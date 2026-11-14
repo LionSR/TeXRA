@@ -468,5 +468,5 @@ export const executeCliConfig: (
     yield* detachPresentation;
     return runResult;
   },
-  Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
+  Effect.catchCause((cause) => Effect.fail(ensureError(cause))),
 );

@@ -211,7 +211,7 @@ const CHANNEL = 'cli.transcript';
 export function reportRequestDefect(
   cause: Cause.Cause<unknown>,
 ): Effect.Effect<string> {
-  const message = toErrorMessage(Cause.squash(cause));
+  const message = toErrorMessage(cause);
   return Effect.logError(`Runtime request failed: ${message}`).pipe(
     withLogChannel(CHANNEL),
     Effect.as(`The request failed inside TeXRA: ${message}`),

@@ -15,7 +15,7 @@
  *   - `list` → enumerate threads by status / scope
  */
 
-import { Cause, Effect, Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 import {
   ChildRuns,
   ToolContext,
@@ -321,10 +321,7 @@ const executeAsk = Effect.fn('executeAsk')(function* (
         Effect.catchCause((cause) =>
           Effect.logWarning(
             `Inquiry thread ${manifest.threadId} stays open after its request failed to open`,
-          ).pipe(
-            Effect.annotateLogs({ data: Cause.squash(cause) }),
-            withLogChannel(CHANNEL),
-          ),
+          ).pipe(Effect.annotateLogs({ data: cause }), withLogChannel(CHANNEL)),
         ),
       ),
     ),

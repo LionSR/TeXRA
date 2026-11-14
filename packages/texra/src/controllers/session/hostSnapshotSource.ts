@@ -41,11 +41,9 @@ import {
   type Secrets,
   type SettingsStores,
 } from '@texra-ai/harness/plugins';
-import {
-  APPROVAL_POLICY_SETTING,
-  GIT_COMMITS_TO_SHOW_SETTING,
-} from '@texra-ai/harness/schemas';
-import { loadTeamOptions } from '@texra/shared/teamLaunch';
+import { APPROVAL_POLICY_SETTING } from '@texra-ai/harness/schemas';
+import { GIT_COMMITS_TO_SHOW_SETTING } from '@texra/shared/settings/texraSettings';
+import { loadTeamOptions } from '@texra/agent/teams/teamLaunch';
 import type {
   FileOptions,
   HostSnapshot,
@@ -294,7 +292,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       Effect.gen(function* () {
         const models = yield* readModelOptions(
           stores,
-          yield* getEnabledModels(stores.globalState),
+          yield* getEnabledModels(stores),
         );
         const modelOptions = modelOptionsFrom(models);
         yield* SubscriptionRef.update(inputs, (s) => ({

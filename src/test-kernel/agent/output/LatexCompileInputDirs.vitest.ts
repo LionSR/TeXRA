@@ -20,7 +20,7 @@ import { revisionLatexdiffs } from '@texra/agent/output/revisionLatexdiffs';
 
 // Local file imports
 import { compileFsLayer, runStorageFile } from './compileCheckTestUtils';
-import { LATEXDIFF_BETWEEN_ROUNDS_SETTING } from '@texra/shared/settingsView/documentsSettings';
+import { LATEXDIFF_BETWEEN_ROUNDS_SETTING } from '@texra/shared/settings/documentsSettings';
 
 const mocks = vi.hoisted(() => ({
   compileLatex2Pdf: vi.fn(

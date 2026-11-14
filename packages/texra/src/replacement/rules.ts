@@ -11,6 +11,7 @@ import {
 import {
   createPatterns,
   generateBackslashFixes,
+  generateLegacyFontFixes,
   type PatternDict,
 } from '@replacement/patterns';
 import type { NonRegexRuleSet } from '@replacement/types';
@@ -79,40 +80,44 @@ export const EQUATION_REPLACEMENTS: NonRegexRuleSet = {
       'eqn.',
     ]);
 
-    // ===== Grouped backslash fixes =====
-    // Grouped only for readability; every group is fixed the same way.
-    const backslashCommandGroups = {
-      mathOperators: [...MATH_OPERATORS, 'pi', 'bna'],
-      greekLetters: [
-        ...GREEK_LETTERS,
-        'partial',
-        'Delta',
-        'Gamma',
-        'Lambda',
-        'Sigma',
-        'Omega',
-      ],
-      delimiters: 'left right left( right( left[ right['.split(' '),
-      mathCommands: 'frac sum_ prod_ int_ oint_ nabla'.split(' '),
-      integrals: 'int iint iiint oint ooint ooooint'.split(' '),
-      dots: 'cdot dot ldots cdots vdots ddots iddots'.split(' '),
-      formattingCommands: `
+    // ===== Backslash fixes =====
+    const backslashFixPatterns = generateBackslashFixes([
+      // Math operators
+      ...MATH_OPERATORS,
+      'pi',
+      'bna',
+      // Greek letters
+      ...GREEK_LETTERS,
+      'partial',
+      'Delta',
+      'Gamma',
+      'Lambda',
+      'Sigma',
+      'Omega',
+      // Delimiters
+      ...'left right left( right( left[ right['.split(' '),
+      // Math commands
+      ...'frac sum_ prod_ int_ oint_ nabla'.split(' '),
+      // Integrals
+      ...'int iint iiint oint ooint ooooint'.split(' '),
+      // Dots
+      ...'cdot dot ldots cdots vdots ddots iddots'.split(' '),
+      // Formatting commands
+      ...`
         mathbf mathbb mathcal mathscr bm
         sum prod lim infty rightarrow leftarrow Rightarrow
         Leftarrow exists forall der partial Delta Gamma Lambda Sigma Omega
       `
         .trim()
         .split(/\s+/),
-      formattingWithBraces: `
+      // Formatting commands with their opening brace
+      ...`
         text{ tilde{ textit{ textbf{ emph{ underline{
         overbrace{ underbrace{ label{
       `
         .trim()
         .split(/\s+/),
-    };
-    const groupedBackslashPatterns = generateBackslashFixes(
-      Object.values(backslashCommandGroups).flat(),
-    );
+    ]);
 
     // Greek letter notation fixes
     // Examples: \a_ -> a_, \a^ -> a^
@@ -141,7 +146,7 @@ export const EQUATION_REPLACEMENTS: NonRegexRuleSet = {
     return {
       ...linebreakFixesPatterns,
       ...referencePatterns,
-      ...groupedBackslashPatterns,
+      ...backslashFixPatterns,
       ...letterNotationFixes,
       ...envEndFixes,
       ...bracesFixes,
@@ -188,19 +193,11 @@ export const EQUATION_REPLACEMENTS: NonRegexRuleSet = {
 
 export const FONT_COMMAND_REPLACEMENTS: NonRegexRuleSet = {
   patterns: {
-    ...createPatterns(
+    ...generateLegacyFontFixes(
       [...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'],
-      (letter) => [
-        [`{\\rm ${letter}}`, `\\mathrm{${letter}}`],
-        [`{\\bf ${letter}}`, `\\mathbf{${letter}}`],
-        [`{\\it ${letter}}`, `\\mathit{${letter}}`],
-        [`{\\sf ${letter}}`, `\\mathsf{${letter}}`],
-        [`{\\tt ${letter}}`, `\\mathtt{${letter}}`],
-      ],
+      ['rm', 'bf', 'it', 'sf', 'tt'],
     ),
-    ...createPatterns([...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'], (letter) => [
-      [`{\\cal ${letter}}`, `\\mathcal{${letter}}`],
-    ]),
+    ...generateLegacyFontFixes([...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'], ['cal']),
   },
 };
 
@@ -250,7 +247,6 @@ export const GPTNESS_REPLACEMENTS: NonRegexRuleSet = {
     showcasing: 'showing',
     'paradigm shift': 'big change',
     envisage: 'imagine',
-    // parameterizing: 'parametrizing',
     Normalising: 'Normalizing',
     conditon: 'condition',
     necessitates: 'requires',
@@ -314,7 +310,6 @@ export const GPTNESS_REPLACEMENTS: NonRegexRuleSet = {
     'in the first instance': 'firstly',
     'for the duration of': 'during',
     'be that as it may': 'however', // or 'despite that'
-    // 'in accordance with': 'according to', // or 'following'
     'make endeavors to': 'try to',
     'is indicative of': 'indicates',
     'holds true for': 'applies to',
@@ -331,12 +326,6 @@ export const GPTNESS_REPLACEMENTS: NonRegexRuleSet = {
 
     // Additional GPT-isms
     brittle: 'fragile',
-    // 'deeper understanding': 'better understanding',
-    // 'are essential': 'are important',
-    // novel: 'new',
-    // explore: 'study',
-    // fostering: 'promoting',
-    // pivotal: 'important',
   },
 };
 
@@ -769,7 +758,6 @@ export const LATEX_SPACING_REPLACEMENTS: NonRegexRuleSet = {
     // ===== Math mode punctuation =====
     // Move punctuation outside math mode
     '.$': '$.',
-    // ',$': '$,', // this is problematic for eg. tikz figure xticklabels={$-\Sig$,0$,\Sig$},
     '$-\\,': '$-',
 
     // ===== Delimiter simplification =====
@@ -821,8 +809,6 @@ export const UNICODE_REPLACEMENTS: NonRegexRuleSet = {
     '\u2008': ' ', // PUNCTUATION SPACE (U+2008)
     '\u2009': ' ', // THIN SPACE (U+2009)
     '\u200A': ' ', // HAIR SPACE (U+200A)
-    // '\u2028': '\n', // LINE SEPARATOR (U+2028) - User commented out
-    // '\u2029': '\n', // PARAGRAPH SEPARATOR (U+2029) - User commented out
 
     // ===== Suspicious or Invisible Unicode Characters (to be removed) =====
     '\u00AD': '', // Soft Hyphen (U+00AD)
@@ -846,13 +832,8 @@ export const UNICODE_REPLACEMENTS: NonRegexRuleSet = {
 
     // ===== Common Symbols to ASCII or simple representation =====
     '\u2022': '*', // BULLET (U+2022) '•' to asterisk
-    // '\u00B9': '1', // SUPERSCRIPT ONE (U+00B9) '¹' to '1'
-    // '\u00B2': '2', // SUPERSCRIPT TWO (U+00B2) '²' to '2'
     '\u00BD': '1/2', // VULGAR FRACTION ONE HALF (U+00BD) '½' to '1/2'
     '\u2713': '\\checkmark', // CHECK MARK (U+2713) '✓' to \checkmark
-    // '™': '\\texttrademark{}', - User commented out
-    // '®': '\\textregistered{}', - User commented out
-    // '©': '\\textcopyright{}', - User commented out
 
     // ===== Accented Latin Characters to LaTeX Commands =====
     '\u00E1': "\\'a", // LATIN SMALL LETTER A WITH ACUTE (U+00E1) 'á'
@@ -873,7 +854,6 @@ export const UNICODE_REPLACEMENTS: NonRegexRuleSet = {
     '\u00E4': '\\"a', // LATIN SMALL LETTER A WITH DIAERESIS (U+00E4) 'ä' (from general knowledge, not in list)
     '\u00EB': '\\"e', // LATIN SMALL LETTER E WITH DIAERESIS (U+00EB) 'ë' (from general knowledge, not in list)
     '\u00EF': '\\"i', // LATIN SMALL LETTER I WITH DIAERESIS (U+00EF) 'ï' (from general knowledge, not in list)
-    // '\u00F6': '\\"o', // LATIN SMALL LETTER O WITH DIAERESIS (U+00F6) 'ö'
     '\u00FC': '\\"u', // LATIN SMALL LETTER U WITH DIAERESIS (U+00FC) 'ü' (from general knowledge, not in list)
     '\u00E3': '\\~a', // LATIN SMALL LETTER A WITH TILDE (U+00E3) 'ã'
     '\u00F1': '\\~n', // LATIN SMALL LETTER N WITH TILDE (U+00F1) 'ñ' (from general knowledge, not in list)

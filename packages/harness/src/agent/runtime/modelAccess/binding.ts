@@ -1,5 +1,6 @@
 /**
- * A decided route made into a `BoundModel`: the canned validation model, or
+ * A request's route, decided over one settings read and made into a
+ * `BoundModel`: the canned validation model, or
  * a wire model `@texra-ai/llm` binds
  * with the route's one credential and the vendor knobs the settings hold.
  * Also the facts the run reads beside the `Model`: the config it runs and
@@ -13,6 +14,7 @@ import {
   type ModelConfig,
   type ModelOrigin,
   type ReasoningRequest,
+  selectModel,
 } from '@texra-ai/llm';
 import { bindModel as bindWireModel } from '@texra-ai/llm/node';
 
@@ -25,7 +27,11 @@ import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 
 import { routeCredential } from './credentials';
 import { routePolicies, type CallFailure } from './failureInfo';
-import { ValidationModel, type RouteDecision } from './routeDecision';
+import {
+  decideRoute,
+  ValidationModel,
+  type RouteDecision,
+} from './routeDecision';
 import type { BindRequest, BoundModel } from './ModelAccess';
 import type { HttpClient } from 'effect/http';
 
@@ -90,16 +96,44 @@ const commonOf = ({ request, catalogEntry, decision, settings }: BindPlan) => ({
   textOnly: request.textOnly,
 });
 
-/** Bind `plan`'s decided route into the caller's scope. */
-export const bindRoute = Effect.fn('bindRoute')(function* (
-  plan: BindPlan,
+/** Bind `request` into the caller's scope: decide its route over one read
+ *  of `readSettings`, then make that route a model. */
+export const bindRoute = Effect.fn('ModelAccess.bind')(function* (
+  request: BindRequest,
+  readSettings: Effect.Effect<
+    ModelSettings,
+    RouteUnavailable,
+    Secrets | SubscriptionAccounts
+  >,
 ): Effect.fn.Return<
   BoundModel,
   CallFailure,
   Scope.Scope | HttpClient.HttpClient | Secrets | SubscriptionAccounts
 > {
-  const { request, requested, settings } = plan;
-  const { route, backend } = plan.decision;
+  const selected = selectModel(request.modelId);
+  const requested = request.config ?? selected?.config;
+  if (requested === undefined) {
+    return yield* RouteUnavailable.of(
+      new Error(`Model ${request.modelId} is not registered`),
+    );
+  }
+  const ask = selected?.request ?? {};
+  const settings = yield* readSettings;
+  const decision = yield* decideRoute(requested, settings, {
+    ...request,
+    mode: ask.mode,
+  });
+  const plan: BindPlan = {
+    request,
+    requested,
+    // A rebind that keeps the route's overlay as `request.config` still
+    // reports its usage under the catalog entry.
+    catalogEntry: selected?.config ?? requested,
+    ask,
+    settings,
+    decision,
+  };
+  const { route, backend } = decision;
   const protocol = PROTOCOL_BY_BACKEND[backend];
   if (protocol === 'validation') {
     const canned = yield* Effect.serviceOption(ValidationModel);

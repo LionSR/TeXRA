@@ -56,7 +56,7 @@ import {
   type ServiceUnavailable,
   WINDOWS_UNSUPPORTED,
 } from '@texra/controllers/server/client';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 
 import { readCliEntrypointPath } from './cliContext';

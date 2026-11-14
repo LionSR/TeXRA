@@ -141,13 +141,13 @@ const watchCustomDirectory = Stream.unwrap(
       Stream.catchCause((cause) =>
         Cause.hasInterruptsOnly(cause)
           ? Stream.fromEffect(Effect.interrupt)
-          : stopped(toErrorMessage(Cause.squash(cause))),
+          : stopped(toErrorMessage(cause)),
       ),
     );
   }).pipe(
     Effect.catchCause((cause) =>
       Effect.logWarning(
-        `The custom agents directory is not watched: ${toErrorMessage(Cause.squash(cause))}`,
+        `The custom agents directory is not watched: ${toErrorMessage(cause)}`,
       ).pipe(Effect.as(Stream.empty)),
     ),
   ),
@@ -159,7 +159,7 @@ const namedCustomDirectory = Effect.flatMap(AgentDirectories, (directories) =>
 ).pipe(
   Effect.catchCause((cause) =>
     Effect.logWarning(
-      `The custom agents directory setting was not read; no agent catalog is loaded: ${toErrorMessage(Cause.squash(cause))}`,
+      `The custom agents directory setting was not read; no agent catalog is loaded: ${toErrorMessage(cause)}`,
     ).pipe(Effect.as(false)),
   ),
 );
@@ -206,7 +206,7 @@ export const agentCatalogFollower = Layer.effectDiscard(
       // misses says the catalog did not load.
       Effect.catchCause((cause) =>
         Effect.logError(
-          `The agent catalog was not loaded, after its tries; it lists the agents it had until the next successful load: ${toErrorMessage(Cause.squash(cause))}`,
+          `The agent catalog was not loaded, after its tries; it lists the agents it had until the next successful load: ${toErrorMessage(cause)}`,
         ),
       ),
     );

@@ -10,7 +10,7 @@ import {
   formatSubscriptionUsageReset,
   formatSubscriptionUsageUpdated,
   subscriptionUsageWindowLabel,
-} from '@texra/shared/subscriptionUsagePresentation';
+} from '@ui/copy/subscriptionUsage';
 import { commonViewStyles, designTokens } from '@ui/styles';
 
 type UnavailableReason = Extract<

@@ -65,7 +65,7 @@ import {
 import {
   DOCUMENTS_OPEN_PDF_SETTING,
   DOCUMENTS_REJECT_ON_COMPILE_FAILURE_SETTING,
-} from '@texra/shared/settingsView/documentsSettings';
+} from '@texra/shared/settings/documentsSettings';
 
 /** A revision of a document task, by its zero-based index. */
 export const RevisionSchema = Schema.Int.check(

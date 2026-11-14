@@ -29,7 +29,6 @@ import type {
   ToolCodeSection,
   ToolFileGroupsSection,
   ToolSection,
-  ToolSectionFile,
   ToolTextSection,
 } from './toolRowModel';
 
@@ -94,6 +93,23 @@ function outputEdits(output: unknown): readonly unknown[] {
   return Predicate.hasProperty(output, 'edits') && Array.isArray(output.edits)
     ? output.edits
     : [];
+}
+
+/**
+ * The line changes a call's output `edits` report, by path: what a card the
+ * tool stated shows beside each file it lists, since the tool states its card
+ * from its input, before any edit is made.
+ */
+export function outputLineChanges(
+  output: unknown,
+): ReadonlyMap<string, typeof LineChangesSchema.Type> {
+  return new Map(
+    outputEdits(output).flatMap((raw) =>
+      Option.toArray(decodeOutputEdit(raw)).flatMap(({ path, lineChanges }) =>
+        path && lineChanges ? [[path, lineChanges] as const] : [],
+      ),
+    ),
+  );
 }
 
 /** The fields the cards read from one of a tool's output `edits`. */
@@ -316,40 +332,6 @@ function buildExecutionsSections(ctx: SectionContext): ToolSection[] {
   return sections;
 }
 
-function buildAcceptRunFilesSections(ctx: SectionContext): ToolSection[] {
-  const { input } = ctx;
-  if (!Predicate.isObject(input)) return [];
-  // The files name what is accepted; the source agent's raw id is left out
-  // (ids are for bug reports, not the card).
-  const sections: ToolSection[] = [];
-  const raw = Array.isArray(input.files) ? input.files : [];
-  if (raw.length === 0) return sections;
-  const editsByPath = new Map(
-    outputEdits(ctx.parsedOutput).flatMap((raw) =>
-      Option.toArray(decodeOutputEdit(raw)).flatMap((edit) =>
-        edit.path ? [[edit.path, edit] as const] : [],
-      ),
-    ),
-  );
-  const files: ToolSectionFile[] = raw.map((entry) => {
-    const source = Predicate.isObject(entry)
-      ? (asString(entry.path) ?? '')
-      : '';
-    const original = Predicate.isObject(entry)
-      ? asString(entry.original)
-      : undefined;
-    const dest = original ?? source;
-    const lineChanges = editsByPath.get(dest)?.lineChanges;
-    return {
-      path: dest,
-      ...(dest && source && dest !== source ? { from: source } : {}),
-      ...(lineChanges ? { lineChanges } : {}),
-    };
-  });
-  sections.push({ kind: 'fileList', label: 'Files:', files });
-  return sections;
-}
-
 /**
  * The `agent` tool's input derives from a host-only schema, so each
  * displayed field is read with its own guard.
@@ -562,10 +544,6 @@ const SECTION_BUILDERS: readonly {
   {
     match: (ctx) => normalizeToolName(ctx.toolName) === 'executions',
     build: buildExecutionsSections,
-  },
-  {
-    match: (ctx) => normalizeToolName(ctx.toolName) === 'accept_run_files',
-    build: buildAcceptRunFilesSections,
   },
   {
     match: (ctx) =>

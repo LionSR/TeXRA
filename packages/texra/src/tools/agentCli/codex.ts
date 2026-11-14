@@ -347,12 +347,12 @@ function buildCodexTurn(params: {
     claim: params.claim,
     runProviderTurn: runStreamedTurn(thread, prompt, logger),
     getUsage: codexTurnUsage,
-    delivery: (turn, wallTimeMs) => ({
+    delivery: (turn, wallTime) => ({
       family: 'codex',
       runId,
       prompt,
       attributes: [{ name: 'thread-id', value: thread.id || null }],
-      wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
+      wallTime,
       response: turn.finalResponse,
       usage: codexTurnUsage(turn),
     }),

@@ -18,7 +18,7 @@ import { TEXRA_APP } from '@test/support/texraApp';
 import {
   CLI_CHAT_SETTING,
   CLI_MODEL_SETTING,
-} from '@texra/shared/settingsView/texraSettings';
+} from '@texra/shared/settings/texraSettings';
 
 const tempDirs = useTempDirs();
 

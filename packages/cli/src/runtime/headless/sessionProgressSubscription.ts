@@ -23,6 +23,30 @@ function childRow(child: RunView) {
   };
 }
 
+/** One `kind: "progress"` record on stdout. */
+function writeProgressRecord(event: string, payload: unknown): void {
+  writeNdjsonStdout({
+    kind: 'progress',
+    event,
+    ts: new Date().toISOString(),
+    payload,
+  });
+}
+
+/**
+ * One committed session row as its progress record: `event` is the row's
+ * `type`, `payload` the rest of the row. A `debug`-level `log` row is a
+ * diagnostic, not progress, and is written only when `includeDebugLogs`.
+ */
+export function writeProgressRow(
+  row: { readonly type: string; readonly level?: unknown },
+  includeDebugLogs: boolean,
+): void {
+  if (!includeDebugLogs && row.type === 'log' && row.level === 'debug') return;
+  const { type, ...payload } = row;
+  writeProgressRecord(type, payload);
+}
+
 /**
  * Headless CLI progress output. Every display row the session commits goes
  * out as one `kind: "progress"` record whose `event` is the row's `type` and
@@ -63,18 +87,9 @@ function childRow(child: RunView) {
 export const attachCliSessionProgressProjection = Effect.fn(
   'attachCliSessionProgressProjection',
 )(function* (session: Pick<LocalSession, 'view'>) {
-  // A `debug`-level `log` row is a diagnostic, not progress: it reaches the
-  // wire only under the process's own minimum log level, which `--verbose`
-  // lowers to `Debug` — the one place the CLI decides what a debug line is.
+  // A debug row reaches the wire only under the process's own minimum log
+  // level, which `--verbose` lowers to `Debug`.
   const includeDebugLogs = yield* LogLevel.isEnabled('Debug');
-  function emit(event: string, payload: unknown): void {
-    writeNdjsonStdout({
-      kind: 'progress',
-      event,
-      ts: new Date().toISOString(),
-      payload,
-    });
-  }
 
   /** The tail's coordinate: the commit each forward read covered, set once
    *  that read's events have all been written below, so it never runs ahead
@@ -110,7 +125,7 @@ export const attachCliSessionProgressProjection = Effect.fn(
       if (writtenChildren.get(parentRunId) === wire) continue;
       writtenChildren.set(parentRunId, wire);
       if (view.cursor > attachedAt)
-        emit('run.children', { runId: parentRunId, children });
+        writeProgressRecord('run.children', { runId: parentRunId, children });
     }
   };
   // Seed from the session view as it stands at attach, before any fiber can see a
@@ -123,10 +138,7 @@ export const attachCliSessionProgressProjection = Effect.fn(
       Stream.runForEach(session.view.events(attachedAt, drainedTo), (event) =>
         Effect.sync(() => {
           if (event.commit > stopAt) return;
-          const { type, ...payload } = event;
-          if (includeDebugLogs || type !== 'log' || event.level !== 'debug') {
-            emit(type, payload);
-          }
+          writeProgressRow(event, includeDebugLogs);
         }),
       ),
     ),

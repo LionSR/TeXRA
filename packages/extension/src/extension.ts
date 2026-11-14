@@ -68,7 +68,7 @@ import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
   settingsTabByCommand,
   type ExtensionCommandId,
@@ -325,7 +325,7 @@ export async function activate(context: vscode.ExtensionContext) {
             Effect.logError(
               'Extension cleanup after failed activation failed',
             ).pipe(
-              Effect.annotateLogs({ data: Cause.squash(cause) }),
+              Effect.annotateLogs({ data: cause }),
               withLogChannel(EXTENSION_CHANNEL),
               // The runtime that held the diagnostics layer is gone, so the
               // entry needs it provided to reach the host's sink.
@@ -486,7 +486,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     ).pipe(
       Effect.catchCause((cause) =>
         Effect.logError(
-          `Tool availability refresh failed (${trigger}): ${toErrorMessage(Cause.squash(cause))}`,
+          `Tool availability refresh failed (${trigger}): ${toErrorMessage(cause)}`,
         ).pipe(withLogChannel(EXTENSION_CHANNEL)),
       ),
     );

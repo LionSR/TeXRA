@@ -463,7 +463,7 @@ export class SessionRunRegistry implements RunsShape {
           Effect.catchCause((cause) =>
             Effect.logWarning(
               `Run ${runId}: the stop asked as it opened was not recorded`,
-            ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
+            ).pipe(Effect.annotateLogs({ data: cause })),
           ),
         );
       // Resolve the launch's environment before its opening acquires
@@ -758,10 +758,7 @@ export class SessionRunRegistry implements RunsShape {
         Effect.catchCause((cause) =>
           Effect.logWarning(
             "The held runs' parents could not be read at shutdown; stopping each",
-          ).pipe(
-            Effect.annotateLogs({ data: Cause.squash(cause) }),
-            Effect.as(held),
-          ),
+          ).pipe(Effect.annotateLogs({ data: cause }), Effect.as(held)),
         ),
       );
       return Effect.flatMap(roots, (roots) =>
@@ -773,7 +770,7 @@ export class SessionRunRegistry implements RunsShape {
                 Effect.logWarning(
                   `Run ${runId}: its shutdown stop was not recorded`,
                 ).pipe(
-                  Effect.annotateLogs({ data: Cause.squash(cause) }),
+                  Effect.annotateLogs({ data: cause }),
                   Effect.andThen(Effect.sync(() => this.interrupt(runId))),
                 ),
               ),

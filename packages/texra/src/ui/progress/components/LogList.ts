@@ -17,7 +17,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@ui/wa/spinner';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
-import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { designTokens } from '@ui/styles';
 import { getComposedPathElement } from './composedPath';
 import { logStyles } from '../styles/logStyles';

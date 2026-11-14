@@ -1,5 +1,5 @@
 import { Box, Text, useStderr, useWindowSize } from 'ink';
-import { Cause, Effect, Exit, Fiber, Stream, type Duration } from 'effect';
+import { Effect, Exit, Fiber, Stream, type Duration } from 'effect';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { apiKeyEntry } from '@texra-ai/llm';
@@ -165,7 +165,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   useEffect(() => {
     if (routeRead === undefined || Exit.isSuccess(routeRead)) return;
     writeStderr(
-      `[warn] [cli.tui] subscription route probe failed for ${accessModel}: ${toErrorMessage(Cause.squash(routeRead.cause))}\n`,
+      `[warn] [cli.tui] subscription route probe failed for ${accessModel}: ${toErrorMessage(routeRead.cause)}\n`,
     );
   }, [routeRead, accessModel, writeStderr]);
   const prospectiveRoute =
