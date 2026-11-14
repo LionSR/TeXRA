@@ -33,7 +33,10 @@ import { downloadArXivSource } from '@commands/latex/arXivCommands';
 import { launchSetupAssistant } from '@commands/setup/setupAssistantCommand';
 import { createSampleProject } from '@commands/system/sampleProjectCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
-import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
+import {
+  openGuidePage,
+  VscodeExternalOpener,
+} from '@frontend/hosts/VscodeExternalOpener';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { openBuilt } from '@frontend/latex/openBuild';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
@@ -59,10 +62,7 @@ import {
   type TranscriptExportOpenKind,
 } from '@texra/controllers/progressView/exportTranscript';
 import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
-import {
-  fromHost,
-  hostFailure,
-} from '@texra/controllers/session/hostCallFailure';
+import { hostFailure } from '@texra/controllers/session/hostCallFailure';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import type {
   OwnHostArms,
@@ -158,10 +158,8 @@ const openExportPath = (
     });
   const uri = vscode.Uri.file(filePath);
   if (kind === 'external') {
-    return Effect.tryPromise({
-      try: () => vscode.env.openExternal(uri),
-      catch: failed,
-    }).pipe(Effect.asVoid);
+    // The opener also fails when VS Code declines the file.
+    return new VscodeExternalOpener().openExternal(uri.toString());
   }
   if (kind === 'pdf') {
     return executeVscodeCommand('vscode.open', uri).pipe(
@@ -345,12 +343,14 @@ export const createExtensionHostRequests = Effect.fn(
       runHandler('setApiKey', setApiKey(roots, provider)).pipe(
         Effect.andThen(snapshot.refreshHostBanners),
       ),
+    // A link VS Code declines or cannot open is answered as a rejection, so
+    // the view shows which URL did not open.
     openExternal: (url) =>
-      Effect.asVoid(
-        fromHost('env.openExternal', () =>
-          vscode.env.openExternal(vscode.Uri.parse(url)),
+      new VscodeExternalOpener()
+        .openExternal(url)
+        .pipe(
+          Effect.mapError((failed) => new Rejected({ reason: failed.message })),
         ),
-      ),
     // The banner refresh probes the dependencies again; the banner shows
     // what is missing.
     recheckDependencies: snapshot.refreshHostBanners,
@@ -382,7 +382,7 @@ export const createExtensionHostRequests = Effect.fn(
   /**
    * The arms this host performs its own way. The capabilities that still
    * answer with a promise - VS Code commands, the editor APIs - are lifted
-   * once (`executeVscodeCommand`, `fromHost`), and this extension's own
+   * once (`executeVscodeCommand`), and this extension's own
    * commands run as the programs behind them, so no arm re-enters the
    * runtime between here and the bridge that runs this program.
    */

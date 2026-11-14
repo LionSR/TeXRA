@@ -7,15 +7,14 @@ import { GlobalValues, type ValueFamily } from '@texra-ai/harness/host';
 
 import type { Cause } from 'effect';
 import type { HttpClientError } from 'effect/http';
+import { NonNegativeIntSchema } from '@texra-ai/harness/schemas';
 
 /** The hosts that check for updates, each with its own record. */
 type UpdateCheckHost = 'cli' | 'desktop';
 
 /** Persisted update notification state, isolated by host and configured storage root. */
 const UpdateCheckRecordSchema = Schema.Struct({
-  lastCheckedAt: Schema.NullOr(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
+  lastCheckedAt: Schema.NullOr(NonNegativeIntSchema),
   lastNotifiedVersion: Schema.NullOr(
     Schema.String.check(Schema.isMinLength(1)),
   ),

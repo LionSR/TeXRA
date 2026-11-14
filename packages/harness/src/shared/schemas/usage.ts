@@ -1,10 +1,7 @@
 import { Schema, Struct, type Types } from 'effect';
 
 import { StoredProtocolSchema } from './storedTurn';
-
-export const TokenCountSchema = Schema.Int.check(
-  Schema.isGreaterThanOrEqualTo(0),
-);
+import { NonNegativeIntSchema } from './nonNegativeInt';
 
 /**
  * The subscription routes a run can decline: storage's spelling of llm's
@@ -37,18 +34,18 @@ export type UsageRoute = typeof UsageRouteSchema.Type;
  * absent.
  */
 export const TokenUsageStatsSchema = Schema.Struct({
-  inputTokens: TokenCountSchema,
-  outputTokens: TokenCountSchema,
+  inputTokens: NonNegativeIntSchema,
+  outputTokens: NonNegativeIntSchema,
   cost: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
   /** Prompt tokens read from the provider's cache. */
-  cachedInputTokens: Schema.optional(TokenCountSchema),
+  cachedInputTokens: Schema.optional(NonNegativeIntSchema),
   /** Prompt tokens billed at the full input rate: input minus cache reads. */
-  cacheMissInputTokens: Schema.optional(TokenCountSchema),
+  cacheMissInputTokens: Schema.optional(NonNegativeIntSchema),
   /** Prompt tokens written to the provider's cache (Anthropic). */
-  cacheWriteTokens: Schema.optional(TokenCountSchema),
-  reasoningTokens: Schema.optional(TokenCountSchema),
+  cacheWriteTokens: Schema.optional(NonNegativeIntSchema),
+  reasoningTokens: Schema.optional(NonNegativeIntSchema),
   /** Prompt tokens a provider-run tool added (Google). */
-  toolUsePromptTokens: Schema.optional(TokenCountSchema),
+  toolUsePromptTokens: Schema.optional(NonNegativeIntSchema),
   usageRoute: Schema.optional(UsageRouteSchema),
   /** The subscription plan that covered this usage, when the route names one
    *  (today only `chatgpt-subscription`). Recorded per usage row so a resumed

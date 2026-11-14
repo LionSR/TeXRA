@@ -2,7 +2,6 @@ import { Effect, Schema, Struct } from 'effect';
 
 import { ModelFailureSchema } from './errors';
 import { RunIdSchema, Sha256Schema } from './identifiers';
-import { LineCountSchema } from './lineChanges';
 import { PlanSchema } from './plan';
 import { MODEL_PROVIDERS } from './runInput';
 import {
@@ -10,6 +9,7 @@ import {
   TaskProposalFieldsSchema,
 } from './proposalFields';
 import { DeclinableUsageRouteSchema } from './usage';
+import { NonNegativeIntSchema } from './nonNegativeInt';
 
 /** The fields the bash, tool edit and question requests share. */
 const RequestBaseSchema = Schema.Struct({
@@ -22,8 +22,8 @@ export const ToolEditRequestSchema = RequestBaseSchema.mapFields(
     path: Schema.String,
     relativePath: Schema.String,
     sourceTool: Schema.String,
-    addedLines: LineCountSchema,
-    removedLines: LineCountSchema,
+    addedLines: NonNegativeIntSchema,
+    removedLines: NonNegativeIntSchema,
     /** The address of the proposal's content (`ToolEditContent`: the
      *  original and proposed text with their diff) in the session's blob
      *  store, stored with the request's row; `request.preview` reads it. */
@@ -54,9 +54,7 @@ export const ToolEditContentSchema = Schema.Struct({
   originalContent: Schema.String,
   proposedContent: Schema.String,
   hunks: Schema.Array(DiffHunkSchema),
-  firstChangedLine: Schema.NullOr(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
+  firstChangedLine: Schema.NullOr(NonNegativeIntSchema),
 });
 /** A pending tool edit's content. */
 export type ToolEditContent = typeof ToolEditContentSchema.Type;

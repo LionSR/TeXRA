@@ -33,6 +33,7 @@ import {
   type RequestPayload,
   type RunId,
   FactNameSchema,
+  NonNegativeIntSchema,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript/transcriptRow';
 import type {
@@ -44,7 +45,7 @@ import type {
 const SessionKeySchema = Schema.String.check(Schema.isMinLength(1));
 
 /** The integer fields' shapes: `Count` from zero, `Positive` from one. */
-const Count = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+const Count = NonNegativeIntSchema;
 const Positive = Schema.Int.check(Schema.isGreaterThan(0));
 
 /**

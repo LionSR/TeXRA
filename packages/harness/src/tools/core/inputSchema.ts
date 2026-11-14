@@ -39,3 +39,15 @@ export function nullishWithDefault<S extends Schema.Top>(
       }),
     );
 }
+
+/**
+ * A tool call's optional time limit in milliseconds, from one second to a
+ * day. Each tool annotates it with what the limit stops.
+ */
+export const timeoutMsField = Schema.optional(
+  Schema.NullOr(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(1000)).check(
+      Schema.isLessThanOrEqualTo(24 * 60 * 60 * 1000),
+    ),
+  ),
+);

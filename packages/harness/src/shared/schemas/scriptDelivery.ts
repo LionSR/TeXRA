@@ -1,15 +1,15 @@
 import { Schema } from 'effect';
 
-import { LineCountSchema } from './lineChanges';
+import { NonNegativeIntSchema } from './nonNegativeInt';
 
 /** How a background script's calls ended. */
 const ScriptTallySchema = Schema.Struct({
-  total: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ok: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  failed: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  cancelled: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  total: NonNegativeIntSchema,
+  ok: NonNegativeIntSchema,
+  failed: NonNegativeIntSchema,
+  cancelled: NonNegativeIntSchema,
   /** Skipped by the user. */
-  skipped: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  skipped: NonNegativeIntSchema,
 });
 export type ScriptTally = typeof ScriptTallySchema.Type;
 
@@ -18,8 +18,8 @@ export type ScriptTally = typeof ScriptTallySchema.Type;
  *  reported none). */
 const ScriptDeliveryFileSchema = Schema.Struct({
   path: Schema.String,
-  added: Schema.NullOr(LineCountSchema),
-  removed: Schema.NullOr(LineCountSchema),
+  added: Schema.NullOr(NonNegativeIntSchema),
+  removed: Schema.NullOr(NonNegativeIntSchema),
 });
 
 /** Compact, host-neutral facts used to present a background script's
@@ -27,10 +27,10 @@ const ScriptDeliveryFileSchema = Schema.Struct({
 export const ScriptDeliverySummarySchema = Schema.Struct({
   name: Schema.String,
   outcome: Schema.Literals(['completed', 'failed', 'stopped']),
-  sectionCount: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  sectionCount: NonNegativeIntSchema,
   tally: ScriptTallySchema,
   costUsd: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
-  durationMs: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  durationMs: NonNegativeIntSchema,
   files: Schema.Array(ScriptDeliveryFileSchema),
   errorCause: Schema.NullOr(Schema.String),
 });

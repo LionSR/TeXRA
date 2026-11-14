@@ -235,14 +235,18 @@ export const bearerHeaders = (token: string) => ({
 });
 
 /** Ambient OpenAI headers would override the selected deployment. */
-export function refuseAmbientHeaders(): void {
-  if (process.env.OPENAI_CUSTOM_HEADERS)
-    throw new ModelError({
-      kind: 'invalid-request',
-      message:
-        'Ambient OpenAI headers cannot override the selected deployment.',
-    });
-}
+export const refuseAmbientHeaders: Effect.Effect<void, ModelError> =
+  Effect.suspend(() =>
+    process.env.OPENAI_CUSTOM_HEADERS
+      ? Effect.fail(
+          new ModelError({
+            kind: 'invalid-request',
+            message:
+              'Ambient OpenAI headers cannot override the selected deployment.',
+          }),
+        )
+      : Effect.void,
+  );
 
 /**
  * The SDK client for one selected Responses deployment: no retries, no

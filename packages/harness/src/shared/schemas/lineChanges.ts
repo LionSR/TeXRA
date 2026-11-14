@@ -1,19 +1,12 @@
 import { Schema, Struct } from 'effect';
-
-/**
- * Nonnegative line-count schema shared by tool results, approvals, and output
- * diff statistics.
- */
-export const LineCountSchema = Schema.Int.check(
-  Schema.isGreaterThanOrEqualTo(0),
-);
+import { NonNegativeIntSchema } from './nonNegativeInt';
 
 /**
  * Schema for line change statistics.
  */
 export const LineChangesSchema = Schema.Struct({
-  added: LineCountSchema,
-  removed: LineCountSchema,
+  added: NonNegativeIntSchema,
+  removed: NonNegativeIntSchema,
 });
 
 /**
