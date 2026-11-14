@@ -168,7 +168,7 @@ export class TraceEmitter implements AgentTrace {
     this.emit({
       type: 'tool.start',
       logId,
-      toolName: log.toolName ?? 'unknown',
+      toolName: log.toolName,
       input: toJsonValue(log.input),
       ...(log.card ? { card: log.card } : {}),
     });
