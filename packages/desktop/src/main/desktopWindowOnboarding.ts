@@ -4,15 +4,10 @@
 import { Effect, FiberHandle, Scope } from 'effect';
 
 import {
-  AppState,
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
 } from '@texra-ai/harness/host';
-import {
-  setFirstRunDone,
-  setOnboardingDeclined,
-} from '@texra/controllers/onboarding/onboardingFunnel';
 import {
   kickoffDesktopSetup,
   type WindowSetupLaunch,
@@ -27,10 +22,6 @@ import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 
 /** The onboarding cards' actions the host request handlers call. */
 export interface WindowOnboarding {
-  /** The welcome card's skip: persists the declined flag. */
-  skipOnboarding(): Effect.Effect<void, StateWriteFailed>;
-  /** The setup card's skip: marks the first run done. */
-  skipSetup(): Effect.Effect<void, StateWriteFailed>;
   /** The setup card's Run Setup: launches the setup conversation through
    *  the launch path of the project window that asked. */
   runSetup(launch: WindowSetupLaunch): Effect.Effect<void>;
@@ -47,9 +38,8 @@ export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
     /** The settings surface, read when a card asks, since it is built after
      *  this surface. */
     readonly settings: () => DesktopSettingsIpc | undefined;
-  }): Effect.fn.Return<WindowOnboarding, never, Scope.Scope | AppState> {
+  }): Effect.fn.Return<WindowOnboarding, never, Scope.Scope> {
     const { runtime } = options;
-    const state = yield* AppState;
     // One setup launch at a time: a double-click of "Run Setup" while the
     // first still resolves its model, before its run shows in the session
     // view the shared launch checks, is a no-op. The launch runs the setup
@@ -57,8 +47,6 @@ export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
     // stops with the window.
     const setupLaunch = yield* FiberHandle.make<void, never>();
     return {
-      skipOnboarding: () => setOnboardingDeclined(state, true),
-      skipSetup: () => setFirstRunDone(state),
       runSetup: (launch) =>
         Effect.asVoid(
           FiberHandle.run(

@@ -15,7 +15,6 @@ import {
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
 } from '@texra-ai/harness/host';
-import { AppSignals } from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import { HostFailed } from '@texra/hosts/uiHosts';
@@ -47,10 +46,7 @@ interface DesktopHostRequestsOptions {
   /** Packaged app resources root (`…/resources`), for export templates. */
   resourcesPath: string;
   postToRenderer(message: unknown): void;
-  onboarding: Pick<
-    WindowOnboarding,
-    'skipOnboarding' | 'skipSetup' | 'runSetup' | 'signInWithChatGpt'
-  >;
+  onboarding: WindowOnboarding;
   openExternalUrl(url: string): Effect.Effect<void, HostFailed>;
   /** Re-probe the LaTeX toolchain. */
   recheckTools(): Effect.Effect<void, never, ProcessServices>;
@@ -60,10 +56,11 @@ interface DesktopHostRequestsOptions {
 }
 
 /** The desktop's half of a project's window, for the window's scope. */
-export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
-  function* (options: DesktopHostRequestsOptions) {
+export const createDesktopHostRequests = (
+  options: DesktopHostRequestsOptions,
+) =>
+  Effect.sync(() => {
     const { host, runtime, snapshot } = options;
-    const signals = yield* AppSignals;
     /**
      * Each arm answers with the program that presents its notice; the
      * session forks it, so nothing here settles a dialog on a fiber of its
@@ -141,10 +138,8 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
         signInChatGpt: Effect.suspend(() =>
           options.onboarding.signInWithChatGpt(),
         ),
-        skip: Effect.suspend(() => options.onboarding.skipOnboarding()),
         runSetup: (launch) =>
           Effect.suspend(() => options.onboarding.runSetup(launch)),
-        skipSetup: Effect.suspend(() => options.onboarding.skipSetup()),
         // The desktop has no walkthrough of its own: the card's "Open
         // walkthrough" opens the desktop docs.
         openGettingStarted: Effect.suspend(() =>
@@ -168,12 +163,6 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
           event: K,
           payload: RuntimePresentationEventPayloads[K],
         ): HostPresentation => presentationEventHandlers[event](payload),
-        // What a service task wrote, told here as a task here tells it: the
-        // file tree follows it.
-        filesWritten: (absolutePaths: readonly string[]) =>
-          signals.emit('workspaceFilesWritten', {
-            absolutePaths: [...absolutePaths],
-          }),
       },
       notify: host.notify,
       runs: {
@@ -228,5 +217,4 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
         resourcesPath: options.resourcesPath,
       },
     };
-  },
-);
+  });

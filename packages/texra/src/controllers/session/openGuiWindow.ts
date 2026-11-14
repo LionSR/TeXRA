@@ -26,6 +26,7 @@ import {
   type ProcessServices,
 } from '@texra-ai/harness/host';
 import {
+  AppSignals,
   ToolRegistry,
   type StorageFs,
   type WorkspaceFs,
@@ -93,6 +94,10 @@ import {
 } from '@texra-ai/harness/schemas';
 import type { ApiKeyProviderId } from '@texra-ai/llm';
 import type { HostDraftRequests } from './hostDraftRequests';
+import {
+  setFirstRunDone,
+  setOnboardingDeclined,
+} from '@texra/controllers/onboarding/onboardingFunnel';
 import type { WindowSetupLaunch } from '@texra/controllers/onboarding/setupLaunch';
 import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
 
@@ -175,16 +180,14 @@ export interface SharedHostCommandBindings {
   openExternal(url: string): HostVerb<void>;
   readonly recheckDependencies: HostVerb<void>;
   readonly openInstallGuide: HostVerb<void>;
-  /** The onboarding card's five verbs; its sixth, "set an API key", is
+  /** The onboarding card's verbs a host performs. "Set an API key" is
    *  {@link SharedHostCommandBindings.setApiKey}, the same verb the banner
-   *  takes. */
+   *  takes, and the two skips write the funnel's flags in the body below. */
   readonly onboarding: {
     readonly signInChatGpt: HostVerb<void>;
-    readonly skip: HostVerb<void>;
     /** Launch this window's project's setup conversation through the
      *  window's own launch path. */
     runSetup(launch: WindowSetupLaunch): HostVerb<void>;
-    readonly skipSetup: HostVerb<void>;
     readonly openGettingStarted: HostVerb<void>;
   };
 }
@@ -202,8 +205,10 @@ interface GuiWindowHost {
   readonly notify: Dialogs['notify'];
   readonly bindings: SharedHostCommandBindings;
   readonly own: OwnHostArms;
-  /** What the window does for its project's runs, here or in the service. */
-  readonly window: WindowHost;
+  /** What the window does for its project's runs, here or in the service.
+   *  Announcing the files a service task wrote is the same on every host,
+   *  so the window's opening adds it. */
+  readonly window: Omit<WindowHost, 'filesWritten'>;
   readonly runs: Pick<HostRunActionPorts, 'openFinalOutput' | 'revealProgress'>;
   readonly files: Omit<ProgressDocumentTaskFileActionsHost, 'showInfo'>;
   /** The transcript export's format picker and opener, the LaTeX export's
@@ -312,8 +317,18 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   // itself.
   const workspace = roots.workspace ?? roots.storage;
   const present = presenterOn(host.window);
+  const signals = yield* AppSignals;
+  const window: WindowHost = {
+    ...host.window,
+    // What a service task wrote is announced as a task here announces it:
+    // the host's file tree or decorations follow the signal.
+    filesWritten: (absolutePaths) =>
+      signals.emit('workspaceFilesWritten', {
+        absolutePaths: [...absolutePaths],
+      }),
+  };
   yield* Effect.forkScoped(
-    attachWindowHost(runs.link, workspace, host.window, ports.focused),
+    attachWindowHost(runs.link, workspace, window, ports.focused),
   );
   // The banner says where the window's tasks run when it is not where the
   // user expects: a folder's tasks running here, because the service was
@@ -681,7 +696,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
               yield* bindings.setApiKey();
               return done;
             case 'skip':
-              yield* bindings.onboarding.skip;
+              yield* setOnboardingDeclined(roots.globalState, true);
               return done;
             case 'runSetup':
               yield* bindings.onboarding.runSetup({
@@ -692,7 +707,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
               });
               return done;
             case 'skipSetup':
-              yield* bindings.onboarding.skipSetup;
+              yield* setFirstRunDone(roots.globalState);
               return done;
             case 'openGettingStarted':
               yield* bindings.onboarding.openGettingStarted;
