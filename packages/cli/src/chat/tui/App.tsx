@@ -36,8 +36,7 @@ import {
 } from './appInteractionPolicy';
 import { ApprovalModal } from './modals/ApprovalModal';
 import { InfoPane } from './panes/InfoPane';
-import { WorkPlanReader } from './panes/WorkPlanReader';
-import { TranscriptReader } from './panes/TranscriptReader';
+import { TranscriptReader, WorkPlanReader } from './panes/ReaderPane';
 import { ScriptStagePopup } from './panes/ScriptStagePopup';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
