@@ -325,7 +325,7 @@ export async function activate(context: vscode.ExtensionContext) {
             Effect.logError(
               'Extension cleanup after failed activation failed',
             ).pipe(
-              Effect.annotateLogs({ data: Cause.squash(cause) }),
+              Effect.annotateLogs({ data: cause }),
               withLogChannel(EXTENSION_CHANNEL),
               // The runtime that held the diagnostics layer is gone, so the
               // entry needs it provided to reach the host's sink.
@@ -486,7 +486,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     ).pipe(
       Effect.catchCause((cause) =>
         Effect.logError(
-          `Tool availability refresh failed (${trigger}): ${toErrorMessage(Cause.squash(cause))}`,
+          `Tool availability refresh failed (${trigger}): ${toErrorMessage(cause)}`,
         ).pipe(withLogChannel(EXTENSION_CHANNEL)),
       ),
     );

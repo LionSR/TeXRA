@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit, FiberSet, Scope, Semaphore } from 'effect';
+import { Effect, Exit, FiberSet, Scope, Semaphore } from 'effect';
 import { Menu, type BrowserWindow } from 'electron';
 
 import { workspaceEnvironmentLayer } from '@texra-ai/harness/host';
@@ -158,7 +158,7 @@ export function createDesktopWindows(options: {
       Scope.close(scope, Exit.void).pipe(
         Effect.catchCause((cause) =>
           Effect.logError('The desktop window did not release cleanly').pipe(
-            Effect.annotateLogs({ data: Cause.squash(cause) }),
+            Effect.annotateLogs({ data: cause }),
             withLogChannel('desktop'),
           ),
         ),

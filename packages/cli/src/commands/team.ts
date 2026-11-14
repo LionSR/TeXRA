@@ -183,7 +183,12 @@ const runTeam = Effect.fn('runTeam')(function* (
       allowEmptyInput: hasInstruction,
       requireWorkspaceFiles: true,
     },
-    Effect.fnUntraced(function* ({ inputFiles, contextFiles, stdinInputPath }) {
+    Effect.fnUntraced(function* ({
+      inputFiles,
+      mediaFiles,
+      contextFiles,
+      stdinInputPath,
+    }) {
       if (runContext.approvalPolicy === 'never') {
         writeTextStderr(
           `WARN team ${plan.preset.id} may run without subagents because approval policy "never" denies approval-gated tools, the agent tool included. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
@@ -208,6 +213,7 @@ const runTeam = Effect.fn('runTeam')(function* (
         agentSource: rootAgent.source,
         model,
         inputFiles,
+        mediaFiles,
         contextFiles,
         instruction: formatTeamRunInstruction(plan.preset, {
           inputFiles,

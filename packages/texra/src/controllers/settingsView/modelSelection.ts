@@ -141,7 +141,7 @@ const buildSelectionItems = Effect.fn('buildModelSelectionItems')(function* (
     items.push({ ...item, ...reasoningLevelData(decided) });
   }
 
-  return items.sort((a, b) => a.name.localeCompare(b.name));
+  return items.toSorted((a, b) => a.name.localeCompare(b.name));
 });
 
 /**

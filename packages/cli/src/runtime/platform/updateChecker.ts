@@ -342,7 +342,7 @@ export function notifyCliUpdate(
       Effect.catchCause((cause) =>
         Cause.hasDies(cause)
           ? Effect.logWarning('The update check failed unexpectedly').pipe(
-              Effect.annotateLogs({ data: Cause.squash(cause) }),
+              Effect.annotateLogs({ data: cause }),
               Effect.as(undefined),
             )
           : Effect.undefined,

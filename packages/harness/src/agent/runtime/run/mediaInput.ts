@@ -12,7 +12,7 @@
  * its media is read once, as it is sent, and stored by address). Nothing
  * drops an attachment silently.
  */
-import { Cause, Effect, Exit, FileSystem } from 'effect';
+import { Effect, Exit, FileSystem } from 'effect';
 
 import { pathToLocationIn } from '@common/storage/fileLocation';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -326,7 +326,7 @@ export const captureAttachments = Effect.fn('toolUse.captureAttachments')(
           ...base,
           content: {
             kind: 'metadata-only',
-            reason: toErrorMessage(Cause.squash(read.cause)),
+            reason: toErrorMessage(read.cause),
           },
         });
     }

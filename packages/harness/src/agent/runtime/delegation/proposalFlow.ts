@@ -6,7 +6,7 @@
  */
 
 // Third-party imports
-import { Cause, Context, type Deferred, Effect, Exit } from 'effect';
+import { Context, type Deferred, Effect, Exit } from 'effect';
 
 // Local imports
 import {
@@ -277,7 +277,7 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
     );
     if (Exit.isFailure(modelExit)) {
       return errorResult(
-        `Cannot launch with model '${result.model}': ${toErrorMessage(Cause.squash(modelExit.cause))} Re-propose the delegation.`,
+        `Cannot launch with model '${result.model}': ${toErrorMessage(modelExit.cause)} Re-propose the delegation.`,
         {
           summary: `Approved model override '${result.model}' is not available`,
         },

@@ -18,7 +18,7 @@
  */
 
 // Third-party imports
-import { Cause, Effect, FileSystem, Predicate, Stream } from 'effect';
+import { Effect, FileSystem, Predicate, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -163,7 +163,7 @@ function showDiagnostics(
         ).pipe(
           Effect.catchCause((cause) =>
             Effect.logError(
-              `Failed to refresh criticism diagnostics: ${toErrorMessage(Cause.squash(cause))}`,
+              `Failed to refresh criticism diagnostics: ${toErrorMessage(cause)}`,
             ),
           ),
           Effect.forkChild,

@@ -238,7 +238,7 @@ export const sessionEventsLayer = Layer.effect(
           yield* Effect.logWarning(
             'Session publisher ended abnormally on close',
           ).pipe(
-            Effect.annotateLogs({ data: Cause.squash(ended.value.cause) }),
+            Effect.annotateLogs({ data: ended.value.cause }),
             withLogChannel(CHANNEL),
           );
         }
@@ -298,7 +298,7 @@ export const sessionEventsLayer = Layer.effect(
         run: inTransaction(job, options.order).pipe(
           Effect.catchCause((cause) =>
             Effect.logError('Session publication failed').pipe(
-              Effect.annotateLogs({ data: Cause.squash(cause) }),
+              Effect.annotateLogs({ data: cause }),
               withLogChannel(CHANNEL),
               Effect.andThen(
                 Effect.sync(() => options.failed?.(Cause.squash(cause))),

@@ -1,4 +1,4 @@
-import { Cause, Effect, FileSystem, Schema } from 'effect';
+import { Effect, FileSystem, Schema } from 'effect';
 import * as vscode from 'vscode';
 import { nanoid } from 'nanoid';
 
@@ -133,7 +133,7 @@ export class BundledViewContentProvider {
       // failure is logged here, once, with its cause.
       Effect.catchCause((cause) =>
         Effect.logError(
-          `Error generating HTML content for ${this.viewName}: ${toErrorMessage(Cause.squash(cause))}`,
+          `Error generating HTML content for ${this.viewName}: ${toErrorMessage(cause)}`,
         ).pipe(Effect.as('<html><body>Error loading content</body></html>')),
       ),
     );

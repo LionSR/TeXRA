@@ -171,7 +171,7 @@ const summarize = Effect.fn('compaction.summarize')(function* (
     }
     activity.finish('failed');
     logger.warn(
-      `Compaction failed, continuing with original messages: ${toErrorMessage(Cause.squash(summarized.cause))}`,
+      `Compaction failed, continuing with original messages: ${toErrorMessage(summarized.cause)}`,
       { data: Cause.squash(summarized.cause) },
     );
     return null;
@@ -313,7 +313,7 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
           : land(input, [], exit.value, base, reason);
       // A failed summary call warned itself; this is a defect in making one.
       input.logger.warn(
-        `A background compaction stopped: ${toErrorMessage(Cause.squash(exit.cause))}`,
+        `A background compaction stopped: ${toErrorMessage(exit.cause)}`,
         { data: Cause.squash(exit.cause) },
       );
       return cell.current;

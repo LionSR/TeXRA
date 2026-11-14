@@ -20,7 +20,7 @@ import {
   workspaceEnvironmentLayer,
 } from '@texra-ai/harness/host';
 import { Secrets, withLogChannel } from '@texra-ai/harness/plugins';
-import { Cause, Effect, FileSystem, Scope } from 'effect';
+import { Effect, FileSystem, Scope } from 'effect';
 
 import {
   toErrorMessage,
@@ -361,7 +361,7 @@ export const createHostRunActions = Effect.fn(
               : present(shown.message);
           }),
           Effect.catchCause((cause) => {
-            const message = toErrorMessage(Cause.squash(cause));
+            const message = toErrorMessage(cause);
             return Effect.logWarning(
               `Failed to send a follow-up to run ${launcher}: ${message}`,
             ).pipe(

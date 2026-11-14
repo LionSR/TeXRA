@@ -170,7 +170,7 @@ function startDetached<A, E extends { readonly message: string }>(
                     onNone: () =>
                       Effect.fail(
                         new TaskFailed({
-                          message: toErrorMessage(Cause.squash(cause)),
+                          message: toErrorMessage(cause),
                         }),
                       ),
                   }),
