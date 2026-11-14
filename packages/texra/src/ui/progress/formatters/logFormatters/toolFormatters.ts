@@ -20,6 +20,7 @@ import {
   normalizeToolName,
 } from '@texra-ai/harness/transcript';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
+import { runStatusLabel, statusGlyph } from '@ui/copy/runStatus';
 import { TOOL_CUT_BY_RUN_END_NOTE } from '@ui/copy/scriptStage';
 import { ICON_NAMES, type IconName } from '@ui/wa/iconNames';
 
@@ -72,7 +73,7 @@ export function formatToolUseTemplate(
   if (model.isUserFeedback) {
     iconName = 'comment';
   } else if (stopped || showAsError) {
-    iconName = 'circle-exclamation';
+    iconName = statusGlyph({ tone: stopped ? 'warning' : 'danger' });
   } else {
     const icon = tools.icons[normalizedToolName];
     iconName =
@@ -146,7 +147,7 @@ export function formatToolUseTemplate(
   const timerTemplate = running ? html`<tool-timer .startTime=${row.timestamp} .timeoutMs=${toolTimeoutMs ?? 0}></tool-timer>` : nothing;
 
   // prettier-ignore
-  const stoppedTemplate = stopped ? html`<span class="tool-interrupted">Interrupted</span>` : nothing;
+  const stoppedTemplate = stopped ? html`<span class="tool-interrupted">${runStatusLabel('interrupted')}</span>` : nothing;
   // prettier-ignore
   const extraContent = html`${timerTemplate}${stoppedTemplate}`;
 

@@ -5,6 +5,7 @@ import { MODELS } from '@texra-ai/llm';
 
 import { getEnabledModels } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { enabledLabel } from '@ui/copy/format';
 
 import {
   listCliEnabledModelCatalog,
@@ -161,7 +162,7 @@ const listEnabledModels = Effect.fn('listEnabledModels')(function* () {
     text: catalog
       .map(
         (model) =>
-          `${model.enabled ? 'on' : 'off'}\t${model.id}\t${model.label}\t${model.provider}`,
+          `${enabledLabel(model.enabled)}\t${model.id}\t${model.label}\t${model.provider}`,
       )
       .join('\n'),
   });

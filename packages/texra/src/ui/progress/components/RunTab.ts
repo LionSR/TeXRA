@@ -35,7 +35,11 @@ import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import './WorktreeChip';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
+import {
+  NESTED_AGENT,
+  nestedRollupLabel,
+  TASK_ACTIONS,
+} from '@ui/copy/nestedRuns';
 import { formatRelativeTime } from '@ui/copy/format';
 import { runTabStyles } from './RunTab.styles';
 import type { RunView } from '@texra-ai/harness/schemas';
@@ -52,7 +56,7 @@ function buildTooltip(run: RunView): string {
   const mainLine = [
     run.label,
     `Status: ${run.approval === 'none' ? runStatus(run).word : 'Needs approval'}`,
-    run.rollup.total > 0 && rollupLabel(run),
+    run.rollup.total > 0 && nestedRollupLabel(run.rollup),
     modelDisplay && `Model: ${modelDisplay}`,
     worktreeDisplay,
   ]
@@ -69,14 +73,6 @@ function buildTooltip(run: RunView): string {
   ]
     .filter(Boolean)
     .join('\n');
-}
-
-/** A collapsed parent's descendants in words: "2 agents · 1 running". */
-function rollupLabel(run: RunView): string {
-  const total = formatResultCount(run.rollup.total, NESTED_AGENT.countNoun);
-  return run.rollup.running > 0
-    ? `${total} · ${run.rollup.running} running`
-    : total;
 }
 
 function runDecorator(run: RunView) {
@@ -272,7 +268,9 @@ export class RunTab extends LitElement {
               >
               ${
                 showRollup
-                  ? html`<span class="tab-rollup">${rollupLabel(run)}</span>`
+                  ? html`<span class="tab-rollup"
+                      >${nestedRollupLabel(run.rollup)}</span
+                    >`
                   : nothing
               }
               ${

@@ -14,7 +14,6 @@ import {
 } from '@texra/shared/agentCliSettings';
 import {
   agentCliReasoning,
-  resolveAgentCliModel,
   selectAgentCliModel,
   type AgentCliModelRule,
 } from './agentCliModel';
@@ -93,9 +92,7 @@ export const codexRun = Effect.fn('codexConfig.codexRun')(function* (
     stores,
     CODEX_REASONING_EFFORT_SETTING,
   );
-  const selection = yield* resolveAgentCliModel(() =>
-    selectAgentCliModel(modelString, CODEX_MODEL_RULE),
-  );
+  const selection = yield* selectAgentCliModel(modelString, CODEX_MODEL_RULE);
   const slug = codexBackendModelId(selection.config);
   const uncapped = yield* agentCliReasoning(selection, undefined, {
     userEffort,

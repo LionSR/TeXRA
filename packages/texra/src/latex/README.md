@@ -9,7 +9,7 @@ testable.
 
 The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
 `latexdiff/`, the extractors, `overleafClone.ts`, `arxivProcessor.ts`,
-`LatexMediaManager.ts`) returns `Effect` programs:
+`latexMedia.ts`) returns `Effect` programs:
 
 - **Nothing here runs a fiber.** The caller runs the program at its boundary
   (a tool's `execute()`, a VS Code command, a desktop handler, a CLI command).
@@ -22,7 +22,7 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
   `withLogChannel`; tests assert on the sink's entries
   (`@test/support/logSinkCapture`). `Debug` entries below the host's
   `MinimumLogLevel` are dropped (the CLI shows them with `--verbose`).
-  `LatexMediaManager`'s `AgentTrace` is the run's product trace, not logging.
+  `latexMedia.ts`'s `AgentTrace` is the run's product trace, not logging.
 
 ## Files
 
@@ -36,7 +36,7 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
   (bibliography references and citation keys from source, then entries from
   the `.bib` files: two stages with different inputs);
   `extractFileDependencies.ts` (`\input`, `\include`, bibliography targets and
-  local `.sty` files, for `LatexMediaManager` to mirror);
+  local `.sty` files, for `latexMedia.ts` to mirror);
   `latexParsingUtils.ts` (comment stripping and bibliography-directive
   matching shared by the extractors; put new shared parsing here);
   `labelSearch.ts` (`\label{}` lookup); `criticismParser.ts` (`\criticize{}`
@@ -47,8 +47,8 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
   the clean-up of its output, which restores bibliography directives and
   sanitizes `\DIFadd`/`\DIFdel`; it succeeds with the diff's path or fails
   with a typed error).
-- **Media and files**: `LatexMediaManager.ts` (compiles PDFs and mirrors
-  figure dependencies into run storage; stateless); `TikzPictureManager.ts`
+- **Media and files**: `latexMedia.ts` (`processInputFiles`: compiles PDFs
+  and mirrors figure dependencies into run storage); `tikzPictures.ts`
   (standalone TikZ rendering); `acceptedFileTarget.ts` (where an accepted file
   lands, and the write).
 - **Remote sources**: `arxivIdentifier.ts` and `arxivProcessor.ts` (arXiv IDs

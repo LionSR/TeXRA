@@ -28,10 +28,9 @@ export interface PerKeyLanes<Key> {
  * Run `self` on `key`'s lane, FIFO: each entrant claims the lane
  * synchronously when its effect starts by swapping its own `Deferred` in as
  * the tail, waits for its predecessor's, and hands off in `ensuring` once
- * `self` succeeds, fails, or is interrupted. The wait itself is
- * interruptible; a waiter interrupted before entering hands its successor
- * the wait for its own predecessor, so the successor still waits for whoever
- * actually holds the lane. A hand-off through a `Deferred` resumes the next
+ * `self` succeeds, fails, or is interrupted. A waiter interrupted before
+ * entering hands its successor the wait for its own predecessor, so the
+ * successor still waits for whoever actually holds the lane. A hand-off through a `Deferred` resumes the next
  * fiber directly, so fibers started in sequence enter in that order. The
  * lane is created on first use and deleted from `lanes` once the last fiber
  * holding or waiting on it settles.
@@ -47,53 +46,52 @@ export interface PerKeyLanes<Key> {
  * body still on the caller's fiber, and it was longer while adding two
  * lifecycle cases (raced creation, ended queue) that the chain does not have.
  *
- * `refuseClaim` makes the claim conditional: it reads the lane's current
- * occupant in the same synchronous step that would install the caller's own
- * tail, so nothing can claim the lane between the decision and the claim.
- * Returning a value refuses with it and leaves the lane exactly as it was
- * found; returning `undefined` claims as usual.
+ * The claim and the registration of its release are one uninterruptible
+ * step. A fiber can yield between any two steps once it has used its
+ * scheduler budget, and an interruption arriving then replaces the step it
+ * was about to run: were the claim interruptible, that could be the step
+ * that registers the release, and the lane would stay claimed by a fiber
+ * that is gone, with every later entrant waiting on it. Only the wait and
+ * `self` are interruptible.
  */
-export function withPerKeyLane<Key, RefusalE = never>(
+export function withPerKeyLane<Key>(
   lanes: PerKeyLanes<Key>,
   key: Key,
-  refuseClaim?: (occupant: PerKeyLane | undefined) => RefusalE | undefined,
-): <A, E, R>(
-  self: Effect.Effect<A, E, R>,
-) => Effect.Effect<A, E | RefusalE, R> {
-  return <A, E, R>(self: Effect.Effect<A, E, R>) =>
-    Effect.suspend((): Effect.Effect<A, E | RefusalE, R> => {
-      const existing = lanes.get(key);
-      const refusal = refuseClaim?.(existing);
-      if (refusal !== undefined) return Effect.fail(refusal);
-      const mine = Deferred.makeUnsafe<void>();
-      const previous = existing?.tail;
-      const held = existing ?? { tail: mine, fibers: 0 };
-      if (!existing) lanes.set(key, held);
-      held.tail = mine;
-      held.fibers += 1;
-      let entered = previous === undefined;
-      const run =
-        previous === undefined
-          ? self
-          : Effect.flatMap(Deferred.await(previous), () => {
-              entered = true;
-              return self;
-            });
-      return run.pipe(
-        Effect.ensuring(
-          Effect.sync(() => {
-            Deferred.doneUnsafe(
-              mine,
-              previous === undefined || entered
-                ? Effect.void
-                : Deferred.await(previous),
-            );
-            held.fibers -= 1;
-            if (held.fibers === 0 && lanes.get(key) === held) {
-              lanes.delete(key);
-            }
-          }),
-        ),
-      );
-    });
+): <A, E, R>(self: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R> {
+  return (self) =>
+    Effect.uninterruptibleMask((restore) =>
+      Effect.suspend(() => {
+        const existing = lanes.get(key);
+        const mine = Deferred.makeUnsafe<void>();
+        const previous = existing?.tail;
+        const held = existing ?? { tail: mine, fibers: 0 };
+        if (!existing) lanes.set(key, held);
+        held.tail = mine;
+        held.fibers += 1;
+        let entered = previous === undefined;
+        const run =
+          previous === undefined
+            ? self
+            : Effect.flatMap(Deferred.await(previous), () => {
+                entered = true;
+                return self;
+              });
+        return restore(run).pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              Deferred.doneUnsafe(
+                mine,
+                previous === undefined || entered
+                  ? Effect.void
+                  : Deferred.await(previous),
+              );
+              held.fibers -= 1;
+              if (held.fibers === 0 && lanes.get(key) === held) {
+                lanes.delete(key);
+              }
+            }),
+          ),
+        );
+      }),
+    );
 }

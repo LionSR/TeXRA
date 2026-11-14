@@ -1,5 +1,5 @@
 /**
- * How a renderer words a size, a change and a moment: English
+ * How a renderer words a size, a change, a moment and a switch: English
  * copy every host prints the same way.
  */
 import prettyBytes from 'pretty-bytes';
@@ -27,6 +27,11 @@ export function formatMediaLabel(media: {
 /** A change's line counts as a diff prints them (`+3 -1`). */
 export function formatLineChanges(added: number, removed: number): string {
   return `+${added} -${removed}`;
+}
+
+/** A model's or skill's switch as a word, in every list that shows it. */
+export function enabledLabel(enabled: boolean): string {
+  return enabled ? 'enabled' : 'disabled';
 }
 
 const relativeTimeFormat = new Intl.RelativeTimeFormat(undefined, {

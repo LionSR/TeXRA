@@ -3,7 +3,7 @@
  *
  * Parses \input{}, \include{}, \bibliography{}, \addbibresource{}, and
  * \usepackage{} commands to discover files that the main document depends on.
- * Used by LatexMediaManager to mirror these dependencies into run storage
+ * Used by `processInputFiles` (`latexMedia.ts`) to mirror these dependencies into run storage
  * so that output files can be compiled outside the workspace.
  */
 

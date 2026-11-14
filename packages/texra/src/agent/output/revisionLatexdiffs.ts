@@ -27,10 +27,9 @@ import {
 } from '@texra/shared/constants/revisionLayout';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 
-import {
-  publishCompiledPdfArtifact,
-  publishCompiledPdfArtifactBestEffort,
-} from './compiledPdfArtifacts';
+import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
+
+import { publishCompiledPdfArtifact } from './compiledPdfArtifacts';
 import { resolveWorkspaceSourceDir } from './compileCheck';
 import type { OutputDependencies } from './outputFileExtraction';
 import {
@@ -99,13 +98,13 @@ const mirrorDependency = (
     if ((yield* entryTypeIn(fs, target.absolutePath)) === undefined) return;
     yield* fileService.mirrorWorkspaceFile(target);
   }).pipe(
-    Effect.catch((error) =>
-      Effect.sync(() => {
+    recoverLogged(
+      (error) =>
         logger.warn(
           `Unable to mirror workspace dependency ${target.absolutePath}: ${toErrorMessage(error)}`,
           { data: { path: target.absolutePath, error } },
-        );
-      }),
+        ),
+      () => Effect.void,
     ),
   );
 
@@ -209,11 +208,18 @@ export const revisionLatexdiffs = Effect.fn('documents.revisionLatexdiffs')(
   (effect, { run: { logger } }) =>
     // A failed pass is an error on the transcript, and the round records
     // that its diffs did not run.
-    Effect.catch(effect, (error) => {
-      const message = toErrorMessage(error);
-      logger.error(`Error during latexdiff processing: ${message}`);
-      return Effect.succeed(notRun(`the latexdiff pass failed: ${message}`));
-    }),
+    effect.pipe(
+      recoverLogged(
+        (error) =>
+          logger.error(
+            `Error during latexdiff processing: ${toErrorMessage(error)}`,
+          ),
+        (error) =>
+          Effect.succeed(
+            notRun(`the latexdiff pass failed: ${toErrorMessage(error)}`),
+          ),
+      ),
+    ),
 );
 
 /**
@@ -263,13 +269,12 @@ const diffPair = (
     const cwd = path.dirname(
       yield* fs.realPath(asGiven).pipe(
         Effect.catchIf(absentReason, () => Effect.succeed(asGiven)),
-        Effect.catch((error) =>
-          Effect.sync(() => {
+        recoverLogged(
+          (error) =>
             logger.warn(
               `Could not resolve links in ${asGiven}; latexdiff runs beside the path as given, so relative inputs may not resolve: ${error.message}`,
-            );
-            return asGiven;
-          }),
+            ),
+          () => Effect.succeed(asGiven),
         ),
       ),
     );
@@ -298,21 +303,22 @@ const diffPair = (
       artifact: compiled.artifact,
     } satisfies SingleDiffOutcome;
   }).pipe(
-    Effect.catch((error) =>
-      Effect.sync((): SingleDiffOutcome => {
-        const message = toErrorMessage(error);
-        const line = `${label} failed for ${fileLocationDisplayPath(revised.location)}: ${message}`;
+    recoverLogged(
+      (error) =>
         // An input that is no whole document has nothing to mark up.
-        if (Predicate.isTagged(error, 'NoDocumentEnvironment')) {
-          logger.debug(line, { data: error });
-        } else {
-          logger.warn(line, { data: error });
-        }
-        return {
-          entry: { ...pair, status: 'failed', error: message },
+        (Predicate.isTagged(error, 'NoDocumentEnvironment')
+          ? logger.debug
+          : logger.warn
+        ).call(
+          logger,
+          `${label} failed for ${fileLocationDisplayPath(revised.location)}: ${toErrorMessage(error)}`,
+          { data: error },
+        ),
+      (error) =>
+        Effect.succeed<SingleDiffOutcome>({
+          entry: { ...pair, status: 'failed', error: toErrorMessage(error) },
           artifact: null,
-        };
-      }),
+        }),
     ),
   );
 };
@@ -390,26 +396,31 @@ const compileDiff = Effect.fn('documents.compileDiff')(function* (
   }
 
   const { runId, runDirectory } = fileService;
-  const artifact = yield* publishCompiledPdfArtifactBestEffort(
-    publishCompiledPdfArtifact({
-      runDirectory,
-      runId,
-      round,
-      displayName: path.basename(diffLocation.absolutePath),
-      source: sourceLocation,
-      compiledPdfPath: compiled.pdfPath,
-      pdfStemSuffix,
-    }),
+  const artifact = yield* publishCompiledPdfArtifact({
+    runDirectory,
+    runId,
+    round,
+    displayName: path.basename(diffLocation.absolutePath),
+    source: sourceLocation,
+    compiledPdfPath: compiled.pdfPath,
+    pdfStemSuffix,
+  }).pipe(
     // Publishing the auxiliary PDF is best effort: a copy that failed is
     // reported here and leaves the diff `.tex` itself intact.
-    (error) =>
-      logger.warn(`Failed to publish latexdiff PDF: ${toErrorMessage(error)}`, {
-        data: {
-          diffFile: diffLocation.absolutePath,
-          compiledPdfPath: compiled.pdfPath,
-          error,
-        },
-      }),
+    recoverLogged(
+      (error) =>
+        logger.warn(
+          `Failed to publish latexdiff PDF: ${toErrorMessage(error)}`,
+          {
+            data: {
+              diffFile: diffLocation.absolutePath,
+              compiledPdfPath: compiled.pdfPath,
+              error,
+            },
+          },
+        ),
+      () => Effect.succeed(null),
+    ),
   );
   return { diffLocation, artifact };
 });

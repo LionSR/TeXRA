@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: `withPerKeyLane` takes no conditional claim.** Its third
+  parameter, `refuseClaim`, had no caller and is removed; a lane is claimed
+  by every entrant.
 - **SDK: the harness names no agent commit identity.**
   `GIT_AUTHOR_NAME_SETTING` and `GIT_AUTHOR_EMAIL_SETTING` read
   `undefined` unless the person or the app's catalog (`settingsCatalog`'s
@@ -1777,6 +1780,18 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **A file write that is stopped part-way no longer empties the file.**
+  Stopping a run while it wrote an approved edit, or closing a project while
+  the desktop editor saved, could leave the file with no content at all,
+  neither the old nor the new. A write now finishes once it has started.
+- **A stopped operation no longer blocks later writes of the same file or
+  project.** In rare timing, an operation interrupted as it took its turn
+  (saving a setting, opening or closing a project, writing a credential)
+  kept that turn for the rest of the process, and every later one on the
+  same file or project waited for good.
+- **Closing a session no longer waits on queued writes.** Rows are committed
+  as they are written, so a close has nothing left to flush and a write can
+  no longer be dropped or left unanswered at the close deadline.
 - **A task launched to run once is never resumed to wait for messages.**
   Resumed in a chat or a window, such a task waited for a message that
   every send then refused with "Resume it". It now runs its cycle and ends,

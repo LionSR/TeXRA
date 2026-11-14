@@ -173,7 +173,7 @@ export function defineSubscriptionAuthCommand(
         ndjson: { kind: `${ndjsonKind}-status`, ...status },
         text: status.signedIn
           ? ACCOUNT_OUTCOME.signedInAs(provider.displayName, label)
-          : `Not signed in with ${provider.displayName}.`,
+          : ACCOUNT_OUTCOME.notSignedIn(provider.displayName),
       });
       return CliExitCode.Success;
     }),

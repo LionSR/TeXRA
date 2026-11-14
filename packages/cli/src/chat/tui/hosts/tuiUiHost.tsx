@@ -4,14 +4,14 @@
 // which is why it cannot fail and answers `Effect.sync`.
 // A dialog is a foreground form: it takes the App's one `activeForm` slot, so
 // a host dialog obeys the same one-modal-at-a-time promotion the approval
-// queue does, and a second one waits on this module's lane rather than
-// painting over the first. A slash form already in that slot is waited on
-// too, through the slot owner in `cliState`. Cancelling is a value, never a failure: `confirm`
+// queue does, and a second one, like a dialog arriving while a slash form
+// holds the slot, waits in the slot's own queue (`formSlot`) rather than
+// painting over the first. Cancelling is a value, never a failure: `confirm`
 // answers `false` and `input` answers `undefined`, exactly as the two
 // graphical hosts do.
 
 // Third-party imports
-import { Effect, Semaphore } from 'effect';
+import { Effect } from 'effect';
 import { Text } from 'ink';
 
 // Local imports
@@ -29,20 +29,14 @@ import { closeActiveForm, openActiveForm } from '../state/formSlot';
 import { appendLocalNotice } from '../state/transcript';
 
 /**
- * One host dialog at a time. Two runs asking at once queue here instead of
- * overwriting each other's form, and the fiber that loses the race is
- * interruptible while it waits — an interrupted waiter never takes the slot.
- */
-const dialogLane = Semaphore.makeUnsafe(1);
-
-/**
  * Put one form in the App's foreground slot and wait for the answer it
  * resolves. The slot is claimed through `openActiveForm`, the one owner both
  * this and the slash-command forms write through, so a dialog opened while a
- * slash form is still on screen waits behind it rather than unmounting it and
- * throwing away what the user typed. The slot is released on every exit: the
- * App closes the form itself when it answers, and the finalizer closes it
- * from here, which gives up a queued place just as it gives up the slot.
+ * slash form or another dialog is still on screen waits behind it, in arrival
+ * order, rather than unmounting it and throwing away what the user typed. The
+ * slot is released on every exit: the App closes the form itself when it
+ * answers, and the finalizer closes it from here, which gives up a queued
+ * place just as it gives up the slot.
  */
 function openDialog<T>(
   commandName: string,
@@ -51,25 +45,23 @@ function openDialog<T>(
     availableRows: number,
   ) => React.ReactNode,
 ): Effect.Effect<T | undefined> {
-  return dialogLane.withPermit(
-    Effect.callback<T | undefined>((resume) => {
-      // The form is re-rendered on every frame, so its answer callback is
-      // latched: a second keypress landing between the answer and the
-      // unmount must not resume this fiber twice.
-      let settled = false;
-      const form = openActiveForm({
-        commandName,
-        render: (onDone: () => void, availableRows: number) =>
-          render((value) => {
-            if (settled) return;
-            settled = true;
-            onDone();
-            resume(Effect.succeed(value));
-          }, availableRows),
-      });
-      return Effect.sync(() => closeActiveForm(form));
-    }),
-  );
+  return Effect.callback<T | undefined>((resume) => {
+    // The form is re-rendered on every frame, so its answer callback is
+    // latched: a second keypress landing between the answer and the
+    // unmount must not resume this fiber twice.
+    let settled = false;
+    const form = openActiveForm({
+      commandName,
+      render: (onDone: () => void, availableRows: number) =>
+        render((value) => {
+          if (settled) return;
+          settled = true;
+          onDone();
+          resume(Effect.succeed(value));
+        }, availableRows),
+    });
+    return Effect.sync(() => closeActiveForm(form));
+  });
 }
 
 /** Pick one of the caller's own labels, or dismiss. */

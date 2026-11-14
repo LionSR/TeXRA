@@ -42,19 +42,21 @@ interface AgentCliModel {
 export function selectAgentCliModel(
   id: string,
   rule: AgentCliModelRule,
-): SelectedModel {
+): Effect.Effect<SelectedModel, ToolError> {
   const selection = selectModel(id);
-  if (selection === undefined) {
-    throw new ToolError(
-      `Unknown model "${id}" for ${rule.cli}: expected a model reference such as provider/id, optionally with @effort.`,
+  if (selection === undefined)
+    return Effect.fail(
+      new ToolError(
+        `Unknown model "${id}" for ${rule.cli}: expected a model reference such as provider/id, optionally with @effort.`,
+      ),
     );
-  }
-  if (!rule.eligible(selection.config)) {
-    throw new ToolError(
-      `${rule.cli} cannot run "${id}" (${selection.config.label}): it needs ${rule.requirement}.`,
+  if (!rule.eligible(selection.config))
+    return Effect.fail(
+      new ToolError(
+        `${rule.cli} cannot run "${id}" (${selection.config.label}): it needs ${rule.requirement}.`,
+      ),
     );
-  }
-  return selection;
+  return Effect.succeed(selection);
 }
 
 /**
@@ -83,17 +85,3 @@ export function agentCliReasoning(
     }),
   );
 }
-
-/** Run a model/effort resolution, reporting a refusal as the tool's error. */
-export const resolveAgentCliModel = <A>(
-  resolve: () => A,
-): Effect.Effect<A, ToolError> =>
-  Effect.try({
-    try: resolve,
-    catch: (error) =>
-      error instanceof ToolError
-        ? error
-        : new ToolError(`Model selection failed: ${String(error)}`, {
-            cause: error,
-          }),
-  });

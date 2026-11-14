@@ -155,7 +155,7 @@ function buildLatexSearchParts(input: {
  * own way. The file is not proven to be this run's: an earlier build's PDF
  * in a reused output directory also reads as success.
  */
-export type CompileLatex2PdfResult =
+type CompileLatex2PdfResult =
   | { ok: true; pdfPath: string }
   | { ok: false; logTail: string };
 

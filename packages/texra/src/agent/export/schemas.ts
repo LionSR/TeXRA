@@ -6,7 +6,7 @@
  * uses `assembleTrace` instead.
  *
  * The conversation's nodes cross the service's RPC edge
- * (`records.conversation`), so the shapes are schemas and the types derive
+ * (`records.readConversation`), so the shapes are schemas and the types derive
  * from them.
  */
 

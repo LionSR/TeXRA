@@ -21,6 +21,7 @@ import {
 } from '@ui/copy/approvalPolicy';
 import { formatTokenCount } from '@ui/copy/format';
 import { usageCostLabel } from '@ui/copy/modelAccess';
+import { runStatusLabel } from '@ui/copy/runStatus';
 import type { Session, WorkspaceRoots } from '@texra-ai/harness';
 
 /** What the task pill paints from one session view. */
@@ -90,15 +91,16 @@ function paint(
     item.tooltip = tip;
   }
   if (activity === 'approval') {
-    item.text = '$(bell-dot) TeXRA: Waiting for you';
-    item.accessibilityInformation = { label: 'TeXRA tasks, waiting for you' };
+    const waiting = runStatusLabel('waitingOnUser');
+    item.text = `$(bell-dot) TeXRA: ${waiting}`;
+    item.accessibilityInformation = { label: `TeXRA tasks, ${waiting}` };
   } else if (working > 1) {
     item.text = `$(loading~spin) TeXRA: ${working} active`;
     item.accessibilityInformation = {
       label: `TeXRA tasks, ${working} active`,
     };
   } else if (working === 1) {
-    item.text = '$(loading~spin) TeXRA: Running';
+    item.text = `$(loading~spin) TeXRA: ${runStatusLabel('running')}`;
     item.accessibilityInformation = { label: 'TeXRA tasks, one active' };
   } else {
     // Nothing running: no pill. The setup pill covers the first run.

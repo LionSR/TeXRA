@@ -28,7 +28,7 @@ import {
   getLanguageFromPath,
   TOOL_OUTPUT_LANGUAGES,
 } from '@ui/progress/formatters/constants';
-import { TOOL_STATUS_WORD } from '@ui/copy/runStatus';
+import { statusGlyph, TOOL_STATUS } from '@ui/copy/runStatus';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import type {
@@ -222,15 +222,17 @@ function renderToolSection(
     case 'badges':
       // prettier-ignore
       return buildToolUseSection(section.label, html`${section.badges.map((badge) => buildStatusBadge('image', badge))}`);
-    case 'status':
+    case 'status': {
+      const status = TOOL_STATUS[section.status];
       return buildToolUseSection(
         section.label,
         buildStatusBadge(
-          section.status === 'failed' ? 'circle-exclamation' : 'check',
-          TOOL_STATUS_WORD[section.status],
+          statusGlyph(status),
+          status.word,
           section.status === 'in_progress',
         ),
       );
+    }
     default:
       return absurd(section);
   }

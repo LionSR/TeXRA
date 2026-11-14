@@ -68,10 +68,7 @@ export class RunTabs extends LitElement {
         font-weight: var(--font-weight-normal);
         color: var(--color-text-muted);
       }
-      .group-heading.group-waiting {
-        color: var(--color-warning);
-      }
-      .group-heading.group-interrupted {
+      .group-heading:is(.group-waiting, .group-interrupted) {
         color: var(--color-warning);
       }
     `,

@@ -16,7 +16,11 @@ import {
   formatCompactDuration,
   pluralize,
 } from '@texra-ai/harness/schemas';
-import { formatLoopPositionLabel, runStatus } from '@ui/copy/runStatus';
+import {
+  formatLoopPositionLabel,
+  runStatus,
+  runStatusLabel,
+} from '@ui/copy/runStatus';
 
 import {
   safeTerminalText,
@@ -265,8 +269,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       .filter(Boolean)
       .join(' ');
     const phase = livePhaseText(root);
-    parts.push(subject || phase || 'Running');
-    if (subject && phase && phase !== 'Running') parts.push(phase);
+    parts.push(subject || phase || runStatusLabel('running'));
+    if (subject && phase && phase !== runStatusLabel('running'))
+      parts.push(phase);
     const runStartedAt = root.runStartedAt ?? this.attachedAt;
     const elapsed = formatCompactDuration(now - runStartedAt);
     const children = this.liveChildren();

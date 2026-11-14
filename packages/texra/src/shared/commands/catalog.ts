@@ -10,6 +10,7 @@ interface CommandCatalogEntry {
   id: string;
   title: string;
   shortTitle?: string;
+  /** The palette group. Every extension command is in {@link EXTENSION_COMMAND_CATEGORY}. */
   category: string;
   icon?: string;
   enablement?: string;
@@ -29,76 +30,71 @@ interface CommandCatalogEntry {
   palette?: false;
 }
 
+/** The palette group of every command the extension contributes. */
+const EXTENSION_COMMAND_CATEGORY = 'TeXRA';
+
+/** An extension row: its category is {@link EXTENSION_COMMAND_CATEGORY}. */
+type ExtensionCommandEntry = Omit<CommandCatalogEntry, 'category'>;
+
 /**
- * The commands the VS Code extension contributes, in manifest order. The
- * desktop app runs some of them too.
+ * The commands the VS Code extension contributes, in manifest order, all in
+ * {@link EXTENSION_COMMAND_CATEGORY}. The desktop app runs some of them too.
  */
 const commandCatalog = [
   {
     id: 'texra.createSampleProject',
     title: 'Create Sample Project',
-    category: 'TeXRA',
   },
   {
     id: 'texra.runSetupAssistant',
     title: 'Run Setup Assistant',
-    category: 'TeXRA',
     icon: '$(rocket)',
   },
   {
     id: 'texra.openGettingStarted',
     title: 'Open Getting Started Walkthrough',
-    category: 'TeXRA',
     icon: '$(mortar-board)',
   },
   {
     id: 'texra.cleanBuild',
     title: 'Delete All build/ Folders in Workspace',
-    category: 'TeXRA',
     icon: '$(close-all)',
   },
   {
     id: 'texra.cloneOverleafProject',
     title: 'Clone Overleaf/ShareLaTeX Project',
-    category: 'TeXRA',
     icon: '$(repo-clone)',
   },
   {
     id: 'texra.indentCurrentTeX',
     title: 'Format Current LaTeX File',
-    category: 'TeXRA',
     icon: '$(indent)',
     enablement: '!virtualWorkspace',
   },
   {
     id: 'texra.fixCompilation',
     title: 'Fix LaTeX Compilation Errors',
-    category: 'TeXRA',
     icon: '$(wrench)',
     enablement: '!virtualWorkspace',
   },
   {
     id: 'texra.getTeXCount',
     title: 'Count Words in Current TeX File',
-    category: 'TeXRA',
     icon: '$(symbol-number)',
     enablement: '!virtualWorkspace',
   },
   {
     id: 'texra.compileTikzFigures',
     title: 'Compile TikZ Figures from Current File',
-    category: 'TeXRA',
   },
   {
     id: 'texra.downloadArXivSource',
     title: 'Download arXiv Source',
-    category: 'TeXRA',
   },
   {
     id: 'texra.execute',
     palette: false,
     title: 'Execute Agent',
-    category: 'TeXRA',
     keybinding: {
       key: 'ctrl+alt+e',
       mac: 'cmd+option+e',
@@ -108,25 +104,21 @@ const commandCatalog = [
   {
     id: 'texra.setApiKey',
     title: 'Set API Key',
-    category: 'TeXRA',
   },
   {
     id: 'texra.removeApiKey',
     palette: false,
     title: 'Remove API Key',
-    category: 'TeXRA',
   },
   {
     id: 'texra.auth.chatgpt.signIn',
     title: 'Sign In with ChatGPT Subscription',
-    category: 'TeXRA',
     icon: '$(comment-discussion)',
   },
   {
     id: 'texra.showMemory',
     palette: false,
     title: 'Memory Settings',
-    category: 'TeXRA',
     icon: '$(database)',
     settingsTab: 'memory',
   },
@@ -134,7 +126,6 @@ const commandCatalog = [
     id: 'texra.showModels',
     palette: false,
     title: 'Model Settings',
-    category: 'TeXRA',
     icon: '$(hubot)',
     settingsTab: 'models/models',
   },
@@ -142,7 +133,6 @@ const commandCatalog = [
     id: 'texra.showAgents',
     palette: false,
     title: 'Agent Settings',
-    category: 'TeXRA',
     icon: '$(symbol-method)',
     settingsTab: 'agents/library',
   },
@@ -150,7 +140,6 @@ const commandCatalog = [
     id: 'texra.showTools',
     palette: false,
     title: 'Plugin Settings',
-    category: 'TeXRA',
     icon: '$(extensions)',
     settingsTab: 'plugins',
   },
@@ -158,7 +147,6 @@ const commandCatalog = [
     id: 'texra.showApprovalSettings',
     palette: false,
     title: 'Approval Settings',
-    category: 'TeXRA',
     icon: '$(shield)',
     settingsTab: 'general/approval',
   },
@@ -166,7 +154,6 @@ const commandCatalog = [
     id: 'texra.showTeamSettings',
     palette: false,
     title: 'Agent Team Settings',
-    category: 'TeXRA',
     icon: '$(organization)',
     settingsTab: 'agents/teams',
   },
@@ -174,14 +161,12 @@ const commandCatalog = [
     id: 'texra.showGitSettings',
     palette: false,
     title: 'Git Settings',
-    category: 'TeXRA',
     icon: '$(git-branch)',
     settingsTab: 'general/git',
   },
   {
     id: 'texra.showMainView',
     title: 'New Task',
-    category: 'TeXRA',
     icon: '$(edit)',
     keybinding: {
       key: 'ctrl+alt+m',
@@ -192,7 +177,6 @@ const commandCatalog = [
   {
     id: 'texra.showProgressView',
     title: 'Show Tasks',
-    category: 'TeXRA',
     icon: '$(eye)',
     keybinding: {
       key: 'ctrl+alt+p',
@@ -204,37 +188,32 @@ const commandCatalog = [
     id: 'texra.openProgressViewInTab',
     title: 'Open Tasks in Editor',
     shortTitle: 'Open in Editor',
-    category: 'TeXRA',
     icon: '$(multiple-windows)',
   },
   {
     id: 'texra.showDashboard',
     title: 'Open Settings',
     shortTitle: 'Settings',
-    category: 'TeXRA',
     icon: '$(gear)',
   },
   {
     id: 'texra.replyComment',
     palette: false,
     title: 'Reply',
-    category: 'TeXRA',
   },
   {
     id: 'texra.resolveCommentThread',
     palette: false,
     title: 'Resolve',
-    category: 'TeXRA',
     icon: '$(check)',
   },
   {
     id: 'texra.unresolveCommentThread',
     palette: false,
     title: 'Reopen',
-    category: 'TeXRA',
     icon: '$(history)',
   },
-] as const satisfies readonly CommandCatalogEntry[];
+] as const satisfies readonly ExtensionCommandEntry[];
 
 /**
  * The commands only the desktop app has. They carry the same identity fields
@@ -319,11 +298,11 @@ type PackageCommandContribution = { command: string } & Pick<
  * it into `package.json`, and its `--check` (in `npm run gate`) fails on drift.
  */
 export const packageCommandContributions: PackageCommandContribution[] =
-  commandCatalog.map((entry: CommandCatalogEntry) => ({
+  commandCatalog.map((entry: ExtensionCommandEntry) => ({
     command: entry.id,
     title: entry.title,
     ...(entry.shortTitle === undefined ? {} : { shortTitle: entry.shortTitle }),
-    category: entry.category,
+    category: EXTENSION_COMMAND_CATEGORY,
     ...(entry.icon === undefined ? {} : { icon: entry.icon }),
     ...(entry.enablement === undefined ? {} : { enablement: entry.enablement }),
   }));
@@ -335,7 +314,7 @@ export const packageCommandContributions: PackageCommandContribution[] =
  * row is never shown.
  */
 export const packageCommandPalette = commandCatalog.map(
-  (entry: CommandCatalogEntry) => ({
+  (entry: ExtensionCommandEntry) => ({
     command: entry.id,
     when: entry.palette === false ? 'false' : 'texra.activated',
   }),
@@ -343,15 +322,18 @@ export const packageCommandPalette = commandCatalog.map(
 
 /** The manifest's `contributes.keybindings`, in catalog order. */
 export const commandKeybindings = commandCatalog.flatMap(
-  (entry: CommandCatalogEntry) =>
+  (entry: ExtensionCommandEntry) =>
     entry.keybinding ? [{ command: entry.id, ...entry.keybinding }] : [],
 );
 
 export const commandCatalogById = new Map<CommandId, CommandCatalogEntry>(
-  [...commandCatalog, ...desktopCommandCatalog].map((entry) => [
-    entry.id,
-    entry,
-  ]),
+  [
+    ...commandCatalog.map((entry) => ({
+      ...entry,
+      category: EXTENSION_COMMAND_CATEGORY,
+    })),
+    ...desktopCommandCatalog,
+  ].map((entry) => [entry.id, entry]),
 );
 
 /** Ids of the catalog entries that open the settings view on a specific tab. */
