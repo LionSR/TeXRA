@@ -30,6 +30,30 @@ describe('CLI workflow input lifecycle', () => {
     ),
     { buildPerTest: true, excludeTestServices: true },
   )((it) => {
+    it.effect('keeps media inputs out of the text inputs', () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          Promise.all(
+            ['paper.tex', 'figure.png'].map((name) =>
+              fs.writeFile(path.join(root, name), ''),
+            ),
+          ),
+        );
+        const expanded = yield* withExpandedRunInputs(
+          ['paper.tex', 'figure.png'],
+          [],
+          root,
+          {},
+          ({ inputFiles, mediaFiles }) =>
+            Effect.succeed({ inputFiles, mediaFiles }),
+        ).pipe(Effect.provide(nodePlatformLayer));
+        expect(expanded).toEqual({
+          inputFiles: ['paper.tex'],
+          mediaFiles: ['figure.png'],
+        });
+      }),
+    );
+
     it.effect('removes materialized stdin input on platform shutdown', () =>
       Effect.gen(function* () {
         const fakePlatform = (yield* FakeHost).platform;
