@@ -11,7 +11,11 @@ import {
   teamPlanStatus,
   type TeamAvailability,
 } from '@texra/agent/teams/teamLaunch';
-import { workspaceTeams, type TeamPreset } from '@texra/shared/agentTeams';
+import {
+  launchableTeams,
+  workspaceTeams,
+  type TeamPreset,
+} from '@texra/shared/agentTeams';
 import { findTeamPreset, type TeamRunPlan } from '@texra/agent/teams/teamPlan';
 import type { AgentEntry, StateStore } from '@texra-ai/harness/host';
 import { formatResultCount } from '@texra-ai/harness/schemas';
@@ -45,9 +49,7 @@ const MULTI_AGENT_SHOW_HINT =
  * roots) rather than being read off the calling context.
  */
 export function readCliTeams(repoState: StateStore) {
-  return Effect.map(workspaceTeams(repoState), (teams: readonly TeamPreset[]) =>
-    teams.filter((team) => !team.setupOnly),
-  );
+  return Effect.map(workspaceTeams(repoState), launchableTeams);
 }
 
 /** Resolve the current display name for a persisted team identity. */

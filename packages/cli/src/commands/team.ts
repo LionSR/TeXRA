@@ -39,8 +39,7 @@ import { withUsageSections } from './_helpers/dispatch';
 import { formatTeamRunInstruction } from './_helpers/runInstructions';
 import { emitCliResult } from './_helpers/output';
 import {
-  AGENT_RUN_GLOBAL_ARGS,
-  GLOBAL_ARGS,
+  SKILL_SOURCE_ARGS,
   collectCommonAgentRunFlags,
   optString,
 } from './_helpers/globalArgs';
@@ -107,7 +106,6 @@ const runTeamList = Effect.fn('runTeamList')(function* (
     ndjson: cliTeamNdjsonRecords(plans),
     text: formatCliTeamList(plans),
   });
-  return CliExitCode.Success;
 });
 
 const runTeamShow = Effect.fn('runTeamShow')(function* (
@@ -121,7 +119,6 @@ const runTeamShow = Effect.fn('runTeamShow')(function* (
     ndjson: { kind: 'team-inspection', plan },
     text: formatCliTeamInspection(plan),
   });
-  return CliExitCode.Success;
 });
 
 const runTeam = Effect.fn('runTeam')(function* (
@@ -256,9 +253,7 @@ const runTeam = Effect.fn('runTeam')(function* (
 
 const teamListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List teams' },
-  args: {
-    ...GLOBAL_ARGS,
-  },
+  args: {},
   run: Effect.fn('team.run')(function* () {
     const services = yield* cliPlatform;
     return yield* runTeamList(services);
@@ -271,7 +266,6 @@ const teamShowCommand = defineCliCommand({
     description: 'Show one team and its resolved agents',
   },
   args: {
-    ...GLOBAL_ARGS,
     team: {
       type: 'positional',
       required: true,
@@ -288,7 +282,7 @@ const teamRunCommand = withUsageSections(
   defineCliCommand({
     meta: { name: 'run', description: 'Run a team' },
     args: {
-      ...AGENT_RUN_GLOBAL_ARGS,
+      ...SKILL_SOURCE_ARGS,
       team: {
         type: 'positional',
         required: true,

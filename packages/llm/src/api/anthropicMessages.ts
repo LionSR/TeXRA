@@ -27,7 +27,7 @@ import {
   type TurnResult,
 } from '../turn.js';
 import { assembleTurn } from './assembleTurn.js';
-import { boundTurn, fitLimit, resolveTurn } from './turnInput.js';
+import { boundTurn, resolveTurn } from './turnInput.js';
 import {
   answeredCalls,
   callsAnsweredBy,
@@ -626,14 +626,25 @@ export const anthropicMessagesModel = Effect.fn('llm.anthropicMessages.model')(
         request,
         origin,
         undefined,
-        (input) =>
-          Effect.succeed({
+        (input) => {
+          // A manual thinking budget at or above a smaller requested limit (a
+          // summary sized to the context left) is left off that request
+          // rather than refused.
+          const maxOutputTokens =
+            input.maxOutputTokens ?? config.defaults.maxOutputTokens;
+          const { thinking } = config.defaults;
+          const fits =
+            thinking.mode !== 'enabled' ||
+            thinking.budgetTokens < maxOutputTokens;
+          return Effect.succeed({
             controls: {
-              ...fitLimit(config.defaults, input.maxOutputTokens),
+              maxOutputTokens,
+              thinking: fits ? thinking : ({ mode: 'disabled' } as const),
               effort: config.defaults.effort,
               cache: config.defaults.cache,
             },
-          }),
+          });
+        },
         (turn) => invocationBody(turn, origin, config, uploads),
       );
 

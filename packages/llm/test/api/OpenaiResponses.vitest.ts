@@ -28,9 +28,8 @@ const CONFIG: OpenAIResponsesConfiguration = {
   ],
   continuationInheritsInstructions: false,
   supportsForcedToolChoice: true,
-  openaiEndpoint: true,
   requestDialect: 'openai',
-  background: 'unsupported',
+  background: false,
   defaults: {
     temperature: 0.7,
     maxOutputTokens: 100,

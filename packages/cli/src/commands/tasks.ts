@@ -44,7 +44,7 @@ import { attachTask } from '../runtime/headless/taskAttach';
 import { runOutcomeExitCode } from '../runtime/headless/terminalStatus';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
+import { optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
 import type { RuntimeCommand } from '@texra-ai/harness/schemas';
@@ -122,7 +122,6 @@ const listCommand = defineCliCommand({
     description:
       'List the tasks of every project, newest first (* = running in the service)',
   },
-  args: { ...GLOBAL_ARGS },
   platform: { startsService: true },
   catchExitCode: CliExitCode.AgentError,
   run: Effect.fn('run')(function* () {
@@ -135,7 +134,6 @@ const listCommand = defineCliCommand({
         ? tasks.map(taskLine).join('\n')
         : 'No tasks yet. `texra tasks start <agent> --instruction …` starts one.',
     });
-    return CliExitCode.Success;
   }, Effect.scoped),
 });
 
@@ -145,7 +143,7 @@ const attachCommand = defineCliCommand({
     description:
       'Follow a task live until it ends; Ctrl-C detaches and leaves it running',
   },
-  args: { ...GLOBAL_ARGS, id: TASK_ID_ARG },
+  args: { id: TASK_ID_ARG },
   platform: { startsService: true },
   catchExitCode: CliExitCode.AgentError,
   run: (context, ctx) => {
@@ -179,7 +177,6 @@ const startCommand = defineCliCommand({
       'Start an agent as a task in the TeXRA service and print its id',
   },
   args: {
-    ...GLOBAL_ARGS,
     agent: {
       type: 'positional',
       required: true,
@@ -251,14 +248,12 @@ const startCommand = defineCliCommand({
       ndjson: { kind: 'task', task: { runId, workspace: context.cwd } },
       text: runId,
     });
-    return CliExitCode.Success;
   }),
 });
 
 const sendCommand = defineCliCommand({
   meta: { name: 'send', description: 'Send a running task a follow-up' },
   args: {
-    ...GLOBAL_ARGS,
     id: TASK_ID_ARG,
     text: {
       type: 'positional',
@@ -280,7 +275,7 @@ const sendCommand = defineCliCommand({
           json: { runId: task.runId, status },
           ndjson: { kind: 'task', task: { runId: task.runId, status } },
           text: `Follow-up ${status} to ${task.runId}.`,
-        }).pipe(Effect.as(CliExitCode.Success));
+        });
       }),
     ),
 });
@@ -290,7 +285,7 @@ const stopCommand = defineCliCommand({
     name: 'stop',
     description: 'Stop a running task; it can be resumed later',
   },
-  args: { ...GLOBAL_ARGS, id: TASK_ID_ARG },
+  args: { id: TASK_ID_ARG },
   platform: { startsService: true },
   catchExitCode: CliExitCode.AgentError,
   run: (_, ctx) =>
@@ -304,7 +299,7 @@ const stopCommand = defineCliCommand({
           json: { runId: task.runId, stopped: true },
           ndjson: { kind: 'task', task: { runId: task.runId, stopped: true } },
           text: `Stopped ${task.runId}.`,
-        }).pipe(Effect.as(CliExitCode.Success)),
+        }),
       ),
     ),
 });

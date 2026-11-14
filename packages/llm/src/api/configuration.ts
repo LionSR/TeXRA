@@ -16,7 +16,10 @@ import {
   wireEffort,
 } from '../models/reasoningChoice.js';
 import { BACKEND_PROTOCOLS } from '../providers/providerPlugins.js';
-import { responsesConfiguration } from './responsesConfiguration.js';
+import {
+  onOpenAiEndpoint,
+  responsesConfiguration,
+} from './responsesConfiguration.js';
 import {
   type ModelConfiguration,
   ThinkingLevelSchema,
@@ -112,7 +115,6 @@ const CONFIGURE: {
     return {
       ...base,
       protocol: 'google-interactions',
-      background: 'supported',
       defaults: {
         maxOutputTokens: controls.maxOutputTokens,
         // Server-side conversation state is the user's choice: on, Google
@@ -246,6 +248,6 @@ export function servesWebSocket(
     configuration.protocol === 'openai-responses' &&
     options.webSocket &&
     !(options.background && backgroundCapable(configuration)) &&
-    configuration.openaiEndpoint
+    onOpenAiEndpoint(configuration)
   );
 }

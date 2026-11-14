@@ -26,7 +26,6 @@ import {
 } from '../runtime/models/modelAccess';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult, emitPagedCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/platform/cliContext';
 
@@ -74,7 +73,6 @@ const listModels = Effect.fn('listModels')(function* (
       .map(({ model, status }) => `${model.value}\t${model.label}\t${status}`)
       .join('\n'),
   });
-  return CliExitCode.Success;
 });
 
 const showModel = Effect.fn('showModel')(function* (id: string) {
@@ -100,13 +98,11 @@ const showModel = Effect.fn('showModel')(function* (id: string) {
     ndjson: { kind: 'model', model: record },
     text: formatCliModelDetails(entry),
   });
-  return CliExitCode.Success;
 });
 
 const modelsListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List available models' },
   args: {
-    ...GLOBAL_ARGS,
     all: {
       type: 'boolean',
       description: 'Include unavailable models with their access status',
@@ -120,7 +116,6 @@ const modelsListCommand = defineCliCommand({
 const modelsShowCommand = defineCliCommand({
   meta: { name: 'show', description: 'Show one model' },
   args: {
-    ...GLOBAL_ARGS,
     id: {
       type: 'positional',
       required: true,
@@ -166,7 +161,6 @@ const listEnabledModels = Effect.fn('listEnabledModels')(function* () {
       )
       .join('\n'),
   });
-  return CliExitCode.Success;
 });
 
 const setModelEnabled = Effect.fn('setModelEnabled')(function* (
@@ -190,7 +184,7 @@ const setModelEnabled = Effect.fn('setModelEnabled')(function* (
         text: result.enabled
           ? `Enabled ${result.model} in the model picker.`
           : `Disabled ${result.model} in the model picker.`,
-      }).pipe(Effect.as(CliExitCode.Success)),
+      }),
     ),
     Effect.catchCause((cause) =>
       Effect.sync(() => {
@@ -207,7 +201,6 @@ const modelsEnabledCommand = defineCliCommand({
     description:
       'List models enabled for pickers (`/model`, lead model). Use enable/disable to change.',
   },
-  args: { ...GLOBAL_ARGS },
   run: listEnabledModels,
   catchExitCode: reportModelPlatformFailure,
 });
@@ -218,7 +211,6 @@ const modelsEnableCommand = defineCliCommand({
     description: 'Add a model to the picker',
   },
   args: {
-    ...GLOBAL_ARGS,
     id: {
       type: 'positional',
       required: true,
@@ -235,7 +227,6 @@ const modelsDisableCommand = defineCliCommand({
     description: 'Remove a model from the picker',
   },
   args: {
-    ...GLOBAL_ARGS,
     id: {
       type: 'positional',
       required: true,

@@ -16,6 +16,17 @@ import type { ConfigurationOf, Facts } from './configuration.js';
 
 type ResponsesConfiguration = ConfigurationOf<'openai-responses'>;
 
+/**
+ * OpenAI's own endpoint (the API or a ChatGPT plan): it routes its prompt
+ * cache by `prompt_cache_key` and takes `developer` messages mid-run.
+ */
+export const onOpenAiEndpoint = (
+  configuration: Pick<ResponsesConfiguration, 'requestDialect' | 'deployment'>,
+): boolean =>
+  configuration.requestDialect === 'chatgpt' ||
+  (configuration.requestDialect === 'openai' &&
+    configuration.deployment.endpoint === OPENAI_DEFAULT_ENDPOINT);
+
 /** The request fields a vendor route sets for itself. */
 interface VendorFields extends Pick<
   ResponsesConfiguration,
@@ -38,12 +49,11 @@ function vendorRoute(
   return {
     ...base,
     protocol: 'openai-responses',
-    background: 'unsupported',
+    background: false,
     supportsDocumentInput: false,
     allowedReasoningEfforts: acceptedEfforts,
     continuationInheritsInstructions: false,
     supportsForcedToolChoice: fields.supportsForcedToolChoice,
-    openaiEndpoint: false,
     requestDialect: 'compatible',
     defaults: {
       maxOutputTokens: controls.maxOutputTokens,
@@ -81,14 +91,13 @@ function firstPartyResponses(facts: Facts): ResponsesConfiguration {
       ...base,
       requestedModel: codexBackendModelId(config),
       protocol: 'openai-responses',
-      background: 'unsupported',
+      background: false,
       // The plan's backend takes no input files.
       supportsDocumentInput: false,
       allowedReasoningEfforts: facts.acceptedEfforts,
       continuationInheritsInstructions: false,
       // OpenAI documents no `tool_choice` for a namespaced function.
       supportsForcedToolChoice: false,
-      openaiEndpoint: true,
       requestDialect: 'chatgpt',
       defaults: {
         maxOutputTokens: null,
@@ -104,19 +113,14 @@ function firstPartyResponses(facts: Facts): ResponsesConfiguration {
   const xai = config.provider === ModelProvider.XAI;
   // Background responses serve the GPT family only; another model on this
   // case (an o-series deep-research model, Meta's) streams in the foreground.
-  const background =
-    !xai && config.id.toLowerCase().startsWith('gpt')
-      ? 'supported'
-      : 'unsupported';
   return {
     ...base,
     protocol: 'openai-responses',
-    background,
+    background: !xai && config.id.toLowerCase().startsWith('gpt'),
     supportsDocumentInput: config.capabilities.supportsNativePdf,
     allowedReasoningEfforts: facts.acceptedEfforts,
     continuationInheritsInstructions: xai,
     supportsForcedToolChoice: true,
-    openaiEndpoint: spec.route.endpoint === OPENAI_DEFAULT_ENDPOINT,
     requestDialect: 'openai',
     defaults: {
       maxOutputTokens: controls.maxOutputTokens,

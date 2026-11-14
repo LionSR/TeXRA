@@ -14,7 +14,6 @@ import {
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import {
-  GLOBAL_ARGS,
   SKILL_SOURCE_ARGS,
   collectStringFlagValues,
 } from './_helpers/globalArgs';
@@ -79,7 +78,6 @@ const listSkills = Effect.fn('listSkills')(function* (
 const skillsListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List available skills' },
   args: {
-    ...GLOBAL_ARGS,
     ...SKILL_SOURCE_ARGS,
   },
   run: (context, ctx) =>

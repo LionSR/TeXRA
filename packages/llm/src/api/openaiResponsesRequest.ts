@@ -10,6 +10,7 @@ import {
   type TurnRequest,
 } from '../turn.js';
 import { boundTurn, resolveTurn } from './turnInput.js';
+import { onOpenAiEndpoint } from './responsesConfiguration.js';
 import { ModelError } from '../errors.js';
 import { responseInput, toolNamespaceOf } from './openaiResponsesLower.js';
 import type { ResponseOrigin } from './openaiResponsesCodec.js';
@@ -42,7 +43,7 @@ export const prepareResponsesTurn = (
           store: config.defaults.store,
           reasoning: config.defaults.reasoning,
           serviceTier: config.defaults.serviceTier,
-          ...(config.openaiEndpoint && author.cacheKey !== undefined
+          ...(onOpenAiEndpoint(config) && author.cacheKey !== undefined
             ? { promptCacheKey: author.cacheKey }
             : {}),
         },
