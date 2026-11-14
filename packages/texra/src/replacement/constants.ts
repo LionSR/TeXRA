@@ -2,9 +2,23 @@
 
 import escapeRegExp from 'escape-string-regexp';
 
-// Greek letters used for pattern generation
+/** Lowercase Greek letters by LaTeX name, in alphabetical order, with their Unicode characters. */
 // prettier-ignore
-export const GREEK_LETTERS = 'alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega'.split(' ');
+export const GREEK_LETTER_CHARACTERS: Readonly<Record<string, string>> = {
+  alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', zeta: 'ζ',
+  eta: 'η', theta: 'θ', iota: 'ι', kappa: 'κ', lambda: 'λ', mu: 'μ',
+  nu: 'ν', xi: 'ξ', omicron: 'ο', pi: 'π', rho: 'ρ', sigma: 'σ',
+  tau: 'τ', upsilon: 'υ', phi: 'φ', chi: 'χ', psi: 'ψ', omega: 'ω',
+};
+
+export const GREEK_LETTERS = Object.keys(GREEK_LETTER_CHARACTERS);
+
+/** The uppercase Greek letters LaTeX has a command for; the rest are Latin capitals. */
+// prettier-ignore
+export const UPPERCASE_GREEK_LETTER_CHARACTERS: Readonly<Record<string, string>> = {
+  Gamma: 'Γ', Delta: 'Δ', Theta: 'Θ', Lambda: 'Λ', Xi: 'Ξ', Pi: 'Π',
+  Sigma: 'Σ', Upsilon: 'Υ', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω',
+};
 
 // Section commands for LaTeX documents
 export const SECTION_TYPES = [

@@ -7,6 +7,7 @@ import {
   LATEX_ENVIRONMENTS,
   MATH_OPERATORS,
   SECTION_TYPES,
+  UPPERCASE_GREEK_LETTER_CHARACTERS,
 } from '@replacement/constants';
 import {
   createPatterns,
@@ -356,45 +357,14 @@ export const HTML_ENTITY_REPLACEMENTS: PatternDict = {
   '&deg;': '^{\\circ}',
   '&micro;': '\\mu',
 
-  // Lowercase Greek letters
-  '&alpha;': '\\alpha',
-  '&beta;': '\\beta',
-  '&gamma;': '\\gamma',
-  '&delta;': '\\delta',
-  '&epsilon;': '\\epsilon',
-  '&zeta;': '\\zeta',
-  '&eta;': '\\eta',
-  '&theta;': '\\theta',
-  '&iota;': '\\iota',
-  '&kappa;': '\\kappa',
-  '&lambda;': '\\lambda',
-  '&mu;': '\\mu',
-  '&nu;': '\\nu',
-  '&xi;': '\\xi',
+  // Greek letters: &alpha; -> \alpha. LaTeX has no \omicron, and the
+  // final sigma is a sigma.
+  ...createPatterns(GREEK_LETTERS, (name) => [[`&${name};`, `\\${name}`]]),
   '&omicron;': 'o',
-  '&pi;': '\\pi',
-  '&rho;': '\\rho',
   '&sigmaf;': '\\sigma',
-  '&sigma;': '\\sigma',
-  '&tau;': '\\tau',
-  '&upsilon;': '\\upsilon',
-  '&phi;': '\\phi',
-  '&chi;': '\\chi',
-  '&psi;': '\\psi',
-  '&omega;': '\\omega',
-
-  // Uppercase Greek letters with LaTeX commands
-  '&Gamma;': '\\Gamma',
-  '&Delta;': '\\Delta',
-  '&Theta;': '\\Theta',
-  '&Lambda;': '\\Lambda',
-  '&Xi;': '\\Xi',
-  '&Pi;': '\\Pi',
-  '&Sigma;': '\\Sigma',
-  '&Upsilon;': '\\Upsilon',
-  '&Phi;': '\\Phi',
-  '&Psi;': '\\Psi',
-  '&Omega;': '\\Omega',
+  ...createPatterns(Object.keys(UPPERCASE_GREEK_LETTER_CHARACTERS), (name) => [
+    [`&${name};`, `\\${name}`],
+  ]),
 
   // Logical and set operators
   '&forall;': '\\forall',

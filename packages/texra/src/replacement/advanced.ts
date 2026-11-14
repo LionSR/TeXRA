@@ -2,6 +2,10 @@
  * Utilities for managing text replacements in the codebase.
  */
 
+import {
+  GREEK_LETTER_CHARACTERS,
+  UPPERCASE_GREEK_LETTER_CHARACTERS,
+} from '@replacement/constants';
 import { findBraceBalancedMacroCalls } from '@texra/utils/text/braceBalancedMacro';
 
 /**
@@ -123,42 +127,17 @@ export function escapeTextttUnderscores(text: string): string {
 
 // Map of Unicode characters to their LaTeX equivalents
 const MATH_UNICODE_MAP: Record<string, string> = {
-  // Greek letters (alphabetical)
-  α: '\\alpha', // alpha
-  β: '\\beta', // beta
-  χ: '\\chi', // chi
-  δ: '\\delta', // delta
-  Δ: '\\Delta', // Delta
-  ε: '\\epsilon', // epsilon
-  η: '\\eta', // eta
-  γ: '\\gamma', // gamma
-  Γ: '\\Gamma', // Gamma
-  ι: '\\iota', // iota
-  κ: '\\kappa', // kappa
-  λ: '\\lambda', // lambda
-  Λ: '\\Lambda', // Lambda
-  μ: '\\mu', // mu (U+03BC GREEK SMALL LETTER MU)
-  µ: '\\mu', // mu (U+00B5 MICRO SIGN)
-  ν: '\\nu', // nu
-  ω: '\\omega', // omega
-  Ω: '\\Omega', // Omega
-  φ: '\\phi', // phi
-  Φ: '\\Phi', // Phi
-  π: '\\pi', // pi
-  Π: '\\Pi', // Pi
-  ψ: '\\psi', // psi
-  Ψ: '\\Psi', // Psi
-  ρ: '\\rho', // rho
-  σ: '\\sigma', // sigma
-  Σ: '\\Sigma', // Sigma
-  τ: '\\tau', // tau
-  θ: '\\theta', // theta
-  Θ: '\\Theta', // Theta
-  υ: '\\upsilon', // upsilon
-  Υ: '\\Upsilon', // Upsilon
-  ξ: '\\xi', // xi
-  Ξ: '\\Xi', // Xi
-  ζ: '\\zeta', // zeta
+  // Greek letters: α -> \alpha, Δ -> \Delta. LaTeX has no \omicron, so ο
+  // is left as written.
+  ...Object.fromEntries(
+    Object.entries({
+      ...GREEK_LETTER_CHARACTERS,
+      ...UPPERCASE_GREEK_LETTER_CHARACTERS,
+    })
+      .filter(([name]) => name !== 'omicron')
+      .map(([name, char]) => [char, `\\${name}`]),
+  ),
+  µ: '\\mu', // U+00B5 MICRO SIGN, beside the Greek mu
 
   // Mathematical operators and symbols
   '−': '-', // minus sign (U+2212)
