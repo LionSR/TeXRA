@@ -28,8 +28,8 @@ import {
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
-import { GLOBAL_ARGS, collectStringFlagValues } from './_helpers/globalArgs';
-import { emitCliResult } from './_helpers/output';
+import { collectStringFlagValues } from './_helpers/globalArgs';
+import { commandResult, emitCliResult } from './_helpers/output';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
@@ -135,7 +135,6 @@ const pluginInstallCommand = defineCliCommand({
       'Install a Claude Code or Codex plugin, disabled until you enable it',
   },
   args: {
-    ...GLOBAL_ARGS,
     source: {
       type: 'positional',
       required: true,
@@ -184,7 +183,7 @@ const pluginInstallCommand = defineCliCommand({
               plugin,
             })),
             text: `Installed:\n${formatPluginList(installed)}\nEnable with \`texra plugin enable <name>\`.`,
-          }).pipe(Effect.as(CliExitCode.Success)),
+          }),
         ),
       ),
     );
@@ -193,7 +192,6 @@ const pluginInstallCommand = defineCliCommand({
 
 const pluginListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List installed plugins' },
-  args: { ...GLOBAL_ARGS },
   catchExitCode: pluginExitCode,
   run: () =>
     withPluginEnv((env) =>
@@ -206,7 +204,7 @@ const pluginListCommand = defineCliCommand({
               plugin,
             })),
             text: formatPluginList(plugins),
-          }).pipe(Effect.as(CliExitCode.Success)),
+          }),
         ),
       ),
     ),
@@ -242,7 +240,7 @@ const pluginShowCommand = defineCliCommand({
     description:
       'Show one installed plugin: what it contains, its hooks, and what TeXRA does not run',
   },
-  args: { ...GLOBAL_ARGS, name: NAME_ARG },
+  args: { name: NAME_ARG },
   catchExitCode: pluginExitCode,
   run: (_, ctx) =>
     withPluginEnv((env) =>
@@ -260,7 +258,7 @@ const pluginShowCommand = defineCliCommand({
               json: plugin,
               ndjson: { kind: 'plugin' as const, plugin },
               text,
-            }).pipe(Effect.as(CliExitCode.Success)),
+            }),
           );
         }),
       ),
@@ -273,7 +271,7 @@ const pluginRemoveCommand = defineCliCommand({
     description:
       'Remove an installed plugin; what it wrote to history is kept, unread',
   },
-  args: { ...GLOBAL_ARGS, name: NAME_ARG },
+  args: { name: NAME_ARG },
   catchExitCode: pluginExitCode,
   run: (_, ctx) =>
     withPluginEnv((env) =>
@@ -285,14 +283,7 @@ const pluginRemoveCommand = defineCliCommand({
             text = `${removed.name} was already forgotten; removed its leftover directory ${removed.path}.`;
           else if (removed.local)
             text = `Removed ${removed.name}. Its directory ${removed.path} is yours and was left in place.`;
-          return emitCliResult({
-            json: result,
-            ndjson: {
-              kind: 'result',
-              result: { command: 'plugin remove', ...result },
-            },
-            text,
-          }).pipe(Effect.as(CliExitCode.Success));
+          return emitCliResult(commandResult('plugin remove', result, text));
         }),
       ),
     ),
@@ -304,7 +295,7 @@ const pluginEnableCommand = defineCliCommand({
     description:
       'Enable an installed plugin, asking to trust the version it is at',
   },
-  args: { ...GLOBAL_ARGS, name: NAME_ARG },
+  args: { name: NAME_ARG },
   catchExitCode: pluginExitCode,
   run: (_, ctx) =>
     withPluginEnv((env) =>
@@ -314,17 +305,15 @@ const pluginEnableCommand = defineCliCommand({
             name: ctx.args.name,
             enabled: outcome === 'enabled',
           };
-          return emitCliResult({
-            json: result,
-            ndjson: {
-              kind: 'result',
-              result: { command: 'plugin enable', ...result },
-            },
-            text:
+          return emitCliResult(
+            commandResult(
+              'plugin enable',
+              result,
               outcome === 'enabled'
                 ? `Enabled ${ctx.args.name}. Open runs load it at their next step.`
                 : `Not enabled: ${ctx.args.name} was not trusted.`,
-          }).pipe(
+            ),
+          ).pipe(
             Effect.as(
               outcome === 'enabled'
                 ? CliExitCode.Success
@@ -342,21 +331,20 @@ const pluginDisableCommand = defineCliCommand({
     description:
       'Disable an installed plugin without removing it: it contributes nothing from the next step',
   },
-  args: { ...GLOBAL_ARGS, name: NAME_ARG },
+  args: { name: NAME_ARG },
   catchExitCode: pluginExitCode,
   run: (_, ctx) =>
     withPluginEnv((env) =>
       InstalledPlugins.disable(ctx.args.name, env).pipe(
         Effect.flatMap(() => {
           const result = { name: ctx.args.name, enabled: false };
-          return emitCliResult({
-            json: result,
-            ndjson: {
-              kind: 'result',
-              result: { command: 'plugin disable', ...result },
-            },
-            text: `Disabled ${ctx.args.name}.`,
-          }).pipe(Effect.as(CliExitCode.Success));
+          return emitCliResult(
+            commandResult(
+              'plugin disable',
+              result,
+              `Disabled ${ctx.args.name}.`,
+            ),
+          );
         }),
       ),
     ),
@@ -369,7 +357,6 @@ const pluginUpdateCommand = defineCliCommand({
       'Fetch the latest commit of installed plugins and reread their manifests',
   },
   args: {
-    ...GLOBAL_ARGS,
     name: {
       ...NAME_ARG,
       required: false,
@@ -394,7 +381,7 @@ const pluginUpdateCommand = defineCliCommand({
               updates.length === 0
                 ? 'No plugins installed.'
                 : updates.map(formatPluginUpdate).join('\n'),
-          }).pipe(Effect.as(CliExitCode.Success)),
+          }),
         ),
       ),
     ),

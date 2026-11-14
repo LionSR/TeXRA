@@ -14,11 +14,7 @@ import { notifyCliUpdate } from '../runtime/platform/updateChecker';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
-import {
-  INTERACTIVE_AGENT_GLOBAL_ARGS,
-  optString,
-  rejectHeadlessOnlyFlags,
-} from './_helpers/globalArgs';
+import { SKILL_SOURCE_ARGS, optString } from './_helpers/globalArgs';
 
 const shortcutModifierLabel = defaultShortcutModifierLabel();
 const alternateShortcutModifierLabel =
@@ -30,7 +26,7 @@ export const chatCommand = withUsageSections(
   defineCliCommand({
     meta: { name: 'chat', description: 'Interactive tool-use chat session' },
     args: {
-      ...INTERACTIVE_AGENT_GLOBAL_ARGS,
+      ...SKILL_SOURCE_ARGS,
       agent: { type: 'string', description: 'Agent for the session' },
       model: {
         type: 'string',
@@ -38,7 +34,6 @@ export const chatCommand = withUsageSections(
         description: 'Model for the session',
       },
     },
-    setup: (ctx) => rejectHeadlessOnlyFlags(ctx.rawArgs, 'chat'),
     // Every chat is a client of the one service, and shows a store moved
     // aside in its transcript.
     platform: { startsService: true, presentsStoreMovedAside: true },

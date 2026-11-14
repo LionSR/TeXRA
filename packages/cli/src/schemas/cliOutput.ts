@@ -267,7 +267,7 @@ const CLI_RUN_STATUS = {
   ERROR: 'error',
 } as const;
 
-export type CliRunStatus = (typeof CLI_RUN_STATUS)[keyof typeof CLI_RUN_STATUS];
+type CliRunStatus = (typeof CLI_RUN_STATUS)[keyof typeof CLI_RUN_STATUS];
 
 /**
  * Project the canonical outcome onto the frozen public run-status

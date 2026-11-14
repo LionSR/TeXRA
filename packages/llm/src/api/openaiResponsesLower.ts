@@ -13,6 +13,7 @@ import {
 import { sameModelOrigin } from '../protocol.js';
 import { ModelError } from '../errors.js';
 import { prefixFingerprint } from './prefixFingerprint.js';
+import { onOpenAiEndpoint } from './responsesConfiguration.js';
 import {
   responsesContent,
   type DocumentAccess,
@@ -100,7 +101,7 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
     if (message.role === 'system') {
       // A developer message outranks user text; elsewhere it is user text.
       input.push(
-        config.openaiEndpoint
+        onOpenAiEndpoint(config)
           ? { role: 'developer', content: message.text }
           : { role: 'user', content: systemUpdateText(message.text) },
       );

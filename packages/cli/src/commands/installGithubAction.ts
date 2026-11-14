@@ -27,7 +27,7 @@ import {
 import { gh, ghAvailable, git, localBranchExists } from '../runtime/gitOps';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
+import { optString } from './_helpers/globalArgs';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { CliContext } from '../runtime/platform/cliContext';
 
@@ -310,7 +310,7 @@ const runInstallGithubAction = Effect.fn('runInstallGithubAction')(function* (
     if (!branchExists) {
       yield* restoreBranch(root, startBranch);
       printSecretChecklist(slug);
-      return CliExitCode.Success;
+      return;
     }
   }
 
@@ -319,7 +319,7 @@ const runInstallGithubAction = Effect.fn('runInstallGithubAction')(function* (
       `Skipped push/PR (--no-pr). Push "${branch}" and open a PR when ready.`,
     );
     printSecretChecklist(slug);
-    return CliExitCode.Success;
+    return;
   }
 
   if (!slug) {
@@ -330,7 +330,7 @@ const runInstallGithubAction = Effect.fn('runInstallGithubAction')(function* (
       `Push "${branch}" to your GitHub remote and open a PR manually.`,
     );
     printSecretChecklist(slug);
-    return CliExitCode.Success;
+    return;
   }
 
   const push = yield* git(root, 'push', '-u', 'origin', branch);
@@ -389,7 +389,6 @@ const runInstallGithubAction = Effect.fn('runInstallGithubAction')(function* (
     );
   }
   printSecretChecklist(slug);
-  return CliExitCode.Success;
 });
 
 export const installGithubActionCommand = defineCliCommand({
@@ -401,7 +400,6 @@ export const installGithubActionCommand = defineCliCommand({
   // git repository.
   layer: cliSecretsLayer,
   args: {
-    ...GLOBAL_ARGS,
     branch: {
       type: 'string',
       description: `Branch to create for the PR (default: ${DEFAULT_BRANCH_NAME})`,

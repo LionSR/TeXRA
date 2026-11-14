@@ -56,7 +56,6 @@ describe('canonical Google Interactions protocol', () => {
       {
         protocol: 'google-interactions',
         requestedModel: 'gemini-test',
-        background: 'supported',
         deployment: {
           endpoint: 'https://synthetic.invalid',
           credentialScope: 'test-account',

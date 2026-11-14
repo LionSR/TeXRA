@@ -28,7 +28,6 @@ import {
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { emitCliResult } from './_helpers/output';
-import { GLOBAL_ARGS } from './_helpers/globalArgs';
 
 interface InitAgentOption {
   readonly name: string;
@@ -183,7 +182,7 @@ const runInit = Effect.fn('runInit')(function* (
     });
     if (!result) {
       writeTextStderr('Cancelled. No config written.');
-      return CliExitCode.Success;
+      return;
     }
     answers = result.answers;
     gitignore = result.gitignore;
@@ -200,7 +199,6 @@ const runInit = Effect.fn('runInit')(function* (
     : undefined;
 
   yield* emitInitSummary(filePath, answers, config, models, gitignoreOutcome);
-  return CliExitCode.Success;
 });
 
 export const initCommand = defineCliCommand({
@@ -209,7 +207,6 @@ export const initCommand = defineCliCommand({
     description: 'Bootstrap a .texra/config.json with sensible defaults',
   },
   args: {
-    ...GLOBAL_ARGS,
     yes: {
       type: 'boolean',
       alias: 'y',
