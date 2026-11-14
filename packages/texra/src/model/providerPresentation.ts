@@ -14,7 +14,7 @@ import {
   type RegionalProviderId,
 } from '@texra-ai/llm';
 import { providerRegionSetting } from '@texra-ai/harness/schemas';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import type { StateReadFailed } from '@texra-ai/harness/host';
 
 /** Whether `provider`'s region toggle picks its China platform. */

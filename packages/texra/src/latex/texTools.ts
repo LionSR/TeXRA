@@ -19,7 +19,7 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import {
   INCLUDE_WORKSPACE_IN_TEXINPUTS_SETTING,
   TIKZ_INPUT_DIRECTORY_SETTING,
-} from '@texra/shared/settingsView/texraSettings';
+} from '@texra/shared/settings/texraSettings';
 
 // Raw tail, no TeX-log parsing -- a deliberate choice (see compileCheck.ts):
 // tex compile logs are noisy and heuristic parsing is a losing game, so every

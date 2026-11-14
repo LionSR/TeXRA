@@ -26,8 +26,8 @@ import {
   formatResultCount,
 } from '@texra-ai/harness/schemas';
 import { workspaceTeams } from '@texra/shared/agentTeams';
-import { formatUnknownTeamMessage } from '@texra/shared/teamLaunch';
-import { applyTeam } from '@texra/shared/teamPlan';
+import { formatUnknownTeamMessage } from '@texra/agent/teams/teamLaunch';
+import { applyTeam } from '@texra/agent/teams/teamPlan';
 import {
   AGENT_TEMPLATE_FILES,
   agentFileFromTemplate,

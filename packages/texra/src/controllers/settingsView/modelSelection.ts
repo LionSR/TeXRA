@@ -93,7 +93,7 @@ const buildSelectionItems = Effect.fn('buildModelSelectionItems')(function* (
   Error,
   Secrets | SubscriptionAccounts
 > {
-  const enabledSet = new Set(yield* getEnabledModels(stores.globalState));
+  const enabledSet = new Set(yield* getEnabledModels(stores));
 
   // Resolve availability (personal-key, subscription) once for the
   // models this host shows, via the same shared computation the CLI picker

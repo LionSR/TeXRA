@@ -14,7 +14,7 @@ import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
 import {
   TELEMETRY_ENABLED_SETTING,
   TEXRA_SETTINGS,
-} from '@texra/shared/settingsView/texraSettings';
+} from '@texra/shared/settings/texraSettings';
 
 // Local file imports
 import { CliExitCode } from './platform/exitCodes';

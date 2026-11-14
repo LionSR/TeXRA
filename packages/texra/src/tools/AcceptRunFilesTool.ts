@@ -16,6 +16,7 @@ import {
   Effect,
   FileSystem,
   Predicate,
+  Result,
   Schema,
 } from 'effect';
 
@@ -44,6 +45,7 @@ import {
   FileLocation,
   formatResultCount,
   pluralize,
+  type ToolCard,
 } from '@texra-ai/harness/schemas';
 import { cleanupAcceptedWorkspaceDiffFiles } from '@latex/acceptedFileTarget';
 import { stripCriticizeAnnotations } from '@replacement/advanced';
@@ -147,6 +149,32 @@ const FileMapping = Schema.Struct({
       'Original workspace path to write to (matches original attribute in delivery). Defaults to path if omitted.',
   }),
 });
+
+/**
+ * The card: each file under the workspace path it is written to, with the
+ * run-storage file it comes from when that differs. The source run's id is
+ * left out (ids are for bug reports, not the card); the harness adds each
+ * file's line changes from the call's output edits.
+ */
+function acceptRunFilesCard(
+  input: typeof AcceptRunFilesInputSchema.Type,
+): ToolCard {
+  return {
+    title: 'accept_run_files',
+    sections: [
+      {
+        kind: 'fileList',
+        label: 'Files:',
+        files: input.files.map(({ path, original }) => {
+          const dest = original ?? path;
+          return dest === path
+            ? { path: dest }
+            : { path: dest, note: `from ${path}` };
+        }),
+      },
+    ],
+  };
+}
 
 const AcceptRunFilesInputSchema = Schema.Struct({
   /** Run ID (matches `id` attribute in subagent-result XML). */
@@ -478,5 +506,11 @@ Parameters map directly to subagent-result delivery attributes:
   path         ← <output-files><file path="...">
   original     ← <output-files><file original="...">`,
   schema: AcceptRunFilesInputSchema,
+  card: (raw) => {
+    const input = Schema.decodeUnknownResult(AcceptRunFilesInputSchema)(raw);
+    return Result.isSuccess(input)
+      ? acceptRunFilesCard(input.success)
+      : undefined;
+  },
   execute: acceptFiles,
 });

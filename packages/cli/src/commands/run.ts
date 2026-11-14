@@ -73,6 +73,7 @@ import {
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
+  cliLaunchOutput,
   formatDocumentTaskTextResult,
   inputDerivedOutputFiles,
   resolveDocumentTaskOutput,
@@ -226,12 +227,16 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         outputFiles: [],
         ...(cliOutputFile !== undefined || cliOutputDirectory !== undefined
           ? {
-              cli: {
-                outputFile: cliOutputFile,
-                outputDirectory: cliOutputDirectory,
-                expectedOutputFiles: expectedOutputFiles
-                  ? [...expectedOutputFiles]
-                  : undefined,
+              launch: {
+                ...(cliOutputFile !== undefined && {
+                  outputFile: cliOutputFile,
+                }),
+                ...(cliOutputDirectory !== undefined && {
+                  outputDirectory: cliOutputDirectory,
+                }),
+                ...(expectedOutputFiles && {
+                  expectedOutputFiles: [...expectedOutputFiles],
+                }),
               },
             }
           : {}),
@@ -397,7 +402,7 @@ export const executeCliRun = Effect.fn('executeCliRun')(function* (
         : [];
       const expectedOutputFiles = declaredOutputFiles.length
         ? declaredOutputFiles
-        : (config.cli?.expectedOutputFiles ?? undefined);
+        : (cliLaunchOutput(config).expectedOutputFiles ?? undefined);
       // The task's documents are its documents row, read from the
       // store, which holds every row the run committed once its end is.
       const outputResult = yield* Effect.result(

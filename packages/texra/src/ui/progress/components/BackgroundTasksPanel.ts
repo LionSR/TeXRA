@@ -43,7 +43,7 @@ import {
   inquiryThreadsUnder,
   type InquiryThreadSummary,
 } from '@texra/shared/plugins/externalInquiry';
-import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { TickerController } from '@ui/litControllers/TickerController';
 import { runStatus } from '@ui/copy/runStatus';
 import { designTokens, commonViewStyles } from '@ui/styles';

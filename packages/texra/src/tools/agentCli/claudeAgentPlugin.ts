@@ -11,7 +11,7 @@ import {
   Secrets,
   withLogChannel,
 } from '@texra-ai/harness/plugins';
-import { CLAUDE_AGENT_SETTINGS } from '@texra/shared/settingsView/integrationSettings';
+import { CLAUDE_AGENT_SETTINGS } from '@texra/shared/settings/integrationSettings';
 import {
   ClaudeAgentSessions,
   claudeAgentSessionsLayer,

@@ -1,13 +1,9 @@
-import { Cause, Effect, Predicate } from 'effect';
+import { Effect, Predicate } from 'effect';
 
-import {
-  toErrorMessage,
-  agentName as bareAgentName,
-} from '@texra-ai/harness/schemas';
+import { agentName as bareAgentName } from '@texra-ai/harness/schemas';
 import { resolveCliRunAgent } from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/platform/cliContext';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
-import { setCliHelperModel } from '@cli/runtime/platform/initPlatform';
 import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
@@ -27,7 +23,7 @@ import {
   formatTeamLaunchBlockedMessage,
   formatUnknownTeamMessage,
   resolveTeamLaunch,
-} from '@texra/shared/teamLaunch';
+} from '@texra/agent/teams/teamLaunch';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,
@@ -124,13 +120,13 @@ export const applyCliTeamSelection = Effect.fn('applyCliTeamSelection')(
     }
     const teamName = yield* readCliTeamName(
       context.runSession.roots.repoState,
-      fields.cli.teamId,
+      fields.launch.teamId,
     );
     patchSessionMeta({
       agent: fields.agent,
       agentSource: entry.source,
       teamName,
-      cliTeamId: fields.cli.teamId,
+      cliTeamId: fields.launch.teamId,
       delegationAgentScope: fields.delegationAgentScope,
     });
     appendLocalNotice(
@@ -159,7 +155,6 @@ export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
           ),
         },
       );
-      yield* setCliHelperModel(context.stores.globalState, selection.model);
       setCliSessionModelOverride(selection.model);
       appendLocalNotice(`Root model set to ${selection.model}.`);
       return;
@@ -191,20 +186,8 @@ export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
       );
     if (!switched) return;
     setCliSessionModelOverride(nextModel);
-    // The switch already reached the live run; only the persisted default is
-    // at stake here, so a write failure is reported beside the switch rather
-    // than failing the command.
-    yield* setCliHelperModel(context.stores.globalState, nextModel).pipe(
-      Effect.matchCause({
-        onSuccess: () =>
-          appendLocalNotice(
-            `Model switched to ${nextModel}. Future turns will use it.`,
-          ),
-        onFailure: (cause) =>
-          appendLocalNotice(
-            `Model switched to ${nextModel}. Could not persist it as the default helper model: ${toErrorMessage(Cause.squash(cause))}`,
-          ),
-      }),
+    appendLocalNotice(
+      `Model switched to ${nextModel}. Future turns will use it.`,
     );
   },
 );
