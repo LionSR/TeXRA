@@ -43,10 +43,10 @@ import {
   logWarning,
   pollGet,
   readNewItems,
+  type SeenItems,
   type PollEvent,
   type PollResult,
 } from './poller';
-import { dedupeComments, DedupedResource, MAX_SEEN_IDS } from './pollingDedup';
 import {
   GhIssueCommentArraySchema,
   GhPullRequestSchema,
@@ -55,9 +55,7 @@ import {
   isDefiniteMergeableState,
   type GhCheckAnnotation,
   type GhCheckRun,
-  type GhIssueComment,
   type GhReview,
-  type GhReviewComment,
 } from './prTypes';
 import type { PullTarget } from './subscriptionTarget';
 
@@ -76,9 +74,9 @@ export interface PullState {
     readonly reviewComments?: string;
     readonly reviews?: string;
   };
-  readonly issueComments: DedupedResource<GhIssueComment> | undefined;
-  readonly reviewComments: DedupedResource<GhReviewComment> | undefined;
-  readonly reviews: DedupedResource<GhReview> | undefined;
+  readonly issueComments: SeenItems | undefined;
+  readonly reviewComments: SeenItems | undefined;
+  readonly reviews: SeenItems | undefined;
   readonly lastFailedCheckKeys: ReadonlySet<string>;
   /**
    * `${id}:${completed_at}` for runs observed (with annotations) on the most
@@ -241,28 +239,15 @@ export const pollPull = Effect.fn('github.pollPull')(function* (
     return { next: undefined, events: [] } satisfies PollResult<PullState>;
   }
 
-  const issueComments = readNewItems(
-    prior?.issueComments,
-    commentsRes,
-    dedupeComments<GhIssueComment>,
-  );
+  const issueComments = readNewItems(prior?.issueComments, commentsRes);
   events.push(...issueComments.fresh.map((c) => formatCommentEvent(pr, c)));
-  const reviewComments = readNewItems(
-    prior?.reviewComments,
-    reviewCommentsRes,
-    dedupeComments<GhReviewComment>,
-  );
+  const reviewComments = readNewItems(prior?.reviewComments, reviewCommentsRes);
   events.push(...reviewComments.fresh.map((c) => formatReviewComment(pr, c)));
   const reviews = readNewItems(
     prior?.reviews,
     reviewsRes.status === 200
       ? { ...reviewsRes, data: reviewsRes.data.filter(isSubmittedReview) }
       : reviewsRes,
-    () =>
-      new DedupedResource<GhReview>({
-        getId: (review) => review.id,
-        maxSeenIds: MAX_SEEN_IDS,
-      }),
   );
   events.push(...reviews.fresh.map((r) => formatReview(pr, r)));
 

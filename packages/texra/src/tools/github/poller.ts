@@ -13,6 +13,7 @@
 
 // Third-party imports
 import { Clock, Duration, Effect, Random, Ref, Schedule, Schema } from 'effect';
+import { LRUCache } from 'lru-cache';
 
 // Local imports
 import {
@@ -30,7 +31,7 @@ import {
   type GitHubFailure,
   type GitHubServices,
 } from './githubClient';
-import type { DedupedResource } from './pollingDedup';
+import { getNewestTimestamp } from './githubPaths';
 import { GITHUB_POLL_INTERVAL_MS } from './prSubscriptionConstants';
 import type { GhUser } from './prTypes';
 import { targetPath, type SubscriptionTarget } from './subscriptionTarget';
@@ -237,23 +238,67 @@ export function pollGet<T>(
   );
 }
 
+/** A copy of `cache` with the same capacity, entries and recency order. */
+export function copyLru<
+  K extends NonNullable<unknown>,
+  V extends NonNullable<unknown>,
+>(cache: LRUCache<K, V>): LRUCache<K, V> {
+  const copy = new LRUCache<K, V>({ max: cache.max });
+  copy.load(cache.dump());
+  return copy;
+}
+
+/** How many delivered ids a list resource remembers, so a long-running
+ *  subscription does not grow its history without bound. */
+const MAX_SEEN_IDS = 1000;
+
+/** The ids a list resource has delivered, and the newest timestamp among
+ *  its items: the cursor its next poll reads from. A poll builds the next
+ *  one and never changes the one it read. */
+export interface SeenItems {
+  readonly ids: LRUCache<number, true>;
+  readonly sinceCursor: string | undefined;
+}
+
 /**
  * A list resource's next dedup state and the new items to report from one
  * response. `seen` is `undefined` until a 200 has been read: that first list
- * is only recorded. Bot-authored items are recorded but not reported.
+ * is only recorded, with `seedCursor` as its cursor until an item names a
+ * newer one. Bot-authored items are recorded but not reported.
  */
-export function readNewItems<T extends { user: GhUser | null | undefined }>(
-  seen: DedupedResource<T> | undefined,
+export function readNewItems<
+  T extends {
+    readonly id: number;
+    readonly user: GhUser | null | undefined;
+    readonly created_at?: string | null;
+    readonly updated_at?: string | null;
+  },
+>(
+  seen: SeenItems | undefined,
   res: ConditionalResponse<readonly T[]>,
-  create: () => DedupedResource<T>,
-): { readonly seen: DedupedResource<T> | undefined; readonly fresh: T[] } {
+  seedCursor?: string,
+): { readonly seen: SeenItems | undefined; readonly fresh: T[] } {
   if (res.status !== 200) return { seen, fresh: [] };
-  const next = seen?.copy() ?? create();
   const fresh: T[] = [];
-  if (seen === undefined) next.seed(res.data);
-  else
-    next.diff(res.data, (item) => {
+  let ids: LRUCache<number, true>;
+  if (seen === undefined) {
+    ids = new LRUCache({ max: MAX_SEEN_IDS });
+    for (const item of res.data) ids.set(item.id, true);
+  } else {
+    ids = copyLru(seen.ids);
+    // Classify the whole batch against pre-batch membership before adding
+    // anything, so an eviction triggered partway through this tick can't
+    // make an id already seen this tick look "new" again (`newIds` also
+    // catches the same id appearing twice within one fetched page).
+    const newIds = new Set<number>();
+    for (const item of res.data) {
+      if (ids.has(item.id) || newIds.has(item.id)) continue;
+      newIds.add(item.id);
       if (!shouldDropBotEvent(item.user)) fresh.push(item);
-    });
-  return { seen: next, fresh };
+    }
+    for (const id of newIds) ids.set(id, true);
+  }
+  const sinceCursor =
+    getNewestTimestamp(res.data) ?? seen?.sinceCursor ?? seedCursor;
+  return { seen: { ids, sinceCursor }, fresh };
 }

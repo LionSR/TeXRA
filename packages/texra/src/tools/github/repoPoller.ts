@@ -50,11 +50,12 @@ import {
 } from './formatRepoEvent';
 import {
   pollGet,
+  copyLru,
   readNewItems,
+  type SeenItems,
   type PollEvent,
   type PollResult,
 } from './poller';
-import { copyLru, dedupeComments, type DedupedResource } from './pollingDedup';
 import {
   GhIssueCommentArraySchema,
   GhPullRequestSchema,
@@ -63,7 +64,6 @@ import {
   isDefiniteMergeableState,
   type GhIssueComment,
   type GhPullsListEntry,
-  type GhReviewComment,
 } from './prTypes';
 import type { RepoTarget } from './subscriptionTarget';
 
@@ -115,8 +115,8 @@ export interface RepoState {
    * repeatedly. The pulls endpoint does NOT support `since`, so PR transitions
    * are tracked by the per-PR maps below instead.
    */
-  readonly issueComments: DedupedResource<GhIssueComment> | undefined;
-  readonly reviewComments: DedupedResource<GhReviewComment> | undefined;
+  readonly issueComments: SeenItems | undefined;
+  readonly reviewComments: SeenItems | undefined;
   /**
    * Per-PR last-known state, indexed by PR number. Lets us emit a single
    * "opened" / "closed" / "merged" event per transition rather than every
@@ -207,8 +207,10 @@ export const pollRepo = Effect.fn('github.pollRepo')(function* (
   }
 
   // An item whose URL names no number is recorded but not reported.
-  const issueComments = readNewItems(prior?.issueComments, issueRes, () =>
-    dedupeComments<GhIssueComment>({ sinceCursor: seedCursor }),
+  const issueComments = readNewItems(
+    prior?.issueComments,
+    issueRes,
+    seedCursor,
   );
   for (const c of issueComments.fresh) {
     const number = parseTargetNumberFromIssueUrl(c);
@@ -216,8 +218,10 @@ export const pollRepo = Effect.fn('github.pollRepo')(function* (
       events.push(formatRepoIssueComment(repo, number, c));
     }
   }
-  const reviewComments = readNewItems(prior?.reviewComments, reviewRes, () =>
-    dedupeComments<GhReviewComment>({ sinceCursor: seedCursor }),
+  const reviewComments = readNewItems(
+    prior?.reviewComments,
+    reviewRes,
+    seedCursor,
   );
   for (const c of reviewComments.fresh) {
     const prNumber = matchPositiveInt(PR_NUMBER_RE, c.html_url);
