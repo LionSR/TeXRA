@@ -62,9 +62,13 @@ Open pull requests the order waits on:
 - **14713** (a document task tells its chat what the user changed) edits
   `hostRunActions.ts`, `documentTools.ts` and `workflowOutput.ts`: G5, I1,
   I3, I4, I5 and I7 land after it.
-- **14773** (programs, not agents, for the catalog and codemode) is set
-  aside by the owner (2026-11-07). M4, M9 and H9, which its outcome could
-  replace, are out of the order until the owner returns to it.
+- **14773** (programs, not agents, for the catalog and codemode) was set
+  aside by the owner (2026-11-07), who returned to it on 2026-11-14: 14940
+  supersedes it. Of M4, M9 and H9, which its outcome could replace, the
+  reworked note replaces only M9; where each goes is in its section "随
+  #14773 搁置的三条发现"
+  ([programs, not agents](./2026-11-06-programs-not-agents.md)). They stay
+  out of the order until the owner places them.
 - **14777** (one unwrap of a platform error) landed 2026-11-07, so G10's
   error tags can join the storage-errors inventory now.
 - **14741** (blob link kinds) touches only the store; nothing here waits.
@@ -361,7 +365,8 @@ inside one plugin).
    shell's head and tail as a projection of its `process.output` rows.
 4. M10: `utils/core/index.ts`'s barrel and the three modules with domain
    owners moved to them.
-5. Set aside with PR 14773 (owner, 2026-11-07), not in the order: M4 (the
+5. Set aside with PR 14773 (owner, 2026-11-07; superseded by 14940, see
+   "Open pull requests the order waits on"), not in the order: M4 (the
    plan tool reads its fact row, not its own past tool results), M9 (the
    catalog follower as one feed with `Stream.take(1)` for the first load),
    H9 (a plugin reaches its host one way).
