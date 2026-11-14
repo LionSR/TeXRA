@@ -18,12 +18,14 @@ const model = (ref: string): ModelConfig => {
 };
 
 const onKey = (config: ModelConfig, request: ReasoningRequest = {}) =>
-  decideReasoning(config, request, undefined, {
-    kind: 'api-key',
-    endpoint: 'https://generativelanguage.googleapis.com',
-    provider: 'google',
-    plan: null,
-  });
+  Effect.fromResult(
+    decideReasoning(config, request, undefined, {
+      kind: 'api-key',
+      endpoint: 'https://generativelanguage.googleapis.com',
+      provider: 'google',
+      plan: null,
+    }),
+  );
 
 describe('reasoning on a route', () => {
   it.effect(

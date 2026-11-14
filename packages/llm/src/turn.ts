@@ -157,7 +157,7 @@ const AnthropicControlsSchema = Schema.Struct({
  * `maxOutputTokens` is a route that takes none.
  */
 /** Whether a configuration's protocol may run a turn in the background. */
-export const BackgroundCapabilitySchema = Schema.Literals([
+const BackgroundCapabilitySchema = Schema.Literals([
   'supported',
   'unsupported',
 ]);

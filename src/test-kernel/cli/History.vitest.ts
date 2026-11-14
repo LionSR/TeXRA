@@ -5,7 +5,6 @@ import { layer } from '@effect/vitest';
 import { expect } from 'vitest';
 import {
   AgentConfigSchema,
-  emptyRunEndOutput,
   qualifyAggregateId,
   RUN_OUTCOME,
   RunIdSchema,
@@ -13,6 +12,7 @@ import {
   type RunOutcome,
   type RunRecord,
 } from '@texra-ai/harness/schemas';
+import { emptyRunEndOutput } from '@shared/schemas';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import {
   cliHistoryNdjsonRecords,

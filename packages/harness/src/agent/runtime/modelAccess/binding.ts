@@ -11,6 +11,7 @@ import { hash } from 'node:crypto';
 
 import { Effect, Option, type Scope } from 'effect';
 import {
+  BACKEND_PROTOCOLS,
   type ModelConfig,
   type ModelOrigin,
   type ReasoningRequest,
@@ -19,7 +20,7 @@ import {
 import { bindModel as bindWireModel } from '@texra-ai/llm/node';
 
 import { RouteUnavailable } from '@common/errors/agentErrors';
-import { decideReasoning, PROTOCOL_BY_BACKEND } from '@model/reasoningLevel';
+import { decideReasoning } from '@model/reasoningLevel';
 import type { ModelSettings } from '@model/modelSettings';
 import { runModelFetch } from '@platform/defaults/longRunningModelTransport';
 import type { Secrets } from '@platform/secrets';
@@ -76,11 +77,13 @@ const reasoningOf = Effect.fn('binding.reasoning')(function* (
   plan: BindPlan,
   config: ModelConfig,
 ) {
-  const choice = yield* decideReasoning(
-    config,
-    plan.ask,
-    plan.settings.reasoningLevels[config.ref],
-    plan.decision.route,
+  const choice = yield* Effect.fromResult(
+    decideReasoning(
+      config,
+      plan.ask,
+      plan.settings.reasoningLevels[config.ref],
+      plan.decision.route,
+    ),
   ).pipe(Effect.mapError(RouteUnavailable.of));
   if (choice.note !== undefined) yield* Effect.logInfo(choice.note);
   return choice;
@@ -134,8 +137,7 @@ export const bindRoute = Effect.fn('ModelAccess.bind')(function* (
     decision,
   };
   const { route, backend } = decision;
-  const protocol = PROTOCOL_BY_BACKEND[backend];
-  if (protocol === 'validation') {
+  if (backend === 'validation') {
     const canned = yield* Effect.serviceOption(ValidationModel);
     if (Option.isNone(canned)) {
       return yield* new RouteUnavailable({
@@ -178,7 +180,10 @@ export const bindRoute = Effect.fn('ModelAccess.bind')(function* (
   const credential = yield* routeCredential(route);
   const chatgpt = credential.route === 'chatgpt-subscription';
   const reasoning = yield* reasoningOf(plan, requested);
-  const turn = { protocol, textOnly: request.textOnly };
+  const turn = {
+    protocol: BACKEND_PROTOCOLS[backend],
+    textOnly: request.textOnly,
+  };
   const bound = yield* bindWireModel({
     model: requested,
     route,
