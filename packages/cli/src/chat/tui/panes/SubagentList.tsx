@@ -7,6 +7,7 @@ import { COLLAPSED, EXPANDED, TICK } from '@cli/tui/ui/glyphs';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { finishedToolCalls } from '@cli/runtime/headless/runProgressRenderer';
 import { truncateSummaryToWidth } from '@cli/runtime/terminal/terminalText';
+import { nestedRollupLabel } from '@ui/copy/nestedRuns';
 import { formatLoopPositionLabel, runStatus } from '@ui/copy/runStatus';
 
 import { childElapsed } from '../state/childControls';
@@ -119,7 +120,7 @@ function SessionRow({
   const color = CHILD_TONE_COLOR[runStatus(run).tone];
   const rollup =
     !expanded && run.rollup.total > 0
-      ? `${run.rollup.total} total · ${run.rollup.running} running · ${run.rollup.finished} finished`
+      ? nestedRollupLabel(run.rollup)
       : undefined;
   return (
     <Box
