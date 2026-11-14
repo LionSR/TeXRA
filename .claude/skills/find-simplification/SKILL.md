@@ -83,7 +83,7 @@ Reject or downgrade a candidate when:
 
 ## Implement Or Record The Candidate
 
-A candidate that is proven and fits a reviewable diff is implemented, not written up: in a scheduled audit, as one commit per candidate in the run's PR, sized and batched as `AGENTS.md` "Scheduled audits" says; otherwise as its own PR when the user asked for changes. Record a candidate only when it is too large for the run, needs a design decision first, or the user asked for a survey alone.
+A candidate that is proven and fits a reviewable diff is implemented, not written up: in a scheduled audit, as one commit per candidate in the run's PR, sized and batched as `AGENTS.md` "Scheduled audits" says; otherwise as its own PR when the user asked for changes. Record a candidate only when it is too large for the run, needs a design decision first, or the user asked for a survey alone; in a scheduled audit the note goes in the run's PR beside the implemented work.
 
 This repo has no inline-TODO convention; recorded findings go to one of two places:
 
@@ -104,7 +104,7 @@ Diff the sibling branch against `origin/main`, not against the current PR branch
 
 ## Validation And PR Hygiene
 
-For docs-only proposal work, run `npm run format`, `npm run gate:docs`, and `git diff --check`. For code-touching implementation, run the checks AGENTS.md requires before committing: `npm run format`, `npm run typecheck`, `npm run lint`, and `npm test`.
+For docs-only proposal work, run `npm run format`, `npm run gate:docs`, and `git diff --check`. For code-touching implementation, run the checks AGENTS.md requires before committing: `npm run format`, `npm run typecheck`, `npm run lint`, and `npm test`; a scheduled audit runs `npm run gate` and `npm run test:changed` instead, as "Scheduled audits" says.
 
 A PR implementing a simplification is usually titled `refactor:` / `simplify:` / `consolidate:` / `dedupe:` — which activates the letter-level template requirements (checklist §14): the body must carry `## Net elements (R6)` (files, `^[+-]export` symbols, class/interface/enum declarations, net LoC from `git diff --stat origin/main`) and `## Consumer counts (R8)` (grepped subscriber/caller counts for every deleted emit path or public symbol). Build implies delete in the same PR; a net-positive-LOC "reduction" needs its stated reason. Use Conventional Commits.
 

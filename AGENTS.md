@@ -497,17 +497,19 @@ section says what to do with it.
 - Run `npm run gate` and `npm run test:changed` before pushing, and say in the
   PR body what ran. Subscribe to the PR, fix CI and answer review until it is
   ready to merge; the owner merges.
-- Only a finding that needs a design decision becomes a dated note under
-  `.agents/docs/proposed/simplification/` in the same PR, with its first step
-  implemented. An audit document alone is never the result of a run.
+- A finding too large for the run, or one that needs a design decision first,
+  becomes a dated note under `.agents/docs/proposed/simplification/` in the
+  same PR, beside whatever first step stands alone. A PR that holds only
+  notes is not the result of a run.
 - When nothing survives verification, say so in two lines and open nothing.
 
 ## Skills
 
 - **code-review**: `/review` and any review of this repo; always include a
   `Verified` section.
-- **find-simplification**: deletion and collapse candidates, recorded as dated
-  proposals or tech-debt issues.
+- **find-simplification**: deletion and collapse candidates, implemented when
+  they fit a reviewable diff and otherwise recorded as dated proposals or
+  tech-debt issues.
 - **texra-cli**: the Ink TUI, transcript rendering, headless output, CLI flags
   and help.
 - **releasing**: changelog, tags, GitHub Releases, desktop installers, npm
