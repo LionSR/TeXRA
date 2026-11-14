@@ -14,7 +14,7 @@ import { when } from 'lit/directives/when.js';
 // Local imports
 import { shownRun, type Surface } from '@texra/shared/session/surface';
 import { unseenRuns } from '@texra/shared/session/unseenRuns';
-import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 import {
   RUN_SECTION_LABELS,
   RUN_SECTION_ORDER,

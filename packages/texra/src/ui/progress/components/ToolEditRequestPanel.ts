@@ -12,7 +12,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import { isLatexFile } from '@texra/shared/latexFileTypes';
-import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 
 // Local imports - shared helpers
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
