@@ -31,7 +31,7 @@ import {
 import type { RunServices } from '@agent/runtime/ToolServices';
 import type { SessionHandleInit } from '@agent/runtime/SessionHandle';
 import { mcpConfigPathOf } from '@common/plugins/mcpServers';
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure, withLogChannel } from '@logger/effectLog';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { AppSignals } from '@platform/appSignals';
 import { AgentDirectories, AppState } from '@platform/interfaces';
@@ -73,12 +73,6 @@ import { sessionInputsLayer } from './sessionInputsLayer';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
 const CHANNEL = 'sessionLayer';
-
-/** Log a failure on this channel, with the failure attached as its `data`. */
-const logFailure =
-  (message: string, log = Effect.logWarning) =>
-  (data: unknown) =>
-    log(message).pipe(Effect.annotateLogs({ data }), withLogChannel(CHANNEL));
 
 /**
  * Which session an entry is: its storage root (`SessionView.key`), with what
@@ -238,9 +232,10 @@ const listSessions = Effect.gen(function* () {
 const unopenedEntry =
   (key: SessionKey) =>
   (error: SessionOpenError): Effect.Effect<Option.Option<never>> =>
-    logFailure(`Session ${key.storage} failed to open; it holds no session.`)(
-      error,
-    ).pipe(Effect.as(Option.none()));
+    logFailure(
+      CHANNEL,
+      `Session ${key.storage} failed to open; it holds no session.`,
+    )(error).pipe(Effect.as(Option.none()));
 
 /** The session held for `root`, if the map holds one: an entry still building
  *  is waited for, never skipped, which is what lets a close issued right after

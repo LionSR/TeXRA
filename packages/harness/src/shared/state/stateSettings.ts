@@ -11,6 +11,7 @@ import {
   QualifiedSkillNameSchema,
 } from '@shared/schemas';
 import {
+  booleanWithDefault,
   PROVIDER_ENDPOINT_SETTINGS,
   PROVIDER_REGION_SETTINGS,
 } from '@shared/state/providerSettings';
@@ -171,7 +172,7 @@ export const GOAL_STRATEGY_SETTING = {
 export const GOOGLE_INTERACTIONS_SERVER_STATE_SETTING = {
   key: 'model.useGoogleInteractionsServerState',
   slot: 'config',
-  schema: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  schema: booleanWithDefault(true),
   configTarget: 'global',
   title: 'Server-side conversation state',
   description:
@@ -181,9 +182,7 @@ export const GOOGLE_INTERACTIONS_SERVER_STATE_SETTING = {
 export const GOOGLE_BACKGROUND_RESPONSES_SETTING = {
   key: 'model.useGoogleBackgroundResponses',
   slot: 'config',
-  schema: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
+  schema: booleanWithDefault(false),
   configTarget: 'global',
   title: 'Google background responses',
   description:
@@ -193,9 +192,7 @@ export const GOOGLE_BACKGROUND_RESPONSES_SETTING = {
 export const OPENAI_FAST_TIER_SETTING = {
   key: 'model.openaiFastTier',
   slot: 'config',
-  schema: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
+  schema: booleanWithDefault(false),
   configTarget: 'global',
   title: 'Fast mode',
   description:
@@ -235,9 +232,7 @@ export const MODEL_RETRY_MAX_ATTEMPTS_SETTING = {
 export const CHATGPT_PREFER_SUBSCRIPTION_SETTING = {
   key: 'chatgptCodex.preferSubscription',
   slot: 'config',
-  schema: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
+  schema: booleanWithDefault(false),
   title: 'Prefer the ChatGPT subscription',
   description:
     'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing takes the input window the Codex backend grants each model; use chatgptCodex.contextWindowK to override it.',
@@ -268,9 +263,7 @@ export const CHATGPT_CODEX_CONTEXT_WINDOW_SETTING = {
 export const XAI_PREFER_SUBSCRIPTION_SETTING = {
   key: 'xaiGrok.preferSubscription',
   slot: 'config',
-  schema: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
+  schema: booleanWithDefault(false),
   title: 'Prefer the Grok subscription',
   description:
     'Prefer your signed-in Grok (xAI SuperGrok) account for xAI models instead of API-key routing. Experimental. Uses the public Grok CLI OAuth client; xAI may change or revoke that registration without notice.',
@@ -296,9 +289,7 @@ export const MAX_IMAGE_DIMENSION_SETTING = {
 export const DEBUG_MODE_SETTING = {
   key: 'logger.debugMode',
   slot: 'config',
-  schema: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
+  schema: booleanWithDefault(false),
   title: 'Verbose transcript',
   description:
     "Show the transcript's verbose tier: debug-level rows and their payload detail. The log surfaces filter themselves (the Output view's own level filter, the desktop log file, the CLI's --verbose/--quiet).",
@@ -307,9 +298,7 @@ export const DEBUG_MODE_SETTING = {
 export const SAVE_MODEL_IO_SETTING = {
   key: 'debug.saveModelIO',
   slot: 'config',
-  schema: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
+  schema: booleanWithDefault(false),
   title: 'Save model requests and responses',
   description:
     'Save what is sent to and received from the model: the request messages and raw responses as JSON, plus the final input prompt as XML.',
@@ -319,9 +308,7 @@ export const SAVE_MODEL_IO_SETTING = {
 export const AGENT_SKILLS_ENABLED_SETTING = {
   key: 'skills.enabled',
   slot: 'config',
-  schema: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
+  schema: booleanWithDefault(false),
   title: 'Enable skills for agents',
   description:
     'Expose enabled built-in and imported skills to agent prompts. Skills are off by default.',
@@ -383,7 +370,7 @@ export const DISABLED_SKILL_SOURCES_SETTING = {
 export const GIT_MARK_COMMITS_SETTING = {
   key: 'git.markCommits',
   slot: 'repoState',
-  schema: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  schema: booleanWithDefault(true),
   title: 'Mark agent commits',
   description:
     'Attribute agent-authored git commits to the agent commit author so they are distinguishable from your own commits.',
@@ -418,9 +405,7 @@ export const GIT_AUTHOR_EMAIL_SETTING = {
 export const GIT_WORKTREE_SUPPORT_SETTING = {
   key: 'git.worktreeSupport',
   slot: 'repoState',
-  schema: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
+  schema: booleanWithDefault(false),
   title: 'Subagent worktrees',
   description:
     'Allow spawned subagents to run in isolated git worktrees so parallel edits do not conflict.',
@@ -434,7 +419,7 @@ export const GIT_WORKTREE_SUPPORT_SETTING = {
 export const ALLOW_ORCHESTRATOR_KILL_SETTING = {
   key: 'allowOrchestratorKill',
   slot: 'globalState',
-  schema: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  schema: booleanWithDefault(true),
   title: 'Let a task stop its agents',
   description:
     'Allow a task to stop the agents it started once they are no longer needed.',
@@ -443,9 +428,7 @@ export const ALLOW_ORCHESTRATOR_KILL_SETTING = {
 export const DETACH_SUBAGENTS_ON_STOP_SETTING = {
   key: 'detachSubagentsOnStop',
   slot: 'globalState',
-  schema: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
+  schema: booleanWithDefault(false),
   title: 'Keep agents running',
   description: "Let a task's agents continue when the task is stopped.",
 } as const satisfies SettingRow<boolean>;
@@ -457,7 +440,7 @@ export const DETACH_SUBAGENTS_ON_STOP_SETTING = {
 export const MEMORY_ENABLED_SETTING = {
   key: 'memory.enabled',
   slot: 'globalState',
-  schema: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  schema: booleanWithDefault(true),
   title: 'Enable memory for chat agents',
   description: 'Remember useful details across chat sessions.',
 } as const satisfies SettingRow<boolean>;
@@ -472,9 +455,7 @@ export const MEMORY_ENABLED_SETTING = {
 export const SCRIPT_ONLY_SETTING = {
   key: 'codeMode.scriptOnly',
   slot: 'globalState',
-  schema: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
+  schema: booleanWithDefault(false),
   title: 'Script-only tools',
   description:
     'Send chat agents the script tool and their own tools alone: every other tool is called from inside a script. Off by default while the comparison against direct tool calls runs.',
@@ -484,9 +465,7 @@ export const SCRIPT_ONLY_SETTING = {
 export const WEBSOCKET_OPENAI_SETTING = {
   key: 'websocket.openai',
   slot: 'globalState',
-  schema: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
+  schema: booleanWithDefault(false),
   title: 'OpenAI WebSocket',
   description:
     'EXPERIMENTAL: use the persistent WebSocket transport for OpenAI Responses requests (lower latency for tool-use loops), and let the ChatGPT-subscription Codex backend attempt WebSocket. Off by default.',
@@ -509,9 +488,7 @@ export const HELPER_MODEL_SETTING = {
 export const KIMI_CODE_PREFER_SETTING = {
   key: 'kimiCode.prefer',
   slot: 'globalState',
-  schema: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
+  schema: booleanWithDefault(false),
   title: 'Kimi Code subscription',
   description:
     'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
@@ -520,9 +497,7 @@ export const KIMI_CODE_PREFER_SETTING = {
 export const GLM_CODING_PLAN_SETTING = {
   key: 'glm.codingPlan',
   slot: 'globalState',
-  schema: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
+  schema: booleanWithDefault(false),
   title: 'GLM Coding Plan',
   description:
     'Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits.',
@@ -535,7 +510,7 @@ export const GLM_CODING_PLAN_SETTING = {
 export const TOOL_PATH_PROTECTION_SETTING = {
   key: 'tools.restrictPathsToWorkingDirectory',
   slot: 'workspaceState',
-  schema: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  schema: booleanWithDefault(true),
   title: 'Restrict tool paths to the working directory',
   description:
     'Keep file-reading, editing, search, diagnostics, and PDF tools inside the active working directory. Turn this off only when an agent must use arbitrary filesystem paths.',

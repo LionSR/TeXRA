@@ -422,8 +422,6 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     ));
   if (pre && pre.rows.length > 0) yield* commit(call, pre.rows);
   let result: ToolResult;
-  // What the body ran on, which the card shows; the issued input is recorded.
-  let ran = input;
   /** The card the call opens over `on`, with the stage it opens under. */
   const cardOver = (on: unknown) => ({
     logId: fact.logId,
@@ -444,7 +442,6 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     // From here the call may have run: its intent commits now, which opens
     // its card, unless this attempt's body already started (a re-entry).
     const bodyStarts = Effect.fn('bodyStarts')(function* (on: unknown) {
-      ran = on;
       if (!bodyStarted)
         yield* commit(call, [
           {
@@ -562,7 +559,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
           type: 'tool.start',
           aggregateId: dispatch.aggregateId,
           ...staged,
-          ...cardOver(ran),
+          ...cardOver(input),
           ...(attempt > 1 ? { attempt } : {}),
         },
       ];

@@ -94,16 +94,28 @@ export function logReplacementDiagnostics(
   ).pipe(withLogChannel(CHANNEL));
 }
 
-function applyNonRegexPolicy(
+/**
+ * Run rule passes in order, each over the trimmed output of the one before.
+ * A plain-string pass is followed by the critique wrapping; whole-document
+ * cleanup runs once, in the last pass.
+ */
+function runPasses(
   text: string,
-  config: ConfigProvider,
+  passes: readonly (OrderedRuleSet | RegexRuleSet[])[],
 ): ReplacementResult {
-  const processed = applyReplacements(text, getAllReplacements(config));
-  const trimmed = processed.text.trim();
-  return {
-    text: wrapCritiqueInAlign(trimmed),
-    diagnostics: processed.diagnostics,
-  };
+  const diagnostics: ReplacementDiagnostic[] = [];
+  let result = text;
+  for (const [index, rules] of passes.entries()) {
+    const applied = applyReplacements(result, rules, {
+      cleanupPasses: index === passes.length - 1,
+    });
+    diagnostics.push(...applied.diagnostics);
+    result = applied.text.trim();
+    if (!Array.isArray(rules)) {
+      result = wrapCritiqueInAlign(result);
+    }
+  }
+  return { text: result, diagnostics };
 }
 
 function applyAllPolicy(
@@ -111,25 +123,11 @@ function applyAllPolicy(
   config: ConfigProvider,
 ): ReplacementResult {
   const replacements = getAllReplacements(config);
-
-  const nonRegex = applyReplacements(text, replacements, {
-    cleanupPasses: false,
-  });
-  let result = nonRegex.text.trim();
-  result = wrapCritiqueInAlign(result);
-  const regex = applyReplacements(result, getAllReplacementsRegex(config), {
-    cleanupPasses: false,
-  });
-  const final = applyReplacements(regex.text.trim(), replacements);
-  result = final.text.trim();
-  return {
-    text: wrapCritiqueInAlign(result),
-    diagnostics: [
-      ...nonRegex.diagnostics,
-      ...regex.diagnostics,
-      ...final.diagnostics,
-    ],
-  };
+  return runPasses(text, [
+    replacements,
+    getAllReplacementsRegex(config),
+    replacements,
+  ]);
 }
 
 /**
@@ -156,7 +154,7 @@ const replacementEngine = {
    * {@link applyAll}.
    */
   applyToXmlContent(text: string, config: ConfigProvider): ReplacementResult {
-    const nonRegex = applyNonRegexPolicy(text, config);
+    const nonRegex = runPasses(text, [getAllReplacements(config)]);
     const fenced = applyReplacements(
       nonRegex.text,
       FENCED_LATEX_BLOCK_REPLACEMENTS,
