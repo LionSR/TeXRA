@@ -22,20 +22,6 @@ type FollowUpServices =
   | SessionViewAccess
   | Interactions;
 
-/** The caller's {@link FollowUpServices}, for a run's inbox kept past the
- *  caller's fiber ({@link runInbox}). */
-const followUpServices = Effect.map(
-  Effect.context<FollowUpServices>(),
-  Context.pick(
-    Inbox,
-    Runs,
-    RunRegistry,
-    SessionLog,
-    SessionViewAccess,
-    Interactions,
-  ),
-);
-
 /**
  * Why a submission could not be admitted, as {@link describeFollowUpFailure}
  * words it: the kind of a resume's refusal (`ResumeRefusal`; a message to a
@@ -287,7 +273,7 @@ export interface RunInbox {
 }
 
 /** `runId`'s input on the session whose services are `session`
- *  ({@link followUpServices}). */
+ *  ({@link FollowUpServices}). */
 export const runInbox = (
   runId: RunId,
   session: Context.Context<FollowUpServices>,
