@@ -272,7 +272,8 @@ Done, on the branch after PR 14927:
   two would have needed two mechanisms. The one readline wrapper stays and
   races its `close`.
 - Row 14: `Dialogs.notify` returns once the host is asked to show the
-  notice, in VS Code and the desktop app; eleven caller forks are gone.
+  notice, in VS Code and the desktop app; fifteen caller forks are gone
+  and two remain, one in each host.
 - Row 15: a service link holds one value, the client or why it is away;
   "a run at work" has one reading (`runsAtWork`) for a project's hold, the
   service's load and a drain's end.
