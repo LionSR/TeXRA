@@ -12,6 +12,8 @@
  * - A host's shutdown that stops a launch still opening, then interrupts
  *   it (the CLI's), leaves the run ended without the shutdown's reason, so
  *   a resume reads its turn as unanswered rather than continued.
+ * - A run whose end the store refused fails its result with "ended without
+ *   a stored end" and nothing of why.
  */
 import { layer } from '@effect/vitest';
 import { Context, Effect, Exit, Fiber, Schema, Scope, Stream } from 'effect';
@@ -250,6 +252,29 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
               .filter((row) => row.run === runId && row.type === 'run.stop')
               .map((row) => Schema.decodeUnknownSync(RunStopData)(row.data));
             expect(stops).toStrictEqual([{ reason: 'shutdown' }]);
+          }),
+      );
+
+      it.effect(
+        "fails a run's result with what the store refused of its end",
+        () =>
+          Effect.gen(function* () {
+            const { roots } = yield* FakeHost;
+            const sdk = yield* packageSession(
+              yield* persistentTestSession(roots),
+            );
+            const faults = yield* sessionStoreFaults(roots.storage);
+            yield* faults.failNext('appendAll', 'run.end');
+            // One run, so the refused end is its own.
+            const run = yield* sdk.start({
+              agent: 'golden_child',
+              instruction: 'Answer once.',
+              model: MODEL,
+            });
+            const failure = yield* Effect.flip(run.result);
+            expect(failure.message).toContain(
+              'injected appendAll fault (run.end)',
+            );
           }),
       );
 

@@ -142,8 +142,11 @@ const childRunEnd = Effect.fn('childRunEnd')(function* (
   const runs = yield* RunRegistry;
   yield* start;
   const live = runs.get(runId);
-  if (live !== undefined)
-    yield* live.drained.pipe(
+  // What the child's fiber failed on, when it did: the reason an end is
+  // missing below (the store refused it).
+  const unsaved =
+    live &&
+    (yield* live.drained.pipe(
       Effect.onInterrupt(() =>
         runs.attachedParent(runId).pipe(
           // An edge the store cannot give is no defect of this wait, whose
@@ -175,11 +178,16 @@ const childRunEnd = Effect.fn('childRunEnd')(function* (
           }),
         ),
       ),
-    );
+    ));
   const result = yield* getRunRecords(runId).readRunEnd();
   if (result === null)
     return yield* Effect.fail(
-      new Error(`Subagent ${runId} ended without a recorded end.`),
+      unsaved === undefined
+        ? new Error(`Subagent ${runId} ended without a recorded end.`)
+        : new Error(
+            `Subagent ${runId} ended without a recorded end: ${unsaved.message}`,
+            { cause: unsaved },
+          ),
     );
   if (result.outcome === RUN_OUTCOME.FAILED)
     return yield* Effect.fail(
