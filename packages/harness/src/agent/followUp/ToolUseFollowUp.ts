@@ -47,10 +47,7 @@ const followUpServices = Effect.map(
  *   store), which says nothing about the run itself.
  * - `notParent`: the sender is not the run's parent.
  */
-type FollowUpFailureReason =
-  | ResumeRefusal['kind']
-  | 'readFailed'
-  | 'notParent';
+type FollowUpFailureReason = ResumeRefusal['kind'] | 'readFailed' | 'notParent';
 
 /**
  * Three outcomes: the input reached a running loop, it waits in the run's
