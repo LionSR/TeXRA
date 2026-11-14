@@ -30,6 +30,17 @@ export const WORKSPACE_STORAGE_LAYOUT = Object.freeze({
   original: 'original',
 } as const);
 
+/** Where a tool plugin's bundled `kind` ships under a host's packaged
+ *  resources root: `<resources>/plugins/<id>/<kind>`. A plugin that ships
+ *  none has no such directory, which reads as none. */
+export function bundledPluginDir(
+  resourcesPath: string,
+  pluginId: string,
+  kind: 'skills' | 'agents',
+): string {
+  return path.join(resourcesPath, 'plugins', pluginId, kind);
+}
+
 /** Global (non-workspace-scoped) storage directory names, shared across hosts. */
 export const CUSTOM_AGENTS_STORAGE_DIR = 'custom_agents';
 

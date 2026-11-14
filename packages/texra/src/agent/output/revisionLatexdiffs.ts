@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 
+import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
 import { Effect, FileSystem, Predicate } from 'effect';
 
 import { createRunStorageLocation } from '@texra-ai/harness/host';
@@ -16,6 +17,7 @@ import {
   latexdiffPairs,
   type LatexdiffPair,
 } from '@latex/latexdiff/diffOperations';
+import { REVISION_DIFF_PDF_SUFFIX } from '@latex/latexdiff/diffFileNameManager';
 import { compileLatex2Pdf } from '@latex/texTools';
 import type {
   LatexdiffEntry,
@@ -141,7 +143,7 @@ export const revisionLatexdiffs = Effect.fn('documents.revisionLatexdiffs')(
     });
     yield* fileService.ensureMirroredInRunSubdir(layout.diffDir);
 
-    logger.debug(`Revision ${currRound + 1} output files`, {
+    logger.debug(`${formatRoundLabel(currRound)} output files`, {
       data: outputFiles.map((f) => f.location.absolutePath),
     });
 
@@ -296,7 +298,9 @@ const diffPair = (
       diffDirectory,
       revised.round,
       revised.location,
-      baseRound === null ? '-diff' : '-round-diff',
+      baseRound === null
+        ? REVISION_DIFF_PDF_SUFFIX.fromStart
+        : REVISION_DIFF_PDF_SUFFIX.betweenRounds,
     );
     return {
       entry: { ...pair, status: 'ok', diff: compiled.diffLocation },

@@ -448,7 +448,7 @@ export const downloadArxivSource = Effect.fn('arxivProcessor.downloadSource')(
 
     const needsDownload = !(yield* hasExistingSource(isRoot, paperDirFull));
     if (needsDownload) {
-      yield* fetchAndPlaceSource(id, paperDirFull, isRoot);
+      yield* claimDirAndPlaceSource(id, paperDirFull, isRoot);
     }
 
     // Skip auto-indent for root destination to avoid reformatting existing workspace files
@@ -539,67 +539,65 @@ function removeUnfinishedPaperDir(
 
 /**
  * Download the arXiv source and place it into the paper directory
- * (`stageAndPlaceSource`). A paper directory this download creates is its
+ * (`downloadAndPlaceSource`). A paper directory this download creates is its
  * own until the source is fully placed: any other exit -- a PDF-only
  * submission, a failed extraction, or Cancel mid-extraction -- removes it
  * (`removeUnfinishedPaperDir`), and a failure whose directory could not be
  * removed says so. A directory that was already there, and the workspace
  * root, belong to the user and stay.
  */
-const fetchAndPlaceSource = Effect.fn('arxivProcessor.fetchAndPlaceSource')(
-  function* (id: string, paperDirFull: string, isRoot: boolean) {
-    const fs = yield* FileSystem.FileSystem;
-    // The claim is the create itself: a non-recursive `makeDirectory` either
-    // makes the directory, and this download owns it, or fails
-    // `AlreadyExists`, and it is the user's or a concurrent download's. An
-    // existence probe before the create let two downloads of one id (two
-    // runs, or a run and the host command) both pass it, both believe they
-    // owned the directory, and the loser's cleanup remove the winner's
-    // placed source.
-    const ownsPaperDir = isRoot
-      ? false
-      : yield* permanentFs(
-          fs
-            .makeDirectory(path.dirname(paperDirFull), { recursive: true })
-            .pipe(
-              Effect.andThen(fs.makeDirectory(paperDirFull)),
-              Effect.as(true),
-              Effect.catchIf(
-                (error) => error.reason._tag === 'AlreadyExists',
-                () => Effect.succeed(false),
-              ),
-            ),
-        );
-    // `Effect.scoped` closes the staging directory's finalizer here, on
-    // success, failure and interruption alike, before the paper directory
-    // that holds it is removed.
-    const placed = Effect.scoped(stageAndPlaceSource(id, paperDirFull));
-    if (!ownsPaperDir) return yield* placed;
-    const removeUnfinished = removeUnfinishedPaperDir(paperDirFull);
-    return yield* placed.pipe(
-      // Cancel or a defect reads no failure message: the warning is all.
-      Effect.onExit((exit) =>
-        Exit.isFailure(exit) &&
-        (Cause.hasInterrupts(exit.cause) || !Cause.hasFails(exit.cause))
-          ? Effect.asVoid(removeUnfinished)
-          : Effect.void,
-      ),
-      // A failure carries what its cleanup left behind; with a partial
-      // tree in place, trying again cannot help, so it is permanent.
-      Effect.catch((error) =>
-        Effect.flatMap(removeUnfinished, (left) =>
-          Effect.fail(
-            left === null
-              ? error
-              : new ArxivSourcePermanentError({
-                  message: `${error.message} ${left}`,
-                }),
+const claimDirAndPlaceSource = Effect.fn(
+  'arxivProcessor.claimDirAndPlaceSource',
+)(function* (id: string, paperDirFull: string, isRoot: boolean) {
+  const fs = yield* FileSystem.FileSystem;
+  // The claim is the create itself: a non-recursive `makeDirectory` either
+  // makes the directory, and this download owns it, or fails
+  // `AlreadyExists`, and it is the user's or a concurrent download's. An
+  // existence probe before the create let two downloads of one id (two
+  // runs, or a run and the host command) both pass it, both believe they
+  // owned the directory, and the loser's cleanup remove the winner's
+  // placed source.
+  const ownsPaperDir = isRoot
+    ? false
+    : yield* permanentFs(
+        fs.makeDirectory(path.dirname(paperDirFull), { recursive: true }).pipe(
+          Effect.andThen(fs.makeDirectory(paperDirFull)),
+          Effect.as(true),
+          Effect.catchIf(
+            (error) => error.reason._tag === 'AlreadyExists',
+            () => Effect.succeed(false),
           ),
         ),
+      );
+  // `Effect.scoped` closes the staging directory's finalizer here, on
+  // success, failure and interruption alike, before the paper directory
+  // that holds it is removed.
+  const placed = Effect.scoped(downloadAndPlaceSource(id, paperDirFull));
+  if (!ownsPaperDir) return yield* placed;
+  const removeUnfinished = removeUnfinishedPaperDir(paperDirFull);
+  return yield* placed.pipe(
+    // Cancel or a defect reads no failure message: the warning is all.
+    Effect.onExit((exit) =>
+      Exit.isFailure(exit) &&
+      (Cause.hasInterrupts(exit.cause) || !Cause.hasFails(exit.cause))
+        ? Effect.asVoid(removeUnfinished)
+        : Effect.void,
+    ),
+    // A failure carries what its cleanup left behind; with a partial
+    // tree in place, trying again cannot help, so it is permanent.
+    Effect.catch((error) =>
+      Effect.flatMap(removeUnfinished, (left) =>
+        Effect.fail(
+          left === null
+            ? error
+            : new ArxivSourcePermanentError({
+                message: `${error.message} ${left}`,
+              }),
+        ),
       ),
-    );
-  },
-);
+    ),
+  );
+});
 
 /**
  * Download the arXiv source tarball into a unique staging directory in the
@@ -607,47 +605,47 @@ const fetchAndPlaceSource = Effect.fn('arxivProcessor.fetchAndPlaceSource')(
  * into the paper root. The staging directory is removed by a scope
  * finalizer, so the caller must run this inside `Effect.scoped`.
  */
-const stageAndPlaceSource = Effect.fn('arxivProcessor.stageAndPlaceSource')(
-  function* (id: string, paperDirFull: string) {
-    const fs = yield* FileSystem.FileSystem;
-    const progress = yield* LatexProgress;
-    // A staging directory of this download's own: a fixed name derived from
-    // the id would be shared by two downloads of the same paper, which
-    // would then stream into one archive file and remove each other's
-    // staging. The prefix keeps it clear of a user's `download/` folder.
-    const downloadDirFull = yield* permanentFs(
-      fs.makeTempDirectory({
-        directory: paperDirFull,
-        prefix: `.arxiv-download-${id.replaceAll('/', '_')}-`,
-      }),
-    );
-    // The staging directory belongs to this scope, so removing it is a scope
-    // finalizer rather than a step on the happy path. Every non-success exit
-    // used to leave `.arxiv-download-<id>/` behind in the paper directory: a
-    // download that ran out of retries, a PDF-only submission detected from
-    // the content type, a failed extraction, and interruption.
-    yield* Effect.addFinalizer(() =>
-      cleanUpBestEffort(downloadDirFull, 'staging download dir', {
-        recursive: true,
-      }),
-    );
-    const downloadBasePath = path.join(downloadDirFull, 'source');
+const downloadAndPlaceSource = Effect.fn(
+  'arxivProcessor.downloadAndPlaceSource',
+)(function* (id: string, paperDirFull: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const progress = yield* LatexProgress;
+  // A staging directory of this download's own: a fixed name derived from
+  // the id would be shared by two downloads of the same paper, which
+  // would then stream into one archive file and remove each other's
+  // staging. The prefix keeps it clear of a user's `download/` folder.
+  const downloadDirFull = yield* permanentFs(
+    fs.makeTempDirectory({
+      directory: paperDirFull,
+      prefix: `.arxiv-download-${id.replaceAll('/', '_')}-`,
+    }),
+  );
+  // The staging directory belongs to this scope, so removing it is a scope
+  // finalizer rather than a step on the happy path. Every non-success exit
+  // used to leave `.arxiv-download-<id>/` behind in the paper directory: a
+  // download that ran out of retries, a PDF-only submission detected from
+  // the content type, a failed extraction, and interruption.
+  yield* Effect.addFinalizer(() =>
+    cleanUpBestEffort(downloadDirFull, 'staging download dir', {
+      recursive: true,
+    }),
+  );
+  const downloadBasePath = path.join(downloadDirFull, 'source');
 
-    progress(`Downloading arXiv source for ${id}...`, 20);
+  progress(`Downloading arXiv source for ${id}...`, 20);
 
-    const downloadUrl = `https://arxiv.org/src/${id}`;
-    const downloadedPath = yield* downloadFile(downloadUrl, downloadBasePath);
+  const downloadUrl = `https://arxiv.org/src/${id}`;
+  const downloadedPath = yield* downloadFile(downloadUrl, downloadBasePath);
 
-    // Detect PDF-only submissions (no LaTeX source available)
-    if (hasExtension(downloadedPath, '.pdf')) {
-      return yield* new ArxivSourcePermanentError({
-        message: PDF_ONLY_SUBMISSION_ERROR,
-      });
-    }
+  // Detect PDF-only submissions (no LaTeX source available)
+  if (hasExtension(downloadedPath, '.pdf')) {
+    return yield* new ArxivSourcePermanentError({
+      message: PDF_ONLY_SUBMISSION_ERROR,
+    });
+  }
 
-    yield* placeSourceFiles(downloadedPath, downloadDirFull, paperDirFull);
-  },
-);
+  yield* placeSourceFiles(downloadedPath, downloadDirFull, paperDirFull);
+});
 
 /**
  * Place the downloaded source into the paper directory: extract a tar/tgz

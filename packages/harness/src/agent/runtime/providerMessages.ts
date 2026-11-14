@@ -44,7 +44,7 @@ import type { StoredBlobs } from '@shared/session/database';
 import { blobAddress } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import type { InputPart } from './run/mediaInput';
+import type { InputPart } from '@texra-ai/llm';
 
 type AssertNever<T extends never> = T;
 type StoredTurn = typeof StoredTurnSchema.Type;

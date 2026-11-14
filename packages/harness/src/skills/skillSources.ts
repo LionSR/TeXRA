@@ -5,6 +5,7 @@ import {
   type LoadablePlugin,
 } from '@common/plugins/pluginTrust';
 import type { ActiveSkillSourceScope } from '@shared/schemas';
+import { bundledPluginDir } from '@common/storage/storageLayout';
 
 import type { SkillSource, SkillSourceTier } from './loadSkills';
 
@@ -202,7 +203,7 @@ function pluginSkillContribution(pluginId: string): SkillSourceContribution {
     tier: 'bundled',
     roots: ({ resourcesPath }) => [
       {
-        path: path.join(resourcesPath, 'plugins', pluginId, 'skills'),
+        path: bundledPluginDir(resourcesPath, pluginId, 'skills'),
         label: 'bundled',
         plugin: pluginId,
       },

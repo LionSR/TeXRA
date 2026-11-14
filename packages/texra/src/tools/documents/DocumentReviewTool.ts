@@ -4,6 +4,7 @@
  * recipe in `@texra/agent/output/documentRecipe` calls it). The bundled `critic`
  * persona holds the instructions; this tool only gathers what it reads.
  */
+import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
 import { Effect, FileSystem, Schema } from 'effect';
 
 import { absentReason } from '@texra-ai/harness/node';
@@ -38,7 +39,7 @@ type Round = RoundOutput | undefined;
  *  next revision can still repair it. */
 const missingEvidence = (round: Round, revision: number): string | null => {
   if ((round?.outputs.length ?? 0) === 0)
-    return `<missing>Revision ${revision + 1} wrote no documents.</missing>`;
+    return `<missing>${formatRoundLabel(revision)} wrote no documents.</missing>`;
   const missing = round?.missingOutputs ?? [];
   return missing.length > 0
     ? `<missing>Not written: ${missing.join(', ')}</missing>`

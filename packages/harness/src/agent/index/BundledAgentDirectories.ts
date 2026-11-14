@@ -1,9 +1,8 @@
-import * as path from 'node:path';
-
 import { Effect } from 'effect';
 
 import { AppState } from '@platform/interfaces';
 import type { StateReadFailed } from '@shared/config/settings';
+import { bundledPluginDir } from '@common/storage/storageLayout';
 import { readDisabledTools } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 
@@ -40,7 +39,7 @@ export const enabledBuiltInRoots = (
         : [...registry.entries.keys()].flatMap((id) =>
             disabled.has(id)
               ? []
-              : [path.join(resourcesRoot, 'plugins', id, 'agents')],
+              : [bundledPluginDir(resourcesRoot, id, BUNDLED_AGENTS_DIRECTORY)],
           )),
     ],
   );

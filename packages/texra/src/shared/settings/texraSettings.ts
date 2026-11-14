@@ -297,11 +297,7 @@ export const INLINE_CRITICISM_SETTING = {
 } as const satisfies TexraSettingRow<boolean>;
 
 /** TeXRA's rows no TeXRA UI shows, in catalog order. */
-/**
- * The launcher's commit picker reads the count through the host snapshot on
- * both GUI hosts; the CLI only writes it, through the setup assistant's
- * `update_config`.
- */
+/** How many recent commits the launcher's commit picker lists. */
 export const GIT_COMMITS_TO_SHOW_SETTING = {
   key: 'git.numberOfCommitsToShow',
   slot: 'config',
