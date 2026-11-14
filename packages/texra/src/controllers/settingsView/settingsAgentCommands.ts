@@ -24,7 +24,7 @@ import {
   toErrorMessage,
   formatResultCount,
 } from '@texra-ai/harness/schemas';
-import { workspaceTeams } from '@texra/shared/agentTeams';
+import { launchableTeams, workspaceTeams } from '@texra/shared/agentTeams';
 import { formatUnknownTeamMessage } from '@texra/agent/teams/teamLaunch';
 import { applyTeam } from '@texra/agent/teams/teamPlan';
 import {
@@ -167,9 +167,8 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       Effect.gen(function* () {
         const { catalog, workspaceAgents } = yield* page;
         return {
-          // The setup starter is a selectable agent list, not a team card.
-          presets: (yield* workspaceTeams(ports.roots.repoState)).filter(
-            (preset) => !preset.setupOnly,
+          presets: launchableTeams(
+            yield* workspaceTeams(ports.roots.repoState),
           ),
           orchestratorAgents: catalog.getOrchestratorAgentNames(),
           activePresetId: yield* workspaceAgents.getActiveTeamId(),
