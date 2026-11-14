@@ -4,6 +4,7 @@
 // objects.
 
 import { Schema } from 'effect';
+import { NonNegativeIntSchema } from '@shared/schemas';
 
 /** What the worker is started with: one script and the limits it runs under. */
 export const WorkerInputSchema = Schema.Struct({
@@ -26,13 +27,13 @@ export type WorkerInput = typeof WorkerInputSchema.Type;
 /** One settlement, delivered to the realm in the order the host chooses. */
 export const SettleMessageSchema = Schema.Union([
   Schema.Struct({
-    seq: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    seq: NonNegativeIntSchema,
     ok: Schema.Literal(true),
     /** JSON text of the value; absent resolves the guest's promise with undefined. */
     json: Schema.optional(Schema.String),
   }),
   Schema.Struct({
-    seq: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    seq: NonNegativeIntSchema,
     ok: Schema.Literal(false),
     name: Schema.String,
     message: Schema.String,
@@ -45,7 +46,7 @@ const JsonText = Schema.fromJsonString(Schema.Unknown);
 
 const IssuedOpSchema = Schema.Struct({
   /** Issue order inside the realm, from 0. */
-  seq: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  seq: NonNegativeIntSchema,
   name: Schema.String,
   /** The guest's argument, as JSON text on the wire. */
   input: JsonText,
@@ -78,7 +79,7 @@ export type ScriptEnd = typeof ScriptEndSchema.Type;
 export const StepReportSchema = Schema.Struct({
   ops: Schema.Array(IssuedOpSchema),
   logs: Schema.Array(Schema.String),
-  logsDropped: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  logsDropped: NonNegativeIntSchema,
   end: Schema.optional(ScriptEndSchema),
 });
 /** A report as the worker writes it, with guest values still JSON text. */

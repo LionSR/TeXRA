@@ -346,7 +346,7 @@ export {
   JsonValueSchema,
   type LaunchNotice,
   LaunchNoticeSchema,
-  LineCountSchema,
+  NonNegativeIntSchema,
   listingTypeOf,
   type McpToolOutput,
   MESSAGE_TYPES,

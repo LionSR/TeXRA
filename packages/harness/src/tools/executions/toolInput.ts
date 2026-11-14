@@ -6,7 +6,7 @@
 import { Option, Schema, SchemaGetter } from 'effect';
 
 // Local imports
-import { RunIdSchema } from '@shared/schemas';
+import { RunIdSchema, NonNegativeIntSchema } from '@shared/schemas';
 import {
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
   EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
@@ -44,7 +44,7 @@ const ViewActionSchema = Schema.Struct({
 
   /** Zero-based offset for list or conversation pagination. */
   offset: nullishWithDefault(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    NonNegativeIntSchema,
     0,
     'Zero-based offset into the executions list or conversation messages. Use with limit on /executions or /executions/{id}/conversation.',
   ),
@@ -98,7 +98,7 @@ const WaitActionSchema = Schema.Struct({
 
   /** Zero-based offset for the /executions listing returned once the wait resolves. */
   offset: nullishWithDefault(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    NonNegativeIntSchema,
     0,
     'Zero-based offset into the executions list returned once the wait resolves (with /executions only).',
   ),
