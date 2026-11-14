@@ -1780,6 +1780,10 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **Stop reaches the agents under a task that was just resumed.** A task
+  woken by one of its background agents' results could be stopped while it
+  was still starting up; its other agents then kept running after Stop.
+  They are stopped with it now.
 - **A file write that is stopped part-way no longer empties the file.**
   Stopping a run while it wrote an approved edit, or closing a project while
   the desktop editor saved, could leave the file with no content at all,
