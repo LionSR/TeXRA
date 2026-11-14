@@ -278,6 +278,7 @@ export {
 // control characters stripped so untrusted text cannot inject terminal
 // escapes.
 export {
+  collapseWhitespace,
   countLines,
   formatClippedList,
   formatCompactDuration,

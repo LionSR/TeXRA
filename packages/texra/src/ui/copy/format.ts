@@ -16,6 +16,15 @@ export function formatTokenCount(tokens: number): string {
   return tokens.toLocaleString('en-US');
 }
 
+/** A file that reached the model as media, by its kind and size
+ *  (`[image, 1.2 MiB]`). */
+export function formatMediaLabel(media: {
+  readonly kind: string;
+  readonly sizeBytes: number;
+}): string {
+  return `[${media.kind}, ${formatBytes(media.sizeBytes)}]`;
+}
+
 /** The lines a change adds and removes. */
 interface LineChanges {
   readonly added: number;

@@ -163,11 +163,16 @@ export function stripControlCharacters(text: string, replacement = ''): string {
   return text.replaceAll(CONTROL_CHARACTERS, replacement);
 }
 
+/** `text` on one line: every whitespace run one space, none at the ends. */
+export function collapseWhitespace(text: string): string {
+  return text.replaceAll(/\s+/g, ' ').trim();
+}
+
 /**
  * Collapse whitespace first, then truncate to a fixed-width one-line summary.
  */
 export function truncateSummary(text: string, maxLength: number): string {
-  return truncateWithEllipsis(text.replaceAll(/\s+/g, ' ').trim(), maxLength);
+  return truncateWithEllipsis(collapseWhitespace(text), maxLength);
 }
 
 /**

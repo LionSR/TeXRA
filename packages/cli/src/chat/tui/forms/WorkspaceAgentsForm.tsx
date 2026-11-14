@@ -9,6 +9,7 @@ import {
 } from '@texra-ai/harness/host';
 import {
   agentKeyOf,
+  formatResultCount,
   type WorkspaceAgentsSelection,
 } from '@texra-ai/harness/schemas';
 import {
@@ -197,7 +198,7 @@ export function WorkspaceAgentsForm(
           description:
             data.record.agentKeys === 'all'
               ? 'all agents'
-              : `${data.record.agentKeys.length} agents`,
+              : formatResultCount(data.record.agentKeys.length, 'agent'),
         },
       ],
       setMode,
