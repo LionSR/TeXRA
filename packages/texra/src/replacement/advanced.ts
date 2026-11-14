@@ -5,6 +5,7 @@
 import {
   GREEK_LETTER_CHARACTERS,
   UPPERCASE_GREEK_LETTER_CHARACTERS,
+  withStarredForms,
 } from '@replacement/constants';
 import { findBraceBalancedMacroCalls } from '@texra/utils/text/braceBalancedMacro';
 
@@ -251,16 +252,15 @@ const MATH_UNICODE_MAP: Record<string, string> = {
   ᵐ: '^{m}',
 };
 
-// Math environment delimiters to search for
-const MATH_ENVIRONMENTS = [
-  { start: '\\begin{equation}', end: '\\end{equation}' },
-  { start: '\\begin{equation*}', end: '\\end{equation*}' },
-  { start: '\\begin{align}', end: '\\end{align}' },
-  { start: '\\begin{align*}', end: '\\end{align*}' },
-  { start: '\\begin{aligned}', end: '\\end{aligned}' },
-  { start: '\\begin{multline}', end: '\\end{multline}' },
-  { start: '\\begin{gather}', end: '\\end{gather}' },
-  { start: '\\begin{cases}', end: '\\end{cases}' },
+// Math delimiters to search for: the environments, then display brackets.
+const MATH_DELIMITERS = [
+  ...[
+    ...withStarredForms(['equation', 'align']),
+    'aligned',
+    'multline',
+    'gather',
+    'cases',
+  ].map((name) => ({ start: `\\begin{${name}}`, end: `\\end{${name}}` })),
   { start: '\\[', end: '\\]' },
   { start: '$$', end: '$$' },
 ];
@@ -309,7 +309,7 @@ export function replaceMathUnicode(text: string): string {
   }
 
   // Process each block math environment
-  for (const env of MATH_ENVIRONMENTS) {
+  for (const env of MATH_DELIMITERS) {
     let startIdx = 0;
     while ((startIdx = text.indexOf(env.start, startIdx)) !== -1) {
       const envStart = startIdx + env.start.length;

@@ -1,13 +1,20 @@
 // Local imports
 import {
+  DISPLAY_MATH_ENVIRONMENTS,
   FENCED_LATEX_BLOCK_PATTERN_INLINE,
   FENCED_LATEX_BLOCK_PATTERN_MULTILINE,
 } from './constants';
 import { createPatterns } from './patterns';
 import type { RegexRuleSet, ReplacementFunction } from './types';
 
-const EQUATION_ENVIRONMENT_PATTERN =
-  '(?:align\\*?|aligned\\*?|alignat\\*?|flalign\\*?|gather\\*?|multline\\*?|equation\\*?|eqnarray\\*?|split\\*?)';
+/** A display-math environment, or `aligned` or `split`, starred or not. */
+const EQUATION_ENVIRONMENT_PATTERN = `(?:${[
+  ...DISPLAY_MATH_ENVIRONMENTS,
+  'aligned',
+  'split',
+]
+  .map((name) => `${name}\\*?`)
+  .join('|')})`;
 
 const convertFencedLatexBlock: ReplacementFunction = (
   match,

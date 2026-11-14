@@ -64,27 +64,63 @@ export const MATH_OPERATORS = [
   'liminf',
 ];
 
-const FENCED_LATEX_ENVIRONMENTS = [
-  'align',
-  'align*',
-  'aligned',
-  'aligned*',
-  'alignat',
-  'alignat*',
-  'gather',
-  'gather*',
-  'multline',
-  'multline*',
+/**
+ * The math environments the replacement rules and the latexdiff clean-up
+ * handle. Each of them picks its subset from this one vocabulary.
+ */
+export type MathEnvironment =
+  | 'equation'
+  | 'align'
+  | 'aligned'
+  | 'alignat'
+  | 'flalign'
+  | 'gather'
+  | 'multline'
+  | 'eqnarray'
+  | 'split'
+  | 'cases'
+  | 'matrix'
+  | 'pmatrix'
+  | 'bmatrix'
+  | 'vmatrix'
+  | 'smallmatrix';
+
+/** The top-level display-math environments, without their starred forms. */
+export const DISPLAY_MATH_ENVIRONMENTS: readonly MathEnvironment[] = [
   'equation',
-  'equation*',
-  'cases',
-  'cases*',
-  'split',
+  'align',
+  'alignat',
+  'flalign',
+  'gather',
+  'multline',
+  'eqnarray',
+];
+
+/** Each name followed by its starred form: `align`, `align*`. */
+export function withStarredForms(names: readonly MathEnvironment[]): string[] {
+  return names.flatMap((name) => [name, `${name}*`]);
+}
+
+const MATRIX_ENVIRONMENTS: readonly MathEnvironment[] = [
   'pmatrix',
   'bmatrix',
   'vmatrix',
   'matrix',
   'smallmatrix',
+];
+
+const FENCED_LATEX_ENVIRONMENTS = [
+  ...withStarredForms([
+    'align',
+    'aligned',
+    'alignat',
+    'gather',
+    'multline',
+    'equation',
+    'cases',
+  ]),
+  'split',
+  ...MATRIX_ENVIRONMENTS,
 ];
 
 const FENCED_LATEX_ENVIRONMENT_PATTERN =
