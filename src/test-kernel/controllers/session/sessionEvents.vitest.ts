@@ -542,6 +542,8 @@ describe('Sessions owner', () => {
           _tag: 'Unavailable',
           reason: expect.stringContaining('example'),
         });
+        // A caller that only formats the error still shows why.
+        expect(error.message).toContain('example');
         expect((yield* session.view.read([RUN])).requests).toHaveLength(1);
       }).pipe(Effect.provide(Sessions.layer({ platform, plugins: [] })));
     }),

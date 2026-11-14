@@ -2720,7 +2720,8 @@ function truncateWithEllipsis(text: string, maxLen: number): string
 ## Unavailable
 
 The stream, request, or run the request names is gone or not in a state
-that can take it.
+that can take it. `reason` says which, and is also its `message`, so a
+caller that only formats errors still shows why.
 
 ```ts
 class Unavailable extends Schema.TaggedError<Unavailable>()(
