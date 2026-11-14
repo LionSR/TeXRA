@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
 
 describe('PromptBuilder', () => {

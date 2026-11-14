@@ -14,7 +14,7 @@ import {
 } from '@texra-ai/harness/node';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
 
 // Local file imports

@@ -8,7 +8,7 @@ import { Effect } from 'effect';
 import { Sessions } from '@texra-ai/harness';
 import { type SessionView } from '@texra-ai/harness/schemas';
 
-import { runStatus } from '@ui/copy/runStatus';
+import { runStatusKey } from '@texra/shared/session/runStatusKey';
 
 import type { TaskSummary } from './protocol';
 
@@ -24,7 +24,7 @@ function summaries(view: SessionView, workspace: string): TaskSummary[] {
       runId: run.id,
       label: run.label,
       description: run.description,
-      statusKey: runStatus(run).key,
+      statusKey: runStatusKey(run),
       launchedAt: run.launchedAt,
       live: run.holder === 'here',
     }));

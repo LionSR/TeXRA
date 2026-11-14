@@ -344,7 +344,8 @@ export const StartRequestSchema = Schema.Union([
         Schema.toEncoded(InlinePersonaSchema),
       ]),
       instruction: Schema.String,
-      model: Schema.optional(Schema.String),
+      /** The model the run starts on; the harness names no default. */
+      model: Schema.String,
     }),
   ),
   StartOptionsSchema.mapFields(Struct.assign({ config: AgentConfigSchema })),

@@ -16,6 +16,7 @@ import {
 import type { CredentialOrigin } from '@texra-ai/llm';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { postMessage } from '@texra/shared/hostBridge';
 import { type PRSubscriptionEntry } from '@texra/shared/settingsView/settingsViewMessages';
 import { credentialOriginLabel, TOKEN_ACTION_COPY } from '@ui/copy/credentials';
@@ -38,9 +39,15 @@ import {
 } from '../components/shared/stateSettingRows';
 import { settingSignal } from '../settingsState';
 
-/** The identity agent commits use while a field is blank: its row's default. */
-function defaultIdentity(row: SettingRow<string>): string {
-  return Schema.decodeUnknownSync(row.schema)(undefined);
+/** The identity agent commits use while a field is blank: the default
+ *  TeXRA's catalog gives the row (the harness names none). */
+function defaultIdentity(row: SettingRow<string | undefined>): string {
+  const entry = TEXRA_SETTINGS.catalog.byKey(row.key);
+  const value: unknown =
+    entry === undefined
+      ? undefined
+      : Schema.decodeUnknownSync(entry.schema)(undefined);
+  return typeof value === 'string' ? value : '';
 }
 
 const DEFAULT_GIT_AUTHOR_NAME = defaultIdentity(GIT_AUTHOR_NAME_SETTING);
@@ -179,7 +186,7 @@ export class GitTab extends SignalWatcher(LitElement) {
 
   private handleIdentityInputChange(
     event: Event,
-    row: SettingRow<string>,
+    row: SettingRow<string | undefined>,
   ): void {
     // An emptied field resets to the default identity its placeholder shows;
     // `null` clears the key (the catalog rejects a blank name or email).
@@ -398,7 +405,7 @@ export class GitTab extends SignalWatcher(LitElement) {
                         name="git-author-name"
                         autocomplete="name"
                         spellcheck="false"
-                        .value=${settingSignal(GIT_AUTHOR_NAME_SETTING).get()}
+                        .value=${settingSignal(GIT_AUTHOR_NAME_SETTING).get() ?? ''}
                         placeholder=${DEFAULT_GIT_AUTHOR_NAME}
                         @change=${(event: Event) =>
                           this.handleIdentityInputChange(
@@ -419,7 +426,7 @@ export class GitTab extends SignalWatcher(LitElement) {
                         autocapitalize="off"
                         spellcheck="false"
                         dir="ltr"
-                        .value=${settingSignal(GIT_AUTHOR_EMAIL_SETTING).get()}
+                        .value=${settingSignal(GIT_AUTHOR_EMAIL_SETTING).get() ?? ''}
                         placeholder=${DEFAULT_GIT_AUTHOR_EMAIL}
                         @change=${(event: Event) =>
                           this.handleIdentityInputChange(

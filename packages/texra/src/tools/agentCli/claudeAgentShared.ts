@@ -35,7 +35,7 @@ import type {
 import {
   CLAUDE_AGENT_EFFORT_SETTING,
   CLAUDE_AGENT_MODEL_SETTING,
-} from '@texra/shared/settingsView/integrationSettings';
+} from '@texra/shared/settings/integrationSettings';
 
 /**
  * Compile-time guard: the agent CLI effort vocabulary in `@shared` (the one

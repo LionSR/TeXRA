@@ -27,7 +27,7 @@ import {
  * The row is also the handle a reader passes to `Settings`, which types the
  * value by the row's schema. Where an app shows a row is the app's: TeXRA
  * keeps that beside its own rows
- * (`packages/texra/src/shared/settingsView/settingSurfaces.ts`).
+ * (`packages/texra/src/shared/settings/settingSurfaces.ts`).
  */
 
 /**
@@ -288,30 +288,6 @@ export const MAX_IMAGE_DIMENSION_SETTING = {
 } as const satisfies SettingRow<number>;
 
 /**
- * The launcher's commit picker reads the count through the host snapshot on
- * both GUI hosts; the CLI only writes it, through the setup assistant's
- * `update_config`.
- */
-export const GIT_COMMITS_TO_SHOW_SETTING = {
-  key: 'git.numberOfCommitsToShow',
-  slot: 'config',
-  schema: Schema.Int.check(
-    Schema.isBetween({ minimum: 1, maximum: 1000 }),
-  ).pipe(Schema.withDecodingDefault(Effect.succeed(20))),
-  title: 'Commits to show',
-  description:
-    'Number of recent commits to show in the commit selection dropdown',
-} as const satisfies SettingRow<number>;
-
-export const SOX_PATH_SETTING = {
-  key: 'audio.soxPath',
-  slot: 'config',
-  schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
-  title: 'SoX path',
-  description: 'Path to the SoX executable. Overrides automatic detection.',
-} as const satisfies SettingRow<string>;
-
-/**
  * Transcript verbosity, its one meaning: the debug tier of the transcript
  * view and the detail of the payloads it shows. A log surface's own level
  * filter decides what that surface prints, so no producer reads this row to
@@ -413,31 +389,31 @@ export const GIT_MARK_COMMITS_SETTING = {
     'Attribute agent-authored git commits to the agent commit author so they are distinguishable from your own commits.',
 } as const satisfies SettingRow<boolean>;
 
+/**
+ * The identity agent-authored commits carry while commit marking is on. The
+ * harness names none: an app's catalog supplies its own (`settingsCatalog`'s
+ * `defaults`), and while neither the person nor the app names one, commits
+ * keep git's own identity. `.min(1)` so a blank value is rejected at the
+ * write boundary.
+ */
 export const GIT_AUTHOR_NAME_SETTING = {
   key: 'git.authorName',
   slot: 'repoState',
-  // `.min(1)` so a blank value is rejected at the write boundary and a
-  // blank read falls back (loudly) to the default identity.
-  schema: Schema.String.check(Schema.isMinLength(1)).pipe(
-    Schema.withDecodingDefault(Effect.succeed('texra-ai')),
-  ),
+  schema: Schema.UndefinedOr(Schema.String.check(Schema.isMinLength(1))),
   title: 'Agent commit author',
   description:
     'Author and committer name used for agent-authored commits when commit marking is enabled.',
-} as const satisfies SettingRow<string>;
+} as const satisfies SettingRow<string | undefined>;
 
+/** The email beside {@link GIT_AUTHOR_NAME_SETTING}, by the same rule. */
 export const GIT_AUTHOR_EMAIL_SETTING = {
   key: 'git.authorEmail',
   slot: 'repoState',
-  schema: Schema.String.check(Schema.isMinLength(1)).pipe(
-    Schema.withDecodingDefault(
-      Effect.succeed('texra-ai@users.noreply.github.com'),
-    ),
-  ),
+  schema: Schema.UndefinedOr(Schema.String.check(Schema.isMinLength(1))),
   title: 'Agent commit email',
   description:
     'Author and committer email used for agent-authored commits when commit marking is enabled.',
-} as const satisfies SettingRow<string>;
+} as const satisfies SettingRow<string | undefined>;
 
 export const GIT_WORKTREE_SUPPORT_SETTING = {
   key: 'git.worktreeSupport',
@@ -583,8 +559,6 @@ const HARNESS_SETTINGS = [
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   XAI_PREFER_SUBSCRIPTION_SETTING,
   MAX_IMAGE_DIMENSION_SETTING,
-  GIT_COMMITS_TO_SHOW_SETTING,
-  SOX_PATH_SETTING,
   DEBUG_MODE_SETTING,
   SAVE_MODEL_IO_SETTING,
   AGENT_SKILLS_ENABLED_SETTING,
@@ -631,6 +605,10 @@ export interface SettingsCatalog {
    * are cloned so a caller cannot mutate the catalog's own default.
    */
   readonly configDefault: (key: string) => unknown;
+  /** The models every user starts with enabled, in picker order; a person's
+   *  selection is stored as a change over this list. The app's choice over
+   *  the llm catalog: the harness curates none. */
+  readonly curatedModels: readonly string[];
 }
 
 /** The harness's rows, then `rows` (an app's own, its plugins' included),
@@ -642,6 +620,8 @@ export function settingsCatalog(options: {
   /** The app's own defaults for harness rows, by key: the value an absent
    *  key reads as (the helper model, which the harness leaves unset). */
   readonly defaults?: Readonly<Record<string, unknown>>;
+  /** {@link SettingsCatalog.curatedModels}; none when absent. */
+  readonly curatedModels?: readonly string[];
 }): SettingsCatalog {
   const appDefaults = options.defaults ?? {};
   const unowned = Object.keys(appDefaults).filter(
@@ -679,6 +659,7 @@ export function settingsCatalog(options: {
   const defaults = new Map<string, unknown>();
   return {
     namespace: options.namespace,
+    curatedModels: Object.freeze([...(options.curatedModels ?? [])]),
     rows,
     byKey: (key) => byKey.get(key),
     byStoredKey: (storedKey) =>

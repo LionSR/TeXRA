@@ -132,7 +132,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // configurations because they count only text inputs.
   // v5: no OpenRouter backend (an earlier build's row would fail as damaged).
   // v6: no Copilot backend.
-  'run.config': { version: 6, listing: 'own' },
+  // v7: the app's launch facts are an opaque `launch` record, not a `cli`
+  // block (an earlier build's team and output fields would be dropped).
+  'run.config': { version: 7, listing: 'own' },
   'run.detach': { ...V1, listing: 'own' },
   'run.stop': { ...V1, listing: 'own' },
   // v2: a recipe's value is `structured`, with no `documents`.

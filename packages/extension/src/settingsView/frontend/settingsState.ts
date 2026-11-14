@@ -24,7 +24,7 @@
 import { Schema } from 'effect';
 
 import type { SettingRow } from '@texra-ai/harness/schemas';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import type { SettingsHostState } from '@texra/shared/settingsView/settingsViewMessages';
 import type {
   SettingsSectionName,

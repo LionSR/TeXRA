@@ -30,7 +30,7 @@ import {
 } from '@texra/shared/plugins/documentOutputs';
 import { FileActionSchema } from '@texra/shared/session/hostRequest';
 import type { Surface } from '@texra/shared/session/surface';
-import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 import type { IconName } from '@ui/wa/iconNames';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';

@@ -72,7 +72,7 @@ For every symbol or behavior, classify consumers before writing:
 - Non-production corpus: `src/test-kernel/`, docs, snapshots, comments.
 - Ambiguous corpus: `scripts/` and `docs/scripts/` — some are release/CI tooling that counts as production. Inspect usage before classifying.
 
-Use `rg` first: the exact symbol, `.name(` and `name(`, command IDs and config keys as string literals, event names, and any wire strings. VS Code commands are wired through `packages/extension/package.json` contributions and `packages/extension/src/commands.ts`; settings keys are declared by owner (`packages/harness/src/shared/state/stateSettings.ts`, `packages/texra/src/shared/settingsView/texraSettings.ts`, or a plugin's `settings`) and consumed by the native settings view. Grep those boundaries as well as imports.
+Use `rg` first: the exact symbol, `.name(` and `name(`, command IDs and config keys as string literals, event names, and any wire strings. VS Code commands are wired through `packages/extension/package.json` contributions and `packages/extension/src/commands.ts`; settings keys are declared by owner (`packages/harness/src/shared/state/stateSettings.ts`, `packages/texra/src/shared/settings/texraSettings.ts`, or a plugin's `settings`) and consumed by the native settings view. Grep those boundaries as well as imports.
 
 Reject or downgrade a candidate when:
 

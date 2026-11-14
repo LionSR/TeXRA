@@ -30,7 +30,11 @@ import {
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 
-import { dispatchSections, inputFilePath } from './toolRowSections';
+import {
+  dispatchSections,
+  inputFilePath,
+  outputLineChanges,
+} from './toolRowSections';
 import {
   transcriptText,
   type PayloadLanguage,
@@ -293,16 +297,25 @@ export function toolRowModel(
   ctx: ToolRowModelContext = {},
 ): ToolRowModel {
   const headerPreview = toolHeaderPreview(normalized, ctx);
-  // A card the tool stated is painted as given; any other call's sections
+  // A card the tool stated is painted as given, its file lists with the
+  // line changes the call's output edits report; any other call's sections
   // are derived from its name and input.
   const { card } = normalized;
+  const lineChanges = card ? outputLineChanges(ctx.parsedOutput) : undefined;
   const { sections, carriesOutput, fileLinkKind } = card
     ? {
-        sections: card.sections.map((section): ToolSection =>
-          section.kind === 'text'
-            ? { ...section, text: transcriptText(section.text) }
-            : section,
-        ),
+        sections: card.sections.map((section): ToolSection => {
+          if (section.kind === 'text')
+            return { ...section, text: transcriptText(section.text) };
+          if (section.kind !== 'fileList') return section;
+          return {
+            ...section,
+            files: section.files.map((file) => {
+              const changes = lineChanges?.get(file.path);
+              return changes ? { ...file, lineChanges: changes } : file;
+            }),
+          };
+        }),
         carriesOutput: false,
         fileLinkKind: undefined,
       }

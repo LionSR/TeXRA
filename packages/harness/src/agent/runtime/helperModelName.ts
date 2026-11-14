@@ -34,7 +34,7 @@ export const getHelperModelName = Effect.fn('getHelperModelName')(function* (
     HELPER_MODEL_SETTING,
   );
   if (configured === undefined || configured === fallback) return fallback;
-  const enabled = yield* getEnabledModels(stores.globalState);
+  const enabled = yield* getEnabledModels(stores);
   return enabled.includes(modelRefOf(configured) ?? configured)
     ? configured
     : fallback;

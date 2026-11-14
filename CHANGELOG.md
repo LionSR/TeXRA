@@ -6,6 +6,28 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: the harness names no agent commit identity.**
+  `GIT_AUTHOR_NAME_SETTING` and `GIT_AUTHOR_EMAIL_SETTING` read
+  `undefined` unless the person or the app's catalog (`settingsCatalog`'s
+  `defaults`) names one; with neither, an agent's commits keep git's own
+  identity. TeXRA's catalog keeps `texra-ai`.
+- **SDK: two app settings leave the harness catalog.**
+  `GIT_COMMITS_TO_SHOW_SETTING` and `SOX_PATH_SETTING` are no longer
+  exported; no harness code read them. TeXRA declares them in its own rows
+  under the same stored keys.
+- **SDK: the harness names no default model, agent or curated picker list.**
+  `DEFAULT_AGENT_MODEL` and `DEFAULT_TASK_AGENT` are no longer exported, and
+  `AgentConfig.model` and `.agent` are required. `session.start` takes a
+  required `model`. The models every user starts with enabled come from the
+  app's catalog: `settingsCatalog({ curatedModels })`, read as
+  `SettingsCatalog.curatedModels` (none when absent). `getEnabledModels` and
+  `setModelEnabled` take the settings slots (`config` and `globalState`)
+  instead of the global state store alone.
+- **SDK: an app's launch facts are an opaque `launch` record.**
+  `AgentConfig.cli` (output file, output directory, expected outputs, team
+  id) is gone; `AgentConfig.launch` is a JSON record the launching app
+  writes and decodes itself, which the harness never reads and a child run
+  does not inherit. `run.config` rows are version 7.
 - **SDK: a child run's result is data.** A process child's turn returns its
   report as a `ChildRunDelivery` (`ProcessReport.report`), and
   `ProcessTurn.reportError` builds one from the error. A queued message's

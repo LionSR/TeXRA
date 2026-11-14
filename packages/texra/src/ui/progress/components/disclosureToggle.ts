@@ -1,4 +1,4 @@
-import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { isOwnDetailsToggle } from '@ui/litControllers/detailsToggle';
 import type { RunId } from '@texra-ai/harness/schemas';
 

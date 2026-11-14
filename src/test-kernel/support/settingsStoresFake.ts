@@ -7,7 +7,7 @@
 import type { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import type { SettingsStores } from '@shared/config/settings';
 
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 
 import { fakeConfig, FakeStateStore } from './FakePlatform';
 
