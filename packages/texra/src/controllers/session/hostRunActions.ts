@@ -51,7 +51,7 @@ import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFin
 import {
   planCompileFixer,
   type CompileFixerPlanFailed,
-} from '../progressView/compileFixer';
+} from '@texra/agent/output/compileFixer';
 import type { AgentConfig, AgentConfigInput } from '@texra-ai/harness/schemas';
 import {
   isRequestRefusal,
