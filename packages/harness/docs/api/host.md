@@ -2376,6 +2376,24 @@ type StoredSetting<T = unknown> =
   | { readonly kind: 'invalid'; readonly cause: string };
 ```
 
+## subscribeAppSignal
+
+Subscribe to `signal` now, in the caller's scope, and stream its payloads
+from then on. The subscription is live when this returns, where a stream
+run on a forked fiber subscribes only once that fiber starts: for a caller
+that must not miss a signal published after it reads the state the signal
+announces.
+
+```ts
+function subscribeAppSignal<K extends AppSignal>(
+  signal: K,
+): Effect.Effect<
+  Stream.Stream<AppSignalPayloads[K]>,
+  never,
+  AppSignals | Scope.Scope
+>
+```
+
 ## SubscriptionPreference
 
 Each subscription's "prefer my subscription" switch: its read (`get`) and

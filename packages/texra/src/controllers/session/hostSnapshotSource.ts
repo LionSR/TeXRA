@@ -31,8 +31,8 @@ import {
 import {
   AgentDirectories,
   AppState,
-  appSignalStream,
   getEnabledModels,
+  subscribeAppSignal,
   readModelOptions,
   workspaceEnvironmentLayer,
 } from '@texra-ai/harness/host';
@@ -358,12 +358,13 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       Stream.runForEach(() => loadFlags),
       Effect.forkScoped,
     );
-    /** Run `load` after each signal of `signals`, subscribed by the end of
-     *  this turn so none published after the source opens is missed. Signals that arrive
+    /** Run `load` after each element of `signals`, a subscription the
+     *  source's scope already holds (`subscribeAppSignal`), so no signal
+     *  published after the source opens is missed. Signals that arrive
      *  during a load are answered by one more load, not one each. A defect
      *  (an unreadable project `.env`) is logged and the following goes on. */
     const follow = <R>(
-      signals: Stream.Stream<unknown, never, AppSignals>,
+      signals: Stream.Stream<unknown>,
       load: Effect.Effect<void, never, R>,
     ) =>
       signals.pipe(
@@ -378,23 +379,26 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
             ),
           ),
         ),
-        Effect.forkScoped({ startImmediately: true }),
+        Effect.forkScoped,
       );
     // The agent catalog reloaded, a team was applied or the agent list was
     // edited (`workspaceAgentsChanged`).
-    yield* follow(appSignalStream('workspaceAgentsChanged'), catalogs);
+    yield* follow(
+      yield* subscribeAppSignal('workspaceAgentsChanged'),
+      catalogs,
+    );
     // A stored key or sign-in (`credentialChanged`), or a model-access
     // preference or enabled-model write (`modelAccessChanged`): the
     // credential first, then the catalogs that list the models it reaches.
     yield* follow(
       Stream.merge(
-        appSignalStream('credentialChanged'),
-        appSignalStream('modelAccessChanged'),
+        yield* subscribeAppSignal('credentialChanged'),
+        yield* subscribeAppSignal('modelAccessChanged'),
       ),
       Effect.andThen(loadCredential, catalogs),
     );
     yield* follow(
-      appSignalStream('approvalPolicyChanged'),
+      yield* subscribeAppSignal('approvalPolicyChanged'),
       Effect.suspend(() => write({ approvalPolicy: approvalPolicy() })),
     );
     // Configuring a credential clears a previous "Skip for now", so a user
