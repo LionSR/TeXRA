@@ -28,10 +28,9 @@ import {
   type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
 
-import {
-  publishCompiledPdfArtifact,
-  publishCompiledPdfArtifactBestEffort,
-} from './compiledPdfArtifacts';
+import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
+
+import { publishCompiledPdfArtifact } from './compiledPdfArtifacts';
 import {
   type AgentTrace,
   Settings,
@@ -276,12 +275,12 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
   // outcome is known, so a crash mid-check never masquerades as success. A
   // missing log is already clear (`force`); any other failure is named.
   const clearStaleLogs = fs.remove(logAbsolutePath, { force: true }).pipe(
-    Effect.catch((error) =>
-      Effect.sync(() => {
+    recoverLogged(
+      (error) =>
         ctx.logger.warn(
           `Compile check: could not clear stale log ${logRelativePath}: ${toErrorMessage(error)}`,
-        );
-      }),
+        ),
+      () => Effect.void,
     ),
   );
 
@@ -337,14 +336,17 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
     // reported as success. It becomes a failure with a synthetic excerpt,
     // persisted to the same discoverable compile/*.log slot a real compile
     // failure would use.
-    Effect.catch((error) =>
-      Effect.sync((): CompileAttempt => {
-        const message = toErrorMessage(error);
-        ctx.logger.warn(`Compile check: ${displayName} errored: ${message}`, {
-          data: error,
-        });
-        return { kind: 'errored', message };
-      }),
+    recoverLogged(
+      (error) =>
+        ctx.logger.warn(
+          `Compile check: ${displayName} errored: ${toErrorMessage(error)}`,
+          { data: error },
+        ),
+      (error) =>
+        Effect.succeed<CompileAttempt>({
+          kind: 'errored',
+          message: toErrorMessage(error),
+        }),
     ),
   );
 
@@ -368,20 +370,22 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
     yield* clearStaleLogs;
     // Publishing the PDF is best effort: a failed copy must not turn a
     // document that genuinely compiled into a reported compile failure.
-    const artifact = yield* publishCompiledPdfArtifactBestEffort(
-      publishCompiledPdfArtifact({
-        runDirectory: opts.runDirectory,
-        runId,
-        round: currentRound,
-        displayName,
-        source: outputFile.location,
-        compiledPdfPath: compileResult.pdfPath,
-      }),
-      (err) =>
-        ctx.logger.warn(
-          `Compile check: ${displayName} PDF publish failed: ${toErrorMessage(err)}`,
-          { data: err },
-        ),
+    const artifact = yield* publishCompiledPdfArtifact({
+      runDirectory: opts.runDirectory,
+      runId,
+      round: currentRound,
+      displayName,
+      source: outputFile.location,
+      compiledPdfPath: compileResult.pdfPath,
+    }).pipe(
+      recoverLogged(
+        (err) =>
+          ctx.logger.warn(
+            `Compile check: ${displayName} PDF publish failed: ${toErrorMessage(err)}`,
+            { data: err },
+          ),
+        () => Effect.succeed(null),
+      ),
     );
     if (artifact) {
       ctx.logger.debug(`Compile check: ${displayName} PDF persisted`, {
@@ -436,13 +440,13 @@ const writeCompileFailure = Effect.fn('documents.writeCompileFailure')(
       });
       yield* fs.writeFileString(logAbsolutePath, `${failureLogExcerpt}\n`);
     }).pipe(
-      Effect.catch((writeErr) =>
-        Effect.sync(() => {
+      recoverLogged(
+        (writeErr) =>
           ctx.logger.warn(
             `Compile check: failed to persist log for ${displayName}: ${toErrorMessage(writeErr)}`,
             { data: writeErr },
-          );
-        }),
+          ),
+        () => Effect.void,
       ),
     );
 

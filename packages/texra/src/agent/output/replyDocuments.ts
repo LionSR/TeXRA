@@ -36,6 +36,7 @@ import {
   type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
 import { addCdataToTagsMultiple } from '@texra/utils/text/xmlCdata';
+import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
 
 import {
   assignByContentSimilarity,
@@ -141,13 +142,12 @@ const documentsBySimilarity = Effect.fn('replyDocuments.bySimilarity')(
           // similarity against any real fenced block rather than aborting
           // the whole recovery pass. The cause is named, so an empty
           // score is never mistaken for an empty file.
-          Effect.catch((error) =>
-            Effect.sync(() => {
+          recoverLogged(
+            (error) =>
               logger.warn(
                 `Base file ${loc.absolutePath} unreadable during similarity recovery: ${toErrorMessage(error)}`,
-              );
-              return '';
-            }),
+              ),
+            () => Effect.succeed(''),
           ),
           Effect.map((content) => ({ name: expected.names[idx], content })),
         ),

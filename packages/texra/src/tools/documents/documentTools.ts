@@ -39,11 +39,11 @@ import {
 } from '@texra/shared/plugins/documents';
 import { runCompileCheck } from '@texra/agent/output/compileCheck';
 import { extractFilesFromXml } from '@texra/agent/output/outputFileExtraction';
-import { recoverOutputFailure } from '@texra/agent/output/outputOperations';
 import { computeOutputDiffStats } from '@texra/agent/output/diffComputation';
 import { revisionLatexdiffs } from '@texra/agent/output/revisionLatexdiffs';
 import { ensureCorrectXmlStructure } from '@texra/agent/output/replyDocuments';
 import { revisionLayout } from '@texra/shared/constants/revisionLayout';
+import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
 import {
   keepReply,
   openDocuments,
@@ -264,11 +264,10 @@ export const DocumentExtractTool = defineTool({
     // A broken structure costs the repair, not the revision: reported, and
     // extraction reads the reply as it is.
     yield* ensureCorrectXmlStructure(location, roots.config, logger).pipe(
-      recoverOutputFailure({
-        logger,
-        label: 'XML structure',
-        recover: () => Effect.void,
-      }),
+      recoverLogged(
+        (error) => logger.warn(`XML structure: ${toErrorMessage(error)}`),
+        () => Effect.void,
+      ),
     );
     const extracted = yield* extractFilesFromXml(
       docs.deps,
@@ -298,11 +297,11 @@ export const DocumentExtractTool = defineTool({
       }),
       { discard: true },
     ).pipe(
-      recoverOutputFailure({
-        logger,
-        label: "Keeping the model's outputs",
-        recover: () => Effect.void,
-      }),
+      recoverLogged(
+        (error) =>
+          logger.warn(`Keeping the model's outputs: ${toErrorMessage(error)}`),
+        () => Effect.void,
+      ),
     );
     // The revision anew: what an earlier attempt of it recorded is replaced.
     const round: RoundOutput = {
@@ -381,16 +380,15 @@ export const DocumentCompileTool = defineTool({
       recorded?.outputs ?? [],
     ).pipe(
       // A check that could not run (an unreadable setting) checked nothing.
-      recoverOutputFailure({
-        logger,
-        label: 'Compile check',
-        recover: () =>
+      recoverLogged(
+        (error) => logger.warn(`Compile check: ${toErrorMessage(error)}`),
+        () =>
           Effect.succeed({
             _tag: 'skipped' as const,
             reason: 'the check itself failed',
             unverified: true,
           }),
-      }),
+      ),
     );
     // What a failed compile means for the task is decided here, once, and
     // recorded with the revision.

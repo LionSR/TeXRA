@@ -14,6 +14,7 @@ import { Effect, FileSystem, Predicate } from 'effect';
 // Local imports
 import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import type { DocumentTaskOptions } from '@texra/shared/plugins/documents';
+import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
 
 // Local file imports
 import { extractLatexFileDependencies } from './extractFileDependencies';
@@ -85,10 +86,10 @@ const forEachFile = <E, R>(
     files,
     (file) =>
       task(file).pipe(
-        Effect.catch((error) =>
-          Effect.sync(() =>
+        recoverLogged(
+          (error) =>
             logSkipped(logger, failureMessage, file.absolutePath, error),
-          ),
+          () => Effect.void,
         ),
       ),
     { concurrency: LATEX_CONCURRENCY, discard: true },
@@ -145,14 +146,13 @@ const compilePdfs = Effect.fn('latexMedia.compilePdfs')(function* (
       // fail here; a compile that merely returns { ok: false } is logged
       // inside compileOnePdf. Either way the remaining files continue.
       compileOnePdf(run, file).pipe(
-        Effect.catch((error) =>
-          Effect.sync(() => {
+        recoverLogged(
+          (error) =>
             run.logger.warn(
               `Skipping PDF compile for ${file.absolutePath}: ${toErrorMessage(error)}`,
               { data: { sourceFile: file.absolutePath, error } },
-            );
-            return undefined;
-          }),
+            ),
+          () => Effect.succeed(undefined),
         ),
       ),
     { concurrency: LATEX_CONCURRENCY },
@@ -173,16 +173,15 @@ const mirrorProjectSiblings = Effect.fn('latexMedia.mirrorProjectSiblings')(
   ): Effect.fn.Return<void, never, FileSystem.FileSystem> {
     const fs = yield* FileSystem.FileSystem;
     const entries = yield* fs.readDirectory(projectDir).pipe(
-      Effect.catch((error) =>
-        Effect.sync((): readonly string[] | undefined => {
+      recoverLogged(
+        (error) =>
           logSkipped(
             logger,
             'Unable to scan project siblings',
             projectDir,
             error,
-          );
-          return undefined;
-        }),
+          ),
+        () => Effect.succeed(undefined),
       ),
     );
     if (!entries) return;
@@ -252,16 +251,15 @@ const mirrorLatexFileDependencies = Effect.fn(
     visited.add(file.absolutePath);
 
     const deps = yield* extractLatexFileDependencies(file).pipe(
-      Effect.catch((error) =>
-        Effect.sync((): readonly string[] => {
+      recoverLogged(
+        (error) =>
           logSkipped(
             logger,
             'Unable to extract LaTeX dependencies',
             file.absolutePath,
             error,
-          );
-          return [];
-        }),
+          ),
+        () => Effect.succeed<readonly string[]>([]),
       ),
     );
     if (deps.length === 0) continue;
@@ -305,13 +303,12 @@ const extractFiguresFromFiles = Effect.fn('latexMedia.extractFiguresFromFiles')(
           // A malformed or unreadable .tex file contributes no figures
           // rather than aborting the surrounding fan-out, but the document
           // then compiles without them, so the cause is named.
-          Effect.catch((error) =>
-            Effect.sync((): readonly string[] => {
+          recoverLogged(
+            (error) =>
               logger.warn('Unable to extract figure paths', {
                 data: { path: file.absolutePath, error },
-              });
-              return [];
-            }),
+              }),
+            () => Effect.succeed<readonly string[]>([]),
           ),
           Effect.flatMap(
             Effect.fnUntraced(function* (figures) {
@@ -392,13 +389,12 @@ const compileTikzFigures = Effect.fn('latexMedia.compileTikzFigures')(
           // compile is reported by TikzPictureManager itself; everything
           // else (standalone generation, the filesystem) lands here and
           // would otherwise vanish.
-          Effect.catch((error) =>
-            Effect.sync((): FileLocation[] => {
+          recoverLogged(
+            (error) =>
               logger.warn('TikZ extraction failed', {
                 data: { path: file.absolutePath, error },
-              });
-              return [];
-            }),
+              }),
+            () => Effect.succeed<FileLocation[]>([]),
           ),
         ),
       { concurrency: LATEX_CONCURRENCY },
