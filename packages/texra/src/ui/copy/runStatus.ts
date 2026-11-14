@@ -11,6 +11,7 @@ import {
   type Stage,
   type ToolCallStatus,
 } from '@texra-ai/harness/schemas';
+import type { CompactionActivityStatus } from '@texra-ai/harness/transcript';
 import {
   runSection,
   runStatusKey,
@@ -26,14 +27,6 @@ export function formatLoopPositionLabel(
 ): string | undefined {
   return turn == null ? undefined : `t${turn}`;
 }
-
-/** How a tool card's status section reads. */
-export const TOOL_STATUS_WORD: Readonly<Record<ToolCallStatus, string>> =
-  Object.freeze({
-    in_progress: 'Running',
-    completed: 'Completed',
-    failed: 'Failed',
-  });
 
 /**
  * One label per section, in the order the sections are painted. Both
@@ -61,14 +54,18 @@ export const RUN_SECTION_ORDER: readonly RunSection[] = Object.freeze(
 /** A fact-only word every host paints in its own colour vocabulary. */
 export type RunTone = 'running' | 'success' | 'danger' | 'neutral' | 'warning';
 
+/** A status's word and tone. */
+interface StatusWord {
+  readonly word: string;
+  readonly tone: RunTone;
+}
+
 /**
  * The word and tone of each status key (`runStatusKey`).
  * `packages/cli/scripts/validate-run.mjs` pins the completed and stopped
  * words against the real headless run.
  */
-const RUN_STATUS: Readonly<
-  Record<RunStatusKey, { readonly word: string; readonly tone: RunTone }>
-> = Object.freeze({
+const RUN_STATUS: Readonly<Record<RunStatusKey, StatusWord>> = Object.freeze({
   starting: { word: 'Initializing', tone: 'running' },
   resuming: { word: 'Resuming', tone: 'running' },
   running: { word: 'Running', tone: 'running' },
@@ -81,13 +78,46 @@ const RUN_STATUS: Readonly<
   waitingOnUser: { word: 'Waiting on you', tone: 'warning' },
 });
 
-/** Shape cue per tone, the one glyph table every painter reads. */
+/** Shape cue per tone, the one glyph table every web painter reads. */
 const TONE_GLYPH: Readonly<Record<RunTone, IconName>> = Object.freeze({
   running: 'circle',
   success: 'circle-check',
   danger: 'circle-exclamation',
   warning: 'triangle-exclamation',
   neutral: 'circle',
+});
+
+/** How a status of any kind is painted: its tone, and a glyph of its own
+ *  only where the tone's glyph would say the wrong thing. */
+export interface StatusLook {
+  readonly tone: RunTone;
+  readonly glyph?: IconName;
+}
+
+/** The web glyph a status shows: its own, else its tone's. */
+export function statusGlyph(look: StatusLook): IconName {
+  return look.glyph ?? TONE_GLYPH[look.tone];
+}
+
+/** How a tool card's status section reads. */
+export const TOOL_STATUS: Readonly<Record<ToolCallStatus, StatusWord>> =
+  Object.freeze({
+    in_progress: { word: 'Running', tone: 'running' },
+    completed: { word: 'Completed', tone: 'success' },
+    failed: { word: 'Failed', tone: 'danger' },
+  });
+
+/** The tone of a context compaction's activity row; its words are the
+ *  row's label (`COMPACTION_ACTIVITY_LABEL`). */
+export const COMPACTION_ACTIVITY_TONE: Readonly<
+  Record<CompactionActivityStatus, RunTone>
+> = Object.freeze({
+  running: 'running',
+  completed: 'success',
+  failed: 'danger',
+  cancelled: 'neutral',
+  skipped: 'neutral',
+  interrupted: 'warning',
 });
 
 /** How one run reads, in every renderer. */

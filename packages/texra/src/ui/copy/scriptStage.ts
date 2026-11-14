@@ -10,6 +10,7 @@ import {
   type ScriptStageView,
 } from '@texra-ai/harness/transcript';
 import { formatCostUsd, formatResultCount } from '@texra-ai/harness/schemas';
+import type { StatusLook } from '@ui/copy/runStatus';
 
 /** The error a tool card shows when the run's end cut its call short
  *  (`ToolRow.cutByRunEnd`): the call never finished, so nothing records how
@@ -28,6 +29,20 @@ export const SCRIPT_CALL_STATUS_LABEL = {
   failed: 'Failed',
   'not run': 'Not run',
 } as const satisfies Record<ScriptCallStatus, string>;
+
+/** How each call status is painted. A queued call has not started and a
+ *  reused one ran nothing this time, so neither shows its tone's glyph. */
+export const SCRIPT_CALL_STATUS_LOOK = {
+  queued: { tone: 'neutral', glyph: 'circle-dot' },
+  running: { tone: 'running' },
+  interrupted: { tone: 'warning' },
+  finished: { tone: 'success' },
+  reused: { tone: 'success', glyph: 'clock-rotate-left' },
+  skipped: { tone: 'neutral' },
+  cancelled: { tone: 'neutral' },
+  failed: { tone: 'danger' },
+  'not run': { tone: 'neutral' },
+} as const satisfies Record<ScriptCallStatus, StatusLook>;
 
 /** What a row says before its answer, in one line. */
 function detailText(detail: NonNullable<ScriptCallView['detail']>): string {

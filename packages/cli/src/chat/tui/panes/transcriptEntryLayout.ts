@@ -1,27 +1,21 @@
 // Declarative conversation-entry geometry shared by Ink renderers, viewport
 // budgeting, static scrollback, and print-once full output.
 
+import { Record as Rec } from 'effect';
+
 import { textDisplayWidth } from '@cli/runtime/terminal/terminalText';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
-  COLOR_BORDER,
-  COLOR_ERROR,
-  COLOR_HINT,
-  COLOR_SUCCESS,
-} from '@cli/tui/ui/colors';
-import {
-  CROSS,
   ERROR_ENTRY_PREFIX,
   NOTICE_ENTRY_PREFIX,
-  SKIP_CIRCLE,
   STATUS_DOT,
-  TICK,
-  WARNING,
   TOOL_OUTPUT_CORNER,
   USER_ENTRY_PREFIX,
 } from '@cli/tui/ui/glyphs';
+import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 import { RESPONSE_CUT_NOTE } from '@ui/copy/responseCut';
+import { COMPACTION_ACTIVITY_TONE } from '@ui/copy/runStatus';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { transcriptRowBodyLines } from '../render/transcriptRowLines';
 import {
@@ -29,10 +23,7 @@ import {
   transcriptRowHeadline,
 } from './transcriptEntries';
 import { toolUseDisplayLines, toolUseMarginBottomRows } from './toolRenderers';
-import type {
-  TranscriptRowKind,
-  CompactionActivityStatus,
-} from '@texra-ai/harness/transcript';
+import type { TranscriptRowKind } from '@texra-ai/harness/transcript';
 
 const DEFAULT_TRANSCRIPT_COLUMNS = 80;
 const USER_ENTRY_MARGIN_TOP_ROWS = 1;
@@ -119,19 +110,12 @@ const ROW_GEOMETRY = {
   },
 } as const satisfies Record<TranscriptRowKind, RowGeometry>;
 
-/** Marker glyph + color per activity status: compaction activity rows and
- *  stages (whose `stageStatus` keys are a subset) share it. */
-export const COMPACTION_ACTIVITY_STATUS_STYLE = {
-  running: { marker: STATUS_DOT, color: COLOR_HINT },
-  completed: { marker: TICK, color: COLOR_SUCCESS },
-  failed: { marker: CROSS, color: COLOR_ERROR },
-  cancelled: { marker: SKIP_CIRCLE, color: COLOR_BORDER },
-  skipped: { marker: SKIP_CIRCLE, color: COLOR_BORDER },
-  interrupted: { marker: WARNING, color: COLOR_ERROR },
-} as const satisfies Record<
-  CompactionActivityStatus,
-  { readonly marker: string; readonly color: string | undefined }
->;
+/** Marker and color per activity status, painted from its tone: compaction
+ *  activity rows and stages (whose `stageStatus` keys are a subset) share it. */
+export const COMPACTION_ACTIVITY_STATUS_STYLE = Rec.map(
+  COMPACTION_ACTIVITY_TONE,
+  (tone) => TONE_PAINT[tone],
+);
 
 export interface TranscriptEntryLayout {
   readonly columns: number;
