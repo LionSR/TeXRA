@@ -30,6 +30,7 @@ import {
 } from './storedTurn';
 import { ToolCardSchema } from './toolCard';
 import { SettledAttachmentSchema, SettledToolResultSchema } from './toolResult';
+import { NonNegativeIntSchema } from './nonNegativeInt';
 
 /* ------------------------------------------------------------------ ids */
 
@@ -96,9 +97,7 @@ export type PositionAt = typeof PositionAtSchema.Type;
  *  delivering `append` move it on), and the view as `RunView.position`. */
 export const RunPositionPayloadSchema = Schema.Struct({
   at: PositionAtSchema,
-  turn: Schema.optional(
-    Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
-  ),
+  turn: Schema.optional(Schema.NullOr(NonNegativeIntSchema)),
   /** A `turn.end`'s: how the turn ended, `completed` with its answer or
    *  `failed` without one, which a follow-up's receipt reads. The run's
    *  own end is its `run.end` row. */
@@ -304,8 +303,8 @@ export const ContextEditPayloadSchema = Schema.Struct({
   ),
   base: Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
   range: Schema.Struct({
-    from: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-    to: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    from: NonNegativeIntSchema,
+    to: NonNegativeIntSchema,
   }),
   messages: Schema.Array(StoredMessageSchema),
   usage: Schema.NullOr(NormalizedUsageSchema),
@@ -344,7 +343,7 @@ export const ScriptCallPayloadSchema = Schema.Struct({
   /** The `script` call of the pending response that issued this one. */
   scriptCallId: CallIdSchema,
   /** Issue order inside the script, from 0. */
-  seq: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  seq: NonNegativeIntSchema,
   /** `<scriptCallId>/<seq>`. */
   callId: CallIdSchema,
   toolName: Schema.String.check(Schema.isMinLength(1)),

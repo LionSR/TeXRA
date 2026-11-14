@@ -25,6 +25,7 @@ import {
   Layer,
   Option,
   Schedule,
+  Scheduler,
   Schema,
   Stream,
   SubscriptionRef,
@@ -44,6 +45,7 @@ import {
   type SessionRow,
   type SessionRowDraft,
   factName,
+  NonNegativeIntSchema,
 } from '@shared/schemas';
 import {
   NO_RUN_ROWS,
@@ -144,7 +146,7 @@ const RECORD_TYPES = JSON.stringify(RECORD_ROW_TYPES);
 /** A run's aggregate `logical_id` column as the `RunId` it is. */
 const runIdOf = Schema.decodeUnknownSync(RunIdSchema);
 /** The `event` table's autoincrement sequence: a non-negative integer. */
-const EventSeqSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+const EventSeqSchema = NonNegativeIntSchema;
 /** Where a display page after a commit ends: at the last of the stored rows
  *  it covers. A page may end at any row, as each display row is shown from
  *  one stored row. No row: the page runs to the end. Counted in rows, so a
@@ -387,8 +389,21 @@ export const databaseLayer = (
       // transaction it is a savepoint. A busy lock, which only the global
       // store's other writers take, runs the transaction again whole; a
       // nested body never meets one, its transaction holding the lock already.
+      //
+      // The driver is synchronous and a body awaits nothing, so the only way
+      // another fiber could run between BEGIN and COMMIT is the scheduler
+      // taking the fiber off after its step budget. With that off, a
+      // transaction is one uninterrupted turn: transactions on this
+      // connection run in the order they are called, and none waits for
+      // another.
       const own = <A, E>(body: Effect.Effect<A, E>) =>
-        retryBusy(sql.withTransaction(body));
+        retryBusy(
+          Effect.provideService(
+            sql.withTransaction(body),
+            Scheduler.PreventSchedulerYield,
+            true,
+          ),
+        );
       const transaction = <A, E, EBody>(
         body: Effect.Effect<A, EBody>,
         failed: (cause: unknown) => E,

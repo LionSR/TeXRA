@@ -1243,15 +1243,6 @@ function launchPolicy(
 ): ApprovalPolicy
 ```
 
-## LineCountSchema
-
-Nonnegative line-count schema shared by tool results, approvals, and output
-diff statistics.
-
-```ts
-const LineCountSchema: Int
-```
-
 ## listingTypeOf
 
 The listing type the fold keys `latest` by, from the kind's listing class,
@@ -1451,6 +1442,14 @@ function needsUser(
   run: ReadRunView,
   runs: ReadonlyMap<RunId, ReadRunView>,
 ): boolean
+```
+
+## NonNegativeIntSchema
+
+A whole number that is zero or more: a count, a size, an offset.
+
+```ts
+const NonNegativeIntSchema: Int
 ```
 
 ## NormalizedToolUse

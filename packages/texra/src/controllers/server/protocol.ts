@@ -52,6 +52,7 @@ import {
   RuntimeCommandSchema,
   SessionViewSchema,
   StartRequestSchema,
+  NonNegativeIntSchema,
 } from '@texra-ai/harness/schemas';
 import { RunStatusKeySchema } from '@texra/shared/session/runStatusKey';
 import {
@@ -93,9 +94,9 @@ export const ServiceInfoSchema = Schema.Struct({
   /** Where clients connect: the Unix socket path. */
   socket: Schema.String,
   startedAt: Schema.Int.check(Schema.isGreaterThan(0)),
-  clients: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  clients: NonNegativeIntSchema,
   /** Tasks this service is running now, across its projects. */
-  running: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  running: NonNegativeIntSchema,
   /** A drain is in progress: no new task starts here. */
   draining: Schema.Boolean,
 });

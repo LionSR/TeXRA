@@ -131,7 +131,7 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
   }
 
   private renderDiffMeta(): TemplateResult {
-    // `LineCountSchema` makes both counts required nonnegative integers.
+    // `NonNegativeIntSchema` makes both counts required nonnegative integers.
     const { addedLines: added, removedLines: removed } = this.permission.data;
     const total = added + removed;
     const lineLabel = pluralize(total, 'line');

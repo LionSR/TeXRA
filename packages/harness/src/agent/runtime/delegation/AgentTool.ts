@@ -43,7 +43,7 @@ import {
 } from '@shared/session/runHistory';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { defineTool, type DefinedTool } from '@tools/core/definition';
-import { nullishWithDefault } from '@tools/core/inputSchema';
+import { nullishWithDefault, timeoutMsField } from '@tools/core/inputSchema';
 import { errorResult, executed } from '@tools/core/result';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { sha256 } from '@utils/core/idHash';
@@ -126,13 +126,7 @@ export const CALL_FIELDS = Object.freeze({
   label: Schema.optional(Schema.NullOr(Schema.String)).annotate({
     description: 'A short title for the call’s card.',
   }),
-  timeoutMs: Schema.optional(
-    Schema.NullOr(
-      Schema.Int.check(Schema.isGreaterThanOrEqualTo(1000)).check(
-        Schema.isLessThanOrEqualTo(24 * 60 * 60 * 1000),
-      ),
-    ),
-  ).annotate({
+  timeoutMs: timeoutMsField.annotate({
     description: 'Stops the agent after this many milliseconds: `TimedOut`.',
   }),
   background: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({

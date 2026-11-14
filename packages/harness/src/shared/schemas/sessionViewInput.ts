@@ -13,6 +13,7 @@ import {
   DisplayRowSchema,
   type DisplayRow,
 } from './sessionEvent';
+import { NonNegativeIntSchema } from './nonNegativeInt';
 
 /**
  * The read that delivered a durable row: the cold listing, one
@@ -34,7 +35,7 @@ export const EventInputSchema = Schema.TaggedStruct('event', {
 export const TextChunkSchema = Schema.TaggedStruct('chunk', {
   runId: RunIdSchema,
   rowId: Schema.String,
-  from: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  from: NonNegativeIntSchema,
   to: Schema.Int.check(Schema.isGreaterThan(0)),
   text: Schema.String,
 });
@@ -81,7 +82,7 @@ export type LocalRuntimeState = typeof LocalRuntimeStateSchema.Type;
  */
 export const TranscriptSubscriptionSchema = Schema.Struct({
   id: AggregateIdSchema,
-  fromSeq: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  fromSeq: NonNegativeIntSchema,
 });
 export type TranscriptSubscription =
   (typeof TranscriptSubscriptionSchema)['Type'];

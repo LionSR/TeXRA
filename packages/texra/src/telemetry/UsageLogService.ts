@@ -26,6 +26,7 @@ import {
   extractErrorMessage,
   formatResultCount,
   toErrorMessage,
+  NonNegativeIntSchema,
 } from '@texra-ai/harness/schemas';
 import { readOrCreateInstallId } from '@telemetry/installId';
 import { TELEMETRY_ENABLED_SETTING } from '@texra/shared/settings/texraSettings';
@@ -45,7 +46,7 @@ interface UsageLogBatch {
 const UsageLogResponseSchema = Schema.Union([
   Schema.Struct({
     success: Schema.Literal(true),
-    accepted: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    accepted: NonNegativeIntSchema,
   }),
   Schema.Struct({
     success: Schema.Literal(false),
