@@ -3,83 +3,93 @@ created: 2026-11-06
 status: proposed
 ---
 
-# 程序，不是 agent：目录、codemode 和长期的单位模型
+# 程序，不是 agent：小内核和 theorist 的程序插件
 
-基线：`main` 的 `c4c843a`（2026-11-06）。路径相对仓库根。度量用
-`wc -l` 和 `grep`，在"现状的度量"一节逐条给出命令可复核的数字。本文是
-设计的当前状态，不是讨论的记录；负责人当天的裁决集中在"决定记录"一节。
-2026-11-06 晚由一个无上下文的审稿代理对照代码复核过一轮，其发现已并入
-（"审稿修正"一节列出改了什么）。
+基线：`main` 的 `221c02a`（2026-11-14）。路径相对仓库根。度量用 `wc -l`
+和 `grep`，"现状的度量"一节给出可复核的数字。本文是设计的当前状态，不是
+讨论的记录；负责人的裁决集中在"决定记录"，2026-11-14 这次改写相对
+11-06 版改了什么列在"修订记录"。
 
 ## 摘要
 
 TeXRA 今天只有一种用户可创造的单位：agent 文件。于是审稿视角是 agent，
-Wolfram 用法是 agent，一条 `latexdiff` 命令也是 agent。bundled 目录到了
-35 个文件（加 lean4 插件 5 个），随后长出了一整层让它们"可用"的补偿机制：
+Wolfram 用法是 agent，一条 `latexdiff` 命令也是 agent。bundled 目录有 35
+个文件（加 lean4 插件 5 个），随后长出了一整层让它们"可用"的补偿机制：
 team、workspace 级 agent 选择、排序和黑名单、customize 副本和漂移提示、
-launch form 的选项表。负责人的判断是"available 的 agent 太多，补偿太多"。
-本提案的结论是：**数量是症状，单位是病因。**
+launch form 的选项表。**数量是症状，单位是病因。** 这个诊断不变：单位应
+该是程序（沙箱里的 JS），不是 agent。
 
-设计只剩三种单位：程序模块（沙箱里的 JS）、工具、项目约定（`AGENTS.md`）。
-agent 文件和 persona 这个名词都不再存在：一次子运行需要的只是 system 文
-本、工具列表和模型，那是模型调用的参数。编排是程序，document task 是同一
-个 `revise` 原语的几组参数，team 是一个目录里的几个文件。补偿层整层消失，
-新能力长在用户的项目里而不是 bundled 目录里。
+11-06 版把程序放进了内核旁边的一组新目录（`.texra/tasks/`、
+`~/.texra/tasks/`、插件随包的 `tasks/`），并为它们配了解析器、发现规则、
+撞名规则、`author` 标记和一个设置页。负责人 2026-11-14 的方向是另一种切
+法：**内核小而美，theorist 的东西是程序插件。** 本文按这个方向重写：
+
+- **程序只有一个家：插件。** 工具今天就只住在插件里；程序也住进去。
+  `Plugin` 上的 `scriptModules` 和 `agentBlock` 两个字段换成 `modules` 和
+  `programs`，契约不变大。
+- **内核只多认识一件事，少认识一类事。** 核心概念的十三个名词里，Agent
+  换成 Program，其余十二个都留着。agent 文件、persona、catalog、skill、
+  team、task 块、recipe 这些词从内核消失。
+- **产品是内核加几个 theorist 插件。** "AI theorist"不是 `assistant.yaml`，
+  也不是一个 team：它是开着的那些插件各自带来的程序、工具和一段 prompt。
+  聊天是内核的模型循环，没有 agent 文件。
 
 这不是一个新方向。仓库里已经有三处"run 是一段程序"：goal 策略是一个脚本
-模块（`packages/harness/src/tools/plan/goalScript.ts`，由设置
-`goal.strategy` 指名，默认 `builtIn:goal`），document task 的 recipe 是一段
-内联 JS（`packages/texra/src/agent/output/documentRecipe.ts`），后台脚本是
-`AgentConfig.script.kind: 'background'`。它们各自特例化了同一个东西。提案
-把它们合成一类，再让用户的 task 成为第四个实例。
+模块（`packages/harness/src/tools/plan/goalScript.ts`），document task 的
+recipe 是一段内联 JS（`packages/texra/src/agent/output/documentRecipe.ts`），
+后台脚本是 `AgentConfig.script.kind: 'background'`；前两处已经由插件用
+`scriptModules` 出货。它们各自特例化了同一个东西，各有一条启动路径。提案
+把它们合成"插件的程序，按名启动"这一件事。
 
-## 现状的度量（`c4c843a`）
+## 现状的度量（`221c02a`）
 
-| 事实                                                          | 数字                        | 来源                                                                                                                                                                                                                                                                                            |
-| ------------------------------------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| bundled agent 文件                                            | 35（顶层 33，`write/` 2）   | `find packages/extension/resources/agents -name '*.yaml'`                                                                                                                                                                                                                                       |
-| 其中 document task（带 `task:` 块）                           | 15                          | `grep -l '^task:'`，含 `write/` 两个和 `critic`                                                                                                                                                                                                                                                 |
-| lean4 插件目录（5 agent、5 skill 及其 references）            | 993 行                      | `packages/extension/resources/plugins/lean4/`；每个 skill 旁有一个 agent 包装它                                                                                                                                                                                                                 |
-| bundled agent 提示词总行数；最大单文件                        | 3749；402（`enhance.yaml`） | `wc -l`，含 `write/`                                                                                                                                                                                                                                                                            |
-| document task 的轮廓                                          | 工具全 0；轮数 1 或 2       | 15 个文件无 `tools:`（`PersonaSchema` 默认 `[]`）；`requests:` 长度 1（correct、apply、merge）或 2；两个 `write/` 文件带 `files:`                                                                                                                                                               |
-| team 预设（加一个不进 UI 的 starter）                         | 5+1                         | `packages/texra/src/shared/agentTeams.ts`                                                                                                                                                                                                                                                       |
-| team 相关代码                                                 | 1264 行                     | `agentTeams.ts`、`teamLaunch.ts`、`packages/cli/src/commands/team.ts`、Teams 标签页和 `apply_team`                                                                                                                                                                                              |
-| workspace 选择、hidden keys、delegation scope、agent 设置页   | 2749 行                     | `packages/harness/src/agent/workspaceAgents/` 590、`shared/schemas/workspaceAgents.ts` 44、`AgentsTab.ts` 284、`settingsView/frontend/components/profile/` 1831                                                                                                                                 |
-| agent 索引（扫描、customize 副本、`basedOn`、newer-built-in） | 1410 行                     | `packages/harness/src/agent/index/`                                                                                                                                                                                                                                                             |
-| skills 子系统                                                 | 1521 行                     | `packages/harness/src/skills/`、`packages/cli/src/commands/skills.ts`                                                                                                                                                                                                                           |
-| documents 插件（工具、recipe、task 块、选项表）               | 2305 行                     | `packages/texra/src/tools/documents/`、`documentRecipe.ts`、`packages/texra/src/shared/plugins/documents.ts`                                                                                                                                                                                    |
-| 工具定义；工具代码                                            | 44；约 33000 行             | `packages/texra/src/tools` 20787 行，`packages/harness/src/tools` 12472 行                                                                                                                                                                                                                      |
-| 审稿簇：读 LaTeX 写批注，只有视角不同                         | 10 个                       | `critic`、`criticize`、`firstread`、`review`、`logic`、`notation`、`enhance`、`devise`、`codeReviewer`、`progressCheck`                                                                                                                                                                         |
-| 改稿簇                                                        | 7 个                        | `correct`、`polish`、`generic`、`apply`、`merge`、`simplifier`、`codeSimplifier`                                                                                                                                                                                                                |
-| 研究簇，共享同一段"Mathematical Communication"样板            | 6 个                        | `assistant`、`research`、`numerics`、`search`、`prover`、`review`                                                                                                                                                                                                                               |
-| 编排簇，前两者工具列表完全相同                                | 3 个                        | `orchestrator`、`engineer`、`leanOrchestrator`                                                                                                                                                                                                                                                  |
-| 引用 bundled 名字的测试                                       | 11 个套件加 golden store    | `src/test-kernel/fixtures/storage/golden-1.0.sql`（`'polish'` 的 task run）、`goldenStore`、`Resumability`、`WorkflowRunCommand`、`History`、`helperModelPreference`、`completedRunArchive`、`TeamLaunch`、`WorkspaceAgentsController`、`SettingsAgentCatalogController`、`support/texraApp.ts` |
+| 事实                                            | 数字                                  | 来源                                                                                                                                            |
+| ----------------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| bundled agent 文件                              | 35（顶层 33，`write/` 2），3524 行    | `find packages/extension/resources/agents -name '*.yaml'`                                                                                       |
+| 其中 document task（带 `task:` 块）             | 15，工具全 0，轮数 1 或 2             | `grep -l '^task:'`                                                                                                                              |
+| 插件随包目录                                    | lean4 987 行，multi-agent 305 行      | `packages/extension/resources/plugins/`：lean4 是 5 个 agent（609 行）加 5 个 skill，multi-agent 是 1 个 skill                                  |
+| bundled skills                                  | 9 个 `SKILL.md`，目录 593 行          | `packages/extension/resources/skills/`                                                                                                          |
+| team：预设、启动、CLI、标签页、`apply_team`     | 1650 行（8 个文件）                   | `agentTeams.ts`、`agent/teams/`、`teamCatalogPorts.ts`、`packages/cli/src/commands/team.ts`、`cliTeams.ts`、`TeamsTab.ts`、`ApplyTeamTool.ts`   |
+| workspace 选择和 agent 设置页                   | 618 + 890 + 690 行                    | harness `agent/workspaceAgents/` 和它的 schema；设置页前端的 Agents、Skills 标签页和选择面板；后端 `settingsAgentCommands.ts` 和 catalog 控制器 |
+| agent 索引（扫描、customize 副本、插件 agent）  | 1549 + 264 行                         | `packages/harness/src/agent/index/`、`tools/agentCatalogFollower.ts`                                                                            |
+| skills 子系统                                   | 1447 + 107 + 94 行                    | `packages/harness/src/skills/`、三个 skill schema、`packages/cli/src/commands/skills.ts`                                                        |
+| documents 插件（工具、recipe、task 块、选项表） | 2271 行                               | `packages/texra/src/tools/documents/` 1837、`documentRecipe.ts` 164、`packages/texra/src/shared/plugins/documents.ts` 270                       |
+| 插件                                            | 19 个：harness 内置 6，app 13         | `harnessBuiltins`（`packages/harness/src/tools/builtinPlugins.ts`）、`texraPlugins`（`packages/texra/src/tools/registry.ts`）                   |
+| `Plugin` 的字段                                 | 13                                    | `packages/harness/src/tools/plugins.ts`                                                                                                         |
+| 带 `scriptModules` 的插件；带 `prompt` 段的插件 | 2（goal、documents）；3               | `grep scriptModules`；`memory-workflow`、`core`、`documents`                                                                                    |
+| 一个插件的程序今天的启动路径                    | 3 条                                  | host 表单经 `documentTaskConfig`；模型经 `document_task` 工具；`plan` 工具经 `launchBackgroundScript(goalScript(…))`                            |
+| 读"这个 run 是不是 task"的地方                  | 约 20 个源文件，另 11 个读视图        | `isTaskConfig`、`recipeBlockOf`、`script.kind`（`packages/harness/src/shared/schemas/runRecords.ts`）；另 11 个文件读 `RunView.recipe`          |
+| harness 公开导出                                | 752：root 36、host 161、node 48、其余 | `config/api-reports/*.md` 的 `Exports:` 行（plugins 134、schemas 299、transcript 74）                                                           |
+| harness、app 源码                               | 80458、81235 行                       | `packages/{harness,texra}/src` 的 `.ts`、`.tsx`                                                                                                 |
+| 工具定义；工具代码                              | 约 50 个；31502 行                    | `grep -c 'defineTool('` 得 52；`packages/texra/src/tools` 19003，`packages/harness/src/tools` 12499                                             |
+
+35 个文件按做的事分簇：审稿 10 个（读 LaTeX 写批注，只有视角不同）、改稿
+7 个、研究 6 个（共享同一段"Mathematical Communication"样板）、编排 3 个
+（`orchestrator` 和 `engineer` 只差提示词）。
 
 补偿层的清单，每一条都只为"几十个可用"而存在：
 
 - `WorkspaceAgentsSelectionSchema` 的四种 kind（`inherit`、`all`、`team`、
-  `custom`）、`HiddenCustomAgentKeysSchema`、`AgentDelegationScopeSchema`。
-- 五个 team、starter、Teams 标签页、`apply_team` 工具、`setup` 里问学科
-  的那段对话、`DEFAULT_TEAM` 设置、`cli.teamId`。
-- `PREFERRED_TOOL_USE_AGENTS`、`NON_DEFAULT_TOOL_USE_AGENTS`
-  （`packages/texra/src/shared/constants/agents.ts`）、composer 里的
-  "Browse all agents…"、agent 选项上的 `isOrchestrator` 和 `rounds`。
+  `custom`）、`HiddenCustomAgentKeysSchema`、`AgentDelegationScopeSchema`
+  （`packages/harness/src/shared/schemas/workspaceAgents.ts`）。
+- 五个 team、starter、Teams 标签页、`apply_team` 工具、`setup` 里问学科的
+  那段对话。
+- `PREFERRED_TOOL_USE_AGENTS`、`BUILTIN_TEAM_ROOT_AGENT_NAMES`、
+  `NON_DEFAULT_TOOL_USE_AGENTS`
+  （`packages/texra/src/shared/constants/agents.ts`）、agent 选项上的
+  `isOrchestrator` 和 `rounds`。
 - `customizeCopy`、`basedOn`、newer-built-in 提示。
-- `DOCUMENT_TASK_OPTIONS` 这张表和它在四个面上的渲染（2026-11-03 刚把它收
-  成一张表，见 `fewer-processing-options.md` §5；收成一张表是对的，但表
-  本身还是"代码拒绝做的决定"）。
+- `DOCUMENT_TASK_OPTIONS` 这张五行的表和它在各个面上的渲染。
 
 ## 诊断
 
 Ousterhout 的说法：当一个热点太复杂，找它背后的数据结构、重复的事实或放错
-的所有者。这里放错的是"可创造的单位"。
+的所有者。这里有两处放错。
 
-agent 文件把三种不同的东西压进一个形状：
+**第一处：可创造的单位放错了。** agent 文件把三种不同的东西压进一个形状：
 
-1. **模型调用的参数**：prompt、tools、temperature。`InlinePersonaSchema` 已
-   经是它的精确定义，`agent()` 工具也已经接受内联的一份
-   （`packages/harness/src/agent/runtime/delegation/AgentTool.ts:94`）。
-2. **知识**：rubric、格式约定、领域用法。402 行的 `enhance.yaml` 几乎全是
+1. **模型调用的参数**：prompt、tools、temperature。
+2. **知识**：rubric、格式约定、领域用法。384 行的 `enhance.yaml` 几乎全是
    这个。
 3. **流程**：几轮、每轮读什么、何时停。`task:` 块用 Nunjucks 写它，recipe
    用 JS 跑它。
@@ -87,60 +97,185 @@ agent 文件把三种不同的东西压进一个形状：
 把 2 和 3 塞进 1，目录就必然按"视角 × 流程"的积膨胀。四种审稿视角乘一种
 批注流程是四个文件；再来一种流程就是八个。
 
-"谁在跑什么"这个事实今天有五个表示：agent 名、team、workspace 选择、
-内联 persona、两种 script kind。设计的第一步是把它收成一个。
+**第二处：容器放错了。** 工具只有一个家，插件：每个工具属于恰好一个插
+件，插件有开关、可用性探测、信任记录和一页设置。程序今天没有家，所以每
+处"run 是程序"都自己找地方：goal 在插件的 `scriptModules` 里再由 `plan`
+工具拼两行脚本启动，document 的 recipe 由 app 按 agent 名生成源码再挂到
+agent 文件的 `task:` 块上，后台脚本写在模型的调用里。11-06 版为程序新建
+了一个家（三个目录根加一个解析器），它是插件已有的那一套的平行物：
 
-反过来看仓库已经做对的部分：codemode 文档
-（`.agents/docs/implemented/architecture/2026-10-01-codemode-everywhere.md`）
-把 `script` 做成了一个完整的运行时：QuickJS、按 settle 顺序的确定重放、
-`agent()` 和 `self()` 是普通调用、模块源码按 specifier 钉在步骤的
-`tools.offered.modules` 里（`packages/harness/src/shared/schemas/offeredTools.ts:61`，
-每个源码是一个 `context.blob`）。goal 插件已经把"策略"做成一个可替换的脚
-本模块。documents 的 recipe 已经是 25 行 JS。缺的只是：**把这条路当主路，
-并让人也能走。**
+| 程序需要的       | 11-06 版新建的                               | 插件今天已有的                                                     |
+| ---------------- | -------------------------------------------- | ------------------------------------------------------------------ |
+| 放在哪           | `.texra/tasks/`、`~/.texra/tasks/`、`tasks/` | `resources/plugins/<id>/`，目录名就是插件 id                       |
+| 按名字找到它     | 三种来源的解析器、撞名是扫描期错误           | 插件表（`toolTable`），id 唯一，模块名随 id 唯一                   |
+| 关掉它           | 无（文件在就在）                             | 插件开关，关掉即收回它的一切（裁决 D9）                            |
+| 能不能信         | `author` 字段，工作区的每次启动审批          | 安装式插件的信任记录：按内容摘要，改了任何文件就收回，直到重新审阅 |
+| 人在哪里看见它   | 新的 Tasks 页、`texra tasks types`           | Plugins 页和 CLI 的 `/plugins`                                     |
+| 对模型说它是什么 | `export const description` 静态提取          | 插件表里的数据                                                     |
+
+内核今天认识 app 的词汇，是同一个病的另一面。核心概念的十三个名词
+（`.agents/docs/implemented/architecture/2026-09-26-core-concepts.md`）
+里有 **Agent**："从一个有序的来源目录解析出的定义"。`AgentConfig` 上为它
+有 `agent`、`agentSource`、`persona`、`asCaller`、`delegationAgentScope`
+五个字段，`Plugin` 上为它有 `agentBlock`，harness 里为它有索引、workspace
+选择和 skills 三个目录共 3570 行。
+
+反过来看已经做对的部分：
+
+- `Plugin.scriptModules` 已经让插件出货沙箱模块；沙箱的模块加载器已经是
+  "一个 specifier 整体命名一个模块，宿主给的就加载，别的一律拒绝"
+  （`packages/harness/src/agent/codeSandbox/worker.ts`），没有文件系统。
+- `assistant.yaml` 的 92 行 prompt 本身就是按能力分段写的（Literature、
+  Computation、Formal Proofs、Document Toolkit、各工具的用法），并且要为
+  可能没开的插件写"when available"。它是手工拼出来的"各插件的 prompt
+  段"；而 `Plugin.prompt` 这个字段已经存在，有三个插件在用。
+- codemode 的裁决里已经有一条"code mode stays domain-free"。
+
+缺的只是：**把"插件带程序"当成唯一的路，让内核忘掉 agent。**
 
 ## 长期判断
 
 前提（负责人裁决，见"决定记录"）：模型会变强。由此，价值从"对模型说什么"
 转到四件事：验证器（编译、diff、测试、texcount、文献 API）、持久的编排（长
-goal、恢复、预算、并行）、用户自己积累的程序和项目约定、以及可观测和可审批
-的执行。提示词趋近于零；凡是提示词里教模型"按步骤做"的部分，都应该是一段
-步骤被验证过的程序。
+goal、恢复、预算、并行）、用户和社区积累的程序、以及可观测和可审批的执
+行。提示词趋近于零；凡是提示词里教模型"按步骤做"的部分，都应该是一段步
+骤被验证过的程序。
 
-因此 3 年后的 TeXRA 应该是：一个持久执行 JS 程序的 harness，程序的操作是
-模型调用和工具调用，历史是真相；TeXRA 产品本身是一组程序和一组工具。1.0
-PRD 的第一句已经这么说了（"允许模型编写策略、能够可靠保存和恢复调用的
-agent runtime"）。本提案是把这句话落到用户可创造的单位上。
+因此 TeXRA 分两层看：
+
+- **内核**是一个持久执行程序的 harness，程序的操作是模型调用和工具调
+  用，历史是真相。1.0 PRD 的第一段已经这么说了："内核维护调用、权限、资
+  源和持久化契约；goal、研究流程和领域策略由脚本及插件表达"。
+- **产品**是一组插件。一个 theorist 的做法（改稿、审稿、推导、形式化、查
+  文献）是带验证器的程序，住在插件里，随插件开关、分发和信任。
 
 三年尺度上要守住的不变量：
 
-- **历史一个写者，run loop 一个程序**（AGENTS.md "Agent system"）。程序模块
+- **历史一个写者，run loop 一个程序**（AGENTS.md "Agent system"）。程序
   是 `script` 调用的 guest，不是第二个引擎。
-- **持久化不随代码变**：钉住的源码和摘要是 run 的一部分；改 task 文件不改
-  正在跑的 run，恢复用原源码。
-- **一个 fact 一个 owner**：谁写了这段程序是一个字段，审批和重放从它推导。
+- **持久化不随代码变**：钉住的源码和摘要是 run 的一部分；改了程序文件不
+  改正在跑的 run，恢复用原源码。
+- **一个 fact 一个 owner**：一段程序是谁的，由它的名字（`<插件>:<名字>`）
+  回答，审批和信任从它推导，不另存一份。
 
 ## 设计
 
-### 三种单位
+### 两层
 
-| 单位     | 是什么                                          | 谁写             | 落在哪                                                                      |
-| -------- | ----------------------------------------------- | ---------------- | --------------------------------------------------------------------------- |
-| 程序模块 | 一个 ES 模块，默认导出 `async (args) => result` | 插件、用户、模型 | 插件：`builtIn:<name>`；用户：`.texra/tasks/`；模型：内联在 `script` 调用里 |
-| 工具     | 带审批和重放语义的能力                          | 插件             | `Plugin.tools`，不变                                                        |
-| 项目约定 | 这个项目的记号、引用、风格                      | 用户             | `AGENTS.md`，PromptBuilder 已经读它                                         |
+```
+内核      @texra-ai/harness、@texra-ai/llm   持久地跑程序；认识 run、call、tool、program、plugin
+theorist  @texra-ai/texra 的插件             程序 + 工具 + 一段 prompt：documents、lean4、…
+host      extension、desktop、cli            三个壳
+```
 
-不是单位的东西：
+内核对 theorist 一无所知：它不认识 document、LaTeX、审稿、Lean，也不认
+识"内置的 task 目录"。theorist 插件只通过 `Plugin` 这一个契约进入内核，
+和一个仓库外的 embedder 写插件用的是同一个契约。
 
-- **persona。** 一次子运行需要的只是 `{ system, tools, model, temperature }`，
-  那是模型调用的参数，不是"角色"。persona 是 agent 文件时代的名词：把参数
-  打包成可按名字引用的东西，是为了复用；代码里复用就是 import 一个对象或
-  一段文本。harness 不为它设名词、不设文件格式、不设目录。
-- **skill。** 可复用的文本是导出字符串的模块，
-  `import { rubric } from './rubrics/logic.js'`。通用知识（Wolfram 怎么用、
-  LaTeX 引号风格、Zotero 查重）删，模型会；TeXRA 特有的约定（`\criticize{}`
-  的格式、输出文档的格式）进对应的程序模块。
-- **team。** 一个目录里的几个 task 文件（"multi-agent 编排"一节）。
+### 内核认识什么
+
+| 核心概念    | 今天                                                                                 | 之后                                                                       |
+| ----------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| Agent       | 从有序的来源目录解析出的定义：built-in、custom、插件、inline                         | 删。换成 **Program**：插件出货的沙箱模块，按 `<插件>:<名字>` import 和启动 |
+| Plugin      | 工具、prompt 段、layer、探测、开关、fact、一个 agent 文件块                          | 同左，agent 文件块换成程序                                                 |
+| Composition | 钉住的目录按 agent 的工具声明收窄                                                    | 钉住的目录按 run 的工具列表收窄                                            |
+| Run         | 以一份 agent 定义打开                                                                | 以一组 chat 参数或一个程序打开                                             |
+| 其余九个    | Process、Session、History、Projection、Input、Call、Request、Host、Application state | 不动                                                                       |
+
+之后内核里不再出现的词：agent 文件、persona、agent source、catalog、
+customize 副本、skill、team、delegation scope、workspace 选择、task 块、
+recipe。
+
+"小"在这里指内核认识的名词和公开面，不指行数。harness 的 80458 行里，大
+头是持久化协议本身：`agent/runtime` 19221、`shared/session` 7135、
+`controllers`（SQLite 存储）6536，本提案不动它们。本提案从 harness 拿走的
+是约 4500 行 app 词汇和 `./host` 入口上为它们而设的导出（见"删除清单"）。
+把内置插件从内核目录里搬出去是另一件事，见"负责人问题"4。
+
+### 插件契约
+
+`Plugin`（`packages/harness/src/tools/plugins.ts`）13 个字段，改两个：
+
+```ts
+interface Plugin {
+  // id、tools、availability、toggle、injectedWhen、prompt、processLayer、
+  // sessionLayer、decision、factKinds、requires：不变
+
+  /** 它出货的沙箱模块，源码按名字；以 `<id>:<name>` 被 import。
+   *  今天的 scriptModules，命名空间从 builtIn: 改为插件 id。 */
+  readonly modules?: Readonly<Record<string, string>>;
+
+  /** 其中可以被人或模型按名启动的模块（默认导出是
+   *  async (args) => result），名字到一行描述：picker 和模型的脚本
+   *  声明里显示的那一行。今天的 agentBlock 的位置。 */
+  readonly programs?: Readonly<Record<string, string>>;
+}
+```
+
+- `agentBlock` 连同 `AgentBlock`、`AgentBlockResult`、`RecipeChange`、
+  `boundFiles`、`boundFile`、`agentBlockOf`、`ToolTable.blocks` 和
+  `ITool.launchesTasks` 一起删。PRD 也说 `agentBlock`"不应被写成 agent 模
+  板发布接口"。
+- 命名空间用插件 id（`documents:revise`、`goal:goal`），不再用
+  `builtIn:`。id 已经是持久化的、唯一的、不复用的，于是"两个插件出同名模
+  块"这条表检查（`toolTable`）因构造而不需要，"这段程序是谁的"由名字回
+  答。
+- 描述是插件表里的数据。不为发现而求值任何源码，原生插件也不从源码里提
+  取它。
+- 没有按程序的工具声明。一个程序的 run 被 offer 的工具从插件表推出：一
+  次聊天此刻会被 offer 的那些，加上它自己的插件和它 `requires` 的插件的
+  工具，不看开关（今天 task 的"工具不受开关影响"就是这一条）。程序是固
+  定的代码，它调什么写在源码里；能收窄的是它启动的 `agent()`，那是代码
+  里的一个 `tools` 列表。
+- `injectedWhen` 的一半理由是"agent 没声明这个工具也给它"；agent 的工具声
+  明消失后，这个字段只剩"跟着一个设置开关"这一半，留到删 agent 文件那一
+  期再看它是否还要。
+
+### 一个程序是什么
+
+```js
+// packages/extension/resources/plugins/documents/programs/annotate.js
+import { revise, addsOnly, ANNOTATE_FORMAT } from 'documents:revise';
+
+export default (args) =>
+  revise({
+    ...args,
+    system: 'You annotate. You never rewrite.',
+    requests: [ANNOTATE_FORMAT],
+    // 代码能检查 YAML 只能要求的事：diff 只新增 \criticize{ 行
+    verify: addsOnly('\\criticize{'),
+  });
+```
+
+- **契约。** 一个 ES 模块，默认导出 `async (args) => result`。`args` 是
+  launch form 已有的四组文件加指令加 memories（`LaunchSurfaceSchema`，
+  `packages/texra/src/shared/session/surface.ts`），没有按程序的输入
+  schema；由事件触发的程序从 `args.event` 拿到事件。返回值是 run 的结构化
+  输出。
+- **import。** 只有一种 specifier：`<插件>:<名字>`。加载器不变：宿主给
+  的就加载，别的拒绝并列出可用的名字。没有文件系统路径，所以没有越界和
+  解析根这两个问题。模块之间的静态 `import` 和脚本里的动态 `import()` 走
+  同一个加载器。
+- **启动只有一条路。** `start({ program: 'documents:annotate', args })`。
+  run 以一段两行的生成脚本打开（import 这个模块，调用它的默认导出），这
+  正是 `goalScript()` 今天生成的东西，所以 `script` 工具、它的行和重放都
+  不变。今天的三条启动路径（表单经 `documentTaskConfig`、模型经
+  `document_task` 和 `ChildRuns.launch({ task })`、`plan` 经
+  `launchBackgroundScript`）都变成这一条。
+- **钉住。** 一步能 import 的模块，源码按 specifier 存为 `context.blob`，
+  摘要写进这一步的 `tools.offered.modules`
+  （`packages/harness/src/shared/schemas/offeredTools.ts`）；这是模块今天
+  就钉在的地方，不另开一份。恢复用钉住的源码。
+- **没有按程序的选项。** `reflect`、`attachTeXCount` 这类开关是程序里的
+  一行 `if`；真需要一个开关的地方是第二个程序。launch form 的五个开关和
+  `texra run` 的对应 flag 随之消失，这是明说的损失（"权衡"）。
+- **源码是真实的文件。** bundled 插件的程序是它目录
+  `resources/plugins/<id>/programs/` 里的 `.js` 文件；这个目录今天放的是
+  `agents/` 和 `skills/`，按 id 对上插件，随插件开关收回。host 的组装根在
+  建插件表时读入，交给内核的是值，内核不读程序目录。今天的 `GOAL_MODULE`、
+  `DOCUMENTS_MODULE` 和 `recipeSource()` 是 TS 里的模板字符串，没有 lint、
+  没有高亮，常量靠 `JSON.stringify` 拼进源码；之后它们是可以 lint、可以在
+  编辑器里读、可以让模型当例子读的文件。
 
 ### 原语：一个 `start`，三个糖，一个收件箱
 
@@ -153,32 +288,27 @@ tools.*            效果
 import             复用
 ```
 
-`agent(prompt, { system, tools, model })`、`task(name, args)` 和
-`self(prompt, { fork })` 是 `start` 的三个糖，放在 `builtIn:` 模块里，不进
-内核：`agent` 是 `start` 一个 chat 叶子，`task` 是 `start` 一个 program，
-`self` 是 `start` 一个 chat 叶子并取调用者的 system 和 tools、可选复制对
-话。它们的参数加起来恰好是 run 配置的联合，所以脚本里的 `start`、SDK 的
-`session.start`、launch form 和 `texra run` 发的是同一个东西，PRD 要的"一扇
-门"在这里闭合。
+`agent(prompt, { system, tools, model })`、`program(name, args)` 和
+`self(prompt, { fork })` 是 `start` 的三个糖：`agent` 是 `start` 一个 chat
+叶子，`program` 是 `start` 一个插件的程序，`self` 是 `start` 一个 chat 叶子
+并取调用者的 system 和 tools、可选复制对话。它们的参数加起来恰好是 run
+配置的联合，所以脚本里的 `start`、SDK 的 `session.start`、launch form 和
+`texra run` 发的是同一个东西，PRD 要的"一扇门"在这里闭合。
 
 收件箱是唯一的通道：用户文本、子 run 的报告、同级消息、订阅通知都是它里
-面的一条消息（`agent/followUp/`）。一个程序**不读**自己的收件箱（"大一统"
-一节说为什么），它从 args 拿到触发它的事件。
+面的一条消息（`packages/harness/src/agent/followUp/`）。一个程序**不读**
+自己的收件箱（"触发"一节说为什么），它从 args 拿到触发它的事件。
 
-JS 图灵完备，加上 `start` 和 `await`，能表达任何可计算的编排：顺序、分支、
-循环、递归、fan-out、监督循环、辩论、人在回路（`inquiry` 工具开一个请求，
-答复是子 run 的结果）。Unix 的对照：`start` 是 fork 加 exec，`await` 是
-wait，收件箱加 `from()` 是 pipe，`executions kill` 是 signal，
-`.texra/tasks/` 是 PATH，args 和返回值加 run 存储是 stdin 和 stdout，
-`AGENTS.md` 是 env，审批策略加"子 run 的工具 ⊆ 父 run"是权限。三处故意不
-像 Unix：没有进程间的字节流（结果是值和文件）；guest 里没有时钟和随机数
-（用记录替代，为了重放）；模型调用是 syscall 不是程序（审批、计费、历史在
-内核）。
+JS 图灵完备，加上 `start` 和 `await`，能表达任何可计算的编排：顺序、分
+支、循环、递归、fan-out、监督循环、辩论、人在回路。Unix 的对照：`start`
+是 fork 加 exec，`await` 是 wait，收件箱是 pipe，插件表是 PATH，args 和
+返回值加 run 存储是 stdin 和 stdout，`AGENTS.md` 是 env，审批策略加"子
+run 的工具 ⊆ 父 run"是权限。
 
 诚实的缺口：没有时间触发（需要一个让 host 到点发消息的 `schedule` 工具，
 今天只有 GitHub 订阅）；程序把控制权交给人没有原语（结束并返回结果，host
 决定下一步，goal 的 `needs_user` 就是这样）；上下文只有 fork 整个对话或
-fresh 两档，中间档靠作者在 prompt 里拼。
+fresh 两档。
 
 ### run 的两类
 
@@ -186,207 +316,174 @@ fresh 两档，中间档靠作者在 prompt 里拼。
 今天是"persona 可选，script 可选，两种 script kind"。目标形态是一个联合：
 
 ```
-run.chat    { system, tools, model, temperature, instruction, files…, memories,
-              outputSchema, workingDirectory, cli }                       内核的模型循环
-run.program { source, modules, author, title, tools, timeoutMs, args,
-              conversation? }                                            沙箱里的程序
+run.chat     { system, tools, model, temperature, instruction, files…, memories,
+               outputSchema, workingDirectory }                    内核的模型循环
+run.program  { program: '<插件>:<名字>', args, conversation? }      插件的程序，按名
+             { code, title, tools, timeoutMs, conversation }       模型写的脚本送后台
 ```
 
-- `background`、`recipe` 和用户 task 合为 `program`；`author`
-  （`'model' | 'plugin' | 'workspace'`）是它们的差别，决定审批（下文）和
-  picker、history 怎么标它。`recipe.block` 和 `recipe.options` 随 `task:`
-  块删。
+- 按名的程序和内联的代码是 `program` 的两种写法，差别就是"谁写的"：有
+  名字的是那个插件的，内联的是模型的。所以不需要 `author` 字段，
+  `recipe.block` 和 `recipe.options` 随 `task:` 块删。
 - `conversation` 是可选的父对话边：一个从聊天里启动的程序（后台脚本、
   goal）记录它 fork 的来源，`self()` 只在这条边存在时可用，这正是今天
-  `selfOf` 的规则（`SelfTool.ts:62-72`：后台脚本有可 fork 的对话，recipe
-  没有）。picker 或 CLI 启动的 task 没有这条边，`self()` 在里面是错误，用
-  `agent()`。所以 goal 仍是"聊天的一个程序"，它是 `program` 的消费者，不
-  与此矛盾。
+  `selfOf` 的规则（`packages/harness/src/tools/codemode/SelfTool.ts`：后
+  台脚本有可 fork 的对话，recipe 没有）。picker 或 CLI 启动的程序没有这
+  条边，`self()` 在里面是错误，用 `agent()`。
 - `chat` 的字段就是今天 `InlinePersonaSchema` 加 `AgentConfig` 上已有的
-  `memories`、`outputSchema`、`workingDirectory`、`cli`（`--output`、
-  `--output-dir`、`expectedOutputFiles`）换个名字直接放在 config 上，没有
-  `persona` 子对象、没有 `agent` 名、没有 `agentSource`。`run.config` 本来
-  就把 inline persona 整个存下，持久化不变。
-- `agent()` 的输入去掉 `agentName` 和 `persona`，直接取 `system`、`tools`、
-  `model`、`temperature`；`self()` 的 `asCaller` 变成"复制父运行的 system
-  和 tools"。
+  几项，直接放在 config 上：没有 `persona` 子对象、没有 `agent` 名、没有
+  `agentSource`。`agent()` 的输入去掉 `agentName` 和 `persona`，直接取
+  `system`、`tools`、`model`；`asCaller` 变成"复制父运行的 system 和
+  tools"。
 - 聊天本身仍是内核原生的模型轮次。"一切都是程序"（聊天循环也是 guest 脚
-  本）与 run loop 唯一写者的契约冲突，不做；联合类型给它留门。
+  本）与 run loop 唯一写者的契约冲突，不做。
 
-这个联合是**格式变更**：`run.config` 的行版本从 6 升（`rowVersions.ts`），
-golden store 重生成，`run.start` 的身份字段 `agent` 也要换。它归 PRD 的
-"格式批"，在 API 冻结前一次做（"分期"第 4 期），不在第 1 期。过渡期的
-`script.kind` 有 13 处读者（`RunRecord.ts:37`、`runRecords.ts:39`、
-`runActions.ts:60-101`、`sessionView.ts:272`、`childDelivery.ts:41`、
-`SelfTool.ts:80`、`documents.ts:198,269`、进度视图的五个组件），它们读的
-`run.recipe` 是 UI 区分 task 与 chat、以及拒绝恢复和 fork 已结束 task 的唯一
-事实；联合落地时它的替代是 `kind === 'program'`，这个替代要和联合在同一
-个 PR 里命名。
+这个联合是**格式变更**：`run.config` 的行版本要升
+（`packages/harness/src/shared/schemas/rowVersions.ts`），golden store 重
+生成。今天约 20 个源文件读"这个 run 是不是 task"，它们的替代是"这个 run
+是不是以一个按名的程序打开的"，一个事实，仍从 `run.config` 读；这和已否
+决的候选 `RUN-trusted-script-launch-grants`（不另存一份授权记录）一致。
 
-### 程序模块的契约
+### 聊天不是一个 agent
 
-```js
-// .texra/tasks/annotate.js
-import { rubric } from './rubrics/logic.js';
-import { ANNOTATE_FORMAT } from 'builtIn:documents';
+没有 agents 目录之后，聊天是内核的模型循环加上开着的插件：
 
-export const description = 'Inline \\criticize{} comments; never rewrites.';
+- **system 文本** = 调用者给的 `system`（根聊天不给）、`AGENTS.md`、附上
+  的 memories、harness 自己的工具使用说明、然后每个开着的插件的 `prompt`
+  段。除第一项外都是 `buildOpeningSystemPrompt` 和 `stepInstructions`
+  （`packages/harness/src/agent/prompt/PromptBuilder.ts`）今天就在拼的；
+  消失的是排在最前面的 persona prompt、skills 列表，以及"Available
+  agents"这一段（`delegationSection`）。`assistant.yaml` 里各能力的那几句搬到各自插件
+  的段里，插件没开就没有那几句，不必再写"when available"。通用的部分
+  （你在哪、什么时候写脚本、什么时候启动一个程序）是 app 的 `core` 插件
+  的段，40 行以内；这个插件和它的段今天就在（`TEX_INSTRUCTIONS`）。
+- **工具** = 开着的插件的全部工具。这就是 `assistant.yaml` 今天手抄的那
+  37 个名字。
+- **可启动的程序** = 开着的插件的 `programs`，和工具声明并列出现在脚本声
+  明里（`packages/harness/src/tools/codemode/declarations.ts` 加一段）。
 
-export default async ({ files, context, media, instruction, memories }) => {
-  const ctx = await tools.document_context({ files, context, media });
-  const reply = await agent(
-    `${ANNOTATE_FORMAT}\n${rubric}\n${instruction}\n${ctx.prompt}`,
-    {
-      system: 'You annotate. You never rewrite.',
-      tools: [],
-      memories,
-      label: 'Annotate',
-    },
-  );
-  await tools.document_extract({ run: reply.runId });
-  const out = await tools.document_compile();
-  if (!out.ok) {
-    await agent(`Fix the build:\n${out.log}`, {
-      tools: ['read_file', 'edit_file', 'bash'],
-    });
-    return tools.document_compile();
-  }
-  return out;
-};
-```
+所以没有叫 assistant 的文件、常量或名字：它是"插件开着时你得到的东西"。
+审稿、搜索、写代码不是目录项，是模型在脚本里用不同的 `system` 字面量调
+`agent()`；"只读审稿"是一个 `tools` 列表。headless 的一次性聊天是
+`texra run chat --print`。
 
-- `args` 是 launch form 已有的四组文件加指令加 memories（`LaunchSurfaceSchema`，
-  `packages/texra/src/shared/session/surface.ts`），没有按 task 的输入
-  schema。merge 这种双角色任务用 `context` 承担第二角色。一个由事件触发
-  的程序从 `args.event` 拿到事件（"大一统"一节）。
-- 返回值是结果卡片；改好的文件走 `document_extract` 进 run 存储，
-  `accept_run_files` 收回工作区，都是现成的。
-- `description` 供 picker 和 `task()` 的声明，发现时静态提取
-  `export const description = '…'` 这一行，不求值：求值要为每个文件起一个
-  worker（`codeSandbox.ts:182-190` 一个 run 一个 worker），扫描期付不起。
-  模块顶层仍按规则必须是纯的，违反时启动期报错。
-- 没有按 task 的选项。`reflect`、`attachTeXCount` 这类开关是程序里的一行
-  `if`；想要不同行为的用户改这 25 行，或者让 assistant 改。真需要一个开关
-  的地方，是第二个文件。launch form 的每次启动开关和 `texra run` 的五个
-  flag 随之消失，这是明说的损失（"权衡"）。
+`setup` 是 setup 插件自己的一组 chat 参数（它的 system 文本和工具列
+表），由 setup 命令作为一次普通的 `start` 发出；内核里没有它的名字。删掉
+问学科选 team 的一段。
 
-### 三种来源，一个解析器
+script-only 翻为默认：两个模型的评测通过率持平、每次成功的成本低 18% 到
+66%（codemode 文档 "Still open" 第二轮），按 Q10 补 glm 和 fan-out journey
+后翻；Q3 的按模型回退标志留给过不了线的模型。
 
-PRD 把工作区 import 推后，并要求到时"同时交付相对路径、越界和循环处理规
-则，不提前建立无人消费的 resolver"。这里是那套规则，消费者就是 task：
+### theorist 的程序插件
 
-1. `builtIn:<name>`：插件的 `scriptModules`，不变。
-2. 相对路径：只在 task 所在根（`.texra/tasks/`、`~/.texra/tasks/`，或插件
-   随包的 `tasks/`）内解析；`..` 越出根、绝对路径、`node_modules`、npm 包
-   名一律拒绝，错误说明允许的形式。相对 import 一个非 `.js` 文件得到它的
-   文本（模板、system 文本、rubric），和模块一样钉住。
-3. 循环：解析整张图时检测，拒绝并列出环。
-4. 钉住：启动时把图里每个模块的源码存为 `context.blob`，摘要写进步骤的
-   `tools.offered.modules`，这是模块今天就钉在的地方
-   （`offeredTools.ts:61-64`）；不在 `AgentConfig` 上另开一份（一个 fact
-   一个 owner，`check:fact-spread` 也不允许）。恢复用钉住的源码；文件改了
-   下次启动才生效。
-5. 形式：task 文件是 ES 模块，静态 `import` 语句。沙箱今天以
-   `type: 'global'` 加一个异步函数体包装求值脚本（`worker.ts:56-66`，
-   `codeSandbox.ts` 的 `(async () => {`），静态 `import` 在那里是语法错误。
-   program 的入口改为一个合成的 `type: 'module'` 入口，import task 并调用
-   它的默认导出；`setModuleLoader` 从钉住的表里服务 `.js` 和文本模块；确定
-   性前奏、`__csDone` 和行号换算随之改。模型的内联脚本仍是函数体加动态
-   `import()`。两者用同一个解析器。
+把今天的资产照实搬过去，19 个插件里带程序的是三个：
 
-导入不扩大调用者的工具或文件权限（PRD 原话）：一个 task 能调的工具是它
-的 run 被 offered 的那些。
+| 插件                   | 今天的来源                                                 | 程序                                                                                           | 工具                             |
+| ---------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------- |
+| `documents`            | 15 个 task 文件、`critic`、`latexFixer`                    | `edit`、`annotate`、`enhance`、`apply`、`merge`、`transcribe`、`slides`、`poster`、`fix-build` | `document_*`、`accept_run_files` |
+| `lean4`                | 5 个 agent、5 个 skill                                     | `prove`、`blueprint`                                                                           | `lean_*`                         |
+| `goal`（harness 内置） | `builtIn:goal`                                             | `goal`                                                                                         | `plan`                           |
+| 其余 16 个             | arxiv、zotero、wolfram、latex 提取和诊断、github、setup 等 | 无                                                                                             | 原样                             |
 
-### 审批、重放与信任
+其余的 bundled agent 不变成程序：`research`、`numerics`、`prover`、
+`search`、`review`、`presenter`、`simplifier`、`progressCheck`、四个写代
+码的、三个编排的和 `latexDiff`，差别是工作方式的描述，不是流程，随"模型
+会变强"直接变成 `agent()` 的一行参数。`creator` 不保留：写一个程序就是写
+一个文件。9 个 bundled skill 和 multi-agent 的那个 skill 删；TeXRA 特有的
+约定（`\criticize{}` 的格式、输出文档的格式）进对应的程序。
 
-- **信任跟着"谁出的货"走，不跟着"是不是文件"走。** 今天 `isTrustedScript`
-  只认 `kind: 'recipe'`（`RunRecord.ts:36-37`）：可信脚本的 `agent()` 随启
-  动批准、文件列表"按写的通过"（`AgentTool.ts:271-283`，绝对路径也过）、
-  不激活 skill。这些待遇只给 `author: 'plugin'`（随应用出货，我们测过）。
-  `author: 'workspace'` 的 task **不可信**：它的 `agent()` 走 Q5 的一次脚本
-  请求（展示源码，批准即覆盖整段），文件列表和模型脚本一样解析。否则克隆
-  一个仓库，它的 `.texra/tasks/x.js` 就在 picker 里一键读工作区外的文件，
-  连一张提案卡都没有；`package.json` 的 scripts 从不以按钮出现在 picker 里，
-  不能拿来类比。`author: 'model'` 就是今天的后台脚本。
-- 审批不加新东西。`program` 的嵌套调用走和今天完全相同的 per-call 程序
-  （hooks、guard、approval、settle）。
-- 重放：源码和模块钉在步骤上，`ScriptDiverged` 照旧。
-- 发现期不执行任何代码（静态提取 `description`）。
+三条规则：
 
-### built-in 与 custom 的边界
+1. **按能力切，不按学科切。** 物理、数学、CS 的 theorist 都要改稿和查文
+   献；按学科切会让同一个程序有三个家。学科是"这个项目开着哪些插件"加
+   `AGENTS.md` 里的约定，不是一个插件。今天的五个 team 回答的问题（这个项
+   目看见哪些 agent）随目录一起消失：picker 里是 chat 加十来个程序。
+2. **一个 theorist 程序是一个带验证器的做法。** 它值得是程序而不是一句提
+   示词，是因为有东西能检查它：`documents` 的编译、diff 和 texcount，
+   `lean4` 的诊断。往后新增的程序（拿 CAS 逐步复核一段推导、对着 `.bib`
+   和 arXiv 核对每条引用）按同一个标准进来；本提案不建它们。
+3. **一个棘轮。** bundled 程序的数量只降不升。新增一个要同时交一个
+   journey，并写明它为什么不能是用户自己的程序。12 个各自带 journey，棘
+   轮从第一天起算。
 
-一句话：built-in 是产品承诺能跑的东西，custom 是用户积累的东西；两者的
-关系是 import，不是覆盖。
+### 目录插件：安装的和项目自己的
 
-一个东西是 built-in 要同时满足三条：零配置能跑（不依赖 Lean、Zotero、
-Wolfram 这类外部件；需要外部件的归插件，带 `<plugin>:` 命名空间）；我们
-测它（有 journey 或 E2E）；它编码的是 TeXRA 自己的契约（`\criticize{}`
-的格式、输出文档的格式、`document_*` 的调用顺序），不是领域知识。rubric、
-口味、学科约定是知识，归 custom 或 `AGENTS.md`。按这三条，built-in 是两
-份 chat 常量（下节）和 documents 插件的九个 task 模块：八个从 YAML 移植
-的，加 `fix-build`（编译失败后的修复，今天 host 手拼 config 启
-`latexFixer`）。九个各自带 journey，棘轮从第一天起算。
+程序是沙箱里的 JS，不需要原生代码，所以一个只带程序的插件可以是一个目
+录。安装式插件今天已经是目录（Claude Code、Codex 的布局，
+`packages/harness/src/common/plugins/pluginManifest.ts`），能带 skills、
+commands、agents、MCP server 和 hooks，不能带脚本模块。之后它带的是
+`programs/*.js`、MCP server 和 hooks：
 
-custom 扩展 built-in 的方式是 import。bundled 的 task 把内部函数和参数一
-起导出，用户包一层：
+- **加载。** 和它的 MCP server 一样按步加载（`readInstalledPluginLoad`，
+  `packages/harness/src/common/plugins/pluginTrust.ts`），进入这一步的模
+  块表，名字是 `<插件名>:<文件名>`。目录里一个程序的描述由加载器从文件
+  里那一行 `export const description = '…'` 静态读出，不求值；一个非
+  `.js` 文件被 import 时是导出其文本的模块（模板、rubric）。这些是加载
+  器的约定，内核拿到的仍是值。
+- **信任用已有的那一套。** 安装式插件的信任按内容摘要记在用户的全局状态
+  里：启用时列出它带的东西让人审阅，改了任何文件摘要就变，插件整体收
+  回，直到重新审阅。程序进这份清单（名字和描述，源码可看）。于是"有名
+  字的程序"都是受信的：内置的随应用出货，安装的过了这次审阅；不受信的
+  插件什么都不加载，所以不存在"在 picker 里但不可信"的第三类，也就不需
+  要 `author` 字段和按启动的审批。
+- **项目自己的程序是一个按路径引用的插件。** 安装式插件已经支持本地路
+  径；项目的 `.texra/programs/` 就是这样一个插件。信任记录在用户的全局状
+  态里，仓库不能给自己授权（裁决 D6）：克隆一个仓库，它的程序在 Plugins
+  页里是"未受信"，一个都不出现在 picker 里。
+
+这就是用户创造的闭环：模型在聊天里写了一段脚本，跑通了，用户说"存下
+来"，模型把它写进 `.texra/programs/x.js`（一次普通的 `write_file`，走审
+批 diff）；用户在 Plugins 页审阅一次，picker 里就有它，`texra run x` 能
+跑，进 git 能分享，别人拉下来审阅一次就能用。目录从使用中长出来，而不是
+从 vendor 的仓库里长出来。一段还没被审阅的程序并没有丢：模型照样能读它，
+把它当一段内联脚本跑，走脚本本来的审批。
+
+custom 扩展 bundled 的方式是 import，不是覆盖。bundled 的程序就是一个
+模块，用户包一层：
 
 ```js
-// .texra/tasks/logic-review.js
-import { annotate } from 'builtIn:documents';
-import { rubric } from './rubrics/logic.js';
+// .texra/programs/logic-review.js
+import annotate from 'documents:annotate';
+import rubric from './rubrics/logic.md';
 export const description = 'Annotate for argument structure only.';
 export default (args) => annotate({ ...args, rubric });
 ```
 
-上游改了 `annotate`，包装自动跟上；要完全不同的行为就复制那 25 行。今天
-的 `customizeCopy`、`basedOn` 和 newer-built-in 提示存在的唯一理由是
-built-in 太大、改得太勤，用户复制一份 400 行就漂移；两个条件都随本提案
-消失，机制跟着删。
+上游改了 `annotate`，包装自动跟上。今天的 `customizeCopy`、`basedOn` 和
+newer-built-in 提示存在的唯一理由是 built-in 太大、改得太勤，用户复制一份
+400 行就漂移；两个条件都消失，机制跟着删。同名不覆盖：名字带插件前缀，
+不会撞。相对 specifier（`./rubrics/logic.md`）按发起 import 的模块自己的
+名字解析成同一个插件里的另一个名字：specifier 字符串上的一个纯函数，没
+有文件系统，越出插件的名字查不到就被拒绝。它只对目录插件有用，随这一期
+加。
 
-同名不覆盖。built-in 带 `builtIn:` 命名空间，永远不与用户文件撞名；项目
-的 `.texra/tasks/` 和用户的 `~/.texra/tasks/` 之间撞名是扫描期错误，指出
-两个路径。沉默的 shadowing 是 silent degradation。
+### 审批、重放与信任
 
-一个棘轮：built-in 的数量只降不升。新增一个 built-in 要同时交一个 journey
-测试，并写明它为什么不能是 custom 或插件。
-
-### bundled 的两个 chat
-
-没有 agents 目录之后，bundled 的"agent"是 `packages/texra` 里两份
-`(system, tools)` 常量，由 host 的命令启动：
-
-- **assistant**：chat 的默认参数。`system.md` 40 行以内：你在哪、工具怎么
-  用、什么时候写脚本、什么时候 `task()`、怎么把跑通的脚本存成 task。工具
-  是 offered 的全部。script-only。审稿、搜索、写代码不是目录项，是它在脚
-  本里用不同的 `system` 字面量调 `agent()`；"只读审稿"是一个 `tools` 列
-  表，不是一个文件。headless 的一次性聊天是 `texra run chat --print`（今天
-  是 `texra run <chat agent> --print`，`texra chat` 拒绝非 TTY）。
-- **setup**：首次运行的对话，带 `probe_environment`、`update_config`、
-  `install_vscode_extension` 这组工具，由 setup 命令启动。删掉问学科选
-  team 的一段。
-
-`creator` 不保留：写一个 task 就是写一个文件，assistant 在 `system.md` 里
-知道怎么做，`texra tasks types` 给它和用户同一份 `.texra/tasks/texra.d.ts`。
-`prover`、`numerics` 不保留：它们的差别是工作方式的描述，不是工具集。
-`texra chat --agent research` 这种按会话换 persona 随之消失（权衡）。
-
-script-only 翻为默认：两个模型的评测通过率持平、每次成功的成本低 18% 到
-66%（codemode 文档 "Still open"），按 Q10 补 glm 和 fan-out journey 后翻；
-Q3 的按模型回退标志留给过不了线的模型。
+- **信任跟着插件走。** 今天 `isTaskConfig` 只认 `script.kind: 'recipe'`：
+  这样的 run 的工具不受开关影响、`agent()` 随启动批准、文件列表"按写的通
+  过"、不激活 skill。之后这些待遇给"以一个按名的程序打开的 run"，因为有
+  名字就意味着它的插件被加载了，被加载就意味着它是随应用出货的或者过了
+  内容审阅的。
+- **模型写的脚本不变。** 内联的代码是模型的：它的 `agent()` 走 Q5 的一次
+  脚本请求（展示源码，批准即覆盖整段），文件列表照模型脚本解析。
+- **审批不加新东西。** 程序里的嵌套调用走和今天完全相同的 per-call 程序
+  （hooks、guard、approval、结果行）。模型启动一个程序是一次子运行的启动
+  审批（`proposal` 请求），字段从 agent 名改为程序名。
+- **重放。** 源码和模块钉在步骤上，`ScriptDiverged` 照旧。
+- **发现期不执行任何代码。**
 
 ### multi-agent 编排
 
 编排不是被删掉，是回到它本来的形态：一段程序。codemode 文档已经写了
 "`agent()` 是普通工具，所以 fan-out 工作流就是一个脚本"，并以此替掉了
 `delegate_multi_agents` 和五种 `workflow.*` 行。今天的 `orchestrator` 和
-`engineer` 是两段提示词，工具列表完全相同，只是告诉模型"拆任务然后调
-`agent()`"。
+`engineer` 是两段提示词，只是告诉模型"拆任务然后调 `agent()`"。
 
 留下的是机器：子运行带父边、一次脚本审批覆盖它的所有 `agent()`（Q5）、
-会话级子运行并发预算（`CHILD_RUN_CONCURRENCY_BUDGET`）、goal 的花费上限、
-`executions` 的运行间消息、子报告走 follow-up 收件箱、后台程序、Q2 的结果
-复用、SQL 的 `run_tree` 和 `tool_calls` 视图。没有一个依赖 agent 文件或
-team。
+会话级子运行并发预算、goal 的花费上限、`executions` 的运行间消息、子报告
+走 follow-up 收件箱、后台程序、Q2 的结果复用、SQL 的 `run_tree` 和
+`tool_calls` 视图。没有一个依赖 agent 文件或 team。
 
 每种模式是几行：
 
@@ -405,12 +502,12 @@ const [math, cites, code] = await Promise.all([
 ]);
 
 // pipeline
-const annotated = await task('annotate', { files });
-const applied = await task('apply', from(annotated));
+const annotated = await program('documents:annotate', { files });
+const applied = await program('documents:apply', from(annotated));
 
-// supervisor loop：builtIn:goal 已经是它，verdict 和花费上限的语义在里面。
+// supervisor loop：goal 已经是它，verdict 和花费上限的语义在里面。
 // 它用 self()，所以只能从一个聊天的脚本里调（program 的 conversation 边）
-const { goal } = await import('builtIn:goal');
+const { goal } = await import('goal:goal');
 return goal(objective, { maxCostUsd: 5 });
 
 // debate + judge
@@ -422,45 +519,23 @@ return agent(`Judge:\n${a.response}\n---\n${b.response}`, {
   system: JUDGE,
   schema: VERDICT,
 });
-
-// 后台 + 消息
-const worker = await agent('Watch CI and fix red builds.', {
-  background: true,
-  tools,
-});
-await tools.executions({
-  action: 'send',
-  run: worker.runId,
-  message: 'PR #42 opened.',
-});
 ```
 
 team 给过的是一张"编排者可以挑的专家名单"。替代有两层：模型为当下需要的
-专家当场写一段 system 文本（"模型会变强"的直接推论）；需要跨会话复用或带
-专属工具的专家，是一个五行的 task 文件，`task()` 的声明列表就是名单。
-Physicist 团队变成一个目录里的几个 task 文件，放在插件或模板仓库里；
-lean4 插件随包带 `lean-prove`、`lean-blueprint` 两个 task，替代它的五个
-agent 和 `leanOrchestrator` 这个 picker 项。
+专家当场写一段 system 文本；需要跨会话复用或带专属工具的专家，是一个五
+行的程序，脚本声明里的程序列表就是名单。
 
-真正要补的只有发现：编排者今天从"available agents"里挑名字，之后要在脚本
-声明里看到 task 的名字和 `description`，与工具声明并列。这是
-`packages/harness/src/tools/codemode/declarations.ts` 加一段，不是新机制；
-`searchTools` 已经覆盖工具。
-
-不出 `builtIn:orchestration` 库（`fanOut`、`pipeline`、`supervise`）：
-`Promise.all` 就是 fan-out，`task` 加 `from` 就是 pipeline。唯一值得作为库
-出货的模式是 goal，因为它编码了 verdict、暂停原因和花费上限这些 harness
-语义，而它已经在了。
-
-`agent()` 与 `task()`、`self()` 一起作为 `script` 的全局始终提供；
-`multi-agent` 插件的开关保留作为用户的一次同意。
-`docs/guide/multi-agent-workflows.md` 改写成上面五个模式。
+不出编排库（`fanOut`、`pipeline`、`supervise`）：`Promise.all` 就是
+fan-out，`program` 加 `from` 就是 pipeline。唯一值得作为库出货的模式是
+goal，因为它编码了 verdict、暂停原因和花费上限这些 harness 语义，而它已
+经在了。`multi-agent` 插件的开关保留作为用户的一次同意。
+`docs/guide/multi-agent-workflows.md` 改写成上面四个模式。
 
 ### document task 的归宿
 
-15 个带 `task:` 块的文件（含 `write/` 两个和 `critic`）是同一个函数的 15
-组参数，那个函数今天就是 25 行 JS 的 recipe。`builtIn:documents` 导出一个
-原语，现在的 recipe 泛化后的样子：
+15 个带 `task:` 块的文件是同一个函数的 15 组参数，那个函数今天就是一段
+JS 的 recipe。`documents:revise` 导出一个原语，现在的 recipe 泛化后的样
+子：
 
 ```js
 revise({
@@ -481,544 +556,428 @@ revise({
 `document_compile`、`document_diff`，轮间 `document_review`，最后
 `document_propose`。`critic` 不再是 agent，是 `review` 的默认常量。
 
-这不是 25 行 recipe 的改写，是 documents 七个工具的契约变更：
-`document_context` 今天每次调用都经 `AgentCatalog` 读 agent 的 `task:` 块
-（`documentState.ts:155-163`），轮数取 `task.requests.length`
-（`documentTools.ts:221`），prefix 和 requests 由它渲染 Nunjucks。之后
-prefix、requests、轮数由 `revise` 作为工具输入传给 `document_context`，
-Nunjucks 删；"Pass N of M"的 M 今天来自目录选项的 `rounds`
-（`progressBadgeFormatter.ts:12-21`），之后来自 `document_context` 第一次
-调用写进 documents fact 的 `revisions`。
+这不是 recipe 的改写，是 documents 工具的契约变更：`document_context` 今
+天每次调用都经 `AgentCatalog` 读 agent 的 `task:` 块（`documentState.ts`
+的 `documentTaskOf`），轮数取 `task.requests.length`（`documentTools.ts`），
+prefix 和 requests 由它渲染 Nunjucks。之后 prefix、requests、轮数由
+`revise` 作为工具输入传给 `document_context`，Nunjucks 删；"Pass N of M"的
+M 今天来自目录选项的 `rounds`，之后来自 `document_context` 第一次调用写进
+documents fact 的 `revisions`。
 
-按参数去重后 15 个文件是 8 个，每个十几行：
+按参数去重后 15 个文件是 8 个程序，每个十几行：
 
-| 今天                                  | 之后            | 差别只在                           |
-| ------------------------------------- | --------------- | ---------------------------------- |
-| correct, polish, generic              | `edit.js`       | requests 文字，由 instruction 区分 |
-| criticize, firstread, logic, notation | `annotate.js`   | 无；它们独有的句子不保留           |
-| enhance, devise                       | `enhance.js`    | 两段 requests                      |
-| apply                                 | `apply.js`      |                                    |
-| merge                                 | `merge.js`      |                                    |
-| ocr, transcribe_audio                 | `transcribe.js` | 由媒体文件后缀决定                 |
-| paper2slide                           | `slides.js`     | 模板 import                        |
-| paper2poster                          | `poster.js`     | 三个模板 import                    |
-| critic                                | `review` 参数   |                                    |
+| 今天                                  | 之后          | 差别只在                           |
+| ------------------------------------- | ------------- | ---------------------------------- |
+| correct, polish, generic              | `edit`        | requests 文字，由 instruction 区分 |
+| criticize, firstread, logic, notation | `annotate`    | 无；它们独有的句子不保留           |
+| enhance, devise                       | `enhance`     | 两段 requests                      |
+| apply                                 | `apply`       |                                    |
+| merge                                 | `merge`       |                                    |
+| ocr, transcribe_audio                 | `transcribe`  | 由媒体文件后缀决定                 |
+| paper2slide                           | `slides`      | 模板 import                        |
+| paper2poster                          | `poster`      | 三个模板 import                    |
+| critic                                | `review` 参数 |                                    |
+
+第九个是 `fix-build`：编译失败后的修复，今天 host 手拼 config 启
+`latexFixer`（`compileFixer.ts` 的 `planCompileFixer`）。
 
 代码赢过 YAML 的地方是 `verify`：YAML 只能要求模型"别改别的"，代码可以
 检查。`annotate` 断言 diff 只新增 `\criticize{` 行；`merge` 断言输出含原文
 的每个 `\section`；`edit` 断言 texcount 没有掉一半；`slides` 和 `poster`
 断言带模板能编译。每个几行，失败就是下一轮的输入。
 
-模板不再用 `files:` 绑定变量，而是
-`import template from './template_poster.tex'`（解析器规则 2）。
-
-模型自己用同一个原语。用户说"把这篇校对一下"，assistant 不需要目录里有
-`edit`：`const { revise } = await import('builtIn:documents')` 然后一行
-调用。八个 bundled 文件只为两件事存在：picker 里的一次点击，和
-`texra run edit paper.tex`。模型写的临时版本跑通了，`write_file` 进
-`.texra/tasks/` 就是第九个。
+模型自己用同一个原语。用户说"把这篇校对一下"，聊天里的模型不需要 picker
+里有 `edit`：一行 `program('documents:edit', { files })`。九个 bundled 程
+序只为两件事存在：picker 里的一次点击，和 `texra run documents:edit
+paper.tex`。
 
 这和裁决"Adaptive document workflows are not planned"（2026-09-06）的关
-系：那条拒绝的是 document task 引擎里由模型选择的工作流（节点、游标）。
-这里引擎不变，模型在一段脚本里组合一个固定的原语，每段脚本过 Q5 的一次
-审批并按 settle 顺序重放。它是"策略是代码"，不是"引擎里有自适应"。本提案
-把这条列为要负责人确认的第六处（下文）。
+系：那条拒绝的是由模型选择、用候选文件的 document 工作流取代固定的工作
+流。这里固定的工作流还在（`revise` 的步骤不变），模型在一段脚本里组合一
+个固定的原语，每段脚本过 Q5 的一次审批并按记录重放。它是"策略是代码"，
+不是"引擎里有自适应"。本提案把这条列为要负责人确认的一处（下文）。
 
 ### 启动面
 
-picker 列 chat 和 task，仅此。`launchTarget: 'agent' | 'team'`、
-`selectedTeamId`、`agent` 字段删。`texra run <task | chat>` 一个命令，
-`--print` 照旧，`texra chat` 照旧，`texra team`、`texra agents`、
-`texra skills` 删。`document_task` 工具和 `builtIn:documents` 的 `revise()`
-包装删，`from()` 留给串联。提案卡（`AgentProposalSchema`）今天显示 agent
-名，之后显示 `label` 和 system 文本的首句。
+picker 列 chat 和开着的插件的程序，仅此。`launchTarget: 'agent' | 'team'`、
+`selectedTeamId`、`agent` 字段和五个选项字段删。`texra run <程序 | chat>`
+一个命令，`--print` 照旧，`texra chat` 照旧，`texra team`、`texra agents`、
+`texra skills` 删。`document_task` 工具和 `builtIn:documents` 的
+`revise(agentName)` 包装删，`from()` 留给串联。提案卡今天显示 agent 名，
+之后显示程序名，或 `label` 和 system 文本的首句。
 
-`codemode/declarations.ts` 已经把每个工具渲染成 TS 声明给模型；同一份声明
-由 `texra tasks types` 写成 `.texra/tasks/texra.d.ts`，编辑器里写 task 有
-补全和类型检查。一个命令，不新增声明来源。
+Plugins 页（和 CLI 的 `/plugins`）多列一项：每个插件的程序，名字、描述、
+源码。不新建 Tasks 页。
 
-### 插件
+## run 怎么开始、怎么结束、结果去哪
 
-`Plugin` 接口（`packages/harness/src/tools/plugins.ts`）去掉 `agentBlock`
-（PRD 也说它"不应被写成 agent 模板发布接口"），`scriptModules` 不变，新增
-插件随包的 `tasks/` 目录作为程序模块的第二来源；插件的 `agents/` 目录和
-skills 一起删。documents 插件 = 它的工具加 `builtIn:documents`（`revise`、
-常量和 `from()`）加 bundled 的九个 task 文件。lean4 插件 = 它的工具加两个
-task 模块；5 个 agent 和 5 个 skill 一起删。
-
-随之失去的互操作：安装式 Claude Code / Codex 插件 manifest 里的 `agents`
-（`AgentSource.PLUGIN`，`<plugin>:<name>`）不再加载；它们的 commands、MCP
-和 hooks 不受影响。
-
-### 用户创造的闭环
-
-这是选这条路最强的理由。模型在聊天里写了一段脚本，跑通了，用户说"存下
-来"，assistant 把它写进 `.texra/tasks/x.js`（一次普通的 `write_file`，走
-审批 diff）。下次 picker 里就有它，`texra run x` 能跑，进 git 能分享。目录
-从使用中长出来，而不是从 vendor 的仓库里长出来；一年后 bundled 目录还是
-那几个文件。
-
-重放的确定性还给了一个后手：一次记录下来的 run 就是 task 的一份 fixture，
-`texra run` 对着记录的调用重放一遍，就是不花模型钱的回归测试。本提案不
-建它，但这条路只有程序模块才走得通。
-
-## 接缝：run 怎么开始、怎么结束、结果去哪
-
-在动单位之前把今天每一条"接起来"的路径列出来，看哪些是统一的、哪些不是。
 结论先说：**结束的一侧已经是一个机制，开始的一侧有五种叫法，结果的读法
 有一处插件特例。** 本提案改的只是后两者。
 
 ### 开始：谁启动一个 run，用什么命名它
 
-| 入口                                        | 命名方式                                                                                                                                                                                                                | 代码                                                                                                                               |
-| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| host 的 launch form                         | `agent` 名、`launchTarget: agent \| team`、`selectedTeamId`、选项表                                                                                                                                                     | `LaunchSurfaceSchema` → `session.start({ config })`                                                                                |
-| `texra run <agent>`、`texra team run`       | agent 名、team id                                                                                                                                                                                                       | `packages/cli/src/commands/workflow.ts`、`team.ts`                                                                                 |
-| SDK                                         | `agent: name \| InlinePersona` 或整份 `config`                                                                                                                                                                          | `StartRequestSchema`（`runtimeRequest.ts`）                                                                                        |
-| host 自己按名字启动                         | `'latexFixer'`（编译失败后的修复，`script: null` 表示"聊天不是 recipe"）、`'merge'`（合并动作）、`'setup'`（onboarding）、`'polish'`（文本润色的 helper 调用标签）、schema 默认 `'correct'`、form 默认 `'orchestrator'` | `compileFixer.ts:130`、`hostRunActions.ts:437`、`setupLaunch.ts:53`、`textEnhancement.ts:50`、`agentConfig.ts:11`、`surface.ts:78` |
-| 模型：`agent()`                             | `agentName` 或内联 `persona`；`requireAgent` 在"可启动的 agent"里按 scope 和 shadowing 解析                                                                                                                             | `AgentTool.ts`、`proposalFlow.ts:50`                                                                                               |
-| 模型：`document_task()`                     | agent 名，子 run 开在 recipe 上，`script.kind: 'recipe'` 加 `block` 和 `options`                                                                                                                                        | `DocumentTaskTool.ts`                                                                                                              |
-| 模型：`self()`                              | 同一个 agent；fork 用 `forkSeed` 的 cut，或 fresh；只有后台脚本有可 fork 的对话                                                                                                                                         | `SelfTool.ts:62-72`、`forkRun.ts`                                                                                                  |
-| 模型：`script` 后台、plan 的 "Run as Goal"  | 父 run 的 agent 和工具，`script.kind: 'background'`                                                                                                                                                                     | `backgroundScript.ts`、`PlanTool.ts`、`goalScript.ts`                                                                              |
-| 进程子运行（后台 bash、claude_code、codex） | 工具自己供给那一轮                                                                                                                                                                                                      | `processRun.ts`                                                                                                                    |
-| 恢复、fork、聊天续轮                        | 同一份 rows；`run.fork` 带 provenance；`continues` 继承上一轮的人工授权；`interactive` 让 run 等后续消息                                                                                                                | `resumeRun.ts`、`forkRun.ts`、`rootLaunch.ts:111`、`FollowUps.ts`                                                                  |
+| 入口                                       | 今天的命名方式                                                                          | 代码                                                                              |
+| ------------------------------------------ | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| host 的 launch form                        | `agent` 名、`launchTarget`、`selectedTeamId`、选项表                                    | `LaunchSurfaceSchema` → `session.start({ config })`                               |
+| `texra run <agent>`、`texra team run`      | agent 名、team id                                                                       | `packages/cli/src/commands/run.ts`、`team.ts`                                     |
+| SDK                                        | agent 名或 inline persona，或整份 `config`                                              | `StartRequestSchema`                                                              |
+| host 自己按名字启动                        | `'latexFixer'`、`'merge'`、`'setup'`；表单默认 `'orchestrator'`、CLI 默认 `'assistant'` | `planCompileFixer`、`handleFixCompilation`、`HostRunActions.merge`、`launchSetup` |
+| 模型：`agent()`                            | `agentName` 或内联 `persona`                                                            | `AgentTool.ts`、`proposalFlow.ts` 的 `requireAgent`                               |
+| 模型：`document_task()`                    | agent 名，子 run 开在 recipe 上                                                         | `DocumentTaskTool.ts`                                                             |
+| 模型：`self()`                             | 同一个 agent；fork 或 fresh；只有后台脚本有可 fork 的对话                               | `SelfTool.ts`                                                                     |
+| 模型：`script` 后台、plan 的 "Run as Goal" | 父 run 的 agent 和工具，`script.kind: 'background'`                                     | `backgroundScript.ts`、`PlanTool.ts`、`goalScript.ts`                             |
+| 进程子运行（后台 bash、agent CLI）         | 工具自己供给那一轮                                                                      | `processRun.ts`                                                                   |
+| 恢复、fork、聊天续轮                       | 同一份 rows                                                                             | `resumeRun.ts`、`forkRun.ts`、`rootLaunch.ts`、`FollowUps.ts`                     |
 
 一个 run 要跑什么，今天有五种表示：agent 名、team、内联 persona、recipe
-块、script kind。它们在同一张 `AgentConfig` 上共存，靠 `agentSource`、
-`persona`、`script`、`delegationAgentScope`、`cli.teamId` 五个字段互相排
-斥。本提案收成两种（`chat`、`program`），上表每一行的"命名方式"变成：
-host 和 CLI 启动 `chat`（默认）或一个 task；SDK 给 `{ system, tools }` 或
-`{ program, args }`；模型用 `agent()`、`task()`、`self()`；host 自己启动的
-六处变成对 bundled 常量或 bundled task 的调用（`fix-build` 和 `merge` 是
-task，setup 是一份 chat 常量，`polish` 标签随目录消失，两个默认值删）。
-`requireAgent` 的 scope 和 shadowing 解析删。
+块、script kind。它们在同一张 `AgentConfig` 上共存。本提案收成两种
+（`chat`、`program`）：host 和 CLI 启动 chat 或一个程序；SDK 给
+`{ system, tools }` 或 `{ program, args }`；模型用 `agent()`、
+`program()`、`self()`；host 自己按名字启动的几处变成对插件程序的调用
+（`documents:fix-build`、`documents:merge`）或 setup 插件的 chat 参数，
+两个默认值删。`requireAgent` 的 scope 和 shadowing 解析删。
 
 ### 结束：一个终点，一种投递
 
 这一侧已经统一，本提案不动它：
 
 - **一个终点。** 每个 run 的 fiber 不管怎么退出都到 `endRun`
-  （`AgentRunLifecycle.ts`），一次事务写 `run.end`
-  `{ outcome, error, output: { response, files, structured } }`，同一事
-  务把子 run 的报告（`run.report`）排进父 run 的收件箱（`runLifecycle.ts`
-  "endRunRows"），除非父调用在等它。
-- **等与不等。** 脚本里的 `agent()` 默认等（`childLaunch.ts`，直接读子 run
-  的 end，解析成 `{ response, files, structured?, runId, outcome, cost, spent }`）；
+  （`AgentRunLifecycle.ts`），一次事务写 `run.end`，同一事务把子 run 的
+  报告排进父 run 的收件箱（`agent/storage/runLifecycle.ts`），除非父调用
+  在等它。
+- **等与不等。** 脚本里的 `agent()` 默认等（`childLaunch.ts`）；
   `background: true`、直接调用、后台脚本、进程子运行走收件箱，父 run 下
-  一轮把整批排队项合成一条 user 消息（`FollowUps.ts`）；one-shot 父 run
-  在带内等。投递的信封只有一个构造器（`deliveryEnvelope.ts`），子 agent、
-  后台 bash、后台脚本、agent CLI 共用。
-- **停止与遗留。** `run.stop` 行加 fiber 中断；被停的子 agent 不投递，被停
-  的脚本投递一条"要恢复的 run"的通知；进程死掉留下的子 run 在父 run 恢复
-  时按自己的 id 恢复，不能恢复的报一次"结果未知"（`leftoverChildren.ts`）。
+  一轮把整批排队项合成一条 user 消息（`FollowUps.ts`）。投递的信封只有一
+  个构造器（`deliveryEnvelope.ts`）。
+- **停止与遗留。** `run.stop` 行加 fiber 中断；进程死掉留下的子 run 在父
+  run 恢复时按自己的 id 恢复（`leftoverChildren.ts`）。
 - **goal。** 结果是 `completed` 或 `paused`（`needs_user`、`round_failed`、
-  `no_verdict`、`spend_cap`）；"暂停是一个结果，不是一个在等的 run"，继续
-  是新的 goal 或新的一轮。
+  `no_verdict`、`spend_cap`）；"暂停是一个结果，不是一个在等的 run"。
 
 ### 结果怎么被读：唯一的插件特例
 
-`output.structured` 有三种来源：`submit_output` 终端工具（带
-`outputSchema` 的 run）、recipe 脚本的返回值、后台脚本的返回值。前者和后
-者的读法是通用的：后台脚本投递"它的调用、调用写的文件、子 run 花了多少"
-（`scriptRun.ts` 的 `scriptEndDelivery`，文件由 `scriptRunCalls` 从调用结
-果折出来）。recipe 是特例：`recipeResult.ts` 按 `script.block` 找到插件的
-`AgentBlock.result`，用它的 `schema` 校验、`delivery()` 生成投递正文、
-`changes()` 列出写了哪些文件（`DOCUMENT_TASK_RESULT`，
-`documentResult.ts`）。这是 harness 里唯一一处"读一个结果要问插件"，它的
-输出被四处消费：`recipeResult.ts` 本身、`AgentTool.childResult` 把
-`changes` 放进脚本值（`AgentTool.ts:239-251`）、`scriptRun.ts:110-130` 的
-后台脚本文件摘要、`childDelivery.ts:77-88` 的父投递。
+recipe 是特例：`recipeResult.ts` 按 `script.block` 找到插件的
+`AgentBlock.result`，用它的 schema 校验、`delivery()` 生成投递正文、
+`changes()` 列出写了哪些文件。这是 harness 里唯一一处"读一个结果要问插
+件"，它有三个调用者：`AgentTool.ts`（把 `changes` 放进脚本值）、
+`childDelivery.ts`（父投递）、`agent/storage/childRunOutput.ts`。
 
-本提案删掉它：一个 program 的结束就是一个脚本的结束。投递是通用的调用摘
-要加文件列表加返回值（JSON，有界）；`document_propose` 的结果行含"提议的
-文件、diff 路径和编译失败"，通用摘要把这些带上，父模型读到的内容不少于
-今天的 `documentsDelivery`。四处消费者一起改；documents 的 fact（UI 读
-diff 和 accept 用的）照旧由 `document_propose` 写，accept files 和
-latexdiff 读的是 `documentsOf(run.facts)`，不受影响。
+本提案删掉它：一个程序的结束就是一个脚本的结束。投递是通用的调用摘要加
+文件列表加返回值（JSON，有界）；`document_propose` 的结果行含"提议的文
+件、diff 路径和编译失败"，通用摘要把这些带上，父模型读到的内容不少于今
+天。三个调用者一起改；documents 的 fact（UI 读 diff 和 accept 用的）照旧
+由 `document_propose` 写，不受影响。
 
-### 两个要注意的细节
-
-- **文件字段两类 run 都要。** `document_context` 从 `run.config` 读启动
-  时的 inputFiles、contextFiles、mediaFiles、outputFiles，launch form 和卡
-  片也显示它们。`NullableFileFieldsSchema` 留在联合的两个分支上；
-  `program.args` 就是这四组加 `instruction` 和 `memories`。
-- **`self()` 只在有对话边的程序里有意义**（"run 的两类"）。Q2 复用的 key
-  对 program 子 run 是源码摘要加 args 的文件指纹加模型，替代今天的
-  `agent.name`、`persona`、`task.options`。
-
-## 大一统：触发就是带着事件启动一个程序
+## 触发就是带着事件启动一个程序
 
 goal mode 之所以看起来 codemode native，是因为它把三件事分开了：触发是
-一次按钮（批准 plan），启动是一段两行脚本（`goalScript()`），策略是一个可
-替换的模块（`goal.strategy`）。把这三件事推到每一个入口上，就是统一。
+一次按钮（批准 plan），启动是一段两行脚本，策略是一个可替换的模块
+（`goal.strategy`）。把这三件事推到每一个入口上，就是统一。
 
 两条公理：凡是在跑的东西都是程序（叶子是 chat）；凡是让程序跑起来的事都
-是一次 `start`，事件在 `args` 里。于是所有入口归成一种：
+是一次 `start`，事件在 `args` 里。
 
-| 触发                          | 今天怎么接                                       | 统一后                                                                       |
-| ----------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------- |
-| 批准 plan，"Run as Goal"      | `goalScript()` 生成两行脚本，`PlanTool` 特殊启动 | `start({ program: goal, args, conversation })`，不特殊                       |
-| launch form 点 Run            | 按 agent 还是 task 拼不同的 `AgentConfig`        | `start({ program: edit, args })`                                             |
-| `texra run`                   | 同上                                             | 同上                                                                         |
-| 编译失败后修复                | `compileFixer.ts` 手拼 config 启 `latexFixer`    | `start({ program: fix-build, args: { run } })`，或 task 自己在 `verify` 里修 |
-| 模型要 fan-out                | 脚本里 `Promise.all(agent…)`                     | 不变，这本来就是统一后的样子                                                 |
-| PR 开了、CI 红了              | 订阅通知投进某个 run 的收件箱                    | host 收到通知，`start({ program: ci-fix, args: { event } })`                 |
-| 用户在聊天里回话              | chat 叶子的下一轮                                | 不变                                                                         |
-| 一个程序要等另一个            | `executions wait`                                | 不变                                                                         |
-| host 的其他事件（保存、定时） | 无                                               | 同"PR 开了"：一次 `start`，事件在 args                                       |
+| 触发                          | 今天怎么接                                       | 统一后                                                                        |
+| ----------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------- |
+| 批准 plan，"Run as Goal"      | `goalScript()` 生成两行脚本，`PlanTool` 特殊启动 | `start({ program: 'goal:goal', args, conversation })`，不特殊                 |
+| launch form 点 Run            | 按 agent 还是 task 拼不同的 `AgentConfig`        | `start({ program: 'documents:edit', args })`                                  |
+| `texra run`                   | 同上                                             | 同上                                                                          |
+| 编译失败后修复                | `planCompileFixer` 手拼 config 启 `latexFixer`   | `start({ program: 'documents:fix-build', args })`，或程序在 `verify` 里自己修 |
+| 模型要 fan-out                | 脚本里 `Promise.all(agent…)`                     | 不变                                                                          |
+| PR 开了、CI 红了              | 订阅通知投进某个 run 的收件箱                    | host 收到通知，`start({ program, args: { event } })`                          |
+| 用户在聊天里回话              | chat 叶子的下一轮                                | 不变                                                                          |
+| host 的其他事件（保存、定时） | 无                                               | 一次 `start`，事件在 args                                                     |
 
 一个要对事件做反应的程序，是**每个事件启动一次**的短程序，不是一个常驻
-的循环。订阅住在 host（`github_subscription` 今天就把通知路由给一个 run，
-之后路由成一次 `start`），程序本身无状态，状态在文件和 run history 里。
+的循环。订阅住在 host，程序本身无状态，状态在文件和 run history 里。
 
-### 为什么不是 `receive()`
+不做 `receive()`（让程序等自己收件箱的下一条消息）：收件箱的消费是整批
+的，一个 run 一个读者，把队列里所有项合成一条 user 消息一次提交
+（`FollowUps.ts`），逐条消费是一个新的写点；`needsWake`
+（`agent/followUp/FollowUpReader.ts`）对通知类消息不唤醒，一个在等的程序
+进程死了，webhook 不会叫醒它；而且它反转 codemode 的关注点分离
+（Messaging 不认识 scripts）。"每个事件启动一次"用已有的写点和唤醒规则
+就能做。
 
-本提案曾提议一个 `receive()` 全局让程序等自己收件箱的下一条消息。审稿对
-照代码后否决，理由三条，都成立：
+边界：chat 叶子是唯一不是程序的东西；沙箱没有定时器不变，定时触发是
+host 到点 `start`；脚本 24 小时的墙钟上限不变。
 
-1. 收件箱的消费是整批的：一个 run 一个读者，`consume` 把队列里所有项合成
-   **一条** user `message` 行加 `run.position turn.ready` 一次提交
-   （`FollowUps.ts:14-24`）。逐条消费、消费行和 `script.call` 同批提交，是
-   一个新的写点（"Write points are the contract"），还要在一个没有模型轮
-   次的 run 里写 user 消息行。它不是"一次普通调用"。
-2. `needsWake` 对通知类消息返回 false，对已结束 run 的 run 来信也返回
-   false（`RunInput.ts:66-81`）：一个在等的程序进程死了，webhook 不会唤醒
-   它。CI 看守只在 host 一直活着时成立，VS Code 和桌面 host 做不到。
-3. 它反转 codemode 的关注点分离表（"Messaging must not know about scripts"、
-   "Code mode adds no channel, subscriber or writer"）。
+## 其他 surface
 
-"每个事件启动一次"用已有的写点、唤醒规则和 `needsWake` 就能做，不加通道。
-PRD 的"暂停是一个结果，不是一个在等的 run"也正是这个形态。
+| 面                    | 今天涉及 agent、team、skill、task 的部分                                                                      | 之后                                                                              |
+| --------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| 设置页                | Agents、Teams、Skills 三个标签页，选择面板，newer-built-in 提示                                               | 都删；Plugins 页列每个插件的程序                                                  |
+| 进度视图的 launch     | `launchTarget`、`selectedTeamId`、`agent`、五个选项字段                                                       | chat 或程序名，加四组文件和指令                                                   |
+| CLI                   | `agents`、`team`、`skills`、`chat --agent`、`run <agent>` 加选项 flag                                         | 前三个命令和 `--agent` 删；`run <程序 \| chat>`                                   |
+| 设置行                | `workspaceAgents`、`hiddenCustomAgents`、`skills.*`、`codeMode.scriptOnly`、`goal.strategy`                   | 前三组删；`scriptOnly` 随翻默认删；`goal.strategy` 留，值是程序名                 |
+| SDK 导出              | `./host` 上 `AgentCatalog`、`WorkspaceAgents`、`AgentDirectories`、`Skills` 四族，`./plugins` 上 `AgentBlock` | 全删。`AgentConfig`、`AgentEvent`、`AgentPlatform` 是 run 的词汇，名字不动        |
+| `session.request`     | 无                                                                                                            | 不变；`StartRequest` 改为 `{ system, tools, instruction }` 或 `{ program, args }` |
+| 请求                  | `proposal`（子运行的启动审批）显示 agent 名和 persona                                                         | 留；显示程序名，或 label 和 system 文本                                           |
+| `docs/guide`（32 页） | `built-in-agents`、`custom-agents`、`multi-agent-workflows`、`agent-architecture`、`texra-cli`                | 分别改成程序参考、写一个程序、四个编排模式、两类 run、CLI                         |
+| harness 的打包示例    | `packages/harness/example/` 的 `07-programmed-path.ts`、`10-external-plugin.ts`、`acme-notes` 用 agent 文件   | 改为插件带程序；R9（随包提供 agent 文件）改为随包提供程序                         |
+| 测试                  | 引用 bundled 名字的套件和 golden store（`golden-1.0.sql` 里有一次 `polish` 的 task run）                      | 套件改写或删除，golden store 随 `run.config` 版本一起重生成                       |
 
-### 边界
+## 删除清单
 
-- **chat 叶子是唯一不是程序的东西。** 把它也包成
-  `return agent(msg, { interactive })` 可以做到一切皆程序，但每个对话多一
-  个 run 层，卡片多一层，没有收益。goal 已经付了这层代价（后台脚本加
-  `self()` 子 run），它值；聊天不值。
-- **沙箱的"没有定时器"不变。** 定时触发是 host 到点 `start`，程序不等。
-- **脚本 24 小时的墙钟上限不变。** 没有常驻程序，上限不碍事。
+| 删什么                                                                                                        | 行数（量于 `221c02a`） | 留什么                            |
+| ------------------------------------------------------------------------------------------------------------- | ---------------------- | --------------------------------- |
+| 35 个 bundled agent 文件、lean4 和 multi-agent 的随包目录、bundled skills                                     | 3524 + 1292 + 593      | 12 个程序文件和各插件的 prompt 段 |
+| harness：agent 索引、catalog follower、workspace 选择、skills、`AgentBlock` 和 `recipeResult`、persona schema | 约 4500                | 无                                |
+| team：预设、启动、CLI、标签页、`apply_team`                                                                   | 1650                   | 无                                |
+| agent 设置页（前端和后端）                                                                                    | 1580                   | Plugins 页多一列程序              |
+| documents：`task:` 块、Nunjucks、`files:`/`outputs:`、选项表、`rounds`、`document_task`、recipe 源码生成      | 约 1000 of 2271        | 文档工具本身和 `revise`           |
+| CLI：`texra agents`、`texra skills`（`team` 已计入上面）                                                      | 370                    | `texra run`                       |
+| 新增：`modules`/`programs` 和按名启动、脚本声明里的程序、`revise`、12 个程序文件、目录插件的程序加载          | 约 +900                |                                   |
 
-## 其他 surface：目录概念今天伸到哪里
-
-逐个面清点"agent、team、skill、document task、编排者"这些概念的触点
-（只读清点于 `c4c843a`；计数为该面的总条目数与其中涉及这些概念的条目数）。
-
-| 面                       | 总数                                                                                                 | 涉及概念                                                                                                                                                                                                                                                 | 本提案之后                                                                                                                                                |
-| ------------------------ | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 设置页                   | 6 页，12 个 tab                                                                                      | `agents` 页的四个 section（library、teams、skills、advanced）；`AgentsTab`、`TeamsTab`、`SkillsTab`、`AgentSelectionPanel`、newer-built-in 提示（`settingsTarget.ts:37`）                                                                                | 一个 `tasks` 页：列文件、显示源码、打开编辑器；advanced 里留"Agents at once"（子运行并发预算）                                                            |
-| 设置页 IPC               | 约 63 种                                                                                             | 19 种：15 入站（openAgentYaml、setAgentEnabled、createAgent、customizeAgent、applyAgentModePreset、setSkillEnabled…）、4 出站（`packages/texra/src/shared/ipc.ts:47-106`）                                                                               | 约 3 种：列 task、打开 task 文件、打开 tasks 目录                                                                                                         |
-| 进度视图的 host 请求     | 36 种                                                                                                | `launch`（`launchTarget`、`selectedTeamId`、`agent`、选项表字段）、`agentConfigBanner`、`onboarding.runSetup`、`runCompileFixer`、`polish`（`hostRequest.ts:36-238`）                                                                                    | `launch` 只带 chat 或 task 名加四组文件和指令；`agentConfigBanner` 删；`runCompileFixer` 变 `start(fix-build)`；setup 和 polish 照旧                      |
-| VS Code 命令             | 38 个 id                                                                                             | `texra.execute`（"Execute Agent"）、`texra.showAgents`、`texra.showTeamSettings`、`texra.runSetupAssistant`、`texra.createSampleProject`                                                                                                                 | `showTeamSettings` 删，`showAgents` 变 `showTasks`，其余保留                                                                                              |
-| 设置目录行               | 约 70 行                                                                                             | `workspaceAgents`、`hiddenCustomAgents`（repo state，无 UI 行）、`skills.enabled/disabled/disabledSources`、`chat` 的 agent 部分、`codeMode.scriptOnly`、`goal.strategy`、`childRunConcurrencyBudget`                                                    | 前五项删；`scriptOnly` 随 K5-c 删；`goal.strategy` 留（它是程序模块的先例）；并发预算留                                                                   |
-| CLI                      | 23 个命令                                                                                            | `agents`（list/show/customize/reset/keep）、`team`（list/show/run）、`skills`、`config agents`、`chat --agent`、`run <agent>` 加选项表 flag 和 `--output`/`--output-dir`、`setup`                                                                        | `agents`、`team`、`skills`、`config agents`、`--agent` 和五个选项 flag 删；`run <task \| chat>` 保留 `--print`、`--output`、`--output-dir`；`setup` 留    |
-| SDK 导出                 | 753 个名（六个入口的 API 报告：root 59、host 172、node 51、plugins 127、schemas 263、transcript 81） | 约 40 个概念命名的导出：`AgentCatalog` 一族 6、`WorkspaceAgents` 一族 4、`AgentDirectories` 一族 9、`Skills` 一族 8、`AgentBlock` 2、`Persona`/`InlinePersona`/`AgentSource`/`isTaskConfig`/`AgentScanIssue` 等（`host.ts`、`schemas.ts`、`plugins.ts`） | 全删。`AgentConfig`、`AgentProposal`、`AgentEvent`、`AgentPlatform`、`AgentTrace` 是 run 的词汇，名字不动。这正是 general-package 设计要缩的 `host.ts` 面 |
-| `session.request` 的请求 | 13 种                                                                                                | 无                                                                                                                                                                                                                                                       | 不变；`StartRequest` 改为 `{ system, tools, instruction }` 或 `{ program, args }`                                                                         |
-| 模型或 host 打开的请求   | 7 种                                                                                                 | `proposal`（`AgentProposalPermission`，子运行的启动审批）                                                                                                                                                                                                | 留；字段从 agentName 和 persona 改为 label 和 system 文本，审批界面显示它们                                                                               |
-| `docs/guide`             | 32 页                                                                                                | 16 页超过 20 次提到 agent；重写量最大的是 `built-in-agents`、`custom-agents`、`multi-agent-workflows`、`agent-architecture`、`texra-cli`；`open-source` 和 `configuration` 讲 skills                                                                     | 前四页分别改成 task 参考、写 task、五个编排模式、两类 run；skills 段删                                                                                    |
-| 引用 bundled 名字的代码  | 61 个源文件                                                                                          | `orchestrator` 32 个文件、`workspaceAgents` 18、`agentTeams` 12、`criticize` 10                                                                                                                                                                          | 随删除消失                                                                                                                                                |
-| 引用 bundled 名字的测试  | 11 个套件加 golden store                                                                             | 见"现状的度量"末行                                                                                                                                                                                                                                       | 11 个套件改写或删除，golden store 随 `run.config` 版本一起重生成                                                                                          |
-| harness 的打包示例       | `packages/harness/example/` 的 `07-programmed-path.ts`、`10-external-plugin.ts`、`acme-notes`        | 磁盘上的 agent 文件（PRD R6、R9，线 11 已端到端跑过）                                                                                                                                                                                                    | 改为 task 文件和 `tasksDir`；R9（插件随包提供 agent 文件）改为随包提供 task 文件                                                                          |
-
-SDK 的 `host.ts` 面缩一小半：general-package 设计想把根导出从 246 缩到
-59，并点名 team 词汇和 `AgentDirectoriesPort.teams` 是留在 harness 里的应
-用词汇；本提案删的约 40 个导出正是那一块，不用另开一条线。
-
-## 删除账
-
-| 删什么                                                                                                                        | 行数（量于 `c4c843a`） | 留什么                                        |
-| ----------------------------------------------------------------------------------------------------------------------------- | ---------------------- | --------------------------------------------- |
-| 35 个 bundled agent 文件、lean4 插件目录                                                                                      | 3749 + 993             | 两份 `(system, tools)` 常量，约 200 行        |
-| agent 索引、`AgentSource`、插件 agent 加载、`InlinePersona` 和 `AgentDefinition` schema                                       | 1410 + ~200            | 无                                            |
-| team：预设、启动、CLI、标签页、`apply_team`、设置                                                                             | 1264                   | 无                                            |
-| workspace 选择、hidden keys、delegation scope、agent 设置页                                                                   | ~2200 of 2749          | 一个 Tasks 页（列文件、显示源码、打开编辑器） |
-| skills 子系统                                                                                                                 | 1521                   | 无                                            |
-| `task:` 块、Nunjucks、`files:`/`outputs:`、选项表、`rounds`、`critic.yaml`、`document_task`、`AgentBlock.result` 及其四处消费 | ~1000 of 2305          | 文档工具本身和 `revise`                       |
-| CLI：`texra agents`、`texra team`、`texra skills`                                                                             | 734                    | `texra run`、`texra tasks types`              |
-| 新增：模块解析器和模块入口、task 加载器、`task()` 和声明、`revise`、九个 task 文件、Tasks 页、types 命令                      | 约 +1500               |                                               |
-
-净减约 1.1 万行，其中约 4700 行是提示词和 skill 文本。另有 11 个测试套
-件要改写或删除，golden store 随行版本重生成。
+净减约 1.3 到 1.4 万行，其中约 5400 行是提示词和 skill 文本。新增比
+11-06 版少，因为不建工作区解析器、模块入口、task 加载器、Tasks 页和
+types 命令。
 
 ## 与已有裁决和 PRD 的关系
 
-六处需要负责人明确改口，本提案不假装它们不存在：
+需要负责人明确改口的六处，本提案不假装它们不存在：
 
 1. **codemode Q8 "No script files"**（2026-10-02）。收窄为：模型写的脚本
-   仍不落文件；人和插件写的程序是文件，源码和摘要钉在步骤上。recipe 今天
-   就是这样，所以这是把已有做法说成规则，不是新路径。
-2. **PRD "Agent 文件和 imports"，两种组合方式**：原文保留"参数化 prompt"和
-   "脚本模块"，并把工作区 import 推后。本提案只留一种（脚本），并把工作区
-   import 连同它的规则提前到 1.0。理由：两种组合方式就是两个解析器、两套
-   文档、两种心智模型；task 块的 Nunjucks 能表达的，25 行 JS 都能表达，反
-   之不然。
-3. **PRD "Agent 文件和 imports"，agent 文件本身**："Agent 文件是可复用的
-   persona 和能力配置… 文件形式本身不需要被替换"，以及 R6 的"文件与 inline
-   定义一致"、R9 的"插件随包提供 agent 文件"验收和打包示例梯子。本提案没
-   有 agent 文件也没有 persona，只有 chat 的参数；R6 因只剩一种形式而平凡
-   成立，R9 改为随包提供 task 文件，示例梯子随第 2 期改。
-4. **skills**（Claude Code / Codex 互操作的一部分，PRD "安装式 manifest"
-   一行）。删掉它失去导入第三方 skill 包，连同安装式插件的 `agents`；模型
-   仍能 `read_file` 用户指给它的任何 Markdown，程序能 import 任何文本。安
-   装式插件的 commands、MCP 和 hooks 不受影响。
-5. **裁决 D9/D10（2026-09-30）"Custom teams stay presets… Reopen: a team
-   needs state a preset cannot hold"**。本提案删 team，不是因为 team 需要更
-   多状态，而是因为它回答的问题（这个项目看见哪些 agent）随目录一起消失。
-   这是在触发条件之外 reopen，要负责人确认。
-6. **裁决 "Adaptive document workflows are not planned"（2026-09-06）**。
-   见"document task 的归宿"末段：引擎不变，模型组合固定原语，每段脚本过
-   Q5 审批并精确重放。要负责人确认这不算那条裁决拒绝的东西。
+   仍不落文件；插件出货的程序是文件，源码和摘要钉在步骤上。recipe 和 goal
+   今天就是插件出货的源码，所以这是把已有做法说成规则。
+2. **PRD "Agent 文件和 imports"，参数化 prompt。** 原文保留"参数化
+   prompt"和"脚本模块"两种组合方式；本提案只留脚本。task 块的 Nunjucks 能
+   表达的，一段 JS 都能表达，反之不然。原文把工作区 import 推后，并要求到
+   时同时交付相对路径、越界和循环规则；11-06 版把它提前到 1.0，本版**不
+   再提前**：内核仍只 import 已启用插件注册的模块，这正是 PRD 1.0 的范
+   围。
+3. **PRD "Agent 文件和 imports"，agent 文件本身**，以及 R6 的"文件与
+   inline 定义一致"、R9 的"插件随包提供 agent 文件"。本提案没有 agent 文
+   件也没有 persona；R6 因只剩一种形式而平凡成立，R9 改为随包提供程序，
+   示例梯子随之改。
+4. **skills 和安装式插件的 agents**（PRD "安装式 manifest"一行）。删掉它
+   们失去导入第三方 skill 包和 Claude Code 的 subagent 文件；模型仍能
+   `read_file` 用户指给它的任何 Markdown。commands 是按 skill 读的，一起
+   失去；MCP 和 hooks 不受影响。
+5. **裁决 "Adaptive document workflows are not planned"（2026-09-06）**。
+   见"document task 的归宿"末段。
+6. **安装式插件带程序**（新）。PRD 的能力矩阵写"安装式 manifest…不承诺原
+   生脚本模块"，裁决 D11 写仓库外的插件是 MCP、hooks 和数据，不加载第三
+   方代码。本提案让目录插件带沙箱里的程序：它不是原生代码，没有环境权
+   限，效果只经过它的 run 被 offer 的工具，而同一个受信插件的 hooks 和
+   MCP server 今天已经能起本地进程。要负责人确认这算 D11 的"数据"多带一
+   种，而不是它拒绝的 code plugin。
+
+两处比 11-06 版更贴近已有裁决：
+
+- **D9**（"一个开关应该收回一个插件贡献的一切"）原样成立，对象从插件的
+  skills 和 agents 换成它的程序。**D10** 的 team 仍然删：它回答的问题随
+  目录消失。
+- general-package 设计比较过"最小内核，每个内置都是插件"这一案，因 churn
+  没选。本提案不搬目录，靠删除让内核变小；`builtins/` 目录那一步仍按原
+  裁定等一个具名的 embedder。
 
 不与之冲突的：无流程引擎、历史一个写者、`agent()` 替代 delegation 工具
 （Q7）、Q2 的结果复用、Q5 的一次脚本审批、1.0 的 SQL 只读视图、codemode
-的关注点分离表（`receive()` 撤回后不再触碰"Messaging must not know about
-scripts"）。
+的关注点分离表、"code mode stays domain-free"、
+`RUN-trusted-script-launch-grants` 的否决。
 
 ## 更彻底的方案：Unix
 
-比本提案再往前一步就是 Unix。记录它，是为了说明本提案停在哪里、为什么，
-以及从它借走什么。
+比本提案再往前一步就是 Unix：`texra` 是读 stdin 写 stdout 的过滤器，task
+是 PATH 上任意语言的可执行文件，工具是 CLI，持久化靠内容寻址的缓存而不是
+重放。它撞四面墙：Windows 上没有 shell；1.0 PRD 的 P0 承诺（公开 SDK、故
+障点测试、运行所有权、重放）全是进程内契约；沙箱让每个嵌套调用在执行前
+过审批并在卡片树里可见，shell 脚本做不到；三个 host 的 UI 全来自 run
+history 的行。
 
-### E：texra 是一个过滤器，shell 是编排器
-
-Unix 的四条原则逐一套上去：
-
-- **模型是过滤器。** `cat paper.tex | texra ask -s proofread.md > out.tex`。
-  `texra` 是读 stdin 写 stdout 的命令，背后一个 daemon 存历史。没有 agent，
-  system 文本是 `-s` 后面的文件。
-- **task 是可执行文件。** `.texra/bin/annotate` 是任意语言的脚本，里面调
-  `texra ask`、`latexmk`、`latexdiff`。流水线是管道：
-  `texra annotate paper.tex | texra apply paper.tex`。bundled 和 custom 的区
-  别只是在 PATH 上的位置。
-- **工具是 PATH 上的 CLI，不是插件。** 今天有 44 个工具定义，约 33000 行工
-  具代码。Wolfram 已经是"在 bash 里跑 wolframscript"，latexdiff、texcount、
-  pdftotext、arxiv、Zotero 本质上都是一个 CLI 加一段 `--help`。模型本来就
-  会用 CLI；bash 工具加命令守卫就是整个集成机制，MCP 通过一个桥变成 CLI。
-  `Plugin` 接口缩成"PATH 上的一个目录加 `AGENTS.md` 的一段"。
-- **持久化靠内容寻址，不靠重放。** 下一小节。
-
-删掉的东西：agent 目录、插件系统、QuickJS 沙箱、模块解析、task 契约、
-skills、teams，和三个 host 里渲染嵌套卡片树的大部分。剩下：一个 CLI、一个
-daemon、按目录分层的 `AGENTS.md`、`.texra/bin`、make。
-
-### make 是什么意思：缓存对重放
-
-`make` 是 Unix 的构建工具：Makefile 写明每个目标文件依赖哪些输入、用什么
-命令生成；make 只重做输入比目标新的步骤。构建中途失败再跑一次，做完的目
-标直接跳过。现代变体（nix、bazel）不看时间戳看内容哈希：输入内容没变，
-产物直接复用。这是 Unix 对"流水线中断了怎么续"和"改了一行要不要全重跑"
-的回答：不记录执行过程，只缓存产物。
-
-套到 TeXRA：目标是 task 的产物（run 存储里 `r0/` 的文件）；输入是输入文
-件的内容、task 源码的摘要、指令和模型；命令是跑这个 task。Q2 的结果复用
-（codemode 文档 "Cross-script reuse"）今天就是它的雏形：`agent()` 的结果按
-prompt、每个影响运行的选项和每个引用文件的指纹哈希，范围是发出 `script`
-调用的 run 和它的后台脚本。扩到 `task()`、跨 run 生效，就是"改了 `paper.tex`
-一行，重跑整条流水线，只有输入变了的步骤真的跑"。
-
-它和重放的区别：
-
-|        | 重放                                           | 缓存                                 |
-| ------ | ---------------------------------------------- | ------------------------------------ |
-| 范围   | 一个 run 内                                    | 跨 run                               |
-| 做什么 | 按记录顺序把结果交回程序，精确续跑被中断的程序 | 按输入匹配复用产物                   |
-| 性质   | 正确性需要它                                   | 优化，也是 Unix 式的持久化           |
-| 钥匙   | 调用序号加 `(toolName, input)` 一致            | 输入内容、源码摘要、指令、模型的哈希 |
-
-完整的 E 用缓存替代重放，这是它最大的代价：一个跑了三小时的 goal 进程死
-了，能续的前提是每一步都幂等且已缓存，脚本本身可以重跑。E-lite 两者都留。
-能安全缓存的前提是产物不直接改工作区，而是进 run 存储再由用户 accept；这
-正是 documents 今天的设计，也是 `task()` 比 `agent()` 更适合缓存的原因。
-两套机制是否能收成一个按内容寻址的调用结果表（幂等调用按内容取结果，不幂
-等的按序号；`replay: 'safe'` 已经是那个声明），是本提案之外值得单独想的
-问题。
-
-### 它撞的四面墙
-
-- **Windows。** 学术用户相当一部分在 Windows 上用 VS Code 扩展，"shell 是
-  编排器"在那里没有 shell。这一条单独就否决 E 的字面版本。
-- **1.0 PRD 的 P0 承诺。** 公开 SDK 入口、调用持久化的故障点测试、运行所有
-  权、codemode 的重放，全是进程内契约。E 把 SDK 变成 "spawn texra"，是另一
-  个产品。
-- **审批粒度。** 沙箱让每个嵌套调用在执行前过 hooks、守卫、审批，并在卡片
-  树里可见；shell 脚本要调什么，跑到那一行才知道。
-- **三个 host 的 UI。** 嵌套卡片、diff 视图、accept files、Pass N of M 全来
-  自 run history 的行，进程只有 stdout。
-
-### E-lite：把原则搬进来，不搬掉 harness
-
-本提案已经是"everything is a file"：task、system 文本、rubric 是文件，run
-是目录，memory 是文件。还差四条，每条都能单独落：
+"小内核、程序在外面"是从它借来的原则，本提案在 harness 之内兑现它。还可
+以单独落的四条：
 
 1. **工具是 CLI，bespoke 工具要有理由。** 一个插件工具只在三种情况下有资
-   格存在：需要审批语义（write、edit 的 diff 审批）、需要写 run history 的
-   行（`document_*`、`agent()`）、需要结构化结果供脚本分支。其余的
-   （extract_figures、extract_bib_entries、arxiv、Zotero、latex preview）变
-   成 `.texra/bin` 或随包的 CLI，模型用 bash 调，`--help` 是文档。这一刀砍
-   的是三万三千行里最大的一块，也让 `Plugin` 接口瘦一半。它把插件作者的扩
-   展方式从"写一个 Plugin"改成"写一个 CLI"，是负责人问题 4。
-2. **发现靠文件系统，不靠目录。** picker 和模型都读 `.texra/tasks/` 和
-   `.texra/bin/`，`description` 和 `--help` 就是元数据。没有注册、没有设置页
-   里的 catalog。
+   格存在：需要审批语义、需要写 run history 的行、需要结构化结果供脚本分
+   支。其余的（`extract_figures`、`extract_bib_entries`、arxiv、Zotero）变
+   成随包的 CLI，模型用 bash 调。这一刀砍的是三万行工具代码里最大的一
+   块，也把插件作者的扩展方式改成"写一个程序加一个 CLI"。是负责人问题
+   6。
+2. **发现靠插件表。** picker 和模型读的是同一张表。
 3. **headless 走文本流。** `texra run` 已经输出 NDJSON；再让它从 stdin 读
-   文件列表、向 stdout 打产物路径，shell 组合就免费了：
-   `texra run annotate paper.tex | texra run apply`。
-4. **缓存是一等机制。** 把 Q2 的内容寻址复用从 `agent()` 扩到 `task()`，
-   范围从一个 run 扩到会话。重放仍负责中断续跑，缓存负责"改了一行重跑整
-   条流水线"。
-
-`.texra/tasks/*.js` 仍是 JS 而不是 bash，只因为 Windows 和重放；它已经是
-"小程序、文本进出、靠文件组合"的东西。本提案的推荐是上文的设计加这四条；
-第 1 条收益最大、争议也最大。
+   文件列表、向 stdout 打产物路径，shell 组合就免费了。
+4. **缓存是一等机制。** 把 Q2 的内容寻址复用从 `agent()` 扩到
+   `program()`，范围从一个 run 扩到会话：改了 `paper.tex` 一行，重跑整条
+   流水线，只有输入变了的步骤真的跑。重放仍负责中断续跑。能安全缓存的前
+   提是产物不直接改工作区，而是进 run 存储再由用户 accept，这正是
+   documents 今天的设计。
 
 ## 权衡
 
-- **确定性对灵活性**：程序钉在 run 上，所以一个 task 的行为在运行中不变；
-  代价是改了文件要重新启动才生效。这是 PRD 要求的，不是代价。
-- **不会编程的用户**：YAML 从来没有比 25 行带模板字符串的 JS 更容易；402
-  行的 YAML 没人读得完。assistant 代写，`texra.d.ts` 给补全。
+- **确定性对灵活性**：程序钉在 run 上，所以一个程序的行为在运行中不变；
+  代价是改了文件要重新启动才生效。这是 PRD 要求的。
+- **项目程序每改一次要审阅一次**：信任按内容，所以模型替你改了
+  `.texra/programs/x.js`，它从 picker 里消失直到你在 Plugins 页再看一眼。
+  11-06 版是每次启动审批一次。这里换成每个版本审批一次：稳定的程序不再
+  打扰，改动的程序多一步。
+- **不会编程的用户**：YAML 从来没有比十几行带模板字符串的 JS 更容易；384
+  行的 YAML 没人读得完。模型代写。
 - **换一个口吻聊天**：由 `AGENTS.md` 承担，它是项目级的。按会话切换
-  system 文本（`texra chat --agent research`）是弱模型时代的需求；要它的人
-  写一个三行 task 调 `agent()`。
-- **每次启动的开关**：launch form 的 `reflect`、`attachTeXCount` 等五个开关
-  和 `texra run` 的五个 flag 消失，变成 task 文件里的一行。`--output`、
-  `--output-dir` 留（它们是 `cli` 字段，不是选项表）。
+  persona（`texra chat --agent research`）消失；要它的人写一个三行程序调
+  `agent()`。
+- **每次启动的开关**：launch form 的五个开关和对应 flag 消失，变成程序里
+  的一行。
+- **聊天的 system 文本跟着插件开关变**：开关一个插件会改下一步的 system
+  文本。插件的 prompt 段今天就是按步钉住、变化时作为一条更新消息发出，
+  机制不变，只是它承担的内容变多。
 - **弱模型**：script-only 对 DeepSeek 和 Gemini flash 已验证；更弱的模型
-  走 Q3 回退，它们本来也跑不动 400 行 rubric。前提的下行有界：某个便宜模
-  型在某类论文上确实需要一段 rubric，用户写三行 task import 一段文本就有
-  了，不需要为所有人预留 400 行。
-- **可发现性**：35 个名字至少告诉用户 TeXRA 能干什么。缩到 10 项后，Tasks
-  页和 `docs/guide/built-in-agents.md` 改写成 task 参考页承担这个角色。
-- **破坏范围**：1.0 不保兼容。用户的 custom agent 和 custom team 失效，安
-  装式插件的 agent 不再加载，changelog 写迁移路径：team 变插件开关或一个
-  目录的 task，agent 变 task 或 `AGENTS.md`；不写 YAML 到 JS 的转换器
-  （AGENTS.md 禁止 legacy reader），由 assistant 对话完成。
+  走 Q3 回退。某个便宜模型在某类论文上确实需要一段 rubric，用户写三行程
+  序 import 一段文本就有了，不需要为所有人预留 400 行。
+- **可发现性**：35 个名字至少告诉用户 TeXRA 能干什么。缩到十来项后，
+  Plugins 页和程序参考页承担这个角色。
+- **互操作**：安装式插件的 skills、commands 和 agents 不再加载。
+- **破坏范围**：1.0 不保兼容。用户的 custom agent 和 custom team 失效，
+  changelog 写迁移路径：agent 变程序或 `AGENTS.md`，team 变插件开关；不
+  写 YAML 到 JS 的转换器（AGENTS.md 禁止 legacy reader），由模型对话完
+  成。
 
 ## 分期
 
-每一期独立可合，拆成能单独 review 的小 PR。顺序按"先让 picker 里出现 task，
-再删目录"排：负责人在删 35 个之前先看到 10 项的 picker 长什么样。
+每一期独立可合。顺序按"先让程序进契约，再搬内容，最后删目录"排：负责人
+在删 35 个之前先看到 picker 里十来项的样子。
 
-1. **解析器和模块入口**（harness，无用户可见变化，不动行版本）：三种来源
-   一个解析器，先只开 `builtIn:`；整张图钉进步骤的 `tools.offered.modules`；
-   worker 增加 `type: 'module'` 的合成入口。`goal.strategy` 和 recipe 不动。
-   这是每一期都依赖的一块，先合。
-2. **工作区 task 和 `revise`**：`.texra/tasks/` 来源、文本 import、
-   `AgentConfig.script` 加 `author` 字段（`recipe` 读作 `author: 'plugin'`，
-   不改联合、不动行版本）、`task()` 全局和它在声明里的 task 列表、
-   `texra run <task>`、Tasks 页、`texra tasks types`、工作区 task 走 Q5 审
-   批。`revise` 原语和七个 documents 工具的契约变更；先移植 `edit.js` 和
-   `annotate.js`，journeys 跑一次作回归检查；再移剩下六个和 `fix-build`；
-   最后一个 bundled task 移完就删 `task:` 块、Nunjucks、选项表、
-   `document_task`、`critic.yaml`、`AgentBlock.result` 及其四处消费。打包示
-   例梯子随之改。
-3. **script-only 翻默认**：补 Q10 两项，翻；回退标志留。
-4. **格式批（API 冻结前一次）**：`AgentConfig` 联合 `chat | program`，
-   `run.recipe` 的替代命名，`run.config` 行版本升、golden store 重生成，
-   `StartRequest` 改取 `system`/`tools`，`agent()` 改签名，`asCaller` 改为
-   复制父 run 的 system 和 tools。
-5. **删补偿层和 agent 文件**：agents 目录、agent 索引和 schema、team、
-   workspace 选择、skills、customize、三个 CLI 命令；`assistant` 和 `setup`
-   成为两份常量；11 个测试套件改写或删；文档和迁移说明。
-6. **（可选，负责人问题 4）工具改 CLI**：先从 `latex-extract` 和 `arxiv`
-   两个插件试。
+1. **程序进插件契约，一个按名启动**（harness）。`Plugin.modules` 和
+   `programs`，specifier 改为 `<插件>:<名字>`，按名启动（run 以生成的两行
+   脚本打开），脚本声明里列程序。第一个消费者是 goal：`plan` 工具改用按
+   名启动，`goal.strategy` 的值是程序名。无用户可见变化。
+2. **documents 搬成程序**。`revise` 原语和 documents 工具的契约变更；程序
+   是 `resources/plugins/documents/programs/` 里的文件。先移 `edit` 和
+   `annotate`，journey 跑一次作回归；再移剩下六个和 `fix-build`；最后一
+   个移完就删 `task:` 块、Nunjucks、选项表、`document_task`、
+   `critic.yaml`、`AgentBlock`、`recipeResult` 和它的三个调用者。picker 出
+   现程序。
+3. **lean4 和随包目录**。`resources/plugins/<id>/` 下的 `agents/` 和
+   `skills/` 换成 `programs/`；lean4 的两个程序。
+4. **目录插件带程序**。安装式插件的 `programs/`、项目的
+   `.texra/programs/`、加载器的约定、信任审阅里列出程序。和第 2、3 期互
+   不依赖，可以提前。
+5. **script-only 翻默认**。补 Q10 两项，翻；回退标志留。
+6. **格式批**（API 冻结前一次）。`AgentConfig` 联合 `chat | program`，
+   `run.config` 行版本升、golden store 重生成，`StartRequest` 和 `agent()`
+   改签名，`asCaller` 改为复制父 run 的 system 和 tools。
+7. **删 agent 文件和补偿层**。agents 目录、agent 索引和 schema、team、
+   workspace 选择、skills、customize、三个 CLI 命令；聊天的 system 文本
+   改由插件的段拼出；测试套件改写或删；文档和迁移说明。
+8. **（可选）工具改 CLI**。先从 `latex-extract` 和 `arxiv` 两个插件试。
+
+第 1 期到第 4 期在格式批之前，过渡期的存法（按名启动在 `run.config` 上
+怎么记）在第 1 期的 PR 里定，约束是不为信任另存一份事实。
 
 ## 负责人问题
 
-1. 接受六处改口（Q8 收窄、PRD 的一种组合方式、PRD 的 agent 文件和 R9、删
-   skills 连同安装式插件的 agents、D9/D10 的 team、2026-09-06 的自适应工作
-   流）？
-2. 第 1 期现在开，还是等 1.0 PRD 的在途线（线 7、9、11）合完？推荐：现在
-   开，它只碰沙箱的模块加载和 `tools.offered.modules` 的填充，不动行版本，
-   和在途线不重叠。
-3. **名字。** 本文用"task"称程序模块，但 `texra tasks` 今天已经是服务里的
-   运行（列出、附着、停止），"document task"也是旧词。候选：`recipe`（代码
-   里已经用它指这个东西：`script.kind: 'recipe'`，`documentRecipe.ts`）、
-   `program`、`workflow`（AGENTS.md 禁的是流程引擎，不是这个词，但容易误
-   读）。推荐 `recipe`：`.texra/recipes/`、`recipe('annotate', args)`、
-   `texra run <recipe>`、`texra recipes types`。定了之后本文一次 grep 改名。
-4. E-lite 第 1 条：把只包装一个 CLI 的插件工具改成 `.texra/bin` 或随包的
-   CLI，bespoke 工具只留需要审批语义、写行或结构化结果的？推荐：接受，
-   作为第 6 期，先从 `latex-extract` 和 `arxiv` 两个插件试。
-5. 工作区 task 的信任：永远走 Q5 请求（推荐），还是"在这个工作区跑过一次
-   后视为可信"？
+1. **读法对不对。** 本文把"core 小而美，theorist 的 program plugin"读
+   成：内核只多认识"插件带程序"并忘掉 agent；程序没有插件之外的家，项目
+   自己的程序是一个按路径引用的插件；产品是内核加 theorist 插件。
+2. **theorist 插件怎么切。** 按能力（`documents`、`lean4`、往后的文献和
+   推导），学科是开着哪些插件加 `AGENTS.md`（推荐）；还是按学科各一个插
+   件（physicist、mathematician、computer scientist），各带自己的程序？
+3. **名字。** 定为 program：`programs/`、`Plugin.programs`、
+   `program('documents:edit')`、`texra run <program>`。11-06 版在 task 和
+   recipe 之间没定；`texra tasks` 今天指服务里的运行，不撞。
+4. **"小"的口径。** 名词和公开面（本提案）；还是也要物理上拆：把
+   harness 的内置插件（memory、executions、MCP、web、plan，约 3900 行）
+   搬出内核目录或单独成包？后者在 general-package 设计里已裁定等一个具
+   名的 embedder。推荐：先前者。
+5. **接受六处改口**（"与已有裁决和 PRD 的关系"）？其中第 6 处是新的。
+6. **工具改 CLI**（Unix 一节第 1 条）作为第 8 期？推荐：接受，先试两个插
+   件。
+7. **第 1 期现在开**，还是等 1.0 PRD 的在途线合完？推荐：现在开，它只碰
+   `Plugin` 的两个字段、模块表的命名空间和 `plan` 工具的启动。
 
 ## 决定记录
 
 负责人 2026-11-06：
 
-- 模型会变强是设计前提，不是待验证的假设。rubric 和通用领域知识现在就删，
-  评测只作回归检查。
-- persona 不是单位："import code 更 end to end"。`prover`、`numerics` 随之
-  直接变成 `agent()` 的一行参数。
+- 模型会变强是设计前提，不是待验证的假设。rubric 和通用领域知识现在就
+  删，评测只作回归检查。
+- persona 不是单位："import code 更 end to end"。
 - 不要 skills。
 - 要 fully embrace codemode；document task 是有用的，保留其能力。
-- multi-agent 编排要考虑在内（"multi-agent 编排"一节）。
-- 要一个 code 的大一统（"大一统"一节）。
-- 让一个无上下文的子代理审稿（下节）。
+- multi-agent 编排要考虑在内。
+- 要一个 code 的大一统（"触发"一节）。
 
-## 审稿修正（2026-11-06）
+负责人 2026-11-14：
 
-无上下文的审稿代理对照代码复核后，本文改了这些：
+- "core 比较小而美，然后有一些 theorists 的 program plugin。"本文按"负
+  责人问题"1 的读法重写；读法本身待确认。
 
-- 度量：bundled 文件 35 不是 34，提示词 3749 不是 3616，lean4 目录 993，
-  workspace 选择 2749，SDK 导出 753 分六个入口；"没有 fixture 引用 bundled
-  名"是错的，11 个套件加 golden store 引用。
-- goal 用 `self()`，而 `self()` 只能从有对话的后台脚本 fork：`program` 加可
-  选的 `conversation` 边，goal 是有这条边的程序；picker 启动的 task 没有，
-  `self()` 在其中是错误。
-- 模块钉在步骤的 `tools.offered.modules`，不在 `AgentConfig` 上另开一份。
-- `receive()` 撤回：收件箱按批消费成一条 user 消息、通知不唤醒已死进程、
-  反转 codemode 的关注点分离。改为"每个事件启动一次，事件在 args 里"。
-- 工作区 task 不可信：`agent()` 走 Q5 请求，文件列表照模型脚本解析。
-- 第 1 期不是"无用户可见变化"的联合变更，那是格式批；第 1 期缩为解析器
-  和模块入口。`run.recipe` 是 UI 和 resume/fork 规则的唯一 task 判别，联合
-  落地时要命名替代。
-- `revise` 是七个 documents 工具的契约变更，"Pass N of M"的 M 改从 fact 取。
-- `AgentBlock.result` 有四处消费者，一起改。
-- 发现期静态提取 `description`，不求值（一个文件一个 worker 付不起）。
-- 补上的损失：headless 聊天保留为 `texra run chat --print`；`--output`、
-  `--output-dir` 留；五个启动开关消失；按会话换 persona 消失；安装式插件的
-  agents 不再加载；lean4 随包两个 task。
-- 改口从四处到六处（D9/D10 的 team、2026-09-06 的自适应工作流）。
-- 删除 team、skills、agent 文件移到 picker 出现 task 之后（第 5 期）。
-- 审稿建议"不改联合，`script` 加 `source` 字段"：第 2 期采纳为 `author`
-  字段不动联合；联合本身留在格式批。审稿建议"persona 改名等 API 冻结后"：
-  同样归格式批。
+## 修订记录
+
+**2026-11-14，按小内核和程序插件重写。** 相对 11-06 版：
+
+- 程序的家从三个目录根（`.texra/tasks/`、`~/.texra/tasks/`、插件的
+  `tasks/`）改为插件；"三种来源，一个解析器"一节删，内核的模块加载器不
+  变。
+- `author` 字段和"工作区 task 每次启动审批"删，信任用安装式插件已有的内
+  容摘要记录。
+- "bundled 的两个 chat"改为"聊天不是一个 agent"：没有 assistant 常量，
+  system 文本由插件的段拼出。
+- 新增"内核认识什么"和"theorist 的程序插件"两节；Tasks 页、
+  `texra tasks types` 和沙箱的 `type: 'module'` 入口不再需要。
+- 改口从六处仍是六处：工作区 import 不再提前、team 那一条因 D9 原样成立
+  而降级，新增"安装式插件带程序"。
+- 度量在 `221c02a` 重量；两处引用已漂移并改正（`needsWake` 现在在
+  `FollowUpReader.ts`，`AgentBlock.result` 的调用者是三处）。
+
+**2026-11-06，无上下文审稿后的修正**（仍然成立的部分已并入正文）：goal 用
+`self()`，所以 `program` 要有可选的 `conversation` 边；模块钉在步骤的
+`tools.offered.modules`，不在 `AgentConfig` 上另开一份；`receive()` 撤
+回；联合是格式批，不是第 1 期；`revise` 是 documents 工具的契约变更；发
+现期不求值。
 
 ## 不做的事
 
 - 不做流程引擎、不做第二个 run history 写者、不做任务调度器。
+- 不做第二个程序容器：没有工作区 task 根，没有 `~/.texra/tasks/`，内核不
+  读程序目录。
+- 不做 persona 或 chat 预设的目录：`Plugin` 上没有"命名的聊天"。
 - 不做常驻程序和 `receive()`；事件触发是每事件一次 `start`。
-- 不做 npm 包解析、不做远程依赖、不做 `..` 越根。
-- 不做按 task 的输入 schema 或选项表。
+- 不做 npm 包解析、不做远程依赖、不做文件系统路径的 import。
+- 不做按程序的输入 schema 或选项表。
 - 不做 YAML 到 JS 的兼容转换器。
 - 不做编排库；goal 是唯一出货的模式，而它已经在了。
-- 不在本提案里做"聊天也是程序"。
+- 不做"聊天也是程序"。
+- 不做学科插件，除非负责人问题 2 选了它。
 
 ## Verified
 
-- `find packages/extension/resources/agents -name '*.yaml' | wc -l` 得 35；
-  `grep -l '^task:'` 得 15；15 个无 `tools:`，`requests:` 长度 1 或 2，
-  `write/` 两个带 `files:`。
-- `wc -l` 的各项行数如"现状的度量"表；`config/api-reports/*.md` 的
-  `Exports:` 行为 59、172、51、127、263、81。
-- `packages/harness/src/agent/codeSandbox/worker.ts` 的 `setModuleLoader`
-  按 `input.modules` 解析 specifier，相对路径今天被拒绝；脚本以
-  `type: 'global'` 加函数体包装求值，静态 `import` 报语法错误。
-- `offeredTools.ts:61-64`：模块按 specifier 钉为 `context.blob` 的摘要。
-- `goalScript.ts`：`goalScript()` 两行；`GOAL_MODULE` 是 `self()` 循环。
-  `SelfTool.ts:62-72`：只有 `background` 脚本有可 fork 的对话。
-- `FollowUps.ts:14-24`：一批排队项合成一条 user 消息；`RunInput.ts:66-81`：
-  `needsWake` 对通知返回 false。
-- `RunRecord.ts:36-37`：`isTrustedScript` 只认 `recipe`；
-  `AgentTool.ts:271-283`：可信脚本的文件列表按写的通过。
-- `script.kind` 和 `run.recipe` 的读者：`grep` 得 13 处，列在"run 的两类"。
-- 引用 bundled 名字的测试：`grep` 得 11 个套件加 `golden-1.0.sql`。
-- `AgentTool.ts:94`：输入含 `persona`；`InlinePersonaSchema` 在
-  `shared/schemas/agent.ts`。
-- `LaunchSurfaceSchema` 含 `launchTarget`、`selectedTeamId` 和
-  `DocumentTaskOptionsSchema` 的字段；`chat.ts:51-58` 拒绝非 TTY。
-- `packages/cli/src/commands/tasks.ts` 的 `texra tasks` 指服务里的运行。
-- codemode 文档 "Still open" 的两轮评测表：`only` 对 `direct`，DeepSeek
-  每次成功 $0.0017 对 $0.0020，Gemini $0.0155 对 $0.0463。
+在 `221c02a` 上：
+
+- `find packages/extension/resources/agents -name '*.yaml' | wc -l` 得 35，
+  共 3524 行；`grep -l '^task:'` 得 15。
+- 各目录行数如"现状的度量"表（`wc -l`）；`config/api-reports/*.md` 的
+  `Exports:` 行为 36、161、48、134、299、74。
+- `packages/harness/src/tools/plugins.ts` 的 `Plugin` 有 13 个字段；
+  `scriptModules` 只有 `goal` 和 `documents` 两处；`texraPlugins` 列 19
+  个插件。
+- `packages/harness/src/agent/codeSandbox/worker.ts`：`setModuleLoader` 按
+  `input.modules` 的键查 specifier，别的（含相对路径）拒绝；脚本以
+  `type: 'global'` 加函数体包装求值。
+- `packages/harness/src/tools/sessionTools.ts`：一步的 `modules` 由开着的
+  内置插件的 `scriptModules` 拼成 `builtIn:<name>`；安装式插件不进这张
+  表。
+- `packages/harness/src/shared/schemas/offeredTools.ts`：模块按 specifier
+  钉为 `context.blob` 的摘要。
+- `goalScript.ts`：`goalScript()` 两行，`GOAL_MODULE` 是 `self()` 循环；
+  `PlanTool.ts` 用 `launchBackgroundScript` 启动它。
+- `PromptBuilder.ts`：`buildOpeningSystemPrompt` 把 persona prompt 排在最
+  前，其后是 `AGENTS.md`、memories 和工具说明；没有 harness 自己的身份文
+  本。带 `prompt` 段的插件是 `memory-workflow`、`core`、`documents`。
+- `packages/extension/resources/plugins/<id>/` 按 `Plugin.id` 对上插件；
+  `enabledBuiltInRoots` 对关掉的插件略过它的 `agents/`。
+- 安装式插件：`PluginManifestSchema` 没有脚本或模块字段；信任是
+  `PluginTrust { version, digest }`，`readInstalledPluginLoad` 只加载启用
+  且摘要匹配的；记录在用户的全局状态，没有项目级的插件目录。
+- 插件开关 `tools.disabled` 在全局状态，没有按 workspace 的开关。
+- `isTaskConfig` 和 `recipeBlockOf` 在 `runRecords.ts`，都读
+  `script.kind === 'recipe'`；`readRecipeResult` 有三个调用者。
+- `documentState.ts` 经 `AgentCatalog` 读 task 块；`documentTools.ts` 的轮
+  数取 `docs.task.requests.length`。
+- `assistant.yaml` 92 行，列 37 个工具。
+- codemode 文档的裁决 Q2、Q3、Q5、Q7、Q8、Q10 和 "code mode stays
+  domain-free"；"Still open" 第二轮的评测表。
+- 裁决台账的 D6、D9、D10、D11 和 "Adaptive document workflows are not
+  planned"；`refuted-candidates.json` 的
+  `RUN-trusted-script-launch-grants`。
