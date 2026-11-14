@@ -224,7 +224,8 @@ LaTeX、审稿、Lean，什么是 agent 文件和 team，内核一概不知道�
 4. 沙箱：给模块加载器一个明确的 normalizer；脚本失败时保留模块里的帧。
 5. 删 agent 那一期：`chat` 的参数直接在 config 上（第二次存法变更）；根
    聊天能调的是开着的全部，声明的是一张短表。
-6. code mode 默认打开：`codeMode.scriptOnly` 的默认值翻过来。
+6. code mode 默认打开：TeXRA 的 catalog 把 `codeMode.scriptOnly` 默认设
+   成开，保留直接调用的模型把它读成关。
 
 ### 插件契约
 
@@ -527,20 +528,38 @@ codemode Q10 定的线（五晚的合并窗口）。已有的数据是三个 jou
 文档 "Still open" 第二轮）；那些 journey 用的是六到八个工具、全部声明的
 小 agent。
 
-翻默认值是单独的一处改动。在 `d173e42` 上把默认值改成开、跑一遍非
-crash 的套件：248 个文件里 4 个失败，585 个测试里 5 个，都是脚本化的假
-模型直接调工具（`hooks.vitest.ts`、`sessionPrograms.vitest.ts`、
-`AgentLaunchActivation.vitest.ts`、`sessionStore.vitest.ts`）。没有量的
-是 crash 重放、CLI 的 validation model 和 journey 默认的那一组。
+翻默认值是单独的一处改动，但不止改一个默认值。在 `d173e42` 上直接把
+harness 那一行的默认值改成开：非 crash 的套件 248 个文件里 4 个失败（585
+个测试里 5 个：`hooks.vitest.ts`、`sessionPrograms.vitest.ts`、
+`AgentLaunchActivation.vitest.ts`、`sessionStore.vitest.ts`），crash 重放
+7 个文件全部失败（9 个测试里 8 个）。原因是同一个：validation model 的对
+话是按直接调工具写的，默认值一翻，它的每个直接调用都被拒绝。CLI 的
+validation 脚本和桌面 e2e 跑的也是这个模型。
+
+所以这一处改动由四件事组成：
+
+1. **默认值放在 TeXRA 的 catalog 里**（`settingsCatalog` 的
+   `defaults`），harness 那一行仍然是关。code mode 默认开是产品的决定，
+   embedder 的 agent 照旧拿到它声明的工具。要 SDK 也默认开，把这一行挪
+   到 harness 的行上。
+2. **保留直接调用的模型把这个设置读成关。** 这就是 Q3 的按模型回退，
+   codemode 文档把它的位置定在 `BoundModel` 旁边。第一个、目前也是唯一
+   的成员是 validation model，于是夹具、crash 重放和 validation 脚本一
+   行不用改。真实模型一个都没列：还没有哪个被量出不达标。
+3. **开关在每个 host 都够得着。** 它今天只在 CLI 的 `/config` 里。默认
+   开之后扩展和桌面版的用户必须能关，所以设置页 Agents 的 Advanced 里
+   加这一行。
+4. **journey 脚本默认跑 `only` 那一组**，`--direct` 取代
+   `--script-only`，否则两组跑的是同一件事。
 
 原来排在翻之前的三件事，改成翻之后补：
 
 1. 按 Q10 补 glm 和 fan-out journey。
 2. 加一个整套聊天的 journey，其中要用的工具没有声明，得靠搜索找到。"只
    声明小核心"是否成立看它。
-3. Q3 的按模型回退今天没有建。建好之前，写不好脚本的模型靠用户把
-   `codeMode.scriptOnly` 关掉。走回退的模型没有脚本可搜，能调的工具要
-   全部发给它，和今天一样。
+3. 给 Q3 的回退列真实模型。机制随翻默认值一起建，名单是空的。有数据之
+   前，写不好脚本的模型靠用户把 `codeMode.scriptOnly` 关掉。走回退的模
+   型没有脚本可搜，能调的工具要全部发给它，和今天一样。
 
 ### theorist 的程序插件
 
@@ -1190,9 +1209,9 @@ history 的行。
    删；文档、迁移说明和 `texra-action`。只有入口 agent 的 launch form 到
    这一期才出现。
 6. **code mode 默认打开**。现在就可以开（负责人 2026-11-14），独立于
-   以上各期，是单独的一处改动；它牵动什么见"入口只有一个 agent"。在第
-   5 期之前翻，`assistant.yaml` 的 37 个工具仍全部声明；"只声明小核心"
-   要等第 5 期的短表。
+   以上各期，是单独的一处改动；它由哪四件事组成见"入口只有一个
+   agent"。在第 5 期之前翻，`assistant.yaml` 的 37 个工具仍全部声明；
+   "只声明小核心"要等第 5 期的短表。
 7. **（可选）工具改 CLI**。先从 `arxiv` 试。
 
 ## 负责人问题
@@ -1298,6 +1317,11 @@ skills、commands 和 agents 不删，所以 skills 子系统留着；`latex-ext
 去掉；第 1 期现在开。这一批没有再过第
 二个审稿者。
 
+**同日，量了翻默认值的全部影响：** 直接翻 harness 那一行，crash 重放全
+部失败，validation 脚本和桌面 e2e 跑的也是同一个假模型。所以翻默认值由
+四件事组成（"入口只有一个 agent"末尾），Q3 的回退随它一起建，不再排在
+翻之后。
+
 **2026-11-06，无上下文审稿后的修正**（仍然成立的部分已并入正文）：模块
 钉在步骤的 `tools.offered.modules`，不在 `AgentConfig` 上另开一份；
 `receive()` 撤回；`revise` 是 documents 工具的契约变更；发现期不求值。
@@ -1388,9 +1412,15 @@ skills、commands 和 agents 不删，所以 skills 子系统留着；`latex-ext
 - `texra init` 把 `.texra/` 写进 `.gitignore`；
   `installGithubAction.ts` 生成的 workflow 用
   `texra-ai/texra-action/review@v2`，它调 `texra run`。
-- 把 `codeMode.scriptOnly` 的默认值改成开，跑
+- 把 harness 上 `codeMode.scriptOnly` 那一行的默认值改成开，跑
   `vitest run --project '!crash'`：248 个文件 4 个失败，585 个测试 5 个
-  失败（基线全过）；改动已还原，没有提交。
+  失败；跑 `--project crash`：7 个文件全部失败，9 个测试 8 个失败（基线
+  全过）；改动已还原，没有提交。
+- 按"入口只有一个 agent"末尾的四件事在 `d173e42` 上实现了一遍（没有合
+  并）：`npm run gate` 和 `npm test`（255 个文件、593 个测试）全过，没有
+  改任何测试。真实的 `texra run assistant` 对着本地假的模型端点，新装的
+  home 里请求只带 `script` 一个工具，把开关关掉后带 20 个。桌面版
+  Settings → Agents → Advanced 里这一行默认是开，关掉后重启仍是关。
 - codemode 文档的裁决 Q3、Q5、Q7、Q8、Q10 和 "code mode stays
   domain-free"；"Still open" 第二轮的评测表；Q3 的回退没有建。
 - 裁决台账的 D6、D9、D10、D11、2026-10-24 的子运行工具裁决和 "Adaptive
