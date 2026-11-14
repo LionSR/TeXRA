@@ -9,14 +9,15 @@
  * the rows (`run/modelCall.ts`): its usage rides the edit its caller lands.
  *
  * A turn's retry loop is `invoke` over the invocation's rows: `nextAttempt`
- * reads the next move off them, so the loop keeps no count and no permit of
- * its own and a resume continues the same series under the same budget.
- * Each failed attempt commits a `failed` row with the move after it, an
- * automatic resend under the process's `ModelRetryGate` while the budget the
- * rows count lasts, then a person's answer to a `request.opened` the same
- * batch opens. The answer is the `request.decided` row, and the attempt
- * after it consumes it; an attempt a person admitted whose outcome no row
- * recorded is asked about again, never resent unasked.
+ * reads the next step off them, so the loop keeps no count and no permit of
+ * its own. Each failed attempt commits a `failed` row with the step after
+ * it, an automatic resend under the process's `ModelRetryGate` while the
+ * budget of recorded failures lasts, then a person's answer to a
+ * `request.opened` the same batch opens. The answer is the
+ * `request.decided` row, and the attempt after it consumes it. A resume
+ * restarts from the last recorded outcome: an attempt no row saw end is
+ * sent again, and so is one whose retry request an earlier lifecycle left
+ * unanswered, since resuming the run is the person's word to go on.
  */
 import { randomUUID } from 'node:crypto';
 
@@ -745,29 +746,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           ),
         );
 
-      /** Ask again about `attempt`: one whose outcome no row records (a
-       *  person allowed it, or it is past the automatic retries), or one
-       *  whose retry request an earlier lifecycle cancelled, asked as the
-       *  next attempt failing unsent on the same error. */
-      const reask = Effect.fn('ModelInvoker.reask')(function* (
-        cell: RunCell,
-        attempt: Attempt,
-      ): Effect.fn.Return<void, InvokeError, SessionServices> {
-        const bound = yield* ScopedRef.get(run.model);
-        const { ref, failed } = attempt;
-        yield* commitFailed(
-          cell,
-          failed === null ? ref : { ...ref, attempt: ref.attempt + 1 },
-          failed?.error ?? {
-            source: 'interrupted',
-            provider: bound.config.provider,
-          },
-          { kind: 'ask', requestId: `retry-${randomUUID()}` },
-          bound,
-          null,
-        );
-      });
-
       /** The turn as it ends without a response: the state its rows left. */
       const endedAs = (
         cell: RunCell,
@@ -793,7 +771,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         const retries = (yield* ScopedRef.get(run.model)).automaticRetries;
         for (;;) {
           const { invocation, requests, activatedAt } = yield* cell.current;
-          const move = nextAttempt(invocation, requests, retries, activatedAt);
+          const move = nextAttempt(invocation, requests, activatedAt);
           if (move.kind === 'fail') return yield* endedAs(cell, 'failed');
           if (move.kind === 'cancel') return yield* endedAs(cell, 'cancelled');
           if (move.kind === 'await') {
@@ -806,10 +784,6 @@ export const modelInvokerLayer = (): Layer.Layer<
               (yield* cell.current).commit,
             ).pipe(Effect.provideService(SessionLog, log));
             yield* cell.refresh;
-            continue;
-          }
-          if (move.kind === 'reask') {
-            yield* reask(cell, move.attempt);
             continue;
           }
           const ref =

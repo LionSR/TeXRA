@@ -226,7 +226,7 @@ export const MODEL_RETRY_MAX_ATTEMPTS_SETTING = {
   ),
   title: 'Automatic retries',
   description:
-    'Additional automatic retries after the initial model request (0–5). A resumed request keeps the retries it already used.',
+    'Additional automatic retries after the initial model request (0–5). A request cut off by a stop or a crash counts as none: its run sends it again when resumed.',
 } as const satisfies SettingRow<number>;
 
 export const CHATGPT_PREFER_SUBSCRIPTION_SETTING = {

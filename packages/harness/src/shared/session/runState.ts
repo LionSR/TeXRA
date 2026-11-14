@@ -29,7 +29,7 @@ import {
   type SessionRow,
   type SessionRowDraft,
 } from '@shared/schemas';
-import { closedBy, NO_FACTS, withInput, type RunFacts } from './runFacts';
+import { NO_FACTS, withInput, type RunFacts } from './runFacts';
 import {
   applyRunRow,
   type BatchCopies,
@@ -291,20 +291,9 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
   'run.position': { requires: 'any', apply: applySharedRow },
   'request.opened': { requires: 'existing', apply: applySharedRow },
   'request.decided': { requires: 'existing', apply: applySharedRow },
-  'run.stop': {
-    // A shutdown's stop cut the attempt it stopped, which spends no retry
-    // when the run resumes.
-    requires: 'existing',
-    apply: (state, row) =>
-      Result.succeed({
-        ...state,
-        invocation:
-          row.reason === 'shutdown'
-            ? closedBy(state.invocation)
-            : state.invocation,
-      }),
-  },
-  // The lifecycle's end: nothing continues from it until the next open.
+  // A stop and the lifecycle's end: nothing continues from either until
+  // the next open, which restarts whatever they cut.
+  'run.stop': { requires: 'existing', apply: (state) => Result.succeed(state) },
   'run.end': { requires: 'existing', apply: (state) => Result.succeed(state) },
   'run.activate': {
     requires: 'existing',

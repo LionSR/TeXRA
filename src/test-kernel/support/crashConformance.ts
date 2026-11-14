@@ -46,10 +46,9 @@
  *   ended cleanly before the crash;
  * - a person is asked whether a command ran that the crash stopped before
  *   its body started (before its approval);
- * - approvals durable: a crash between a request and its answer leaves it
- *   pending, and the resume's answer is to that same request; a crash
- *   between the answer and the body it admits honours that answer. Either
- *   way the attempt never asks again;
+ * - approvals durable: a request a crash left pending stays offered after
+ *   it (the next activation cancels it and its asker asks again), or a
+ *   crash between an answer and the body it admits loses that answer;
  * - an edit of a file the run read before the crash is refused after it as
  *   unread: what a run has read is a fact of its rows, not of the process
  *   that ran the read (#14479);

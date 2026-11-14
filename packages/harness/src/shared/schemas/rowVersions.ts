@@ -159,7 +159,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // reply, the route's, or an attempt the process stopped during), never
   // its words or a classification of it (an earlier build's end would read
   // without its verdict).
-  'run.end': { version: 9, listing: 'own' },
+  // v10: a model failure has no `interrupted` source, as `model.message`
+  // v18.
+  'run.end': { version: 10, listing: 'own' },
   'run.removed': { ...V1, listing: 'lifecycle' },
   // v2: a model's summary carries its helper request's priced `usage`,
   // which the run's spend counts (a v1 summary would read as free).
@@ -206,7 +208,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v11: who answers a request is its row's `answeredBy`, decided once as
   // it opens, and no payload carries `offersGrant` (an earlier build's row
   // names no answerer).
-  'request.opened': { version: 11, listing: 'request' },
+  // v12: a retry's failure has no `interrupted` source, as `model.message`
+  // v18.
+  'request.opened': { version: 12, listing: 'request' },
   // v2: no `setup` arm; a proposal's approve may carry edited files,
   // instruction and options.
   'request.decided': { version: 2, listing: 'request' },
@@ -242,7 +246,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v8: an error row's model failure is its verdict (`failure`), with no
   // worded `message`, status or classification beside it (an earlier
   // build's error row would be refused as a damaged payload).
-  log: { version: 8, listing: 'none' },
+  // v9: an error row's model failure has no `interrupted` source, as
+  // `model.message` v18.
+  log: { version: 9, listing: 'none' },
   // v2: no `phase` kind and no `index`/`total` (an earlier build's script
   // phase stage would fail its run as damaged rather than read as that
   // build's).
@@ -323,7 +329,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v17: no `identified` kind: an accepted operation holds the provider's
   // response id, and nothing read it elsewhere (an earlier build's row
   // would fail as damaged).
-  'model.message': { version: 17, listing: 'none' },
+  // v18: a failure has no `interrupted` source: a resume sends an attempt
+  // no row saw end again and asks nobody (an earlier build's question
+  // about such an attempt would fail as damaged).
+  'model.message': { version: 18, listing: 'none' },
   // v2: the causes are `compaction` and `fork` alone (an earlier build's edit
   // of another cause would fail its run as damaged rather than read as that
   // build's).

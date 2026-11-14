@@ -26,12 +26,11 @@ export const SubscriptionSessionFailureSchema = Schema.Struct({
 /**
  * A model call's failure as a run records it: the verdict, never its words.
  * `model` is llm's verdict on the vendor's reply (its kind, the vendor's own
- * message and status, and the quota a used-up plan or credit names), `route`
- * is model access finding no route to send on (a missing key, a subscription
- * session that could not bill), and `interrupted` is an attempt the process
- * stopped during, which may have been billed without an answer. `provider`
- * is the binding's. Each reader words it ({@link modelFailureMessage}, or an
- * app's own copy), so a wording change is not a format change.
+ * message and status, and the quota a used-up plan or credit names), and
+ * `route` is model access finding no route to send on (a missing key, a
+ * subscription session that could not bill). `provider` is the binding's.
+ * Each reader words it ({@link modelFailureMessage}, or an app's own copy),
+ * so a wording change is not a format change.
  */
 export const ModelFailureSchema = Schema.Union([
   ModelErrorFieldsSchema.mapFields(
@@ -52,10 +51,6 @@ export const ModelFailureSchema = Schema.Union([
     /** The route's credential is not set anywhere the run reads. */
     missingApiKey: Schema.optional(Schema.Literal(true)),
     session: Schema.optional(SubscriptionSessionFailureSchema),
-  }),
-  Schema.Struct({
-    source: Schema.Literal('interrupted'),
-    provider: Schema.optional(Schema.String),
   }),
 ]);
 /** {@link ModelFailureSchema}'s value. */
@@ -107,10 +102,6 @@ export function usageLimitMessage(
   return `${names.plan} usage limit reached${tier}.${reset} Switch to ${names.fallback} to keep working, or wait until the limit resets.`;
 }
 
-/** What a person is told of an attempt the process stopped during. */
-const INTERRUPTED_MESSAGE =
-  'The process stopped while a model request was running, so it may have been billed without an answer. Retry again?';
-
 /**
  * A model call's failure in plain words, the one wording of the verdict for
  * every reader without copy of its own: a used-up plan says what ran out
@@ -119,7 +110,6 @@ const INTERRUPTED_MESSAGE =
  * message under its status.
  */
 export function modelFailureMessage(failure: ModelFailure): string {
-  if (failure.source === 'interrupted') return INTERRUPTED_MESSAGE;
   if (failure.source === 'route') {
     const { message, session } = failure;
     if (session === undefined) return message;
