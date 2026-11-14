@@ -141,12 +141,6 @@ export const ModelMessagePayloadSchema = Schema.Union([
     request: Sha256Schema,
     origin: StoredOriginSchema,
   }),
-  /** Provider identity observed before completion. */
-  Schema.Struct({
-    kind: Schema.Literal('identified'),
-    invocation: InvocationRefSchema,
-    providerResponseId: Schema.String.check(Schema.isMinLength(1)),
-  }),
   /** The attempt failed: what went wrong, as its verdict (llm's on the
    *  vendor's reply, or the route's), and what the invoker does next,
    *  decided once here so a resume replays it. */

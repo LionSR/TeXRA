@@ -143,15 +143,6 @@ export const submitAndObserve = (
         {
           type: 'model.message',
           aggregateId,
-          payload: {
-            kind: 'identified',
-            invocation,
-            providerResponseId: operation.providerResponseId,
-          },
-        },
-        {
-          type: 'model.message',
-          aggregateId,
           payload: { kind: 'accepted', invocation, operation, deadlineAtMs },
         },
       ]);

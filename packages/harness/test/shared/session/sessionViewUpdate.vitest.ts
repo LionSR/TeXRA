@@ -183,7 +183,6 @@ const TURN_ROWS: readonly RunHistoryRow[] = [
   toolTurn.append,
   position('turn.ready', 0),
   toolTurn.attempt,
-  toolTurn.identified,
   toolTurn.response,
   toolTurn.intent,
   toolTurn.result('call-a'),
@@ -261,7 +260,7 @@ describe('applyRunRows', () => {
   ])('%s', (_name, check) => check());
 
   it('delivers the paid assistant turn once and derives usage from the rows', () => {
-    const state = stateOf(through(10));
+    const state = stateOf(through(9));
     expect(state?.messages.map((m) => m.role)).toEqual([
       'user',
       'assistant',
@@ -273,8 +272,8 @@ describe('applyRunRows', () => {
     // The turn's stamped price: a settlement adds nothing to it.
     expect(state?.usage.cost).toBe(0.25);
     // Incremental and cold folds are the same computation.
-    const half = stateOf(applyRunRows(null, TURN_ROWS.slice(0, 6)));
-    expect(stateOf(applyRunRows(half, TURN_ROWS.slice(6)))).toEqual(state);
+    const half = stateOf(applyRunRows(null, TURN_ROWS.slice(0, 5)));
+    expect(stateOf(applyRunRows(half, TURN_ROWS.slice(5)))).toEqual(state);
   });
 
   it.each([
@@ -284,7 +283,7 @@ describe('applyRunRows', () => {
       'out-of-order',
       () =>
         through(
-          6,
+          5,
           {
             ...toolTurn.intent,
             payload: { ...toolTurn.intent.payload, attempt: 2 },
@@ -295,7 +294,7 @@ describe('applyRunRows', () => {
     [
       // A call settles once.
       'orphan-settlement',
-      () => through(7, toolTurn.result('call-a', { attempt: 2 })),
+      () => through(6, toolTurn.result('call-a', { attempt: 2 })),
     ],
   ])('refuses loudly: %s', (reason, run) => {
     expect(reasonOf(run())).toBe(reason);
@@ -308,7 +307,7 @@ describe('applyRunRows', () => {
   it('folds a structured output a script submitted', () => {
     const state = stateOf(
       through(
-        5,
+        4,
         {
           type: 'script.call',
           payload: {
@@ -337,7 +336,7 @@ describe('applyRunRows', () => {
   it('keeps a final-tool nudge on the turn it was appended in', () => {
     const state = stateOf(
       through(
-        9,
+        8,
         message({
           kind: 'append',
           sourceResponse: null,
@@ -419,7 +418,6 @@ describe('nextAttempt', () => {
       current: {
         ref: { invocationId: '0'.repeat(8), attempt: 1 },
         sent: null,
-        providerResponseId: null,
         accepted: null,
         failed: {
           error: { source: 'interrupted' },

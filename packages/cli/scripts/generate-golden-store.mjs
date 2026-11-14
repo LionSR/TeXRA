@@ -1344,7 +1344,6 @@ async function normalize(file, root) {
     updateSequence.run(ids.get(row.logical_id), uuids.get(row.uid), row.id);
   }
   for (const [table, column, keys] of [
-    ['projected_row', 'data', ['"commit"', 'type']],
     ['run_usage', 'usage', ['aggregate']],
     ['current_value', 'value', ['family', 'key']],
   ]) {

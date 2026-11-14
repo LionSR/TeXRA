@@ -51,7 +51,6 @@ type StoredPayload<K> = Extract<
 >;
 
 export type ModelMessagePayload =
-  | StoredPayload<'identified'>
   | StoredPayload<'failed'>
   | Replace<StoredPayload<'attempt'>, { readonly origin: ModelOrigin }>
   | Replace<StoredPayload<'accepted'>, { readonly operation: RemoteOperation }>

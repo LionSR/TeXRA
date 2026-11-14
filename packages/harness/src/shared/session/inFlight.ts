@@ -41,7 +41,6 @@ export type Attempt = {
     readonly request: string;
     readonly origin: ModelOrigin;
   } | null;
-  readonly providerResponseId: string | null;
   /** The background operation a resume observes; `cancelled` retires it. */
   readonly accepted: {
     readonly operation: RemoteOperation;
@@ -67,13 +66,7 @@ export type Invocation = {
 type InvocationRow = Extract<
   ModelMessagePayload,
   {
-    kind:
-      | 'attempt'
-      | 'identified'
-      | 'accepted'
-      | 'cancelled'
-      | 'failed'
-      | 'response';
+    kind: 'attempt' | 'accepted' | 'cancelled' | 'failed' | 'response';
   }
 >;
 
@@ -135,7 +128,6 @@ function openedBy(
       ref: p.invocation,
       sent:
         p.kind === 'attempt' ? { request: p.request, origin: p.origin } : null,
-      providerResponseId: null,
       accepted: null,
       failed: p.kind === 'failed' ? { error: p.error, next: p.next } : null,
       closed: false,
@@ -165,8 +157,6 @@ function movedBy(
   switch (p.kind) {
     case 'attempt':
       return outOfOrder('an attempt row moves no attempt');
-    case 'identified':
-      return moved({ providerResponseId: p.providerResponseId });
     case 'accepted':
       return moved({
         accepted: { operation: p.operation, deadlineAtMs: p.deadlineAtMs },

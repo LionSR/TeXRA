@@ -320,7 +320,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // the route's, or `interrupted` for an attempt the process stopped
   // during, in place of a made-up failure message (an earlier build's
   // error would read without its verdict).
-  'model.message': { version: 16, listing: 'none' },
+  // v17: no `identified` kind: an accepted operation holds the provider's
+  // response id, and nothing read it elsewhere (an earlier build's row
+  // would fail as damaged).
+  'model.message': { version: 17, listing: 'none' },
   // v2: the causes are `compaction` and `fork` alone (an earlier build's edit
   // of another cause would fail its run as damaged rather than read as that
   // build's).

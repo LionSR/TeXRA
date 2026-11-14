@@ -483,7 +483,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             expect(user.stopped).toEqual([
               'append',
               'attempt',
-              'identified',
               'accepted',
               'cancelled',
             ]);
@@ -492,12 +491,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             expect(user.resumed.kind).toBe('response');
 
             const shutdown = yield* scenario('shutdown');
-            expect(shutdown.stopped).toEqual([
-              'append',
-              'attempt',
-              'identified',
-              'accepted',
-            ]);
+            expect(shutdown.stopped).toEqual(['append', 'attempt', 'accepted']);
             // The resume observes the operation the shutdown left running.
             expect(shutdown.calls).toEqual({
               submit: 1,

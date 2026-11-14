@@ -299,8 +299,7 @@ The private rows themselves are never sent to a renderer
 (`shared/schemas/sessionEvent.ts#isDisplayRow`).
 
 - `model.message` (folded: yes): One arm per invocation fact: `attempt`,
-  `identified`, `accepted`, `cancelled`, `failed`, `response`, `handed-down`,
-  `append` (`shared/schemas/runHistoryEvent.ts#ModelMessagePayloadSchema`).
+  `accepted`, `cancelled`, `failed`, `response`, `handed-down`, `append` (`shared/schemas/runHistoryEvent.ts#ModelMessagePayloadSchema`).
 - `context.edit` (folded: yes): Replaces messages `[from, to)` of the model's
   view; cause `compaction` or `fork`
   (`shared/schemas/runHistoryEvent.ts#ContextEditPayloadSchema`).
@@ -328,7 +327,6 @@ The `model.message` arms:
 
 - `attempt`: A billed request is about to leave; names its recorded request by
   sha256 and its origin.
-- `identified`: The provider's response id, seen before completion.
 - `accepted`: A background operation the provider accepted, with its admitted
   deadline.
 - `cancelled`: A user stop the provider confirmed for an accepted operation.

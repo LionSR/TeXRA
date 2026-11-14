@@ -108,7 +108,6 @@ function rowOrigins(row: RunHistoryDraft): readonly ModelOrigin[] {
         : [p.turn.requestedOrigin, continuation.origin];
     }
     // These carry no origin: a new kind is placed here or above.
-    case 'identified':
     case 'failed':
     case 'cancelled':
     case 'handed-down':

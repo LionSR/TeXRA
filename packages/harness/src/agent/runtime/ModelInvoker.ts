@@ -2,9 +2,9 @@
  * The one service that touches the llm `Model` for a run. One `invoke` is
  * one turn with its billed attempts: the `TurnRequest` assembled from the
  * folded `RunState`, `prepareTurn`, the `attempt` row committed before the
- * request leaves the process, `identified` when the provider names the
- * response, the stream bridged into the trace, and the `response` row with
- * its dispatch facts and priced usage committed before any tool runs.
+ * request leaves the process, the stream bridged into the trace, and the
+ * `response` row with its dispatch facts and priced usage committed before
+ * any tool runs.
  * `call` is a compaction summary on the same binding, gate and pricing, off
  * the rows (`run/modelCall.ts`): its usage rides the edit its caller lands.
  *
@@ -236,9 +236,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         });
 
       /**
-       * One attempt from its first event to its `response` row. The
-       * provider's identity becomes an `identified` row as soon as it is
-       * seen (once; a background operation may report it twice), deltas
+       * One attempt from its first event to its `response` row. Deltas
        * stream into the run's thinking and output handles, and the
        * completed result is kept. Then the handles close, a failed stream
        * classifies, an empty one is a malformed output, and a completed
@@ -267,46 +265,30 @@ export const modelInvokerLayer = (): Layer.Layer<
           value: TurnResult | null;
           streamedText: string;
         } = { value: null, streamedText: '' };
-        const onEvent = Effect.fnUntraced(function* (event: TurnEvent) {
-          switch (event.kind) {
-            case 'identified': {
-              const current = yield* cell.current;
-              if (
-                current.invocation?.current.providerResponseId ===
-                event.providerResponseId
-              ) {
+        const onEvent = (event: TurnEvent) =>
+          Effect.sync(() => {
+            switch (event.kind) {
+              // The provider's name for the response: no row records it, an
+              // accepted background operation carries its own.
+              case 'identified':
                 return;
-              }
-              yield* cell.append([
-                {
-                  type: 'model.message',
-                  aggregateId,
-                  payload: {
-                    kind: 'identified',
-                    invocation,
-                    providerResponseId: event.providerResponseId,
-                  },
-                },
-              ]);
-              return;
+              case 'delta':
+                if (event.part === 'reasoning') {
+                  trace.thinking.append(event.text);
+                } else {
+                  trace.output.append(event.text);
+                  // Kept for the failure path only: a completed turn reports
+                  // its own text, so this tail is read when the stream dies.
+                  completed.streamedText = (
+                    completed.streamedText + event.text
+                  ).slice(-PARTIAL_TEXT_TAIL_MAX);
+                }
+                return;
+              case 'completed':
+                completed.value = event.result;
+                return;
             }
-            case 'delta':
-              if (event.part === 'reasoning') {
-                trace.thinking.append(event.text);
-              } else {
-                trace.output.append(event.text);
-                // Kept for the failure path only: a completed turn reports
-                // its own text, so this tail is read when the stream dies.
-                completed.streamedText = (
-                  completed.streamedText + event.text
-                ).slice(-PARTIAL_TEXT_TAIL_MAX);
-              }
-              return;
-            case 'completed':
-              completed.value = event.result;
-              return;
-          }
-        });
+          });
         const streamed = yield* Effect.exit(Stream.runForEach(events, onEvent));
         if (Exit.isFailure(streamed)) {
           trace.thinking.finalize(undefined);
