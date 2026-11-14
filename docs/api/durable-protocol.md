@@ -127,7 +127,7 @@ one (section 9):
 ### Owned child runs and `context.edit`
 
 - **Owned children**: when a parent run calls `agent` and awaits the child, the child's `runId` is derived deterministically from `(parentRunId, responseId, callId, attempt)` and `run.start.parent.call.callId` names the owning call. On recovery, the parent's open `agent` call reattaches to that child (reading its result if finished, or resuming it under the same `runId`). Calling `session.resume(childRunId)` on an owned child resumes the parent and sets [`run.redirectedFrom`](./harness/#run).
-- **Context edits (`context.edit`) and forks (`run.fork`)**: compaction and forking both write `context.edit` rows that replace a message slice `[from, to)` against a recorded `base` edit. `run.fork` creates a new run whose `run.start.provenance` is `{ kind: 'fork', from, at }` seeded with a `context.edit` snapshot at `at`.
+- **Context edits (`context.edit`) and forks (`run.fork`)**: compaction and forking both write `context.edit` rows that replace a message slice `[from, to)`. `run.fork` creates a new run whose `run.start.provenance` is `{ kind: 'fork', from, at }` seeded with a `context.edit` snapshot at `at`.
 
 ## Crash-conformance invariants (`I1`–`I9`)
 

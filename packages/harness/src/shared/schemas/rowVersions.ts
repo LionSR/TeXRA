@@ -332,7 +332,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v7: a compaction may be triggered by an `overflow`, the request the
   // model's window could not hold (an earlier build would refuse the trigger
   // as damaged).
-  'context.edit': { version: 7, listing: 'none' },
+  // v8: no `base`: an edit is written by the fiber that holds the view it
+  // edits (an earlier build's row would have the field silently dropped).
+  'context.edit': { version: 8, listing: 'none' },
   // v2: the intent names the card its attempt opens (`logId`, `toolName`,
   // the `input` the body runs on, the tool's `card`, a script's `section`),
   // which a display read shows as the call's `tool.start`; the run loop

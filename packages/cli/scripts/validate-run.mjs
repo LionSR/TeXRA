@@ -1812,17 +1812,17 @@ prompt: |
 }
 
 /**
- * Background compaction end to end (durable harness H5, gap 4): at a 1%
- * threshold, a long first message puts the conversation over it. The
- * message starts a task in the service, which takes messages as a chat's
- * run does (a headless `texra run` takes none). The chat that resumes it
- * runs a turn that starts the summary off the loop and still sends the
- * whole history (the reply names the first message), and the turn after
- * lands it, as an edit of the messages before that turn's request,
- * keeping what followed (the reply names the summary and the new message
- * only). The store's `context.edit` rows are kept as the artifact.
+ * Threshold compaction end to end: at a 1% threshold, a long first message
+ * puts the conversation over it. The message starts a task in the service,
+ * which takes messages as a chat's run does (a headless `texra run` takes
+ * none). The chat that resumes it runs a turn whose request waits for the
+ * summary of the whole history, the turn's message included, and sends
+ * only that (the reply names the summary and nothing before it); the turn
+ * after is under the threshold and adds its message (the reply names the
+ * summary and the new message). The store's `context.edit` rows are kept
+ * as the artifact.
  */
-async function validateBackgroundCompaction() {
+async function validateThresholdCompaction() {
   const cwd = makeScratch('texra-cli-compaction-');
   try {
     const project = echoProject(cwd, {
@@ -1860,7 +1860,7 @@ async function validateBackgroundCompaction() {
       await observed.close();
     }
     const replies = [
-      'First message | Second message',
+      'Model saw: [Previous conversation summary]',
       'Earlier turns, summarized. | Third message',
     ];
     await project.chat(
@@ -1872,7 +1872,7 @@ async function validateBackgroundCompaction() {
     );
     project.stopService();
     const rows = project.readStore(VIEW_ROWS);
-    const artifactPath = writeArtifact('background-compaction.json', {
+    const artifactPath = writeArtifact('threshold-compaction.json', {
       source,
       replies,
       rows,
@@ -1883,7 +1883,7 @@ async function validateBackgroundCompaction() {
         edits[0].cause === 'compaction' &&
         edits[0].trigger === 'context-limit' &&
         JSON.parse(edits[0].range).to === 3,
-      `the summary should land as one edit of the three messages before the second turn's request (artifact: ${artifactPath})`,
+      `the summary should land as one edit of the three messages the second turn's request held (artifact: ${artifactPath})`,
     );
   } finally {
     removeScratch(cwd);
@@ -3605,7 +3605,7 @@ async function validateCliRunArtifacts(options = {}) {
   await validateFork();
   await validateTuiFork();
   await validateMidTurnDelivery();
-  await validateBackgroundCompaction();
+  await validateThresholdCompaction();
   await validateOpenTimePrompt();
   await validateServiceSharedTask();
   await validateServiceTasksInTui();
