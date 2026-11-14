@@ -12,7 +12,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 import { acceptsFollowUp, resolveBypass } from '@texra-ai/harness/schemas';
-import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { CopyButtonController } from '@ui/litControllers/CopyButtonController';
 import type { IconName } from '@ui/wa/iconNames';
 import { runNoticeText, runStatus } from '@ui/copy/runStatus';

@@ -219,7 +219,7 @@ interface AgentCliTurnParams<TTurn> {
    *  the turn returns. Null when the provider reported none. */
   getUsage: (turn: TTurn) => TokenUsageStats | null;
   /** The delivery of a turn the provider returned. */
-  delivery: (turn: TTurn, wallTimeMs: number) => ChildRunDelivery;
+  delivery: (turn: TTurn, wallTime: string) => ChildRunDelivery;
   /** The delivery of a failed turn: one the provider reported failed, or
    *  (no turn) one that threw. */
   errorDelivery: (turn: TTurn | null, err: unknown) => ChildRunDelivery;
@@ -252,6 +252,7 @@ export function buildAgentCliTurn<TTurn>(
     const startedAt = yield* Clock.currentTimeMillis;
     const turn = yield* runProviderTurn;
     const wallTimeMs = (yield* Clock.currentTimeMillis) - startedAt;
+    const wallTime = `${(wallTimeMs / 1000).toFixed(1)}s`;
     // Every turn the provider returns, an error turn included, reports its
     // spend: the child has no model rows, so its `usage` rows are its one
     // record of spend.
@@ -262,7 +263,7 @@ export function buildAgentCliTurn<TTurn>(
       });
       logger.emit({ type: 'usage', usage });
     }
-    logger.info(`Turn completed in ${(wallTimeMs / 1000).toFixed(1)}s`);
+    logger.info(`Turn completed in ${wallTime}`);
     if (isTurnError?.(turn) === true) {
       const failure =
         turnErrorMessage?.(turn) ??
@@ -270,7 +271,7 @@ export function buildAgentCliTurn<TTurn>(
       logger.error(failure);
       return { report: errorDelivery(turn, null), failure };
     }
-    return { report: delivery(turn, wallTimeMs) };
+    return { report: delivery(turn, wallTime) };
   }).pipe(
     Effect.onExit((exit) =>
       claim === undefined ? Effect.void : Scope.close(claim, exit),

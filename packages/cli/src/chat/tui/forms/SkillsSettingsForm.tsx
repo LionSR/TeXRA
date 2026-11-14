@@ -11,7 +11,7 @@ import {
 import { type WorkspaceRoots } from '@texra-ai/harness';
 import { Skills, type ProcessRuntime } from '@texra-ai/harness/host';
 import { Settings } from '@texra-ai/harness/plugins';
-import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
+import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
 
 import { AsyncListForm } from './_shared/ListForm';
 

@@ -15,7 +15,6 @@ import {
   type DocumentTaskOptions,
 } from '@texra/shared/plugins/documents';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
-import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 
 import {
   failUsage,
@@ -67,12 +66,14 @@ import {
 } from '../runtime/headless/terminalStatus';
 import {
   hasMixedStdinDocumentTaskInputSpecs,
+  classifyInputFiles,
   withExpandedRunInputs,
   DOCUMENT_TASK_INPUT_REQUIRED_MESSAGE,
 } from '../runtime/headless/documentTaskInputs';
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
+  cliLaunchOutput,
   formatDocumentTaskTextResult,
   inputDerivedOutputFiles,
   resolveDocumentTaskOutput,
@@ -97,19 +98,6 @@ interface HeadlessRunInit {
   readonly instructionFile?: string;
   /** The document task's switches, each a flag of the same name. */
   readonly options: DocumentTaskOptions;
-}
-
-/** Keep binary media out of document text interpolation on both run paths. */
-function classifyInputFiles(files: readonly string[]) {
-  const extensions = getIncludedExtensions('media');
-  const inputFiles: string[] = [];
-  const mediaFiles: string[] = [];
-  for (const file of files) {
-    if (extensions.includes(path.extname(file).toLowerCase()))
-      mediaFiles.push(file);
-    else inputFiles.push(file);
-  }
-  return { inputFiles, mediaFiles };
 }
 
 /**
@@ -190,9 +178,13 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
     init.contextFiles,
     context.cwd,
     {},
-    Effect.fnUntraced(function* ({ inputFiles, contextFiles, stdinInputPath }) {
-      const classified = classifyInputFiles(inputFiles);
-      if (init.output && classified.inputFiles.length > 1) {
+    Effect.fnUntraced(function* ({
+      inputFiles,
+      mediaFiles,
+      contextFiles,
+      stdinInputPath,
+    }) {
+      if (init.output && inputFiles.length > 1) {
         return yield* failUsage(MULTI_INPUT_OUTPUT_MESSAGE);
       }
 
@@ -207,7 +199,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
       // stamped on the config below, from the entry resolved above, and
       // read back from the recorded config at finalization.
       const expectedOutputFiles = init.outputDir
-        ? inputDerivedOutputFiles(classified.inputFiles, stdinInputPath)
+        ? inputDerivedOutputFiles(inputFiles, stdinInputPath)
         : undefined;
       // Persist CLI destinations absolutely so resumption has one path
       // representation and never reconstructs output locations.
@@ -221,17 +213,22 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         agent: init.agent,
         agentSource: source,
         model,
-        ...classified,
+        inputFiles,
+        mediaFiles,
         contextFiles,
         outputFiles: [],
         ...(cliOutputFile !== undefined || cliOutputDirectory !== undefined
           ? {
-              cli: {
-                outputFile: cliOutputFile,
-                outputDirectory: cliOutputDirectory,
-                expectedOutputFiles: expectedOutputFiles
-                  ? [...expectedOutputFiles]
-                  : undefined,
+              launch: {
+                ...(cliOutputFile !== undefined && {
+                  outputFile: cliOutputFile,
+                }),
+                ...(cliOutputDirectory !== undefined && {
+                  outputDirectory: cliOutputDirectory,
+                }),
+                ...(expectedOutputFiles && {
+                  expectedOutputFiles: [...expectedOutputFiles],
+                }),
               },
             }
           : {}),
@@ -292,16 +289,21 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
       allowEmptyInput: true,
       requireWorkspaceFiles: true,
     },
-    Effect.fnUntraced(function* ({ inputFiles, contextFiles, stdinInputPath }) {
-      const classified = classifyInputFiles(inputFiles);
+    Effect.fnUntraced(function* ({
+      inputFiles,
+      mediaFiles,
+      contextFiles,
+      stdinInputPath,
+    }) {
       const config: AgentConfigPayload = {
         agent: init.agent,
         agentSource,
         model,
-        ...classified,
+        inputFiles,
+        mediaFiles,
         contextFiles,
         instruction: formatToolUseAgentRunInstruction({
-          inputFiles: classified.inputFiles,
+          inputFiles,
           contextFiles,
           instruction,
         }),
@@ -397,7 +399,7 @@ export const executeCliRun = Effect.fn('executeCliRun')(function* (
         : [];
       const expectedOutputFiles = declaredOutputFiles.length
         ? declaredOutputFiles
-        : (config.cli?.expectedOutputFiles ?? undefined);
+        : (cliLaunchOutput(config).expectedOutputFiles ?? undefined);
       // The task's documents are its documents row, read from the
       // store, which holds every row the run committed once its end is.
       const outputResult = yield* Effect.result(

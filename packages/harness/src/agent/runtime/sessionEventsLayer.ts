@@ -41,7 +41,6 @@ import {
   SessionEvents,
   type Append,
   type CommittedBatch,
-  type OpenWork,
   type SessionEventsShape,
 } from '@shared/session/sessionEvents';
 
@@ -60,7 +59,7 @@ export const SESSION_CLOSE_DEADLINE_MS = 5_000;
  *  not here: they close at that same move. A stage is no work of the
  *  publisher's: one left open closes on the run's outcome when the view's
  *  transcript applies its `run.end`. */
-type OpenWorkByAggregate = Map<AggregateId, Map<string, OpenWork>>;
+type OpenWorkByAggregate = Map<AggregateId, Set<string>>;
 
 /** One unit of the publisher's work, bound to its append and built when
  *  the publisher runs it: an awaited one settles the deferred its enqueuer
@@ -93,11 +92,11 @@ function openWorkTracker(): {
         aggregates.delete(row.aggregateId);
         continue;
       }
-      const work = aggregates.get(row.aggregateId) ?? new Map();
+      const work = aggregates.get(row.aggregateId) ?? new Set();
       if (closesRunWindow(row)) {
         work.clear();
       } else if (row.type === 'stream.start') {
-        work.set(row.id, { id: row.id });
+        work.add(row.id);
       } else if (row.type === 'stream.end') {
         work.delete(row.id);
       } else {
@@ -109,7 +108,7 @@ function openWorkTracker(): {
   };
   return {
     track,
-    openWork: (id) => [...(aggregates.get(id)?.values() ?? [])],
+    openWork: (id) => [...(aggregates.get(id) ?? [])],
   };
 }
 
@@ -238,7 +237,7 @@ export const sessionEventsLayer = Layer.effect(
           yield* Effect.logWarning(
             'Session publisher ended abnormally on close',
           ).pipe(
-            Effect.annotateLogs({ data: Cause.squash(ended.value.cause) }),
+            Effect.annotateLogs({ data: ended.value.cause }),
             withLogChannel(CHANNEL),
           );
         }
@@ -298,7 +297,7 @@ export const sessionEventsLayer = Layer.effect(
         run: inTransaction(job, options.order).pipe(
           Effect.catchCause((cause) =>
             Effect.logError('Session publication failed').pipe(
-              Effect.annotateLogs({ data: Cause.squash(cause) }),
+              Effect.annotateLogs({ data: cause }),
               withLogChannel(CHANNEL),
               Effect.andThen(
                 Effect.sync(() => options.failed?.(Cause.squash(cause))),

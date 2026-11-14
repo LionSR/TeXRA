@@ -35,7 +35,7 @@ import {
   projectDisplayOf,
   type ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { serviceProjectState } from '@texra/controllers/server/serviceSession';
 import type { ServiceLink } from '@texra/controllers/server/client';
 import { HostWindows } from '@texra/controllers/server/hostWindows';

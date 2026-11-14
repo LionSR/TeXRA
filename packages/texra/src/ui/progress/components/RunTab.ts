@@ -14,7 +14,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports
-import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { runNoticeText, runStatus } from '@ui/copy/runStatus';
 import { designTokens } from '@ui/styles';
 import {

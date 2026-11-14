@@ -19,7 +19,7 @@ import { FakeHost } from '@test/support/testKernel';
 import {
   TELEMETRY_ENABLED_SETTING,
   TEXRA_SETTINGS,
-} from '@texra/shared/settingsView/texraSettings';
+} from '@texra/shared/settings/texraSettings';
 
 function usageEntry(model: string) {
   return {

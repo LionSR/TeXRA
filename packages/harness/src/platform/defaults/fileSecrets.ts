@@ -15,14 +15,7 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
-import {
-  Cause,
-  Effect,
-  Fiber,
-  FileSystem,
-  type PlatformError,
-  Stream,
-} from 'effect';
+import { Effect, Fiber, FileSystem, type PlatformError, Stream } from 'effect';
 
 import { SecretsFailed, type SecretsOperation } from '@texra-ai/llm';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -185,9 +178,7 @@ export class FileSecrets implements PlatformSecrets {
             : announce(decodeURIComponent(name)),
         ),
         // fs.watch can also throw synchronously (EMFILE, ENOSPC): a defect.
-        Effect.catchCause((cause) =>
-          stopped(toErrorMessage(Cause.squash(cause))),
-        ),
+        Effect.catchCause((cause) => stopped(toErrorMessage(cause))),
         // Watching before the first listing, so no write falls between.
         (watching) => Effect.forkScoped(watching, { startImmediately: true }),
       );
@@ -196,9 +187,7 @@ export class FileSecrets implements PlatformSecrets {
       return yield* Fiber.join(watcher);
     }).pipe(
       Effect.scoped,
-      Effect.catchCause((cause) =>
-        stopped(toErrorMessage(Cause.squash(cause))),
-      ),
+      Effect.catchCause((cause) => stopped(toErrorMessage(cause))),
     );
   }
 

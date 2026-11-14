@@ -6,7 +6,7 @@
  */
 
 // Third-party imports
-import { Cause, Context, type Deferred, Effect, Exit } from 'effect';
+import { Context, type Deferred, Effect, Exit } from 'effect';
 
 // Local imports
 import {
@@ -34,7 +34,10 @@ import { Approvals, type RunHistoryRefused } from '@shared/session/runHistory';
 import { errorResult } from '@tools/core/result';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { selectAvailableDelegationModel } from './delegationAvailability';
+import {
+  delegationAgents,
+  selectAvailableDelegationModel,
+} from './delegationAvailability';
 
 // Local file imports
 import type { ApprovalMeta, DelegatedChildApproval } from './subagentRun';
@@ -56,10 +59,10 @@ export const requireAgent = Effect.fn('requireAgent')(function* (
   const catalog = yield* AgentCatalog;
   const pinned = isTaskConfig(run.config) ? catalog.get(name) : undefined;
   if (pinned) return pinned;
-  const scope = run.config.delegationAgentScope;
-  const agents = scope
-    ? catalog.pinned(scope)
-    : yield* catalog.workspaceAgents(stores).visible();
+  const agents = yield* delegationAgents(
+    stores,
+    run.config.delegationAgentScope,
+  );
   const agent = findAgentByIdentifier(agents, name);
   if (agent) return agent;
   return yield* Effect.fail(
@@ -277,7 +280,7 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
     );
     if (Exit.isFailure(modelExit)) {
       return errorResult(
-        `Cannot launch with model '${result.model}': ${toErrorMessage(Cause.squash(modelExit.cause))} Re-propose the delegation.`,
+        `Cannot launch with model '${result.model}': ${toErrorMessage(modelExit.cause)} Re-propose the delegation.`,
         {
           summary: `Approved model override '${result.model}' is not available`,
         },
@@ -290,13 +293,12 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
     changes && result.agent && result.agent !== proposal.agent
       ? result.agent
       : undefined;
-  const catalog = yield* AgentCatalog;
-  const scope = parent.run.config.delegationAgentScope;
   const resolvedAgentOverride = agentOverride
     ? findAgentByIdentifier(
-        scope
-          ? catalog.pinned(scope)
-          : yield* catalog.workspaceAgents(parent.env.roots).visible(),
+        yield* delegationAgents(
+          parent.env.roots,
+          parent.run.config.delegationAgentScope,
+        ),
         agentOverride,
       )
     : undefined;

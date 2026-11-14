@@ -12,7 +12,7 @@ import {
 import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
 import { readModelOptions } from '@texra-ai/harness/host';
 import { Secrets } from '@texra-ai/harness/plugins';
-import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
+import { CURATED_MODELS } from '@texra/model/curatedModels';
 import { FakeHost } from '@test/support/testKernel';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { MODEL_SELECTION_KEY } from '@model/computeModelOptions';
@@ -26,7 +26,7 @@ const OPENAI_KEY_SECRETS = { [apiKeySecretName('openai')]: 'sk-openai' };
 function onlyEnabled(models: readonly string[]) {
   return {
     enabledExtras: models,
-    disabledDefaults: DEFAULT_MODELS.filter((model) => !models.includes(model)),
+    disabledDefaults: CURATED_MODELS.filter((model) => !models.includes(model)),
   };
 }
 

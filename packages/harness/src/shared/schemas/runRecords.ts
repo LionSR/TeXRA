@@ -204,7 +204,7 @@ export const RunWorkspaceFilesSchema = Schema.Array(Schema.String).pipe(
         ...new Set(
           paths.map((value) => normalizeFilePath(value.trim())).filter(Boolean),
         ),
-      ].sort((a, b) => a.localeCompare(b)),
+      ].toSorted((a, b) => a.localeCompare(b)),
     ),
     encode: SchemaGetter.passthrough(),
   }),

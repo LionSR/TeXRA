@@ -232,6 +232,7 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(CHILD, T.child, {
     type: 'run.config',
     config: Schema.decodeUnknownSync(AgentConfigSchema)({
+      agent: 'search',
       model: 'claude-sonnet-5-5',
       instruction: 'search',
     }),
@@ -331,6 +332,7 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(PROCESS, T.process, {
     type: 'run.config',
     config: Schema.decodeUnknownSync(AgentConfigSchema)({
+      agent: 'bash',
       model: 'unused',
       instruction: 'npm test',
     }),

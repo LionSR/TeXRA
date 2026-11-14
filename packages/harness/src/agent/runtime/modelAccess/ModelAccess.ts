@@ -37,7 +37,6 @@ import { bindRoute } from './binding';
 import {
   admitSwitch,
   credentialSwitch,
-  decideRoute,
   type SwitchRefusal,
 } from './routeDecision';
 import type { Binding } from '@texra-ai/llm/node';
@@ -120,40 +119,6 @@ const settingsOf = (stores: SettingsStores) =>
     error instanceof RouteUnavailable ? error : RouteUnavailable.of(error),
   );
 
-/** Bind `request` over one settings read. */
-const bindOver = Effect.fn('ModelAccess.bind')(function* (
-  stores: SettingsStores,
-  request: BindRequest,
-): Effect.fn.Return<
-  BoundModel,
-  CallFailure,
-  Scope.Scope | HttpClient.HttpClient | Secrets | SubscriptionAccounts
-> {
-  const selected = selectModel(request.modelId);
-  const requested = request.config ?? selected?.config;
-  if (requested === undefined) {
-    return yield* RouteUnavailable.of(
-      new Error(`Model ${request.modelId} is not registered`),
-    );
-  }
-  const ask = selected?.request ?? {};
-  const settings = yield* settingsOf(stores);
-  const decision = yield* decideRoute(requested, settings, {
-    ...request,
-    mode: ask.mode,
-  });
-  return yield* bindRoute({
-    request,
-    requested,
-    // A rebind that keeps the route's overlay as `request.config` still
-    // reports its usage under the catalog entry.
-    catalogEntry: selected?.config ?? requested,
-    ask,
-    settings,
-    decision,
-  });
-});
-
 /**
  * Model access over `stores` (a session's setting slots), the process
  * {@link Secrets} and its subscription accounts, for the project whose environment is in force where the
@@ -183,7 +148,7 @@ export const modelAccessLayer = (
           Effect.provideService(SubscriptionAccounts, accounts),
         );
       return {
-        bind: (request) => inProject(bindOver(stores, request)),
+        bind: (request) => inProject(bindRoute(request, settingsOf(stores))),
         admit: (modelId, current, declined) => {
           if (current.modelId === modelId) return Effect.succeed(null);
           const selected = selectModel(modelId);

@@ -77,6 +77,7 @@ const program = Effect.gen(function* () {
   const run = yield* session.start({
     agent: 'polish',
     instruction: 'Tighten the summary in notes.md.',
+    model: 'anthropic/claude-sonnet-5-5',
   });
   // The events end when the run does; `responseText` keeps the answer's
   // text and drops the model's thinking and tool output.
@@ -116,6 +117,7 @@ const program = Effect.gen(function* () {
       tools: ['read_file', 'grep'],
     },
     instruction: 'Suggest a tighter summary for notes.md.',
+    model: 'anthropic/claude-sonnet-5-5',
   });
   return yield* run.result;
 });
@@ -196,6 +198,7 @@ const program = Effect.gen(function* () {
   const run = yield* session.start({
     agent: 'polish',
     instruction: 'Tighten the summary in notes.md.',
+    model: 'anthropic/claude-sonnet-5-5',
   });
   return yield* run.result;
 });

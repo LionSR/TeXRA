@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterAll } from 'vitest';
 import type { CliContext } from '@cli/runtime/platform/cliContext';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 
 /**
  * This test file's own storage root, removed when the file finishes. A fixed

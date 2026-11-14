@@ -6,7 +6,7 @@
  * `Error` flattener for the raw values its other callers hand it.
  */
 // Third-party imports
-import { Predicate } from 'effect';
+import { Cause, Predicate } from 'effect';
 import { configure } from 'safe-stable-stringify';
 
 const safeStringify = configure({ circularValue: '[Circular]' });
@@ -76,17 +76,24 @@ function isPlainObject(value: object): value is Record<string, unknown> {
   return proto === Object.prototype || proto === null;
 }
 
+/** A failed Effect's `Cause` as the error it raised, so a producer attaches
+ * the cause it caught and this module decides how a failure reads. */
+const raisedBy = (value: unknown): unknown =>
+  Cause.isCause(value) ? Cause.squash(value) : value;
+
 /**
  * Render one debug payload. Errors don't survive `JSON.stringify`, so they're
  * flattened here, each `Error` to one object for the whole render so
- * `safe-stable-stringify` still renders a cycle as `"[Circular]"`.
+ * `safe-stable-stringify` still renders a cycle as `"[Circular]"`. A `Cause`,
+ * as the payload or any field of it, renders as the error it raised.
  *
  * A plain payload's `Error`-valued fields render after its other fields, each
  * group in sorted key order. The sink bounds the rendered string, and a stack
  * sorted ahead of `runId` or `key` would otherwise spend that budget and cut
  * the fields that identify what failed.
  */
-export function formatLogData(data: unknown): string {
+export function formatLogData(payload: unknown): string {
+  const data = raisedBy(payload);
   if (!Predicate.isObjectOrArray(data)) return String(data);
   const flattened = new WeakMap<Error, Record<string, unknown>>();
   // `splitRoot` is the payload a split render copied its fields out of. Each
@@ -98,12 +105,17 @@ export function formatLogData(data: unknown): string {
       value,
       (_key, field) => {
         if (field === splitRoot) return '[Circular]';
-        return field instanceof Error ? flattenError(field, flattened) : field;
+        const raised = raisedBy(field);
+        return raised instanceof Error
+          ? flattenError(raised, flattened)
+          : raised;
       },
       2,
     ) ?? String(value);
   if (!isPlainObject(data)) return render(data);
-  const fields = Object.entries(data);
+  const fields = Object.entries(data).map(
+    ([key, field]) => [key, raisedBy(field)] as const,
+  );
   const errorFields = fields.filter(([, field]) => field instanceof Error);
   if (errorFields.length === 0) return render(data);
   const head = render(

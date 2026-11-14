@@ -14,7 +14,7 @@ export function cachedDateTimeFormat(
   // Sorted so the same options produce the same key regardless of property
   // order (plain `JSON.stringify` would key on insertion order instead).
   const key = Object.entries(options)
-    .sort(([a], [b]) => a.localeCompare(b))
+    .toSorted(([a], [b]) => a.localeCompare(b))
     .map(([k, v]) => `${k}:${v}`)
     .join(',');
   let formatter = formatters.get(key);

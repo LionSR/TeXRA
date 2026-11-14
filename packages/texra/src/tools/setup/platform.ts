@@ -107,7 +107,7 @@ export function assertInSetupAllowlist(
   if (allowed.has(id)) return Effect.void;
   return Effect.fail(
     new ToolError(
-      `${kind} "${id}" is not in the setup allowlist. Allowed: ${[...allowed].sort().join(', ')}.`,
+      `${kind} "${id}" is not in the setup allowlist. Allowed: ${[...allowed].toSorted().join(', ')}.`,
     ),
   );
 }
