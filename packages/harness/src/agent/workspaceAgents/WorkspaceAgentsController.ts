@@ -17,7 +17,6 @@ import {
 import type { StateKey } from '@shared/state/stateSettings';
 
 import {
-  forgetHiddenAgent,
   HIDDEN_CUSTOM_AGENTS_KEY,
   WORKSPACE_AGENTS_KEY,
   readWorkspaceAgentsSelection,
@@ -295,11 +294,6 @@ export class WorkspaceAgentsController<
       () =>
         new InvalidAgentTeamError({ message: `Unknown agent team: ${teamId}` }),
     );
-  }
-
-  /** A custom agent the user deleted: its hidden choice goes with it. */
-  forgetDeletedAgent(name: string): Effect.Effect<void, StateWriteFailed> {
-    return forgetHiddenAgent(this.deps.repoState, name);
   }
 
   setAgentEnabled(input: {

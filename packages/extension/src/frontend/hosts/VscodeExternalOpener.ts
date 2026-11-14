@@ -18,7 +18,7 @@ export class VscodeExternalOpener implements ExternalOpener {
       catch: (cause) =>
         new HostFailed({
           member: 'openExternal',
-          message: 'VS Code would not open the URL in the default browser.',
+          message: `VS Code would not open ${url} in the default browser.`,
           cause,
         }),
     }).pipe(
@@ -31,7 +31,7 @@ export class VscodeExternalOpener implements ExternalOpener {
         () =>
           new HostFailed({
             member: 'openExternal',
-            message: 'VS Code declined to open the URL: no handler took it.',
+            message: `VS Code declined to open ${url}: no handler took it.`,
             // The refusal is the answer itself; there is no underlying fault.
             cause: undefined,
           }),
