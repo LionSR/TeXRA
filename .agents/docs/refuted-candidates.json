@@ -738,6 +738,45 @@
           "signature": "const finishCall = Effect.fn('toolUse.finishCall')(function* ( call: Call, place: Pick<RunCallShape, 'script' | 'scriptCalls'>, ended = false, ): Effect.fn.Return<void, InvokeError, AgentRunServices> {…});"
         }
       ]
+    },
+    {
+      "id": "EFF-ADOPT-workflow-run-loop",
+      "candidate": "the durable run loop (runLoop.ts, ModelInvoker.invoke over nextAttempt, toolUseDispatch over resumedAttempt) onto effect/workflow: a Workflow per run, an Activity per model or tool call, a DurableDeferred per request",
+      "why": "Read against effect 4.1.3 (every module @stability unstable); nothing was run. Three facts decide it. (1) A resume replays the workflow function from its start and memoizes completed activities by name and attempt (node_modules/effect/src/cluster/ClusterWorkflowEngine.ts:300-323, :527, :765); an awaited deferred or a child completing interrupts and replays the run (node_modules/effect/src/workflow/WorkflowEngine.ts:387-402), so each message to a run with thousands of steps costs all of them, and there is no history truncation. The loop here never re-executes: it continues from the RunState its rows rebuild. (2) Activities run at least once: only completed results are stored, and Activity.make says side effects before a suspension can repeat and must be idempotent (node_modules/effect/src/workflow/Activity.ts:124-129); an attempt that started and has no result has no representation and no hook, and an interrupted body is retried in memory. The write points here (the `attempt` row before a billed request leaves, `tool.intent` as a body starts) exist so that such an attempt spends a retry counted from the rows or is asked about, and so that a tool not declared replay-safe is not run again. (3) An interrupt ends the workflow: resume acts only on a Suspended reply (ClusterWorkflowEngine.ts:309-311), where a stopped run here resumes from its rows; and the stored results are engine messages (cluster_messages, cluster_replies) with no ordered read, where these rows are also what every host renders and what the model's history is rebuilt from, so the session rows would stay as a second log. The one durable engine, ClusterWorkflowEngine over SingleRunner (node_modules/effect/src/cluster/SingleRunner.ts:61-79), runs in one process over SQLite but brings sharding with it: 300 shards, shard-acquisition and lock-refresh loops every 10 s, reply polling every 200 ms and five cluster_* tables (node_modules/effect/src/cluster/ShardingConfig.ts:236-257). No piece lifts out: Activity, DurableDeferred and DurableClock all require the WorkflowEngine and a WorkflowInstance, and a deferred's token is what callRequestId already derives. Revisit if the engine gains a non-replaying resume and an in-flight activity hook.",
+      "ruling": "packages/harness/src/shared/session/inFlight.ts#nextAttempt",
+      "symbols": [
+        {
+          "file": "packages/harness/src/shared/session/inFlight.ts",
+          "symbol": "nextAttempt",
+          "signature": "export function nextAttempt( invocation: Invocation | null, requests: RunRowState['requests'], retries: number, activatedAt: number | null, ): NextAttempt {…}"
+        }
+      ]
+    },
+    {
+      "id": "EFF-ADOPT-eventlog-session-store",
+      "candidate": "the session store's event table, per-aggregate sequence and projections (databaseLayer.ts, rowCodec.ts, rowReader.ts, projections.ts) onto effect/eventlog: EventJournal over SqlEventJournal, with EventLog handlers as the projections",
+      "why": "Read against effect 4.1.3 (@stability unstable); nothing was run. The journal is built for syncing one log between devices, and three facts decide it. (1) It has no stream with its own order and no ranged or keyed read: an Entry is id, event, primaryKey and payload (node_modules/effect/src/eventlog/EventJournal.ts:447-452), and the only reads are `entries`, a SELECT of the whole table, and `entriesById` (node_modules/effect/src/eventlog/SqlEventJournal.ts:487-496). The store reads one run from a seq by row type, and a commit range across runs, and never the whole log. (2) A payload is a Uint8Array in the event's binary codec stored as a BLOB, with no per-kind version; the reads here select into the rows' JSON (USAGE_ROWS, the json_each bindings), the row codec refuses a row by its kind's version, and strings over 4096 characters leave the row for the content-addressed blob table. (3) An entry cannot be deleted: the one removal is `destroy`, which drops every table (SqlEventJournal.ts:570-575), where deleting a run here cascades by foreign key and the pages are reclaimed. It also always creates its remote, checkpoint and cursor tables, and EventLog requires an identity key pair. writeMany does commit a batch with a caller's effect in its transaction (:460-484), which is what `own` over sql.withTransaction already does. Adoption would leave nearly all of the four files standing.",
+      "ruling": "packages/harness/src/controllers/session/rowCodec.ts#prepareEventDraft",
+      "symbols": [
+        {
+          "file": "packages/harness/src/controllers/session/rowCodec.ts",
+          "symbol": "prepareEventDraft",
+          "signature": "export function prepareEventDraft(input: WithBlobs<SessionRowDraft>): { readonly draft: SessionRowDraft; readonly row: EncodedRow; } {…}"
+        }
+      ]
+    },
+    {
+      "id": "EFF-ADOPT-sql-schema-resolver-model",
+      "candidate": "the store's hand-written statements and row decoding (rowReader.ts read, rowCodec.ts decodeRow, the point reads in databaseLayer.ts and projections.ts) onto effect/sql SqlSchema, SqlResolver and SqlModel",
+      "why": "Read against effect 4.1.3; nothing was run. The store already runs on @effect/sql-sqlite-node, sql.withTransaction, sql.afterCommit and SqlError's classification, so only the layer above the driver is in question. SqlSchema's findAll, findOne and void encode a request, execute and decode the rows all or nothing (node_modules/effect/src/sql/SqlSchema.ts:35-181): they could wrap the fixed-shape reads (the store gate, projection states, readState) at about the same size each, deleting no function and turning a row-shape defect into a typed error. They do not fit the event read: blobs are fetched between the select and the decode, a wide read leaves out a row that does not decode where a strict one fails, and `data` is JSON text inflated by a reviver. SqlResolver suspends the fiber to collect a batch, against a transaction body that awaits nothing, and the reads are already batched by list arguments; the point reads inside a transaction depend on writes made earlier in the same loop. SqlModel.makeRepository is CRUD by one id column (node_modules/effect/src/sql/SqlModel.ts:35-80); current_value has a composite key and no other table is CRUD by id. SqlError does not classify SQLITE_CORRUPT or SQLITE_NOTADB (node_modules/effect/src/sql/SqlError.ts:609-610), so isDamaged keeps its errcode read. Migrator stays refused for the reasons in the storage design note, re-read against 4.1.3. A move of the statements to the tagged template would put each parameter beside its placeholder; it is a rewrite of every statement, not a deletion.",
+      "ruling": "packages/harness/src/controllers/session/rowCodec.ts#decodeRow",
+      "symbols": [
+        {
+          "file": "packages/harness/src/controllers/session/rowCodec.ts",
+          "symbol": "decodeRow",
+          "signature": "export function decodeRow( input: SqlRow, factKinds: FactKinds, blobs: Blobs, ): Result.Result< SessionRow | undefined, DatabaseStoreNewer | DatabaseRowCorrupt | DatabaseRowEarlier > {…}"
+        }
+      ]
     }
   ]
 }
