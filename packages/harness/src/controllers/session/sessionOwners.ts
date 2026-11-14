@@ -195,14 +195,18 @@ export const sessionOwnersLayer = (
           aggregateState: database.aggregateState,
           removeRun: (id, expectedStartCommit) =>
             Effect.tap(store.removeRun(id, expectedStartCommit), (rows) =>
-              Effect.forEach(
-                rows,
-                (row) => {
-                  if (row.type !== 'run.removed') return Effect.void;
-                  for (const runId of row.runIds) inbox.forget(runId);
-                  return deletions.removed(row);
-                },
-                { discard: true },
+              // One step once the removal has committed: an interruption
+              // between rows must not leave a removed run in the inbox.
+              Effect.uninterruptible(
+                Effect.forEach(
+                  rows,
+                  (row) => {
+                    if (row.type !== 'run.removed') return Effect.void;
+                    for (const runId of row.runIds) inbox.forget(runId);
+                    return deletions.removed(row);
+                  },
+                  { discard: true },
+                ),
               ),
             ),
         },

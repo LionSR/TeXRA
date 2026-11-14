@@ -241,7 +241,8 @@ export const readRememberedDesktopProjects = Effect.fn(
 
 /** Show `message` in a warning dialog without waiting on the user, on a
  *  fiber of `scope`, the process's: a dialog that cannot be shown is logged,
- *  with the message it carried. */
+ *  with the message it carried, and once that scope has closed a warning
+ *  starts nothing. */
 const warnInDialog =
   (scope: Scope.Scope) =>
   (message: string): Effect.Effect<void> =>

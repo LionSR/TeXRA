@@ -51,7 +51,8 @@ export function createDesktopDialogs(
   },
 ) {
   /** A message box nobody answers or waits for, held by the window; one
-   *  that cannot be shown (its window gone) is logged at warn. */
+   *  the window cannot show is logged at warn, and once the window's scope
+   *  has closed a notice starts nothing. */
   const notify = (
     level: NoticeLevel,
     message: string,
