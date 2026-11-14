@@ -30,9 +30,10 @@ launch form 的选项表。**数量是症状，单位是病因。** 这个诊断
   agent 文件、persona、catalog、skill、team、task 块、recipe 这些词从内
   核消失。
 - **产品是内核加一个 `theory` 插件。** theorist 的东西总体是一个插件
-  （负责人 2026-11-14）：十个内置程序、它们调用的步骤工具和 theorist 的
-  那段文本。"AI theorist"不是 `assistant.yaml`，也不是一个 team。聊天是
-  内核的模型循环，没有 agent 文件。
+  （负责人 2026-11-14）：八个内置程序、它们调用的步骤工具和 theorist 的
+  那段文本。Lean 有外部依赖，是单独的插件，带它自己的两个程序。"AI
+  theorist"不是 `assistant.yaml`，也不是一个 team。聊天是内核的模型循
+  环，没有 agent 文件。
 - **内置程序是起点，不是边界。** 模型应该自由地 generalize（负责人
   2026-11-14）：它能读内置程序的源码，用同样的积木写自己的程序并启动
   它。
@@ -179,7 +180,8 @@ goal、恢复、预算、并行）、积累下来的程序、以及可观测和�
 
 ```
 内核      @texra-ai/harness、@texra-ai/llm   持久地跑程序；认识 run、call、tool、program、plugin
-theory    @texra-ai/texra 的一个插件         十个内置程序、它们的步骤工具、theorist 的那段文本
+theory    @texra-ai/texra 的一个插件         八个内置程序、它们的步骤工具、theorist 的那段文本
+lean4     单独的插件                         Lean 的工具和两个内置程序；没装 Lean 就整个不出现
 host      extension、desktop、cli            三个壳
 ```
 
@@ -206,7 +208,7 @@ recipe。
 头是持久化协议本身：`agent/runtime` 19220、`shared/session` 7135、
 `controllers`（SQLite 存储）6550，本提案不动它们。本提案从 harness 拿走的
 是约 4400 行 app 词汇和 `./host` 入口上为它们而设的导出（见"删除清单"）。
-把内置插件从内核目录里搬出去是另一件事，见"负责人问题"4。
+把内置插件从内核目录里搬出去是另一件事，见"负责人问题"3。
 
 内核要改的地方不多，全部列在这里，后面各节展开：
 
@@ -250,8 +252,7 @@ interface Plugin {
 ```ts
 const theory: TexraPlugin = {
   id: 'theory',
-  // Lean 的工具在 lean4 插件里：它有自己的依赖探测和语言服务
-  requires: ['lean4', 'multi-agent', 'codemode'],
+  requires: ['multi-agent', 'codemode'],
   scriptModules: { revise: REVISE, edit: EDIT, annotate: ANNOTATE /* … */ },
   programs: {
     edit: { description: 'Rewrite the documents as instructed.', tools: STEPS },
@@ -259,7 +260,6 @@ const theory: TexraPlugin = {
       description: 'Add \\criticize{} comments; never rewrites.',
       tools: STEPS,
     },
-    prove: { description: 'Prove the stated theorem in Lean.', tools: LEAN },
     // …
   },
   // 今天 documents 插件的步骤工具和它的 fact
@@ -518,31 +518,32 @@ journey、两个模型、每组 7 到 9 次：通过率持平，每次成功的�
 ### theorist 的程序插件
 
 theorist 的东西总体是一个插件，叫 `theory`（负责人 2026-11-14："就一个
-theory""总体是个插件"）。它带三样：十个内置程序，这些程序调用的步骤工
+theory""总体是个插件"）。它带三样：八个内置程序，这些程序调用的步骤工
 具和它们的 fact（今天的 `documents` 插件并进来），和 theorist 的那段基
-础文本。
+础文本。Lean 是单独的插件（负责人同日："lean 也是个单独的插件好
+了"），带它自己的两个程序。
 
-| 内置程序                                                                          | 今天的来源                      | 用到的工具                             |
-| --------------------------------------------------------------------------------- | ------------------------------- | -------------------------------------- |
-| `edit`、`annotate`、`enhance`、`apply`、`merge`、`transcribe`、`slides`、`poster` | 15 个 task 文件、`critic`       | `theory` 自己的六个步骤工具、`agent`   |
-| `prove`、`blueprint`                                                              | lean4 的 5 个 agent、5 个 skill | `lean_*`（在 `lean4` 插件里）、`agent` |
+| 插件     | 内置程序                                                                          | 今天的来源                  | 程序用到的工具                |
+| -------- | --------------------------------------------------------------------------------- | --------------------------- | ----------------------------- |
+| `theory` | `edit`、`annotate`、`enhance`、`apply`、`merge`、`transcribe`、`slides`、`poster` | 15 个 task 文件、`critic`   | 它自己的六个步骤工具、`agent` |
+| `lean4`  | `prove`、`blueprint`                                                              | 它的 5 个 agent、5 个 skill | 它自己的 `lean_*`、`agent`    |
 
-十个内置程序，一个插件。`documents` 并进来，是因为它的步骤工具只为这些
-程序存在；一个只给另一个插件的程序供工具的插件是一道没有内容的隔断。
-`lean4` 的语言服务工具留在自己的插件里：它有自己的依赖探测（要装
-Lean）和语言服务，一个插件只有一个探测。arxiv、zotero、wolfram 这些工
-具插件原样，它们的工具聊天直接能调；`goal` 的策略模块照旧由 `plan` 启
-动。一个程序列的工具里有探测没过的（没装 Lean），它就不出现在 picker
-和脚本声明里；这从目录已有的数据推出。
+十个内置程序，两个插件。分法只看一件事：有没有自己的外部依赖。
 
-为什么是一个而不是按能力或按学科切：
+- `documents` 并进 `theory`：它的步骤工具只为这些程序存在，一个只给另
+  一个插件的程序供工具的插件是一道没有内容的隔断。
+- Lean 单独：它要装 Lean，有自己的依赖探测和语言服务，而一个插件只有
+  一个探测。程序跟着工具放在 `lean4` 里，探测没过时工具和程序一起不出
+  现，不需要"某个程序的工具缺了"这种跨插件的判断。`lean4` 今天就有卡
+  片。
+- arxiv、zotero、wolfram 这些工具插件原样，它们的工具聊天直接能调；
+  `goal` 的策略模块照旧由 `plan` 启动。
 
-- 按能力切（`documents` 带八个、`lean4` 带两个），程序散在两处，theorist
-  自己的那段文本没有家，只能塞进 `core`。
-- 按学科切，物理、数学、CS 的 theorist 都要改稿，同一个程序有三个家。
-  学科的约定写在项目的 `AGENTS.md` 里，它本来就是按项目的。
-- 一个 `theory`：产品就是内核加它。把 `theory` 从插件表里拿掉，剩下的
-  是一个通用的 harness，带文件、shell、web 和几个工具插件。
+为什么不按学科切：物理、数学、CS 的 theorist 都要改稿，同一个程序会有
+三个家。学科的约定写在项目的 `AGENTS.md` 里，它本来就是按项目的。也不
+把 `theory` 的八个再按能力拆开：拆开之后程序散在几处，theorist 自己的
+那段文本没有家。产品就是内核加 `theory`；把它从插件表里拿掉，剩下的是
+一个通用的 harness，带文件、shell、web 和几个工具插件。
 
 其余的 bundled agent 不变成程序：`research`、`numerics`、`prover`、
 `search`、`review`、`presenter`、`simplifier`、`progressCheck`、四个写代
@@ -756,15 +757,15 @@ workspace 选择放行的那些 agent（全开是 35 个加插件的 5 个，tea
 是为了把它砍短）；之后默认是 chat，不选任何东西就能开始，要什么在聊天
 里说，由模型启动对应的程序。
 
-picker 列 chat 和十个程序，仅此。`launchTarget: 'agent' | 'team'`、
+picker 列 chat 和十个程序（没装 Lean 是八个），仅此。`launchTarget: 'agent' | 'team'`、
 `selectedTeamId`、`agent` 字段和五个选项字段删。`texra run <程序 | chat>`
 一个命令，`--print` 照旧，`texra chat` 照旧，`texra team`、`texra agents`、
 `texra skills` 删。`document_task` 工具和 `builtIn:documents` 的
 `revise(agentName)`、`from()` 包装删。提案卡今天显示 agent 名，之后显示
 程序名，或 `label` 和 system 文本的首句。
 
-Plugins 页（和 CLI 的 `/plugins`）上 `theory` 有一张卡片，列它的十个程
-序：名字、描述、源码。不新建 Tasks 页。
+Plugins 页（和 CLI 的 `/plugins`）上，`theory` 和 `lean4` 的卡片各列自
+己的程序：名字、描述、源码。不新建 Tasks 页。
 
 ## run 怎么开始、怎么结束、结果去哪
 
@@ -1036,7 +1037,7 @@ history 的行。
    格存在：需要审批语义、需要写 run history 的行、需要结构化结果供脚本分
    支。其余的（`extract_figures`、`extract_bib_entries`、arxiv、Zotero）变
    成随包的 CLI，模型用 bash 调。这一刀砍的是三万行工具代码里最大的一
-   块。是负责人问题 7。
+   块。是负责人问题 6。
 2. **headless 走文本流。** `texra run` 已经输出 NDJSON；再让它从 stdin 读
    文件列表、向 stdout 打产物路径，shell 组合就免费了。
 3. **缓存是一等机制。** 子运行结果的内容寻址复用今天已经覆盖任何子运行
@@ -1104,8 +1105,8 @@ history 的行。
    Nunjucks、选项表、`critic.yaml` 和 `AgentBlock` 剩下的部分。步骤工具
    对模型写的程序开放，`describeTool` 对程序名返回源码。结果的读法在这
    一期对比后决定删不删。picker 里出现程序，和还没删的 agent 并列。
-3. **`theory` 的两个 Lean 程序**。lean4 的 agent 和 skill 先不删（team
-   还指着它们），留到第 5 期。
+3. **`lean4` 插件的两个程序**。它的 agent 和 skill 先不删（team 还指着
+   它们），留到第 5 期。
 4. **（可选）安装式插件带程序**，即"用户自己的程序"一节。要在第 5 期之
    前，否则 1.0 没有文件形式的自定义。
 5. **删 agent 文件和补偿层，聊天的存法变更**。`run.chat` 去掉 persona 和
@@ -1124,36 +1125,32 @@ history 的行。
 
 ## 负责人问题
 
-1. **`lean4` 的工具留在自己的插件里。** "总体是个插件"已定：
-   `documents` 并进 `theory`。Lean 的四个语言服务工具没有并进来：一个插
-   件只有一个依赖探测，并进来的话没装 Lean 会把整个 `theory` 收回。两个
-   Lean 程序在 `theory` 里。这样可以吗？
-2. **hint 是自由文本，还是一张具名的短表。** 推荐自由文本：写在指令
+1. **hint 是自由文本，还是一张具名的短表。** 推荐自由文本：写在指令
    里，`theory` 的那段文本用一句话列出常用的几种。一张表（`notation`、
    `logic` 等各一两句）能让 `--hint notation` 可复现，但它是 picker 之
    外的又一份目录。
-3. **名字。** 定为 program：`Plugin.programs`、`program('edit')`、
+2. **名字。** 定为 program：`Plugin.programs`、`program('edit')`、
    `texra run <program>`。11-06 版在 task 和 recipe 之间没定；
    `texra tasks` 今天指服务里的运行，不撞。
-4. **"小"的口径。** 名词和公开面（本提案）；还是也要物理上拆：把
+3. **"小"的口径。** 名词和公开面（本提案）；还是也要物理上拆：把
    harness 的内置插件（memory、executions、MCP、web、plan，3861 行）搬
    出内核目录或单独成包？后者在 general-package 设计里已裁定等一个具名
    的 embedder。推荐：先前者。
-5. **接受六处改口**（"与已有裁决和 PRD 的关系"）？
-6. **用户自己的程序进不进 1.0**（第 4 期，第七处改口）？不进，1.0 里用
+4. **接受六处改口**（"与已有裁决和 PRD 的关系"）？
+5. **用户自己的程序进不进 1.0**（第 4 期，第七处改口）？不进，1.0 里用
    户能改的只有 `AGENTS.md`。推荐：进，用已有的安装和信任，不做项目里的
    自动发现。
-7. **工具改 CLI**（Unix 一节第 1 条）作为第 7 期？推荐：接受，先试两个插
+6. **工具改 CLI**（Unix 一节第 1 条）作为第 7 期？推荐：接受，先试两个插
    件。
-8. **第 1 期现在开**，还是等 1.0 PRD 的在途线合完？推荐：现在开，它只碰
+7. **第 1 期现在开**，还是等 1.0 PRD 的在途线合完？推荐：现在开，它只碰
    `Plugin` 的一个字段、`script` 的一个成员和 documents 的启动路径。
-9. **声明的核心是哪几个。** "都能调，不全声明"已定（"决定记录"）。核心
+8. **声明的核心是哪几个。** "都能调，不全声明"已定（"决定记录"）。核心
    推荐文件和 shell 的六个（`bash`、`read_file`、`write_file`、
    `edit_file`、`glob`、`grep`）加 `agent` 和 `program`；十个程序的名字
    和描述也内联。
-10. **code mode 什么时候翻。** 方向已定；是等 Q10 的线和"聊天不是一个
-    agent"里那三件事，还是先翻、把 `codeMode.scriptOnly` 留作关的开关？
-    推荐：先补那个"要靠搜索"的 journey，过了就翻，开关留着。
+9. **code mode 什么时候翻。** 方向已定；是等 Q10 的线和"聊天不是一个
+   agent"里那三件事，还是先翻、把 `codeMode.scriptOnly` 留作关的开关？
+   推荐：先补那个"要靠搜索"的 journey，过了就翻，开关留着。
 
 ## 决定记录
 
@@ -1186,6 +1183,8 @@ history 的行。
   十个是内置程序；模型可以读它们的源码、写自己的程序并启动。这改了
   2026-09-06 的"Adaptive document workflows are not planned"。
   `documents` 并进 `theory`。
+- "lean 也是个单独的插件好了。"Lean 的工具和它的两个程序都在 `lean4`
+  插件里，不进 `theory`。
 
 ## 修订记录
 
@@ -1220,9 +1219,9 @@ history 的行。
 - D10 重新列为一处改口；`requires` 不改含义。
 
 **同日，负责人的后续裁决并入：** code mode 默认打开，开着的工具都能调
-但只声明一个小核心；theorist 的东西总体是一个插件 `theory`，初稿按能力
-拆成 `documents` 和 `lean4` 两个，后一稿又把步骤工具留在 `documents`
-里；`logic` 和 `notation` 是 hint，不是程序；十个程序是内置的起点，模型
+但只声明一个小核心；theorist 的东西总体是一个插件 `theory`，Lean 因为
+有外部依赖是单独的插件并带自己的两个程序（中间一稿把步骤工具留在
+`documents` 里，又一稿把 Lean 的程序放进了 `theory`）；`logic` 和 `notation` 是 hint，不是程序；十个程序是内置的起点，模型
 可以写自己的，初稿把步骤工具关在内置程序里。这一批没有再过第二个审稿
 者。
 
@@ -1243,7 +1242,8 @@ history 的行。
 - 不做编排库；goal 是唯一出货的模式，而它已经在了。
 - 不做"聊天也是程序"。
 - 不做按项目的插件开关。
-- 不做学科插件，也不把程序按能力拆到几个插件里：一个 `theory`。
+- 不做学科插件。theorist 的程序在 `theory` 里；只有带外部依赖的 Lean 是
+  单独的插件。
 
 ## Verified
 
