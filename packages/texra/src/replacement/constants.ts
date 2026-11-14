@@ -2,6 +2,11 @@
 
 import escapeRegExp from 'escape-string-regexp';
 
+export const UPPERCASE_LETTERS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
+
+/** The Latin letters, uppercase first. */
+export const LETTERS = [...UPPERCASE_LETTERS, ...'abcdefghijklmnopqrstuvwxyz'];
+
 /** Lowercase Greek letters by LaTeX name, in alphabetical order, with their Unicode characters. */
 // prettier-ignore
 export const GREEK_LETTER_CHARACTERS: Readonly<Record<string, string>> = {

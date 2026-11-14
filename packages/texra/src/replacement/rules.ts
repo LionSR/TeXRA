@@ -5,9 +5,11 @@ import { String as Str } from 'effect';
 import {
   GREEK_LETTERS,
   LATEX_ENVIRONMENTS,
+  LETTERS,
   MATH_OPERATORS,
   SECTION_TYPES,
   UPPERCASE_GREEK_LETTER_CHARACTERS,
+  UPPERCASE_LETTERS,
 } from '@replacement/constants';
 import {
   createPatterns,
@@ -179,11 +181,8 @@ export const EQUATION_REPLACEMENTS: PatternDict = (() => {
 })();
 
 export const FONT_COMMAND_REPLACEMENTS: PatternDict = {
-  ...generateLegacyFontFixes(
-    [...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'],
-    ['rm', 'bf', 'it', 'sf', 'tt'],
-  ),
-  ...generateLegacyFontFixes([...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'], ['cal']),
+  ...generateLegacyFontFixes(LETTERS, ['rm', 'bf', 'it', 'sf', 'tt']),
+  ...generateLegacyFontFixes(UPPERCASE_LETTERS, ['cal']),
 };
 
 // These commands (e.g. \end{section}) never appear in valid LaTeX.
@@ -471,22 +470,19 @@ export const LATEX_XML_REPLACEMENTS: PatternDict = (() => {
       [`\\end{${tag}>`, `</${tag}>`],
     ]),
 
-    // ===== 1. LATEX TAG ENDING FIXES =====
-    // Fix LaTeX tags closed as XML-style end tags with a trailing '>'; the
+    // LaTeX tags closed as XML-style end tags with a trailing '>'; the
     // plain `\end{env>}`/`\end{env>` spellings already come from
     // the XML to LaTeX conversions above.
     ...createPatterns(LATEX_ENVIRONMENTS, (env) => [
       [`</end{${env}>`, `\\end{${env}}`],
     ]),
 
-    // ===== 2. XML BRACE FIXES =====
-    // Fix XML tags with extra braces that remain as XML
+    // XML tags with an extra brace stay XML
     ...createPatterns(pureXmlTags, (tag) => [
       [`<${tag}}`, `<${tag}>`],
       [`</${tag}}`, `</${tag}>`],
     ]),
 
-    // ===== 3. Special Case Handling =====
     // Special cases for minipage. The literal `\n`-prefixed spelling needs no
     // entry of its own: this rule rewrites the tag and leaves the prefix.
     '\\minipage}': '\\end{minipage}',
@@ -495,16 +491,14 @@ export const LATEX_XML_REPLACEMENTS: PatternDict = (() => {
     '<item>': '\\item',
     '</item>': '',
 
-    // ===== 6. LATEX BRACE FIXES =====
-    // Fix extra braces in LaTeX environment tags
+    // Extra braces in LaTeX environment tags
     '\\begin{figure*}}': '\\begin{figure*}',
     '\\begin{figure}}': '\\begin{figure}',
 
-    // ===== 7. Unified <documents><document name="..."> hygiene =====
-    // Empty name attribute breaks the named-document fallback in extraction.
+    // An empty name attribute breaks the named-document fallback in extraction.
     '<document name="">': '<document name="unknown">',
 
-    // ===== 8. Stray XML noise emitted by some models =====
+    // Stray XML noise emitted by some models
     '<?xml version="1.0" encoding="UTF-8"?>': '',
     '```xml\n': '',
     '</xml>': '',
