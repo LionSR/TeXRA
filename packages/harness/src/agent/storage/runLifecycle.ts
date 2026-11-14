@@ -12,6 +12,7 @@ import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { consumedRows } from '@agent/runtime/loop/rows';
 import { SessionRoots } from '@platform/rootedFs';
 import {
+  blocksCaller,
   runEndErrorMessage,
   RUN_OUTCOME,
   RunRecordFieldsSchema,
@@ -184,16 +185,19 @@ const endOf = (end: Omit<RunEnd, 'usage'>): Omit<RunEnd, 'usage'> => ({
   output: end.output,
 });
 
-/** The cancellation of every request `state` leaves open: a run that ends
- *  answers them, so no surface keeps offering one nobody waits on. */
+/** The cancellation of every request `state` leaves open that kept its
+ *  caller waiting: a run that ends answers them, so no surface keeps
+ *  offering one nobody waits on. One that does not block its caller stays
+ *  open: its plugin's answer resumes the run. */
 const cancelledRequests = (
   runId: RunId,
   state: RunState,
 ): readonly RunHistoryDraft[] =>
   cancelRequestRows(
     runId,
-    Object.entries(state.requests).flatMap(([requestId, { decision }]) =>
-      decision === null ? [requestId] : [],
+    Object.entries(state.requests).flatMap(
+      ([requestId, { decision, payload }]) =>
+        decision === null && blocksCaller(payload) ? [requestId] : [],
     ),
     'The run ended.',
   );
