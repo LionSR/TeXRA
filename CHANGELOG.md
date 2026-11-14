@@ -1785,6 +1785,10 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **The Plugins page no longer probes for tools without end.** With
+  Settings open on a folder no running task held, the app checked every
+  external tool again several times a second for as long as the page was
+  open, starting a process each time.
 - **An agent's edit and a save in the desktop editor no longer overwrite
   each other.** Each checked the file and then wrote it with nothing
   between them and the other writer, so one landing inside the other's

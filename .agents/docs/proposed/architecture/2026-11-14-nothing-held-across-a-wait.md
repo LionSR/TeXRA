@@ -254,6 +254,10 @@ Done, on the branch after PR 14927:
   `Deferred` chain is gone. The agent catalog's one-key lane is a
   `Semaphore(1)`. An approved edit and the desktop editor's save share one
   lane per file (`withFileWriteLane`).
+- Row 11: the settings surface holds its workspace's availability results
+  while it follows them. Over the same desktop E2E spec the app's log fell
+  from about 400 lines to 76, Zotero probes from 168 to 10 and
+  `npm prefix -g` spawns from 85 to 6.
 
 Open: everything else in "Order". Three things the first pass learned:
 

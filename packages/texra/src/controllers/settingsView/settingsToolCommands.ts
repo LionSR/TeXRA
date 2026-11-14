@@ -94,15 +94,27 @@ export function settingsToolCommands(ports: {
    * The rows' input changes whenever this workspace's results change,
    * whoever probed: a session opening, the Re-check button, a credential
    * write, an editor extension installed. Runs until interrupted.
+   *
+   * The surface holds its workspace's results for as long as it follows
+   * them. Results are kept only while something holds their root, and a
+   * page that found none probes once: with no session open here and no
+   * hold, that probe's result was dropped as the probe returned, the
+   * follower had seen it and rebuilt the page, and the page, finding none
+   * again, probed again, without end.
    */
   const followToolAvailability = Effect.flatMap(
     ToolAvailability,
     (availability) =>
-      SubscriptionRef.changes(availability.results).pipe(
-        Stream.map((held) => held.get(roots.workspace)),
-        Stream.changes,
-        Stream.filter(Predicate.isNotUndefined),
-        Stream.runForEach(() => changed('plugins')),
+      Effect.scoped(
+        Effect.andThen(
+          availability.hold(roots),
+          SubscriptionRef.changes(availability.results).pipe(
+            Stream.map((held) => held.get(roots.workspace)),
+            Stream.changes,
+            Stream.filter(Predicate.isNotUndefined),
+            Stream.runForEach(() => changed('plugins')),
+          ),
+        ),
       ),
   );
 
