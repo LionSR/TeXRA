@@ -42,6 +42,7 @@ import {
   type RunId,
   type SubagentProgressUpdate,
   type AgentConfig,
+  SCRIPT_TOOL_NAME,
 } from '@shared/schemas';
 import type {
   RegisterRunOptions,
@@ -106,9 +107,6 @@ interface RunCallbacks {
   /** Fires on meaningful progress: plan changes, tool call milestones. */
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
 }
-
-/** The tool a script's run makes its one call to. */
-const SCRIPT_TOOL = 'script';
 
 /** What a launch resolved for its run (`buildAgentLaunchContext`), which
  *  the run's `AgentRun` carries whole. */
@@ -255,7 +253,7 @@ export const agentRunLayer = (
       // its persona's.
       let tools = persona.tools;
       if (script !== null)
-        tools = [SCRIPT_TOOL, ...script.tools].map((name) => ({ name }));
+        tools = [SCRIPT_TOOL_NAME, ...script.tools].map((name) => ({ name }));
       else if (inherits)
         tools = CLAUDE_COUNTERPART_TOOLS.map((name) => ({ name }));
       // The loaded plugins (MCP servers) the declared tools name, held in

@@ -28,6 +28,7 @@ import {
   ToolError,
   type ToolFileAttachment,
   type ToolResultPayload,
+  SCRIPT_TOOL_NAME,
 } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 
@@ -338,10 +339,8 @@ const SURFACE = [
   'There are no timers, no `Date.now()` and no `Math.random()`: the script replays exactly after an interruption, on the modules it first loaded, and calls that finished are not run again.',
 ].join('\n\n');
 
-const SCRIPT_TOOL = 'script';
-
 export const ScriptTool = defineTool({
-  name: SCRIPT_TOOL,
+  name: SCRIPT_TOOL_NAME,
   // A resume runs the script again from the top against its recorded calls:
   // each settled call is handed back from its row, never run twice.
   replay: 'safe',

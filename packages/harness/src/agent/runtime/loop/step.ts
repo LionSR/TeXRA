@@ -57,6 +57,7 @@ import {
   qualifyAggregateId,
   SKILL_CATALOG_MAX_SKILLS,
   type OfferedTool,
+  SCRIPT_TOOL_NAME,
 } from '@shared/schemas';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
@@ -78,7 +79,7 @@ import {
 } from '../agentToolResolution';
 import { hostCapabilitiesOf, liveToolGates } from '../requests';
 import { blobRows, systemTextAt, stored } from '../run/recordedRequest';
-import { appendRow, SCRIPT_TOOL_NAME } from './rows';
+import { appendRow } from './rows';
 import { stepHooks, type StepHooks } from './hooks';
 import type { AgentRunShape } from '../run/AgentRun';
 import { AGENT_SKILLS_ENABLED_SETTING } from '@shared/state/stateSettings';
