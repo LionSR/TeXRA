@@ -23,7 +23,12 @@ import {
 } from '@texra/shared/model/subscriptionAuthStatus';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
-import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
+import {
+  ACCOUNT_OUTCOME,
+  CHATGPT_AUTH,
+  GROK_AUTH,
+  SUBSCRIPTION_AUTH_COPY,
+} from '@ui/copy/accountAuth';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import {
@@ -131,7 +136,9 @@ export class SubscriptionSection extends SignalWatcher(LitElement) {
                 ${
                   signedIn
                     ? html`${waIcon('circle-check')}
-                        <bdi dir="auto">${`Signed in as ${account}`}</bdi>`
+                        <bdi dir="auto"
+                          >${ACCOUNT_OUTCOME.signedInAs(SUBSCRIPTION_AUTH_COPY[provider.providerId].label, account)}</bdi
+                        >`
                     : provider.accountTitle
                 }
               </span>

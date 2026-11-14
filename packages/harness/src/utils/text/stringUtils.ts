@@ -21,6 +21,20 @@ export function formatCompactDuration(durationMs: number): string {
 }
 
 /**
+ * A coarse wait (`1d 20h`, `20h 22m`, `5m`), as a used-up plan's reset is
+ * worded: two units at most, whole minutes, and no minutes once it reaches a
+ * day (`pretty-ms` would back-fill a zero hour with them, `1d 58m`); under a
+ * minute is `less than a minute`.
+ */
+export function formatResetDuration(durationMs: number): string {
+  const wholeMinutes = Math.floor(Math.max(0, durationMs) / 60_000);
+  if (wholeMinutes === 0) return 'less than a minute';
+  const flooredMinutes =
+    wholeMinutes >= 1440 ? wholeMinutes - (wholeMinutes % 60) : wholeMinutes;
+  return prettyMilliseconds(flooredMinutes * 60_000, { unitCount: 2 });
+}
+
+/**
  * Format token counts for compact usage displays.
  *
  * Token displays intentionally stay raw until they exceed 4096, the common
@@ -64,6 +78,19 @@ export function formatResultCount(
   plural?: string,
 ): string {
   return `${count} ${pluralize(count, singular, plural)}`;
+}
+
+/**
+ * The first `max` items of a list, then how many it leaves out
+ * (`a, b, c +2 more`), so every clipped list reads the same.
+ */
+export function formatClippedList(
+  items: readonly string[],
+  max: number,
+): string {
+  const shown = items.slice(0, max).join(', ');
+  const hidden = items.length - Math.min(items.length, max);
+  return hidden > 0 ? `${shown} +${hidden} more` : shown;
 }
 
 /**
@@ -136,11 +163,16 @@ export function stripControlCharacters(text: string, replacement = ''): string {
   return text.replaceAll(CONTROL_CHARACTERS, replacement);
 }
 
+/** `text` on one line: every whitespace run one space, none at the ends. */
+export function collapseWhitespace(text: string): string {
+  return text.replaceAll(/\s+/g, ' ').trim();
+}
+
 /**
  * Collapse whitespace first, then truncate to a fixed-width one-line summary.
  */
 export function truncateSummary(text: string, maxLength: number): string {
-  return truncateWithEllipsis(text.replaceAll(/\s+/g, ' ').trim(), maxLength);
+  return truncateWithEllipsis(collapseWhitespace(text), maxLength);
 }
 
 /**

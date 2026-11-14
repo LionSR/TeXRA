@@ -4,7 +4,11 @@
  */
 
 // Third-party imports
-import { getBasename, type FileListEntry } from '@texra-ai/harness/schemas';
+import {
+  formatResultCount,
+  getBasename,
+  type FileListEntry,
+} from '@texra-ai/harness/schemas';
 import { html, nothing, type TemplateResult } from 'lit';
 import { classMap } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
@@ -18,7 +22,7 @@ import type { IconName } from '@ui/wa/iconNames';
 import { stopSpinnerMotion } from '@ui/wa/spinner';
 import { renderStatusBadge } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { formatBytes } from '@ui/copy/format';
+import { formatMediaLabel } from '@ui/copy/format';
 
 // Side-effect import - register the <copy-button> element drawn below
 import '@ui/progress/components/CopyButton';
@@ -187,6 +191,16 @@ export function buildFileLinkSpan(
   return html`<span class="file-link clickable-link" data-file=${filePath} data-file-line=${ifDefined(options.startLine)} role="button" tabindex="0" aria-label=${accessibleName} dir="auto">${content}</span>`;
 }
 
+/** Build a file's `+3 -1` chip: the counts for the eye, the sentence for a
+ *  screen reader. */
+export function buildLineChangeStats(changes: {
+  readonly added: number;
+  readonly removed: number;
+}): TemplateResult {
+  // prettier-ignore
+  return html`<span class="file-stats"><span class="visually-hidden">${formatResultCount(changes.added, 'line')} added, ${formatResultCount(changes.removed, 'line')} removed</span><span class="added" aria-hidden="true">+${changes.added}</span><span class="removed" aria-hidden="true">-${changes.removed}</span></span>`;
+}
+
 /** Build the `<li>` rows for a file-list banner. The summary line above them
  *  is the row's (`FileListRow.summary`), not derived here. `media` is the
  *  row's own subset — a file that reached the model as an image or audio clip
@@ -208,7 +222,7 @@ export function buildFileListRender(
     // worth labelling sets `sourceDisplay`, so no host needs a fallback to
     // spell it out.
     // prettier-ignore
-    return html`<li class="detail-item" title=${filePath}>${waIcon(iconName)} ${buildFileLinkSpan(filePath, html`<bdi dir="auto">${fileName}</bdi>`)}${file.varName ? html` <span class="file-var">[<bdi dir="auto">${file.varName}</bdi>]</span>` : ''}${file.sourceDisplay ? html` <span class="file-source">(<bdi dir="auto">${file.sourceDisplay}</bdi>)</span>` : ''}${loaded ? html` <span class="file-media">[${loaded.kind}, <bdi dir="ltr">${formatBytes(loaded.sizeBytes)}</bdi>]</span>` : ''}</li>`;
+    return html`<li class="detail-item" title=${filePath}>${waIcon(iconName)} ${buildFileLinkSpan(filePath, html`<bdi dir="auto">${fileName}</bdi>`)}${file.varName ? html` <span class="file-var">[<bdi dir="auto">${file.varName}</bdi>]</span>` : ''}${file.sourceDisplay ? html` <span class="file-source">(<bdi dir="auto">${file.sourceDisplay}</bdi>)</span>` : ''}${loaded ? html` <span class="file-media"><bdi dir="ltr">${formatMediaLabel(loaded)}</bdi></span>` : ''}</li>`;
   })}`;
 }
 

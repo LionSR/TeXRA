@@ -5,7 +5,6 @@ import {
   normalizeFilePath,
   fileLocationDisplayPath,
   type RunId,
-  pluralize,
 } from '@texra-ai/harness/schemas';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -33,8 +32,10 @@ import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import type { IconName } from '@ui/wa/iconNames';
 import { designTokens, commonViewStyles } from '@ui/styles';
+import { lineChangeStatsStyles } from '@ui/styles/surfaceStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { buildLineChangeStats } from '@ui/progress/formatters/htmlBuilders';
 import { getComposedPathElement } from './composedPath';
 
 // Local imports - styles
@@ -105,7 +106,12 @@ function parsePath(path: string): { dir: string; basename: string } {
 
 @customElement('file-list')
 export class FileList extends LitElement {
-  static override styles = [designTokens, commonViewStyles, fileListStyles];
+  static override styles = [
+    designTokens,
+    commonViewStyles,
+    lineChangeStatsStyles,
+    fileListStyles,
+  ];
 
   /** The run whose files these are; every verb names it. */
   @property({ attribute: false }) runId: RunId | null = null;
@@ -399,17 +405,7 @@ export class FileList extends LitElement {
     const counts = outputDiffCounts(file.diff);
     if (!counts) return nothing;
 
-    return html`
-      <span class="file-stats">
-        <span class="visually-hidden"
-          >${counts.added} ${pluralize(counts.added, 'line', 'lines')} added,
-          ${counts.removed} ${pluralize(counts.removed, 'line', 'lines')}
-          removed</span
-        >
-        <span class="added" aria-hidden="true">+${counts.added}</span>
-        <span class="removed" aria-hidden="true">-${counts.removed}</span>
-      </span>
-    `;
+    return buildLineChangeStats(counts);
   }
 
   private renderBaseActions(

@@ -11,7 +11,7 @@ import {
   type ToolResult,
   type WorkspaceFs,
 } from '@texra-ai/harness/plugins';
-import { TikzPictureManager } from '@latex/TikzPictureManager';
+import { compileTikzPictures, extractTikzPictures } from '@latex/tikzPictures';
 import {
   buildLimitedAttachments,
   emptyExtractionResult,
@@ -49,7 +49,7 @@ const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
     const { path, display } = yield* resolveLatexFile(texPath);
     const location = pathToLocationIn(call.env.roots.workspace, path.absolute);
 
-    const tikzFigures = yield* TikzPictureManager.extract(location);
+    const tikzFigures = yield* extractTikzPictures(location);
     if (tikzFigures.length === 0) {
       return emptyExtractionResult(
         'TikZ figures',
@@ -71,7 +71,7 @@ const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
 
     let attachments: ToolFileAttachment[] | undefined;
     if (compile) {
-      const compiledPaths = yield* TikzPictureManager.compile(
+      const compiledPaths = yield* compileTikzPictures(
         location,
         call.env.roots,
       );

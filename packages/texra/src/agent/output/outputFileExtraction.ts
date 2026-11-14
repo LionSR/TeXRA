@@ -12,19 +12,20 @@
 import {
   normalizeFilePath,
   fileLocationDisplayPath,
+  toErrorMessage,
   type AgentConfig,
   type FileLocation,
 } from '@texra-ai/harness/schemas';
 import { Effect, FileSystem } from 'effect';
 
 import { revisionLayout } from '@texra/shared/constants/revisionLayout';
+import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
 import {
   OUTPUT_DOCUMENTS_TAG,
   type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
 
 import { replaceInputCommands } from './fileMapping';
-import { recoverOutputFailure } from './outputOperations';
 import { extractReplyDocuments } from './replyDocuments';
 import type { ExpectedDocuments } from './extraction/filenameHeaders';
 import type { AgentTrace, RunFileService } from '@texra-ai/harness/plugins';
@@ -111,13 +112,12 @@ const warnNoOutputs = Effect.fn('documents.warnNoOutputs')(function* (
   // wrote no documents, so it is never a quiet success.
   const rawText = yield* fs.readFileString(outputLocation.absolutePath).pipe(
     Effect.map((text: string) => text.replaceAll('\r\n', '\n')),
-    Effect.catch((error) =>
-      Effect.sync(() => {
+    recoverLogged(
+      (error) =>
         deps.logger.warn(
           `The raw response at ${outputLocation.absolutePath} could not be read: ${error.message}`,
-        );
-        return '';
-      }),
+        ),
+      () => Effect.succeed(''),
     ),
   );
   if (rawText.trim().length > 0) {
@@ -211,14 +211,14 @@ export const extractFilesFromXml = Effect.fn('documents.extractFilesFromXml')(
       }
       return split;
     }).pipe(
-      recoverOutputFailure({
-        logger,
-        label: 'Error processing output file',
-        recover: () =>
+      recoverLogged(
+        (error) =>
+          logger.warn(`Error processing output file: ${toErrorMessage(error)}`),
+        () =>
           warnNoOutputs(deps, currRound, outputLocation).pipe(
             Effect.as(nothing),
           ),
-      }),
+      ),
     );
     return {
       outputs: extracted.outputs,

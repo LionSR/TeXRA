@@ -42,6 +42,21 @@ function buildLevelIcon(level: LogLevel): TemplateResult {
   });
 }
 
+/** A log line's leading cell: its level icon, then its time of day when
+ *  `withTime`; the full moment is its tooltip. */
+function logLineTimestamp(
+  timestamp: number,
+  level: LogLevel,
+  withTime: boolean,
+): TemplateResult {
+  const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
+    new Date(timestamp),
+  );
+  const levelIcon = buildLevelIcon(level);
+  // prettier-ignore
+  return html`<span class="timestamp" title=${tooltipTimestamp}>${withTime ? html`${levelIcon} [${timeDisplay}]` : levelIcon}</span>`;
+}
+
 /** Format user message entry as TemplateResult. */
 export function formatUserMessageTemplate(row: UserRow): FormatResult {
   const { id, timestamp, scriptSummary, forkAt, media } = row;
@@ -54,20 +69,15 @@ export function formatProgressStatusTemplate(
   row: ProgressStatusRow,
 ): FormatResult {
   const { level, id, timestamp } = row;
-  const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
-    new Date(timestamp),
-  );
-
   const summaryText =
     row.quotaFallback === undefined
       ? row.summary.full
       : quotaFallbackNoticeText(row.quotaFallback);
-  const levelIcon = buildLevelIcon(level);
 
   // prettier-ignore
   return html`<div
       data-log-id=${ifDefined(id)}
-    ><div class="log-line"><span class="timestamp" title=${tooltipTimestamp}>${levelIcon} [${timeDisplay}]</span> <span class=${`message-${level}`}>${summaryText}</span></div></div>`;
+    ><div class="log-line">${logLineTimestamp(timestamp, level, true)} <span class=${`message-${level}`}>${summaryText}</span></div></div>`;
 }
 
 /**
@@ -91,9 +101,8 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
   // Do not expose a disclosure control when the row has nothing to reveal.
   // The level icon supplies a non-color error cue for the static row.
   if (!hasDetails) {
-    const levelIcon = buildLevelIcon('error');
     // prettier-ignore
-    return html`<div class="log-line" data-log-id=${ifDefined(id)}><span class="timestamp" title=${tooltipTimestamp}>${levelIcon} [${timeDisplay}]</span> <span class="message-error">${summaryText}</span></div>`;
+    return html`<div class="log-line" data-log-id=${ifDefined(id)}>${logLineTimestamp(timestamp, 'error', true)} <span class="message-error">${summaryText}</span></div>`;
   }
 
   // Build modular template parts to avoid overly long single-line templates.
@@ -121,20 +130,12 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
 export function formatDefaultLogMessageTemplate(row: LogRow): FormatResult {
   const { id, level, timestamp, verbose } = row;
   const text = row.text.full;
-  const levelIcon = buildLevelIcon(level);
-  const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
-    new Date(timestamp),
-  );
-
-  const timestampContent = verbose
-    ? html`${levelIcon} [${timeDisplay}]`
-    : levelIcon;
 
   // prettier-ignore
   return html`<div
       class="log-line"
       data-log-id=${id}
-    ><span class="timestamp" title=${tooltipTimestamp}>${timestampContent}</span>${when(
+    >${logLineTimestamp(timestamp, level, verbose === true)}${when(
         verbose,
         () => html` <span class=${`level-${level}`}>${level.toUpperCase().padEnd(8)}</span>`,
       )} <span class=${`message-${level}`}>${text}</span></div>`;

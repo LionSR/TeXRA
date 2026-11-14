@@ -1,13 +1,20 @@
 // Local imports
 import {
+  DISPLAY_MATH_ENVIRONMENTS,
   FENCED_LATEX_BLOCK_PATTERN_INLINE,
   FENCED_LATEX_BLOCK_PATTERN_MULTILINE,
 } from './constants';
 import { createPatterns } from './patterns';
 import type { RegexRuleSet, ReplacementFunction } from './types';
 
-const EQUATION_ENVIRONMENT_PATTERN =
-  '(?:align\\*?|aligned\\*?|alignat\\*?|flalign\\*?|gather\\*?|multline\\*?|equation\\*?|eqnarray\\*?|split\\*?)';
+/** A display-math environment, or `aligned` or `split`, starred or not. */
+const EQUATION_ENVIRONMENT_PATTERN = `(?:${[
+  ...DISPLAY_MATH_ENVIRONMENTS,
+  'aligned',
+  'split',
+]
+  .map((name) => `${name}\\*?`)
+  .join('|')})`;
 
 const convertFencedLatexBlock: ReplacementFunction = (
   match,
@@ -79,7 +86,6 @@ const expandEquationMacro: ReplacementFunction = (
 };
 
 export const EQUATION_MACRO_REPLACEMENTS: RegexRuleSet = {
-  isRegex: true,
   flags: 'gm',
   patterns: {
     // Require macros to be on their own line so inline uses like "foo \\be bar"
@@ -91,7 +97,6 @@ export const EQUATION_MACRO_REPLACEMENTS: RegexRuleSet = {
 };
 
 export const FENCED_LATEX_BLOCK_REPLACEMENTS: RegexRuleSet = {
-  isRegex: true,
   flags: 'g',
   patterns: {
     [FENCED_LATEX_BLOCK_PATTERN_MULTILINE]: convertFencedLatexBlock,
@@ -101,7 +106,6 @@ export const FENCED_LATEX_BLOCK_REPLACEMENTS: RegexRuleSet = {
 
 // Parentheses sizing standardization
 export const PARENTHESES_REPLACEMENTS: RegexRuleSet = {
-  isRegex: true,
   flags: 'g',
   patterns: {
     // ===== Small delimiter normalization =====
@@ -139,7 +143,6 @@ export const PARENTHESES_REPLACEMENTS: RegexRuleSet = {
 
 // LaTeX inline math formatting fixes
 export const INLINE_MATH_REPLACEMENTS: RegexRuleSet = {
-  isRegex: true,
   flags: 'g',
   patterns: {
     // ===== Convert \( \) to $ $ =====
@@ -164,7 +167,6 @@ export const INLINE_MATH_REPLACEMENTS: RegexRuleSet = {
 
 // Context-aware personal style conversions
 export const PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS: RegexRuleSet = {
-  isRegex: true,
   flags: 'g',
   patterns: {
     // Temporarily protect \mathrm{Tr} inside command definitions
@@ -315,7 +317,6 @@ function difCommandMarker(cmd: string): string {
 
 // Latexdiff markup fixes using regex
 export const LATEXDIFF_MARKUP_REPLACEMENTS: RegexRuleSet = {
-  isRegex: true,
   flags: 'gs',
   patterns: {
     // Collapse redundant blank lines / spaces between a closing brace and \end{...}%DIFAUXCMD
@@ -339,10 +340,6 @@ export const LATEXDIFF_MARKUP_REPLACEMENTS: RegexRuleSet = {
       }),
     ),
 
-    // Note: For commands like \bze that should not be split, use:
-    // latexdiff --append-safecmd="bze,hbze" old.tex new.tex
-    // This prevents latexdiff from splitting the command and its arguments
-
     // === Fix escaped tildes in \DIFdel/\DIFadd commands ===
     // The escaped tilde \~ is a tilde accent command that needs an argument.
     // Inside \DIFdel{} it should be the non-breaking space character ~.
@@ -358,7 +355,6 @@ export const LATEXDIFF_MARKUP_REPLACEMENTS: RegexRuleSet = {
 };
 
 export const EQUATION_STYLE_REPLACEMENTS: RegexRuleSet = {
-  isRegex: true,
   flags: 'g',
   patterns: {
     // Swap order of superscript and subscript in integrals/sums/products to ensure subscript comes first
@@ -367,18 +363,13 @@ export const EQUATION_STYLE_REPLACEMENTS: RegexRuleSet = {
       '$1_{$3}^{$2}',
     // Remove extra space after \left( and before \right)
     '\\\\left\\(\\s+': '\\left(',
-    '\\s+\\\\right\\)': '\\right)', // this works
-    '\\\\left\\\\{\\s+': '\\left\\{', // Note the double backslash before {
-    '\\s+\\\\right\\\\}': '\\right\\}', // Note the double backslash before }
+    '\\s+\\\\right\\)': '\\right)',
+    '\\\\left\\\\{\\s+': '\\left\\{',
+    '\\s+\\\\right\\\\}': '\\right\\}',
     '\\\\left\\|\\s+': '\\left|',
     '\\s+\\\\right\\|': '\\right|',
     '\\\\left\\[\\s+': '\\left[',
     '\\s+\\\\right\\]': '\\right]',
-
-    // Fix list item spacing
-    // '\\\\begin\\{(itemize|enumerate|description)\\}\\s*\\\\item':
-    // '\\begin{$1}\n    \\item',
-    // this is also detecting \n after \begin{itemize}
 
     // Fix Repeated Words (Common Typos)
     '\\b(the|and|or|of|in|to|a|for|that|this|with|by|on|as) \\1\\b': '$1',
@@ -411,9 +402,6 @@ export const EQUATION_STYLE_REPLACEMENTS: RegexRuleSet = {
     // Fix inconsistent blank lines after environments (universally preferred)
     '(\\\\end\\{(equation|align|figure|table|itemize|enumerate|description)\\})([A-Za-z])':
       '$1\n\n$3',
-
-    // Fix space before closing braces in commands (nearly universal style)
-    // '\\\\(textbf|textit|emph|underline)\\{([^{}]*)\\s+\\}': '\\\\$1{$2}', // might not working now
 
     // Remove spaces inside textbf/textit/emph/underline/overbrace/underbrace/label
     ...createPatterns(

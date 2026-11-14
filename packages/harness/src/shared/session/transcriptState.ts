@@ -53,7 +53,8 @@ export interface TranscriptContext {
 
 /** The current state of one row id (a text stream, a tool card or a log
  *  row): what a later event for the same id updates, and what `paint` turns
- *  into the row. */
+ *  into the row. A stream is open while `running`, a card while its `log`
+ *  status is in progress; nothing else records either. */
 export type RowState =
   | {
       readonly kind: 'text';
@@ -94,10 +95,6 @@ export interface TranscriptIndexes {
    *  appearance) and `settlementSeqNo` (became printable) handed out. */
   appended: number;
   settled: number;
-  /** Streams `stream.start` opened that nothing has settled yet. */
-  readonly streams: Set<string>;
-  /** Tool cards `tool.start` opened that are still in progress. */
-  readonly activeTools: Set<string>;
   /** This turn's model-response stream, which `response.finalized` closes. */
   pendingModelResponseId: string | undefined;
   /** The run is waiting or ended: cards and streams stay closed until it
@@ -134,8 +131,6 @@ export function emptyTranscriptIndexes(): TranscriptIndexes {
     slots: new Map(),
     appended: 0,
     settled: 0,
-    streams: new Set(),
-    activeTools: new Set(),
     pendingModelResponseId: undefined,
     closed: false,
     live: new Map(),

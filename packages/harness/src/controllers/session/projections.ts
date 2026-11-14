@@ -1,6 +1,6 @@
 /**
  * The store's projections:
- * the display and listing tables no row stores, each maintained by a pure
+ * the listing and spend tables no row stores, each maintained by a pure
  * projector over decoded events. Their upkeep runs the projectors in
  * `Database`'s append transaction, making the writes they return; when the
  * store opens it rebuilds a projection whose stored version is not this
@@ -10,12 +10,14 @@
  *
  * - `listing`: per aggregate and listing key (`listingKeyOf`), the newest
  *   row: what a cold listing delivers, and what a run's record is read from
- *   (`READ_RUN_RECORD`); an open request and a queued follow-up are keys of
- *   their own (`pendingKeyOf`), deleted when their pair closes them.
- * - `usage`: a `usage` display row per priced `model.message` response,
- *   `context.edit` summary and model `run.description` label (a run with a
- *   run history stores its spend there, never as a `usage` row), and each
- *   run's spend summed by `sumUsageStats`.
+ *   (`READ_RUN_RECORD`); the key of an open request or a queued follow-up
+ *   is deleted when its pair closes it.
+ * - `usage`: each run's spend, summed by `sumUsageStats` over its priced
+ *   rows: a `model.message` response or failure, a `context.edit` summary
+ *   and a model's `run.description` label (a run with a run history stores
+ *   its spend there, never as a `usage` row). The `usage` display row of a
+ *   priced row is not stored: a display read takes it off that row
+ *   (`USAGE_ROWS`), and a committed batch's from `usageRows`.
  *
  * This module reads decoded events only, never `event.data`.
  */
@@ -57,12 +59,6 @@ type ProjectionOp =
       readonly first?: true;
     }
   | {
-      readonly table: 'projected_row';
-      readonly commit: number;
-      readonly type: 'usage';
-      readonly data: string;
-    }
-  | {
       readonly table: 'run_usage';
       readonly aggregate: AggregateId;
       readonly commit: number;
@@ -80,9 +76,8 @@ interface Projector {
   readonly inputs: readonly string[];
   /** The prior row it reads by primary key before projecting, if any. */
   readonly prior: keyof typeof PRIOR_COLUMN | null;
-  /** The table its rebuild empties, and the projected types it deletes. */
+  /** The table its rebuild empties. */
   readonly table: 'listing_entry' | 'run_usage';
-  readonly projects: readonly 'usage'[];
   /** `prior` is the stored column of the aggregate's prior row. */
   readonly project: (
     event: SessionRow,
@@ -142,13 +137,13 @@ const PROJECTORS = {
   listing: {
     // v2: a run's first row a catch-up could not read is listed
     // (`UNREAD_KEY`): a run's record is read from the listing.
-    version: 2,
+    // v3: a `run.position` is listed by where it stands (`listingKeyOf`).
+    version: 3,
     inputs: SessionRowDraftSchema.members
       .map((schema) => schema.fields.type.literal)
       .filter((type) => listingTypeOf({ type }) !== null),
     prior: null,
     table: 'listing_entry',
-    projects: [],
     // A run's first row a catch-up could not read is listed too, so a read
     // of its listing or its record meets the row and never answers without
     // it. A plugin's own aggregate keeps no record.
@@ -164,12 +159,12 @@ const PROJECTORS = {
             },
           ]
         : [],
-    // Every input has a listing type (`inputs`); a pending key replaces it.
+    // Every input has a listing key (`inputs`); the row that closes a
+    // request or a follow-up drops its key.
     project: (event) => {
-      const pending = pendingKeyOf(event);
-      const key = pending?.key ?? listingKeyOf(event);
+      const key = listingKeyOf(event);
       if (key === null) return [];
-      const commit = pending?.open === false ? null : event.commit;
+      const commit = pendingKeyOf(event)?.open === false ? null : event.commit;
       return [
         { table: 'listing_entry', aggregate: event.aggregateId, key, commit },
       ];
@@ -178,11 +173,12 @@ const PROJECTORS = {
   usage: {
     // v2: the rows carry `TurnUsage`'s count names and no `elapsedTime`.
     // v3: a model label's `run.description` is priced too.
-    version: 3,
+    // v4: no `usage` row is stored: a display read takes it off its priced
+    // row (`USAGE_ROWS`).
+    version: 4,
     inputs: ['model.message', 'context.edit', 'run.description', 'usage'],
     prior: 'run_usage',
     table: 'run_usage',
-    projects: ['usage'],
     project: (event, prior) => {
       const stored = event.type === 'usage' ? event.usage : null;
       const priced = stored ?? pricedUsage(event);
@@ -193,16 +189,6 @@ const PROJECTORS = {
           : [decodeStoredUsage(prior).usage, priced],
       );
       return [
-        ...(stored === null
-          ? [
-              {
-                table: 'projected_row' as const,
-                commit: event.commit,
-                type: 'usage' as const,
-                data: JSON.stringify({ usage: priced }),
-              },
-            ]
-          : []),
         {
           table: 'run_usage',
           aggregate: event.aggregateId,
@@ -266,12 +252,6 @@ function opStatement(op: ProjectionOp): [string, unknown[]] {
              DO ${op.first ? 'NOTHING' : 'UPDATE SET "commit" = excluded."commit"'}`,
             [...aggregateColumns(op.aggregate), op.key, op.commit],
           ];
-    case 'projected_row':
-      return [
-        `INSERT INTO projected_row ("commit", type, data) VALUES (?, ?, ?)
-         ON CONFLICT("commit", type) DO UPDATE SET data = excluded.data`,
-        [op.commit, op.type, op.data],
-      ];
     case 'run_usage':
       return [
         `INSERT INTO run_usage (aggregate, "commit", usage)
@@ -355,13 +335,7 @@ export function projectionUpkeep<E>(
           yield* Effect.logInfo(
             `Rebuilding the ${name} projection of ${path} (stored version ${state.version}, this build's ${PROJECTORS[name].version}).`,
           ).pipe(withLogChannel('sessionDatabase'));
-        if (!own) {
-          yield* exec(`DELETE FROM ${PROJECTORS[name].table}`);
-          yield* exec(
-            'DELETE FROM projected_row WHERE type IN (SELECT value FROM json_each(?))',
-            [JSON.stringify(PROJECTORS[name].projects)],
-          );
-        }
+        if (!own) yield* exec(`DELETE FROM ${PROJECTORS[name].table}`);
         const through = own ? state.through : 0;
         const rows =
           through >= top

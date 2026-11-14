@@ -52,7 +52,7 @@ export type RowOf<T extends SessionRow['type']> = Extract<
 >;
 
 /** The follow-ups these rows say a run has not taken. */
-export type PendingFollowUps = {
+type PendingFollowUps = {
   /** Queued without consumed, in commit order. */
   readonly followUps: readonly QueuedFollowUp[];
   /**

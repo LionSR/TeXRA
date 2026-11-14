@@ -352,6 +352,74 @@ describe('session events and view', () => {
     }).pipe(Effect.provide(graph([runStartRow, waiting, requested]))),
   );
 
+  // A cold read holds the newest row of each listing key, so the wait a
+  // fork cuts at has a key of its own: one newer position must not hide it.
+  it.effect('keeps the fork point of a run read cold in a later turn', () =>
+    Effect.gen(function* () {
+      const view = yield* SessionViewService;
+      yield* settle(view.ref, (v) => v.runs.has(RUN));
+      const run = (yield* SubscriptionRef.get(view.ref)).runs.get(RUN);
+      expect(run).toMatchObject({ position: 'running', forkPoint: 2 });
+    }).pipe(
+      Effect.provide(
+        graph([
+          runStartRow,
+          waiting,
+          {
+            type: 'run.position',
+            aggregateId: qualifyAggregateId('run', RUN),
+            payload: { at: 'turn.begin', turn: 1 },
+          },
+        ]),
+      ),
+    ),
+  );
+
+  // No table stores a priced row's `usage` row: a display read takes it off
+  // the priced row's stored JSON, so that read must agree with the codec.
+  it.effect('reads a priced row back with its usage row, cold', () =>
+    Effect.gen(function* () {
+      const db = yield* Database;
+      const rows = yield* db.readDisplay(0).pipe(
+        Stream.runCollect,
+        Effect.map((pages) => [...pages].flat()),
+      );
+      expect(rows.map((row) => [row.type, row.commit])).toEqual([
+        ['run.start', 1],
+        ['run.description', 2],
+        ['usage', 2],
+      ]);
+      expect(rows.at(-1)).toMatchObject({
+        usage: { inputTokens: 3, outputTokens: 4, cost: 0.5 },
+      });
+      expect(rows.at(-1)).not.toHaveProperty('usage.provider');
+      const view = yield* SessionViewService;
+      yield* settle(view.ref, (v) => v.runs.has(RUN));
+      expect(
+        (yield* SubscriptionRef.get(view.ref)).runs.get(RUN)?.usage.cost,
+      ).toBe(0.5);
+    }).pipe(
+      Effect.provide(
+        graph([
+          runStartRow,
+          {
+            type: 'run.description',
+            aggregateId: qualifyAggregateId('run', RUN),
+            description: 'A title',
+            by: 'model',
+            usage: {
+              inputTokens: 3,
+              outputTokens: 4,
+              cost: 0.5,
+              responseTimeMs: 12,
+              provider: 'openai-responses',
+            },
+          },
+        ]),
+      ),
+    ),
+  );
+
   it.effect('commits a detached job before the call returns', () =>
     Effect.gen(function* () {
       const events = yield* SessionEvents;

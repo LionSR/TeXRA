@@ -62,7 +62,6 @@ import {
   DatabaseReadFailed,
   DatabaseWriteFailed,
   RunChanged,
-  type SessionOpenError,
 } from '@shared/session/database';
 import { factKindsOf } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
@@ -88,8 +87,7 @@ import {
   AGGREGATE,
   callCard,
   DISPLAY_READ_TYPES,
-  PROJECTED_COLUMNS,
-  PROJECTED_FROM,
+  USAGE_ROWS,
   READ_LISTING,
   READ_RUN_RECORD,
   rowReader,
@@ -155,8 +153,8 @@ const DISPLAY_PAGE_END = `SELECT "commit" AS through FROM event
   WHERE "commit" > ? ORDER BY "commit" LIMIT 1 OFFSET ${DISPLAY_PAGE_ROWS - 1}`;
 
 /**
- * The one display union: the `event` rows of the types bound first, every
- * projected row, and an optional further arm, narrowed by `where` over the
+ * The one display union: the `event` rows of the types bound first, the
+ * `usage` row of every priced row, and an optional further arm, narrowed by `where` over the
  * union's columns (`"commit"`, `kind`, `logicalId`, `seq`), which SQLite
  * pushes into each arm, so a range binds once.
  */
@@ -164,7 +162,7 @@ const displayUnion = (where: string, order: string, arm?: string) =>
   `SELECT * FROM (
     SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
       WHERE e.type IN (SELECT value FROM json_each(?))
-    UNION ALL SELECT ${PROJECTED_COLUMNS} FROM ${PROJECTED_FROM}
+    UNION ALL ${USAGE_ROWS}
     ${arm === undefined ? '' : `UNION ALL ${arm}`}
   ) WHERE ${where} ORDER BY ${order}`;
 /** What a display read shows of one decoded row: a display row itself, a
@@ -183,18 +181,11 @@ const displayRows = (rows: readonly SessionRow[]) =>
  *  (`persistent`) or only opened (`existing`), is held exclusively by this
  *  process for the connection's life; the `global` store is shared across
  *  processes and polled for their commits; `ephemeral` runs in memory. */
-export type StoreMode = 'persistent' | 'existing' | 'ephemeral' | 'global';
+type StoreMode = 'persistent' | 'existing' | 'ephemeral' | 'global';
 
 /** Why a project store did not open: another process holds it. */
 export const STORE_HELD_MESSAGE =
   'Another TeXRA process holds this project; close it there first.';
-
-/** Whether a session failed to open because another process holds its
- *  project store: what a service that replaces a retiring one waits out. */
-export const storeHeld = (error: SessionOpenError): boolean =>
-  error._tag === 'DatabaseOpenFailed' &&
-  error.cause instanceof Error &&
-  error.cause.message === STORE_HELD_MESSAGE;
 
 export const databaseLayer = (
   mode: StoreMode,
@@ -328,7 +319,7 @@ export const databaseLayer = (
       const collectBlobs = `DELETE FROM blob
         WHERE digest IN (SELECT value FROM json_each(?))
           AND NOT EXISTS (SELECT 1 FROM event_blob r WHERE r.digest = blob.digest)`;
-      // The display types in a commit range, plus projected rows.
+      // The display types in a commit range, with the priced rows' usage.
       const display = displayUnion(
         '"commit" > ? AND "commit" <= ?',
         '"commit"',
@@ -341,7 +332,7 @@ export const databaseLayer = (
       // A deletion marker closes its run and stays its last row until collected.
       const pendingDeletions = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
         WHERE e.type = 'run.removed' ORDER BY e."commit"`;
-      // One aggregate's display rows, its projected rows among them.
+      // One aggregate's display rows, its priced rows' usage among them.
       const displayAggregate = displayUnion(
         'kind = ? AND logicalId = ? AND seq >= ?',
         'seq',

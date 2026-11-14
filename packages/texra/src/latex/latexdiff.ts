@@ -19,6 +19,7 @@ import { Settings } from '@texra-ai/harness/plugins';
 import { readNormalizedFile } from '@texra-ai/harness/node';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { FileLocation } from '@texra-ai/harness/schemas';
+import { DISPLAY_MATH_ENVIRONMENTS } from '@replacement/constants';
 import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
@@ -322,18 +323,9 @@ export const latexdiffAgainstCommit = Effect.fn('latexdiffAgainstCommit')(
 // The clean-up of latexdiff's output: pure text transforms, then the
 // workspace's replacement rules.
 
-/** LaTeX starred math environments whose labels are removed. */
-const STAR_ENVIRONMENTS = [
-  'align\\*',
-  'equation\\*',
-  'gather\\*',
-  'multline\\*',
-  'flalign\\*',
-  'alignat\\*',
-];
-
+/** The starred (unnumbered) display environments, whose labels are removed. */
 const STAR_ENV_REGEX = new RegExp(
-  `\\\\begin\\{(${STAR_ENVIRONMENTS.join('|')})\\}([\\s\\S]*?)\\\\end\\{\\1\\}`,
+  `\\\\begin\\{(${DISPLAY_MATH_ENVIRONMENTS.map((name) => `${name}\\*`).join('|')})\\}([\\s\\S]*?)\\\\end\\{\\1\\}`,
   'g',
 );
 

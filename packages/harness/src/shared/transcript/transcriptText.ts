@@ -11,7 +11,7 @@
  */
 import yaml from 'yaml';
 
-import { splitContentLines } from '@utils/text/stringUtils';
+import { collapseWhitespace, splitContentLines } from '@utils/text/stringUtils';
 
 /** One text-bearing field of a transcript row. */
 export interface TranscriptText {
@@ -34,7 +34,7 @@ export function transcriptText(raw: string): TranscriptText {
   if (!raw) return EMPTY_TRANSCRIPT_TEXT;
   return {
     full: raw,
-    oneLine: raw.replaceAll(/\s+/g, ' ').trim(),
+    oneLine: collapseWhitespace(raw),
     lineCount: splitContentLines(raw).length,
   };
 }

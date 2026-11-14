@@ -43,10 +43,10 @@ import {
   logWarning,
   pollGet,
   readNewItems,
+  type SeenItems,
   type PollEvent,
   type PollResult,
 } from './poller';
-import { dedupeComments, DedupedResource, MAX_SEEN_IDS } from './pollingDedup';
 import {
   GhIssueCommentArraySchema,
   GhPullRequestSchema,
@@ -55,14 +55,11 @@ import {
   isDefiniteMergeableState,
   type GhCheckAnnotation,
   type GhCheckRun,
-  type GhIssueComment,
   type GhReview,
-  type GhReviewComment,
 } from './prTypes';
+import { COALESCE_THRESHOLD } from './prSubscriptionConstants';
 import type { PullTarget } from './subscriptionTarget';
 
-// Coalesce this many same-kind events in a single tick into a summary.
-const COALESCE_THRESHOLD = 3;
 // Bound the per-subscription fan-out across runs (e.g. a matrix build
 // lighting up a fleet of checks). Excess candidates stay queued and are
 // drained on later polls.
@@ -76,9 +73,9 @@ export interface PullState {
     readonly reviewComments?: string;
     readonly reviews?: string;
   };
-  readonly issueComments: DedupedResource<GhIssueComment> | undefined;
-  readonly reviewComments: DedupedResource<GhReviewComment> | undefined;
-  readonly reviews: DedupedResource<GhReview> | undefined;
+  readonly issueComments: SeenItems | undefined;
+  readonly reviewComments: SeenItems | undefined;
+  readonly reviews: SeenItems | undefined;
   readonly lastFailedCheckKeys: ReadonlySet<string>;
   /**
    * `${id}:${completed_at}` for runs observed (with annotations) on the most
@@ -241,28 +238,15 @@ export const pollPull = Effect.fn('github.pollPull')(function* (
     return { next: undefined, events: [] } satisfies PollResult<PullState>;
   }
 
-  const issueComments = readNewItems(
-    prior?.issueComments,
-    commentsRes,
-    dedupeComments<GhIssueComment>,
-  );
+  const issueComments = readNewItems(prior?.issueComments, commentsRes);
   events.push(...issueComments.fresh.map((c) => formatCommentEvent(pr, c)));
-  const reviewComments = readNewItems(
-    prior?.reviewComments,
-    reviewCommentsRes,
-    dedupeComments<GhReviewComment>,
-  );
+  const reviewComments = readNewItems(prior?.reviewComments, reviewCommentsRes);
   events.push(...reviewComments.fresh.map((c) => formatReviewComment(pr, c)));
   const reviews = readNewItems(
     prior?.reviews,
     reviewsRes.status === 200
       ? { ...reviewsRes, data: reviewsRes.data.filter(isSubmittedReview) }
       : reviewsRes,
-    () =>
-      new DedupedResource<GhReview>({
-        getId: (review) => review.id,
-        maxSeenIds: MAX_SEEN_IDS,
-      }),
   );
   events.push(...reviews.fresh.map((r) => formatReview(pr, r)));
 

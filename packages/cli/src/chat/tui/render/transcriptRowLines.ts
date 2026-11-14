@@ -14,7 +14,7 @@ import { safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import { CROSS, TICK, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
-import { formatBytes } from '@ui/copy/format';
+import { formatMediaLabel } from '@ui/copy/format';
 import { errorRowText } from '@ui/copy/modelAccess';
 
 // A body block can be arbitrarily large (a 50 KB tool dump, a long error
@@ -77,9 +77,7 @@ function fileListLines(row: Extract<TranscriptRow, { kind: 'fileList' }>) {
     const marker = file.ok ? TICK : CROSS;
     const name = file.varName ? `${file.varName}: ` : '';
     const source = file.sourceDisplay ? ` (${file.sourceDisplay})` : '';
-    const size = media
-      ? ` [${media.kind}, ${formatBytes(media.sizeBytes)}]`
-      : '';
+    const size = media ? ` ${formatMediaLabel(media)}` : '';
     return `${marker} ${name}${file.path}${source}${size}`;
   });
 }

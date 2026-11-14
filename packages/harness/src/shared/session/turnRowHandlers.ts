@@ -207,7 +207,9 @@ const MESSAGE_HANDLERS: {
         answer: turnText(p.turn) || state.answer,
         countStale: false,
         usage: addUsage(state.usage, p.usage),
-        forceFinalTool: false,
+        finalTool: state.finalTool?.owed
+          ? { ...state.finalTool, owed: false }
+          : state.finalTool,
         answerFinalized: false,
       };
       return Result.succeed(
@@ -242,8 +244,7 @@ const MESSAGE_HANDLERS: {
         overflowCompacted: false,
         input: withInput(state.input, p.input),
         ...(p.reason === 'final-tool' && {
-          finalToolTurn: state.turn,
-          forceFinalTool: true,
+          finalTool: { turn: state.turn, owed: true },
         }),
       });
     const pending = state.pendingResponse;
