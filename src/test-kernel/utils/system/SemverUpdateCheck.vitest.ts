@@ -3,20 +3,32 @@ import { describe, expect } from 'vitest';
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import { it as effectIt } from '@effect/vitest';
 import { Effect, Exit, Fiber, FileSystem, Layer } from 'effect';
+import { FetchHttpClient, type HttpClient } from 'effect/http';
 import { TestClock } from 'effect/testing';
+import { GlobalValues } from '@texra-ai/harness/host';
 import { globalDatabaseLayer } from '@controllers/session/databaseLayer';
 import { globalValuesOver } from '@test/support/setupPlatform';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { updateCheckRecordsLayer } from '@texra/controllers/session/updateCheckRecords';
-import {
-  runDailyUpdateCheck,
-  UpdateCheckRecords,
-} from '@texra/utils/system/updateCheck';
+import { jsonResponse } from '@test/support/fetchTestUtils';
+import { checkForDesktopUpdate } from '@desktop/main/desktopUpdateChecker';
+import { UPDATE_CHECKS } from '@texra/utils/system/updateCheck';
 
-describe('runDailyUpdateCheck', () => {
+describe('checkForDesktopUpdate', () => {
   const nowMs = Date.UTC(2026, 0, 1);
+  /** The releases API, answering with release 1.1.0. */
+  const releases = FetchHttpClient.layer.pipe(
+    Layer.provide(
+      Layer.succeed(FetchHttpClient.Fetch)(() =>
+        Promise.resolve(jsonResponse({ tag_name: 'v1.1.0' })),
+      ),
+    ),
+  );
   const withRecords = <A, E>(
-    program: Effect.Effect<A, E, UpdateCheckRecords | TestClock.TestClock>,
+    program: Effect.Effect<
+      A,
+      E,
+      GlobalValues | HttpClient.HttpClient | TestClock.TestClock
+    >,
   ) =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -32,15 +44,12 @@ describe('runDailyUpdateCheck', () => {
         // throttle still sees whatever day the program says it is.
         return yield* Effect.andThen(TestClock.setTime(nowMs), program).pipe(
           Effect.provide(TestClock.layer()),
+          Effect.provide(releases),
           Effect.provide(
-            updateCheckRecordsLayer.pipe(
-              Layer.provide(
-                globalValuesOver(
-                  globalDatabaseLayer(storage).pipe(
-                    Layer.provide(nodeSpawnerLayer),
-                    Layer.orDie,
-                  ),
-                ),
+            globalValuesOver(
+              globalDatabaseLayer(storage).pipe(
+                Layer.provide(nodeSpawnerLayer),
+                Layer.orDie,
               ),
             ),
           ),
@@ -53,22 +62,18 @@ describe('runDailyUpdateCheck', () => {
     () =>
       withRecords(
         Effect.gen(function* () {
-          const records = yield* UpdateCheckRecords;
           const checking = yield* Effect.forkChild(
             Effect.withFiber((fiber) =>
-              runDailyUpdateCheck({
+              checkForDesktopUpdate({
                 currentVersion: '1.0.0',
-                host: 'desktop',
-                fetchLatest: Effect.succeed({
-                  version: '1.1.0',
-                  refreshed: true,
-                }),
+                isPackaged: true,
                 notify: () => Effect.sync(() => fiber.interruptUnsafe()),
               }),
             ),
           );
           expect(Exit.isFailure(yield* Fiber.await(checking))).toBe(true);
-          expect(yield* records.read('desktop')).toEqual({
+          const values = yield* GlobalValues;
+          expect(yield* values.get(UPDATE_CHECKS, 'desktop')).toEqual({
             lastNotifiedVersion: '1.1.0',
             lastCheckedAt: null,
           });
