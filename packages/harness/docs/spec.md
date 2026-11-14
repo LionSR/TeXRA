@@ -754,13 +754,12 @@ resume a wake took follows it itself, whoever opened it,
 `agent/followUp/ToolUseFollowUp.ts#wakeRun`, and the package's resume through
 `effect/sessionPrograms.ts#redirectedFrom`).
 
-The activation is one transaction: it folds the stored rows and commits the
-activation rows with a `request.decided` `cancel` for every request the
-previous process left unbound (`agent/runtime/makeRunHistory.ts#activate`). A
-request is unbound unless it is the turn's open retry ask, the request a
-pending call's resumed attempt re-enters, the request a pending `script`
-call's guest calls share (attempt 0), or one that does not block its caller
-(`shared/session/runState.ts#unboundRequests`).
+The activation is one transaction: it folds the stored rows and commits a
+`request.decided` `cancel` for every request the previous process left open
+that blocks its caller, then the activation rows
+(`agent/runtime/makeRunHistory.ts#activate`). What was in flight counts as not
+done: the call or turn that asked asks again under a new id. A request that
+does not block its caller stays open.
 
 ### 7.3 Refusals
 
@@ -806,8 +805,9 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
 - A request's id is part of its payload
   (`agent/runtime/requests.ts#const { requestId } = payload.data`). A tool call's
   request id is derived from the response, call, attempt and ordinal, so a
-  resumed attempt rejoins the request it left standing
-  (`shared/session/inFlight.ts#callRequestId`).
+  call's requests are found from its rows
+  (`shared/session/inFlight.ts#callRequestId`). No request is joined across a
+  stop: a resumed call asks again under the next ordinal.
 - The opening and any decision the approval policy gives at once MUST commit in
   one batch, through the asker's cell, so no surface lists it pending
   (`agent/runtime/requests.ts#openRequest`); a grant turned on answers every
@@ -831,11 +831,11 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
 - An interrupted asker writes nothing: the request a stopped or failed run
   leaves open is cancelled with the run's end, in the end's batch, so no
   surface keeps offering it (`agent/storage/runLifecycle.ts#cancelledRequests`);
-  one a dead process left is the next resume's to cancel as unbound.
-- A request is a row, so it outlives its process. A resume cancels the unbound
-  ones (section 7.2) and re-enters the bound ones under the same id
+  one a dead process left is the next resume's to cancel.
+- A request is a row, so it outlives its process. A resume cancels every open
+  one that blocks its caller (section 7.2), and the call that asked asks again
   (`shared/session/inFlight.ts#resumedAttempt`). An open request that does not
-  block its caller is neither: no attempt re-enters it and it is not unbound; it
+  block its caller is not cancelled: it
   stays open until its `request.decided` commits, or until `run.removed`
   closes the run, which retires it with no decision row
   (`controllers/session/SessionRequests.ts#admit`). Its plugin's decision
@@ -872,8 +872,8 @@ unless the item names another test:
 - **I3**: One model invocation has at most one committed response.
 - **I4**: A command subject to approval runs only after its approval; an
   unfinished call that is not replay-safe and that recovery classifies as
-  outcome-unknown runs again only after a person's retry (a call rejoining a
-  standing or newly decided request runs at once, section 9).
+  outcome-unknown runs again only after a person's retry (a call that was
+  waiting on a request nobody answered runs again and asks again, section 9).
 - **I5**: An owned child that ended cleanly answers its call; it is not launched
   again without a person's retry; no child is left without a terminal row. Also
   asserted by
@@ -910,11 +910,11 @@ What survives at each commit point follows from sections 2 to 8:
   resubmitted (`shared/session/inFlight.ts#nextAttempt`).
 - `response`: The response is reused; no new invocation is made for it
   (`agent/runtime/loop/runLoop.ts#runTurn`).
-- **a call's requests, no intent**: The call re-enters the request it asked
-  (`shared/session/inFlight.ts#resumedAttempt`).
-- `tool.intent`, no result: If the call opened a request that still stands, or
-  one decided since this process activated the run, the call runs again and
-  rejoins that request under its id
+- **a call's requests, no intent**: The call runs and asks again; the request
+  it left open was cancelled (`shared/session/inFlight.ts#resumedAttempt`).
+- `tool.intent`, no result: If the last request the call opened was answered
+  by nobody (open, or cancelled by a stop or a resume), the call was waiting
+  on it: it runs again from its start and asks again
   (`shared/session/inFlight.ts#resumedAttempt`). Otherwise it is re-run only if
   both the stored and the current tool declare `replay: 'safe'`, the stored
   arguments validate, and it has not started three times already; else settled

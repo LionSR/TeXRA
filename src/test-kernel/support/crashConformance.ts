@@ -555,32 +555,19 @@ function violations(
     requestId.replace(/:\d+$/, '');
   const callOfRequest = (requestId: string) =>
     /^[^/]+\/(.+):\d+:\d+$/.exec(requestId)?.[1];
-  // A crash between a request and its answer, or between the answer and
-  // the body it admits, loses no person's decision: the resume joins the
-  // request the attempt opened, pending or answered, and never asks that
-  // attempt again, nor retires what it left pending.
-  const askedBefore = new Set(
-    prefix
-      .filter((row) => row.type === 'request.opened')
-      .map((row) => attemptOfRequest(requestIdOf(row))),
-  );
-  const reasked = final.filter(
-    (row) =>
-      row.commit > n &&
-      row.type === 'request.opened' &&
-      askedBefore.has(attemptOfRequest(requestIdOf(row))),
-  );
+  // Whatever was in flight at a crash counts as not done: a request the
+  // crash left pending is cancelled when the run is next activated, so no
+  // surface keeps offering it, and the call that asked asks again.
   const decidedIn = (rows: readonly Row[], requestId: string) =>
     rows.find(
       (row) => row.type === 'request.decided' && requestIdOf(row) === requestId,
     );
-  const pendingLost = prefix.filter(
+  const pendingKept = prefix.filter(
     (row) =>
       row.type === 'request.opened' &&
       decidedIn(prefix, requestIdOf(row)) === undefined &&
-      decidedIn(final, requestIdOf(row))?.data.includes(
-        '"action":"approve"',
-      ) !== true,
+      decidedIn(final, requestIdOf(row))?.data.includes('"action":"cancel"') !==
+        true,
   );
   const isCommand = (callId: unknown) =>
     /validation-(bash-\d+|script-\d+\/1)$/.test(String(callId));
@@ -703,12 +690,9 @@ function violations(
       : 'an invocation was answered twice',
     reruns.length === 0 ? null : 'an unfinished command ran again',
     unapproved.length === 0 ? null : 'a command ran before its approval',
-    reasked.length === 0
+    pendingKept.length === 0
       ? null
-      : 'a call attempt that asked before the crash asked again',
-    pendingLost.length === 0
-      ? null
-      : 'a request the crash left pending was not answered after it',
+      : 'a request the crash left pending was not cancelled after it',
     relaunches.length === 0 ? null : 'a child launched again',
     children.every((child) =>
       final.some((row) => row.run === child.run && row.type === 'run.end'),

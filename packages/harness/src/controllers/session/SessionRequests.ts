@@ -186,7 +186,8 @@ const decideSurfaceRequest = (
     // A request that blocks its caller is answered by the fiber waiting on it,
     // and that fiber died with the owner this decision takes over from:
     // recording a decision would clear the panel without doing what it says.
-    // Resuming the run re-enters the call, which asks again and is answered then.
+    // Resuming the run cancels this request; the call asks again and is
+    // answered then.
     if (!heldHere && blocksCaller(pending.payload)) {
       return yield* new Unavailable({
         runId: req.runId,

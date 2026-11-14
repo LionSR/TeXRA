@@ -16,7 +16,6 @@ import {
   addUsage,
   CommitOrdinalSchema,
   NO_USAGE,
-  blocksCaller,
   type CommitOrdinal,
   type HookOutcomes,
   type JsonValue,
@@ -38,13 +37,7 @@ import {
   ownCopy,
   type SharedRunRow,
 } from './runRows';
-import {
-  attemptRequests,
-  resumedAttempt,
-  outOfOrder,
-  type Invocation,
-  type PendingResponse,
-} from './inFlight';
+import { outOfOrder, type Invocation, type PendingResponse } from './inFlight';
 import { TURN_ROW_HANDLERS } from './turnRowHandlers';
 import type { RunRowState } from './runRowsShape';
 import type { HistoryMessage, Live, RunHistoryRow } from './historyTurns';
@@ -226,41 +219,9 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   hookOutcomes: {},
 });
 
-/**
- * The undecided requests no resume can answer: all but the turn's retry
- * ask and, for each pending call, the request its `resumedAttempt`
- * re-enters and the one its script's calls share (attempt 0). Each of the
- * rest keeps a call waiting that a new process will not wait on, so a
- * resume cancels them before it continues the run (`RunHistory.activate`).
- * A request that does not block its caller (`blocksCaller`) keeps nothing
- * waiting, so it stays open across every batch.
- */
-export function unboundRequests(state: RunState): readonly string[] {
-  const { pendingResponse: pending, requests } = state;
-  const own = new Set<string | undefined>(
-    Object.entries(pending?.records ?? {}).flatMap(([callId, { status }]) => {
-      if (pending === null || status.kind === 'settled') return [];
-      const at = { responseId: pending.responseId, callId };
-      return [
-        attemptRequests(requests, { ...at, attempt: 0 }).own?.requestId,
-        resumedAttempt(state, at, status).own?.requestId,
-      ];
-    }),
-  );
-  const asked = state.invocation?.current.failed?.next;
-  if (asked?.kind === 'ask') own.add(asked.requestId);
-  return Object.entries(requests).flatMap(([requestId, request]) =>
-    request.decision !== null ||
-    own.has(requestId) ||
-    !blocksCaller(request.payload)
-      ? []
-      : [requestId],
-  );
-}
-
 /** The `request.decided` rows that cancel `requestIds` of `runId` with
  *  `cause`: what a run's end writes for every request it leaves open, and
- *  a resume's activation for those no attempt re-enters. */
+ *  a resume's activation for those a dead process left. */
 export const cancelRequestRows = (
   runId: RunId,
   requestIds: readonly string[],

@@ -110,7 +110,7 @@ export const requestToolEditApproval = (
       const text = JSON.stringify(content);
       const address = blobAddress(text);
       const permission: ToolEditRequest = {
-        requestId: requests.nextId('toolEdit'),
+        requestId: requests.nextId(),
         path,
         // The call's own workspace root, as data: the display path a host
         // shows is relative to the session that raised the request, not to

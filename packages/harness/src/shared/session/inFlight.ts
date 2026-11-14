@@ -366,23 +366,23 @@ export type CallAttempt = Pick<
 >;
 
 /** The id of the `ordinal`-th request (from 1) `at` raises: derived, never
- *  drawn, so a resumed attempt joins the request it left standing. */
+ *  drawn, so a call's requests are found from its rows. */
 export const callRequestId = (at: CallAttempt, ordinal: number): string =>
   `${at.responseId}/${at.callId}:${at.attempt}:${ordinal}`;
 
-/** What one attempt asked: `raised` requests (ordinals 1..raised); `own`,
- *  the first one not cancelled, which is the one that counts (a stop's
- *  cancel decides nothing, so the attempt asked again). */
+/** What one attempt asked: `raised` requests (ordinals 1..raised), and the
+ *  `last` of them. A request is asked once: one a stop or a resume
+ *  cancelled is asked again under the next ordinal, never joined. */
 export interface AttemptRequests {
   readonly raised: number;
-  readonly own: {
+  readonly last: {
     readonly requestId: string;
     readonly request: RunRowState['requests'][string];
   } | null;
 }
 
-/** The attempt a call runs at and what it asked; `mayHaveRun`, a replay of
- *  a started body with nothing to re-enter ({@link resumedAttempt}). */
+/** The attempt a call runs at and what it asked; `mayHaveRun`, a started
+ *  body that got past what it asked ({@link resumedAttempt}). */
 type ResumedAttempt = AttemptRequests & {
   readonly attempt: number;
   readonly mayHaveRun: boolean;
@@ -393,25 +393,22 @@ export function attemptRequests(
   requests: RunRowState['requests'],
   at: CallAttempt,
 ): AttemptRequests {
-  let own: AttemptRequests['own'] = null;
+  let last: AttemptRequests['last'] = null;
   for (let raised = 0; ; raised += 1) {
     const requestId = callRequestId(at, raised + 1);
     const request = requests[requestId];
-    if (request === undefined) return { raised, own };
-    if (own === null && request.decision?.action !== 'cancel')
-      own = { requestId, request };
+    if (request === undefined) return { raised, last };
+    last = { requestId, request };
   }
 }
 
-/** The attempt a resume continues an unfinished call at. An unstarted body
- *  re-enters whatever it asked; a started one, its own request while it
- *  stands or while no waiter read its answer (decided since this owner took
- *  the run; a stop's cancel decides nothing). Else the body may have run. */
+/** The attempt a resume runs an unfinished call at. Whatever was in flight
+ *  counts as not done: an unstarted body runs at its next attempt, and a
+ *  started one whose last request nobody answered (open, or cancelled when
+ *  its run stopped or resumed) was waiting on it, so it runs again from its
+ *  start and asks again. Any other started body may have run. */
 export function resumedAttempt(
-  state: {
-    readonly requests: RunRowState['requests'];
-    readonly activatedAt: number | null;
-  },
+  state: { readonly requests: RunRowState['requests'] },
   at: Omit<CallAttempt, 'attempt'>,
   status: Exclude<CallStatus, { kind: 'settled' }>,
 ): ResumedAttempt {
@@ -423,12 +420,11 @@ export function resumedAttempt(
   const next = asked(attemptOf(status) + 1);
   if (status.kind === 'issued' || next.raised > 0) return next;
   const started = asked(status.attempt);
-  const decidedAt = started.own?.request.decidedAt ?? null;
-  const stands =
-    decidedAt === null ||
-    state.activatedAt === null ||
-    decidedAt > state.activatedAt;
-  return started.raised > 0 && stands ? started : { ...next, mayHaveRun: true };
+  const decision = started.last?.request.decision ?? null;
+  const waiting =
+    started.last !== null &&
+    (decision === null || decision.action === 'cancel');
+  return waiting ? started : { ...next, mayHaveRun: true };
 }
 
 /** A response whose calls are not yet all finished and delivered. */

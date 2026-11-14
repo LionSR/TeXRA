@@ -144,12 +144,10 @@ export function nativeToolTestLayer(
           callRequests({
             run: toolRun,
             session,
-            cell,
             commit: cell.append,
             at: { responseId: runCall.responseId, callId },
-            entered: { attempt: 1, raised: 0, own: null },
-            retireCause: 'The test call ended.',
-          }).requests,
+            entered: { attempt: 1, raised: 0 },
+          }),
       );
       return Layer.mergeAll(
         // A run's call is dispatched in its session's fiber, which the

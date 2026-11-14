@@ -190,7 +190,7 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
   plan: Plan,
   runId: RunId,
 ) {
-  const requestId = call.requests.nextId('planApproval');
+  const requestId = call.requests.nextId();
 
   yield* Effect.logInfo('Requesting approval for plan objective').pipe(
     withLogChannel(CHANNEL),
