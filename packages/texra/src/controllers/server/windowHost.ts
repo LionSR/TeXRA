@@ -22,11 +22,12 @@ import { toErrorMessage, toJsonValue } from '@texra-ai/harness/schemas';
 import type { EditorCapabilities } from '@texra/tools/editorHost';
 import { WINDOW_OUTDATED, type ServiceLink } from './client';
 
-import type {
-  HostAnswer,
-  HostCall,
-  HostCapability,
-  HostAttachFrame,
+import {
+  HostCapabilitySchema,
+  type HostAnswer,
+  type HostCall,
+  type HostCapability,
+  type HostAttachFrame,
 } from './hostCalls';
 
 const CHANNEL = 'WindowHost';
@@ -57,15 +58,12 @@ export interface WindowHost
   readonly filesWritten?: (absolutePaths: readonly string[]) => void;
 }
 
-function capabilitiesOf(host: WindowHost): HostCapability[] {
-  return [
-    ...(host.readDiagnostics ? (['readDiagnostics'] as const) : []),
-    ...(host.addCriticism ? (['addCriticism'] as const) : []),
-    ...(host.openPdf ? (['openPdf'] as const) : []),
-    ...(host.emit ? (['notices'] as const) : []),
-    ...(host.filesWritten ? (['filesWritten'] as const) : []),
-  ];
-}
+/** The calls `host` can carry out: each it has the member for, the runtime's
+ *  notices through `emit`. */
+const capabilitiesOf = (host: WindowHost): HostCapability[] =>
+  HostCapabilitySchema.literals.filter(
+    (kind) => host[kind === 'notices' ? 'emit' : kind] !== undefined,
+  );
 
 /** Carry out one call; its value, or the window's failure. */
 function perform(
@@ -86,7 +84,7 @@ function perform(
           })
           .pipe(Effect.as(null)) ?? unoffered(call)
       );
-    case 'notice':
+    case 'notices':
       return host.emit === undefined
         ? unoffered(call)
         : Effect.suspend(

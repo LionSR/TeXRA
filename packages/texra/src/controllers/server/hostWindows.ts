@@ -48,7 +48,6 @@ import {
 
 import {
   ANSWERED,
-  CALL_CAPABILITY,
   type HostAnswer,
   type HostCall,
   type HostCapability,
@@ -146,7 +145,7 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
       Effect.suspend(() => {
         // Target selection and registration are one synchronous step. The
         // acquisition installs cleanup before sending can be interrupted.
-        const window = target(key, CALL_CAPABILITY[call.kind]);
+        const window = target(key, call.kind);
         if (window === undefined)
           return Effect.fail(
             new WindowCallFailed({
@@ -227,7 +226,7 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
           ? Effect.logWarning(`Host notice ${event}`).pipe(
               Effect.annotateLogs({ data: payload }),
             )
-          : tell(window, { kind: 'notice', notice });
+          : tell(window, { kind: 'notices', notice });
       },
     };
   };
