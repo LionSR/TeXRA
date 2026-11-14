@@ -1,10 +1,16 @@
+// Node imports
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 // Third-party imports
-import { Effect, Fiber, Scheduler } from 'effect';
+import { Effect, Fiber, FileSystem, Scheduler } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - harness
 import { deriveRunId } from '@utils/core/idHash';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
+import { nodeFileServices } from '@utils/files/fsDurability';
 
 describe('deriveRunId', () => {
   it('is stable across identity field order', () => {
@@ -29,6 +35,30 @@ describe('withPerKeyLane', () => {
       );
       await Effect.runPromise(Fiber.interrupt(fiber));
       expect(lanes.size, `padding ${padding}`).toBe(0);
+    }
+  });
+});
+
+describe('nodeFileServices', () => {
+  it('finishes a write its fiber is interrupted in', async () => {
+    const directory = mkdtempSync(path.join(tmpdir(), 'texra-write-'));
+    const target = path.join(directory, 'file.txt');
+    writeFileSync(target, 'before');
+    try {
+      const after = await Effect.runPromise(
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          const write = yield* Effect.forkChild(
+            fs.writeFileString(target, 'after'),
+            { startImmediately: true },
+          );
+          yield* Fiber.interrupt(write);
+          return yield* fs.readFileString(target);
+        }).pipe(Effect.provide(nodeFileServices)),
+      );
+      expect(after).toBe('after');
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
     }
   });
 });
