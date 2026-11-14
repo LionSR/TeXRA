@@ -11,16 +11,18 @@ import {
   type CliEnabledModelRow,
 } from '@cli/runtime/models/enabledModels';
 import { AsyncListForm } from './_shared/ListForm';
-import type { ProcessRuntime, StateStore } from '@texra-ai/harness/host';
+import type { ProcessRuntime } from '@texra-ai/harness/host';
+import type { SettingsStores } from '@texra-ai/harness/plugins';
 
 interface EnabledModelsFormProps {
   readonly availableRows?: number;
   /**
-   * The global state the enabled-model list reads and each toggle writes, with
-   * the runtime that runs that write: Ink components own no runtime, so both
-   * arrive as props from the surface that opened the form.
+   * The settings slots the enabled-model list reads and each toggle writes
+   * (the catalog's curated models, the global selection), with the runtime
+   * that runs that write: Ink components own no runtime, so both arrive as
+   * props from the surface that opened the form.
    */
-  readonly state: StateStore;
+  readonly stores: Pick<SettingsStores, 'config' | 'globalState'>;
   readonly runtime: ProcessRuntime;
   readonly onClose: () => void;
 }
@@ -42,7 +44,7 @@ export function EnabledModelsForm(
       title="/models"
       compactTitle="/models · Enable models that appear in pickers."
       loadingLabel="Loading models..."
-      load={() => listCliEnabledModelCatalog(props.state)}
+      load={() => listCliEnabledModelCatalog(props.stores)}
       runtime={props.runtime}
       items={(models) =>
         models.map((model) => ({
@@ -64,7 +66,7 @@ export function EnabledModelsForm(
         const row = models.find((candidate) => candidate.id === id);
         // A refused write (e.g. disabling the last remaining model) keeps the
         // catalog as-is.
-        if (row) update(setCliModelEnabled(props.state, id, !row.enabled));
+        if (row) update(setCliModelEnabled(props.stores, id, !row.enabled));
       }}
       onCancel={props.onClose}
     />

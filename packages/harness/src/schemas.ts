@@ -30,7 +30,6 @@ export type {
 // and its JSON with the fields its category hides dropped.
 export type { RunRecord } from '@agent/core/definition/RunRecord';
 export { serializeFilteredConfig } from '@tools/executions/configView';
-export { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
 // The subscriptions a model call can route through, by provider id.
 export {
   SUBSCRIPTION_AUTH_PROVIDERS,
@@ -229,7 +228,6 @@ export {
   DISABLED_SKILLS_SETTING,
   GIT_AUTHOR_EMAIL_SETTING,
   GIT_AUTHOR_NAME_SETTING,
-  GIT_COMMITS_TO_SHOW_SETTING,
   GIT_MARK_COMMITS_SETTING,
   GIT_WORKTREE_SUPPORT_SETTING,
   GLM_CODING_PLAN_SETTING,
@@ -250,7 +248,6 @@ export {
   SAVE_MODEL_IO_SETTING,
   XAI_PREFER_SUBSCRIPTION_SETTING,
   settingsCatalog,
-  SOX_PATH_SETTING,
   TOOL_PATH_PROTECTION_SETTING,
   WEBSOCKET_OPENAI_SETTING,
   type HarnessRowKey,
@@ -325,7 +322,6 @@ export {
   blocksCaller,
   type ContextStateData,
   CredentialSwitchSchema,
-  DEFAULT_TASK_AGENT,
   type DiffStats,
   DiffStatsSchema,
   emptyRunEndOutput,
@@ -385,6 +381,7 @@ export {
   RunIdSchema,
   RunRecordFieldsSchema,
   RunOutcomeSchema,
+  RunPositionSchema,
   RunResultSchema,
   type ProcessExit,
   type RunResult,

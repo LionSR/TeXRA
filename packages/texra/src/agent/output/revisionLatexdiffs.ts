@@ -43,7 +43,7 @@ import {
   LATEXDIFF_BETWEEN_ROUNDS_SETTING,
   LATEXDIFF_MATH_MARKUP_SETTING,
   DOCUMENTS_COMPILE_TIMEOUT_SETTING,
-} from '@texra/shared/settingsView/documentsSettings';
+} from '@texra/shared/settings/documentsSettings';
 
 /** What a diff pass reads of the documents: their run and session roots. */
 type DiffRun = {

@@ -10,9 +10,9 @@ import {
   teamLaunchBlockReason,
   teamPlanStatus,
   type TeamAvailability,
-} from '@texra/shared/teamLaunch';
+} from '@texra/agent/teams/teamLaunch';
 import { workspaceTeams, type TeamPreset } from '@texra/shared/agentTeams';
-import { findTeamPreset, type TeamRunPlan } from '@texra/shared/teamPlan';
+import { findTeamPreset, type TeamRunPlan } from '@texra/agent/teams/teamPlan';
 import type { AgentEntry, StateStore } from '@texra-ai/harness/host';
 import { formatResultCount } from '@texra-ai/harness/schemas';
 

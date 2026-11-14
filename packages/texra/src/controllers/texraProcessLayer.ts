@@ -36,7 +36,7 @@ import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import { TEXRA_STORAGE_DIR_NAME } from '@texra/platform/defaults/nodeStorage';
 import { teamMembers } from '@texra/shared/agentTeams';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { makeEditorHost } from '@texra/tools/editorHost';
 import { texraPlugins } from '@texra/tools/registry';
 import type { Sessions } from '@texra-ai/harness';

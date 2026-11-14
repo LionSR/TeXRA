@@ -24,7 +24,8 @@ import {
   absentReason,
   pathExists,
 } from '@texra-ai/harness/node';
-import { ensureError, SOX_PATH_SETTING } from '@texra-ai/harness/schemas';
+import { ensureError } from '@texra-ai/harness/schemas';
+import { SOX_PATH_SETTING } from '@texra/shared/settings/texraSettings';
 import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import {
   findCommand,

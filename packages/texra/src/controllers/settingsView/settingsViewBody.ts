@@ -58,8 +58,8 @@ import { buildProfilePage } from '@texra/controllers/settingsView/profileMessage
 import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
 import { settingsToolCommands } from '@texra/controllers/settingsView/settingsToolCommands';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
-import { buildSettingsSnapshotMessage } from '@texra/shared/settingsView/handlers/settingsSnapshot';
-import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
+import { buildSettingsSnapshotMessage } from '@texra/controllers/settingsView/settingsSnapshot';
+import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
 import {
   DERIVED_SETTINGS_SNAPSHOTS,
   type SettingsHostState,
@@ -108,7 +108,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
     const inputs = yield* PubSub.unbounded<SettingsInput>();
 
     const present = settingsPresentation(bindings, inputs);
-    const { notice, report, reported, changed } = present;
+    const { notice, alert, report, reported, changed } = present;
 
     // ── Controllers ──
 
@@ -207,9 +207,15 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       return subscriptionChange(
         providerId,
         ports.accountCopy.signOutFailed(provider.displayName),
-        Effect.andThen(
-          provider.signOut(),
-          notice(ports.accountCopy.signedOut(provider.displayName)),
+        Effect.flatMap(provider.signOut(roots), ({ preferenceError }) =>
+          Effect.andThen(
+            notice(ports.accountCopy.signedOut(provider.displayName)),
+            preferenceError === undefined
+              ? Effect.void
+              : alert(
+                  `${provider.displayName} subscription could not be turned off: ${preferenceError}`,
+                ),
+          ),
         ),
       );
     };
@@ -328,7 +334,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
         setModelEnabled({
           model: message.modelName,
           enabled: message.enabled,
-          state: roots.globalState,
+          stores: roots,
         }).pipe(
           Effect.andThen(changed('settings')),
           // The options cache is invalidated by the writer itself.

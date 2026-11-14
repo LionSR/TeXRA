@@ -34,6 +34,7 @@ import {
   Unavailable,
   type RequestError,
 } from '@texra-ai/harness/schemas';
+import { DEFAULT_AGENT_MODEL } from '@texra/model/curatedModels';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import { forkRun, resumeRun } from '@texra/controllers/session/runActionPolicy';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
@@ -50,7 +51,7 @@ import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFin
 import {
   planCompileFixer,
   type CompileFixerPlanFailed,
-} from '../progressView/compileFixer';
+} from '@texra/agent/output/compileFixer';
 import type { AgentConfig, AgentConfigInput } from '@texra-ai/harness/schemas';
 import {
   isRequestRefusal,
@@ -413,7 +414,7 @@ export const createHostRunActions = Effect.fn(
       const config = yield* documentTaskConfig(
         {
           agent: 'merge',
-          model: yield* getHelperModelName(roots),
+          model: (yield* getHelperModelName(roots)) ?? DEFAULT_AGENT_MODEL,
           inputFiles: [baseFile],
           editedFile,
         },

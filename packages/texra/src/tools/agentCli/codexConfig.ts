@@ -32,7 +32,7 @@ import type { ModelReasoningEffort } from '@openai/codex-sdk';
 import {
   CODEX_MODEL_SETTING,
   CODEX_REASONING_EFFORT_SETTING,
-} from '@texra/shared/settingsView/integrationSettings';
+} from '@texra/shared/settings/integrationSettings';
 
 const CHANNEL = 'codexConfig';
 

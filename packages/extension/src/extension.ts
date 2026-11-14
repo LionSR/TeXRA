@@ -68,7 +68,7 @@ import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
   settingsTabByCommand,
   type ExtensionCommandId,

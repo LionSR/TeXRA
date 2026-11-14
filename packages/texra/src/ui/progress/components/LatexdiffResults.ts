@@ -12,7 +12,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
-import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 import {
   formatRoundLabel,
   latexdiffDisplayName,

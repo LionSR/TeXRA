@@ -9,7 +9,7 @@ import { Layer } from 'effect';
 import { teamMembers } from '@texra/shared/agentTeams';
 import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
 import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import { texraPlugins } from '@texra/tools/registry';
 import type { Plugin } from '@tools/plugins';

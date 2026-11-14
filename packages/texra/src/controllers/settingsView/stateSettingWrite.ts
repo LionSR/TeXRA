@@ -14,11 +14,11 @@
 import { Settings, type SettingsStores } from '@texra-ai/harness/plugins';
 import { Effect, Result, Schema } from 'effect';
 
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import type {
   SettingsViewRow,
   TexraSettingRow,
-} from '@texra/shared/settingsView/settingSurfaces';
+} from '@texra/shared/settings/settingSurfaces';
 
 /** The surfaces that write a setting: a settings view, or the CLI. */
 type SettingSurface = 'settingsView' | 'cli';

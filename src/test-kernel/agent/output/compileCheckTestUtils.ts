@@ -18,7 +18,7 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING,
   DOCUMENTS_COMPILE_TIMEOUT_SETTING,
-} from '@texra/shared/settingsView/documentsSettings';
+} from '@texra/shared/settings/documentsSettings';
 
 /** The rooted filesystems of the test host's roots, over the Node
  *  filesystem. */

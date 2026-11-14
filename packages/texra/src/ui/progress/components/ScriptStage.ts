@@ -17,7 +17,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared contracts
 import type { Surface } from '@texra/shared/session/surface';
-import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { TALK_TO_AGENT } from '@ui/copy/nestedRuns';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import {
