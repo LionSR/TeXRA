@@ -92,4 +92,11 @@ describe('extractBibliography helpers', () => {
       assert.deepStrictEqual(keys, ['real']);
     }),
   );
+
+  it.effect('reads a citation with a space before its optional argument', () =>
+    Effect.gen(function* () {
+      const keys = yield* citationKeysOf('\\cite [p.~3]{spaced}');
+      assert.deepStrictEqual(keys, ['spaced']);
+    }),
+  );
 });
