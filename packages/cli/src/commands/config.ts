@@ -9,7 +9,7 @@ import {
 } from '@texra-ai/harness/schemas';
 
 import { workspaceTeams } from '@texra/shared/agentTeams';
-import { findTeamPreset } from '@texra/shared/teamPlan';
+import { findTeamPreset } from '@texra/agent/teams/teamPlan';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
   CliUsageError,

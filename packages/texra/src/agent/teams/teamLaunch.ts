@@ -20,7 +20,7 @@ import {
   type TeamCatalogAgent,
   type TeamRunOptions,
   type TeamRunPlan,
-} from '@texra/shared/teamPlan';
+} from '@texra/agent/teams/teamPlan';
 import type { AgentDelegationScope } from '@texra-ai/harness/host';
 
 /** The team a run was launched as, the one key TeXRA keeps in a run's

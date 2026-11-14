@@ -72,7 +72,7 @@ import type { TuiSession } from './tui/state/sessionRunState';
 import { oneShotResumeNotice } from './tui/state/resumeHint';
 import { currentView, runViewOf, sessionView } from './tui/state/sessionView';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { launchTeamId } from '@texra/shared/teamLaunch';
+import { launchTeamId } from '@texra/agent/teams/teamLaunch';
 import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import {

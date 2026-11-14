@@ -23,7 +23,7 @@ import {
   formatTeamLaunchBlockedMessage,
   formatUnknownTeamMessage,
   resolveTeamLaunch,
-} from '@texra/shared/teamLaunch';
+} from '@texra/agent/teams/teamLaunch';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,

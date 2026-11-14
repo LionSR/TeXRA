@@ -20,7 +20,7 @@ import {
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
-import { launchTeamId } from '@texra/shared/teamLaunch';
+import { launchTeamId } from '@texra/agent/teams/teamLaunch';
 import { cliLaunchOutput } from '@cli/runtime/headless/documentTaskOutput';
 import { runStatus, runStatusLabel } from '@ui/copy/runStatus';
 import type { RunStatusKey } from '@texra/shared/session/runStatusKey';

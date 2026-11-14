@@ -55,7 +55,7 @@ import {
 } from '@cli/tui/terminalCleanup';
 import { getFirstRunDone } from '@texra/controllers/onboarding/onboardingFunnel';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { launchTeamId } from '@texra/shared/teamLaunch';
+import { launchTeamId } from '@texra/agent/teams/teamLaunch';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';

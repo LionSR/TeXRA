@@ -378,7 +378,7 @@ re-read the surface and the ports. Where it changes this design:
   them; #14371 removed five of the six that were free. Shrinking further means
   narrowing the root signatures (the run-lifecycle work in the 1.0 PRD) or
   moving app vocabulary: the team launch code moved to
-  `packages/texra/src/shared/teamLaunch.ts` (16 `./host` names freed) and the
+  `packages/texra/src/agent/teams/teamLaunch.ts` (16 `./host` names freed) and the
   picker wire types to `packages/texra/src/shared/pickerOptions.ts` (7
   `./schemas` names freed, `ModelAvailabilityKindSchema` added).
 - **Lane 3, vocabulary.** #14364 made the namespace data and moved the

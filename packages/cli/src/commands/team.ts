@@ -3,8 +3,8 @@ import { defineCommand } from 'citty';
 
 import { AgentCatalog, type ProcessServices } from '@texra-ai/harness/host';
 import type { Sessions } from '@texra-ai/harness';
-import { canLaunchTeam, planTeamRuns } from '@texra/shared/teamLaunch';
-import { findTeamPreset, planTeamRun } from '@texra/shared/teamPlan';
+import { canLaunchTeam, planTeamRuns } from '@texra/agent/teams/teamLaunch';
+import { findTeamPreset, planTeamRun } from '@texra/agent/teams/teamPlan';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra/shared/constants/agents';
 
 import { missingAgentMessage, missingTeamMessage } from '../runtime/agents';

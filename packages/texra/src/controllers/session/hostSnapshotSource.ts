@@ -45,7 +45,7 @@ import {
   APPROVAL_POLICY_SETTING,
   GIT_COMMITS_TO_SHOW_SETTING,
 } from '@texra-ai/harness/schemas';
-import { loadTeamOptions } from '@texra/shared/teamLaunch';
+import { loadTeamOptions } from '@texra/agent/teams/teamLaunch';
 import type {
   FileOptions,
   HostSnapshot,

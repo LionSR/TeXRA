@@ -20,7 +20,7 @@ import {
   formatUnknownTeamMessage,
   launchTeamId,
   resolveTeamLaunch,
-} from '@texra/shared/teamLaunch';
+} from '@texra/agent/teams/teamLaunch';
 import { isPastedImage } from '@texra/shared/utils/pastedImageName';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
