@@ -18,9 +18,12 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  statfsSync,
   symlinkSync,
   writeFileSync,
+  type StatsFs,
 } from 'node:fs';
+import type * as nodeFs from 'node:fs';
 import * as os from 'node:os';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -109,6 +112,10 @@ vi.mock('node:os', async (importOriginal) => ({
   ...(await importOriginal<typeof os>()),
   platform: vi.fn(() => process.platform),
 }));
+vi.mock('node:fs', async (importOriginal) => {
+  const fs = await importOriginal<typeof nodeFs>();
+  return { ...fs, statfsSync: vi.fn(fs.statfsSync) };
+});
 vi.mock('@texra/tools/lean/direct/leanServerPool', async () => {
   const { Layer } = await import('effect');
   const { LeanLanguageServices } =
@@ -601,6 +608,37 @@ describe('the session event table and its one publisher', () => {
       expect(existsSync(join(storage, 'texra.db'))).toBe(false);
     }).pipe(Effect.ensuring(Effect.sync(() => system.mockRestore())));
   });
+
+  it.effect(
+    'opens on a Linux filesystem no list names and still refuses NFS',
+    () => {
+      const system = vi.mocked(os.platform).mockReturnValue('linux');
+      const mounted = vi.mocked(statfsSync);
+      // cast: the check reads only the filesystem's type.
+      const type = (magic: number) => ({ type: magic }) as StatsFs;
+      return Effect.gen(function* () {
+        // eCryptfs: local, and neither a network nor a clustered filesystem.
+        mounted.mockReturnValue(type(0xf15f));
+        const local = workspace();
+        yield* Database.pipe(Effect.provide(substrate(local)));
+        expect(existsSync(join(local, 'texra.db'))).toBe(true);
+        mounted.mockReturnValue(type(0x6969));
+        const remote = workspace();
+        const failure = yield* Effect.flip(
+          Database.pipe(Effect.provide(substrate(remote))),
+        );
+        expect(String(failure.cause)).toContain('verified local filesystem');
+        expect(existsSync(join(remote, 'texra.db'))).toBe(false);
+      }).pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            system.mockRestore();
+            mounted.mockRestore();
+          }),
+        ),
+      );
+    },
+  );
 
   /** A store holding one run row, then re-stamped as another build's. */
   const storeOfFormat = (storage: string, format: number) =>

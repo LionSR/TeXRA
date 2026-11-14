@@ -11,25 +11,25 @@ import { ensureError } from '@utils/errors/errorMessage';
 import { STORE_FILE_SUFFIXES } from './storeAside';
 import type { PlatformError } from 'effect/PlatformError';
 
-/** Local Linux filesystem types from include/uapi/linux/magic.h. Network,
- * clustered and unclassified FUSE filesystems are deliberately absent. */
-const LOCAL_LINUX_FILESYSTEMS = new Set([
-  0xef53, // ext2, ext3, ext4
-  0x58465342, // XFS
-  0x9123683e, // Btrfs
-  0x01021994, // tmpfs
-  0x794c7630, // overlayfs
-  0x2fc12fc1, // ZFS
-  0xf2f52010, // F2FS
-  0x3153464a, // JFS
-  0x52654973, // ReiserFS
-  0x3434, // NILFS
-  0x42465331, // BFS
-  0x28cd3d45, // cramfs
-  0x73717368, // squashfs
-  0x4d44, // FAT
-  0x2011bab0, // exFAT
-  0x5346544e, // NTFS
+/** The Linux filesystem types (`statfs` `f_type`) a store is refused on:
+ * network and clustered filesystems, where the shared-memory index WAL
+ * keeps beside the store is unsafe, and FUSE, which does not say what is
+ * behind it (GlusterFS, sshfs). Every other type is accepted, so a local
+ * filesystem needs no entry. From include/uapi/linux/magic.h unless a line
+ * names another header. */
+const REMOTE_LINUX_FILESYSTEMS = new Set([
+  0x6969, // NFS
+  0x517b, // SMB
+  0xff534d42, // CIFS
+  0xfe534d42, // SMB2
+  0x01021997, // 9p
+  0x00c36400, // Ceph
+  0x5346414f, // AFS (OpenAFS)
+  0x6b414653, // AFS (the kernel's client)
+  0x7461636f, // OCFS2
+  0x01161970, // GFS2 (include/uapi/linux/gfs2_ondisk.h)
+  0x0bd00bd0, // Lustre (lustre_user.h, in the kernel tree until 4.17)
+  0x65735546, // FUSE
 ]);
 
 /** Whether the mount table `mountOutput` (`/sbin/mount`'s) marks the
@@ -75,7 +75,9 @@ const isLocalMacDirectory = Effect.fnUntraced(function* (directory: string) {
   });
 });
 
-/** Whether the filesystem holding `resolved` is verified local. */
+/** Whether the filesystem holding `resolved` is local: marked so in the
+ * mount table on macOS, not a known remote type on Linux, a drive letter on
+ * Windows. */
 function isLocalDirectory(
   resolved: string,
 ): Effect.Effect<boolean, Error | PlatformError, ChildProcessSpawner> {
@@ -84,7 +86,7 @@ function isLocalDirectory(
       return isLocalMacDirectory(resolved);
     case 'linux':
       return Effect.try({
-        try: () => LOCAL_LINUX_FILESYSTEMS.has(statfsSync(resolved).type),
+        try: () => !REMOTE_LINUX_FILESYSTEMS.has(statfsSync(resolved).type),
         catch: ensureError,
       });
     case 'win32':
@@ -99,10 +101,10 @@ function isLocalDirectory(
  * opens the file with SQLite's URI `mode=rw`, which never makes one) and
  * answer the database path inside it.
  *
- * Reject remote or unclassified storage before SQLite opens: WAL does not
- * work over a network filesystem. The native
- * Windows realpath uses GetFinalPathNameByHandleW, resolving junctions and
- * mapped shares to their final DOS or UNC path. A UNC result is not local.
+ * Reject remote storage before SQLite opens: WAL does not work over a
+ * network filesystem. The native Windows realpath uses
+ * GetFinalPathNameByHandleW, resolving junctions and mapped shares to their
+ * final DOS or UNC path. A UNC result is not local.
  * https://docs.libuv.org/en/v1.x/fs.html#c.uv_fs_realpath
  */
 export const localDatabasePath = Effect.fn('localDatabasePath')(function* (
