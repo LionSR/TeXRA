@@ -5,18 +5,15 @@
  * `SCHEMA_VERSION` names the DDL, never the row vocabulary: rows carry
  * their own versions (`rowVersions.ts`), and the kinds a store holds are
  * gated by `rowCodec.ts`, so it moves only for a change an older build
- * cannot write around. Only a file with no tables and no stamps gets the
- * schema. Any other file that is not this build's schema is refused with
- * its data unchanged: an earlier one has no step to this one (there is no
- * migration), a later one is a newer build's, and one without the
- * application id is not a session store. This module knows no row kind or
- * payload field.
+ * cannot write around. An unstamped file gets the schema. A file stamped
+ * with another schema fails the open unchanged: an earlier one has no step
+ * to this one (there is no migration), a later one is a newer build's. A
+ * file SQLite reports damaged is renamed aside and a fresh store opened.
+ * This module knows no row kind or payload field.
  */
 import { Clock, Effect, Exit, FileSystem, Scope } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  corruptAsideName,
-  freeName,
   isDamaged,
   pragmaValue,
   retryBusy,
@@ -29,9 +26,6 @@ const CHANNEL = 'sessionDatabase';
 
 /** The DDL this build creates and writes. */
 const SCHEMA_VERSION = 105;
-/** `TeXR`: a harness store, told apart from a foreign SQLite file before
- *  anything in it is touched. */
-const APPLICATION_ID = 0x54655852;
 
 /**
  * The tables every store holds. `commit` is a SQLite keyword, so the column
@@ -147,24 +141,6 @@ const verifyPragma = Effect.fnUntraced(function* (
     );
 });
 
-/** The user tables a file holds (none: a new file). */
-const userTables = (sql: Sql) =>
-  sql
-    .unsafe<{ name: string }>(
-      "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
-      [],
-    )
-    .pipe(Effect.map((rows) => rows.map((row) => row.name)));
-
-/** The error that rejects a file this build does not write. The connection
- *  that read its stamps has already enabled WAL, so a file in another
- *  journal mode (never a session store) keeps that one change; no table,
- *  row or stamp of any refused file is written. */
-const refused = (path: string, why: string) =>
-  Effect.fail(
-    new Error(`Session store ${path} ${why}; none of its data was changed.`),
-  );
-
 /** Give an empty file its `auto_vacuum` setting, which is fixed when the
  *  first page is written. Enabling WAL already wrote it, so one `VACUUM` of
  *  the empty file applies the setting. */
@@ -173,34 +149,19 @@ const incrementalVacuum = Effect.fnUntraced(function* (sql: Sql) {
   if ((yield* pragmaValue(sql, 'auto_vacuum')) !== 2) yield* run(sql, 'VACUUM');
 });
 
-/**
- * Whether the file is already this build's store (false: a new file, with no
- * tables and no stamps, which the caller gives the schema). Any other file
- * is refused ({@link refused}): another application's (an `application_id`
- * that is not ours, or tables or a schema stamp without one), a newer
- * build's schema, and an earlier build's, which this build has no step from.
- */
+/** Whether the file is already this build's store (false: an unstamped
+ *  file, which the caller gives the schema). A newer build's schema and an
+ *  earlier build's, which this build has no step from, fail the open. */
 const checkStamps = Effect.fnUntraced(function* (sql: Sql, path: string) {
-  const application = Number(yield* pragmaValue(sql, 'application_id'));
   const stored = Number(yield* pragmaValue(sql, 'user_version'));
-  if (application === APPLICATION_ID) {
-    if (stored === SCHEMA_VERSION) return true;
-    return yield* refused(
-      path,
+  if (stored === SCHEMA_VERSION) return true;
+  if (stored === 0) return false;
+  return yield* Effect.fail(
+    new Error(
       stored > SCHEMA_VERSION
-        ? `has schema ${stored}, newer than this build's ${SCHEMA_VERSION}: a newer build opens it`
-        : `was written by an earlier build (schema ${stored}; this build writes ${SCHEMA_VERSION}) and this build keeps no compatibility with it; move it away to create a fresh store there`,
-    );
-  }
-  if (
-    application === 0 &&
-    stored === 0 &&
-    (yield* userTables(sql)).length === 0
-  )
-    return false;
-  return yield* refused(
-    path,
-    `is not a session store (application id ${application}, schema ${stored}); move it away to create a fresh store there`,
+        ? `Session store ${path} has schema ${stored}, newer than this build's ${SCHEMA_VERSION}: a newer build opens it.`
+        : `Session store ${path} was written by an earlier build (schema ${stored}; this build writes ${SCHEMA_VERSION}) and this build keeps no compatibility with it; move it away to create a fresh store there.`,
+    ),
   );
 });
 
@@ -240,7 +201,6 @@ const prepareStore = Effect.fnUntraced(function* (
       if (yield* checkStamps(sql, path)) return;
       for (const statement of [...TABLES, ...ADDITIVE])
         yield* run(sql, statement);
-      yield* run(sql, `PRAGMA application_id = ${APPLICATION_ID}`);
       yield* run(sql, `PRAGMA user_version = ${SCHEMA_VERSION}`);
     }).pipe(sql.withTransaction);
   }
@@ -298,37 +258,19 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
 ) {
   const fs = yield* FileSystem.FileSystem;
   const outer = yield* Effect.scope;
-  /** One open in a scope of its own, which a failed open closes: the file
-   *  is moved only while no connection of this process holds it. */
-  const attempt = Effect.gen(function* () {
-    const scope = yield* Scope.fork(outer, 'sequential');
-    return yield* connect.pipe(
-      Effect.tap((sql) => prepareStore(sql, path, filename)),
-      Scope.provide(scope),
-      Effect.onError(() => Scope.close(scope, Exit.void)),
-      Effect.exit,
-    );
-  });
-  const first = yield* attempt;
+  // The first open in a scope of its own, which a failed open closes: the
+  // file is moved only while no connection of this process holds it.
+  const scope = yield* Scope.fork(outer, 'sequential');
+  const first = yield* connect.pipe(
+    Effect.tap((sql) => prepareStore(sql, path, filename)),
+    Scope.provide(scope),
+    Effect.onError(() => Scope.close(scope, Exit.void)),
+    Effect.exit,
+  );
   if (Exit.isSuccess(first)) return { sql: first.value, movedAside: null };
   if (filename === IN_MEMORY_STORE || !isDamaged(first.cause))
     return yield* Effect.failCause(first.cause);
-  // Another process may have seen the same damage and already put a fresh
-  // store here, which a second open returns. The file is moved only when
-  // that open reports damage too and the file is the same one (inode, size,
-  // mtime) from before it up to the rename.
-  const identity = fs.stat(filename).pipe(
-    Effect.map((info) => `${info.ino}/${info.size}/${info.mtime}`),
-    Effect.orElseSucceed(() => null),
-  );
-  const seen = yield* identity;
-  const second = yield* attempt;
-  if (Exit.isSuccess(second)) return { sql: second.value, movedAside: null };
-  if (!isDamaged(second.cause) || seen === null || (yield* identity) !== seen)
-    return yield* Effect.failCause(second.cause);
-  const aside = yield* freeName(
-    corruptAsideName(filename, yield* Clock.currentTimeMillis),
-  );
+  const aside = `${filename}.corrupt-${yield* Clock.currentTimeMillis}`;
   for (const suffix of STORE_FILE_SUFFIXES) {
     if (yield* fs.exists(`${filename}${suffix}`))
       yield* fs.rename(`${filename}${suffix}`, `${aside}${suffix}`);

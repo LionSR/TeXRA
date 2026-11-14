@@ -18,13 +18,9 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
-  statfsSync,
   symlinkSync,
   writeFileSync,
-  type StatsFs,
 } from 'node:fs';
-import type * as nodeFs from 'node:fs';
-import * as os from 'node:os';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -89,10 +85,6 @@ import { foldRunRows, RUN_ROW_READS } from '@shared/session/runRowReads';
 import type { SessionLogShape } from '@shared/session/sessionLog';
 import { SessionEvents } from '@shared/session/sessionEvents';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import {
-  nodeSpawnerLayer,
-  scriptedSpawnerLayer,
-} from '@test/support/childProcessTestLayer';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { runStart } from '@test/support/sessionRows';
 import { readStoreSnapshot } from '@test/support/storeFaults';
@@ -106,16 +98,7 @@ import {
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { ownFactsChecked } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-vi.mock('node:os', async (importOriginal) => ({
-  ...(await importOriginal<typeof os>()),
-  platform: vi.fn(() => process.platform),
-}));
-vi.mock('node:fs', async (importOriginal) => {
-  const fs = await importOriginal<typeof nodeFs>();
-  return { ...fs, statfsSync: vi.fn(fs.statfsSync) };
-});
 vi.mock('@texra/tools/lean/direct/leanServerPool', async () => {
   const { Layer } = await import('effect');
   const { LeanLanguageServices } =
@@ -236,7 +219,7 @@ const graph = (
   store: Layer.Layer<
     Database,
     never,
-    WorkspaceRoots | FileSystem.FileSystem | ChildProcessSpawner
+    WorkspaceRoots | FileSystem.FileSystem
   > = databaseLayer('ephemeral').pipe(
     Layer.orDie,
     Layer.provide(storePluginsLayer),
@@ -569,14 +552,10 @@ describe('the session event table and its one publisher', () => {
     for (const root of roots) rmSync(root, { recursive: true, force: true });
   });
 
-  const substrate = (
-    storage: string,
-    spawner: Layer.Layer<ChildProcessSpawner> = nodeSpawnerLayer,
-  ) =>
+  const substrate = (storage: string) =>
     databaseLayer('persistent').pipe(
       Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
       Layer.provide(storePluginsLayer),
-      Layer.provide(spawner),
       Layer.provide(nodePlatformLayer),
       Layer.fresh,
     );
@@ -591,54 +570,6 @@ describe('the session event table and its one publisher', () => {
     db.exec('PRAGMA foreign_keys = ON');
     return db;
   };
-
-  it.effect('rejects a remote mount before creating the database', () => {
-    const storage = workspace();
-    const resolved = realpathSync.native(storage);
-    const system = vi.mocked(os.platform).mockReturnValue('darwin');
-    const mount = scriptedSpawnerLayer(() => ({
-      stdout: `server:/paper on ${resolved} (nfs, nodev)\n`,
-    }));
-    return Effect.gen(function* () {
-      const failure = yield* Effect.flip(
-        Database.pipe(Effect.provide(substrate(storage, mount.layer))),
-      );
-      expect(failure._tag).toBe('DatabaseOpenFailed');
-      expect(String(failure.cause)).toContain('verified local filesystem');
-      expect(existsSync(join(storage, 'texra.db'))).toBe(false);
-    }).pipe(Effect.ensuring(Effect.sync(() => system.mockRestore())));
-  });
-
-  it.effect(
-    'opens on a Linux filesystem no list names and still refuses NFS',
-    () => {
-      const system = vi.mocked(os.platform).mockReturnValue('linux');
-      const mounted = vi.mocked(statfsSync);
-      // cast: the check reads only the filesystem's type.
-      const type = (magic: number) => ({ type: magic }) as StatsFs;
-      return Effect.gen(function* () {
-        // eCryptfs: local, and neither a network nor a clustered filesystem.
-        mounted.mockReturnValue(type(0xf15f));
-        const local = workspace();
-        yield* Database.pipe(Effect.provide(substrate(local)));
-        expect(existsSync(join(local, 'texra.db'))).toBe(true);
-        mounted.mockReturnValue(type(0x6969));
-        const remote = workspace();
-        const failure = yield* Effect.flip(
-          Database.pipe(Effect.provide(substrate(remote))),
-        );
-        expect(String(failure.cause)).toContain('verified local filesystem');
-        expect(existsSync(join(remote, 'texra.db'))).toBe(false);
-      }).pipe(
-        Effect.ensuring(
-          Effect.sync(() => {
-            system.mockRestore();
-            mounted.mockRestore();
-          }),
-        ),
-      );
-    },
-  );
 
   /** A store holding one run row, then re-stamped as another build's. */
   const storeOfFormat = (storage: string, format: number) =>
@@ -655,46 +586,6 @@ describe('the session event table and its one publisher', () => {
           }
         }),
       ),
-    );
-
-  // Another tool's database at the store's path: unstamped, or stamped with
-  // its own id even at this build's schema number.
-  for (const stamp of [
-    '',
-    'PRAGMA application_id = 1234; PRAGMA user_version = 105;',
-  ])
-    it.effect(
-      `refuses another application's SQLite file and keeps its rows (${stamp || 'unstamped'})`,
-      () => {
-        const storage = workspace();
-        return Effect.gen(function* () {
-          yield* Effect.sync(() => {
-            const connection = reader(storage);
-            try {
-              connection.exec(
-                `CREATE TABLE notes (body TEXT); INSERT INTO notes VALUES ('mine');
-             ${stamp}`,
-              );
-            } finally {
-              connection.close();
-            }
-          });
-          const failure = yield* Effect.flip(
-            Database.pipe(Effect.provide(substrate(storage))),
-          );
-          expect(failure._tag).toBe('DatabaseOpenFailed');
-          expect(failure.message).toContain('is not a session store');
-          expect(failure.message).toContain('application id');
-          const stored = reader(storage);
-          try {
-            expect(stored.prepare('SELECT body FROM notes').all()).toEqual([
-              { body: 'mine' },
-            ]);
-          } finally {
-            stored.close();
-          }
-        });
-      },
     );
 
   it.effect('moves a truncated store aside and opens a fresh one', () =>

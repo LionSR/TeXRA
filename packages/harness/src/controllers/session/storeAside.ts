@@ -1,9 +1,8 @@
 /**
- * The session store's aside copies: the damaged files a store open moved
- * beside it (`.corrupt-<stamp>`), each at a name no earlier copy holds and
- * kept until a storage prune deletes them; the outermost transaction's busy
- * retry; and the test of whether a failed open is SQLite reporting the file
- * damaged.
+ * The session store's aside copies: the damaged files a store open renamed
+ * beside it (`.corrupt-<stamp>`), kept until a storage prune deletes them;
+ * the outermost transaction's busy retry; and the test of whether a failed
+ * open is SQLite reporting the file damaged.
  */
 import { basename, dirname, join } from 'node:path';
 import {
@@ -22,11 +21,6 @@ export type Sql = SqlClient.SqlClient;
 
 /** A store's file and the two SQLite keeps beside it in WAL mode. */
 export const STORE_FILE_SUFFIXES = Object.freeze(['', '-wal', '-shm'] as const);
-
-/** The name an open moves a damaged store to. `ASIDE` below matches it,
- *  and what goes with it. */
-export const corruptAsideName = (filename: string, at: number): string =>
-  `${filename}.corrupt-${at}`;
 
 export const run = (sql: Sql, statement: string) => sql.unsafe(statement, []);
 
@@ -51,28 +45,10 @@ export const isBusy = (error: unknown): boolean =>
 export const retryBusy = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   effect.pipe(Effect.retry({ schedule: BUSY_RETRY, while: isBusy }));
 
-/**
- * The first of `base`, `base.2`, `base.3`, … that names no file (with its
- * `-wal` and `-shm` companions, for a whole database moved aside): an
- * earlier copy is never replaced, on any platform's `rename`.
- */
-export const freeName = Effect.fnUntraced(function* (base: string) {
-  const fs = yield* FileSystem.FileSystem;
-  for (let n = 1; ; n += 1) {
-    const name = n === 1 ? base : `${base}.${n}`;
-    const taken = yield* Effect.forEach(
-      STORE_FILE_SUFFIXES,
-      (suffix) => fs.exists(`${name}${suffix}`),
-      { concurrency: 'unbounded' },
-    );
-    if (!taken.some(Boolean)) return name;
-  }
-});
-
-/** A `corruptAsideName` suffix, the `.<n>` of a taken name, and a moved WAL
- *  or shared-memory file. `.pre1` is the copy an earlier build kept of a
- *  store it replaced: no build writes one now, and the storage prune still
- *  lists those left behind so that it can delete them. */
+/** The suffix of a damaged store an open renamed aside (`openStore`), and
+ *  of its WAL or shared-memory file. `.pre1` and a `.<n>` after either are
+ *  copies earlier builds left: none is written now, and the storage prune
+ *  still lists them so that it can delete them. */
 const ASIDE = /^\.(?:pre1|corrupt-\d+)(?:\.\d+)?(?:-wal|-shm)?$/;
 
 /** The aside copies beside the store at `filename`, with their sizes. */

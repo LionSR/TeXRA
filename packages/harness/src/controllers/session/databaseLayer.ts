@@ -14,6 +14,7 @@
  * ordinals, none of which a caller supplies.
  */
 import { randomUUID } from 'node:crypto';
+import { mkdirSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import * as SqliteClient from '@effect/sql-sqlite-node/SqliteClient';
 import * as Reactivity from 'effect/reactivity/Reactivity';
@@ -30,9 +31,9 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withLogChannel } from '@logger/effectLog';
+import { ensureError } from '@utils/errors/errorMessage';
 import {
   CURRENT_VALUE_VERSION,
   edgesOf,
@@ -66,7 +67,6 @@ import {
 import { factKindsOf } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { currentValues, READ_RETRY } from './currentValues';
-import { localDatabasePath } from './localDatabasePath';
 import { LISTED_TYPES, projectionUpkeep, usageRows } from './projections';
 import {
   EVENT_COLUMNS,
@@ -192,7 +192,7 @@ export const databaseLayer = (
 ): Layer.Layer<
   Database,
   DatabaseOpenFailed,
-  WorkspaceRoots | FileSystem.FileSystem | ChildProcessSpawner | ToolRegistry
+  WorkspaceRoots | FileSystem.FileSystem | ToolRegistry
 > =>
   Layer.effect(
     Database,
@@ -206,14 +206,21 @@ export const databaseLayer = (
         new DatabaseOpenFailed({ path, cause });
       const create = mode !== 'existing';
       const exclusive = mode === 'persistent' || mode === 'existing';
+      // The store's directory is made here (not by SQLite, which makes
+      // only the file), unless the store must exist already.
       const filename =
         mode === 'ephemeral'
           ? IN_MEMORY_STORE
-          : yield* localDatabasePath(
-              roots.storage,
-              SESSION_DATABASE_FILE,
-              create,
-            ).pipe(Effect.mapError(openFailed));
+          : yield* Effect.try({
+              try: () => {
+                if (create) mkdirSync(roots.storage, { recursive: true });
+                return join(
+                  realpathSync.native(roots.storage),
+                  SESSION_DATABASE_FILE,
+                );
+              },
+              catch: (cause) => openFailed(ensureError(cause)),
+            });
       // A project store never waits for a lock: its one holder is this
       // process, and a lock another holds refuses the open at once, on the
       // fiber, never by blocking the thread in SQLite.
@@ -813,11 +820,7 @@ export const storeOpenElsewhere = (filename: string) =>
  * poll fiber; an entry that must create none passes a refusing layer. */
 export const globalDatabaseLayer = (
   storage: string,
-): Layer.Layer<
-  GlobalDatabase,
-  DatabaseOpenFailed,
-  FileSystem.FileSystem | ChildProcessSpawner
-> =>
+): Layer.Layer<GlobalDatabase, DatabaseOpenFailed, FileSystem.FileSystem> =>
   Layer.effect(GlobalDatabase, Database).pipe(
     Layer.provide(
       databaseLayer('global').pipe(

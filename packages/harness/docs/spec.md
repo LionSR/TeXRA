@@ -85,23 +85,18 @@ its kind is its `type` column.
 ### 2.1 One file per storage root
 
 The store is one SQLite file named `texra.db` under the storage root
-(`controllers/session/databaseLayer.ts#SESSION_DATABASE_FILE`); the file name and the
-application id (`TeXR`) carry the product's name. An ephemeral session runs the
-same schema in memory (`controllers/session/storeSchema.ts#IN_MEMORY_STORE`).
+(`controllers/session/databaseLayer.ts#SESSION_DATABASE_FILE`). An ephemeral
+session runs the same schema in memory
+(`controllers/session/storeSchema.ts#IN_MEMORY_STORE`).
 
-The store MUST carry application id `0x54655852` and schema version 105 in
-SQLite's `user_version` (`controllers/session/storeSchema.ts#APPLICATION_ID`,
-`#SCHEMA_VERSION`). A process MUST give the schema only to a file with no
-tables, no application id and no schema stamp, and MUST refuse any other file
-that does not carry both stamps, writing no table, row or stamp of it: one
-with another application id, one with tables or a schema stamp and no
-application id, and a store stamped with a schema other than its own, earlier
-or newer (`controllers/session/storeSchema.ts#checkStamps`). The stamps are
-read on the store's own connection, after it enabled WAL: a refused file that
-was in another journal mode, which no session store is, stays in WAL mode. A file SQLite reports
-damaged at open SHALL be moved, with its WAL and shared-memory files, to
+The store MUST carry schema version 105 in SQLite's `user_version`
+(`controllers/session/storeSchema.ts#SCHEMA_VERSION`). A process gives the
+schema to an unstamped file and MUST fail the open of a store stamped with a
+schema other than its own, earlier or newer, writing nothing to it
+(`controllers/session/storeSchema.ts#checkStamps`). A file SQLite reports
+damaged at open SHALL be renamed, with its WAL and shared-memory files, to
 `<file>.corrupt-<ms>`, and a fresh store opened in its place
-(`controllers/session/storeAside.ts#corruptAsideName`).
+(`controllers/session/storeSchema.ts#openStore`).
 
 A persistent store runs in WAL mode with `synchronous = NORMAL` and foreign keys
 on (`controllers/session/storeSchema.ts#prepareStore`). Every transaction the

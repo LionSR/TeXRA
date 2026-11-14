@@ -14,7 +14,6 @@ import {
   Option,
   RcMap,
 } from 'effect';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import type { LocalRuntimeState } from '@shared/schemas';
 import {
@@ -70,7 +69,7 @@ export const readSessionView = Effect.fn('readSessionView')(function* (
 ): Effect.fn.Return<
   Option.Option<SessionView>,
   DatabaseOpenFailed,
-  FileSystem.FileSystem | ChildProcessSpawner | ProjectDatabases | ToolRegistry
+  FileSystem.FileSystem | ProjectDatabases | ToolRegistry
 > {
   const databases = yield* ProjectDatabases;
   const read = Effect.gen(function* () {
