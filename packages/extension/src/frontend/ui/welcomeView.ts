@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
-import { type ProcessRuntime } from '@texra-ai/harness/host';
+import type { ScopedFork } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import type { CommandId } from '@texra/shared/commands/catalog';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
@@ -142,7 +142,9 @@ function renderWelcomeHtml(): string {
 
 export function registerWelcomeView(
   context: vscode.ExtensionContext,
-  runtime: ProcessRuntime,
+  /** The activation's run function: a folder opened after deactivation
+   *  reloads nothing. */
+  fork: ScopedFork<never>,
 ): void {
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
@@ -153,7 +155,7 @@ export function registerWelcomeView(
       if (vscode.workspace.workspaceFolders?.length === 1) {
         // A refused reload leaves the window as it is: say so in the log,
         // where a user asking why the panel did not open would look.
-        runtime.runFork(
+        fork(
           executeVscodeCommand('workbench.action.reloadWindow').pipe(
             Effect.catch((error) =>
               Effect.logWarning(

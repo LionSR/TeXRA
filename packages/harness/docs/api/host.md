@@ -2140,6 +2140,35 @@ interface RuntimePresentationEventPayloads {
 }
 ```
 
+## scopedFork
+
+The run function a host callback starts Effect work with: each fiber
+joins one `FiberSet` of the caller's scope, whose close interrupts and
+awaits it, and once that scope has closed a callback starts nothing (the
+fiber it gets back is already interrupted). Like `runtime.runFork`, it
+runs the effect's first synchronous steps before it returns. A failure or
+defect is logged once, as {@link withForkFailureReporting} logs a
+runtime's fork.
+
+Build it once where the owner's scope is acquired, in the context the
+owner's fibers run in (a host's process services): every fiber starts
+from that context, as `runtime.runFork` starts from the runtime's, so no
+more specific provision sits inside for it to shadow.
+
+```ts
+const scopedFork: <R = never>() => Effect<ScopedFork<R>, never, Scope | R>
+```
+
+## ScopedFork
+
+Start an effect on a fiber of the scope that made this run function.
+
+```ts
+type ScopedFork<R> = <A, E>(
+  effect: Effect.Effect<A, E, R>,
+) => Fiber.Fiber<A, E>;
+```
+
 ## SentReasoning
 
 What a run sends for reasoning, or why its bind refuses the request.
