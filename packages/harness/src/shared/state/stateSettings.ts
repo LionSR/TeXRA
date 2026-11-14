@@ -288,30 +288,6 @@ export const MAX_IMAGE_DIMENSION_SETTING = {
 } as const satisfies SettingRow<number>;
 
 /**
- * The launcher's commit picker reads the count through the host snapshot on
- * both GUI hosts; the CLI only writes it, through the setup assistant's
- * `update_config`.
- */
-export const GIT_COMMITS_TO_SHOW_SETTING = {
-  key: 'git.numberOfCommitsToShow',
-  slot: 'config',
-  schema: Schema.Int.check(
-    Schema.isBetween({ minimum: 1, maximum: 1000 }),
-  ).pipe(Schema.withDecodingDefault(Effect.succeed(20))),
-  title: 'Commits to show',
-  description:
-    'Number of recent commits to show in the commit selection dropdown',
-} as const satisfies SettingRow<number>;
-
-export const SOX_PATH_SETTING = {
-  key: 'audio.soxPath',
-  slot: 'config',
-  schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
-  title: 'SoX path',
-  description: 'Path to the SoX executable. Overrides automatic detection.',
-} as const satisfies SettingRow<string>;
-
-/**
  * Transcript verbosity, its one meaning: the debug tier of the transcript
  * view and the detail of the payloads it shows. A log surface's own level
  * filter decides what that surface prints, so no producer reads this row to
@@ -583,8 +559,6 @@ const HARNESS_SETTINGS = [
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   XAI_PREFER_SUBSCRIPTION_SETTING,
   MAX_IMAGE_DIMENSION_SETTING,
-  GIT_COMMITS_TO_SHOW_SETTING,
-  SOX_PATH_SETTING,
   DEBUG_MODE_SETTING,
   SAVE_MODEL_IO_SETTING,
   AGENT_SKILLS_ENABLED_SETTING,

@@ -899,16 +899,6 @@ const GIT_AUTHOR_EMAIL_SETTING: { readonly key: "git.authorEmail"; readonly slot
 const GIT_AUTHOR_NAME_SETTING: { readonly key: "git.authorName"; readonly slot: "repoState"; readonly schema: withDecodingDefault<String, never>; readonly title: "Agent commit author"; readonly description: "Author and committer name used for agent-authored commits when commit marking is enabled."; }
 ```
 
-## GIT_COMMITS_TO_SHOW_SETTING
-
-The launcher's commit picker reads the count through the host snapshot on
-both GUI hosts; the CLI only writes it, through the setup assistant's
-`update_config`.
-
-```ts
-const GIT_COMMITS_TO_SHOW_SETTING: { readonly key: "git.numberOfCommitsToShow"; readonly slot: "config"; readonly schema: withDecodingDefault<Int, never>; readonly title: "Commits to show"; readonly description: "Number of recent commits to show in the commit selection dropdown"; }
-```
-
 ## GIT_MARK_COMMITS_SETTING
 
 ```ts
@@ -2497,12 +2487,6 @@ Canonical grammar for discovered and persisted skill names.
 
 ```ts
 const SkillNameSchema: decodeTo<String, String, never, never>
-```
-
-## SOX_PATH_SETTING
-
-```ts
-const SOX_PATH_SETTING: { readonly key: "audio.soxPath"; readonly slot: "config"; readonly schema: withDecodingDefault<String, never>; readonly title: "SoX path"; readonly description: "Path to the SoX executable. Overrides automatic detection."; }
 ```
 
 ## splitContentLines

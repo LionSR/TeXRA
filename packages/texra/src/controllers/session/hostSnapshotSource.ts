@@ -41,10 +41,8 @@ import {
   type Secrets,
   type SettingsStores,
 } from '@texra-ai/harness/plugins';
-import {
-  APPROVAL_POLICY_SETTING,
-  GIT_COMMITS_TO_SHOW_SETTING,
-} from '@texra-ai/harness/schemas';
+import { APPROVAL_POLICY_SETTING } from '@texra-ai/harness/schemas';
+import { GIT_COMMITS_TO_SHOW_SETTING } from '@texra/shared/settings/texraSettings';
 import { loadTeamOptions } from '@texra/agent/teams/teamLaunch';
 import type {
   FileOptions,

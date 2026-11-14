@@ -295,7 +295,34 @@ export const INLINE_CRITICISM_SETTING = {
 } as const satisfies TexraSettingRow<boolean>;
 
 /** TeXRA's rows no TeXRA UI shows, in catalog order. */
+/**
+ * The launcher's commit picker reads the count through the host snapshot on
+ * both GUI hosts; the CLI only writes it, through the setup assistant's
+ * `update_config`.
+ */
+export const GIT_COMMITS_TO_SHOW_SETTING = {
+  key: 'git.numberOfCommitsToShow',
+  slot: 'config',
+  schema: Schema.Int.check(
+    Schema.isBetween({ minimum: 1, maximum: 1000 }),
+  ).pipe(Schema.withDecodingDefault(Effect.succeed(20))),
+  title: 'Commits to show',
+  description:
+    'Number of recent commits to show in the commit selection dropdown',
+} as const satisfies SettingRow<number>;
+
+/** The audio tools' SoX binary, when automatic detection should not decide. */
+export const SOX_PATH_SETTING = {
+  key: 'audio.soxPath',
+  slot: 'config',
+  schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
+  title: 'SoX path',
+  description: 'Path to the SoX executable. Overrides automatic detection.',
+} as const satisfies SettingRow<string>;
+
 const TEXRA_UNSHOWN_ROWS: readonly SettingRow[] = [
+  GIT_COMMITS_TO_SHOW_SETTING,
+  SOX_PATH_SETTING,
   CLI_AGENT_SETTING,
   CLI_MODEL_SETTING,
   CLI_CHAT_SETTING,

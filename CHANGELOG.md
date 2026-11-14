@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: two app settings leave the harness catalog.**
+  `GIT_COMMITS_TO_SHOW_SETTING` and `SOX_PATH_SETTING` are no longer
+  exported; no harness code read them. TeXRA declares them in its own rows
+  under the same stored keys.
 - **SDK: the harness names no default model, agent or curated picker list.**
   `DEFAULT_AGENT_MODEL` and `DEFAULT_TASK_AGENT` are no longer exported, and
   `AgentConfig.model` and `.agent` are required. `session.start` takes a
