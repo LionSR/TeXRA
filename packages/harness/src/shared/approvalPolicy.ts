@@ -77,7 +77,7 @@ const APPROVAL_CREDENTIAL_RETRY_MESSAGE =
 const APPROVAL_YOLO_NO_HUMAN_MESSAGE =
   'User question requires human input; yolo mode cannot synthesize an answer.';
 
-export type RetryApprovalDecision =
+type RetryApprovalDecision =
   | 'present'
   | {
       readonly deny: 'yolo-retry' | 'credential' | 'policy' | 'unpresentable';
@@ -116,7 +116,7 @@ export function retryDenialMessage(
 }
 
 /** Whether a human-input request may be shown, or why it settles denied. */
-export type HumanInputDecision =
+type HumanInputDecision =
   | 'present'
   | {
       readonly deny: 'yolo-no-human' | 'policy' | 'unpresentable';

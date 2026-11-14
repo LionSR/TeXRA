@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/plugins.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 135
+Exports: 134
 
 - `AGENT_TOOL_NAME` — `const AGENT_TOOL_NAME: "agent"`
 - `AgentBlock` — `interface AgentBlock<A = unknown, R = unknown> { readonly key: string; readonly schema: Schema.Codec<A, unknown>; readonly result?: AgentBlockResult<R>; files?(block: A): readonly string[]; }`
@@ -38,7 +38,6 @@ Exports: 135
 - `FactKind` — `interface FactKind { readonly plugin: string; readonly kind: string; readonly version: number; readonly schema: Schema.Codec<unknown, unknown>; readonly fork: 'copy' | 'drop'; readonly accepts?: (previous: PluginRow | undefined, next: PluginRow) => string | null; readonly supersedes?: (latest: PluginRow, next: PluginRow) => boolean; readonly writes?: (value: JsonValue) => readonly string[]; }`
 - `fileList` — `const fileList: (description: string) => decodeTo<toType<$Array<String>>, optional<NullOr<$Array<String>>>, never, never>`
 - `fileOps` — `const fileOps: (options?: { readonly writeFilter?: WriteFilter | undefined; }) => Plugin`
-- `FollowUpFailureReason` — `type FollowUpFailureReason = ResumeRefusal['kind'] | 'readFailed' | 'notParent'; ≡ FollowUpFailureReason`
 - `FollowUpSenderInput` — `type FollowUpSenderInput = Exclude<FollowUpSender, { readonly kind: 'run'; }> | { readonly kind: 'run'; readonly runId: RunId; }; ≡ FollowUpSenderInput`
 - `formatToolOutput` — `function formatToolOutput: (header: string, content: null | string | string[], noMatchesText?: string) => string`
 - `getGitignoreMatcher` — `const getGitignoreMatcher: (workspaceRoot: string | undefined) => Effect<GitignoreMatcher, PlatformError, FileSystem>`

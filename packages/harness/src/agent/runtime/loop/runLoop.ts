@@ -79,7 +79,7 @@ interface ToolUseStart {
 
 /** What {@link openToolUse} committed: the run's cell and the commit of
  *  the batch that opened this activation. */
-export interface ToolUseOpening {
+interface ToolUseOpening {
   readonly cell: RunCell;
   readonly activation: CommitOrdinal;
 }

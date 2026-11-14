@@ -201,10 +201,7 @@ export type SessionOpenError =
   | SessionOptionsConflict;
 
 /** A read of committed events. */
-export type EventsRead = Effect.Effect<
-  readonly SessionRow[],
-  DatabaseReadFailed
->;
+type EventsRead = Effect.Effect<readonly SessionRow[], DatabaseReadFailed>;
 
 export class Database extends Context.Service<
   Database,

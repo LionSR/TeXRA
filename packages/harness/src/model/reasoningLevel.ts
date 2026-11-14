@@ -2,11 +2,9 @@ import { Effect, Result, Schema } from 'effect';
 
 import {
   acceptedEfforts,
-  BACKEND_PROTOCOLS,
   type BackendProviderId,
   chooseReasoning,
   type ModelConfig,
-  type ModelOrigin,
   type ModelRoute,
   type ReasoningChoice,
   type ReasoningChoiceError,
@@ -63,11 +61,6 @@ export const reasoningEffortOverrides = Effect.fn('reasoningEffortOverrides')(
   },
 );
 
-/** The protocol each backend serves a run on. */
-export const PROTOCOL_BY_BACKEND: Readonly<
-  Record<ModelBackend, ModelOrigin['protocol'] | 'validation'>
-> = Object.freeze({ validation: 'validation', ...BACKEND_PROTOCOLS });
-
 type AssertNever<T extends never> = T;
 /** Every plugin that names a protocol is a stored backend. */
 type _EveryBackendProviderIsStored = AssertNever<
@@ -95,28 +88,23 @@ type ReasoningRoute = ModelRoute | { readonly kind: 'validation' };
 const llmRoute = (route: ReasoningRoute) =>
   route.kind === 'validation' ? undefined : route;
 
-/** {@link decideReasoning} as a value: the choice, or why it is refused. */
-const chooseOnRoute = (
-  config: ModelConfig,
-  request: ReasoningRequest,
-  userEffort: ReasoningEffort | undefined,
-  route: ReasoningRoute,
-) => chooseReasoning(config, request, { userEffort, route: llmRoute(route) });
-
 /**
  * The run's reasoning decision: the model string's own request, else the
  * user's saved level for the model, else the default, for the reasoning the
  * route can control (`chooseReasoning`'s route rules). A level the model
  * lacks is substituted (the choice's `note` says so); a request the route
- * cannot carry fails.
+ * cannot carry is the failure.
  */
 export function decideReasoning(
   config: ModelConfig,
   request: ReasoningRequest,
   userEffort: ReasoningEffort | undefined,
   route: ReasoningRoute,
-): Effect.Effect<ReasoningChoice, ReasoningChoiceError> {
-  return Effect.fromResult(chooseOnRoute(config, request, userEffort, route));
+): Result.Result<ReasoningChoice, ReasoningChoiceError> {
+  return chooseReasoning(config, request, {
+    userEffort,
+    route: llmRoute(route),
+  });
 }
 
 /** What a run sends for reasoning, or why its bind refuses the request. */
@@ -168,12 +156,16 @@ export function routeReasoningOf(input: {
   readonly route: ReasoningRoute;
 }): RouteReasoning | undefined {
   const { config, request, saved, route } = input;
-  const chosen = chooseOnRoute(config, request, saved, route);
+  const chosen = decideReasoning(config, request, saved, route);
   const sent = sentOf(config, route, chosen);
   const fallback =
     saved === undefined
       ? sent
-      : sentOf(config, route, chooseOnRoute(config, request, undefined, route));
+      : sentOf(
+          config,
+          route,
+          decideReasoning(config, request, undefined, route),
+        );
   const efforts = acceptedEfforts(config, llmRoute(route));
   // The model does not reason on the route: no level, and no thinking.
   if (

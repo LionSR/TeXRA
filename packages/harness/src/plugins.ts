@@ -185,7 +185,6 @@ export type {
 export type { ChildRunDelivery } from '@shared/schemas';
 // A run's input as a plugin sends it, and how the send landed.
 export type {
-  FollowUpFailureReason,
   RunInbox,
   RunInboxSendOptions,
   SubmitFollowUpResult,

@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  emptyRunEndOutput,
-  MESSAGE_TYPES,
-  type RunId,
-} from '@texra-ai/harness/schemas';
+import { MESSAGE_TYPES, type RunId } from '@texra-ai/harness/schemas';
+import { emptyRunEndOutput } from '@shared/schemas';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import type { TranscriptRow } from '@texra-ai/harness/transcript';
 

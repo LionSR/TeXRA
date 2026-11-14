@@ -68,8 +68,6 @@ export const LaunchNoticeSchema = Schema.Union([
     }) satisfies Schema.Codec<AgentNotFoundPayload, unknown>,
   }),
 ]);
-/** A refused launch's notice ({@link LaunchNoticeSchema}). */
-export type LaunchNotice = typeof LaunchNoticeSchema.Type;
 
 /** Show an error message via a host notification. */
 export const RequestShowErrorPayloadSchema = Schema.Struct({

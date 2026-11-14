@@ -17,7 +17,7 @@ import { escapeAttr } from '@shared/utils/xmlEscape';
 import { ToolRegistry, type RecipeChange } from '@tools/toolTable';
 
 /** A recipe run's value as its block reads it. */
-export interface RecipeResult {
+interface RecipeResult {
   /** The block's key (`kind` on the delivery). */
   readonly key: string;
   /** The delivery body; empty when no listed plugin reads the block. */

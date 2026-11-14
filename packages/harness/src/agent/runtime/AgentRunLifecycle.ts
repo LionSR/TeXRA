@@ -37,7 +37,7 @@ const logLifecycleWarning = (message: string, data: unknown) =>
   );
 
 /** How a run ends, as {@link endVerdict} decides it. */
-export interface EndVerdict {
+interface EndVerdict {
   readonly outcome: RunOutcome;
   /** What the run failed with, a stopped run's failure included. */
   readonly error?: unknown;

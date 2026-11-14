@@ -89,9 +89,8 @@ export type { ValueFamily } from '@shared/session/valueFamily';
 export {
   DatabaseWriteFailed,
   type CurrentValues,
-  type EventsRead,
 } from '@shared/session/database';
-export type { DraftBlob, WithBlobs } from '@shared/session/historyTurns';
+export type { DraftBlob } from '@shared/session/historyTurns';
 export type { AppStateStore } from '@platform/interfaces';
 export {
   deleteStorageInventory,
@@ -99,10 +98,7 @@ export {
   type StorageInventory,
 } from '@controllers/session/projectDatabase';
 // Follow-up delivery helpers hosts share.
-export {
-  describeFollowUpFailure,
-  presentFollowUpResult,
-} from '@agent/followUp/ToolUseFollowUp';
+export { presentFollowUpResult } from '@agent/followUp/ToolUseFollowUp';
 // A host's presentation surface: session and sessionless interactions, the
 // emit handlers (one per event), and a failed run's presentation, with the
 // notice a refused launch carries.
@@ -146,7 +142,6 @@ export {
 export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';
 // The canned model a package-validation build provides beneath the process.
 export { ValidationModel } from '@agent/runtime/modelAccess/routeDecision';
-export type { RouteCredential } from '@agent/runtime/modelAccess/credentials';
 // The models a host offers: each visible model's option, the enabled list and
 // its writer, run-model precedence, the reasoning policy, the helper model.
 export {
