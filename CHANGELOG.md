@@ -1785,6 +1785,10 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **Two TeXRA windows refreshing a subscription sign-in at once no longer
+  sign each other out.** The one whose refresh was refused deleted the
+  session the other had just stored; it now uses that session, and deletes
+  only a refused session that is still the stored one.
 - **The Plugins page no longer probes for tools without end.** With
   Settings open on a folder no running task held, the app checked every
   external tool again several times a second for as long as the page was

@@ -258,6 +258,8 @@ Done, on the branch after PR 14927:
   while it follows them. Over the same desktop E2E spec the app's log fell
   from about 400 lines to 76, Zotero probes from 168 to 10 and
   `npm prefix -g` spawns from 85 to 6.
+- Row 22, the credential file: a refused refresh adopts a session another
+  process stored and deletes only one that is still the stored one.
 - Slice 8: the log viewer test writes its entry through the app's log.
 
 Open: everything else in "Order". Three things the first pass learned:
