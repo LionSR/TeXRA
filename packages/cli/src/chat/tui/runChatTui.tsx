@@ -6,7 +6,6 @@
 // this module keeps only composition, rendering glue, and the Ink lifecycle.
 
 import {
-  Cause,
   Effect,
   Exit,
   FiberHandle,
@@ -242,7 +241,7 @@ export async function runChat(
           : Effect.succeed({ model: defaults.model, notice: undefined }),
       );
       if (Exit.isFailure(modelSelectionExit)) {
-        writeTextStderr(toErrorMessage(Cause.squash(modelSelectionExit.cause)));
+        writeTextStderr(toErrorMessage(modelSelectionExit.cause));
         return { exitCode: CliExitCode.Usage };
       }
       const modelSelection = modelSelectionExit.value;

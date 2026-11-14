@@ -193,7 +193,7 @@ const setModelEnabled = Effect.fn('setModelEnabled')(function* (
     ),
     Effect.catchCause((cause) =>
       Effect.sync(() => {
-        writeTextStderr(toErrorMessage(Cause.squash(cause)));
+        writeTextStderr(toErrorMessage(cause));
         return CliExitCode.Usage;
       }),
     ),

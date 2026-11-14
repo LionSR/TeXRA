@@ -467,7 +467,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
                             `The TeXRA service stopped sending ${workspace}; the watch resumes when the service is back`,
                           ).pipe(
                             Effect.annotateLogs({
-                              data: Cause.squash(cause),
+                              data: cause,
                             }),
                           ),
                         ).pipe(Stream.drain),

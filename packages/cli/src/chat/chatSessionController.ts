@@ -974,7 +974,7 @@ export function createChatSessionController(
         Cause.hasInterruptsOnly(cause)
           ? Effect.interrupt
           : Effect.sync(() =>
-              appendLocalErrorTranscript(toErrorMessage(Cause.squash(cause))),
+              appendLocalErrorTranscript(toErrorMessage(cause)),
             ),
       ),
     );

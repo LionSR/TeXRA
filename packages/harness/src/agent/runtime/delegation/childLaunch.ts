@@ -56,7 +56,7 @@ const defectsAsErrors = <A, R>(
     Effect.catchCause((cause) =>
       Cause.hasInterruptsOnly(cause)
         ? Effect.failCause(cause)
-        : Effect.fail(ensureError(Cause.squash(cause))),
+        : Effect.fail(ensureError(cause)),
     ),
   );
 
@@ -152,10 +152,7 @@ const childRunEnd = Effect.fn('childRunEnd')(function* (
           Effect.catchCause((cause) =>
             Effect.logWarning(
               `Subagent ${runId}: its parent edge could not be read; releasing it`,
-            ).pipe(
-              Effect.annotateLogs({ data: Cause.squash(cause) }),
-              Effect.as(undefined),
-            ),
+            ).pipe(Effect.annotateLogs({ data: cause }), Effect.as(undefined)),
           ),
           Effect.flatMap((parent) => {
             // A child the registry holds with no parent edge was detached:
@@ -169,7 +166,7 @@ const childRunEnd = Effect.fn('childRunEnd')(function* (
                 Effect.logWarning(
                   `Subagent ${runId}: its release was not recorded`,
                 ).pipe(
-                  Effect.annotateLogs({ data: Cause.squash(cause) }),
+                  Effect.annotateLogs({ data: cause }),
                   Effect.andThen(Effect.sync(() => runs.interrupt(runId))),
                 ),
               ),

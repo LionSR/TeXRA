@@ -1,4 +1,4 @@
-import { Cause, Effect, Predicate } from 'effect';
+import { Effect, Predicate } from 'effect';
 
 import {
   toErrorMessage,
@@ -202,7 +202,7 @@ export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
           ),
         onFailure: (cause) =>
           appendLocalNotice(
-            `Model switched to ${nextModel}. Could not persist it as the default helper model: ${toErrorMessage(Cause.squash(cause))}`,
+            `Model switched to ${nextModel}. Could not persist it as the default helper model: ${toErrorMessage(cause)}`,
           ),
       }),
     );

@@ -1,5 +1,4 @@
 import {
-  Cause,
   Context,
   Effect,
   Option,
@@ -97,7 +96,7 @@ function presentOn<K extends RuntimePresentationEvent>(
         Effect.catchCause((cause) =>
           Effect.logWarning('A host presentation notice failed').pipe(
             Effect.annotateLogs({
-              data: { event, cause: Cause.squash(cause) },
+              data: { event, cause: cause },
             }),
             withLogChannel(CHANNEL),
           ),

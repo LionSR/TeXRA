@@ -261,7 +261,7 @@ void Effect.runPromise(
               Cause.hasInterruptsOnly(cause)
                 ? Effect.void
                 : Effect.logError('A desktop background task failed').pipe(
-                    Effect.annotateLogs({ data: Cause.squash(cause) }),
+                    Effect.annotateLogs({ data: cause }),
                     withLogChannel('desktop'),
                   ),
             ),

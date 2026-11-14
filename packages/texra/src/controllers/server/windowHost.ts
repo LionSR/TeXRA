@@ -199,18 +199,18 @@ function attachTo(
               : awaited
                 ? send(id, {
                     ok: false,
-                    message: toErrorMessage(Cause.squash(cause)),
+                    message: toErrorMessage(cause),
                   })
                 : Effect.logWarning(
                     `This window could not carry out a host call (${call.kind})`,
-                  ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
+                  ).pipe(Effect.annotateLogs({ data: cause })),
         }),
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
             ? Effect.void
             : Effect.logWarning(
                 `A host call (${call.kind}) was not answered`,
-              ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
+              ).pipe(Effect.annotateLogs({ data: cause })),
         ),
       );
     return yield* client['host.attach']({
@@ -249,7 +249,7 @@ function attachTo(
           ? Effect.void
           : Effect.logWarning(
               `The TeXRA service stopped asking this window of ${workspace}; tasks there run without its editor until it reconnects`,
-            ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
+            ).pipe(Effect.annotateLogs({ data: cause })),
     }),
     Effect.ensuring(Deferred.succeed(attached, undefined)),
     Effect.scoped,
