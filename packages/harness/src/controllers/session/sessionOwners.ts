@@ -47,7 +47,7 @@ import type { SessionServices } from '@agent/runtime/rootLaunch';
 import type { SessionHandleInit } from '@agent/runtime/SessionHandle';
 import type { RunServices } from '@agent/runtime/ToolServices';
 import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionEventsLayer';
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure, withLogChannel } from '@logger/effectLog';
 import { SessionRoots, sessionFsLayer } from '@platform/rootedFs';
 import type { RunId, SessionCloseReport } from '@shared/schemas';
 import { Database, type DatabaseReadFailed } from '@shared/session/database';
@@ -79,12 +79,6 @@ import {
 import { sweepLeftoverRuns } from './sweepLeftoverRuns';
 
 const CHANNEL = 'sessionOwners';
-
-/** Log a failure on this channel, with the failure attached as its `data`. */
-const logFailure =
-  (message: string, log = Effect.logWarning) =>
-  (data: unknown) =>
-    log(message).pipe(Effect.annotateLogs({ data }), withLogChannel(CHANNEL));
 
 /** Stop every run of `session`, cascading, and wait for them to end within
  *  the close budget, which starts before the stop rows: their writes are
@@ -218,9 +212,10 @@ export const sessionOwnersLayer = (
       const budget = yield* resolveChildRunConcurrencyBudget(roots).pipe(
         Effect.map((permits) => Semaphore.makeUnsafe(permits)),
         Effect.catch((error) =>
-          logFailure('The child-run budget setting could not be read.')(
-            error,
-          ).pipe(Effect.as(ChildRunBudget.defaultValue())),
+          logFailure(
+            CHANNEL,
+            'The child-run budget setting could not be read.',
+          )(error).pipe(Effect.as(ChildRunBudget.defaultValue())),
         ),
       );
       const withRequests = withPolicy.pipe(
@@ -295,9 +290,10 @@ export const sessionOwnersLayer = (
           yield* presentTerminalResult(event).pipe(
             Effect.provide(session),
             Effect.catchCause((cause) =>
-              logFailure('Terminal result presentation threw')(
-                Cause.squash(cause),
-              ),
+              logFailure(
+                CHANNEL,
+                'Terminal result presentation threw',
+              )(Cause.squash(cause)),
             ),
           );
         }),
