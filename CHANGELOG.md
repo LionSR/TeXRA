@@ -1791,6 +1791,11 @@ All notable changes to this project will be documented in this file.
   service then delivered no pull request or issue activity to any open
   project, and new subscriptions polled nothing, until a restart. Only a
   shutdown runs that step now.
+- **A `texra` question whose input ends no longer hangs.** Pressing Ctrl-D
+  at a confirmation (`texra prune`, a plugin's trust question, an approval
+  prompt, a token prompt), or running one with its input closed, left the
+  command waiting for an answer that could not come; it now fails saying
+  the input ended.
 - **`texra service stop` and `restart` give up after 30 seconds on a
   service of another build too.** A running service that speaks a protocol
   this build cannot read was waited for without a limit, and a stop of one

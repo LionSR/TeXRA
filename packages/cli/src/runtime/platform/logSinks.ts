@@ -162,9 +162,9 @@ export function writeErrorStderr(error: unknown): void {
 
 /**
  * Ask one question on stdin. The readline interface is the foreign edge and is
- * wrapped exactly once here: acquire opens it, use awaits the answer, and
- * release closes it on success, failure and interruption alike — the last of
- * which the `try`/`finally` this replaced could not see.
+ * wrapped exactly once here: acquire opens it, use awaits the answer or the
+ * end of the input, and release closes it on success, failure and
+ * interruption alike.
  */
 export function askCliQuestion(
   question: string,
@@ -195,10 +195,19 @@ export function askCliQuestion(
       });
     }),
     (prompt) =>
-      Effect.tryPromise({
-        try: () => prompt.question(options.hidden ? '' : question),
-        catch: ensureError,
-      }),
+      Effect.raceFirst(
+        Effect.tryPromise({
+          try: () => prompt.question(options.hidden ? '' : question),
+          catch: ensureError,
+        }),
+        // readline leaves a pending question unanswered for good when its
+        // input ends (Ctrl-D, a closed pipe); its `close` is the answer.
+        Effect.callback<never, Error>((resume) => {
+          prompt.once('close', () =>
+            resume(Effect.fail(new Error('The input ended before an answer.'))),
+          );
+        }),
+      ),
     (prompt) =>
       Effect.sync(() => {
         prompt.close();
