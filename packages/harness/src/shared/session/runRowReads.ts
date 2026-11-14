@@ -308,8 +308,8 @@ export interface FollowUpRecord {
  * are `rows`, in seq order: `unknown` for an id no row queued, `deleted`
  * for a run deleted since, its inputs with it. A turn's input is answered at that turn's `turn.end` when
  * the turn completed, and unanswered when it failed, or when the run ended
- * with the turn open and no activation followed (a clean close is not an
- * end: the input is still the resumable run's). An activation after the end
+ * with the turn open and no activation followed (a run its process left
+ * without an end is no end: the input is still the resumable run's). An activation after the end
  * continues the turn, and its input with it.
  */
 export function followUpReceipt(
@@ -365,8 +365,8 @@ function turnReceipt(
     // Past the turn with no end of it: the end that cut it short says why.
     if (rowTurn > turn) return unansweredBy(turn, record.end);
   }
-  // A shutdown cut the turn, which the resume continues.
-  return record.end === null || record.stop?.reason === 'shutdown'
+  // No end: the process left the turn open, and a resume continues it.
+  return record.end === null
     ? { state: 'incorporated', turn }
     : unansweredBy(turn, record.end);
 }

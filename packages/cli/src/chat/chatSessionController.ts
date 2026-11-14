@@ -16,7 +16,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { type Run, type RunStopReason, type Session } from '@texra-ai/harness';
+import type { Run, Session } from '@texra-ai/harness';
 import {
   presentFollowUpResult,
   presentRunFailure,
@@ -146,7 +146,7 @@ export interface ChatSessionController {
 
   /** Request stop of the root run using the configured child policy, for
    *  `reason`: a `user` stop also cancels its remote background work. */
-  stop(reason: RunStopReason): void;
+  stop(): void;
 
   /**
    * The composer's submit path: a slash command, the first
@@ -161,10 +161,6 @@ export interface ChatSessionController {
   /** Succeeds once every message submitted so far has been sent, or has
    *  started its run. */
   readonly submitted: Effect.Effect<void>;
-  /** Succeeds once the root launch on its way has reached its end and the
-   *  chat's root run is no longer live here: what an exit that stopped the
-   *  root waits for. */
-  readonly rootRunEnded: Effect.Effect<void>;
   /** Activate a skill for the next submitted message. */
   activateSkill(selection: SkillActivation): void;
   /** Drop every activated skill. */
@@ -272,17 +268,6 @@ export function createChatSessionController(
   const requests: SessionRequests = runSession;
   // The fold the chat's runs appear in: the service's, or this session's.
   const viewChanges: Stream.Stream<SessionView> = runSession.view.changes;
-  /** A run that is no longer live here: its generation let go. */
-  const endedHere = (runId: RunId): Effect.Effect<void> =>
-    viewChanges.pipe(
-      Stream.filter((view) => {
-        const run = view.runs.get(runId);
-        return run === undefined || run.holder !== 'here';
-      }),
-      Stream.runHead,
-      Effect.asVoid,
-    );
-
   /** Issue one request to the session's runtime and read its Effect result
    *  as the response: the refusal text, or undefined on success. */
   const request = (req: RuntimeCommand): Effect.Effect<string | undefined> =>
@@ -727,12 +712,9 @@ export function createChatSessionController(
 
   /** A stop lands on the root the session holds. One asked while a launch
    *  is still entering the session waits for it, then lands on the run that
-   *  launch reached (a stop of a run that already ended is a no-op). Why
-   *  the run then stops is the run registry's fact. */
-  const stop = (reason: RunStopReason): void => {
-    // A chat of the background service leaves its task running when the
-    // terminal goes: only the user's own stop reaches it.
-    if (reason === 'shutdown' && served) return;
+   *  launch reached (a stop of a run that already ended is a no-op). It
+   *  is the person's stop: leaving the chat stops nothing. */
+  const stop = (): void => {
     const launched = session.launched;
     if (launched === undefined && heldRoot() === undefined) return;
     runtime.runFork(
@@ -743,7 +725,7 @@ export function createChatSessionController(
         Effect.flatMap((runId) =>
           runId == null
             ? Effect.void
-            : request({ kind: 'run.stop', runId, reason }),
+            : request({ kind: 'run.stop', runId, reason: 'user' }),
         ),
       ),
     );
@@ -1009,19 +991,6 @@ export function createChatSessionController(
       inOrder(Effect.void),
       FiberSet.awaitEmpty(sending),
     ),
-    rootRunEnded: Effect.suspend(() => {
-      const launched = session.launched;
-      return (
-        launched === undefined ? Effect.void : Deferred.await(launched)
-      ).pipe(
-        Effect.andThen(
-          Effect.suspend(() => {
-            const runId = rootRunId.get();
-            return runId === undefined ? Effect.void : endedHere(runId);
-          }),
-        ),
-      );
-    }),
     activateSkill,
     performHost: interactions.performHost,
     clearPendingSkills: () =>

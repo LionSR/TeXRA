@@ -41,9 +41,7 @@ export interface RunsShape {
    *  driving it here is interrupted, whose end reads the reason from that
    *  row. A stop stops the run's children with it, at any depth. A `user`
    *  stop is an explicit stop of the work: the run cancels the remote
-   *  background operation it is observing. A `shutdown` stop only ends
-   *  this process's hold on the run, leaving that operation for a resume
-   *  to observe. A run no fiber here drives ends
+   *  background operation it is observing. A run no fiber here drives ends
    *  CANCELLED in the batch that records the stop. Resolves to whether a
    *  fiber here took the stop; fails when the rows the stop owed storage
    *  were refused. */

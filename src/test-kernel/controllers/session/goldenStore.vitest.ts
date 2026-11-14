@@ -427,10 +427,9 @@ describe('the golden 1.0 store', () => {
         run(SCRIPTED, 'golden_script', { children: [DEFINED] }),
         run(DEFINED, 'golden_reader', { parent: SCRIPTED }),
         run(FORK_SOURCE, 'golden_fork'),
-        // The resumed chat over the fork, exited at its idle prompt.
-        run(FORKED, 'golden_fork', {
-          outcome: 'cancelled',
-        }),
+        // The resumed chat over the fork, exited at its idle prompt: the
+        // exit wrote nothing, so it still reads as waiting, its owner gone.
+        run(FORKED, 'golden_fork', { position: 'waiting', outcome: null }),
         // Killed while its command's result was uncommitted: it still reads
         // as running, its owner dead.
         run(KILLED, 'golden_effect', { position: 'running', outcome: null }),

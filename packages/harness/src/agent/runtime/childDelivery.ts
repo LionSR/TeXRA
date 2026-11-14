@@ -54,7 +54,7 @@ function contextLines(
 
 /**
  * The delivery a child's end makes, or null when it delivers nothing
- * (a stopped subagent, a script stopped by this process's shutdown).
+ * (a stopped subagent, a script its awaiting call released).
  * `report` is the run's own, its outcome resolved by its end; `record` is
  * what its rows say before the end (its stop, an earlier report).
  */

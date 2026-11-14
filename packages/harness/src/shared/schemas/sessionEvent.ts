@@ -248,8 +248,8 @@ const DisplayRowDraftSchema = Schema.Union([
     binding: Schema.optional(Schema.NullOr(RunBindingSchema)),
   }),
   /**
-   * A stop asked of the run, and why: a person's, or this process's
-   * shutdown. Committed before the run's fiber is interrupted, so the end
+   * A stop asked of the run, and why: a person's, or the call that
+   * awaited it letting go. Committed before the run's fiber is interrupted, so the end
    * that follows reads the reason here; a run with no fiber here ends in
    * the same batch. The one row every reader of "why it stopped" reads.
    */

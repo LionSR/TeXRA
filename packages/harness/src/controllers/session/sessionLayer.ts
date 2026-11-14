@@ -254,12 +254,13 @@ const heldSession = Effect.fn('heldSession')(function* (root: string) {
 
 /**
  * Close the session of one root, the one way a session ends: refuse new
- * runs; stop every run, cascading, and wait for them to end within its
+ * runs; interrupt every run and wait for its fiber to exit within its
  * budget ({@link SESSION_CLOSE_DEADLINE_MS}); release the entry, whose
- * finalizers flush and unwind. A shutdown writes no end of its own: a run
- * still live past the budget is reported abandoned and left resumable, its
- * state classified from its checkpoint by the next launch. Uninterruptible:
- * the budget is its one cancellation, and every step after it still runs. */
+ * finalizers flush and unwind. A close writes no stop and no end: each run
+ * is left as its rows stand and reads as interrupted, resumable, at the
+ * next open, as after a crash. One still live past the budget is reported
+ * abandoned. Uninterruptible: the budget is its one cancellation, and
+ * every step after it still runs. */
 const closeSession = (root: string) =>
   Effect.gen(function* () {
     const sessions = yield* SessionMap;
@@ -270,7 +271,7 @@ const closeSession = (root: string) =>
     const { settled, abandoned } = yield* stopSessionRuns(held.session);
     if (abandoned.length > 0)
       yield* Effect.logWarning(
-        `Session ${root} closed with runs still live past its budget; the next launch classifies them from their checkpoints: ${abandoned.join(', ')}`,
+        `Session ${root} closed with runs still live past its budget; they read as interrupted at the next open: ${abandoned.join(', ')}`,
       ).pipe(withLogChannel(CHANNEL));
     yield* sessions.invalidate(held.key);
     return { settled, abandoned } satisfies SessionCloseReport;

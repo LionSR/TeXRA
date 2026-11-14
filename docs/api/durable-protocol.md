@@ -133,17 +133,17 @@ one (section 9):
 
 `src/test-kernel/support/crashConformance.ts` runs a multi-step agent workflow against SQLite, truncates the store at every commit `1..N`, reopens the session, resumes the run, and asserts nine invariants:
 
-| ID     | Invariant                                                                                                                                                                                   |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **I1** | **Outcome equivalence**: recovery from any commit point reaches the clean run's outcome, preserving committed answers, tool results, owned children, and context edits.                     |
-| **I2** | **Single tool result**: a tool call with a committed `tool.result` is never executed a second time.                                                                                         |
-| **I3** | **At most one response per model invocation**: recovery never appends a second `response` row to an invocation that already committed one.                                                  |
-| **I4** | **Approval and uncertain side effects**: an approval-gated call never runs before its approval commits, and an interrupted `replay: 'unsafe'` call never re-runs unprompted.                |
-| **I5** | **Owned child reattachment**: an owned child that finished answers its parent call on recovery and is not launched again without a person's retry; no child is left without a terminal row. |
-| **I6** | **At-most-once child delivery**: a child's result reaches its parent at most once; a result whose parent cannot take it stays in the child's run report.                                    |
-| **I7** | **Context edit and fork preservation**: committed compactions and forks recover with the exact message history they committed.                                                              |
-| **I8** | **Atomic stop**: a stopped run's halt and `run.end` commit together, so recovery never mistakes an acknowledged stop for an interrupted run.                                                |
-| **I9** | **Durable policy revocation**: revoking an approval bypass is acknowledged only after the `approval.policy` row commits to SQLite.                                                          |
+| ID     | Invariant                                                                                                                                                                                                                         |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **I1** | **Outcome equivalence**: recovery from any commit point reaches the clean run's outcome, preserving committed answers, tool results, owned children, and context edits.                                                           |
+| **I2** | **Single tool result**: a tool call with a committed `tool.result` is never executed a second time.                                                                                                                               |
+| **I3** | **At most one response per model invocation**: recovery never appends a second `response` row to an invocation that already committed one.                                                                                        |
+| **I4** | **Approval and uncertain side effects**: an approval-gated call never runs before its approval commits, and an interrupted `replay: 'unsafe'` call never re-runs unprompted.                                                      |
+| **I5** | **Owned child reattachment**: an owned child that finished answers its parent call on recovery and is not launched again without a person's retry; no child is left without a terminal row.                                       |
+| **I6** | **At-most-once child delivery**: a child's result reaches its parent at most once; a result whose parent cannot take it stays in the child's run report.                                                                          |
+| **I7** | **Context edit and fork preservation**: committed compactions and forks recover with the exact message history they committed.                                                                                                    |
+| **I8** | **Atomic stop**: a stopped run's halt and `run.end` commit together, so recovery never mistakes an acknowledged stop for an interrupted run. A process that exits writes neither: its runs read as interrupted, as after a crash. |
+| **I9** | **Durable policy revocation**: revoking an approval bypass is acknowledged only after the `approval.policy` row commits to SQLite.                                                                                                |
 
 ## Storage failure outcomes (`S1`–`S5`)
 

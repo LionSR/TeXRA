@@ -340,8 +340,7 @@ export const endRunRows = Effect.fn('endRunRows')(function* (
  * The rows a stop commits for `runId`: its `run.stop` row, and, for a run
  * no fiber here drives (`end`), its CANCELLED end in the same batch. A run
  * whose lifecycle ended gets none: there is nothing to stop. The first stop
- * of a lifecycle stands: a person's outranks the shutdown that follows it,
- * and a second ask adds no row. Answers whether the run has rows at all:
+ * of a lifecycle stands, and a second ask adds no row. Answers whether the run has rows at all:
  * one that has none yet is a launch that has not registered.
  */
 export const stopRun = Effect.fn('stopRun')(function* (

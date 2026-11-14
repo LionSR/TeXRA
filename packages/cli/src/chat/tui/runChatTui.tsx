@@ -526,7 +526,7 @@ export async function runChat(
     }
 
     const meta = sessionMetaSignal.get();
-    if (isRunPending) chatController.stop('user');
+    if (isRunPending) chatController.stop();
     chatController.clearPendingSkills();
     startChat(meta);
     // The erase happens outside Ink, so the scrollback prints again from a
@@ -672,7 +672,6 @@ export async function runChat(
     runtime,
     leaveProcess: services.leave,
     submitted: chatController.submitted,
-    rootRunEnded: chatController.rootRunEnded,
     getApprovalPolicy,
     // What the session's publisher still holds, drained before shutdown
     // within the close budget; one that does not drain is said on stderr.
@@ -691,7 +690,7 @@ export async function runChat(
       ),
     ),
     repaintAfterTerminalResume: scrollback.restart,
-    interruptActive: (reason) => chatController.stop(reason),
+    interruptActive: () => chatController.stop(),
   });
 
   // Interactive resume: kick off the continued tool-use run now that Ink is

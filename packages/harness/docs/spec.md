@@ -500,8 +500,14 @@ MUST carry an outcome, and every other position MUST NOT carry one
 is its `run.end` alone, committed in one transaction with the requests it
 leaves open cancelled and its unread input dropped
 (`agent/storage/runLifecycle.ts#endIn`); a stop commits a `run.stop` row
-naming its reason first, and for a run no fiber here drives, the `run.end`
-in the same batch (`agent/storage/runLifecycle.ts#stopRun`). A run whose
+naming its reason first (`user`, or `released` by the call that awaited
+it), and for a run no fiber here drives, the `run.end`
+in the same batch (`agent/storage/runLifecycle.ts#stopRun`). A process that
+exits stops nothing: a session's close interrupts its runs' fibers and MUST
+NOT write a stop or an end for a run nobody stopped, so the run is left as
+its rows stand and reads as interrupted, resumable, at the next open, as
+after a crash (`agent/runtime/runRegistry.ts#interruptAll`,
+`agent/runtime/AgentRunLifecycle.ts#commitEnd`). A run whose
 history does not load ends with its `run.end` and its requests uncancelled,
 with a warning (`agent/storage/runLifecycle.ts#endIn`). Every child is a
 run that ends: a native child runs one cycle and ends with its report; a
@@ -871,8 +877,9 @@ unless the item names another test:
   `src/test-kernel/support/crashConformance.ts#'reads every child result settled before the crash, exactly once'`.
 - **I7**: A fork keeps the history it was registered with; compaction keeps
   the context it committed.
-- **I8**: A run's halt commits with its end; a stopped run never reads as
-  interrupted.
+- **I8**: A run's halt commits with its end; a run a person stopped never
+  reads as interrupted. A run its process left, by a crash or by exiting, has
+  neither stop nor end and reads as interrupted.
 - **I9**: Turning off a run's shell bypass is acknowledged only after its row is
   durable.
 

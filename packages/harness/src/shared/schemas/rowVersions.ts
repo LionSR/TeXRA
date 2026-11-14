@@ -138,7 +138,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v7: the app's launch facts are an opaque `launch` record, not a `cli`
   // block (an earlier build's team and output fields would be dropped).
   'run.config': { version: 7, listing: 'own' },
-  'run.stop': { ...V1, listing: 'own' },
+  // v2: no `shutdown` reason: a process that exits writes nothing for its
+  // runs (an earlier build's shutdown stop would fail as damaged).
+  'run.stop': { version: 2, listing: 'own' },
   // v2: a recipe's value is `structured`, with no `documents`.
   // v3: the error's classification as `model.message` v9.
   // v4: an error always carries its `message` (an earlier build's error
