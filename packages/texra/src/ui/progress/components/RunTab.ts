@@ -24,6 +24,7 @@ import {
 } from '@ui/styles/controlStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { afterDropdownHides } from '@ui/wa/selectTemplates';
+import { inlineRenameField } from '@ui/wa/inlineRename';
 import { AGENT_DECORATORS, type RunDecorator } from '@ui/wa/icons';
 
 // Side-effect imports - register WA components
@@ -119,19 +120,13 @@ export class RunTab extends LitElement {
   private startRename(): void {
     if (!this.run.actions.includes('rename')) return;
     this.renaming = true;
-    void this.updateComplete.then(() => {
-      const input =
-        this.renderRoot.querySelector<HTMLInputElement>('.tab-rename');
-      input?.focus();
-      input?.select();
-    });
   }
 
-  private finishRename(input: HTMLInputElement, save: boolean): void {
+  private finishRename(value: string | null): void {
     if (!this.renaming) return;
     this.renaming = false;
-    const title = input.value.trim();
-    if (save && title && title !== (this.run.description || this.run.label)) {
+    const title = value?.trim();
+    if (title && title !== (this.run.description || this.run.label)) {
       this.dispatchEvent(
         SessionUiEvents.runtime({
           kind: 'run.rename',
@@ -224,22 +219,12 @@ export class RunTab extends LitElement {
         <div class="tab-select-tooltip-anchor">
           ${
             this.renaming
-              ? html`<input
-                  class="tab-rename inline-rename"
-                  aria-label="Task title"
-                  .value=${runTitle}
-                  @keydown=${(event: KeyboardEvent) => {
-                    event.stopPropagation();
-                    const input = event.target;
-                    if (!(input instanceof HTMLInputElement)) return;
-                    if (event.key === 'Enter') this.finishRename(input, true);
-                    if (event.key === 'Escape') this.finishRename(input, false);
-                  }}
-                  @blur=${(event: FocusEvent) => {
-                    if (event.target instanceof HTMLInputElement)
-                      this.finishRename(event.target, true);
-                  }}
-                />`
+              ? inlineRenameField({
+                  value: runTitle,
+                  label: 'Task title',
+                  className: 'tab-rename',
+                  onFinish: (value) => this.finishRename(value),
+                })
               : nothing
           }
           <button

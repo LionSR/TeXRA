@@ -46,10 +46,12 @@ export const openDesktopBrowserWindow = (options: {
           ? { trafficLightPosition: { x: 18, y: 18 } }
           : { titleBarOverlay: true }),
         // Match the operating-system theme before the renderer paints to
-        // avoid a contrasting flash behind the frameless window.
+        // avoid a contrasting flash behind the frameless window. These are
+        // the two values of `--desktop-color-background` in
+        // `renderer/themeTokens.css`; change them together.
         backgroundColor: nativeTheme.shouldUseDarkColors
-          ? '#212121'
-          : '#f7f7f7',
+          ? '#1b1e23'
+          : '#fbfcfe',
         webPreferences: {
           offscreen: DESKTOP_HEADLESS,
           backgroundThrottling: !DESKTOP_HEADLESS,

@@ -565,13 +565,6 @@ function shellTemplate(): TemplateResult {
                   return projectRail.runProjectAction(key, action);
                 renamingProjectKey = key;
                 rerenderShell();
-                requestAnimationFrame(() => {
-                  const input = appRoot.querySelector<HTMLInputElement>(
-                    '.shell-project-rename',
-                  );
-                  input?.focus();
-                  input?.select();
-                });
               },
               onRenameProject: finishProjectRename,
               onOpenSettings: () => settingsDialog.open(),

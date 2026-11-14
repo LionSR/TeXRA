@@ -12,6 +12,7 @@ import {
 } from '@cli/runtime/models/enabledModels';
 import { AsyncListForm } from './_shared/ListForm';
 import type { ProcessRuntime, StateStore } from '@texra-ai/harness/host';
+import { SEPARATOR } from '@cli/tui/ui/glyphs';
 
 interface EnabledModelsFormProps {
   readonly availableRows?: number;
@@ -31,7 +32,7 @@ function formatEnabledModelDescription(model: CliEnabledModelRow): string {
     model.provider,
     model.deprecated ? 'deprecated' : undefined,
   ].filter(Predicate.isNotNullish);
-  return parts.join(' · ');
+  return parts.join(SEPARATOR);
 }
 
 export function EnabledModelsForm(

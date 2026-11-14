@@ -27,6 +27,7 @@ import {
   ScrollableModalText,
   scrollableModalTextRowsBudget,
 } from './ScrollableModalText';
+import { SEPARATOR } from '@cli/tui/ui/glyphs';
 
 interface AgentProposalProps {
   readonly availableRows?: number;
@@ -144,7 +145,7 @@ function agentProposalMetadataLines({
       segments: [
         { text: 'Model: ', bold: true },
         { text: getModelLabel(payload.model) },
-        { text: ' · ' },
+        { text: SEPARATOR },
         { text: 'Kind: ', bold: true },
         { text: agentProposalLabel(payload) },
       ],

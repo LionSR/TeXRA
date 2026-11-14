@@ -5,13 +5,8 @@ import { createContext, useState } from 'react';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
-import {
-  KEY_HINT_SEPARATOR,
-  KeyHints,
-  keyHintSpans,
-  type KeyHint,
-} from '@cli/tui/ui/KeyHints';
-import { POINTER } from '@cli/tui/ui/glyphs';
+import { KeyHints, keyHintSpans, type KeyHint } from '@cli/tui/ui/KeyHints';
+import { POINTER, SEPARATOR } from '@cli/tui/ui/glyphs';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import { useLiveNowMs } from '@cli/tui/useLiveNowMs';
 import {
@@ -143,7 +138,7 @@ export function ConfirmCard({
           ) : (
             <Text bold color={color} wrap="truncate-end">
               {pulsedTitle}
-              <Text dimColor>{KEY_HINT_SEPARATOR}</Text>
+              <Text dimColor>{SEPARATOR}</Text>
               <Text dimColor>{keyHintSpans(hints)}</Text>
             </Text>
           )}

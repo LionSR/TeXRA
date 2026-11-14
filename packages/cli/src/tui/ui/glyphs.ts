@@ -37,6 +37,29 @@ export const SKIP_CIRCLE = '⊘';
 /** Hollow dot: the off beat of a pulse, and a step queued but not started. */
 export const HOLLOW_DOT = '○';
 
+/** Script-call states beside the shared ones: half-filled while running,
+ *  dashed when interrupted, a loop for a result reused from an earlier run,
+ *  and a middle dot for a call the script never reached. */
+export const RUNNING_HALF = '◐';
+export const INTERRUPTED_CIRCLE = '◌';
+export const REUSED = '↺';
+export const NOT_RUN = '·';
+
+/** Inline separator between facts on one line and between key hints. */
+export const SEPARATOR = ' · ';
+
+/** Unordered list item marker, also a neutral static-row bullet. */
+export const LIST_BULLET = '•';
+
+/** Blockquote gutter, repeated per nesting level (trailing space included). */
+export const QUOTE_BAR = '│ ';
+
+/** Horizontal rule segment. */
+export const RULE = '─';
+
+/** Text caret drawn in place of reverse video when color is off. */
+export const GLYPH_CARET = '▏';
+
 /** Disclosure markers for a collapsible tree row. */
 export const EXPANDED = '▾';
 export const COLLAPSED = '▸';

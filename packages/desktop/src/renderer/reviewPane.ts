@@ -3,6 +3,7 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import './TexraDiffView';
 import { html, nothing, render, type TemplateResult } from 'lit';
+import { styleMap } from 'lit/directives/style-map.js';
 import { formatResultCount } from '@texra-ai/harness/schemas';
 
 import { DESKTOP_THEME_KIND, type Theme } from '@texra/shared/ipc';
@@ -79,7 +80,7 @@ export function createReviewPane(): ReviewPaneController {
         return html`
           <wa-details
             class="desktop-review-directory"
-            style=${`--review-tree-depth: ${depth}`}
+            style=${styleMap({ '--tree-depth': String(depth) })}
             icon-placement="start"
             open
           >
@@ -98,7 +99,7 @@ export function createReviewPane(): ReviewPaneController {
         <wa-button
           type="button"
           class="desktop-review-file btn-ghost"
-          style=${`--review-tree-depth: ${depth}`}
+          style=${styleMap({ '--tree-depth': String(depth) })}
           appearance="plain"
           size="s"
           data-active=${active ? 'true' : 'false'}
