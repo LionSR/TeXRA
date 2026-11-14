@@ -5,25 +5,24 @@
  * `SCHEMA_VERSION` names the DDL, never the row vocabulary: rows carry
  * their own versions (`rowVersions.ts`), and the kinds a store holds are
  * gated by `rowCodec.ts`, so it moves only for a change an older build
- * cannot write around. The 1.0 baseline is 102; a file below it holding
- * tables is pre-1.0 (100 and 101 were pre-releases that never shipped),
- * read by no build and moved aside whole. A file at or above it that is not
- * this build's schema is refused untouched: an earlier one has no step to
- * this one (there is no migration), a later one is a newer build's. This module knows no row kind or payload field.
+ * cannot write around. Only a file with no tables and no stamps gets the
+ * schema. Any other file that is not this build's schema is refused
+ * untouched: an earlier one has no step to this one (there is no
+ * migration), a later one is a newer build's, and one without the
+ * application id is not a session store. This module knows no row kind or
+ * payload field.
  */
 import { Clock, Effect, Exit, FileSystem, Scope } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
-import type { SessionStoreMovedAside } from '@shared/session/database';
 import {
-  asideName,
   cannotOpen,
+  corruptAsideName,
   freeName,
   isDamaged,
   pragmaValue,
   retryBusy,
   run,
   STORE_FILE_SUFFIXES,
-  underCopy,
   type Sql,
 } from './storeAside';
 
@@ -31,9 +30,6 @@ const CHANNEL = 'sessionDatabase';
 
 /** The DDL this build creates and writes. */
 const SCHEMA_VERSION = 105;
-/** The first stamp a released build wrote. Fixed for good: a store stamped
- *  below it is pre-1.0 and moved aside; one at or above it is kept. */
-const BASELINE_1_0 = 102;
 /** `TeXR`: a harness store, told apart from a foreign SQLite file before
  *  anything in it is touched. */
 const APPLICATION_ID = 0x54655852;
@@ -161,57 +157,51 @@ const userTables = (sql: Sql) =>
     )
     .pipe(Effect.map((rows) => rows.map((row) => row.name)));
 
-/** A pre-1.0 store's mark: `event`, `event_sequence` keyed by `aggregate_id`. */
-const PRE1_SIGNATURE = `SELECT count(*) AS keyed FROM pragma_table_info('event') a,
-  pragma_table_info('event_sequence') b
-  WHERE a.name = 'aggregate_id' AND b.name = 'aggregate_id'`;
-
 /** The refusal of a file this build must not touch. */
 const refused = (path: string, why: string) =>
   Effect.fail(
     new Error(`Session store ${path} ${why}; nothing in it was changed.`),
   );
 
-/** Give an empty file the 1.0 header: `auto_vacuum` is fixed when the first
- *  page is written, which enabling WAL already did, so one `VACUUM` of the
- *  empty file applies it. */
+/** Give an empty file its `auto_vacuum` setting, which is fixed when the
+ *  first page is written. Enabling WAL already wrote it, so one `VACUUM` of
+ *  the empty file applies the setting. */
 const incrementalVacuum = Effect.fnUntraced(function* (sql: Sql) {
   yield* run(sql, 'PRAGMA auto_vacuum = INCREMENTAL');
   if ((yield* pragmaValue(sql, 'auto_vacuum')) !== 2) yield* run(sql, 'VACUUM');
 });
 
 /**
- * Refuse a file this build must not touch, answering whether it is a store
- * written before 1.0, which the caller moves aside (a released store never
- * is). Refused: another application's file (its `application_id`, a 1.0
- * stamp without ours, or tables without `PRE1_SIGNATURE` below the
- * baseline), a newer schema, and a released one this build has no step from.
- * Run read-only before the store's own connection enables WAL, and again.
+ * Whether the file is already this build's store (false: a new file, with no
+ * tables and no stamps, which the caller gives the schema). Any other file
+ * is refused, and nothing in it is changed: another application's (an
+ * `application_id` that is not ours, or tables or a schema stamp without
+ * one), a newer build's schema, and an earlier build's, which this build
+ * has no step from. Run read-only before the store's own connection enables
+ * WAL, and again.
  */
 const checkStamps = Effect.fnUntraced(function* (sql: Sql, path: string) {
   const application = Number(yield* pragmaValue(sql, 'application_id'));
   const stored = Number(yield* pragmaValue(sql, 'user_version'));
-  const pre1 = stored < BASELINE_1_0 && (yield* userTables(sql)).length > 0;
-  const signed =
-    pre1 &&
-    (yield* sql.unsafe<{ keyed: number }>(PRE1_SIGNATURE, []))[0]?.keyed === 1;
-  if (
-    application === 0
-      ? stored >= BASELINE_1_0 || (pre1 && !signed)
-      : application !== APPLICATION_ID
-  )
-    return yield* refused(
-      path,
-      `is not a session store (application id ${application}, schema ${stored}); move it away to create a fresh store there`,
-    );
-  if (stored >= BASELINE_1_0 && stored !== SCHEMA_VERSION)
+  if (application === APPLICATION_ID) {
+    if (stored === SCHEMA_VERSION) return true;
     return yield* refused(
       path,
       stored > SCHEMA_VERSION
         ? `has schema ${stored}, newer than this build's ${SCHEMA_VERSION}: a newer build opens it`
         : `was written by an earlier build (schema ${stored}; this build writes ${SCHEMA_VERSION}) and this build keeps no compatibility with it; move it away to create a fresh store there`,
     );
-  return pre1;
+  }
+  if (
+    application === 0 &&
+    stored === 0 &&
+    (yield* userTables(sql)).length === 0
+  )
+    return false;
+  return yield* refused(
+    path,
+    `is not a session store (application id ${application}, schema ${stored}); move it away to create a fresh store there`,
+  );
 });
 
 /** The filename SQLite opens as a store held in memory, not in a file: it
@@ -219,8 +209,8 @@ const checkStamps = Effect.fnUntraced(function* (sql: Sql, path: string) {
 export const IN_MEMORY_STORE = ':memory:';
 
 /**
- * Bring an open connection to the store this build writes: pragmas, a pre-1.0
- * store moved aside, the schema stamped; answering what it moved aside.
+ * Bring an open connection to the store this build writes: pragmas, and the
+ * schema stamped on a new file.
  *
  * The driver sets `busy_timeout` before enabling WAL, and that order is
  * load-bearing: `journal_mode = WAL` takes an exclusive lock, and at zero a
@@ -230,9 +220,8 @@ export const IN_MEMORY_STORE = ':memory:';
  * thread in SQLite. `synchronous = NORMAL` is the WAL-safe setting: `FULL` cost
  * 1.4x to 1.8x, and `kill -9` mid-transaction lost nothing at `NORMAL`.
  *
- * A store written before 1.0 is copied whole to the first free `.pre1`
- * name and every table dropped (`underCopy`); an empty file gets the schema
- * under the write lock, which a second process finds stamped.
+ * A new file gets the schema under the write lock, which a second process
+ * finds stamped.
  */
 const prepareStore = Effect.fnUntraced(function* (
   sql: Sql,
@@ -244,51 +233,22 @@ const prepareStore = Effect.fnUntraced(function* (
   yield* run(sql, 'PRAGMA synchronous = NORMAL');
   yield* verifyPragma(sql, 'journal_mode', persistent ? 'wal' : 'memory');
   yield* verifyPragma(sql, 'foreign_keys', 1);
-  let movedAside: SessionStoreMovedAside | null = null;
-  for (;;) {
-    const pre1 = yield* checkStamps(sql, path);
-    const stored = Number(yield* pragmaValue(sql, 'user_version'));
-    if (stored === SCHEMA_VERSION) break;
-    if (!pre1) {
-      if (persistent) yield* incrementalVacuum(sql);
-      yield* Effect.gen(function* () {
-        // Another process stamped the file while this one waited: the
-        // loop checks it again.
-        if (Number(yield* pragmaValue(sql, 'user_version')) !== stored) return;
-        for (const statement of [...TABLES, ...ADDITIVE])
-          yield* run(sql, statement);
-        yield* run(sql, `PRAGMA application_id = ${APPLICATION_ID}`);
-        yield* run(sql, `PRAGMA user_version = ${SCHEMA_VERSION}`);
-      }).pipe(sql.withTransaction);
-      continue;
-    }
-    // Off outside the transaction (a no-op inside one): a drop then
-    // neither checks nor cascades a foreign key it removes anyway. A failure
-    // to turn it back on fails the open, as a failed copy does.
-    yield* run(sql, 'PRAGMA foreign_keys = OFF');
-    const aside = yield* underCopy(
-      sql,
-      asideName.pre1(filename),
-      Effect.gen(function* () {
-        for (const table of yield* userTables(sql))
-          yield* run(sql, `DROP TABLE "${table}"`);
-        yield* run(sql, 'PRAGMA user_version = 0');
-      }),
-    );
-    yield* run(sql, 'PRAGMA foreign_keys = ON');
-    if (aside === null) continue;
-    yield* incrementalVacuum(sql);
-    yield* Effect.logWarning(
-      `Session store ${path} was written before the 1.0 format (format ${stored}); this build keeps no compatibility with it, so the whole store was moved to ${aside} and starts fresh.`,
-    ).pipe(withLogChannel(CHANNEL));
-    movedAside = { path, aside, reason: 'pre-1.0' };
+  if (!(yield* checkStamps(sql, path))) {
+    if (persistent) yield* incrementalVacuum(sql);
+    yield* Effect.gen(function* () {
+      // Another process may have stamped the file while this one waited.
+      if (yield* checkStamps(sql, path)) return;
+      for (const statement of [...TABLES, ...ADDITIVE])
+        yield* run(sql, statement);
+      yield* run(sql, `PRAGMA application_id = ${APPLICATION_ID}`);
+      yield* run(sql, `PRAGMA user_version = ${SCHEMA_VERSION}`);
+    }).pipe(sql.withTransaction);
   }
   for (const statement of ADDITIVE) yield* run(sql, statement);
   if (persistent) {
     yield* run(sql, 'PRAGMA journal_size_limit = 1048576');
   }
   yield* run(sql, 'PRAGMA busy_timeout = 25');
-  return movedAside;
 });
 
 /** Pages one reclaim step frees at most: a few milliseconds of the lock. */
@@ -355,16 +315,11 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
   const outer = yield* Effect.scope;
   const first = yield* Scope.fork(outer, 'sequential');
   const attempt = yield* connect.pipe(
-    Effect.flatMap((sql) =>
-      Effect.map(prepareStore(sql, path, filename), (movedAside) => ({
-        sql,
-        movedAside,
-      })),
-    ),
+    Effect.tap((sql) => prepareStore(sql, path, filename)),
     Scope.provide(first),
     Effect.exit,
   );
-  if (Exit.isSuccess(attempt)) return attempt.value;
+  if (Exit.isSuccess(attempt)) return { sql: attempt.value, movedAside: null };
   if (!persistent || !isDamaged(attempt.cause)) {
     return yield* Effect.failCause(attempt.cause);
   }
@@ -385,10 +340,11 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
   );
   if (!stillDamaged || seen === null || (yield* identity) !== seen) {
     const sql = yield* connect;
-    return { sql, movedAside: yield* prepareStore(sql, path, filename) };
+    yield* prepareStore(sql, path, filename);
+    return { sql, movedAside: null };
   }
   const aside = yield* freeName(
-    asideName.corrupt(filename, yield* Clock.currentTimeMillis),
+    corruptAsideName(filename, yield* Clock.currentTimeMillis),
   );
   for (const suffix of STORE_FILE_SUFFIXES) {
     if (yield* fs.exists(`${filename}${suffix}`))
@@ -399,8 +355,5 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
   ).pipe(withLogChannel(CHANNEL));
   const sql = yield* connect;
   yield* prepareStore(sql, path, filename);
-  return {
-    sql,
-    movedAside: { path, aside, reason: 'corrupt' as const },
-  };
+  return { sql, movedAside: { path, aside } };
 });

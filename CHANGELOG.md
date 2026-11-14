@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: a store an earlier build wrote is refused, never moved aside.**
+  Opening a session store stamped with another build's schema fails and
+  changes nothing in the file; the error says to move it away. Only a
+  damaged file is moved aside, so `SessionStoreMovedAside` has no `reason`.
 - **SDK: `withPerKeyLane` takes no conditional claim.** Its third
   parameter, `refuseClaim`, had no caller and is removed; a lane is claimed
   by every entrant.
@@ -710,8 +714,8 @@ All notable changes to this project will be documented in this file.
 - **A window of the TeXRA service keeps its project's settings in the
   service.** A VS Code window or a desktop folder the service serves no
   longer opens the project's store: project settings are read and written
-  through the service, and a store the service had to move aside (written
-  before 1.0, or damaged) is announced in the project's window. An older
+  through the service, and a damaged store the service had to move aside
+  is announced in the project's window. An older
   window is refused by a newer service and asked to update.
 - **An explicit `--approval-policy yolo` is an Auto-approve launch, in the
   TeXRA service too.** The flag (or `TEXRA_APPROVAL_POLICY=yolo`) grants
@@ -828,8 +832,8 @@ All notable changes to this project will be documented in this file.
   window that is already open stops saving into it. A task with any
   damaged saved step stays in the task list marked as damaged, with a note
   in the log, and it cannot be opened or resumed, while every other task
-  still works. History from before 1.0 is
-  still set aside on first launch; the copies set aside are now kept until
+  still works. A damaged store is
+  still set aside when it is opened; the copies set aside are now kept until
   you remove them with `texra doctor --prune-storage`, which lists every
   copy and every project folder that no longer exists before deleting
   anything.

@@ -776,3 +776,9 @@ constraints on the store.
 | Q5  | Moving SQLite to a worker thread       | Deferred past 1.0. It is taken only if an event-loop reading shows a stall over the 100 ms budget.                                                   | §8                          |
 | Q6  | A daemon owning the store              | Refused (D4). The CLI or SDK process is the unattended runner; a project store is held by one process at a time, with no claim.                      | §8; ledger                  |
 | Q7  | Where a run's retained outputs live    | SQLite (D5). Files are for compiler scratch only.                                                                                                    | §10; ledger                 |
+
+Q3 was overturned on 2026-11-14. The released line (0.40) has no SQLite store,
+so no user holds a store written before 1.0. The retirement is deleted: a file
+that holds tables and is not stamped with this build's schema is refused
+untouched, with a message that says to move it away, and nothing is copied to
+`.pre1`.

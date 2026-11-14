@@ -110,7 +110,7 @@ export interface SessionLogShape {
   ): Stream.Stream<DisplayRow, DatabaseReadFailed>;
   /** The cold listing (`Database.readListing`). */
   listing(): Effect.Effect<readonly DisplayRow[], DatabaseReadFailed>;
-  /** Set when opening the store moved an older build's rows aside; the
-   *  host that opened the session presents it once. */
+  /** Set when opening the store moved a damaged file aside; the host that
+   *  opened the session presents it once. */
   readonly movedAside: SessionStoreMovedAside | null;
 }
