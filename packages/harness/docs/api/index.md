@@ -194,8 +194,8 @@ positions and its notices.
 
 ```ts
 interface LocalSession extends Session {
-  /** Set when opening found a store from an older build, or a damaged one,
-   *  and moved it aside to start fresh; tell the person once. */
+  /** Set when opening found a damaged store and moved it aside to start
+   *  fresh; tell the person once. */
   readonly storeMovedAside: SessionStoreMovedAside | null;
   readonly view: Session['view'] & {
     /** Keep the transcripts of the runs `set` names in the view until the

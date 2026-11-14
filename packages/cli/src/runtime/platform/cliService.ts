@@ -177,7 +177,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     // (registered after them, so released first); the service's exit
     // closes every session ahead of that (`serve`'s settle).
     const session = yield* openLocalSession(sessions, roots);
-    // A store moved aside at open (pre-1.0 or corrupt) is said once, in
+    // A damaged store moved aside at open is said once, in
     // the service's log and to the project's first window: the windows
     // open no store of their own to notice it.
     const moved = session.storeMovedAside;

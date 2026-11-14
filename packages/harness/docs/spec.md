@@ -91,15 +91,17 @@ same schema in memory (`controllers/session/storeSchema.ts#IN_MEMORY_STORE`).
 
 The store MUST carry application id `0x54655852` and schema version 105 in
 SQLite's `user_version` (`controllers/session/storeSchema.ts#APPLICATION_ID`,
-`#SCHEMA_VERSION`). A process MUST refuse, unchanged, a file with another
-application id or a schema stamp at or above 102 other than its own
-(`controllers/session/storeSchema.ts#checkStamps`). A store stamped below 102
-that holds tables of the pre-1.0 format SHALL be copied whole to the first free
-`<file>.pre1` name and started fresh; nothing in it is read again
-(`controllers/session/storeSchema.ts#asideName.pre1`). A file SQLite reports
+`#SCHEMA_VERSION`). A process MUST give the schema only to a file with no
+tables, no application id and no schema stamp, and MUST refuse any other file
+that does not carry both stamps, writing no table, row or stamp of it: one
+with another application id, one with tables or a schema stamp and no
+application id, and a store stamped with a schema other than its own, earlier
+or newer (`controllers/session/storeSchema.ts#checkStamps`). The stamps are
+read on the store's own connection, after it enabled WAL: a refused file that
+was in another journal mode, which no session store is, stays in WAL mode. A file SQLite reports
 damaged at open SHALL be moved, with its WAL and shared-memory files, to
 `<file>.corrupt-<ms>`, and a fresh store opened in its place
-(`controllers/session/storeSchema.ts#asideName.corrupt`).
+(`controllers/session/storeAside.ts#corruptAsideName`).
 
 A persistent store runs in WAL mode with `synchronous = NORMAL` and foreign keys
 on (`controllers/session/storeSchema.ts#prepareStore`). Every transaction the
@@ -107,11 +109,9 @@ store runs MUST begin with `BEGIN IMMEDIATE`, so it holds the write lock from it
 first statement and never upgrades a read lock: it is the SQLite client's own
 transaction, which begins that way on a writable connection
 (`controllers/session/databaseLayer.ts#sql.withTransaction`). File maintenance
-runs outside these: the one-time `VACUUM` at setup, page reclaim in autocommit
-`incremental_vacuum` steps, and the `VACUUM INTO` copy a store moved aside
-takes, none of which writes a row
-(`controllers/session/storeSchema.ts#incrementalVacuum`, `#reclaimFreePages`,
-`controllers/session/storeAside.ts#'VACUUM INTO ?'`).
+runs outside these: the one-time `VACUUM` at setup and page reclaim in
+autocommit `incremental_vacuum` steps, neither of which writes a row
+(`controllers/session/storeSchema.ts#incrementalVacuum`, `#reclaimFreePages`).
 
 ### 2.2 The event table and the envelope
 
@@ -948,8 +948,7 @@ These existing suites check the sections above. Each citation names a test by
 its title.
 
 - **2.1 file and schema**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts#'retires a store written before 1.0 whole and starts clean'`,
-  `#refuses another application's SQLite file untouched`,
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts#refuses another application's SQLite file and keeps its rows`,
   `#'moves a truncated store aside and opens a fresh one'`,
   `#'refuses a store of a newer schema and changes nothing'`
 - **2.2 envelope**:

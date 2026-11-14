@@ -18,9 +18,12 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  statfsSync,
   symlinkSync,
   writeFileSync,
+  type StatsFs,
 } from 'node:fs';
+import type * as nodeFs from 'node:fs';
 import * as os from 'node:os';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -109,6 +112,10 @@ vi.mock('node:os', async (importOriginal) => ({
   ...(await importOriginal<typeof os>()),
   platform: vi.fn(() => process.platform),
 }));
+vi.mock('node:fs', async (importOriginal) => {
+  const fs = await importOriginal<typeof nodeFs>();
+  return { ...fs, statfsSync: vi.fn(fs.statfsSync) };
+});
 vi.mock('@texra/tools/lean/direct/leanServerPool', async () => {
   const { Layer } = await import('effect');
   const { LeanLanguageServices } =
@@ -602,6 +609,37 @@ describe('the session event table and its one publisher', () => {
     }).pipe(Effect.ensuring(Effect.sync(() => system.mockRestore())));
   });
 
+  it.effect(
+    'opens on a Linux filesystem no list names and still refuses NFS',
+    () => {
+      const system = vi.mocked(os.platform).mockReturnValue('linux');
+      const mounted = vi.mocked(statfsSync);
+      // cast: the check reads only the filesystem's type.
+      const type = (magic: number) => ({ type: magic }) as StatsFs;
+      return Effect.gen(function* () {
+        // eCryptfs: local, and neither a network nor a clustered filesystem.
+        mounted.mockReturnValue(type(0xf15f));
+        const local = workspace();
+        yield* Database.pipe(Effect.provide(substrate(local)));
+        expect(existsSync(join(local, 'texra.db'))).toBe(true);
+        mounted.mockReturnValue(type(0x6969));
+        const remote = workspace();
+        const failure = yield* Effect.flip(
+          Database.pipe(Effect.provide(substrate(remote))),
+        );
+        expect(String(failure.cause)).toContain('verified local filesystem');
+        expect(existsSync(join(remote, 'texra.db'))).toBe(false);
+      }).pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            system.mockRestore();
+            mounted.mockRestore();
+          }),
+        ),
+      );
+    },
+  );
+
   /** A store holding one run row, then re-stamped as another build's. */
   const storeOfFormat = (storage: string, format: number) =>
     Database.pipe(
@@ -619,91 +657,14 @@ describe('the session event table and its one publisher', () => {
       ),
     );
 
-  /** A store as a pre-1.0 build left it: its `event` and `event_sequence`
-   *  keyed by `aggregate_id`, one event, one setting and one line of input
-   *  history, stamped `format`. */
-  const legacyStore = (storage: string, format: number) =>
-    Effect.sync(() => {
-      const connection = reader(storage);
-      try {
-        connection.exec(`
-          CREATE TABLE event_sequence (aggregate_id TEXT PRIMARY KEY, seq INTEGER);
-          CREATE TABLE event ("commit" INTEGER PRIMARY KEY, aggregate_id TEXT, data TEXT);
-          CREATE TABLE current_value (family TEXT, key TEXT, value TEXT);
-          CREATE TABLE input_history (id INTEGER PRIMARY KEY, at INTEGER, value TEXT);
-          INSERT INTO event_sequence VALUES ('["run","ab12cd"]', 1);
-          INSERT INTO event VALUES (1, '["run","ab12cd"]', '{}');
-          INSERT INTO current_value VALUES ('setting', 'k', '1');
-          INSERT INTO input_history VALUES (1, 1, 'an earlier prompt');
-          PRAGMA user_version = ${format};
-        `);
-      } finally {
-        connection.close();
-      }
-    });
-
-  it.effect('retires a store written before 1.0 whole and starts clean', () => {
-    const storage = workspace();
-    const format = 44;
-    return Effect.gen(function* () {
-      yield* legacyStore(storage, format);
-      const reopenedStore = yield* Database.pipe(
-        Effect.flatMap((database) =>
-          Effect.map(database.readListing(), (listing) => ({
-            listing,
-            movedAside: database.movedAside,
-          })),
-        ),
-        Effect.provide(substrate(storage)),
-      );
-      const asidePath = join(realpathSync.native(storage), 'texra.db.pre1');
-      expect(reopenedStore).toEqual({
-        listing: [],
-        movedAside: {
-          path: join(storage, 'texra.db'),
-          aside: asidePath,
-          reason: 'pre-1.0',
-        },
-      });
-      const aside = new DatabaseSync(asidePath);
-      try {
-        expect(aside.prepare('PRAGMA user_version').get()).toEqual({
-          user_version: format,
-        });
-        expect(
-          aside.prepare('SELECT count(*) AS rows FROM event').get(),
-        ).toEqual({ rows: 1 });
-      } finally {
-        aside.close();
-      }
-      // Nothing is kept, current values and input history included, and
-      // the file carries the 1.0 header.
-      const reopened = reader(storage);
-      try {
-        expect(reopened.prepare('PRAGMA user_version').get()).toEqual({
-          user_version: 105,
-        });
-        expect(reopened.prepare('PRAGMA auto_vacuum').get()).toEqual({
-          auto_vacuum: 2,
-        });
-        for (const table of ['current_value', 'input_history'])
-          expect(
-            reopened.prepare(`SELECT count(*) AS rows FROM ${table}`).get(),
-          ).toEqual({ rows: 0 });
-      } finally {
-        reopened.close();
-      }
-    });
-  });
-
   // Another tool's database at the store's path: unstamped, or stamped with
-  // its own id even at the 1.0 schema's number.
+  // its own id even at this build's schema number.
   for (const stamp of [
     '',
-    'PRAGMA application_id = 1234; PRAGMA user_version = 102;',
+    'PRAGMA application_id = 1234; PRAGMA user_version = 105;',
   ])
     it.effect(
-      `refuses another application's SQLite file untouched (${stamp || 'unstamped'})`,
+      `refuses another application's SQLite file and keeps its rows (${stamp || 'unstamped'})`,
       () => {
         const storage = workspace();
         return Effect.gen(function* () {
@@ -760,7 +721,6 @@ describe('the session event table and its one publisher', () => {
           movedAside: {
             path: file,
             aside: expect.stringMatching(/texra\.db\.corrupt-\d+$/),
-            reason: 'corrupt',
           },
           commit: 0,
         });

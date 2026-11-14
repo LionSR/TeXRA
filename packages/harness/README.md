@@ -351,8 +351,10 @@ happens without reading the code. The full table is kept with
 the session store's source; in short:
 
 - **S1** The store does not open (`DatabaseOpenFailed`): the session does
-  not open, and the error says why. A store written before 1.0, or one SQLite
-  reports damaged, is moved aside instead (`movedAside`), never read again.
+  not open, and the error says why. A store an earlier build wrote is
+  refused unchanged, and the error says to move it away. A store SQLite
+  reports damaged is moved aside instead (`storeMovedAside`), never read
+  again.
 - **S2** A store a newer build wrote (`DatabaseStoreNewer`, the cause of an
   open, read or write failure) is refused whole: nothing is read in part or
   written beside it.
@@ -379,7 +381,7 @@ the session store's source; in short:
 Under its storage root a session owns the store (`texra.db`) and one
 directory per run, `executions/<runId>/`, holding the files the run
 generated. A deletion removes nothing else: the project's own files are
-never touched, and a store moved aside (`texra.db.pre1`) is never read again
+never touched, and a store moved aside (`texra.db.corrupt-<ms>`) is never read again
 and goes only when a person deletes it (`deleteStorageInventory`, which
 `texra doctor --prune-storage` runs after asking).
 

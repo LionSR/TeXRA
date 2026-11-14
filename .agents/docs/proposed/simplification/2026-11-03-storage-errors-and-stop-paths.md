@@ -65,11 +65,11 @@ cannot be read":
 - `factKindOf` (`rowCodec.ts:341-364`) and `readTraceFacts`
   (`packages/harness/src/transcript/traceDocumentSchema.ts:61-79`) implement
   the same four version branches.
-- "The store is missing" is decided three ways: `readSessionView.ts:53-69`
-  (absence, SQLite 14, then `fs.exists`), `openStore` (`storeSchema.ts:364-373`,
-  `cannotOpen || isDamaged` means create), and `storeOpenElsewhere`'s
+- "The store is missing" is decided two ways: `readSessionView.ts:53-69`
+  (absence, SQLite 14, then `fs.exists`) and `storeOpenElsewhere`'s
   three-value result of which each caller reads one value
-  (`projectDatabase.ts:100,151`).
+  (`projectDatabase.ts:100,151`). A third, `openStore`'s read-only probe
+  (`cannotOpen || isDamaged` means create), is deleted.
 
 **Proposal.** One `classifyRunRead(cause): 'corrupt' | 'earlier' | 'io'` in
 `shared/session`, used by all four sites; each caller states its fallback
