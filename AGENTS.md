@@ -461,12 +461,56 @@ directories are excluded by `docs/.vitepress/publicDocs.js`. A new file at the
 must exist (`npm run gate:docs`). Changelog rules: the `releasing`
 skill.
 
+## Scheduled audits
+
+A session a scheduled routine starts to review, audit or look for refactoring
+ends in a PR, not a report and not a question, even when the routine's prompt
+only asks for findings or suggestions. The prompt says what to look for; this
+section says what to do with it.
+
+- **Size the PR like the work on `main`.** A `refactor:` or `simplify:` PR
+  here typically changes 400 to 650 lines across 20 to 30 files, and a quarter
+  of them change more than 800; a scheduled run that lands 30 to 100 lines has
+  fixed one instance and stopped. A finding is an instance of a design
+  problem. Name the problem (a fact with two owners, a rule decided per host,
+  a hand-written version of what Effect, SQLite or Node provides, a layer that
+  only forwards), fix every instance of it across the packages, and delete
+  what the fix makes unnecessary: callers, options, tests that pin the old
+  shape, comments and docs. Batch related findings under one theme, as #14790
+  (four plugins, one structure each) and #14896 (five findings, one owner per
+  run fact) do. A diff under about 200 changed lines means the run is not
+  finished: widen the theme or take the next finding.
+- **Fix the cause, not the symptom.** Before 1.0 a stored format, a public
+  name or a behavior may change when that is the simpler design. Such a change
+  gets its own commit and a line under "Needs your eye" at the top of the PR
+  body, so it can be dropped.
+- **Continue open work before finding new work.** The dated notes under
+  `.agents/docs/proposed/` list findings and their order; an unimplemented one
+  outranks a new small find. So do the unfinished findings that recent PR
+  bodies list and the audit notes earlier runs left on unmerged `claude/*`
+  branches.
+- Skip what is already done or refused: open PRs, PRs merged in the last two
+  weeks, and `.agents/docs/refuted-candidates.json`. Several audits run the
+  same morning, so list open PRs again before pushing.
+- One commit per finding on the session's branch, in one PR against `main`
+  titled for the theme. This is the one exception to one PR per change.
+- Run `npm run gate` and `npm run test:changed` before pushing, and say in the
+  PR body what ran. Subscribe to the PR, fix CI and answer review until it is
+  ready to merge. The routine's prompt says whether the run merges its own
+  PR; when it is silent, the owner merges.
+- A finding too large for the run, or one that needs a design decision first,
+  becomes a dated note under `.agents/docs/proposed/simplification/` in the
+  same PR, beside whatever first step stands alone. A PR that holds only
+  notes is not the result of a run.
+- When nothing survives verification, say so in two lines and open nothing.
+
 ## Skills
 
 - **code-review**: `/review` and any review of this repo; always include a
   `Verified` section.
-- **find-simplification**: deletion and collapse candidates, recorded as dated
-  proposals or tech-debt issues.
+- **find-simplification**: deletion and collapse candidates, implemented when
+  they fit a reviewable diff and otherwise recorded as dated proposals or
+  tech-debt issues.
 - **texra-cli**: the Ink TUI, transcript rendering, headless output, CLI flags
   and help.
 - **releasing**: changelog, tags, GitHub Releases, desktop installers, npm
