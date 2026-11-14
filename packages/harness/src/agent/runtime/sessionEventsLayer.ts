@@ -9,14 +9,12 @@
 import {
   Array as Arr,
   Cause,
-  Deferred,
   Effect,
   Exit,
-  Fiber,
+  FiberSet,
   Layer,
-  Option,
   PubSub,
-  Queue,
+  Scheduler,
   Stream,
   SubscriptionRef,
   type Take,
@@ -61,24 +59,6 @@ export const SESSION_CLOSE_DEADLINE_MS = 5_000;
  *  transcript applies its `run.end`. */
 type OpenWorkByAggregate = Map<AggregateId, Set<string>>;
 
-/** One unit of the publisher's work, bound to its append and built when
- *  the publisher runs it: an awaited one settles the deferred its enqueuer
- *  waits on with the job's own exit. `refuse` is what the close does with
- *  a job it will not run (past the close deadline). */
-interface PublicationJob {
-  readonly run: Effect.Effect<void>;
-  readonly refuse: Effect.Effect<void>;
-}
-
-/** Why the close settled a publication it did not finish: never run, or
- *  cut at the deadline (it may have committed before the cut). */
-const refusal = (cut: boolean): Error =>
-  new Error(
-    cut
-      ? 'Session publication cut at the close deadline; whether it committed is unknown'
-      : 'Session publication refused: the plane has closed',
-  );
-
 /** What the publisher keeps open per aggregate, from the rows it commits:
  *  `track` folds a committed batch in, `openWork` reads one aggregate's. */
 function openWorkTracker(): {
@@ -112,35 +92,11 @@ function openWorkTracker(): {
   };
 }
 
-/** Run `job` and complete `done` with however it ended; one the close cut
- *  short, or never ran, is refused. */
-function settling<A, E>(
-  job: Effect.Effect<A, E>,
-  done: Deferred.Deferred<A, E>,
-): PublicationJob {
-  const refuse = (cut: boolean) =>
-    Effect.asVoid(Deferred.die(done, refusal(cut)));
-  return {
-    run: job.pipe(
-      Effect.exit,
-      Effect.flatMap((exit) =>
-        Exit.hasInterrupts(exit) ? refuse(true) : Deferred.done(done, exit),
-      ),
-      Effect.onInterrupt(() => refuse(true)),
-      Effect.asVoid,
-    ),
-    refuse: refuse(false),
-  };
-}
-
-/** An ordering job's `append`: it writes no row. */
-const ordering: Append = () =>
-  Effect.die(new Error('An ordering job appends nothing'));
-
-/** A job that waits on its own publisher would wait forever. */
+/** A job that opened another would publish the inner one's rows before its
+ *  own transaction committed. */
 const reentered = Effect.die(
   new Error(
-    'A publisher job waited on its own publisher: append through the job instead',
+    'A publisher job opened another publication: append through the job instead',
   ),
 );
 
@@ -148,16 +104,15 @@ const reentered = Effect.die(
  * The publisher and public event readers over the root's database. Each
  * reader supplies its own starting position.
  *
- * Publication is one inbox and one consumer fiber: every job, awaited
- * or detached, runs in the order it was enqueued as one SQLite transaction
- * (`Database.job`), and the table's commit order is that order. A job
- * stays interruptible: one cut before its commit rolls back whole, and
- * what the publisher tracks of its rows moves only once they committed.
- * Closing the plane ({@link SessionEventsShape.drain}) ends the inbox and
- * drains it inside one deadline; at the deadline the running job is cut
- * and every queued one refused. A job enqueued after that is refused too:
- * a detached one is logged and dropped, an awaited one is the caller's
- * defect, as is a job that waits on its own publisher.
+ * A publication is one SQLite transaction (`Database.job`) and the
+ * publication of its rows, run where it is called as one uninterrupted
+ * turn: the driver is synchronous, a job awaits nothing, and the scheduler
+ * does not take the fiber off in between. So the table's commit order and
+ * the order subscribers see are the order of the calls, whichever fiber
+ * made them, and no publication waits behind another. A job that fails
+ * rolls back whole and publishes nothing. After {@link SessionEventsShape.close}
+ * an awaited publication is the caller's defect and a detached one is
+ * logged and dropped, as is a job that opens another.
  */
 export const sessionEventsLayer = Layer.effect(
   SessionEvents,
@@ -166,6 +121,7 @@ export const sessionEventsLayer = Layer.effect(
     const { track, openWork } = openWorkTracker();
     const committed = yield* PubSub.unbounded<Take.Take<CommittedBatch>>();
     let head = yield* log.currentCommit;
+    let closed = false;
     /** What a committed job wrote, tracked and published in commit order:
      *  `head` moves first, so a reader that subscribes between the two
      *  steps reads the batch from the store and drops its copy. */
@@ -179,106 +135,64 @@ export const sessionEventsLayer = Layer.effect(
           { rows: log.displayRows(rows), through: last.commit },
         ]);
       });
-    /** One job: one transaction (`Database.job`), or in its place with
-     *  none (`order`). What it wrote is published once the transaction
-     *  committed, so a rolled-back job publishes nothing, and a commit is
-     *  never left unpublished by an interrupt. */
-    const inTransaction = <A, E>(
+    /** One job: its transaction, then the publication of what it wrote, in
+     *  one turn. A rolled-back job publishes nothing, and a commit is never
+     *  left unpublished by an interrupt. */
+    const commit = <A, E>(
       job: (append: Append, appended: SessionRow[]) => Effect.Effect<A, E>,
-      order = false,
-    ): Effect.Effect<A, E | DatabaseWriteFailed> => {
-      if (order) return job(ordering, []);
-      const appended: SessionRow[] = [];
-      // Both of `appendAll`'s rejections (a closed aggregate, a failed
-      // write) pass through typed, not as defects.
-      const append: Append = (events) =>
-        Effect.tap(log.appendAll(events), (rows) =>
-          Effect.sync(() => appended.push(...rows)),
-        );
-      return Effect.uninterruptibleMask((restore) =>
-        restore(log.job(Effect.suspend(() => job(append, appended)))).pipe(
-          Effect.tap(() => publish(appended)),
-        ),
-      );
-    };
-    const inbox = yield* Queue.unbounded<PublicationJob, Cause.Done>();
-    // One job per take, never a batch: a job the close refuses is one the
-    // consumer never took. It ends when the ended inbox runs dry.
-    const consumer = yield* Effect.forkScoped(
-      Effect.forever(
-        Effect.flatMap(Queue.take(inbox), (job) => job.run),
-        { disableYield: true },
-      ).pipe(Effect.catchIf(Cause.isDone, () => Effect.void)),
-    );
-    // Cached: the session's close and the publisher's scope both run it,
-    // and only the first waits.
-    const drain: SessionEventsShape['drain'] = yield* Effect.cached(
+    ): Effect.Effect<A, E | DatabaseWriteFailed> =>
+      Effect.suspend(() => {
+        const appended: SessionRow[] = [];
+        // Both of `appendAll`'s rejections (a closed aggregate, a failed
+        // write) pass through typed, not as defects.
+        const append: Append = (events) =>
+          Effect.tap(log.appendAll(events), (rows) =>
+            Effect.sync(() => appended.push(...rows)),
+          );
+        return log
+          .job(
+            Effect.suspend(() => {
+              // A transaction run again starts from no rows.
+              appended.length = 0;
+              return job(append, appended);
+            }),
+          )
+          .pipe(
+            Effect.tap(() => publish(appended)),
+            Effect.uninterruptible,
+            Effect.provideService(Scheduler.PreventSchedulerYield, true),
+          );
+      });
+    /** `work`, unless the plane has closed or a job is asking: decided in
+     *  the same uninterrupted turn that runs it, so a close cannot land
+     *  between the answer and the transaction. */
+    const awaited = <A, E>(work: Effect.Effect<A, E>): Effect.Effect<A, E> =>
       Effect.gen(function* () {
-        yield* Queue.end(inbox);
-        // Interruptible inside the close's uninterruptible region, so the
-        // deadline can cut the wait.
-        const ended = yield* Fiber.await(consumer).pipe(
-          Effect.interruptible,
-          Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
-        );
-        // At the deadline the running job is cut; its transaction rolls back
-        // unless it had committed.
-        if (Option.isNone(ended)) {
-          // A detached job cut here, whose write then fails, is heard by
-          // nobody: say the cut happened.
-          yield* Effect.logWarning(
-            'Session publisher cut at the close deadline; a job it was running may not have been written',
-          ).pipe(withLogChannel(CHANNEL));
-          yield* Fiber.interrupt(consumer);
-        } else if (
-          Exit.isFailure(ended.value) &&
-          !Cause.hasInterruptsOnly(ended.value.cause)
-        ) {
-          yield* Effect.logWarning(
-            'Session publisher ended abnormally on close',
-          ).pipe(
-            Effect.annotateLogs({ data: ended.value.cause }),
-            withLogChannel(CHANNEL),
+        if (closed) {
+          return yield* Effect.die(
+            new Error('Session publication after the plane closed'),
           );
         }
-        // Whatever the consumer never ran (the deadline cut it, or it died)
-        // is refused, never left for its awaiter to wait on.
-        const refused = yield* Queue.clear(inbox).pipe(Effect.orDie);
-        yield* Effect.forEach(refused, (job) => job.refuse, { discard: true });
-        if (refused.length > 0)
-          yield* Effect.logWarning(
-            `Session publisher closed; ${refused.length} queued publications refused`,
-          ).pipe(withLogChannel(CHANNEL));
+        if (yield* InPublisherJob) return yield* reentered;
+        return yield* work;
+      }).pipe(Effect.provideService(Scheduler.PreventSchedulerYield, true));
+    // The tails end with the plane.
+    yield* Effect.addFinalizer(() =>
+      Effect.suspend(() => {
+        closed = true;
+        return PubSub.end(committed, Exit.void);
       }),
     );
-    // The tails end once the inbox has run dry.
-    yield* Effect.addFinalizer(() =>
-      Effect.andThen(drain, PubSub.end(committed, Exit.void)),
-    );
-    const enqueue = (job: PublicationJob): boolean =>
-      Queue.offerUnsafe(inbox, job);
-    /** Enqueue `job` and wait for its exit. */
-    const awaited = Effect.fn('awaited')(function* <A, E>(
-      job: Effect.Effect<A, E | DatabaseWriteFailed>,
-    ): Effect.fn.Return<A, E | DatabaseWriteFailed> {
-      if (yield* InPublisherJob) return yield* reentered;
-      const done = yield* Deferred.make<A, E | DatabaseWriteFailed>();
-      if (!enqueue(settling(job, done))) {
-        return yield* Effect.die(
-          new Error('Session publication after the plane closed'),
-        );
-      }
-      return yield* Deferred.await(done);
-    });
-    const transact: SessionEventsShape['transact'] = (job, options = {}) =>
+    // How the synchronous door runs a job: the fiber starts in the call and,
+    // awaiting nothing, has finished when the call returns.
+    const run = yield* FiberSet.makeRuntime<never>();
+    const transact: SessionEventsShape['transact'] = (job) =>
       awaited(
-        inTransaction(
-          (append, appended) =>
-            Effect.map(job(append), (value) => ({
-              value,
-              through: appended.at(-1)?.commit ?? null,
-            })),
-          options.order,
+        commit((append, appended) =>
+          Effect.map(job(append), (value) => ({
+            value,
+            through: appended.at(-1)?.commit ?? null,
+          })),
         ),
       );
     const removeRun: SessionEventsShape['removeRun'] = (
@@ -286,15 +200,24 @@ export const sessionEventsLayer = Layer.effect(
       expectedStartCommit,
     ) =>
       awaited(
-        inTransaction((_, appended) =>
+        commit((_, appended) =>
           Effect.tap(log.runRemoval(id, expectedStartCommit), (rows) =>
             Effect.sync(() => appended.push(...rows)),
           ),
         ),
       );
     const detach: SessionEventsShape['detach'] = (job, options = {}) => {
-      const admitted = enqueue({
-        run: inTransaction(job, options.order).pipe(
+      // Direct sink write: `detach` is the synchronous door for producers
+      // with no fiber.
+      if (closed) {
+        writeLogLine(
+          CHANNEL,
+          'Session publication dropped: the plane has closed',
+        );
+        return;
+      }
+      const fiber = run(
+        commit(job).pipe(
           Effect.catchCause((cause) =>
             Effect.logError('Session publication failed').pipe(
               Effect.annotateLogs({ data: cause }),
@@ -305,21 +228,22 @@ export const sessionEventsLayer = Layer.effect(
             ),
           ),
         ),
-        refuse: Effect.void,
-      });
-      // Direct sink write: `detach` is the synchronous door for producers
-      // with no fiber, and the refusing plane's publisher fiber has ended.
-      if (!admitted)
+      );
+      // A job that awaited something is still running: its row will land
+      // after whatever is published next, and nothing else would say so.
+      if (fiber.pollUnsafe() === undefined)
         writeLogLine(
           CHANNEL,
-          'Session publication dropped: the plane has closed',
+          'A detached session publication did not finish in its call; its row may land out of order',
         );
     };
     return {
       transact,
       detach,
       removeRun,
-      drain,
+      close: Effect.sync(() => {
+        closed = true;
+      }),
       openWork,
       head: () => head,
       subscribe: PubSub.subscribe(committed),

@@ -433,8 +433,8 @@ const makeMachineGitEnv: Effect.Effect<NodeJS.ProcessEnv>
 
 ## nodeFileServices
 
-Node's file services: `FileSystem` (with the one-call native `realPath`)
-and `Path`. The process platform, the JSON and credential stores and the
+Node's file services: `FileSystem` (with the one-call native `realPath`
+and uninterruptible writes) and `Path`. The process platform, the JSON and credential stores and the
 hosts' own reads all provide this one layer.
 
 ```ts

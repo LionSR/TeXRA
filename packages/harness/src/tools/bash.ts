@@ -261,9 +261,8 @@ function backgroundBashTurn(params: {
       onStderr: (chunk) => record('stderr', chunk),
     }).pipe(Effect.ensuring(Effect.sync(recordTails)));
     const wallTimeMs = (yield* Clock.currentTimeMillis) - startedAt;
-    // The output rows were published as the chunks arrived; past the
-    // barrier every one is committed, so the run's rows hold the whole log.
-    yield* log.settled;
+    // The output rows were committed as the chunks arrived, so the run's
+    // rows hold the whole log.
     const rows = yield* log.display(runId);
     // `executeCommand` never fails on a non-zero exit: it answers with the
     // exit code, which the run's end reads as its failure, its output still

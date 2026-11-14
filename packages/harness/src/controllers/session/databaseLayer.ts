@@ -25,6 +25,7 @@ import {
   Layer,
   Option,
   Schedule,
+  Scheduler,
   Schema,
   Stream,
   SubscriptionRef,
@@ -388,8 +389,21 @@ export const databaseLayer = (
       // transaction it is a savepoint. A busy lock, which only the global
       // store's other writers take, runs the transaction again whole; a
       // nested body never meets one, its transaction holding the lock already.
+      //
+      // The driver is synchronous and a body awaits nothing, so the only way
+      // another fiber could run between BEGIN and COMMIT is the scheduler
+      // taking the fiber off after its step budget. With that off, a
+      // transaction is one uninterrupted turn: transactions on this
+      // connection run in the order they are called, and none waits for
+      // another.
       const own = <A, E>(body: Effect.Effect<A, E>) =>
-        retryBusy(sql.withTransaction(body));
+        retryBusy(
+          Effect.provideService(
+            sql.withTransaction(body),
+            Scheduler.PreventSchedulerYield,
+            true,
+          ),
+        );
       const transaction = <A, E, EBody>(
         body: Effect.Effect<A, EBody>,
         failed: (cause: unknown) => E,
