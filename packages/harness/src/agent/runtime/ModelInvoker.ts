@@ -763,17 +763,23 @@ export const modelInvokerLayer = (): Layer.Layer<
           ),
         );
 
-      /** Ask again about `attempt`, whose outcome no row records: one a
-       *  person allowed, or one past the automatic retries. */
+      /** Ask again about `attempt`: one whose outcome no row records (a
+       *  person allowed it, or it is past the automatic retries), or one
+       *  whose retry request an earlier lifecycle cancelled, asked as the
+       *  next attempt failing unsent on the same error. */
       const reask = Effect.fn('ModelInvoker.reask')(function* (
         cell: RunCell,
         attempt: Attempt,
       ): Effect.fn.Return<void, InvokeError, SessionServices> {
         const bound = yield* ScopedRef.get(run.model);
+        const { ref, failed } = attempt;
         yield* commitFailed(
           cell,
-          attempt.ref,
-          { source: 'interrupted', provider: bound.config.provider },
+          failed === null ? ref : { ...ref, attempt: ref.attempt + 1 },
+          failed?.error ?? {
+            source: 'interrupted',
+            provider: bound.config.provider,
+          },
           { kind: 'ask', requestId: `retry-${randomUUID()}` },
           bound,
           null,
@@ -804,8 +810,8 @@ export const modelInvokerLayer = (): Layer.Layer<
       ): Effect.fn.Return<InvocationOutcome, InvokeError, AttemptServices> {
         const retries = (yield* ScopedRef.get(run.model)).automaticRetries;
         for (;;) {
-          const { invocation, requests } = yield* cell.current;
-          const move = nextAttempt(invocation, requests, retries);
+          const { invocation, requests, activatedAt } = yield* cell.current;
+          const move = nextAttempt(invocation, requests, retries, activatedAt);
           if (move.kind === 'fail') return yield* endedAs(cell, 'failed');
           if (move.kind === 'cancel') return yield* endedAs(cell, 'cancelled');
           if (move.kind === 'await') {

@@ -24,6 +24,8 @@ import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 
 import type { RunHistoryRow } from '@shared/session/historyTurns';
 import { applyRunRows, type RunHistoryDraft } from '@shared/session/runState';
+import { nextAttempt, type Invocation } from '@shared/session/inFlight';
+import type { RunRowState } from '@shared/session/runRowsShape';
 
 import { toolUseTurn } from '@test/support/sessionRows';
 import {
@@ -383,5 +385,39 @@ describe('applyRunRows', () => {
     expect(rowAccepted(attachment({ thumbnail: new Uint8Array([3]) }))).toBe(
       false,
     );
+  });
+});
+
+describe('nextAttempt', () => {
+  // A run stopped at its retry prompt ends with the prompt cancelled, as its
+  // end cancels every open request. That cancel is no answer: read as one,
+  // every resume would end the run cancelled again before taking any input.
+  it('asks again about a retry prompt an earlier lifecycle cancelled', () => {
+    const asked: Invocation = {
+      current: {
+        ref: { invocationId: '0'.repeat(8), attempt: 1 },
+        sent: null,
+        providerResponseId: null,
+        accepted: null,
+        failed: {
+          error: { source: 'interrupted' },
+          next: { kind: 'ask', requestId: 'retry-1' },
+        },
+        closed: false,
+      },
+      earlier: [],
+    };
+    const cancelledAt = (decidedAt: number) =>
+      ({
+        'retry-1': {
+          decision: { action: 'cancel', cause: 'The run ended.' },
+          decidedAt,
+        },
+        // cast: the rule reads a request's decision and when it was made.
+      }) as unknown as RunRowState['requests'];
+    // Cancelled at seq 5; the run was activated again at seq 9.
+    expect(nextAttempt(asked, cancelledAt(5), 0, 9).kind).toBe('reask');
+    // Cancelled by the person while this activation (seq 9) held the run.
+    expect(nextAttempt(asked, cancelledAt(12), 0, 9).kind).toBe('cancel');
   });
 });

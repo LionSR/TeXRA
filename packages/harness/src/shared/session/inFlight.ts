@@ -196,7 +196,7 @@ export interface RetryCredentials {
  * What an invocation does next: `send` a new attempt (`retry`: after a
  * person's answer or a declined route, which rebinds first), `observe` the accepted background
  * operation, ask again (`reask`) about an attempt whose outcome no row
- * recorded, `await` the answer to the open retry request, or end it
+ * recorded or whose retry request an earlier lifecycle cancelled, `await` the answer to the open retry request, or end it
  * (`fail`, `cancel`).
  */
 export type NextAttempt =
@@ -222,7 +222,8 @@ const spentRetries = (failures: readonly (Failure | null)[]): number =>
 
 /**
  * What `invocation` does next (null: a new one), from its rows, the run's
- * `requests` and the driver's automatic `retries`. An attempt no row saw end
+ * `requests`, the driver's automatic `retries` and the `seq` of the run's
+ * latest activation (`activatedAt`). An attempt no row saw end
  * spends a retry (a `closed` one none); past them, a person is asked before
  * it is resent, as they are about any attempt once they allowed one of the
  * invocation. An accepted background operation is observed, never resubmitted.
@@ -231,6 +232,7 @@ export function nextAttempt(
   invocation: Invocation | null,
   requests: RunRowState['requests'],
   retries: number,
+  activatedAt: number | null,
 ): NextAttempt {
   if (invocation === null) return SEND;
   const { current, earlier } = invocation;
@@ -278,8 +280,17 @@ export function nextAttempt(
           },
         };
       }
-      return decision.action === 'deny'
-        ? { kind: 'fail', error: failed.error }
+      if (decision.action === 'deny')
+        return { kind: 'fail', error: failed.error };
+      // A cancel from before this activation is not the person's answer to
+      // this owner: a run's end cancels every request it leaves open, and a
+      // person's cancel ended the lifecycle it was given in. Read as an
+      // answer, it would end every resume before the run took any input.
+      const decidedAt = request?.decidedAt ?? null;
+      return activatedAt !== null &&
+        decidedAt !== null &&
+        decidedAt < activatedAt
+        ? { kind: 'reask', attempt: current }
         : { kind: 'cancel' };
     }
   }
