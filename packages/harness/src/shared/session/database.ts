@@ -201,7 +201,7 @@ export type SessionOpenError =
   | SessionOptionsConflict;
 
 /** A read of committed events. */
-export type EventsRead = Effect.Effect<
+type EventsRead = Effect.Effect<
   readonly SessionRow[],
   DatabaseReadFailed
 >;

@@ -47,7 +47,7 @@ export const followUpServices = Effect.map(
  *   store), which says nothing about the run itself.
  * - `notParent`: the sender is not the run's parent.
  */
-export type FollowUpFailureReason =
+type FollowUpFailureReason =
   | ResumeRefusal['kind']
   | 'readFailed'
   | 'notParent';
