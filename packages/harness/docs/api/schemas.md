@@ -403,7 +403,8 @@ class Cancelled extends Schema.TaggedError<Cancelled>()(
 
 ## causeChain
 
-`err` followed by its `cause` chain, outermost first; an
+`err` followed by its `cause` chain, outermost first; a `Cause` reads as
+the error it raised; an
 `AggregateError`'s `errors` follow it before its cause, and an error
 whose `reason` carries the cause (a `PlatformError`, a `SqlError`) is
 followed by that cause. Shared traversal for messages and for
@@ -665,7 +666,8 @@ function emptyRunEndOutput(): RunEndOutput
 
 ## ensureError
 
-Coerce any thrown value to an Error instance.
+Coerce any thrown value, or the `Cause` of a failed Effect, to an Error
+instance.
 
 ```ts
 function ensureError(err: unknown): Error
