@@ -543,6 +543,11 @@ export class SessionRunRegistry implements RunsShape {
     // said: the run reads as interrupted at its next open.
     const stopRows = (reason: RunStopReason, end: boolean) =>
       this.inSession(stopRun(runId, reason, end)).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning(
+            `Run ${runId}: the stop asked as it opened was not recorded`,
+          ).pipe(Effect.annotateLogs({ data: cause })),
+        ),
         // Then the runs held under it, as a stop of a running run does: a
         // parent resumed by a child's delivery has children running while
         // it opens.
@@ -553,7 +558,7 @@ export class SessionRunRegistry implements RunsShape {
         ),
         Effect.catchCause((cause) =>
           Effect.logWarning(
-            `Run ${runId}: the stop asked as it opened was not recorded`,
+            `Run ${runId}: the stop asked as it opened did not reach the runs under it`,
           ).pipe(Effect.annotateLogs({ data: cause })),
         ),
       );
