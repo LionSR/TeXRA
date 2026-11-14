@@ -5,13 +5,14 @@
  * 2. Attaches a `SessionHost` (`session.attach({ approve })`) that inspects
  *    `PendingRequest` and approves the tool call.
  * 3. Starts an `interactive: true` run, waits for its first cycle to reach
- *    `waiting`, sends a follow-up under an id of its own via
- *    `session.request({ kind: 'followUp.send' })`, waits for that follow-up's
- *    receipt to say it was answered (`followUp.receipt`), and stops the
- *    interactive run cleanly via `session.request({ kind: 'run.stop' })`,
- *    after which its `result` is the `cancelled` end it stored.
+ *    `waiting`, sends a follow-up via
+ *    `session.request({ kind: 'followUp.send' })`, waits for the run to wait
+ *    again (a new `forkPoint`: the turn that took the follow-up ended), and
+ *    stops the interactive run cleanly via
+ *    `session.request({ kind: 'run.stop' })`, after which its `result` is
+ *    the `cancelled` end it stored.
  */
-import { Effect, Layer, Schema, Stream } from 'effect';
+import { Effect, Layer, Option, Schema, Stream } from 'effect';
 import { Sessions } from '@texra-ai/harness';
 import {
   definePlugin,
@@ -88,38 +89,35 @@ const program = Effect.gen(function* () {
     interactive: true,
   });
 
-  // Wait for the first interactive cycle to pause for user input
-  yield* Stream.runHead(
+  // Wait for the first interactive cycle to pause for user input. The run's
+  // `forkPoint` is the seq of its newest wait.
+  const firstWait = yield* Stream.runHead(
     Stream.filter(
       run.view,
       (view) => view.runs.get(run.runId)?.position === 'waiting',
     ),
   );
+  const waitedAt = Option.getOrThrow(firstWait).runs.get(run.runId)?.forkPoint;
   console.log('[04] cycle 1 status=waiting');
 
-  // Send a follow-up under an id of our own: a retry under the same id
-  // answers with this message's receipt instead of sending it twice.
+  // Send a follow-up: the live run reads it at once.
   const followUpOutcome = yield* session.request({
     kind: 'followUp.send',
     runId: run.runId,
-    id: 'tag-release',
     text: 'Tag release v1.',
   });
-  console.log(
-    `[04] followUp ${followUpOutcome.id}: ${followUpOutcome.receipt.state}`,
-  );
+  console.log(`[04] followUp ${followUpOutcome.status}`);
 
-  // Wait for the turn that takes the follow-up to answer it
-  const { receipt } = yield* session.request({
-    kind: 'followUp.receipt',
-    runId: run.runId,
-    id: 'tag-release',
-    wait: true,
-  });
-  if (receipt.state !== 'answered') {
-    throw new Error(`Expected the follow-up answered, got ${receipt.state}`);
-  }
-  console.log(`[04] followUp answered by turn ${receipt.turn}`);
+  // Wait for the turn that takes the follow-up to end: the run waits again,
+  // at a later seq.
+  const secondWait = yield* Stream.runHead(
+    Stream.filter(
+      run.view,
+      (view) => view.runs.get(run.runId)?.forkPoint !== waitedAt,
+    ),
+  );
+  const answered = Option.getOrThrow(secondWait).runs.get(run.runId);
+  console.log(`[04] followUp answered by turn ${answered?.turn}`);
 
   // Stop the interactive run cleanly; `run.stop` awaits settlement
   yield* session.request({

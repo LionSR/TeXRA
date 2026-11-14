@@ -121,8 +121,8 @@ All notable changes to this project will be documented in this file.
   `RuntimeRequest` is `RuntimeCommand`; `session.request` keeps its name.
   The stored `request.*` rows and their `kind` values are unchanged.
 - **SDK: `session.request` fails with the runtime's own errors.**
-  `RequestErrorSchema` is `RunActive`, `Unavailable`, `Cancelled`,
-  `Rejected` and `Conflict`. `Invalid` and `Internal`, which only a bridge
+  `RequestErrorSchema` is `RunActive`, `Unavailable`, `Cancelled` and
+  `Rejected`. `Invalid` and `Internal`, which only a bridge
   between processes raised, are gone, and so are `HostRequestFailure`,
   `RequestRefusal` and `isRequestRefusal`.
 - **SDK: a launch's approval is one value.** `session.start`'s `approval`
@@ -1220,22 +1220,6 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- **SDK: a message to a run carries the caller's id, and its receipt says
-  what became of it.**
-  - `followUp.send` takes an optional `id` and answers with that id and
-    the message's receipt.
-  - A retry under the same id answers with the first send's receipt instead
-    of sending the message twice. That holds after a lost reply, and after
-    the run stopped taking input.
-  - A different message under that id fails with `Conflict`.
-  - `followUp.receipt`, with `wait: true` to wait, reads the receipt from
-    the run's rows. It is one of: `accepted`; `incorporated` into a turn;
-    `answered`; or `unanswered`, with why. Why is one of: the turn failed,
-    the run ended first, or the message left the queue unread.
-  - The harness examples wait on the receipt instead of counting model
-    calls.
-  - A turn's end position records the turn's outcome (`run.position` v2), so
-    a run an earlier build wrote reads as that build's.
 - **Long Claude runs start answering sooner.** On Anthropic's own API,
   each request after the first now sends only the new messages and the id
   of the previous response (message threads, beta), instead of the whole

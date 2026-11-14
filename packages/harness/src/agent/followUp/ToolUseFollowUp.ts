@@ -10,7 +10,6 @@ import { withLogChannel } from '@logger/effectLog';
 import { type ResumeRefusal, type RunId } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { withPerKeyLane } from '@utils/core/perKeyQueue';
-import { sentBefore } from './followUpMessages';
 import { Inbox, type InboxItem } from './Inbox';
 
 /** What a follow-up's admission and its wake read of the session. */
@@ -209,8 +208,6 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   // run's messages commit in call order; the wake runs after, so a send that
   // resumes the run does not hold later sends for the resumed turn.
   const sent = yield* Effect.gen(function* () {
-    if (yield* sentBefore(runId, item, hold, attach))
-      return { status: 'sent' } as const;
     // A run that takes no input (a process run, a one-shot root) reads
     // none, live or resumed: nothing would read the row.
     // Still the view's answer, and so unsettled: a run the view has not

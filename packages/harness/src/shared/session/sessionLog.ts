@@ -73,7 +73,7 @@ export interface SessionLogShape {
   now(): CommitOrdinal;
   /** A run's history rows, the kinds its state reads, in seq order; with
    *  `fromSeq`, only those from that seq on; with `types`, those kinds
-   *  instead (what one input became: `RECEIPT_ROW_TYPES`). */
+   *  instead. */
   history(
     id: AggregateId,
     fromSeq?: number,
