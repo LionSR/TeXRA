@@ -129,7 +129,7 @@ export const owningCall = Effect.fn('owningCall')(function* (runId: RunId) {
 /** The unended children `runId`'s open calls own, from its history and
  *  their own rows. Unloadable, it names no calls: every child it launched
  *  (the listing's `launch.id`) is owned, loudly. */
-export const openOwnedChildren = Effect.fn('openOwnedChildren')(function* (
+const openOwnedChildren = Effect.fn('openOwnedChildren')(function* (
   runId: RunId,
 ) {
   const log = yield* SessionLog;

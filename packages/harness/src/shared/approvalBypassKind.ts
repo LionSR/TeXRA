@@ -64,7 +64,7 @@ const STRICTNESS: Readonly<Record<ApprovalPolicy, number>> = {
 };
 
 /** The stricter of two policies (`never` < `ask` < `yolo`). */
-export function stricterPolicy(
+function stricterPolicy(
   a: ApprovalPolicy,
   b: ApprovalPolicy,
 ): ApprovalPolicy {

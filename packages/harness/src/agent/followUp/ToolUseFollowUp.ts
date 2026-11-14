@@ -14,7 +14,7 @@ import { sentBefore } from './followUpMessages';
 import { Inbox, type InboxItem } from './Inbox';
 
 /** What a follow-up's admission and its wake read of the session. */
-export type FollowUpServices =
+type FollowUpServices =
   | Inbox
   | Runs
   | RunRegistry
@@ -24,7 +24,7 @@ export type FollowUpServices =
 
 /** The caller's {@link FollowUpServices}, for a run's inbox kept past the
  *  caller's fiber ({@link runInbox}). */
-export const followUpServices = Effect.map(
+const followUpServices = Effect.map(
   Effect.context<FollowUpServices>(),
   Context.pick(
     Inbox,

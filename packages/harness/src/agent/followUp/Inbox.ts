@@ -38,7 +38,7 @@ const CLOSED = Object.freeze({
   reason: 'notResumable',
 } as const);
 /** The session doors the inbox works through (the session layer wires them). */
-export interface InboxPort {
+interface InboxPort {
   /** The session's log: a send is one transaction. */
   readonly log: Pick<
     SessionLogShape,
