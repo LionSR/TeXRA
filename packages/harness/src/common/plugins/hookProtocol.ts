@@ -15,6 +15,7 @@ import type {
   HookOutcomePayload,
   HookStatus,
 } from '@shared/schemas';
+import { NonNegativeIntSchema } from '@shared/schemas';
 
 // --------------------------------------------------------------------- input
 
@@ -54,9 +55,7 @@ const HookInputSchema = Schema.Union([
     tool_input: Schema.Unknown,
     tool_response: Schema.Unknown,
     tool_use_id: Schema.String,
-    duration_ms: Schema.optional(
-      Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-    ),
+    duration_ms: Schema.optional(NonNegativeIntSchema),
   }),
   Schema.Struct({
     ...CommonInput,

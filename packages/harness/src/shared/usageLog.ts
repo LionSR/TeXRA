@@ -6,6 +6,7 @@ import {
   AGENT_SOURCE,
   UsageRouteSchema,
   type AgentSource,
+  NonNegativeIntSchema,
 } from '@shared/schemas';
 
 /**
@@ -20,7 +21,7 @@ export function usageAgentName(
   return source === AGENT_SOURCE.BUILT_IN ? name : 'custom';
 }
 
-const Count = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+const Count = NonNegativeIntSchema;
 const Text = Schema.String.check(Schema.isMinLength(1));
 
 /**

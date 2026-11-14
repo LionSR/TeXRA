@@ -29,6 +29,7 @@ import {
   RunIdSchema,
   toErrorMessage,
   type FileLocation,
+  NonNegativeIntSchema,
 } from '@texra-ai/harness/schemas';
 import replacementEngine, {
   logReplacementDiagnostics,
@@ -68,9 +69,7 @@ import {
 } from '@texra/shared/settings/documentsSettings';
 
 /** A revision of a document task, by its zero-based index. */
-export const RevisionSchema = Schema.Int.check(
-  Schema.isGreaterThanOrEqualTo(0),
-).annotate({
+export const RevisionSchema = NonNegativeIntSchema.annotate({
   description: 'The revision, from 0, in the order the task runs them.',
 });
 

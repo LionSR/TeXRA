@@ -33,6 +33,7 @@ import {
 import { executed } from '@tools/core/result';
 
 import { defineTool } from '../core/definition';
+import { timeoutMsField } from '../core/inputSchema';
 import { launchBackgroundScript } from './backgroundScript';
 import { declarationOf, globalDeclarationOf } from './declarations';
 import { describeTool, searchTools } from './discovery';
@@ -53,13 +54,7 @@ const ScriptInputSchema = Schema.Struct({
     description:
       'Run the script as a background run of its own: the call returns its run id at once, and the result and a summary arrive as one follow-up when it ends. A one-shot run runs it in the foreground.',
   }),
-  timeoutMs: Schema.optional(
-    Schema.NullOr(
-      Schema.Int.check(Schema.isGreaterThanOrEqualTo(1000)).check(
-        Schema.isLessThanOrEqualTo(24 * 60 * 60 * 1000),
-      ),
-    ),
-  ).annotate({
+  timeoutMs: timeoutMsField.annotate({
     description:
       'Wall-clock limit in milliseconds, tool calls included: 1 s to 24 h, default 60 min.',
   }),

@@ -5,6 +5,7 @@
  * hook again (`2026-09-28-code-plugins-hooks-v1.md`).
  */
 import { Schema } from 'effect';
+import { NonNegativeIntSchema } from './nonNegativeInt';
 
 /** The hook events the harness runs in v1; the protocol module parses the
  *  rest of the reference's events and ignores them. */
@@ -42,7 +43,7 @@ export const HookOutcomePayloadSchema = Schema.Struct({
   plugin: Schema.String.check(Schema.isMinLength(1)),
   /** The handler's position in the plugin's hook configuration. */
   hook: Schema.String.check(Schema.isMinLength(1)),
-  durationMs: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  durationMs: NonNegativeIntSchema,
   status: HookStatusSchema,
   exitCode: Schema.NullOr(Schema.Int),
   /** What a `PreToolUse` hook said about the call: null when it gave no
