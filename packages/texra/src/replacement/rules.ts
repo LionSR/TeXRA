@@ -33,6 +33,9 @@ function generateReferenceSpacing(referenceTypes: string[]): PatternDict {
   });
 }
 
+/** The spellings of a blank line the line-break fixes collapse to one break. */
+const BLANK_LINES = ['\n\n', '\n    \n', '\n\t\n'];
+
 export const CHARACTER_REPLACEMENTS: PatternDict = {
   ansätze: 'ans{\\"a}tze',
   Rényi: "R{\\'e}nyi",
@@ -47,13 +50,11 @@ export const EQUATION_REPLACEMENTS: PatternDict = (() => {
   // Examples:
   // \n\n\end{align} -> \n\end{align}
   // \n    \n\end{aligned} -> \n\end{aligned}
-  const linebreakFixesPatterns = createPatterns(
-    'align aligned'.split(' '),
-    (env) => [
-      [`\n\n\\end{${env}}`, `\n\\end{${env}}`],
-      [`\n    \n\\end{${env}}`, `\n\\end{${env}}`],
-      [`\n\t\n\\end{${env}}`, `\n\\end{${env}}`],
-    ],
+  const linebreakFixesPatterns = createPatterns(['align', 'aligned'], (env) =>
+    BLANK_LINES.map((blank): [string, string] => [
+      `${blank}\\end{${env}}`,
+      `\n\\end{${env}}`,
+    ]),
   );
 
   // ===== Reference formatting =====
@@ -98,8 +99,8 @@ export const EQUATION_REPLACEMENTS: PatternDict = (() => {
     // Formatting commands
     ...`
       mathbf mathbb mathcal mathscr bm
-      sum prod lim infty rightarrow leftarrow Rightarrow
-      Leftarrow exists forall der partial Delta Gamma Lambda Sigma Omega
+      sum prod infty rightarrow leftarrow Rightarrow
+      Leftarrow exists forall der
     `
       .trim()
       .split(/\s+/),
@@ -510,15 +511,16 @@ export const LATEX_XML_REPLACEMENTS: PatternDict = (() => {
   };
 })();
 
-export const LATEXDIFF_REPLACEMENTS: PatternDict = {
-  // Fix issues with latexdiff markup and excessive newlines
-  '\n\n}\\end{align*}%DIFAUXCMD': '\n}\\end{align*}%DIFAUXCMD',
-  '\n    \n}\\end{align*}%DIFAUXCMD': '\n}\\end{align*}%DIFAUXCMD',
-  '\n\t\n}\\end{align*}%DIFAUXCMD': '\n}\\end{align*}%DIFAUXCMD',
-  '\n\n}\\end{aligned*}%DIFAUXCMD': '\n}\\end{aligned*}%DIFAUXCMD',
-  '\n    \n}\\end{aligned*}%DIFAUXCMD': '\n}\\end{aligned*}%DIFAUXCMD',
-  '\n\t\n}\\end{aligned*}%DIFAUXCMD': '\n}\\end{aligned*}%DIFAUXCMD',
-};
+// A blank line latexdiff leaves before the closing brace of a starred
+// environment: \n\n}\end{align*}%DIFAUXCMD -> \n}\end{align*}%DIFAUXCMD
+export const LATEXDIFF_REPLACEMENTS: PatternDict = createPatterns(
+  ['align*', 'aligned*'],
+  (env) =>
+    BLANK_LINES.map((blank): [string, string] => [
+      `${blank}}\\end{${env}}%DIFAUXCMD`,
+      `\n}\\end{${env}}%DIFAUXCMD`,
+    ]),
+);
 
 export const PERSONAL_STYLE_REPLACEMENTS: PatternDict = {
   // ===== Spacing preferences =====
