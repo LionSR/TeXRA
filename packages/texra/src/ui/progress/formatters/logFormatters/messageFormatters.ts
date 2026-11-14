@@ -18,7 +18,7 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports - shared schemas and utilities
-import { errorRowText, quotaFallbackNoticeText } from '@ui/copy/modelAccess';
+import { errorRowText } from '@ui/copy/modelAccess';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
@@ -69,10 +69,7 @@ export function formatProgressStatusTemplate(
   row: ProgressStatusRow,
 ): FormatResult {
   const { level, id, timestamp } = row;
-  const summaryText =
-    row.quotaFallback === undefined
-      ? row.summary.full
-      : quotaFallbackNoticeText(row.quotaFallback);
+  const summaryText = row.summary.full;
 
   // prettier-ignore
   return html`<div

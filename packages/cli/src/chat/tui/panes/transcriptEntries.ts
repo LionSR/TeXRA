@@ -10,7 +10,7 @@ import {
 } from '@cli/runtime/terminal/ansiEscapes';
 import { safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
-import { errorRowText, quotaFallbackNoticeText } from '@ui/copy/modelAccess';
+import { errorRowText } from '@ui/copy/modelAccess';
 
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
 
@@ -109,11 +109,7 @@ function deriveTranscriptRowHeadline(row: TranscriptRow): string {
     case 'error':
       return safeTerminalText(errorRowText(row).summary);
     case 'progressStatus':
-      return safeTerminalText(
-        row.quotaFallback === undefined
-          ? row.summary.full
-          : quotaFallbackNoticeText(row.quotaFallback),
-      );
+      return safeTerminalText(row.summary.full);
     default:
       return rowHeadline(row);
   }

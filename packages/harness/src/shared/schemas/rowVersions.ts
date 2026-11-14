@@ -210,7 +210,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // names no answerer).
   // v12: a retry's failure has no `interrupted` source, as `model.message`
   // v18.
-  'request.opened': { version: 12, listing: 'request' },
+  // v13: a retry's credential switch has no `automatic`: a person takes
+  // every switch (an earlier build's flag would be silently dropped).
+  'request.opened': { version: 13, listing: 'request' },
   // v2: no `setup` arm; a proposal's approve may carry edited files,
   // instruction and options.
   'request.decided': { version: 2, listing: 'request' },
@@ -248,7 +250,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // build's error row would be refused as a damaged payload).
   // v9: an error row's model failure has no `interrupted` source, as
   // `model.message` v18.
-  log: { version: 9, listing: 'none' },
+  // v10: no `quotaFallback` message type: a used-up plan asks before the
+  // run moves off it (an earlier build's notice would fail as damaged).
+  log: { version: 10, listing: 'none' },
   // v2: no `phase` kind and no `index`/`total` (an earlier build's script
   // phase stage would fail its run as damaged rather than read as that
   // build's).
@@ -332,7 +336,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v18: a failure has no `interrupted` source: a resume sends an attempt
   // no row saw end again and asks nobody (an earlier build's question
   // about such an attempt would fail as damaged).
-  'model.message': { version: 18, listing: 'none' },
+  // v19: a failed attempt has no `next: decline`: a used-up plan opens the
+  // retry request, whose answer declines the route (an earlier build's
+  // row would fail as damaged).
+  'model.message': { version: 19, listing: 'none' },
   // v2: the causes are `compaction` and `fork` alone (an earlier build's edit
   // of another cause would fail its run as damaged rather than read as that
   // build's).

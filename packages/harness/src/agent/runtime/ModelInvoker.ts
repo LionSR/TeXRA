@@ -55,11 +55,9 @@ import {
   ModelAccess,
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
+import { credentialSwitch } from '@agent/runtime/modelAccess/routeDecision';
 import { RouteUnavailable } from '@common/errors/agentErrors';
-import {
-  modelFailureOf,
-  quotaFallbackMessage,
-} from '@common/errors/sdkError/providerErrorFormat';
+import { modelFailureOf } from '@common/errors/sdkError/providerErrorFormat';
 import { SessionRoots } from '@platform/rootedFs';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
@@ -550,9 +548,7 @@ export const modelInvokerLayer = (): Layer.Layer<
        * One that asks opens its retry request at the request door
        * (`openRequest`), its `failed` row beside it, with the credential
        * move a used-up `quota` offers and, where the policy answers at once,
-       * that answer, so no surface lists it pending. A used-up plan the
-       * route falls back from without asking asks nothing: its `failed` row
-       * declines the route (`next: decline`).
+       * that answer, so no surface lists it pending.
        */
       const commitFailed = Effect.fn('ModelInvoker.commitFailed')(function* (
         cell: RunCell,
@@ -562,7 +558,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         bound: BoundModel,
         usage: NormalizedUsage | null,
       ): Effect.fn.Return<void, CellError, SessionServices> {
-        const failedRow = (next: StepAfterFailure): RunHistoryDraft => ({
+        const failedRow: RunHistoryDraft = {
           type: 'model.message',
           aggregateId,
           payload: {
@@ -572,31 +568,10 @@ export const modelInvokerLayer = (): Layer.Layer<
             next,
             ...(usage === null ? {} : { usage }),
           },
-        });
+        };
         if (next.kind !== 'ask')
-          return yield* Effect.asVoid(cell.append([failedRow(next)]));
+          return yield* Effect.asVoid(cell.append([failedRow]));
         const { requestId } = next;
-        const credentialSwitch = yield* access.credentialSwitch(
-          bound,
-          error.source === 'model' ? error.quota : undefined,
-          (yield* cell.current).declinedRoutes,
-        );
-        if (
-          credentialSwitch?.kind === 'decline-route' &&
-          credentialSwitch.automatic
-        ) {
-          // Nobody is asked: the run declines the route and resends on the
-          // user's own key. The notice records the route; an app words it.
-          logger.info(quotaFallbackMessage(credentialSwitch), {
-            messageType: MESSAGE_TYPES.QUOTA_FALLBACK,
-            data: { route: credentialSwitch.route },
-          });
-          return yield* Effect.asVoid(
-            cell.append([
-              failedRow({ kind: 'decline', route: credentialSwitch.route }),
-            ]),
-          );
-        }
         yield* openRequest(
           { runId, append: (rows) => cell.append(rows) },
           {
@@ -607,10 +582,13 @@ export const modelInvokerLayer = (): Layer.Layer<
               operation: 'Model request',
               model: bound.modelId,
               failure: error,
-              credentialSwitch,
+              credentialSwitch: credentialSwitch(
+                bound,
+                error.source === 'model' ? error.quota : undefined,
+              ),
             },
           },
-          { beside: [failedRow(next)] },
+          { beside: [failedRow] },
         );
       });
 

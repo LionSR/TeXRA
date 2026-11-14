@@ -170,9 +170,9 @@ function movedBy(
   }
 }
 
-/** The credentials a retry is sent on, and the route it declines: a
- *  person's answer (personal credentials decline the route its request
- *  offered to switch off), or an automatic decline. */
+/** The credentials a person's retry is sent on, and the route it declines:
+ *  personal credentials decline the route its request offered to switch
+ *  off. */
 export interface RetryCredentials {
   readonly credentials: NonNullable<
     Extract<RequestDecision, { action: 'retry' }>['credentials']
@@ -182,9 +182,9 @@ export interface RetryCredentials {
 
 /**
  * What an invocation does next: `send` a new attempt (`retry`: after a
- * person's answer or a declined route, which rebinds first), `observe` the
- * accepted background operation, `await` the answer to the open retry
- * request, or end it (`fail`, `cancel`).
+ * person's answer, which rebinds first), `observe` the accepted background
+ * operation, `await` the answer to the open retry request, or end it
+ * (`fail`, `cancel`).
  */
 export type NextAttempt =
   | { readonly kind: 'send'; readonly retry: RetryCredentials | null }
@@ -229,11 +229,6 @@ export function nextAttempt(
       return SEND;
     case 'stop':
       return { kind: 'fail', error: failed.error };
-    case 'decline':
-      return {
-        kind: 'send',
-        retry: { credentials: 'personal', declines: failed.next.route },
-      };
     case 'ask': {
       const { requestId } = failed.next;
       const request = requests[requestId];

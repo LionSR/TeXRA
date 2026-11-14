@@ -83,7 +83,7 @@ export function reasonPhrase(statusCode: number): string | undefined {
  * own reads what ran out. An app's switch and sign-in labels are its copy,
  * worded from the same facts where it shows them.
  */
-export const planOwner = (plan: DeclinableUsageRoute): string =>
+const planOwner = (plan: DeclinableUsageRoute): string =>
   providerDisplayName(PLAN_ROUTES[plan].provider);
 
 /**
