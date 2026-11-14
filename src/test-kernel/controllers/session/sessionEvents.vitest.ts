@@ -375,6 +375,51 @@ describe('session events and view', () => {
     ),
   );
 
+  // No table stores a priced row's `usage` row: a display read takes it off
+  // the priced row's stored JSON, so that read must agree with the codec.
+  it.effect('reads a priced row back with its usage row, cold', () =>
+    Effect.gen(function* () {
+      const db = yield* Database;
+      const rows = yield* db.readDisplay(0).pipe(
+        Stream.runCollect,
+        Effect.map((pages) => [...pages].flat()),
+      );
+      expect(rows.map((row) => [row.type, row.commit])).toEqual([
+        ['run.start', 1],
+        ['run.description', 2],
+        ['usage', 2],
+      ]);
+      expect(rows.at(-1)).toMatchObject({
+        usage: { inputTokens: 3, outputTokens: 4, cost: 0.5 },
+      });
+      expect(rows.at(-1)).not.toHaveProperty('usage.provider');
+      const view = yield* SessionViewService;
+      yield* settle(view.ref, (v) => v.runs.has(RUN));
+      expect(
+        (yield* SubscriptionRef.get(view.ref)).runs.get(RUN)?.usage.cost,
+      ).toBe(0.5);
+    }).pipe(
+      Effect.provide(
+        graph([
+          runStartRow,
+          {
+            type: 'run.description',
+            aggregateId: qualifyAggregateId('run', RUN),
+            description: 'A title',
+            by: 'model',
+            usage: {
+              inputTokens: 3,
+              outputTokens: 4,
+              cost: 0.5,
+              responseTimeMs: 12,
+              provider: 'openai-responses',
+            },
+          },
+        ]),
+      ),
+    ),
+  );
+
   it.effect('commits a detached job before the call returns', () =>
     Effect.gen(function* () {
       const events = yield* SessionEvents;

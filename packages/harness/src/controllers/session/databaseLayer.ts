@@ -87,8 +87,7 @@ import {
   AGGREGATE,
   callCard,
   DISPLAY_READ_TYPES,
-  PROJECTED_COLUMNS,
-  PROJECTED_FROM,
+  USAGE_ROWS,
   READ_LISTING,
   READ_RUN_RECORD,
   rowReader,
@@ -154,8 +153,8 @@ const DISPLAY_PAGE_END = `SELECT "commit" AS through FROM event
   WHERE "commit" > ? ORDER BY "commit" LIMIT 1 OFFSET ${DISPLAY_PAGE_ROWS - 1}`;
 
 /**
- * The one display union: the `event` rows of the types bound first, every
- * projected row, and an optional further arm, narrowed by `where` over the
+ * The one display union: the `event` rows of the types bound first, the
+ * `usage` row of every priced row, and an optional further arm, narrowed by `where` over the
  * union's columns (`"commit"`, `kind`, `logicalId`, `seq`), which SQLite
  * pushes into each arm, so a range binds once.
  */
@@ -163,7 +162,7 @@ const displayUnion = (where: string, order: string, arm?: string) =>
   `SELECT * FROM (
     SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
       WHERE e.type IN (SELECT value FROM json_each(?))
-    UNION ALL SELECT ${PROJECTED_COLUMNS} FROM ${PROJECTED_FROM}
+    UNION ALL ${USAGE_ROWS}
     ${arm === undefined ? '' : `UNION ALL ${arm}`}
   ) WHERE ${where} ORDER BY ${order}`;
 /** What a display read shows of one decoded row: a display row itself, a
