@@ -69,35 +69,42 @@ function emptyReport(ctx: RunLaunch, outcome: RunOutcome): RunReport {
   return misses.length > 0 ? { ...report, memoryMisses: misses } : report;
 }
 
+/** The outcome and error a run's end commits ({@link commitEnd}). */
+type ResolvedEnd = Pick<RunEnding, 'outcome' | 'error'>;
+
 /**
  * The one end both run programs commit, from the verdict each reached on
  * its own (`ending`): rows the store refused (`log.lost`) fail the run
- * unless a stop ended it, whoever ends it; the `run.end` commits in one
- * transaction with everything the end decides (`endRunRows`), the report
- * `report` builds for the outcome it commits among them; an end the store
- * refused fails the fiber once, logged, and the run reads as interrupted
- * at its next open; and a stop stays the fiber's exit once the end
- * committed. Uninterruptible: a stop lands before this or after its row,
- * never inside.
+ * unless a stop ended it, whoever ends it, and are its error unless it has
+ * one of its own; the `run.end` commits in one transaction with everything
+ * the end decides (`endRunRows`), the report `report` builds for the
+ * outcome and error it commits among them; an end the store refused fails
+ * the fiber once, logged, and the run reads as interrupted at its next
+ * open; and a stop stays the fiber's exit once the end committed.
+ * Uninterruptible: a stop lands before this or after its row, never
+ * inside.
  */
 export const commitEnd = Effect.fn('commitEnd')(function* (
   exit: Exit.Exit<unknown, Error>,
   ending: Omit<RunEnding, 'report'>,
   report: (
-    outcome: RunOutcome,
+    end: ResolvedEnd,
   ) => Effect.Effect<RunEnding['report'], Error, AgentRunServices>,
 ): Effect.fn.Return<void, Error, AgentRunServices> {
   const { runId } = ending;
   const lost = yield* (yield* SessionLog).lost(runId);
-  const outcome =
-    lost !== undefined && ending.outcome !== RUN_OUTCOME.CANCELLED
-      ? RUN_OUTCOME.FAILED
-      : ending.outcome;
+  const end: ResolvedEnd = {
+    outcome:
+      lost !== undefined && ending.outcome !== RUN_OUTCOME.CANCELLED
+        ? RUN_OUTCOME.FAILED
+        : ending.outcome,
+    error: ending.error ?? lost,
+  };
+  const { outcome } = end;
   const ended = yield* endRunRows({
     ...ending,
-    outcome,
-    error: lost ?? ending.error,
-    report: yield* report(outcome),
+    ...end,
+    report: yield* report(end),
   }).pipe(
     Effect.tapError((unsaved) =>
       logLifecycleWarning(`Run ${runId}: its end could not be saved`, {
@@ -195,17 +202,24 @@ export const endRun = Effect.fn('endRun')(function* (
     exit,
     { runId, outcome: verdict.outcome, error, output: carried?.output },
     // What the child tells its parent, from its report as the end resolves
-    // it; a report that cannot be built is the end's error, delivered as
-    // such rather than lost.
-    (outcome) =>
+    // it: the outcome the end commits, and the end's error where the run
+    // reported no failure of its own (rows the store refused). A report
+    // that cannot be built is the end's error, delivered as such rather
+    // than lost.
+    ({ outcome, error: ended }) =>
       childResult === undefined
         ? Effect.succeed(null)
         : Effect.gen(function* () {
             const record = yield* log.facts(runId);
             const wallTimeMs = (yield* Clock.currentTimeMillis) - ctx.startedAt;
+            const failure = childResult.failure ?? ended;
             return yield* childEndReport(
               ctx,
-              { ...childResult, outcome },
+              {
+                ...childResult,
+                outcome,
+                ...(failure !== undefined && { failure }),
+              },
               record,
               wallTimeMs,
             ).pipe(

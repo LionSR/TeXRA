@@ -4,7 +4,9 @@
  *
  * Failure modes:
  * - a process run whose output rows the store refused ends with its own
- *   verdict, where a native run whose rows the store refused ends failed.
+ *   verdict, where a native run whose rows the store refused ends failed;
+ * - its end says failed while its parent is delivered the turn's clean
+ *   result, and no view shows the loss.
  */
 import { layer } from '@effect/vitest';
 import { Context, Effect } from 'effect';
@@ -64,17 +66,24 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           );
           yield* Context.get(session, Runs).get(runId)?.drained ?? Effect.void;
 
-          const end = yield* getRunRecords(runId)
-            .readRunEnd()
-            .pipe(Effect.provide(session));
+          const records = getRunRecords(runId);
+          const end = yield* records.readRunEnd().pipe(Effect.provide(session));
           expect(end).toMatchObject({
             outcome: 'failed',
             error: {
+              kind: 'result-lost',
               message: expect.stringContaining(
                 'Rows this run published were not written',
               ),
             },
           });
+          // Its parent reads the same end: the delivery is an error, not
+          // the turn's clean result.
+          const report = yield* records
+            .readReport()
+            .pipe(Effect.provide(session));
+          expect(report).toContain('<background-error');
+          expect(report).toContain('Rows this run published were not written');
         }),
       );
     });
