@@ -195,13 +195,15 @@ export const sessionOwnersLayer = (
           aggregateState: database.aggregateState,
           removeRun: (id, expectedStartCommit) =>
             Effect.tap(store.removeRun(id, expectedStartCommit), (rows) =>
-              Effect.sync(() => {
-                for (const row of rows) {
-                  if (row.type !== 'run.removed') continue;
+              Effect.forEach(
+                rows,
+                (row) => {
+                  if (row.type !== 'run.removed') return Effect.void;
                   for (const runId of row.runIds) inbox.forget(runId);
-                  deletions.removed(row);
-                }
-              }),
+                  return deletions.removed(row);
+                },
+                { discard: true },
+              ),
             ),
         },
         plugins: yield* ToolRegistry,
