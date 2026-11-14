@@ -3,17 +3,15 @@
 // Third-party imports
 import { html, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
-import { when } from 'lit/directives/when.js';
 
 // Side-effect imports - register WA components used by this template
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
-import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
-import { describeLineChanges } from '@ui/copy/format';
+import { buildLineChangeStats } from '@ui/progress/formatters/htmlBuilders';
 
 // Local imports - shared helpers
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
@@ -26,7 +24,6 @@ import { BaseRequestPanel } from './BaseRequestPanel';
 // Local imports - styles
 import { toolEditRequestPanelStyles } from './ToolEditRequestPanel.styles';
 import type { RuntimeCommand } from '@texra-ai/harness/schemas';
-import { pluralize } from '@texra-ai/harness/schemas';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 @customElement('tool-edit-request-panel')
@@ -134,25 +131,7 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
   private renderDiffMeta(): TemplateResult {
     // `NonNegativeIntSchema` makes both counts required nonnegative integers.
     const { addedLines: added, removedLines: removed } = this.permission.data;
-    const total = added + removed;
-    const lineLabel = pluralize(total, 'line');
-
-    return html`
-      <span id="tool-edit-diff-summary" class="tool-edit__diff">
-        ${when(
-          added > 0,
-          () => html`<span class="tool-edit__diff-added">+${added}</span>`,
-        )}
-        ${when(
-          removed > 0,
-          () => html`<span class="tool-edit__diff-removed">-${removed}</span>`,
-        )}
-        <span class="tool-edit__diff-label">${total} ${lineLabel}</span>
-      </span>
-      <wa-tooltip for="tool-edit-diff-summary"
-        >${describeLineChanges({ added, removed })}</wa-tooltip
-      >
-    `;
+    return buildLineChangeStats({ added, removed });
   }
 
   // ===========================================================================

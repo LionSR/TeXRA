@@ -5,28 +5,20 @@ import { css, type CSSResult } from 'lit';
 import { sp } from '@ui/styles';
 
 export const toolEditRequestPanelStyles: CSSResult = css`
-  .tool-edit__diff {
+  /* The line-change chip (buildLineChangeStats). */
+  .file-stats {
     display: inline-flex;
     align-items: baseline;
     gap: ${sp.small};
+    font-size: var(--font-size-xs);
     font-variant-numeric: tabular-nums;
   }
 
-  .tool-edit__diff-added,
-  .tool-edit__diff-removed {
-    font-size: var(--font-size-xs);
-  }
-
-  .tool-edit__diff-added {
+  .file-stats > .added {
     color: var(--color-added);
   }
 
-  .tool-edit__diff-removed {
+  .file-stats > .removed {
     color: var(--color-removed);
-  }
-
-  .tool-edit__diff-label {
-    color: var(--color-text-muted);
-    font-size: var(--font-size-xs);
   }
 `;

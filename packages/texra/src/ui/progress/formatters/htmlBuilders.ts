@@ -4,7 +4,11 @@
  */
 
 // Third-party imports
-import { getBasename, type FileListEntry } from '@texra-ai/harness/schemas';
+import {
+  formatResultCount,
+  getBasename,
+  type FileListEntry,
+} from '@texra-ai/harness/schemas';
 import { html, nothing, type TemplateResult } from 'lit';
 import { classMap } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
@@ -18,7 +22,7 @@ import type { IconName } from '@ui/wa/iconNames';
 import { stopSpinnerMotion } from '@ui/wa/spinner';
 import { renderStatusBadge } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { describeLineChanges, formatMediaLabel } from '@ui/copy/format';
+import { formatMediaLabel } from '@ui/copy/format';
 
 // Side-effect import - register the <copy-button> element drawn below
 import '@ui/progress/components/CopyButton';
@@ -194,7 +198,7 @@ export function buildLineChangeStats(changes: {
   readonly removed: number;
 }): TemplateResult {
   // prettier-ignore
-  return html`<span class="file-stats"><span class="visually-hidden">${describeLineChanges(changes)}</span><span class="added" aria-hidden="true">+${changes.added}</span><span class="removed" aria-hidden="true">-${changes.removed}</span></span>`;
+  return html`<span class="file-stats"><span class="visually-hidden">${formatResultCount(changes.added, 'line')} added, ${formatResultCount(changes.removed, 'line')} removed</span><span class="added" aria-hidden="true">+${changes.added}</span><span class="removed" aria-hidden="true">-${changes.removed}</span></span>`;
 }
 
 /** Build the `<li>` rows for a file-list banner. The summary line above them
