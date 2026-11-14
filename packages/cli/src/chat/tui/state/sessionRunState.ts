@@ -200,8 +200,7 @@ export class TuiSession {
 
   /**
    * On exit, a tool-use session suspended at a wait (idle/WAITING) is not
-   * stopped the way a Ctrl-C stops a turn: the user's stop policy
-   * (`detachSubagentsOnStop`) does not apply, and the exit needs no second
+   * stopped the way a Ctrl-C stops a turn, and the exit needs no second
    * Ctrl-C. The session's close still ends the generation, which records its
    * terminal `run.end` as cancelled ("Stopped"): every activation ends with
    * one, and a run left without it would read as interrupted by a crash.

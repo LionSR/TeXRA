@@ -152,8 +152,8 @@ export interface RunEnding {
   /** A child's report: its delivery, kept rendered as the run's
    *  `run.report` (the envelope its parent's model reads) and queued typed
    *  on the parent's input unless the parent's call awaits the child (it
-   *  reads the report itself) or the child was detached. Null, or absent:
-   *  nothing to report (a stop, a root). */
+   *  reads the report itself). Null, or absent: nothing to report (a stop,
+   *  a root). */
   readonly report?: ChildRunDelivery | null;
   /** Rows committed ahead of the end (a process run's exit). */
   readonly leading?: readonly UnfoldedDraft[];

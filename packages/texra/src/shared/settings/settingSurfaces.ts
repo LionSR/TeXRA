@@ -25,7 +25,6 @@ import {
   type SettingRow,
   ALLOW_ORCHESTRATOR_KILL_SETTING,
   DASHSCOPE_REGION_SETTING,
-  DETACH_SUBAGENTS_ON_STOP_SETTING,
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
   GIT_AUTHOR_EMAIL_SETTING,
@@ -232,10 +231,6 @@ export const HARNESS_ROW_SURFACES: Readonly<
 
   // --- Agent coordination -----------------------------------------------------
   [ALLOW_ORCHESTRATOR_KILL_SETTING.key]: {
-    category: 'agents',
-    ...AGENTS_AND_CLI,
-  },
-  [DETACH_SUBAGENTS_ON_STOP_SETTING.key]: {
     category: 'agents',
     ...AGENTS_AND_CLI,
   },

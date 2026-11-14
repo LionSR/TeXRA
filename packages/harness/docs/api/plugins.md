@@ -464,8 +464,8 @@ interface ChildRunsShape {
   ) => Effect.Effect<RunId, Error, ToolContext | RunServices>;
   /** The run's input: what a tool sends it, and when it takes no more. */
   readonly inbox: (runId: RunId) => Effect.Effect<RunInbox, Error>;
-  /** Its attached parent as the rows record it (`run.start`, then a
-   *  `run.detach`): null for a root, or a run that is not there. */
+  /** Its parent as the rows record it (`run.start`): null for a root, or
+   *  a run that is not there. */
   readonly parent: (runId: RunId) => Effect.Effect<RunId | null, Error>;
   /** Its records: whether the store still lists it, and its terminal
    *  result (null before it ends). */

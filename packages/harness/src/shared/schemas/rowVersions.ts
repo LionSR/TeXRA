@@ -69,6 +69,9 @@ export const RETIRED_ROW_KINDS: ReadonlyMap<string, 'display' | 'execution'> =
     ['model.retry', 'execution'],
     // A document round's outputs: the run's files.
     ['output.produced', 'execution'],
+    // A child's parent edge severed by its parent's stop, which decided
+    // where its end delivered and the grants it kept.
+    ['run.detach', 'execution'],
     // A goal run's plan.
     ['run.fact', 'execution'],
     // The loop state a resume continued from.
@@ -135,7 +138,6 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v7: the app's launch facts are an opaque `launch` record, not a `cli`
   // block (an earlier build's team and output fields would be dropped).
   'run.config': { version: 7, listing: 'own' },
-  'run.detach': { ...V1, listing: 'own' },
   'run.stop': { ...V1, listing: 'own' },
   // v2: a recipe's value is `structured`, with no `documents`.
   // v3: the error's classification as `model.message` v9.

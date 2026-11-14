@@ -358,7 +358,7 @@ export function createChatSessionController(
 
   // One interaction host for the chat session's lifetime, as the extension
   // and desktop attach theirs. The session routes every request to its last
-  // attachment, so a detached child of an earlier turn keeps an answerable
+  // attachment, so a background child of an earlier turn keeps an answerable
   // approval path after its root finalizes, with no per-turn generation.
   const presentationHost = createCliRuntimeHost(sessionContext);
   runtime.runSync(
@@ -727,10 +727,8 @@ export function createChatSessionController(
 
   /** A stop lands on the root the session holds. One asked while a launch
    *  is still entering the session waits for it, then lands on the run that
-   *  launch reached (a stop of a run that already ended is a no-op).
-   *  Ctrl-C leaves the child policy unset, so the stop itself (`Runs.stop`)
-   *  applies the configured "Keep agents running"; why the run then stops
-   *  is the run registry's fact. */
+   *  launch reached (a stop of a run that already ended is a no-op). Why
+   *  the run then stops is the run registry's fact. */
   const stop = (reason: RunStopReason): void => {
     // A chat of the background service leaves its task running when the
     // terminal goes: only the user's own stop reaches it.

@@ -33,24 +33,12 @@ import { stopRun } from '@agent/storage/runLifecycle';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
-import {
-  grantSource,
-  grantsKept,
-  type ApprovalGrants,
-} from '@shared/approvalBypassKind';
-import { Settings } from '@shared/config/settings';
-import { ancestryRows } from '@shared/session/runRelation';
-import {
-  qualifyAggregateId,
-  type RunId,
-  type RunStopReason,
-} from '@shared/schemas';
+import type { RunId, RunStopReason } from '@shared/schemas';
 import type { SessionLog } from '@shared/session/runHistory';
 
 import type { LiveRun, RunControls, RunsShape } from './runs';
 import type { RunServices } from './ToolServices';
 import type { SessionServices } from './rootLaunch';
-import { DETACH_SUBAGENTS_ON_STOP_SETTING } from '@shared/state/stateSettings';
 
 /** A launch already has the run here: the one refusal for that fact. Hosts
  *  word it from `message`; a resume reads the tag to report the run
@@ -75,12 +63,12 @@ type CapturedServices = Exclude<AgentRunServices, Runs | RunRegistry>;
 /** What the session hands its runs. They read a run's parent from the
  *  session's log and keep no copy of their own. */
 export interface RunRegistryInit {
-  /** The session's log: each run's parent edge and its detach batch. */
+  /** The session's log: each run's parent edge. */
   readonly log: SessionLog['Service'];
   /** Tell the session's view which runs are driven here (`runsHere`),
    *  called with the whole set as a fiber is forked or exits. */
   readonly runsHere: (runIds: readonly RunId[]) => void;
-  /** The session's roots: the stop policy's setting slots. */
+  /** The session's roots: the workspace a launch's environment reads. */
   readonly roots: WorkspaceRoots;
   /** Run `effect` in the caller's fiber on the session's context, never
    *  the caller's: a launch's opening, a stop's rows, a resume's decision.
@@ -235,14 +223,6 @@ export class SessionRunRegistry implements RunsShape {
       () => this.liveRun(runId)?.drained ?? Effect.void,
     );
     return { runId, controls: undefined, drained };
-  }
-
-  /** The children one parent's detach covers: each run held here whose
-   *  edge names the parent. */
-  private childRunIds(parentRunId: RunId): Effect.Effect<readonly RunId[]> {
-    return this.heldWhere((id) =>
-      Effect.map(this.attachedParent(id), (parent) => parent === parentRunId),
-    );
   }
 
   /** The runs held here that `matches`, read from the store. The reads
@@ -593,11 +573,9 @@ export class SessionRunRegistry implements RunsShape {
   }
 
   /**
-   * Stop a run (`RunsShape.stop` says what each reason does to its
-   * children). Its `run.stop` row first, so a child registering under it
-   * meanwhile is refused (`registrationRows`) and none escapes; then every
-   * run held here under it, at any depth (a user's stop detaches its
-   * children instead when "Keep agents running" is on); then the
+   * Stop a run (`RunsShape.stop`). Its `run.stop` row first, so a child
+   * registering under it meanwhile is refused (`registrationRows`) and none
+   * escapes; then every run held here under it, at any depth; then the
    * interruption of the fiber driving it here. A run no fiber drives here
    * gets its end in the same batch as the stop. A run still opening takes
    * the stop once its opening committed: its start forks it and interrupts
@@ -658,25 +636,16 @@ export class SessionRunRegistry implements RunsShape {
     });
   }
 
-  /** What a stop of `runId` does to the runs held here under it: a user's
-   *  stop detaches its children while "Keep agents running" is on; any
-   *  other stop ends every run under it, at any depth. */
+  /** A stop of `runId` stops every run held here under it, at any depth. */
   private stopUnder(
     runId: RunId,
     reason: RunStopReason,
   ): Effect.Effect<void, Error> {
-    return Effect.gen({ self: this }, function* () {
-      const detach =
-        reason === 'user' &&
-        (yield* Settings.get(
-          this.init.roots,
-          DETACH_SUBAGENTS_ON_STOP_SETTING,
-        ));
-      if (detach) yield* this.detachActiveChildren(runId);
-      else
-        for (const id of yield* this.heldUnder(runId))
-          yield* this.stopHeld(id, reason);
-    });
+    return Effect.flatMap(this.heldUnder(runId), (held) =>
+      Effect.forEach(held, (id) => this.stopHeld(id, reason), {
+        discard: true,
+      }),
+    );
   }
 
   /** The stop of a run whose fiber is `live` here, its stop marked
@@ -794,40 +763,6 @@ export class SessionRunRegistry implements RunsShape {
         discard: true,
       }).pipe(Effect.andThen(this.awaitDrained(runId)));
     });
-  }
-
-  // ---------------------------------------------------------------- detach
-
-  /**
-   * Detach the children driven here from a parent, promoting them to
-   * top-level: they keep running and deliver through the follow-up queue.
-   * One job severs each durably, keeping the grants each inherited.
-   */
-  private detachActiveChildren(parentRunId: RunId): Effect.Effect<void, Error> {
-    const { log } = this.init;
-    return log.transact((tx) =>
-      Effect.gen({ self: this }, function* () {
-        // Each child's kept grants, from its rows and its ancestors'.
-        const kept = new Map<RunId, ApprovalGrants>();
-        for (const id of yield* this.childRunIds(parentRunId)) {
-          const facts = yield* log.facts(id);
-          if (facts?.start == null || facts.grants === null) continue;
-          const parent = facts.start.parent?.id ?? parentRunId;
-          const line = yield* ancestryRows((run) => log.facts(run), parent);
-          kept.set(id, grantsKept(grantSource(line), id, parent, facts.grants));
-        }
-        if (kept.size > 0)
-          yield* tx.append(
-            [...kept].flatMap(([id, snapshot]) => {
-              const aggregateId = qualifyAggregateId('run', id);
-              return [
-                { type: 'run.detach', aggregateId },
-                { type: 'approval.policy', aggregateId, snapshot },
-              ] as const;
-            }),
-          );
-      }),
-    );
   }
 
   // ----------------------------------------------------------------- close

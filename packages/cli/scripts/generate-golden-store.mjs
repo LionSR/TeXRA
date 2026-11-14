@@ -32,9 +32,8 @@
  *   machine's. Leaving TeX off the PATH would not hide it: the CLI adds the
  *   usual TeX directories after the PATH it is given (`commandDirs`).
  * - `golden_chat`, the interactive `texra chat` driven under a PTY, with
- *   "Keep agents running" turned on in `/config`, Codex switched on in
- *   `/plugins`, and a plugin's `PostToolUse` hooks on `plan` and `codex`
- *   enabled: a plan the user runs as a goal
+ *   Codex switched on in `/plugins`, and a plugin's `PostToolUse` hooks on
+ *   `plan` and `codex` enabled: a plan the user runs as a goal
  *   (`r` on the approval), which runs the default goal strategy as a background
  *   script of the chat whose one round, a fork of the chat (`self()`),
  *   runs a command under the goal's grant, unasked, and submits its
@@ -47,10 +46,10 @@
  *   `context.edit` replacing the history; then a turn whose approved
  *   `codex` call runs the hook (`hook.outcome`) and launches a Codex child,
  *   on a stand-in Codex CLI first on PATH, whose turn is held; then the
- *   chat's turn held, a message typed behind it, and the user's stop, which
- *   detaches the running child (`run.detach`), so that follow-up stays
- *   queued; the child's turn is then released and it ends on its own
- *   (`run.end`, `run.report`). The stand-in is a POSIX script, so the
+ *   chat's turn held, a message typed behind it, the child's turn released
+ *   so it ends on its own (`run.end`, `run.report`), and the user's stop,
+ *   so that follow-up and the child's report stay queued. The `codex` call
+ *   is approved with `a`, which records the grant (`approval.policy`). The stand-in is a POSIX script, so the
  *   generator runs on macOS and Linux. Only the chat
  *   makes a goal: the headless policy approves a plan without one. Each
  *   keystroke
@@ -641,8 +640,6 @@ async function generate(root) {
       },
       tty,
     );
-  // "Keep agents running" on, in `/config`: the user's stop detaches the
-  // chat's Codex child instead of stopping it.
   /** Press the hotkey the open list shows for `label`. */
   const pick = async (label) => {
     const pattern = new RegExp(`(\\w)\\. ${label}`);
@@ -653,18 +650,6 @@ async function generate(root) {
     );
     tty.write(key);
   };
-  await send('/config');
-  await pick('Tasks and agents');
-  await pick('Keep agents running — off');
-  await shows('the setting on', 'Keep agents running — on');
-  tty.write('\x1b');
-  await shows('the settings categories', 'Tasks and agents —');
-  tty.write('\x1b');
-  await until(
-    'the closed /config',
-    () => !tty.screen().includes('/config'),
-    tty,
-  );
   // Codex on, in `/plugins`, before the chat's first turn binds its tools.
   await send('/plugins');
   await shows('the plugin list', 'Switch plugins on or off');
@@ -729,13 +714,14 @@ async function generate(root) {
   await send('/compact');
   await shows('the compaction notice', 'Context compaction requested');
   await waitingAfter('the chat waiting after the compaction', turn);
-  // A turn that launches a Codex child and is then held, a message typed
-  // behind it, and the user's stop: the follow-up stays queued on the
-  // stopped run, and the stop detaches the running child, whose turn is
-  // released after it and ends it as a root.
+  // A turn that launches a Codex child, approved with `a` (approve and stop
+  // asking: the grant's `approval.policy` row), and is then held; a message
+  // typed behind it; the child's turn released, so it ends on its own and
+  // reports to the held chat; and the user's stop, which leaves the typed
+  // message and the report queued on the stopped run.
   await send('Hold this turn.');
   await shows('the Codex call approval', 'y approve');
-  tty.write('y');
+  tty.write('a');
   const chatRows = (sql) => rowsOf(chatRun(), sql);
   const codexRows = (sql) =>
     rowsOf(query(cli.store(), RUN_OF_AGENT, ['codex'])[0]?.id, sql);
@@ -763,24 +749,21 @@ async function generate(root) {
         AND json_extract(e.data, '$.control') IS NULL`) === 4,
     tty,
   );
-  tty.write('\x03');
-  await until(
-    'the stopped chat',
-    () =>
-      chatRows(`e.type = 'run.stop'
-        AND json_extract(e.data, '$.reason') = 'user'`) > 0 &&
-      codexRows(`e.type = 'run.detach'`) > 0,
-    tty,
-  );
-  await shows('the idle prompt', 'Ctrl-C exit');
-  // The detached child's turn goes on: released, it ends as a root, its
-  // report kept on the run.
   writeFileSync(path.join(root, 'codex.release'), '');
   await until(
     'the ended Codex child',
     () => codexRows(`e.type = 'run.end'`) > 0,
     tty,
   );
+  tty.write('\x03');
+  await until(
+    'the stopped chat',
+    () =>
+      chatRows(`e.type = 'run.stop'
+        AND json_extract(e.data, '$.reason') = 'user'`) > 0,
+    tty,
+  );
+  await shows('the idle prompt', 'Ctrl-C exit');
   tty.write('\x03');
   const exit = await tty.exited;
   // The chat's last run is the one the user stopped, which ended cancelled:

@@ -140,7 +140,7 @@ one (section 9):
 | **I3** | **At most one response per model invocation**: recovery never appends a second `response` row to an invocation that already committed one.                                                  |
 | **I4** | **Approval and uncertain side effects**: an approval-gated call never runs before its approval commits, and an interrupted `replay: 'unsafe'` call never re-runs unprompted.                |
 | **I5** | **Owned child reattachment**: an owned child that finished answers its parent call on recovery and is not launched again without a person's retry; no child is left without a terminal row. |
-| **I6** | **At-most-once child delivery**: a child's result reaches its parent at most once; a result whose child was detached, or whose parent cannot take it, stays in the child's run report.      |
+| **I6** | **At-most-once child delivery**: a child's result reaches its parent at most once; a result whose parent cannot take it stays in the child's run report.                                    |
 | **I7** | **Context edit and fork preservation**: committed compactions and forks recover with the exact message history they committed.                                                              |
 | **I8** | **Atomic stop**: a stopped run's halt and `run.end` commit together, so recovery never mistakes an acknowledged stop for an interrupted run.                                                |
 | **I9** | **Durable policy revocation**: revoking an approval bypass is acknowledged only after the `approval.policy` row commits to SQLite.                                                          |

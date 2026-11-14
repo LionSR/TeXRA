@@ -22,13 +22,12 @@ import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';
  *
  * 1. A vocabulary change leaves a view that no longer compiles.
  * 2. A resumed run shows its previous lifecycle's outcome.
- * 3. A detached child still appears under its former parent.
- * 4. A runaway statement holds the store instead of stopping at its
+ * 3. A runaway statement holds the store instead of stopping at its
  *    deadline, or the store stays dead after it.
- * 5. A run history row, a private record, or the session database's own tables
+ * 4. A run history row, a private record, or the session database's own tables
  *    are reachable from a query.
- * 6. A statement writes to the store or runs a second statement.
- * 7. `runs` comes from a view that lags the rows committed before the
+ * 5. A statement writes to the store or runs a second statement.
+ * 6. `runs` comes from a view that lags the rows committed before the
  *    query.
  */
 

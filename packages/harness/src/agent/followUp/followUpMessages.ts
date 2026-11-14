@@ -169,8 +169,8 @@ export const sentBefore = Effect.fn('sentBefore')(function* (
   // None, or a deleted run, whose send the path past this refuses.
   if (typeof first === 'string') return false;
   const media = attach === undefined ? {} : yield* attach;
-  // The relation it was stamped with: a retry after a detach is the same
-  // request, not a new one.
+  // The relation it was stamped with: a retry is the same request, not a
+  // new one.
   const stamped = first.queued.content.from;
   const asked = queuedRow({ ...item, ...media, deliveryId }, hold, () =>
     stamped.kind === 'run' ? stamped.relation : 'peer',

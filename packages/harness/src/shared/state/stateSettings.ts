@@ -425,14 +425,6 @@ export const ALLOW_ORCHESTRATOR_KILL_SETTING = {
     'Allow a task to stop the agents it started once they are no longer needed.',
 } as const satisfies SettingRow<boolean>;
 
-export const DETACH_SUBAGENTS_ON_STOP_SETTING = {
-  key: 'detachSubagentsOnStop',
-  slot: 'globalState',
-  schema: booleanWithDefault(false),
-  title: 'Keep agents running',
-  description: "Let a task's agents continue when the task is stopped.",
-} as const satisfies SettingRow<boolean>;
-
 /**
  * Every host's runtime honors the row through the `memory` entry of the
  * memory-workflow plugin's `injectedWhen` (`@tools/plugins`).
@@ -543,7 +535,6 @@ const HARNESS_SETTINGS = [
   GIT_AUTHOR_EMAIL_SETTING,
   GIT_WORKTREE_SUPPORT_SETTING,
   ALLOW_ORCHESTRATOR_KILL_SETTING,
-  DETACH_SUBAGENTS_ON_STOP_SETTING,
   MEMORY_ENABLED_SETTING,
   SCRIPT_ONLY_SETTING,
   WEBSOCKET_OPENAI_SETTING,

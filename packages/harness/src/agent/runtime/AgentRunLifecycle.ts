@@ -164,7 +164,7 @@ export const endRun = Effect.fn('endRun')(function* (
               }
             : classified;
         })();
-  // Read once as the run entered: a child detached mid-run ends as a child.
+  // Read once as the run entered.
   const parentRunId = ctx.entry.parent;
   if (thrown !== undefined && error !== undefined) {
     if (verdict.outcome === RUN_OUTCOME.CANCELLED)

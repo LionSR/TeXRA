@@ -114,8 +114,7 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
   // One goal at a time: two would race each other's edits and caps. The
   // goals this conversation launched are its `plan` results' runs; one is
   // running while its run has not ended, or, unborn while it waits for the
-  // child-run budget, while this process holds it. "Keep agents running"
-  // detached, a goal is still found by the call that launched it.
+  // child-run budget, while this process holds it.
   const { runId } = call.run;
   // A plan call, by the response its result names (`RunFacts.calls`).
   const issued = (yield* (yield* RunHistory).load(runId))?.calls ?? {};

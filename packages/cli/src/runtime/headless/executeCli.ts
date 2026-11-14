@@ -326,11 +326,9 @@ export const executeCliConfig: (
       // The run's finalization is done: nothing is left to stop or wait for.
       if (yield* Deferred.isDone(finalized)) return;
       shutdown = true;
-      // Headless shutdown cascades into active children: a detached child
-      // cannot outlive the exiting CLI process, so the detach-on-stop toggle
-      // is not consulted here. The stop lands whether or not the session has
-      // started the run yet: one that has not starts it stopped, so it ends
-      // cancelled as soon as it opens.
+      // The stop lands whether or not the session has started the run yet:
+      // one that has not starts it stopped, so it ends cancelled as soon as
+      // it opens.
       yield* withProcessServices(
         options.services.runtime,
         Effect.gen(function* () {

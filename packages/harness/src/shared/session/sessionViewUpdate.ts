@@ -728,10 +728,6 @@ function applyRunEvent(
         ...run,
         facts: { ...run.facts, [factName(event)]: event.value },
       };
-    case 'run.detach': // the attached parent goes; the launch parent stays
-      return run.parentId === null
-        ? run
-        : { ...run, parentId: record.parent?.id ?? null };
     case 'run.description':
       // A title the record did not take (a model's, under a user's) changes
       // nothing.

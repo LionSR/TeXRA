@@ -21,7 +21,6 @@ import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   type AgentScanIssue,
   ALLOW_ORCHESTRATOR_KILL_SETTING,
-  DETACH_SUBAGENTS_ON_STOP_SETTING,
   GIT_WORKTREE_SUPPORT_SETTING,
   pluralize,
 } from '@texra-ai/harness/schemas';
@@ -255,7 +254,6 @@ export class AgentsTab extends SignalWatcher(LitElement) {
           revertOnEmpty: false,
         })}
         ${renderStateSettingToggleRow(ALLOW_ORCHESTRATOR_KILL_SETTING)}
-        ${renderStateSettingToggleRow(DETACH_SUBAGENTS_ON_STOP_SETTING)}
         ${renderStateSettingToggleRow(GIT_WORKTREE_SUPPORT_SETTING)}
         ${renderStateSettingNumberRow(CHILD_RUN_CONCURRENCY_BUDGET_SETTING, {
           step: 1,

@@ -209,8 +209,7 @@ export const fingerprint = Effect.fn('agent.fingerprint')(function* (
  * The runs whose completed calls a call may reuse: the run that issued
  * the `script` call, and the background script runs it launched. A call of
  * a background script's run reaches its parent and its siblings this way.
- * Both follow each script's launch parent, which a detach leaves as it
- * was, so a script the person kept running stays in the scope.
+ * Both follow each script's launch parent.
  */
 const reuseScope = Effect.fn('agent.reuseScope')(function* (call: RunToolCall) {
   const { runId } = call.run;

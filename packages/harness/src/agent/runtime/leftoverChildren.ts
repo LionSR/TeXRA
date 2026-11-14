@@ -1,7 +1,6 @@
 /**
  * What a dead process or a clean close left of a run's children, finished
- * as the parent resumes (`resumeLeftoverChildren`) or, for a process run a
- * detach left with no parent, as the session opens (`sweepLeftoverRuns`).
+ * as the parent resumes (`resumeLeftoverChildren`).
  * A child cut short (no end, or a clean close's cancelled end) whose rows
  * can continue is resumed under its own id, so its end reaches its parent
  * as it would have; one that cannot continue (a background command, a
@@ -52,7 +51,7 @@ const FAMILY_OF = {
  * nothing) only sends it, under the same lifecycle's `deliveryId`.
  */
 const reportInterrupted = Effect.fn('reportInterrupted')(function* (
-  parent: RunId | null,
+  parent: RunId,
   child: RunView,
   facts: RunRows,
   why: string,
@@ -76,7 +75,6 @@ const reportInterrupted = Effect.fn('reportInterrupted')(function* (
     });
     return;
   }
-  if (parent === null) return;
   const sent = yield* (yield* Inbox).send(parent, {
     delivery,
     from: { kind: 'run', runId: child.id },
@@ -96,20 +94,19 @@ export const cutShort = ({ end, stop }: RunRows): boolean =>
   end === null ||
   (end.outcome === RUN_OUTCOME.CANCELLED && stop?.reason === 'shutdown');
 
-/** The one closer of what a dead process or a clean close left of `run`
- *  ({@link resumeLeftoverChildren}, `sweepLeftoverRuns`). A child resumed
- *  under its parent opens in the parent's run fiber and takes its
- *  `LaunchKeys`, as a child it starts does; a sweep has no parent and
- *  brings none. */
-export const closeLeftoverRun = Effect.fn('closeLeftoverRun')(function* (
-  parent: Pick<RunLaunch, 'runId'> | null,
+/** The one closer of what a dead process or a clean close left of `run`,
+ *  a child of the resuming `parent`. A child resumed under its parent
+ *  opens in the parent's run fiber and takes its `LaunchKeys`, as a child
+ *  it starts does. */
+const closeLeftoverRun = Effect.fn('closeLeftoverRun')(function* (
+  parent: Pick<RunLaunch, 'runId'>,
   run: RunView,
 ) {
   if ((yield* Runs).get(run.id) !== undefined) return;
   const facts = yield* (yield* SessionLog).facts(run.id);
   if (facts === null || !cutShort(facts)) return;
   if ((yield* owningCall(run.id)) !== null) return;
-  const parentRunId = parent?.runId ?? null;
+  const parentRunId = parent.runId;
   const report = (why: string) =>
     reportInterrupted(parentRunId, run, facts, why);
   const rejection = yield* checkpointRefusal(run.id);

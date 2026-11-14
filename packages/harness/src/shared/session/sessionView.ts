@@ -136,11 +136,13 @@ const RunViewSchema = Schema.Struct({
   takesFollowUps: Schema.Boolean,
   /** Latest `context.state`. */
   context: Schema.NullOr(ContextStateDataSchema),
-  /** The run it is attached to now: its launcher until a detach. */
+  /** The run it is listed under: its launcher, while the view lists
+   *  that run. */
   parentId: Schema.NullOr(RunIdSchema),
-  /** Its launch edge (`run.start.parent`), which a detach keeps: the run
-   *  that launched it, and that run's tool card it was launched from
-   *  (`parent.call.card`; null for a launch no call made). Null for a root. */
+  /** Its launch edge (`run.start.parent`), kept when its launcher is no
+   *  longer listed: the run that launched it, and that run's tool card it
+   *  was launched from (`parent.call.card`; null for a launch no call
+   *  made). Null for a root. */
   launch: Schema.NullOr(
     Schema.Struct({ id: RunIdSchema, card: Schema.NullOr(Schema.String) }),
   ),

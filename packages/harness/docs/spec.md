@@ -370,7 +370,6 @@ also read by `applyRunRows`.
 - `run.activate` (folded: yes): One activation: the first launch or a resume.
 - `run.config` (folded: yes): What the run runs on: configuration, model,
   binding.
-- `run.detach` (folded: no): A stop severed the parent edge.
 - `run.end` (folded: no): The terminal fact: outcome, classified error, output.
 - `run.removed` (folded: no): The deletion marker: last row of its aggregate, final.
 - `run.description` (folded: no): A title, by `model` or `user`.
@@ -510,7 +509,7 @@ process child (a background command, an agent CLI's turn) is one turn of
 its process, ended with its exit (`agent/runtime/processRun.ts`). A child's
 end queues its report on its parent's input in the same transaction, under
 `${runId}:${activation}` (`agent/storage/runLifecycle.ts#parentDelivery`),
-unless the parent's call awaits it or the child was detached.
+unless the parent's call awaits it.
 
 **W6.** Every failed attempt of a turn that reaches failure recording MUST
 commit a `failed` row whose `next` is the move after it; a call off the rows
@@ -867,8 +866,7 @@ unless the item names another test:
   asserted by
   `src/test-kernel/support/crashConformance.ts#'reads every child result settled before the crash, exactly once'`.
 - **I6**: A child's result is delivered to its parent at most once; a result
-  whose child was detached, or whose parent cannot take it, stays in the
-  child's run report with a warning
+  whose parent cannot take it stays in the child's run report with a warning
   (`agent/storage/runLifecycle.ts#parentDelivery`). Asserted by
   `src/test-kernel/support/crashConformance.ts#'reads every child result settled before the crash, exactly once'`.
 - **I7**: A fork keeps the history it was registered with; compaction keeps
