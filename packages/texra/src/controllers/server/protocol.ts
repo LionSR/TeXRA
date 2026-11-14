@@ -181,7 +181,7 @@ const workspace = Schema.String;
  * (`records.readConfig`): what each answers with. A run the store does not
  * hold reads as absent, as it does there.
  */
-export const RUN_RECORDS = {
+export const RUN_RECORDS = Object.freeze({
   exists: Schema.Boolean,
   readConfig: Schema.NullOr(AgentConfigSchema),
   readReport: Schema.NullOr(Schema.String),
@@ -209,7 +209,7 @@ export const RUN_RECORDS = {
       status: Schema.Literals(['config_missing', 'streamLogs_missing']),
     }),
   ]),
-} satisfies {
+}) satisfies {
   readonly [K in keyof RunRecords]: Schema.Codec<
     Effect.Success<RunRecords[K]>,
     unknown

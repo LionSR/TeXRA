@@ -33,7 +33,8 @@ import {
   projectApprovalPolicy,
   type CliContext,
 } from '@cli/runtime/platform/cliContext';
-import { isLinked, linkClient } from '@cli/runtime/platform/cliService';
+import { isLinked } from '@cli/runtime/platform/cliService';
+import { linkedClient } from '@texra/controllers/server/client';
 
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/models/chatDefaults';
@@ -538,7 +539,10 @@ export async function runChat(
   // The chat's slash commands, over the controller they drive.
   const commands = builtinSlashCommands({
     runSession,
-    ...(link !== undefined && { connectService: () => linkClient(link) }),
+    ...(link !== undefined && {
+      connectService: () =>
+        Effect.map(linkedClient(link), (client) => ({ client })),
+    }),
     onAccountChanged: () =>
       connectChatModel(
         slashCommandContext(),

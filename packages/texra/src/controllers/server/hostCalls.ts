@@ -95,14 +95,17 @@ export type HostCapability = HostCall['kind'];
 /** The calls a run waits on: what each answers with, and how long a run
  *  waits for it. A diagnostics read may build the document first, so it
  *  waits longest. Every other call is told and not answered. */
-export const ANSWERED = {
-  readDiagnostics: {
+export const ANSWERED = Object.freeze({
+  readDiagnostics: Object.freeze({
     result: Schema.Array(GenericDiagnosticSchema),
     within: '2 minutes',
-  },
-  addCriticism: { result: Schema.Boolean, within: '10 seconds' },
-  openPdf: { result: Schema.Null, within: '30 seconds' },
-} as const satisfies Partial<
+  }),
+  addCriticism: Object.freeze({
+    result: Schema.Boolean,
+    within: '10 seconds',
+  }),
+  openPdf: Object.freeze({ result: Schema.Null, within: '30 seconds' }),
+} as const) satisfies Partial<
   Record<
     HostCall['kind'],
     {

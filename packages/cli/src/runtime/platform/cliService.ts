@@ -49,10 +49,8 @@ import type {
 import {
   isOlder,
   linkService,
-  linkedClient,
   probeRecordedService,
   spawnService,
-  type ServiceConnection,
   type ServiceLink,
   type ServiceUnavailable,
   WINDOWS_UNSUPPORTED,
@@ -340,9 +338,3 @@ export const linkCliService = Effect.fn('linkCliService')(function* (
     ? reach(linked.failure.reason)
     : linked.success;
 });
-
-/** {@link linkedClient} in the shape the chat's `/tasks` takes. */
-export const linkClient = (
-  link: ServiceLink,
-): Effect.Effect<Pick<ServiceConnection, 'client'>, Error> =>
-  Effect.map(linkedClient(link), (client) => ({ client }));
