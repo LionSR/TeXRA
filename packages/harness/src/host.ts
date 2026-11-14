@@ -48,6 +48,8 @@ export {
   type ProcessServices,
 } from './effect/processLayer.js';
 export type { PlatformServices, PluginContext } from '@platform/processRuntime';
+// The run function a host callback starts Effect work with, owned by a scope.
+export { scopedFork, type ScopedFork } from '@platform/processRuntime';
 // What a run's program requires of the process, beneath `ProcessServices`.
 export type { RunServices } from '@agent/runtime/ToolServices';
 export type { AgentCatalogServices } from '@agent/index/agentEntry';

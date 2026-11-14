@@ -45,7 +45,11 @@ import {
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import type { Session, Sessions, WorkspaceRoots } from '@texra-ai/harness';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
+import type {
+  ProcessRuntime,
+  ProcessServices,
+  ScopedFork,
+} from '@texra-ai/harness/host';
 
 /** The log channel of the command registration's own failures. */
 const REGISTRY_CHANNEL = 'ExtensionCommandRegistry';
@@ -82,6 +86,8 @@ export function registerCommands(
   context: vscode.ExtensionContext,
   progressViewProvider: ProgressViewProvider,
   runtime: ProcessRuntime,
+  /** The activation's run function for VS Code callbacks. */
+  fork: ScopedFork<ProcessServices | Sessions>,
   roots: WorkspaceRoots,
   /** Where this window's runs run. */
   runSession: Session,
@@ -89,6 +95,7 @@ export function registerCommands(
   const settingsViewProvider = new SettingsViewProvider(
     context,
     runtime,
+    fork,
     roots,
     progressViewProvider,
   );
@@ -179,14 +186,14 @@ export function registerCommands(
           undefined,
           (failure) => {
             if (failure.kind === 'invalidArguments') {
-              runtime.runFork(
+              fork(
                 showLoggedMessage(
                   `Invalid arguments for command ${failure.id}: ${failure.error.message}`,
                 ).pipe(withLogChannel(REGISTRY_CHANNEL)),
               );
               return;
             }
-            runtime.runFork(
+            fork(
               Effect.logError(
                 `No handler is registered for command ${failure.id}`,
               ).pipe(withLogChannel(REGISTRY_CHANNEL)),

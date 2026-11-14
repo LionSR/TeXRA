@@ -14,7 +14,7 @@ import {
   Stream,
 } from 'effect';
 
-import { AgentCatalog } from '@texra-ai/harness/host';
+import { AgentCatalog, scopedFork } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   ensureError,
@@ -64,6 +64,7 @@ import type { Session, WorkspaceRoots } from '@texra-ai/harness';
 import type {
   ProcessRuntime,
   ProcessServices,
+  ScopedFork,
   StateStore,
 } from '@texra-ai/harness/host';
 
@@ -128,6 +129,10 @@ interface ViewParts {
   readonly contentProvider: BundledViewContentProvider;
   readonly globalState: StateStore;
   readonly runtime: ProcessRuntime;
+  /** The view's run function: a surface's posts and messages start their
+   *  work there, so a request a surface sent outlives that surface and
+   *  ends with the view. */
+  readonly fork: ScopedFork<ProcessServices>;
 }
 
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
@@ -158,6 +163,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       ) => Effect.Effect<void, Error, ProcessServices>,
     ) {
       const scope = yield* Scope.Scope;
+      const fork = yield* scopedFork<ProcessServices>();
       const catalog = yield* AgentCatalog;
       const draftRequests = yield* HostDraftRequests.make;
       const contentProvider = new BundledViewContentProvider(
@@ -236,7 +242,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         // goes.
         toolEdits: new VscodeToolEditApprovalHost(
           path.join(storageRoot.fsPath, 'tool-edit-previews'),
-          runtime,
+          fork,
           roots,
           scope,
         ),
@@ -282,6 +288,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         contentProvider,
         globalState,
         runtime,
+        fork,
       });
       yield* Deferred.succeed(built, view);
       yield* Effect.forkScoped(view.attention.follow(runSession));
@@ -348,6 +355,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   private readonly globalState: StateStore;
   private readonly runtime: ProcessRuntime;
+  private readonly fork: ScopedFork<ProcessServices>;
   private constructor(parts: ViewParts) {
     this.bridge = parts.bridge;
     this.snapshot = parts.snapshot;
@@ -358,6 +366,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.runSession = parts.runSession;
     this.globalState = parts.globalState;
     this.runtime = parts.runtime;
+    this.fork = parts.fork;
   }
 
   // --- The host snapshot's producers ---
@@ -449,9 +458,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       view: vscode.WebviewView | vscode.WebviewPanel,
     ): Effect.fn.Return<void, SurfacePlacementFailed, FileSystem.FileSystem> {
       this.closeSurface(this.surfaces[id]);
-      // The post starts synchronously inside runFork, so sends keep their order.
+      // The post starts synchronously inside the fork, so sends keep their
+      // order.
       const send = (message: DownWire): void => {
-        this.runtime.runFork(
+        this.fork(
           Effect.tryPromise({
             try: () => view.webview.postMessage(message),
             catch: ensureError,
@@ -525,7 +535,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       for (const listener of [
         view.onDidDispose(() => this.closeSurface(surface)),
         view.webview.onDidReceiveMessage((message) => {
-          this.runtime.runFork(attached.receive(message));
+          this.fork(attached.receive(message));
         }),
       ])
         yield* Scope.addFinalizer(

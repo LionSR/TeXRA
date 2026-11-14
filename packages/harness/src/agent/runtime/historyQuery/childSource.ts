@@ -217,11 +217,10 @@ export const spawnQueryStore = Effect.fn('HistoryQuery.spawn')(function* (
             }),
         ),
       );
-    const requests = yield* Queue.unbounded<string>();
-    const replies = yield* Queue.unbounded<
-      string,
-      Cause.Done | PlatformError
-    >();
+    // One request at a time: each offers its line and takes its reply
+    // before the next (the store's lane), so one of each is ever waiting.
+    const requests = yield* Queue.bounded<string>(1);
+    const replies = yield* Queue.bounded<string, Cause.Done | PlatformError>(1);
     // A failed write ends the reply queue with its cause, so the request
     // waiting on a reply fails as `HistoryQueryFailed` instead of hanging.
     yield* Stream.fromQueue(requests).pipe(

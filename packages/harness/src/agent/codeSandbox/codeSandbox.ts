@@ -21,7 +21,11 @@ import * as Worker from 'effect/workers/Worker';
 
 import { ensureError } from '@utils/errors/errorMessage';
 
-import { GUEST_CPU_BUDGET_MS, QUICKJS_MEMORY_LIMIT_BYTES } from './limits';
+import {
+  GUEST_CPU_BUDGET_MS,
+  MAX_FANOUT,
+  QUICKJS_MEMORY_LIMIT_BYTES,
+} from './limits';
 import {
   type ScriptEnd,
   type SettleMessage,
@@ -219,10 +223,13 @@ const make = Effect.gen(function* () {
         wasm,
         interrupt,
       };
-      const reports = yield* Queue.unbounded<
+      // The worker reports once at the start and once per settlement it is
+      // sent, and the loop takes each report before it sends the next, so
+      // one report at most is ever waiting.
+      const reports = yield* Queue.bounded<
         typeof StepReportSchema.Type,
         SandboxUnavailable
-      >();
+      >(1);
       const worker = yield* platform.spawn<unknown, SettleMessage>(0).pipe(
         Effect.provideService(
           Worker.Spawner,
@@ -259,7 +266,9 @@ const make = Effect.gen(function* () {
         Effect.sync(() => Atomics.store(new Int32Array(interrupt), 0, 1)),
       );
       const calls = yield* FiberSet.make<void, never>();
-      const settled = yield* Queue.unbounded<SettleMessage, E>();
+      // Each call settles once and the worker caps the calls outstanding at
+      // `MAX_FANOUT`, so no offer here ever waits.
+      const settled = yield* Queue.bounded<SettleMessage, E>(MAX_FANOUT);
 
       let open = 0;
       let report = yield* Queue.take(reports);

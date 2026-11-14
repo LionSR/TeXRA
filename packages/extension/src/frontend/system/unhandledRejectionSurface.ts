@@ -31,10 +31,13 @@ const CHANNEL = 'extension';
 export const installUnhandledRejectionSurface = Effect.fn(
   'installUnhandledRejectionSurface',
 )(function* (extensionPath: string) {
-  const entries = yield* Queue.unbounded<{
+  // Each entry ends the host on the next tick (below), so a few at most are
+  // ever waiting; one past the bound is dropped, since the log is its only
+  // reporter.
+  const entries = yield* Queue.dropping<{
     readonly message: string;
     readonly data: unknown;
-  }>();
+  }>(64);
   yield* Effect.forkScoped(
     Effect.forever(
       Queue.take(entries).pipe(
