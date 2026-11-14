@@ -15,6 +15,7 @@ import {
   formatCliHistoryAgentLabel,
   formatCliHistorySubject,
 } from '@cli/runtime/historyLabels';
+import { formatShortDateTime } from '@ui/formatting/dateTimeFormat';
 import { rootRunId } from '../state/cliState';
 import { AsyncListForm } from './_shared/ListForm';
 import type { Session } from '@texra-ai/harness';
@@ -44,7 +45,8 @@ function resumeEntryLabel(entry: CliHistoryEntry): string {
 }
 
 function resumeEntryDescription(entry: CliHistoryEntry): string {
-  const standing = `${entry.timestamp} · ${historyStanding(entry)} · ${formatCliHistoryAgentLabel(entry)}`;
+  const when = formatShortDateTime(entry.timestamp) ?? entry.timestamp;
+  const standing = `${when} · ${historyStanding(entry)} · ${formatCliHistoryAgentLabel(entry)}`;
   return entry.resumable || entry.resumeBlocked === undefined
     ? standing
     : `${standing} · cannot resume: ${entry.resumeBlocked}`;
