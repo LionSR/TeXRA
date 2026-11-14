@@ -110,7 +110,7 @@ export const stopSessionRuns = (
  * The services of one root over its graph, one scoped program. The entry's
  * scope is the session's one lifetime (`closeSession` and disposal close
  * it): what is acquired later is released earlier, so the runs are
- * disposed before the inbox and the host, the store's publisher drains
+ * disposed before the inbox and the host, the store's publisher closes
  * after the runs' fibers published their last rows, and the readers of its
  * tails, acquired first, live until the end.
  */
@@ -145,12 +145,12 @@ export const sessionOwnersLayer = (
         roots.storage,
       );
       const view = yield* makeSessionViewAccess(roots.storage, store.closed);
-      // The publisher drains inside the close deadline, after the runs'
-      // fibers published their last rows.
+      // The publisher closes after the runs' fibers published their last
+      // rows.
       yield* Effect.addFinalizer(() => store.close);
       // The runs' fibers (one per run, under its id) and the session's own,
       // interrupted after the services above them are disposed and before
-      // the publisher drains.
+      // the publisher closes.
       const runFibers = yield* FiberMap.make<RunId>();
       const fibers = yield* FiberSet.make();
 

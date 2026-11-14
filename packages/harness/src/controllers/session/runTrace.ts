@@ -6,7 +6,7 @@
  * publishes it (`committed`). The trace's one read side is those rows and that text
  * read back (`replayTrace`).
  */
-import { Effect, Stream, Struct, SubscriptionRef } from 'effect';
+import { Effect, Scheduler, Stream, Struct, SubscriptionRef } from 'effect';
 
 import { runEventDraft } from '@agent/trace/TraceEmitter';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
@@ -54,8 +54,8 @@ interface RunTraceInit {
   readonly events: Pick<SessionEventsShape, 'detach' | 'openWork'>;
   /** The transient text the session's view folds beside its rows. */
   readonly text: SubscriptionRef.SubscriptionRef<InflightText>;
-  /** The publisher's barrier: every row enqueued before it was tried. */
-  readonly settled: Effect.Effect<void>;
+  /** Run one update of the transient text now, from synchronous code. */
+  readonly run: (update: Effect.Effect<void>) => unknown;
   /** Whether the session's doors are shut. */
   readonly closed: () => boolean;
 }
@@ -65,7 +65,7 @@ export function makeRunTrace({
   storage,
   events,
   text,
-  settled,
+  run,
   closed,
 }: RunTraceInit): RunTraceSink {
   /** Each run's first refused row, until its end takes it. */
@@ -91,8 +91,17 @@ export function makeRunTrace({
     const chunk = SubscriptionRef.getUnsafe(text).get(runId)?.get(id);
     return chunk === undefined ? undefined : textSince(chunk).text;
   };
+  /** One update of the transient text as one uninterrupted turn: the ref's
+   *  permit is never held while another update asks for it, so an update
+   *  run from the synchronous door has landed when the call returns. */
+  const updateText = (update: (held: InflightText) => InflightText) =>
+    Effect.provideService(
+      SubscriptionRef.update(text, update),
+      Scheduler.PreventSchedulerYield,
+      true,
+    );
   const appendText = (runId: RunId, id: string, chunk: string) =>
-    SubscriptionRef.update(text, (held) => {
+    updateText((held) => {
       const rows = new Map(held.get(runId));
       const previous = rows.get(id);
       rows.set(id, {
@@ -115,16 +124,12 @@ export function makeRunTrace({
     publish: (runId, event) => {
       if (refusedAfterClose()) return;
       if (event.type === 'stream.chunk') {
-        const chunk = event.text;
-        events.detach(() => appendText(runId, event.id, chunk), {
-          order: true,
-        });
+        run(appendText(runId, event.id, event.text));
         return;
       }
-      // The call fixes the row's place in the order; the draft is built when
-      // the publisher runs the job, after every chunk enqueued before it
-      // reached the text, so a `stream.end` with no final text of its own
-      // closes on the complete streamed text. The first refusal is kept.
+      // Every chunk published before this call has reached the text, so a
+      // `stream.end` with no final text of its own closes on the complete
+      // streamed text. The first refusal is kept.
       events.detach(
         (append) => {
           const draft = runEventDraft(
@@ -145,7 +150,7 @@ export function makeRunTrace({
       );
     },
     lost: (runId) =>
-      Effect.map(settled, () => {
+      Effect.sync(() => {
         const refusal = lost.get(runId);
         lost.delete(runId);
         return refusal === undefined
@@ -172,7 +177,7 @@ export function makeRunTrace({
         closes = { row: null };
       const dropping = closes;
       if (dropping === undefined) return Effect.void;
-      return SubscriptionRef.update(text, (held) => {
+      return updateText((held) => {
         const rows = held.get(target.id);
         const { row: dropped } = dropping;
         if (rows === undefined || (dropped !== null && !rows.has(dropped)))
@@ -215,8 +220,8 @@ export function replayTrace<E>(
         debug: boolean,
       ) => Stream.Stream<readonly SessionViewInput[]>;
     };
-    /** `settled`: every write enqueued so far is committed; `now()`: the
-     *  head. */
+    /** `settled`: the view applied every write committed so far; `now()`:
+     *  the head. */
     readonly log: {
       readonly settled: Effect.Effect<void>;
       readonly now: () => CommitOrdinal;

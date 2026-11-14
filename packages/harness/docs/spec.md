@@ -74,7 +74,7 @@ its kind is its `type` column.
 - **Fold**: `applyRunRows`, the pure function from a run's rows to the
   `RunState` the loop continues from
   (`shared/session/runState.ts#applyRunRows`).
-- **Publisher**: `SessionEvents`, the one inbox through which a session writes
+- **Publisher**: `SessionEvents`, the one door through which a session writes
   (`agent/runtime/sessionEventsLayer.ts#sessionEventsLayer`).
 - **Commit, seq**: `commit` orders rows across the store; `seq` orders rows
   within an aggregate
@@ -143,36 +143,35 @@ verifies the digest (`controllers/session/rowCodec.ts#encodeDraft`,
 
 ### 2.3 One publisher
 
-Every row a session writes is written by a job on one inbox drained by one
-fiber. Jobs SHALL run in the order they were enqueued, one at a time, and the
-table's commit order is that order (`agent/runtime/sessionEventsLayer.ts#consumer`).
-A job other than an ordering barrier (`transact(job, order)`, below) is one
-SQLite transaction: its appends commit together or not at all
-(`agent/runtime/sessionEventsLayer.ts#inTransaction`,
-`controllers/session/databaseLayer.ts#job`).
+Every row a session writes is written by a job of the one publisher. A job
+is one SQLite transaction followed by the publication of its rows, and it
+SHALL run where it is called as one uninterrupted turn: the driver is
+synchronous, the job awaits nothing, and the scheduler does not take the
+fiber off between its steps (`agent/runtime/sessionEventsLayer.ts#commit`,
+`controllers/session/databaseLayer.ts#PreventSchedulerYield`). So jobs run one
+at a time, the table's commit order is the order of the calls, and a job's
+appends commit together or not at all
+(`controllers/session/databaseLayer.ts#job`).
 
 The publisher offers these doors:
 
-- `transact(job)`: Enqueue a job and wait for its value
+- `transact(job)`: Run a job and return its value
   (`agent/runtime/sessionEventsLayer.ts#'transact'`).
-- `transact(job, order)`: A barrier with no transaction; its `append` is a
-  defect (`agent/runtime/sessionEventsLayer.ts#'An ordering job appends nothing'`,
-  `#inTransaction`).
-- `detach(job)`: Enqueue a job and return at once, for a producer with no fiber;
-  its order is the moment of the call (`agent/runtime/sessionEventsLayer.ts#detach`).
-- `removeRun`: Commit a run's deletion marker (`run.removed`) as the next
-  job, refused unless the run's start commit is the one the caller read
+- `detach(job)`: Run a job from synchronous code, for a producer with no fiber;
+  the job has committed or failed when the call returns
+  (`agent/runtime/sessionEventsLayer.ts#detach`).
+- `removeRun`: Commit a run's deletion marker (`run.removed`), refused unless
+  the run's start commit is the one the caller read
   (`agent/runtime/sessionEventsLayer.ts#removeRun`).
-- `drain`: End the inbox and run what it holds within the close deadline of
-  5,000 ms (`agent/runtime/sessionEventsLayer.ts#drain`,
-  `#SESSION_CLOSE_DEADLINE_MS`).
+- `close`: Take no publication from here on; nothing is left to wait for
+  (`agent/runtime/sessionEventsLayer.ts#closed`).
 
-A job MUST NOT wait on its own publisher; doing so is a defect
+A job MUST NOT open another publication; doing so is a defect
 (`agent/runtime/sessionEventsLayer.ts#reentered`). A job body MUST be
 database-only: what must follow its commit runs after the transaction
-returns (`agent/runtime/sessionEventsLayer.ts#inTransaction`). At the close deadline the running job is cut and every queued
-job refused (`agent/runtime/sessionEventsLayer.ts#drain`). An awaited job enqueued
-after close is a defect; a detached one is logged and dropped
+returns, and a body that awaited would let another job run inside its
+transaction (`agent/runtime/sessionEventsLayer.ts#commit`). An awaited job
+given after close is a defect; a detached one is logged and dropped
 (`agent/runtime/sessionEventsLayer.ts#'Session publication after the plane closed'`,
 `#'Session publication dropped: the plane has closed'`).
 
@@ -198,9 +197,9 @@ A trace row emitted on its own reaches the publisher through
 closing rows commit inside the run's own batches instead
 (`agent/runtime/loop/runLoop.ts#log.closure`), and a call's card is no row of
 its own: a display read shows the call's `tool.intent` and `tool.result` as it
-(`controllers/session/rowReader.ts#callCard`). `SessionLog.settled` is the
-barrier after every job enqueued before it, once the terminal-result presenter
-has run over the view's rows past it
+(`controllers/session/rowReader.ts#callCard`). `SessionLog.settled` returns
+once the terminal-result presenter has run over the view's rows past every
+commit made so far
 (`controllers/session/sessionStore.ts#settled`).
 
 ### 2.4 Row versions and the store gate

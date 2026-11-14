@@ -1899,8 +1899,8 @@ function replayTrace<E>(
         debug: boolean,
       ) => Stream.Stream<readonly SessionViewInput[]>;
     };
-    /** `settled`: every write enqueued so far is committed; `now()`: the
-     *  head. */
+    /** `settled`: the view applied every write committed so far; `now()`:
+     *  the head. */
     readonly log: {
       readonly settled: Effect.Effect<void>;
       readonly now: () => CommitOrdinal;
