@@ -43,10 +43,6 @@ export const CHARACTER_REPLACEMENTS: PatternDict = {
 
 // Common LaTeX equation spacing fixes
 export const EQUATION_REPLACEMENTS: PatternDict = (() => {
-  // ====================================================================
-  // Auto-generated replacements - for easily maintainable pattern groups
-  // ====================================================================
-
   // ===== Linebreak fixes within environments =====
   // Examples:
   // \n\n\end{align} -> \n\end{align}
@@ -148,12 +144,6 @@ export const EQUATION_REPLACEMENTS: PatternDict = (() => {
     ...envEndFixes,
     ...bracesFixes,
 
-    // =================================================================
-    // Manual replacements - for cases that need special handling
-    // =================================================================
-
-    // Note: latexdiff compatibility fixes moved to dedicated LATEXDIFF_REPLACEMENTS category
-
     // Additional specific Greek letter fixes
     '\\\\\\rho': '\\rho',
     '\\\\\\delta': '\\delta',
@@ -246,7 +236,7 @@ export const GPTNESS_REPLACEMENTS: PatternDict = {
   Itô: 'Ito',
   k_BT: 'k_B T',
 
-  // Sophisticated single words (user curated)
+  // Sophisticated single words
   myriad: 'many',
   multitude: 'many',
   amalgamation: 'combination',
@@ -278,7 +268,7 @@ export const GPTNESS_REPLACEMENTS: PatternDict = {
   // LaTeX packages:
   ',amsth,': ',amsthm,',
 
-  // Sophisticated/Formal GPT Expressions (user curated)
+  // Sophisticated or formal GPT expressions
   'it is imperative to': 'we must',
   'it is paramount that': 'it is crucial that',
   'of paramount importance': 'very important',
@@ -410,10 +400,6 @@ export const HTML_ENTITY_REPLACEMENTS: PatternDict = {
 };
 
 export const LATEX_XML_REPLACEMENTS: PatternDict = (() => {
-  // ====================================================================
-  // Auto-generated replacements - for easily maintainable pattern groups
-  // ====================================================================
-
   // Pure XML tags that should not be treated as LaTeX environments.
   const pureXmlTags = [
     'revised_statement',
@@ -483,10 +469,6 @@ export const LATEX_XML_REPLACEMENTS: PatternDict = (() => {
       [`\\end{${tag}>}`, `</${tag}>`],
       [`\\end{${tag}>`, `</${tag}>`],
     ]),
-
-    // =================================================================
-    // Manual replacements - for cases that need special handling
-    // =================================================================
 
     // ===== 1. LATEX TAG ENDING FIXES =====
     // Fix LaTeX tags closed as XML-style end tags with a trailing '>'; the
@@ -637,7 +619,6 @@ export const LATEX_SPACING_REPLACEMENTS: PatternDict = {
 
   // ===== Comma spacing fixes =====
   // Note: ',\,\' -> ', \' preserves the trailing backslash (start of next command)
-  // Bug fix: previously this was ', ' which stripped backslashes from commands like \phi
   ',\\,\\': ', \\',
   ')\\,\\': ') \\',
   '}\\,\\': '} \\',
@@ -728,109 +709,97 @@ export const LATEX_SPACING_REPLACEMENTS: PatternDict = {
   '\\sum\\limits_': '\\sum_',
 };
 
+/** Every character from `first` to `last`, by code point. */
+function characterRange(first: number, last: number): string[] {
+  return Array.from({ length: last - first + 1 }, (_, i) =>
+    String.fromCodePoint(first + i),
+  );
+}
+
 export const UNICODE_REPLACEMENTS: PatternDict = {
-  // ===== Dash and hyphen replacements (globally safe) =====
-  '–': '-', // en dash (U+2013) to ASCII hyphen (U+002D)
-  '‑': '-', // non-breaking hyphen (U+2011) to ASCII hyphen (U+002D)
-  '—': '-', // em dash (U+2014) to ASCII hyphen (U+002D)
-  '‐': '-', // HYPHEN (U+2010) to ASCII hyphen (U+002D)
-  // Note: Unicode MINUS SIGN U+2212 ('−') is handled by replaceMathUnicode
+  // En dash, non-breaking hyphen, em dash and hyphen to an ASCII hyphen. The
+  // minus sign U+2212 is converted in math by replaceMathUnicode.
+  '–': '-',
+  '‑': '-',
+  '—': '-',
+  '‐': '-',
 
-  // ===== Quote character replacements (globally safe) =====
-  '\u2019': "'", // right single quote (U+2019) to ASCII apostrophe
-  '\u2018': "'", // left single quote (U+2018) to ASCII apostrophe
-  '\u201D': '"', // right double quote (U+201D) to ASCII double quote
-  '\u201C': '"', // left double quote (U+201C) to ASCII double quote
-  ʼ: "'", // MODIFIER LETTER APOSTROPHE (U+02BC)
-  ʾ: "'", // MODIFIER LETTER RIGHT HALF RING (U+02BE) - sometimes misused as quote
-  '՚': "'", // ARMENIAN APOSTROPHE (U+055A) - sometimes misused as quote
+  // Curly quotes, and the letters models misuse as apostrophes (modifier
+  // apostrophe, right half ring, Armenian apostrophe), to ASCII quotes.
+  '’': "'",
+  '‘': "'",
+  '”': '"',
+  '“': '"',
+  ʼ: "'",
+  ʾ: "'",
+  '՚': "'",
 
-  // ===== Spacing and Ellipsis =====
-  '\u00A0': '~', // Non-breaking space (U+00A0)
-  '\u2026': '...', // Horizontal Ellipsis (U+2026) '…' to three periods
-  '\u2000': ' ', // EN QUAD (U+2000)
-  '\u2001': ' ', // EM QUAD (U+2001)
-  '\u2002': ' ', // EN SPACE (U+2002)
-  '\u2003': ' ', // EM SPACE (U+2003)
-  '\u2004': ' ', // THREE-PER-EM SPACE (U+2004)
-  '\u2005': ' ', // FOUR-PER-EM SPACE (U+2005)
-  '\u2006': ' ', // SIX-PER-EM SPACE (U+2006)
-  '\u2007': ' ', // FIGURE SPACE (U+2007)
-  '\u2008': ' ', // PUNCTUATION SPACE (U+2008)
-  '\u2009': ' ', // THIN SPACE (U+2009)
-  '\u200A': ' ', // HAIR SPACE (U+200A)
+  ' ': '~', // no-break space
+  '…': '...',
+  // The typographic spaces, en quad through hair space.
+  ...createPatterns(characterRange(0x2000, 0x200a), (c) => [[c, ' ']]),
 
-  // ===== Suspicious or Invisible Unicode Characters (to be removed) =====
-  '\u00AD': '', // Soft Hyphen (U+00AD)
-  '\u180E': '', // Mongolian Vowel Separator (U+180E)
-  '\u200B': '', // Zero Width Space (U+200B)
-  '\u200C': '', // Zero Width Non-Joiner (U+200C)
-  '\u200D': '', // Zero Width Joiner (U+200D)
-  '\u200E': '', // Left-to-Right Mark (U+200E)
-  '\u200F': '', // Right-to-Left Mark (U+200F)
-  '\u202A': '', // Left-to-Right Embedding (U+202A)
-  '\u202B': '', // Right-to-Left Embedding (U+202B)
-  '\u202C': '', // Pop Directional Formatting (U+202C)
-  '\u202D': '', // Left-to-Right Override (U+202D)
-  '\u202E': '', // Right-to-Left Override (U+202E)
-  '\u2060': '', // Word Joiner (U+2060)
-  '\u2066': '', // Left-to-Right Isolate (U+2066)
-  '\u2067': '', // Right-to-Left Isolate (U+2067)
-  '\u2068': '', // First Strong Isolate (U+2068)
-  '\u2069': '', // Pop Directional Isolate (U+2069)
-  '\uFEFF': '', // Zero Width No-Break Space (BOM) (U+FEFF)
+  // Invisible characters: soft hyphen, Mongolian vowel separator, zero-width
+  // spaces and joiners, bidirectional marks, embeddings, overrides and
+  // isolates, word joiner, byte order mark.
+  ...createPatterns(
+    [
+      '­',
+      '᠎',
+      ...characterRange(0x200b, 0x200f),
+      ...characterRange(0x202a, 0x202e),
+      '⁠',
+      ...characterRange(0x2066, 0x2069),
+      '﻿',
+    ],
+    (c) => [[c, '']],
+  ),
 
-  // ===== Common Symbols to ASCII or simple representation =====
-  '\u2022': '*', // BULLET (U+2022) '•' to asterisk
-  '\u00BD': '1/2', // VULGAR FRACTION ONE HALF (U+00BD) '½' to '1/2'
-  '\u2713': '\\checkmark', // CHECK MARK (U+2713) '✓' to \checkmark
+  '•': '*',
+  '½': '1/2',
+  '✓': '\\checkmark',
 
-  // ===== Accented Latin Characters to LaTeX Commands =====
-  '\u00E1': "\\'a", // LATIN SMALL LETTER A WITH ACUTE (U+00E1) 'á'
-  '\u00E9': "\\'e", // LATIN SMALL LETTER E WITH ACUTE (U+00E9) 'é'
-  '\u00ED': "\\'i", // LATIN SMALL LETTER I WITH ACUTE (U+00ED) 'í' (from general knowledge, not in list)
-  '\u00F3': "\\'o", // LATIN SMALL LETTER O WITH ACUTE (U+00F3) 'ó'
-  '\u00FA': "\\'u", // LATIN SMALL LETTER U WITH ACUTE (U+00FA) 'ú' (from general knowledge, not in list)
-  '\u00E0': '\\`a', // LATIN SMALL LETTER A WITH GRAVE (U+00E0) 'à' (from general knowledge, not in list)
-  '\u00E8': '\\`e', // LATIN SMALL LETTER E WITH GRAVE (U+00E8) 'è' (from general knowledge, not in list)
-  '\u00EC': '\\`i', // LATIN SMALL LETTER I WITH GRAVE (U+00EC) 'ì' (from general knowledge, not in list)
-  '\u00F2': '\\`o', // LATIN SMALL LETTER O WITH GRAVE (U+00F2) 'ò' (from general knowledge, not in list)
-  '\u00F9': '\\`u', // LATIN SMALL LETTER U WITH GRAVE (U+00F9) 'ù' (from general knowledge, not in list)
-  '\u00E2': '\\^a', // LATIN SMALL LETTER A WITH CIRCUMFLEX (U+00E2) 'â' (from general knowledge, not in list)
-  '\u00EA': '\\^e', // LATIN SMALL LETTER E WITH CIRCUMFLEX (U+00EA) 'ê' (from general knowledge, not in list)
-  '\u00EE': '\\^i', // LATIN SMALL LETTER I WITH CIRCUMFLEX (U+00EE) 'î' (from general knowledge, not in list)
-  '\u00F4': '\\^o', // LATIN SMALL LETTER O WITH CIRCUMFLEX (U+00F4) 'ô'
-  '\u00FB': '\\^u', // LATIN SMALL LETTER U WITH CIRCUMFLEX (U+00FB) 'û' (from general knowledge, not in list)
-  '\u00E4': '\\"a', // LATIN SMALL LETTER A WITH DIAERESIS (U+00E4) 'ä' (from general knowledge, not in list)
-  '\u00EB': '\\"e', // LATIN SMALL LETTER E WITH DIAERESIS (U+00EB) 'ë' (from general knowledge, not in list)
-  '\u00EF': '\\"i', // LATIN SMALL LETTER I WITH DIAERESIS (U+00EF) 'ï' (from general knowledge, not in list)
-  '\u00FC': '\\"u', // LATIN SMALL LETTER U WITH DIAERESIS (U+00FC) 'ü' (from general knowledge, not in list)
-  '\u00E3': '\\~a', // LATIN SMALL LETTER A WITH TILDE (U+00E3) 'ã'
-  '\u00F1': '\\~n', // LATIN SMALL LETTER N WITH TILDE (U+00F1) 'ñ' (from general knowledge, not in list)
-  '\u00F5': '\\~o', // LATIN SMALL LETTER O WITH TILDE (U+00F5) 'õ' (from general knowledge, not in list)
-  '\u00C1': "\\'A", // LATIN CAPITAL LETTER A WITH ACUTE (U+00C1) 'Á' (from general knowledge, not in list)
-  '\u00C9': "\\'E", // LATIN CAPITAL LETTER E WITH ACUTE (U+00C9) 'É' (from general knowledge, not in list)
-  '\u00D3': "\\'O", // LATIN CAPITAL LETTER O WITH ACUTE (U+00D3) 'Ó' (from general knowledge, not in list)
-  '\u00D4': '\\^O', // LATIN CAPITAL LETTER O WITH CIRCUMFLEX (U+00D4) 'Ô' (from general knowledge, not in list)
-  '\u00D6': '\\"O', // LATIN CAPITAL LETTER O WITH DIAERESIS (U+00D6) 'Ö' (from general knowledge, not in list)
-  '\u00C3': '\\~A', // LATIN CAPITAL LETTER A WITH TILDE (U+00C3) 'Ã' (from general knowledge, not in list)
-  '\u014C': '\\=O', // LATIN CAPITAL LETTER O WITH MACRON (U+014C) 'Ō' (from general knowledge, not in list)
-  '\u014D': '\\=o', // LATIN SMALL LETTER O WITH MACRON (U+014D) 'ō'
-  '\u00C7': '\\c C', // LATIN CAPITAL LETTER C WITH CEDILLA (U+00C7) 'Ç' (from general knowledge, not in list)
-  '\u00E7': '\\c c', // LATIN SMALL LETTER C WITH CEDILLA (U+00E7) 'ç' (from general knowledge, not in list)
+  // Accented Latin letters to LaTeX accent commands.
+  á: "\\'a",
+  é: "\\'e",
+  í: "\\'i",
+  ó: "\\'o",
+  ú: "\\'u",
+  à: '\\`a',
+  è: '\\`e',
+  ì: '\\`i',
+  ò: '\\`o',
+  ù: '\\`u',
+  â: '\\^a',
+  ê: '\\^e',
+  î: '\\^i',
+  ô: '\\^o',
+  û: '\\^u',
+  ä: '\\"a',
+  ë: '\\"e',
+  ï: '\\"i',
+  ü: '\\"u',
+  ã: '\\~a',
+  ñ: '\\~n',
+  õ: '\\~o',
+  Á: "\\'A",
+  É: "\\'E",
+  Ó: "\\'O",
+  Ô: '\\^O',
+  Ö: '\\"O',
+  Ã: '\\~A',
+  Ō: '\\=O',
+  ō: '\\=o',
+  Ç: '\\c C',
+  ç: '\\c c',
 
-  // ===== Homoglyph Normalization (Context dependent, use with care) =====
-  '\u043E': 'o', // CYRILLIC SMALL LETTER O (U+043E) 'о' to Latin 'o'
-  '\u0435': 'e', // CYRILLIC SMALL LETTER IE (U+0435) 'е' to Latin 'e'
-  '\u0430': 'a', // CYRILLIC SMALL LETTER A (U+0430) 'а' to Latin 'a' (from general knowledge, not in list)
-  // Add more Cyrillic or other homoglyphs here if needed
+  // Cyrillic homoglyphs (о, е, а) to the Latin letters they imitate.
+  о: 'o',
+  е: 'e',
+  а: 'a',
 
-  // Other math symbols like arrows (→), degree (°), μ (general), ±, ×, ÷
-  // are handled by replaceMathUnicode within math environments.
-
-  // ===== Greek letter replacements (moved by user) =====
-  // Fix micro unit symbols with proper math mode
-  '$ μs': '$ $\\mu$s', // micro (μ U+03BC) to \mu
+  // A Greek mu after a closing $ starts a unit: wrap it in math.
+  '$ μs': '$ $\\mu$s',
   '$ μm': '$ $\\mu$m',
   '$ μA': '$ $\\mu$A',
   '$ μV': '$ $\\mu$V',

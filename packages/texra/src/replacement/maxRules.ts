@@ -657,9 +657,5 @@ export const MAX_REGEX_REPLACEMENTS: RegexRuleSet = {
     // --- End of custom word list based \cref{fig:...} replacements ---
 
     '\\(see\\s+\\\\cref\\{(fig:[^,}]+)\\}\\)': '(see Figure~\\ref{$1})',
-
-    // Next step
-    // \KL[|] -> \\KL[\|]
-    // get _ or - in the equation labels consistent.
   },
 };

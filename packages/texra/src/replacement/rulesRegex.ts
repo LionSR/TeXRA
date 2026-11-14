@@ -333,10 +333,6 @@ export const LATEXDIFF_MARKUP_REPLACEMENTS: RegexRuleSet = {
       }),
     ),
 
-    // Note: For commands like \bze that should not be split, use:
-    // latexdiff --append-safecmd="bze,hbze" old.tex new.tex
-    // This prevents latexdiff from splitting the command and its arguments
-
     // === Fix escaped tildes in \DIFdel/\DIFadd commands ===
     // The escaped tilde \~ is a tilde accent command that needs an argument.
     // Inside \DIFdel{} it should be the non-breaking space character ~.
@@ -360,18 +356,13 @@ export const EQUATION_STYLE_REPLACEMENTS: RegexRuleSet = {
       '$1_{$3}^{$2}',
     // Remove extra space after \left( and before \right)
     '\\\\left\\(\\s+': '\\left(',
-    '\\s+\\\\right\\)': '\\right)', // this works
-    '\\\\left\\\\{\\s+': '\\left\\{', // Note the double backslash before {
-    '\\s+\\\\right\\\\}': '\\right\\}', // Note the double backslash before }
+    '\\s+\\\\right\\)': '\\right)',
+    '\\\\left\\\\{\\s+': '\\left\\{',
+    '\\s+\\\\right\\\\}': '\\right\\}',
     '\\\\left\\|\\s+': '\\left|',
     '\\s+\\\\right\\|': '\\right|',
     '\\\\left\\[\\s+': '\\left[',
     '\\s+\\\\right\\]': '\\right]',
-
-    // Fix list item spacing
-    // '\\\\begin\\{(itemize|enumerate|description)\\}\\s*\\\\item':
-    // '\\begin{$1}\n    \\item',
-    // this is also detecting \n after \begin{itemize}
 
     // Fix Repeated Words (Common Typos)
     '\\b(the|and|or|of|in|to|a|for|that|this|with|by|on|as) \\1\\b': '$1',
@@ -404,9 +395,6 @@ export const EQUATION_STYLE_REPLACEMENTS: RegexRuleSet = {
     // Fix inconsistent blank lines after environments (universally preferred)
     '(\\\\end\\{(equation|align|figure|table|itemize|enumerate|description)\\})([A-Za-z])':
       '$1\n\n$3',
-
-    // Fix space before closing braces in commands (nearly universal style)
-    // '\\\\(textbf|textit|emph|underline)\\{([^{}]*)\\s+\\}': '\\\\$1{$2}', // might not working now
 
     // Remove spaces inside textbf/textit/emph/underline/overbrace/underbrace/label
     ...createPatterns(
