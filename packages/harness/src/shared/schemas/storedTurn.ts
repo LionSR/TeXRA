@@ -17,6 +17,7 @@ import { Schema } from 'effect';
 
 import { JsonValueSchema } from './jsonValue';
 import { Sha256Schema } from './identifiers';
+import { NonNegativeIntSchema } from './nonNegativeInt';
 
 /** Provider bytes, kept verbatim and never interpreted by storage. */
 const ProviderEvidenceSchema = Schema.Struct({
@@ -110,9 +111,7 @@ const StoredContentSchema = Schema.Array(
   ]),
 );
 
-const TokenCount = Schema.NullOr(
-  Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-);
+const TokenCount = Schema.NullOr(NonNegativeIntSchema);
 
 /** One completed provider turn. */
 export const StoredTurnSchema = Schema.Struct({
@@ -162,7 +161,7 @@ export const StoredMessageSchema = Schema.Union([
     role: Schema.Literal('tool'),
     results: Schema.Array(
       Schema.Struct({
-        callOrdinal: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+        callOrdinal: NonNegativeIntSchema,
         status: Schema.Literals(['success', 'error']),
         content: Schema.Array(StoredInputPartSchema),
       }),

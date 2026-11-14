@@ -33,6 +33,7 @@ import {
   type AggregateId,
   type SessionRow,
   type TokenUsageStats,
+  NonNegativeIntSchema,
 } from '@shared/schemas';
 import {
   EVENT_COLUMNS,
@@ -230,7 +231,7 @@ export const LISTED_TYPES = JSON.stringify([...LISTED_KINDS]);
 const ProjectionStateSchema = Schema.Struct({
   name: Schema.String,
   version: Schema.Int,
-  through: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  through: NonNegativeIntSchema,
 });
 
 /** A projection this build owns (its version) and that has read every row

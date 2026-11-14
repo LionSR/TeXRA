@@ -9,7 +9,14 @@ import { resolve } from 'node:path';
 import ts from 'typescript';
 
 export function loadAliases(rootDir) {
-  const tsconfig = readTsconfig(resolve(rootDir, 'tsconfig.json'));
+  const tsconfigPath = resolve(rootDir, 'tsconfig.json');
+  const { config: tsconfig, error } = ts.parseConfigFileTextToJson(
+    tsconfigPath,
+    readFileSync(tsconfigPath, 'utf8'),
+  );
+  if (error) {
+    throw new Error(ts.flattenDiagnosticMessageText(error.messageText, '\n'));
+  }
 
   return Object.fromEntries(
     Object.entries(tsconfig.compilerOptions.paths).map(([key, values]) => {
@@ -24,15 +31,4 @@ export function loadAliases(rootDir) {
       return [aliasKey, resolve(rootDir, pathValue)];
     }),
   );
-}
-
-function readTsconfig(tsconfigPath) {
-  const { config, error } = ts.parseConfigFileTextToJson(
-    tsconfigPath,
-    readFileSync(tsconfigPath, 'utf8'),
-  );
-  if (error) {
-    throw new Error(ts.flattenDiagnosticMessageText(error.messageText, '\n'));
-  }
-  return config;
 }

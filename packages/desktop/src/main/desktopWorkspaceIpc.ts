@@ -55,6 +55,7 @@ import {
   AgentDocumentUnavailable,
   resolveAgentDocument,
 } from './desktopAgentDocuments.js';
+import { isAgentDocumentTarget } from '../shared/desktopAgentDocument.js';
 import type { ProcessServices } from '@texra-ai/harness/host';
 import type { DesktopPtyHost } from './desktopPtyHost.js';
 import type { DesktopBrowserViews } from './desktopBrowserViews.js';
@@ -340,7 +341,7 @@ export function createDesktopWorkspaceIpc(
 
   const readFile = Effect.fn('readFile')(function* (path: string) {
     const fs = yield* FileSystem.FileSystem;
-    const absolutePath = yield* path.startsWith('texra-agent:')
+    const absolutePath = yield* isAgentDocumentTarget(path)
       ? resolveAgentDocument(path, false)
       : resolveWorkspacePath(options.getWorkspacePath(), path);
     const contents = yield* editorText(fs, absolutePath);
@@ -363,7 +364,7 @@ export function createDesktopWorkspaceIpc(
   const writeFile = (path: string, contents: string, base: string | null) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const absolutePath = yield* path.startsWith('texra-agent:')
+      const absolutePath = yield* isAgentDocumentTarget(path)
         ? resolveAgentDocument(path, true)
         : resolveWorkspaceWritePath(options.getWorkspacePath(), path);
       if (base !== null) {
