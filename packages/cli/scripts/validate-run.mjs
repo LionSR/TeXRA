@@ -1405,9 +1405,10 @@ function validateSdkInlinePersona() {
  * An SDK approval that outlives its process: an embedder on a persistent
  * session starts a run whose custom tool asks for approval, and its handler
  * receives the request and leaves it pending; the process is killed there.
- * A second embedder reopens the session's store, resumes the run with the
- * same custom tool, and its handler approves the same request, so the tool
- * runs once and the run completes. Both phases' output, the run's request
+ * A second embedder reopens the session's store and resumes the run with the
+ * same custom tool: the request the dead process left is cancelled, the call
+ * asks again and its handler approves that one, so the tool runs once and the
+ * run completes. Both phases' output, the run's request
  * and tool rows and the file the tool wrote are the artifact.
  */
 async function validateSdkResumeApproval() {
@@ -1515,14 +1516,22 @@ async function validateSdkResumeApproval() {
       approved,
     });
     const requests = rows.filter((row) => row.requestId !== null);
+    const [left, cancelled, again, decided] = requests;
     assert(
       answered.length === 1 &&
-        sameRequest(answered[0]) &&
-        requests.length === 2 &&
-        requests.every(sameRequest) &&
-        requests[1].type === 'request.decided' &&
-        requests[1].decision === 'approve',
-      `the resumed run's one request should be the one asked before the kill, approved after it (artifact: ${artifactPath})`,
+        !sameRequest(answered[0]) &&
+        requests.length === 4 &&
+        left.type === 'request.opened' &&
+        sameRequest(left) &&
+        cancelled.type === 'request.decided' &&
+        sameRequest(cancelled) &&
+        cancelled.decision === 'cancel' &&
+        again.type === 'request.opened' &&
+        !sameRequest(again) &&
+        decided.type === 'request.decided' &&
+        decided.requestId === again.requestId &&
+        decided.decision === 'approve',
+      `the resume should cancel the request asked before the kill and ask again, approved once (artifact: ${artifactPath})`,
     );
     assert(
       result?.outcome === 'completed' &&
@@ -3436,12 +3445,22 @@ prompt: |
       const [kind, id] = JSON.parse(record.payload.aggregateId);
       return kind === 'run' ? id : undefined;
     };
-    // A run id is opaque: the script's children are the child rows its
-    // parent reports, never names parsed out of an id.
+    // A run id is opaque: the script's children are the runs whose
+    // `run.start` names the headless run as their parent, never names parsed
+    // out of an id. Not the `run.children` records: those report a live
+    // list as the view publishes it, and a list between two published
+    // levels is never written.
+    const rootId = runIdOf(
+      records.find(
+        (record) => record.kind === 'progress' && record.event === 'run.start',
+      ),
+    );
     const childIds = new Set(
       records.flatMap((record) =>
-        record.kind === 'progress' && record.event === 'run.children'
-          ? (record.payload?.children ?? []).map((child) => child.childRunId)
+        record.kind === 'progress' &&
+        record.event === 'run.start' &&
+        record.payload?.parent?.id === rootId
+          ? [runIdOf(record)]
           : [],
       ),
     );
