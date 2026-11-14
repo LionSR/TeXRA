@@ -179,6 +179,10 @@ export const STRUCTURED_OUTPUT_TOOL_NAME = 'submit_output';
 /** The tool that runs a named agent as a child of the calling run. */
 export const AGENT_TOOL_NAME = 'agent' as const;
 
+/** The tool that runs a script. A script's own run makes its one call to it,
+ *  whatever launched the run. */
+export const SCRIPT_TOOL_NAME = 'script';
+
 export const ToolResultSchema = Schema.Union([
   ExecutedToolResultSchema,
   ErrorToolResultSchema,

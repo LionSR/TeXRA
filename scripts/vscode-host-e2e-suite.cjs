@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const { existsSync, readFileSync } = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { setTimeout: sleep } = require('node:timers/promises');
 const vscode = require('vscode');
 
 const EXTENSION_ID = 'texra-ai.texra';
@@ -95,7 +96,7 @@ async function checks() {
   const openTabs = () => vscode.window.tabGroups.all.flatMap((g) => g.tabs);
   const deadline = Date.now() + 10_000;
   while (!openTabs().some(isTexraWebviewTab) && Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await sleep(200);
   }
   assert.ok(
     openTabs().some(isTexraWebviewTab),
@@ -123,7 +124,7 @@ async function checks() {
     const end = Date.now() + 60_000;
     while (!check()) {
       assert.ok(Date.now() < end, `timed out waiting for ${label}`);
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await sleep(250);
     }
   };
   await step('the service record', () =>

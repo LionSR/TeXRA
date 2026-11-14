@@ -21,7 +21,11 @@ import {
 import { childRunDescription } from '@agent/runtime/delegation/childRun';
 import { startChildRun } from '@agent/runtime/delegation/childLaunch';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
-import { AgentConfigSchema, type RunId } from '@shared/schemas';
+import {
+  AgentConfigSchema,
+  SCRIPT_TOOL_NAME,
+  type RunId,
+} from '@shared/schemas';
 import { executed } from '@tools/core/result';
 
 /** What the model reads for a script sent to the background. */
@@ -84,7 +88,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
         // The tools its parent's step offered it, less the parent's own
         // terminal tool and the script tool its run adds itself.
         tools: offered.flatMap(({ name, plugin }) =>
-          plugin === 'run' || name === 'script' ? [] : [name],
+          plugin === 'run' || name === SCRIPT_TOOL_NAME ? [] : [name],
         ),
         ...(input.timeoutMs !== undefined && { timeoutMs: input.timeoutMs }),
         kind: 'background',

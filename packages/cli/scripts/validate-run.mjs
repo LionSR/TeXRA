@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { stripVTControlCharacters } from 'node:util';
 import { parseArgs as parseCittyArgs } from 'citty';
 
@@ -139,7 +140,7 @@ async function waitFor(label, check, timeoutMs = 120_000) {
   const deadline = Date.now() + timeoutMs;
   while (!check()) {
     assert(Date.now() < deadline, `timed out waiting for ${label}`);
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    await sleep(250);
   }
 }
 
@@ -1944,7 +1945,7 @@ async function validateServiceChatsSeeEachOther() {
         Date.now() < deadline,
         `the first chat never answered\noutput:\n${stripVTControlCharacters(first?.output ?? '').slice(-3000)}`,
       );
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await sleep(250);
     }
     let phase = 'opening';
     let from = 0;
@@ -2054,13 +2055,6 @@ prompt: |
       return false;
     }
   };
-  const until = async (label, check) => {
-    const deadline = Date.now() + 30_000;
-    while (!check()) {
-      assert(Date.now() < deadline, `timed out waiting for ${label}`);
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    }
-  };
   let nextList;
   try {
     // A task at work in this build's service: its model call is held.
@@ -2096,18 +2090,30 @@ prompt: |
     let nextExit = null;
     nextList.on('exit', (code) => (nextExit = code ?? 1));
     let draining;
-    await until('the older service to drain', () => {
-      draining = status(binaryPath, 'service status (draining)');
-      return draining.draining === true;
-    });
+    await waitFor(
+      'the older service to drain',
+      () => {
+        draining = status(binaryPath, 'service status (draining)');
+        return draining.draining === true;
+      },
+      30_000,
+    );
     const waited = nextExit === null && alive(first.pid);
     writeFileSync(path.join(project.work, 'golden-park.release'), '');
-    await until('the newer client to finish', () => nextExit !== null);
+    await waitFor(
+      'the newer client to finish',
+      () => nextExit !== null,
+      30_000,
+    );
     assert(
       nextExit === 0,
       `texra tasks list (next build) should succeed once the older service exits (exit ${nextExit})\nstderr:\n${nextStderr}`,
     );
-    await until('the retired service to exit', () => !alive(first.pid));
+    await waitFor(
+      'the retired service to exit',
+      () => !alive(first.pid),
+      30_000,
+    );
     const next = status(nextBuildPath, 'service status (next build)');
     texraWith(
       binaryPath,
@@ -2319,13 +2325,6 @@ async function validateServiceSessionIdle() {
     assertSuccess(result, label);
     return result.stdout.trim();
   };
-  const waitFor = async (label, check, timeoutMs = 120_000) => {
-    const deadline = Date.now() + timeoutMs;
-    while (!check()) {
-      assert(Date.now() < deadline, `timed out waiting for ${label}`);
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    }
-  };
   const service = spawn(
     process.execPath,
     [binaryPath, 'serve', '--idle-timeout', '4'],
@@ -2492,7 +2491,7 @@ prompt: |
         : undefined) === undefined
     ) {
       assert(Date.now() < deadline, 'timed out waiting for the project store');
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await sleep(250);
     }
     writeFileSync(
       path.join(storage, dir, 'config.json'),
@@ -2515,10 +2514,7 @@ prompt: |
       { cwd: project.work, env },
     );
     assertSuccess(started, 'texra tasks start env_validation');
-    while (!existsSync(output)) {
-      assert(Date.now() < deadline, 'timed out waiting for env.txt');
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    }
+    await waitFor('env.txt', () => existsSync(output));
     const reported = readFileSync(output, 'utf8');
     const artifactPath = writeArtifact('service-project-env.json', {
       command: reported,
@@ -2551,11 +2547,7 @@ prompt: |
       { cwd: project.work, env },
     );
     assertSuccess(second, 'texra tasks start env_validation (edited)');
-    const editDeadline = Date.now() + 120_000;
-    while (!existsSync(output)) {
-      assert(Date.now() < editDeadline, 'timed out waiting for env.txt again');
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    }
+    await waitFor('env.txt again', () => existsSync(output));
     const edited = readFileSync(output, 'utf8');
     writeArtifact('service-project-env-edited.json', { command: edited });
     assert(
@@ -2664,7 +2656,7 @@ prompt: |
     let value;
     while ((value = found()) === undefined) {
       assert(Date.now() < deadline, `timed out waiting for ${what}`);
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await sleep(250);
     }
     return value;
   };
@@ -2775,13 +2767,6 @@ prompt: |
     assertSuccess(result, label);
     return result;
   };
-  const waitFor = async (label, check, timeoutMs = 120_000) => {
-    const deadline = Date.now() + timeoutMs;
-    while (!check()) {
-      assert(Date.now() < deadline, `timed out waiting for ${label}`);
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    }
-  };
   const storage = path.join(storageRoot, 'v1', 'workspace-storage');
   const projectDir = () => {
     const dir = existsSync(storage)
@@ -2865,7 +2850,7 @@ prompt: |
       firstWatch.events().some((row) => row.type === 'request.opened'),
     );
     // Long enough for an Auto-approve run to have run its command.
-    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    await sleep(3_000);
     const approved = path.join(project.work, 'approved.txt');
     const setting = JSON.parse(
       readFileSync(path.join(projectDir(), 'config.json'), 'utf8'),
@@ -2900,7 +2885,7 @@ prompt: |
     await waitFor('the narrowed command to wait for approval', () =>
       narrowWatch.events().some((row) => row.type === 'request.opened'),
     );
-    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    await sleep(3_000);
     const narrowedCommandRan = existsSync(approved);
     const narrowPrefix = narrowWatch.events();
     const narrowThrough = Math.max(...narrowPrefix.map((row) => row.commit));

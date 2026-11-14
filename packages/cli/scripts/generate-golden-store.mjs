@@ -104,6 +104,7 @@ import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { zstdDecompressSync } from 'node:zlib';
@@ -526,7 +527,7 @@ async function until(label, check, handle, timeoutMs = 60_000) {
       fail(
         `timed out waiting for ${label}${lastError ? ` (last read: ${lastError.message})` : ''}\n${handle?.output() ?? ''}`,
       );
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await sleep(50);
   }
 }
 
@@ -1150,7 +1151,7 @@ async function normalize(file, root) {
   const collect = (value) => {
     if (typeof value === 'string') {
       const text = paths.reduce(
-        (out, [from, to]) => out.split(from).join(to),
+        (out, [from, to]) => out.replaceAll(from, () => to),
         value,
       );
       for (const match of text.match(UUID) ?? []) uuids.get(match);
@@ -1271,7 +1272,7 @@ async function normalize(file, root) {
     for (const [from, to] of replacements)
       out =
         typeof from === 'string'
-          ? out.split(from).join(to)
+          ? out.replaceAll(from, () => to)
           : out.replace(from, to);
     return out.replace(
       /(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])/g,

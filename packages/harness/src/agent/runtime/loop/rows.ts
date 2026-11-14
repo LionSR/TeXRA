@@ -21,6 +21,7 @@ import {
   type RunId,
   type RunInput,
   type RunOutcome,
+  SCRIPT_TOOL_NAME,
 } from '@shared/schemas';
 import { consumedRow } from '@shared/session/runFacts';
 import type { QueuedFollowUp } from '@shared/session/runRows';
@@ -130,9 +131,6 @@ export function configRow(
     binding,
   };
 }
-
-/** The tool a script's run calls: `script`, whatever launched the run. */
-export const SCRIPT_TOOL_NAME = 'script';
 
 /**
  * The row of a script's run's one call (`AgentConfig.script`): the call the

@@ -33,6 +33,7 @@ import {
   type ToolResult,
   type AgentConfig,
   isTaskConfig,
+  AGENT_TOOL_NAME,
 } from '@shared/schemas';
 import { attemptRequests, callRequestId } from '@shared/session/inFlight';
 import {
@@ -537,7 +538,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
 
 export const agentTool = (): DefinedTool<AgentInput, PluginToolServices> =>
   defineTool({
-    name: 'agent',
+    name: AGENT_TOOL_NAME,
     requiresApproval: 'inBody',
     // A resumed call finds the child its earlier attempt launched and settles
     // from it, or resumes it under its own id: it never launches a second one.
