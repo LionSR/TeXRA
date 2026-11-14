@@ -262,7 +262,7 @@ const parentDelivery = Effect.fn('parentDelivery')(function* (
  * rows this build cannot load ends unloaded, with a warning, requests
  * uncancelled.
  */
-export const endIn = Effect.fn('endIn')(function* (
+const endIn = Effect.fn('endIn')(function* (
   tx: Pick<SessionTransaction, 'append'>,
   input: RunEnding,
   leading: readonly UnfoldedDraft[] = [],

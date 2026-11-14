@@ -127,7 +127,7 @@ export const REFUSED: { readonly failed: ResumeRefusal } = {
  * row waits for the next explicit resume; an owning parent is followed; a
  * run the store no longer holds is not resumed. Never fails.
  */
-export const wakeRun = Effect.fn('wakeRun')(function* (
+const wakeRun = Effect.fn('wakeRun')(function* (
   runId: RunId,
 ): Effect.fn.Return<void, never, Runs | RunRegistry | SessionLog> {
   // The store's answer, not the view's: the view trails the log, and a run

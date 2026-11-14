@@ -83,7 +83,7 @@ export type Sent =
 type Refusal = 'notResumable' | 'notParent';
 
 /** What a send asks of the row and of the run. */
-export interface SendOptions {
+interface SendOptions {
   /** When the row may be read (`readableMessages`). Absent: at once, or at
    *  the turn's end for a host's notification (`queuedRow`). */
   readonly hold?: QueuedFollowUp['holdUntil'];
