@@ -55,7 +55,7 @@ import {
   CUSTOM_REPLACEMENTS_SETTING,
   ENABLED_REGEX_REPLACEMENTS_SETTING,
   ENABLED_REPLACEMENTS_SETTING,
-} from '@texra/shared/settingsView/texraSettings';
+} from '@texra/shared/settings/texraSettings';
 
 const CHANNEL = 'ReplacementEngine';
 

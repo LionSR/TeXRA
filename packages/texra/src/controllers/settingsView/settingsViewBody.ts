@@ -58,8 +58,8 @@ import { buildProfilePage } from '@texra/controllers/settingsView/profileMessage
 import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
 import { settingsToolCommands } from '@texra/controllers/settingsView/settingsToolCommands';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
-import { buildSettingsSnapshotMessage } from '@texra/shared/settingsView/handlers/settingsSnapshot';
-import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
+import { buildSettingsSnapshotMessage } from '@texra/controllers/settingsView/settingsSnapshot';
+import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
 import {
   DERIVED_SETTINGS_SNAPSHOTS,
   type SettingsHostState,

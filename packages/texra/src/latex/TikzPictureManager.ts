@@ -17,7 +17,7 @@ import { compileLatex2Pdf } from './texTools';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import type { FileLocation } from '@texra-ai/harness/schemas';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import { TIKZ_TEMPLATE_SETTING } from '@texra/shared/settingsView/texraSettings';
+import { TIKZ_TEMPLATE_SETTING } from '@texra/shared/settings/texraSettings';
 
 /**
  * Create a standalone LaTeX file for a TikZ picture

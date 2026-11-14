@@ -28,7 +28,7 @@ import {
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import { readOrCreateInstallId } from '@telemetry/installId';
-import { TELEMETRY_ENABLED_SETTING } from '@texra/shared/settingsView/texraSettings';
+import { TELEMETRY_ENABLED_SETTING } from '@texra/shared/settings/texraSettings';
 import type { AppState, ConfigProvider } from '@texra-ai/harness/host';
 
 const CHANNEL = 'UsageLogService';

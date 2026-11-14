@@ -14,9 +14,9 @@ import {
 } from '@texra-ai/harness/schemas';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
-import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
-import type { TexraSettingRow } from '@texra/shared/settingsView/settingSurfaces';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
+import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
+import type { TexraSettingRow } from '@texra/shared/settings/settingSurfaces';
 import {
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,

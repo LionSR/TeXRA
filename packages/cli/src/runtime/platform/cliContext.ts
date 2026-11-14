@@ -46,7 +46,7 @@ import { loadCliStartupConfig } from './cliConfig';
 import { loginShellEnvironment } from './loginShellEnv';
 import { interactiveTerminalFailure } from '../terminal/terminalRequirements';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import { CLI_OUTPUT_FORMAT_SETTING } from '@texra/shared/settingsView/texraSettings';
+import { CLI_OUTPUT_FORMAT_SETTING } from '@texra/shared/settings/texraSettings';
 
 type CliMode = 'headless' | 'interactive';
 

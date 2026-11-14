@@ -15,7 +15,7 @@ import {
   CLAUDE_AGENT_MODEL_VALUES,
   CODEX_MODEL_VALUES,
 } from '@texra/shared/agentCliSettings';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
   CHATGPT_SETUP_MODEL,
   SETUP_MODEL_BY_PROVIDER,

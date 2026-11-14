@@ -11,7 +11,7 @@ import { Effect } from 'effect';
  * nothing left of its own to say.
  */
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import type { DerivedSettingsSnapshot } from '@texra/shared/settingsView/settingsViewMessages';
 
 /** Read one settings-view snapshot from the host's stores. */

@@ -101,7 +101,7 @@ import {
   PROCESS,
   tail,
 } from '@test/shared/session/fanOutScenario';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import {
   buildDiffHunks,

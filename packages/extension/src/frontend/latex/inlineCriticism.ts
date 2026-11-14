@@ -40,7 +40,7 @@ import {
   Settings,
   type SettingsStores,
 } from '@texra-ai/harness/plugins';
-import { INLINE_CRITICISM_SETTING } from '@texra/shared/settingsView/texraSettings';
+import { INLINE_CRITICISM_SETTING } from '@texra/shared/settings/texraSettings';
 
 const CHANNEL = 'InlineCriticism';
 const COLLECTION_NAME = 'texra-criticism';

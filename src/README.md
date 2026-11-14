@@ -67,7 +67,6 @@ CLI surfaces, and ships in nothing.
 - **`utils/`**: leaf helpers with no domain knowledge; if it could be an npm
   package, it goes here.
 
-When two fit, take the one with tighter constraints, and look for a boundary
-test near the target first: `shared/settingsView/handlers/` is guarded by
-`SharedSettingsViewBoundary.vitest.ts` against `@controllers/`, `@agent/`,
-`@model/` and `@tools/`, while `ui/wa/` deliberately depends on Lit.
+When two fit, take the one with tighter constraints: `shared/` holds no
+Effect programs that read or write stores (those are `controllers/`), while
+`ui/wa/` deliberately depends on Lit.

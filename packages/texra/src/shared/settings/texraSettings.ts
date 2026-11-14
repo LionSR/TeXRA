@@ -32,16 +32,16 @@ import {
   NON_REGEX_REPLACEMENT_CATEGORIES,
   REGEX_REPLACEMENT_CATEGORIES,
 } from '@texra/shared/constants/replacementCategories';
-import { DOCUMENTS_SETTINGS } from '@texra/shared/settingsView/documentsSettings';
+import { DOCUMENTS_SETTINGS } from '@texra/shared/settings/documentsSettings';
 import {
   CLAUDE_AGENT_SETTINGS,
   CODEX_SETTINGS,
-} from '@texra/shared/settingsView/integrationSettings';
+} from '@texra/shared/settings/integrationSettings';
 import {
   HARNESS_ROW_SURFACES,
   type SettingsViewRow,
   type TexraSettingRow,
-} from '@texra/shared/settingsView/settingSurfaces';
+} from '@texra/shared/settings/settingSurfaces';
 import type { SettingsViewSnapshot } from '@texra/shared/settingsView/settingsViewMessages';
 
 /** Standalone preamble used when extracting a TikZ figure for compilation. */

@@ -27,7 +27,7 @@ import {
  * The row is also the handle a reader passes to `Settings`, which types the
  * value by the row's schema. Where an app shows a row is the app's: TeXRA
  * keeps that beside its own rows
- * (`packages/texra/src/shared/settingsView/settingSurfaces.ts`).
+ * (`packages/texra/src/shared/settings/settingSurfaces.ts`).
  */
 
 /**
