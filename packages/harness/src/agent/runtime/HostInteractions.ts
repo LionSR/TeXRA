@@ -96,7 +96,7 @@ function presentOn<K extends RuntimePresentationEvent>(
         Effect.catchCause((cause) =>
           Effect.logWarning('A host presentation notice failed').pipe(
             Effect.annotateLogs({
-              data: { event, cause: cause },
+              data: { event, cause },
             }),
             withLogChannel(CHANNEL),
           ),
