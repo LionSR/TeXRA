@@ -72,7 +72,7 @@ const TranscriptViewSchema = Schema.Struct({
 export type TranscriptView = typeof TranscriptViewSchema.Type;
 
 /** One run as every renderer reads it; `SessionView.runs` holds them. */
-export const RunViewSchema = Schema.Struct({
+const RunViewSchema = Schema.Struct({
   /** The run id: the aggregate's logical id, minted once at launch. */
   id: RunIdSchema,
   /** From `run.start`; every run has one. */

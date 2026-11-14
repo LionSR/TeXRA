@@ -80,10 +80,13 @@ export type RunFacts = {
   /** The result a script run's handed-down call finished with: no model
    *  answers it, so its turn ends there, and an error fails it. */
   readonly handedDown: ToolResultPayload['result'] | null;
-  /** The turn whose final-tool nudge was appended, so it is asked once. */
-  readonly finalToolTurn: number | null;
-  /** The final-tool nudge stands unanswered: the next response is forced. */
-  readonly forceFinalTool: boolean;
+  /** The final-tool nudge: the turn it was appended in, so a turn is asked
+   *  once, and whether the response it forces is still `owed`. A nudge of
+   *  an earlier turn forces nothing. */
+  readonly finalTool: {
+    readonly turn: number;
+    readonly owed: boolean;
+  } | null;
   /** The latest response's answer was finalized for display. */
   readonly answerFinalized: boolean;
   /** Each call a response issued, and each call a script of it issued, by
@@ -107,8 +110,7 @@ export const NO_FACTS: RunFacts = {
   toolCalls: 0,
   structured: null,
   handedDown: null,
-  finalToolTurn: null,
-  forceFinalTool: false,
+  finalTool: null,
   answerFinalized: false,
   calls: byId([]),
 };

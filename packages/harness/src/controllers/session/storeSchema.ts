@@ -50,7 +50,7 @@ const APPLICATION_ID = 0x54655852;
  * them: `start_commit` (the commit of seq 1) and `closed_by` (the
  * deletion marker's commit, `NULL` while open). The foreign keys are the
  * collection mechanism: deleting an aggregate cascades to its dependents,
- * its events, its projections and their projected rows.
+ * its events and its projections.
  *
  * `event_blob` links a row to each blob it needs kept: `inline` is 1 for a
  * string the codec moved out of the row, which a read inflates back, and 0
@@ -118,12 +118,9 @@ const ADDITIVE = [
     version        INTEGER NOT NULL,
     through_commit INTEGER NOT NULL
   ) STRICT, WITHOUT ROWID`,
-  `CREATE TABLE IF NOT EXISTS projected_row (
-    "commit" INTEGER NOT NULL REFERENCES event("commit") ON DELETE CASCADE,
-    type     TEXT NOT NULL,
-    data     TEXT NOT NULL,
-    PRIMARY KEY ("commit", type)
-  ) STRICT, WITHOUT ROWID`,
+  // A table earlier builds kept a copy of each priced row's usage in: no
+  // build reads it now, and every row of it was derived.
+  `DROP TABLE IF EXISTS projected_row`,
   `CREATE TABLE IF NOT EXISTS listing_entry (
     aggregate INTEGER NOT NULL REFERENCES event_sequence(id) ON DELETE CASCADE,
     key       TEXT NOT NULL,
