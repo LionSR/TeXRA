@@ -328,7 +328,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
         setModelEnabled({
           model: message.modelName,
           enabled: message.enabled,
-          state: roots.globalState,
+          stores: roots,
         }).pipe(
           Effect.andThen(changed('settings')),
           // The options cache is invalidated by the writer itself.

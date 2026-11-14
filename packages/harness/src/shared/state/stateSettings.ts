@@ -631,6 +631,10 @@ export interface SettingsCatalog {
    * are cloned so a caller cannot mutate the catalog's own default.
    */
   readonly configDefault: (key: string) => unknown;
+  /** The models every user starts with enabled, in picker order; a person's
+   *  selection is stored as a change over this list. The app's choice over
+   *  the llm catalog: the harness curates none. */
+  readonly curatedModels: readonly string[];
 }
 
 /** The harness's rows, then `rows` (an app's own, its plugins' included),
@@ -642,6 +646,8 @@ export function settingsCatalog(options: {
   /** The app's own defaults for harness rows, by key: the value an absent
    *  key reads as (the helper model, which the harness leaves unset). */
   readonly defaults?: Readonly<Record<string, unknown>>;
+  /** {@link SettingsCatalog.curatedModels}; none when absent. */
+  readonly curatedModels?: readonly string[];
 }): SettingsCatalog {
   const appDefaults = options.defaults ?? {};
   const unowned = Object.keys(appDefaults).filter(
@@ -679,6 +685,7 @@ export function settingsCatalog(options: {
   const defaults = new Map<string, unknown>();
   return {
     namespace: options.namespace,
+    curatedModels: Object.freeze([...(options.curatedModels ?? [])]),
     rows,
     byKey: (key) => byKey.get(key),
     byStoredKey: (storedKey) =>

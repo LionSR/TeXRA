@@ -1,14 +1,10 @@
 /** Shared canonical configuration schema for runtime and persisted events. */
 import { Effect, Schema, Struct } from 'effect';
 
-import { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
 import { AgentSourceSchema, InlinePersonaSchema } from './agent';
 import { AgentDelegationScopeSchema } from './workspaceAgents';
 import { NullableFileFieldsSchema } from './fileFields';
 import { JsonValueSchema } from './jsonValue';
-
-/** Agent selected when launch input names none. */
-export const DEFAULT_TASK_AGENT = 'correct';
 
 /** What every script a run opens on records: its source, title, the tools
  *  it is offered, and its wall-clock limit. */
@@ -26,9 +22,7 @@ const ScriptFieldsSchema = Schema.Struct({
 /** A run's launch configuration, as its `run.config` row records it. */
 const AgentConfigObjectSchema = NullableFileFieldsSchema.mapFields(
   Struct.assign({
-    agent: Schema.String.pipe(
-      Schema.withDecodingDefault(Effect.succeed(DEFAULT_TASK_AGENT)),
-    ),
+    agent: Schema.String,
     /**
      * Resolved source of `agent`. A boundary that validated the agent pins it;
      * launch (`prepareAgentDefinition`) stamps the entry it resolved, so every
@@ -48,9 +42,7 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.mapFields(
      * caller's step offered.
      */
     asCaller: Schema.optional(Schema.NullOr(Schema.Boolean)),
-    model: Schema.String.pipe(
-      Schema.withDecodingDefault(Effect.succeed(DEFAULT_AGENT_MODEL)),
-    ),
+    model: Schema.String,
     instruction: Schema.String.pipe(
       Schema.withDecodingDefault(Effect.succeed('')),
     ),

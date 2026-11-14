@@ -24,6 +24,7 @@ import {
   type SettingsCatalog,
 } from '@texra-ai/harness/schemas';
 import { CliOutputFormatSchema } from '@texra/shared/cliOutputFormat';
+import { CURATED_MODELS } from '@texra/model/curatedModels';
 import { LATEX_FORMATTER_VALUES } from '@texra/shared/constants/latexConfig';
 import {
   DEFAULT_ENABLED_REGEX_REPLACEMENTS,
@@ -336,6 +337,7 @@ const catalog: SettingsCatalog = settingsCatalog({
   namespace: 'texra',
   rows: [...TEXRA_UNSHOWN_ROWS, ...TEXRA_PLACED_ROWS],
   defaults: { [HELPER_MODEL_SETTING.key]: DEFAULT_HELPER_MODEL },
+  curatedModels: CURATED_MODELS,
 });
 
 /** Each harness row's placement, by key. */

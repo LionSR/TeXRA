@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: the harness names no default model, agent or curated picker list.**
+  `DEFAULT_AGENT_MODEL` and `DEFAULT_TASK_AGENT` are no longer exported, and
+  `AgentConfig.model` and `.agent` are required. `session.start` takes a
+  required `model`. The models every user starts with enabled come from the
+  app's catalog: `settingsCatalog({ curatedModels })`, read as
+  `SettingsCatalog.curatedModels` (none when absent). `getEnabledModels` and
+  `setModelEnabled` take the settings slots (`config` and `globalState`)
+  instead of the global state store alone.
 - **SDK: an app's launch facts are an opaque `launch` record.**
   `AgentConfig.cli` (output file, output directory, expected outputs, team
   id) is gone; `AgentConfig.launch` is a JSON record the launching app

@@ -30,7 +30,6 @@ export type {
 // and its JSON with the fields its category hides dropped.
 export type { RunRecord } from '@agent/core/definition/RunRecord';
 export { serializeFilteredConfig } from '@tools/executions/configView';
-export { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
 // The subscriptions a model call can route through, by provider id.
 export {
   SUBSCRIPTION_AUTH_PROVIDERS,
@@ -325,7 +324,6 @@ export {
   blocksCaller,
   type ContextStateData,
   CredentialSwitchSchema,
-  DEFAULT_TASK_AGENT,
   type DiffStats,
   DiffStatsSchema,
   emptyRunEndOutput,

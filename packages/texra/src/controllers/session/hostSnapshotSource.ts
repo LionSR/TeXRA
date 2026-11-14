@@ -294,7 +294,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       Effect.gen(function* () {
         const models = yield* readModelOptions(
           stores,
-          yield* getEnabledModels(stores.globalState),
+          yield* getEnabledModels(stores),
         );
         const modelOptions = modelOptionsFrom(models);
         yield* SubscriptionRef.update(inputs, (s) => ({

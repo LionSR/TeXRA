@@ -1010,7 +1010,7 @@ The models the pickers show — the single reader of
 {@link MODEL_SELECTION_KEY} for every host.
 
 ```ts
-const getEnabledModels: (state: Pick<StateStore, "get">) => Effect<readonly string[], StateReadFailed, never>
+const getEnabledModels: (stores: Pick<SettingsStores, "config" | "globalState">) => Effect<readonly string[], StateReadFailed, never>
 ```
 
 ## getHelperModelName
@@ -2192,7 +2192,7 @@ never enabled. Either violation fails with `StateWriteFailed`.
 function setModelEnabled(input: {
   readonly model: string;
   readonly enabled: boolean;
-  readonly state: StateStore;
+  readonly stores: Pick<SettingsStores, 'config' | 'globalState'>;
 })
 ```
 
