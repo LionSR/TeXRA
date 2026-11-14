@@ -12,8 +12,7 @@ import type { Session, WorkspaceRoots } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness/host';
 
 /** The setup assistant's log channel, for its launch and what follows it. */
-export const SETUP_ASSISTANT_CHANNEL = 'SetupAssistant';
-const CHANNEL = SETUP_ASSISTANT_CHANNEL;
+const CHANNEL = 'SetupAssistant';
 
 /**
  * The launch program the command surface runs on the process runtime: a

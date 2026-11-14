@@ -233,6 +233,11 @@ export const workspaceTeams = <E>(
     ];
   });
 
+/** The teams a person picks from: every preset but the setup starter,
+ *  which the setup flow applies itself. */
+export const launchableTeams = (presets: readonly TeamPreset[]): TeamPreset[] =>
+  presets.filter((preset) => !preset.setupOnly);
+
 /**
  * The members of the workspace's team `teamId`, `undefined` for a team it has
  * none of: what the harness reads of a team (`AgentDirectoriesPort.teamMembers`)

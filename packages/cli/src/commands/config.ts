@@ -20,7 +20,6 @@ import {
   formatCliWorkspaceAgents,
   readCliWorkspaceAgents,
 } from '../runtime/workspaceAgents';
-import { CliExitCode } from '../runtime/platform/exitCodes';
 import {
   cliPlatform,
   type CliPlatformServices,
@@ -30,7 +29,7 @@ import { writeErrorStderr } from '../runtime/platform/logSinks';
 import { setWorkspaceCliChatAgent } from '../runtime/platform/cliConfig';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
+import { optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 
 function parseAgentKeys(value: string): string[] {
@@ -87,7 +86,6 @@ const showConfig = Effect.fn('showConfig')(function* (
       formatCliWorkspaceAgents(agents),
     ].join('\n'),
   });
-  return CliExitCode.Success;
 });
 
 const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
@@ -177,7 +175,6 @@ const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
       ndjson: { kind: 'workspace-agents', agents: record },
       text: formatCliWorkspaceAgents(record),
     });
-    return CliExitCode.Success;
   },
 );
 
@@ -187,7 +184,6 @@ const configAgentsCommand = defineCliCommand({
     description: 'Show or change the workspace agents',
   },
   args: {
-    ...GLOBAL_ARGS,
     agents: {
       type: 'string',
       valueHint: 'inherit|all|team:<team>|agent,...',
@@ -219,7 +215,6 @@ const configAgentsCommand = defineCliCommand({
 
 const configShowCommand = defineCliCommand({
   meta: { name: 'show', description: 'Show effective CLI configuration' },
-  args: { ...GLOBAL_ARGS },
   run: Effect.fn('config.run')(function* () {
     const services = yield* cliPlatform;
     return yield* showConfig(services);
@@ -231,7 +226,6 @@ const configEditCommand = defineCliCommand({
     name: 'edit',
     description: 'Open the interactive configuration view',
   },
-  args: { ...GLOBAL_ARGS },
   // The terminal check is the builder's, above the program: it refuses
   // before `defineCliCommand` installs anything.
   run: (context) => {
@@ -258,7 +252,6 @@ const configEditCommand = defineCliCommand({
         colorEnabled: context.stdoutColorEnabled,
         onError: writeErrorStderr,
       });
-      return CliExitCode.Success;
     });
   },
 });

@@ -1,4 +1,9 @@
-import { defineCommand, type ArgsDef, type CommandDef } from 'citty';
+import {
+  defineCommand,
+  type ArgsDef,
+  type CommandDef,
+  type CommandMeta,
+} from 'citty';
 import {
   Cause,
   Effect,
@@ -34,6 +39,12 @@ import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 
 import { loadConfigAndWarn } from './loadConfigAndWarn';
 import { setExitCode } from './exitCode';
+import {
+  GLOBAL_ARGS,
+  INTERACTIVE_COMMAND_NAMES,
+  INTERACTIVE_GLOBAL_ARGS,
+  rejectHeadlessOnlyFlags,
+} from './globalArgs';
 
 // citty hands `run` a context whose `args` is keyed by the command's `ArgsDef`.
 // We mirror that shape so handlers keep full literal-typed access to `ctx.args`
@@ -43,17 +54,23 @@ type CliCommandRunContext<A extends ArgsDef> = Parameters<
 >[0];
 
 /**
- * What a command's program finishes with: the process exit code, or the chat
- * session it hands the terminal to (`texra setup`'s setup agent, `texra
- * resume`'s tool-use session). The TUI is not part of the program: `runChat`
- * installs Ink, its own SIGINT/SIGTERM pair and the teardown it owns, so it
- * mounts after the program has finished rather than inside a fiber of the
- * runtime it outlives.
+ * What a command's program finishes with: nothing, which is success, the
+ * process exit code, or the chat session it hands the terminal to (`texra
+ * setup`'s setup agent, `texra resume`'s tool-use session). The TUI is not
+ * part of the program: `runChat` installs Ink, its own SIGINT/SIGTERM pair
+ * and the teardown it owns, so it mounts after the program has finished
+ * rather than inside a fiber of the runtime it outlives.
  */
-type CliCommandOutcome = number | { readonly chat: RunChatInit };
+type CliCommandOutcome = number | void | { readonly chat: RunChatInit };
 
 interface DefineCliCommandOptions<A extends ArgsDef, E, R, O> {
-  readonly meta: CommandDef<A>['meta'];
+  readonly meta: CommandMeta & { readonly name: string };
+  /**
+   * The command's own arguments. The global flags come first, added here:
+   * every command takes {@link GLOBAL_ARGS}, and an interactive one
+   * ({@link INTERACTIVE_COMMAND_NAMES}) takes {@link INTERACTIVE_GLOBAL_ARGS}
+   * and refuses the headless-only flags before anything is built.
+   */
   readonly args?: A;
   /**
    * citty's `setup`, which runs before `run`: an argv refusal that must
@@ -65,12 +82,12 @@ interface DefineCliCommandOptions<A extends ArgsDef, E, R, O> {
    * Core handler. Receives the already-built `CliContext` (with config
    * warnings surfaced by `loadConfigAndWarn`) and citty's run context, and
    * returns the command as the program it is, run with that context as its
-   * `CliInvocation`: one Effect ending in the
-   * process exit code, which this helper runs on the command's runtime.
+   * `CliInvocation`: one Effect ending in the process exit code, or in
+   * nothing for success, which this helper runs on the command's runtime.
    * The value it finishes with is forwarded to `setExitCode`, so a handler
-   * reduces to "do the work, return a code" — or, for a command that ends in
-   * the chat TUI, "do the work, name the session", which this helper mounts
-   * once the program has finished.
+   * reduces to "do the work" — or, for a command that ends in the chat TUI,
+   * "do the work, name the session", which this helper mounts once the
+   * program has finished.
    *
    * It is called to BUILD that program, before the runtime is built. A
    * command that can refuse its arguments without the runtime refuses HERE,
@@ -126,7 +143,7 @@ export function defineCliCommand<const A extends ArgsDef, E>(
   > & { readonly platform?: CliPlatformOptions },
 ): CommandDef<A>;
 export function defineCliCommand<const A extends ArgsDef, E, R>(
-  options: DefineCliCommandOptions<A, E, NoInfer<R>, number> & {
+  options: DefineCliCommandOptions<A, E, NoInfer<R>, number | void> & {
     readonly layer: (context: CliContext) => Layer.Layer<R>;
   },
 ): CommandDef<A>;
@@ -143,6 +160,8 @@ export function defineCliCommand<const A extends ArgsDef, E>(
     ) => Layer.Layer<CliServices | CliPlatform>;
   },
 ): CommandDef<A> {
+  const { name } = options.meta;
+  const interactive = INTERACTIVE_COMMAND_NAMES.includes(name);
   function report(cause: Cause.Cause<unknown>): void {
     // Ctrl-C or SIGTERM: the platform's shutdown interrupted the command,
     // and its signal handler ends the process with the signal's code. That
@@ -163,8 +182,19 @@ export function defineCliCommand<const A extends ArgsDef, E>(
 
   return defineCommand<A>({
     meta: options.meta,
-    args: options.args,
-    setup: options.setup,
+    // The global flags parse too; a program reads them through
+    // `loadConfigAndWarn`, never `ctx.args`.
+    args: Object.assign(
+      {},
+      interactive ? INTERACTIVE_GLOBAL_ARGS : GLOBAL_ARGS,
+      options.args,
+    ),
+    setup: interactive
+      ? (ctx) => {
+          rejectHeadlessOnlyFlags(ctx.rawArgs, name);
+          return options.setup?.(ctx);
+        }
+      : options.setup,
     async run(ctx) {
       // A pre-runtime run: the context program opens the config stores
       // before the command's runtime exists.
@@ -208,6 +238,7 @@ export function defineCliCommand<const A extends ArgsDef, E>(
         const exit = await runtime.runPromiseExit(program);
         if (Exit.isFailure(exit)) return report(exit.cause);
         const outcome = exit.value;
+        if (outcome === undefined) return setExitCode(CliExitCode.Success);
         if (typeof outcome === 'number') return setExitCode(outcome);
         // The TUI mounts at this Promise edge, after the program has
         // finished, on the runtime that program ran on: `runChat` owns Ink,

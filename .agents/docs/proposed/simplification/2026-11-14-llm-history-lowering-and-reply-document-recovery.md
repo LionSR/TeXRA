@@ -100,6 +100,19 @@ on their own:
    two codecs rely on the shared function. If the Google behavior is the
    same fact, call the shared function and delete the skip; if it differs on
    purpose, say why in the comment that currently points at the other codecs.
+   Checked on 2026-11-14 (evening): the two agree on a same-protocol switch,
+   but the skip also covers two cases `replayableHistory` passes through.
+   Reasoning recorded on another protocol would go from omitted to refused
+   ("Google reasoning needs supported thought evidence"), and reasoning on an
+   assistant message with no origin would go from omitted to sent as an
+   unsigned `thought` step. The harness produces neither: a resume, a fork
+   and a model switch all stay on the run's backend, and so on its protocol
+   (`foreignProtocol` in `runProgram.ts` refuses the rest), and its one
+   origin-less assistant message (`turnRowHandlers.ts`, a handed-down call)
+   holds only a local call. An SDK caller can send both, so the swap is a
+   public-behavior decision for the llm package, not a refactor: decide
+   whether origin-less reasoning is this model's, then make the swap with
+   that answer.
 2. If a fourth protocol is added, revisit A with four callers.
 
 Any change here is checked by the request bodies the codec suites already

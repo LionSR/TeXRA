@@ -8,10 +8,6 @@ import {
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
-import {
-  INTERACTIVE_GLOBAL_ARGS,
-  rejectHeadlessOnlyFlags,
-} from './_helpers/globalArgs';
 import { CliUsageError, type CliContext } from '../runtime/platform/cliContext';
 
 /** The command's program builder; the command's `run` is its only caller. */
@@ -44,10 +40,6 @@ export const setupCommand = withUsageSections(
       description:
         'Guided setup with the setup agent: environment, agents, and your first task (a ChatGPT or Grok subscription, or an API key, first)',
     },
-    args: {
-      ...INTERACTIVE_GLOBAL_ARGS,
-    },
-    setup: (ctx) => rejectHeadlessOnlyFlags(ctx.rawArgs, 'setup'),
     // The same chat platform as `texra chat`.
     platform: { startsService: true, presentsStoreMovedAside: true },
     run: runSetup,
