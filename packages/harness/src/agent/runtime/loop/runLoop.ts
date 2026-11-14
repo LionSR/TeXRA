@@ -127,7 +127,7 @@ const afterTextResponse = Effect.fn('toolUse.afterTextResponse')(function* (
     at = yield* cell.append(finalizedRows(runId, text, at.lastTurn));
   if (
     finalToolName !== null &&
-    at.finalToolTurn !== at.turn &&
+    at.finalTool?.turn !== at.turn &&
     at.structured === null
   ) {
     const row = appendRow(runId, [nudge(FINAL_TOOL_INSTRUCTION)], {
@@ -380,7 +380,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (noops.length > 0) state = yield* cell.append(noops);
       }
       const toolChoice =
-        state.forceFinalTool &&
+        state.finalTool?.owed === true &&
+        state.finalTool.turn === state.turn &&
         run.finalToolName !== null &&
         bound.forcedToolChoice
           ? { name: run.finalToolName }
