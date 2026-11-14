@@ -10,6 +10,12 @@ export function formatBytes(bytes: number): string {
   return prettyBytes(bytes, { binary: true });
 }
 
+/** An exact token count with thousands separators (`12,345`), for a tooltip
+ *  or a total where the compact form would round. */
+export function formatTokenCount(tokens: number): string {
+  return tokens.toLocaleString('en-US');
+}
+
 /** The lines a change adds and removes. */
 interface LineChanges {
   readonly added: number;

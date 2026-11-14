@@ -19,6 +19,7 @@ import {
   approvalPolicyLabel,
   formatApprovalPolicy,
 } from '@ui/copy/approvalPolicy';
+import { formatTokenCount } from '@ui/copy/format';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import type { Session, WorkspaceRoots } from '@texra-ai/harness';
 
@@ -79,8 +80,8 @@ function paint(
         '| TeXRA usage | |',
         '| --- | ---: |',
         `| Cost | ${usageCostLabel(usage)} |`,
-        `| Input tokens | ${inputTokens.toLocaleString()} |`,
-        `| Output tokens | ${outputTokens.toLocaleString()} |`,
+        `| Input tokens | ${formatTokenCount(inputTokens)} |`,
+        `| Output tokens | ${formatTokenCount(outputTokens)} |`,
         '',
         '*Click to show TeXRA sessions*',
       ].join('\n'),
