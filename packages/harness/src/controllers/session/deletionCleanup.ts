@@ -281,7 +281,7 @@ export const deleteAdmittedRun = (
                 ? `The ${noun} started again since its deletion was asked for; nothing was removed.`
                 : error instanceof DatabaseAggregateClosed
                   ? `The ${noun} is already removed.`
-                  : `The ${noun} could not be removed from the listing.`,
+                  : `The ${noun} could not be removed from the listing: ${error.message}`,
           });
         }),
       );
