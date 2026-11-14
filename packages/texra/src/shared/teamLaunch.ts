@@ -5,9 +5,13 @@
  */
 
 // Third-party imports
-import { String as Str } from 'effect';
+import { Schema, String as Str } from 'effect';
 import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
-import { agentKeyOf, type AgentSource } from '@texra-ai/harness/schemas';
+import {
+  agentKeyOf,
+  type AgentConfig,
+  type AgentSource,
+} from '@texra-ai/harness/schemas';
 import type { TeamPreset } from '@texra/shared/agentTeams';
 import type { TeamOptionData } from '@texra/shared/pickerOptions';
 import {
@@ -18,6 +22,23 @@ import {
   type TeamRunPlan,
 } from '@texra/shared/teamPlan';
 import type { AgentDelegationScope } from '@texra-ai/harness/host';
+
+/** The team a run was launched as, the one key TeXRA keeps in a run's
+ *  `launch` record for every host (a command line adds its output targets). */
+const TeamLaunchSchema = Schema.Struct({
+  teamId: Schema.optional(Schema.NullOr(Schema.String)),
+});
+
+/** The team preset a run was launched from, read back from its `launch`
+ *  record so a resume or Run again keeps the team. */
+export function launchTeamId(
+  config: Pick<AgentConfig, 'launch'>,
+): string | undefined {
+  const { teamId } = Schema.decodeUnknownSync(TeamLaunchSchema)(
+    config.launch ?? {},
+  );
+  return teamId?.trim() || undefined;
+}
 
 export function planTeamRuns<T extends TeamCatalogAgent>(
   presets: readonly TeamPreset[],
@@ -98,12 +119,12 @@ function teamExecutionFields<T extends TeamCatalogAgent>(
 ): {
   agent: string;
   delegationAgentScope: AgentDelegationScope;
-  cli: { teamId: string };
+  launch: { teamId: string };
 } {
   return {
     agent: agentKeyOf(plan.rootAgent),
     delegationAgentScope: [...plan.agentKeys],
-    cli: { teamId: plan.preset.id },
+    launch: { teamId: plan.preset.id },
   };
 }
 

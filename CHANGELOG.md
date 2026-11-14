@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: an app's launch facts are an opaque `launch` record.**
+  `AgentConfig.cli` (output file, output directory, expected outputs, team
+  id) is gone; `AgentConfig.launch` is a JSON record the launching app
+  writes and decodes itself, which the harness never reads and a child run
+  does not inherit. `run.config` rows are version 7.
 - **SDK: a child run's result is data.** A process child's turn returns its
   report as a `ChildRunDelivery` (`ProcessReport.report`), and
   `ProcessTurn.reportError` builds one from the error. A queued message's

@@ -218,7 +218,7 @@ const runTeam = Effect.fn('runTeam')(function* (
         }),
         displayInstruction,
         workingDirectory: runContext.cwd,
-        cli: { teamId: plan.preset.id },
+        launch: { teamId: plan.preset.id },
         delegationAgentScope: [...plan.agentKeys],
       };
 

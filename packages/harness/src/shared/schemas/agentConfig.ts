@@ -10,29 +10,6 @@ import { JsonValueSchema } from './jsonValue';
 /** Agent selected when launch input names none. */
 export const DEFAULT_TASK_AGENT = 'correct';
 
-/**
- * Fields a command-line launch sets, grouped so their footprint on
- * `AgentConfig` is self-evident at the schema level. Absent for runs a host
- * launches from a view.
- */
-const CliOutputFieldsSchema = Schema.Struct({
-  /** Workspace file the run's output is copied to, kept for resume. */
-  outputFile: Schema.optional(Schema.NullOr(Schema.String)),
-  /** Workspace directory the run's output files are copied to. */
-  outputDirectory: Schema.optional(Schema.NullOr(Schema.String)),
-  /** Relative artifacts expected under {@link CliOutputFieldsSchema.outputDirectory}. */
-  expectedOutputFiles: Schema.optional(
-    Schema.NullOr(Schema.Array(Schema.String)),
-  ),
-  /**
-   * Team preset id this run was launched from (a CLI team command, or a
-   * view's team launcher, so resume retains team identity). Used so a team
-   * run, whose root is an orchestrator agent, is not inferred as the default
-   * agent for a plain chat session. Preserved across resume.
-   */
-  teamId: Schema.optional(Schema.NullOr(Schema.String)),
-});
-
 /** What every script a run opens on records: its source, title, the tools
  *  it is offered, and its wall-clock limit. */
 const ScriptFieldsSchema = Schema.Struct({
@@ -87,8 +64,15 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.mapFields(
     ),
     /** Working directory override for subagent tool calls (e.g. a git worktree). */
     workingDirectory: Schema.optional(Schema.NullOr(Schema.String)),
-    /** CLI-only fields, absent for extension/desktop-launched runs. */
-    cli: Schema.optional(Schema.NullOr(CliOutputFieldsSchema)),
+    /**
+     * What the launching app records about its own launch (a team it ran,
+     * where a command line copies the output) and reads back on resume. The
+     * harness never reads it, and a child run does not inherit it; each
+     * owner decodes its own keys.
+     */
+    launch: Schema.optional(
+      Schema.NullOr(Schema.Record(Schema.String, JsonValueSchema)),
+    ),
     /** Run-scoped delegation agent list used by team runs and their children. */
     delegationAgentScope: Schema.optional(
       Schema.NullOr(AgentDelegationScopeSchema),

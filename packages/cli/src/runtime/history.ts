@@ -20,6 +20,8 @@ import {
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
+import { launchTeamId } from '@texra/shared/teamLaunch';
+import { cliLaunchOutput } from '@cli/runtime/headless/documentTaskOutput';
 import {
   runStatus,
   runStatusLabel,
@@ -386,8 +388,10 @@ export function formatCliHistoryDetailsText(
 ): string {
   const { config, run } = details;
   const model = details.currentModel ?? config?.model;
-  const team = teamIdOf(config);
-  const cliOutputFile = config?.cli?.outputFile?.trim();
+  const team = config ? launchTeamId(config) : undefined;
+  const cliOutputFile = config
+    ? cliLaunchOutput(config).outputFile?.trim()
+    : undefined;
   // Worded as every host words it.
   const status = `${run ? runStatusLabel(run.statusKey) : 'Unknown'}${
     details.resumable ? ' (resumable)' : ''
@@ -457,15 +461,11 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
     inputBasename,
     kind: runKindOf(config),
     description: entry.description,
-    teamId: teamIdOf(config),
+    teamId: config ? launchTeamId(config) : undefined,
   };
 }
 
 /** A document task's run, or a chat: what its launch config ran. */
 function runKindOf(config: AgentConfig): 'task' | 'chat' {
   return isTaskConfig(config) ? 'task' : 'chat';
-}
-
-function teamIdOf(config: AgentConfig | null): string | undefined {
-  return config?.cli?.teamId?.trim() || undefined;
 }

@@ -72,6 +72,7 @@ import type { TuiSession } from './tui/state/sessionRunState';
 import { oneShotResumeNotice } from './tui/state/resumeHint';
 import { currentView, runViewOf, sessionView } from './tui/state/sessionView';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
+import { launchTeamId } from '@texra/shared/teamLaunch';
 import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import {
@@ -296,11 +297,11 @@ export function createChatSessionController(
   const adoptRunConfig = Effect.fn('adoptRunConfig')(function* (
     config: Pick<
       AgentConfig,
-      'agent' | 'agentSource' | 'model' | 'cli' | 'delegationAgentScope'
+      'agent' | 'agentSource' | 'model' | 'launch' | 'delegationAgentScope'
     >,
     modelSource?: 'history',
   ) {
-    const cliTeamId = config.cli?.teamId ?? undefined;
+    const cliTeamId = launchTeamId(config);
     const teamName = yield* readCliTeamName(
       runSession.roots.repoState,
       cliTeamId,
@@ -776,7 +777,7 @@ export function createChatSessionController(
           ...(displayInstruction !== undefined ? { displayInstruction } : {}),
           workingDirectory: cwd,
           ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
-          ...(meta.cliTeamId ? { cli: { teamId: meta.cliTeamId } } : {}),
+          ...(meta.cliTeamId ? { launch: { teamId: meta.cliTeamId } } : {}),
           ...(meta.delegationAgentScope
             ? { delegationAgentScope: meta.delegationAgentScope }
             : {}),

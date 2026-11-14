@@ -55,7 +55,7 @@ describe('resolveTeamLaunch', () => {
           'builtIn:lead',
           'builtIn:member',
         ],
-        cli: { teamId: 'custom-team' },
+        launch: { teamId: 'custom-team' },
       },
       missingNames: [],
     });

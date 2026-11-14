@@ -55,6 +55,7 @@ import {
 } from '@cli/tui/terminalCleanup';
 import { getFirstRunDone } from '@texra/controllers/onboarding/onboardingFunnel';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
+import { launchTeamId } from '@texra/shared/teamLaunch';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
@@ -239,10 +240,12 @@ export async function runChat(
         return { exitCode: CliExitCode.Usage };
       }
       const modelSelection = modelSelectionExit.value;
-      // Both persisted team fields are optional and nullable on the wire, so a
-      // resumed run that never carried a preset lands `null` where
-      // `SessionMeta` wants absent.
-      const initialPresetId = initialResume?.config.cli?.teamId ?? undefined;
+      // The delegation scope is optional and nullable on the wire, so a
+      // resumed run that never carried one lands `null` where `SessionMeta`
+      // wants absent.
+      const initialPresetId = initialResume
+        ? launchTeamId(initialResume.config)
+        : undefined;
       sessionMetaSignal.set({
         agent: defaults.agent,
         agentSource: agentEntry.source,
