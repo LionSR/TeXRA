@@ -28,7 +28,6 @@ import { CliExitCode } from '../runtime/platform/exitCodes';
 import { writeTextStderr } from '../runtime/platform/logSinks';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 
 /** How long a service with no project open stays up. */
@@ -118,7 +117,6 @@ const runServe = Effect.fn('runServe')(function* (
     Effect.catchTag('ServiceAlreadyRunning', (error) =>
       Effect.sync(() => {
         writeTextStderr(error.message);
-        return CliExitCode.Success;
       }),
     ),
     Effect.catchTag('ServiceUnavailable', (error) =>
@@ -137,7 +135,6 @@ export const serveCommand = defineCliCommand({
       'Run the TeXRA service in the foreground (windows start it on their own)',
   },
   args: {
-    ...GLOBAL_ARGS,
     'idle-timeout': {
       type: 'string',
       valueHint: 'seconds',
@@ -208,7 +205,6 @@ const stopRunningService = Effect.gen(function* () {
 
 const statusCommand = defineCliCommand({
   meta: { name: 'status', description: 'Show whether the TeXRA service runs' },
-  args: { ...GLOBAL_ARGS },
   layer: cliProcessLayer,
   catchExitCode: CliExitCode.AgentError,
   run: () =>
@@ -224,7 +220,6 @@ const stopCommand = defineCliCommand({
     description:
       'Stop the TeXRA service; its running tasks stop and can be resumed',
   },
-  args: { ...GLOBAL_ARGS },
   layer: cliProcessLayer,
   catchExitCode: CliExitCode.AgentError,
   run: () =>
@@ -235,14 +230,12 @@ const stopCommand = defineCliCommand({
             ? 'No TeXRA service was running.'
             : `Stopped ${stopped}.`,
         );
-        return CliExitCode.Success;
       }),
     ),
 });
 
 const restartCommand = defineCliCommand({
   meta: { name: 'restart', description: 'Stop the TeXRA service and start it' },
-  args: { ...GLOBAL_ARGS },
   layer: cliProcessLayer,
   catchExitCode: CliExitCode.AgentError,
   run: Effect.fn('service.run')(function* (context) {
@@ -260,7 +253,6 @@ const restartCommand = defineCliCommand({
       ),
     );
     yield* emitStatus(info);
-    return CliExitCode.Success;
   }),
 });
 
