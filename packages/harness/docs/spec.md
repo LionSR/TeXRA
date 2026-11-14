@@ -934,8 +934,7 @@ These existing suites check the sections above. Each citation names a test by
 its title.
 
 - **2.1 file and schema**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts#refuses another application's SQLite file and keeps its rows`,
-  `#'moves a truncated store aside and opens a fresh one'`,
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts#'moves a truncated store aside and opens a fresh one'`,
   `#'refuses a store of a newer schema and changes nothing'`
 - **2.2 envelope**:
   `src/test-kernel/controllers/session/sessionEvents.vitest.ts#'assigns a dense seq per aggregate and one commit order across them'`,
