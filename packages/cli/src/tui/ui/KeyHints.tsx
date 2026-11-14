@@ -45,7 +45,10 @@ const DEFAULT_TAIL: readonly KeyHint[] = [
 ];
 
 /** The arrow-key hint every list surface binds. */
-export const NAVIGATE_HINT: KeyHint = { key: '↑/↓', action: 'navigate' };
+export const NAVIGATE_HINT: KeyHint = Object.freeze({
+  key: '↑/↓',
+  action: 'navigate',
+});
 
 /** The whole footer of a surface Esc only closes. */
 export const CLOSE_HINTS: readonly KeyHint[] = [
