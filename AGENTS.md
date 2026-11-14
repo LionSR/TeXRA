@@ -461,6 +461,33 @@ directories are excluded by `docs/.vitepress/publicDocs.js`. A new file at the
 must exist (`npm run gate:docs`). Changelog rules: the `releasing`
 skill.
 
+## Scheduled audits
+
+A session a scheduled routine starts to review, audit or look for refactoring
+ends in a draft PR, not a report, even when the routine's prompt only asks for
+findings or suggestions. The prompt says what to look for; this section says
+what to do with it.
+
+- Skip what is already covered: open PRs, PRs merged in the last two weeks
+  and the unfinished findings their bodies list,
+  `.agents/docs/refuted-candidates.json`, and the notes under
+  `.agents/docs/proposed/`. Several audits run the same morning, so list open
+  PRs again before pushing.
+- Implement every finding you verified in the code and that fits a reviewable
+  diff, largest payoff first: one commit per finding on the session's branch,
+  in one draft PR against `main`. This is the one exception to one PR per
+  change. A behavior, stored-format or wording change is allowed: it gets its
+  own commit and a line under "Needs your eye" at the top of the PR body, so
+  it can be dropped.
+- Run `npm run gate` and `npm run test:changed` before pushing, and say in the
+  PR body what ran. Subscribe to the PR, fix CI and answer review until it is
+  ready to merge; the owner merges.
+- A finding too large for the run (a redesign, a new dependency, several
+  hundred changed lines) becomes a dated note under
+  `.agents/docs/proposed/simplification/` in the same PR, with its first step
+  implemented when that step stands alone.
+- When nothing survives verification, say so in two lines and open nothing.
+
 ## Skills
 
 - **code-review**: `/review` and any review of this repo; always include a
