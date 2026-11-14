@@ -23,6 +23,7 @@ import type { EditorCapabilities } from '@texra/tools/editorHost';
 import { WINDOW_OUTDATED, type ServiceLink } from './client';
 
 import {
+  ANSWERED,
   HostCapabilitySchema,
   type HostAnswer,
   type HostCall,
@@ -184,8 +185,9 @@ function attachTo(
     /** Carry out a call; an awaited one is answered however it ends, a
      *  defect included, so the service never waits on a call that died
      *  here; one nothing waits on says here when it could not be done. */
-    const answer = (id: string, call: HostCall, awaited: boolean) =>
-      perform(host, call).pipe(
+    const answer = (id: string, call: HostCall) => {
+      const awaited = Object.hasOwn(ANSWERED, call.kind);
+      return perform(host, call).pipe(
         Effect.matchCauseEffect({
           onSuccess: (value) =>
             awaited
@@ -211,6 +213,7 @@ function attachTo(
               ).pipe(Effect.annotateLogs({ data: cause })),
         ),
       );
+    };
     return yield* client['host.attach']({
       workspace,
       capabilities: capabilitiesOf(host),
@@ -231,7 +234,7 @@ function attachTo(
             ),
           );
         // Each call on its own fiber: a slow build never holds the next.
-        return Effect.forkScoped(answer(frame.id, frame.call, frame.awaited));
+        return Effect.forkScoped(answer(frame.id, frame.call));
       }),
     );
   }).pipe(

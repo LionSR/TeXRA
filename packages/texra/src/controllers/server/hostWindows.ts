@@ -130,7 +130,6 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
       kind: 'call',
       id: randomUUID(),
       call,
-      awaited: false,
     }).pipe(Effect.asVoid);
 
   /** Send a call to the window `key`'s project routes it to and wait for
@@ -163,7 +162,6 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
           kind: 'call',
           id,
           call,
-          awaited: true,
         }).pipe(
           Effect.andThen(
             Deferred.await(answered).pipe(

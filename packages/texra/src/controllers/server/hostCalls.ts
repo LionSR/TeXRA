@@ -121,10 +121,9 @@ export const HostAttachFrameSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('call'),
     id: Schema.String,
+    /** Answered with `host.answer` when its kind is one a run waits on
+     *  ({@link ANSWERED}); a notice or a file notification is told. */
     call: HostCallSchema,
-    /** Whether a run waits for the answer: a notice or a file notification
-     *  is told and not answered. */
-    awaited: Schema.Boolean,
   }),
 ]);
 export type HostAttachFrame = typeof HostAttachFrameSchema.Type;
