@@ -4,23 +4,14 @@
  */
 import { type TextChunk } from '@shared/schemas';
 import { settleCompactionActivities } from '@shared/runs/compactionActivityProjection';
-import { hasIncompleteEmbeddedSubagentFollowup } from '@shared/subagentFollowup';
 import type { RunLabels } from '@shared/tools/executionsDisplay';
-import {
-  transcriptText,
-  appendTranscriptText,
-} from '@shared/transcript/transcriptText';
-import {
-  streamingTextRow,
-  toolRow,
-} from '@shared/transcript/projectTranscriptRow';
 
 import {
-  isStreamingTextRow,
   rowById,
+  slotRow,
+  takesLiveText,
   upsertCompactionRows,
   upsertRow,
-  writableArray,
   type TranscriptIndexes,
   type TranscriptDraft,
   type TranscriptWork,
@@ -31,8 +22,8 @@ import type { TranscriptView } from './sessionView';
 // Live text
 // ---------------------------------------------------------------------------
 
-/** What a live chunk did: nothing, moved the held text of a row not yet
- *  painted, or repainted a row into `transcript`. */
+/** What a live chunk did: nothing, moved the held text without a row to
+ *  paint, or repainted a row into `transcript`. */
 type LiveTextOutcome =
   | { readonly outcome: 'ignored' }
   | { readonly outcome: 'held' }
@@ -45,10 +36,9 @@ const HELD: LiveTextOutcome = Object.freeze({ outcome: 'held' });
  * Apply one live chunk: ignored when its `to` is not past the text held,
  * otherwise the held text is truncated at `from` and the chunk appended, so a
  * redelivery in any order is a no-op and a `from: 0` chunk replaces the row.
- * An append costs the chunk, never the row; the embedded-followup flag is the
- * one whole-text scan, and it runs only while a block is open or the chunk
- * could open one. Durable text wins: a row whose finalizing event has been
- * applied is never reopened.
+ * The row is painted anew from its slot and the text held, as its own event
+ * paints it. Durable text wins: a row whose finalizing event has been
+ * applied takes no chunk (`takesLiveText`).
  */
 export function applyLiveText(
   transcript: TranscriptView,
@@ -57,8 +47,8 @@ export function applyLiveText(
   runLabels: RunLabels,
 ): LiveTextOutcome {
   const { ix } = work;
-  const cursor = ix.cursors.get(chunk.rowId);
-  if (!cursor && rowById(transcript, ix, chunk.rowId)) return IGNORED;
+  const slot = ix.slots.get(chunk.rowId);
+  if (slot !== undefined && !takesLiveText(slot)) return IGNORED;
   const held = ix.live.get(chunk.rowId) ?? '';
   if (chunk.to <= held.length) return IGNORED;
   if (chunk.from > held.length) {
@@ -68,54 +58,18 @@ export function applyLiveText(
   }
   const text = held.slice(0, chunk.from) + chunk.text;
   ix.live.set(chunk.rowId, text);
-  // The row paints when its event is applied, joined with this text.
-  if (!cursor) return HELD;
-  const slot = ix.slots.get(chunk.rowId);
+  // A chunk ahead of its row: the row paints when its event is applied,
+  // joined with this text. A stream whose text is still blank paints none.
+  const row = slot && slotRow(slot, text, runLabels);
+  if (row === undefined) return HELD;
   const next: TranscriptDraft = { ...transcript };
-  if (slot?.kind === 'tool') {
-    upsertRow(
-      work,
-      next,
-      toolRow(slot.base, slot.log, text, runLabels, slot.call),
-    );
-    return { outcome: 'repainted', transcript: next };
-  }
-  const measured =
-    chunk.from === held.length
-      ? appendTranscriptText(cursor, chunk.text, held.at(-1) ?? '')
-      : transcriptText(text);
-  ix.cursors.set(chunk.rowId, measured);
-  const at = ix.rowIndex.get(chunk.rowId);
-  const row = at === undefined ? undefined : next.rows[at];
-  if (at !== undefined && row && isStreamingTextRow(row)) {
-    const { pendingEmbeddedFollowup: wasPending, ...rest } = row;
-    const pending =
-      row.kind === 'assistant' && (wasPending || chunk.text.includes('<'))
-        ? hasIncompleteEmbeddedSubagentFollowup(measured.full)
-        : wasPending;
-    writableArray(work, next, 'rows')[at] = {
-      ...rest,
-      text: measured,
-      ...(pending ? { pendingEmbeddedFollowup: true } : {}),
-    };
-  } else if (slot?.kind === 'text' && slot.rowKind) {
-    // The row's own text was blank and painted no row; the chunk that gives
-    // it one paints it once.
-    const painted = streamingTextRow(
-      slot.base,
-      slot.rowKind,
-      measured.full,
-      slot.running,
-    );
-    if (painted) upsertRow(work, next, painted);
-  }
+  upsertRow(work, next, row);
   return { outcome: 'repainted', transcript: next };
 }
 
-/** Drop a run's live text and its streaming cursors: the run ended. */
+/** Drop the live text held for a run's rows: the run ended. */
 export function clearLiveText(ix: TranscriptIndexes): void {
   ix.live.clear();
-  ix.cursors.clear();
 }
 
 // ---------------------------------------------------------------------------

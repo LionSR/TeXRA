@@ -142,8 +142,6 @@ export type RunState = Omit<RunRowState, 'at'> &
     readonly steppedAt: number | null;
     /** The priced usage summed from its `response` and `context.edit` rows. */
     readonly usage: TokenUsageStats;
-    /** The latest `context.edit`'s `seq`: the next edit's `base`. */
-    readonly lastEdit: number | null;
     /** The turn compacted for a request the window could not hold. */
     readonly overflowCompacted: boolean;
     /** The latest `tools.offered` row's set; `null` before the first. */
@@ -209,7 +207,6 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   steppedAt: null,
   usage: NO_USAGE,
   ...NO_FACTS,
-  lastEdit: null,
   overflowCompacted: false,
   offeredTools: null,
   offeredWith: { skills: [], hooks: [], modules: {} },
@@ -354,19 +351,10 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
       const input = withInput(state.input, p.input);
       if (p.cause === 'fork') {
         const first = state.at === null && state.messages.length === 0;
-        if (!first || p.base !== null || p.range.to !== 0)
+        if (!first || p.range.to !== 0)
           return outOfOrder('a fork edit must be the first view of its run');
-        return Result.succeed({
-          ...state,
-          messages: p.messages,
-          lastEdit: row.seq,
-          input,
-        });
+        return Result.succeed({ ...state, messages: p.messages, input });
       }
-      if (p.base !== state.lastEdit)
-        return outOfOrder(
-          `an edit computed at ${p.base ?? 'no edit'} lands after ${state.lastEdit ?? 'no edit'}`,
-        );
       if (p.range.to > state.messages.length)
         return outOfOrder(
           `an edit of messages [${p.range.from}, ${p.range.to}) over ${state.messages.length}`,
@@ -391,7 +379,6 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
           state.countStale ||
           p.range.from !== p.range.to ||
           p.messages.length > 0,
-        lastEdit: row.seq,
         input,
       });
     },

@@ -18,6 +18,9 @@ All notable changes to this project will be documented in this file.
   `undefined` unless the person or the app's catalog (`settingsCatalog`'s
   `defaults`) names one; with neither, an agent's commits keep git's own
   identity. TeXRA's catalog keeps `texra-ai`.
+- **SDK: a run's view no longer says who wrote its title.**
+  `RunView.descriptionBy` is removed; no host read it. The run's
+  `run.description` rows still record it.
 - **SDK: two app settings leave the harness catalog.**
   `GIT_COMMITS_TO_SHOW_SETTING` and `SOX_PATH_SETTING` are no longer
   exported; no harness code read them. TeXRA declares them in its own rows
@@ -1436,13 +1439,6 @@ All notable changes to this project will be documented in this file.
   plugin that is off or not trusted, is no longer failed by a resume: it
   stays interrupted and says what it is waiting for.
 
-- **Long conversations no longer pause to compact.** When a conversation
-  reaches the compaction threshold, TeXRA summarizes the earlier turns in
-  the background while the agent keeps working on the full history, and
-  swaps the summary in at its next model call or when its turn ends,
-  keeping everything that happened since. `/compact` still waits for its
-  summary.
-
 - **Fork a conversation.** `texra resume <id> --fork` continues a new
   task that holds the conversation as it stood at the end of its last turn,
   and leaves the original unchanged. A fork records where it came from.
@@ -1919,8 +1915,8 @@ All notable changes to this project will be documented in this file.
   subagent's result held for a parent open in another process is delivered
   under a claim its park let go, so the delivery no longer polls for the
   child's process to exit; a request a stopped or failed run leaves open is
-  cancelled with the run's end; a run that cannot hold its claim, or record
-  a finished compaction as it stops, ends failed naming the refusal; a
+  cancelled with the run's end; a run that cannot hold its claim ends
+  failed naming the refusal; a
   subagent launch that fails before its run exists fails the `agent` call
   that launched it; and a file a model cannot take, or a tool attachment it
   cannot read inline, is told to the model in the message that carried it.
