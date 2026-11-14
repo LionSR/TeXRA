@@ -27,8 +27,8 @@ launch form 的选项表。**数量是症状，单位是病因。** 这个诊断
 - **程序住在插件里。** 工具今天就只住在插件里；程序也住进去。`Plugin`
   上的 `agentBlock` 换成 `programs`，`scriptModules` 原样，契约不变大。
 - **内核少认识一类事。** 核心概念的十三个名词里，Agent 换成 Program。
-  agent 文件、persona、catalog、skill、team、task 块、recipe 这些词从内
-  核消失。
+  agent 文件、persona、catalog、team、task 块、recipe 这些词从内核消
+  失。
 - **产品是内核加一个 `theory` 插件。** theorist 的东西总体是一个插件
   （负责人 2026-11-14）：八个内置程序、它们调用的步骤工具和 theorist 的
   那段文本。Lean 有外部依赖，是单独的插件，带它自己的两个程序。"AI
@@ -127,8 +127,8 @@ recipe 由 app 按 agent 名生成源码，挂到 agent 文件的 `task:` 块上
 （`.agents/docs/implemented/architecture/2026-09-26-core-concepts.md`）
 里有 **Agent**："从一个有序的来源目录解析出的定义"。`AgentConfig` 上为它
 有 `agent`、`agentSource`、`persona`、`asCaller`、`delegationAgentScope`
-五个字段，`Plugin` 上为它有 `agentBlock`，harness 里为它有索引、workspace
-选择和 skills 三个目录共 3570 行。
+五个字段，`Plugin` 上为它有 `agentBlock`，harness 里为它有索引和
+workspace 选择两个目录共 2123 行。
 
 反过来看已经做对的部分：
 
@@ -203,14 +203,16 @@ host      extension、desktop、cli            三个壳
 | 其余八个    | Process、Session、History、Projection、Call、Request、Host、Application state | 不动                                                            |
 
 之后内核里不再出现的词：agent 文件、persona、agent source、catalog、
-customize 副本、skill、team、delegation scope、workspace 选择、task 块、
-recipe。
+customize 副本、team、delegation scope、workspace 选择、task 块、
+recipe。skill 这个词留着：安装式插件带来的 skill 还要内核加载。
 
-"小"在这里指内核认识的名词和公开面，不指行数。harness 的 80570 行里，大
-头是持久化协议本身：`agent/runtime` 19220、`shared/session` 7135、
-`controllers`（SQLite 存储）6550，本提案不动它们。本提案从 harness 拿走的
-是约 4400 行 app 词汇和 `./host` 入口上为它们而设的导出（见"删除清单"）。
-把内置插件从内核目录里搬出去是另一件事，见"负责人问题"2。
+"小"指内核认识的东西少，不指代码行数少（负责人 2026-11-14 选了这个口
+径）。之后内核只管四件事：把一个 run 持久地跑下去（历史、恢复、停
+止），调模型，调工具（审批、重放），跑插件登记的程序。什么是 document、
+LaTeX、审稿、Lean，什么是 agent 文件和 team，内核一概不知道；这些只出
+现在插件里。代码上，本提案从 harness 拿走约 2800 行只为 agent 目录服务
+的东西，和 `./host` 入口上为它们设的导出。持久化协议那一大块不动，把
+内置插件搬出内核目录也不在本提案里。
 
 内核要改的地方不多，全部列在这里，后面各节展开：
 
@@ -472,7 +474,8 @@ TeXRA 用户的旋钮。
   着的插件的 `prompt` 段（按插件 id 排）。除第一项外都是
   `buildOpeningSystemPrompt` 和 `stepInstructions`
   （`packages/harness/src/agent/prompt/PromptBuilder.ts`）今天就在拼的；
-  消失的是 skills 列表和"Available agents"这一段（`delegationSection`）。
+  消失的是"Available agents"这一段（`delegationSection`）；skills 列表
+  留着，列的是安装式插件带来的 skill。
   第一项今天是 persona prompt，之后是 `theory` 的那段基础文本，40 行以内
   （你在哪、什么时候写脚本、什么时候启动一个程序），它是 app 的，不是内
   核的。host 把它作为根聊天的 `system` 传入；插件的 `prompt` 段按插件
@@ -572,9 +575,11 @@ theory""总体是个插件"）。它带三样：八个内置程序，这些程�
 其余的 bundled agent 不变成程序：`research`、`numerics`、`prover`、
 `search`、`review`、`presenter`、`simplifier`、`progressCheck`、四个写代
 码的、三个编排的和 `latexDiff`，差别是工作方式的描述，不是流程，随"模
-型会变强"直接变成 `agent()` 的一行参数。`creator` 不保留。9 个 bundled
-skill 和 multi-agent 的那个 skill 删；TeXRA 特有的约定（`\criticize{}`
-的格式、输出文档的格式）进对应的程序。今天的五个 team 回答的问题（这个
+型会变强"直接变成 `agent()` 的一行参数。`creator` 不保留。TeXRA 自己随
+应用出货的 skill（9 个 bundled 的、lean4 的 5 个、multi-agent 的 1 个）
+删，这是 11-06 的"不要 skills"；安装式插件带来的 skill 照旧加载（负责人
+2026-11-14）。TeXRA 特有的约定（`\criticize{}` 的格式、输出文档的格式）
+进对应的程序。今天的五个 team 回答的问题（这个
 项目看见哪些 agent）随目录一起消失：到处都是 chat 加十个程序。插件开关
 是用户全局的，没有按项目的开关，本提案也不建。
 
@@ -611,7 +616,7 @@ skill 和 multi-agent 的那个 skill 删；TeXRA 特有的约定（`\criticize{
 | 子运行的 prompt 和文件列表按写的通过     | 留。启动时传进来的文件另在启动边界校验（"一个程序是什么"） |
 | 花费含子运行；从行恢复；结束后不接后续   | 留：这是脚本 run 的形状，不是信任                          |
 | agent 名越过 delegation scope 解析       | 没有了：没有 catalog                                       |
-| 指令不激活 skill；恢复时重建模板 opening | 没有了：没有 skill，没有模板                               |
+| 指令不激活 skill；恢复时重建模板 opening | 指令不激活 skill 留着；模板没有了，不再重建 opening        |
 
 - **模型写的程序走脚本本来的审批。** 内联的代码是模型的：Q5 的一次脚本
   请求（展示源码，批准即覆盖整段，含它的 `agent()`），文件列表照模型脚
@@ -788,8 +793,8 @@ return revise({
 
 内置程序的直接启动留在不是"用户常用入口"的地方：`texra run <程序>`
 （脚本、CI 和 `texra-action` 用它）和 host 自己的动作（merge）。
-`texra run chat --print` 和 `texra chat` 照旧，`texra team`、
-`texra agents`、`texra skills` 删。`document_task` 工具和 `builtIn:documents` 的
+`texra run chat --print`、`texra chat` 和 `texra skills` 照旧，
+`texra team`、`texra agents` 删。`document_task` 工具和 `builtIn:documents` 的
 `revise(agentName)`、`from()` 包装删。提案卡今天显示 agent 名，之后显示
 程序名，或 `label` 和 system 文本的首句。
 
@@ -964,11 +969,11 @@ newer-built-in 提示存在的唯一理由是 built-in 太大、改得太勤，�
 
 | 面                    | 今天涉及 agent、team、skill、task 的部分                                                                      | 之后                                                                                                            |
 | --------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| 设置页                | Agents、Teams、Skills 三个标签页，选择面板，newer-built-in 提示                                               | 都删；Plugins 页上 `theory` 的卡片列它的程序                                                                    |
+| 设置页                | Agents、Teams、Skills 三个标签页，选择面板，newer-built-in 提示                                               | Agents、Teams 两个标签页和选择面板删，Skills 标签页留；Plugins 页上 `theory` 的卡片列它的程序                   |
 | 进度视图的 launch     | `launchTarget`、`selectedTeamId`、`agent`、五个选项字段                                                       | 只有入口 agent，加文件和指令；不列程序                                                                          |
-| CLI                   | `agents`、`team`、`skills`、`chat --agent`、`run <agent>` 加选项 flag                                         | 前三个命令和 `--agent` 删；`run <程序 \| chat>`                                                                 |
-| 设置行                | `workspaceAgents`、`hiddenCustomAgents`、`skills.*`、`codeMode.scriptOnly`、`goal.strategy`                   | 前三组删；`scriptOnly` 的默认值翻成开；`goal.strategy` 不动                                                     |
-| SDK 导出              | `./host` 上 `AgentCatalog`、`WorkspaceAgents`、`AgentDirectories`、`Skills` 四族，`./plugins` 上 `AgentBlock` | 全删。`AgentConfig`、`AgentEvent`、`AgentPlatform` 是 run 的词汇，名字不动                                      |
+| CLI                   | `agents`、`team`、`skills`、`chat --agent`、`run <agent>` 加选项 flag                                         | `agents`、`team` 和 `--agent` 删，`skills` 留；`run <程序 \| chat>`                                             |
+| 设置行                | `workspaceAgents`、`hiddenCustomAgents`、`skills.*`、`codeMode.scriptOnly`、`goal.strategy`                   | 前两组删，`skills.*` 留；`scriptOnly` 的默认值翻成开；`goal.strategy` 不动                                      |
+| SDK 导出              | `./host` 上 `AgentCatalog`、`WorkspaceAgents`、`AgentDirectories`、`Skills` 四族，`./plugins` 上 `AgentBlock` | 前三族和 `AgentBlock` 删，`Skills` 一族留。`AgentConfig`、`AgentEvent`、`AgentPlatform` 是 run 的词汇，名字不动 |
 | `session.request`     | 无                                                                                                            | 不变；`StartRequest` 改为 `{ system, tools, instruction }` 或 `{ name, args }`                                  |
 | 请求                  | `proposal`（子运行的启动审批）显示 agent 名和 persona                                                         | 留；显示程序名，或 label 和 system 文本                                                                         |
 | `docs/guide`（32 页） | 16 页提到 `texra run`、`--agent`、`texra team`、`texra agents` 或 `texra skills`                              | `built-in-agents`、`custom-agents`、`multi-agent-workflows`、`agent-architecture`、`texra-cli` 重写，其余改措辞 |
@@ -978,23 +983,26 @@ newer-built-in 提示存在的唯一理由是 built-in 太大、改得太勤，�
 
 ## 删除清单
 
-| 删什么                                                                                                   | 行数（量于 `d173e42`） | 留什么                           |
-| -------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------------------- |
-| 35 个 bundled agent 文件、lean4 和 multi-agent 的随包目录、bundled skills                                | 3524 + 1292 + 593      | 十个程序文件、各插件的 prompt 段 |
-| harness：agent 索引、catalog follower、workspace 选择、skills、persona schema、`AgentBlock`              | 约 4400                | 无                               |
-| team：预设、启动、CLI、标签页、`apply_team`                                                              | 1647                   | 无                               |
-| agent 设置页（前端和后端）                                                                               | 1579                   | Plugins 页多一列程序             |
-| documents：`task:` 块、Nunjucks、`files:`/`outputs:`、选项表、`rounds`、`document_task`、recipe 源码生成 | 约 1000 of 2271        | 文档工具本身和 `revise`          |
-| CLI：`texra agents`、`texra skills`（`team` 已计入上面）                                                 | 363                    | `texra run`                      |
+| 删什么                                                                                                   | 行数（量于 `d173e42`） | 留什么                              |
+| -------------------------------------------------------------------------------------------------------- | ---------------------- | ----------------------------------- |
+| 35 个 bundled agent 文件、lean4 和 multi-agent 的随包目录、TeXRA 自己的 skill                            | 3524 + 1292 + 593      | 十个程序文件、各插件的 prompt 段    |
+| harness：agent 索引、catalog follower、workspace 选择、persona schema、`AgentBlock`                      | 约 2800                | skills 子系统                       |
+| team：预设、启动、CLI、标签页、`apply_team`                                                              | 1647                   | 无                                  |
+| agent 设置页（前端和后端）                                                                               | 1353                   | Skills 标签页；Plugins 页多一列程序 |
+| documents：`task:` 块、Nunjucks、`files:`/`outputs:`、选项表、`rounds`、`document_task`、recipe 源码生成 | 约 1000 of 2271        | 文档工具本身和 `revise`             |
+| CLI：`texra agents`（`team` 已计入上面）                                                                 | 271                    | `texra run`、`texra skills`         |
+| `latex-extract` 插件：`extract_figures`、`extract_tikz_figures`、`extract_bib_entries`                   | 514                    | 无                                  |
 
-删掉的代码约 9000 行（"约"的两项是估计），提示词和 skill 文本 5409 行。
+删掉的代码约 7600 行（"约"的两项是估计），提示词和 TeXRA 自己的 skill
+文本 5409 行。
 新增没有逐项估：`programs` 和按名启动、`program` 工具、normalizer、
 `revise` 和十个程序文件；安装式插件带程序另算。比 11-06 版少建的是工作
 区解析器、沙箱的模块入口、task 加载器、Tasks 页和 types 命令。
 
 ## 与已有裁决和 PRD 的关系
 
-需要负责人明确改口的六处，本提案不假装它们不存在：
+需要负责人明确改口的六处。负责人 2026-11-14 在决定页上同意了第 1、2、
+3、5 处，不同意第 4 处；第 6 处是他当天自己改的：
 
 1. **codemode Q8 "No script files"**（2026-10-02）。原文禁的是 `path`、
    `.texra/scripts/` 下的草稿、`args` 和 `files`。收窄为：这些对模型写的
@@ -1010,10 +1018,12 @@ newer-built-in 提示存在的唯一理由是 built-in 太大、改得太勤，�
    agent 文件"，以及原生插件一行里的"任务配置块"。本提案没有 agent 文件
    也没有 persona；任务配置块换成程序表；R6 因只剩一种形式而平凡成立，
    R9 改为随包提供程序，示例梯子随之改。
-4. **skills 和安装式插件的 agents**（PRD "安装式 manifest"一行）。删掉它
-   们失去导入第三方 skill 包和 Claude Code 的 subagent 文件；commands 是
-   按 skill 读的，一起失去；模型仍能 `read_file` 用户指给它的任何
-   Markdown。hooks 不受影响；MCP 的启用方式变了（"入口只有一个 agent"）。
+4. **skills 和安装式插件的 agents**（PRD "安装式 manifest"一行）。**负责
+   人不同意删。** 安装式插件的 skills、commands 和 agents 照旧加载，PRD
+   的这一行不动，skills 子系统留着。本提案仍删 TeXRA 自己随应用出货的
+   skill（11-06 的"不要 skills"）。两处还没定，见"负责人问题"1：项目和
+   用户目录里的 skill 是否照旧；插件带的 agent 和"入口只有一个"怎么并
+   存。MCP 的启用方式变了（"入口只有一个 agent"）。
 5. **裁决 D10 "Custom teams stay presets"**（2026-09-30）。它的重开条件
    是"一个 team 需要预设装不下的状态"。本提案删 team 不是因为这个，而是
    因为它回答的问题（这个项目看见哪些 agent）随目录一起消失。这是在重开
@@ -1068,9 +1078,8 @@ history 的行。
 
 1. **工具是 CLI，bespoke 工具要有理由。** 一个插件工具只在三种情况下有资
    格存在：需要审批语义、需要写 run history 的行、需要结构化结果供脚本分
-   支。其余的（`extract_figures`、`extract_bib_entries`、arxiv、Zotero）变
-   成随包的 CLI，模型用 bash 调。这一刀砍的是三万行工具代码里最大的一
-   块。是负责人问题 4。
+   支。其余的（arxiv、Zotero）变成随包的 CLI，模型用 bash 调。
+   `latex-extract` 的三个工具负责人已定直接去掉。是负责人问题 2。
 2. **headless 走文本流。** `texra run` 已经输出 NDJSON；再让它从 stdin 读
    文件列表、向 stdout 打产物路径，shell 组合就免费了。
 3. **缓存是一等机制。** 子运行结果的内容寻址复用今天已经覆盖任何子运行
@@ -1118,7 +1127,9 @@ history 的行。
 - **可发现性**：35 个名字至少告诉用户 TeXRA 能干什么。之后常用入口里
   没有任何列表，由入口 agent 自己、Plugins 页和程序参考页承担这个角
   色。
-- **互操作**：安装式插件的 skills、commands 和 agents 不再加载。
+- **互操作保留**：安装式插件的 skills、commands 和 agents 照旧加载（负
+  责人 2026-11-14）。代价是 skills 子系统、它的设置页和 CLI 命令都留
+  着，内核仍认识 skill 这个词。
 - **外部消费者**：`texra run` 的参数换义要和 `texra-action` 一起发；上一
   次这类变更就是两边一起动的。
 - **破坏范围**：1.0 不保兼容。用户的 custom agent 和 custom team 失效，
@@ -1127,7 +1138,8 @@ history 的行。
 
 ## 分期
 
-每一期独立可合，存法只变两次，各自落在需要它的那一期。
+每一期独立可合，存法只变两次，各自落在需要它的那一期。第 1 期现在就
+开，不等 1.0 PRD 的在途线（负责人 2026-11-14）。
 
 1. **按名启动和它的存法**（harness 加 documents 的启动路径；用户看不到
    变化）。`Plugin.programs`；`script` 的 `recipe` 成员换成 `program` 成
@@ -1151,7 +1163,8 @@ history 的行。
 5. **删 agent 文件和补偿层，聊天的存法变更**。`run.chat` 去掉 persona 和
    agent 名（第二次存法变更），`agent()` 和 `StartRequest` 改签名；
    agents 目录（含 lean4 的）、agent 索引和 schema、team、workspace 选
-   择、skills、customize、三个 CLI 命令、launch form 的 agent 列表；聊天
+   择、TeXRA 自己的 skill、customize、`agents` 和 `team` 两个 CLI 命令、
+   `latex-extract` 插件、launch form 的 agent 列表；聊天
    的 system 文本改由 app 的基础文本和插件的段拼出，根聊天能调的改为
    "开着的"、声明的改为一张短表，MCP 改为配了就能调；测试套件改写或
    删；文档、迁移说明和 `texra-action`。只有入口 agent 的 launch form 到
@@ -1160,26 +1173,20 @@ history 的行。
    以上各期，是单独的一处改动；它牵动什么见"入口只有一个 agent"。在第
    5 期之前翻，`assistant.yaml` 的 37 个工具仍全部声明；"只声明小核心"
    要等第 5 期的短表。
-7. **（可选）工具改 CLI**。先从 `latex-extract` 和 `arxiv` 两个插件试。
+7. **（可选）工具改 CLI**。先从 `arxiv` 试。
 
 ## 负责人问题
 
-1. **名字。** 定为 program：`Plugin.programs`、`program('edit')`、
-   `texra run <program>`。11-06 版在 task 和 recipe 之间没定；
-   `texra tasks` 今天指服务里的运行，不撞。
-2. **"小"的口径。** 名词和公开面（本提案）；还是也要物理上拆：把
-   harness 的内置插件（memory、executions、MCP、web、plan，3861 行）搬
-   出内核目录或单独成包？后者在 general-package 设计里已裁定等一个具名
-   的 embedder。推荐：先前者。
-3. **接受六处改口**（"与已有裁决和 PRD 的关系"）？
-4. **工具改 CLI**（Unix 一节第 1 条）作为第 7 期？推荐：接受，先试两个插
-   件。
-5. **第 1 期现在开**，还是等 1.0 PRD 的在途线合完？推荐：现在开，它只碰
-   `Plugin` 的一个字段、`script` 的一个成员和 documents 的启动路径。
-6. **声明的核心是哪几个。** "都能调，不全声明"已定（"决定记录"）。核心
-   推荐文件和 shell 的六个（`bash`、`read_file`、`write_file`、
-   `edit_file`、`glob`、`grep`）加 `agent` 和 `program`；十个程序的名字
-   和描述也内联。
+决定页上的十一处都选了。剩下两处：
+
+1. **skills 留到哪一步，插件带的 agent 怎么办。** 你选了不删安装式插件的
+   skills、commands 和 agents。本文据此保留 skills 子系统，并仍然删掉
+   TeXRA 自己随应用出货的 15 个 skill。还没定的：项目和用户目录里的
+   skill（`.texra/skills`、`~/.texra/skills`、`.claude/skills` 这一类）
+   是否照旧加载；安装式插件带的 agent 不能是入口，它们是留作入口 agent
+   可以按名调用的子运行，还是不加载。
+2. **工具改 CLI**（Unix 一节第 1 条）作为第 7 期？你在这一条上没选，只说
+   了 `latex-extract` 可以去掉。推荐：接受，先试 `arxiv`。
 
 ## 决定记录
 
@@ -1219,9 +1226,14 @@ history 的行。
 - "入口 agent 需要只有一个，用户不应该能改这个。"一个入口 agent，基础
   文本和声明的工具是 app 的常量（"入口只有一个 agent"一节）。
 - "Code mode 可以开了。"现在就翻默认值，不等 journey；开关留着。
-- 在决定页上选的三处：项目的 `AGENTS.md` 保留；内置程序的直接启动保
-  留，"但是最直接的用户常用入口不给调默认的了"（launch form 只有入口
-  agent）；用户自己的程序进 1.0。
+- 在决定页上选的：项目的 `AGENTS.md` 保留；内置程序的直接启动保留，
+  "但是最直接的用户常用入口不给调默认的了"（launch form 只有入口
+  agent）；用户自己的程序进 1.0；声明的核心是那八个；名字是 program；
+  第 1 期现在开；"小"指内核认识的东西少，不做物理拆分；改写稿开一个新
+  PR 取代 #14773。
+- 改口：同意四处（Q8、参数化 prompt、agent 文件和任务配置块、D10 的
+  team）；**不同意删安装式插件的 skills、commands 和 agents**。
+- `latex-extract`："extract 那个可以去掉了"。
 
 ## 修订记录
 
@@ -1261,7 +1273,9 @@ history 的行。
 `documents` 里，又一稿把 Lean 的程序放进了 `theory`）；`logic` 和 `notation` 是 hint，不是程序；十个程序是内置的起点，模型
 可以写自己的，初稿把步骤工具关在内置程序里。入口 agent 只有一个且用户不能改，
 setup 和编译修复不再是另一组 chat 参数；没有 `--hint`；launch form 不
-列内置程序；用户自己的程序进 1.0；code mode 现在就翻。这一批没有再过第
+列内置程序；用户自己的程序进 1.0；code mode 现在就翻；安装式插件的
+skills、commands 和 agents 不删，所以 skills 子系统留着；`latex-extract`
+去掉；第 1 期现在开。这一批没有再过第
 二个审稿者。
 
 **2026-11-06，无上下文审稿后的修正**（仍然成立的部分已并入正文）：模块
