@@ -228,7 +228,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       const notice = vscode.env.isTelemetryEnabled
         ? yield* telemetryNoticeIfDue(roots.config)
         : null;
-      if (notice) yield* Effect.forkDetach(vscodeUi.notify('info', notice));
+      if (notice) yield* vscodeUi.notify('info', notice);
       return { runtime, roots, hosts: yield* HostWindows, reached };
     }),
   );
@@ -417,8 +417,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   const windowSession: GuiSession = yield* openProjectSession(
     roots,
     reached,
-    (message) =>
-      Effect.asVoid(Effect.forkDetach(vscodeUi.notify('warning', message))),
+    (message) => vscodeUi.notify('warning', message),
   ).pipe(Effect.provideService(HostWindows, hosts));
   const { session } = windowSession;
 

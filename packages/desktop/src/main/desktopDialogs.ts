@@ -47,8 +47,8 @@ export function createDesktopDialogs(
     dispatchInstructionAction(action: InstructionAction): void;
   },
 ) {
-  /** A message box nobody answers; one that cannot be shown (its window
-   *  gone) is logged at warn. */
+  /** A message box nobody answers or waits for; one that cannot be shown
+   *  (its window gone) is logged at warn. */
   const notify = (
     level: NoticeLevel,
     message: string,
@@ -63,12 +63,13 @@ export function createDesktopDialogs(
         }),
       catch: ensureError,
     }).pipe(
-      Effect.asVoid,
       Effect.catch((cause) =>
         Effect.logWarning(
           `A desktop ${level} dialog could not be shown: ${cause.message}`,
         ).pipe(withLogChannel('desktop')),
       ),
+      Effect.forkDetach,
+      Effect.asVoid,
     );
   return {
     notify,

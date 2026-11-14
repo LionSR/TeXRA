@@ -1791,6 +1791,11 @@ All notable changes to this project will be documented in this file.
   service then delivered no pull request or issue activity to any open
   project, and new subscriptions polled nothing, until a restart. Only a
   shutdown runs that step now.
+- **A VS Code notice no longer holds what raised it until it is
+  dismissed.** A warning or info toast shown from a request (a blocked
+  edit's warning, the service notice at startup, a clone's result) kept
+  that request waiting until the toast was closed. A notice now returns as
+  soon as the host is asked to show it, in VS Code and the desktop app.
 - **A `texra` question whose input ends no longer hangs.** Pressing Ctrl-D
   at a confirmation (`texra prune`, a plugin's trust question, an approval
   prompt, a token prompt), or running one with its input closed, left the

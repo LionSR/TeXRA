@@ -128,20 +128,10 @@ export class SettingsProfileKeyController {
     },
   );
 
-  /**
-   * Tell the user a key changed. Best-effort by design and not awaited, as it
-   * was: the write already happened, a host notice can stay on screen long
-   * after the action that raised it, and a toast that cannot be shown must not
-   * turn a successful key change into a reported failure, so it is logged
-   * rather than reported. The notice is a
-   * detached fiber rather than a discarded `Effect` — an `Effect` nobody runs
-   * shows nothing at all — started on this frame so it is posted before the
-   * action returns.
-   */
+  /** Tell the user a key changed: the write already happened, and a toast
+   *  that cannot be shown is logged by the host, never a failed change. */
   private notify(message: string): Effect.Effect<void> {
-    return this.deps.dialogs
-      .notify('info', message)
-      .pipe(Effect.forkDetach({ startImmediately: true }), Effect.asVoid);
+    return this.deps.dialogs.notify('info', message);
   }
 }
 
