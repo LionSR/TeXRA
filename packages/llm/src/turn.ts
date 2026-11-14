@@ -195,7 +195,10 @@ export type ModelConfiguration =
       readonly protocol: 'anthropic-messages';
       /** The model takes mid-conversation `role: "system"` messages. */
       readonly supportsSystemMessages: boolean;
-      readonly defaults: Omit<typeof AnthropicControlsSchema.Type, 'toolChoice'>;
+      readonly defaults: Omit<
+        typeof AnthropicControlsSchema.Type,
+        'toolChoice'
+      >;
     });
 
 /**
