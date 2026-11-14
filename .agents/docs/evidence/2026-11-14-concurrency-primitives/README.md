@@ -3,8 +3,10 @@
 Cited by
 [concurrency on Effect's own primitives](../../proposed/architecture/2026-11-14-nothing-held-across-a-wait.md).
 Run at main `7547ab0`, Effect 4.1.3, Node 22.23.4, after `corepack pnpm
-install`. Each script resolves `effect` from `packages/harness`, so it runs
-from this directory with `node <name>.mjs`.
+install`. Three scripts are kept, the ones a change in this tree rests on;
+each resolves `effect` from `packages/harness` and runs from this directory
+with `node <name>.mjs`. The other rows record what was measured in the
+session that wrote the note; their scripts were not kept.
 
 "Budget" is `Scheduler.MaxOpsBeforeYield`: the number of steps a fiber runs
 before the scheduler takes it off. The default is 2048; a small budget makes
