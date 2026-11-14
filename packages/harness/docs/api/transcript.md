@@ -142,12 +142,6 @@ interface ContextManagementRow extends TranscriptRowBase {
 }
 ```
 
-## decodeXmlEntities
-
-```ts
-function decodeXmlEntities(text: string): string
-```
-
 ## dispatchedChildren
 
 The runs `run` launched that are not a script's calls: what its dispatch
