@@ -110,7 +110,7 @@ export const McpToolOutputSchema = Schema.Struct({
 export type McpToolOutput = typeof McpToolOutputSchema.Type;
 
 export const ToolUseLogSchema = Schema.Struct({
-  toolName: Schema.optional(Schema.String),
+  toolName: Schema.String,
   input: Schema.optional(Schema.Unknown),
   output: Schema.optional(Schema.Unknown),
   summary: Schema.optional(Schema.String),
