@@ -27,7 +27,6 @@ import {
   Clock,
   Context,
   Deferred,
-  type Duration,
   Effect,
   Equal,
   Layer,
@@ -48,8 +47,8 @@ import {
 } from '@texra/tools/editorHost';
 
 import {
+  ANSWERED,
   CALL_CAPABILITY,
-  CallResultSchemas,
   type HostAnswer,
   type HostCall,
   type HostCapability,
@@ -85,14 +84,7 @@ class WindowCallFailed extends Schema.TaggedError<WindowCallFailed>()(
   },
 ) {}
 
-/** How long a run waits for each answer. A diagnostics read may build the
- *  document first, so it waits longest. */
-const ANSWER_WITHIN = {
-  readDiagnostics: '2 minutes',
-  addCriticism: '10 seconds',
-  openPdf: '30 seconds',
-} satisfies Partial<Record<HostCall['kind'], Duration.Input>>;
-type AnsweredCall = Extract<HostCall, { kind: keyof typeof ANSWER_WITHIN }>;
+type Answered = typeof ANSWERED;
 
 interface Window {
   readonly id: string;
@@ -143,13 +135,12 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
     }).pipe(Effect.asVoid);
 
   /** Send a call to the window `key`'s project routes it to and wait for
-   *  its answer, decoded by `schema`. */
-  const ask = Effect.fn('ask')(function* <A>(
+   *  its answer, decoded as its kind answers. */
+  const ask = Effect.fn('ask')(function* <K extends keyof Answered>(
     key: string,
-    call: AnsweredCall,
-    schema: Schema.Codec<A, unknown>,
-  ): Effect.fn.Return<A, WindowCallFailed> {
-    const within = ANSWER_WITHIN[call.kind];
+    call: HostCall & { readonly kind: K },
+  ): Effect.fn.Return<Answered[K]['result']['Type'], WindowCallFailed> {
+    const { result, within }: Answered[K] = ANSWERED[call.kind];
     const answered = Deferred.makeUnsafe<unknown, WindowCallFailed>();
     const value = yield* Effect.acquireUseRelease(
       Effect.suspend(() => {
@@ -196,7 +187,7 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
           calls.delete(id);
         }),
     );
-    const parsed = Schema.decodeUnknownResult(schema)(value);
+    const parsed = Schema.decodeUnknownResult(result)(value);
     if (!Result.isSuccess(parsed))
       return yield* new WindowCallFailed({
         reason: 'failed',
@@ -246,11 +237,7 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
     get readDiagnostics(): EditorCapabilities['readDiagnostics'] {
       if (!offers(key, 'readDiagnostics')) return undefined;
       return (path: string) =>
-        ask(
-          key,
-          { kind: 'readDiagnostics', path },
-          CallResultSchemas.readDiagnostics,
-        ).pipe(
+        ask(key, { kind: 'readDiagnostics', path }).pipe(
           Effect.mapError(
             (failure) =>
               new DiagnosticsReadFailed({
@@ -264,21 +251,12 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
     },
     get addCriticism(): EditorCapabilities['addCriticism'] {
       if (!offers(key, 'addCriticism')) return undefined;
-      return (entry) =>
-        ask(
-          key,
-          { kind: 'addCriticism', entry },
-          CallResultSchemas.addCriticism,
-        );
+      return (entry) => ask(key, { kind: 'addCriticism', entry });
     },
     get openPdf(): EditorCapabilities['openPdf'] {
       if (!offers(key, 'openPdf')) return undefined;
       return ({ location, preserveFocus }) =>
-        ask(
-          key,
-          { kind: 'openPdf', location, preserveFocus },
-          Schema.Null,
-        ).pipe(
+        ask(key, { kind: 'openPdf', location, preserveFocus }).pipe(
           Effect.asVoid,
           Effect.mapError(
             (failure) =>

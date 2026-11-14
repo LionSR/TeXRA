@@ -7,7 +7,7 @@
  * A call's result enters the run's history only through the tool result
  * that used it.
  */
-import { Schema } from 'effect';
+import { type Duration, Schema } from 'effect';
 
 import {
   ApprovalPolicySchema,
@@ -108,11 +108,25 @@ export const CALL_CAPABILITY: Readonly<
   filesWritten: 'filesWritten',
 };
 
-/** What each call answers with, when it answers with a value. */
-export const CallResultSchemas = {
-  readDiagnostics: Schema.Array(GenericDiagnosticSchema),
-  addCriticism: Schema.Boolean,
-} as const;
+/** The calls a run waits on: what each answers with, and how long a run
+ *  waits for it. A diagnostics read may build the document first, so it
+ *  waits longest. Every other call is told and not answered. */
+export const ANSWERED = {
+  readDiagnostics: {
+    result: Schema.Array(GenericDiagnosticSchema),
+    within: '2 minutes',
+  },
+  addCriticism: { result: Schema.Boolean, within: '10 seconds' },
+  openPdf: { result: Schema.Null, within: '30 seconds' },
+} as const satisfies Partial<
+  Record<
+    HostCall['kind'],
+    {
+      readonly result: Schema.Codec<unknown, unknown>;
+      readonly within: Duration.Input;
+    }
+  >
+>;
 
 /** A frame of `host.attach`: the attachment's id first, then the calls. */
 export const HostAttachFrameSchema = Schema.Union([
