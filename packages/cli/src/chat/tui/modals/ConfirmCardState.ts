@@ -1,15 +1,11 @@
 import { isEscapeInput, type ReturnKeyInput } from '@cli/tui/inputKeys';
-import {
-  KEY_HINT_SEPARATOR,
-  keyHintsText,
-  type KeyHint,
-} from '@cli/tui/ui/KeyHints';
+import { keyHintsText, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import {
   firstFittingCandidate,
   textDisplayWidth,
 } from '@cli/runtime/terminal/terminalText';
-import { HOLLOW_DOT, STATUS_DOT } from '@cli/tui/ui/glyphs';
+import { HOLLOW_DOT, SEPARATOR, STATUS_DOT } from '@cli/tui/ui/glyphs';
 import {
   APPROVE_SESSION_ACTION,
   declineDecision,
@@ -196,10 +192,7 @@ export function confirmCardCompactHintLayout({
   const pulsedTitleColumns = textDisplayWidth(confirmCardPulsedTitle(0, title));
   const inlineHints = confirmCardKeyHintsForWidth({
     ...options,
-    maxColumns: Math.max(
-      0,
-      columns - pulsedTitleColumns - KEY_HINT_SEPARATOR.length,
-    ),
+    maxColumns: Math.max(0, columns - pulsedTitleColumns - SEPARATOR.length),
   });
   const stackedHints = confirmCardKeyHintsForWidth({
     ...options,

@@ -212,11 +212,11 @@ export const logEntryStyles = css`
   }
 
   .level-debug {
-    color: var(--wa-color-debug-name, #4b9ef9);
+    color: var(--wa-color-debug-name);
   }
 
   .level-info {
-    color: var(--wa-color-icon-info, #75beff);
+    color: var(--wa-color-icon-info);
   }
 
   .level-warn,
@@ -230,7 +230,7 @@ export const logEntryStyles = css`
   }
 
   .message-debug {
-    color: var(--wa-color-text-preformat, #a9b7c6);
+    color: var(--wa-color-text-preformat);
   }
 
   .message-info {

@@ -6,6 +6,7 @@
  */
 import { html, LitElement, nothing, type TemplateResult } from 'lit';
 import { property } from 'lit/decorators.js';
+import { styleMap } from 'lit/directives/style-map.js';
 
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
@@ -58,7 +59,11 @@ export abstract class BaseRunContent extends LitElement {
   protected renderLog(): TemplateResult {
     return html`<div
       class="conversation-log"
-      style=${this.run?.actions.includes('fork') ? '' : '--texra-fork-from-here: none'}
+      style=${styleMap({
+        '--texra-fork-from-here': this.run?.actions.includes('fork')
+          ? undefined
+          : 'none',
+      })}
       @fork-from-here=${(event: CustomEvent<ForkFromHere>) => {
         const run = this.run;
         if (!run?.actions.includes('fork')) return;

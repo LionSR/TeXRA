@@ -11,7 +11,7 @@ export const designTokens: CSSResult = css`
   :host {
     /* Text colors */
     --color-text-secondary: var(--wa-color-text-quiet);
-    --color-text-link: var(--wa-color-text-link, #3794ff);
+    --color-text-link: var(--wa-color-text-link);
     --color-text-link-active: var(--wa-color-text-link-active);
 
     /* Background colors */
@@ -21,26 +21,26 @@ export const designTokens: CSSResult = css`
     --color-border: var(--wa-color-surface-border);
 
     /* Status colors */
-    --color-success: var(--wa-color-success-on-quiet, #2ea043);
-    --color-error: var(--wa-color-danger-on-quiet, #f14c4c);
-    --color-warning: var(--wa-color-warning-on-quiet, #cca700);
-    --color-info: var(--wa-color-chart-blue, #3794ff);
-    --color-added: var(--wa-color-chart-green, #4caf50);
-    --color-removed: var(--wa-color-chart-red, #f44336);
+    --color-success: var(--wa-color-success-on-quiet);
+    --color-error: var(--wa-color-danger-on-quiet);
+    --color-warning: var(--wa-color-warning-on-quiet);
+    --color-info: var(--wa-color-chart-blue);
+    --color-added: var(--wa-color-chart-green);
+    --color-removed: var(--wa-color-chart-red);
 
     /* Status indicators (dependency installed/missing, tool available/missing).
        Distinct from --color-success/--color-error: these use the editor
        "testing" palette so green/salmon status icons match the host theme. */
-    --color-status-ok: var(--wa-color-testing-passed, #73c991);
-    --color-status-error: var(--wa-color-testing-failed, #f48771);
+    --color-status-ok: var(--wa-color-testing-passed);
+    --color-status-error: var(--wa-color-testing-failed);
 
     /* In-progress / pending accent (running-tool spinner, timers). */
-    --color-pending: var(--wa-color-chart-yellow, #cca700);
+    --color-pending: var(--wa-color-chart-yellow);
 
     /* Diff foreground colors (added/removed/modified lines in tool diffs). */
-    --color-diff-added: var(--wa-color-git-added, #3fb950);
-    --color-diff-removed: var(--wa-color-git-deleted, #f85149);
-    --color-diff-modified: var(--wa-color-git-modified, #d29922);
+    --color-diff-added: var(--wa-color-git-added);
+    --color-diff-removed: var(--wa-color-git-deleted);
+    --color-diff-modified: var(--wa-color-git-modified);
 
     /* Component aliases */
     --background-color: var(--color-bg-secondary);

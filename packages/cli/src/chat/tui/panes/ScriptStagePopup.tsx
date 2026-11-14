@@ -22,6 +22,11 @@ import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import {
   CROSS,
   HOLLOW_DOT,
+  INTERRUPTED_CIRCLE,
+  NOT_RUN,
+  REUSED,
+  RUNNING_HALF,
+  SEPARATOR,
   SKIP_CIRCLE,
   STATUS_DIAMOND,
   TICK,
@@ -55,14 +60,14 @@ const POPUP_EXTRA_ROWS = 1;
 
 const STATUS_GLYPH = {
   queued: HOLLOW_DOT,
-  running: '◐',
-  interrupted: '◌',
+  running: RUNNING_HALF,
+  interrupted: INTERRUPTED_CIRCLE,
   finished: TICK,
-  reused: '↺',
+  reused: REUSED,
   skipped: SKIP_CIRCLE,
   cancelled: SKIP_CIRCLE,
   failed: CROSS,
-  'not run': '·',
+  'not run': NOT_RUN,
 } as const satisfies Record<ScriptCallView['status'], string>;
 
 const STATUS_COLOR = {
@@ -210,7 +215,7 @@ export function ScriptStagePopup({
     (stage && scriptStageSummary(stage)) || `${stage?.calls.length ?? 0} calls`,
   ]
     .filter(Predicate.isNotUndefined)
-    .join(' · ');
+    .join(SEPARATOR);
   const layout = readerLayout({
     availableRows,
     extraRows: POPUP_EXTRA_ROWS,
@@ -294,7 +299,7 @@ export function ScriptStagePopup({
         )}
         <Box height={1} overflowY="hidden">
           <Text dimColor wrap="truncate-end">
-            {safeTerminalText(call?.facts.join(' · ') ?? '')}
+            {safeTerminalText(call?.facts.join(SEPARATOR) ?? '')}
           </Text>
         </Box>
       </Box>

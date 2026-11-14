@@ -8,7 +8,7 @@ import { useState, useEffect } from 'react';
 import { isPlainReturnInput } from '@cli/tui/inputKeys';
 import { moreRowsText, previousRowsText } from '@cli/tui/overflowText';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
-import { KeyHints } from '@cli/tui/ui/KeyHints';
+import { KeyHints, NAVIGATE_HINT } from '@cli/tui/ui/KeyHints';
 import { nextWrappingHighlightIndex } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
@@ -177,9 +177,7 @@ export function SlashPalette(
       footer={
         <KeyHints
           hints={[
-            ...(slashPaletteOwnsArrows(matchCount)
-              ? [{ key: '↑/↓', action: 'navigate' }]
-              : []),
+            ...(slashPaletteOwnsArrows(matchCount) ? [NAVIGATE_HINT] : []),
             {
               key: 'Enter',
               action: slashPaletteEnterHintAction(highlightedCommand),

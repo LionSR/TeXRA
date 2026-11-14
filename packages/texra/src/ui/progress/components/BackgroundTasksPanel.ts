@@ -21,6 +21,7 @@
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
+import { styleMap } from 'lit/directives/style-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Side-effect imports - register WA components used by this template
@@ -124,6 +125,9 @@ export class BackgroundTasksPanel extends LitElement {
         width: 100%;
         min-height: 1.75rem;
         padding: var(--wa-space-3xs) var(--wa-space-xs);
+        padding-inline-start: calc(
+          var(--wa-space-xs) + var(--tree-depth, 0) * var(--wa-space-m)
+        );
         border: 0;
         border-radius: var(--border-radius-small);
         background: transparent;
@@ -383,7 +387,7 @@ export class BackgroundTasksPanel extends LitElement {
           'task-row': true,
           [`tone-${status.tone}`]: true,
         })}
-        style=${`padding-inline-start: calc(var(--wa-space-xs) + ${depth} * var(--wa-space-m))`}
+        style=${styleMap({ '--tree-depth': String(depth) })}
         aria-label=${label}
         @click=${() => this.navigateToRun(child.id)}
       >

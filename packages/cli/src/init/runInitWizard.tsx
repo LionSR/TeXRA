@@ -18,6 +18,7 @@ import {
 import { pickDefaultToolUseAgent } from '../runtime/defaultAgents';
 import type { InitAnswers } from '../runtime/platform/initConfig';
 import type { CliModelAccess } from '../runtime/models/modelAccess';
+import { NAVIGATE_HINT } from '@cli/tui/ui/KeyHints';
 
 interface InitWizardAgentOption {
   readonly name: string;
@@ -204,7 +205,7 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
       }
       subtitle={`Step ${index + 1}/${stepCount} · ${STEP_TITLES[step]}`}
       keyHints={[
-        { key: '↑/↓', action: 'navigate' },
+        NAVIGATE_HINT,
         { key: 'Enter', action: 'select' },
         { key: 'Esc', action: 'cancel' },
       ]}

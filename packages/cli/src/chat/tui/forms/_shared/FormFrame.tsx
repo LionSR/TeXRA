@@ -4,7 +4,12 @@
 
 import { Text, useWindowSize } from 'ink';
 
-import { CLOSE_HINTS, KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
+import {
+  CLOSE_HINTS,
+  KeyHints,
+  type KeyHint,
+  NAVIGATE_HINT,
+} from '@cli/tui/ui/KeyHints';
 import {
   BORDERED_PANEL_CHROME_COLUMNS,
   BorderedPanel,
@@ -104,7 +109,7 @@ export function CompactFormKeyHints(props: {
   return (
     <KeyHints
       hints={[
-        { key: '↑/↓', action: 'navigate' },
+        NAVIGATE_HINT,
         props.primary,
         { key: 'Esc', action: props.escapeAction ?? 'close' },
       ]}
@@ -124,18 +129,13 @@ export function PickerKeyHints(props: {
 }): React.JSX.Element {
   if (props.selectable && props.hasItems) {
     return (
-      <KeyHints
-        hints={[
-          { key: '↑/↓', action: 'navigate' },
-          { key: '1-9/a-z', action: 'select' },
-        ]}
-      />
+      <KeyHints hints={[NAVIGATE_HINT, { key: '1-9/a-z', action: 'select' }]} />
     );
   }
   return (
     <KeyHints
       hints={[
-        ...(props.hasItems ? [{ key: '↑/↓', action: 'navigate' }] : []),
+        ...(props.hasItems ? [NAVIGATE_HINT] : []),
         { key: 'Enter', action: 'close' },
         { key: 'Esc', action: 'close' },
       ]}
