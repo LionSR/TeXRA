@@ -559,7 +559,7 @@ Its result is the agent's final reply, or a \`schema\` value. Pick the agent who
     schema: AgentInputSchema,
     execute: (input: AgentInput) =>
       launchChildAgent({
-        tool: 'agent',
+        tool: AGENT_TOOL_NAME,
         agentName: input.agentName,
         persona: input.persona && {
           name: input.agentName,

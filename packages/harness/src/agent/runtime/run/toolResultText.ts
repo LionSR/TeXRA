@@ -41,15 +41,16 @@ export function formatAttachmentSummary(
 }
 
 /**
- * Check if tool result text exceeds the maximum allowed length. Returns a
- * head+tail replacement (with an explicit elision marker) if exceeded,
- * otherwise null so the caller keeps the original text. Head is small
- * (enough to name the invoked engine/file); tail is large because compiler
- * and build errors cluster at the end of long logs.
+ * `text` within the size cap: itself, or past the cap its head and tail
+ * around an explicit elision marker. Head is small (enough to name the
+ * invoked engine/file); tail is large because compiler and build errors
+ * cluster at the end of long logs. Every result passes it as the model reads
+ * it; a tool whose output comes from outside the process also applies it
+ * before the output is stored.
  */
-function checkToolResultTextLimit(text: string): string | null {
+export function capToolResultText(text: string): string {
   if (text.length <= MAX_TOOL_RESULT_TEXT_LENGTH) {
-    return null;
+    return text;
   }
 
   const head = appendHead('', text, TOOL_RESULT_TRUNCATION_HEAD_CHARS);
@@ -102,5 +103,5 @@ export function formatToolResultAsText(
   // summary, error, userInstruction, or attachmentSummary.
   const combined = textPieces.join('\n\n') || 'OK';
 
-  return checkToolResultTextLimit(combined) ?? combined;
+  return capToolResultText(combined);
 }
