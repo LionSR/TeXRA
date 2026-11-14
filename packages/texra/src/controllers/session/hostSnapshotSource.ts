@@ -22,6 +22,7 @@ import {
   Effect,
   type FileSystem,
   Option,
+  Predicate,
   type Path,
   type Scope,
   Semaphore,
@@ -44,6 +45,7 @@ import {
   type SettingsStores,
 } from '@texra-ai/harness/plugins';
 import { APPROVAL_POLICY_SETTING } from '@texra-ai/harness/schemas';
+import { apiKeyEntry } from '@texra-ai/llm';
 import { GIT_COMMITS_TO_SHOW_SETTING } from '@texra/shared/settings/texraSettings';
 import { loadTeamOptions } from '@texra/agent/teams/teamLaunch';
 import type {
@@ -387,12 +389,26 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       yield* subscribeAppSignal('workspaceAgentsChanged'),
       catalogs,
     );
-    // A stored key or sign-in (`credentialChanged`), or a model-access
-    // preference or enabled-model write (`modelAccessChanged`): the
-    // credential first, then the catalogs that list the models it reaches.
+    // Any secret written (`credentialChanged`) may change the credential;
+    // only a provider's API key, or a model-access preference or
+    // enabled-model write (`modelAccessChanged`), changes the models listed,
+    // so an OAuth refresh or a GitHub token reloads no catalog. A sign-in
+    // announces its token write, then its preference (`modelAccessChanged`).
+    const providerKey = ({ key }: { readonly key: string }) =>
+      (apiKeyEntry(key) ?? 'unknown') !== 'unknown';
+    yield* follow(
+      Stream.filter(
+        yield* subscribeAppSignal('credentialChanged'),
+        Predicate.not(providerKey),
+      ),
+      loadCredential,
+    );
     yield* follow(
       Stream.merge(
-        yield* subscribeAppSignal('credentialChanged'),
+        Stream.filter(
+          yield* subscribeAppSignal('credentialChanged'),
+          providerKey,
+        ),
         yield* subscribeAppSignal('modelAccessChanged'),
       ),
       Effect.andThen(loadCredential, catalogs),
