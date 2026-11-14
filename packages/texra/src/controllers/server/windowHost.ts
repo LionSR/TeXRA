@@ -13,14 +13,13 @@ import {
   Ref,
   type Scope,
   Stream,
-  SubscriptionRef,
 } from 'effect';
 
 import { type HostInteractions } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { toErrorMessage, toJsonValue } from '@texra-ai/harness/schemas';
 import type { EditorCapabilities } from '@texra/tools/editorHost';
-import { WINDOW_OUTDATED, type ServiceLink } from './client';
+import { WINDOW_OUTDATED, linkOutage, type ServiceLink } from './client';
 
 import {
   ANSWERED,
@@ -134,7 +133,7 @@ export const attachWindowHost = Effect.fn('server.attachWindowHost')(function* <
   // window that hears it (a reconnect resets `refusalTold`, so a later
   // refusal is said again): every call it makes says it too.
   yield* Effect.forkScoped(
-    SubscriptionRef.changes(link.away).pipe(
+    linkOutage(link).pipe(
       Stream.filter((reason) => reason === WINDOW_OUTDATED),
       Stream.runForEach((message) =>
         Deferred.succeed(attached, undefined).pipe(

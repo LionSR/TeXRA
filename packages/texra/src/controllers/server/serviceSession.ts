@@ -27,7 +27,6 @@ import {
   Semaphore,
   Stream,
   Struct,
-  SubscriptionRef,
 } from 'effect';
 
 import {
@@ -53,8 +52,10 @@ import { requestErrorText } from '@ui/copy/requestErrors';
 
 import { attachWindowHost } from './windowHost';
 import {
+  SERVICE_OFFLINE,
   WINDOW_OUTDATED,
   environmentApiKeys,
+  linkOutage,
   linkedClient,
   requestOnService,
   type ServiceClient,
@@ -270,7 +271,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       Stream.filter(Predicate.isNotNull),
       Stream.map((client) => ({ client })),
     ),
-    SubscriptionRef.changes(link.away).pipe(
+    linkOutage(link).pipe(
       Stream.filter((reason) => reason === WINDOW_OUTDATED),
       Stream.map((refused) => ({ refused })),
     ),
@@ -380,10 +381,12 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
               `The TeXRA service stopped before task ${runId} ended`,
             ).pipe(
               Effect.annotateLogs({ data: error }),
-              Effect.andThen(SubscriptionRef.get(link.away)),
-              // The link's reason once it has one; until then the call's.
-              Effect.flatMap((reason) =>
-                Effect.fail(runFailure(reason || error.message)),
+              Effect.andThen(link.state.get),
+              // Why the link is away, or offline when it has not heard yet.
+              Effect.flatMap((state) =>
+                Effect.fail(
+                  runFailure('away' in state ? state.away : SERVICE_OFFLINE),
+                ),
               ),
             ),
       ),
