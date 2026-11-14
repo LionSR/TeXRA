@@ -69,6 +69,9 @@ export const RETIRED_ROW_KINDS: ReadonlyMap<string, 'display' | 'execution'> =
     ['model.retry', 'execution'],
     // A document round's outputs: the run's files.
     ['output.produced', 'execution'],
+    // A child's parent edge severed by its parent's stop, which decided
+    // where its end delivered and the grants it kept.
+    ['run.detach', 'execution'],
     // A goal run's plan.
     ['run.fact', 'execution'],
     // The loop state a resume continued from.
@@ -135,8 +138,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v7: the app's launch facts are an opaque `launch` record, not a `cli`
   // block (an earlier build's team and output fields would be dropped).
   'run.config': { version: 7, listing: 'own' },
-  'run.detach': { ...V1, listing: 'own' },
-  'run.stop': { ...V1, listing: 'own' },
+  // v2: no `shutdown` reason: a process that exits writes nothing for its
+  // runs (an earlier build's shutdown stop would fail as damaged).
+  'run.stop': { version: 2, listing: 'own' },
   // v2: a recipe's value is `structured`, with no `documents`.
   // v3: the error's classification as `model.message` v9.
   // v4: an error always carries its `message` (an earlier build's error
@@ -159,7 +163,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // reply, the route's, or an attempt the process stopped during), never
   // its words or a classification of it (an earlier build's end would read
   // without its verdict).
-  'run.end': { version: 9, listing: 'own' },
+  // v10: a model failure has no `interrupted` source, as `model.message`
+  // v18.
+  'run.end': { version: 10, listing: 'own' },
   'run.removed': { ...V1, listing: 'lifecycle' },
   // v2: a model's summary carries its helper request's priced `usage`,
   // which the run's spend counts (a v1 summary would read as free).
@@ -206,7 +212,11 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v11: who answers a request is its row's `answeredBy`, decided once as
   // it opens, and no payload carries `offersGrant` (an earlier build's row
   // names no answerer).
-  'request.opened': { version: 11, listing: 'request' },
+  // v12: a retry's failure has no `interrupted` source, as `model.message`
+  // v18.
+  // v13: a retry's credential switch has no `automatic`: a person takes
+  // every switch (an earlier build's flag would be silently dropped).
+  'request.opened': { version: 13, listing: 'request' },
   // v2: no `setup` arm; a proposal's approve may carry edited files,
   // instruction and options.
   'request.decided': { version: 2, listing: 'request' },
@@ -242,7 +252,11 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v8: an error row's model failure is its verdict (`failure`), with no
   // worded `message`, status or classification beside it (an earlier
   // build's error row would be refused as a damaged payload).
-  log: { version: 8, listing: 'none' },
+  // v9: an error row's model failure has no `interrupted` source, as
+  // `model.message` v18.
+  // v10: no `quotaFallback` message type: a used-up plan asks before the
+  // run moves off it (an earlier build's notice would fail as damaged).
+  log: { version: 10, listing: 'none' },
   // v2: no `phase` kind and no `index`/`total` (an earlier build's script
   // phase stage would fail its run as damaged rather than read as that
   // build's).
@@ -320,7 +334,16 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // the route's, or `interrupted` for an attempt the process stopped
   // during, in place of a made-up failure message (an earlier build's
   // error would read without its verdict).
-  'model.message': { version: 16, listing: 'none' },
+  // v17: no `identified` kind: an accepted operation holds the provider's
+  // response id, and nothing read it elsewhere (an earlier build's row
+  // would fail as damaged).
+  // v18: a failure has no `interrupted` source: a resume sends an attempt
+  // no row saw end again and asks nobody (an earlier build's question
+  // about such an attempt would fail as damaged).
+  // v19: a failed attempt has no `next: decline`: a used-up plan opens the
+  // retry request, whose answer declines the route (an earlier build's
+  // row would fail as damaged).
+  'model.message': { version: 19, listing: 'none' },
   // v2: the causes are `compaction` and `fork` alone (an earlier build's edit
   // of another cause would fail its run as damaged rather than read as that
   // build's).

@@ -45,7 +45,6 @@ import {
   type TuiSession,
 } from './state/sessionRunState';
 import type { ApprovalPolicy, SessionView } from '@texra-ai/harness/schemas';
-import type { RunStopReason } from '@texra-ai/harness';
 import type { Instance as InkInstance } from 'ink';
 
 const EXIT_CONFIRMATION_TTL_MS = 800;
@@ -81,18 +80,15 @@ interface SessionExitControllerContext {
   /** Finishes once every message the chat was sending is sent (or started
    *  its run); a graceful exit waits on it before it returns. */
   readonly submitted: Effect.Effect<void>;
-  /** Finishes once the chat's root run is no longer live here: what a
-   *  graceful exit that stopped it waits for. */
-  readonly rootRunEnded: Effect.Effect<void>;
   /** Reads the live approval policy for the resume hint. */
   readonly getApprovalPolicy: () => ApprovalPolicy;
   /** Materialize buffered trace chunks and drain queued publications. */
   readonly flushArtifacts: Effect.Effect<void, Error>;
   /** Repaint the TUI from a known origin after a `fg`/SIGCONT resume. */
   readonly repaintAfterTerminalResume: () => void;
-  /** Stop the active run (its `run.stop` row): Ctrl-C on a running turn
-   *  is a `user` stop, every exit path a `shutdown`. */
-  readonly interruptActive: (reason: RunStopReason) => void;
+  /** Stop the active run (its `run.stop` row): Ctrl-C on a running turn.
+   *  No exit path stops a run: the process's exit leaves it as it stands. */
+  readonly interruptActive: () => void;
 }
 
 /** The exit-subsystem handles `runChat` wires into Ink props and its `finally`. */
@@ -153,8 +149,8 @@ export function createSessionExitController(
     writeTextStdout(`\n${hint}`);
   };
   // Drain artifact writes and canonical event publication before shutdown.
-  // Platform shutdown then finishes executions whose leases are still held,
-  // including the WAITING flow whose checkpoint this exit preserves. Every
+  // Platform shutdown then interrupts the runs still held and writes
+  // nothing for them, so their rows stay as this exit leaves them. Every
   // exit persists best-effort: a failed flush is reported and the exit goes
   // on, since the resume hint still names the session and the terminal must
   // still be restored.
@@ -184,22 +180,10 @@ export function createSessionExitController(
       await ink.waitUntilExit();
     });
     const resumeHintView = currentView();
-    // A suspended (idle/WAITING) root session is resumable, so it takes no
-    // stop: the checkpoint survives either way, and the session's close
-    // ends the generation on its own. See TuiSession.isResumableIdle for
-    // the live-flow check that distinguishes this state from a resume that
-    // is still rehydrating. This is the one stop policy of a graceful
-    // exit (`/exit` and Ctrl-C alike); a signal exit stops the run in its
-    // handler, before it leaves.
-    const interruptPendingRun = (): boolean => {
-      if (session.canStartRootRun() || session.isResumableIdle()) return false;
-      ctx.interruptActive('shutdown');
-      return true;
-    };
-    // Interrupt an actively-running turn BEFORE waiting for the chat's sends:
-    // a message to a stopping run lands only once the stop finishes. Re-check
-    // after the wait for a run a send itself resumed.
-    const { disposalFailure, resumableIdle } = yield* withProcessServices(
+    // No exit stops a run: a root the chat still holds, working a turn or
+    // waiting between turns, is left as its rows stand, and the process's
+    // exit interrupts it. It reads as interrupted and stays resumable.
+    const { disposalFailure, held, working } = yield* withProcessServices(
       ctx.runtime,
       Effect.gen(function* () {
         // A disposal failure does not stop the exit: it is reported and
@@ -210,32 +194,27 @@ export function createSessionExitController(
         const disposalFailure = Exit.isFailure(closed)
           ? ensureError(closed.cause)
           : undefined;
-        let interrupted = interruptPendingRun();
+        // Read after the chat's sends: one of them may have resumed a run.
         yield* ctx.submitted;
-        interrupted = interruptPendingRun() || interrupted;
         const idle = session.isResumableIdle();
-        // Only await a run we actually interrupted/finished. A resumableIdle
-        // run is waiting at the WAIT node and never finishes, so awaiting it
-        // would hang the process here. The run's own outcome is not the exit's
-        // concern: an interrupt-only finish must not skip the teardown below.
-        if (interrupted) yield* ctx.rootRunEnded;
+        const working = !idle && !session.canStartRootRun();
         yield* persistSession;
-        return { disposalFailure, resumableIdle: idle };
+        return { disposalFailure, held: idle || working, working };
       }),
     );
     ctx.terminal.release();
-    // The code the chat ends with: the drain above awaited the run, so its
-    // outcome is final, and the fresh chat state below has no root.
-    const exitCode = session.exitCode;
+    // The code the chat ends with, read before the fresh chat state below
+    // drops its root: a turn the exit cut reports as interrupted.
+    const exitCode = working ? CliExitCode.Interrupted : session.exitCode;
     // Print the resume hint after the terminal modes are restored, but before
     // the fresh chat state drops the stream tree the hint is built from.
     printResumeHintOnExit(resumeHintView);
     startChat();
-    if (resumableIdle) {
-      // The run waiting at the WAIT node keeps the event loop alive, so a
+    if (held) {
+      // The run the chat still holds keeps the event loop alive, so a
       // normal return would never let the process exit. Leave here, AFTER
-      // persistence is flushed and the resume hint is printed, preserving the
-      // suspended flow record on disk for `texra resume`. Terminal modes are
+      // persistence is flushed and the resume hint is printed: the run's
+      // rows stay on disk for `texra resume`. Terminal modes are
       // restored, so stderr is the operator's again; the log sink is silent
       // for the whole TUI session and would drop this.
       if (disposalFailure) {
@@ -285,26 +264,21 @@ export function createSessionExitController(
     if (Option.isSome(FiberHandle.getUnsafe(confirmation))) {
       void leave({ kind: 'signal', exitCode: CliExitCode.Interrupted });
     } else if (canStopRootRun.get()) {
-      ctx.interruptActive('user');
+      ctx.interruptActive();
       waitForSecondCtrlC();
     } else if (session.isResumableIdle()) {
       // Exit WITHOUT a user stop. The suspended tool-use run keeps its rows
       // on the run aggregate, so `texra resume` can continue it. Preserve
       // the session's current exit code too: an intentional idle exit after
       // a successful turn should not report SIGINT/130. The platform
-      // shutdown's session close still ends the generation with its
-      // cancelled `run.end` (see `TuiSession.isResumableIdle`).
+      // shutdown's session close writes nothing for the run.
       void leave({ kind: 'signal', exitCode: session.exitCode });
     } else {
       void leave({ kind: 'graceful' });
     }
   };
-  // Only interrupt an actively-running turn; an idle/WAITING session is left
-  // suspended so its rows stay resumable (see handleSigint).
+  // A signal stops no run: whatever the chat holds is left as it stands.
   const handleTermSignal = (exitCode: number) => (): void => {
-    if (canStopRootRun.get()) {
-      ctx.interruptActive('shutdown');
-    }
     void leave({ kind: 'signal', exitCode });
   };
   // Suspend/resume (Ctrl-Z / `kill -TSTP` / `fg`). Raw mode keeps the tty

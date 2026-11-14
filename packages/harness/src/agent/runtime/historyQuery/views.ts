@@ -275,8 +275,8 @@ export const replaceRuns = (
     const params: HistoryParams['run'] = {
       id: cutText(run.id),
       parent_id: cutText(run.parentId),
-      // Only a run still under its parent names the launching call: a
-      // detached child's parent, and its rows, may be gone.
+      // Only a run still listed under its parent names the launching
+      // call: a deleted parent's rows are gone.
       parent_call_position:
         run.parentId === null || run.launch?.card == null
           ? null

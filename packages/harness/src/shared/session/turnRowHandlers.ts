@@ -4,7 +4,7 @@
  * pending response, whose records `inFlight.ts` defines.
  *
  * Lifecycle: a turn's invocation opens at its first `attempt` row and goes
- * through `identified`, `accepted`, `failed` or `cancelled` to its
+ * through `accepted`, `failed` or `cancelled` to its
  * `response`; a response with calls (or a script run's `handed-down` call)
  * opens the pending response, each call of which a `script.call` issues, a
  * `tool.intent` starts and a `tool.result` finishes; the `append` that
@@ -175,7 +175,6 @@ const MESSAGE_HANDLERS: {
   ) => RowOutcome;
 } = {
   attempt: withInvocation,
-  identified: withInvocation,
   accepted: withInvocation,
   cancelled: withInvocation,
   failed: (state, p) =>

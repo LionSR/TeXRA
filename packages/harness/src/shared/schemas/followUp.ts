@@ -33,7 +33,7 @@ export type RunRelation = typeof RunRelationSchema.Type;
  * Who put the input on the run. A run sender's `relation` is what the sender
  * is to the recipient, stamped by the recipient's admission from both runs'
  * lineage as the session view holds it, never taken from the sender: it is
- * the relation as admitted, and a later detach does not rewrite it.
+ * the relation as admitted.
  */
 const FollowUpSenderSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('user') }),

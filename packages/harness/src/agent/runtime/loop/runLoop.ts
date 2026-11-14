@@ -7,7 +7,7 @@
  *
  * The write points, in order: the opening batch of a fresh run (its message
  * and input, its `run.config` binding, `turn.ready`); `turn.begin`; per round
- * the invoker's `attempt` / `identified` / `response` rows; per barrier call
+ * the invoker's `attempt` / `response` rows; per barrier call
  * its `tool.intent`; per settled call its `tool.result` with its card; the
  * delivering `append` with the complete tool group; a follow-up consumed at a
  * request or a nudge, each an `append`; `turn.end` and `waiting`; the

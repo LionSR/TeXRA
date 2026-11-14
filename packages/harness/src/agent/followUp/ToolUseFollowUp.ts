@@ -95,7 +95,7 @@ const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
   notResumable:
     'This run cannot accept messages right now. Resume it, or start a new agent task.',
   notParent:
-    'This run is not a child of the sender: it was detached or launched by another run.',
+    'This run is not a child of the sender: it was launched by another run.',
   blocked:
     "This task's agent, or the plugin it comes from, is missing, off or not trusted. It can continue once that is fixed.",
 };

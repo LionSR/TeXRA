@@ -294,8 +294,7 @@ The private rows themselves are never sent to a renderer
 (`shared/schemas/sessionEvent.ts#isDisplayRow`).
 
 - `model.message` (folded: yes): One arm per invocation fact: `attempt`,
-  `identified`, `accepted`, `cancelled`, `failed`, `response`, `handed-down`,
-  `append` (`shared/schemas/runHistoryEvent.ts#ModelMessagePayloadSchema`).
+  `accepted`, `cancelled`, `failed`, `response`, `handed-down`, `append` (`shared/schemas/runHistoryEvent.ts#ModelMessagePayloadSchema`).
 - `context.edit` (folded: yes): Replaces messages `[from, to)` of the model's
   view; cause `compaction` or `fork`
   (`shared/schemas/runHistoryEvent.ts#ContextEditPayloadSchema`).
@@ -323,14 +322,11 @@ The `model.message` arms:
 
 - `attempt`: A billed request is about to leave; names its recorded request by
   sha256 and its origin.
-- `identified`: The provider's response id, seen before completion.
 - `accepted`: A background operation the provider accepted, with its admitted
   deadline.
 - `cancelled`: A user stop the provider confirmed for an accepted operation.
-- `failed`: The attempt failed, or its outcome is unknown: a person-admitted
-  attempt found with no outcome on resume is re-asked under a `failed` row
-  (`agent/runtime/ModelInvoker.ts#'ModelInvoker.reask'`). Carries its error and
-  the move after it (`retry`, `unchain`, `ask`, `stop`).
+- `failed`: The attempt failed. Carries its error and the step after it
+  (`retry`, `unchain`, `ask`, `stop`).
 - `response`: The completed turn, its dispatch facts per call, and its priced
   usage.
 - `handed-down`: The one call a script's run opens on; no model made it.
@@ -369,7 +365,6 @@ also read by `applyRunRows`.
 - `run.activate` (folded: yes): One activation: the first launch or a resume.
 - `run.config` (folded: yes): What the run runs on: configuration, model,
   binding.
-- `run.detach` (folded: no): A stop severed the parent edge.
 - `run.end` (folded: no): The terminal fact: outcome, classified error, output.
 - `run.removed` (folded: no): The deletion marker: last row of its aggregate, final.
 - `run.description` (folded: no): A title, by `model` or `user`.
@@ -500,8 +495,14 @@ MUST carry an outcome, and every other position MUST NOT carry one
 is its `run.end` alone, committed in one transaction with the requests it
 leaves open cancelled and its unread input dropped
 (`agent/storage/runLifecycle.ts#endIn`); a stop commits a `run.stop` row
-naming its reason first, and for a run no fiber here drives, the `run.end`
-in the same batch (`agent/storage/runLifecycle.ts#stopRun`). A run whose
+naming its reason first (`user`, or `released` by the call that awaited
+it), and for a run no fiber here drives, the `run.end`
+in the same batch (`agent/storage/runLifecycle.ts#stopRun`). A process that
+exits stops nothing: a session's close interrupts its runs' fibers and MUST
+NOT write a stop or an end for a run nobody stopped, so the run is left as
+its rows stand and reads as interrupted, resumable, at the next open, as
+after a crash (`agent/runtime/runRegistry.ts#interruptAll`,
+`agent/runtime/AgentRunLifecycle.ts#commitEnd`). A run whose
 history does not load ends with its `run.end` and its requests uncancelled,
 with a warning (`agent/storage/runLifecycle.ts#endIn`). Every child is a
 run that ends: a native child runs one cycle and ends with its report; a
@@ -509,7 +510,7 @@ process child (a background command, an agent CLI's turn) is one turn of
 its process, ended with its exit (`agent/runtime/processRun.ts`). A child's
 end queues its report on its parent's input in the same transaction, under
 `${runId}:${activation}` (`agent/storage/runLifecycle.ts#parentDelivery`),
-unless the parent's call awaits it or the child was detached.
+unless the parent's call awaits it.
 
 **W6.** Every failed attempt of a turn that reaches failure recording MUST
 commit a `failed` row whose `next` is the move after it; a call off the rows
@@ -607,49 +608,47 @@ be refused when the run already holds history state
 
 A turn's model call MUST go through one loop over its rows,
 `ModelInvoker.invoke` (`agent/runtime/ModelInvoker.ts#'ModelInvoker.invoke'`).
-Its next move is `nextAttempt(invocation, requests, retries)`, read off the
+Its next move is `nextAttempt(invocation, requests, activatedAt)`, read off the
 invocation's rows before every move (`shared/session/inFlight.ts#nextAttempt`). A call off the rows (a compaction
 summary, a helper call) is the other loop, `callModel`
 (`agent/runtime/run/modelCall.ts#callModel`): `Effect.retry` while llm says the
 same request can succeed, under the same gate, with no row and no person:
 
-| Rows show                                                        | Move                                        |
-| ---------------------------------------------------------------- | ------------------------------------------- |
-| no open invocation                                               | send attempt 1                              |
-| open attempt, no outcome, an accepted operation                  | observe it; never resubmit                  |
-| open attempt, no outcome, an earlier `failed` row asked a person | ask again (`reask`)                         |
-| open attempt, no outcome, the automatic retries spent            | ask again (`reask`)                         |
-| open attempt, no outcome, otherwise                              | send the next attempt                       |
-| open attempt a clean close stopped (`run.end` says `shutdown`)   | as above; the stopped attempt spent nothing |
-| `failed` with `retry` or `unchain`                               | send the next attempt                       |
-| `failed` with `stop`                                             | end the invocation failed                   |
-| `failed` with `ask`, request undecided                           | wait for the decision                       |
-| `failed` with `ask`, decided `retry`                             | rebind on the chosen credentials, then send |
-| `failed` with `ask`, decided `deny`                              | end the invocation failed                   |
-| `failed` with `ask`, any other decision                          | end the invocation cancelled                |
+| Rows show                                                       | Move                                        |
+| --------------------------------------------------------------- | ------------------------------------------- |
+| no open invocation                                              | send attempt 1                              |
+| open attempt, no outcome, an accepted operation                 | observe it; never resubmit                  |
+| open attempt, no outcome, otherwise                             | send the next attempt                       |
+| `failed` with `retry` or `unchain`                              | send the next attempt                       |
+| `failed` with `stop`                                            | end the invocation failed                   |
+| `failed` with `ask`, request undecided                          | wait for the decision                       |
+| `failed` with `ask`, decided `retry`                            | rebind on the chosen credentials, then send |
+| `failed` with `ask`, decided `deny`                             | end the invocation failed                   |
+| `failed` with `ask`, cancelled before the run's last activation | send the next attempt                       |
+| `failed` with `ask`, cancelled since                            | end the invocation cancelled                |
+
+A resume restarts the turn's request from the last outcome its rows recorded.
+An attempt no row saw end, because the process died or its run was stopped
+while it ran, counts as not made: it is sent again and spends no retry. A
+retry request an earlier lifecycle left cancelled (by its run's end, by the
+activation that found it open, or by a person's cancel, which ended that
+lifecycle) is not asked again: resuming the run is the person's word to go on,
+so the request is sent.
 
 The move a `failed` row records is decided once, by `failedNext`
-(`shared/session/inFlight.ts#failedNext`), except for the row of a re-ask,
-which names its move itself, `ask` under a fresh request id
-(`agent/runtime/ModelInvoker.ts#'ModelInvoker.reask'`):
+(`shared/session/inFlight.ts#failedNext`):
 
 - A `continuation-gone` failure of an attempt that sent a continuation answers
   `unchain`, once per invocation (`shared/session/inFlight.ts#failedNext`,
   `agent/runtime/ModelInvoker.ts#moveAfter`).
-- A retryable failure answers `retry` while the invocation's earlier failures,
-  `unchain` ones excluded, are fewer than the budget
+- A retryable failure answers `retry` while the invocation's earlier recorded
+  failures, `unchain` ones excluded, are fewer than the budget
   (`shared/session/inFlight.ts#failuresBefore`, `#spentRetries`,
-  `#failedNext`). Every earlier failure counts, whichever move followed it: one
-  that a person's retry allowed spends the budget as an automatic resend does,
-  and so does an attempt with no recorded outcome, which may have been billed,
-  so a crash that recurs on every open does not resend it every time. An
-  attempt a clean session close stopped is the exception: its run's `run.end`
-  says `shutdown` (its `reason`), its request was cut by the stop, not lost,
-  and the fold leaves it out of the count
-  (`shared/session/runFacts.ts#closedBy`,
-  `shared/session/inFlight.ts#failuresBefore`).
-  For a turn's invocation the budget is
-  counted from rows, so a crash does not refill it. A call off the rows counts
+  `#failedNext`). Every recorded failure counts, whichever move followed it: one
+  that a person's retry allowed spends the budget as an automatic resend does.
+  An attempt with no recorded outcome counts as not made and spends nothing.
+  For a turn's invocation the budget is counted from rows, so a resume keeps
+  the failures its rows recorded. A call off the rows counts
   its resends in memory (`agent/runtime/run/modelCall.ts#callModel`): a
   compaction cut short is made anew, with a fresh budget.
 - Past the budget, a failure a person may retry answers `ask` under a fresh
@@ -682,14 +681,8 @@ llm scoped to a route, which the gate cools and waits out
 (`agent/runtime/ModelRetryGate.ts#resendDelayMs`); a resend after a crash, of
 an attempt no row recorded an outcome for, goes out without it.
 
-An attempt of an invocation a person admitted, whose outcome no row recorded and
-which holds no accepted operation, MUST be asked about again and MUST NOT be
-resent unasked (`shared/session/inFlight.ts#nextAttempt`); one that holds an
-accepted operation is observed before another submission is considered. The ask
-is a new `failed` row on that attempt, with `next: ask`
-(`agent/runtime/ModelInvoker.ts#'ModelInvoker.reask'`). An attempt no person
-admitted, whose outcome no row recorded, is resent only while automatic retries
-remain; otherwise it is asked about again
+An attempt whose outcome no row recorded and which holds an accepted operation
+MUST be observed and MUST NOT be resubmitted; one that holds none is sent again
 (`shared/session/inFlight.ts#nextAttempt`).
 
 A subscription session's token is llm's to renew, inside the request: the
@@ -874,14 +867,14 @@ unless the item names another test:
   asserted by
   `src/test-kernel/support/crashConformance.ts#'reads every child result settled before the crash, exactly once'`.
 - **I6**: A child's result is delivered to its parent at most once; a result
-  whose child was detached, or whose parent cannot take it, stays in the
-  child's run report with a warning
+  whose parent cannot take it stays in the child's run report with a warning
   (`agent/storage/runLifecycle.ts#parentDelivery`). Asserted by
   `src/test-kernel/support/crashConformance.ts#'reads every child result settled before the crash, exactly once'`.
 - **I7**: A fork keeps the history it was registered with; compaction keeps
   the context it committed.
-- **I8**: A run's halt commits with its end; a stopped run never reads as
-  interrupted.
+- **I8**: A run's halt commits with its end; a run a person stopped never
+  reads as interrupted. A run its process left, by a crash or by exiting, has
+  neither stop nor end and reads as interrupted.
 - **I9**: Turning off a run's shell bypass is acknowledged only after its row is
   durable.
 
@@ -890,17 +883,16 @@ deterministic. Against a live model, a resent attempt (section 6) may answer
 differently; what recovery preserves is every committed row; it reaches a
 terminal outcome once the provider answers or a person decides each request the
 run opens, such as a retry request past the automatic budget. The suite also
-asserts that a crash between a request and its answer leaves the request pending
-and the resume answers that same request; that a crash between the answer and
-the body honours the answer; and that a crash inside one publisher job leaves
-neither half on disk (`src/test-kernel/support/crashConformance.ts#violations`,
+asserts that a request a crash left pending is cancelled when the run is next
+activated; that a crash between the answer and the body honours the answer; and
+that a crash inside one publisher job leaves neither half on disk (`src/test-kernel/support/crashConformance.ts#violations`,
 `#'a crash between two appends of one job leaves neither'`).
 
 What survives at each commit point follows from sections 2 to 8:
 
-- `attempt`: The attempt has no outcome: resent, or asked again if a person
-  admitted the invocation (section 6). A summary's attempt is not resumed: the
-  summary starts a new invocation (section 6).
+- `attempt`: The attempt has no outcome: it is sent again (section 6). A
+  summary's attempt is not resumed: the summary starts a new invocation
+  (section 6).
 - `accepted`: The operation is observed under its recorded deadline, not
   resubmitted (`shared/session/inFlight.ts#nextAttempt`).
 - `response`: The response is reused; no new invocation is made for it
@@ -970,8 +962,7 @@ its title.
   `src/test-kernel/controllers/session/goldenStore.vitest.ts#'folds to the pinned session view and run states'`
 - **6 retry**:
   `src/test-kernel/agent/runtime/RetryState.vitest.ts#'admits a manual retry through a durable approval'`,
-  `#'stops automatic attempts at the configured limit'`,
-  `#'spends a retry on each attempt the process stopped during'`;
+  `#'stops automatic attempts at the configured limit'`;
   `packages/harness/test/agent/runtime/ModelRetryGate.vitest.ts#'admits one recovery probe and releases siblings after success'`
 - **7 one process per store**:
   `src/test-kernel/controllers/session/sessionEvents.vitest.ts#'closes a run tree with its dependents and collects it'`,
@@ -1004,9 +995,8 @@ its title.
   "SDK and typed-RPC deferral (D11)").
 - **No exactly-once external effects.** The protocol promises one settlement per
   call, not one execution of an arbitrary external effect (section 9).
-- **No once-only billing.** The code may resend an attempt that no person admitted
-  and whose outcome no row recorded while automatic retries remain
-  (`shared/session/inFlight.ts#nextAttempt`); the
+- **No once-only billing.** A resume sends again an attempt whose outcome no
+  row recorded (`shared/session/inFlight.ts#nextAttempt`); the
   earlier attempt may have been billed. The suite asserts at most one committed
   response per invocation (I3), not one billing.
 

@@ -2,21 +2,22 @@
  * The one service that touches the llm `Model` for a run. One `invoke` is
  * one turn with its billed attempts: the `TurnRequest` assembled from the
  * folded `RunState`, `prepareTurn`, the `attempt` row committed before the
- * request leaves the process, `identified` when the provider names the
- * response, the stream bridged into the trace, and the `response` row with
- * its dispatch facts and priced usage committed before any tool runs.
+ * request leaves the process, the stream bridged into the trace, and the
+ * `response` row with its dispatch facts and priced usage committed before
+ * any tool runs.
  * `call` is a compaction summary on the same binding, gate and pricing, off
  * the rows (`run/modelCall.ts`): its usage rides the edit its caller lands.
  *
  * A turn's retry loop is `invoke` over the invocation's rows: `nextAttempt`
- * reads the next move off them, so the loop keeps no count and no permit of
- * its own and a resume continues the same series under the same budget.
- * Each failed attempt commits a `failed` row with the move after it, an
- * automatic resend under the process's `ModelRetryGate` while the budget the
- * rows count lasts, then a person's answer to a `request.opened` the same
- * batch opens. The answer is the `request.decided` row, and the attempt
- * after it consumes it; an attempt a person admitted whose outcome no row
- * recorded is asked about again, never resent unasked.
+ * reads the next step off them, so the loop keeps no count and no permit of
+ * its own. Each failed attempt commits a `failed` row with the step after
+ * it, an automatic resend under the process's `ModelRetryGate` while the
+ * budget of recorded failures lasts, then a person's answer to a
+ * `request.opened` the same batch opens. The answer is the
+ * `request.decided` row, and the attempt after it consumes it. A resume
+ * restarts from the last recorded outcome: an attempt no row saw end is
+ * sent again, and so is one whose retry request an earlier lifecycle left
+ * unanswered, since resuming the run is the person's word to go on.
  */
 import { randomUUID } from 'node:crypto';
 
@@ -54,11 +55,9 @@ import {
   ModelAccess,
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
+import { credentialSwitch } from '@agent/runtime/modelAccess/routeDecision';
 import { RouteUnavailable } from '@common/errors/agentErrors';
-import {
-  modelFailureOf,
-  quotaFallbackMessage,
-} from '@common/errors/sdkError/providerErrorFormat';
+import { modelFailureOf } from '@common/errors/sdkError/providerErrorFormat';
 import { SessionRoots } from '@platform/rootedFs';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
@@ -236,9 +235,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         });
 
       /**
-       * One attempt from its first event to its `response` row. The
-       * provider's identity becomes an `identified` row as soon as it is
-       * seen (once; a background operation may report it twice), deltas
+       * One attempt from its first event to its `response` row. Deltas
        * stream into the run's thinking and output handles, and the
        * completed result is kept. Then the handles close, a failed stream
        * classifies, an empty one is a malformed output, and a completed
@@ -267,46 +264,30 @@ export const modelInvokerLayer = (): Layer.Layer<
           value: TurnResult | null;
           streamedText: string;
         } = { value: null, streamedText: '' };
-        const onEvent = Effect.fnUntraced(function* (event: TurnEvent) {
-          switch (event.kind) {
-            case 'identified': {
-              const current = yield* cell.current;
-              if (
-                current.invocation?.current.providerResponseId ===
-                event.providerResponseId
-              ) {
+        const onEvent = (event: TurnEvent) =>
+          Effect.sync(() => {
+            switch (event.kind) {
+              // The provider's name for the response: no row records it, an
+              // accepted background operation carries its own.
+              case 'identified':
                 return;
-              }
-              yield* cell.append([
-                {
-                  type: 'model.message',
-                  aggregateId,
-                  payload: {
-                    kind: 'identified',
-                    invocation,
-                    providerResponseId: event.providerResponseId,
-                  },
-                },
-              ]);
-              return;
+              case 'delta':
+                if (event.part === 'reasoning') {
+                  trace.thinking.append(event.text);
+                } else {
+                  trace.output.append(event.text);
+                  // Kept for the failure path only: a completed turn reports
+                  // its own text, so this tail is read when the stream dies.
+                  completed.streamedText = (
+                    completed.streamedText + event.text
+                  ).slice(-PARTIAL_TEXT_TAIL_MAX);
+                }
+                return;
+              case 'completed':
+                completed.value = event.result;
+                return;
             }
-            case 'delta':
-              if (event.part === 'reasoning') {
-                trace.thinking.append(event.text);
-              } else {
-                trace.output.append(event.text);
-                // Kept for the failure path only: a completed turn reports
-                // its own text, so this tail is read when the stream dies.
-                completed.streamedText = (
-                  completed.streamedText + event.text
-                ).slice(-PARTIAL_TEXT_TAIL_MAX);
-              }
-              return;
-            case 'completed':
-              completed.value = event.result;
-              return;
-          }
-        });
+          });
         const streamed = yield* Effect.exit(Stream.runForEach(events, onEvent));
         if (Exit.isFailure(streamed)) {
           trace.thinking.finalize(undefined);
@@ -567,9 +548,7 @@ export const modelInvokerLayer = (): Layer.Layer<
        * One that asks opens its retry request at the request door
        * (`openRequest`), its `failed` row beside it, with the credential
        * move a used-up `quota` offers and, where the policy answers at once,
-       * that answer, so no surface lists it pending. A used-up plan the
-       * route falls back from without asking asks nothing: its `failed` row
-       * declines the route (`next: decline`).
+       * that answer, so no surface lists it pending.
        */
       const commitFailed = Effect.fn('ModelInvoker.commitFailed')(function* (
         cell: RunCell,
@@ -579,7 +558,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         bound: BoundModel,
         usage: NormalizedUsage | null,
       ): Effect.fn.Return<void, CellError, SessionServices> {
-        const failedRow = (next: StepAfterFailure): RunHistoryDraft => ({
+        const failedRow: RunHistoryDraft = {
           type: 'model.message',
           aggregateId,
           payload: {
@@ -589,31 +568,10 @@ export const modelInvokerLayer = (): Layer.Layer<
             next,
             ...(usage === null ? {} : { usage }),
           },
-        });
+        };
         if (next.kind !== 'ask')
-          return yield* Effect.asVoid(cell.append([failedRow(next)]));
+          return yield* Effect.asVoid(cell.append([failedRow]));
         const { requestId } = next;
-        const credentialSwitch = yield* access.credentialSwitch(
-          bound,
-          error.source === 'model' ? error.quota : undefined,
-          (yield* cell.current).declinedRoutes,
-        );
-        if (
-          credentialSwitch?.kind === 'decline-route' &&
-          credentialSwitch.automatic
-        ) {
-          // Nobody is asked: the run declines the route and resends on the
-          // user's own key. The notice records the route; an app words it.
-          logger.info(quotaFallbackMessage(credentialSwitch), {
-            messageType: MESSAGE_TYPES.QUOTA_FALLBACK,
-            data: { route: credentialSwitch.route },
-          });
-          return yield* Effect.asVoid(
-            cell.append([
-              failedRow({ kind: 'decline', route: credentialSwitch.route }),
-            ]),
-          );
-        }
         yield* openRequest(
           { runId, append: (rows) => cell.append(rows) },
           {
@@ -624,10 +582,13 @@ export const modelInvokerLayer = (): Layer.Layer<
               operation: 'Model request',
               model: bound.modelId,
               failure: error,
-              credentialSwitch,
+              credentialSwitch: credentialSwitch(
+                bound,
+                error.source === 'model' ? error.quota : undefined,
+              ),
             },
           },
-          { beside: [failedRow(next)] },
+          { beside: [failedRow] },
         );
       });
 
@@ -763,29 +724,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           ),
         );
 
-      /** Ask again about `attempt`: one whose outcome no row records (a
-       *  person allowed it, or it is past the automatic retries), or one
-       *  whose retry request an earlier lifecycle cancelled, asked as the
-       *  next attempt failing unsent on the same error. */
-      const reask = Effect.fn('ModelInvoker.reask')(function* (
-        cell: RunCell,
-        attempt: Attempt,
-      ): Effect.fn.Return<void, InvokeError, SessionServices> {
-        const bound = yield* ScopedRef.get(run.model);
-        const { ref, failed } = attempt;
-        yield* commitFailed(
-          cell,
-          failed === null ? ref : { ...ref, attempt: ref.attempt + 1 },
-          failed?.error ?? {
-            source: 'interrupted',
-            provider: bound.config.provider,
-          },
-          { kind: 'ask', requestId: `retry-${randomUUID()}` },
-          bound,
-          null,
-        );
-      });
-
       /** The turn as it ends without a response: the state its rows left. */
       const endedAs = (
         cell: RunCell,
@@ -811,7 +749,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         const retries = (yield* ScopedRef.get(run.model)).automaticRetries;
         for (;;) {
           const { invocation, requests, activatedAt } = yield* cell.current;
-          const move = nextAttempt(invocation, requests, retries, activatedAt);
+          const move = nextAttempt(invocation, requests, activatedAt);
           if (move.kind === 'fail') return yield* endedAs(cell, 'failed');
           if (move.kind === 'cancel') return yield* endedAs(cell, 'cancelled');
           if (move.kind === 'await') {
@@ -824,10 +762,6 @@ export const modelInvokerLayer = (): Layer.Layer<
               (yield* cell.current).commit,
             ).pipe(Effect.provideService(SessionLog, log));
             yield* cell.refresh;
-            continue;
-          }
-          if (move.kind === 'reask') {
-            yield* reask(cell, move.attempt);
             continue;
           }
           const ref =

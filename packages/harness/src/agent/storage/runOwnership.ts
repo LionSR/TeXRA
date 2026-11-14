@@ -58,8 +58,8 @@ const rowsOf = (runId: RunId) => {
 };
 
 /**
- * A run's persisted parent (`run.start.parent`, less a `run.detach` or an
- * unlisted parent), read cold from the runs' records so a read racing the
+ * A run's persisted parent (`run.start.parent`, less an unlisted
+ * parent), read cold from the runs' records so a read racing the
  * live fold's first replay still sees it. Every resume takes its lineage
  * from here, never from its caller, who has no parent to name for a run that
  * already started once.

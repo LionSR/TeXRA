@@ -1,12 +1,10 @@
-import { ModelError, providerDisplayName } from '@texra-ai/llm';
+import { ModelError } from '@texra-ai/llm';
 
 import {
-  type CredentialSwitch,
   type ErrorContext,
   type ErrorLogData,
   type ModelFailure,
   modelFailureMessage,
-  planOwner,
   type ProviderError,
 } from '@shared/schemas';
 import {
@@ -16,18 +14,6 @@ import {
 
 import { AgentError, RouteUnavailable } from '../agentErrors';
 import { findInCauseChain, isDiskFullError } from '../errorPredicates';
-
-/**
- * The notice of a used-up plan's automatic retry on the model's own key,
- * the move its retry request records; the run records the route beside the
- * notice for an app's words.
- */
-export function quotaFallbackMessage({
-  route,
-  provider,
-}: Extract<CredentialSwitch, { readonly kind: 'decline-route' }>): string {
-  return `Usage limit reached on your ${planOwner(route)} plan; retrying on your own ${providerDisplayName(provider)} API key.`;
-}
 
 /**
  * A model call's failure as a run records it: llm's verdict on the vendor's

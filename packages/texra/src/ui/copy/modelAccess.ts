@@ -160,12 +160,6 @@ export function errorRowText({ summary, details, failure }: ErrorRow): {
   };
 }
 
-/** The notice of a used-up plan's automatic retry on the model's own key. */
-export function quotaFallbackNoticeText(route: DeclinableUsageRoute): string {
-  const { plan, fallback } = PLAN_NAMES[route];
-  return `${plan} usage limit reached; retrying with ${fallback}.`;
-}
-
 /** Model calls paid for by your own provider accounts. */
 export const OWN_API_KEYS = {
   /** Standalone display name, e.g. a section heading or detailed status. */

@@ -75,7 +75,6 @@ export const RUN_ROW_READS = {
       'followup.queued',
       'followup.consumed',
       'run.start',
-      'run.detach',
       'run.activate',
       'run.stop',
       'run.end',
@@ -142,7 +141,6 @@ export function foldRunRows<R extends RunRowRead>(
 export const RECORD_ROW_TYPES = [
   'run.start',
   'approval.policy',
-  'run.detach',
   'run.activate',
   'run.stop',
   'run.end',
@@ -194,8 +192,6 @@ export function recordAfter(record: RunRows, row: SessionRow): RunRows {
       };
     case 'approval.policy':
       return { ...record, grants: row.snapshot };
-    case 'run.detach':
-      return { ...record, parent: null };
     // A resumed run never carries the previous lifecycle's end or stop, and
     // its input is open again.
     case 'run.activate':

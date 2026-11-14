@@ -46,10 +46,9 @@
  *   ended cleanly before the crash;
  * - a person is asked whether a command ran that the crash stopped before
  *   its body started (before its approval);
- * - approvals durable: a crash between a request and its answer leaves it
- *   pending, and the resume's answer is to that same request; a crash
- *   between the answer and the body it admits honours that answer. Either
- *   way the attempt never asks again;
+ * - approvals durable: a request a crash left pending stays offered after
+ *   it (the next activation cancels it and its asker asks again), or a
+ *   crash between an answer and the body it admits loses that answer;
  * - an edit of a file the run read before the crash is refused after it as
  *   unread: what a run has read is a fact of its rows, not of the process
  *   that ran the read (#14479);
@@ -73,7 +72,6 @@ import { layer } from '@effect/vitest';
 import {
   Duration,
   Effect,
-  Exit,
   Fiber,
   Layer,
   RcMap,
@@ -108,7 +106,6 @@ import {
 } from '@shared/session/database';
 import { generateRunId } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
-import { Settings } from '@shared/config/settings';
 import {
   answerOf,
   crashAt,
@@ -120,7 +117,6 @@ import {
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { runStart } from '@test/support/sessionRows';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { DETACH_SUBAGENTS_ON_STOP_SETTING } from '@texra-ai/harness/schemas';
 
 /** A file's lines, none when it is absent. */
 const linesOf = (file: string): string[] =>
@@ -180,9 +176,6 @@ const intentOf = Schema.decodeUnknownSync(
     callId: Schema.String,
     attempt: Schema.Number,
   }),
-);
-const identityOf = Schema.decodeUnknownSync(
-  Schema.Struct({ identity: Schema.Struct({ kind: Schema.String }) }),
 );
 const ownerOf = Schema.decodeUnknownSync(
   Schema.Struct({
@@ -865,9 +858,8 @@ export interface CrashShard {
   readonly count: number;
 }
 
-/** The suite's tests of `scenarios` over the points of `shard`; the two
- *  short ones (a detached command, one job's appends) run with
- *  `child-results` in the first shard. */
+/** The suite's tests of `scenarios` over the points of `shard`; the short
+ *  one (one job's appends) runs with `child-results` in the first shard. */
 export function crashConformanceSuite(
   scenarios: readonly CrashScenario[],
   shard: CrashShard = { index: 0, count: 1 },
@@ -997,7 +989,7 @@ export function crashConformanceSuite(
           );
         /**
          * Checks invariant I6: a child's result is never lost or read twice across a crash: a
-         * detached child's turn, a background script's and a background
+         * background child's turn, a background script's and a background
          * command's last turn each settle in the batch that ends them, and that
          * batch's transaction queues the result on the parent's input, so no
          * crash point falls between a child's settlement and its delivery.
@@ -1190,152 +1182,6 @@ export function crashConformanceSuite(
                     broken.push(`after commit ${n}: ${found.join('; ')}`);
                 }
                 expect(broken).toEqual([]);
-              }),
-            600_000,
-          );
-        /**
-         * A background command its stopped parent let go (a detach) has no
-         * parent to finish it when the process running it dies: the next open
-         * ends it once, failed with its outcome unknown, never runs it again,
-         * and lets its claim go. Parentless is not unowned: a command another
-         * live process still runs is left as it stands.
-         *
-         * The clean pass sends two commands to the background, each waiting for
-         * a release that never comes, then stops their parent, keeping them
-         * running. The cut is the last commit before the session's close ends
-         * them: the parent has ended and the commands run detached. The first,
-         * which the open reaches first, is the control, its claim a live
-         * process's; the second's owner died.
-         */
-        if (runs('child-results') && shard.index === 0)
-          it.effect(
-            'ends a detached command a dead process left running, once',
-            () =>
-              Effect.gen(function* () {
-                const { roots } = yield* FakeHost;
-                const root = generateRunId();
-                const SEND = 'Run in the background.';
-                const of = (rows: readonly Row[], run: string, type: string) =>
-                  rows.filter((row) => row.run === run && row.type === type);
-                /** The root's background commands, in launch order. */
-                const commands = (rows: readonly Row[]) =>
-                  rows
-                    .filter(
-                      (row) =>
-                        row.type === 'run.start' &&
-                        row.parent === root &&
-                        identityOf(json(row)).identity.kind === 'process',
-                    )
-                    // cast: the store's logical id of a run aggregate is its RunId.
-                    .map((row) => row.run as RunId);
-                const began = (rows: readonly Row[]) => commands(rows).length;
-                const { points, clean } = yield* cleanPass(
-                  roots,
-                  (session) =>
-                    rootRun({
-                      config: Schema.decodeUnknownSync(AgentConfigSchema)({
-                        agent: 'golden_script',
-                        model: 'openai/gpt-5.6-sol',
-                        instruction: SEND,
-                      }),
-                      runId: root,
-                      interactive: true,
-                    }).pipe(Effect.provide(session)),
-                  (session) =>
-                    Effect.gen(function* () {
-                      const requests = Context.get(session, SessionRequests);
-                      yield* until(roots.storage, (rows) =>
-                        parkedAfter(rows, root, 1),
-                      );
-                      yield* requests.request({
-                        kind: 'followUp.send',
-                        runId: root,
-                        text: SEND,
-                      });
-                      yield* until(
-                        roots.storage,
-                        (rows) =>
-                          parkedAfter(rows, root, 2) && began(rows) === 2,
-                      );
-                      // A user's stop detaches the background command under
-                      // "Keep agents running".
-                      yield* Settings.set(
-                        roots,
-                        DETACH_SUBAGENTS_ON_STOP_SETTING,
-                        true,
-                      );
-                      yield* requests.request({
-                        kind: 'run.stop',
-                        runId: root,
-                        reason: 'user',
-                      });
-                      yield* until(
-                        roots.storage,
-                        (rows) =>
-                          of(rows, root, 'run.end').length > 0 &&
-                          commands(rows).every(
-                            (run) => of(rows, run, 'run.detach').length > 0,
-                          ),
-                      );
-                    }).pipe(Effect.provide(session)),
-                );
-                const cleanRows = rowsOf(roots.storage);
-                expect(commands(cleanRows)).toHaveLength(2);
-                const [control, detached] = commands(cleanRows);
-                if (control === undefined || detached === undefined)
-                  return yield* Effect.die('the clean pass sent no commands');
-                // The cut: the parent ended, both commands run detached, neither
-                // has ended yet.
-                const ended = cleanRows.filter(
-                  (row) =>
-                    (row.run === control || row.run === detached) &&
-                    row.type === 'run.end',
-                );
-                const n = Math.max(
-                  ...points.filter((point) =>
-                    ended.every((row) => point < row.commit),
-                  ),
-                );
-                const storage = join(roots.storage, 'crash-detached');
-                crashAt(clean, storage, n);
-                const reopened = yield* Effect.scoped(
-                  Effect.gen(function* () {
-                    yield* persistentTestSession({ ...roots, storage });
-                    const isEnded = (rows: readonly Row[]) =>
-                      [control, detached].every(
-                        (run) => of(rows, run, 'run.end').length > 0,
-                      );
-                    const closed = yield* Effect.exit(until(storage, isEnded));
-                    return { released: Exit.isSuccess(closed) };
-                  }),
-                );
-                const final = rowsOf(storage);
-                const after = (run: RunId) =>
-                  final.filter((row) => row.run === run && row.commit > n);
-                expect(reopened.released).toBe(true);
-                // Both commands the dead process left running end failed,
-                // once, with the notice; neither runs again: no exit recorded
-                // after the cut, no run launched.
-                for (const run of [control, detached]) {
-                  expect(
-                    of(final, run, 'run.end').map((row) => json(row).outcome),
-                  ).toEqual(['failed']);
-                  expect(
-                    of(after(run), run, 'run.report').map((row) =>
-                      String(json(row).report),
-                    ),
-                  ).toEqual([
-                    expect.stringContaining('its outcome is unknown'),
-                  ]);
-                  expect(
-                    after(run).filter((row) => row.type === 'process.exit'),
-                  ).toEqual([]);
-                }
-                expect(
-                  final.filter(
-                    (row) => row.commit > n && row.type === 'run.start',
-                  ),
-                ).toEqual([]);
               }),
             600_000,
           );

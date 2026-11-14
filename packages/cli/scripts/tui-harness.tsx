@@ -1065,7 +1065,6 @@ function makeRetryApprovalPayload(): RetryRequest {
           kind: 'decline-route',
           route: 'chatgpt-subscription',
           provider: 'openai',
-          automatic: false,
         }
       : null,
   };
