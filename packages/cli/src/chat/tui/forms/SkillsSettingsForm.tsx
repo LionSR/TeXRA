@@ -12,6 +12,7 @@ import { type WorkspaceRoots } from '@texra-ai/harness';
 import { Skills, type ProcessRuntime } from '@texra-ai/harness/host';
 import { Settings } from '@texra-ai/harness/plugins';
 import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
+import { enabledLabel } from '@ui/copy/format';
 
 import { AsyncListForm } from './_shared/ListForm';
 
@@ -76,14 +77,12 @@ export function SkillsSettingsForm(
         ...ActiveSkillSourceScopeSchema.literals.map((scope) => ({
           value: { kind: 'source' as const, scope },
           label: `Source: ${scope}`,
-          description: data.disabledScopes.includes(scope)
-            ? 'disabled'
-            : 'enabled',
+          description: enabledLabel(!data.disabledScopes.includes(scope)),
         })),
         ...data.skills.map((skill) => ({
           value: { kind: 'skill' as const, name: skill.name },
           label: skill.name,
-          description: `${skill.label} · ${skill.enabled ? 'enabled' : 'disabled'} · ${skill.description}`,
+          description: `${skill.label} · ${enabledLabel(skill.enabled)} · ${skill.description}`,
         })),
       ]}
       availableRows={props.availableRows}
