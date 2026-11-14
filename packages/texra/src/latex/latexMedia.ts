@@ -20,7 +20,7 @@ import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
 import { extractLatexFileDependencies } from './extractFileDependencies';
 import { extractFigurePathsFromLatex } from './extractFigure';
 import { resolveLatexDir } from './latexParsingUtils';
-import { TikzPictureManager } from './TikzPictureManager';
+import { compileTikzPictures } from './tikzPictures';
 import { compileLatex2Pdf } from './texTools';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -384,9 +384,9 @@ const compileTikzFigures = Effect.fn('latexMedia.compileTikzFigures')(
     const tikzResults = yield* Effect.forEach(
       files,
       (file) =>
-        TikzPictureManager.compile(file, roots).pipe(
+        compileTikzPictures(file, roots).pipe(
           // The fan-out continues past an individual failure. A failed
-          // compile is reported by TikzPictureManager itself; everything
+          // compile is reported by compileTikzPictures itself; everything
           // else (standalone generation, the filesystem) lands here and
           // would otherwise vanish.
           recoverLogged(

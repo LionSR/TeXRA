@@ -27,40 +27,38 @@ import { TIKZ_TEMPLATE_SETTING } from '@texra/shared/settings/texraSettings';
  * @param suffix Optional suffix for multiple pictures with same label
  * @returns FileLocation of created LaTeX file
  */
-const createStandalone = Effect.fn('TikzPictureManager.createStandalone')(
-  function* (
-    template: string,
-    tikzpictures: string,
-    label: string,
-    buildDir: string,
-    workspaceRoot: string | undefined,
-    suffix?: string,
-  ) {
-    const fs = yield* FileSystem.FileSystem;
-    const standaloneContent = yield* renderPrompt(template, {
-      tikzpicture: tikzpictures,
-    });
+const createStandalone = Effect.fn('tikzPictures.createStandalone')(function* (
+  template: string,
+  tikzpictures: string,
+  label: string,
+  buildDir: string,
+  workspaceRoot: string | undefined,
+  suffix?: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const standaloneContent = yield* renderPrompt(template, {
+    tikzpicture: tikzpictures,
+  });
 
-    const filename = suffix ? `${label}_${suffix}.tex` : `${label}.tex`;
-    const texLocation = pathToLocationIn(
-      workspaceRoot,
-      path.join(buildDir, filename),
-    );
+  const filename = suffix ? `${label}_${suffix}.tex` : `${label}.tex`;
+  const texLocation = pathToLocationIn(
+    workspaceRoot,
+    path.join(buildDir, filename),
+  );
 
-    yield* fs.writeFileString(texLocation.absolutePath, standaloneContent);
-    yield* Effect.logDebug(
-      `Created standalone LaTeX file: ${texLocation.absolutePath}`,
-    ).pipe(withLogChannel(CHANNEL));
+  yield* fs.writeFileString(texLocation.absolutePath, standaloneContent);
+  yield* Effect.logDebug(
+    `Created standalone LaTeX file: ${texLocation.absolutePath}`,
+  ).pipe(withLogChannel(CHANNEL));
 
-    return texLocation;
-  },
-);
+  return texLocation;
+});
 
 /**
  * Extract TikZ pictures with their labels from a LaTeX file
  * @returns Array of [label, tikzpictures] tuples
  */
-const extract = Effect.fn('TikzPictureManager.extract')(function* (
+export const extractTikzPictures = Effect.fn('tikzPictures.extract')(function* (
   latexFile: FileLocation,
 ) {
   const fs = yield* FileSystem.FileSystem;
@@ -109,7 +107,7 @@ const extract = Effect.fn('TikzPictureManager.extract')(function* (
  *   workspace
  * @returns Array of FileLocations for compiled PDF files
  */
-const compile = Effect.fn('TikzPictureManager.compile')(function* (
+export const compileTikzPictures = Effect.fn('tikzPictures.compile')(function* (
   latexFile: FileLocation,
   roots: WorkspaceRoots,
 ) {
@@ -126,7 +124,7 @@ const compile = Effect.fn('TikzPictureManager.compile')(function* (
   yield* Effect.logDebug(
     `Extracting TikZ pictures from ${latexFile.absolutePath}`,
   ).pipe(withLogChannel(CHANNEL));
-  const labeledTikzPictures = yield* extract(latexFile);
+  const labeledTikzPictures = yield* extractTikzPictures(latexFile);
   yield* Effect.logDebug(
     `Found ${labeledTikzPictures.length} labeled TikZ pictures`,
   ).pipe(withLogChannel(CHANNEL));
@@ -175,9 +173,3 @@ const compile = Effect.fn('TikzPictureManager.compile')(function* (
 
   return compiledFiles;
 });
-
-/**
- * TikZ picture extraction and compilation, exported as a stateless module of
- * Effect functions (no class state or lifecycle).
- */
-export const TikzPictureManager = { extract, compile };

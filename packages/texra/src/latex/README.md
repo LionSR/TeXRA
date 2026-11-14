@@ -48,7 +48,7 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
   sanitizes `\DIFadd`/`\DIFdel`; it succeeds with the diff's path or fails
   with a typed error).
 - **Media and files**: `latexMedia.ts` (`processInputFiles`: compiles PDFs
-  and mirrors figure dependencies into run storage); `TikzPictureManager.ts`
+  and mirrors figure dependencies into run storage); `tikzPictures.ts`
   (standalone TikZ rendering); `acceptedFileTarget.ts` (where an accepted file
   lands, and the write).
 - **Remote sources**: `arxivIdentifier.ts` and `arxivProcessor.ts` (arXiv IDs
