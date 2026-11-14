@@ -18,7 +18,7 @@ import type { IconName } from '@ui/wa/iconNames';
 import { stopSpinnerMotion } from '@ui/wa/spinner';
 import { renderStatusBadge } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { formatBytes } from '@ui/copy/format';
+import { describeLineChanges, formatBytes } from '@ui/copy/format';
 
 // Side-effect import - register the <copy-button> element drawn below
 import '@ui/progress/components/CopyButton';
@@ -185,6 +185,16 @@ export function buildFileLinkSpan(
   const accessibleName = `Open ${filePath}${lineSuffix}`;
   // prettier-ignore
   return html`<span class="file-link clickable-link" data-file=${filePath} data-file-line=${ifDefined(options.startLine)} role="button" tabindex="0" aria-label=${accessibleName} dir="auto">${content}</span>`;
+}
+
+/** Build a file's `+3 -1` chip: the counts for the eye, the sentence for a
+ *  screen reader. */
+export function buildLineChangeStats(changes: {
+  readonly added: number;
+  readonly removed: number;
+}): TemplateResult {
+  // prettier-ignore
+  return html`<span class="file-stats"><span class="visually-hidden">${describeLineChanges(changes)}</span><span class="added" aria-hidden="true">+${changes.added}</span><span class="removed" aria-hidden="true">-${changes.removed}</span></span>`;
 }
 
 /** Build the `<li>` rows for a file-list banner. The summary line above them

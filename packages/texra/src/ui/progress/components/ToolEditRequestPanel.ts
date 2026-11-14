@@ -13,6 +13,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports - shared styles
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
+import { describeLineChanges } from '@ui/copy/format';
 
 // Local imports - shared helpers
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
@@ -136,14 +137,6 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
     const total = added + removed;
     const lineLabel = pluralize(total, 'line');
 
-    const parts: string[] = [];
-    if (added > 0) parts.push(`+${added}`);
-    if (removed > 0) parts.push(`-${removed}`);
-    const tooltip =
-      total === 0
-        ? 'No line changes'
-        : `${parts.join(' / ')} ${lineLabel} changed`;
-
     return html`
       <span id="tool-edit-diff-summary" class="tool-edit__diff">
         ${when(
@@ -156,7 +149,9 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
         )}
         <span class="tool-edit__diff-label">${total} ${lineLabel}</span>
       </span>
-      <wa-tooltip for="tool-edit-diff-summary">${tooltip}</wa-tooltip>
+      <wa-tooltip for="tool-edit-diff-summary"
+        >${describeLineChanges({ added, removed })}</wa-tooltip
+      >
     `;
   }
 

@@ -37,6 +37,7 @@ import { STATUS_DOT, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import type { ToolRow } from '@cli/chat/tui/state/sessionView';
 import { TOOL_STATUS_WORD } from '@ui/copy/runStatus';
 import { TOOL_CUT_BY_RUN_END_NOTE } from '@ui/copy/scriptStage';
+import { formatLineChanges } from '@ui/copy/format';
 
 // Local imports - CLI TUI rendering
 import {
@@ -185,7 +186,7 @@ function sectionFileLine(file: ToolSectionFile): string {
   const from = file.from ? ` ← ${file.from}` : '';
   const note = file.note ? ` (${file.note})` : '';
   const changes = file.lineChanges
-    ? ` (+${file.lineChanges.added}/-${file.lineChanges.removed})`
+    ? ` (${formatLineChanges(file.lineChanges.added, file.lineChanges.removed)})`
     : '';
   return `${file.path}${from}${note}${changes}`;
 }

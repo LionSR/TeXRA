@@ -2,12 +2,30 @@
  * How a renderer words a size, a wait and a moment: English
  * copy every host prints the same way.
  */
+import { formatResultCount } from '@texra-ai/harness/schemas';
 import prettyBytes from 'pretty-bytes';
 import prettyMilliseconds from 'pretty-ms';
 
 /** Human-readable byte size in binary units (`1.5 MiB`, `1023 B`). */
 export function formatBytes(bytes: number): string {
   return prettyBytes(bytes, { binary: true });
+}
+
+/** The lines a change adds and removes. */
+interface LineChanges {
+  readonly added: number;
+  readonly removed: number;
+}
+
+/** A change's line counts as a diff prints them (`+3 -1`). */
+export function formatLineChanges(added: number, removed: number): string {
+  return `+${added} -${removed}`;
+}
+
+/** A change's line counts as a sentence, for a screen reader or a tooltip
+ *  (`3 lines added, 1 line removed`). */
+export function describeLineChanges({ added, removed }: LineChanges): string {
+  return `${formatResultCount(added, 'line')} added, ${formatResultCount(removed, 'line')} removed`;
 }
 
 /**

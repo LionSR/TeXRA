@@ -5,7 +5,6 @@ import {
   normalizeFilePath,
   fileLocationDisplayPath,
   type RunId,
-  pluralize,
 } from '@texra-ai/harness/schemas';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -35,6 +34,7 @@ import type { IconName } from '@ui/wa/iconNames';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { buildLineChangeStats } from '@ui/progress/formatters/htmlBuilders';
 import { getComposedPathElement } from './composedPath';
 
 // Local imports - styles
@@ -399,17 +399,7 @@ export class FileList extends LitElement {
     const counts = outputDiffCounts(file.diff);
     if (!counts) return nothing;
 
-    return html`
-      <span class="file-stats">
-        <span class="visually-hidden"
-          >${counts.added} ${pluralize(counts.added, 'line', 'lines')} added,
-          ${counts.removed} ${pluralize(counts.removed, 'line', 'lines')}
-          removed</span
-        >
-        <span class="added" aria-hidden="true">+${counts.added}</span>
-        <span class="removed" aria-hidden="true">-${counts.removed}</span>
-      </span>
-    `;
+    return buildLineChangeStats(counts);
   }
 
   private renderBaseActions(
