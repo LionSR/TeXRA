@@ -626,7 +626,7 @@ describe('the session event table and its one publisher', () => {
     'PRAGMA application_id = 1234; PRAGMA user_version = 105;',
   ])
     it.effect(
-      `refuses another application's SQLite file untouched (${stamp || 'unstamped'})`,
+      `refuses another application's SQLite file and keeps its rows (${stamp || 'unstamped'})`,
       () => {
         const storage = workspace();
         return Effect.gen(function* () {

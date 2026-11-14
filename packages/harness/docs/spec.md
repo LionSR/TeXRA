@@ -92,11 +92,13 @@ same schema in memory (`controllers/session/storeSchema.ts#IN_MEMORY_STORE`).
 The store MUST carry application id `0x54655852` and schema version 105 in
 SQLite's `user_version` (`controllers/session/storeSchema.ts#APPLICATION_ID`,
 `#SCHEMA_VERSION`). A process MUST give the schema only to a file with no
-tables, no application id and no schema stamp, and MUST refuse, unchanged, any
-other file that does not carry both stamps: one with another application id,
-one with tables or a schema stamp and no application id, and a store stamped
-with a schema other than its own, earlier or newer
-(`controllers/session/storeSchema.ts#checkStamps`). A file SQLite reports
+tables, no application id and no schema stamp, and MUST refuse any other file
+that does not carry both stamps, writing no table, row or stamp of it: one
+with another application id, one with tables or a schema stamp and no
+application id, and a store stamped with a schema other than its own, earlier
+or newer (`controllers/session/storeSchema.ts#checkStamps`). The stamps are
+read on the store's own connection, after it enabled WAL: a refused file that
+was in another journal mode, which no session store is, stays in WAL mode. A file SQLite reports
 damaged at open SHALL be moved, with its WAL and shared-memory files, to
 `<file>.corrupt-<ms>`, and a fresh store opened in its place
 (`controllers/session/storeAside.ts#corruptAsideName`).
@@ -946,7 +948,7 @@ These existing suites check the sections above. Each citation names a test by
 its title.
 
 - **2.1 file and schema**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts#refuses another application's SQLite file untouched`,
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts#refuses another application's SQLite file and keeps its rows`,
   `#'moves a truncated store aside and opens a fresh one'`,
   `#'refuses a store of a newer schema and changes nothing'`
 - **2.2 envelope**:

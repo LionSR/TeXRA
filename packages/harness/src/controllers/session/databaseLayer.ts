@@ -226,12 +226,6 @@ export const databaseLayer = (
           disableWAL: mode === 'ephemeral',
           busyTimeout,
         }),
-        SqliteClient.make({
-          filename,
-          readonly: true,
-          disableWAL: true,
-          busyTimeout,
-        }),
         path,
         filename,
       ).pipe(

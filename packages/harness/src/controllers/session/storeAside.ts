@@ -122,7 +122,8 @@ export function isDamaged(cause: Cause.Cause<unknown>): boolean {
 }
 
 /** Whether a failed open is SQLite unable to open the file at all
- *  (`SQLITE_CANTOPEN`, 14): for a read-only probe, no store there yet. */
+ *  (`SQLITE_CANTOPEN`, 14): for an open that creates no file, no store
+ *  there yet. */
 export function cannotOpen(cause: Cause.Cause<unknown>): boolean {
   return hasSqliteCode(cause, [14]);
 }

@@ -6,8 +6,8 @@
  * their own versions (`rowVersions.ts`), and the kinds a store holds are
  * gated by `rowCodec.ts`, so it moves only for a change an older build
  * cannot write around. Only a file with no tables and no stamps gets the
- * schema. Any other file that is not this build's schema is refused
- * untouched: an earlier one has no step to this one (there is no
+ * schema. Any other file that is not this build's schema is refused with
+ * its data unchanged: an earlier one has no step to this one (there is no
  * migration), a later one is a newer build's, and one without the
  * application id is not a session store. This module knows no row kind or
  * payload field.
@@ -15,7 +15,6 @@
 import { Clock, Effect, Exit, FileSystem, Scope } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  cannotOpen,
   corruptAsideName,
   freeName,
   isDamaged,
@@ -157,10 +156,13 @@ const userTables = (sql: Sql) =>
     )
     .pipe(Effect.map((rows) => rows.map((row) => row.name)));
 
-/** The refusal of a file this build must not touch. */
+/** The error that rejects a file this build does not write. The connection
+ *  that read its stamps has already enabled WAL, so a file in another
+ *  journal mode (never a session store) keeps that one change; no table,
+ *  row or stamp of any refused file is written. */
 const refused = (path: string, why: string) =>
   Effect.fail(
-    new Error(`Session store ${path} ${why}; nothing in it was changed.`),
+    new Error(`Session store ${path} ${why}; none of its data was changed.`),
   );
 
 /** Give an empty file its `auto_vacuum` setting, which is fixed when the
@@ -174,11 +176,9 @@ const incrementalVacuum = Effect.fnUntraced(function* (sql: Sql) {
 /**
  * Whether the file is already this build's store (false: a new file, with no
  * tables and no stamps, which the caller gives the schema). Any other file
- * is refused, and nothing in it is changed: another application's (an
- * `application_id` that is not ours, or tables or a schema stamp without
- * one), a newer build's schema, and an earlier build's, which this build
- * has no step from. Run read-only before the store's own connection enables
- * WAL, and again.
+ * is refused ({@link refused}): another application's (an `application_id`
+ * that is not ours, or tables or a schema stamp without one), a newer
+ * build's schema, and an earlier build's, which this build has no step from.
  */
 const checkStamps = Effect.fnUntraced(function* (sql: Sql, path: string) {
   const application = Number(yield* pragmaValue(sql, 'application_id'));
@@ -293,56 +293,39 @@ export const reclaimFreePages = (sql: Sql, path: string) =>
  */
 export const openStore = Effect.fnUntraced(function* <E, R>(
   connect: Effect.Effect<Sql, E, R | Scope.Scope>,
-  /** A read-only connection that changes nothing in the file. */
-  probe: Effect.Effect<Sql, E, R | Scope.Scope>,
   path: string,
   filename: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const persistent = filename !== IN_MEMORY_STORE;
-  // A file the probe cannot open (none yet) is the open's to create; one
-  // SQLite reads as damaged (cut short in its first page) is moved below.
-  if (persistent)
-    yield* Effect.scoped(
-      Effect.flatMap(probe, (sql) => checkStamps(sql, path)),
-    ).pipe(
-      Effect.catchCause((cause) =>
-        cannotOpen(cause) || isDamaged(cause)
-          ? Effect.void
-          : Effect.failCause(cause),
-      ),
-    );
   const outer = yield* Effect.scope;
-  const first = yield* Scope.fork(outer, 'sequential');
-  const attempt = yield* connect.pipe(
-    Effect.tap((sql) => prepareStore(sql, path, filename)),
-    Scope.provide(first),
-    Effect.exit,
-  );
-  if (Exit.isSuccess(attempt)) return { sql: attempt.value, movedAside: null };
-  if (!persistent || !isDamaged(attempt.cause)) {
-    return yield* Effect.failCause(attempt.cause);
-  }
-  yield* Scope.close(first, Exit.void);
+  /** One open in a scope of its own, which a failed open closes: the file
+   *  is moved only while no connection of this process holds it. */
+  const attempt = Effect.gen(function* () {
+    const scope = yield* Scope.fork(outer, 'sequential');
+    return yield* connect.pipe(
+      Effect.tap((sql) => prepareStore(sql, path, filename)),
+      Scope.provide(scope),
+      Effect.onError(() => Scope.close(scope, Exit.void)),
+      Effect.exit,
+    );
+  });
+  const first = yield* attempt;
+  if (Exit.isSuccess(first)) return { sql: first.value, movedAside: null };
+  if (filename === IN_MEMORY_STORE || !isDamaged(first.cause))
+    return yield* Effect.failCause(first.cause);
   // Another process may have seen the same damage and already put a fresh
-  // store here: move the file only while it is the one that still fails a
-  // read, by the same identity (inode, size, mtime) up to the rename.
+  // store here, which a second open returns. The file is moved only when
+  // that open reports damage too and the file is the same one (inode, size,
+  // mtime) from before it up to the rename.
   const identity = fs.stat(filename).pipe(
     Effect.map((info) => `${info.ino}/${info.size}/${info.mtime}`),
     Effect.orElseSucceed(() => null),
   );
   const seen = yield* identity;
-  const stillDamaged = yield* Effect.scoped(
-    Effect.flatMap(probe, (sql) => userTables(sql)),
-  ).pipe(
-    Effect.as(false),
-    Effect.catchCause((cause) => Effect.succeed(isDamaged(cause))),
-  );
-  if (!stillDamaged || seen === null || (yield* identity) !== seen) {
-    const sql = yield* connect;
-    yield* prepareStore(sql, path, filename);
-    return { sql, movedAside: null };
-  }
+  const second = yield* attempt;
+  if (Exit.isSuccess(second)) return { sql: second.value, movedAside: null };
+  if (!isDamaged(second.cause) || seen === null || (yield* identity) !== seen)
+    return yield* Effect.failCause(second.cause);
   const aside = yield* freeName(
     corruptAsideName(filename, yield* Clock.currentTimeMillis),
   );
