@@ -57,10 +57,9 @@ import {
   type GhCheckRun,
   type GhReview,
 } from './prTypes';
+import { COALESCE_THRESHOLD } from './prSubscriptionConstants';
 import type { PullTarget } from './subscriptionTarget';
 
-// Coalesce this many same-kind events in a single tick into a summary.
-const COALESCE_THRESHOLD = 3;
 // Bound the per-subscription fan-out across runs (e.g. a matrix build
 // lighting up a fleet of checks). Excess candidates stay queued and are
 // drained on later polls.

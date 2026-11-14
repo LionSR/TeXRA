@@ -65,6 +65,7 @@ import {
   type GhIssueComment,
   type GhPullsListEntry,
 } from './prTypes';
+import { COALESCE_THRESHOLD } from './prSubscriptionConstants';
 import type { RepoTarget } from './subscriptionTarget';
 
 // We pull all "updated since" data; a sufficiently large window guarantees we
@@ -89,12 +90,6 @@ const MAX_PR_STATE_ENTRIES = 500;
 // PRs that aren't probed this tick simply wait their turn: the next push
 // or comment will bubble them back to the top of the updated-at order.
 const MAX_MERGEABLE_PROBES_PER_TICK = 5;
-// Coalesce per-tick merge-conflict events into a single summary above this
-// threshold. Mirrors the PR-poller `COALESCE_THRESHOLD`: the typical cause
-// of many simultaneous transitions is a base-branch update invalidating
-// every open PR, and one summary message is more useful to an orchestrator
-// than five individual events.
-const MERGE_CONFLICT_COALESCE_THRESHOLD = 3;
 
 type PullStateName = 'open' | 'closed' | 'merged';
 
@@ -270,7 +265,7 @@ export const pollRepo = Effect.fn('github.pollRepo')(function* (
  * record the readings in `maps`, the poll's next state.
  *
  * Reports one event per PR that flipped to `'dirty'`, or a single coalesced
- * summary if `>= MERGE_CONFLICT_COALESCE_THRESHOLD` PRs flipped on the
+ * summary if `>= COALESCE_THRESHOLD` PRs flipped on the
  * same tick. We do NOT emit "resolved" notifications at the repo level —
  * an orchestrator monitoring conflicts wants the alert, and the agent it
  * delegates the fix to will run a per-PR subscription that surfaces the
@@ -340,7 +335,7 @@ const probeMergeableStates = Effect.fn('github.probeMergeableStates')(
       }
     }
 
-    if (newlyDirty.length >= MERGE_CONFLICT_COALESCE_THRESHOLD) {
+    if (newlyDirty.length >= COALESCE_THRESHOLD) {
       return [
         formatRepoMergeConflictSummary(
           repo,

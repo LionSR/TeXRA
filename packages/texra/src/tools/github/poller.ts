@@ -58,6 +58,7 @@ const BACKOFF_BASE_MS = 60_000;
 const BACKOFF_MAX_MS = 3_600_000;
 /** A target with no successful poll for this long is dropped. */
 const MAX_FAILURE_DURATION_MS = 24 * 3_600_000;
+const UNREACHABLE = 'unreachable for over 24 h; detaching';
 
 interface PollHealth<S> {
   readonly state: S | undefined;
@@ -98,16 +99,19 @@ export const pollTarget = Effect.fn('github.pollTarget')(function* <S, R>(
   /** One poll; whether polling continues. */
   const round = Effect.gen(function* () {
     const prior = yield* Ref.get(health);
+    /** No poll has succeeded for a day: the target halts. */
+    const unreachable = (now: number) =>
+      now - prior.lastSuccessAt >= MAX_FAILURE_DURATION_MS;
     const retryLater = (error: Error) =>
       Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
         const failureCount = prior.consecutiveFailures + 1;
-        if (now - prior.lastSuccessAt >= MAX_FAILURE_DURATION_MS) {
+        if (unreachable(now)) {
           yield* logWarning(
             `Poll failed for ${path}; unreachable for over 24 h, detaching.`,
             { failureCount, error },
           );
-          return yield* halt('unreachable for over 24 h; detaching');
+          return yield* halt(UNREACHABLE);
         }
         yield* Ref.set(health, {
           ...prior,
@@ -168,11 +172,11 @@ export const pollTarget = Effect.fn('github.pollTarget')(function* <S, R>(
             // toward backoff, but a target limited for a whole day still
             // ages out rather than holding its slot.
             const now = yield* Clock.currentTimeMillis;
-            if (now - prior.lastSuccessAt >= MAX_FAILURE_DURATION_MS) {
+            if (unreachable(now)) {
               yield* logWarning(
                 `Rate limited polling ${path} and unreachable for over 24 h; detaching.`,
               );
-              return yield* halt('unreachable for over 24 h; detaching');
+              return yield* halt(UNREACHABLE);
             }
             const resetAtMs = err.resetAt * 1000;
             yield* logWarning(
