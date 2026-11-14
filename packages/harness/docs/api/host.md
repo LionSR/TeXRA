@@ -474,8 +474,8 @@ interface AppSignalPayloads {
    * OAuth refresh must not repaint the profile tab.
    *
    * Consumed by: extension and desktop (an `apiKey.*` change repaints the
-   * credential-dependent settings surfaces, and any change the launcher's
-   * credential check and model catalog), the CLI chat
+   * credential-dependent settings surfaces, and any change reloads the
+   * launcher's credential check and model catalog), the CLI chat
    * TUI (an `apiKey.*` change re-reads the model route and quota its status
    * bar shows), and the `ToolAvailability` process service on every
    * host and the agent package (a key a plugin lists in `reprobeOnSecrets`,
@@ -491,8 +491,9 @@ interface AppSignalPayloads {
    * (`onWrite.invalidatesModelOptions`). Keyless on purpose: a listener
    * re-reads the routes it shows.
    *
-   * Emitted by the writers a person drives: the CLI's and the settings
-   * views' (`settingsViewBody.ts`). Consumed by: the CLI chat TUI's status
+   * Emitted by the writers a person drives: the CLI's, the settings views'
+   * (`settingsViewBody.ts`) and the extension's ChatGPT sign-in from the
+   * getting-started card (`extensionHostRequests.ts`). Consumed by: the CLI chat TUI's status
    * bar, which re-reads the route and quota it shows, and the extension's
    * and desktop's launchers (`hostSnapshotSource.ts`), which re-read their
    * credential check and model catalog.
