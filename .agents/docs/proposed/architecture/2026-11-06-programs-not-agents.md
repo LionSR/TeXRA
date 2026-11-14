@@ -29,10 +29,13 @@ launch form 的选项表。**数量是症状，单位是病因。** 这个诊断
 - **内核少认识一类事。** 核心概念的十三个名词里，Agent 换成 Program。
   agent 文件、persona、catalog、skill、team、task 块、recipe 这些词从内
   核消失。
-- **产品是内核加一个 `theory` 插件。** theorist 的程序插件只有一个（负
-  责人 2026-11-14）：它带十个程序和 theorist 的那段文本，工具仍在各自的
-  工具插件里。"AI theorist"不是 `assistant.yaml`，也不是一个 team。聊天
-  是内核的模型循环，没有 agent 文件。
+- **产品是内核加一个 `theory` 插件。** theorist 的东西总体是一个插件
+  （负责人 2026-11-14）：十个内置程序、它们调用的步骤工具和 theorist 的
+  那段文本。"AI theorist"不是 `assistant.yaml`，也不是一个 team。聊天是
+  内核的模型循环，没有 agent 文件。
+- **内置程序是起点，不是边界。** 模型应该自由地 generalize（负责人
+  2026-11-14）：它能读内置程序的源码，用同样的积木写自己的程序并启动
+  它。
 - **程序是 workflow，视角是 hint。** `logic` 和 `notation` 不是独立的东
   西：workflow 在了，它们只是传给它的一两句话（负责人 2026-11-14）。
 - **用户不从目录里挑。** 让人在三十个 agent 里选是不行的（负责人
@@ -176,7 +179,7 @@ goal、恢复、预算、并行）、积累下来的程序、以及可观测和�
 
 ```
 内核      @texra-ai/harness、@texra-ai/llm   持久地跑程序；认识 run、call、tool、program、plugin
-theory    @texra-ai/texra 的一个插件         十个程序 + theorist 的那段文本；工具在工具插件里
+theory    @texra-ai/texra 的一个插件         十个内置程序、它们的步骤工具、theorist 的那段文本
 host      extension、desktop、cli            三个壳
 ```
 
@@ -247,8 +250,8 @@ interface Plugin {
 ```ts
 const theory: TexraPlugin = {
   id: 'theory',
-  // 它的程序用到的工具在这些插件里
-  requires: ['documents', 'lean4', 'multi-agent', 'codemode'],
+  // Lean 的工具在 lean4 插件里：它有自己的依赖探测和语言服务
+  requires: ['lean4', 'multi-agent', 'codemode'],
   scriptModules: { revise: REVISE, edit: EDIT, annotate: ANNOTATE /* … */ },
   programs: {
     edit: { description: 'Rewrite the documents as instructed.', tools: STEPS },
@@ -259,6 +262,9 @@ const theory: TexraPlugin = {
     prove: { description: 'Prove the stated theorem in Lean.', tools: LEAN },
     // …
   },
+  // 今天 documents 插件的步骤工具和它的 fact
+  tools: [DocumentContextTool /* … */],
+  factKinds: DOCUMENT_FACTS,
 };
 ```
 
@@ -288,9 +294,9 @@ const theory: TexraPlugin = {
   `AgentBlock.result`（一个 task 的结果怎么读给启动它的人）先原样挪到程
   序的登记上，能不能删见"结果怎么被读"。
 - **工具定义上换一个事实。** `launchesTasks` 删；换成"这个工具只在程序
-  里有意义"（`document_context` 这一类，读的是程序 run 自己的状态，今天
-  在 task 之外调用会被拒绝）。这样的工具不对聊天开放，只有列了它的程序
-  拿得到。
+  的 run 里有意义"（`document_context` 这一类，读的是那个 run 自己的状
+  态，今天在 task 之外调用会被拒绝）。这样的工具不进聊天自己的脚本；内
+  置程序列了就有，模型写的程序要了就有。
 
 ### 一个程序是什么
 
@@ -363,10 +369,11 @@ tools.*            效果
 import             复用
 ```
 
-`agent(prompt, { system, tools, model })`、`program(name, args)` 和
+`agent(prompt, { system, tools, model })`、`program(what, args)` 和
 `self(prompt, { fork })` 是 `start` 的三个糖：`agent` 是 `start` 一个 chat
-叶子，`program` 是 `start` 一个登记的程序，`self` 是 `start` 一个 chat 叶
-子并取调用者的 system 和 tools、可选复制对话。脚本里的 `start`、SDK 的
+叶子，`program` 是 `start` 一个程序（`what` 是内置程序的名字，或者模型现
+写的 `{ code, tools }`），`self` 是 `start` 一个 chat 叶子并取调用者的
+system 和 tools、可选复制对话。脚本里的 `start`、SDK 的
 `session.start`、launch form 和 `texra run` 发的是同一份 run 配置，各入
 口再带自己的启动选项。
 
@@ -402,11 +409,13 @@ fresh 两档。
 run.chat     { system, tools, model, temperature, instruction, files…, memories,
                outputSchema, workingDirectory }                  内核的模型循环
 run.program  { name, args, model, files… }                      登记的程序，按名
-             { code, title, tools, timeoutMs, model }           模型写的脚本送后台
+             { code, title, tools, timeoutMs, model }           模型写的程序
 ```
 
 - 按名的程序和内联的代码是 `program` 的两种写法，差别就是"谁写的"：有
-  名字的是那个插件的，内联的是模型的。所以不需要 `author` 字段，
+  名字的是那个插件的，内联的是模型的。内联的今天只有一种启动法（送后
+  台，结果作为 follow-up 回来）；之后它和按名的一样，脚本里默认等它结
+  束。所以不需要 `author` 字段，
   `recipe.block` 和 `recipe.options` 随 `task:` 块删。两种都要 `model`：
   每个 run 都绑定一个，程序里的 `agent()` 默认用它。
 - `self()` 的 fork 需要一个对话：从聊天里启动的脚本记着它的来源，fork 复
@@ -422,7 +431,8 @@ run.program  { name, args, model, files… }                      登记的程�
   本）与 run loop 唯一写者的契约冲突，不做。
 
 存法分两次变，各自落在需要它的那一期：`script` 的 `recipe` 成员换成
-`program` 成员在第 1 期，`chat` 去掉 persona 和 agent 名在删 agent 文件的
+`program` 成员、`documents` 这个插件 id 并进 `theory`（它写在 fact 行和
+offer 记录里）在第 1 期，`chat` 去掉 persona 和 agent 名在删 agent 文件的
 那一期。每次都升 `run.config` 的行版本
 （`packages/harness/src/shared/schemas/rowVersions.ts`）并重生成 golden
 store。
@@ -507,21 +517,23 @@ journey、两个模型、每组 7 到 9 次：通过率持平，每次成功的�
 
 ### theorist 的程序插件
 
-theorist 的程序插件只有一个，叫 `theory`（负责人 2026-11-14："就一个
-theory"）。它带两样东西：程序表，和 theorist 的那段基础文本。它不带工
-具：程序用到的工具仍在各自的工具插件里，`theory` 用 `requires` 指着它
-们。
+theorist 的东西总体是一个插件，叫 `theory`（负责人 2026-11-14："就一个
+theory""总体是个插件"）。它带三样：十个内置程序，这些程序调用的步骤工
+具和它们的 fact（今天的 `documents` 插件并进来），和 theorist 的那段基
+础文本。
 
-| 程序                                                                              | 今天的来源                      | 用到的工具（所在的插件）                            |
-| --------------------------------------------------------------------------------- | ------------------------------- | --------------------------------------------------- |
-| `edit`、`annotate`、`enhance`、`apply`、`merge`、`transcribe`、`slides`、`poster` | 15 个 task 文件、`critic`       | 六个步骤工具（`documents`）、`agent`（multi-agent） |
-| `prove`、`blueprint`                                                              | lean4 的 5 个 agent、5 个 skill | `lean_*`（`lean4`）、`agent`                        |
+| 内置程序                                                                          | 今天的来源                      | 用到的工具                             |
+| --------------------------------------------------------------------------------- | ------------------------------- | -------------------------------------- |
+| `edit`、`annotate`、`enhance`、`apply`、`merge`、`transcribe`、`slides`、`poster` | 15 个 task 文件、`critic`       | `theory` 自己的六个步骤工具、`agent`   |
+| `prove`、`blueprint`                                                              | lean4 的 5 个 agent、5 个 skill | `lean_*`（在 `lean4` 插件里）、`agent` |
 
-十个程序，一个插件。工具插件照旧各管各的能力：`documents` 管步骤工具和
-它的 fact，`lean4` 管语言服务、探测和它的工具，arxiv、zotero、wolfram
-等原样；`goal` 的策略模块照旧由 `plan` 启动。一个程序列的工具里有探测
-没过的（没装 Lean），它就不出现在 picker 和脚本声明里；这从目录已有的
-数据推出。
+十个内置程序，一个插件。`documents` 并进来，是因为它的步骤工具只为这些
+程序存在；一个只给另一个插件的程序供工具的插件是一道没有内容的隔断。
+`lean4` 的语言服务工具留在自己的插件里：它有自己的依赖探测（要装
+Lean）和语言服务，一个插件只有一个探测。arxiv、zotero、wolfram 这些工
+具插件原样，它们的工具聊天直接能调；`goal` 的策略模块照旧由 `plan` 启
+动。一个程序列的工具里有探测没过的（没装 Lean），它就不出现在 picker
+和脚本声明里；这从目录已有的数据推出。
 
 为什么是一个而不是按能力或按学科切：
 
@@ -541,21 +553,26 @@ skill 和 multi-agent 的那个 skill 删；TeXRA 特有的约定（`\criticize{
 项目看见哪些 agent）随目录一起消失：到处都是 chat 加十个程序。插件开关
 是用户全局的，没有按项目的开关，本提案也不建。
 
-三条规则：
+四条规则：
 
-1. **程序是 workflow，视角是 hint。** workflow 在了，`logic` 和
+1. **内置程序是起点，不是边界。** 模型应该自由地 generalize。十个程序
+   是 picker 里的一次点击、`texra run` 的一个名字，也是模型读得到的例
+   子；它们用的积木（`builtIn:revise`、步骤工具）模型同样拿得到，写一个
+   自己的程序并启动它（"document task 的归宿"）。
+2. **程序是 workflow，视角是 hint。** workflow 在了，`logic` 和
    `notation` 就只是 hint 的问题（负责人 2026-11-14）。一个程序存在，是
    因为它的代码不同：验证器不同、输入不同、产物不同。"看论证结构""看记
    号""第一次读的人会在哪里卡住"不是代码，是一两句话，随指令传给同一个
    程序。hint 不是文件，不是目录项，不进 picker；用户在聊天里说，或者
    模型启动程序时替他写。`theory` 的那段文本里用一句话列出常用的几种，
    模型和文档都从那里知道有它们。
-2. **一个程序是一个带验证器的做法。** 它值得是程序而不是一句提示词，是
+3. **一个内置程序是一个带验证器的做法。** 它值得是程序而不是一句提示词，是
    因为有东西能检查它：编译、diff、texcount，Lean 的诊断。往后的程序
    （拿 CAS 逐步复核一段推导、对着 `.bib` 和 arXiv 核对每条引用）按同
    一个标准进来；本提案不建它们。
-3. **新增要过门槛。** 加一个程序要同时交一个 journey，并写明它为什么不
-   能是一个已有程序加一句 hint。十个各自带 journey。
+4. **新增内置的要过门槛。** 加一个内置程序要同时交一个 journey，并写明
+   它为什么不能是一个已有程序加一句 hint，也不能留给模型现写。十个各
+   自带 journey。
 
 ### 审批、重放与信任
 
@@ -571,8 +588,9 @@ skill 和 multi-agent 的那个 skill 删；TeXRA 特有的约定（`\criticize{
 | agent 名越过 delegation scope 解析       | 没有了：没有 catalog                                       |
 | 指令不激活 skill；恢复时重建模板 opening | 没有了：没有 skill，没有模板                               |
 
-- **模型写的脚本不变。** 内联的代码是模型的：它的 `agent()` 走 Q5 的一次
-  脚本请求（展示源码，批准即覆盖整段），文件列表照模型脚本解析。
+- **模型写的程序走脚本本来的审批。** 内联的代码是模型的：Q5 的一次脚本
+  请求（展示源码，批准即覆盖整段，含它的 `agent()`），文件列表照模型脚
+  本解析。它要了步骤工具就有，但没有内置程序的那几项待遇。
 - **审批不加新东西。** 程序里的嵌套调用走和今天完全相同的 per-call 程序
   （hooks、guard、approval、结果行）。模型启动一个程序是一次子运行的启动
   审批（`proposal` 请求），字段从 agent 名改为程序名。
@@ -696,14 +714,40 @@ hint）和轮数的差别：`correct` 今天一轮，`polish`、`generic`、`dev
 的每个 `\section`；`edit` 断言 texcount 没有掉一半；`slides` 和 `poster`
 断言带模板能编译。每个几行，失败就是下一轮的输入。
 
-模型自己用同一个入口。用户说"把这篇校对一下"，聊天里的模型调
-`program('edit', { files })`。步骤工具不对聊天开放，所以模型不会自己拼
-一条 document 流程，也不会在一个 run 里把同一份 document 状态写两遍。
+八个是内置的，模型不限于它们（负责人 2026-11-14："这些是内置
+program，但 model 应该自由去 generalize"）。从近到远三档：
 
-这和裁决"Adaptive document workflows are not planned"（2026-09-06）的关
-系：那条拒绝的是由模型选择、用候选文件的 document 工作流取代固定的工作
-流。这里固定的工作流还在（`revise` 的步骤不变，步骤工具只有程序拿得
-到），模型选的只是启动哪一个程序。本提案仍把它列为要负责人确认的一处。
+1. **一句 hint。** `program('enhance', { files, instruction })`，绝大多
+   数情况到此为止。
+2. **把程序串起来。** 先 `annotate` 再 `apply`，或者几个文件并行。
+3. **写自己的程序。** 模型读一个内置程序的源码（十几行），用同样的积木
+   写一个变体，作为一个程序启动：
+
+```js
+const builtIn = await describeTool('annotate'); // 内置程序的源码
+return program(
+  {
+    code: `const { revise } = await import('builtIn:revise');
+return revise({
+  ...args,
+  requests: [
+    'Mark every step a referee would ask to see proved.',
+    'Now supply the ones that take two lines.',
+  ],
+});`,
+    tools: STEPS,
+  },
+  { files },
+);
+```
+
+模型写的程序是它自己的一个 run，所以有它自己的一份 document 状态、自己
+的卡片和 diff；这就是步骤工具"只在程序的 run 里有意义"的原因。聊天自
+己的脚本不直接调步骤工具：同一个 run 里改两次稿会把同一份状态写两遍。
+
+这改了裁决"Adaptive document workflows are not planned"（2026-09-06）。
+那条不要的是由模型选择的 document 工作流取代固定的工作流。之后固定的工
+作流作为内置程序还在，是默认的那条路；模型可以在它们之外写自己的。
 
 ### 启动面
 
@@ -943,7 +987,9 @@ newer-built-in 提示存在的唯一理由是 built-in 太大、改得太勤，�
    因为它回答的问题（这个项目看见哪些 agent）随目录一起消失。这是在重开
    条件之外重开。
 6. **裁决 "Adaptive document workflows are not planned"**（2026-09-06）。
-   见"document task 的归宿"末段。
+   负责人 2026-11-14 的"model 应该自由去 generalize"改了这一条：固定的
+   工作流留作内置程序，模型可以用同样的积木写自己的（"document task 的
+   归宿"末段）。
 
 可选的那一期多一处：
 
@@ -1016,6 +1062,9 @@ history 的行。
   的一行。轮数的差别也消失（`correct` 一轮，`polish` 两轮）。
 - **MCP 的启用粒度变粗**：今天可以让某个 agent 用某个 server；之后配了
   的 server 每次聊天都能调。
+- **模型写的程序没有内置程序的验证器**，除非它自己写一个；每段要过一次
+  脚本审批，用户看到的是源码。内置程序仍是默认的那条路，自由是留给它
+  们盖不住的情况的。
 - **模型要先找到工具才能用**：没声明的工具多一次 `searchTools` 或
   `describeTool`，在脚本里，不多一次模型往返。风险在模型不知道有这个能
   力；各插件 prompt 段里那一两句就是为此。
@@ -1042,17 +1091,19 @@ history 的行。
 每一期独立可合，存法只变两次，各自落在需要它的那一期。
 
 1. **按名启动和它的存法**（harness 加 documents 的启动路径；用户看不到
-   变化）。`Plugin.programs`；`script` 的 `recipe` 成员换成 `program` 成员
-   （第一次存法变更）；`program` 工具替掉 `document_task` 和
-   `launchesTasks`；脚本声明里列程序；沙箱的 normalizer 和模块帧。第一个
-   消费者是今天的 recipe 本身：它登记成一个程序，15 个 task agent 仍通过
-   它跑，agent 名和选项在 `args` 里。结果的读法原样挪到程序的登记上。
-   goal 不动，`scriptModules` 和 `builtIn:` 不动。
-2. **`theory` 插件和它的前八个程序**。`revise` 原语和步骤工具的契约变
-   更；documents 的 15 个 task 搬成八个程序文件。先移 `edit` 和 `annotate`，journey 跑一次作回归；再移其余六个；最
-   后一个移完就删 15 个 task 文件、`task:` 块、Nunjucks、选项表、
-   `critic.yaml` 和 `AgentBlock` 剩下的部分。结果的读法在这一期对比后决
-   定删不删。picker 里出现程序，和还没删的 agent 并列。
+   变化）。`Plugin.programs`；`script` 的 `recipe` 成员换成 `program` 成
+   员，`documents` 插件改名为 `theory`（第一次存法变更）；`program` 工具
+   替掉 `document_task` 和 `launchesTasks`，按名的和模型现写的都由它启
+   动；脚本声明里列程序；沙箱的 normalizer 和模块帧。第一个消费者是今天
+   的 recipe 本身：它登记成一个程序，15 个 task agent 仍通过它跑，agent
+   名和选项在 `args` 里。结果的读法原样挪到程序的登记上。goal 不动，
+   `scriptModules` 和 `builtIn:` 不动。
+2. **`theory` 的前八个程序**。`revise` 原语和步骤工具的契约变更；15 个
+   task 搬成八个程序文件。先移 `edit` 和 `annotate`，journey 跑一次作回
+   归；再移其余六个；最后一个移完就删 15 个 task 文件、`task:` 块、
+   Nunjucks、选项表、`critic.yaml` 和 `AgentBlock` 剩下的部分。步骤工具
+   对模型写的程序开放，`describeTool` 对程序名返回源码。结果的读法在这
+   一期对比后决定删不删。picker 里出现程序，和还没删的 agent 并列。
 3. **`theory` 的两个 Lean 程序**。lean4 的 agent 和 skill 先不删（team
    还指着它们），留到第 5 期。
 4. **（可选）安装式插件带程序**，即"用户自己的程序"一节。要在第 5 期之
@@ -1073,10 +1124,10 @@ history 的行。
 
 ## 负责人问题
 
-1. **`theory` 只带程序，工具插件不并进去。** 本文把"就一个 theory"读
-   成：程序插件只有一个。`documents`（步骤工具和它的 fact）、`lean4`
-   （语言服务和探测）这些工具插件照旧，因为它们各有自己的探测、服务和
-   持久化的 fact。还是连工具也并成一个？
+1. **`lean4` 的工具留在自己的插件里。** "总体是个插件"已定：
+   `documents` 并进 `theory`。Lean 的四个语言服务工具没有并进来：一个插
+   件只有一个依赖探测，并进来的话没装 Lean 会把整个 `theory` 收回。两个
+   Lean 程序在 `theory` 里。这样可以吗？
 2. **hint 是自由文本，还是一张具名的短表。** 推荐自由文本：写在指令
    里，`theory` 的那段文本用一句话列出常用的几种。一张表（`notation`、
    `logic` 等各一两句）能让 `--hint notation` 可复现，但它是 picker 之
@@ -1131,6 +1182,10 @@ history 的行。
 - "logic 和 notation 我感觉 workflow 在了就只是一个 hints 的问题。"程序
   是 workflow，视角是 hint；`logic` 和 `notation` 是给 `enhance` 的一句
   话。
+- "这些是内置 program，但 model 应该自由去 generalize。总体是个插件。"
+  十个是内置程序；模型可以读它们的源码、写自己的程序并启动。这改了
+  2026-09-06 的"Adaptive document workflows are not planned"。
+  `documents` 并进 `theory`。
 
 ## 修订记录
 
@@ -1165,9 +1220,11 @@ history 的行。
 - D10 重新列为一处改口；`requires` 不改含义。
 
 **同日，负责人的后续裁决并入：** code mode 默认打开，开着的工具都能调
-但只声明一个小核心；theorist 的程序插件只有一个 `theory`，初稿按能力拆
-成 `documents` 和 `lean4` 两个；`logic` 和 `notation` 是 hint，不是程序。
-这一批没有再过第二个审稿者。
+但只声明一个小核心；theorist 的东西总体是一个插件 `theory`，初稿按能力
+拆成 `documents` 和 `lean4` 两个，后一稿又把步骤工具留在 `documents`
+里；`logic` 和 `notation` 是 hint，不是程序；十个程序是内置的起点，模型
+可以写自己的，初稿把步骤工具关在内置程序里。这一批没有再过第二个审稿
+者。
 
 **2026-11-06，无上下文审稿后的修正**（仍然成立的部分已并入正文）：模块
 钉在步骤的 `tools.offered.modules`，不在 `AgentConfig` 上另开一份；
@@ -1245,6 +1302,9 @@ history 的行。
 - `isTaskConfig` 和 `recipeBlockOf` 在 `runRecords.ts`，都读
   `script.kind === 'recipe'`；`readRecipeResult` 有三个调用者；
   `document_propose` 的结果是 `{ files }` 加一个 fact。
+- 步骤工具在 task 之外拒绝执行（`documentState.ts`）；模型写的脚本作为
+  自己的 run 今天只能送后台，工具取父步骤 offer 的
+  （`backgroundScript.ts`）。
 - `compileFixer.ts` 的 `planCompileFixer` 以 `script: null` 启动
   `latexFixer`；`merge.yaml` 的描述说它要 merge 动作给的 edited file。
 - `docs/guide` 有 32 页，16 页提到 `texra run`、`--agent`、`texra team`、
