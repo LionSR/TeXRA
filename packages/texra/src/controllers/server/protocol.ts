@@ -17,7 +17,8 @@
  *   exit once the running tasks end (`drain: true`, the upgrade path).
  * - `tasks.list`: every task in every project this storage root holds.
  * - `task.watch`: a project's session feed (a stream of `EventsFrame`s)
- *   for one `Subscribe`, the frames the webview bridge already carries.
+ *   from a cursor, with the transcripts named, the frames the webview
+ *   bridge already carries.
  * - `task.request`: one `RuntimeCommand` (send, approve, stop, fork, a
  *   model switch, a pending tool edit's preview, …).
  * - `task.start` / `task.resume`: launch or continue a task in the service,
@@ -247,10 +248,13 @@ export const TexraRpcs = RpcGroup.make(
     success: Schema.Array(TaskSummarySchema),
   }),
   Rpc.make('task.watch', {
-    // `workspace` names the project; the frames name the session.
+    // `workspace` names the project; the frames name the session. The
+    // watch is one ordered stream, so it takes no generation.
     payload: {
       workspace,
-      subscribe: SubscribeSchema.mapFields(Struct.omit(['session'])),
+      subscribe: SubscribeSchema.mapFields(
+        Struct.pick(['debug', 'cursor', 'aggregates']),
+      ),
     },
     success: EventsFrameSchema,
     error: TaskFailed,

@@ -271,7 +271,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
             const key = session.roots.storage;
             return frameSubscription(
               { key, view: session.view },
-              { ...subscribe, session: key },
+              { kind: 'subscribe', generation: 0, ...subscribe, session: key },
             );
           }),
         ),

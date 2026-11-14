@@ -315,8 +315,6 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         client['task.watch']({
           workspace,
           subscribe: {
-            kind: 'subscribe',
-            generation: 0,
             debug: view.debug,
             cursor: view.cursor,
             aggregates,
@@ -449,8 +447,6 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
                     client['task.watch']({
                       workspace,
                       subscribe: {
-                        kind: 'subscribe',
-                        generation: 0,
                         debug: from.debug,
                         cursor: at,
                         aggregates: [...set],
