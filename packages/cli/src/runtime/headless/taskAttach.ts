@@ -28,7 +28,8 @@ import type { TaskSummary } from '@texra/controllers/server/protocol';
 import type { ServiceClient } from '@texra/controllers/server/client';
 import { WebviewSessions } from '@texra/shared/session/webviewSessionLayer';
 
-import { writeNdjsonStdout, writeTextStdout } from '../platform/logSinks';
+import { writeTextStdout } from '../platform/logSinks';
+import { writeProgressRow } from './sessionProgressSubscription';
 import type { RunView, SessionView } from '@texra-ai/harness/schemas';
 
 /** How the attached task is printed. */
@@ -64,17 +65,7 @@ function writeProgress(
     // The listing repeats a run's newest rows; its history and the tail
     // carry each row once.
     if (read === 'listing' || event.aggregateId !== aggregate) continue;
-    // A debug log row is a diagnostic: only `--verbose` prints it, as in
-    // `texra run`'s projection.
-    if (!includeDebugLogs && event.type === 'log' && event.level === 'debug')
-      continue;
-    const { type, ...payload } = event;
-    writeNdjsonStdout({
-      kind: 'progress',
-      event: type,
-      ts: new Date().toISOString(),
-      payload,
-    });
+    writeProgressRow(event, includeDebugLogs);
   }
 }
 
