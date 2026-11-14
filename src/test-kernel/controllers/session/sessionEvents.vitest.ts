@@ -38,6 +38,7 @@ import {
   type FileSystem,
   Layer,
   Result,
+  Scheduler,
   Schema,
   Stream,
   SubscriptionRef,
@@ -349,6 +350,36 @@ describe('session events and view', () => {
         { cursor: 5, status: 'running', requests: [] },
       ]);
     }).pipe(Effect.provide(graph([runStartRow, waiting, requested]))),
+  );
+
+  it.effect('runs no job that reached the publisher after it closed', () =>
+    Effect.gen(function* () {
+      // The step budget decides where the scheduler first takes the
+      // publishing fiber off: over these budgets, one parks it between the
+      // publisher's closed check and its transaction, where the close lands.
+      for (let budget = 2; budget < 80; budget++) {
+        const ranAfterClose = yield* Effect.gen(function* () {
+          const events = yield* SessionEvents;
+          let closed = false;
+          let ranClosed = false;
+          const publishing = yield* Effect.forkChild(
+            events
+              .transact(() =>
+                Effect.sync(() => {
+                  ranClosed = closed;
+                }),
+              )
+              .pipe(Effect.provideService(Scheduler.MaxOpsBeforeYield, budget)),
+            { startImmediately: true },
+          );
+          yield* events.close;
+          closed = true;
+          yield* Fiber.await(publishing);
+          return ranClosed;
+        }).pipe(Effect.provide(graph([runStartRow])));
+        expect(ranAfterClose, `budget ${budget}`).toBe(false);
+      }
+    }),
   );
 });
 

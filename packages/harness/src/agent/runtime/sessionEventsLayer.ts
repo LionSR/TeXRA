@@ -163,18 +163,19 @@ export const sessionEventsLayer = Layer.effect(
             Effect.provideService(Scheduler.PreventSchedulerYield, true),
           );
       });
-    /** `work`, unless the plane has closed or a job is asking. */
-    const awaited = Effect.fn('awaited')(function* <A, E>(
-      work: Effect.Effect<A, E>,
-    ): Effect.fn.Return<A, E> {
-      if (closed) {
-        return yield* Effect.die(
-          new Error('Session publication after the plane closed'),
-        );
-      }
-      if (yield* InPublisherJob) return yield* reentered;
-      return yield* work;
-    });
+    /** `work`, unless the plane has closed or a job is asking: decided in
+     *  the same uninterrupted turn that runs it, so a close cannot land
+     *  between the answer and the transaction. */
+    const awaited = <A, E>(work: Effect.Effect<A, E>): Effect.Effect<A, E> =>
+      Effect.gen(function* () {
+        if (closed) {
+          return yield* Effect.die(
+            new Error('Session publication after the plane closed'),
+          );
+        }
+        if (yield* InPublisherJob) return yield* reentered;
+        return yield* work;
+      }).pipe(Effect.provideService(Scheduler.PreventSchedulerYield, true));
     // The tails end with the plane.
     yield* Effect.addFinalizer(() =>
       Effect.suspend(() => {
