@@ -1,3 +1,6 @@
+// Third-party imports
+import { Record as Rec } from 'effect';
+
 // Local imports - shared formatting
 import {
   COLOR_BORDER,
@@ -19,10 +22,15 @@ import type { RunTone } from '@ui/copy/runStatus';
  *  and every TUI row that shows a status takes its marker and colour here. */
 export const TONE_PAINT: Readonly<
   Record<RunTone, { readonly marker: string; readonly color: string }>
-> = Object.freeze({
-  running: { marker: STATUS_DOT, color: COLOR_HINT },
-  success: { marker: TICK, color: COLOR_SUCCESS },
-  danger: { marker: CROSS, color: COLOR_ERROR },
-  warning: { marker: WARNING, color: COLOR_WARNING },
-  neutral: { marker: SKIP_CIRCLE, color: COLOR_BORDER },
-});
+> = Object.freeze(
+  Rec.map(
+    {
+      running: { marker: STATUS_DOT, color: COLOR_HINT },
+      success: { marker: TICK, color: COLOR_SUCCESS },
+      danger: { marker: CROSS, color: COLOR_ERROR },
+      warning: { marker: WARNING, color: COLOR_WARNING },
+      neutral: { marker: SKIP_CIRCLE, color: COLOR_BORDER },
+    },
+    (paint) => Object.freeze(paint),
+  ),
+);

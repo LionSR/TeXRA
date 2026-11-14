@@ -102,9 +102,9 @@ export function statusGlyph(look: StatusLook): IconName {
 /** How a tool card's status section reads. */
 export const TOOL_STATUS: Readonly<Record<ToolCallStatus, StatusWord>> =
   Object.freeze({
-    in_progress: { word: 'Running', tone: 'running' },
-    completed: { word: 'Completed', tone: 'success' },
-    failed: { word: 'Failed', tone: 'danger' },
+    in_progress: Object.freeze({ word: 'Running', tone: 'running' }),
+    completed: Object.freeze({ word: 'Completed', tone: 'success' }),
+    failed: Object.freeze({ word: 'Failed', tone: 'danger' }),
   });
 
 /** The tone of a context compaction's activity row; its words are the

@@ -32,17 +32,19 @@ export const SCRIPT_CALL_STATUS_LABEL = {
 
 /** How each call status is painted. A queued call has not started and a
  *  reused one ran nothing this time, so neither shows its tone's glyph. */
-export const SCRIPT_CALL_STATUS_LOOK = {
-  queued: { tone: 'neutral', glyph: 'circle-dot' },
-  running: { tone: 'running' },
-  interrupted: { tone: 'warning' },
-  finished: { tone: 'success' },
-  reused: { tone: 'success', glyph: 'clock-rotate-left' },
-  skipped: { tone: 'neutral' },
-  cancelled: { tone: 'neutral' },
-  failed: { tone: 'danger' },
-  'not run': { tone: 'neutral' },
-} as const satisfies Record<ScriptCallStatus, StatusLook>;
+export const SCRIPT_CALL_STATUS_LOOK: Readonly<
+  Record<ScriptCallStatus, StatusLook>
+> = Object.freeze({
+  queued: Object.freeze({ tone: 'neutral', glyph: 'circle-dot' }),
+  running: Object.freeze({ tone: 'running' }),
+  interrupted: Object.freeze({ tone: 'warning' }),
+  finished: Object.freeze({ tone: 'success' }),
+  reused: Object.freeze({ tone: 'success', glyph: 'clock-rotate-left' }),
+  skipped: Object.freeze({ tone: 'neutral' }),
+  cancelled: Object.freeze({ tone: 'neutral' }),
+  failed: Object.freeze({ tone: 'danger' }),
+  'not run': Object.freeze({ tone: 'neutral' }),
+});
 
 /** What a row says before its answer, in one line. */
 function detailText(detail: NonNullable<ScriptCallView['detail']>): string {
