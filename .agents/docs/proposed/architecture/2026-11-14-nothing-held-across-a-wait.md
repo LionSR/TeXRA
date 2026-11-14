@@ -280,6 +280,8 @@ Done, on the branch after PR 14927:
 - Row 23: the recovery probe tells the gate when its response's first
   event arrives (`RouteAnswered`) and goes on as one of the calls that
   answer admits.
+- Row 12, the GitHub deliveries: one fiber a run sends a poll round's
+  events in their order, where each event was its own fork.
 
 Open: fiber-first opening (row 6), the frames on `rpc` (row 16), the model
 socket (row 18), the inbound queues (row 12), agent selection as one store
@@ -295,6 +297,13 @@ write (row 22), the buffers (row 20), and slice 7. What the passes learned:
   `Fiber.interruptAll` in the run `FiberMap`'s finalizer, which waits for
   a run that does not unwind. No such run was reproduced, and a bounded
   closer would be hand-written, so it is left until one is observed.
+- Row 18: `llm/src/api/openaiResponsesWebSocket.ts` has no test and its
+  path is billed. Moving it to `Socket` starts with a scripted local
+  server that pins the handshake, an idle frame, a close mid-turn and the
+  connection's reuse; none exists yet.
+- Row 16: the frames reach three hosts (the VS Code webview, the desktop
+  renderer, the trace viewer), and only the desktop's can be driven here.
+  It is its own PR.
 - Rows 9 and 10 at the remaining lanes: a reopen must wait for a close and
   nothing shipped does that, so the session and desktop project lanes
   stay. The Codex probe keeps its lane and its map: it caches only what a
