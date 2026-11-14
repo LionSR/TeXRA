@@ -158,10 +158,8 @@ const openExportPath = (
     });
   const uri = vscode.Uri.file(filePath);
   if (kind === 'external') {
-    return Effect.tryPromise({
-      try: () => vscode.env.openExternal(uri),
-      catch: failed,
-    }).pipe(Effect.asVoid);
+    // The opener also fails when VS Code declines the file.
+    return new VscodeExternalOpener().openExternal(uri.toString());
   }
   if (kind === 'pdf') {
     return executeVscodeCommand('vscode.open', uri).pipe(
