@@ -14,7 +14,7 @@ import {
   Scope,
   ScopedRef,
   Semaphore,
-  SynchronizedRef,
+  Ref,
 } from 'effect';
 
 import type { ITool } from '@agent/core/tools/ToolTypes';
@@ -140,7 +140,7 @@ export interface AgentRunShape extends RunLaunch {
    * catalog generation, replaced by each new step. A background script
    * reads what its parent's step offered here.
    */
-  readonly steps: SynchronizedRef.SynchronizedRef<OpenStep | null>;
+  readonly steps: Ref.Ref<OpenStep | null>;
   /** The synthetic terminal tool, when the config declares an output schema. */
   readonly finalToolName: string | null;
   /**
@@ -316,7 +316,7 @@ export const agentRunLayer = (
         ...launch,
         fileService: new RunFileService(runId, roots),
         toolInputs,
-        steps: yield* SynchronizedRef.make<OpenStep | null>(null),
+        steps: yield* Ref.make<OpenStep | null>(null),
         finalToolName,
         model,
         scope,
