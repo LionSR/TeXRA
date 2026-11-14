@@ -20,14 +20,12 @@ import {
   Schema,
   Scope,
   Stream,
+  Struct,
   SubscriptionRef,
 } from 'effect';
+import type { RpcGroup } from 'effect/rpc';
 
-import {
-  LaunchRefused,
-  type LocalSession,
-  type RunRecords,
-} from '@texra-ai/harness';
+import { LaunchRefused, type LocalSession } from '@texra-ai/harness';
 import {
   type RunId,
   toErrorMessage,
@@ -39,9 +37,11 @@ import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import {
   PROTOCOL,
   ProjectStateFailed,
+  RUN_RECORDS,
   TaskFailed,
   TaskRecordsFailed,
   TexraRpcs,
+  type RecordRpc,
   type ServiceInfo,
 } from './protocol';
 
@@ -227,14 +227,19 @@ export const serviceHandlers = TexraRpcs.toLayer(
           ),
         );
     const session = over((message) => new TaskFailed({ message }));
-    /** One member of `Session.records(runId)` over the project's session. */
-    const record =
-      <A>(read: (records: RunRecords) => Effect.Effect<A, Error>) =>
-      ({ workspace, runId }: { workspace: string; runId: RunId }) =>
-        over((message) => new TaskRecordsFailed({ runId, message }))(
-          workspace,
-          (held) => read(held.records(runId)),
-        );
+    // cast: each member's handler answers that member of the project's
+    // `Session.records(runId)`, which `RUN_RECORDS` types its procedure by.
+    const records = Object.fromEntries(
+      Struct.keys(RUN_RECORDS).map((member) => [
+        `records.${member}`,
+        ({ workspace, runId }: { workspace: string; runId: RunId }) =>
+          over((message) => new TaskRecordsFailed({ runId, message }))(
+            workspace,
+            (held): Effect.Effect<unknown, Error> =>
+              held.records(runId)[member],
+          ),
+      ]),
+    ) as unknown as RpcGroup.HandlersFrom<RecordRpc>;
     return {
       'service.hello': Effect.fn('handlers.service.hello')(function* () {
         return {
@@ -291,17 +296,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
         session(workspace, (held) => held.listRuns),
       'session.deleteRuns': ({ workspace, target }) =>
         session(workspace, (held) => held.deleteRuns(target)),
-      'records.exists': record((records) => records.exists),
-      'records.config': record((records) => records.readConfig),
-      'records.report': record((records) => records.readReport),
-      'records.runEnd': record((records) => records.readRunEnd),
-      'records.result': record((records) => records.readResult),
-      'records.workspaceFiles': record((records) => records.readWorkspaceFiles),
-      'records.skills': record((records) => records.readSkills),
-      'records.resumable': record((records) => records.readResumable),
-      'records.rejection': record((records) => records.readRejection),
-      'records.conversation': record((records) => records.readConversation),
-      'records.trace': record((records) => records.readTrace),
+      ...records,
       'task.request': ({ workspace, request }) =>
         Effect.scoped(
           projects.open(workspace).pipe(

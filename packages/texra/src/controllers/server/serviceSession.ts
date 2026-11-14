@@ -26,6 +26,7 @@ import {
   type Scope,
   Semaphore,
   Stream,
+  Struct,
   SubscriptionRef,
 } from 'effect';
 
@@ -58,7 +59,11 @@ import {
   type ServiceClient,
   type ServiceLink,
 } from './client';
-import type { ProjectStateFailed, TaskFailed } from './protocol';
+import {
+  RUN_RECORDS,
+  type ProjectStateFailed,
+  type TaskFailed,
+} from './protocol';
 import type {
   CommitOrdinal,
   TranscriptInterest,
@@ -553,32 +558,18 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           tools: tools.map((tool) => tool.definition.name),
           message: "The TeXRA service cannot run a window's own tools.",
         });
-  /** `Session.records`: each member one procedure of the service. */
-  const records = (runId: RunId): RunRecords => {
-    const ask = <A>(
-      read: (
-        client: ServiceClient,
-        input: { workspace: string; runId: RunId },
-      ) => Effect.Effect<A, Error>,
-    ) => asked(link, (client) => read(client, { workspace, runId }));
-    return {
-      exists: ask((client, input) => client['records.exists'](input)),
-      readConfig: ask((client, input) => client['records.config'](input)),
-      readReport: ask((client, input) => client['records.report'](input)),
-      readRunEnd: ask((client, input) => client['records.runEnd'](input)),
-      readResult: ask((client, input) => client['records.result'](input)),
-      readWorkspaceFiles: ask((client, input) =>
-        client['records.workspaceFiles'](input),
-      ),
-      readSkills: ask((client, input) => client['records.skills'](input)),
-      readResumable: ask((client, input) => client['records.resumable'](input)),
-      readRejection: ask((client, input) => client['records.rejection'](input)),
-      readConversation: ask((client, input) =>
-        client['records.conversation'](input),
-      ),
-      readTrace: ask((client, input) => client['records.trace'](input)),
-    };
-  };
+  /** `Session.records`: each member its procedure of the service. */
+  const records = (runId: RunId): RunRecords =>
+    // cast: each entry is its member's procedure, whose answer `RUN_RECORDS`
+    // types as that member's.
+    Object.fromEntries(
+      Struct.keys(RUN_RECORDS).map((member) => [
+        member,
+        asked<unknown>(link, (client) =>
+          client[`records.${member}`]({ workspace, runId }),
+        ),
+      ]),
+    ) as unknown as RunRecords;
   return {
     roots,
     view: {
