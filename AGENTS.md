@@ -496,7 +496,8 @@ section says what to do with it.
   titled for the theme. This is the one exception to one PR per change.
 - Run `npm run gate` and `npm run test:changed` before pushing, and say in the
   PR body what ran. Subscribe to the PR, fix CI and answer review until it is
-  ready to merge; the owner merges.
+  ready to merge. The routine's prompt says whether the run merges its own
+  PR; when it is silent, the owner merges.
 - A finding too large for the run, or one that needs a design decision first,
   becomes a dated note under `.agents/docs/proposed/simplification/` in the
   same PR, beside whatever first step stands alone. A PR that holds only
