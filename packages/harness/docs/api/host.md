@@ -474,7 +474,8 @@ interface AppSignalPayloads {
    * OAuth refresh must not repaint the profile tab.
    *
    * Consumed by: extension and desktop (an `apiKey.*` change repaints the
-   * credential-dependent settings, launcher and model surfaces), the CLI chat
+   * credential-dependent settings surfaces, and any change the launcher's
+   * credential check and model catalog), the CLI chat
    * TUI (an `apiKey.*` change re-reads the model route and quota its status
    * bar shows), and the `ToolAvailability` process service on every
    * host and the agent package (a key a plugin lists in `reprobeOnSecrets`,
@@ -486,14 +487,15 @@ interface AppSignalPayloads {
   /**
    * A model-access preference was written in this process: a subscription's
    * preference, the access route picked for a provider, a subscription
-   * sign-out, or a setting whose write re-routes models
+   * sign-out, the enabled models, or a setting whose write re-routes models
    * (`onWrite.invalidatesModelOptions`). Keyless on purpose: a listener
    * re-reads the routes it shows.
    *
-   * Emitted by the CLI's writers of those settings. Consumed by: the CLI chat
-   * TUI's status bar, which re-reads the route and quota it shows. Not the
-   * extension or desktop: their settings views repaint model options in the
-   * write's own round-trip (`settingsViewBody.ts`).
+   * Emitted by the writers a person drives: the CLI's and the settings
+   * views' (`settingsViewBody.ts`). Consumed by: the CLI chat TUI's status
+   * bar, which re-reads the route and quota it shows, and the extension's
+   * and desktop's launchers (`hostSnapshotSource.ts`), which re-read their
+   * credential check and model catalog.
    */
   modelAccessChanged: undefined;
 
@@ -510,19 +512,21 @@ interface AppSignalPayloads {
   githubSubscriptionsChanged: undefined;
 
   /**
-   * The workspace agents changed outside a settings round-trip. Keyless
-   * on purpose: every listener re-reads the agent list, so which team or agent
-   * moved carries no information.
+   * The workspace agents changed. Keyless on purpose: every listener
+   * re-reads the agent list, so which team or agent moved carries no
+   * information.
    *
    * Emitted, in every process sharing the global store, when the default
    * team changes (`apply_team`, which the setup agent runs mid-conversation,
    * even in a background service task), and when the agent catalog is
    * reloaded after a tool switch, a plugin install or an agent file's edit:
-   * `agentCatalogFollower` emits both, in this process or another. A team
-   * change from the settings view emits too, through the same follower.
+   * `agentCatalogFollower` emits both, in this process or another. The
+   * settings views' agent and team writes emit it themselves
+   * (`settingsAgentCommands.ts`).
    *
    * Consumed by: extension and desktop settings views, both re-reading the
-   * agent list and team presets, and the extension's launcher. Not the CLI:
+   * agent list and team presets, and their launchers
+   * (`hostSnapshotSource.ts`). Not the CLI:
    * it reads the agent list per command
    * and has no persistent panel that could go stale.
    */
@@ -532,7 +536,8 @@ interface AppSignalPayloads {
    * The approval policy was written from a settings view (the shared
    * settings commands' `updateStateSetting`).
    *
-   * Consumed by: the extension's status-bar tooltip, painted outside the
+   * Consumed by: the extension's status-bar tooltip and the launchers'
+   * approval snapshot (`hostSnapshotSource.ts`), painted outside the
    * settings webview's round-trip. The settings views repaint their own
    * approval snapshot inline, and the CLI repaints its session line from the
    * `/config` form and `/approval` directly. Enforcement reads the config

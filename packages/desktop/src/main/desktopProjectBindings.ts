@@ -7,14 +7,7 @@
 
 import { homedir } from 'node:os';
 
-import {
-  Effect,
-  Exit,
-  Queue,
-  Scope,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Effect, Exit, Queue, Scope, Stream, SubscriptionRef } from 'effect';
 
 import {
   type ProcessRuntime,
