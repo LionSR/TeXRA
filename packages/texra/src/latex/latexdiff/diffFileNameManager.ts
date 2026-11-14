@@ -29,10 +29,10 @@ export const WORKSPACE_DIFF_SUFFIX = '_diff';
 
 /** The stem suffix of a revision's compiled latexdiff PDF: against the
  *  starting document, or against an earlier round. */
-export const REVISION_DIFF_PDF_SUFFIX = {
+export const REVISION_DIFF_PDF_SUFFIX = Object.freeze({
   fromStart: '-diff',
   betweenRounds: '-round-diff',
-} as const;
+} as const);
 
 /** What latexdiff-vc inserts between the stem and the commit hash. */
 const VERSION_CONTROL_DIFF_INFIX = '-diff';
