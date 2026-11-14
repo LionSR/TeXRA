@@ -64,14 +64,11 @@ export const launchSetupAssistant = Effect.fn('launchSetupAssistant')(
       Effect.annotateLogs({ data: cause }),
       withLogChannel(CHANNEL),
       Effect.andThen(
-        Effect.forkDetach(
-          vscodeUi.notify(
-            'error',
-            `Failed to launch setup assistant: ${toErrorMessage(cause)}`,
-          ),
+        vscodeUi.notify(
+          'error',
+          `Failed to launch setup assistant: ${toErrorMessage(cause)}`,
         ),
       ),
-      Effect.asVoid,
     );
   }),
   withLogChannel(CHANNEL),

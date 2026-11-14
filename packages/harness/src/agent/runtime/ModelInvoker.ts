@@ -31,7 +31,7 @@ import {
   Result,
   ScopedRef,
   Stream,
-  SynchronizedRef,
+  Ref,
 } from 'effect';
 import {
   ModelError,
@@ -92,7 +92,7 @@ import type { StateReadFailed } from '@shared/config/settings';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { UsageLog, usageAgentName } from '@shared/usageLog';
 
-import { resendDelayMs, RouteRetries } from './ModelRetryGate';
+import { resendDelayMs, RouteAnswered, RouteRetries } from './ModelRetryGate';
 import { decisionOf, openRequest } from './requests';
 import { AgentRun } from './run/AgentRun';
 import { callModel, type ModelCallResult } from './run/modelCall';
@@ -352,7 +352,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         const responseId = randomUUID();
         const calls = dispatchFactsFor(
           localCallsOf(turn.content),
-          (yield* SynchronizedRef.get(run.steps))?.tools.registry,
+          (yield* Ref.get(run.steps))?.tools.registry,
           logger,
         );
         // The completed turn, committed once before any local tool runs; it
@@ -463,14 +463,18 @@ export const modelInvokerLayer = (): Layer.Layer<
         yield* checkRecordedRequest(run, resolved);
         const started = yield* monotonicMillis;
         attemptStarts.set(invocation, started);
+        // The response's first event is the route's answer: a recovery
+        // probe opens its route there, not at the end of the turn.
+        const answered = yield* RouteAnswered;
         return yield* consume(
           cell,
           invocation,
           bound,
           started,
-          resolved.mode === 'foreground'
+          (resolved.mode === 'foreground'
             ? bound.model.streamTurn(resolved)
-            : submitAndObserve(run, cell, resolved, invocation, bound),
+            : submitAndObserve(run, cell, resolved, invocation, bound)
+          ).pipe(Stream.onFirst(() => answered)),
         );
       });
 

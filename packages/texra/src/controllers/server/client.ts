@@ -497,7 +497,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
 });
 
 /** What a call made while the link reconnects is told. */
-const SERVICE_OFFLINE =
+export const SERVICE_OFFLINE =
   'The TeXRA service is offline; TeXRA is reconnecting to it.';
 
 /** What a window is told when a newer TeXRA's service replaced the one it
@@ -520,49 +520,63 @@ export const followed = <A>(
   changes: SubscriptionRef.changes(ref),
 });
 
-/** A window's lasting hold on the service: the client it is connected
- *  through, or null while the service is away and the link reaches it
- *  again; and, while it is null, why. A window of a session its own
- *  process opened holds a link to that process (`HostWindows.localLink`),
- *  whose client is only what a window attaches through: a link to the
- *  service is one of those too. */
+/** What a link holds: the client it is connected through, or none and
+ *  why, as a window says it: reconnecting ({@link SERVICE_OFFLINE}), or
+ *  refused by a newer service ({@link WINDOW_OUTDATED}). */
+export type Linked<Client> =
+  | { readonly client: Client }
+  | { readonly client: null; readonly away: string };
+
+/** A window's lasting hold on the service: one value, set by the link's
+ *  holder alone, which goes away while the service is and comes back as
+ *  the link reaches it again. A window of a session its own process opened
+ *  holds a link to that process (`HostWindows.localLink`), whose client is
+ *  only what a window attaches through: a link to the service is one of
+ *  those too. */
 export interface ServiceLink<Client = ServiceClient> {
+  readonly state: Followed<Linked<Client>>;
+  /** The client of `state`, null while it holds none. */
   readonly client: Followed<Client | null>;
-  /** Why `client` is null, as a window says it: reconnecting
-   *  ({@link SERVICE_OFFLINE}), or refused by a newer service
-   *  ({@link WINDOW_OUTDATED}). */
-  readonly away: SubscriptionRef.SubscriptionRef<string>;
-  /** Whether a window was told of the refusal `away` holds: once per
-   *  link, however many projects' windows attached through it. */
+  /** Whether a window was told of the refusal the link is away for: once
+   *  per link, however many projects' windows attached through it. */
   readonly refusalTold: Ref.Ref<boolean>;
 }
 
+/** A link over the one value its holder sets. */
+export const linkOver = <Client>(
+  state: SubscriptionRef.SubscriptionRef<Linked<Client>>,
+  refusalTold: Ref.Ref<boolean>,
+): ServiceLink<Client> => ({
+  state: followed(state),
+  client: {
+    get: Effect.map(SubscriptionRef.get(state), ({ client }) => client),
+    changes: SubscriptionRef.changes(state).pipe(
+      Stream.map(({ client }) => client),
+      Stream.changes,
+    ),
+  },
+  refusalTold,
+});
+
 /** The service's client through `link` now; a link that holds none fails
- *  with why (its `away`). A reconnect needs nothing of the caller: its next
- *  call takes it. */
+ *  with why. A reconnect needs nothing of the caller: its next call takes
+ *  it. */
 export const linkedClient = <Client>(
   link: ServiceLink<Client>,
 ): Effect.Effect<Client, Error> =>
-  Effect.flatMap(link.client.get, (client) =>
-    client === null
-      ? Effect.flatMap(SubscriptionRef.get(link.away), (away) =>
-          Effect.fail(new Error(away)),
-        )
-      : Effect.succeed(client),
+  Effect.flatMap(link.state.get, (state) =>
+    'away' in state
+      ? Effect.fail(new Error(state.away))
+      : Effect.succeed(state.client),
   );
 
-/** Why `link` holds no service now, at each change: its `away` while its
- *  client is null, null while it holds one. What a window's banner says. */
+/** Why `link` holds no service now, at each change; null while it holds
+ *  one. What a window's banner says. */
 export const linkOutage = (
   link: ServiceLink<unknown>,
 ): Stream.Stream<string | null> =>
-  Stream.merge(link.client.changes, SubscriptionRef.changes(link.away)).pipe(
-    Stream.mapEffect(() =>
-      Effect.map(
-        Effect.all([link.client.get, SubscriptionRef.get(link.away)]),
-        ([client, away]) => (client === null ? away : null),
-      ),
-    ),
+  link.state.changes.pipe(
+    Stream.map((state) => ('away' in state ? state.away : null)),
     Stream.changes,
   );
 
@@ -590,7 +604,6 @@ export const linkService = Effect.fn('server.linkService')(function* (
   ServiceUnavailable,
   Scope.Scope | GlobalValues
 > {
-  const away = yield* SubscriptionRef.make(SERVICE_OFFLINE);
   const connect = Effect.fn('connect')(function* (
     begin: ServiceStart,
     told: (message: string) => Effect.Effect<void>,
@@ -607,15 +620,15 @@ export const linkService = Effect.fn('server.linkService')(function* (
     return { connection, lost, scope };
   });
   let current = yield* connect(start, waiting);
-  const client = yield* SubscriptionRef.make<ServiceClient | null>(
-    current.connection.client,
-  );
+  const state = yield* SubscriptionRef.make<Linked<ServiceClient>>({
+    client: current.connection.client,
+  });
+  const awayFor = (away: string) =>
+    SubscriptionRef.set(state, { client: null, away });
   // While the link is down, a wait on an older service is what the
   // window's banner says.
   const awayWaiting = (message: string) =>
-    SubscriptionRef.set(away, message).pipe(
-      Effect.andThen(Effect.logWarning(message)),
-    );
+    awayFor(message).pipe(Effect.andThen(Effect.logWarning(message)));
   const refusalTold = yield* Ref.make(false);
   yield* Effect.addFinalizer(() =>
     Effect.suspend(() => Scope.close(current.scope, Exit.void)),
@@ -624,8 +637,7 @@ export const linkService = Effect.fn('server.linkService')(function* (
     Effect.forever(
       Effect.gen(function* () {
         yield* Deferred.await(current.lost);
-        yield* SubscriptionRef.set(away, SERVICE_OFFLINE);
-        yield* SubscriptionRef.set(client, null);
+        yield* awayFor(SERVICE_OFFLINE);
         yield* Scope.close(current.scope, Exit.void);
         yield* Effect.logWarning(
           `The TeXRA service (pid ${current.connection.info.pid}) went away; reconnecting.`,
@@ -646,8 +658,7 @@ export const linkService = Effect.fn('server.linkService')(function* (
             Effect.suspend(() => {
               if (error.message === told) return Effect.void;
               told = error.message;
-              return SubscriptionRef.set(
-                away,
+              return awayFor(
                 error.newer === true ? WINDOW_OUTDATED : SERVICE_OFFLINE,
               ).pipe(
                 Effect.andThen(
@@ -667,11 +678,12 @@ export const linkService = Effect.fn('server.linkService')(function* (
         );
         // Reached again: whatever kept it away no longer holds, so a host
         // that attaches later is not told it, and a later refusal is told.
-        yield* SubscriptionRef.set(away, SERVICE_OFFLINE);
         yield* Ref.set(refusalTold, false);
-        yield* SubscriptionRef.set(client, current.connection.client);
+        yield* SubscriptionRef.set(state, {
+          client: current.connection.client,
+        });
       }),
     ),
   );
-  return { client: followed(client), away, refusalTold };
+  return linkOver(state, refusalTold);
 });

@@ -26,6 +26,7 @@ import {
   type Cause,
   Deferred,
   Effect,
+  Exit,
   Queue,
   Ref,
   Schema,
@@ -369,31 +370,44 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
     method: string,
     params?: unknown,
   ) {
-    const id = yield* Ref.updateAndGet(ids, (n) => n + 1);
-    const deferred = yield* Deferred.make<unknown, PendingError>();
-    yield* Ref.update(pending, (map) =>
-      new Map(map).set(id, { method, deferred }),
-    );
-    // `close` fails only the table it drained, so an entry inserted after it
-    // would wait forever: read the state after the insert and fail it here.
-    const closedSince = yield* Ref.get(closedReason);
-    if (closedSince !== undefined) {
-      yield* takePending(id);
-      return yield* new JsonRpcConnectionDisposed({ message: closedSince });
-    }
-    yield* send({
-      jsonrpc: '2.0',
-      id,
-      method,
-      ...(params !== undefined && { params }),
-    });
-    const notice = options.cancel?.(id, method);
-    return yield* Deferred.await(deferred).pipe(
-      Effect.onInterrupt(() =>
-        Effect.flatMap(takePending(id), (entry) =>
-          entry && notice ? notify(notice.method, notice.params) : Effect.void,
-        ),
-      ),
+    // The entry is in the table from here until the request ends, however
+    // it ends: an answer or `close` takes it, and any other exit takes it
+    // here, telling the peer a call it interrupted is no longer wanted.
+    return yield* Effect.acquireUseRelease(
+      Effect.gen(function* () {
+        const id = yield* Ref.updateAndGet(ids, (n) => n + 1);
+        const deferred = yield* Deferred.make<unknown, PendingError>();
+        yield* Ref.update(pending, (map) =>
+          new Map(map).set(id, { method, deferred }),
+        );
+        return { id, deferred };
+      }),
+      ({ id, deferred }) =>
+        Effect.gen(function* () {
+          // `close` fails only the table it drained, so an entry inserted
+          // after it would wait forever: read the state after the insert
+          // and fail it here.
+          const closedSince = yield* Ref.get(closedReason);
+          if (closedSince !== undefined)
+            return yield* new JsonRpcConnectionDisposed({
+              message: closedSince,
+            });
+          yield* send({
+            jsonrpc: '2.0',
+            id,
+            method,
+            ...(params !== undefined && { params }),
+          });
+          return yield* Deferred.await(deferred);
+        }),
+      ({ id }, exit) =>
+        Effect.flatMap(takePending(id), (entry) => {
+          const notice =
+            entry && Exit.hasInterrupts(exit)
+              ? options.cancel?.(id, method)
+              : undefined;
+          return notice ? notify(notice.method, notice.params) : Effect.void;
+        }),
     );
   });
 

@@ -174,34 +174,36 @@ const emitStatus = (info: ServiceInfo | null) =>
     });
   });
 
-/** Ask the service to stop and wait until it is gone: its socket closes
- *  as it exits. */
+/** Ask the service to stop and wait until it is gone, within
+ *  `STOP_TIMEOUT`: its socket closes as it exits. Answers what was stopped,
+ *  or `null` when none ran. */
 const stopRunningService = Effect.gen(function* () {
   // A service this build cannot speak to still takes the stop, the one
-  // procedure every build keeps.
-  const info = yield* probeCliService.pipe(
+  // procedure every build keeps; its socket is all this build knows of it.
+  const target:
+    | (Pick<ServiceInfo, 'socket'> & { readonly pid?: number })
+    | null = yield* probeCliService.pipe(
     Effect.catchIf(
       (error) => error.unspoken !== undefined,
-      (error) =>
-        Effect.as(stopService(error.unspoken ?? '', false), null).pipe(
-          Effect.mapError(
-            (failure) =>
-              new Error(`The TeXRA service did not stop: ${failure.message}`),
-          ),
-        ),
+      (error) => Effect.succeed({ socket: error.unspoken ?? '' }),
     ),
   );
-  if (info === null) return null;
-  yield* stopService(info.socket, false).pipe(
-    Effect.timeout(STOP_TIMEOUT),
+  if (target === null) return null;
+  const service =
+    target.pid === undefined
+      ? 'the TeXRA service'
+      : `the TeXRA service (pid ${target.pid})`;
+  yield* stopService(target.socket, false).pipe(
+    Effect.timeoutOrElse({
+      duration: STOP_TIMEOUT,
+      orElse: () =>
+        Effect.fail(new Error(`it did not exit within ${STOP_TIMEOUT}`)),
+    }),
     Effect.mapError(
-      () =>
-        new Error(
-          `The TeXRA service (pid ${info.pid}) did not stop within ${STOP_TIMEOUT}.`,
-        ),
+      (failure) => new Error(`Could not stop ${service}: ${failure.message}`),
     ),
   );
-  return info;
+  return service;
 });
 
 const statusCommand = defineCliCommand({
@@ -231,7 +233,7 @@ const stopCommand = defineCliCommand({
         writeTextStderr(
           stopped === null
             ? 'No TeXRA service was running.'
-            : `Stopped the TeXRA service (pid ${stopped.pid}).`,
+            : `Stopped ${stopped}.`,
         );
         return CliExitCode.Success;
       }),

@@ -247,6 +247,36 @@ describe('ChatGPT session coordinator', () => {
   );
 
   it.effect(
+    'adopts the session another process stored when its own refresh is rejected',
+    () =>
+      Effect.gen(function* () {
+        const storage = memoryStorage(expiredSession());
+        const { pending, refreshTokens, refreshStarted } = parkedRefresh();
+        const coordinator = yield* makeCoordinator(storage, { refreshTokens });
+
+        const token = yield* forkNow(freshToken(coordinator));
+        yield* refreshStarted;
+
+        // Another host shares the credential file and not this coordinator's
+        // lock: it exchanged the same refresh token first and stored what it
+        // got, which is why the exchange in flight is refused.
+        yield* storage.set(
+          'unused',
+          JSON.stringify(
+            session({
+              accessToken: 'access-other',
+              refreshToken: 'refresh-other',
+            }),
+          ),
+        );
+        pending.resolve(revoked());
+
+        expect(yield* Fiber.join(token)).toBe('access-other');
+        expect(storage.peek()?.refreshToken).toBe('refresh-other');
+      }),
+  );
+
+  it.effect(
     'keeps the previous refresh token when the response omits a new one',
     () =>
       Effect.gen(function* () {

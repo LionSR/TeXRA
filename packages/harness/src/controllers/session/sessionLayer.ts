@@ -412,9 +412,10 @@ export function ownerProcessLayer(
 
 /**
  * The owner over the map: each method runs on its caller's fiber with the
- * map provided. A close, of one session or of all, drains the plugins
- * first: what a plugin admitted for a session (a GitHub poll round's
- * delivery) lands before that session closes, not after. Its release
+ * map provided. The shutdown (`closeAll`) drains the plugins first: what a
+ * plugin's process-wide work took in (a GitHub poll round's delivery) lands
+ * before the sessions close. One session's close drains nothing, because a
+ * drain ends that work for every session of the process. Its release
  * closes what is still open before the map's own release unwinds the
  * entries.
  */
@@ -438,8 +439,7 @@ const sessionOwnerLayer = Layer.effect(
     return {
       open: (init) => withMap(openSession(init)),
       list: withMap(listSessions),
-      close: (root) =>
-        withMap(Effect.andThen(catalog.drain, closeSession(root))),
+      close: (root) => withMap(closeSession(root)),
       closeAll,
     };
   }),

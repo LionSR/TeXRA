@@ -103,20 +103,27 @@ export class ServiceControl extends Context.Service<
   }
 >()('@texra-ai/texra/server/ServiceControl') {}
 
-/** The tasks the service runs now, across its open projects: what its
- *  registry holds live, which a started run is before the view applies
- *  it. `atWork`: only those not waiting for their next message, a run the
- *  view does not show yet counted as at work. */
+/** The runs of `session` at work: those its registry holds live that are
+ *  not waiting for their next message. A started run is held before the
+ *  view applies it, and counts. The one reading of "at work": a project's
+ *  hold, the service's load and a drain's end all ask it. */
+export const runsAtWork = (session: LocalSession): number => {
+  const { runs } = session.view.current();
+  return session
+    .held()
+    .filter(({ runId }) => runs.get(runId)?.position !== 'waiting').length;
+};
+
+/** The tasks the service runs now, across its open projects: every run
+ *  its registries hold live, or with `atWork` only those at work
+ *  ({@link runsAtWork}). */
 export const runningTasks = Effect.fn('server.runningTasks')(function* (
   projects: Context.Service.Shape<typeof ServiceProjects>,
   atWork = false,
 ): Effect.fn.Return<number> {
   let running = 0;
-  for (const session of (yield* projects.opened).values()) {
-    const { runs } = session.view.current();
-    for (const { runId } of session.held())
-      if (!atWork || runs.get(runId)?.position !== 'waiting') running += 1;
-  }
+  for (const session of (yield* projects.opened).values())
+    running += atWork ? runsAtWork(session) : session.held().length;
   return running;
 });
 

@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: a `PerKeyLane` holds a `Semaphore`.** `withPerKeyLane` keeps its
+  signature; the lane record it stores is `{ lock, fibers }` where it was
+  `{ tail, fibers }`. Fibers enter in the order they join the key's queue,
+  which can differ from the order of two calls made within a few steps of
+  each other.
 - **SDK: `withPerKeyLane` takes no conditional claim.** Its third
   parameter, `refuseClaim`, had no caller and is removed; a lane is claimed
   by every entrant.
@@ -1780,6 +1785,49 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **Closing one project no longer stops GitHub updates for the others.** A
+  project's close ran the shutdown step of every plugin, which ended the
+  GitHub pollers of the whole process: the desktop app and the background
+  service then delivered no pull request or issue activity to any open
+  project, and new subscriptions polled nothing, until a restart. Only a
+  shutdown runs that step now.
+- **After a rate limit, the other agents on that model no longer wait for
+  one whole turn.** When a provider failure paused a model route, the
+  first request let through held the route until its turn finished, so
+  every other run and subagent on that credential waited for it, up to the
+  length of that turn. The route now reopens as soon as the provider starts
+  answering that request.
+- **A VS Code notice no longer holds what raised it until it is
+  dismissed.** A warning or info toast shown from a request (a blocked
+  edit's warning, the service notice at startup, a clone's result) kept
+  that request waiting until the toast was closed. A notice now returns as
+  soon as the host is asked to show it, in VS Code and the desktop app.
+- **A `texra` question whose input ends no longer hangs.** Pressing Ctrl-D
+  at a confirmation (`texra prune`, a plugin's trust question, an approval
+  prompt, a token prompt), or running one with its input closed, left the
+  command waiting for an answer that could not come; it now fails saying
+  the input ended.
+- **`texra service stop` and `restart` give up after 30 seconds on a
+  service of another build too.** A running service that speaks a protocol
+  this build cannot read was waited for without a limit, and a stop of one
+  reported that no service was running.
+- **Two TeXRA windows refreshing a subscription sign-in at once no longer
+  sign each other out.** The one whose refresh was refused deleted the
+  session the other had just stored; it now uses that session, and deletes
+  only a refused session that is still the stored one.
+- **The Plugins page no longer probes for tools without end.** With
+  Settings open on a folder no running task held, the app checked every
+  external tool again several times a second for as long as the page was
+  open, starting a process each time.
+- **An agent's edit and a save in the desktop editor no longer overwrite
+  each other.** Each checked the file and then wrote it with nothing
+  between them and the other writer, so one landing inside the other's
+  check and write was lost without a conflict. Both now take the file's one
+  write lane.
+- **Stop reaches the agents under a task that was just resumed.** A task
+  woken by one of its background agents' results could be stopped while it
+  was still starting up; its other agents then kept running after Stop.
+  They are stopped with it now.
 - **A file write that is stopped part-way no longer empties the file.**
   Stopping a run while it wrote an approved edit, or closing a project while
   the desktop editor saved, could leave the file with no content at all,
