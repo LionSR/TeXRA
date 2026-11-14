@@ -17,7 +17,7 @@
  *   view with the previous one by identity.
  *
  * An event re-derives its run and each ancestor up to the root; a text chunk
- * costs the chunk, never the row's text.
+ * repaints its one row, whose text is measured whole each time.
  */
 
 import { Equal, type Types } from 'effect';
