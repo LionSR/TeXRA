@@ -35,6 +35,9 @@ launch form 的选项表。**数量是症状，单位是病因。** 这个诊断
 - **用户不从目录里挑。** 让人在三十个 agent 里选是不行的（负责人
   2026-11-14）。默认就是聊天，不选任何东西就能开始；picker 里除了聊天只
   有十个程序，新增一个要过门槛。
+- **code mode 默认打开，不把所有工具摆给模型**（负责人 2026-11-14）。模
+  型拿到的只有 `script` 一个工具；脚本的描述里只声明一个小核心，其余开
+  着的工具能调，靠 `searchTools` 找。
 
 这不是一个新方向。仓库里已经有三处"run 是一段程序"：goal 策略是插件出货
 的一个脚本模块（`packages/harness/src/tools/plan/goalScript.ts`），
@@ -130,6 +133,11 @@ recipe 由 app 按 agent 名生成源码，挂到 agent 文件的 `task:` 块上
   用。
 - `assistant.yaml` 的工具表是 52 个工具里的 37 个，没列的 15 个恰好是只
   属于某个程序或某次对话的那些。默认集合可以推出来，不用抄。
+- `script` 的描述今天就分两层：声明的工具内联成 TypeScript 声明，其余能
+  调的靠 `searchTools` 找（"more are callable: `searchTools` finds
+  them"）；script-only 打开时请求里只发 `script`
+  （`packages/harness/src/agent/runtime/agentToolResolution.ts` 的
+  `sent`）。"不把所有工具摆给模型"的机器已经在了。
 - codemode 的裁决里已经有一条"code mode stays domain-free"。
 
 缺的只是：**把"插件带程序"当成唯一的路，让内核忘掉 agent。**
@@ -202,8 +210,9 @@ recipe。
 3. 一个 `program` 工具替掉 `document_task` 和 `ITool.launchesTasks`；脚本
    声明里列出程序。
 4. 沙箱：给模块加载器一个明确的 normalizer；脚本失败时保留模块里的帧。
-5. 删 agent 那一期：`chat` 的参数直接在 config 上（第二次存法变更），根
-   聊天的工具是"开着的"而不是一张表。
+5. 删 agent 那一期：`chat` 的参数直接在 config 上（第二次存法变更）；根
+   聊天能调的是开着的全部，声明的是一张短表。
+6. code mode 默认打开：`codeMode.scriptOnly` 的默认值翻过来。
 
 ### 插件契约
 
@@ -438,17 +447,31 @@ store。
   （你在哪、什么时候写脚本、什么时候启动一个程序），它是 app 的一个常
   量，不是内核的。`assistant.yaml` 里各能力的那几句搬到各自插件的段里，
   插件没开就没有那几句，不必再写"when available"。
-- **工具** = 开着的插件对聊天开放的工具，按步解析，config 里不抄表。今
-  天 `assistant.yaml` 抄的 37 个就是这个集合：52 个工具去掉 setup 的 8
+- **模型拿到的只有 `script`。** code mode 默认打开：一次聊天的请求里只
+  发 `script` 这一个工具，别的都从脚本里调。今天这是
+  `codeMode.scriptOnly`，默认关。
+- **能调的** = 开着的插件对聊天开放的工具，按步解析，config 里不抄表。
+  今天 `assistant.yaml` 抄的 37 个就是这个集合：52 个工具去掉 setup 的 8
   个（只给 setup 那次对话）、documents 的六个步骤工具（只在它的程序里有
-  意义）和 `self`。一次给了 `tools` 列表的启动（setup、`agent()` 的子运
-  行）拿到的就是那张列表。
+  意义）和 `self`。dispatch 只跑被 offer 的工具，这条规矩不变。
+- **声明的只是一个小核心。** 不把所有工具摆给模型。脚本的描述里内联的
+  是声明的那些；其余能调的靠 `searchTools(query)` 找、`describeTool(name)`
+  读全，MCP 和插件注入的工具今天已经是这样。根聊天声明的是 app 的一张短
+  表（文件和 shell 的六个，加 `agent` 和 `program`），和基础文本一样是
+  app 的常量。theorist 插件的工具不声明：各插件的 prompt 段用一两句说它
+  有什么，模型用到时去找。一次给了 `tools` 列表的启动（setup、`agent()`
+  的子运行）声明的和能调的都是那张列表。
+- **"开着就能调"成为默认。** 今天"没列也给"要插件逐个工具用
+  `injectedWhen` 声明；之后这是每个对聊天开放的工具的默认，
+  `injectedWhen` 只剩"跟着一个设置"的用途。
 - **MCP。** 用户在 `~/.texra/mcp.json` 里配的 server 今天要 agent 的
   `tools:` 点名 `mcp__<server>__*` 才进 run。没有 agent 文件之后，配了就
-  对聊天开放：配置它就是同意。不想给聊天用的不配。
-- **可启动的程序** = 开着的插件的 `programs`，和工具声明并列出现在脚本
-  声明里（`packages/harness/src/tools/codemode/declarations.ts` 加一段），
-  前提是这次聊天被 offer 了 `program` 工具。
+  能调、能被搜到：配置它就是同意。它的工具不声明，所以配十个 server 也
+  不往每次请求里加东西。
+- **可启动的程序** = 开着的插件的 `programs`，名字和描述随 `program` 的
+  声明内联在脚本的描述里
+  （`packages/harness/src/tools/codemode/declarations.ts` 加一段）。它们
+  是产品的入口，十行。
 
 所以没有叫 assistant 的文件或名字。审稿、搜索、写代码不是目录项，是模型
 在脚本里用不同的 `system` 字面量调 `agent()`。headless 的一次性聊天是
@@ -463,12 +486,17 @@ store。
   `planCompileFixer` 以 `script: null` 启动它）：documents 插件的一组
   chat 参数。
 
-script-only 翻为默认要另外过线。已有的数据是三个 journey、两个模型、每组
-7 到 9 次：通过率持平，每次成功的成本低 18% 和 66%（codemode 文档 "Still
-open" 第二轮）。那些 journey 用的是六到八个工具的小 agent，不是 37 个工具
-的聊天；翻之前按 Q10 补 glm 和 fan-out journey，再加一个整套聊天的。Q3
-的按模型回退今天没有建；翻的时候要么建它，要么留着
-`codeMode.scriptOnly` 当回退。
+code mode 默认打开是定了的方向，翻之前还差三件事。已有的数据是三个
+journey、两个模型、每组 7 到 9 次：通过率持平，每次成功的成本低 18% 和
+66%（codemode 文档 "Still open" 第二轮）；那些 journey 用的是六到八个工
+具、全部声明的小 agent。所以：
+
+1. 按 Q10 补 glm 和 fan-out journey。
+2. 加一个整套聊天的 journey，其中要用的工具没有声明，得靠搜索找到。"只
+   声明小核心"是否成立看它。
+3. Q3 的按模型回退今天没有建。翻的时候要么建它，要么留着
+   `codeMode.scriptOnly` 当关的开关。走回退的模型没有脚本可搜，能调的工
+   具要全部发给它，和今天一样。
 
 ### theorist 的程序插件
 
@@ -830,7 +858,7 @@ newer-built-in 提示存在的唯一理由是 built-in 太大、改得太勤，�
 | 设置页                | Agents、Teams、Skills 三个标签页，选择面板，newer-built-in 提示                                               | 都删；Plugins 页列每个插件的程序                                                                                |
 | 进度视图的 launch     | `launchTarget`、`selectedTeamId`、`agent`、五个选项字段                                                       | chat 或程序名，加文件和指令                                                                                     |
 | CLI                   | `agents`、`team`、`skills`、`chat --agent`、`run <agent>` 加选项 flag                                         | 前三个命令和 `--agent` 删；`run <程序 \| chat>`                                                                 |
-| 设置行                | `workspaceAgents`、`hiddenCustomAgents`、`skills.*`、`codeMode.scriptOnly`、`goal.strategy`                   | 前三组删；后两个不动                                                                                            |
+| 设置行                | `workspaceAgents`、`hiddenCustomAgents`、`skills.*`、`codeMode.scriptOnly`、`goal.strategy`                   | 前三组删；`scriptOnly` 的默认值翻成开；`goal.strategy` 不动                                                     |
 | SDK 导出              | `./host` 上 `AgentCatalog`、`WorkspaceAgents`、`AgentDirectories`、`Skills` 四族，`./plugins` 上 `AgentBlock` | 全删。`AgentConfig`、`AgentEvent`、`AgentPlatform` 是 run 的词汇，名字不动                                      |
 | `session.request`     | 无                                                                                                            | 不变；`StartRequest` 改为 `{ system, tools, instruction }` 或 `{ name, args }`                                  |
 | 请求                  | `proposal`（子运行的启动审批）显示 agent 名和 persona                                                         | 留；显示程序名，或 label 和 system 文本                                                                         |
@@ -904,6 +932,11 @@ newer-built-in 提示存在的唯一理由是 built-in 太大、改得太勤，�
 - general-package 设计比较过"最小内核，每个内置都是插件"这一案，因 churn
   没选。本提案不搬目录，靠删除让内核变小；`builtins/` 目录那一步仍按原
   裁定等一个具名的 embedder。
+- general-package 设计的第 5 条线（deferred tools："`OfferedTool.sent`、
+  script-only 的 dispatch 路径和 `searchTools` 已经在了"）和 codemode 的
+  Q4（声明的工具内联成类型声明）：本提案不给工具加 `deferred` 标记，而
+  是让聊天声明得少，没声明的都是 deferred。Q10 的线决定 code mode 什么
+  时候翻，不决定翻不翻。
 - 无流程引擎、历史一个写者、`agent()` 替代 delegation 工具（Q7）、Q5 的
   一次脚本审批、1.0 的 SQL 只读视图、codemode 的关注点分离表、"code
   mode stays domain-free"、`RUN-trusted-script-launch-grants` 的否决。
@@ -949,14 +982,18 @@ history 的行。
 - **每次启动的开关**：launch form 的五个开关和对应 flag 消失，变成程序里
   的一行。轮数的差别也消失（`correct` 一轮，`polish` 两轮）。
 - **MCP 的启用粒度变粗**：今天可以让某个 agent 用某个 server；之后配了
-  的 server 每次聊天都有，它的工具声明每次都发。
+  的 server 每次聊天都能调。
+- **模型要先找到工具才能用**：没声明的工具多一次 `searchTools` 或
+  `describeTool`，在脚本里，不多一次模型往返。风险在模型不知道有这个能
+  力；各插件 prompt 段里那一两句就是为此。
 - **聊天的 system 文本跟着插件开关变**：开关一个插件会改下一步的 system
   文本。插件的 prompt 段今天就是按步钉住、变化时作为一条更新消息发出，
   机制不变，只是它承担的内容变多；段按插件 id 排，不能靠顺序表达轻重。
 - **每个带 `script` 的步骤多钉十来个模块**，脚本的描述里多列十来个名
   字。
-- **弱模型**：script-only 的数据只覆盖两个模型和小工具集；37 个工具的聊
-  天要另测。某个便宜模型在某类论文上确实需要一段 rubric，就写在
+- **弱模型**：code mode 的数据只覆盖两个模型和全部声明的小工具集；整套
+  聊天加搜索要另测。写不好脚本的模型走回退，拿到全部工具的 schema，和今
+  天一样。某个便宜模型在某类论文上确实需要一段 rubric，就写在
   `AGENTS.md` 里。
 - **可发现性**：35 个名字至少告诉用户 TeXRA 能干什么。缩到十项后，
   Plugins 页和程序参考页承担这个角色。
@@ -991,10 +1028,14 @@ history 的行。
    agent 名（第二次存法变更），`agent()` 和 `StartRequest` 改签名；
    agents 目录（含 lean4 的）、agent 索引和 schema、team、workspace 选
    择、skills、customize、三个 CLI 命令、launch form 的 agent 列表；聊天
-   的 system 文本改由 app 的基础文本和插件的段拼出，根聊天的工具改为
-   "开着的"，MCP 改为配了就开；测试套件改写或删；文档、迁移说明和
-   `texra-action`。"chat 加十个程序"的 picker 到这一期才出现。
-6. **script-only 翻默认**。独立于以上各期；条件见"聊天不是一个 agent"。
+   的 system 文本改由 app 的基础文本和插件的段拼出，根聊天能调的改为
+   "开着的"、声明的改为一张短表，MCP 改为配了就能调；测试套件改写或
+   删；文档、迁移说明和 `texra-action`。"chat 加十个程序"的 picker 到这
+   一期才出现。
+6. **code mode 默认打开**。方向已定（负责人 2026-11-14），独立于以上各
+   期，可以更早；翻之前要做的三件事见"聊天不是一个 agent"。在第 5 期之
+   前翻，`assistant.yaml` 的 37 个工具仍全部声明；"只声明小核心"要等第
+   5 期的短表。
 7. **（可选）工具改 CLI**。先从 `latex-extract` 和 `arxiv` 两个插件试。
 
 ## 负责人问题
@@ -1020,6 +1061,13 @@ history 的行。
    件。
 8. **第 1 期现在开**，还是等 1.0 PRD 的在途线合完？推荐：现在开，它只碰
    `Plugin` 的一个字段、`script` 的一个成员和 documents 的启动路径。
+9. **"不提供所有的工具"的读法和核心是哪几个。** 本文读成：开着的工具都
+   能调，但只声明一个小核心，其余靠搜索；不是把能调的集合也砍小。核心
+   推荐文件和 shell 的六个（`bash`、`read_file`、`write_file`、
+   `edit_file`、`glob`、`grep`）加 `agent` 和 `program`。
+10. **code mode 什么时候翻。** 方向已定；是等 Q10 的线和上面三件事，还
+    是先翻、把 `codeMode.scriptOnly` 留作关的开关？推荐：先补那个"要靠
+    搜索"的 journey，过了就翻，开关留着。
 
 ## 决定记录
 
@@ -1040,6 +1088,9 @@ history 的行。
 - "搞 30 个 agent 让用户选肯定是不行的。"启动面默认是聊天，picker 不列
   agent（"启动面"一节）。
 - 文档要对上最新的 `main`：基线和度量取自 `d173e42`。
+- "将来默认打开 code mode，不提供所有的工具。"模型拿到的只有 `script`；
+  声明一个小核心，其余靠搜索（"聊天不是一个 agent"一节）。读法见"负责
+  人问题"9。
 
 ## 修订记录
 
@@ -1121,6 +1172,13 @@ history 的行。
   工具或有 prompt 段的插件起服务；task 的工具不看开关。
 - `packages/harness/src/tools/codemode/ScriptTool.ts`：脚本失败时只留含
   `script.js` 的帧。
+- 声明的和能调的：`ScriptTool.ts` 的描述内联声明的工具，并写明"more
+  are callable: `searchTools` finds them"；`searchTools` 在这一步钉住的
+  目录上做 BM25（`tools/codemode/discovery.ts`）；
+  `agentToolResolution.ts` 先 offer 声明的再 offer 注入的（插件的
+  `injectedWhen`、安装式插件的全部工具），script-only 打开时只有 `script`
+  的 `sent` 为真；`toolUseDispatch.ts` 不执行对一个没发出去的工具的直接
+  调用。`codeMode.scriptOnly` 默认关。
 - `goalScript.ts`：`goalScript()` 两行，调具名导出 `goal`；`PlanTool.ts`
   用 `launchBackgroundScript` 启动它；`goal.strategy` 只接受
   `builtIn:<name>`。
