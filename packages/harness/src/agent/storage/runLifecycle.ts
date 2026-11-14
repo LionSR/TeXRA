@@ -118,10 +118,9 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
   return yield* Effect.gen(function* () {
     const prior = yield* getRunRecords(runId).exists();
     if (options.parentRunId !== undefined) {
-      // A barrier first (a queued `run.start` reads absent); the database
-      // refuses a closed or unborn parent, this only words the refusal.
+      // The database refuses a closed or unborn parent; this only words
+      // the refusal.
       const log = yield* SessionLog;
-      yield* log.transact([]);
       const parent = yield* log.facts(options.parentRunId);
       if (parent === null)
         return yield* Effect.fail(

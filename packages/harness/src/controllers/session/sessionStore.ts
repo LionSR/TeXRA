@@ -11,11 +11,13 @@
 import {
   Deferred,
   Effect,
+  FiberSet,
   Option,
   Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
+import { writeLogLine } from '@logger/logSink';
 
 import {
   qualifyAggregateId,
@@ -125,27 +127,31 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       );
     let doorsShut = false;
     const closed = () => doorsShut;
-    /** Jobs before it ran, the presenter ran past them; its end fails only
-     *  this. */
-    const settled = events
-      .transact(() => Effect.sync(events.head), { order: true })
-      .pipe(
-        Effect.orDie,
-        Effect.flatMap(({ value: commit }) =>
-          reach(
-            SubscriptionRef.changes(presented).pipe(
-              Stream.interruptWhen(Deferred.await(presenterEnded)),
-            ),
-            commit,
-            'Session presenter stopped before settling',
-          ),
+    /** The presenter ran past every job committed so far; its end fails
+     *  only this. */
+    const settled = Effect.suspend(() =>
+      reach(
+        SubscriptionRef.changes(presented).pipe(
+          Stream.interruptWhen(Deferred.await(presenterEnded)),
         ),
-      );
+        events.head(),
+        'Session presenter stopped before settling',
+      ),
+    );
+    const applyNow = yield* FiberSet.makeRuntime<never, void, never>();
     const trace = makeRunTrace({
       storage,
       events,
       text: chunks.ref,
-      settled,
+      run: (update) => {
+        // An update that awaited is still running: a `stream.end` published
+        // next would close on text that misses it.
+        if (applyNow(update).pollUnsafe() === undefined)
+          writeLogLine(
+            'sessionStore',
+            'A transient text update did not finish in its call; a stream may close on text that misses it',
+          );
+      },
       closed,
     });
     // The text a committed row closes is dropped as its batch is published.
@@ -162,12 +168,8 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
           | ((tx: SessionTransaction) => Effect.Effect<A, E>),
       ) => {
         if (typeof work === 'function') return transact(work);
-        // An empty batch is a barrier: every job before it has run.
         return work.length === 0
-          ? Effect.as(
-              events.transact(() => Effect.void, { order: true }),
-              [],
-            )
+          ? Effect.succeed([])
           : transact((tx) => tx.append(work));
       },
       publish: trace.publish,
@@ -213,7 +215,7 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
         ),
         Stream.ensuring(Deferred.succeed(presenterEnded, undefined)),
       ),
-      close: events.drain.pipe(
+      close: events.close.pipe(
         Effect.ensuring(
           Effect.sync(() => {
             doorsShut = true;
