@@ -56,7 +56,7 @@ export const listRunGeneratedFiles = Effect.fn('listRunGeneratedFiles')(
     const runDir = runDirUnder(storage, runId);
     if (!(yield* fs.exists(runDir))) return [];
     const files = yield* walkRunStorage(runDir, '', RUN_FILE_SCAN_DEPTH);
-    return files.sort((a, b) => a.path.localeCompare(b.path));
+    return files.toSorted((a, b) => a.path.localeCompare(b.path));
   },
 );
 
