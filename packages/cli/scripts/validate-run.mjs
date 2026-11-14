@@ -3227,39 +3227,77 @@ async function validateServiceSharedTask() {
 }
 
 /**
- * Resume all and rename: a chat killed while it waits leaves its task
- * interrupted; the next `texra chat` resumes nothing until `/resume all`,
- * which names and resumes it. A resumed chat's
- * `/rename` then writes the user's title. `/resume all`'s line, the
- * activation counts and the task's `run.description` rows are the artifact.
+ * Resume all and rename: a chat killed in the middle of a turn leaves its
+ * task interrupted; the next `texra chat` resumes nothing until
+ * `/resume all`, which names and resumes it. A resumed chat's `/rename`
+ * then writes the user's title. `/resume all`'s line, the activation counts
+ * and the task's `run.description` rows are the artifact.
  */
 async function validateOpenTimePrompt() {
   const cwd = makeScratch('texra-cli-open-prompt-');
   try {
     const project = echoProject(cwd);
+    writeFileSync(
+      path.join(
+        cwd,
+        'home',
+        '.texra',
+        'v1',
+        'global-storage',
+        'custom_agents',
+        'park-validation.yaml',
+      ),
+      `name: park_validation
+description: Hold its model call until released.
+
+prompt: |
+  GOLDEN-PARK
+`,
+    );
     // The chat is its task's writer here, so killing it is the crash this
     // recovers from: a service would keep the task running past the kill.
-    project.ptyEnv.TEXRA_NO_SERVICE = '1';
-    const seed = project.firstRun('First message');
-    let killed = false;
-    const opening = await runTexraPty(['resume', seed, '--fork'], {
-      label: 'texra resume --fork, then SIGKILL',
-      cwd: project.work,
-      cols: 160,
-      rows: 40,
-      timeoutMs: 40_000,
-      env: project.ptyEnv,
-      onData: (_data, pty) => {
-        if (!killed && stripVTControlCharacters(pty.output).includes('Idle')) {
-          killed = true;
-          pty.setTimer(() => pty.kill('SIGKILL'), 800);
-        }
+    project.ptyEnv = {
+      ...project.ptyEnv,
+      TEXRA_NO_SERVICE: '1',
+      [VALIDATION_SCENARIOS.golden]: '1',
+    };
+    let asked = false;
+    const opening = await runTexraPty(
+      ['chat', '--agent', 'park_validation', '--model', 'openai/gpt-5.6-sol'],
+      {
+        label: 'texra chat, then SIGKILL in the middle of its turn',
+        cwd: project.work,
+        cols: 160,
+        rows: 40,
+        timeoutMs: 40_000,
+        env: project.ptyEnv,
+        onData: (_data, pty) => {
+          if (
+            asked ||
+            !stripVTControlCharacters(pty.output).includes('/ commands')
+          )
+            return;
+          asked = true;
+          pty.setTimer(() => pty.write('First message'), 500);
+          pty.setTimer(() => pty.write('\r'), 900);
+          // The turn's model request waits for a release file nobody has
+          // written, so the kill cuts the turn in the middle.
+          pty.setTimer(() => pty.kill('SIGKILL'), 4_000);
+        },
       },
-    });
-    const source = runStartForkedFrom(project.readStore(VIEW_ROWS), seed)?.run;
+    );
+    // The chat's task, cut after its first model request was recorded.
+    const source = project.readStore(
+      `SELECT s.logical_id AS run FROM event e
+       JOIN event_sequence s ON s.id = e.aggregate
+       WHERE e.type = 'model.message' AND s.id IN (
+         SELECT aggregate FROM event
+         WHERE type = 'run.start'
+           AND json_extract(data, '$.identity.agent') = 'park_validation')`,
+    )[0]?.run;
     assert(
-      killed && opening.exit.signal === 9 && source !== undefined,
-      `the forked chat should reach idle and be killed before testing resume (exit ${JSON.stringify(opening.exit)})\noutput:\n${stripVTControlCharacters(opening.output).slice(-3000)}`,
+      opening.exit.signal === 9 && source !== undefined,
+      `the chat should be killed while its model request is held (exit ${JSON.stringify(opening.exit)})\noutput:\n${stripVTControlCharacters(opening.output)}`,
     );
     const activations = () =>
       project.readStore(
@@ -3293,6 +3331,8 @@ async function validateOpenTimePrompt() {
     );
     const whileListed = activations();
 
+    // The resumed task sends its request again; this time it is answered.
+    writeFileSync(path.join(project.work, 'golden-park.release'), '');
     let phase = 'opening';
     let notice = [];
     const chat = await runTexraPty(['chat'], {
@@ -3354,8 +3394,9 @@ async function validateOpenTimePrompt() {
         WHERE s.logical_id = '${source}' AND e.type = 'run.description'
         ORDER BY e."commit"`,
     );
+    // The task's name when \`/resume all\` listed it: its first description.
+    const described = titles[0]?.description ?? '';
     const artifactPath = writeArtifact('open-time-prompt.json', {
-      seed,
       source,
       openingExit: opening.exit,
       notice,
@@ -3366,7 +3407,7 @@ async function validateOpenTimePrompt() {
       chat.exit.exitCode === 0 &&
         phase === 'resumed' &&
         notice.length === 1 &&
-        notice[0].includes('First message') &&
+        notice[0].includes(described) &&
         whileListed === interrupted &&
         resumed === interrupted + 1,
       `the chat should resume nothing at open, then /resume all should name and resume the interrupted task (artifact: ${artifactPath})\noutput:\n${stripVTControlCharacters(chat.output).slice(-3000)}`,
