@@ -2,7 +2,7 @@
  * Utilities for managing text replacements in the codebase.
  */
 
-import { Effect, Result, Array as Arr } from 'effect';
+import { Effect, Result } from 'effect';
 import { LRUCache } from 'lru-cache';
 
 import { Settings, withLogChannel } from '@texra-ai/harness/plugins';
@@ -12,7 +12,8 @@ import type {
   RegexReplacementCategory,
 } from '@texra/shared/constants/replacementCategories';
 
-import { NonRegexRuleSet, RegexRuleSet } from './types';
+import type { PatternDict } from './patterns';
+import type { RegexRuleSet } from './types';
 import {
   applyLatexQuotesFormatting,
   type ReplacementDiagnostic,
@@ -67,10 +68,10 @@ const CHANNEL = 'ReplacementEngine';
  */
 interface OrderedRuleSet {
   readonly rules: readonly (readonly [from: string, to: string])[];
-  readonly isRegex?: false;
 }
 
-type ReplacementRuleSet = OrderedRuleSet | RegexRuleSet;
+/** One pass: the ordered plain rules, or the regex categories in order. */
+type ReplacementPass = OrderedRuleSet | readonly RegexRuleSet[];
 
 /**
  * Replaced text plus what the passes had to say about it. The engine is pure,
@@ -101,7 +102,7 @@ export function logReplacementDiagnostics(
  */
 function runPasses(
   text: string,
-  passes: readonly (OrderedRuleSet | RegexRuleSet[])[],
+  passes: readonly ReplacementPass[],
 ): ReplacementResult {
   const diagnostics: ReplacementDiagnostic[] = [];
   let result = text;
@@ -111,7 +112,7 @@ function runPasses(
     });
     diagnostics.push(...applied.diagnostics);
     result = applied.text.trim();
-    if (!Array.isArray(rules)) {
+    if ('rules' in rules) {
       result = wrapCritiqueInAlign(result);
     }
   }
@@ -155,10 +156,9 @@ const replacementEngine = {
    */
   applyToXmlContent(text: string, config: ConfigProvider): ReplacementResult {
     const nonRegex = runPasses(text, [getAllReplacements(config)]);
-    const fenced = applyReplacements(
-      nonRegex.text,
+    const fenced = applyReplacements(nonRegex.text, [
       FENCED_LATEX_BLOCK_REPLACEMENTS,
-    );
+    ]);
     return {
       text: fenced.text,
       diagnostics: [...nonRegex.diagnostics, ...fenced.diagnostics],
@@ -182,7 +182,7 @@ const replacementEngine = {
  * accept a no-op category nor run one nobody can enable. A key two
  * categories share takes the later category's value.
  */
-const NON_REGEX_RULES: Record<NonRegexReplacementCategory, NonRegexRuleSet> = {
+const NON_REGEX_RULES: Record<NonRegexReplacementCategory, PatternDict> = {
   // LaTeX content formatting
   equations: EQUATION_REPLACEMENTS,
   sections: SECTION_REPLACEMENTS,
@@ -235,7 +235,7 @@ function getAllReplacements(config: ConfigProvider): OrderedRuleSet {
     {},
     ...Object.entries(NON_REGEX_RULES)
       .filter(([name]) => enabled.has(name))
-      .map(([, rules]) => rules.patterns),
+      .map(([, rules]) => rules),
     customReplacements,
   );
 
@@ -265,10 +265,7 @@ function getAllReplacementsRegex(config: ConfigProvider): RegexRuleSet[] {
     return enabledRules;
   }
 
-  return [
-    ...enabledRules,
-    { isRegex: true, flags: 'g', patterns: customReplacements },
-  ];
+  return [...enabledRules, { flags: 'g', patterns: customReplacements }];
 }
 
 /**
@@ -302,11 +299,12 @@ function getCompiledRegex(pattern: string, flags: string): RegExp {
 }
 
 /**
- * Apply replacements to text, handling both regex and non-regex patterns.
+ * Apply one pass to text: the ordered plain rules, or each regex category in
+ * order.
  */
 function applyReplacements(
   text: string,
-  replacements: ReplacementRuleSet | ReplacementRuleSet[],
+  pass: ReplacementPass,
   options?: {
     /** Whether to run trailing whole-document cleanup passes (defaults to true). */
     cleanupPasses?: boolean;
@@ -316,8 +314,12 @@ function applyReplacements(
   // Apply Unicode replacements in math environments first.
   let result = replaceMathUnicode(text);
 
-  for (const category of Arr.ensure(replacements)) {
-    if (category.isRegex) {
+  if ('rules' in pass) {
+    for (const [from, to] of pass.rules) {
+      result = result.replaceAll(from, to);
+    }
+  } else {
+    for (const category of pass) {
       for (const [pattern, repl] of Object.entries(category.patterns)) {
         const current = result;
         const replaced = Result.try({
@@ -341,10 +343,6 @@ function applyReplacements(
             message: `Error with regex pattern "${pattern}": ${replaced.failure}`,
           });
         }
-      }
-    } else {
-      for (const [from, to] of category.rules) {
-        result = result.replaceAll(from, to);
       }
     }
   }

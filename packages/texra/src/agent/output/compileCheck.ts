@@ -17,7 +17,7 @@ import {
 
 import { Effect, FileSystem } from 'effect';
 
-import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
+import { compileLatex2Pdf } from '@latex/texTools';
 import {
   revisionLayout,
   stripRevisionDir,
@@ -28,18 +28,15 @@ import {
   type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
 
-import {
-  publishCompiledPdfArtifact,
-  publishCompiledPdfArtifactBestEffort,
-} from './compiledPdfArtifacts';
+import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
+
+import { publishCompiledPdfArtifact } from './compiledPdfArtifacts';
 import {
   type AgentTrace,
   Settings,
   withLogChannel,
-  type WorkspaceFs,
 } from '@texra-ai/harness/plugins';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import {
   DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING,
   DOCUMENTS_COMPILE_TIMEOUT_SETTING,
@@ -187,19 +184,6 @@ interface PerFileOptions {
   timeoutMs: number;
 }
 
-/**
- * Per-file compile context for the failure-persistence helper, constructed
- * once inside {@link compileOne} and spread into each call's args.
- */
-interface CompileTarget {
-  ctx: CompileCheckContext;
-  opts: PerFileOptions;
-  displayName: string;
-  currentRound: number;
-  outputFile: OutputFileInfo;
-  runId: RunId;
-}
-
 /** What one output file contributed to the round's compile check. */
 interface PerFileOutcome {
   failure: CompileFailure | null;
@@ -219,17 +203,10 @@ const PATH_HASH_LENGTH = 8;
 const MAX_SANITIZED_STEM_LENGTH = 200;
 
 /**
- * What one `compileLatex2Pdf` attempt produced: a file with no
- * `\documentclass` is skipped without compiling, a machine with no engine to
- * drive is `no-compiler`, a file that failed before the engine could answer
- * is `errored`, and everything else carries the engine's own verdict.
+ * Compile one output: a file with no `\documentclass` is skipped without
+ * compiling, a machine with no engine to drive is `no-compiler`, and an
+ * unreadable file or a failed build is a failure with its log excerpt.
  */
-type CompileAttempt =
-  | { readonly kind: 'skipped' }
-  | { readonly kind: 'no-compiler' }
-  | { readonly kind: 'errored'; readonly message: string }
-  | { readonly kind: 'compiled'; readonly result: CompileLatex2PdfResult };
-
 const compileOne = Effect.fn('documents.compileOne')(function* (
   ctx: CompileCheckContext,
   outputFile: OutputFileInfo,
@@ -263,203 +240,154 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
   const logAbsolutePath = path.join(opts.runDirectory, logRelativePath);
   const { runId } = ctx.fileService;
 
-  const target: CompileTarget = {
-    ctx,
-    opts,
-    displayName,
-    currentRound,
-    outputFile,
-    runId,
-  };
-
   // A stale log from an earlier attempt is cleared only once this file's
   // outcome is known, so a crash mid-check never masquerades as success. A
   // missing log is already clear (`force`); any other failure is named.
   const clearStaleLogs = fs.remove(logAbsolutePath, { force: true }).pipe(
-    Effect.catch((error) =>
-      Effect.sync(() => {
+    recoverLogged(
+      (error) =>
         ctx.logger.warn(
           `Compile check: could not clear stale log ${logRelativePath}: ${toErrorMessage(error)}`,
-        );
-      }),
+        ),
+      () => Effect.void,
     ),
   );
 
-  const attempt = Effect.gen(function* (): Generator<
-    Effect.Effect<
-      unknown,
-      Error,
-      FileSystem.FileSystem | WorkspaceFs | ChildProcessSpawner
-    >,
-    CompileAttempt
-  > {
-    const content = yield* fs.readFileString(outputFile.location.absolutePath);
-    if (!/\\documentclass/.test(content)) {
-      ctx.logger.debug(
-        `Compile check: ${displayName} has no \\documentclass, skipping`,
+  /**
+   * Persist a failure's log excerpt to this file's collision-free
+   * `compile/*.log` slot and build its {@link CompileFailure} record. Never
+   * fails: a persistence error is logged at `warn` and recovered, so a
+   * failure is always counted even when its log could not be written.
+   */
+  const writeCompileFailure = Effect.fn('documents.writeCompileFailure')(
+    function* (failureLogExcerpt: string) {
+      yield* Effect.gen(function* () {
+        // Created on the first failure, so a revision that compiles leaves
+        // no compile log behind.
+        yield* fs.makeDirectory(path.dirname(logAbsolutePath), {
+          recursive: true,
+        });
+        yield* fs.writeFileString(logAbsolutePath, `${failureLogExcerpt}\n`);
+      }).pipe(
+        recoverLogged(
+          (writeErr) =>
+            ctx.logger.warn(
+              `Compile check: failed to persist log for ${displayName}: ${toErrorMessage(writeErr)}`,
+              { data: writeErr },
+            ),
+          () => Effect.void,
+        ),
       );
-      yield* clearStaleLogs;
-      return { kind: 'skipped' };
-    }
 
-    // The output compiles from `buildDir`, not its original workspace folder.
-    // For extracted outputs, the run-storage basename can be generic while
-    // outputFile.source carries the real workspace path.
-    const source = outputFile.source.trim();
-    const locatedSource =
-      source.length > 0
-        ? pathToLocationIn(ctx.roots.workspace, source)
-        : undefined;
-    const sourceLocation =
-      locatedSource?.kind === 'workspace' ? locatedSource : outputFile.location;
-    const sourceDir = resolveWorkspaceSourceDir(ctx.roots, sourceLocation);
-    const extraInputDirs = [
-      ...(sourceDir ? [sourceDir] : []),
-      ...ctx.inputDirs,
-    ];
+      return {
+        failure: {
+          round: currentRound,
+          displayName,
+          output: outputFile.location,
+          log: createRunStorageLocation(
+            logAbsolutePath,
+            logRelativePath,
+            runId,
+          ),
+          logRelativePath,
+        },
+        artifact: null,
+      } satisfies PerFileOutcome;
+    },
+  );
 
-    // On the timeout the command's scope kills the child, so we don't orphan
-    // hanging latexmk/pdflatex runs.
-    return yield* compileLatex2Pdf(outputFile.location, ctx.roots, {
+  // A file that cannot be read is one we could not determine compiles, which
+  // must never be reported as success. It becomes a failure with a
+  // synthetic excerpt, persisted to the same discoverable compile/*.log slot
+  // a real compile failure would use.
+  const content = yield* fs
+    .readFileString(outputFile.location.absolutePath)
+    .pipe(
+      recoverLogged(
+        (error) =>
+          ctx.logger.warn(
+            `Compile check: ${displayName} errored: ${toErrorMessage(error)}`,
+            { data: error },
+          ),
+        (error) =>
+          writeCompileFailure(
+            `Compile check errored for ${displayName}\n\n${toErrorMessage(error)}`,
+          ),
+      ),
+    );
+  if (typeof content !== 'string') return content;
+  if (!/\\documentclass/.test(content)) {
+    ctx.logger.debug(
+      `Compile check: ${displayName} has no \\documentclass, skipping`,
+    );
+    yield* clearStaleLogs;
+    return { failure: null, artifact: null } satisfies PerFileOutcome;
+  }
+
+  // The output compiles from `buildDir`, not its original workspace folder.
+  // For extracted outputs, the run-storage basename can be generic while
+  // outputFile.source carries the real workspace path.
+  const source = outputFile.source.trim();
+  const locatedSource =
+    source.length > 0
+      ? pathToLocationIn(ctx.roots.workspace, source)
+      : undefined;
+  const sourceLocation =
+    locatedSource?.kind === 'workspace' ? locatedSource : outputFile.location;
+  const sourceDir = resolveWorkspaceSourceDir(ctx.roots, sourceLocation);
+  const extraInputDirs = [...(sourceDir ? [sourceDir] : []), ...ctx.inputDirs];
+
+  // On the timeout the command's scope kills the child, so we don't orphan
+  // hanging latexmk/pdflatex runs.
+  const compileResult = yield* compileLatex2Pdf(
+    outputFile.location,
+    ctx.roots,
+    {
       outputDirectory: buildDir,
       timeout: opts.timeoutMs,
       extraInputDirs,
-    }).pipe(
-      withLogChannel(ctx.runId),
-      Effect.map((result): CompileAttempt => ({ kind: 'compiled', result })),
-      Effect.catchTag('ToolMissing', () =>
-        Effect.succeed<CompileAttempt>({ kind: 'no-compiler' }),
-      ),
-    );
-  }).pipe(
-    // A per-file failure here (fs read error, compiler crash, …) means we
-    // could not determine whether this output compiles — that must never be
-    // reported as success. It becomes a failure with a synthetic excerpt,
-    // persisted to the same discoverable compile/*.log slot a real compile
-    // failure would use.
-    Effect.catch((error) =>
-      Effect.sync((): CompileAttempt => {
-        const message = toErrorMessage(error);
-        ctx.logger.warn(`Compile check: ${displayName} errored: ${message}`, {
-          data: error,
-        });
-        return { kind: 'errored', message };
-      }),
+    },
+  ).pipe(
+    withLogChannel(ctx.runId),
+    Effect.catchTag('ToolMissing', () =>
+      Effect.succeed('no-compiler' as const),
     ),
   );
-
-  const attempted = yield* attempt;
-  if (attempted.kind === 'no-compiler') return 'no-compiler' as const;
-  if (attempted.kind === 'skipped') {
-    return { failure: null, artifact: null };
-  }
-  if (attempted.kind === 'errored') {
-    return yield* writeCompileFailure({
-      ...target,
-      logAbsolutePath,
-      logRelativePath,
-      failureLogExcerpt: `Compile check errored for ${displayName}\n\n${attempted.message}`,
-    });
-  }
-
-  const compileResult = attempted.result;
+  if (compileResult === 'no-compiler') return compileResult;
   if (compileResult.ok) {
     ctx.logger.debug(`Compile check: ${displayName} built successfully`);
     yield* clearStaleLogs;
     // Publishing the PDF is best effort: a failed copy must not turn a
     // document that genuinely compiled into a reported compile failure.
-    const artifact = yield* publishCompiledPdfArtifactBestEffort(
-      publishCompiledPdfArtifact({
-        runDirectory: opts.runDirectory,
-        runId,
-        round: currentRound,
-        displayName,
-        source: outputFile.location,
-        compiledPdfPath: compileResult.pdfPath,
-      }),
-      (err) =>
-        ctx.logger.warn(
-          `Compile check: ${displayName} PDF publish failed: ${toErrorMessage(err)}`,
-          { data: err },
-        ),
+    const artifact = yield* publishCompiledPdfArtifact({
+      runDirectory: opts.runDirectory,
+      runId,
+      round: currentRound,
+      displayName,
+      source: outputFile.location,
+      compiledPdfPath: compileResult.pdfPath,
+    }).pipe(
+      recoverLogged(
+        (err) =>
+          ctx.logger.warn(
+            `Compile check: ${displayName} PDF publish failed: ${toErrorMessage(err)}`,
+            { data: err },
+          ),
+        () => Effect.succeed(null),
+      ),
     );
     if (artifact) {
       ctx.logger.debug(`Compile check: ${displayName} PDF persisted`, {
         data: artifact.relativePath,
       });
     }
-    return { failure: null, artifact };
+    return { failure: null, artifact } satisfies PerFileOutcome;
   }
 
-  const failureLogExcerpt = `Compile check failed for ${displayName}\nBuild directory: ${buildDir}\n\n${compileResult.logTail}`;
   ctx.logger.warn(`Compile check: ${displayName} failed`, {
     data: path.relative(opts.runDirectory, logAbsolutePath),
   });
-  return yield* writeCompileFailure({
-    ...target,
-    logAbsolutePath,
-    logRelativePath,
-    failureLogExcerpt,
-  });
+  return yield* writeCompileFailure(
+    `Compile check failed for ${displayName}\nBuild directory: ${buildDir}\n\n${compileResult.logTail}`,
+  );
 });
-
-interface WriteCompileFailureArgs extends CompileTarget {
-  /** Absolute path of this failure's collision-free `compile/*.log` slot. */
-  logAbsolutePath: string;
-  logRelativePath: string;
-  failureLogExcerpt: string;
-}
-
-/**
- * Persist a failure's log excerpt to its collision-free `compile/*.log` slot
- * and build the corresponding {@link CompileFailure} record. Never fails:
- * a persistence error is logged at `warn` and recovered, so a failure is
- * always counted even when the log itself couldn't be written to disk.
- */
-const writeCompileFailure = Effect.fn('documents.writeCompileFailure')(
-  function* ({
-    ctx,
-    displayName,
-    currentRound,
-    outputFile,
-    runId,
-    logAbsolutePath,
-    logRelativePath,
-    failureLogExcerpt,
-  }: WriteCompileFailureArgs) {
-    const fs = yield* FileSystem.FileSystem;
-    yield* Effect.gen(function* () {
-      // Created on the first failure, so a revision that compiles leaves
-      // no compile log behind.
-      yield* fs.makeDirectory(path.dirname(logAbsolutePath), {
-        recursive: true,
-      });
-      yield* fs.writeFileString(logAbsolutePath, `${failureLogExcerpt}\n`);
-    }).pipe(
-      Effect.catch((writeErr) =>
-        Effect.sync(() => {
-          ctx.logger.warn(
-            `Compile check: failed to persist log for ${displayName}: ${toErrorMessage(writeErr)}`,
-            { data: writeErr },
-          );
-        }),
-      ),
-    );
-
-    const logLocation = createRunStorageLocation(
-      logAbsolutePath,
-      logRelativePath,
-      runId,
-    );
-    return {
-      failure: {
-        round: currentRound,
-        displayName,
-        output: outputFile.location,
-        log: logLocation,
-        logRelativePath,
-      },
-      artifact: null,
-    } satisfies PerFileOutcome;
-  },
-);
