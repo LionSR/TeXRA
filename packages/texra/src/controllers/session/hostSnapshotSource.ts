@@ -45,7 +45,10 @@ import {
   type Secrets,
   type SettingsStores,
 } from '@texra-ai/harness/plugins';
-import { APPROVAL_POLICY_SETTING } from '@texra-ai/harness/schemas';
+import {
+  APPROVAL_POLICY_SETTING,
+  ensureError,
+} from '@texra-ai/harness/schemas';
 import { apiKeyEntry } from '@texra-ai/llm';
 import { GIT_COMMITS_TO_SHOW_SETTING } from '@texra/shared/settings/texraSettings';
 import { loadTeamOptions } from '@texra/agent/teams/teamLaunch';
@@ -290,8 +293,14 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       }),
     );
     // The project's `.env` over the process's: the keys a run of this
-    // project would use, for its models as for its credential below.
-    const projectEnv = workspaceEnvironmentLayer(options.root);
+    // project would use, for its models as for its credential below. An
+    // unreadable `.env` dies in its layer; here it fails the read, so the
+    // producer keeps the field's last value and says why.
+    const underProjectEnv = <A, E, R>(read: Effect.Effect<A, E, R>) =>
+      read.pipe(
+        Effect.provide(workspaceEnvironmentLayer(options.root)),
+        Effect.catchDefect((defect) => Effect.fail(ensureError(defect))),
+      );
     const loadModels = yield* producer(
       'the models',
       Effect.gen(function* () {
@@ -304,7 +313,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
           ...s,
           catalogs: { ...s.catalogs, modelOptions },
         }));
-      }).pipe(Effect.provide(projectEnv)),
+      }).pipe(underProjectEnv),
     );
     const loadFiles = yield* producer(
       'the project files',
@@ -331,8 +340,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     );
     const loadCredential = yield* producer(
       'the provider credentials',
-      hasUsableSetupCredential(stores).pipe(
-        Effect.provide(projectEnv),
+      underProjectEnv(hasUsableSetupCredential(stores)).pipe(
         Effect.flatMap((credential) => write({ credential })),
       ),
     );
@@ -361,7 +369,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
      *  source's scope already holds (`subscribeAppSignal`), so no signal
      *  published after the source opens is missed. Signals that arrive
      *  during a load are answered by one more load, not one each. A defect
-     *  (an unreadable project `.env`) is logged and the following goes on. */
+     *  is logged and the following goes on. */
     const follow = <R>(
       signals: Stream.Stream<unknown>,
       load: Effect.Effect<void, never, R>,
