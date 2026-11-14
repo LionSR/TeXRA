@@ -24,10 +24,6 @@ import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
 
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
-import {
-  TOOL_RESULT_TRUNCATION_HEAD_CHARS,
-  TOOL_RESULT_TRUNCATION_TAIL_CHARS,
-} from '@agent/runtime/run/toolResultText';
 import type { McpServerConfig } from '@common/plugins/mcpServers';
 import { withLogChannel } from '@logger/effectLog';
 import type { ToolResult } from '@shared/schemas';
@@ -38,7 +34,6 @@ import { environment, ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import { IS_WINDOWS, withCommandDirs } from '@utils/system/platformPaths';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { appendHead, appendTail } from '@utils/text/appendTail';
 
 import type { LoadedPluginTools } from './mcpConfig';
 
@@ -157,9 +152,8 @@ const decode = <T>(
     ),
   );
 
-/** The text a call result carries, cut head and tail past the cap a shell
- *  command's output takes, since a long result's summary or error sits at
- *  its end. */
+/** The text a call result carries. A long one is cut where every tool's
+ *  result is, as the model reads it (`formatToolResultAsText`). */
 function resultText(result: typeof CallToolResultSchema.Type): string {
   const parts = result.content.map((item) =>
     item.type === 'text' && item.text != null
@@ -168,13 +162,7 @@ function resultText(result: typeof CallToolResultSchema.Type): string {
   );
   if (parts.length === 0 && result.structuredContent !== undefined)
     parts.push(JSON.stringify(result.structuredContent));
-  const text = parts.join('\n');
-  const cap =
-    TOOL_RESULT_TRUNCATION_HEAD_CHARS + TOOL_RESULT_TRUNCATION_TAIL_CHARS;
-  if (text.length <= cap) return text;
-  const head = appendHead('', text, TOOL_RESULT_TRUNCATION_HEAD_CHARS);
-  const tail = appendTail('', text, TOOL_RESULT_TRUNCATION_TAIL_CHARS);
-  return `${head}\n\n[... ${(text.length - head.length - tail.length).toLocaleString()} characters elided ...]\n\n${tail}`;
+  return parts.join('\n');
 }
 
 /** One listed tool as a runtime tool over the server's connection. */
