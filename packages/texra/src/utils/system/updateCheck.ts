@@ -1,9 +1,9 @@
-import { Clock, Context, Duration, Effect, Predicate, Schema } from 'effect';
+import { Clock, Duration, Effect, Predicate, Result, Schema } from 'effect';
 import { HttpClient, HttpClientResponse } from 'effect/http';
 import { gt as semverGt, valid as semverValid } from 'semver';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import type { ValueFamily } from '@texra-ai/harness/host';
+import { GlobalValues, type ValueFamily } from '@texra-ai/harness/host';
 
 import type { Cause } from 'effect';
 import type { HttpClientError } from 'effect/http';
@@ -19,7 +19,7 @@ const UpdateCheckRecordSchema = Schema.Struct({
     Schema.String.check(Schema.isMinLength(1)),
   ),
 });
-export type UpdateCheckRecord = typeof UpdateCheckRecordSchema.Type;
+type UpdateCheckRecord = typeof UpdateCheckRecordSchema.Type;
 
 /**
  * True when `latest` is strictly newer than `current`, using full semver
@@ -55,23 +55,22 @@ export const UPDATE_CHECKS: ValueFamily<UpdateCheckRecord> = {
   schema: UpdateCheckRecordSchema,
 };
 
-/** Each host's last update check and the last release it announced. */
-export class UpdateCheckRecords extends Context.Service<
-  UpdateCheckRecords,
-  {
-    readonly read: (
-      host: UpdateCheckHost,
-    ) => Effect.Effect<UpdateCheckRecord | null, Error>;
-    readonly recordChecked: (
-      host: UpdateCheckHost,
-      at: number,
-    ) => Effect.Effect<void, Error>;
-    readonly recordNotified: (
-      host: UpdateCheckHost,
-      version: string,
-    ) => Effect.Effect<void, Error>;
-  }
->()('@texra-ai/texra/utils/UpdateCheckRecords') {}
+/** Change `host`'s update-check record, from an empty one when it has none. */
+export const recordUpdateCheck = (
+  host: UpdateCheckHost,
+  change: Partial<UpdateCheckRecord>,
+): Effect.Effect<void, Error, GlobalValues> =>
+  Effect.flatMap(GlobalValues, (values) =>
+    values.modify(UPDATE_CHECKS, host, (current) =>
+      Result.succeed([
+        undefined,
+        {
+          ...(current ?? { lastCheckedAt: null, lastNotifiedVersion: null }),
+          ...change,
+        },
+      ] as const),
+    ),
+  );
 
 /** Result of consulting an update source. */
 export interface UpdateCheckFetchResult {
@@ -81,26 +80,37 @@ export interface UpdateCheckFetchResult {
   refreshed: boolean;
 }
 
+/** What a daily check found: the host announces it, then records the
+ *  check, each as it decides. */
+interface UpdateCheckFinding {
+  /** The published release, when it is newer than this build. */
+  readonly latest: string | undefined;
+  /** The release this host last announced. */
+  readonly lastNotifiedVersion: string | null;
+  /** Stamp the check as done now; nothing when the source did not refresh. */
+  readonly recordChecked: Effect.Effect<void, Error, GlobalValues>;
+}
+
 interface DailyUpdateCheckOptions<R> {
   currentVersion: string;
   host: UpdateCheckHost;
   fetchLatest: Effect.Effect<UpdateCheckFetchResult, Error, R>;
-  notify: (latest: string) => Effect.Effect<void, Error>;
 }
 
-/** Consult the source, notify, then persist the successful check in that order. */
+/** Consult the source, unless `host` checked within the day; undefined when
+ *  it did, or the source named no release. */
 export const runDailyUpdateCheck = Effect.fn('updateCheck.runDailyUpdateCheck')(
   function* <R>({
     currentVersion,
     host,
     fetchLatest,
-    notify,
-  }: DailyUpdateCheckOptions<R>) {
-    // The desktop's notice is a dialog, announced once per release; the
-    // CLI asks at each daily check whether to update now.
-    const notifyOnce = host === 'desktop';
-    const records = yield* UpdateCheckRecords;
-    const previous = yield* records.read(host);
+  }: DailyUpdateCheckOptions<R>): Effect.fn.Return<
+    UpdateCheckFinding | undefined,
+    Error,
+    R | GlobalValues
+  > {
+    const values = yield* GlobalValues;
+    const previous = yield* values.get(UPDATE_CHECKS, host);
     const nowMs = yield* Clock.currentTimeMillis;
     if (
       previous?.lastCheckedAt != null &&
@@ -110,28 +120,15 @@ export const runDailyUpdateCheck = Effect.fn('updateCheck.runDailyUpdateCheck')(
 
     const { version, refreshed } = yield* fetchLatest;
     if (version === undefined) return undefined;
-    const latest = isNewerSemverVersion(version, currentVersion)
-      ? version
-      : undefined;
-    if (
-      latest !== undefined &&
-      (!notifyOnce || previous?.lastNotifiedVersion !== latest)
-    ) {
-      if (notifyOnce) {
-        yield* Effect.uninterruptible(
-          Effect.gen(function* () {
-            yield* notify(latest);
-            yield* records.recordNotified(host, latest);
-          }),
-        );
-      } else {
-        yield* notify(latest);
-      }
-    }
-    // A stamp that is not saved fails the check; how that is reported is the
-    // host's (its `UpdateCheckRecords`).
-    if (refreshed) yield* records.recordChecked(host, nowMs);
-    return latest;
+    return {
+      latest: isNewerSemverVersion(version, currentVersion)
+        ? version
+        : undefined,
+      lastNotifiedVersion: previous?.lastNotifiedVersion ?? null,
+      recordChecked: refreshed
+        ? recordUpdateCheck(host, { lastCheckedAt: nowMs })
+        : Effect.void,
+    };
   },
 );
 

@@ -13,7 +13,6 @@ import type { AgentCliEffort } from '@texra/shared/agentCliSettings';
 
 import {
   agentCliReasoning,
-  resolveAgentCliModel,
   selectAgentCliModel,
   type AgentCliModelRule,
 } from './agentCliModel';
@@ -98,8 +97,9 @@ const claudeCodeRun = Effect.fn('claudeAgent.claudeCodeRun')(function* (
   effort: AgentCliEffort | undefined,
   userEffort: AgentCliEffort,
 ): Effect.fn.Return<ClaudeCodeRun, ToolError> {
-  const selection = yield* resolveAgentCliModel(() =>
-    selectAgentCliModel(modelString, CLAUDE_CODE_MODEL_RULE),
+  const selection = yield* selectAgentCliModel(
+    modelString,
+    CLAUDE_CODE_MODEL_RULE,
   );
   const { config } = selection;
   const resolved = yield* agentCliReasoning(selection, effort, { userEffort });

@@ -126,7 +126,7 @@ const OWN_REQUEST_LABEL = {
 } as const satisfies Partial<Record<HostCommand['kind'], string>>;
 
 /** The requests a host answers its own way. */
-export type OwnHostCommand = Extract<
+type OwnHostCommand = Extract<
   HostCommand,
   { kind: keyof typeof OWN_REQUEST_LABEL }
 >;

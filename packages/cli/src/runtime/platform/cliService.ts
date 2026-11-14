@@ -51,7 +51,6 @@ import {
   linkService,
   probeRecordedService,
   spawnService,
-  type ServiceConnection,
   type ServiceLink,
   type ServiceUnavailable,
   WINDOWS_UNSUPPORTED,
@@ -339,16 +338,3 @@ export const linkCliService = Effect.fn('linkCliService')(function* (
     ? reach(linked.failure.reason)
     : linked.success;
 });
-
-/** The service's client through `link`, for one connection's use; a link
- *  that holds none now fails with why. */
-export const linkClient = (
-  link: ServiceLink,
-): Effect.Effect<Pick<ServiceConnection, 'client'>, Error> =>
-  Effect.flatMap(link.client.get, (client) =>
-    client === null
-      ? Effect.flatMap(SubscriptionRef.get(link.away), (away) =>
-          Effect.fail(new Error(away)),
-        )
-      : Effect.succeed({ client }),
-  );
