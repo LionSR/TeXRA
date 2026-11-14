@@ -24,6 +24,7 @@ import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
 
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
+import { capToolResultText } from '@agent/runtime/run/toolResultText';
 import type { McpServerConfig } from '@common/plugins/mcpServers';
 import { withLogChannel } from '@logger/effectLog';
 import type { ToolResult } from '@shared/schemas';
@@ -152,8 +153,8 @@ const decode = <T>(
     ),
   );
 
-/** The text a call result carries. A long one is cut where every tool's
- *  result is, as the model reads it (`formatToolResultAsText`). */
+/** The text a call result carries, within the cap every tool result takes:
+ *  a server is another program, so its result is cut before it is stored. */
 function resultText(result: typeof CallToolResultSchema.Type): string {
   const parts = result.content.map((item) =>
     item.type === 'text' && item.text != null
@@ -162,7 +163,7 @@ function resultText(result: typeof CallToolResultSchema.Type): string {
   );
   if (parts.length === 0 && result.structuredContent !== undefined)
     parts.push(JSON.stringify(result.structuredContent));
-  return parts.join('\n');
+  return capToolResultText(parts.join('\n'));
 }
 
 /** One listed tool as a runtime tool over the server's connection. */
