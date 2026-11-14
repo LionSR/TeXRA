@@ -61,9 +61,6 @@ wording, so they were not folded into a refactor:
   `packages/cli/src/runtime/models/subscriptionLogin.ts`). The provider's
   `signOut` should own the preference write, as its `signIn` does since
   #14907; the CLI then reports a preference failure as an error, not a note.
-- Two formatters word one plan reset differently: `formatResetDuration`
-  (`packages/texra/src/ui/copy/format.ts`) and `formatSubscriptionUsageReset`
-  (`packages/texra/src/shared/subscriptionUsagePresentation.ts`).
 - The extension's onboarding "Sign in with ChatGPT"
   (`packages/extension/src/progressView/extensionHostRequests.ts`) bypasses
   the settings body's sign-in and its change notices.

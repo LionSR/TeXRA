@@ -444,6 +444,14 @@ How many native child model conversations one session runs at once.
 const CHILD_RUN_CONCURRENCY_BUDGET_SETTING: { readonly key: "childRunConcurrencyBudget"; readonly slot: "config"; readonly schema: withDecodingDefault<Int, never>; readonly title: "Agents at once"; readonly description: "Maximum number of agents one task may run at once in the background; a script's agent() calls also run at most this many at once. 0 (the default) sizes it to this machine's CPU count. Agents beyond the budget wait for a slot to free."; }
 ```
 
+## collapseWhitespace
+
+`text` on one line: every whitespace run one space, none at the ends.
+
+```ts
+function collapseWhitespace(text: string): string
+```
+
 ## CompactionActivityData
 
 ```ts
@@ -776,6 +784,18 @@ type FollowUpContent = typeof FollowUpContentSchema.Type;
 type FollowUpSender = typeof FollowUpSenderSchema.Type;
 ```
 
+## formatClippedList
+
+The first `max` items of a list, then how many it leaves out
+(`a, b, c +2 more`), so every clipped list reads the same.
+
+```ts
+function formatClippedList(
+  items: readonly string[],
+  max: number,
+): string
+```
+
 ## formatCompactDuration
 
 Compact duration capped at two units (`45s`, `3m 5s`, `1h 1m`).
@@ -824,6 +844,17 @@ policy: a `,1` range is omitted, the form `diff -u` and `git diff` emit.
 
 ```ts
 function formatHunkLines(hunks: ToolEditContent['hunks']): string[]
+```
+
+## formatResetDuration
+
+A coarse wait (`1d 20h`, `20h 22m`, `5m`), as a used-up plan's reset is
+worded: two units at most, whole minutes, and no minutes once it reaches a
+day (`pretty-ms` would back-fill a zero hour with them, `1d 58m`); under a
+minute is `less than a minute`.
+
+```ts
+function formatResetDuration(durationMs: number): string
 ```
 
 ## formatResultCount
@@ -2805,6 +2836,18 @@ class Unavailable extends Schema.TaggedError<Unavailable>()(
 
 ```ts
 type UnreadableRun = typeof UnreadableRunSchema.Type;
+```
+
+## usageLimitMessage
+
+A used-up plan in plain words, under the names its reader knows the plan
+and its fallback by: what ran out, when it resets, and what to do.
+
+```ts
+function usageLimitMessage(
+  used: UsedUpPlan,
+  names: { readonly plan: string; readonly fallback: string },
+): string
 ```
 
 ## UsageRoute

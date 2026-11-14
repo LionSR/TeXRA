@@ -7,6 +7,7 @@ import {
   type TokenUsageStats,
 } from '@texra-ai/harness/schemas';
 import type { CliOutputFormat } from '@texra/shared/cliOutputFormat';
+import { formatTokenCount } from '@ui/copy/format';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
@@ -81,13 +82,12 @@ function formatResumeUsage(
   const cached = usage.cachedInputTokens ?? 0;
   const reasoning = usage.reasoningTokens ?? 0;
   const lines = [
-    `total=${total.toLocaleString('en-US')}`,
-    `input=${usage.inputTokens.toLocaleString('en-US')}`,
+    `total=${formatTokenCount(total)}`,
+    `input=${formatTokenCount(usage.inputTokens)}`,
   ];
-  if (cached > 0) lines.push(`(+ ${cached.toLocaleString('en-US')} cached)`);
-  lines.push(`output=${usage.outputTokens.toLocaleString('en-US')}`);
-  if (reasoning > 0)
-    lines.push(`(reasoning ${reasoning.toLocaleString('en-US')})`);
+  if (cached > 0) lines.push(`(+ ${formatTokenCount(cached)} cached)`);
+  lines.push(`output=${formatTokenCount(usage.outputTokens)}`);
+  if (reasoning > 0) lines.push(`(reasoning ${formatTokenCount(reasoning)})`);
   // A task that never reached a model has no cost to state.
   const costLine =
     usage.cost > 0 || usage.usageRoute !== undefined

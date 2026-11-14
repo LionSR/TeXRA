@@ -7,7 +7,10 @@
  */
 import { toolDependencyStatusLabel } from '@texra/shared/tools/toolDependencyStatusLabels';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
-import { formatResultCount } from '@texra-ai/harness/schemas';
+import {
+  formatClippedList,
+  formatResultCount,
+} from '@texra-ai/harness/schemas';
 
 /** The page's own copy. */
 export const PLUGINS_PAGE = Object.freeze({
@@ -167,14 +170,10 @@ export function pluginRowProblem(row: PluginRow): string | null {
   }
 }
 
-/** "Used by: assistant, referee and 3 more", or null when no agent's
+/** "Used by: assistant, referee, writer +3 more", or null when no agent's
  *  tool list reaches the row. */
 export function pluginRowUsedBy(row: PluginRow): string | null {
   const { usedBy } = row;
   if (usedBy.length === 0) return null;
-  const shown = usedBy.slice(0, 3);
-  const more = usedBy.length - shown.length;
-  return more > 0
-    ? `Used by: ${shown.join(', ')} and ${more} more`
-    : `Used by: ${shown.join(', ')}`;
+  return `Used by: ${formatClippedList(usedBy, 3)}`;
 }

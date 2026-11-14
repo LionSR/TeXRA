@@ -35,6 +35,7 @@ import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
 import type { ToolRow } from '@cli/chat/tui/state/sessionView';
 import { TOOL_STATUS } from '@ui/copy/runStatus';
 import { TOOL_CUT_BY_RUN_END_NOTE } from '@ui/copy/scriptStage';
+import { formatLineChanges } from '@ui/copy/format';
 
 // Local imports - CLI TUI rendering
 import {
@@ -176,7 +177,7 @@ function sectionFileLine(file: ToolSectionFile): string {
   const from = file.from ? ` ← ${file.from}` : '';
   const note = file.note ? ` (${file.note})` : '';
   const changes = file.lineChanges
-    ? ` (+${file.lineChanges.added}/-${file.lineChanges.removed})`
+    ? ` (${formatLineChanges(file.lineChanges.added, file.lineChanges.removed)})`
     : '';
   return `${file.path}${from}${note}${changes}`;
 }

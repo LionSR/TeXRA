@@ -1,27 +1,32 @@
 /**
- * How a renderer words a size, a wait, a moment and a switch: English
+ * How a renderer words a size, a change, a moment and a switch: English
  * copy every host prints the same way.
  */
 import prettyBytes from 'pretty-bytes';
-import prettyMilliseconds from 'pretty-ms';
 
 /** Human-readable byte size in binary units (`1.5 MiB`, `1023 B`). */
 export function formatBytes(bytes: number): string {
   return prettyBytes(bytes, { binary: true });
 }
 
-/**
- * A coarse wait (`1d 20h`, `20h 22m`, `5m`), as a used-up plan's reset is
- * worded: two units at most, whole minutes, and no minutes once it reaches a
- * day (`pretty-ms` would back-fill a zero hour with them, `1d 58m`); under a
- * minute is `less than a minute`.
- */
-export function formatResetDuration(durationMs: number): string {
-  const wholeMinutes = Math.floor(Math.max(0, durationMs) / 60_000);
-  if (wholeMinutes === 0) return 'less than a minute';
-  const flooredMinutes =
-    wholeMinutes >= 1440 ? wholeMinutes - (wholeMinutes % 60) : wholeMinutes;
-  return prettyMilliseconds(flooredMinutes * 60_000, { unitCount: 2 });
+/** An exact token count with thousands separators (`12,345`), for a tooltip
+ *  or a total where the compact form would round. */
+export function formatTokenCount(tokens: number): string {
+  return tokens.toLocaleString('en-US');
+}
+
+/** A file that reached the model as media, by its kind and size
+ *  (`[image, 1.2 MiB]`). */
+export function formatMediaLabel(media: {
+  readonly kind: string;
+  readonly sizeBytes: number;
+}): string {
+  return `[${media.kind}, ${formatBytes(media.sizeBytes)}]`;
+}
+
+/** A change's line counts as a diff prints them (`+3 -1`). */
+export function formatLineChanges(added: number, removed: number): string {
+  return `+${added} -${removed}`;
 }
 
 /** A model's or skill's switch as a word, in every list that shows it. */
@@ -41,11 +46,15 @@ const MONTH_MS = YEAR_MS / 12;
  * Calendar-aware "X ago" / "in X" (`yesterday`, `last week`, `in 3 hours`),
  * the largest unit the distance fills: seconds, minutes and hours by elapsed
  * time, days and larger by local calendar boundaries, weeks starting Sunday.
+ * `nowMs` is the moment it is measured from, for a view that ticks its own.
  */
-export function formatRelativeTime(timestamp: number): string {
+export function formatRelativeTime(
+  timestamp: number,
+  nowMs = Date.now(),
+): string {
   if (!timestamp) return '';
   const then = new Date(timestamp);
-  const now = new Date();
+  const now = new Date(nowMs);
   const ms = timestamp - now.getTime();
   const abs = Math.abs(ms);
   const calendarDay = (d: Date) =>

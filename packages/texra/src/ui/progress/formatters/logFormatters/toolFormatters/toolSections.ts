@@ -22,6 +22,7 @@ import {
   buildFileLinkSpan,
   buildEditDiffSection,
   buildStatusBadge,
+  buildLineChangeStats,
 } from '@ui/progress/formatters/htmlBuilders';
 import {
   getLanguageFromPath,
@@ -36,7 +37,6 @@ import type {
   ToolFileSection,
   ToolSection,
 } from '@texra-ai/harness/transcript';
-import { pluralize } from '@texra-ai/harness/schemas';
 
 // Side-effect import to register <terminal-output> custom element
 import '@ui/progress/components/TerminalOutput';
@@ -165,7 +165,7 @@ function renderFileListSection(section: ToolFileListSection): TemplateResult {
   // prettier-ignore
   const fileItems = html`${section.files.map((file) => {
     const diffStats = file.lineChanges
-      ? html` <span class="file-stats"><span class="visually-hidden">${file.lineChanges.added} ${pluralize(file.lineChanges.added, 'line', 'lines')} added, ${file.lineChanges.removed} ${pluralize(file.lineChanges.removed, 'line', 'lines')} removed</span><span class="added" aria-hidden="true">+${file.lineChanges.added}</span><span class="removed" aria-hidden="true">-${file.lineChanges.removed}</span></span>`
+      ? html` ${buildLineChangeStats(file.lineChanges)}`
       : nothing;
     // prettier-ignore
     return html`<li class="detail-item">${waIcon('file')} ${buildFileLinkSpan(file.path, html`<bdi dir="auto">${file.path}</bdi>`)}${file.from ? html` <span class="file-source">(from <bdi dir="auto">${file.from}</bdi>)</span>` : nothing}${file.note ? html` <span class="file-source">(<bdi dir="auto">${file.note}</bdi>)</span>` : nothing}${diffStats}</li>`;

@@ -12,6 +12,7 @@ import {
   type RunView,
   type RunId,
   type RunStanding,
+  formatClippedList,
   formatCompactDuration,
   pluralize,
 } from '@texra-ai/harness/schemas';
@@ -330,10 +331,11 @@ function livePhaseText(root: RunView): string | undefined {
 }
 
 function formatInputLabel(files: readonly string[]): string | undefined {
-  const first = files.at(0);
-  if (!first) return undefined;
-  const firstName = path.basename(first);
-  return files.length === 1 ? firstName : `${firstName} +${files.length - 1}`;
+  if (files.length === 0) return undefined;
+  return formatClippedList(
+    files.map((file) => path.basename(file)),
+    1,
+  );
 }
 
 /** The named agent children (a process child has no agent to name). */
