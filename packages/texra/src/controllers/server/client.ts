@@ -140,7 +140,7 @@ export const WINDOWS_UNSUPPORTED =
 
 /** How long a started service has to answer its first hello: it loads the
  *  agent catalog first, which a loaded machine makes slow. */
-export const START_TIMEOUT = '60 seconds';
+const START_TIMEOUT = '60 seconds';
 /** A started service's probe before it answers this protocol. */
 const NOT_YET_UP = 'not yet up';
 /** How long a service that accepts the connection may take to say hello. */
@@ -163,7 +163,7 @@ const builds = (
 
 /** A service of a newer build speaking another protocol: left running,
  *  and this client refused. */
-export const isNewer = (info: ServiceInfo): boolean =>
+const isNewer = (info: ServiceInfo): boolean =>
   !compatible(info) && builds(info, semverGt);
 
 /** A service the caller should retire: an older build, or one of another
@@ -507,7 +507,7 @@ export const WINDOW_OUTDATED =
 
 /** A value as its readers follow it: what it is now, and each value from
  *  the current one on. */
-export interface Followed<A> {
+interface Followed<A> {
   readonly get: Effect.Effect<A>;
   readonly changes: Stream.Stream<A>;
 }
