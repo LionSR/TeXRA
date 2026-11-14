@@ -83,7 +83,7 @@ Reject or downgrade a candidate when:
 
 ## Implement Or Record The Candidate
 
-A candidate that is proven and fits a reviewable diff is implemented, not written up: in a scheduled audit, as one commit per candidate in the run's draft PR (`AGENTS.md` "Scheduled audits"); otherwise as its own PR when the user asked for changes. Record a candidate only when it is too large for the run, needs a design decision first, or the user asked for a survey alone.
+A candidate that is proven and fits a reviewable diff is implemented, not written up: in a scheduled audit, as one commit per candidate in the run's PR, sized and batched as `AGENTS.md` "Scheduled audits" says; otherwise as its own PR when the user asked for changes. Record a candidate only when it is too large for the run, needs a design decision first, or the user asked for a survey alone.
 
 This repo has no inline-TODO convention; recorded findings go to one of two places:
 
