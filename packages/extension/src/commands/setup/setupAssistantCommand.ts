@@ -60,15 +60,14 @@ export const launchSetupAssistant = Effect.fn('launchSetupAssistant')(
     // That is a cancellation, not a launch failure: re-raise it so no
     // error notification appears during teardown.
     if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
-    const error = Cause.squash(cause);
     return Effect.logError('Setup assistant failed to launch.').pipe(
-      Effect.annotateLogs({ data: error }),
+      Effect.annotateLogs({ data: cause }),
       withLogChannel(CHANNEL),
       Effect.andThen(
         Effect.forkDetach(
           vscodeUi.notify(
             'error',
-            `Failed to launch setup assistant: ${toErrorMessage(error)}`,
+            `Failed to launch setup assistant: ${toErrorMessage(cause)}`,
           ),
         ),
       ),

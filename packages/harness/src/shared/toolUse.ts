@@ -82,13 +82,12 @@ export function normalizeToolUse(log: ToolUseLog): NormalizedToolUse {
   const outputContent = extractOutputContent(log.output);
   const outputText = formatOutputText(outputContent);
 
-  const toolName = trimmedOrNull(log.toolName) ?? '';
   const isUserFeedback = userInstructionText.length > 0;
 
   const headerSummary = summaryText || (isUserFeedback ? '' : errorText);
 
   return {
-    toolName,
+    toolName: log.toolName.trim(),
     errorText,
     outputText,
     ...(log.exitCode !== undefined ? { exitCode: log.exitCode } : {}),
@@ -130,8 +129,8 @@ function malformedToolUseDiagnostic(error: Schema.SchemaError): string {
  * Decode a tool card's payload once, at the transcript fold. Fields outside
  * {@link ToolUseLogSchema} (e.g. `toolUseDispatch.ts`'s `files`) are kept. A
  * payload the schema rejects becomes a visible failed card rather than being
- * dropped: it keeps only the independently usable fields (`toolName` when a
- * string, `input`) and carries the bounded diagnostic as its error. It stays
+ * dropped: it keeps only the independently usable fields (`toolName`, empty
+ * unless a string, and `input`) and carries the bounded diagnostic as its error. It stays
  * live only while the source itself says the call is in progress, so a later
  * corrected payload can still replace it; anything else reads as failed
  * rather than as a quiet success.
@@ -144,7 +143,7 @@ export function decodeToolUseLog(data: Record<string, unknown>): ToolUseLog {
   )(data);
   if (Result.isSuccess(parsed)) return parsed.success;
   return {
-    ...(typeof data.toolName === 'string' ? { toolName: data.toolName } : {}),
+    toolName: typeof data.toolName === 'string' ? data.toolName : '',
     ...('input' in data ? { input: data.input } : {}),
     error: malformedToolUseDiagnostic(parsed.failure),
     status:

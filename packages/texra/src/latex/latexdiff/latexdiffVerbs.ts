@@ -47,7 +47,7 @@ import { type HostCommandFailure } from '@texra/controllers/session/hostCallFail
 import {
   LATEXDIFF_BETWEEN_ROUNDS_SETTING,
   LATEXDIFF_MATH_MARKUP_SETTING,
-} from '@texra/shared/settingsView/documentsSettings';
+} from '@texra/shared/settings/documentsSettings';
 
 /** The latexdiff verbs taken against a commit rather than an edited file. */
 type LatexdiffCommitAction = Extract<

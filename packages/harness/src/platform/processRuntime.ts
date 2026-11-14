@@ -24,7 +24,7 @@ import {
   type Path,
   type Scope,
 } from 'effect';
-import { logEntryOf, writeLogEntry } from '@logger/logSink';
+import { diagnosticLogger } from '@logger/effectDiagnostics';
 import type { AppSignals } from '@platform/appSignals';
 import {
   DatabaseOpenFailed,
@@ -172,9 +172,5 @@ export function withForkFailureReporting<R, ER>(
  * as the errors they are.
  */
 export const viewDiagnosticsLayer: Layer.Layer<never> = Logger.layer([
-  Logger.make((options) => {
-    const entry = logEntryOf(options);
-    if (!entry) return;
-    writeLogEntry(entry);
-  }),
+  diagnosticLogger,
 ]);

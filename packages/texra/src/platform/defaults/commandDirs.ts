@@ -52,7 +52,7 @@ function absoluteEnvRoot(value: string, variable: string): string | null {
  *  directory from PATH, so it is named rather than silently empty. */
 function globDescending(pattern: string): string[] {
   try {
-    return globSync(pattern).sort().reverse();
+    return globSync(pattern).toSorted().toReversed();
   } catch (err) {
     warnSkippedDir(`Glob failed for ${pattern}: ${toErrorMessage(err)}`);
     return [];

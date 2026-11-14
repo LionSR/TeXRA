@@ -148,7 +148,7 @@ export const wakeRun = Effect.fn('wakeRun')(function* (
   if (Exit.isFailure(resumed)) {
     if (Cause.hasInterruptsOnly(resumed.cause)) return;
     yield* Effect.logError(`Failed to resume run ${runId}`).pipe(
-      Effect.annotateLogs({ data: Cause.squash(resumed.cause) }),
+      Effect.annotateLogs({ data: resumed.cause }),
       withLogChannel(CHANNEL),
     );
     return;

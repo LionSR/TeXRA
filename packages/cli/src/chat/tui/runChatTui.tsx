@@ -6,7 +6,6 @@
 // this module keeps only composition, rendering glue, and the Ink lifecycle.
 
 import {
-  Cause,
   Effect,
   Exit,
   FiberHandle,
@@ -40,10 +39,7 @@ import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/models/chatDefaults';
 import type { CliProcessRuntime } from '@cli/runtime/platform/cliProcessRuntime';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
-import {
-  cliPlatform,
-  setCliHelperModel,
-} from '@cli/runtime/platform/initPlatform';
+import { cliPlatform } from '@cli/runtime/platform/initPlatform';
 import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
@@ -58,6 +54,7 @@ import {
 } from '@cli/tui/terminalCleanup';
 import { getFirstRunDone } from '@texra/controllers/onboarding/onboardingFunnel';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
+import { launchTeamId } from '@texra/agent/teams/teamLaunch';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
@@ -234,22 +231,20 @@ export async function runChat(
                   CHAT_STARTUP_MODEL_RECOVERY,
                 ),
               },
-            ).pipe(
-              Effect.tap((selection) =>
-                setCliHelperModel(services.globalState, selection.model),
-              ),
             )
           : Effect.succeed({ model: defaults.model, notice: undefined }),
       );
       if (Exit.isFailure(modelSelectionExit)) {
-        writeTextStderr(toErrorMessage(Cause.squash(modelSelectionExit.cause)));
+        writeTextStderr(toErrorMessage(modelSelectionExit.cause));
         return { exitCode: CliExitCode.Usage };
       }
       const modelSelection = modelSelectionExit.value;
-      // Both persisted team fields are optional and nullable on the wire, so a
-      // resumed run that never carried a preset lands `null` where
-      // `SessionMeta` wants absent.
-      const initialPresetId = initialResume?.config.cli?.teamId ?? undefined;
+      // The delegation scope is optional and nullable on the wire, so a
+      // resumed run that never carried one lands `null` where `SessionMeta`
+      // wants absent.
+      const initialPresetId = initialResume
+        ? launchTeamId(initialResume.config)
+        : undefined;
       sessionMetaSignal.set({
         agent: defaults.agent,
         agentSource: agentEntry.source,

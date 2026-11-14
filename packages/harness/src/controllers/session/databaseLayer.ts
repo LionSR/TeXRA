@@ -652,7 +652,7 @@ export const databaseLayer = (
                 );
                 return [
                   [...rows, ...kept]
-                    .sort((x, y) => x.commit - y.commit)
+                    .toSorted((x, y) => x.commit - y.commit)
                     .flatMap(shown),
                   through < top ? Option.some(through) : Option.none(),
                 ] as const;

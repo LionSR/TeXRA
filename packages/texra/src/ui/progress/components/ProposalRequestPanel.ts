@@ -24,7 +24,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports - shared styles
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { APPROVE_SESSION_ACTION } from '@texra/shared/session/surfaceDecision';
-import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 import {
   DOCUMENT_TASK_OPTIONS,
   DocumentTaskOptionsSchema,

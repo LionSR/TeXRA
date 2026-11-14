@@ -147,8 +147,8 @@ const initModelCommandPlatform = cliPlatform.pipe(
 const listEnabledModels = Effect.fn('listEnabledModels')(function* () {
   const services = yield* initModelCommandPlatform;
   if ('exitCode' in services) return services.exitCode;
-  const catalog = yield* listCliEnabledModelCatalog(services.globalState);
-  const enabled = yield* getEnabledModels(services.globalState);
+  const catalog = yield* listCliEnabledModelCatalog(services);
+  const enabled = yield* getEnabledModels(services);
   yield* emitPagedCliResult({
     json: { enabled, catalog },
     ndjson: [
@@ -174,7 +174,7 @@ const setModelEnabled = Effect.fn('setModelEnabled')(function* (
 ) {
   const services = yield* initModelCommandPlatform;
   if ('exitCode' in services) return services.exitCode;
-  return yield* setCliModelEnabled(services.globalState, id, enabled).pipe(
+  return yield* setCliModelEnabled(services, id, enabled).pipe(
     Effect.flatMap((result) =>
       emitCliResult({
         json: result,
@@ -193,7 +193,7 @@ const setModelEnabled = Effect.fn('setModelEnabled')(function* (
     ),
     Effect.catchCause((cause) =>
       Effect.sync(() => {
-        writeTextStderr(toErrorMessage(Cause.squash(cause)));
+        writeTextStderr(toErrorMessage(cause));
         return CliExitCode.Usage;
       }),
     ),

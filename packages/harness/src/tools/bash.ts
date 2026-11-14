@@ -149,7 +149,7 @@ type BashInput = typeof BashInputSchema.Type;
  * runs carries it. Read from the calling session's settings at each launch,
  * not once for the process: a process holding several projects attributes
  * each project's commits by that project's own setting. Empty when commit
- * marking is off.
+ * marking is off or no identity is named, so git's own identity applies.
  */
 const gitAuthorEnv = Effect.fn('BashTool.gitAuthorEnv')(function* (
   settings: SettingsStores,
@@ -157,6 +157,7 @@ const gitAuthorEnv = Effect.fn('BashTool.gitAuthorEnv')(function* (
   if (!(yield* Settings.get(settings, GIT_MARK_COMMITS_SETTING))) return {};
   const name = yield* Settings.get(settings, GIT_AUTHOR_NAME_SETTING);
   const email = yield* Settings.get(settings, GIT_AUTHOR_EMAIL_SETTING);
+  if (name === undefined || email === undefined) return {};
   return {
     GIT_AUTHOR_NAME: name,
     GIT_AUTHOR_EMAIL: email,

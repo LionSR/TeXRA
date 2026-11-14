@@ -8,7 +8,7 @@ import {
 } from '@texra/shared/plugins/documents';
 import type { RunEnd } from '@texra-ai/harness';
 import type { AgentConfig, RunView } from '@texra-ai/harness/schemas';
-import { AUTO_OPEN_FINAL_SETTING } from '@texra/shared/settingsView/texraSettings';
+import { AUTO_OPEN_FINAL_SETTING } from '@texra/shared/settings/texraSettings';
 
 /**
  * Decide whether a finished run should auto-open a final output, and which

@@ -20,11 +20,10 @@ import {
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
-import {
-  runStatus,
-  runStatusLabel,
-  type RunStatusKey,
-} from '@ui/copy/runStatus';
+import { launchTeamId } from '@texra/agent/teams/teamLaunch';
+import { cliLaunchOutput } from '@cli/runtime/headless/documentTaskOutput';
+import { runStatus, runStatusLabel } from '@ui/copy/runStatus';
+import type { RunStatusKey } from '@texra/shared/session/runStatusKey';
 
 import {
   formatCliHistoryAgentLabel,
@@ -33,8 +32,7 @@ import {
 import {
   createConversationPreview,
   createConversationTranscript,
-  formatConversationPreview,
-  formatConversationTranscript,
+  formatConversation,
 } from './history/conversationFormat';
 import type { RunView, AgentConfig } from '@texra-ai/harness/schemas';
 
@@ -88,8 +86,8 @@ interface CliHistoryDetails {
   readonly config: AgentConfig | null;
   readonly result: RunResult | null;
   readonly report: string | null;
-  readonly conversationPreview: CliHistoryConversationPreview | null;
-  readonly conversation?: CliHistoryConversationPreview | null;
+  /** The whole conversation when the caller asked for it, else a preview. */
+  readonly conversation: CliHistoryConversation | null;
   readonly files: readonly RunGeneratedFile[];
   /** Whether the run's loop opened it: its rows hold a `run.position`. */
   readonly checkpointPresent: boolean;
@@ -97,12 +95,14 @@ interface CliHistoryDetails {
   readonly currentModel?: string;
 }
 
-export interface CliHistoryConversationPreview {
+export interface CliHistoryConversation {
+  /** Whether `messages` is every non-empty message or only the latest. */
+  readonly scope: 'transcript' | 'preview';
   readonly messageCount: number;
-  readonly messages: readonly CliHistoryConversationPreviewMessage[];
+  readonly messages: readonly CliHistoryConversationMessage[];
 }
 
-export interface CliHistoryConversationPreviewMessage {
+export interface CliHistoryConversationMessage {
   readonly index: number;
   readonly role: string;
   readonly content: string;
@@ -208,10 +208,9 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
     const currentModel = config ? (run?.model ?? undefined) : undefined;
     // A run with no config is corrupt: there is nothing to resume it under.
     const resumable = config !== null && checkpointPresent;
-    const conversationPreview = createConversationPreview(conversation);
-    const fullConversation = options.includeFullConversation
+    const shownConversation = options.includeFullConversation
       ? createConversationTranscript(conversation)
-      : undefined;
+      : createConversationPreview(conversation);
     const files = mergeHistoryFiles(
       generatedFiles,
       workspaceFiles.map((file) => ({
@@ -236,10 +235,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       config,
       result,
       report,
-      conversationPreview,
-      ...(options.includeFullConversation
-        ? { conversation: fullConversation }
-        : {}),
+      conversation: shownConversation,
       files,
       checkpointPresent,
       currentModel,
@@ -386,8 +382,10 @@ export function formatCliHistoryDetailsText(
 ): string {
   const { config, run } = details;
   const model = details.currentModel ?? config?.model;
-  const team = teamIdOf(config);
-  const cliOutputFile = config?.cli?.outputFile?.trim();
+  const team = config ? launchTeamId(config) : undefined;
+  const cliOutputFile = config
+    ? cliLaunchOutput(config).outputFile?.trim()
+    : undefined;
   // Worded as every host words it.
   const status = `${run ? runStatusLabel(run.statusKey) : 'Unknown'}${
     details.resumable ? ' (resumable)' : ''
@@ -418,10 +416,12 @@ export function formatCliHistoryDetailsText(
   if (details.report) {
     lines.push('', 'Report:', details.report);
   }
-  if (details.conversation) {
-    lines.push('', formatConversationTranscript(details.conversation));
-  } else if (!details.report && details.conversationPreview) {
-    lines.push('', formatConversationPreview(details.conversationPreview));
+  // The report already says what a preview's last message would.
+  if (
+    details.conversation &&
+    (details.conversation.scope === 'transcript' || !details.report)
+  ) {
+    lines.push('', formatConversation(details.conversation));
   }
   const shown = config
     ? serializeFilteredConfig(
@@ -457,15 +457,11 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
     inputBasename,
     kind: runKindOf(config),
     description: entry.description,
-    teamId: teamIdOf(config),
+    teamId: config ? launchTeamId(config) : undefined,
   };
 }
 
 /** A document task's run, or a chat: what its launch config ran. */
 function runKindOf(config: AgentConfig): 'task' | 'chat' {
   return isTaskConfig(config) ? 'task' : 'chat';
-}
-
-function teamIdOf(config: AgentConfig | null): string | undefined {
-  return config?.cli?.teamId?.trim() || undefined;
 }

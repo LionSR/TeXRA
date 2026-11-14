@@ -113,7 +113,7 @@ export function makeRunTrace({
     });
   const closure = (runId: RunId): StreamClosure[] => {
     const aggregateId = qualifyAggregateId('run', runId);
-    return events.openWork(aggregateId).map(({ id }) => ({
+    return events.openWork(aggregateId).map((id) => ({
       type: 'stream.end',
       aggregateId,
       id,

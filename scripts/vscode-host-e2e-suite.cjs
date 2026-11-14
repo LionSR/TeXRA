@@ -139,13 +139,12 @@ async function checks() {
   // No provider key in this home: the task ends at once, but in the service.
   // The command settles when the task ends; the suite waits only for the
   // service to start it.
+  // The command's argument is the launch configuration itself.
   void vscode.commands
     .executeCommand('texra.execute', {
-      config: {
-        agent: 'setup',
-        model: 'openai/gpt-5.6-sol',
-        instruction: 'Service E2E task',
-      },
+      agent: 'setup',
+      model: 'openai/gpt-5.6-sol',
+      instruction: 'Service E2E task',
     })
     .then(
       () => undefined,

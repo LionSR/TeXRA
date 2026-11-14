@@ -98,7 +98,7 @@ function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
   if (!isFields(value)) return JSON.stringify(value) ?? 'null';
   const entries = Object.keys(value)
-    .sort()
+    .toSorted()
     .map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`);
   return `{${entries.join(',')}}`;
 }

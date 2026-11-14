@@ -39,7 +39,6 @@ import {
   SessionEvents,
   type Append,
   type CommittedBatch,
-  type OpenWork,
   type SessionEventsShape,
 } from '@shared/session/sessionEvents';
 
@@ -58,7 +57,7 @@ export const SESSION_CLOSE_DEADLINE_MS = 5_000;
  *  not here: they close at that same move. A stage is no work of the
  *  publisher's: one left open closes on the run's outcome when the view's
  *  transcript applies its `run.end`. */
-type OpenWorkByAggregate = Map<AggregateId, Map<string, OpenWork>>;
+type OpenWorkByAggregate = Map<AggregateId, Set<string>>;
 
 /** What the publisher keeps open per aggregate, from the rows it commits:
  *  `track` folds a committed batch in, `openWork` reads one aggregate's. */
@@ -73,11 +72,11 @@ function openWorkTracker(): {
         aggregates.delete(row.aggregateId);
         continue;
       }
-      const work = aggregates.get(row.aggregateId) ?? new Map();
+      const work = aggregates.get(row.aggregateId) ?? new Set();
       if (closesRunWindow(row)) {
         work.clear();
       } else if (row.type === 'stream.start') {
-        work.set(row.id, { id: row.id });
+        work.add(row.id);
       } else if (row.type === 'stream.end') {
         work.delete(row.id);
       } else {
@@ -89,7 +88,7 @@ function openWorkTracker(): {
   };
   return {
     track,
-    openWork: (id) => [...(aggregates.get(id)?.values() ?? [])],
+    openWork: (id) => [...(aggregates.get(id) ?? [])],
   };
 }
 
@@ -220,7 +219,7 @@ export const sessionEventsLayer = Layer.effect(
         commit(job).pipe(
           Effect.catchCause((cause) =>
             Effect.logError('Session publication failed').pipe(
-              Effect.annotateLogs({ data: Cause.squash(cause) }),
+              Effect.annotateLogs({ data: cause }),
               withLogChannel(CHANNEL),
               Effect.andThen(
                 Effect.sync(() => options.failed?.(Cause.squash(cause))),

@@ -1,7 +1,7 @@
 import * as nodePath from 'node:path';
 
 // Third-party imports
-import { Cause, Effect, FileSystem, Result } from 'effect';
+import { Effect, FileSystem, Result } from 'effect';
 
 // Local imports - common
 import { ToolContext } from '@agent/core/tools/ToolTypes';
@@ -245,7 +245,7 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
       yield* reloadAgentCatalog.pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning(
-            `Wrote ${displayPath}, but the agent catalog was not reloaded; the agent is listed after the next reload: ${toErrorMessage(Cause.squash(cause))}`,
+            `Wrote ${displayPath}, but the agent catalog was not reloaded; the agent is listed after the next reload: ${toErrorMessage(cause)}`,
           ),
         ),
       );

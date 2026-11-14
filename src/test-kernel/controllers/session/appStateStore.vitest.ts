@@ -14,7 +14,7 @@ import { globalDatabaseLayer } from '@controllers/session/databaseLayer';
 
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 
 describe('application state on SQLite', () => {
   const tempDirs = useTempDirs();

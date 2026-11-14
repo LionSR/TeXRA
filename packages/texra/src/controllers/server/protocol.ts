@@ -53,7 +53,7 @@ import {
   SessionViewSchema,
   StartRequestSchema,
 } from '@texra-ai/harness/schemas';
-import { RUN_STATUS_KEYS } from '@ui/copy/runStatus';
+import { RunStatusKeySchema } from '@texra/shared/session/runStatusKey';
 import {
   CommitOrdinalSchema,
   DisplayRowSchema,
@@ -125,7 +125,7 @@ const TaskSummarySchema = Schema.Struct({
   runId: RunIdSchema,
   label: Schema.String,
   description: Schema.NullOr(Schema.String),
-  statusKey: Schema.Literals(RUN_STATUS_KEYS),
+  statusKey: RunStatusKeySchema,
   /** Launch time, ms since the epoch: the list's order. */
   launchedAt: Schema.Int.check(Schema.isGreaterThan(0)),
   /** This service runs it now, so it answers approvals and streams text. */

@@ -8,7 +8,7 @@
 // terminal before its first await, then skips the graceful drain and leaves
 // with the signal's code through the platform's one exit.
 
-import { Cause, Effect, Exit, FiberHandle, Option, Scope } from 'effect';
+import { Effect, Exit, FiberHandle, Option, Scope } from 'effect';
 import {
   withProcessServices,
   type ProcessRuntime,
@@ -161,7 +161,7 @@ export function createSessionExitController(
   const persistSession = ctx.flushArtifacts.pipe(
     Effect.catchCause((cause) =>
       writeTextStderrAndWait(
-        `[warn] [cli.lifecycle] Transcript flush failed during exit; the session tail may be missing: ${toErrorMessage(Cause.squash(cause))}`,
+        `[warn] [cli.lifecycle] Transcript flush failed during exit; the session tail may be missing: ${toErrorMessage(cause)}`,
       ),
     ),
   );
@@ -208,7 +208,7 @@ export function createSessionExitController(
           Scope.close(ctx.chatScope, Exit.void),
         );
         const disposalFailure = Exit.isFailure(closed)
-          ? ensureError(Cause.squash(closed.cause))
+          ? ensureError(closed.cause)
           : undefined;
         let interrupted = interruptPendingRun();
         yield* ctx.submitted;

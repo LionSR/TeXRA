@@ -22,3 +22,13 @@ export const withLogChannel =
   (channel: string) =>
   <A, E, R>(self: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
     Effect.annotateLogs(self, { [LOG_CHANNEL]: channel });
+
+/** Log `message` as a warning on `channel`, with the failure it is given
+ *  attached as the entry's `data`. */
+export const logFailure =
+  (channel: string, message: string) =>
+  (data: unknown): Effect.Effect<void> =>
+    Effect.logWarning(message).pipe(
+      Effect.annotateLogs({ data }),
+      withLogChannel(channel),
+    );
