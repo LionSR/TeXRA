@@ -1,5 +1,5 @@
 /**
- * How a renderer words a size, a wait and a moment: English
+ * How a renderer words a size, a wait, a moment and a switch: English
  * copy every host prints the same way.
  */
 import prettyBytes from 'pretty-bytes';
@@ -22,6 +22,11 @@ export function formatResetDuration(durationMs: number): string {
   const flooredMinutes =
     wholeMinutes >= 1440 ? wholeMinutes - (wholeMinutes % 60) : wholeMinutes;
   return prettyMilliseconds(flooredMinutes * 60_000, { unitCount: 2 });
+}
+
+/** A model's or skill's switch as a word, in every list that shows it. */
+export function enabledLabel(enabled: boolean): string {
+  return enabled ? 'enabled' : 'disabled';
 }
 
 const relativeTimeFormat = new Intl.RelativeTimeFormat(undefined, {
