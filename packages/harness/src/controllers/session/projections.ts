@@ -10,8 +10,8 @@
  *
  * - `listing`: per aggregate and listing key (`listingKeyOf`), the newest
  *   row: what a cold listing delivers, and what a run's record is read from
- *   (`READ_RUN_RECORD`); an open request and a queued follow-up are keys of
- *   their own (`pendingKeyOf`), deleted when their pair closes them.
+ *   (`READ_RUN_RECORD`); the key of an open request or a queued follow-up
+ *   is deleted when its pair closes it.
  * - `usage`: a `usage` display row per priced `model.message` response,
  *   `context.edit` summary and model `run.description` label (a run with a
  *   run history stores its spend there, never as a `usage` row), and each
@@ -141,7 +141,8 @@ const PROJECTORS = {
   listing: {
     // v2: a run's first row a catch-up could not read is listed
     // (`UNREAD_KEY`): a run's record is read from the listing.
-    version: 2,
+    // v3: a `run.position` is listed by where it stands (`listingKeyOf`).
+    version: 3,
     inputs: SessionRowDraftSchema.members
       .map((schema) => schema.fields.type.literal)
       .filter((type) => listingTypeOf({ type }) !== null),
@@ -163,12 +164,12 @@ const PROJECTORS = {
             },
           ]
         : [],
-    // Every input has a listing type (`inputs`); a pending key replaces it.
+    // Every input has a listing key (`inputs`); the row that closes a
+    // request or a follow-up drops its key.
     project: (event) => {
-      const pending = pendingKeyOf(event);
-      const key = pending?.key ?? listingKeyOf(event);
+      const key = listingKeyOf(event);
       if (key === null) return [];
-      const commit = pending?.open === false ? null : event.commit;
+      const commit = pendingKeyOf(event)?.open === false ? null : event.commit;
       return [
         { table: 'listing_entry', aggregate: event.aggregateId, key, commit },
       ];

@@ -466,13 +466,22 @@ export function edgesOf(draft: SessionRowDraft): AggregateEdges {
 }
 
 /**
- * The `latest` key one row folds under: its listing type, qualified by the
- * row's own discriminator where it carries one. The mirror of the listing
- * query's `GROUP BY`, so "the newest row the fold holds" means the same
- * thing on a cold read and on a replay: one plugin kind's newest row never
- * suppresses another's.
+ * The key one row is listed under: the store keeps the newest row of each
+ * key per aggregate (`listing_entry`), and the session view applies a row
+ * only when it is newer than the last one it applied under the same key. A
+ * cold read delivers nothing but those newest rows, so every fact the view
+ * shows from a listed row must be the newest row of some key:
+ *
+ * - a request and a queued follow-up are keys of their own, by id
+ *   ({@link pendingKeyOf}): one closing never hides another still open;
+ * - a `run.position` is keyed by where it stands (`at`): the newest wait is
+ *   the point a fork cuts at and the newest turn start times the turn, and
+ *   neither is the newest position once a later turn runs;
+ * - a plugin fact by its plugin and kind, a title by who gave it.
  */
 export function listingKeyOf(event: SessionRow): string | null {
+  const pending = pendingKeyOf(event);
+  if (pending !== null) return pending.key;
   // A run's spend: the listing returns its total at its newest priced row,
   // so one key per run orders every read's turns by commit.
   if (event.type === 'usage') return 'usage';
@@ -483,12 +492,13 @@ export function listingKeyOf(event: SessionRow): string | null {
   // Both a run's latest model title and its latest user title are kept:
   // the view lets the user's win.
   if (event.type === 'run.description') return `${type}/${event.by}`;
+  if (event.type === 'run.position') return `${type}/${event.payload.at}`;
   return type;
 }
 
 /**
- * The open sets the listing keeps beside its latest rows: an open request
- * and a queued follow-up are keys of their own, closed by their pair.
+ * The listing key of an open request or a queued follow-up, and whether
+ * the row opens it: the store drops the key when its pair closes it.
  */
 export function pendingKeyOf(
   event: SessionRow,

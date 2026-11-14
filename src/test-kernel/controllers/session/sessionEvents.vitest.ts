@@ -350,6 +350,29 @@ describe('session events and view', () => {
       ]);
     }).pipe(Effect.provide(graph([runStartRow, waiting, requested]))),
   );
+
+  // A cold read holds the newest row of each listing key, so the wait a
+  // fork cuts at has a key of its own: one newer position must not hide it.
+  it.effect('keeps the fork point of a run read cold in a later turn', () =>
+    Effect.gen(function* () {
+      const view = yield* SessionViewService;
+      yield* settle(view.ref, (v) => v.runs.has(RUN));
+      const run = (yield* SubscriptionRef.get(view.ref)).runs.get(RUN);
+      expect(run).toMatchObject({ position: 'running', forkPoint: 2 });
+    }).pipe(
+      Effect.provide(
+        graph([
+          runStartRow,
+          waiting,
+          {
+            type: 'run.position',
+            aggregateId: qualifyAggregateId('run', RUN),
+            payload: { at: 'turn.begin', turn: 1 },
+          },
+        ]),
+      ),
+    ),
+  );
 });
 
 /**
