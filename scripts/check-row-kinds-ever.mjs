@@ -9,16 +9,12 @@ import console from 'node:console';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import { git, ratchetBase } from './ratchet-base.mjs';
 
 const FILE = 'config/storage/row-kinds-ever.json';
-const rootDir = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '..',
-);
+const rootDir = path.resolve(import.meta.dirname, '..');
 const { values } = parseArgs({ options: { base: { type: 'string' } } });
 const { target, base } = ratchetBase(values.base);
 const kinds = (text) => JSON.parse(text).kinds;

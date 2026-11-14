@@ -1,10 +1,8 @@
 /* global console, process */
 import { cp, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const packageDir = path.resolve(scriptDir, '..');
+const packageDir = path.resolve(import.meta.dirname, '..');
 const source = path.resolve(packageDir, '../extension/resources');
 const targetInput = process.env.TEXRA_CLI_RESOURCES_OUTDIR?.trim();
 const target = targetInput

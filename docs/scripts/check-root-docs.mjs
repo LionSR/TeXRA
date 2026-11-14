@@ -19,8 +19,7 @@
 // sub-project.
 
 import { existsSync, readdirSync } from 'node:fs';
-import { basename, dirname, join, relative } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { basename, join, relative } from 'node:path';
 import {
   publicRootDocs,
   publicRootDirs,
@@ -28,7 +27,7 @@ import {
 } from '../.vitepress/publicDocs.js';
 import { walkFiles } from '../../scripts/walkFiles.mjs';
 
-const docsDir = join(dirname(fileURLToPath(import.meta.url)), '..');
+const docsDir = join(import.meta.dirname, '..');
 const ghError = process.env.GITHUB_ACTIONS === 'true' ? '::error::' : '';
 
 const distFlag = process.argv.indexOf('--dist');

@@ -16,7 +16,6 @@
 // installed.
 import { appendFileSync, readFileSync } from 'node:fs';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 const VERSION =
@@ -151,4 +150,4 @@ function main() {
   console.log(summary);
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) main();
+if (process.argv[1] === import.meta.filename) main();

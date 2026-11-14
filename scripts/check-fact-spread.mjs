@@ -20,7 +20,6 @@ import console from 'node:console';
 import { globSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 // Third-party imports
@@ -30,10 +29,7 @@ import ts from 'typescript';
 import { ratchetBase, withBaseTree } from './ratchet-base.mjs';
 import { walkFiles } from './walkFiles.mjs';
 
-const rootDir = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '..',
-);
+const rootDir = path.resolve(import.meta.dirname, '..');
 
 const SOURCE_FILE = /\.(?:ts|tsx|mts)$/;
 const NOT_SOURCE = /\.d\.ts$|\.(?:test|vitest|spec)\.tsx?$/;

@@ -5,12 +5,8 @@
 // scripts/copy-docs.mjs. The generated packages/cli/README.md is gitignored.
 import { copyFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const cliRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '..',
-);
+const cliRoot = path.resolve(import.meta.dirname, '..');
 const repoRoot = path.resolve(cliRoot, '..', '..');
 
 await copyFile(

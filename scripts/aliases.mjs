@@ -4,13 +4,11 @@
  * Extension esbuild reads its package tsconfig, which extends the root.
  */
 
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 
 import { loadAliases } from './aliasUtils.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const rootDir = resolve(__dirname, '..');
+const rootDir = resolve(import.meta.dirname, '..');
 
 /**
  * Convert tsconfig paths to build tool aliases.

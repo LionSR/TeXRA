@@ -105,7 +105,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { createRequire } from 'node:module';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { zstdDecompressSync } from 'node:zlib';
 import { build as bundle } from 'esbuild';
 import stableStringify from 'safe-stable-stringify';
@@ -123,7 +123,7 @@ import { isolateProcessHome } from '../../../scripts/isolated-home.mjs';
 // included, resolves the user's `~/.texra`.
 isolateProcessHome();
 
-const cliRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const cliRoot = path.dirname(import.meta.dirname);
 const repoRoot = path.dirname(path.dirname(cliRoot));
 const validationRoot = path.join(cliRoot, '.texra-validate-run');
 const binaryPath = path.join(validationRoot, 'bin', 'texra.js');

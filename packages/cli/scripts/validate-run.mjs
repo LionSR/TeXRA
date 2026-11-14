@@ -13,7 +13,6 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { stripVTControlCharacters } from 'node:util';
@@ -31,7 +30,7 @@ import { isolateProcessHome } from '../../../scripts/isolated-home.mjs';
 // Every `texra` this script starts resolves `~/.texra` in a temporary home.
 isolateProcessHome();
 
-const cliRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const cliRoot = path.dirname(import.meta.dirname);
 const repoRoot = path.dirname(path.dirname(cliRoot));
 const defaultValidationRoot = path.join(cliRoot, '.texra-validate-run');
 const defaultValidationBinaryPath = path.join(

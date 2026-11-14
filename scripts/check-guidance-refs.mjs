@@ -21,14 +21,13 @@
 
 import { existsSync, globSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { walkFiles } from './walkFiles.mjs';
 
 // Where this script lives: always the real checkout, even when a fixture root
 // is passed. The run vocabulary is production source, not fixture input, so it
 // is read from here rather than from the scanned root.
-const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+const sourceRoot = join(import.meta.dirname, '..');
 
 // The optional root argument keeps fixture tests hermetic without duplicating
 // the production path-prefix configuration.

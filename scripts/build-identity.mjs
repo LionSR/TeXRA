@@ -6,14 +6,9 @@
 // packages/texra/src/controllers/server/protocol.ts). `TEXRA_BUILD_VERSION` in the build's
 // environment overrides it, for a validation that needs two builds.
 import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 
-const rootPackage = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  '..',
-  'package.json',
-);
+const rootPackage = resolve(import.meta.dirname, '..', 'package.json');
 
 /** The esbuild `define` entry that stamps the build identity. */
 export function buildIdentityDefine() {

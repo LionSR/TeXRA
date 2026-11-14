@@ -15,12 +15,8 @@ import { existsSync, lstatSync, mkdirSync, rmSync, symlinkSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
 
-const repoRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '..',
-);
+const repoRoot = path.resolve(import.meta.dirname, '..');
 const target = path.join(repoRoot, 'packages/cli/dist/texra.js');
 const binDir = process.env.TEXRA_LOCAL_BIN_DIR
   ? path.resolve(process.env.TEXRA_LOCAL_BIN_DIR)

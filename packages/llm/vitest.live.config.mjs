@@ -13,14 +13,10 @@
  * route and skips the others.
  */
 
-// Node imports
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 // Third-party imports
 import { defineConfig } from 'vitest/config';
 
-const packageDir = dirname(fileURLToPath(import.meta.url));
+const packageDir = import.meta.dirname;
 
 export default defineConfig({
   root: packageDir,
