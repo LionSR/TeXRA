@@ -317,8 +317,8 @@ export function rowReader<E>(
       if (refusal !== undefined) return yield* refusal;
     }
     // The batch's blobs in one statement: a row carries addresses only. A
-    // projected row (no version) holds none, and its commit is its source
-    // row's, whose strings it would fetch for nothing.
+    // `usage` row read off a priced row (no version) holds none, and its
+    // commit is that row's, whose strings it would fetch for nothing.
     const texts: Blobs = yield* inflated(
       INLINE_BLOBS,
       rows.flatMap((row) =>

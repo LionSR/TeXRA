@@ -319,7 +319,7 @@ export const databaseLayer = (
       const collectBlobs = `DELETE FROM blob
         WHERE digest IN (SELECT value FROM json_each(?))
           AND NOT EXISTS (SELECT 1 FROM event_blob r WHERE r.digest = blob.digest)`;
-      // The display types in a commit range, plus projected rows.
+      // The display types in a commit range, with the priced rows' usage.
       const display = displayUnion(
         '"commit" > ? AND "commit" <= ?',
         '"commit"',
@@ -332,7 +332,7 @@ export const databaseLayer = (
       // A deletion marker closes its run and stays its last row until collected.
       const pendingDeletions = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
         WHERE e.type = 'run.removed' ORDER BY e."commit"`;
-      // One aggregate's display rows, its projected rows among them.
+      // One aggregate's display rows, its priced rows' usage among them.
       const displayAggregate = displayUnion(
         'kind = ? AND logicalId = ? AND seq >= ?',
         'seq',

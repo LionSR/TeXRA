@@ -50,7 +50,7 @@ const APPLICATION_ID = 0x54655852;
  * them: `start_commit` (the commit of seq 1) and `closed_by` (the
  * deletion marker's commit, `NULL` while open). The foreign keys are the
  * collection mechanism: deleting an aggregate cascades to its dependents,
- * its events, its projections and their projected rows.
+ * its events and its projections.
  *
  * `event_blob` links a row to each blob it needs kept: `inline` is 1 for a
  * string the codec moved out of the row, which a read inflates back, and 0
