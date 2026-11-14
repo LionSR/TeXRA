@@ -361,12 +361,12 @@ function buildClaudeAgentTurn(params: {
     turnErrorMessage: (turn) =>
       turn.errorMessage ||
       'Claude Code reported a failed turn without throwing.',
-    delivery: (turn, wallTimeMs) => ({
+    delivery: (turn, wallTime) => ({
       family: 'claude-agent',
       runId,
       prompt,
       attributes: [{ name: 'session-id', value: turn.sessionId || null }],
-      wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
+      wallTime,
       response: turn.finalResponse,
       usage: turn.usage,
       lines: claudeCostLines(turn),
