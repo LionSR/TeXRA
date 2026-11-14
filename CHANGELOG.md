@@ -1785,6 +1785,16 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **Closing one project no longer stops GitHub updates for the others.** A
+  project's close ran the shutdown step of every plugin, which ended the
+  GitHub pollers of the whole process: the desktop app and the background
+  service then delivered no pull request or issue activity to any open
+  project, and new subscriptions polled nothing, until a restart. Only a
+  shutdown runs that step now.
+- **`texra service stop` and `restart` give up after 30 seconds on a
+  service of another build too.** A running service that speaks a protocol
+  this build cannot read was waited for without a limit, and a stop of one
+  reported that no service was running.
 - **Two TeXRA windows refreshing a subscription sign-in at once no longer
   sign each other out.** The one whose refresh was refused deleted the
   session the other had just stored; it now uses that session, and deletes

@@ -32,6 +32,7 @@ import { build } from 'esbuild';
 import {
   Cause,
   Clock,
+  Deferred,
   Effect,
   Exit,
   Fiber,
@@ -48,6 +49,7 @@ import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
 
 import { Sessions } from '@texra-ai/harness';
 import { nodePlatform, nodePlatformServices } from '@texra-ai/harness/node';
+import { definePlugin } from '@texra-ai/harness/plugins';
 
 vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
   ...(await importOriginal<
@@ -542,6 +544,43 @@ describe('Sessions owner', () => {
         });
         expect((yield* session.view.read([RUN])).requests).toHaveLength(1);
       }).pipe(Effect.provide(Sessions.layer({ platform, plugins: [] })));
+    }),
+  );
+
+  // A plugin's drain ends its process-wide work (the GitHub pollers of
+  // every project), so closing one project must not run it.
+  it.live('drains the plugins at shutdown, not when one session closes', () =>
+    Effect.gen(function* () {
+      const directory = mkdtempSync(join(tmpdir(), 'texra-plugin-drain-'));
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => rmSync(directory, { recursive: true, force: true })),
+      );
+      const platform = nodePlatform({
+        agentsDir: join(directory, 'agents'),
+        storageDir: join(directory, 'storage'),
+        workspaceDir: directory,
+      });
+      mkdirSync(join(directory, 'agents'));
+      const up = yield* Deferred.make<void>();
+      let drains = 0;
+      const counted = definePlugin({
+        id: 'counted',
+        processLayer: {
+          layer: Layer.effectDiscard(Deferred.succeed(up, undefined)),
+          drain: Effect.sync(() => {
+            drains += 1;
+          }),
+        },
+      });
+      yield* Effect.gen(function* () {
+        const sessions = yield* Sessions;
+        yield* sessions.open(platform.roots, { persistent: true, host: {} });
+        yield* Deferred.await(up);
+        yield* sessions.close(platform.roots);
+        expect(drains).toBe(0);
+        yield* sessions.closeAll;
+        expect(drains).toBe(1);
+      }).pipe(Effect.provide(Sessions.layer({ platform, plugins: [counted] })));
     }),
   );
 });
