@@ -3104,7 +3104,7 @@ function renderFrame(term) {
     const ln = buf.getLine(i);
     lines.push(ln ? ln.translateToString(true) : '');
   }
-  while (lines.length && lines[lines.length - 1] === '') lines.pop();
+  while (lines.at(-1) === '') lines.pop();
   return lines.join('\n');
 }
 

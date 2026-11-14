@@ -17,6 +17,7 @@ import {
 import { spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { runTests } from '@vscode/test-electron';
 
 import { isolatedHomeEnv } from './isolated-home.mjs';
@@ -186,7 +187,7 @@ async function stopService() {
       );
       return;
     }
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await sleep(100);
   }
 }
 
