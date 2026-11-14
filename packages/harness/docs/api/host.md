@@ -160,10 +160,12 @@ type AgentCustomization = 'copy' | 'overwrite' | 'keep';
 
 ## AgentCustomizeRefused
 
-`customize` refused the change: the entry has no file of its own to copy
-(`noFile`), its copy would land outside the custom directory or a file it
-binds lies outside its own directory (`escapes`), a copy is already there (`exists`, at `path`), or a copy has no newer
-bundled version to keep (`current`).
+`customize` or `removeCustom` refused the change: the entry has no file of
+its own to copy or delete (`noFile`), its copy would land outside the
+custom directory, a file it binds lies outside its own directory or the
+file to delete lies outside the custom directory (`escapes`), a copy is
+already there (`exists`, at `path`), or a copy has no newer bundled version
+to keep (`current`).
 
 ```ts
 class AgentCustomizeRefused extends Schema.TaggedError<AgentCustomizeRefused>()(
@@ -2686,6 +2688,21 @@ interface WorkspaceAgents extends WorkspaceAgentsController<AgentEntry> {
   ) => Effect.Effect<
     AgentEntry,
     AgentNotFound | AgentCatalogLoadError | StateReadFailed
+  >;
+  /**
+   * Delete the custom agent `name`: its file, and the workspace's hidden
+   * choice for it. Refused when the catalog holds no such custom agent
+   * (`noFile`) or its file lies outside the custom directory (`escapes`).
+   * The deleted file's path.
+   */
+  readonly removeCustom: (
+    name: string,
+  ) => Effect.Effect<
+    string,
+    | AgentCustomizeRefused
+    | AgentDirectoriesFailed
+    | StateWriteFailed
+    | PlatformError.PlatformError
   >;
 }
 ```

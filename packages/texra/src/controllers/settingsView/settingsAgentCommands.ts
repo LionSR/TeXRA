@@ -12,7 +12,6 @@ import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
   AgentCatalog,
   AgentDirectories,
-  isStrictlyWithin,
   readCustomAgentDir,
   registerCustomAgentRoot,
   CUSTOM_AGENT_DIR_KEY,
@@ -306,19 +305,11 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
           if (activeDeletions.has(message.agentName)) return Effect.void;
           activeDeletions.add(message.agentName);
           return Effect.gen(function* () {
-            const entryPath = (yield* AgentCatalog).get(
-              agentKey('custom', message.agentName),
-            )?.path;
-            if (!entryPath) {
+            if (
+              !(yield* AgentCatalog).get(agentKey('custom', message.agentName))
+            ) {
               return yield* present.alert(
                 `Custom agent not found: ${message.agentName}`,
-              );
-            }
-
-            const customDir = yield* customDirectory;
-            if (!isStrictlyWithin(customDir, entryPath)) {
-              return yield* present.alert(
-                'Refusing to delete: file is not inside the custom agents directory.',
               );
             }
 
@@ -328,13 +319,18 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
             });
             if (!confirmed) return;
 
-            const fs = yield* FileSystem.FileSystem;
-            // `force` is the facade's delete: a path already gone is the
-            // post-condition, not a failure.
-            yield* fs.remove(entryPath, { force: true });
-            // The removal is real only here: the agent list forgets its choice.
+            // The removal is real only here: the file goes, and the agent
+            // list forgets its choice.
             const { workspaceAgents } = yield* page;
-            yield* workspaceAgents.forgetDeletedAgent(message.agentName);
+            const refused = yield* workspaceAgents
+              .removeCustom(message.agentName)
+              .pipe(
+                Effect.as(undefined),
+                Effect.catchTag('AgentCustomizeRefused', (error) =>
+                  Effect.succeed(error),
+                ),
+              );
+            if (refused) return yield* present.alert(refused.message);
             yield* present.notice(`Deleted custom agent: ${message.agentName}`);
             yield* agentFilesChanged;
           }).pipe(

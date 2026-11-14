@@ -14,13 +14,13 @@ import {
   FileLocationSchema,
   fileLocationDisplayPath,
   fileLocationShortDisplayPath,
-  LineCountSchema,
+  NonNegativeIntSchema,
   type DiffStats,
 } from '@texra-ai/harness/schemas';
 import { LATEXDIFF_MATH_MARKUP_VALUES } from '@texra/shared/constants/latexConfig';
 
 /** A zero-based round (a document task's revision) number. */
-const RoundNumberSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+const RoundNumberSchema = NonNegativeIntSchema;
 
 /** What an output revises: the file it is diffed against, as the run holds
  *  it (the pre-run snapshot of a workspace document), and the workspace
@@ -120,8 +120,8 @@ const OutputFileSummarySchema = Schema.Struct({
   absolutePath: Schema.String,
   location: Schema.Literals(['workspace', 'runStorage', 'external']),
   originalPath: Schema.NullOr(Schema.String),
-  added: Schema.NullOr(LineCountSchema),
-  removed: Schema.NullOr(LineCountSchema),
+  added: Schema.NullOr(NonNegativeIntSchema),
+  removed: Schema.NullOr(NonNegativeIntSchema),
 });
 
 const CompileFailureSchema = Schema.Struct({

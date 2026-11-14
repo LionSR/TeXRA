@@ -1,11 +1,7 @@
 import { defineCommand } from 'citty';
-import { Effect, FileSystem } from 'effect';
+import { Effect } from 'effect';
 
-import {
-  AgentCatalog,
-  AgentDirectories,
-  isStrictlyWithin,
-} from '@texra-ai/harness/host';
+import { AgentCatalog } from '@texra-ai/harness/host';
 import { AGENT_SOURCE, agentKey, agentName } from '@texra-ai/harness/schemas';
 
 import {
@@ -152,23 +148,22 @@ const resetAgent = Effect.fn('resetAgent')(function* (name: string) {
   if (!custom || !(yield* bundledAgentNamed(name))) {
     return refuse(`${name} is not a custom copy of a built-in agent.`);
   }
-  const customDir = yield* (yield* AgentDirectories).custom();
-  if (!isStrictlyWithin(customDir, custom.path)) {
-    return refuse(
-      'Refusing to delete: file is not inside the custom agents directory.',
+  return yield* catalog
+    .workspaceAgents(services)
+    .removeCustom(name)
+    .pipe(
+      Effect.flatMap((path) =>
+        emitCopyResult({
+          action: 'reset',
+          name,
+          path,
+          text: `Removed ${path}; ${name} uses the built-in version again.`,
+        }).pipe(Effect.as(CliExitCode.Success)),
+      ),
+      Effect.catchTag('AgentCustomizeRefused', (refused) =>
+        Effect.succeed(refuse(refused.message)),
+      ),
     );
-  }
-  yield* FileSystem.FileSystem.use((fs) =>
-    fs.remove(custom.path, { force: true }),
-  );
-  yield* catalog.workspaceAgents(services).forgetDeletedAgent(name);
-  yield* emitCopyResult({
-    action: 'reset',
-    name,
-    path: custom.path,
-    text: `Removed ${custom.path}; ${name} uses the built-in version again.`,
-  });
-  return CliExitCode.Success;
 });
 
 /** Keep the custom copy and dismiss its newer-built-in notice. */

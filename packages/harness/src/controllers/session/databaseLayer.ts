@@ -45,6 +45,7 @@ import {
   type SessionRow,
   type SessionRowDraft,
   factName,
+  NonNegativeIntSchema,
 } from '@shared/schemas';
 import {
   NO_RUN_ROWS,
@@ -145,7 +146,7 @@ const RECORD_TYPES = JSON.stringify(RECORD_ROW_TYPES);
 /** A run's aggregate `logical_id` column as the `RunId` it is. */
 const runIdOf = Schema.decodeUnknownSync(RunIdSchema);
 /** The `event` table's autoincrement sequence: a non-negative integer. */
-const EventSeqSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+const EventSeqSchema = NonNegativeIntSchema;
 /** Where a display page after a commit ends: at the last of the stored rows
  *  it covers. A page may end at any row, as each display row is shown from
  *  one stored row. No row: the page runs to the end. Counted in rows, so a
