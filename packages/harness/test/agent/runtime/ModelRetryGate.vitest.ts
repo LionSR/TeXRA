@@ -6,7 +6,7 @@ import { TestClock } from 'effect/testing';
 import { describe, expect, vi, type Mock } from 'vitest';
 
 // Local imports
-import { makeRetryGate } from '@agent/runtime/ModelRetryGate';
+import { makeRetryGate, RouteAnswered } from '@agent/runtime/ModelRetryGate';
 import type { ModelRetryGate, RoutePolicy } from '@texra-ai/harness/plugins';
 
 const ROUTE = 'openai:subscription:gpt-5.6';
@@ -101,6 +101,36 @@ describe('ModelRetryGate', () => {
         yield* Fiber.join(second);
         expect(sibling.calls).toHaveBeenCalledOnce();
       }),
+  );
+
+  // A probe's turn can run for hours: the route opens to the calls waiting
+  // on it when the route answers the probe, not when its turn ends.
+  it.effect('opens a cooling route once its probe is answered', () =>
+    Effect.gen(function* () {
+      const gate = makeRetryGate();
+      yield* openGate(gate);
+
+      const probe = pendingAttempt();
+      const sibling = admitted();
+      const first = yield* Effect.forkChild(
+        gated(
+          gate,
+          wireRoutes(),
+          Effect.andThen(Effect.flatten(RouteAnswered), probe.attempt),
+        ),
+      );
+      const second = yield* Effect.forkChild(
+        gated(gate, wireRoutes(), sibling.attempt),
+      );
+
+      yield* TestClock.adjust(1000);
+      yield* probe.started;
+      yield* Fiber.join(second);
+      expect(sibling.calls).toHaveBeenCalledOnce();
+
+      yield* probe.complete;
+      yield* Fiber.join(first);
+    }),
   );
 
   it.effect('hands an abandoned probe to the next waiting call', () =>

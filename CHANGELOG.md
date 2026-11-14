@@ -1791,6 +1791,12 @@ All notable changes to this project will be documented in this file.
   service then delivered no pull request or issue activity to any open
   project, and new subscriptions polled nothing, until a restart. Only a
   shutdown runs that step now.
+- **After a rate limit, the other agents on that model no longer wait for
+  one whole turn.** When a provider failure paused a model route, the
+  first request let through held the route until its turn finished, so
+  every other run and subagent on that credential waited for it, up to the
+  length of that turn. The route now reopens as soon as the provider starts
+  answering that request.
 - **A VS Code notice no longer holds what raised it until it is
   dismissed.** A warning or info toast shown from a request (a blocked
   edit's warning, the service notice at startup, a clone's result) kept

@@ -2,7 +2,7 @@
  * The process's model retry gate. A failure llm scoped to a route cools that
  * route for every call on it, across every run of every project: the calls
  * wait out one shared backoff, one of them goes through as the recovery
- * probe, and its success opens the route to the rest. A healthy route admits
+ * probe, and the route's answer to it opens the route to the rest. A healthy route admits
  * every call at once. How many times a call is resent is its loop's
  * business, not the gate's.
  */
@@ -38,6 +38,13 @@ export class RouteRetries extends Context.Service<
   RouteRetries,
   ModelRetryGate
 >()('@texra-ai/harness/RouteRetries') {}
+
+/** What an attempt runs once its route answered it (its response began).
+ *  A recovery probe opens its route then; any other call's is nothing. */
+export const RouteAnswered = Context.Reference<Effect.Effect<void>>(
+  '@texra-ai/harness/RouteAnswered',
+  { defaultValue: () => Effect.void },
+);
 
 interface Route {
   /** Whether the route admits every call at once. Only the holder of
@@ -113,8 +120,9 @@ const settle = (
  * the routes it went through healthy so far. A healthy route admits at once.
  * A cooling route's call takes its probe permit: if the route opened while it
  * queued it goes with the cohort, else it waits out the backoff and goes as
- * the probe, holding the permit until its exit is recorded, so no
- * interruption can lose it. Before the attempt, a route passed healthy that
+ * the probe, holding the permit until the route answers it
+ * ({@link RouteAnswered}) or its exit is recorded, so no interruption can
+ * lose it. Before the attempt, a route passed healthy that
  * cooled meanwhile answers `COOLED`, and the call waits again.
  */
 const through = <A, E, R>(
@@ -141,8 +149,25 @@ const through = <A, E, R>(
       );
     });
     if (route.healthy) return healthy;
-    return route.probe
-      .withPermit(
+    // The call goes as the probe until its route answers it, and from then
+    // as one of the cohort that answer opens the route to. It holds the
+    // route's permit until then, or until its exit is recorded.
+    let pass: Pass = 'probe';
+    let held = true;
+    const release = Effect.suspend(() => {
+      if (!held) return Effect.void;
+      held = false;
+      return route.probe.release(1);
+    });
+    const answered = Effect.suspend(() => {
+      if (pass !== 'probe') return Effect.void;
+      route.healthy = true;
+      pass = { healthy: route.cooled };
+      return release;
+    });
+    return Effect.acquireUseRelease(
+      Effect.interruptible(route.probe.take(1)),
+      () =>
         Effect.gen(function* (): Generator<
           Effect.Effect<unknown, never, R>,
           Through<A, E> | 'opened'
@@ -155,16 +180,28 @@ const through = <A, E, R>(
             );
             yield* Effect.sleep(delayMs);
           }
-          const result = yield* through(routes, index + 1, passed, attempt);
-          if (result !== COOLED) yield* settle(route, policy, 'probe', result);
+          // A probe of an outer route too tells that one as well.
+          const outer = yield* RouteAnswered;
+          const result = yield* through(
+            routes,
+            index + 1,
+            passed,
+            attempt,
+          ).pipe(
+            Effect.provideService(
+              RouteAnswered,
+              Effect.andThen(answered, outer),
+            ),
+          );
+          if (result !== COOLED) yield* settle(route, policy, pass, result);
           return result;
         }),
-      )
-      .pipe(
-        Effect.flatMap((result) =>
-          result === 'opened' ? healthy : Effect.succeed(result),
-        ),
-      );
+      () => release,
+    ).pipe(
+      Effect.flatMap((result) =>
+        result === 'opened' ? healthy : Effect.succeed(result),
+      ),
+    );
   });
 
 /**
