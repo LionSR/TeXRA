@@ -7,6 +7,7 @@ import {
   truncateSummary,
 } from '@texra-ai/harness/schemas';
 import { formatBytes } from '@ui/copy/format';
+import { moreRowsText } from '@cli/tui/overflowText';
 
 export const CLI_MEMORY_LIST_LIMIT = 50;
 const MEMORY_DESCRIPTION_MAX = 72;
@@ -40,7 +41,7 @@ export function formatCliMemoryList(items: readonly MemoryViewItem[]): string {
     ),
   ];
   if (items.length > shown.length) {
-    lines.push(`... ${items.length - shown.length} more`);
+    lines.push(moreRowsText(items.length - shown.length));
   }
   return lines.join('\n');
 }

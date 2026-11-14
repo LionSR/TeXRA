@@ -67,6 +67,19 @@ export function formatResultCount(
 }
 
 /**
+ * The first `max` items of a list, then how many it leaves out
+ * (`a, b, c +2 more`), so every clipped list reads the same.
+ */
+export function formatClippedList(
+  items: readonly string[],
+  max: number,
+): string {
+  const shown = items.slice(0, max).join(', ');
+  const hidden = items.length - Math.min(items.length, max);
+  return hidden > 0 ? `${shown} +${hidden} more` : shown;
+}
+
+/**
  * Normalize line endings and split into content lines.
  * A trailing newline does not produce a phantom empty element.
  *
