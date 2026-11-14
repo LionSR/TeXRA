@@ -45,11 +45,15 @@ const MONTH_MS = YEAR_MS / 12;
  * Calendar-aware "X ago" / "in X" (`yesterday`, `last week`, `in 3 hours`),
  * the largest unit the distance fills: seconds, minutes and hours by elapsed
  * time, days and larger by local calendar boundaries, weeks starting Sunday.
+ * `nowMs` is the moment it is measured from, for a view that ticks its own.
  */
-export function formatRelativeTime(timestamp: number): string {
+export function formatRelativeTime(
+  timestamp: number,
+  nowMs = Date.now(),
+): string {
   if (!timestamp) return '';
   const then = new Date(timestamp);
-  const now = new Date();
+  const now = new Date(nowMs);
   const ms = timestamp - now.getTime();
   const abs = Math.abs(ms);
   const calendarDay = (d: Date) =>

@@ -7,6 +7,7 @@ import type {
   SubscriptionUsageWindow,
 } from '@texra/shared/model/subscriptionUsage';
 import { formatResetDuration } from '@texra-ai/harness/schemas';
+import { formatRelativeTime } from '@ui/copy/format';
 
 const STALE_AFTER_MS = 2 * 60_000;
 
@@ -56,11 +57,9 @@ export function formatSubscriptionUsageUpdated(
   fetchedAt: number,
   now: number,
 ): string {
-  const age = Math.max(0, now - fetchedAt);
-  if (age >= STALE_AFTER_MS) {
-    return `stale · updated ${Math.floor(age / 60_000)}m ago`;
-  }
-  return 'updated just now';
+  return now - fetchedAt >= STALE_AFTER_MS
+    ? `stale · updated ${formatRelativeTime(fetchedAt, now)}`
+    : 'updated just now';
 }
 
 /** Compact provider usage text shared by settings and the detailed CLI status. */
