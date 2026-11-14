@@ -38,10 +38,12 @@ launch form 的选项表。**数量是症状，单位是病因。** 这个诊断
   2026-11-14）：它能读内置程序的源码，用同样的积木写自己的程序并启动
   它。
 - **程序是 workflow，视角是 hint。** `logic` 和 `notation` 不是独立的东
-  西：workflow 在了，它们只是传给它的一两句话（负责人 2026-11-14）。
-- **用户不从目录里挑。** 让人在三十个 agent 里选是不行的（负责人
-  2026-11-14）。默认就是聊天，不选任何东西就能开始；picker 里除了聊天只
-  有十个程序，新增一个要过门槛。
+  西：workflow 在了，它们只是传给它的一两句话。没有 `--hint`，没有 hint
+  表，让模型 free style（负责人 2026-11-14）。
+- **入口 agent 只有一个，用户不能改它**（负责人 2026-11-14）。让人在三
+  十个 agent 里选是不行的。不选任何东西就能开始；picker 里除了它只有十
+  个内置程序。它的基础文本和声明的工具是 app 的常量，没有 customize、
+  没有 custom agent、没有 `--agent`。
 - **code mode 默认打开，不把所有工具摆给模型**（负责人 2026-11-14）。模
   型拿到的只有 `script` 一个工具；脚本的描述里只声明一个小核心，其余开
   着的工具能调，靠 `searchTools` 找。
@@ -208,7 +210,7 @@ recipe。
 头是持久化协议本身：`agent/runtime` 19220、`shared/session` 7135、
 `controllers`（SQLite 存储）6550，本提案不动它们。本提案从 harness 拿走的
 是约 4400 行 app 词汇和 `./host` 入口上为它们而设的导出（见"删除清单"）。
-把内置插件从内核目录里搬出去是另一件事，见"负责人问题"3。
+把内置插件从内核目录里搬出去是另一件事，见"负责人问题"2。
 
 内核要改的地方不多，全部列在这里，后面各节展开：
 
@@ -293,10 +295,11 @@ const theory: TexraPlugin = {
   `agentBlockOf`、`ToolTable.blocks` 和 `ITool.launchesTasks` 删。
   `AgentBlock.result`（一个 task 的结果怎么读给启动它的人）先原样挪到程
   序的登记上，能不能删见"结果怎么被读"。
-- **工具定义上换一个事实。** `launchesTasks` 删；换成"这个工具只在程序
-  的 run 里有意义"（`document_context` 这一类，读的是那个 run 自己的状
-  态，今天在 task 之外调用会被拒绝）。这样的工具不进聊天自己的脚本；内
-  置程序列了就有，模型写的程序要了就有。
+- **工具定义上换一个事实。** `launchesTasks` 删；换成"这个工具默认不开
+  放，只有点名它的程序或启动拿得到"。六个步骤工具是这样（内置程序列了
+  就有，模型写的程序要了就有；它们读的是程序 run 自己的状态，今天在
+  task 之外调用会被拒绝），setup 的八个也是这样（由 setup 命令在启动那
+  次对话时点名）。
 
 ### 一个程序是什么
 
@@ -449,59 +452,70 @@ store。
   （diff、accept、Pass N of M）认 run 上有没有 documents 的 fact，不认名
   字，这样包了一层的程序照样有界面。
 
-### 聊天不是一个 agent
+### 入口只有一个 agent
 
-没有 agents 目录之后，聊天是内核的模型循环加上开着的插件：
+入口 agent 只有一个，用户不能改它（负责人 2026-11-14）。它不是一个 agent
+文件，也不在任何目录里：它是内核的模型循环，加上 `theory` 的基础文本和
+开着的插件。
 
-- **system 文本** = 调用者给的 `system`、`AGENTS.md`、附上的 memories、
-  harness 自己的工具使用说明和 workspace 信息，然后按步：工具调用方式那
-  一段、每个开着的插件的 `prompt` 段（按插件 id 排）。除第一项外都是
+用户改不了的：它的基础文本、它声明的核心、它是唯一的入口。没有
+customize 副本，没有 custom agent，没有 `--agent`，设置里没有它的 prompt
+或工具表，也没有第二个可选的入口。用户能给的是三样，都不替换它：项目的
+`AGENTS.md`（项目的约定，附在基础文本后面）、指令、插件的开关。SDK 的
+embedder 可以给自己的 `system` 和 `tools`，那是另一个应用的入口，不是
+TeXRA 用户的旋钮。
+
+它由这几样拼成：
+
+- **system 文本** = 基础文本、`AGENTS.md`、附上的 memories、harness 自己
+  的工具使用说明和 workspace 信息，然后按步：工具调用方式那一段、每个开
+  着的插件的 `prompt` 段（按插件 id 排）。除第一项外都是
   `buildOpeningSystemPrompt` 和 `stepInstructions`
   （`packages/harness/src/agent/prompt/PromptBuilder.ts`）今天就在拼的；
   消失的是 skills 列表和"Available agents"这一段（`delegationSection`）。
-  第一项今天是 persona prompt；根聊天用的是 `theory` 的那段基础文本，40
-  行以内（你在哪、什么时候写脚本、什么时候启动一个程序、常用的 hint 有
-  哪几种），它是 app 的，不是内核的。host 把它作为根聊天的 `system` 传
-  入；插件的 `prompt` 段按插件 id 排，放不到最前面。`assistant.yaml` 里各能力的那几句搬到各自插件的段里，
-  插件没开就没有那几句，不必再写"when available"。
+  第一项今天是 persona prompt，之后是 `theory` 的那段基础文本，40 行以内
+  （你在哪、什么时候写脚本、什么时候启动一个程序），它是 app 的，不是内
+  核的。host 把它作为根聊天的 `system` 传入；插件的 `prompt` 段按插件
+  id 排，放不到最前面。`assistant.yaml` 里各能力的那几句搬到各自插件的
+  段里，插件没开就没有那几句，不必再写"when available"。
 - **模型拿到的只有 `script`。** code mode 默认打开：一次聊天的请求里只
   发 `script` 这一个工具，别的都从脚本里调。今天这是
   `codeMode.scriptOnly`，默认关。
-- **能调的** = 开着的插件对聊天开放的工具，按步解析，config 里不抄表。
-  今天 `assistant.yaml` 抄的 37 个就是这个集合：52 个工具去掉 setup 的 8
-  个（只给 setup 那次对话）、documents 的六个步骤工具（只在它的程序里有
-  意义）和 `self`。dispatch 只跑被 offer 的工具，这条规矩不变。
+- **能调的** = 开着的插件默认开放的工具，按步解析，config 里不抄表。今
+  天 `assistant.yaml` 抄的 37 个就是这个集合：52 个工具去掉 setup 的 8
+  个、六个步骤工具和 `self`。那 15 个默认不开放，只有点名它的程序或启动
+  拿得到。dispatch 只跑被 offer 的工具，这条规矩不变。
 - **声明的只是一个小核心。** 不把所有工具摆给模型。脚本的描述里内联的
   是声明的那些；其余能调的靠 `searchTools(query)` 找、`describeTool(name)`
-  读全，MCP 和插件注入的工具今天已经是这样。根聊天声明的是 app 的一张短
-  表（文件和 shell 的六个，加 `agent` 和 `program`），和基础文本一样是
-  app 的常量。工具插件的工具不声明：各插件的 prompt 段用一两句说它有什
-  么，模型用到时去找。一次给了 `tools` 列表的启动（setup、`agent()`
-  的子运行）声明的和能调的都是那张列表。
+  读全，MCP 和插件注入的工具今天已经是这样。入口 agent 声明的是 app 的
+  一张短表（文件和 shell 的六个，加 `agent` 和 `program`），和基础文本一
+  样是 app 的常量。工具插件的工具不声明：各插件的 prompt 段用一两句说
+  它有什么，模型用到时去找。
 - **"开着就能调"成为默认。** 今天"没列也给"要插件逐个工具用
-  `injectedWhen` 声明；之后这是每个对聊天开放的工具的默认，
-  `injectedWhen` 只剩"跟着一个设置"的用途。
+  `injectedWhen` 声明；之后这是每个默认开放的工具的默认，`injectedWhen`
+  只剩"跟着一个设置"的用途。
 - **MCP。** 用户在 `~/.texra/mcp.json` 里配的 server 今天要 agent 的
   `tools:` 点名 `mcp__<server>__*` 才进 run。没有 agent 文件之后，配了就
   能调、能被搜到：配置它就是同意。它的工具不声明，所以配十个 server 也
   不往每次请求里加东西。
 - **可启动的程序** = 开着的插件的 `programs`，名字和描述随 `program` 的
   声明内联在脚本的描述里
-  （`packages/harness/src/tools/codemode/declarations.ts` 加一段）。它们
-  是产品的入口，十行。
+  （`packages/harness/src/tools/codemode/declarations.ts` 加一段）。十
+  行。
 
-所以没有叫 assistant 的文件或名字。审稿、搜索、写代码不是目录项，是模型
-在脚本里用不同的 `system` 字面量调 `agent()`。headless 的一次性聊天是
-`texra run chat --print`。
+审稿、搜索、写代码不是目录项，也不是别的入口：是这个 agent 在脚本里用
+不同的 `system` 字面量调 `agent()`，那些子运行不是入口。headless 的一次
+性聊天是 `texra run chat --print`。
 
-两处今天按名字启动 agent 的地方是带参数的聊天，不是程序，因为人要接着
-聊：
+今天有两处由 host 按名字启动另一个 agent。之后它们也是这同一个入口
+agent，host 替用户发第一条指令，人接着聊：
 
-- `setup`：setup 插件自己的一组 chat 参数（它的 system 文本和工具列表），
-  由 setup 命令作为一次普通的 `start` 发出。删掉问学科选 team 的一段。
+- `setup`：setup 命令发第一条指令，并在这次启动里点名 setup 插件的八个
+  工具；setup 的做法写在它自己的 prompt 段里，有它的工具才出现。删掉问
+  学科选 team 的一段。
 - 编译失败后的修复（今天的 `latexFixer`，`compileFixer.ts` 的
-  `planCompileFixer` 以 `script: null` 启动它）：`theory` 插件的一组
-  chat 参数。
+  `planCompileFixer` 以 `script: null` 启动它）：host 把失败的日志和文件
+  写成第一条指令。
 
 code mode 默认打开是定了的方向，翻之前还差三件事。已有的数据是三个
 journey、两个模型、每组 7 到 9 次：通过率持平，每次成功的成本低 18% 和
@@ -564,9 +578,9 @@ skill 和 multi-agent 的那个 skill 删；TeXRA 特有的约定（`\criticize{
    `notation` 就只是 hint 的问题（负责人 2026-11-14）。一个程序存在，是
    因为它的代码不同：验证器不同、输入不同、产物不同。"看论证结构""看记
    号""第一次读的人会在哪里卡住"不是代码，是一两句话，随指令传给同一个
-   程序。hint 不是文件，不是目录项，不进 picker；用户在聊天里说，或者
-   模型启动程序时替他写。`theory` 的那段文本里用一句话列出常用的几种，
-   模型和文档都从那里知道有它们。
+   程序。hint 不是文件，不是目录项，不进 picker，也没有 `--hint` 这个参
+   数和具名的 hint 表：用户在聊天里说，模型启动程序时自己写，free
+   style（负责人 2026-11-14）。
 3. **一个内置程序是一个带验证器的做法。** 它值得是程序而不是一句提示词，是
    因为有东西能检查它：编译、diff、texcount，Lean 的诊断。往后的程序
    （拿 CAS 逐步复核一段推导、对着 `.bib` 和 arXiv 核对每条引用）按同
@@ -743,8 +757,8 @@ return revise({
 ```
 
 模型写的程序是它自己的一个 run，所以有它自己的一份 document 状态、自己
-的卡片和 diff；这就是步骤工具"只在程序的 run 里有意义"的原因。聊天自
-己的脚本不直接调步骤工具：同一个 run 里改两次稿会把同一份状态写两遍。
+的卡片和 diff；这就是步骤工具只给程序的 run 的原因。入口 agent 自己的
+脚本不直接调步骤工具：同一个 run 里改两次稿会把同一份状态写两遍。
 
 这改了裁决"Adaptive document workflows are not planned"（2026-09-06）。
 那条不要的是由模型选择的 document 工作流取代固定的工作流。之后固定的工
@@ -752,10 +766,10 @@ return revise({
 
 ### 启动面
 
-用户不挑 agent。launch form 今天默认选中 `orchestrator`，列表是
-workspace 选择放行的那些 agent（全开是 35 个加插件的 5 个，team 存在就
-是为了把它砍短）；之后默认是 chat，不选任何东西就能开始，要什么在聊天
-里说，由模型启动对应的程序。
+入口 agent 只有一个，用户不挑也不改。launch form 今天默认选中
+`orchestrator`，列表是 workspace 选择放行的那些 agent（全开是 35 个加插
+件的 5 个，team 存在就是为了把它砍短）；之后没有 agent 列表，不选任何东
+西就能开始，要什么在聊天里说，由它启动对应的程序。
 
 picker 列 chat 和十个程序（没装 Lean 是八个），仅此。`launchTarget: 'agent' | 'team'`、
 `selectedTeamId`、`agent` 字段和五个选项字段删。`texra run <程序 | chat>`
@@ -791,8 +805,8 @@ Plugins 页（和 CLI 的 `/plugins`）上，`theory` 和 `lean4` 的卡片各�
 块、script kind。它们在同一张 `AgentConfig` 上共存。本提案收成两种
 （`chat`、`program`）：host 和 CLI 启动 chat 或一个程序；SDK 给
 `{ system, tools }` 或 `{ name, args }`；模型用 `agent()`、`program()`、
-`self()`；host 自己按名字启动的三处变成 `merge` 程序和 setup、`theory`
-两个插件的 chat 参数，两个默认值删。`requireAgent` 的 scope 和 shadowing
+`self()`；host 自己按名字启动的三处变成 `merge` 程序，和同一个入口
+agent 加一条 host 写的指令（setup、编译修复），两个默认值删。`requireAgent` 的 scope 和 shadowing
 解析删。后台脚本和 goal 那一行不变。
 
 ### 结束：一个终点，一种投递
@@ -848,7 +862,7 @@ goal mode 之所以看起来 codemode native，是因为它把三件事分开了
 | 批准 plan，"Run as Goal"      | `PlanTool` 以后台脚本启动 `goalScript()`       | 不变：同一个机制，带 goal 自己的启动选项                 |
 | launch form 点 Run            | 按 agent 还是 task 拼不同的 `AgentConfig`      | `start({ name: 'edit', args })`                          |
 | `texra run`                   | 同上                                           | 同上                                                     |
-| 编译失败后修复                | `planCompileFixer` 手拼 config 启 `latexFixer` | 一次带 `theory` 的 chat 参数的 `start`；人可以接着聊     |
+| 编译失败后修复                | `planCompileFixer` 手拼 config 启 `latexFixer` | 入口 agent 加一条 host 写的指令；人可以接着聊            |
 | 模型要 fan-out                | 脚本里 `Promise.all(agent…)`                   | 不变                                                     |
 | PR 开了、CI 红了              | 订阅通知投进某个 run 的收件箱                  | host 收到通知，也可以 `start({ name, args: { event } })` |
 | 用户在聊天里回话              | chat 叶子的下一轮                              | 不变                                                     |
@@ -871,7 +885,9 @@ host 到点 `start`；脚本 24 小时的墙钟上限不变。
 ## 用户自己的程序：安装式插件带程序
 
 前面的设计只用原生插件，不需要这一节。它是可选的一期，回答的问题是：
-custom agent 删掉之后，用户自己的东西放在哪。
+custom agent 删掉之后，用户自己的东西放在哪。它给入口 agent 多几个能启动
+的程序，不改入口 agent 本身：安装式插件不带 prompt 段，替换不了基础文
+本，也加不出第二个入口。
 
 程序是沙箱里的 JS，不需要原生代码，所以一个只带程序的插件可以是一个目
 录。安装式插件今天已经是目录（Claude Code、Codex 的布局，
@@ -982,7 +998,7 @@ newer-built-in 提示存在的唯一理由是 built-in 太大、改得太勤，�
 4. **skills 和安装式插件的 agents**（PRD "安装式 manifest"一行）。删掉它
    们失去导入第三方 skill 包和 Claude Code 的 subagent 文件；commands 是
    按 skill 读的，一起失去；模型仍能 `read_file` 用户指给它的任何
-   Markdown。hooks 不受影响；MCP 的启用方式变了（"聊天不是一个 agent"）。
+   Markdown。hooks 不受影响；MCP 的启用方式变了（"入口只有一个 agent"）。
 5. **裁决 D10 "Custom teams stay presets"**（2026-09-30）。它的重开条件
    是"一个 team 需要预设装不下的状态"。本提案删 team 不是因为这个，而是
    因为它回答的问题（这个项目看见哪些 agent）随目录一起消失。这是在重开
@@ -1037,7 +1053,7 @@ history 的行。
    格存在：需要审批语义、需要写 run history 的行、需要结构化结果供脚本分
    支。其余的（`extract_figures`、`extract_bib_entries`、arxiv、Zotero）变
    成随包的 CLI，模型用 bash 调。这一刀砍的是三万行工具代码里最大的一
-   块。是负责人问题 6。
+   块。是负责人问题 5。
 2. **headless 走文本流。** `texra run` 已经输出 NDJSON；再让它从 stdin 读
    文件列表、向 stdout 打产物路径，shell 组合就免费了。
 3. **缓存是一等机制。** 子运行结果的内容寻址复用今天已经覆盖任何子运行
@@ -1055,8 +1071,9 @@ history 的行。
   己的程序"排在删 agent 文件之前的理由（"分期"）。
 - **不会编程的用户**：YAML 从来没有比十几行带模板字符串的 JS 更容易；384
   行的 YAML 没人读得完。模型代写。
-- **换一个口吻聊天**：由 `AGENTS.md` 承担，它是项目级的。按会话切换
-  persona（`texra chat --agent research`）消失。
+- **用户不能换入口，也不能改它**：这是决定，不是疏漏。按会话切换
+  persona（`texra chat --agent research`）和 custom agent 都消失；换一
+  个口吻由项目的 `AGENTS.md` 承担，它附在基础文本后面，不替换它。
 - **按项目的可见范围消失**：今天 workspace 选择决定一个项目看见哪些
   agent。之后到处是同一个 chat 加十个程序；插件开关是全局的。
 - **每次启动的开关**：launch form 的五个开关和对应 flag 消失，变成程序里
@@ -1118,37 +1135,33 @@ history 的行。
    删；文档、迁移说明和 `texra-action`。"chat 加十个程序"的 picker 到这
    一期才出现。
 6. **code mode 默认打开**。方向已定（负责人 2026-11-14），独立于以上各
-   期，可以更早；翻之前要做的三件事见"聊天不是一个 agent"。在第 5 期之
+   期，可以更早；翻之前要做的三件事见"入口只有一个 agent"。在第 5 期之
    前翻，`assistant.yaml` 的 37 个工具仍全部声明；"只声明小核心"要等第
    5 期的短表。
 7. **（可选）工具改 CLI**。先从 `latex-extract` 和 `arxiv` 两个插件试。
 
 ## 负责人问题
 
-1. **hint 是自由文本，还是一张具名的短表。** 推荐自由文本：写在指令
-   里，`theory` 的那段文本用一句话列出常用的几种。一张表（`notation`、
-   `logic` 等各一两句）能让 `--hint notation` 可复现，但它是 picker 之
-   外的又一份目录。
-2. **名字。** 定为 program：`Plugin.programs`、`program('edit')`、
+1. **名字。** 定为 program：`Plugin.programs`、`program('edit')`、
    `texra run <program>`。11-06 版在 task 和 recipe 之间没定；
    `texra tasks` 今天指服务里的运行，不撞。
-3. **"小"的口径。** 名词和公开面（本提案）；还是也要物理上拆：把
+2. **"小"的口径。** 名词和公开面（本提案）；还是也要物理上拆：把
    harness 的内置插件（memory、executions、MCP、web、plan，3861 行）搬
    出内核目录或单独成包？后者在 general-package 设计里已裁定等一个具名
    的 embedder。推荐：先前者。
-4. **接受六处改口**（"与已有裁决和 PRD 的关系"）？
-5. **用户自己的程序进不进 1.0**（第 4 期，第七处改口）？不进，1.0 里用
+3. **接受六处改口**（"与已有裁决和 PRD 的关系"）？
+4. **用户自己的程序进不进 1.0**（第 4 期，第七处改口）？不进，1.0 里用
    户能改的只有 `AGENTS.md`。推荐：进，用已有的安装和信任，不做项目里的
    自动发现。
-6. **工具改 CLI**（Unix 一节第 1 条）作为第 7 期？推荐：接受，先试两个插
+5. **工具改 CLI**（Unix 一节第 1 条）作为第 7 期？推荐：接受，先试两个插
    件。
-7. **第 1 期现在开**，还是等 1.0 PRD 的在途线合完？推荐：现在开，它只碰
+6. **第 1 期现在开**，还是等 1.0 PRD 的在途线合完？推荐：现在开，它只碰
    `Plugin` 的一个字段、`script` 的一个成员和 documents 的启动路径。
-8. **声明的核心是哪几个。** "都能调，不全声明"已定（"决定记录"）。核心
+7. **声明的核心是哪几个。** "都能调，不全声明"已定（"决定记录"）。核心
    推荐文件和 shell 的六个（`bash`、`read_file`、`write_file`、
    `edit_file`、`glob`、`grep`）加 `agent` 和 `program`；十个程序的名字
    和描述也内联。
-9. **code mode 什么时候翻。** 方向已定；是等 Q10 的线和"聊天不是一个
+8. **code mode 什么时候翻。** 方向已定；是等 Q10 的线和"聊天不是一个
    agent"里那三件事，还是先翻、把 `codeMode.scriptOnly` 留作关的开关？
    推荐：先补那个"要靠搜索"的 journey，过了就翻，开关留着。
 
@@ -1173,7 +1186,7 @@ history 的行。
 - 文档要对上最新的 `main`：基线和度量取自 `d173e42`。
 - "将来默认打开 code mode，不提供所有的工具。"并确认读法："都能调，不
   全声明"。模型拿到的只有 `script`；开着的工具都能调，声明一个小核心，
-  其余靠搜索（"聊天不是一个 agent"一节）。
+  其余靠搜索（"入口只有一个 agent"一节）。
 - "就一个 theory。"theorist 的程序插件只有一个，不按能力拆，也不按学科
   拆（"theorist 的程序插件"一节）。
 - "logic 和 notation 我感觉 workflow 在了就只是一个 hints 的问题。"程序
@@ -1185,6 +1198,10 @@ history 的行。
   `documents` 并进 `theory`。
 - "lean 也是个单独的插件好了。"Lean 的工具和它的两个程序都在 `lean4`
   插件里，不进 `theory`。
+- "不要 --hint，let model free style。"hint 是模型和用户写的自由文本，
+  没有参数，没有表。
+- "入口 agent 需要只有一个，用户不应该能改这个。"一个入口 agent，基础
+  文本和声明的工具是 app 的常量（"入口只有一个 agent"一节）。
 
 ## 修订记录
 
@@ -1192,7 +1209,7 @@ history 的行。
 
 - 程序的家从三个目录根改为插件；"三种来源，一个解析器"一节删。
 - `author` 字段和"工作区 task 每次启动审批"删。
-- "bundled 的两个 chat"改为"聊天不是一个 agent"。
+- "bundled 的两个 chat"改为"入口只有一个 agent"。
 - 新增"内核认识什么"和"theorist 的程序插件"；Tasks 页、
   `texra tasks types` 和沙箱的 `type: 'module'` 入口不再需要。
 - 工作区 import 不再提前到 1.0。
@@ -1222,8 +1239,9 @@ history 的行。
 但只声明一个小核心；theorist 的东西总体是一个插件 `theory`，Lean 因为
 有外部依赖是单独的插件并带自己的两个程序（中间一稿把步骤工具留在
 `documents` 里，又一稿把 Lean 的程序放进了 `theory`）；`logic` 和 `notation` 是 hint，不是程序；十个程序是内置的起点，模型
-可以写自己的，初稿把步骤工具关在内置程序里。这一批没有再过第二个审稿
-者。
+可以写自己的，初稿把步骤工具关在内置程序里。入口 agent 只有一个且用户不能改，
+setup 和编译修复不再是另一组 chat 参数；没有 `--hint`。这一批没有再过第
+二个审稿者。
 
 **2026-11-06，无上下文审稿后的修正**（仍然成立的部分已并入正文）：模块
 钉在步骤的 `tools.offered.modules`，不在 `AgentConfig` 上另开一份；
@@ -1234,7 +1252,10 @@ history 的行。
 - 不做流程引擎、不做第二个 run history 写者、不做任务调度器。
 - 不做工作区里的程序目录：没有 `.texra/tasks/`，没有 `~/.texra/tasks/`，
   没有对工作区的扫描，内核不读任何程序目录。
-- 不做 persona 或 chat 预设的目录：`Plugin` 上没有"命名的聊天"。
+- 不做第二个入口 agent，不让用户改入口 agent：没有 customize，没有
+  `--agent`，没有可编辑的基础文本或工具表，`Plugin` 上没有"命名的聊
+  天"。
+- 不做 `--hint` 和具名的 hint 表。
 - 不做常驻程序和 `receive()`；事件触发是每事件一次 `start`。
 - 不做 npm 包解析、不做远程依赖、不做文件系统路径和相对路径的 import。
 - 不做按程序的输入 schema 或选项表。
