@@ -38,7 +38,7 @@ interface DocumentTaskRunDetailLine {
 type DocumentTaskRunFacts = {
   readonly stages: readonly Stage[];
   /** The run the stages are of: an open one reads as the run reads. */
-  readonly run: Pick<RunView, 'holder' | 'outcome'>;
+  readonly run: Pick<RunView, 'holder' | 'outcome' | 'position'>;
   /** The run's rounds, as its documents fact records them. */
   readonly rounds: readonly RoundOutput[];
 };

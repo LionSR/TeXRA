@@ -218,11 +218,14 @@ export function rollupOf(
   return rollup;
 }
 
-/** Whether nobody drives the run although it has not ended: its process
- *  stopped before it finished, and a resume continues it. */
+/** Whether the run was cut while it worked: it has not ended, nobody
+ *  drives it, and it does not stand between turns. A resume continues it.
+ *  A run left waiting for its next message is not interrupted, whoever
+ *  held it: nothing of it was in flight, and that message continues it. */
 export const isInterrupted = (
-  run: Pick<ReadRunView, 'holder' | 'outcome'>,
-): boolean => run.holder === 'none' && run.outcome === null;
+  run: Pick<ReadRunView, 'holder' | 'outcome' | 'position'>,
+): boolean =>
+  run.holder === 'none' && run.outcome === null && run.position !== 'waiting';
 
 /** Whether the run is working a turn in this process right now (a pending
  *  approval or question is still the turn's). */

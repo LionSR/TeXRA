@@ -86,6 +86,31 @@ describe('session view update', () => {
     });
   });
 
+  // A process that exits writes nothing for its runs, so a conversation
+  // left idle between turns is found with no holder at every restart:
+  // nothing of it was in flight, and its next message continues it.
+  it('reads an idle run nobody holds as waiting, not interrupted', () => {
+    const log = new Log();
+    log.emit(ROOT, T.root, {
+      type: 'run.start',
+      identity: { kind: 'agent', agent: 'custom:search' },
+      parent: null,
+      provenance: null,
+      takesFollowUps: true,
+    });
+    log.emit(ROOT, T.root, { type: 'run.activate' });
+    log.emit(ROOT, T.root + 1, {
+      type: 'run.position',
+      payload: { at: 'waiting', turn: 1 },
+    });
+    const view = viewOf([...log.events.map(tail), nobody]);
+    const idle = runView(view, ROOT);
+    expect(idle.position).toBe('waiting');
+    expect(isInterrupted(idle)).toBe(false);
+    expect(needsUser(idle, view.runs)).toBe(false);
+    expect(view.rollup.interrupted).toBe(0);
+  });
+
   it('ends the turn of a run whose owner died mid-compaction', () => {
     const log = new Log();
     log.emit(ROOT, T.root, {
