@@ -43,8 +43,6 @@ export {
 export { nodePlatformServices } from '@platform/defaults/nodePlatform';
 // The global root's SQLite handle, and the bound its input history keeps. The project stores stay beneath the session composition.
 export { GlobalDatabase, INPUT_HISTORY_LIMIT } from '@shared/session/database';
-// A run's record, as a project store reads it back (`readRunRecord`).
-export type { RowOf, RunRows } from '@shared/session/runRowsShape';
 export {
   canonicalizeWorkspaceRoot,
   relativeToRoot,
