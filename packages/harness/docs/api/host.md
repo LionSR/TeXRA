@@ -883,14 +883,6 @@ item's outcome, in listing order.
 const deleteStorageInventory: (storageRoot: string, inventory: Pick<StorageInventory, "orphans" | "asides">) => Effect<({ path: string; outcome: "failed"; message: string; } | { path: string; outcome: "kept"; message?: undefined; } | { path: string; outcome: "deleted"; message?: undefined; } | { path: string; outcome: "failed"; message: string; })[], DatabaseReadFailed | PlatformError, FileSystem | GlobalValues>
 ```
 
-## describeFollowUpFailure
-
-The one wording of each refusal, shared by every host and tool output.
-
-```ts
-function describeFollowUpFailure(reason: FollowUpFailureReason): string
-```
-
 ## DiffHunks
 
 One diff pass: its hunks, and — when the pass hit its bound — the warning
@@ -928,17 +920,6 @@ interface EnabledSkill {
   readonly display: SkillDisplayItem;
   readonly activation: string;
 }
-```
-
-## EventsRead
-
-A read of committed events.
-
-```ts
-type EventsRead = Effect.Effect<
-  readonly SessionRow[],
-  DatabaseReadFailed
->;
 ```
 
 ## ExportNode
@@ -1968,27 +1949,6 @@ interface RootedFileSystem extends FileSystem.FileSystem {
 }
 ```
 
-## RouteCredential
-
-The credential of one route. `bearer` is what the transport sends: a key,
-or a session's token, which llm reads per request and renews once when
-the provider rejects it.
-
-```ts
-type RouteCredential = {
-  readonly provider: ApiKeyProviderId;
-} & (
-  | { readonly route: 'api-key'; readonly bearer: string }
-  | { readonly route: 'xai-subscription'; readonly bearer: SessionToken }
-  | {
-      readonly route: 'chatgpt-subscription';
-      readonly bearer: SessionToken;
-      /** The ChatGPT plan the session's token names; display-only. */
-      readonly plan: string | undefined;
-    }
-);
-```
-
 ## RouteReasoning
 
 A model's reasoning on its decided route, as data: what the bind's own
@@ -2585,16 +2545,6 @@ interface ValueFamily<T> {
   readonly name: string;
   readonly schema: Schema.Codec<T, unknown>;
 }
-```
-
-## WithBlobs
-
-A draft with the blobs it stores or links.
-
-```ts
-type WithBlobs<Draft> = Draft & {
-  readonly blobs?: readonly DraftBlob[];
-};
 ```
 
 ## withFileWriteLane
