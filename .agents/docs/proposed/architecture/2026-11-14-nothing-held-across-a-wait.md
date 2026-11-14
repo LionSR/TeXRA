@@ -282,10 +282,58 @@ Done, on the branch after PR 14927:
   answer admits.
 - Row 12, the GitHub deliveries: one fiber a run sends a poll round's
   events in their order, where each event was its own fork.
+- Row 13, the VS Code host: `scopedFork` (`harness/src/platform/processRuntime.ts`,
+  exported from `@texra-ai/harness/host`) is `FiberSet.makeRuntime` with
+  the fork-failure report a runtime's `runFork` has, so a converted
+  callback's failure is still logged once. The activation scope holds one
+  (its config warnings, the extension and folder change probes, the
+  welcome view's reload, the command registry's two reports, and the
+  settings panel's five callbacks, whose follow-then-interrupt pair is
+  gone); the progress view's scope holds another (a surface's posts and
+  messages, and the tool-edit host's report and warning). A request a
+  surface sent outlives that surface and ends with the view. A callback
+  after deactivation starts nothing.
+- Row 14, the scoped forks: the desktop window's notice waits on the
+  window's fibers, a project's warning dialog on the process scope, and
+  the CLI's resume of a document task on the shutdown scope beside the
+  chat's own resume.
+- Row 20, the buffers: the history store's request and reply queues and
+  the sandbox's report queue are `bounded(1)` (strict lockstep); the
+  sandbox's settlements are `bounded(MAX_FANOUT)`, the worker's cap on
+  calls outstanding; the availability answers are `sliding(1)` with a
+  replay of one (rounds rise, and a waiter takes the first at or past its
+  own); the deletion markers are `dropping(256)`, and a refused one is
+  logged and stays pending in the store for the next open's pass; the
+  unhandled-rejection log is `dropping(64)` (each entry ends the host).
+- Checks: `check-fact-spread.mjs` holds `Effect.forkDetach`,
+  `Queue.unbounded`, `PubSub.unbounded` and `SynchronizedRef` shrink-only.
+
+Left, with the reason:
+
+- Row 13: `progressView`'s surface close (`Scope.close` of a surface's
+  scope cannot be a fiber of the view scope its close may be running in);
+  the CLI chat's `stop` (asked in the signal handler right before the
+  shutdown scope closes, so a fiber of that scope would be interrupted
+  before its request lands); `texra/src/shared/signals.ts`,
+  `desktopWindows.ts` and `processRuntime.ts` (the roots).
+- Row 14: `VscodeUiHost.notify` and `instruction.ts`'s deferred dismissal
+  (`vscodeUi` is a module singleton reached from fourteen modules and the
+  host-neutral `Dialogs` port; a scope there is module state or a run
+  function threaded through all of them, and the fiber holds only a
+  toast's promise); `HostInteractions.ts`, `ToolUseFollowUp.ts` (row 6),
+  `hostRunActions.ts`, `openGuiWindow.ts`, `nodePlatform.ts`, and the TUI's
+  `sessionCommands.ts`.
+- Row 20: `settingsViewBody.ts`'s inputs (each page filters after the
+  `PubSub`, so a dropped input only one page follows is a page that never
+  rebuilds); `appSignals.ts` (a lost `credentialChanged` is a stale
+  credential); `sessionEventsLayer.ts` (published inside the
+  uninterruptible turn, which must not wait); `sessionFrames.ts`,
+  `hostWindows.ts` (rows 16 and 9) and the frontend's `sessionTransport.ts`.
 
 Open: fiber-first opening (row 6), the frames on `rpc` (row 16), the model
 socket (row 18), the inbound queues (row 12), agent selection as one store
-write (row 22), the buffers (row 20), and slice 7. What the passes learned:
+write (row 22), the remaining buffers (row 20, above), and slice 7. What
+the passes learned:
 
 - Row 6 keeps a `Map`, for the reason in its "Stays" cell. Fiber-first
   opening (the run's fiber acquires its own resources) removes the
@@ -335,9 +383,12 @@ write (row 22), the buffers (row 20), and slice 7. What the passes learned:
 
 ## Checks
 
-- `scripts/check-fact-spread.mjs` holds `withPerKeyLane` shrink-only. Add
-  the constructs of the surface table, so a slice that raises one fails and
-  names the file.
+- `scripts/check-fact-spread.mjs` holds `withPerKeyLane`,
+  `Effect.forkDetach`, `Queue.unbounded`, `PubSub.unbounded` and
+  `SynchronizedRef` shrink-only, so a slice that raises one fails and names
+  the file. The surface table's broader rows (followers, listeners,
+  entries into Effect) are not counted: their spellings also match
+  legitimate uses.
 - The two tests PR 14927 added stay: a detached job has committed when the
   call returns, and no job runs after the publisher closed, at every
   scheduler budget from 2 to 79.

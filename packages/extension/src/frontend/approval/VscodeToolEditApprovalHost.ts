@@ -12,7 +12,7 @@ import { toolEditDiffLabel } from '@ui/copy/toolEditPreview';
 import { Effect, FileSystem, Scope } from 'effect';
 import * as vscode from 'vscode';
 
-import { type ProcessRuntime } from '@texra-ai/harness/host';
+import type { ScopedFork } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   VscodeDiffViewHost,
@@ -47,18 +47,19 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
     );
 
   private readonly storageDirectory: string;
-  private readonly runtime: ProcessRuntime;
+  private readonly fork: ScopedFork<never>;
   private readonly roots: WorkspaceRoots;
   private readonly scope: Scope.Scope;
   constructor(
     storageDirectory: string,
-    runtime: ProcessRuntime,
+    /** The view's run function, where a report or warning is shown. */
+    fork: ScopedFork<never>,
     roots: WorkspaceRoots,
     /** The view's scope, which a scheduled PDF viewer open runs in. */
     scope: Scope.Scope,
   ) {
     this.storageDirectory = storageDirectory;
-    this.runtime = runtime;
+    this.fork = fork;
     this.roots = roots;
     this.scope = scope;
   }
@@ -97,14 +98,12 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   reportError(message: string): void {
     // Fire-and-forget, as the voided promise was: the report is logged and
     // shown on its own fiber, and the caller does not wait for the toast.
-    this.runtime.runFork(
-      showLoggedMessage(message).pipe(withLogChannel(CHANNEL)),
-    );
+    this.fork(showLoggedMessage(message).pipe(withLogChannel(CHANNEL)));
   }
 
   /** A warning, logged and shown on its own fiber, as a report is. */
   private readonly warn = (message: string): void => {
-    this.runtime.runFork(
+    this.fork(
       Effect.logWarning(message).pipe(
         withLogChannel(CHANNEL),
         Effect.andThen(vscodeUi.notify('warning', message)),

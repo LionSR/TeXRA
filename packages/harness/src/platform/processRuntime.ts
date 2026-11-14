@@ -17,6 +17,8 @@ import {
   Context,
   Effect,
   Exit,
+  type Fiber,
+  FiberSet,
   type FileSystem,
   type Layer,
   Logger,
@@ -131,38 +133,79 @@ function isInterruption(cause: Cause.Cause<unknown>): boolean {
 }
 
 /**
+ * Log a forked fiber's failure or defect once, on `fork`. A success stays
+ * silent, as does an exit made of interrupts alone or of interrupts beside
+ * Effect's end-of-stream `Done`.
+ */
+function reportFailedExit(
+  fork: (report: Effect.Effect<void>) => unknown,
+  fiberId: number,
+  exit: Exit.Exit<unknown, unknown>,
+): void {
+  if (Exit.isSuccess(exit) || isInterruption(exit.cause)) return;
+  fork(
+    Effect.logError('Unhandled failure in forked fiber', exit.cause).pipe(
+      Effect.annotateLogs({ forkedFiber: fiberId }),
+    ),
+  );
+}
+
+/**
  * A runtime whose `runFork` reports a fiber's failure or defect on exit.
  * `Fiber.addObserver` fires on every exit, including fibers a
  * caller later `Fiber.join`s, so a joined failure is logged here and still
- * delivered to the joiner. A success stays silent, as does an exit made of
- * interrupts alone or of interrupts beside Effect's end-of-stream `Done`.
- * `runPromise` and `runSync` hand their exits to the caller already.
+ * delivered to the joiner. `runPromise` and `runSync` hand their exits to
+ * the caller already.
  */
 export function withForkFailureReporting<R, ER>(
   runtime: ManagedRuntime.ManagedRuntime<R, ER>,
 ): ManagedRuntime.ManagedRuntime<R, ER> {
   // The report forks on the underlying `runFork`, not the observed one: a
   // defect in the reporter itself must not recurse back into this observer.
-  const reportExit = (
-    fiberId: number,
-    exit: Exit.Exit<unknown, unknown>,
-  ): void => {
-    if (Exit.isSuccess(exit) || isInterruption(exit.cause)) return;
-    runtime.runFork(
-      Effect.logError('Unhandled failure in forked fiber', exit.cause).pipe(
-        Effect.annotateLogs({ forkedFiber: fiberId }),
-      ),
-    );
-  };
+  const fork = (report: Effect.Effect<void>) => runtime.runFork(report);
   return {
     ...runtime,
     runFork: (effect, options) => {
       const fiber = runtime.runFork(effect, options);
-      fiber.addObserver((exit) => reportExit(fiber.id, exit));
+      fiber.addObserver((exit) => reportFailedExit(fork, fiber.id, exit));
       return fiber;
     },
   };
 }
+
+/** Start an effect on a fiber of the scope that made this run function. */
+export type ScopedFork<R> = <A, E>(
+  effect: Effect.Effect<A, E, R>,
+) => Fiber.Fiber<A, E>;
+
+/**
+ * The run function a host callback starts Effect work with: each fiber
+ * joins one `FiberSet` of the caller's scope, whose close interrupts and
+ * awaits it, and once that scope has closed a callback starts nothing (the
+ * fiber it gets back is already interrupted). Like `runtime.runFork`, it
+ * runs the effect's first synchronous steps before it returns. A failure or
+ * defect is logged once, as {@link withForkFailureReporting} logs a
+ * runtime's fork.
+ *
+ * Build it once where the owner's scope is acquired, in the context the
+ * owner's fibers run in (a host's process services): every fiber starts
+ * from that context, as `runtime.runFork` starts from the runtime's, so no
+ * more specific provision sits inside for it to shadow.
+ */
+export const scopedFork = <R = never>(): Effect.Effect<
+  ScopedFork<R>,
+  never,
+  R | Scope.Scope
+> =>
+  Effect.map(FiberSet.makeRuntime<R>(), (run) => (effect) => {
+    const fiber = run(effect);
+    // Reported on the set's own run function, not this one: a defect in the
+    // reporter must not recurse back into this observer.
+    fiber.addObserver((exit) =>
+      reportFailedExit((report) => run(report), fiber.id, exit),
+    );
+    return fiber;
+  });
 
 /**
  * The logger of a view's runtime, which builds no process diagnostics layer:

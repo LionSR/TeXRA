@@ -56,6 +56,12 @@ const PREDICATES = [
   'parentId',
   'withPerKeyLane',
   'toErrorMessage',
+  // Concurrency constructs a scope or a stated bound replaces: a fork no
+  // scope owns, a buffer with no bound, a lock where one `Ref` step serves.
+  'Effect.forkDetach',
+  'Queue.unbounded',
+  'PubSub.unbounded',
+  'SynchronizedRef',
 ];
 
 /** Members a pair of literal sets must share to count as one vocabulary. */
