@@ -18,7 +18,7 @@ import {
  */
 function generateDecoratorShortcuts(
   decorator: string,
-  letters: string[],
+  letters: readonly string[],
   prefix: string,
 ): PatternDict {
   return createPatterns(letters, (letter) => [
