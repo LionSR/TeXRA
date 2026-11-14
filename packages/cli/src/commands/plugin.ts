@@ -10,6 +10,13 @@ import {
   type PluginUpdate,
 } from '@texra-ai/harness/host';
 
+import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
+import {
+  pluginRowProblem,
+  pluginRowState,
+  pluginRowTrust,
+} from '@ui/copy/plugins';
+
 import { CliInvocation, CliUsageError } from '../runtime/platform/cliContext';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
@@ -56,21 +63,17 @@ const withPluginEnv = Effect.fn('withPluginEnv')(function* <A, E>(
 
 const shortCommit = (commit: string | undefined) => commit?.slice(0, 12);
 
-function pluginState(plugin: PluginListing): string {
-  if (plugin.code.length > 0)
-    return `ships ${plugin.code.join(', ')}, cannot be enabled`;
-  if (!plugin.enabled) return 'disabled';
-  return plugin.trusted ? 'enabled' : 'enabled, needs trust';
-}
-
 function formatPluginList(plugins: readonly PluginListing[]): string {
   if (plugins.length === 0) {
     return 'No plugins installed. Install one with `texra plugin install <source>`.';
   }
   return plugins
     .map((plugin) => {
+      // The words for a plugin's state are the Plugins page's and /plugins'.
+      const row: PluginRow = { kind: 'installed', plugin, usedBy: [] };
+      const trust = pluginRowTrust(row);
       const header = [
-        `${plugin.name} (${pluginState(plugin)})`,
+        `${plugin.name} (${pluginRowState(row)}${trust === null ? '' : `, ${trust}`})`,
         plugin.version,
         plugin.commit
           ? `${plugin.source} @ ${shortCommit(plugin.commit)}`
@@ -78,10 +81,13 @@ function formatPluginList(plugins: readonly PluginListing[]): string {
       ]
         .filter(Boolean)
         .join('  ');
-      if (plugin.problem) return `${header}\n  problem: ${plugin.problem}`;
+      const problem = pluginRowProblem(row);
+      const lines =
+        problem === null ? [header] : [header, `  problem: ${problem}`];
+      if (plugin.problem) return lines.join('\n');
       const unloaded = [...plugin.code, ...plugin.ignored];
       return [
-        header,
+        ...lines,
         `  contains: skills (${plugin.skillCount}), commands (${plugin.commandCount}), agents (${plugin.agentCount}), MCP servers (${plugin.mcpServers.length === 0 ? 'none' : plugin.mcpServers.join(', ')}), hooks (${plugin.hooks.length})`,
         `  not loaded: ${unloaded.length === 0 ? 'none' : unloaded.join(', ')}`,
       ].join('\n');
