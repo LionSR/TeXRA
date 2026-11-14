@@ -13,6 +13,7 @@ import {
   MESSAGE_TYPES,
   needsUser,
   qualifyAggregateId,
+  rollupOf,
   type RunId,
   RunIdSchema,
   type RunView,
@@ -109,6 +110,12 @@ describe('session view update', () => {
     expect(isInterrupted(idle)).toBe(false);
     expect(needsUser(idle, view.runs)).toBe(false);
     expect(view.rollup.interrupted).toBe(0);
+    // As a child it has delivered its turn: a parent counts it finished.
+    expect(rollupOf([idle])).toStrictEqual({
+      total: 1,
+      running: 0,
+      finished: 1,
+    });
   });
 
   it('ends the turn of a run whose owner died mid-compaction', () => {

@@ -1903,8 +1903,8 @@ type RetryRequest = typeof RetryRequestSchema.Type;
 What `children` and their descendants count toward a parent's `rollup`:
 the view's count over the run tree (each child's own `rollup` below it),
 and the dispatch card's over the tree it lists (`below` recurses through
-the children it lists instead). A child waiting between turns (held) or
-paused, nothing asked of the user, has delivered its turn: it counts as
+the children it lists instead). A child waiting between turns, held or
+not, nothing asked of the user, has delivered its turn: it counts as
 finished, not running.
 
 ```ts

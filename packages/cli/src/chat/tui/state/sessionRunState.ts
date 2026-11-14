@@ -202,7 +202,8 @@ export class TuiSession {
    * On exit, a tool-use session suspended at a wait (idle/WAITING) is not
    * stopped the way a Ctrl-C stops a turn, and the exit needs no second
    * Ctrl-C. The session's close writes nothing for it: the run is left as
-   * its rows stand and reads as interrupted, resumable, at the next open.
+   * its rows stand and reads as waiting at the next open, where its next
+   * message continues it.
    */
   isResumableIdle(): boolean {
     // The service holds the task: the chat leaves it as it is, any time.

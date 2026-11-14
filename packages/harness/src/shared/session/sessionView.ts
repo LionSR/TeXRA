@@ -194,8 +194,8 @@ export type RunView = typeof RunViewSchema.Type;
  * What `children` and their descendants count toward a parent's `rollup`:
  * the view's count over the run tree (each child's own `rollup` below it),
  * and the dispatch card's over the tree it lists (`below` recurses through
- * the children it lists instead). A child waiting between turns (held) or
- * paused, nothing asked of the user, has delivered its turn: it counts as
+ * the children it lists instead). A child waiting between turns, held or
+ * not, nothing asked of the user, has delivered its turn: it counts as
  * finished, not running.
  */
 export function rollupOf(
@@ -204,10 +204,7 @@ export function rollupOf(
 ): ReadRunView['rollup'] {
   const rollup = { total: 0, running: 0, finished: 0 };
   for (const child of children) {
-    const idle =
-      child.holder === 'here' &&
-      child.position === 'waiting' &&
-      child.approval !== 'own';
+    const idle = child.position === 'waiting' && child.approval !== 'own';
     const under = below(child);
     rollup.total += 1 + under.total;
     rollup.running +=
