@@ -2,9 +2,35 @@
 
 import escapeRegExp from 'escape-string-regexp';
 
-// Greek letters used for pattern generation
+export const UPPERCASE_LETTERS = Object.freeze([
+  ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+]);
+
+/** The Latin letters, uppercase first. */
+export const LETTERS = Object.freeze([
+  ...UPPERCASE_LETTERS,
+  ...'abcdefghijklmnopqrstuvwxyz',
+]);
+
+/** Lowercase Greek letters by LaTeX name, in alphabetical order, with their Unicode characters. */
 // prettier-ignore
-export const GREEK_LETTERS = 'alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega'.split(' ');
+export const GREEK_LETTER_CHARACTERS: Readonly<Record<string, string>> = Object.freeze({
+  alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', zeta: 'ζ',
+  eta: 'η', theta: 'θ', iota: 'ι', kappa: 'κ', lambda: 'λ', mu: 'μ',
+  nu: 'ν', xi: 'ξ', omicron: 'ο', pi: 'π', rho: 'ρ', sigma: 'σ',
+  tau: 'τ', upsilon: 'υ', phi: 'φ', chi: 'χ', psi: 'ψ', omega: 'ω',
+});
+
+export const GREEK_LETTERS = Object.freeze(
+  Object.keys(GREEK_LETTER_CHARACTERS),
+);
+
+/** The uppercase Greek letters LaTeX has a command for; the rest are Latin capitals. */
+// prettier-ignore
+export const UPPERCASE_GREEK_LETTER_CHARACTERS: Readonly<Record<string, string>> = Object.freeze({
+  Gamma: 'Γ', Delta: 'Δ', Theta: 'Θ', Lambda: 'Λ', Xi: 'Ξ', Pi: 'Π',
+  Sigma: 'Σ', Upsilon: 'Υ', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω',
+});
 
 // Section commands for LaTeX documents
 export const SECTION_TYPES = [
@@ -50,27 +76,64 @@ export const MATH_OPERATORS = [
   'liminf',
 ];
 
-const FENCED_LATEX_ENVIRONMENTS = [
-  'align',
-  'align*',
-  'aligned',
-  'aligned*',
-  'alignat',
-  'alignat*',
-  'gather',
-  'gather*',
-  'multline',
-  'multline*',
-  'equation',
-  'equation*',
-  'cases',
-  'cases*',
-  'split',
+/**
+ * The math environments the replacement rules and the latexdiff clean-up
+ * handle. Each of them picks its subset from this one vocabulary.
+ */
+type MathEnvironment =
+  | 'equation'
+  | 'align'
+  | 'aligned'
+  | 'alignat'
+  | 'flalign'
+  | 'gather'
+  | 'multline'
+  | 'eqnarray'
+  | 'split'
+  | 'cases'
+  | 'matrix'
+  | 'pmatrix'
+  | 'bmatrix'
+  | 'vmatrix'
+  | 'smallmatrix';
+
+/** The top-level display-math environments, without their starred forms. */
+export const DISPLAY_MATH_ENVIRONMENTS: readonly MathEnvironment[] =
+  Object.freeze([
+    'equation',
+    'align',
+    'alignat',
+    'flalign',
+    'gather',
+    'multline',
+    'eqnarray',
+  ]);
+
+/** Each name followed by its starred form: `align`, `align*`. */
+export function withStarredForms(names: readonly MathEnvironment[]): string[] {
+  return names.flatMap((name) => [name, `${name}*`]);
+}
+
+const MATRIX_ENVIRONMENTS: readonly MathEnvironment[] = [
   'pmatrix',
   'bmatrix',
   'vmatrix',
   'matrix',
   'smallmatrix',
+];
+
+const FENCED_LATEX_ENVIRONMENTS = [
+  ...withStarredForms([
+    'align',
+    'aligned',
+    'alignat',
+    'gather',
+    'multline',
+    'equation',
+    'cases',
+  ]),
+  'split',
+  ...MATRIX_ENVIRONMENTS,
 ];
 
 const FENCED_LATEX_ENVIRONMENT_PATTERN =

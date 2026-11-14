@@ -7,7 +7,7 @@ export type PatternDict = Record<string, string>;
 
 /** Builds a pattern table from `items`, each mapped to its pairs. */
 export function createPatterns<T>(
-  items: T[],
+  items: readonly T[],
   mapper: (item: T) => [string, string][],
 ): PatternDict {
   return Object.fromEntries(items.flatMap(mapper));
@@ -17,7 +17,9 @@ export function createPatterns<T>(
  * Generates patterns for fixing extra backslashes in LaTeX commands
  * Example: \\\\alpha -> \\alpha
  */
-export function generateBackslashFixes(commands: string[]): PatternDict {
+export function generateBackslashFixes(
+  commands: readonly string[],
+): PatternDict {
   return createPatterns(commands, (cmd) => [[`\\\\${cmd}`, `\\${cmd}`]]);
 }
 
@@ -26,8 +28,8 @@ export function generateBackslashFixes(commands: string[]): PatternDict {
  * command of the same name. Example: {\rm X} -> \mathrm{X}
  */
 export function generateLegacyFontFixes(
-  letters: string[],
-  switches: string[],
+  letters: readonly string[],
+  switches: readonly string[],
 ): PatternDict {
   return createPatterns(letters, (letter) =>
     switches.map((name): [string, string] => [

@@ -21,8 +21,8 @@ The files have distinct roles:
   table representation.
 - `patterns.ts` (`createPatterns`, and the backslash fixes both rule files
   use) and `constants.ts` support construction of the rule tables; a
-  generator one table uses is written at that table. `types.ts` defines
-  their common representation.
+  generator one table uses is written at that table. a plain category is a bare
+  `Record<string, string>` and `types.ts` defines the regex rule set.
 
 Keep rules in their existing category when extending a preset. A rule shared
 by two categories should have one generated source in `patterns.ts`, while each
