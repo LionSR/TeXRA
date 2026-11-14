@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: a `PerKeyLane` holds a `Semaphore`.** `withPerKeyLane` keeps its
+  signature; the lane record it stores is `{ lock, fibers }` where it was
+  `{ tail, fibers }`. Fibers enter in the order they join the key's queue,
+  which can differ from the order of two calls made within a few steps of
+  each other.
 - **SDK: `withPerKeyLane` takes no conditional claim.** Its third
   parameter, `refuseClaim`, had no caller and is removed; a lane is claimed
   by every entrant.

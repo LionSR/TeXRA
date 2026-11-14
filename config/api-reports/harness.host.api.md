@@ -87,7 +87,7 @@ Exports: 164
 - `onAppSignal` — `function onAppSignal: <K extends AppSignal>(signal: K, listener: (payload: AppSignalPayloads[K]) => void) => Effect<void, never, AppSignals>`
 - `ownKeyCredential` — `const ownKeyCredential: (stores: SettingsStores, config: ModelConfig) => Effect<{ readonly provider: "anthropic" | "dashscope" | "deepseek" | "glm" | "google" | "kimiCode" | "meta" | "minimax" | "moonshot" | "openai" | "xai"; } & { readonly bearer: string; readonly route: "api-key"; } & { readonly endpoint: string; }, RouteUnavailable, Secrets>`
 - `pathToLocationIn` — `function pathToLocationIn: (workspaceRoot: string | undefined, target: string) => { readonly absolutePath: string; readonly kind: "external"; } | { readonly absolutePath: string; readonly kind: "runStorage"; readonly relativePath: string; readonly runId: string & Brand<"RunId">; } | { readonly absolutePath: string; readonly kind: "workspace"; readonly relativePath: string; }`
-- `PerKeyLane` — `interface PerKeyLane { tail: Deferred.Deferred<void>; fibers: number; }`
+- `PerKeyLane` — `interface PerKeyLane { readonly lock: Semaphore.Semaphore; fibers: number; }`
 - `PerKeyLanes` — `interface PerKeyLanes<Key> { get(key: Key): PerKeyLane | undefined; set(key: Key, lane: PerKeyLane): unknown; delete(key: Key): unknown; }`
 - `PlatformServices` — `type PlatformServices = FileSystem.FileSystem | Path.Path | ChildProcessSpawner | GlobalStorageFs | GlobalDatabase | HttpClient.HttpClient | Secrets | SubscriptionAccounts | AppState | AgentDirectories | GlobalValues | StateStores | UsageLog | AppSignals; ≡ PlatformServices`
 - `PluginContext` — `type PluginContext = Context.Context<never>; ≡ PluginContext`
