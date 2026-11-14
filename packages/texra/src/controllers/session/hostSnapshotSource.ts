@@ -14,9 +14,10 @@
  * and then writes its own fields, so the last write of a field wins and no
  * producer waits on another; the snapshot is the inputs mapped, so a field
  * derived from several inputs (the funnel, a banner's visibility) is never
- * stored. The catalogs, the credential and the approval policy follow the
- * app signals that announce their changes, written by any writer in the
- * process, so no host or settings page pushes a reload.
+ * stored. The catalogs and the credential follow the app signals that
+ * announce their changes, written by any writer in the process, so no host
+ * or settings page pushes a reload; the approval policy is read live as
+ * each snapshot is mapped.
  */
 import {
   Effect,
@@ -120,7 +121,6 @@ interface Inputs {
     HostSnapshot,
     'agentOptions' | 'modelOptions' | 'teamOptions'
   >;
-  readonly approvalPolicy: HostSnapshot['approvalPolicy'];
   readonly workspaceRoots: HostSnapshot['workspaceRoots'];
   readonly fileOptions: FileOptions;
   readonly commits: { readonly commits: string[]; readonly isGitRepo: boolean };
@@ -226,12 +226,9 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
   > {
     const { stores } = options;
     const appState = yield* AppState;
-    const approvalPolicy = (): HostSnapshot['approvalPolicy'] =>
-      Settings.getConfig(stores.config, APPROVAL_POLICY_SETTING);
     const inputs = yield* SubscriptionRef.make<Inputs>({
       loaded: false,
       catalogs: { agentOptions: [], modelOptions: [], teamOptions: [] },
-      approvalPolicy: approvalPolicy(),
       workspaceRoots: options.workspaceRoots(),
       fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
       commits: { commits: [], isGitRepo: false },
@@ -413,9 +410,11 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       ),
       Effect.andThen(loadCredential, catalogs),
     );
+    // The approval policy is read live as each snapshot is mapped; a
+    // settings view's write republishes the inputs so the change shows.
     yield* follow(
       yield* subscribeAppSignal('approvalPolicyChanged'),
-      Effect.suspend(() => write({ approvalPolicy: approvalPolicy() })),
+      SubscriptionRef.update(inputs, (current) => ({ ...current })),
     );
     // Configuring a credential clears a previous "Skip for now", so a user
     // who later loses every credential sees the picker again.
@@ -439,7 +438,10 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     const snapshotOf = (s: Inputs): HostSnapshot => ({
       project: options.project,
       tools: options.tools,
-      approvalPolicy: s.approvalPolicy,
+      approvalPolicy: Settings.getConfig(
+        stores.config,
+        APPROVAL_POLICY_SETTING,
+      ),
       ...s.catalogs,
       workspaceRoots: s.workspaceRoots,
       fileOptions: {
