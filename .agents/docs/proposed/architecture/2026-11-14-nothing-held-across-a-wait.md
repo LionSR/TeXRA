@@ -117,7 +117,7 @@ Paths are under `packages/`. "Stays" names what remains hand-written and why.
 | 14  | A notice nobody waits for                          | the host runs the wait in its own `FiberSet`; `notify` returns once shown                                                                                                     | about 11 `forkDetach` at callers; the other 14 become scoped forks                                                                                   | none                                                                                                                                                     |
 | 15  | One fact, many readers                             | one `SubscriptionRef` holding a union; readers take `changes` through `Stream.changes`                                                                                        | the link's three refs and five derivations; "a task is at work" computed two ways                                                                    | none                                                                                                                                                     |
 | 16  | A request and its answer, between TeXRA's own ends | `rpc`, with a `Protocol` over `postMessage` where the transport is a frame                                                                                                    | the tables in `texra/src/ui/progress/sessionTransport.ts`, `SessionBridge.ts`, `desktop/src/main/desktopPromptController.ts`                         | `harness/src/tools/jsonRpc.ts` (LSP: the peer also asks); `hostWindows.ts` `ask` (the direction `rpc` lacks)                                             |
-| 17  | A line from the terminal                           | `Terminal.readLine`                                                                                                                                                           | `askCliQuestion` in `cli/src/runtime/platform/logSinks.ts`                                                                                           | the prompt on stderr; hidden input through `cli/Prompt`                                                                                                  |
+| 17  | A line from the terminal                           | the one readline wrapper, racing readline's `close`                                                                                                                           | the question that stayed pending when its input ended                                                                                                | readline: `Terminal.readLine` hides no input and prompts on stdout                                                                                       |
 | 18  | A WebSocket                                        | `Socket.fromWebSocket(ws, { openTimeout })`                                                                                                                                   | the iterator, `rejoin` and the open wait in `llm/src/api/openaiResponsesWebSocket.ts`                                                                | reading the handshake's status; a deadline per pull for liveness                                                                                         |
 | 19  | A wait on something outside the process            | `Effect.timeoutOrElse`; a retry is a `Schedule` with an end                                                                                                                   | the untimed Lean request, TUI exit, `texra service stop` across builds; `READ_RETRY` without a bound; "retry on the next view"                       | a wait on a person, which ends with their window                                                                                                         |
 | 20  | A buffer                                           | `Queue.bounded`, `sliding` or `dropping`, chosen where the queue is made                                                                                                      | fifteen unbounded queues                                                                                                                             | none                                                                                                                                                     |
@@ -261,17 +261,43 @@ Done, on the branch after PR 14927:
 - Row 22, the credential file: a refused refresh adopts a session another
   process stored and deletes only one that is still the stored one.
 - Slice 8: the log viewer test writes its entry through the app's log.
+- Scope ownership: one session's close runs no plugin drain; the shutdown
+  (`closeAll`) alone does. Closing one project had ended the GitHub pollers
+  of every other.
+- Row 19: `texra service stop` and `restart` have one deadline, for a
+  service of another build too.
+- Row 17, not as written: a question on stdin fails when its input ends
+  (readline leaves it pending for good). `Terminal.readLine` was not
+  adopted: it has no hidden input and writes its prompt to stdout, so the
+  two would have needed two mechanisms. The one readline wrapper stays and
+  races its `close`.
+- Row 14: `Dialogs.notify` returns once the host is asked to show the
+  notice, in VS Code and the desktop app; eleven caller forks are gone.
+- Row 15: a service link holds one value, the client or why it is away;
+  "a run at work" has one reading (`runsAtWork`) for a project's hold, the
+  service's load and a drain's end.
+- Row 23: the recovery probe tells the gate when its response's first
+  event arrives (`RouteAnswered`) and goes on as one of the calls that
+  answer admits.
 
-Open: everything else in "Order". Three things the first pass learned:
+Open: fiber-first opening (row 6), the frames on `rpc` (row 16), the model
+socket (row 18), the inbound queues (row 12), agent selection as one store
+write (row 22), the buffers (row 20), and slice 7. What the passes learned:
 
 - Row 6 keeps a `Map`, for the reason in its "Stays" cell. Fiber-first
-  opening (the run's fiber acquires its own resources) is still open; it
-  removes the `opening` state and the detached scope, and changes what a
-  launcher's interruption means.
-- Row 23 needs a signal from the model attempt, in `ModelInvoker.ts`, which
-  the session-data work also edits.
-- Row 10 at the Codex probe and the vendor-package resolver needs a
-  process service to hold the cache: both are module-level today.
+  opening (the run's fiber acquires its own resources) removes the
+  `opening` and `pending` states and the detached scope. It changes what a
+  launcher's interruption means, and a stop that reaches a run before its
+  registration commits has no row to carry its reason, so the run's end
+  would read the reason from the registry.
+- Row 21, the close deadline: the step with no bound is
+  `Fiber.interruptAll` in the run `FiberMap`'s finalizer, which waits for
+  a run that does not unwind. No such run was reproduced, and a bounded
+  closer would be hand-written, so it is left until one is observed.
+- Rows 9 and 10 at the remaining lanes: a reopen must wait for a close and
+  nothing shipped does that, so the session and desktop project lanes
+  stay. The Codex probe keeps its lane and its map: it caches only what a
+  probe said, which `Cache` would need a failure channel to express.
 
 ## Needs the owner
 
