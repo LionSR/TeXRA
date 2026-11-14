@@ -24,3 +24,23 @@ export function cachedDateTimeFormat(
   }
   return formatter;
 }
+
+/**
+ * A moment as every host prints it in a list or a row: locale-aware, short
+ * month, no seconds (`Nov 14, 2026, 09:12 AM`). `null` for a missing or
+ * unparseable value, which its caller words.
+ */
+export function formatShortDateTime(
+  value: string | number | Date | null | undefined,
+): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return cachedDateTimeFormat({
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
