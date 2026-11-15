@@ -1,7 +1,6 @@
-import { randomBytes } from 'node:crypto';
-
 import { Effect, FileSystem, Schema } from 'effect';
 import * as vscode from 'vscode';
+import { nanoid } from 'nanoid';
 
 import { toErrorMessage, escapeAttr } from '@texra-ai/harness/schemas';
 import { HOST_BRIDGE_API_KEY } from '@texra/shared/hostBridgeTypes';
@@ -40,7 +39,7 @@ const buildWebviewHtml = Effect.fnUntraced(function* (
     '\r\n',
     '\n',
   );
-  const nonce = randomBytes(24).toString('base64url');
+  const nonce = nanoid(32);
 
   let result = htmlContent
     .replaceAll('${nonce}', nonce)

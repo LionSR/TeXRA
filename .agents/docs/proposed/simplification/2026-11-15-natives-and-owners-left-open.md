@@ -47,7 +47,9 @@ another open PR to merge first.
    (`scripts/esm-cjs-globals-banner.mjs`) rebuilds `__filename` and
    `__dirname` from `import.meta.url`. Node 22 gives both directly. The banner
    runs inside the packaged desktop and CLI bundles, so the change wants a
-   packaged smoke run.
+   packaged smoke run. The open #14951 already converts
+   `scripts/verify-desktop.mjs` and drops `nanoid` for `node:crypto`, so this
+   run left both to it.
 
 ## Checked and declined
 
