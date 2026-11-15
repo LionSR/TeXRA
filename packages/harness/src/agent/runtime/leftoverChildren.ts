@@ -13,7 +13,7 @@ import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { checkpointRefusal } from '@agent/storage/resumability';
 import { endRunRows } from '@agent/storage/runLifecycle';
 import { owningCall } from '@agent/storage/runOwnership';
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure } from '@logger/effectLog';
 import { DELIVERY_FAMILY } from '@shared/deliveryTags';
 import { RUN_OUTCOME } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
@@ -24,12 +24,6 @@ import { AgentRun, type RunLaunch } from './run/AgentRun';
 import { Runs } from './runRegistry';
 
 const CHANNEL = 'leftoverChildren';
-
-const warn = (message: string, data: unknown) =>
-  Effect.logWarning(message).pipe(
-    Effect.annotateLogs({ data }),
-    withLogChannel(CHANNEL),
-  );
 
 /** The family a child's kind delivers in. */
 const FAMILY_OF = {
@@ -86,7 +80,10 @@ const closeLeftoverRun = Effect.fn('closeLeftoverRun')(function* (
   // agent or plugin, or one that failed, is left for the next resume, said
   // once. Forked: the caller goes on while the child's opening commits.
   const told = (what: string) => (error: unknown) =>
-    warn(`Child run ${run.id} ${what}`, { parent: parentRunId, error });
+    logFailure(
+      CHANNEL,
+      `Child run ${run.id} ${what}`,
+    )({ parent: parentRunId, error });
   yield* Effect.forkScoped(
     Effect.matchEffect(resumeRun(run.id, {}), {
       onSuccess: (answer) =>

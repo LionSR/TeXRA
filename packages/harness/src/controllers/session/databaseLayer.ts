@@ -32,7 +32,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure } from '@logger/effectLog';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   CURRENT_VALUE_VERSION,
@@ -355,12 +355,10 @@ export const databaseLayer = (
           Stream.fromEffectSchedule(
             query(execOne('PRAGMA data_version', [])).pipe(
               Effect.map((row) => row?.data_version),
-              Effect.tapError((error) =>
-                Effect.logWarning(
+              Effect.tapError(
+                logFailure(
+                  CHANNEL,
                   'The session database change poll failed; retrying.',
-                ).pipe(
-                  Effect.annotateLogs({ data: error }),
-                  withLogChannel(CHANNEL),
                 ),
               ),
               Effect.retry(READ_RETRY),

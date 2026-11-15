@@ -7,7 +7,7 @@
  */
 import { Context, Effect, Result, type Scope } from 'effect';
 
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure } from '@logger/effectLog';
 import {
   qualifyAggregateId,
   type ChildRunDelivery,
@@ -174,7 +174,8 @@ export class SessionInbox {
     }).pipe(
       Effect.catch((error) =>
         Effect.as(
-          warnWith(
+          logFailure(
+            CHANNEL,
             `Run ${runId} was not woken; an explicit Resume delivers what is queued`,
           )(error),
           undefined,
@@ -210,7 +211,9 @@ export class SessionInbox {
         // Only a closed input that committed ends the reader.
         Effect.tap((closed) => Effect.sync(() => closed && this.forget(runId))),
         Effect.asVoid,
-        Effect.catch(warnWith(`Run ${runId}: closing its input failed`)),
+        Effect.catch(
+          logFailure(CHANNEL, `Run ${runId}: closing its input failed`),
+        ),
       );
   }
 
@@ -324,20 +327,11 @@ export class SessionInbox {
       });
       if (Result.isFailure(ran))
         this.port.detach(() =>
-          warnWith('An inbox observer threw')(ran.failure),
+          logFailure(CHANNEL, 'An inbox observer threw')(ran.failure),
         );
     }
   }
 }
-
-/** Log `message` at warn with the failure behind it. */
-const warnWith =
-  (message: string) =>
-  (cause: unknown): Effect.Effect<void> =>
-    Effect.logWarning(message).pipe(
-      Effect.annotateLogs({ data: cause }),
-      withLogChannel(CHANNEL),
-    );
 
 /** Whether the run has a pending message, not just one of its own requests. */
 const queued = (input: RunRowsRead<'input'>): boolean =>

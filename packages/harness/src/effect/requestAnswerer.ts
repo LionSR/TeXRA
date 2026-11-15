@@ -25,7 +25,7 @@ import {
 } from '@agent/runtime/HostInteractions';
 import { SessionRequests } from '@agent/runtime/requests';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure, withLogChannel } from '@logger/effectLog';
 import { attentionOf } from '@shared/session/sessionView';
 import { SessionViewAccess } from '@shared/session/runHistory';
 import {
@@ -174,12 +174,10 @@ const answerRequests = (
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
             ? Effect.void
-            : Effect.logWarning(
+            : logFailure(
+                CHANNEL,
                 `The decision on request ${pending.requestId} was not recorded; it is offered again on the next view`,
-              ).pipe(
-                Effect.annotateLogs({ data: cause }),
-                withLogChannel(CHANNEL),
-              ),
+              )(cause),
         ),
       ),
   );
