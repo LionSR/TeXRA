@@ -84,13 +84,15 @@ import {
   openProjectRoots,
   openProjectSession,
 } from '@texra/controllers/session/openProjectSession';
-import type { ServiceLink } from '@texra/controllers/server/client';
+import {
+  reachBundledService,
+  type ServiceLink,
+} from '@texra/controllers/server/client';
 import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import type { GuiSession } from '@texra/controllers/session/openGuiWindow';
-import { reachExtensionService } from './common/extensionService';
 
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -413,7 +415,12 @@ const activateExtension = Effect.fn('activateExtension')(function* (
     context,
     workspaceRoot,
     {
-      service: reachExtensionService(context.extensionPath),
+      // Started, when none answers, from the bundle the extension ships,
+      // with VS Code's own runtime as Node.
+      service: reachBundledService(
+        defaultNodeStorageRoot(),
+        context.extensionPath,
+      ),
     },
   );
   // The host entry holds the process runtime in a local and threads it to the
