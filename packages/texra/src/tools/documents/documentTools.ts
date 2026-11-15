@@ -8,7 +8,7 @@
  * a resumed program replays against the rows.
  */
 // Node imports
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 
 // Third-party imports
 import { Effect, FileSystem, Schema } from 'effect';
@@ -22,6 +22,7 @@ import {
   Settings,
   type AgentTrace,
 } from '@texra-ai/harness/plugins';
+import { hasExtension } from '@texra-ai/harness/host';
 import {
   fileLocationDisplayPath,
   MESSAGE_TYPES,
@@ -49,13 +50,12 @@ import {
   openDocuments,
   revisionPrompt,
   roundOf,
-  templateDirectories,
+  templateDirectory,
   withRound,
   type Documents,
   type RevisionRequest,
 } from '@texra/tools/documents/documentState';
 import { computeDocumentDiffs } from '@texra/tools/documents/documentResult';
-import { rejectOversizedBibAttachments } from '@texra/tools/documents/documentTask';
 import {
   compileFailuresOf,
   latexdiffDisplayName,
@@ -83,14 +83,6 @@ export const documentsOfCall = Effect.fn('documents.ofCall')(function* (
   return yield* openDocuments(yield* ToolContext, described);
 });
 
-/** The fact that records `rounds` (and, once proposed, the `diffs`) as the
- *  documents of `docs`'s run. */
-const outputFact = (
-  docs: Documents,
-  rounds: readonly RoundOutput[],
-  diffs?: Parameters<typeof documentsOutputFact>[2],
-) => documentsOutputFact(docs.task, rounds, diffs);
-
 /** Open `locations` for the user, beside what they are looking at. */
 const present = (docs: Documents, locations: readonly FileLocation[]) =>
   Effect.forEach(
@@ -105,6 +97,60 @@ const present = (docs: Documents, locations: readonly FileLocation[]) =>
 
 const autoOpensPdf = (docs: Documents) =>
   Settings.get(docs.deps.roots, DOCUMENTS_OPEN_PDF_SETTING);
+
+/** The largest `.bib` a program attaches whole as context. */
+const LARGE_BIB_LIMIT_BYTES = 100 * 1024;
+
+/**
+ * Fail a context that attaches an oversized bibliography file, before any
+ * model reads it. `workspaceRoot` is the owning session's workspace folder,
+ * handed in as data so a relative path resolves against its own session.
+ */
+const rejectOversizedBibAttachments = Effect.fn(
+  'rejectOversizedBibAttachments',
+)(function* (
+  workspaceRoot: string | undefined,
+  contextFiles: readonly string[],
+): Effect.fn.Return<void, Error, FileSystem.FileSystem> {
+  const fs = yield* FileSystem.FileSystem;
+  const bibFiles = contextFiles
+    .filter((file) => file.trim() !== '')
+    .filter((file) => hasExtension(file, '.bib'));
+
+  for (const bibFile of bibFiles) {
+    // A relative path names a workspace file, which needs a folder open.
+    let absolute = bibFile;
+    if (!isAbsolute(bibFile)) {
+      if (!workspaceRoot) {
+        return yield* Effect.fail(
+          new Error('Workspace path is not available.'),
+        );
+      }
+      absolute = join(workspaceRoot, bibFile);
+    }
+    // `FileSystem.stat` follows a link; a link whose target does not
+    // resolve is measured as no file, as a path `readLink` cannot name is
+    // no entry at all.
+    const stats = yield* fs.stat(absolute).pipe(
+      Effect.catch((error) =>
+        fs.readLink(absolute).pipe(
+          Effect.as(undefined),
+          Effect.mapError(() => error),
+        ),
+      ),
+    );
+    if (stats === undefined) continue;
+    if (Number(stats.size) <= LARGE_BIB_LIMIT_BYTES) continue;
+
+    const sizeBytes = Number(stats.size);
+    const message = `${bibFile} is ${sizeBytes} bytes, over the ${LARGE_BIB_LIMIT_BYTES} byte limit. Call extract_bib_entries first if citations are needed, then start the program again without the full .bib file.`;
+    return yield* Effect.fail(
+      new ToolError(message, {
+        summary: 'Rejected oversized BibTeX attachment',
+      }),
+    );
+  }
+});
 
 /**
  * What the first revision checks before the task does any work, whichever
@@ -186,7 +232,7 @@ const optionalFlag = (description: string) =>
 export const DocumentContextTool = defineTool({
   name: 'document_context',
   description:
-    "A document program's revision prompt: `intro`, the launch's documents and the `templates`, the instruction, every earlier request of `requests` with the reply it got, and this revision's request with the compile failures that rejected the last one and the `critique` of it, if any. Pass the same `intro`, `requests`, `templates` and `creates` for every revision of a run: the first call records them. Resolves to `{ prompt, mediaFiles, memories }`, for the revision's `agent()` call; `memories` are the launch's.",
+    "A document program's revision prompt: `intro`, the launch's documents and the `templates`, the instruction, every earlier request of `requests` with the reply it got, and this revision's request with the compile failures that rejected the last one and the `critique` of it, if any. The call for revision 0 records `intro`, `requests`, `templates` and `creates` as the run's task; a later call's are not read. Resolves to `{ prompt, mediaFiles, memories }`, for the revision's `agent()` call; `memories` are the launch's.",
   scriptReturns: '{ prompt: string; mediaFiles: string[]; memories: string[] }',
   replay: 'safe',
   schema: Schema.Struct({
@@ -228,11 +274,12 @@ export const DocumentContextTool = defineTool({
   execute: Effect.fn('document_context')(function* (input) {
     const { revision, requests } = input;
     const docs = yield* documentsOfCall({
-      revisions: requests.length,
+      intro: input.intro ?? '',
+      requests,
       templates: [...(input.templates ?? [])],
       creates: input.creates ?? false,
     });
-    const { revisions } = docs.task;
+    const revisions = docs.task.requests.length;
     if (revision >= revisions)
       return yield* Effect.fail(
         new ToolError(
@@ -240,8 +287,6 @@ export const DocumentContextTool = defineTool({
         ),
       );
     const asked: RevisionRequest = {
-      intro: input.intro ?? '',
-      requests,
       attachTeXCount: input.attachTeXCount ?? false,
       autoExtractFigure: input.autoExtractFigure ?? false,
       autoExtractTikzFigure: input.autoExtractTikzFigure ?? false,
@@ -278,7 +323,8 @@ export const DocumentContextTool = defineTool({
         memories: docs.run.config.memories,
       },
       // The first step records the task, which every later step reads.
-      facts: revision === 0 ? [outputFact(docs, docs.rounds)] : [],
+      facts:
+        revision === 0 ? [documentsOutputFact(docs.task, docs.rounds)] : [],
     };
   }),
 });
@@ -397,7 +443,7 @@ export const DocumentExtractTool = defineTool({
         `${formatRoundLabel(revision)}: ${files.length} files`,
       ),
       value: { files, missing },
-      facts: [outputFact(docs, withRound(docs.rounds, round))],
+      facts: [documentsOutputFact(docs.task, withRound(docs.rounds, round))],
     };
   }),
 });
@@ -417,7 +463,11 @@ export const DocumentCompileTool = defineTool({
     const recorded = roundOf(docs.rounds, revision);
     // The compile searches where the task's templates live, so a
     // template's theme files resolve as they do for the prompt.
-    const inputDirs = yield* templateDirectories(docs.task);
+    const directory = yield* templateDirectory;
+    const inputDirs =
+      docs.task.templates.length > 0 && directory !== undefined
+        ? [directory]
+        : [];
     const check = yield* runCompileCheck(
       { roots, fileService, logger, runId: docs.run.runId, inputDirs },
       revision,
@@ -454,7 +504,12 @@ export const DocumentCompileTool = defineTool({
     const facts =
       recorded === undefined
         ? []
-        : [outputFact(docs, withRound(docs.rounds, { ...recorded, compile }))];
+        : [
+            documentsOutputFact(
+              docs.task,
+              withRound(docs.rounds, { ...recorded, compile }),
+            ),
+          ];
     if (yield* autoOpensPdf(docs))
       yield* present(
         docs,
@@ -561,8 +616,8 @@ export const DocumentDiffTool = defineTool({
       ...executed(lines.join('\n'), summary),
       value: { diffs, failed, notRun },
       facts: [
-        outputFact(
-          docs,
+        documentsOutputFact(
+          docs.task,
           withRound(docs.rounds, { ...recorded, latexdiffs: entries }),
         ),
       ],
@@ -609,7 +664,7 @@ export const DocumentProposeTool = defineTool({
       docs.run.runId,
       roundOutputsToOutputSummaries([last]),
     );
-    const fact = outputFact(docs, docs.rounds, diffs);
+    const fact = documentsOutputFact(docs.task, docs.rounds, diffs);
     return {
       ...executed(`Proposed: ${files.join(', ')}`, `${files.length} documents`),
       value: { files },

@@ -11,7 +11,8 @@
  * - **Built-in plugins**: [`harnessBuiltins`](#harnessbuiltins) bundles
  *   [`codemode`](#codemode), [`fileOps`](#fileops), [`goal`](#goal),
  *   [`memoryWorkflow`](#memoryworkflow), [`multiAgent`](#multiagent)
- *   ([`AGENT_TOOL_NAME`](#agent_tool_name)), and [`web`](#web) for
+ *   (the `agent` tool, [`AGENT_TOOL_NAME`](#agent_tool_name), and the
+ *   `program` tool), and [`web`](#web) for
  *   `Sessions.layer({ platform, plugins })`.
  * - **Plugin & tool authoring**: [`defineTool`](#definetool),
  *   [`definePlugin`](#defineplugin) and the
@@ -190,11 +191,10 @@ export type { ToolRun } from '@agent/core/tools/ToolTypes';
 export type { ToolPolicy } from '@agent/runtime/run/AgentRun';
 // Renders a prompt template (Nunjucks) with its variables.
 export { renderPrompt } from '@utils/prompt';
-export {
-  TEMPLATE_INPUT_NAMES,
-  type TemplateInputs,
-  type TemplateOpening,
-  type TemplateVars,
+export type {
+  TemplateInputs,
+  TemplateOpening,
+  TemplateVars,
 } from '@agent/prompt/templateInputs';
 export type {
   AgentTrace,

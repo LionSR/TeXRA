@@ -112,8 +112,8 @@ export interface HostRunActions {
     config: AgentConfig,
     options?: RunValidatedOptions,
   ): Effect.Effect<Run, LaunchError | RunFailure, ProcessServices>;
-  /** Merge `editedFile` into `baseFile`: the merge agent's document task on
-   *  the helper model, answering once its run is admitted. */
+  /** Merge `editedFile` into `baseFile`: the `merge` program on the helper
+   *  model, answering once its run is admitted. */
   merge(
     baseFile: string,
     editedFile: string,
@@ -208,16 +208,14 @@ export const createHostRunActions = Effect.fn(
           }),
       ),
     );
-  /** When a run this window started ends, a document task's final output
-   *  opens. Presentation reacts to the outcome the run committed; it never
+  /** When a run this window started ends, the final output of the documents
+   *  it recorded opens. Presentation reacts to the outcome the run committed; it never
    *  runs inside the run, so it cannot change that outcome. Its documents
    *  are read from the store, which holds the run's rows once its end is
    *  read, whichever process the window's view follows. */
   const whenEnded = (run: Run) =>
     Effect.gen(function* () {
       const result = yield* run.result;
-      const config = yield* readConfig(run.runId);
-      if (config === undefined || programOf(config) === null) return;
       const stored = yield* session.view.read([]);
       const output = yield* selectAutoOpenFinalOutput(
         roots,

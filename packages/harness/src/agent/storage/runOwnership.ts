@@ -180,8 +180,7 @@ const runEndOf = Effect.fn('runEndOf')(function* (
       ? addUsage(turns ?? NO_USAGE, label.usage)
       : turns;
   const own = withLabel(held);
-  // A document task's revisions are its children's runs, which hold
-  // what it cost: those this activation started, each as it had ended
+  // A program's work is its children's runs, which hold what it cost: those this activation started, each as it had ended
   // by this end, whatever a later resume of it spent.
   const children =
     held.config && programOf(held.config) !== null

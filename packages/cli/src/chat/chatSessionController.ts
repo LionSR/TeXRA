@@ -550,7 +550,7 @@ export function createChatSessionController(
           // A document task takes no chat: it resumes beside this one, as
           // `/resume all` resumes it, and joins the agent list.
           if (programOf(config) !== null) {
-            appendLocalNotice(`Resuming document task ${id}. Tab lists it.`);
+            appendLocalNotice(`Resuming program run ${id}. Tab lists it.`);
             yield* endWithout(CliExitCode.Success);
             // Owned by the process's shutdown scope, as the chat's own
             // resume is: an exit interrupts a resume still on its way.

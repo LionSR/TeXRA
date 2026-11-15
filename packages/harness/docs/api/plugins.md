@@ -14,7 +14,8 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
 - **Built-in plugins**: [`harnessBuiltins`](#harnessbuiltins) bundles
   [`codemode`](#codemode), [`fileOps`](#fileops), [`goal`](#goal),
   [`memoryWorkflow`](#memoryworkflow), [`multiAgent`](#multiagent)
-  ([`AGENT_TOOL_NAME`](#agent_tool_name)), and [`web`](#web) for
+  (the `agent` tool, [`AGENT_TOOL_NAME`](#agent_tool_name), and the
+  `program` tool), and [`web`](#web) for
   `Sessions.layer({ platform, plugins })`.
 - **Plugin & tool authoring**: [`defineTool`](#definetool),
   [`definePlugin`](#defineplugin) and the
@@ -1266,8 +1267,7 @@ One of a plugin's script modules that a person or a model starts by name
 (`Plugin.programs`): the module's default export is
 `async (args) => result`, and a run opened on it
 (`AgentConfig.script` of kind `program`) is a script run that imports the
-module and calls that export with the launch's `args`, its instruction
-and its files. The plugin wrote
+module and calls that export with the launch's `args`. The plugin wrote
 it, not a model, so the launch that chose it granted it: its tools are
 the listed ones past any switch, its `agent` calls run under the launch's
 approval, and its prompts and files pass as written.
@@ -1765,16 +1765,6 @@ type SubmitFollowUpResult =
   | { status: 'failed'; message: string };
 ```
 
-## TEMPLATE_INPUT_NAMES
-
-The names of the fixed template variables, the keys of
-{@link TemplateInputsSchema}. A plugin that adds variables of its own
-checks them against this list, so none shadows a fixed one.
-
-```ts
-const TEMPLATE_INPUT_NAMES: readonly string[]
-```
-
 ## TemplateInputs
 
 The fixed variables every prompt template may read.
@@ -1803,8 +1793,7 @@ interface TemplateOpening {
 
 The template-variable map a launch opens with: fixed variables may be
 absent (template rendering keeps `throwOnUndefined` off, so templates
-must tolerate absence). A plugin renders its own variables beside these
-by spreading this map into its own (`TEMPLATE_INPUT_NAMES`).
+must tolerate absence). A plugin's tools read it as `opening.inputs`.
 
 ```ts
 type TemplateVars = Partial<TemplateInputs>;

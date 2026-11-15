@@ -25,7 +25,7 @@ import { computed } from 'vue';
 const props = defineProps({
   command: {
     type: String,
-    default: 'texra run polish --input draft.tex',
+    default: 'texra run edit --input draft.tex',
   },
   rounds: {
     type: Array,

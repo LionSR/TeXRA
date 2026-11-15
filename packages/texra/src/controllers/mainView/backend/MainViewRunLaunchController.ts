@@ -72,8 +72,10 @@ const buildLaunchConfig = Effect.fn('buildLaunchConfig')(function* (
     model: launch.model,
     instruction,
     workingDirectory: launch.workingDirectory.trim() || undefined,
-    inputFiles: launch.inputFiles,
-    contextFiles: launch.contextFiles,
+    // The form starts chats only; it shows its file lists only while open
+    // on a program's proposal, so a launch carries none of them.
+    inputFiles: [],
+    contextFiles: [],
     ...(team
       ? {
           delegationAgentScope: team.delegationAgentScope,
@@ -178,8 +180,6 @@ export function launchFormOf(
     model: config.model,
     instruction: config.instruction,
     workingDirectory: config.workingDirectory ?? '',
-    inputFiles: [...config.inputFiles],
-    contextFiles: [...config.contextFiles],
     mediaFiles: [...config.mediaFiles],
   });
 }

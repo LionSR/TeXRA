@@ -119,7 +119,7 @@ const persistCompletedChild = (
         aggregateId: qualifyAggregateId('run', childRunId),
         parent: null,
         ...documentsOutputFact(
-          { revisions: 1, templates: [], creates: false },
+          { intro: '', requests: ['Revise.'], templates: [], creates: false },
           workflowRounds(absolutePath),
         ),
       },

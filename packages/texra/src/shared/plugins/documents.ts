@@ -28,8 +28,10 @@ const THEORY_PLUGIN = 'theory';
 /** What a document program told its first `document_context` call about
  *  itself, which its later steps read back. */
 const DocumentTaskSpecSchema = Schema.Struct({
-  /** How many revisions it runs: the M of "Pass N of M". */
-  revisions: Schema.Int.check(Schema.isGreaterThan(0)),
+  /** What every revision's prompt opens with, before the documents. */
+  intro: Schema.String,
+  /** What each revision is asked, in order: one revision per request. */
+  requests: Schema.Array(Schema.String).check(Schema.isMinLength(1)),
   /** The plugin's template files its revisions read, by name. */
   templates: Schema.Array(Schema.String),
   /** It writes new documents (a deck, a transcript) and not rewrites of
@@ -150,7 +152,7 @@ export const documentRoundsOf = (
  *  it. */
 export const documentRevisionsOf = (
   run: Pick<RunView, 'facts'>,
-): number | undefined => documentsRowOf(run)?.task.revisions;
+): number | undefined => documentsRowOf(run)?.task.requests.length;
 
 /** What a document task reports of its documents: every revision's
  *  outputs and compile failures, and the proposed diffs. A projection of
@@ -183,8 +185,3 @@ export function documentsOf(
  *  run's first step writes the row. */
 export const isDocumentTaskRun = (run: Pick<RunView, 'facts'>): boolean =>
   DOCUMENTS_OUTPUT_KEY in run.facts;
-
-/** What a proposal launches, as its approval copy names it. */
-export const agentProposalLabel = (proposal: {
-  readonly task: boolean;
-}): string => (proposal.task ? 'program' : 'agent');

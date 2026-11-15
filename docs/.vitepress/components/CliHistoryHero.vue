@@ -13,7 +13,7 @@ const rows = [
   {
     id: '9f3a6c81d24e',
     ts: '2025-11-04T14:31:08.412Z',
-    agent: 'polish',
+    agent: 'edit',
     status: 'completed',
     input: 'draft.tex',
   },
@@ -27,7 +27,7 @@ const rows = [
   {
     id: 'e2c70a94b18f',
     ts: '2025-11-03T17:45:13.208Z',
-    agent: 'correct',
+    agent: 'edit',
     status: 'failed',
     input: 'appendices.tex',
   },

@@ -54,5 +54,4 @@ export const LAUNCH_FILE_LISTS = {
   input: 'inputFiles',
   context: 'contextFiles',
   media: 'mediaFiles',
-  output: 'outputFiles',
-} as const satisfies Record<DocumentFileType | 'output', string>;
+} as const satisfies Record<DocumentFileType, string>;

@@ -46,7 +46,7 @@ type Launch = Surface['launch'];
  *  stays exact. A selection naming no option (an agent hidden or removed
  *  since it was chosen) is no agent, and the host's launch keeps to the same
  *  options (`buildLaunchConfig`): it refuses an agent hidden since. */
-export function launchAgentOption(
+function launchAgentOption(
   launch: Launch,
   host: HostSnapshot,
 ): AgentOptionData | undefined {

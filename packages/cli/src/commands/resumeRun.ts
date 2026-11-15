@@ -113,7 +113,7 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
   const documentTask = programOf(config) !== null;
   if (fork && documentTask) {
     writeTextStderr(
-      `Task ${id} is a document task: only a conversation can be forked.`,
+      `Task ${id} is a program run: only a conversation can be forked.`,
     );
     return CliExitCode.Usage;
   }

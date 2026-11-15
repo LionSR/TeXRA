@@ -244,14 +244,13 @@ function commonDirectory(paths: readonly string[]): string {
 }
 
 /**
- * The output names an `--output-dir` run expects when its agent declares no
- * `task.outputs`: one per input, with a stdin-materialized input
- * reported under its stable basename.
+ * The output names an `--output-dir` run expects when its program declares
+ * no outputs of its own (`Program.outputs`): one per input, with a
+ * stdin-materialized input reported under its stable basename.
  *
  * Computed at launch, while the stdin materialization path is still known, and
- * persisted with the run so a resume reports the same names. The agent's own
- * declared defaults — which only its loaded definition carries — take
- * precedence over these at output finalization.
+ * persisted with the run so a resume reports the same names. The program's
+ * own outputs take precedence over these at output finalization.
  */
 export function inputDerivedOutputFiles(
   inputFiles: readonly string[],
@@ -326,8 +325,8 @@ export const resolveDocumentTaskOutput = Effect.fn('resolveDocumentTaskOutput')(
       return yield* Effect.fail(
         new Error(
           outputDir
-            ? `Document task ${terminalStatus} without generated outputs; nothing was copied to ${outputDir}.`
-            : `Document task ${terminalStatus} without a generated output; ${outputFile} was not written.`,
+            ? `Program ${terminalStatus} without generated outputs; nothing was copied to ${outputDir}.`
+            : `Program ${terminalStatus} without a generated output; ${outputFile} was not written.`,
         ),
       );
     }
@@ -369,7 +368,7 @@ export const resolveDocumentTaskOutput = Effect.fn('resolveDocumentTaskOutput')(
       if (missing.length > 0) {
         return yield* Effect.fail(
           new Error(
-            `Document task ${terminalStatus} without expected ${pluralize(missing.length, 'output')}: ${missing.join(', ')}; copied ${copiedOutputs.length} of ${formatResultCount(expectedRelativePaths.length, 'expected output')} to ${targetRoot}.`,
+            `Program ${terminalStatus} without expected ${pluralize(missing.length, 'output')}: ${missing.join(', ')}; copied ${copiedOutputs.length} of ${formatResultCount(expectedRelativePaths.length, 'expected output')} to ${targetRoot}.`,
           ),
         );
       }
@@ -454,7 +453,7 @@ export function resumeDocumentTaskOutputFile(
   if (typeof cliOutputFile === 'string' && cliOutputFile.trim() !== '') {
     if (!path.isAbsolute(cliOutputFile)) {
       throw new CliUsageError({
-        message: `Stored document task output file is not absolute: ${cliOutputFile}`,
+        message: `Stored program output file is not absolute: ${cliOutputFile}`,
       });
     }
     return cliOutputFile;
@@ -483,7 +482,7 @@ export function resumeDocumentTaskOutputDirectory(
     return undefined;
   if (!path.isAbsolute(outputDirectory)) {
     throw new CliUsageError({
-      message: `Stored document task output directory is not absolute: ${outputDirectory}`,
+      message: `Stored program output directory is not absolute: ${outputDirectory}`,
     });
   }
   return outputDirectory;
