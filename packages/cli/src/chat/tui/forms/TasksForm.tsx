@@ -4,7 +4,7 @@
 // detaches; the task keeps running in the service.
 
 import { Box, Text, useInput, useWindowSize } from 'ink';
-import { Effect, Fiber, type Scope } from 'effect';
+import { Effect, Fiber } from 'effect';
 import { useEffect, useRef, useState } from 'react';
 
 import { presentFollowUpResult } from '@texra-ai/harness/host';
@@ -30,7 +30,6 @@ import {
   readToolEditPreview,
   type ToolEditPreviewRead,
 } from '@texra/controllers/approval/ToolEditApprovalController';
-import type { ServiceConnection } from '@texra/controllers/server/client';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import { runStatus, runStatusLabel } from '@ui/copy/runStatus';
 
@@ -40,18 +39,12 @@ import {
   followAttachedTask,
   type AttachedTaskActions,
   type AttachedTaskLevel,
+  type ConnectService,
 } from '../state/attachedTask';
 import { transcriptToLines } from '../state/transcriptLines';
 import { AsyncListForm } from './_shared/ListForm';
-import type { GlobalValues, ProcessRuntime } from '@texra-ai/harness/host';
+import type { ProcessRuntime } from '@texra-ai/harness/host';
 import type { TuiRequest, PendingApprovalFact } from '../state/approvalQueue';
-
-/** The service's client, through the chat's link. */
-type ConnectService = () => Effect.Effect<
-  Pick<ServiceConnection, 'client'>,
-  Error,
-  Scope.Scope | GlobalValues
->;
 
 interface TasksFormProps {
   readonly runtime: ProcessRuntime;

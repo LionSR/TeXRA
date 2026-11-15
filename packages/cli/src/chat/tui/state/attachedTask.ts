@@ -50,17 +50,20 @@ function treeOf(view: SessionView, root: RunView['id']): Set<string> {
   return ids;
 }
 
+/** The service's client, through the chat's link. */
+export type ConnectService = () => Effect.Effect<
+  Pick<ServiceConnection, 'client'>,
+  Error,
+  Scope.Scope | GlobalValues
+>;
+
 /**
  * Hold the service connection and follow `task`: `onReady` receives the
  * actions once connected, `onLevel` every change. Runs until interrupted;
  * a connection or watch that fails ends it with a final level saying why.
  */
 export function followAttachedTask(
-  connect: () => Effect.Effect<
-    Pick<ServiceConnection, 'client'>,
-    Error,
-    Scope.Scope | GlobalValues
-  >,
+  connect: ConnectService,
   task: TaskSummary,
   onReady: (actions: AttachedTaskActions) => void,
   onLevel: (level: AttachedTaskLevel) => void,
