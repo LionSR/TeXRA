@@ -343,9 +343,6 @@ export const HTML_ENTITY_REPLACEMENTS: PatternDict = {
   '&frac14;': '\\frac{1}{4}',
   '&frac34;': '\\frac{3}{4}',
 
-  // Miscellaneous glyphs
-  '&micro;': '\\mu',
-
   // Greek letters: &alpha; -> \alpha. LaTeX has no \omicron, and the
   // final sigma is a sigma.
   ...createPatterns(GREEK_LETTERS, (name) => [[`&${name};`, `\\${name}`]]),

@@ -141,7 +141,6 @@ const MATH_UNICODE_MAP: Record<string, string> = {
       .filter(([name]) => name !== 'omicron')
       .map(([name, char]) => [char, `\\${name}`]),
   ),
-  µ: '\\mu', // U+00B5 MICRO SIGN, beside the Greek mu
 
   // Operators, relations, arrows and dots that also have an HTML-entity
   // spelling: MATH_SYMBOL_SPELLINGS owns the command, and its glyphs come in

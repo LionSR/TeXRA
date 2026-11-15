@@ -105,6 +105,7 @@ export const MATH_SYMBOL_SPELLINGS: readonly MathSymbolSpelling[] =
     { command: '\\ldots', glyphs: ['…'], entities: ['hellip'] },
     { command: '\\cdot', glyphs: ['⋅', '·'], entities: ['middot', 'sdot'] },
     { command: '^{\\circ}', glyphs: ['°'], entities: ['deg'] },
+    { command: '\\mu', glyphs: ['µ'], entities: ['micro'] },
   ]);
 
 // Section commands for LaTeX documents
