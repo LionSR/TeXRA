@@ -12,9 +12,9 @@ two below need a decision first.
 
 1. **A child's delivery stores its wall time as text.**
    `ChildRunDelivery.wallTime` (`packages/harness/src/shared/schemas/followUp.ts`)
-   is a formatted string (`1.2s`), and four producers format it the same way:
-   `childDelivery.ts`, `delegation/bashDelivery.ts`, and the agent CLI tools'
-   shared `agentCliShared.ts`. The golden-store and crash normalizers scrub it
+   is a formatted string (`1.2s`), and three sites format it the same way:
+   `childDelivery.ts`, `delegation/bashDelivery.ts`, and `agentCliShared.ts`,
+   which both agent CLI tools share. The golden-store and crash normalizers scrub it
    as text, and the envelope writes it unescaped (`deliveryEnvelope.ts`).
    - The delivery also stores its `prompt` whole, though the envelope shows
      200 characters of it.
