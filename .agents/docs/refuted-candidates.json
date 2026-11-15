@@ -764,6 +764,19 @@
           "signature": "export function decodeRow( input: SqlRow, factKinds: FactKinds, blobs: Blobs, ): Result.Result< SessionRow | undefined, DatabaseStoreNewer | DatabaseRowCorrupt | DatabaseRowEarlier > {…}"
         }
       ]
+    },
+    {
+      "id": "SCRIPT-walkfiles-recursive-readdir",
+      "candidate": "scripts/walkFiles.mjs's hand-written recursion replaced by fs.readdirSync(startDir, { recursive: true, withFileTypes: true })",
+      "why": "Built and compared on Node 22.23.4. The recursive readdir descends into symbolic links to directories, which the hand-written walk skips (a link is neither isDirectory nor isFile on a Dirent): walking packages/texra returned 47964 files against 514, because it followed the pnpm links under node_modules. Its order also differs from the depth-first one. The built-in is a different walk, not the same one in fewer lines.",
+      "ruling": ".agents/docs/proposed/simplification/2026-11-15-natives-and-owners-left-open.md",
+      "symbols": [
+        {
+          "file": "scripts/walkFiles.mjs",
+          "symbol": "walkFiles",
+          "signature": "export function walkFiles(startDir, { include } = {}) {…}"
+        }
+      ]
     }
   ]
 }
