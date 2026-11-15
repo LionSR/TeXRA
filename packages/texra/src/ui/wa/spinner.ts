@@ -2,11 +2,13 @@
 // prefers-reduced-motion. The spin lives on the svg (::part(base)); the dash
 // stroke morph lives on the inner .indicator circle, which is not a part, so
 // a host stylesheet cannot reach it. A Lit directive injects one style into
-// the spinner shadow after its first render.
+// the spinner shadow after its first render; `waSpinner()` is the only
+// template that writes the element, so no spinner renders without it.
 
 import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
-import { LitElement, nothing } from 'lit';
+import { html, LitElement, nothing, type TemplateResult } from 'lit';
 import { Directive, directive, type ElementPart } from 'lit/directive.js';
+import { ifDefined } from 'lit/directives/if-defined.js';
 
 const REDUCED_MOTION_STYLE_ATTR = 'data-texra-reduced-motion';
 const REDUCED_MOTION_CSS = `@media (prefers-reduced-motion: reduce) {
@@ -66,5 +68,14 @@ class StopSpinnerMotionDirective extends Directive {
   }
 }
 
-/** Attach to every `<wa-spinner>` so its dash animation honors reduced motion. */
-export const stopSpinnerMotion = directive(StopSpinnerMotionDirective);
+const stopSpinnerMotion = directive(StopSpinnerMotionDirective);
+
+/**
+ * The one `<wa-spinner>` template: its dash animation honors reduced motion,
+ * and it is hidden from assistive technology like a decorative `waIcon()`,
+ * because every spinner stands beside the words that say what is running.
+ */
+export function waSpinner(className?: string): TemplateResult {
+  // prettier-ignore
+  return html`<wa-spinner class=${ifDefined(className)} aria-hidden="true" ${stopSpinnerMotion()}></wa-spinner>`;
+}

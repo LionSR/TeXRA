@@ -19,7 +19,7 @@ import { highlightSpans } from '@ui/highlighting/highlightCode';
 import type { IconName } from '@ui/wa/iconNames';
 
 // Local imports - shared utilities
-import { stopSpinnerMotion } from '@ui/wa/spinner';
+import { waSpinner } from '@ui/wa/spinner';
 import { renderStatusBadge } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { formatMediaLabel } from '@ui/copy/format';
@@ -105,11 +105,7 @@ function renderIconOrSpinner(
   iconName: IconName,
   className?: string,
 ): TemplateResult {
-  if (running) {
-    // prettier-ignore
-    return html`<wa-spinner class=${ifDefined(className)} ${stopSpinnerMotion()}></wa-spinner>`;
-  }
-  return waIcon(iconName, { className });
+  return running ? waSpinner(className) : waIcon(iconName, { className });
 }
 
 /** Build a neutral filled badge with a leading icon, a spinner while `running`. */
