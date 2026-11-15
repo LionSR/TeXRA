@@ -39,7 +39,8 @@ const SCHEMA_VERSION = 105;
  * them: `start_commit` (the commit of seq 1) and `closed_by` (the
  * deletion marker's commit, `NULL` while open). The foreign keys are the
  * collection mechanism: deleting an aggregate cascades to its dependents,
- * its events and its projections.
+ * its events, their blob links and its projections, and the last link's
+ * deletion takes its blob (`event_blob_collect`).
  *
  * `event_blob` links a row to each blob it needs kept: `inline` is 1 for a
  * string the codec moved out of the row, which a read inflates back, and 0
@@ -98,8 +99,9 @@ const TABLES = [
 /**
  * What any build adds without a bump (`CREATE … IF NOT EXISTS` at every
  * open): the projection tables, which carry their own versions in
- * `projection_state` (`projections.ts`), and the indexes, each serving one
- * lookup the reads make, named for the columns it keys.
+ * `projection_state` (`projections.ts`), the indexes, each serving one
+ * lookup the reads make, named for the columns it keys, and the blob
+ * collector.
  */
 const ADDITIVE = [
   `CREATE TABLE IF NOT EXISTS projection_state (
@@ -124,6 +126,12 @@ const ADDITIVE = [
   `CREATE INDEX IF NOT EXISTS event_type_commit ON event(type, "commit")`,
   `CREATE INDEX IF NOT EXISTS event_blob_digest ON event_blob(digest)`,
   `CREATE INDEX IF NOT EXISTS current_value_at ON current_value(family, at)`,
+  // Collection by reachability: a blob goes with the last row linking it,
+  // which the cascade from a collected aggregate removes. The link's
+  // foreign key refuses deleting a blob any row still links.
+  `CREATE TRIGGER IF NOT EXISTS event_blob_collect AFTER DELETE ON event_blob
+    WHEN NOT EXISTS (SELECT 1 FROM event_blob r WHERE r.digest = OLD.digest)
+    BEGIN DELETE FROM blob WHERE digest = OLD.digest; END`,
 ];
 
 const verifyPragma = Effect.fnUntraced(function* (

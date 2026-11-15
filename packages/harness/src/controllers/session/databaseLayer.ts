@@ -313,12 +313,6 @@ export const databaseLayer = (
         UPDATE event_sequence SET closed_by = ?
         WHERE id IN (SELECT id FROM dependents)
       `;
-      const dependentBlobs = `${dependents} SELECT DISTINCT r.digest FROM event_blob r
-        JOIN event e ON e."commit" = r."commit" WHERE e.aggregate IN (SELECT id FROM dependents)`;
-      /** Blob collection is by reachability: a digest no row references. */
-      const collectBlobs = `DELETE FROM blob
-        WHERE digest IN (SELECT value FROM json_each(?))
-          AND NOT EXISTS (SELECT 1 FROM event_blob r WHERE r.digest = blob.digest)`;
       // The display types in a commit range, with the priced rows' usage.
       const display = displayUnion(
         '"commit" > ? AND "commit" <= ?',
@@ -416,7 +410,8 @@ export const databaseLayer = (
       const reparent = `UPDATE event_sequence SET parent_id = ${AGGREGATE}
         WHERE id = ? AND closed_by IS NULL`;
       // A closed aggregate's sequence row, collected with its dependents
-      // and rows by the foreign keys' cascade.
+      // and rows by the foreign keys' cascade, and the blobs no other row
+      // links by the schema's `event_blob_collect`.
       const closedBy = `SELECT id FROM event_sequence
         WHERE kind = ? AND logical_id = ? AND closed_by = ?`;
       const collectClosed = `DELETE FROM event_sequence
@@ -750,14 +745,7 @@ export const databaseLayer = (
             // Filesystem promises cannot be undone by fiber interruption.
             yield* cleanup(tombstone.runIds).pipe(Effect.uninterruptible);
             yield* transact(
-              Effect.gen(function* () {
-                const digests = (yield* exec(dependentBlobs, columns)).map(
-                  (row) => row.digest,
-                );
-                yield* exec(collectClosed, [...columns, tombstone.commit]);
-                if (digests.length > 0)
-                  yield* exec(collectBlobs, [JSON.stringify(digests)]);
-              }),
+              exec(collectClosed, [...columns, tombstone.commit]),
             );
             yield* reclaimFreePages(sql, path);
           }),
