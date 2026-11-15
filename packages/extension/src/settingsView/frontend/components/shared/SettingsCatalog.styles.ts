@@ -145,12 +145,6 @@ export const settingsCatalogStyles: CSSResult = css`
     font-variant-numeric: tabular-nums;
     color: var(--color-text-secondary);
   }
-  .catalog-empty {
-    margin: 0;
-    padding: var(--wa-space-xs);
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-  }
   @container settings-catalog (max-width: 560px) {
     .catalog-toolbar {
       grid-template-columns: minmax(0, 1fr) auto;

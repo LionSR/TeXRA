@@ -46,30 +46,6 @@ export const layoutStyles = css`
   user-message {
     display: block;
   }
-
-  .log-placeholder {
-    text-align: center;
-    color: var(--color-text-secondary);
-    padding: var(--wa-space-s) var(--wa-space-xs);
-  }
-
-  /* Class hooks consumed by the shared renderEmptyState() helper
-     (@ui/wa/emptyState) when it renders into a .log-placeholder. */
-  .log-placeholder .empty-state-icon {
-    font-size: calc(var(--font-size) * 1.5);
-    opacity: var(--opacity-disabled);
-  }
-
-  .log-placeholder .empty-state-title {
-    margin: var(--wa-space-2xs) 0 0;
-    font-size: var(--wa-font-size-m);
-    font-weight: var(--wa-font-weight-semibold);
-    color: var(--wa-color-text-normal);
-  }
-
-  .log-placeholder .empty-state-body {
-    margin: var(--wa-space-3xs) 0 0;
-  }
 `;
 
 /**

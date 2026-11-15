@@ -8,6 +8,7 @@
 // in a layer: any unlayered renderer rule then refines it, whatever order
 // the sheets load in.
 import { designTokens, visuallyHiddenStyles } from '@ui/styles';
+import { placeholderStyles } from '@ui/wa/emptyState';
 import { lineChangeStatsStyles, noticeStyles } from '@ui/styles/surfaceStyles';
 import { toneStyles } from '@ui/styles/toneStyles';
 import {
@@ -32,6 +33,7 @@ shared.replaceSync(
     toneStyles,
     visuallyHiddenStyles,
     lineChangeStatsStyles,
+    placeholderStyles,
   ]
     .map((sheet) => sheet.cssText)
     .join('\n')}\n}`,

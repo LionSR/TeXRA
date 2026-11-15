@@ -9,7 +9,7 @@ import { formatResultCount } from '@texra-ai/harness/schemas';
 import { DESKTOP_THEME_KIND, type Theme } from '@texra/shared/ipc';
 import { buildLineChangeStats } from '@ui/progress/formatters/htmlBuilders';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
-import { renderEmptyState } from '@ui/wa/emptyState';
+import { renderEmptyMessage, renderEmptyState } from '@ui/wa/emptyState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import { buildEditorTree, type EditorTreeNode } from './editorTree';
@@ -210,11 +210,7 @@ export function createReviewPane(): ReviewPaneController {
                         })),
                       ),
                     )
-                  : html`
-                      <div class="desktop-review-no-results">
-                        No matching files
-                      </div>
-                    `
+                  : renderEmptyMessage('No matching files')
               }
             </div>
           </aside>

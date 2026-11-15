@@ -247,7 +247,6 @@ export class RunTabs extends LitElement {
               title: 'No tasks yet',
               body: 'Tasks you start appear here.',
               headingTag: 'h3',
-              className: 'log-placeholder',
             }),
           )}
         </div>
