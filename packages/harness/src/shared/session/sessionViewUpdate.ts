@@ -17,7 +17,7 @@
  *   view with the previous one by identity.
  *
  * An event re-derives its run and each ancestor up to the root; a text chunk
- * costs the chunk, never the row's text.
+ * repaints its one row, whose text is measured whole each time.
  */
 
 import { Equal, type Types } from 'effect';
@@ -320,7 +320,6 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     identity: event.identity,
     label,
     description: null,
-    descriptionBy: null,
     title: label,
     model: null,
     modelLabel: null,
@@ -728,10 +727,6 @@ function applyRunEvent(
         ...run,
         facts: { ...run.facts, [factName(event)]: event.value },
       };
-    case 'run.detach': // the attached parent goes; the launch parent stays
-      return run.parentId === null
-        ? run
-        : { ...run, parentId: record.parent?.id ?? null };
     case 'run.description':
       // A title the record did not take (a model's, under a user's) changes
       // nothing.
@@ -740,7 +735,6 @@ function applyRunEvent(
         : {
             ...run,
             description: event.description,
-            descriptionBy: event.by,
             title: event.description || run.label,
           };
     case 'run.end':

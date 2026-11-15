@@ -16,7 +16,6 @@ import {
   addUsage,
   CommitOrdinalSchema,
   NO_USAGE,
-  blocksCaller,
   type CommitOrdinal,
   type HookOutcomes,
   type JsonValue,
@@ -30,7 +29,7 @@ import {
   type SessionRow,
   type SessionRowDraft,
 } from '@shared/schemas';
-import { closedBy, NO_FACTS, withInput, type RunFacts } from './runFacts';
+import { NO_FACTS, withInput, type RunFacts } from './runFacts';
 import {
   applyRunRow,
   type BatchCopies,
@@ -38,13 +37,7 @@ import {
   ownCopy,
   type SharedRunRow,
 } from './runRows';
-import {
-  attemptRequests,
-  resumedAttempt,
-  outOfOrder,
-  type Invocation,
-  type PendingResponse,
-} from './inFlight';
+import { outOfOrder, type Invocation, type PendingResponse } from './inFlight';
 import { TURN_ROW_HANDLERS } from './turnRowHandlers';
 import type { RunRowState } from './runRowsShape';
 import type { HistoryMessage, Live, RunHistoryRow } from './historyTurns';
@@ -149,8 +142,6 @@ export type RunState = Omit<RunRowState, 'at'> &
     readonly steppedAt: number | null;
     /** The priced usage summed from its `response` and `context.edit` rows. */
     readonly usage: TokenUsageStats;
-    /** The latest `context.edit`'s `seq`: the next edit's `base`. */
-    readonly lastEdit: number | null;
     /** The turn compacted for a request the window could not hold. */
     readonly overflowCompacted: boolean;
     /** The latest `tools.offered` row's set; `null` before the first. */
@@ -216,7 +207,6 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   steppedAt: null,
   usage: NO_USAGE,
   ...NO_FACTS,
-  lastEdit: null,
   overflowCompacted: false,
   offeredTools: null,
   offeredWith: { skills: [], hooks: [], modules: {} },
@@ -226,41 +216,9 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   hookOutcomes: {},
 });
 
-/**
- * The undecided requests no resume can answer: all but the turn's retry
- * ask and, for each pending call, the request its `resumedAttempt`
- * re-enters and the one its script's calls share (attempt 0). Each of the
- * rest keeps a call waiting that a new process will not wait on, so a
- * resume cancels them before it continues the run (`RunHistory.activate`).
- * A request that does not block its caller (`blocksCaller`) keeps nothing
- * waiting, so it stays open across every batch.
- */
-export function unboundRequests(state: RunState): readonly string[] {
-  const { pendingResponse: pending, requests } = state;
-  const own = new Set<string | undefined>(
-    Object.entries(pending?.records ?? {}).flatMap(([callId, { status }]) => {
-      if (pending === null || status.kind === 'settled') return [];
-      const at = { responseId: pending.responseId, callId };
-      return [
-        attemptRequests(requests, { ...at, attempt: 0 }).own?.requestId,
-        resumedAttempt(state, at, status).own?.requestId,
-      ];
-    }),
-  );
-  const asked = state.invocation?.current.failed?.next;
-  if (asked?.kind === 'ask') own.add(asked.requestId);
-  return Object.entries(requests).flatMap(([requestId, request]) =>
-    request.decision !== null ||
-    own.has(requestId) ||
-    !blocksCaller(request.payload)
-      ? []
-      : [requestId],
-  );
-}
-
 /** The `request.decided` rows that cancel `requestIds` of `runId` with
  *  `cause`: what a run's end writes for every request it leaves open, and
- *  a resume's activation for those no attempt re-enters. */
+ *  a resume's activation for those a dead process left. */
 export const cancelRequestRows = (
   runId: RunId,
   requestIds: readonly string[],
@@ -330,20 +288,9 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
   'run.position': { requires: 'any', apply: applySharedRow },
   'request.opened': { requires: 'existing', apply: applySharedRow },
   'request.decided': { requires: 'existing', apply: applySharedRow },
-  'run.stop': {
-    // A shutdown's stop cut the attempt it stopped, which spends no retry
-    // when the run resumes.
-    requires: 'existing',
-    apply: (state, row) =>
-      Result.succeed({
-        ...state,
-        invocation:
-          row.reason === 'shutdown'
-            ? closedBy(state.invocation)
-            : state.invocation,
-      }),
-  },
-  // The lifecycle's end: nothing continues from it until the next open.
+  // A stop and the lifecycle's end: nothing continues from either until
+  // the next open, which restarts whatever they cut.
+  'run.stop': { requires: 'existing', apply: (state) => Result.succeed(state) },
   'run.end': { requires: 'existing', apply: (state) => Result.succeed(state) },
   'run.activate': {
     requires: 'existing',
@@ -393,19 +340,10 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
       const input = withInput(state.input, p.input);
       if (p.cause === 'fork') {
         const first = state.at === null && state.messages.length === 0;
-        if (!first || p.base !== null || p.range.to !== 0)
+        if (!first || p.range.to !== 0)
           return outOfOrder('a fork edit must be the first view of its run');
-        return Result.succeed({
-          ...state,
-          messages: p.messages,
-          lastEdit: row.seq,
-          input,
-        });
+        return Result.succeed({ ...state, messages: p.messages, input });
       }
-      if (p.base !== state.lastEdit)
-        return outOfOrder(
-          `an edit computed at ${p.base ?? 'no edit'} lands after ${state.lastEdit ?? 'no edit'}`,
-        );
       if (p.range.to > state.messages.length)
         return outOfOrder(
           `an edit of messages [${p.range.from}, ${p.range.to}) over ${state.messages.length}`,
@@ -430,7 +368,6 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
           state.countStale ||
           p.range.from !== p.range.to ||
           p.messages.length > 0,
-        lastEdit: row.seq,
         input,
       });
     },

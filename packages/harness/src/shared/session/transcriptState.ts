@@ -18,10 +18,6 @@ import type { CompactionActivityProjection } from '@shared/runs/compactionActivi
 import { compareBySeqNo } from '@shared/runs/runOrdering';
 import type { RunLabels } from '@shared/tools/executionsDisplay';
 import {
-  transcriptText,
-  type TranscriptText,
-} from '@shared/transcript/transcriptText';
-import {
   compactionActivityRow,
   type StreamingTextRow,
   type TranscriptRow,
@@ -105,9 +101,6 @@ export interface TranscriptIndexes {
    *  this entry; the entry goes when the row finalizes or the run ends, and
    *  with the whole state when the run is removed or unsubscribed. */
   readonly live: Map<string, string>;
-  /** Measured live text per streaming row id, extended per chunk rather than
-   *  re-measured; a running tool card's is empty. */
-  readonly cursors: Map<string, TranscriptText>;
   /** The newest thinking row, for `thinkingActive`. */
   thinkingRowId: string | undefined;
   /** The `seq` of the run's newest wait (a `run.position` at `waiting`):
@@ -134,7 +127,6 @@ export function emptyTranscriptIndexes(): TranscriptIndexes {
     pendingModelResponseId: undefined,
     closed: false,
     live: new Map(),
-    cursors: new Map(),
     thinkingRowId: undefined,
     lastWait: null,
     seenUserMessage: false,
@@ -243,21 +235,6 @@ export function upsertCompactionRows(
   }
 }
 
-type StreamingTextRowOf = Extract<
-  TranscriptRow,
-  { kind: StreamingTextRow['kind'] }
->;
-
-export function isStreamingTextRow(
-  row: TranscriptRow,
-): row is StreamingTextRowOf {
-  return (
-    row.kind === 'assistant' ||
-    row.kind === 'thinking' ||
-    row.kind === 'scratchpad'
-  );
-}
-
 // ---------------------------------------------------------------------------
 // One event
 // ---------------------------------------------------------------------------
@@ -309,10 +286,22 @@ export function write(d: Draft, slot: RowState): void {
   d.touched = true;
 }
 
-function rowOf(
+/** Whether the slot's row still takes live text: a stream that paints a
+ *  streaming row, while it runs, or a card in progress. A row that finalized
+ *  takes none, so a late chunk cannot reopen it. */
+export function takesLiveText(slot: RowState): boolean {
+  return slot.kind === 'text'
+    ? slot.running && slot.rowKind !== undefined
+    : slot.kind === 'tool' && slot.log.status === TOOL_CALL_STATUS.IN_PROGRESS;
+}
+
+/** The row a slot paints, over the live text held for it: a stream's text
+ *  in place of its durable one, a card's output so far. No row while a
+ *  text is blank. */
+export function slotRow(
   slot: RowState,
   live: string | undefined,
-  ctx: TranscriptContext,
+  runLabels: RunLabels | undefined,
 ): TranscriptRow | undefined {
   switch (slot.kind) {
     case 'text': {
@@ -328,33 +317,33 @@ function rowOf(
         : plainLogRow(slot.base, text);
     }
     case 'tool':
-      return toolRow(slot.base, slot.log, live, ctx.runLabels, slot.call);
+      return toolRow(slot.base, slot.log, live, runLabels, slot.call);
     case 'log':
       return logPayloadRow(slot.base, slot.text, slot.payload, slot.forkAt);
   }
 }
 
 /**
- * Paint one written slot. A streaming row joins its durable fields with its
- * live text, which may have arrived first; a finalizing row drops that text,
- * so a late chunk cannot reopen it.
+ * Paint one written slot. A row that takes live text joins its durable
+ * fields with that text, which may have arrived first; a finalizing row
+ * drops it.
  */
 export function paint(d: Draft, slot: RowState): void {
   const { ix, next } = d;
   const id = slot.base.id;
-  const streamingText =
-    slot.kind === 'text' && slot.running && slot.rowKind !== undefined;
-  const runningTool =
-    slot.kind === 'tool' && slot.log.status === TOOL_CALL_STATUS.IN_PROGRESS;
+  const takesLive = takesLiveText(slot);
   // One holder of a row's live text, `live`, whichever arrives first: chunks
-  // extend it, and a row applied before any chunk seeds it with the text it
-  // carried, so the chunk re-delivering that text from offset zero ends
+  // extend it, and a stream applied before any chunk seeds it with the text
+  // it carried, so the chunk re-delivering that text from offset zero ends
   // within the length held and is dropped.
-  if (streamingText && slot.text && !ix.live.has(id)) {
+  if (takesLive && slot.kind === 'text' && slot.text && !ix.live.has(id)) {
     ix.live.set(id, slot.text);
   }
-  const live = streamingText || runningTool ? ix.live.get(id) : undefined;
-  const row = rowOf(slot, live, d.ctx);
+  const row = slotRow(
+    slot,
+    takesLive ? ix.live.get(id) : undefined,
+    d.ctx.runLabels,
+  );
   if (row) upsertRow(d, next, row);
   const at = ix.rowIndex.get(id);
   const current = at === undefined ? undefined : next.rows[at];
@@ -365,18 +354,5 @@ export function paint(d: Draft, slot: RowState): void {
       ix.thinkingRowId = id;
     }
   }
-  if (streamingText) {
-    ix.cursors.set(
-      id,
-      current && isStreamingTextRow(current)
-        ? current.text
-        : transcriptText(live ?? ''),
-    );
-  } else if (runningTool) {
-    // A card's output paints from the held text, never a measured cursor.
-    ix.cursors.set(id, transcriptText(''));
-  } else {
-    ix.cursors.delete(id);
-    ix.live.delete(id);
-  }
+  if (!takesLive) ix.live.delete(id);
 }

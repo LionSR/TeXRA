@@ -73,7 +73,7 @@ export interface SessionLogShape {
   now(): CommitOrdinal;
   /** A run's history rows, the kinds its state reads, in seq order; with
    *  `fromSeq`, only those from that seq on; with `types`, those kinds
-   *  instead (what one input became: `RECEIPT_ROW_TYPES`). */
+   *  instead. */
   history(
     id: AggregateId,
     fromSeq?: number,
@@ -110,7 +110,7 @@ export interface SessionLogShape {
   ): Stream.Stream<DisplayRow, DatabaseReadFailed>;
   /** The cold listing (`Database.readListing`). */
   listing(): Effect.Effect<readonly DisplayRow[], DatabaseReadFailed>;
-  /** Set when opening the store moved an older build's rows aside; the
-   *  host that opened the session presents it once. */
+  /** Set when opening the store moved a damaged file aside; the host that
+   *  opened the session presents it once. */
   readonly movedAside: SessionStoreMovedAside | null;
 }

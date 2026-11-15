@@ -148,7 +148,7 @@ export function runStatusLabel(key: RunStatusKey): string {
  *  transcript shown without its run (null) reads an open stage as running. */
 export function stageStatus(
   stage: Pick<Stage, 'outcome'>,
-  run: Pick<RunView, 'holder' | 'outcome'> | null,
+  run: Pick<RunView, 'holder' | 'outcome' | 'position'> | null,
 ): Pick<RunStatus, 'word' | 'tone' | 'glyph'> & {
   readonly key: RunOutcome | 'running' | 'interrupted';
 } {
@@ -165,7 +165,7 @@ export function stageStatus(
  * outrank an interrupted run, which outranks a result its end lost.
  */
 export function runNoticeText(
-  run: Pick<RunView, 'statusNotice' | 'holder' | 'outcome'>,
+  run: Pick<RunView, 'statusNotice' | 'holder' | 'outcome' | 'position'>,
 ): string | null {
   const notice = run.statusNotice;
   switch (notice?.kind) {

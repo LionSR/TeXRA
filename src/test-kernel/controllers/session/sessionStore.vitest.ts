@@ -181,7 +181,6 @@ describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
             );
             expect(view.runs.get(runId)).toMatchObject({
               description: 'Renamed by hand',
-              descriptionBy: 'user',
             });
           }),
       );

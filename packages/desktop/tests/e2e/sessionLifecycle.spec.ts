@@ -113,8 +113,8 @@ async function writeCanonicalRunFixtures(
           },
         ]);
       }
-      // These rows belong to a stopped writer. The next process must derive
-      // interrupted presentation from the recorded loop position, without
+      // These rows belong to a stopped writer. The next process must read
+      // each run's status from its recorded loop position, without
       // rewriting a single row.
       return yield* canonicalRows(fixture);
     }),
@@ -180,12 +180,14 @@ test('a new desktop process hydrates waiting and orphaned histories without rewr
 
   const launched = await launch();
   expect(await processId(launched)).not.toBe(firstPid);
-  // Nothing holds either after the restart: both read interrupted.
-  for (const runId of [WAITING_RUN, ORPHAN_RUN])
+  // Nothing holds either after the restart: the run that waited for a
+  // message reads idle, and the one cut inside its turn reads interrupted.
+  for (const [runId, status] of [
+    [WAITING_RUN, /Status: Idle/],
+    [ORPHAN_RUN, /Status: Interrupted/],
+  ] as const)
     await expect(
-      railRow(launched, runId).getByRole('button', {
-        name: /Status: Interrupted/,
-      }),
+      railRow(launched, runId).getByRole('button', { name: status }),
     ).toBeVisible();
   // The service holds the store: its rows are read from a copy.
   const reloaded = await withStoreCopy(storagePath, (copy) =>
@@ -286,7 +288,10 @@ test('the rail deletes a finished conversation at once, and it stays deleted', a
   const titleBox = await box(row.locator('.tab-title'));
   expect(Math.abs(titleBox.x - rowBox.x - 8)).toBeLessThan(1);
   const projectStatus = await box(page.locator('.shell-project-status'));
-  const taskStatus = await box(row.locator('.tab-status'));
+  // An idle row shows no status: the interrupted run's row has one.
+  const taskStatus = await box(
+    railRow(currentLaunch, ORPHAN_RUN).locator('.tab-status'),
+  );
   expect(
     Math.abs(
       projectStatus.x +

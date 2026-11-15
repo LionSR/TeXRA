@@ -17,7 +17,7 @@ import {
 /**
  * Each way a run's status reads: the outcome it ended on, where its loop
  * stands, or one of the readings that refine or outrank both: `interrupted`
- * (nobody drives a run that has not ended), `waitingOnUser` (a request of its
+ * (nobody drives a run cut inside a turn), `waitingOnUser` (a request of its
  * own waits here), and `starting` / `resuming`, an agent's activation before
  * its first loop step (a first one, or one after a turn has ended).
  */

@@ -182,10 +182,10 @@ export type ChildLaunch = {
 
 /**
  * One request shared by a script's `agent` calls and all its attempts
- * (attempt 0), recovered from rows after restart: one still standing is
- * joined on the one wait (`decisionOf`), a fresh one opens through the
- * call's requests. A stop cancels it, and the next request takes the next
- * ordinal.
+ * (attempt 0), read from the run's rows: the script's calls wait together
+ * on the one that is open (`decisionOf`) and take the answer a person gave
+ * it; a stop or a resume cancels it, and the next request takes the next
+ * ordinal through the call's requests.
  */
 const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
   call: RunToolCall,
@@ -200,10 +200,13 @@ const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
   };
   const from = (yield* SessionLog).now();
   const state = yield* (yield* RunHistory).load(runId);
-  const { raised, own } = attemptRequests(state?.requests ?? {}, shared);
-  if (own?.request.decision === null)
-    return yield* decisionOf(runId, own.requestId, from);
-  if (own !== null) return own.request.decision;
+  const { raised, last } = attemptRequests(state?.requests ?? {}, shared);
+  if (last !== null) {
+    const { decision } = last.request;
+    if (decision === null)
+      return yield* decisionOf(runId, last.requestId, from);
+    if (decision.action !== 'cancel') return decision;
+  }
   const calls = yield* script.calls;
   return yield* call.requests
     .open({

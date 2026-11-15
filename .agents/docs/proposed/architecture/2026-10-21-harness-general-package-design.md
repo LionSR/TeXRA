@@ -398,9 +398,8 @@ re-read the surface and the ports. Where it changes this design:
   claim paths, and the view already lists every queued follow-up. It is a
   feature (about +105 lines with a first `remind` tool) and only its row field
   is cheaper before the freeze.
-- **Lane 5, storage.** `openStore` checks stamps with a read-only probe, moves a
-  damaged file aside by rename and reconnects, and copies a pre-1.0 store, so a
-  ready-made `SqlClient` cannot stand in for it. A port would move about 40
+- **Lane 5, storage.** `openStore` moves a damaged file aside by rename and
+  reconnects, so a ready-made `SqlClient` cannot stand in for it. A port would move about 40
   lines and add about 20, and the crash suite writes files directly, so it gains
   nothing from a client parameter. Browser and edge targets need more than a
   client (WAL, `data_version` polling, process-identity liveness,

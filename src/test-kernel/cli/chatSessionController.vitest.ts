@@ -213,7 +213,7 @@ describe('createChatSessionController', { timeout: REAL_RUN_TIMEOUT }, () => {
             const resumed = yield* Effect.forkChild(ctrl.resume(runId), {
               startImmediately: true,
             });
-            ctrl.stop('user');
+            ctrl.stop();
             yield* Fiber.join(resumed);
 
             // The resume ended once the chat's view showed the run held;
@@ -229,18 +229,18 @@ describe('createChatSessionController', { timeout: REAL_RUN_TIMEOUT }, () => {
         'a run that fails while the chat is leaving exits as a failure',
         () =>
           Effect.gen(function* () {
-            // The quit does not make a failure a success: a run whose end
+            // A stop does not make a failure a success: a run whose end
             // was lost exits as a failure, whether or not the chat is
             // leaving.
             const { session, tui, ctrl, storage } = yield* openChat();
             const runId = yield* stoppedConversation(session);
             const faults = yield* sessionStoreFaults(storage);
             yield* ctrl.resume(runId);
-            // The user quits while the run still works; the store then
+            // The user stops the run as the chat leaves; the store then
             // refuses the run's end.
             tui.exited = Promise.resolve(CliExitCode.Success);
             yield* faults.failNext('appendAll', 'run.end');
-            ctrl.stop('shutdown');
+            ctrl.stop();
 
             yield* until(() => shown(runId)?.holder !== 'here');
             expect(shown(runId)?.outcome).toBeNull();
@@ -263,7 +263,7 @@ describe('createChatSessionController', { timeout: REAL_RUN_TIMEOUT }, () => {
             assert(root !== undefined, 'the first message started no root');
             yield* until(() => shown(root)?.position === 'waiting');
 
-            ctrl.stop('user');
+            ctrl.stop();
             const first = yield* Effect.forkChild(
               ctrl.submit(typed('Do not drop this message.')),
               { startImmediately: true },
@@ -280,7 +280,7 @@ describe('createChatSessionController', { timeout: REAL_RUN_TIMEOUT }, () => {
               return run?.position === 'waiting' && (run.turn ?? 0) >= 2;
             });
 
-            ctrl.stop('user');
+            ctrl.stop();
             yield* until(() => {
               const run = shown(root);
               return (
@@ -324,7 +324,7 @@ describe('createChatSessionController', { timeout: REAL_RUN_TIMEOUT }, () => {
               ctrl.submit(typed('And then this.')),
               { startImmediately: true },
             );
-            ctrl.stop('user');
+            ctrl.stop();
             yield* Fiber.join(starting);
             yield* Fiber.join(messaging);
             const root = rootRunId.get();
@@ -355,7 +355,7 @@ describe('createChatSessionController', { timeout: REAL_RUN_TIMEOUT }, () => {
             const faults = yield* sessionStoreFaults(storage);
             yield* ctrl.resume(runId);
             yield* faults.failNext('appendAll', 'run.end');
-            ctrl.stop('user');
+            ctrl.stop();
 
             yield* until(() =>
               notices.get().some((notice) => notice.row.kind === 'error'),
@@ -423,7 +423,7 @@ describe('createChatSessionController', { timeout: REAL_RUN_TIMEOUT }, () => {
             const old = rootRunId.get();
             assert(old !== undefined, 'the first message started no root');
             yield* until(() => shown(old)?.position === 'waiting');
-            ctrl.stop('user');
+            ctrl.stop();
             yield* until(() => shown(old)?.outcome === 'cancelled');
 
             // The message's commit waits until the resume has claimed the

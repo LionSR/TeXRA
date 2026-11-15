@@ -109,13 +109,12 @@ export class DatabaseReadFailed extends Schema.TaggedError<DatabaseReadFailed>()
 export type StoredBlobs = (digest: string) => string;
 
 /**
- * What opening a store moved aside, whole (never read again): a store written
- * before 1.0, or a file SQLite reports damaged or not a database. Null when
- * nothing was moved. The one fact a host presents about it. */
+ * What opening a store moved aside, whole (never read again): a file SQLite
+ * reports damaged or not a database. Null when nothing was moved. The one
+ * fact a host presents about it. */
 export interface SessionStoreMovedAside {
   readonly path: string;
   readonly aside: string;
-  readonly reason: 'pre-1.0' | 'corrupt';
 }
 
 /** The store gate's refusal (`storeGate`): the store holds a kind or version
@@ -206,7 +205,7 @@ type EventsRead = Effect.Effect<readonly SessionRow[], DatabaseReadFailed>;
 export class Database extends Context.Service<
   Database,
   {
-    /** Set when this open moved a pre-1.0 or damaged store aside. */
+    /** Set when this open moved a damaged store aside. */
     readonly movedAside: SessionStoreMovedAside | null;
     /**
      * Append an ordered batch across aggregates, whole or not at all, in

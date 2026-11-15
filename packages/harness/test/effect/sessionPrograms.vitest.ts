@@ -9,9 +9,8 @@
  *   parent's handle; the redirect leaves a listener of its own subscribed.
  * - A labelled run's label request is left out of its result's usage or its
  *   view's, or the two disagree.
- * - A host's shutdown that stops a launch still opening, then interrupts
- *   it (the CLI's), leaves the run ended without the shutdown's reason, so
- *   a resume reads its turn as unanswered rather than continued.
+ * - A stop that reaches a launch still opening, or before it registered,
+ *   leaves the run without the stop's row or without an end.
  */
 import { layer } from '@effect/vitest';
 import { Context, Effect, Exit, Fiber, Schema, Scope, Stream } from 'effect';
@@ -183,7 +182,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
       );
 
       it.effect(
-        "records a host shutdown's stop of a launch still opening on its run's end",
+        "records a stop of a launch still opening on its run's end",
         () =>
           Effect.gen(function* () {
             const { roots } = yield* FakeHost;
@@ -202,9 +201,9 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
             yield* opening.reached;
             const runId = sdk.held()[0]?.runId;
             assert(runId !== undefined, 'the session holds the launch');
-            // The CLI's shutdown of a launch the session holds: stopped for
-            // the shutdown, then interrupted, as its opening commits.
-            yield* sdk.request({ kind: 'run.stop', runId, reason: 'shutdown' });
+            // A launch the session holds: stopped, then interrupted, as its
+            // opening commits.
+            yield* sdk.request({ kind: 'run.stop', runId, reason: 'user' });
             const interrupted = yield* Effect.forkChild(
               Fiber.interrupt(launch),
             );
@@ -222,23 +221,23 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
             const ends = rows
               .filter((row) => row.type === 'run.end')
               .map((row) => Schema.decodeUnknownSync(RunEndData)(row.data));
-            expect(stops).toStrictEqual([{ reason: 'shutdown' }]);
+            expect(stops).toStrictEqual([{ reason: 'user' }]);
             expect(ends).toStrictEqual([{ outcome: 'cancelled' }]);
           }),
       );
 
       it.effect(
-        'ends cancelled a launch whose shutdown stop came before it started',
+        'ends cancelled a launch whose stop came before it started',
         () =>
           Effect.gen(function* () {
             const { roots } = yield* FakeHost;
             const sdk = yield* packageSession(
               yield* persistentTestSession(roots),
             );
-            // The CLI mints the id, and a shutdown's stop can reach the
-            // session before the launch registers it: no rows exist yet.
+            // A host mints the id, and a stop can reach the session before
+            // the launch registers it: no rows exist yet.
             const runId = generateRunId();
-            yield* sdk.request({ kind: 'run.stop', runId, reason: 'shutdown' });
+            yield* sdk.request({ kind: 'run.stop', runId, reason: 'user' });
             const run = yield* sdk.start({
               agent: 'golden_parent',
               instruction: 'Read the notes, plan, delegate.',
@@ -249,7 +248,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
             const stops = storedRows(roots.storage)
               .filter((row) => row.run === runId && row.type === 'run.stop')
               .map((row) => Schema.decodeUnknownSync(RunStopData)(row.data));
-            expect(stops).toStrictEqual([{ reason: 'shutdown' }]);
+            expect(stops).toStrictEqual([{ reason: 'user' }]);
           }),
       );
 

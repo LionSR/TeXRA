@@ -8,7 +8,7 @@ describe('stageStatus', () => {
   it('reads an open stage of an interrupted run as interrupted', () => {
     const status = stageStatus(
       { outcome: null },
-      { holder: 'none', outcome: null },
+      { holder: 'none', outcome: null, position: 'running' },
     );
     expect(status.key).toBe('interrupted');
     expect(status.word).toBe('Interrupted');

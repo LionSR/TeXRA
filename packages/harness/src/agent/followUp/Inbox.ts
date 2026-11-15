@@ -67,10 +67,6 @@ export type InboxItem = (
   readonly deliveryId?: string;
   /** A request of the run's own (`/compact`, a model switch), not a message. */
   readonly control?: QueuedFollowUp['control'];
-  /** The id a caller named the message by (`followUp.send`; `deliveryId`
-   *  is its `sentFollowUpId`): a retry under it answers with the first
-   *  send's receipt, another message under it fails `Conflict`. */
-  readonly caller?: string;
 };
 
 /** How a send landed: queued for the run (a reader here takes it, or its
@@ -305,8 +301,7 @@ export class SessionInbox {
           sent: yield* landed(false),
         };
       }
-      // A caller's id that is queued or taken was answered before the send
-      // by `sentBefore`, in the same per-run lane.
+      // A delivery repeated under its id: still queued, or already taken.
       return queuedStill
         ? { rows: [], sent: yield* landed(true) }
         : only({ kind: 'duplicate' });

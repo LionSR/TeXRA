@@ -153,19 +153,15 @@ export interface ITool<E = Error, R = never> {
 
 /**
  * The requests one tool call raises, opened through its run's loop. Each
- * carries an id its attempt derives, so a person's pending approval outlives
- * the process that asked: a resume re-enters the call, and the call opens
- * that same request again, joining it instead of asking twice.
+ * carries an id its attempt derives. A request still open when its run
+ * stops is cancelled, and the resumed call asks again under a new id.
  */
 export interface CallRequests {
-  /** The id the call's next request of `kind` opens under: the request a
-   *  resumed call left standing, when it is of this kind, else the
-   *  attempt's next derived id. A request is staged under this id before
-   *  it opens. */
-  readonly nextId: (kind: RequestPayload['kind']) => string;
-  /** Open the request (or re-enter the standing one) and wait for its
-   *  decision. The returned payload is the request actually answered,
-   *  which on resume may differ from the proposal recomputed by the caller.
+  /** The id the call's next request opens under: the attempt's next
+   *  derived id. A request is staged under this id before it opens. */
+  readonly nextId: () => string;
+  /** Open the request and wait for its decision. The returned payload is
+   *  the request as it opened.
    *  `blobs` are the strings the payload names by address, stored with its
    *  row. `operation` is what a command (`bash`) asks permission for: the
    *  shell's (`'bash'`, which the run's command grant answers) or another

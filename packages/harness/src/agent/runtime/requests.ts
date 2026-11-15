@@ -12,7 +12,8 @@
  * the requests it covers, and the invoker's own. A request a stopped or
  * failed run leaves open is cancelled with the run's end, in the end's
  * batch (`endIn`); one a dead process left, with the run's next activation
- * (`cancelRequestRows`).
+ * (`cancelRequestRows`). Either way the asker asks again when its run
+ * resumes: no request is joined across a stop.
  *
  * Who answers a request (`answeredBy`) is decided once, as it opens
  * ({@link answererOf}): its operation's grant ({@link OPERATIONS}), or a
@@ -417,13 +418,6 @@ interface RequestOpening {
    *  stored with the `request.opened` row; the session log's `blobs` reads
    *  them back for as long as the row lives. */
   readonly blobs?: readonly DraftBlob[];
-  /** A request a resumed call re-entered, as it opened, and the commit
-   *  the resume read it open at: open already, only what the policy
-   *  decides now commits, and a person's answer since is read from there. */
-  readonly reentered?: {
-    readonly answeredBy: AnsweredBy;
-    readonly openAt: CommitOrdinal;
-  };
   /** What the call's `PreToolUse` hooks said. */
   readonly hook?: 'allow' | 'ask';
   /** What the request asks permission for, where its kind does not say:
@@ -461,10 +455,11 @@ export const openRequest = <P extends RequestPayload, E>(
     const { runId } = cell;
     const { requestId } = payload.data;
     const aggregateId = qualifyAggregateId('run', runId);
-    const { reentered, hook } = opening;
-    const answeredBy =
-      reentered?.answeredBy ??
-      answererOf(opening.operation ?? KIND_OPERATIONS[payload.kind], hook);
+    const { hook } = opening;
+    const answeredBy = answererOf(
+      opening.operation ?? KIND_OPERATIONS[payload.kind],
+      hook,
+    );
     const decision = answerFor(
       yield* policyOwners,
       runId,
@@ -480,10 +475,6 @@ export const openRequest = <P extends RequestPayload, E>(
       decision === undefined
         ? []
         : [{ type: 'request.decided', aggregateId, requestId, decision }];
-    if (reentered !== undefined) {
-      if (decided.length > 0) yield* cell.append(decided);
-      return { answer, from: reentered.openAt };
-    }
     const { commit } = yield* cell.append([
       {
         type: 'request.opened',

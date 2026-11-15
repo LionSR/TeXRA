@@ -50,7 +50,7 @@ export const openProjectSession = Effect.fn('openProjectSession')(function* (
   if (local !== null)
     yield* Effect.logWarning(local).pipe(withLogChannel(CHANNEL));
   const session = yield* openLocalSession(yield* Sessions, roots);
-  // A store moved aside at open (pre-1.0 or corrupt) is said once.
+  // A damaged store moved aside at open is said once.
   if (session.storeMovedAside)
     yield* warn(sessionStoreMovedAsideMessage(session.storeMovedAside));
   return {

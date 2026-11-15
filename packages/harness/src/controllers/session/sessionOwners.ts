@@ -10,7 +10,6 @@
 import {
   Cause,
   Exit,
-  Clock,
   Context,
   Effect,
   FiberMap,
@@ -80,22 +79,21 @@ import { sweepLeftoverRuns } from './sweepLeftoverRuns';
 
 const CHANNEL = 'sessionOwners';
 
-/** Stop every run of `session`, cascading, and wait for them to end within
- *  the close budget, which starts before the stop rows: their writes are
- *  durable appends and run whole, and the wait gets what they left of the
- *  budget. The runs still live past it are abandoned. */
+/** Interrupt every run of `session` and wait for their fibers to exit
+ *  within the close budget. Nothing is written for them: each is left as
+ *  its rows stand. The runs still live past the budget are abandoned. */
 export const stopSessionRuns = (
   session: Context.Context<SessionServices>,
 ): Effect.Effect<SessionCloseReport> =>
   Effect.gen(function* () {
     const runs = Context.get(session, RunRegistry);
-    const closeBy =
-      (yield* Clock.currentTimeMillis) + SESSION_CLOSE_DEADLINE_MS;
-    yield* runs.stopAll();
-    const left = closeBy - (yield* Clock.currentTimeMillis);
+    runs.interruptAll();
     yield* runs
       .awaitDrained()
-      .pipe(Effect.interruptible, Effect.timeoutOption(Math.max(left, 0)));
+      .pipe(
+        Effect.interruptible,
+        Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
+      );
     const abandoned = runs.get().map((run) => run.runId);
     return { settled: abandoned.length === 0, abandoned };
   });

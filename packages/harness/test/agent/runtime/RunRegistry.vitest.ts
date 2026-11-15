@@ -38,7 +38,7 @@ const CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
 
 /**
  * A registry of its own over the default session, whose runs start on
- * `fork`: its close (`stopAll`) is the test's, not the session's. Its stops
+ * `fork`: its close (`interruptAll`) is the test's, not the session's. Its stops
  * commit on the session; the process services are the caller's.
  */
 function createRegistry(
@@ -93,7 +93,7 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
             ),
           );
           yield* Deferred.await(ended);
-          yield* registry.stopAll();
+          registry.interruptAll();
           expect(registry.get(runId)).toBeDefined();
           const drain = yield* Effect.forkChild(
             registry

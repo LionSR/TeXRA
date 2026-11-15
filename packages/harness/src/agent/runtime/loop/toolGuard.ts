@@ -21,38 +21,25 @@ import {
   type ITool,
 } from '@agent/core/tools/ToolTypes';
 import {
-  type DecisionOf,
   type HookOutcomePayload,
   type RequestPayload,
   RequestPayloadSchema,
   toJsonValue,
   type ToolResult,
 } from '@shared/schemas';
-import type { DatabaseReadFailed } from '@shared/session/database';
 import {
   callRequestId,
   type AttemptRequests,
   type CallAttempt,
 } from '@shared/session/inFlight';
-import {
-  Approvals,
-  SessionLog,
-  type CellError,
-  type RunCell,
-} from '@shared/session/runHistory';
+import { Approvals, type CellError } from '@shared/session/runHistory';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import type { HookAnswer } from '@shared/session/sessionApprovals';
-import type { LogWriteError } from '@shared/session/sessionLog';
 import { assertWritable, resolveToolPath } from '@tools/pathResolution';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { Interactions } from '../HostInteractions';
-import {
-  decideRequest,
-  decisionOf,
-  openRequest,
-  recordedDecision,
-} from '../requests';
+import { decisionOf, openRequest, recordedDecision } from '../requests';
 import { RunCall } from '../RunCall';
 import { askCommandApproval, commandRejectedResult } from './commandApproval';
 import type { AgentRunShape } from '../run/AgentRun';
@@ -234,103 +221,45 @@ export const guardedToolCall = (
 
 /**
  * One tool call's requests (`CallRequests`), opened through its run's loop
- * under ids its attempt (`at` and `entered.attempt`) derives: a fresh one
- * past every ordinal the attempt `raised`. A resumed attempt joins the
- * request it left standing (`own`) when it asks that kind again; one it no
- * longer asks is retired as cancelled (`retireStanding`, which the call's
- * settlement runs too, recording `retireCause`), so no surface keeps
- * offering it; a retirement the store refuses fails the call with the
- * refusal, which ends the run like any refused write. Every request opens
- * at the one door (`openRequest`) through `commit`, which commits rows of
- * the call, and a person's answer is the one wait (`decisionOf`).
+ * under ids its attempt (`at` and `entered.attempt`) derives: each a fresh
+ * one, past every ordinal the attempt `raised`. A resumed call joins
+ * nothing: a request its last run left open was cancelled when that run
+ * ended or this one was activated, so it asks again. Every request opens at
+ * the one door (`openRequest`) through `commit`, which commits rows of the
+ * call, and a person's answer is the one wait (`decisionOf`).
  */
 export const callRequests = (call: {
   readonly run: Pick<AgentRunShape, 'runId'>;
   readonly session: Context.Context<SessionServices>;
-  readonly cell: Pick<RunCell, 'opened'>;
   readonly commit: (
     rows: readonly RunHistoryDraft[],
   ) => Effect.Effect<RunState, CellError>;
   readonly at: Omit<CallAttempt, 'attempt'>;
-  readonly entered: { readonly attempt: number } & AttemptRequests;
-  readonly retireCause: string;
-}): {
-  readonly requests: CallRequests;
-  readonly retireStanding: Effect.Effect<
-    void,
-    DatabaseReadFailed | LogWriteError
-  >;
-} => {
-  const { run, session, cell, commit, entered, retireCause } = call;
+  readonly entered: Pick<AttemptRequests, 'raised'> & {
+    readonly attempt: number;
+  };
+}): CallRequests => {
+  const { run, session, commit, entered } = call;
   const { runId } = run;
   const asker = { runId, append: commit };
   const at: CallAttempt = { ...call.at, attempt: entered.attempt };
-  const log = Context.get(session, SessionLog);
   const interactions = Context.get(session, Interactions);
-  let reentering = entered.own;
   let opened = entered.raised;
-  // Through the decision's own check, so an answer a surface landed
-  // meanwhile stands and the retirement writes nothing. `retireCause` is
-  // why the call no longer asks: a resume that re-entered without it, or
-  // a script that ended before the call settled.
-  const retireStanding = Effect.suspend(() => {
-    const open = reentering?.request.decision === null ? reentering : null;
-    reentering = null;
-    if (open === null) return Effect.void;
-    return Effect.asVoid(
-      decideRequest(runId, open.requestId, {
-        action: 'cancel',
-        cause: retireCause,
-      }).pipe(Effect.provideService(SessionLog, log)),
-    );
-  });
-  const requests: CallRequests = {
-    nextId: (kind) =>
-      reentering?.request.payload.kind === kind
-        ? reentering.requestId
-        : callRequestId(at, opened + 1),
+  return {
+    nextId: () => callRequestId(at, opened + 1),
     open: (payload, opening) =>
       Effect.suspend(() => {
-        const reentered =
-          payload.data.requestId === reentering?.requestId ? reentering : null;
-        if (reentered !== null) reentering = null;
-        else if (payload.data.requestId === callRequestId(at, opened + 1))
+        if (payload.data.requestId === callRequestId(at, opened + 1))
           opened += 1;
-        // Answered before this owner's loop reached the call: the answer
-        // is the row's.
-        // `nextId` rejoins only the same kind. Return the durable payload,
-        // not the recomputation whose blobs are discarded on re-entry.
-        const answered = (decision: DecisionOf<(typeof payload)['kind']>) => ({
-          // cast: the derived request id rejoins only this payload's kind.
-          payload: (reentered?.request.payload ?? payload) as Extract<
-            RequestPayload,
-            { kind: (typeof payload)['kind'] }
-          >,
-          decision,
-        });
-        if (reentered?.request.decision != null)
-          return recordedDecision(payload, reentered.request.decision).pipe(
-            Effect.map(answered),
-          );
         return Effect.gen(function* () {
           // The hook of the call the request opens in, read from its
           // fiber: `CallRequests` is public and requires nothing of its
           // caller.
           const call = yield* Effect.serviceOption(RunCall);
           const hook = Option.isSome(call) ? call.value.hook : undefined;
-          // Fresh: the standing request of another kind is retired first.
-          if (reentered === null) yield* retireStanding;
           const { answer, from } = yield* openRequest(asker, payload, {
             ...opening,
             ...(hook && { hook }),
-            // Open already: only what the policy decides commits, and a
-            // person's answer is read from where the resume read the run.
-            ...(reentered !== null && {
-              reentered: {
-                answeredBy: reentered.request.answeredBy,
-                openAt: cell.opened.commit,
-              },
-            }),
           });
           if (answer !== null) return answer;
           const decision = yield* decisionOf(
@@ -339,7 +268,17 @@ export const callRequests = (call: {
             from,
           );
           return yield* recordedDecision(payload, decision);
-        }).pipe(Effect.provide(session), Effect.map(answered));
+        }).pipe(
+          Effect.provide(session),
+          Effect.map((decision) => ({
+            // cast: the payload is the request this call opened, of its kind.
+            payload: payload as Extract<
+              RequestPayload,
+              { kind: (typeof payload)['kind'] }
+            >,
+            decision,
+          })),
+        );
       }),
     post: (request) =>
       Effect.suspend(() =>
@@ -352,5 +291,4 @@ export const callRequests = (call: {
       ).pipe(Effect.provide(session), Effect.asVoid),
     present: interactions.emit,
   };
-  return { requests, retireStanding };
 };
