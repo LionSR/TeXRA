@@ -22,6 +22,7 @@ import {
   type RunId,
   Rejected,
 } from '@texra-ai/harness/schemas';
+import type { ConfirmQuestion } from '@texra/hosts/uiHosts';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import { revisionLayout } from '@texra/shared/constants/revisionLayout';
 import type { ProcessServices } from '@texra-ai/harness/host';
@@ -56,8 +57,10 @@ export interface ProgressDocumentTaskFileActionsHost {
     editedFile: string,
     title: string,
   ): FileAction<void>;
-  /** Ask to write an accepted file; false when the user declines. */
-  confirmAccept(message: string): Effect.Effect<boolean, HostCommandFailure>;
+  /** Ask a question that names its action; false when the user declines. */
+  confirm(
+    question: ConfirmQuestion,
+  ): Effect.Effect<boolean, HostCommandFailure>;
   openDirectory(directory: string): FileAction<void>;
   showInfo(message: string): Effect.Effect<void, HostCommandFailure>;
 }
@@ -148,7 +151,11 @@ export class ProgressDocumentTaskFileActionsController {
     const written = yield* acceptEditedFileReplace(
       pathToLocationIn(workspace, base),
       pathToLocationIn(workspace, file),
-      { confirm: host.confirmAccept, showInfo: host.showInfo },
+      {
+        confirm: (message) =>
+          host.confirm({ message, action: 'Replace file' }),
+        showInfo: host.showInfo,
+      },
     );
     if (Option.isNone(written) || !activeRun) return;
     const edit = yield* this.userEdit(activeRun, file, written.value);

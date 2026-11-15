@@ -172,7 +172,7 @@ export const createDesktopHostRequests = (
                   }),
               ),
             ),
-        confirmAccept: (message: string) => host.confirmAcceptFile(message),
+        confirm: host.confirm,
         openDirectory: (directory: string) => host.openPath(directory),
       },
       export: {

@@ -58,7 +58,11 @@ import type {
   HostCommand,
 } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
-import { HostFailed, type NoticeLevel } from '@texra/hosts/uiHosts';
+import {
+  HostFailed,
+  type ConfirmQuestion,
+  type NoticeLevel,
+} from '@texra/hosts/uiHosts';
 
 import { normalizeMainViewFileExtension } from '@texra/controllers/mainView/MainViewDroppedFilesController';
 import {
@@ -428,8 +432,8 @@ export const createExtensionHostRequests = Effect.fn(
           'compare',
           handleCompare(at(base), at(edited), title, diffRefresh),
         ),
-      confirmAccept: (message: string) =>
-        vscodeUi.confirm({ message, action: 'Replace file' }),
+      // The host's members read `this`, so they cross the boundary bound.
+      confirm: (question: ConfirmQuestion) => vscodeUi.confirm(question),
       openDirectory: revealFileInOS,
     },
     export: {

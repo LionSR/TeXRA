@@ -236,8 +236,7 @@ export function createDesktopWindowHost(options: {
         'openBuildDisplay' | 'openDiff'
       > = {
         openPath: (filePath) => presented(previewHost.openPath(filePath)),
-        confirmAcceptFile: (message) =>
-          dialogs.confirm({ message, action: 'Replace file' }, name),
+        confirm: (question) => dialogs.confirm(question, name),
         notify: (level, message) => notify(level, message, name),
         // Presentation failures are reported, never raised: a run must not
         // fail because a dialog could not be shown. The caller still awaits

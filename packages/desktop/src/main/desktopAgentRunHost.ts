@@ -44,5 +44,5 @@ export interface DesktopAgentRunHost {
   ): Effect.Effect<void, PreviewUnavailable>;
   openBuildDisplay: BuildDisplayFn;
   openDiff: DiffViewHost['openDiff'];
-  confirmAcceptFile(message: string): Effect.Effect<boolean, HostFailed>;
+  confirm: Dialogs['confirm'];
 }
