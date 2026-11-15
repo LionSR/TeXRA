@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
+import { parseArgs } from 'node:util';
 
 // Third-party imports
 import { build } from 'esbuild';
@@ -91,7 +92,12 @@ function normalizeLineEndings(text) {
   return text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
 }
 
-const check = process.argv.includes('--check');
+const {
+  values: { check },
+} = parseArgs({
+  args: process.argv.slice(2).filter((arg) => arg !== '--'),
+  options: { check: { type: 'boolean' } },
+});
 const packageText = await readFile(packagePath, 'utf8');
 const packageJson = JSON.parse(packageText);
 if (packageJson.contributes?.configuration !== undefined) {
