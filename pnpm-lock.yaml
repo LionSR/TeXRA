@@ -311,9 +311,6 @@ importers:
       string-width:
         specifier: ^8.3.0
         version: 8.3.0
-      strip-ansi:
-        specifier: ^7.2.0
-        version: 7.2.0
       typescript:
         specifier: npm:@typescript/typescript6@^6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -381,9 +378,6 @@ importers:
       lit:
         specifier: ^3.3.3
         version: 3.3.3
-      nanoid:
-        specifier: 'catalog:'
-        version: 6.0.2
       signal-polyfill:
         specifier: ^0.2.2
         version: 0.2.2
@@ -429,12 +423,6 @@ importers:
       lit:
         specifier: ^3.3.3
         version: 3.3.3
-      nanoid:
-        specifier: 'catalog:'
-        version: 6.0.2
-      strip-ansi:
-        specifier: ^7.2.0
-        version: 7.2.0
       vite:
         specifier: ^8.3.7
         version: 8.3.7(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.1)

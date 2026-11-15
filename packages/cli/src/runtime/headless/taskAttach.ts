@@ -10,6 +10,8 @@
  * Attaching never steers the task: it ends when the task reaches a terminal
  * outcome, and an interrupt only detaches this client.
  */
+import { stripVTControlCharacters } from 'node:util';
+
 import {
   Effect,
   Fiber,
@@ -19,7 +21,6 @@ import {
   Schema,
   Stream,
 } from 'effect';
-import stripAnsi from 'strip-ansi';
 
 import { qualifyAggregateId, type RunOutcome } from '@texra-ai/harness/schemas';
 import { fullTranscriptEntryLayout } from '@cli/chat/tui/panes/transcriptEntryLayout';
@@ -150,7 +151,7 @@ export const attachTask = Effect.fn('attachTask')(function* (
         output.columns,
       );
       const text = lines.join('\n');
-      writeTextStdout(`${output.color ? text : stripAnsi(text)}\n`);
+      writeTextStdout(`${output.color ? text : stripVTControlCharacters(text)}\n`);
     }
   };
   const last = yield* watchTask(client, task, (frame) => {
