@@ -98,6 +98,10 @@ export const logEntryStyles = css`
 
   /* Note: .detail-item base styles are in commonViewStyles; this adds log-specific variants */
 
+  .file-load-icon {
+    color: var(--tone-color);
+  }
+
   .file-link {
     color: var(--color-text-link);
     cursor: pointer;

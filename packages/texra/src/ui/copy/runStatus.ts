@@ -104,6 +104,11 @@ export function statusGlyph(look: StatusLook): IconName {
   return look.glyph ?? TONE_GLYPH[look.tone];
 }
 
+/** The tone of a file the run tried to read: loaded, or not. */
+export function fileLoadTone(ok: boolean): RunTone {
+  return ok ? 'success' : 'danger';
+}
+
 /** How a tool card's status section reads. */
 export const TOOL_STATUS: Readonly<Record<ToolCallStatus, StatusWord>> =
   Object.freeze({

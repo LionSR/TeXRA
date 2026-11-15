@@ -23,6 +23,7 @@ import { stopSpinnerMotion } from '@ui/wa/spinner';
 import { renderStatusBadge } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { formatMediaLabel } from '@ui/copy/format';
+import { fileLoadTone, statusGlyph } from '@ui/copy/runStatus';
 
 // Side-effect import - register the <copy-button> element drawn below
 import '@ui/progress/components/CopyButton';
@@ -212,7 +213,7 @@ export function buildFileListRender(
   const mediaByPath = new Map(media.map((ref) => [ref.path, ref.media]));
   // prettier-ignore
   return html`${files.map((file) => {
-    const iconName = file.ok ? 'check' : 'triangle-exclamation';
+    const tone = fileLoadTone(file.ok);
     const filePath = file.path;
     const fileName = getBasename(filePath);
     const loaded = mediaByPath.get(filePath);
@@ -222,7 +223,7 @@ export function buildFileListRender(
     // worth labelling sets `sourceDisplay`, so no host needs a fallback to
     // spell it out.
     // prettier-ignore
-    return html`<li class="detail-item" title=${filePath}>${waIcon(iconName)} ${buildFileLinkSpan(filePath, html`<bdi dir="auto">${fileName}</bdi>`)}${file.varName ? html` <span class="file-var">[<bdi dir="auto">${file.varName}</bdi>]</span>` : ''}${file.sourceDisplay ? html` <span class="file-source">(<bdi dir="auto">${file.sourceDisplay}</bdi>)</span>` : ''}${loaded ? html` <span class="file-media"><bdi dir="ltr">${formatMediaLabel(loaded)}</bdi></span>` : ''}</li>`;
+    return html`<li class="detail-item" title=${filePath}>${waIcon(statusGlyph({ tone }), { className: `file-load-icon tone-${tone}` })} ${buildFileLinkSpan(filePath, html`<bdi dir="auto">${fileName}</bdi>`)}${file.varName ? html` <span class="file-var">[<bdi dir="auto">${file.varName}</bdi>]</span>` : ''}${file.sourceDisplay ? html` <span class="file-source">(<bdi dir="auto">${file.sourceDisplay}</bdi>)</span>` : ''}${loaded ? html` <span class="file-media"><bdi dir="ltr">${formatMediaLabel(loaded)}</bdi></span>` : ''}</li>`;
   })}`;
 }
 
