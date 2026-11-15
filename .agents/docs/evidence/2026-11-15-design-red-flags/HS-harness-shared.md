@@ -12,7 +12,7 @@ Read on `main` at `cb22acd`. Covered: `packages/harness/src/shared/` (schemas, s
 - **Better design:** the card's result is the stored result; what a call edited is `result.edits`, its one owner. `callCard` returns `{ ...envelope, type: 'tool.end', logId, status, result }`.
 - **Deleted:** `tool.end.files` (schema field), `editedFiles`, the `files` key inside `result`, `FileListEntrySchema.source` and its three writes, the false comment at `toolUse.ts:130`, the `logPayload.ts:32` "e.g. `files`" comment.
 - **Size:** about 40 lines, 6 files.
-- **Risk / owner decision:** `tool.end` is stored for agent-CLI children, but no producer of a stored `tool.end` writes `files`, so no row version changes. The note `.agents/docs/proposed/simplification/2026-11-14-tool-card-result-and-delivery-shapes.md` §1 (typed `result` on `tool.end`) does not list these fields; this is its first step and stands alone.
+- **Risk / owner decision:** `tool.end` is stored for agent-CLI children, but no producer of a stored `tool.end` writes `files`, so no row version changes. The note `.agents/docs/proposed/simplification/2026-11-14-tool-card-result-and-delivery-shapes.md` §1 (typed `result` on `tool.end`) does not list these fields; this is its first step and stands alone. Open PR #14949 (`claude/dazzling-cori-84lvx0`, commit `8cb7a10`, "a call's card states its edited files once") deletes `editedFiles` only (`rowReader.ts`, 1+/5-); `tool.end.files`, `result.files`, `FileListEntrySchema.source` and the two false comments remain on that branch, so the rest of this finding stands after it.
 
 ### HS-2: Three `log` payload cases have no producer: `scratchpad`, `toolUse`, and a text row's `status`
 
