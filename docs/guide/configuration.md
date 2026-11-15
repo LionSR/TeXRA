@@ -20,7 +20,7 @@ The page remembers the sub-tab you last opened while Settings stays open.
   **Subscriptions** (ChatGPT and Grok sign-in), and
   **Models** (which models appear, and the helper model).
 - **Agents**: the agent **Library**, **Teams**, **Skills**, and **Advanced**
-  (compaction, retries, and team coordination).
+  (compaction, retries, script-only tools, and team coordination).
 - **Memory**: the notes TeXRA keeps across tasks.
 - **Plugins**: everything that adds tools or agents: TeXRA's plugins (such as
   Codex, Claude Code, Zotero, and GitHub), installed Claude Code and Codex

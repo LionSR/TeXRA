@@ -236,15 +236,12 @@ export const HARNESS_ROW_SURFACES: Readonly<
   },
 
   // --- Memory and code mode --------------------------------------------------
-  // Memory has no `/config` row; script-only tools have no settings-view row.
+  // Memory has no `/config` row.
   [MEMORY_ENABLED_SETTING.key]: {
     category: 'tools',
     surfaces: { settingsView: 'memory' },
   },
-  [SCRIPT_ONLY_SETTING.key]: {
-    category: 'agents',
-    surfaces: { cliConfig: true },
-  },
+  [SCRIPT_ONLY_SETTING.key]: { category: 'agents', ...AGENTS_AND_CLI },
 
   // --- Providers --------------------------------------------------------------
   [WEBSOCKET_OPENAI_SETTING.key]: providerToggle({

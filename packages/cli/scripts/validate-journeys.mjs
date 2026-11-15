@@ -12,11 +12,12 @@
  * that runs on every PR against the canned validation model.
  *
  *   node scripts/validate-journeys.mjs [--model <ref>]... [--journey polish]...
- *     [--no-build] [--out dir] [--script-only] [--repeat n]
+ *     [--no-build] [--out dir] [--direct] [--repeat n]
  *
- * `--script-only` runs every journey with the `texra.codeMode.scriptOnly`
- * setting on in the run's home (the model is sent `script` and the run's own
- * tools alone), the "only" arm of the code mode comparison; `--repeat` runs
+ * A journey runs as a fresh install does, with `texra.codeMode.scriptOnly` on
+ * (the model is sent `script` and the run's own tools alone): the "only" arm
+ * of the code mode comparison. `--direct` turns the setting off in the run's
+ * home, so the model is sent every tool: the "direct" arm. `--repeat` runs
  * each journey that many times. Every run appends one JSON line to `<out>/results.jsonl`.
  *
  * With no `--model` it runs every model in `MODEL_KEYS`, so this map is the one
@@ -230,7 +231,7 @@ const JOURNEYS = {
 };
 
 /** Run one journey through the real CLI; returns its usage or throws. */
-function runJourney(name, model, outDir, { scriptOnly, attempt }) {
+function runJourney(name, model, outDir, { arm, attempt }) {
   const journey = JOURNEYS[name];
   const dir = mkdtempSync(path.join(tmpdir(), `texra-journey-${name}-`));
   const home = mkdtempSync(path.join(tmpdir(), `texra-journey-${name}-home-`));
@@ -263,14 +264,14 @@ function runJourney(name, model, outDir, { scriptOnly, attempt }) {
     // enabled ones only.
     const enable = texra(['models', 'enable', model], 60_000);
     assert(enable.status === 0, `texra models enable ${model} failed`);
-    if (scriptOnly) {
-      // The global state the `enable` above created: the "only" arm's one
+    if (arm === 'direct') {
+      // The global state the `enable` above created: the "direct" arm's one
       // setting, written as the app-state store writes it.
       const db = new DatabaseSync(
         path.join(home, '.texra', 'v1', 'global-storage', 'texra.db'),
       );
       db.prepare(
-        "INSERT OR REPLACE INTO current_value (family, key, value, at) VALUES ('app-state', 'texra.codeMode.scriptOnly', 'true', ?)",
+        "INSERT OR REPLACE INTO current_value (family, key, value, at) VALUES ('app-state', 'texra.codeMode.scriptOnly', 'false', ?)",
       ).run(Date.now());
       db.close();
     }
@@ -293,7 +294,7 @@ function runJourney(name, model, outDir, { scriptOnly, attempt }) {
     const wallMs = Date.now() - startedAt;
     const stem = path.join(
       outDir,
-      `${name}.${model.replaceAll(/[^\w.-]/g, '-')}.${scriptOnly ? 'only' : 'direct'}.${attempt}`,
+      `${name}.${model.replaceAll(/[^\w.-]/g, '-')}.${arm}.${attempt}`,
     );
     writeFileSync(`${stem}.ndjson`, result.stdout ?? '');
     writeFileSync(`${stem}.stderr`, result.stderr ?? '');
@@ -362,7 +363,7 @@ const { values } = parseArgs({
     model: { type: 'string', multiple: true },
     journey: { type: 'string', multiple: true },
     'no-build': { type: 'boolean', default: false },
-    'script-only': { type: 'boolean', default: false },
+    direct: { type: 'boolean', default: false },
     repeat: { type: 'string', default: '1' },
     out: { type: 'string', default: path.join(cliRoot, 'dist/journeys') },
   },
@@ -400,8 +401,7 @@ if (!values['no-build']) {
 }
 mkdirSync(values.out, { recursive: true });
 
-const scriptOnly = values['script-only'];
-const arm = scriptOnly ? 'only' : 'direct';
+const arm = values.direct ? 'direct' : 'only';
 const repeat = Number(values.repeat);
 if (!Number.isInteger(repeat) || repeat < 1) {
   console.error(`--repeat must be a positive integer, got ${values.repeat}`);
@@ -432,7 +432,7 @@ for (const model of funded) {
       try {
         return {
           name,
-          ...runJourney(name, model, values.out, { scriptOnly, attempt }),
+          ...runJourney(name, model, values.out, { arm, attempt }),
         };
       } catch (error) {
         return {

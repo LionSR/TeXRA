@@ -134,7 +134,7 @@ export interface AgentRunShape extends RunLaunch {
   /** What each step resolves its tools from (`loop/step.ts`). */
   readonly toolInputs: Omit<
     StepToolInputs,
-    'approvalPromptsUnavailable' | 'hostCapabilities'
+    'approvalPromptsUnavailable' | 'hostCapabilities' | 'directToolCalls'
   >;
   /**
    * The run's current step: the tools it offers and the pin that holds its
