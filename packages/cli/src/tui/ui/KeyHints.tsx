@@ -43,21 +43,35 @@ const DEFAULT_TAIL: readonly KeyHint[] = Object.freeze([
   Object.freeze({ key: 'Esc', action: 'cancel' }),
 ]);
 
+/** How a hint names each arrow-key pair. */
+export const UP_DOWN_KEYS = '↑/↓';
+export const LEFT_RIGHT_KEYS = '←/→';
+
 /** The arrow-key hint every list surface binds. */
 export const NAVIGATE_HINT: KeyHint = Object.freeze({
-  key: '↑/↓',
+  key: UP_DOWN_KEYS,
   action: 'navigate',
 });
 
+/** Esc closes the surface. */
+export const CLOSE_HINT: KeyHint = Object.freeze({
+  key: 'Esc',
+  action: 'close',
+});
+
 /** The whole footer of a surface Esc only closes. */
-export const CLOSE_HINTS: readonly KeyHint[] = Object.freeze([
-  Object.freeze({ key: 'Esc', action: 'close' }),
+export const CLOSE_HINTS: readonly KeyHint[] = Object.freeze([CLOSE_HINT]);
+
+/** The footer of a surface with nothing to choose: either key closes it. */
+export const ENTER_OR_ESC_CLOSE_HINTS: readonly KeyHint[] = Object.freeze([
+  Object.freeze({ key: 'Enter', action: 'close' }),
+  CLOSE_HINT,
 ]);
 
 /** The ↑/↓ + PgUp/PgDn pair a scrollable body binds while it can scroll. */
 export function scrollKeyHints(action: string): readonly KeyHint[] {
   return [
-    { key: '↑/↓', action },
+    { key: UP_DOWN_KEYS, action },
     { key: 'PgUp/PgDn', action: 'page' },
   ];
 }

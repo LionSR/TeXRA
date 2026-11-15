@@ -17,7 +17,13 @@ import {
 } from '@texra-ai/harness/transcript';
 import { isCtrlInput, isEscapeInput } from '@cli/tui/inputKeys';
 import { ReaderPanel, readerLayout } from '@cli/tui/ui/BorderedPanel';
-import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
+import {
+  CLOSE_HINT,
+  KeyHints,
+  LEFT_RIGHT_KEYS,
+  UP_DOWN_KEYS,
+  type KeyHint,
+} from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import {
   CROSS,
@@ -197,8 +203,8 @@ export function ScriptStagePopup({
   if (call?.askingRunId !== undefined) enterAction = 'review';
   else if (call?.talkable === true) enterAction = TALK_TO_AGENT.toLowerCase();
   const hints: KeyHint[] = [
-    ...(stages.length > 1 ? [{ key: '←/→', action: 'script' }] : []),
-    { key: '↑/↓', action: 'select' },
+    ...(stages.length > 1 ? [{ key: LEFT_RIGHT_KEYS, action: 'script' }] : []),
+    { key: UP_DOWN_KEYS, action: 'select' },
     ...(target !== undefined
       ? [
           {
@@ -209,7 +215,7 @@ export function ScriptStagePopup({
       : []),
     ...(stoppable ? [{ key: 's', action: 'stop agent' }] : []),
     { key: 'Ctrl-T', action: 'transcript' },
-    { key: 'Esc', action: 'close' },
+    CLOSE_HINT,
   ];
   const title = joinFacts([
     'Script',

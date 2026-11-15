@@ -12,7 +12,11 @@ import {
   joinFacts,
 } from '@texra-ai/harness/schemas';
 import { isWorking } from '@texra-ai/harness/schemas';
-import { keyHintText } from '@cli/tui/ui/KeyHints';
+import {
+  keyHintText,
+  LEFT_RIGHT_KEYS,
+  UP_DOWN_KEYS,
+} from '@cli/tui/ui/KeyHints';
 import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import {
@@ -485,11 +489,14 @@ function childListBindingsText(
     key: 'Enter',
     action: selectionResumable ? 'resume' : 'focus',
   });
-  const expandBinding = keyHintText({ key: '←/→', action: 'collapse/expand' });
+  const expandBinding = keyHintText({
+    key: LEFT_RIGHT_KEYS,
+    action: 'collapse/expand',
+  });
   const killBinding = selectionKillable
     ? keyHintText({ key: 'x', action: 'kill' })
     : undefined;
-  const selectBinding = keyHintText({ key: '↑/↓', action: 'select' });
+  const selectBinding = keyHintText({ key: UP_DOWN_KEYS, action: 'select' });
   const inputBinding = keyHintText({ key: 'Tab/Esc', action: 'input' });
   const escBinding = keyHintText({ key: 'Esc', action: 'input' });
   return firstFittingCandidate({
