@@ -1,6 +1,6 @@
 // Shared constants for replacement engine
 
-import escapeRegExp from 'escape-string-regexp';
+import { RegExp as EffectRegExp } from 'effect';
 
 export const UPPERCASE_LETTERS = Object.freeze([
   ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
@@ -136,8 +136,9 @@ const FENCED_LATEX_ENVIRONMENTS = [
   ...MATRIX_ENVIRONMENTS,
 ];
 
-const FENCED_LATEX_ENVIRONMENT_PATTERN =
-  FENCED_LATEX_ENVIRONMENTS.map(escapeRegExp).join('|');
+const FENCED_LATEX_ENVIRONMENT_PATTERN = FENCED_LATEX_ENVIRONMENTS.map(
+  EffectRegExp.escape,
+).join('|');
 
 const LINE_BREAK_PATTERN = String.raw`\r?\n`;
 

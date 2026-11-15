@@ -22,7 +22,6 @@
     "diff": "catalog:",
     "diff-match-patch": "catalog:",
     "effect": "catalog:",
-    "escape-string-regexp": "catalog:",
     "glob": "catalog:",
     "highlight.js": "^11.12.0",
     "highlightjs-lean": "^1.2.0",
