@@ -87,7 +87,14 @@ function localTranscriptRow(
     };
   }
   if (kind === 'user') {
-    return { ...base, level: 'info', kind: 'user', text: body };
+    return {
+      ...base,
+      level: 'info',
+      kind: 'user',
+      text: body,
+      attachments: [],
+      media: [],
+    };
   }
   return { ...base, level: 'info', kind: 'log', text: body };
 }

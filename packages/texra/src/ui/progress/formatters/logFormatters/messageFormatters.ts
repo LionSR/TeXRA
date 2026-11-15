@@ -61,7 +61,7 @@ function logLineTimestamp(
 export function formatUserMessageTemplate(row: UserRow): FormatResult {
   const { id, timestamp, scriptSummary, forkAt, media } = row;
   // prettier-ignore
-  return html`<user-message .text=${row.text.full} .logId=${id} .timestamp=${timestamp} .scriptSummary=${scriptSummary ?? null} .forkAt=${forkAt ?? null} .media=${media ?? []}></user-message>`;
+  return html`<user-message .text=${row.text.full} .logId=${id} .timestamp=${timestamp} .scriptSummary=${scriptSummary ?? null} .forkAt=${forkAt ?? null} .media=${media}></user-message>`;
 }
 
 /** Format progress status entry as TemplateResult. */

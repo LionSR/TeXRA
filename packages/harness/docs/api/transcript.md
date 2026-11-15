@@ -927,10 +927,12 @@ interface UserRow extends TranscriptRowBase {
   readonly text: TranscriptText;
   /** A script delivery's facts, typed. */
   readonly scriptSummary?: ReadonlyDeep<ScriptDeliverySummary>;
-  /** Media that was sent to the model beside the text, by kind (no bytes). */
-  readonly attachments?: readonly MediaAttachmentKind[];
-  /** What a follow-up attached, by address, which "Fork from here" carries. */
-  readonly media?: readonly StoredMedia[];
+  /** Media that was sent to the model beside the text, by kind (no bytes);
+   *  empty when none was. */
+  readonly attachments: readonly MediaAttachmentKind[];
+  /** What a follow-up attached, by address, which "Fork from here" carries;
+   *  empty when it attached nothing. */
+  readonly media: readonly StoredMedia[];
   /** The settled point "Fork from here" cuts at: the `seq` of the park the
    *  run stood at before it took this message. Absent on the first message,
    *  which no park precedes. */

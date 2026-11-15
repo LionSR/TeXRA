@@ -245,10 +245,8 @@ export function logPayloadRow(
         ...(payload.data?.scriptSummary
           ? { scriptSummary: payload.data.scriptSummary }
           : {}),
-        ...(payload.data?.attachments
-          ? { attachments: payload.data.attachments }
-          : {}),
-        ...(payload.data?.media ? { media: payload.data.media } : {}),
+        attachments: payload.data?.attachments ?? [],
+        media: payload.data?.media ?? [],
         ...(forkAt === undefined ? {} : { forkAt }),
       };
     }
