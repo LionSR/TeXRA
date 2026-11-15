@@ -197,11 +197,17 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     // loaded skips this check. The store's answer would always refuse an
     // ended one-shot root, which a later resume does read a message for
     // (`example/10-external-plugin.ts`); which of the two is meant is open.
-    if (view.run(runId)?.takesFollowUps === false)
+    const target = view.run(runId);
+    if (target?.takesFollowUps === false)
       return {
         status: 'failed',
-        message:
-          'This run ran once and takes no messages. Continue it as a fork, or start a new agent task.',
+        // A fork is offered only to a run that has one (`RunView.actions`):
+        // a background command or an agent CLI's turn cannot be forked.
+        message: `This run ran once and takes no messages. ${
+          target.actions.includes('fork')
+            ? 'Continue it as a fork, or start'
+            : 'Start'
+        } a new agent task.`,
       } as const;
     const live = runs.get(runId);
     if (live === undefined) {
