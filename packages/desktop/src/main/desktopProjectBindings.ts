@@ -266,8 +266,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         draftRequests: options.draftRequests,
         host: (parts) =>
           createDesktopHostRequests({
-            ...parts,
-            runtime,
             host: hosts.run,
             files,
             workspaceFile: workspace.file,

@@ -257,16 +257,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             ...parts,
             runSession,
             roots,
-            window: {
-              ...createAgentPresentationHost(
-                parts.snapshot,
-                globalState,
-                runtime,
-                roots,
-                scope,
-              ),
-              ...editor,
-            },
+            notices: createAgentPresentationHost(
+              globalState,
+              runtime,
+              roots,
+              scope,
+            ),
+            window: editor,
             runtime,
             extensionPath: context.extensionPath,
             extensionId: context.extension.id,
