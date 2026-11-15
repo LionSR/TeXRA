@@ -97,7 +97,7 @@ export function subscriptionUsageProviderForStatus({
   readonly usageRoute: UsageRoute | undefined;
   readonly prospectiveRoute: UsageRoute | undefined;
 }): SubscriptionUsageProvider | undefined {
-  return codingPlanForUsageRoute(usageRoute ?? prospectiveRoute)?.usageProvider;
+  return codingPlanForUsageRoute(usageRoute ?? prospectiveRoute)?.id;
 }
 
 /**
@@ -113,7 +113,7 @@ interface StatusBarSegment {
   /** An explicit colour; without one, `dim` paints the terminal's dim. */
   readonly color?: StatusBarColor;
   readonly dim?: boolean;
-  readonly badge?: boolean;
+  /** Set on a badge: its background. */
   readonly badgeColor?: typeof COLOR_ERROR | typeof COLOR_WARNING;
   readonly priority: number;
   readonly policy: StatusBarFitPolicy;
@@ -339,7 +339,7 @@ const STATUS_BAR_PRIORITY = {
 } as const;
 
 function statusBarSegmentWidth(segment: StatusBarSegment): number {
-  return textDisplayWidth(segment.text) + (segment.badge ? 2 : 0);
+  return textDisplayWidth(segment.text) + (segment.badgeColor ? 2 : 0);
 }
 
 function statusBarSegmentsWidth(segments: readonly StatusBarSegment[]): number {
@@ -824,7 +824,6 @@ export function buildStatusBarDisplay(
     if (bypasses?.[badge.field] === true) {
       left.push({
         text: badge.text,
-        badge: true,
         badgeColor: badge.badgeColor,
         priority: STATUS_BAR_PRIORITY.bypassBadge,
         policy: 'keep',

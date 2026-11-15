@@ -453,7 +453,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
             return provider === undefined || provider === 'unknown'
               ? undefined
               : credentialsChanged(
-                  CODING_PLAN_BY_API_PROVIDER.get(provider)?.usageProvider,
+                  CODING_PLAN_BY_API_PROVIDER.get(provider)?.id,
                 );
           }),
         ],

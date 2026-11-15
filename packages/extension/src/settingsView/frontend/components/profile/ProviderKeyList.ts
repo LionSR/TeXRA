@@ -151,7 +151,7 @@ export class ProviderKeyList extends LitElement {
     const plan = CODING_PLAN_BY_API_PROVIDER.get(provider);
     if (!plan) return nothing;
     return html`<subscription-usage-row
-      .snapshot=${this.usage?.[plan.usageProvider] ?? null}
+      .snapshot=${this.usage?.[plan.id] ?? null}
       .now=${this.ticker.now}
     ></subscription-usage-row>`;
   }

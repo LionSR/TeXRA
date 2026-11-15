@@ -106,7 +106,7 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
       const status = cliCodingPlanStatus(access, plan);
       return Effect.map(
         status.keySet
-          ? usageReader.getUsage(plan.usageProvider)
+          ? usageReader.getUsage(plan.id)
           : Effect.succeed(undefined),
         (usage) => [plan.id, usage] as const,
       );
