@@ -1,6 +1,9 @@
 /**
- * What the workspace agents keeps in workspace state, and the one lane its writes
- * take: the workspace agents selection, and the custom agents the user hid.
+ * What the workspace agents keep in repository state: the workspace agents
+ * selection, and the custom agents the user hid. Other processes share the
+ * store, so a change to them is one `StateStore.modify` over the keys it
+ * reads and writes, and the rules here are pure functions of the values that
+ * step reads.
  *
  * The one default for a custom agent an agent list does not name: it is
  * shown unless the user hid it. A list (a team, or an exact custom
@@ -12,7 +15,6 @@
 import { Effect, Result, Schema } from 'effect';
 
 import {
-  Settings,
   StateReadFailed,
   type StateStore,
   type StateWriteFailed,
@@ -28,32 +30,6 @@ import {
   type WorkspaceAgentsSelection,
 } from '@shared/schemas';
 import type { StateKey } from '@shared/state/stateSettings';
-import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
-
-/**
- * One write at a time per store, module-wide. The workspace agents' write is a
- * read-modify-write of one key: two selection changes that interleave would
- * let the second read the selection the first has not stored yet. The lane
- * is the store, and its lifetime is the last fiber holding or waiting on it.
- */
-const workspaceWriteLanes = new Map<StateStore, PerKeyLane>();
-
-export function serializeWorkspaceWrite<A, E>(
-  store: StateStore,
-  write: Effect.Effect<A, E>,
-): Effect.Effect<A, E> {
-  return write.pipe(withPerKeyLane(workspaceWriteLanes, store));
-}
-
-/**
- * Read the canonical workspace selection. Read-only: it never repairs the
- * stored value, because the mutations (`select`, `setAgentEnabled`,
- * `removeTeamPreset`) read it under their own write mutex and own every
- * durable write.
- */
-export function readWorkspaceAgentsSelection(repoState: StateStore) {
-  return Settings.state(repoState, WORKSPACE_AGENTS_KEY);
-}
 
 /** How the workspace obtains its visible agents, per repository; absent is
  *  inherited. */
@@ -89,82 +65,81 @@ function listNames(
   return listed.some((identifier) => agentMatchesIdentifier(entry, identifier));
 }
 
+/**
+ * The stored hidden list a write starts from. A malformed one is refused
+ * and nothing is written, since a write from none would erase every stored
+ * choice.
+ */
+export function storedHidden(
+  stored: unknown,
+): Result.Result<readonly string[], StateReadFailed> {
+  const { key, schema } = HIDDEN_CUSTOM_AGENTS_KEY;
+  return Result.mapError(
+    Schema.decodeUnknownResult(schema)(stored),
+    (cause) =>
+      new StateReadFailed({
+        key,
+        message: `The hidden agents list is invalid and was not changed: ${cause.message}`,
+        cause,
+      }),
+  );
+}
+
 /** The custom agents among `entries` that `listed` leaves out and the user
  *  did not hide: shown all the same. */
 export function unlistedCustomAgents<Entry extends WorkspaceAgentEntry>(
-  repoState: StateStore,
+  hidden: readonly string[],
   entries: readonly Entry[],
   listed: readonly string[],
-): Effect.Effect<Entry[], StateReadFailed> {
-  // A malformed hidden list is reported and read as none, as the workspace
-  // agents selection is.
-  return Effect.map(
-    Settings.state(repoState, HIDDEN_CUSTOM_AGENTS_KEY),
-    (stored) => {
-      const hidden = new Set(stored);
-      return entries.filter(
-        (entry) =>
-          entry.source === AGENT_SOURCE.CUSTOM &&
-          !listNames(listed, entry) &&
-          !hidden.has(agentKeyOf(entry)),
-      );
-    },
+): Entry[] {
+  const hiddenKeys = new Set(hidden);
+  return entries.filter(
+    (entry) =>
+      entry.source === AGENT_SOURCE.CUSTOM &&
+      !listNames(listed, entry) &&
+      !hiddenKeys.has(agentKeyOf(entry)),
+  );
+}
+
+/** `entries` less the custom agents the user hid. */
+export function visibleAgents<Entry extends WorkspaceAgentEntry>(
+  hidden: readonly string[],
+  entries: readonly Entry[],
+): Entry[] {
+  const custom = unlistedCustomAgents(hidden, entries, []);
+  return entries.filter(
+    (entry) => entry.source !== AGENT_SOURCE.CUSTOM || custom.includes(entry),
   );
 }
 
 /**
- * Record which custom agents a written list turns on and off: one the list
- * leaves out is hidden, one it names is shown again. Only the agents listed
- * now change; every other stored choice stays, a key whose agent is absent
- * included, since absence (a first scan not yet published, a file that no
- * longer parses) is no removal. A deleted agent's key goes where it is
- * deleted ({@link forgetHiddenAgent}). The caller holds the workspace agents' write
- * lane.
+ * The hidden list once a written list turns custom agents on and off: one
+ * the list leaves out is hidden, one it names is shown again. Only the
+ * agents listed now change; every other stored choice stays, a key whose
+ * agent is absent included, since absence (a first scan not yet published,
+ * a file that no longer parses) is no removal. A deleted agent's key goes
+ * where it is deleted ({@link forgetHiddenAgent}).
  */
-export function recordCustomChoices(
-  repoState: StateStore,
+export function withCustomChoices(
+  hidden: readonly string[],
   agents: readonly WorkspaceAgentEntry[],
   selection: readonly string[],
-): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
-  const { key } = HIDDEN_CUSTOM_AGENTS_KEY;
-  // One step at the store, which other processes share. A malformed stored
-  // value fails and nothing is written, since a write from none would erase
-  // every stored choice.
-  return Effect.asVoid(
-    repoState.modify([key], ({ [key]: stored }) =>
-      Result.match(
-        Schema.decodeUnknownResult(HIDDEN_CUSTOM_AGENTS_KEY.schema)(stored),
-        {
-          onFailure: (cause) =>
-            Result.fail(
-              new StateReadFailed({
-                key,
-                message: `The hidden agents list is invalid and was not changed: ${cause.message}`,
-                cause,
-              }),
-            ),
-          onSuccess: (keys) => {
-            const hidden = new Set(keys);
-            for (const entry of agents) {
-              if (entry.source !== AGENT_SOURCE.CUSTOM) continue;
-              const agentKey = agentKeyOf(entry);
-              if (listNames(selection, entry)) hidden.delete(agentKey);
-              else hidden.add(agentKey);
-            }
-            return Result.succeed([undefined, { [key]: [...hidden] }] as const);
-          },
-        },
-      ),
-    ),
-  );
+): string[] {
+  const next = new Set(hidden);
+  for (const entry of agents) {
+    if (entry.source !== AGENT_SOURCE.CUSTOM) continue;
+    const agentKey = agentKeyOf(entry);
+    if (listNames(selection, entry)) next.delete(agentKey);
+    else next.add(agentKey);
+  }
+  return [...next];
 }
 
 /**
  * Forget the hidden choice of a custom agent the user deleted: the one
  * place that knows its removal is real. A file removed outside the app keeps
  * its key, which is harmless, until that name is deleted here or recreated
- * and chosen again. Takes the workspace agents' write lane itself, and
- * changes the key in one step at the store, which other processes share.
+ * and chosen again.
  */
 export function forgetHiddenAgent(
   repoState: StateStore,
@@ -172,34 +147,19 @@ export function forgetHiddenAgent(
 ): Effect.Effect<void, StateWriteFailed> {
   const key = agentKeyOf({ source: AGENT_SOURCE.CUSTOM, name });
   const hiddenKey = HIDDEN_CUSTOM_AGENTS_KEY.key;
-  return serializeWorkspaceWrite(
-    repoState,
-    repoState.modify([hiddenKey], ({ [hiddenKey]: stored }) => {
-      const hidden = Schema.decodeUnknownResult(HiddenCustomAgentKeysSchema)(
-        stored,
-      );
-      // Absent or malformed (which every read reports): nothing to
-      // forget, so the stored value stays.
-      return Result.succeed(
-        Result.isSuccess(hidden)
-          ? ([
-              undefined,
-              { [hiddenKey]: hidden.success.filter((k) => k !== key) },
-            ] as const)
-          : ([undefined] as const),
-      );
-    }),
-  );
-}
-
-/** `entries` less the custom agents the user hid. */
-export function visibleAgents<Entry extends WorkspaceAgentEntry>(
-  repoState: StateStore,
-  entries: readonly Entry[],
-): Effect.Effect<Entry[], StateReadFailed> {
-  return Effect.map(unlistedCustomAgents(repoState, entries, []), (custom) =>
-    entries.filter(
-      (entry) => entry.source !== AGENT_SOURCE.CUSTOM || custom.includes(entry),
-    ),
-  );
+  return repoState.modify([hiddenKey], ({ [hiddenKey]: stored }) => {
+    const hidden = Schema.decodeUnknownResult(HiddenCustomAgentKeysSchema)(
+      stored,
+    );
+    // Absent or malformed (which every read reports): nothing to
+    // forget, so the stored value stays.
+    return Result.succeed(
+      Result.isSuccess(hidden)
+        ? ([
+            undefined,
+            { [hiddenKey]: hidden.success.filter((k) => k !== key) },
+          ] as const)
+        : ([undefined] as const),
+    );
+  });
 }
