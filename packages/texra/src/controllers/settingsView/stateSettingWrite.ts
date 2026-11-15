@@ -2,16 +2,22 @@
 // the one write path every settings surface goes through — the extension and
 // desktop settings views plus the CLI `/config` panel.
 //
-// The hosts share persistence through `Settings` and own the post-write
-// side effects: the row's `onWrite` reaction and the approval-policy repaint.
-// `applyStateSettingUpdate` owns the subtle boundary rules once:
+// The write announces what it changed for the rest of the process (a row
+// that re-routes models, the approval policy); a host owns only its own
+// feedback. `applyStateSettingUpdate` owns the subtle boundary rules once:
 //   - a value-less message is a no-op (the catalog schemas carry a decoding
 //     default, so parsing `undefined` would silently write a default),
 //   - null explicitly resets a setting while an omitted value remains a no-op,
 //   - a settings view writes only rows tagged for a settings-view snapshot;
 //     the CLI writes only the rows its `/config` panel lists.
 
-import { Settings, type SettingsStores } from '@texra-ai/harness/plugins';
+import {
+  emitAppSignal,
+  Settings,
+  type AppSignals,
+  type SettingsStores,
+} from '@texra-ai/harness/plugins';
+import { APPROVAL_POLICY_SETTING } from '@texra-ai/harness/schemas';
 import { Effect, Result, Schema } from 'effect';
 
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
@@ -61,17 +67,23 @@ interface StateSettingUpdatePorts<H extends SettingSurface = SettingSurface> {
 }
 
 /**
- * Host-neutral write path for a catalog-backed setting: resolve, guard and
- * persist. The extension and desktop `UPDATE_STATE_SETTING` boundaries and the
- * CLI `/config` panel call it, and each caller applies the row's write
- * consequences (`onWrite`, the approval-policy repaint), its UI feedback and
- * its snapshot rebroadcast. A failed persist returns as the `failed` result.
+ * Host-neutral write path for a catalog-backed setting: resolve, guard,
+ * persist, and announce an applied write to the process: `modelAccessChanged`
+ * for a row whose change re-routes models, `approvalPolicyChanged` for the
+ * approval policy. The extension and desktop `UPDATE_STATE_SETTING`
+ * boundaries and the CLI `/config` panel call it, and each caller adds its
+ * UI feedback and its snapshot rebroadcast. A failed persist returns as the
+ * `failed` result.
  */
 export function applyStateSettingUpdate<H extends SettingSurface>(
   key: string,
   value: unknown,
   ports: StateSettingUpdatePorts<H>,
-): Effect.Effect<StateSettingUpdateResult<WritableEntry<H>>> {
+): Effect.Effect<
+  StateSettingUpdateResult<WritableEntry<H>>,
+  never,
+  AppSignals
+> {
   if (value === undefined) return Effect.succeed({ kind: 'ignored' });
   const entry = WRITABLE_ENTRY_BY_KEY[ports.host](key);
   if (!entry) return Effect.succeed({ kind: 'ignored' });
@@ -92,6 +104,16 @@ export function applyStateSettingUpdate<H extends SettingSurface>(
       ? Settings.reset(ports.stores, entry)
       : Settings.set(ports.stores, entry, parsed.success);
   return persist.pipe(
+    Effect.andThen(
+      entry.onWrite?.invalidatesModelOptions
+        ? emitAppSignal('modelAccessChanged', undefined)
+        : Effect.void,
+    ),
+    Effect.andThen(
+      entry.key === APPROVAL_POLICY_SETTING.key
+        ? emitAppSignal('approvalPolicyChanged', undefined)
+        : Effect.void,
+    ),
     Effect.match({
       onSuccess: () => ({ kind: 'applied', entry }) as const,
       onFailure: (error) => ({ kind: 'failed', entry, error }) as const,

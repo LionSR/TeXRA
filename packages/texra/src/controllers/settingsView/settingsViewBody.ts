@@ -183,15 +183,9 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       yield* changed('credentials');
       if (usageProvider) yield* changed('usage');
     });
-    /** A write that re-routes models (a subscription preference, a routing
-     *  setting): the pages, and every launcher's catalogs through the
-     *  signal. */
-    const modelAccessChanged = Effect.andThen(
-      credentialsChanged(),
-      emitAppSignal('modelAccessChanged', undefined),
-    );
-    /** Run a subscription mutation, report its failure, and say the
-     *  subscription changed whatever the mutation did. */
+    /** Run a subscription mutation, report its failure, and show the pages
+     *  the subscription whatever the mutation did. The mutation's own
+     *  writes announce the change to every launcher. */
     const subscriptionChange = <E>(
       providerId: SubscriptionProviderId,
       failure: string,
@@ -199,7 +193,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
     ) =>
       reported(failure, work).pipe(
         Effect.andThen(changed('subscriptions')),
-        Effect.andThen(modelAccessChanged),
+        Effect.andThen(credentialsChanged()),
       );
     const signInSubscription = (providerId: SubscriptionProviderId) =>
       subscriptionChange(
@@ -261,14 +255,12 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       // Every outcome is sent back, so a rejected edit shows the stored value.
       yield* changed('settings');
       if (result.kind !== 'applied') return;
+      // A row that re-routes models changes what the credentials page says.
       if (result.entry.onWrite?.invalidatesModelOptions) {
-        yield* modelAccessChanged;
+        yield* credentialsChanged();
       }
       if (codingPlanForUsageSetting(key) !== undefined) {
         yield* changed('usage');
-      }
-      if (key === APPROVAL_POLICY_SETTING.key) {
-        yield* emitAppSignal('approvalPolicyChanged', undefined);
       }
     });
 

@@ -1,4 +1,9 @@
-import { Settings, type SettingsStores } from '@texra-ai/harness/plugins';
+import {
+  emitAppSignal,
+  Settings,
+  type AppSignals,
+  type SettingsStores,
+} from '@texra-ai/harness/plugins';
 import {
   providerRegionSetting,
   GLM_CODING_PLAN_SETTING,
@@ -12,7 +17,7 @@ import type {
   ConfigWriteFailed,
   StateReadFailed,
 } from '@texra-ai/harness/host';
-import type { Effect } from 'effect';
+import { Effect } from 'effect';
 
 export interface CodingPlanSubscriptionRuntime {
   readonly descriptor: CodingPlanSubscription;
@@ -20,26 +25,31 @@ export interface CodingPlanSubscriptionRuntime {
     stores: SettingsStores,
   ) => Effect.Effect<boolean, StateReadFailed>;
   /**
-   * Persist the toggle through the shared config write path. An `Effect`, like
-   * every other write of a catalog-backed setting, so the caller's program
-   * composes it and owns the failure.
+   * Persist the toggle through the shared config write path and announce
+   * `modelAccessChanged`. An `Effect`, like every other write of a
+   * catalog-backed setting, so the caller's program composes it and owns the
+   * failure.
    */
   readonly setEnabled: (
     stores: SettingsStores,
     enabled: boolean,
-  ) => Effect.Effect<void, ConfigWriteFailed | Error>;
+  ) => Effect.Effect<void, ConfigWriteFailed | Error, AppSignals>;
 }
+
+/** A plan's toggle re-routes its models, so its write says so. */
+const announced = <E>(write: Effect.Effect<void, E>) =>
+  Effect.andThen(write, emitAppSignal('modelAccessChanged', undefined));
 
 const RUNTIME_BY_ID = {
   glmCodingPlan: {
     getEnabled: (stores) => Settings.get(stores, GLM_CODING_PLAN_SETTING),
     setEnabled: (stores, enabled) =>
-      Settings.set(stores, GLM_CODING_PLAN_SETTING, enabled),
+      announced(Settings.set(stores, GLM_CODING_PLAN_SETTING, enabled)),
   },
   kimiCode: {
     getEnabled: (stores) => Settings.get(stores, KIMI_CODE_PREFER_SETTING),
     setEnabled: (stores, enabled) =>
-      Settings.set(stores, KIMI_CODE_PREFER_SETTING, enabled),
+      announced(Settings.set(stores, KIMI_CODE_PREFER_SETTING, enabled)),
   },
 } as const satisfies Record<
   CodingPlanSubscription['id'],

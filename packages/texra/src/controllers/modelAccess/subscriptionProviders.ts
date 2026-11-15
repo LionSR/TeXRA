@@ -34,7 +34,12 @@ import {
 import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
 import type { SecretsFailed } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
-import { withLogChannel, type SettingsStores } from '@texra-ai/harness/plugins';
+import {
+  emitAppSignal,
+  withLogChannel,
+  type AppSignals,
+  type SettingsStores,
+} from '@texra-ai/harness/plugins';
 
 const CHANNEL = 'subscriptionProviders';
 
@@ -116,12 +121,13 @@ export interface SubscriptionProvider {
   ): Effect.Effect<
     SubscriptionAccount,
     Error,
-    HttpClient.HttpClient | SubscriptionAccounts
+    HttpClient.HttpClient | SubscriptionAccounts | AppSignals
   >;
   /**
    * The sign-out program, the mirror of `signIn`: the account signed out,
    * then the provider's subscription preference turned off, so its models
-   * stop routing to an account that is gone. A host runs it at its own
+   * stop routing to an account that is gone, and `modelAccessChanged`
+   * announced whichever way the preference write went. A host runs it at its own
    * edge; a failure is the provider's own auth error or the secret store's
    * rejection. A preference write that fails after the sign-out succeeded
    * is reported in the result, since the account is already signed out.
@@ -131,7 +137,7 @@ export interface SubscriptionProvider {
   ): Effect.Effect<
     SubscriptionSignOutResult,
     SubscriptionStatusError,
-    SubscriptionAccounts | HttpClient.HttpClient
+    SubscriptionAccounts | HttpClient.HttpClient | AppSignals
   >;
   /**
    * The signed-in status. A store that cannot be read, or a stored session
@@ -144,14 +150,15 @@ export interface SubscriptionProvider {
   >;
   isPreferSubscription(stores: SettingsStores): boolean;
   /**
-   * Persist the preference. An `Effect`, like
+   * Persist the preference and announce `modelAccessChanged`, as a sign-in
+   * and a sign-out do for the preference they write. An `Effect`, like
    * every other write of a catalog-backed setting, so a host runs it at its own
    * edge and owns the failure.
    */
   setPreferSubscription(
     stores: SettingsStores,
     enabled: boolean,
-  ): Effect.Effect<void, ConfigWriteFailed | Error>;
+  ): Effect.Effect<void, ConfigWriteFailed | Error, AppSignals>;
 }
 
 /** What a sign-out reports beside the sign-out itself: why the provider's
@@ -235,6 +242,13 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
             ),
         });
 
+  /** Write the preference and say model access changed, so every launcher
+   *  and status bar that shows a route reads it again. */
+  const setPreference = (stores: SettingsStores, enabled: boolean) =>
+    SubscriptionPreference.set(descriptor.id, stores, enabled).pipe(
+      Effect.andThen(emitAppSignal('modelAccessChanged', undefined)),
+    );
+
   const signIn = Effect.fn(`subscriptionProviders.${descriptor.id}.signIn`)(
     function* (options: SubscriptionSignInOptions) {
       const coordinator = yield* account;
@@ -266,11 +280,7 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
                 },
               ),
             );
-      yield* SubscriptionPreference.set(
-        descriptor.id,
-        options.stores,
-        true,
-      ).pipe(
+      yield* setPreference(options.stores, true).pipe(
         Effect.mapError(
           (cause) =>
             new Error(
@@ -292,8 +302,7 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
     ...descriptor,
     isPreferSubscription: (stores: SettingsStores) =>
       SubscriptionPreference.get(descriptor.id, stores),
-    setPreferSubscription: (stores: SettingsStores, enabled: boolean) =>
-      SubscriptionPreference.set(descriptor.id, stores, enabled),
+    setPreferSubscription: setPreference,
     signIn,
     signOut: (stores: SettingsStores) =>
       Effect.flatMap(account, (coordinator) => coordinator.signOut()).pipe(
@@ -307,6 +316,8 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
             }),
           ),
         ),
+        // The account is gone whether or not the preference followed it.
+        Effect.tap(() => emitAppSignal('modelAccessChanged', undefined)),
       ),
     getStatus: () =>
       Effect.flatMap(account, (coordinator) =>

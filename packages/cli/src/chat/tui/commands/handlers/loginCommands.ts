@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 
 import {
-  emitAppSignal,
   type AppSignals,
   type Secrets,
   type SettingsStores,
@@ -66,7 +65,6 @@ const loginToSubscription = Effect.fn('loginToSubscription')(function* (
   const account = yield* signInCliSubscription(stores, providerId, args, {
     writeProgress: output.writeProgress,
   });
-  yield* emitAppSignal('modelAccessChanged', undefined);
   output.appendOutcome(
     SUBSCRIPTION_AUTH_COPY[providerId].signedInEnabled(account.label),
   );
@@ -122,7 +120,6 @@ const logoutLines = Effect.fn('loginCommands.logoutLines')(function* (
     if (target !== providerId && target !== 'all') continue;
     const { label } = SUBSCRIPTION_AUTH_COPY[providerId];
     yield* signOutCliSubscription(stores, providerId).pipe(
-      Effect.tap(() => emitAppSignal('modelAccessChanged', undefined)),
       Effect.match({
         onFailure: (error) => {
           lines.push(

@@ -152,8 +152,7 @@ export class ProgressDocumentTaskFileActionsController {
       pathToLocationIn(workspace, base),
       pathToLocationIn(workspace, file),
       {
-        confirm: (message) =>
-          host.confirm({ message, action: 'Replace file' }),
+        confirm: (message) => host.confirm({ message, action: 'Replace file' }),
         showInfo: host.showInfo,
       },
     );

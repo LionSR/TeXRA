@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { emitAppSignal, type SettingsStores } from '@texra-ai/harness/plugins';
+import type { SettingsStores } from '@texra-ai/harness/plugins';
 
 import { type ApiKeyProviderId } from '@texra-ai/llm';
 import { loadCliDetailedAccountStatusLines } from '@cli/runtime/models/apiStatus';
@@ -56,7 +56,6 @@ export const applyCliModelAccessSelection = Effect.fn(
     selection,
     { writeProgress: output.writeProgress },
   );
-  yield* emitAppSignal('modelAccessChanged', undefined);
   output.appendOutcome(access.message);
 });
 

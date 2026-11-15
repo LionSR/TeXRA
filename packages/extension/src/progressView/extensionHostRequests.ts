@@ -20,11 +20,7 @@ import {
   type ProcessServices,
   pathToLocationIn,
 } from '@texra-ai/harness/host';
-import {
-  emitAppSignal,
-  withLogChannel,
-  WorkspaceFs,
-} from '@texra-ai/harness/plugins';
+import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
 import {
   toErrorMessage,
@@ -354,12 +350,10 @@ export const createExtensionHostRequests = Effect.fn(
     // Every dependency the banner lists installs from the one guide page.
     openInstallGuide: runHandler('openDoc', openGuidePage('installation')),
     onboarding: {
-      // The sign-in's token write announces itself; its subscription
-      // preference write is announced here, as the settings view's is.
-      signInChatGpt: Effect.gen(function* () {
-        yield* signInWithSubscription(roots, 'chatgpt');
-        yield* emitAppSignal('modelAccessChanged', undefined);
-      }).pipe(withLogChannel(CHANNEL)),
+      // The sign-in's token and preference writes announce themselves.
+      signInChatGpt: signInWithSubscription(roots, 'chatgpt').pipe(
+        withLogChannel(CHANNEL),
+      ),
       runSetup: (launch) =>
         runHandler(
           'runSetupAssistant',
