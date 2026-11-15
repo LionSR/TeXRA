@@ -47,6 +47,12 @@ const SNAPSHOT = `SELECT key, value FROM current_value
   WHERE family = ? AND key IN (SELECT value FROM json_each(?))
   ORDER BY key`;
 
+/** Append an entry unless it repeats the latest; a row back when it did. */
+const APPEND_HISTORY = `INSERT INTO input_history (at, value)
+  SELECT ?1, ?2
+  WHERE ?2 IS NOT (SELECT value FROM input_history ORDER BY id DESC LIMIT 1)
+  RETURNING id`;
+
 /** A failed change read's backoff (this feed's and the store's change
  *  poll): 250 ms doubling, at most 30 s. */
 export const READ_RETRY = Schedule.exponential('250 millis').pipe(
@@ -218,14 +224,7 @@ export function currentValues(store: {
       append: ({ at, value }) =>
         transact(
           Effect.gen(function* () {
-            const latest = yield* execOne(
-              'SELECT value FROM input_history ORDER BY id DESC LIMIT 1',
-            );
-            if (latest?.value !== value) {
-              yield* exec(
-                'INSERT INTO input_history (at, value) VALUES (?, ?)',
-                [at, value],
-              );
+            if ((yield* execOne(APPEND_HISTORY, [at, value])) !== undefined) {
               yield* exec(
                 'DELETE FROM input_history WHERE id NOT IN (SELECT id FROM input_history ORDER BY id DESC LIMIT ?)',
                 [INPUT_HISTORY_LIMIT],
