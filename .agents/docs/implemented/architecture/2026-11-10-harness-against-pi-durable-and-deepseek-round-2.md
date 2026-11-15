@@ -1,13 +1,13 @@
 ---
 created: 2026-11-10
-status: proposed
+status: implemented
 ---
 
 # The harness against pi-durable and DeepSeek Harness, round 2: what is still ad hoc
 
 Read on 2026-11-10 at TeXRA `8281784`, and every finding re-checked on
 `main` at `521bb189`, after
-[one row per fact](./2026-11-09-agent-data-one-row-per-fact.md) (#14894)
+[one row per fact](../../proposed/architecture/2026-11-09-agent-data-one-row-per-fact.md) (#14894)
 merged. The peers are pi
 [`a05e3a0`](https://github.com/earendil-works/pi/tree/a05e3a07763c38d23d50207742f7e073e35cd0f8)
 (`packages/durable` 1.5.1 and `packages/ai`) and DeepSeek Harness (dsh)
@@ -452,7 +452,7 @@ and the XML is rendered once at the point the row becomes a model message
 (`FollowUps.batchMessage`) ... `summarizeSubagentFollowup` and
 `parseScriptDeliverySummary` then read the typed row"
 ([A-child-runs](../../evidence/2026-11-05-design-red-flags/A-child-runs.md),
-finding 7; [root designs](./2026-11-05-root-designs-effect-native.md),
+finding 7; [root designs](../../proposed/architecture/2026-11-05-root-designs-effect-native.md),
 R5).
 
 The catalogue marks A7 "landed (#14769, R5; one delivery id #14788)". Only
@@ -727,7 +727,7 @@ plugin carries a re-delivery branch to cope with it
 
 ### Already designed, and marked landed in part
 
-R7 ([root designs](./2026-11-05-root-designs-effect-native.md), "R7. A
+R7 ([root designs](../../proposed/architecture/2026-11-05-root-designs-effect-native.md), "R7. A
 question to a person is a row of the run") designed this module:
 
 - `openRequest(cell, payload, beside?)` for every asker, with the
@@ -853,29 +853,12 @@ The peers' newest changes add evidence on two points:
   (`endIn`), one publisher, and resume as the same program over the same
   rows.
 
-## Still open
+## Left open, carried by round 3
 
-- **Finding 6**, as written above, when the next provider is added.
-- **The `takesFollowUps` owner question (#14893).** 4 (a) never resumes a
-  run launched to run once into a wait, and words the refusal of a send to
-  it as having run once. The send check still reads `takesFollowUps` from
-  the view, as #14893 left it, so it skips a run the view has not loaded.
-  Whichever rule the owner picks, `openResume` and the refusal change
-  together.
-- **Found while landing, not fixed here.**
-  - **A deletion can outlive its process.** `texra history delete` can
-    exit before its session collects the deletion, and the golden
-    generator's `--twice` fails for the same reason. The measurements and
-    the constraint on a fix are recorded once, in
-    [the session surfaces audit](../simplification/2026-11-10-session-surfaces-ad-hoc.md)
-    ("`history delete` 的回收是异步的，golden 的生成因此不确定").
-  - **Two answers to one inquiry at once** can leave the thread's record
-    and the decided row naming different answers, now that `decisionLanes`
-    is gone. The run is told what the thread says.
-  - **A resume between a result that ends its turn and that turn's end**
-    (`submit_output`'s `endTurn`, after its delivering `append` and before
-    `turn.end`) calls the model once more. This was read while measuring
-    step 2 and not reproduced.
+What this round left open (finding 6, the defects found while landing, and
+the `takesFollowUps` question) is carried by
+[round 3](../../proposed/architecture/2026-11-11-harness-against-pi-durable-and-deepseek-round-3.md),
+"Carried from round 2".
 
 ## Verified
 
