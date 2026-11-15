@@ -756,7 +756,7 @@ run's next append, with nothing written
 (`agent/runtime/makeRunHistory.ts#notOwner`,
 `shared/session/runHistory.ts#runRefusal`). A tool call that meets a storage
 refusal fails the dispatch instead of settling
-(`agent/runtime/loop/toolUseDispatch.ts#findStorageRefusal`). A request on a
+(`agent/runtime/loop/toolUseDispatch.ts#readCause`). A request on a
 run a launch here holds that would need the run stopped first is refused as
 `RunActive` (`controllers/session/deletionCleanup.ts#deleteAdmittedRun`).
 
