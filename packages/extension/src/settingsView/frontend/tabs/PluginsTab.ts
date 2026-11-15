@@ -16,7 +16,7 @@ import '@awesome.me/webawesome/dist/components/select/select.js';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
   PLUGINS_PAGE,
   pluginRowKey,

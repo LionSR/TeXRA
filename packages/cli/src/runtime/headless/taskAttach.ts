@@ -28,7 +28,8 @@ import type { TaskSummary } from '@texra/controllers/server/protocol';
 import type { ServiceClient } from '@texra/controllers/server/client';
 import { WebviewSessions } from '@texra/shared/session/webviewSessionLayer';
 
-import { writeNdjsonStdout, writeTextStdout } from '../platform/logSinks';
+import { writeTextStdout } from '../platform/logSinks';
+import { writeProgressRow } from './sessionProgressSubscription';
 import type { RunView, SessionView } from '@texra-ai/harness/schemas';
 
 /** How the attached task is printed. */
@@ -64,17 +65,7 @@ function writeProgress(
     // The listing repeats a run's newest rows; its history and the tail
     // carry each row once.
     if (read === 'listing' || event.aggregateId !== aggregate) continue;
-    // A debug log row is a diagnostic: only `--verbose` prints it, as in
-    // `texra run`'s projection.
-    if (!includeDebugLogs && event.type === 'log' && event.level === 'debug')
-      continue;
-    const { type, ...payload } = event;
-    writeNdjsonStdout({
-      kind: 'progress',
-      event: type,
-      ts: new Date().toISOString(),
-      payload,
-    });
+    writeProgressRow(event, includeDebugLogs);
   }
 }
 
@@ -97,16 +88,13 @@ export function watchTask(
         { id: qualifyAggregateId('run', task.runId), fromSeq: 0 },
       ];
       // Begin the frames and name the transcript before the first frame, as
-      // a webview shell does before it posts its `Subscribe`. One ordered
-      // watch stream needs no generation.
+      // a webview shell does before it posts its `Subscribe`.
       yield* graph.frames.begin(0);
       yield* graph.view.subscribe(aggregates);
       const { debug } = graph.view.current();
       const feeding = yield* client['task.watch']({
         workspace: task.workspace,
         subscribe: {
-          kind: 'subscribe',
-          generation: 0,
           debug,
           cursor: 0,
           aggregates,

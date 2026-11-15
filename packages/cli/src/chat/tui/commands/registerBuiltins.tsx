@@ -332,7 +332,7 @@ export function builtinSlashCommands(options: {
     props: SlashFormProps,
   ): React.JSX.Element => (
     <EnabledModelsForm
-      state={stores.globalState}
+      stores={stores}
       runtime={runtime}
       availableRows={props.availableRows}
       onClose={() => props.onDone(undefined)}

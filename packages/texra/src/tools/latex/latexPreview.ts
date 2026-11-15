@@ -173,9 +173,7 @@ const withLatexOperation = (
       Cause.hasInterruptsOnly(cause)
         ? Effect.interrupt
         : Effect.sync(() => {
-            entry.onError(
-              `${operationName} failed: ${toErrorMessage(Cause.squash(cause))}`,
-            );
+            entry.onError(`${operationName} failed: ${toErrorMessage(cause)}`);
           }),
     ),
     entry.operation.withPermitsIfAvailable(1),

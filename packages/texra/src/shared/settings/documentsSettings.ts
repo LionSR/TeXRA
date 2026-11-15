@@ -10,7 +10,7 @@ import { Effect, Schema } from 'effect';
 
 // Local imports
 import { LATEXDIFF_MATH_MARKUP_VALUES } from '@texra/shared/constants/latexConfig';
-import type { TexraSettingRow } from '@texra/shared/settingsView/settingSurfaces';
+import type { TexraSettingRow } from '@texra/shared/settings/settingSurfaces';
 
 export const DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING = {
   key: 'documents.compileAfterOutput',

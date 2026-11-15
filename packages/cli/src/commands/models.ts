@@ -5,6 +5,7 @@ import { MODELS } from '@texra-ai/llm';
 
 import { getEnabledModels } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { enabledLabel } from '@ui/copy/format';
 
 import {
   listCliEnabledModelCatalog,
@@ -25,7 +26,6 @@ import {
 } from '../runtime/models/modelAccess';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult, emitPagedCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/platform/cliContext';
 
@@ -73,7 +73,6 @@ const listModels = Effect.fn('listModels')(function* (
       .map(({ model, status }) => `${model.value}\t${model.label}\t${status}`)
       .join('\n'),
   });
-  return CliExitCode.Success;
 });
 
 const showModel = Effect.fn('showModel')(function* (id: string) {
@@ -99,13 +98,11 @@ const showModel = Effect.fn('showModel')(function* (id: string) {
     ndjson: { kind: 'model', model: record },
     text: formatCliModelDetails(entry),
   });
-  return CliExitCode.Success;
 });
 
 const modelsListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List available models' },
   args: {
-    ...GLOBAL_ARGS,
     all: {
       type: 'boolean',
       description: 'Include unavailable models with their access status',
@@ -119,7 +116,6 @@ const modelsListCommand = defineCliCommand({
 const modelsShowCommand = defineCliCommand({
   meta: { name: 'show', description: 'Show one model' },
   args: {
-    ...GLOBAL_ARGS,
     id: {
       type: 'positional',
       required: true,
@@ -147,8 +143,8 @@ const initModelCommandPlatform = cliPlatform.pipe(
 const listEnabledModels = Effect.fn('listEnabledModels')(function* () {
   const services = yield* initModelCommandPlatform;
   if ('exitCode' in services) return services.exitCode;
-  const catalog = yield* listCliEnabledModelCatalog(services.globalState);
-  const enabled = yield* getEnabledModels(services.globalState);
+  const catalog = yield* listCliEnabledModelCatalog(services);
+  const enabled = yield* getEnabledModels(services);
   yield* emitPagedCliResult({
     json: { enabled, catalog },
     ndjson: [
@@ -161,11 +157,10 @@ const listEnabledModels = Effect.fn('listEnabledModels')(function* () {
     text: catalog
       .map(
         (model) =>
-          `${model.enabled ? 'on' : 'off'}\t${model.id}\t${model.label}\t${model.provider}`,
+          `${enabledLabel(model.enabled)}\t${model.id}\t${model.label}\t${model.provider}`,
       )
       .join('\n'),
   });
-  return CliExitCode.Success;
 });
 
 const setModelEnabled = Effect.fn('setModelEnabled')(function* (
@@ -174,7 +169,7 @@ const setModelEnabled = Effect.fn('setModelEnabled')(function* (
 ) {
   const services = yield* initModelCommandPlatform;
   if ('exitCode' in services) return services.exitCode;
-  return yield* setCliModelEnabled(services.globalState, id, enabled).pipe(
+  return yield* setCliModelEnabled(services, id, enabled).pipe(
     Effect.flatMap((result) =>
       emitCliResult({
         json: result,
@@ -189,11 +184,11 @@ const setModelEnabled = Effect.fn('setModelEnabled')(function* (
         text: result.enabled
           ? `Enabled ${result.model} in the model picker.`
           : `Disabled ${result.model} in the model picker.`,
-      }).pipe(Effect.as(CliExitCode.Success)),
+      }),
     ),
     Effect.catchCause((cause) =>
       Effect.sync(() => {
-        writeTextStderr(toErrorMessage(Cause.squash(cause)));
+        writeTextStderr(toErrorMessage(cause));
         return CliExitCode.Usage;
       }),
     ),
@@ -206,7 +201,6 @@ const modelsEnabledCommand = defineCliCommand({
     description:
       'List models enabled for pickers (`/model`, lead model). Use enable/disable to change.',
   },
-  args: { ...GLOBAL_ARGS },
   run: listEnabledModels,
   catchExitCode: reportModelPlatformFailure,
 });
@@ -217,7 +211,6 @@ const modelsEnableCommand = defineCliCommand({
     description: 'Add a model to the picker',
   },
   args: {
-    ...GLOBAL_ARGS,
     id: {
       type: 'positional',
       required: true,
@@ -234,7 +227,6 @@ const modelsDisableCommand = defineCliCommand({
     description: 'Remove a model from the picker',
   },
   args: {
-    ...GLOBAL_ARGS,
     id: {
       type: 'positional',
       required: true,

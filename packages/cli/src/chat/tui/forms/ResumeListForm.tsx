@@ -15,11 +15,12 @@ import {
   formatCliHistoryAgentLabel,
   formatCliHistorySubject,
 } from '@cli/runtime/historyLabels';
+import { formatShortDateTime } from '@ui/formatting/dateTimeFormat';
 import { rootRunId } from '../state/cliState';
 import { AsyncListForm } from './_shared/ListForm';
 import type { Session } from '@texra-ai/harness';
 import type { ProcessRuntime } from '@texra-ai/harness/host';
-import type { RunId } from '@texra-ai/harness/schemas';
+import { collapseWhitespace, type RunId } from '@texra-ai/harness/schemas';
 
 interface ResumeListFormProps {
   /**
@@ -37,14 +38,15 @@ interface ResumeListFormProps {
 /** A task goes by its title: the user's, else the model's, else what it is
  *  about; the id stays for `texra resume <id>` and never labels a row. */
 function resumeEntryLabel(entry: CliHistoryEntry): string {
-  const title = entry.description?.replaceAll(/\s+/g, ' ').trim();
+  const title = entry.description && collapseWhitespace(entry.description);
   return (
     title || formatCliHistorySubject(entry, formatCliHistoryAgentLabel(entry))
   );
 }
 
 function resumeEntryDescription(entry: CliHistoryEntry): string {
-  const standing = `${entry.timestamp} · ${historyStanding(entry)} · ${formatCliHistoryAgentLabel(entry)}`;
+  const when = formatShortDateTime(entry.timestamp) ?? entry.timestamp;
+  const standing = `${when} · ${historyStanding(entry)} · ${formatCliHistoryAgentLabel(entry)}`;
   return entry.resumable || entry.resumeBlocked === undefined
     ? standing
     : `${standing} · cannot resume: ${entry.resumeBlocked}`;

@@ -104,11 +104,10 @@ export function detectLatexSettingsStatus(
     // instead of painting the view with an all-missing status.
     Effect.catchCause((cause) => {
       if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
-      const error = Cause.squash(cause);
       return Effect.logWarning(
-        `LaTeX tooling detection failed: ${toErrorMessage(error)}`,
+        `LaTeX tooling detection failed: ${toErrorMessage(cause)}`,
       ).pipe(
-        Effect.annotateLogs({ data: error }),
+        Effect.annotateLogs({ data: cause }),
         withLogChannel(CHANNEL),
         Effect.as({
           ...DEFAULT_LATEX_SETTINGS_STATUS,

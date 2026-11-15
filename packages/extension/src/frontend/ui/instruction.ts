@@ -1,5 +1,5 @@
 // Third-party imports
-import { Cause, Effect, Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -80,7 +80,7 @@ export const showInstructionWithSuppress = Effect.fn(
   return yield* settle.pipe(
     Effect.catchCause((cause) =>
       Effect.logWarning(`Failed to settle instruction "${key}"`).pipe(
-        Effect.annotateLogs({ data: Cause.squash(cause) }),
+        Effect.annotateLogs({ data: cause }),
         withLogChannel(CHANNEL),
       ),
     ),

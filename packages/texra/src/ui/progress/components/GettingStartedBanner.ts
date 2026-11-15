@@ -3,7 +3,7 @@ import { html, css, LitElement, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 import type { GettingStartedAction } from '@texra/shared/session/hostRequest';
-import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { GETTING_STARTED_ACTION_PRESENTATION } from '@ui/copy/onboarding';
 import { designTokens, commonViewStyles, bannerStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';

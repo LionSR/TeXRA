@@ -25,7 +25,6 @@ import {
   type SettingRow,
   ALLOW_ORCHESTRATOR_KILL_SETTING,
   DASHSCOPE_REGION_SETTING,
-  DETACH_SUBAGENTS_ON_STOP_SETTING,
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
   GIT_AUTHOR_EMAIL_SETTING,
@@ -46,13 +45,11 @@ import {
   WEBSOCKET_OPENAI_SETTING,
   CHATGPT_PREFER_SUBSCRIPTION_SETTING,
   DEBUG_MODE_SETTING,
-  GIT_COMMITS_TO_SHOW_SETTING,
   GLM_ENDPOINT_SETTING,
   GOAL_STRATEGY_SETTING,
   GOOGLE_BACKGROUND_RESPONSES_SETTING,
   MAX_IMAGE_DIMENSION_SETTING,
   SAVE_MODEL_IO_SETTING,
-  SOX_PATH_SETTING,
   XAI_PREFER_SUBSCRIPTION_SETTING,
 } from '@texra-ai/harness/schemas';
 import type { SettingsViewSnapshot } from '@texra/shared/settingsView/settingsViewMessages';
@@ -214,8 +211,6 @@ export const HARNESS_ROW_SURFACES: Readonly<
   },
   // Written by the setup assistant's `update_config`, read by their tools.
   [MAX_IMAGE_DIMENSION_SETTING.key]: null,
-  [GIT_COMMITS_TO_SHOW_SETTING.key]: null,
-  [SOX_PATH_SETTING.key]: null,
   // Debugging switches, set in `config.json`.
   [DEBUG_MODE_SETTING.key]: null,
   [SAVE_MODEL_IO_SETTING.key]: null,
@@ -236,10 +231,6 @@ export const HARNESS_ROW_SURFACES: Readonly<
 
   // --- Agent coordination -----------------------------------------------------
   [ALLOW_ORCHESTRATOR_KILL_SETTING.key]: {
-    category: 'agents',
-    ...AGENTS_AND_CLI,
-  },
-  [DETACH_SUBAGENTS_ON_STOP_SETTING.key]: {
     category: 'agents',
     ...AGENTS_AND_CLI,
   },

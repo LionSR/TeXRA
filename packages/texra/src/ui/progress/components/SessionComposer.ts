@@ -33,7 +33,7 @@ import {
   type Draft,
   type Surface,
 } from '@texra/shared/session/surface';
-import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { appendClipboardImageChips } from '@texra/shared/utils/clipboard';
 import {
   clipboardImageFiles,

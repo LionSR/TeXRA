@@ -24,7 +24,7 @@ import {
 import { ensureError } from '@utils/errors/errorMessage';
 import { childEndReport } from './childDelivery';
 import type { RunReport } from './runReport';
-import type { AgentRunServices } from './runRegistry';
+import { RunRegistry, type AgentRunServices } from './runRegistry';
 import type { RunLaunch } from './run/AgentRun';
 
 const CHANNEL = 'agentRunLifecycle';
@@ -37,7 +37,7 @@ const logLifecycleWarning = (message: string, data: unknown) =>
   );
 
 /** How a run ends, as {@link endVerdict} decides it. */
-export interface EndVerdict {
+interface EndVerdict {
   readonly outcome: RunOutcome;
   /** What the run failed with, a stopped run's failure included. */
   readonly error?: unknown;
@@ -71,7 +71,9 @@ function emptyReport(ctx: RunLaunch, outcome: RunOutcome): RunReport {
 
 /**
  * The one end both run programs commit, from the verdict each reached on
- * its own (`ending`): rows the store refused (`log.lost`) fail the run
+ * its own (`ending`): a run the session's close interrupted, with no stop
+ * asked, gets no end at all and is left as its rows stand; rows the store
+ * refused (`log.lost`) fail the run
  * unless a stop ended it, whoever ends it; the `run.end` commits in one
  * transaction with everything the end decides (`endRunRows`), the report
  * `report` builds for the outcome it commits among them; an end the store
@@ -88,6 +90,15 @@ export const commitEnd = Effect.fn('commitEnd')(function* (
   ) => Effect.Effect<RunEnding['report'], Error, AgentRunServices>,
 ): Effect.fn.Return<void, Error, AgentRunServices> {
   const { runId } = ending;
+  // The process is going, and nobody stopped the run: it gets no end, and
+  // reads as interrupted, resumable, at the next open, as after a crash.
+  if (
+    Exit.isFailure(exit) &&
+    Cause.hasInterrupts(exit.cause) &&
+    (yield* RunRegistry).closing &&
+    (yield* (yield* SessionLog).facts(runId))?.stop == null
+  )
+    return yield* Effect.failCause(exit.cause);
   const lost = yield* (yield* SessionLog).lost(runId);
   const outcome =
     lost !== undefined && ending.outcome !== RUN_OUTCOME.CANCELLED
@@ -164,7 +175,7 @@ export const endRun = Effect.fn('endRun')(function* (
               }
             : classified;
         })();
-  // Read once as the run entered: a child detached mid-run ends as a child.
+  // Read once as the run entered.
   const parentRunId = ctx.entry.parent;
   if (thrown !== undefined && error !== undefined) {
     if (verdict.outcome === RUN_OUTCOME.CANCELLED)

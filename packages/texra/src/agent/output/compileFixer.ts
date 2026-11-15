@@ -194,67 +194,62 @@ function buildCompileFixerQuestion(
     .join('\n');
 }
 
-const compileFixerTargets = Effect.fn('ProgressFollowUp.compileFixerTargets')(
-  function* (
-    originalConfig: AgentConfig,
-    compileFailures: readonly CompileFailure[],
-    rounds: readonly RoundOutput[],
-    workspaceRoot: string | undefined,
-  ): Effect.fn.Return<
-    CompileFixerTarget[],
-    PlatformError.PlatformError,
-    FileSystem.FileSystem
-  > {
-    if (!workspaceRoot) return [];
-    // Prefer the recorded output source, followed by the original inputs.
-    const outputByPath = new Map(
-      rounds
-        .flatMap((round) => round.outputs)
-        .map((output) => [output.location.absolutePath, output] as const),
-    );
+const compileFixerTargets = Effect.fn('compileFixer.targets')(function* (
+  originalConfig: AgentConfig,
+  compileFailures: readonly CompileFailure[],
+  rounds: readonly RoundOutput[],
+  workspaceRoot: string | undefined,
+): Effect.fn.Return<
+  CompileFixerTarget[],
+  PlatformError.PlatformError,
+  FileSystem.FileSystem
+> {
+  if (!workspaceRoot) return [];
+  // Prefer the recorded output source, followed by the original inputs.
+  const outputByPath = new Map(
+    rounds
+      .flatMap((round) => round.outputs)
+      .map((output) => [output.location.absolutePath, output] as const),
+  );
 
-    const generatedOutputSources = compileFailures
-      .map((failure) => outputByPath.get(failure.output.absolutePath)?.source)
-      .filter((source): source is string => !!source);
-    const originalInputRecovery = originalConfig.inputFiles.filter(Boolean);
+  const generatedOutputSources = compileFailures
+    .map((failure) => outputByPath.get(failure.output.absolutePath)?.source)
+    .filter((source): source is string => !!source);
+  const originalInputRecovery = originalConfig.inputFiles.filter(Boolean);
 
-    const preferred = [...generatedOutputSources, ...originalInputRecovery];
-    // The map is the target list: insertion order is the order targets are
-    // named in, and a path seen twice keeps its first target, enriched by the
-    // second.
-    // Each candidate is probed together with the others; the merge below
-    // takes them in order.
-    const probed = yield* Effect.forEach(
-      preferred,
-      (candidate) => {
-        const location = pathToLocationIn(workspaceRoot, candidate);
-        return location.kind !== 'workspace'
-          ? Effect.succeed([])
-          : compileFixerTargetsForCandidate(
-              location.relativePath,
-              workspaceRoot,
-            );
-      },
-      { concurrency: 8 },
-    );
-    const targetByPath = new Map<string, CompileFixerTarget>();
-    for (const candidateTargets of probed) {
-      for (const target of candidateTargets) {
-        const existing = targetByPath.get(target.path);
-        if (existing) {
-          existing.latexdiffArtifact ??= target.latexdiffArtifact;
-          existing.missingLatexdiffArtifact ??= target.missingLatexdiffArtifact;
-          continue;
-        }
-        targetByPath.set(target.path, target);
+  const preferred = [...generatedOutputSources, ...originalInputRecovery];
+  // The map is the target list: insertion order is the order targets are
+  // named in, and a path seen twice keeps its first target, enriched by the
+  // second.
+  // Each candidate is probed together with the others; the merge below
+  // takes them in order.
+  const probed = yield* Effect.forEach(
+    preferred,
+    (candidate) => {
+      const location = pathToLocationIn(workspaceRoot, candidate);
+      return location.kind !== 'workspace'
+        ? Effect.succeed([])
+        : compileFixerTargetsForCandidate(location.relativePath, workspaceRoot);
+    },
+    { concurrency: 8 },
+  );
+  const targetByPath = new Map<string, CompileFixerTarget>();
+  for (const candidateTargets of probed) {
+    for (const target of candidateTargets) {
+      const existing = targetByPath.get(target.path);
+      if (existing) {
+        existing.latexdiffArtifact ??= target.latexdiffArtifact;
+        existing.missingLatexdiffArtifact ??= target.missingLatexdiffArtifact;
+        continue;
       }
+      targetByPath.set(target.path, target);
     }
-    return [...targetByPath.values()];
-  },
-);
+  }
+  return [...targetByPath.values()];
+});
 
 const compileFixerTargetsForCandidate = Effect.fn(
-  'ProgressFollowUp.compileFixerTargetsForCandidate',
+  'compileFixer.targetsForCandidate',
 )(function* (
   relativePath: string,
   workspaceRoot: string,

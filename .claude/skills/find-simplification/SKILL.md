@@ -1,11 +1,11 @@
 ---
 name: find-simplification
-description: 'Use when working in the TeXRA repo to find non-obvious simplification candidates and record them as dated proposals or tech-debt issues; especially for dead exports, duplicated lifecycle machinery, expired compatibility readers, speculative generality, over-built seams, added-then-removed features, or hand-rolled code that a Node builtin or an existing dependency already covers.'
+description: 'Use when working in the TeXRA repo to find non-obvious simplification candidates, implement the ones that fit a reviewable diff and record the rest as dated proposals or tech-debt issues; especially for dead exports, duplicated lifecycle machinery, expired compatibility readers, speculative generality, over-built seams, added-then-removed features, or hand-rolled code that a Node builtin or an existing dependency already covers.'
 ---
 
 # Finding TeXRA Simplifications
 
-This skill turns a broad "find things to simplify" request into evidence-backed proposals that remove or collapse existing surface area. It is guidance, not a checklist: follow the code, keep judgment active, and prefer a few well-proven candidates over a pile of thin guesses.
+This skill turns a broad "find things to simplify" request into evidence-backed changes and proposals that remove or collapse existing surface area. It is guidance, not a checklist: follow the code, keep judgment active, and prefer a few well-proven candidates over a pile of thin guesses.
 
 ## Start With Repo Context
 
@@ -72,7 +72,7 @@ For every symbol or behavior, classify consumers before writing:
 - Non-production corpus: `src/test-kernel/`, docs, snapshots, comments.
 - Ambiguous corpus: `scripts/` and `docs/scripts/` — some are release/CI tooling that counts as production. Inspect usage before classifying.
 
-Use `rg` first: the exact symbol, `.name(` and `name(`, command IDs and config keys as string literals, event names, and any wire strings. VS Code commands are wired through `packages/extension/package.json` contributions and `packages/extension/src/commands.ts`; settings keys are declared by owner (`packages/harness/src/shared/state/stateSettings.ts`, `packages/texra/src/shared/settingsView/texraSettings.ts`, or a plugin's `settings`) and consumed by the native settings view. Grep those boundaries as well as imports.
+Use `rg` first: the exact symbol, `.name(` and `name(`, command IDs and config keys as string literals, event names, and any wire strings. VS Code commands are wired through `packages/extension/package.json` contributions and `packages/extension/src/commands.ts`; settings keys are declared by owner (`packages/harness/src/shared/state/stateSettings.ts`, `packages/texra/src/shared/settings/texraSettings.ts`, or a plugin's `settings`) and consumed by the native settings view. Grep those boundaries as well as imports.
 
 Reject or downgrade a candidate when:
 
@@ -81,9 +81,11 @@ Reject or downgrade a candidate when:
 - The removal would force unrelated churn without actually reducing the public API or required behavior (churn-class ban, checklist §14 R5).
 - The idea is correct but tiny — batch it with related finds in one proposal or issue instead of standing alone.
 
-## Record The Candidate
+## Implement Or Record The Candidate
 
-This repo has no inline-TODO convention; durable findings go to one of two places:
+A candidate that is proven and fits a reviewable diff is implemented, not written up: in a scheduled audit, as one commit per candidate in the run's PR, sized and batched as `AGENTS.md` "Scheduled audits" says; otherwise as its own PR when the user asked for changes. Record a candidate only when it is too large for the run, needs a design decision first, or the user asked for a survey alone; in a scheduled audit the note goes in the run's PR beside the implemented work.
+
+This repo has no inline-TODO convention; recorded findings go to one of two places:
 
 - **A dated proposal** under `.agents/docs/proposed/simplification/`, named yyyy-mm-dd-topic.md, for a design-level simplification (collapsing a seam, retiring a format, replacing machinery). Follow the existing proposals' style: problem with consumer evidence, exact proposal, what we give up, acceptance criteria, risks.
 - **A GitHub issue** labeled `tech-debt` for a bounded deletion, in the style of #8746: title, evidence with `path:line` citations and grepped consumer counts, estimated net LoC and element delta, risk level. Dedupe against existing `label:tech-debt` issues (open _and_ closed) first; consolidate into the existing issue that owns the topic rather than filing a duplicate.
@@ -102,7 +104,7 @@ Diff the sibling branch against `origin/main`, not against the current PR branch
 
 ## Validation And PR Hygiene
 
-For docs-only proposal work, run `npm run format`, `npm run gate:docs`, and `git diff --check`. For code-touching implementation, run the checks AGENTS.md requires before committing: `npm run format`, `npm run typecheck`, `npm run lint`, and `npm test`.
+For docs-only proposal work, run `npm run format`, `npm run gate:docs`, and `git diff --check`. For code-touching implementation, run the checks AGENTS.md requires before committing: `npm run format`, `npm run typecheck`, `npm run lint`, and `npm test`; a scheduled audit runs `npm run gate` and `npm run test:changed` instead, as "Scheduled audits" says.
 
 A PR implementing a simplification is usually titled `refactor:` / `simplify:` / `consolidate:` / `dedupe:` — which activates the letter-level template requirements (checklist §14): the body must carry `## Net elements (R6)` (files, `^[+-]export` symbols, class/interface/enum declarations, net LoC from `git diff --stat origin/main`) and `## Consumer counts (R8)` (grepped subscriber/caller counts for every deleted emit path or public symbol). Build implies delete in the same PR; a net-positive-LOC "reduction" needs its stated reason. Use Conventional Commits.
 

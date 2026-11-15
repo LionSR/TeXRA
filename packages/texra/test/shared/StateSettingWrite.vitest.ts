@@ -5,8 +5,8 @@ import { describe, expect } from 'vitest';
 
 // Local imports
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
-import { LATEX_FORMATTER_SETTING } from '@texra/shared/settingsView/texraSettings';
+import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
+import { LATEX_FORMATTER_SETTING } from '@texra/shared/settings/texraSettings';
 
 describe('applyStateSettingUpdate', () => {
   it.effect('uses null as an explicit reset and omission as a no-op', () =>

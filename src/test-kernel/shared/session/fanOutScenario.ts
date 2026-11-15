@@ -10,7 +10,6 @@ import {
   AgentConfigSchema,
   type ApprovalGrants,
   type DisplayRow,
-  emptyRunEndOutput,
   type LocalRuntimeState,
   MESSAGE_TYPES,
   qualifyAggregateId,
@@ -19,7 +18,7 @@ import {
   RunIdSchema,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import type { RunParent } from '@shared/schemas';
+import { emptyRunEndOutput, type RunParent } from '@shared/schemas';
 import {
   makeSessionViewUpdater,
   type SessionViewUpdater,
@@ -232,6 +231,7 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(CHILD, T.child, {
     type: 'run.config',
     config: Schema.decodeUnknownSync(AgentConfigSchema)({
+      agent: 'search',
       model: 'claude-sonnet-5-5',
       instruction: 'search',
     }),
@@ -331,6 +331,7 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(PROCESS, T.process, {
     type: 'run.config',
     config: Schema.decodeUnknownSync(AgentConfigSchema)({
+      agent: 'bash',
       model: 'unused',
       instruction: 'npm test',
     }),

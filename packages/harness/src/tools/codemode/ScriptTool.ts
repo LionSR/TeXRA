@@ -28,10 +28,12 @@ import {
   ToolError,
   type ToolFileAttachment,
   type ToolResultPayload,
+  SCRIPT_TOOL_NAME,
 } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 
 import { defineTool } from '../core/definition';
+import { timeoutMsField } from '../core/inputSchema';
 import { launchBackgroundScript } from './backgroundScript';
 import { declarationOf, globalDeclarationOf } from './declarations';
 import { describeTool, searchTools } from './discovery';
@@ -52,13 +54,7 @@ const ScriptInputSchema = Schema.Struct({
     description:
       'Run the script as a background run of its own: the call returns its run id at once, and the result and a summary arrive as one follow-up when it ends. A one-shot run runs it in the foreground.',
   }),
-  timeoutMs: Schema.optional(
-    Schema.NullOr(
-      Schema.Int.check(Schema.isGreaterThanOrEqualTo(1000)).check(
-        Schema.isLessThanOrEqualTo(24 * 60 * 60 * 1000),
-      ),
-    ),
-  ).annotate({
+  timeoutMs: timeoutMsField.annotate({
     description:
       'Wall-clock limit in milliseconds, tool calls included: 1 s to 24 h, default 60 min.',
   }),
@@ -338,10 +334,8 @@ const SURFACE = [
   'There are no timers, no `Date.now()` and no `Math.random()`: the script replays exactly after an interruption, on the modules it first loaded, and calls that finished are not run again.',
 ].join('\n\n');
 
-const SCRIPT_TOOL = 'script';
-
 export const ScriptTool = defineTool({
-  name: SCRIPT_TOOL,
+  name: SCRIPT_TOOL_NAME,
   // A resume runs the script again from the top against its recorded calls:
   // each settled call is handed back from its row, never run twice.
   replay: 'safe',

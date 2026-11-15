@@ -1,5 +1,5 @@
 import { defineCommand } from 'citty';
-import { Cause, Effect } from 'effect';
+import { Effect } from 'effect';
 
 import { withProcessServices } from '@texra-ai/harness/host';
 import { ensureError } from '@texra-ai/harness/schemas';
@@ -71,7 +71,7 @@ const doctorReport = (context: CliContext): Effect.Effect<DoctorReport> =>
     Effect.catchCause((cause) =>
       buildDoctorReport(context, {
         kind: 'degraded',
-        initError: ensureError(Cause.squash(cause)),
+        initError: ensureError(cause),
       }).pipe(Effect.provide(nodePlatformServices)),
     ),
   );

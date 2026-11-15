@@ -26,7 +26,7 @@ import {
   ToolError,
   Settings,
 } from '@texra-ai/harness/plugins';
-import { ZOTERO_PORT_SETTING } from '@texra/shared/settingsView/texraSettings';
+import { ZOTERO_PORT_SETTING } from '@texra/shared/settings/texraSettings';
 
 const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s
 const ZOTERO_PING_TIMEOUT_MS = 2_000; // 2 s

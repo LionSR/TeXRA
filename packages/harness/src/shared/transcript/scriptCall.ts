@@ -1,5 +1,6 @@
 import { Predicate, Record as EffectRecord } from 'effect';
 import { type ScriptTally } from '@shared/schemas';
+import { formatClippedList } from '@utils/text/stringUtils';
 
 const CALL_FILE_PREVIEW_LIMIT = 3;
 
@@ -13,11 +14,10 @@ export function formatScriptCallFiles(files: {
   readonly context: readonly string[];
   readonly media: readonly string[];
 }): string | undefined {
-  const visible = files.input.slice(0, CALL_FILE_PREVIEW_LIMIT);
-  const hiddenInputs = files.input.length - visible.length;
-  const hiddenSuffix = hiddenInputs > 0 ? ` +${hiddenInputs}` : '';
   const parts = [
-    visible.length > 0 ? `${visible.join(', ')}${hiddenSuffix}` : undefined,
+    files.input.length > 0
+      ? formatClippedList(files.input, CALL_FILE_PREVIEW_LIMIT)
+      : undefined,
     files.context.length > 0 ? `${files.context.length} context` : undefined,
     files.media.length > 0 ? `${files.media.length} media` : undefined,
   ].filter(Predicate.isNotNullish);

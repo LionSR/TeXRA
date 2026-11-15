@@ -6,6 +6,43 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: a store an earlier build wrote is refused, never moved aside.**
+  Opening a session store stamped with another build's schema fails and
+  changes nothing in the file; the error says to move it away. Only a
+  damaged file is moved aside, so `SessionStoreMovedAside` has no `reason`.
+- **SDK: a `PerKeyLane` holds a `Semaphore`.** `withPerKeyLane` keeps its
+  signature; the lane record it stores is `{ lock, fibers }` where it was
+  `{ tail, fibers }`. Fibers enter in the order they join the key's queue,
+  which can differ from the order of two calls made within a few steps of
+  each other.
+- **SDK: `withPerKeyLane` takes no conditional claim.** Its third
+  parameter, `refuseClaim`, had no caller and is removed; a lane is claimed
+  by every entrant.
+- **SDK: the harness names no agent commit identity.**
+  `GIT_AUTHOR_NAME_SETTING` and `GIT_AUTHOR_EMAIL_SETTING` read
+  `undefined` unless the person or the app's catalog (`settingsCatalog`'s
+  `defaults`) names one; with neither, an agent's commits keep git's own
+  identity. TeXRA's catalog keeps `texra-ai`.
+- **SDK: a run's view no longer says who wrote its title.**
+  `RunView.descriptionBy` is removed; no host read it. The run's
+  `run.description` rows still record it.
+- **SDK: two app settings leave the harness catalog.**
+  `GIT_COMMITS_TO_SHOW_SETTING` and `SOX_PATH_SETTING` are no longer
+  exported; no harness code read them. TeXRA declares them in its own rows
+  under the same stored keys.
+- **SDK: the harness names no default model, agent or curated picker list.**
+  `DEFAULT_AGENT_MODEL` and `DEFAULT_TASK_AGENT` are no longer exported, and
+  `AgentConfig.model` and `.agent` are required. `session.start` takes a
+  required `model`. The models every user starts with enabled come from the
+  app's catalog: `settingsCatalog({ curatedModels })`, read as
+  `SettingsCatalog.curatedModels` (none when absent). `getEnabledModels` and
+  `setModelEnabled` take the settings slots (`config` and `globalState`)
+  instead of the global state store alone.
+- **SDK: an app's launch facts are an opaque `launch` record.**
+  `AgentConfig.cli` (output file, output directory, expected outputs, team
+  id) is gone; `AgentConfig.launch` is a JSON record the launching app
+  writes and decodes itself, which the harness never reads and a child run
+  does not inherit. `run.config` rows are version 7.
 - **SDK: a child run's result is data.** A process child's turn returns its
   report as a `ChildRunDelivery` (`ProcessReport.report`), and
   `ProcessTurn.reportError` builds one from the error. A queued message's
@@ -96,8 +133,8 @@ All notable changes to this project will be documented in this file.
   `RuntimeRequest` is `RuntimeCommand`; `session.request` keeps its name.
   The stored `request.*` rows and their `kind` values are unchanged.
 - **SDK: `session.request` fails with the runtime's own errors.**
-  `RequestErrorSchema` is `RunActive`, `Unavailable`, `Cancelled`,
-  `Rejected` and `Conflict`. `Invalid` and `Internal`, which only a bridge
+  `RequestErrorSchema` is `RunActive`, `Unavailable`, `Cancelled` and
+  `Rejected`. `Invalid` and `Internal`, which only a bridge
   between processes raised, are gone, and so are `HostRequestFailure`,
   `RequestRefusal` and `isRequestRefusal`.
 - **SDK: a launch's approval is one value.** `session.start`'s `approval`
@@ -685,8 +722,8 @@ All notable changes to this project will be documented in this file.
 - **A window of the TeXRA service keeps its project's settings in the
   service.** A VS Code window or a desktop folder the service serves no
   longer opens the project's store: project settings are read and written
-  through the service, and a store the service had to move aside (written
-  before 1.0, or damaged) is announced in the project's window. An older
+  through the service, and a damaged store the service had to move aside
+  is announced in the project's window. An older
   window is refused by a newer service and asked to update.
 - **An explicit `--approval-policy yolo` is an Auto-approve launch, in the
   TeXRA service too.** The flag (or `TEXRA_APPROVAL_POLICY=yolo`) grants
@@ -803,8 +840,8 @@ All notable changes to this project will be documented in this file.
   window that is already open stops saving into it. A task with any
   damaged saved step stays in the task list marked as damaged, with a note
   in the log, and it cannot be opened or resumed, while every other task
-  still works. History from before 1.0 is
-  still set aside on first launch; the copies set aside are now kept until
+  still works. A damaged store is
+  still set aside when it is opened; the copies set aside are now kept until
   you remove them with `texra doctor --prune-storage`, which lists every
   copy and every project folder that no longer exists before deleting
   anything.
@@ -1195,22 +1232,6 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- **SDK: a message to a run carries the caller's id, and its receipt says
-  what became of it.**
-  - `followUp.send` takes an optional `id` and answers with that id and
-    the message's receipt.
-  - A retry under the same id answers with the first send's receipt instead
-    of sending the message twice. That holds after a lost reply, and after
-    the run stopped taking input.
-  - A different message under that id fails with `Conflict`.
-  - `followUp.receipt`, with `wait: true` to wait, reads the receipt from
-    the run's rows. It is one of: `accepted`; `incorporated` into a turn;
-    `answered`; or `unanswered`, with why. Why is one of: the turn failed,
-    the run ended first, or the message left the queue unread.
-  - The harness examples wait on the receipt instead of counting model
-    calls.
-  - A turn's end position records the turn's outcome (`run.position` v2), so
-    a run an earlier build wrote reads as that build's.
 - **Long Claude runs start answering sooner.** On Anthropic's own API,
   each request after the first now sends only the new messages and the id
   of the previous response (message threads, beta), instead of the whole
@@ -1422,13 +1443,6 @@ All notable changes to this project will be documented in this file.
   on its own. A task whose agent is gone, or whose agent comes from a
   plugin that is off or not trusted, is no longer failed by a resume: it
   stays interrupted and says what it is waiting for.
-
-- **Long conversations no longer pause to compact.** When a conversation
-  reaches the compaction threshold, TeXRA summarizes the earlier turns in
-  the background while the agent keeps working on the full history, and
-  swaps the summary in at its next model call or when its turn ends,
-  keeping everything that happened since. `/compact` still waits for its
-  summary.
 
 - **Fork a conversation.** `texra resume <id> --fork` continues a new
   task that holds the conversation as it stood at the end of its last turn,
@@ -1755,6 +1769,61 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **Closing one project no longer stops GitHub updates for the others.** A
+  project's close ran the shutdown step of every plugin, which ended the
+  GitHub pollers of the whole process: the desktop app and the background
+  service then delivered no pull request or issue activity to any open
+  project, and new subscriptions polled nothing, until a restart. Only a
+  shutdown runs that step now.
+- **After a rate limit, the other agents on that model no longer wait for
+  one whole turn.** When a provider failure paused a model route, the
+  first request let through held the route until its turn finished, so
+  every other run and subagent on that credential waited for it, up to the
+  length of that turn. The route now reopens as soon as the provider starts
+  answering that request.
+- **A VS Code notice no longer holds what raised it until it is
+  dismissed.** A warning or info toast shown from a request (a blocked
+  edit's warning, the service notice at startup, a clone's result) kept
+  that request waiting until the toast was closed. A notice now returns as
+  soon as the host is asked to show it, in VS Code and the desktop app.
+- **A `texra` question whose input ends no longer hangs.** Pressing Ctrl-D
+  at a confirmation (`texra prune`, a plugin's trust question, an approval
+  prompt, a token prompt), or running one with its input closed, left the
+  command waiting for an answer that could not come; it now fails saying
+  the input ended.
+- **`texra service stop` and `restart` give up after 30 seconds on a
+  service of another build too.** A running service that speaks a protocol
+  this build cannot read was waited for without a limit, and a stop of one
+  reported that no service was running.
+- **Two TeXRA windows refreshing a subscription sign-in at once no longer
+  sign each other out.** The one whose refresh was refused deleted the
+  session the other had just stored; it now uses that session, and deletes
+  only a refused session that is still the stored one.
+- **The Plugins page no longer probes for tools without end.** With
+  Settings open on a folder no running task held, the app checked every
+  external tool again several times a second for as long as the page was
+  open, starting a process each time.
+- **An agent's edit and a save in the desktop editor no longer overwrite
+  each other.** Each checked the file and then wrote it with nothing
+  between them and the other writer, so one landing inside the other's
+  check and write was lost without a conflict. Both now take the file's one
+  write lane.
+- **Stop reaches the agents under a task that was just resumed.** A task
+  woken by one of its background agents' results could be stopped while it
+  was still starting up; its other agents then kept running after Stop.
+  They are stopped with it now.
+- **A file write that is stopped part-way no longer empties the file.**
+  Stopping a run while it wrote an approved edit, or closing a project while
+  the desktop editor saved, could leave the file with no content at all,
+  neither the old nor the new. A write now finishes once it has started.
+- **A stopped operation no longer blocks later writes of the same file or
+  project.** In rare timing, an operation interrupted as it took its turn
+  (saving a setting, opening or closing a project, writing a credential)
+  kept that turn for the rest of the process, and every later one on the
+  same file or project waited for good.
+- **Closing a session no longer waits on queued writes.** Rows are committed
+  as they are written, so a close has nothing left to flush and a write can
+  no longer be dropped or left unanswered at the close deadline.
 - **A task launched to run once is never resumed to wait for messages.**
   Resumed in a chat or a window, such a task waited for a message that
   every send then refused with "Resume it". It now runs its cycle and ends,
@@ -1894,8 +1963,8 @@ All notable changes to this project will be documented in this file.
   subagent's result held for a parent open in another process is delivered
   under a claim its park let go, so the delivery no longer polls for the
   child's process to exit; a request a stopped or failed run leaves open is
-  cancelled with the run's end; a run that cannot hold its claim, or record
-  a finished compaction as it stops, ends failed naming the refusal; a
+  cancelled with the run's end; a run that cannot hold its claim ends
+  failed naming the refusal; a
   subagent launch that fails before its run exists fails the `agent` call
   that launched it; and a file a model cannot take, or a tool attachment it
   cannot read inline, is told to the model in the message that carried it.

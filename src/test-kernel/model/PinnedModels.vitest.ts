@@ -10,12 +10,12 @@ import {
 } from '@texra-ai/llm';
 import { Settings } from '@texra-ai/harness/plugins';
 import { HELPER_MODEL_SETTING } from '@texra-ai/harness/schemas';
-import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
+import { CURATED_MODELS } from '@texra/model/curatedModels';
 import {
   CLAUDE_AGENT_MODEL_VALUES,
   CODEX_MODEL_VALUES,
 } from '@texra/shared/agentCliSettings';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
   CHATGPT_SETUP_MODEL,
   SETUP_MODEL_BY_PROVIDER,
@@ -33,7 +33,7 @@ const PINNED: readonly (readonly [string, string])[] = [
     'helper model setting',
     Settings.defaultOf(TEXRA_SETTINGS.catalog, HELPER_MODEL_SETTING) ?? '',
   ],
-  ...DEFAULT_MODELS.map((model) => ['DEFAULT_MODELS', model] as const),
+  ...CURATED_MODELS.map((model) => ['CURATED_MODELS', model] as const),
   ...Object.entries(SETUP_MODEL_BY_PROVIDER).map(
     ([provider, model]) => [`setup model for ${provider}`, model] as const,
   ),

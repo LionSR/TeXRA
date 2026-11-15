@@ -18,7 +18,10 @@ import { Effect } from 'effect';
 
 // Local imports
 import { modelRefOf } from '@texra-ai/llm';
-import { AgentCatalog } from '@agent/index/agentCatalog';
+import {
+  AgentCatalog,
+  type WorkspaceAgentsStores,
+} from '@agent/index/agentCatalog';
 import type { StepTools } from '@agent/runtime/loop/step';
 import { withLogChannel } from '@logger/effectLog';
 import { readModelOptions, type ModelOption } from '@model/computeModelOptions';
@@ -45,6 +48,18 @@ const availableModelNames = (options: readonly ModelOption[]): string[] =>
  * Reading
  * ---------------------------------------------------------------------- */
 
+/** The agents a delegation may launch: the run's pinned delegation scope's,
+ *  else the workspace's visible ones. */
+export const delegationAgents = Effect.fn('delegationAgents')(function* (
+  stores: WorkspaceAgentsStores,
+  scope: AgentDelegationScope | null | undefined,
+) {
+  const catalog = yield* AgentCatalog;
+  return scope
+    ? catalog.pinned(scope)
+    : yield* catalog.workspaceAgents(stores).visible();
+});
+
 /**
  * The targets the offered `definitions` can launch, or `undefined` when they
  * hold no delegation tool: the run's pinned delegation scope's agents, or
@@ -63,11 +78,7 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
       ({ name }) => registry.get(name)?.launchesTasks,
     );
     if (!chats && !tasks) return undefined;
-    const catalog = yield* AgentCatalog;
-    const entries = scope
-      ? catalog.pinned(scope)
-      : yield* catalog.workspaceAgents(stores).visible();
-    const agents = entries.flatMap(
+    const agents = (yield* delegationAgents(stores, scope)).flatMap(
       ({ name, description, tools: agentTools, blocks }) => {
         const task = Object.keys(blocks).length > 0;
         return chats || task

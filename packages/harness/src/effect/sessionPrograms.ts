@@ -150,7 +150,7 @@ const admitInput = Effect.fn('admitInput')(function* (
     agentSource: resolved.source,
     persona,
     instruction: input.instruction,
-    ...(input.model ? { model: input.model } : {}),
+    model: input.model,
   }).pipe(Effect.mapError(inputRefused));
 });
 

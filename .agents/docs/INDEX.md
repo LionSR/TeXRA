@@ -14,7 +14,8 @@ ruling and argues against it explicitly.
 | Harness 1.0 release requirements                                        | [Harness 1.0 发布 PRD](./proposed/architecture/2026-10-28-harness-1-release-prd.md)                                                  |
 | The harness as a general package                                        | [harness general-package design](./proposed/architecture/2026-10-21-harness-general-package-design.md)                               |
 | The harness against pi-durable and dsh                                  | [harness design by Ousterhout's criteria](./implemented/architecture/2026-10-30-harness-design-against-pi-durable-and-deepseek.md)   |
-| The harness against the peers, round 2: what is still ad hoc            | [harness against the peers, round 2](./proposed/architecture/2026-11-10-harness-against-pi-durable-and-deepseek-round-2.md)          |
+| The harness against the peers, round 2: what is still ad hoc            | [harness against the peers, round 2](./implemented/architecture/2026-11-10-harness-against-pi-durable-and-deepseek-round-2.md)       |
+| The harness against the peers, round 3: durable waits and run input     | [harness against the peers, round 3](./proposed/architecture/2026-11-11-harness-against-pi-durable-and-deepseek-round-3.md)          |
 | The tool layer: catalogs, the step pin, the tool contracts              | [tool layer: one catalog, one step pin, one tool contract](./implemented/architecture/2026-11-01-tool-layer-one-catalog-one-step.md) |
 | The harness / app / llm package split                                   | [harness package split](./implemented/architecture/2026-10-02-harness-package-split.md)                                              |
 | Durable runs: replay, fork, compaction                                  | [durable harness](./implemented/architecture/2026-10-02-durable-harness.md)                                                          |
@@ -30,6 +31,7 @@ ruling and argues against it explicitly.
 | Liveness and single ownership of a run                                  | [single owner liveness and one fold](./implemented/architecture/2026-09-20-single-owner-liveness-and-one-fold.md)                    |
 | One fact, one representation: stop, resume and neighbours               | [one fact, one representation](./proposed/architecture/2026-11-03-one-fact-one-representation.md)                                    |
 | Root designs behind the red flags, Effect-native targets                | [root designs, Effect-native](./proposed/architecture/2026-11-05-root-designs-effect-native.md)                                      |
+| Concurrency: locks, queues, lifetimes and waits                         | [nothing held across a wait](./proposed/architecture/2026-11-14-nothing-held-across-a-wait.md)                                       |
 | Red flags outside the harness core; the order of what remains           | [red flags round 2 and the order](./proposed/architecture/2026-11-07-red-flags-round-2-and-order.md)                                 |
 | The red flags left, ordered by unknown unknowns first; round-3 packages | [red flags round 3, the plan](./proposed/architecture/2026-11-07-red-flags-round-3-plan.md)                                          |
 | Run-to-run messaging, subagent reports                                  | [session messaging](./implemented/architecture/2026-09-25-session-messaging.md)                                                      |

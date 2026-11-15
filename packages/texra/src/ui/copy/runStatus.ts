@@ -1,19 +1,24 @@
 /**
  * How a run's place reads in every renderer: its word, tone and glyph, the
- * section a run list groups it into, and its loop position. English copy
- * over the view's facts (`position`, `outcome`, `holder`, `approval`,
- * `turn`), so the dock, the TUI and the trace viewer cannot word one thing
- * two ways.
+ * label of the section a run list groups it into, and its loop position.
+ * English copy over the classification in `shared/session/runStatusKey.ts`,
+ * so the dock, the TUI and the trace viewer cannot word one thing two ways.
  */
 import {
   isInterrupted,
-  isPlainAgentIdentity,
   type RunOutcome,
-  type RunStanding,
   type RunView,
   type Stage,
   type ToolCallStatus,
 } from '@texra-ai/harness/schemas';
+import type { CompactionActivityStatus } from '@texra-ai/harness/transcript';
+import {
+  runSection,
+  runStatusKey,
+  type RunSection,
+  type RunStatusFacts,
+  type RunStatusKey,
+} from '@texra/shared/session/runStatusKey';
 import type { IconName } from '@ui/wa/iconNames';
 
 /** Compact position label: `t2` for a run's second turn. */
@@ -22,17 +27,6 @@ export function formatLoopPositionLabel(
 ): string | undefined {
   return turn == null ? undefined : `t${turn}`;
 }
-
-/** How a tool card's status section reads. */
-export const TOOL_STATUS_WORD: Readonly<Record<ToolCallStatus, string>> =
-  Object.freeze({
-    in_progress: 'Running',
-    completed: 'Completed',
-    failed: 'Failed',
-  });
-
-/** The section a run list puts a run in. */
-export type RunSection = 'running' | 'waiting' | 'interrupted' | 'recent';
 
 /**
  * One label per section, in the order the sections are painted. Both
@@ -60,16 +54,18 @@ export const RUN_SECTION_ORDER: readonly RunSection[] = Object.freeze(
 /** A fact-only word every host paints in its own colour vocabulary. */
 export type RunTone = 'running' | 'success' | 'danger' | 'neutral' | 'warning';
 
+/** A status's word and tone. */
+interface StatusWord {
+  readonly word: string;
+  readonly tone: RunTone;
+}
+
 /**
- * Each way a run's status reads, with its word and tone: the outcome it
- * ended on, where its loop stands, or one of two readings that outrank
- * both: `interrupted` (nobody drives a run that has not ended) and
- * `waitingOnUser` (a request of its own waits here). `starting` and
- * `resuming` are an agent's activation before its first loop step: a first
- * one, or one after a turn has ended. `packages/cli/scripts/validate-run.mjs`
- * pins the completed and stopped words against the real headless run.
+ * The word and tone of each status key (`runStatusKey`).
+ * `packages/cli/scripts/validate-run.mjs` pins the completed and stopped
+ * words against the real headless run.
  */
-const RUN_STATUS = {
+const RUN_STATUS: Readonly<Record<RunStatusKey, StatusWord>> = Object.freeze({
   starting: { word: 'Initializing', tone: 'running' },
   resuming: { word: 'Resuming', tone: 'running' },
   running: { word: 'Running', tone: 'running' },
@@ -80,27 +76,48 @@ const RUN_STATUS = {
   failed: { word: 'Error', tone: 'danger' },
   interrupted: { word: 'Interrupted', tone: 'warning' },
   waitingOnUser: { word: 'Waiting on you', tone: 'warning' },
-} as const satisfies Record<
-  string,
-  { readonly word: string; readonly tone: RunTone }
->;
+});
 
-/** How a run's status reads: one key of the status table. */
-export type RunStatusKey = keyof typeof RUN_STATUS;
-/** Every key of the status table, for a wire schema that carries one. */
-// cast: `Object.keys` widens to string[]; the table's own keys are these.
-export const RUN_STATUS_KEYS = Object.keys(RUN_STATUS) as [
-  RunStatusKey,
-  ...RunStatusKey[],
-];
-
-/** Shape cue per tone, the one glyph table every painter reads. */
+/** Shape cue per tone, the one glyph table every web painter reads. */
 const TONE_GLYPH: Readonly<Record<RunTone, IconName>> = Object.freeze({
   running: 'circle',
   success: 'circle-check',
   danger: 'circle-exclamation',
   warning: 'triangle-exclamation',
   neutral: 'circle',
+});
+
+/** How a status of any kind is painted: its tone, and a glyph of its own
+ *  only where the tone's glyph would say the wrong thing. */
+export interface StatusLook {
+  readonly tone: RunTone;
+  readonly glyph?: IconName;
+}
+
+/** The web glyph a status shows: its own, else its tone's. */
+export function statusGlyph(look: StatusLook): IconName {
+  return look.glyph ?? TONE_GLYPH[look.tone];
+}
+
+/** How a tool card's status section reads. */
+export const TOOL_STATUS: Readonly<Record<ToolCallStatus, StatusWord>> =
+  Object.freeze({
+    in_progress: Object.freeze({ word: 'Running', tone: 'running' }),
+    completed: Object.freeze({ word: 'Completed', tone: 'success' }),
+    failed: Object.freeze({ word: 'Failed', tone: 'danger' }),
+  });
+
+/** The tone of a context compaction's activity row; its words are the
+ *  row's label (`COMPACTION_ACTIVITY_LABEL`). */
+export const COMPACTION_ACTIVITY_TONE: Readonly<
+  Record<CompactionActivityStatus, RunTone>
+> = Object.freeze({
+  running: 'running',
+  completed: 'success',
+  failed: 'danger',
+  cancelled: 'neutral',
+  skipped: 'neutral',
+  interrupted: 'warning',
 });
 
 /** How one run reads, in every renderer. */
@@ -112,40 +129,12 @@ interface RunStatus {
   readonly section: RunSection;
 }
 
-/** The facts a run's status is read from: where it stands, and what
- *  outranks or refines that. */
-type RunStatusFacts = RunStanding &
-  Pick<RunView, 'holder' | 'approval' | 'turn' | 'identity' | 'forkPoint'>;
-
-/**
- * The one reading of a run's status: an interrupted run outranks one
- * waiting on the user, which outranks its outcome and then its position.
- */
+/** How one run reads in every renderer: its status key and section
+ *  (`shared/session/runStatusKey.ts`), worded. */
 export function runStatus(run: RunStatusFacts): RunStatus {
-  const key = statusKey(run);
+  const key = runStatusKey(run);
   const { word, tone } = RUN_STATUS[key];
-  return { key, word, tone, glyph: TONE_GLYPH[tone], section: sectionOf(run) };
-}
-
-function statusKey(run: RunStatusFacts): RunStatusKey {
-  if (isInterrupted(run)) return 'interrupted';
-  if (run.approval === 'own') return 'waitingOnUser';
-  if (run.outcome !== null) return run.outcome;
-  if (
-    run.position === 'running' &&
-    run.turn === null &&
-    isPlainAgentIdentity(run.identity)
-  )
-    return run.forkPoint === null ? 'starting' : 'resuming';
-  return run.position;
-}
-
-function sectionOf(run: RunStatusFacts): RunSection {
-  if (isInterrupted(run)) return 'interrupted';
-  if (run.approval === 'own') return 'waiting';
-  return run.holder === 'here' && run.position !== 'ready'
-    ? 'running'
-    : 'recent';
+  return { key, word, tone, glyph: TONE_GLYPH[tone], section: runSection(run) };
 }
 
 /** The word a status key reads as. */
@@ -159,7 +148,7 @@ export function runStatusLabel(key: RunStatusKey): string {
  *  transcript shown without its run (null) reads an open stage as running. */
 export function stageStatus(
   stage: Pick<Stage, 'outcome'>,
-  run: Pick<RunView, 'holder' | 'outcome'> | null,
+  run: Pick<RunView, 'holder' | 'outcome' | 'position'> | null,
 ): Pick<RunStatus, 'word' | 'tone' | 'glyph'> & {
   readonly key: RunOutcome | 'running' | 'interrupted';
 } {
@@ -176,7 +165,7 @@ export function stageStatus(
  * outrank an interrupted run, which outranks a result its end lost.
  */
 export function runNoticeText(
-  run: Pick<RunView, 'statusNotice' | 'holder' | 'outcome'>,
+  run: Pick<RunView, 'statusNotice' | 'holder' | 'outcome' | 'position'>,
 ): string | null {
   const notice = run.statusNotice;
   switch (notice?.kind) {

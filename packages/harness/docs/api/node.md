@@ -433,8 +433,8 @@ const makeMachineGitEnv: Effect.Effect<NodeJS.ProcessEnv>
 
 ## nodeFileServices
 
-Node's file services: `FileSystem` (with the one-call native `realPath`)
-and `Path`. The process platform, the JSON and credential stores and the
+Node's file services: `FileSystem` (with the one-call native `realPath`
+and uninterruptible writes) and `Path`. The process platform, the JSON and credential stores and the
 hosts' own reads all provide this one layer.
 
 ```ts
@@ -631,60 +631,6 @@ function resolveWorkspaceStoragePath(
   storageRoot: string,
   workspaceRoot: string | undefined,
 ): string
-```
-
-## RowOf
-
-The row of kind `T`.
-
-```ts
-type RowOf<T extends SessionRow['type']> = Extract<
-  SessionRow,
-  { type: T }
->;
-```
-
-## RunRows
-
-What a run's record rows say about it, each field from the rows its
-comment names, as `recordAfter` (`runRowReads.ts`) applies them: what
-`SessionLog.facts` serves, read from the newest row of each kind, and
-what the session view keeps per run for the fields it shows.
-
-```ts
-type RunRows = {
-  /** Its `run.start`, and its parent edge: the start's, until a
-   *  `run.detach` severs it. */
-  readonly start: RowOf<'run.start'> | null;
-  readonly parent: RowOf<'run.start'>['parent'];
-  /** Its latest `run.activate`, and the `run.end` of the lifecycle that
-   *  began (null until it ends): a resumed run never carries an old end. */
-  readonly activation: RowOf<'run.activate'> | null;
-  readonly end: RowOf<'run.end'> | null;
-  /** The stop asked of this lifecycle (`run.stop`), null until one is:
-   *  why the run stopped, or is stopping. */
-  readonly stop: RowOf<'run.stop'> | null;
-  /** Its input is closed: the latest of `run.activate`, `followup.closed`
-   *  and `run.removed` is not an activation. */
-  readonly inputClosed: boolean;
-  /** Its latest `run.report`, `process.exit`, `run.config` and
-   *  `run.position`. */
-  readonly report: string | null;
-  readonly exit: RowOf<'process.exit'> | null;
-  readonly config: RowOf<'run.config'>['config'] | null;
-  readonly position: RowOf<'run.position'> | null;
-  /** Its title: the latest user `run.description`, else the latest one. */
-  readonly title: RowOf<'run.description'> | null;
-  /** Its latest model `run.description`, whose priced request (`usage`) is
-   *  part of the run's spend whatever title stands. */
-  readonly label: RowOf<'run.description'> | null;
-  /** Its own grants: the latest `approval.policy`, else the snapshot its
-   *  `run.start` carried. */
-  readonly grants: ApprovalGrants | null;
-  /** Each plugin row kind's latest row, by `plugin/kind` (`plugin.fact`):
-   *  read through its plugin's own reader. */
-  readonly facts: Readonly<Record<FactName, RowOf<'plugin.fact'>>>;
-};
 ```
 
 ## runsInWsl

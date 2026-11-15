@@ -378,7 +378,7 @@ re-read the surface and the ports. Where it changes this design:
   them; #14371 removed five of the six that were free. Shrinking further means
   narrowing the root signatures (the run-lifecycle work in the 1.0 PRD) or
   moving app vocabulary: the team launch code moved to
-  `packages/texra/src/shared/teamLaunch.ts` (16 `./host` names freed) and the
+  `packages/texra/src/agent/teams/teamLaunch.ts` (16 `./host` names freed) and the
   picker wire types to `packages/texra/src/shared/pickerOptions.ts` (7
   `./schemas` names freed, `ModelAvailabilityKindSchema` added).
 - **Lane 3, vocabulary.** #14364 made the namespace data and moved the
@@ -398,9 +398,8 @@ re-read the surface and the ports. Where it changes this design:
   claim paths, and the view already lists every queued follow-up. It is a
   feature (about +105 lines with a first `remind` tool) and only its row field
   is cheaper before the freeze.
-- **Lane 5, storage.** `openStore` checks stamps with a read-only probe, moves a
-  damaged file aside by rename and reconnects, and copies a pre-1.0 store, so a
-  ready-made `SqlClient` cannot stand in for it. A port would move about 40
+- **Lane 5, storage.** `openStore` moves a damaged file aside by rename and
+  reconnects, so a ready-made `SqlClient` cannot stand in for it. A port would move about 40
   lines and add about 20, and the crash suite writes files directly, so it gains
   nothing from a client parameter. Browser and edge targets need more than a
   client (WAL, `data_version` polling, process-identity liveness,

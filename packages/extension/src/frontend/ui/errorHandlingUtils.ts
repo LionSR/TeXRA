@@ -77,7 +77,7 @@ export const showLoggedMessage = Effect.fn('showLoggedMessage')(function* (
   message: string,
 ): Effect.fn.Return<string> {
   yield* Effect.logError(message);
-  yield* Effect.forkDetach(vscodeUi.notify('error', message));
+  yield* vscodeUi.notify('error', message);
   return message;
 });
 
@@ -86,7 +86,7 @@ export const showLoggedMessage = Effect.fn('showLoggedMessage')(function* (
 export const showLoggedInfoMessage = Effect.fn('showLoggedInfoMessage')(
   function* (message: string): Effect.fn.Return<string> {
     yield* Effect.logInfo(message);
-    yield* Effect.forkDetach(vscodeUi.notify('info', message));
+    yield* vscodeUi.notify('info', message);
     return message;
   },
 );

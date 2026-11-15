@@ -82,14 +82,17 @@ export const withCancellationToken = <A, E>(
  * an answer nobody will read.
  */
 class VscodeUiHost implements Dialogs {
+  /** Asked of VS Code, the notice is done: a toast answers only when it is
+   *  dismissed, which nobody waits for. */
   notify(level: NoticeLevel, message: string): Effect.Effect<void> {
     return this.showMessage(level, message, {}).pipe(
-      Effect.asVoid,
       Effect.catch((failure) =>
         Effect.logWarning(
           `VS Code would not show a notice: ${failure.message}`,
         ).pipe(withLogChannel('VscodeUiHost')),
       ),
+      Effect.forkDetach,
+      Effect.asVoid,
     );
   }
 

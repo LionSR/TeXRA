@@ -298,10 +298,12 @@ export function agentSourceRoots(
 // and "keep mine" write through `AgentCatalog.customize`.
 
 /**
- * `customize` refused the change: the entry has no file of its own to copy
- * (`noFile`), its copy would land outside the custom directory or a file it
- * binds lies outside its own directory (`escapes`), a copy is already there (`exists`, at `path`), or a copy has no newer
- * bundled version to keep (`current`).
+ * `customize` or `removeCustom` refused the change: the entry has no file of
+ * its own to copy or delete (`noFile`), its copy would land outside the
+ * custom directory, a file it binds lies outside its own directory or the
+ * file to delete lies outside the custom directory (`escapes`), a copy is
+ * already there (`exists`, at `path`), or a copy has no newer bundled version
+ * to keep (`current`).
  */
 export class AgentCustomizeRefused extends Schema.TaggedError<AgentCustomizeRefused>()(
   'AgentCustomizeRefused',

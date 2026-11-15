@@ -38,7 +38,7 @@ const CLOSED = Object.freeze({
   reason: 'notResumable',
 } as const);
 /** The session doors the inbox works through (the session layer wires them). */
-export interface InboxPort {
+interface InboxPort {
   /** The session's log: a send is one transaction. */
   readonly log: Pick<
     SessionLogShape,
@@ -67,10 +67,6 @@ export type InboxItem = (
   readonly deliveryId?: string;
   /** A request of the run's own (`/compact`, a model switch), not a message. */
   readonly control?: QueuedFollowUp['control'];
-  /** The id a caller named the message by (`followUp.send`; `deliveryId`
-   *  is its `sentFollowUpId`): a retry under it answers with the first
-   *  send's receipt, another message under it fails `Conflict`. */
-  readonly caller?: string;
 };
 
 /** How a send landed: queued for the run (a reader here takes it, or its
@@ -83,7 +79,7 @@ export type Sent =
 type Refusal = 'notResumable' | 'notParent';
 
 /** What a send asks of the row and of the run. */
-export interface SendOptions {
+interface SendOptions {
   /** When the row may be read (`readableMessages`). Absent: at once, or at
    *  the turn's end for a host's notification (`queuedRow`). */
   readonly hold?: QueuedFollowUp['holdUntil'];
@@ -305,8 +301,7 @@ export class SessionInbox {
           sent: yield* landed(false),
         };
       }
-      // A caller's id that is queued or taken was answered before the send
-      // by `sentBefore`, in the same per-run lane.
+      // A delivery repeated under its id: still queued, or already taken.
       return queuedStill
         ? { rows: [], sent: yield* landed(true) }
         : only({ kind: 'duplicate' });

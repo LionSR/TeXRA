@@ -13,14 +13,9 @@
  *    the local `node_modules`, the global npm prefix, and PATH (in that
  *    priority order) and pass the result as `pathToClaudeCodeExecutable` to
  *    `query()`. Results are cached for the session.
- *
- * 3. `getClaudeAgentConfig()` — the same lazy access for `claudeAgentConfig`,
- *    which the tool-registration path must not pull in eagerly.
  */
 
 import * as path from 'node:path';
-
-import { Effect } from 'effect';
 
 import {
   binaryIfPresent,
@@ -117,9 +112,3 @@ export const findClaudeBinaryPath = createCachedBinaryResolver(() => {
     pathCommand: 'claude',
   };
 });
-
-/** Lazy accessor for claudeAgentConfig.ts exports: Node's module cache
- *  answers every call after the first. */
-export const getClaudeAgentConfig = Effect.promise(
-  () => import('./claudeAgentConfig.js'),
-);

@@ -295,5 +295,5 @@ export function findDisplayMathRanges(content: string): SourceRange[] {
       ranges.push({ start, end: start + match[0].length });
     }
   }
-  return ranges.sort((a, b) => a.start - b.start);
+  return ranges.toSorted((a, b) => a.start - b.start);
 }

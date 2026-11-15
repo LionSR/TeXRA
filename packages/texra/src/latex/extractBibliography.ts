@@ -24,9 +24,11 @@ import {
 // Third-party imports - types
 import type { BibEntry } from 'bibtex';
 
-// Compiled regex patterns (matchAll clones the regex, so module-level is safe)
+// A citation command, its optional arguments and its keys; LaTeX allows
+// whitespace before each argument. matchAll clones the regex, so one
+// module-level instance is safe.
 const CITATION_PATTERN = new RegExp(
-  `\\\\(?:${LATEX_CITATION_COMMANDS.join('|')})\\*?(?:\\[[^\\]]*\\])*\\{([^}]*)\\}`,
+  `\\\\(?:${LATEX_CITATION_COMMANDS.join('|')})\\*?(?:\\s*\\[[^\\]]*\\])*\\s*\\{([^}]*)\\}`,
   'g',
 );
 

@@ -35,7 +35,7 @@ import {
   REQUEST_ACTIONS,
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
-import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 import type { IconName } from '@ui/wa/iconNames';
 import {
   commonViewStyles,

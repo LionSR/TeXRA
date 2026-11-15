@@ -136,7 +136,9 @@ export function mergeEditOnto(
   if (clash) return undefined;
   const merged: string[] = [];
   let at = 0;
-  for (const change of [...ours, ...theirs].sort((a, b) => a.start - b.start)) {
+  for (const change of [...ours, ...theirs].toSorted(
+    (a, b) => a.start - b.start,
+  )) {
     merged.push(...base.slice(at, change.start), ...change.lines);
     at = change.end;
   }

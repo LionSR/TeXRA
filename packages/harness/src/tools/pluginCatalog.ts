@@ -6,7 +6,6 @@
 
 // Third-party imports
 import {
-  Cause,
   Duration,
   Effect,
   Exit,
@@ -110,7 +109,7 @@ export const pluginCatalogLayer = (table: ToolTable, mcpConfigPath: string) =>
             Effect.catchCause((cause) =>
               Effect.as(
                 Effect.logError(
-                  `Tool switches were not applied to the catalog after seven tries; the plugins they switch stay as they were (off, before the first read) until the switches change again: ${toErrorMessage(Cause.squash(cause))}`,
+                  `Tool switches were not applied to the catalog after seven tries; the plugins they switch stay as they were (off, before the first read) until the switches change again: ${toErrorMessage(cause)}`,
                 ),
                 Result.failVoid,
               ),

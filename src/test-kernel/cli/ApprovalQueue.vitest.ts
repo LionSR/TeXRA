@@ -70,7 +70,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
     // The child's request holds its parent open.
     expect(sessionListRunIds.get()).toEqual([ROOT, RUN_A]);
 
-    // A detached child still owned by this terminal keeps its approval
+    // A background child still owned by this terminal keeps its approval
     // path even after the root conversation has been cleared.
     rootRunId.set(undefined);
     const detachedView = viewWith([{ id: RUN_A }, { id: RUN_B, held: false }], {

@@ -10,7 +10,7 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { Effect, SynchronizedRef } from 'effect';
+import { Effect, Ref } from 'effect';
 
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import {
@@ -21,6 +21,7 @@ import {
   type RunId,
   type RunInput,
   type RunOutcome,
+  SCRIPT_TOOL_NAME,
 } from '@shared/schemas';
 import { consumedRow } from '@shared/session/runFacts';
 import type { QueuedFollowUp } from '@shared/session/runRows';
@@ -131,9 +132,6 @@ export function configRow(
   };
 }
 
-/** The tool a script's run calls: `script`, whatever launched the run. */
-export const SCRIPT_TOOL_NAME = 'script';
-
 /**
  * The row of a script's run's one call (`AgentConfig.script`): the call the
  * application handed it, which no model produced, so it records no attempt,
@@ -152,7 +150,7 @@ export const handedDown = Effect.fn('rows.handedDown')(function* (
   });
   const [facts] = dispatchFactsFor(
     [{ callId: SCRIPT_CALL_ID, name: SCRIPT_TOOL_NAME, argumentsText }],
-    (yield* SynchronizedRef.get(run.steps))?.tools.registry,
+    (yield* Ref.get(run.steps))?.tools.registry,
     run.logger,
   );
   if (facts === undefined)

@@ -63,6 +63,6 @@ export const listRunWorkspaceFiles = Effect.fn('storage.listRunWorkspaceFiles')(
       { concurrency: 8 },
     );
     const files = entries.filter(Predicate.isNotUndefined);
-    return files.sort((a, b) => a.path.localeCompare(b.path));
+    return files.toSorted((a, b) => a.path.localeCompare(b.path));
   },
 );

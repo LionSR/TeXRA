@@ -80,17 +80,28 @@ function systemErrorFrom(
 }
 
 /**
- * Node's `FileSystem`, with `realPath` as one native realpath(3) call.
+ * Node's `FileSystem`, with `realPath` as one native realpath(3) call and
+ * writes that finish once started.
+ *
  * `@effect/platform-node` resolves a POSIX path with Node's JavaScript
  * `fs.realpath`, which runs one `lstat` per path segment (Windows already
  * gets the native call); the native call answers the same in one syscall.
  * Its errors classify as the library's do.
+ *
+ * The library's `writeFile` hands Node the fiber's abort signal, and Node
+ * opens the file truncating before it checks that signal again: a write
+ * interrupted during the open leaves the file empty, holding neither the
+ * old content nor the new. Every write here is uninterruptible instead, so
+ * a stop arriving mid-write waits for the bytes to land. `writeFileString`
+ * is built on `writeFile` and gets the same.
  */
 const nodeFileSystemLayer: Layer.Layer<FileSystem.FileSystem> = Layer.effect(
   FileSystem.FileSystem,
   Effect.map(FileSystem.FileSystem, (fs) =>
     FileSystem.make({
       ...fs,
+      writeFile: (target, data, options) =>
+        Effect.uninterruptible(fs.writeFile(target, data, options)),
       realPath: (target) =>
         Effect.tryPromise({
           try: () => nodeFs.realpath(target),
@@ -101,8 +112,8 @@ const nodeFileSystemLayer: Layer.Layer<FileSystem.FileSystem> = Layer.effect(
 ).pipe(Layer.provide(NodeFileSystem.layer));
 
 /**
- * Node's file services: `FileSystem` (with the one-call native `realPath`)
- * and `Path`. The process platform, the JSON and credential stores and the
+ * Node's file services: `FileSystem` (with the one-call native `realPath`
+ * and uninterruptible writes) and `Path`. The process platform, the JSON and credential stores and the
  * hosts' own reads all provide this one layer.
  */
 export const nodeFileServices: Layer.Layer<FileSystem.FileSystem | Path.Path> =

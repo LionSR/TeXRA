@@ -28,7 +28,6 @@ import { CliExitCode } from '../runtime/platform/exitCodes';
 import { writeTextStderr } from '../runtime/platform/logSinks';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 
 /** How long a service with no project open stays up. */
@@ -118,7 +117,6 @@ const runServe = Effect.fn('runServe')(function* (
     Effect.catchTag('ServiceAlreadyRunning', (error) =>
       Effect.sync(() => {
         writeTextStderr(error.message);
-        return CliExitCode.Success;
       }),
     ),
     Effect.catchTag('ServiceUnavailable', (error) =>
@@ -137,7 +135,6 @@ export const serveCommand = defineCliCommand({
       'Run the TeXRA service in the foreground (windows start it on their own)',
   },
   args: {
-    ...GLOBAL_ARGS,
     'idle-timeout': {
       type: 'string',
       valueHint: 'seconds',
@@ -174,39 +171,40 @@ const emitStatus = (info: ServiceInfo | null) =>
     });
   });
 
-/** Ask the service to stop and wait until it is gone: its socket closes
- *  as it exits. */
+/** Ask the service to stop and wait until it is gone, within
+ *  `STOP_TIMEOUT`: its socket closes as it exits. Answers what was stopped,
+ *  or `null` when none ran. */
 const stopRunningService = Effect.gen(function* () {
   // A service this build cannot speak to still takes the stop, the one
-  // procedure every build keeps.
-  const info = yield* probeCliService.pipe(
+  // procedure every build keeps; its socket is all this build knows of it.
+  const target:
+    | (Pick<ServiceInfo, 'socket'> & { readonly pid?: number })
+    | null = yield* probeCliService.pipe(
     Effect.catchIf(
       (error) => error.unspoken !== undefined,
-      (error) =>
-        Effect.as(stopService(error.unspoken ?? '', false), null).pipe(
-          Effect.mapError(
-            (failure) =>
-              new Error(`The TeXRA service did not stop: ${failure.message}`),
-          ),
-        ),
+      (error) => Effect.succeed({ socket: error.unspoken ?? '' }),
     ),
   );
-  if (info === null) return null;
-  yield* stopService(info.socket, false).pipe(
-    Effect.timeout(STOP_TIMEOUT),
+  if (target === null) return null;
+  const service =
+    target.pid === undefined
+      ? 'the TeXRA service'
+      : `the TeXRA service (pid ${target.pid})`;
+  yield* stopService(target.socket, false).pipe(
+    Effect.timeoutOrElse({
+      duration: STOP_TIMEOUT,
+      orElse: () =>
+        Effect.fail(new Error(`it did not exit within ${STOP_TIMEOUT}`)),
+    }),
     Effect.mapError(
-      () =>
-        new Error(
-          `The TeXRA service (pid ${info.pid}) did not stop within ${STOP_TIMEOUT}.`,
-        ),
+      (failure) => new Error(`Could not stop ${service}: ${failure.message}`),
     ),
   );
-  return info;
+  return service;
 });
 
 const statusCommand = defineCliCommand({
   meta: { name: 'status', description: 'Show whether the TeXRA service runs' },
-  args: { ...GLOBAL_ARGS },
   layer: cliProcessLayer,
   catchExitCode: CliExitCode.AgentError,
   run: () =>
@@ -222,7 +220,6 @@ const stopCommand = defineCliCommand({
     description:
       'Stop the TeXRA service; its running tasks stop and can be resumed',
   },
-  args: { ...GLOBAL_ARGS },
   layer: cliProcessLayer,
   catchExitCode: CliExitCode.AgentError,
   run: () =>
@@ -231,16 +228,14 @@ const stopCommand = defineCliCommand({
         writeTextStderr(
           stopped === null
             ? 'No TeXRA service was running.'
-            : `Stopped the TeXRA service (pid ${stopped.pid}).`,
+            : `Stopped ${stopped}.`,
         );
-        return CliExitCode.Success;
       }),
     ),
 });
 
 const restartCommand = defineCliCommand({
   meta: { name: 'restart', description: 'Stop the TeXRA service and start it' },
-  args: { ...GLOBAL_ARGS },
   layer: cliProcessLayer,
   catchExitCode: CliExitCode.AgentError,
   run: Effect.fn('service.run')(function* (context) {
@@ -258,7 +253,6 @@ const restartCommand = defineCliCommand({
       ),
     );
     yield* emitStatus(info);
-    return CliExitCode.Success;
   }),
 });
 

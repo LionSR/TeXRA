@@ -16,7 +16,7 @@ import {
   LATEX_FORMATTER_SETTING,
   LATEXINDENT_CONFIG_SETTING,
   TEXFMT_CONFIG_SETTING,
-} from '@texra/shared/settingsView/texraSettings';
+} from '@texra/shared/settings/texraSettings';
 
 interface LatexFormatterDefinition {
   /** Setting value that selects this formatter. */

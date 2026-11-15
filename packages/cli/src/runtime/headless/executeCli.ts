@@ -26,8 +26,6 @@ import {
 } from '@texra-ai/harness';
 import {
   presentRunFailure,
-  withProcessServices,
-  type ProcessRuntime,
   type ProcessServices,
   AgentError,
 } from '@texra-ai/harness/host';
@@ -64,20 +62,17 @@ type CliRunRequest = Required<
 
 export interface CliExecuteOptions {
   /** The `CliPlatform` services the run uses, from the command that
-   *  holds them: `session`, where the run starts, resumes, stops and asks
-   *  its host, and whose records and rows its output reads; `runtime`,
-   *  which the shutdown
-   *  step runs its programs on (it runs on the process's shutdown fiber);
-   *  and `shutdownScope`, of which the run's shutdown-status step is a child
+   *  holds them: `session`, where the run starts, resumes and asks its
+   *  host, and whose records and rows its output reads; and
+   *  `shutdownScope`, of which the run's shutdown-status step is a child
    *  scope's finalizer, so it runs before the sessions close. */
   readonly services: {
     readonly session: Effect.Effect<LocalSession, SessionOpenError>;
-    readonly runtime: ProcessRuntime;
     readonly shutdownScope: Scope.Scope;
   };
-  /** Called once when a shutdown stopped the run, after its end is
-   *  committed, if its rows say it can be resumed (`readResumable`): part
-   *  of the finalization a shutdown waits for within its deadline. */
+  /** Called once when a shutdown left the run without an end, if its rows
+   *  say it can be resumed (`readResumable`): part of the finalization a
+   *  shutdown waits for within its deadline. */
   readonly onInterruptedRunFinalized?: (runId: RunId) => Effect.Effect<void>;
   /** What the command does with the run once its end is committed (a
    *  document task's output copy and result record), with its committed
@@ -89,7 +84,7 @@ export interface CliExecuteOptions {
   readonly runId?: RunId;
 }
 
-export type CliConfigExecuteResult =
+type CliConfigExecuteResult =
   | {
       readonly ok: true;
       readonly result: CliRunResult;
@@ -195,10 +190,8 @@ export const executeCliConfig: (
       writeTextStderr(parsed.failure.reason);
       return { ok: false as const, exitCode: CliExitCode.Usage };
     }
-    // The run id is decided before launch: a shutdown stops the launch
-    // through the session's registry under it (`runs.stop`), which the
-    // launch tracks (or attaches to a waiting predecessor) before the first
-    // resume lineage read, so this kill has a target from that first await on.
+    // The run id is decided before launch, so a shutdown that cuts the
+    // launch can still name the run it leaves behind.
     const request: CliRunRequest = {
       config: parsed.success,
       runId: options.runId ?? generateRunId(),
@@ -283,63 +276,39 @@ export const executeCliConfig: (
         ? Effect.void
         : writeTextStderrAndWait(`[warn] [cli.shutdown] ${what}: ${cause}`);
     // Whether a shutdown reached this run: its finalization then reads
-    // whether the stopped run can be resumed, once its end is committed.
+    // whether the run it left can be resumed.
     let shutdown = false;
     const finalized = yield* Deferred.make<void>();
-    const stopThroughSession = session
-      .request({
-        kind: 'run.stop',
-        runId: launchRunId,
-        reason: 'shutdown',
-      })
-      .pipe(
-        Effect.asVoid,
-        Effect.catch((error) =>
-          sayShutdownFailure(
-            `Run ${launchRunId} was not stopped for the shutdown`,
-            toErrorMessage(error),
-          ),
-        ),
-      );
-    /** The run's launch and its committed end. The end is the session's to
-     *  deliver, so its wait is not abandoned: a shutdown reaches the run as
-     *  a stop, which its end answers. */
+    /** The run's launch and its committed end, which the session delivers.
+     *  A shutdown abandons the wait: the process is going, and the run is
+     *  left as its rows stand. */
     const launched = yield* Effect.forkChild(
       Effect.suspend(() =>
         launchOn(session, request, runContext, options),
       ).pipe(
         Effect.flatMap((run) =>
-          Effect.uninterruptible(
-            // The run's whole result, built once: what the command emits and
-            // what its `afterRun` finalizes.
-            Effect.map(run.result, (end) => ({
-              ...end,
-              runId: run.runId,
-              plugins,
-              workingDirectory: runContext.cwd,
-            })),
-          ),
+          // The run's whole result, built once: what the command emits and
+          // what its `afterRun` finalizes.
+          Effect.map(run.result, (end) => ({
+            ...end,
+            runId: run.runId,
+            plugins,
+            workingDirectory: runContext.cwd,
+          })),
         ),
       ),
     );
     const shutdownStatus = Effect.gen(function* () {
-      // The run's finalization is done: nothing is left to stop or wait for.
+      // The run's finalization is done: nothing is left to wait for.
       if (yield* Deferred.isDone(finalized)) return;
       shutdown = true;
-      // Headless shutdown cascades into active children: a detached child
-      // cannot outlive the exiting CLI process, so the detach-on-stop toggle
-      // is not consulted here. The stop lands whether or not the session has
-      // started the run yet: one that has not starts it stopped, so it ends
-      // cancelled as soon as it opens.
-      yield* withProcessServices(
-        options.services.runtime,
-        Effect.gen(function* () {
-          yield* stopThroughSession;
-          // The run's end, its recovery notice and the command's own
-          // finalization, within the deadline below.
-          yield* Deferred.await(finalized);
-        }),
-      );
+      // Nothing is written for the run: the session's close, which follows
+      // this step, interrupts it, and it reads as interrupted, resumable,
+      // at the next open. Only the wait for its end is given up here.
+      yield* Fiber.interrupt(launched);
+      // The recovery notice and the command's own finalization, within the
+      // deadline below.
+      yield* Deferred.await(finalized);
     });
     // Registered only once `shutdownStatus` exists: a shutdown scope already
     // closing runs this finalizer at once. A child of the process's shutdown
@@ -374,10 +343,8 @@ export const executeCliConfig: (
     // `ensuring`s it.
     const detachPresentation = Scope.close(presentationScope, Exit.void);
     const exit = yield* Fiber.await(launched);
-    // A run the shutdown stopped stores its cancelled end, which is its
-    // result (exit 130, from its outcome). An interrupts-only exit after a
-    // shutdown is the process's own interruption of the launch (exit 130 as
-    // well).
+    // An interrupts-only exit after a shutdown is the process's own
+    // interruption of the wait (exit 130): the run has no end.
     const interrupted =
       shutdown && Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause);
     if (Exit.isSuccess(exit)) {
@@ -415,16 +382,11 @@ export const executeCliConfig: (
 
     const finalization = yield* Effect.result(
       Effect.gen(function* () {
-        // A run the shutdown stopped (it ended cancelled): its committed
-        // rows say whether it can be resumed, read once its end is
-        // committed. A launch that answered no end has nothing to read.
-        const stopped =
-          shutdown &&
-          runResult.ok &&
-          runResult.result.outcome === RUN_OUTCOME.CANCELLED;
+        // A run the shutdown left: its committed rows say whether it can be
+        // resumed.
         const onFinalized = options.onInterruptedRunFinalized;
         if (
-          stopped &&
+          interrupted &&
           onFinalized !== undefined &&
           (yield* session.records(launchRunId).readResumable)
         )
@@ -468,5 +430,5 @@ export const executeCliConfig: (
     yield* detachPresentation;
     return runResult;
   },
-  Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
+  Effect.catchCause((cause) => Effect.fail(ensureError(cause))),
 );

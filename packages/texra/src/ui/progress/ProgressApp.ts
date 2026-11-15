@@ -39,7 +39,7 @@ import '@ui/wa/spinner';
 import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { shownRun, type Surface } from '@texra/shared/session/surface';
-import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 import {
   FILE_SELECT_CONFIGS,
   LAUNCH_FILE_LISTS,

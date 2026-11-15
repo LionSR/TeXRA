@@ -12,13 +12,10 @@ import {
 import {
   AppState,
   type ProcessServices,
-  type StateStore,
-  type StateWriteFailed,
   StateStores,
 } from '@texra-ai/harness/host';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
 import { openNodeWorkspaceRoots, setLogSink } from '@texra-ai/harness/node';
-import { HELPER_MODEL_SETTING } from '@texra-ai/harness/schemas';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { openLocalSession } from '@texra/controllers/session/openProjectSession';
 import {
@@ -151,21 +148,6 @@ export class CliPlatform extends Context.Service<
 
 /** The command's platform, brought up by the first step that asks. */
 export const cliPlatform = CliPlatform.use((open) => open);
-
-/**
- * Record the model the chat is running as the default helper model. Returns
- * the write as the Effect it is: the callers that want a promise face own a
- * runtime and run it, and the ones that are already inside a program compose
- * it directly, so no runtime is threaded in here purely to keep the promise.
- */
-export function setCliHelperModel(
-  state: StateStore,
-  model: string | undefined,
-): Effect.Effect<void, StateWriteFailed> {
-  // Keep the write lazy: a refused write is the caller's failure to handle,
-  // not a rejection nobody reads.
-  return model ? state.update(HELPER_MODEL_SETTING.key, model) : Effect.void;
-}
 
 const openCliPlatform = Effect.fn('openCliPlatform')(function* (
   context: CliPlatformContext,

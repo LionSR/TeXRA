@@ -8,7 +8,7 @@ import { app, Notification, type BrowserWindow } from 'electron';
 import { Context, Effect, Queue, Stream, SubscriptionRef } from 'effect';
 
 import { attentionOf } from '@texra-ai/harness/schemas';
-import { runStatus } from '@ui/copy/runStatus';
+import { runStatus, runStatusLabel } from '@ui/copy/runStatus';
 
 import { DesktopProjects, type DesktopProject } from './desktopProjects.js';
 import { DESKTOP_HEADLESS } from './desktopPresentation.js';
@@ -135,7 +135,7 @@ export const followDesktopAttention = Effect.gen(function* () {
           const run = view.runs.get(runId);
           if (run === undefined || notices.some((n) => n.runId === runId))
             continue;
-          const line = `${run.title} is waiting for you.`;
+          const line = `${run.title}: ${runStatusLabel('waitingOnUser')}.`;
           notices.push({ runId, line });
         }
         // A child's ending is its parent's news.

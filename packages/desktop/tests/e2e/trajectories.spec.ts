@@ -160,9 +160,9 @@ test('the Memory tab lists a memory file of the project', async () => {
 });
 
 /**
- * Trajectory 4 — Logs view: ensure the Logs workbench renders the desktop log
- * viewer skeleton (header + actions). The actual log content is async and
- * may be empty on a fresh run, so we only assert structural surfaces.
+ * Trajectory 4 — Logs view: the Logs workbench renders the desktop log
+ * viewer (header and actions) and an entry the app logged, with its level
+ * icon centred.
  */
 test('logs workbench renders the desktop log viewer', async () => {
   await openWorkbench(launched, 'logs');
@@ -174,22 +174,12 @@ test('logs workbench renders the desktop log viewer', async () => {
   );
   await expect(actions).toHaveCount(4);
 
-  await launched.page.evaluate(() => {
-    window.postMessage(
-      {
-        command: 'desktop:setLog',
-        log: {
-          path: '/tmp/texra-desktop.log',
-          text: JSON.stringify({
-            level: 'INFO',
-            timestamp: '2026-07-26T12:00:00.000Z',
-            message: 'Geometry check',
-          }),
-          truncated: false,
-        },
-      },
-      '*',
-    );
+  // The viewer's content has one writer, the main process, which posts the
+  // log again whenever its file changes. A snapshot posted into the
+  // renderer from here would be replaced by the next real one, so the entry
+  // goes through the app's own log.
+  await launched.app.evaluate(() => {
+    console.info('Geometry check');
   });
   const infoSurface = launched.page
     .locator('.desktop-log-entry[data-level="info"]')

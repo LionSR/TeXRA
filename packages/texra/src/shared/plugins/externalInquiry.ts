@@ -22,6 +22,7 @@ import {
   type JsonValue,
   type RunId,
   type ToolFact,
+  NonNegativeIntSchema,
 } from '@texra-ai/harness/schemas';
 import type { ValueFamily } from '@texra-ai/harness/host';
 import type { SessionView } from '@texra-ai/harness/schemas';
@@ -116,7 +117,7 @@ const InquiryThreadSummarySchema = Schema.Struct({
       expected: 'an ISO date-time',
     }),
   ),
-  turnCount: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  turnCount: NonNegativeIntSchema,
 });
 /** A thread as a list shows it. */
 export type InquiryThreadSummary = typeof InquiryThreadSummarySchema.Type;

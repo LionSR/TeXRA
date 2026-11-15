@@ -27,7 +27,7 @@ import {
   sessionHandleOf,
   TestSession,
 } from '@test/support/testKernel';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'Context.Context<SessionServices>',

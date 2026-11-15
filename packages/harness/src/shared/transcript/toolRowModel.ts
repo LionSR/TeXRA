@@ -29,8 +29,13 @@ import {
 } from '@shared/tools/toolDisplayName';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { toolDisplayKind } from '@shared/tools/toolKind';
+import { collapseWhitespace } from '@utils/text/stringUtils';
 
-import { dispatchSections, inputFilePath } from './toolRowSections';
+import {
+  dispatchSections,
+  inputFilePath,
+  outputLineChanges,
+} from './toolRowSections';
 import {
   transcriptText,
   type PayloadLanguage,
@@ -193,7 +198,7 @@ const TRIVIAL_WRITE_OUTPUT = 'written';
  *  tool that folds stdout into its summary does not push the actual summary
  *  off the row. No length cut — that belongs to the painter. */
 function headerSummaryText(summary: string): string {
-  const oneLine = summary.replaceAll(/\s+/g, ' ').trim();
+  const oneLine = collapseWhitespace(summary);
   const marker = oneLine.search(/\s+<(?:stdout|stderr)>/i);
   return marker >= 0 ? oneLine.slice(0, marker).trim() || oneLine : oneLine;
 }
@@ -218,8 +223,7 @@ function toolHeaderPreview(
       ? executionsSubagentSummary(input, ctx.runLabels)
       : undefined;
   const inputPreview =
-    labeled ??
-    deriveToolInputPreview(toolName, input).replaceAll(/\s+/g, ' ').trim();
+    labeled ?? collapseWhitespace(deriveToolInputPreview(toolName, input));
   const summary = headerSummaryText(headerSummary);
   const kind = toolDisplayKind(toolName);
   // A script is named by its title (the input preview) in every state.
@@ -229,7 +233,7 @@ function toolHeaderPreview(
   // row's code section.
   const description =
     Predicate.isObject(input) && typeof input.description === 'string'
-      ? input.description.replaceAll(/\s+/g, ' ').trim()
+      ? collapseWhitespace(input.description)
       : '';
   return description || inputPreview || summary;
 }
@@ -269,11 +273,11 @@ function outputSuppression(
 ): ToolOutputSuppression | undefined {
   const { outputText, errorText } = normalized;
   if (!outputText) return 'empty';
-  const collapsed = outputText.replaceAll(/\s+/g, ' ').trim();
-  if (collapsed && collapsed === headerPreview.replaceAll(/\s+/g, ' ').trim()) {
+  const collapsed = collapseWhitespace(outputText);
+  if (collapsed && collapsed === collapseWhitespace(headerPreview)) {
     return 'duplicate-of-header';
   }
-  if (collapsed && collapsed === errorText.replaceAll(/\s+/g, ' ').trim()) {
+  if (collapsed && collapsed === collapseWhitespace(errorText)) {
     return 'duplicate-of-error';
   }
   if (carriesOutput) return 'rendered-by-sections';
@@ -293,16 +297,25 @@ export function toolRowModel(
   ctx: ToolRowModelContext = {},
 ): ToolRowModel {
   const headerPreview = toolHeaderPreview(normalized, ctx);
-  // A card the tool stated is painted as given; any other call's sections
+  // A card the tool stated is painted as given, its file lists with the
+  // line changes the call's output edits report; any other call's sections
   // are derived from its name and input.
   const { card } = normalized;
+  const lineChanges = card ? outputLineChanges(ctx.parsedOutput) : undefined;
   const { sections, carriesOutput, fileLinkKind } = card
     ? {
-        sections: card.sections.map((section): ToolSection =>
-          section.kind === 'text'
-            ? { ...section, text: transcriptText(section.text) }
-            : section,
-        ),
+        sections: card.sections.map((section): ToolSection => {
+          if (section.kind === 'text')
+            return { ...section, text: transcriptText(section.text) };
+          if (section.kind !== 'fileList') return section;
+          return {
+            ...section,
+            files: section.files.map((file) => {
+              const changes = lineChanges?.get(file.path);
+              return changes ? { ...file, lineChanges: changes } : file;
+            }),
+          };
+        }),
         carriesOutput: false,
         fileLinkKind: undefined,
       }
@@ -320,9 +333,9 @@ export function toolRowModel(
   // descriptions named the row.
   const echoPreview =
     toolDisplayKind(normalized.toolName) === 'bash'
-      ? deriveToolInputPreview(normalized.toolName, normalized.input)
-          .replaceAll(/\s+/g, ' ')
-          .trim() || headerSummaryText(normalized.headerSummary)
+      ? collapseWhitespace(
+          deriveToolInputPreview(normalized.toolName, normalized.input),
+        ) || headerSummaryText(normalized.headerSummary)
       : headerPreview;
   const suppression = outputSuppression(
     normalized,

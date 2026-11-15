@@ -9,6 +9,7 @@ import {
   createWorkspaceLocation,
 } from '@texra-ai/harness/host';
 import { replaceInputCommands } from '@texra/agent/output/fileMapping';
+import { noopTrace } from '@test/support/noopTrace';
 
 describe('replaceInputCommands', () => {
   it.effect(
@@ -37,7 +38,7 @@ describe('replaceInputCommands', () => {
           outputs.map(({ location }) => [location.absolutePath, original]),
         );
 
-        yield* replaceInputCommands(bases, outputs).pipe(
+        yield* replaceInputCommands(bases, outputs, noopTrace).pipe(
           Effect.provide(
             FileSystem.layerNoop({
               readFileString: (target: string) =>

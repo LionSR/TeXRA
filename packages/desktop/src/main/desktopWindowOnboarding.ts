@@ -4,12 +4,15 @@
 import { Effect, FiberHandle, Scope } from 'effect';
 
 import {
+  presentRunFailure,
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
 } from '@texra-ai/harness/host';
+import type { Secrets } from '@texra-ai/harness/plugins';
+import { Cancelled } from '@texra-ai/harness/schemas';
 import {
-  kickoffDesktopSetup,
+  launchSetup,
   type WindowSetupLaunch,
 } from '@texra/controllers/onboarding/setupLaunch';
 import {
@@ -19,6 +22,30 @@ import {
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import type { StateReadFailed, StateWriteFailed } from '@texra-ai/harness/host';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
+
+/**
+ * Launch the setup conversation from the setup card through the launch path
+ * of the window that asked, the one its Execute button uses. Setup continues
+ * after its initiating request has completed, so a failure before the launch
+ * is presented here (the launch path presents its own); the kickoff finishes
+ * with the setup run, so a second Run Setup waits for it. A setup run already
+ * live in the project is left to run alone.
+ */
+const kickoffSetup = (
+  launch: WindowSetupLaunch,
+): Effect.Effect<void, never, Secrets | ProcessServices> =>
+  launchSetup({
+    session: launch.session,
+    roots: launch.roots,
+    start: launch.runValidated,
+  }).pipe(
+    Effect.catchTag('SetupAlreadyRunning', () => Effect.void),
+    Effect.catch((error) =>
+      error instanceof Cancelled
+        ? Effect.void
+        : presentRunFailure(launch.present, error),
+    ),
+  );
 
 /** The onboarding cards' actions the host request handlers call. */
 export interface WindowOnboarding {
@@ -51,7 +78,7 @@ export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
         Effect.asVoid(
           FiberHandle.run(
             setupLaunch,
-            withProcessServices(runtime, kickoffDesktopSetup(launch)),
+            withProcessServices(runtime, kickoffSetup(launch)),
             { onlyIfMissing: true },
           ),
         ),

@@ -14,7 +14,6 @@ import { DatabaseReadFailed } from '@shared/session/database';
 import { attemptOf } from '@shared/session/inFlight';
 import {
   RunHistory,
-  runReadRefusal,
   SessionLog,
   SessionViewAccess,
 } from '@shared/session/runHistory';
@@ -58,8 +57,8 @@ const rowsOf = (runId: RunId) => {
 };
 
 /**
- * A run's persisted parent (`run.start.parent`, less a `run.detach` or an
- * unlisted parent), read cold from the runs' records so a read racing the
+ * A run's persisted parent (`run.start.parent`, less an unlisted
+ * parent), read cold from the runs' records so a read racing the
  * live fold's first replay still sees it. Every resume takes its lineage
  * from here, never from its caller, who has no parent to name for a run that
  * already started once.
@@ -124,49 +123,6 @@ export const owningCall = Effect.fn('owningCall')(function* (runId: RunId) {
   return children?.includes(runId) === true
     ? { parentRunId: id, callId }
     : null;
-});
-
-/** The unended children `runId`'s open calls own, from its history and
- *  their own rows. Unloadable, it names no calls: every child it launched
- *  (the listing's `launch.id`) is owned, loudly. */
-export const openOwnedChildren = Effect.fn('openOwnedChildren')(function* (
-  runId: RunId,
-) {
-  const log = yield* SessionLog;
-  const history = yield* (yield* RunHistory).load(runId).pipe(
-    Effect.catchIf(
-      (error) => runReadRefusal(error) !== undefined,
-      (refused) =>
-        Effect.as(
-          Effect.logWarning(`Run ${runId}: ${refused.message}`),
-          false as const,
-        ),
-    ),
-  );
-  const named =
-    history === false
-      ? [...(yield* (yield* SessionViewAccess).read([])).runs.values()].flatMap(
-          (child) =>
-            child.launch?.id === runId ? [[null, child.id] as const] : [],
-        )
-      : [...openCallChildren(runId, history)].flatMap(([callId, children]) =>
-          children.map((child) => [callId, child] as const),
-        );
-  const open: { readonly runId: RunId; readonly callId: string }[] = [];
-  for (const [callId, child] of named) {
-    // Its edge and its end; a damaged child fails alone, loudly.
-    const read = yield* Effect.result(log.facts(child));
-    if (read._tag === 'Failure') {
-      yield* Effect.logWarning(
-        `Child run ${child} cannot be read; its parent ${runId} treats it as failed.`,
-      ).pipe(Effect.annotateLogs({ data: read.failure }));
-      continue;
-    }
-    const edge = read.success?.parent?.call?.callId ?? null;
-    if (edge !== null && (callId ?? edge) === edge)
-      if (read.success?.end === null) open.push({ runId: child, callId: edge });
-  }
-  return open;
 });
 
 /**

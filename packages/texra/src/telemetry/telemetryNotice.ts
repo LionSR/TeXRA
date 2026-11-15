@@ -3,7 +3,7 @@ import { Effect, Result, Schema } from 'effect';
 import { AppState, type ConfigProvider } from '@texra-ai/harness/host';
 import { Settings } from '@texra-ai/harness/plugins';
 import { toErrorMessage, type StateKey } from '@texra-ai/harness/schemas';
-import { TELEMETRY_ENABLED_SETTING } from '@texra/shared/settingsView/texraSettings';
+import { TELEMETRY_ENABLED_SETTING } from '@texra/shared/settings/texraSettings';
 
 import { usageLoggingOptOut } from './UsageLogService';
 

@@ -7,11 +7,12 @@
 import { Effect } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { ensureError } from '@texra-ai/harness/schemas';
 import {
   subscriptionProvider,
   type SubscriptionProviderId,
   type SubscriptionSignInPresenter,
+  type SubscriptionSignOutResult,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 
@@ -54,9 +55,7 @@ export function shouldUseSubscriptionDeviceCode(
 }
 
 /** A sign-out whose preference write failed carries the reason. */
-interface CliSubscriptionSignOutResult {
-  readonly preferenceError?: string;
-}
+type CliSubscriptionSignOutResult = SubscriptionSignOutResult;
 
 /**
  * One subscription sign-in program for every OAuth provider: device-code when
@@ -114,24 +113,16 @@ export const signInCliSubscription = Effect.fn(
 });
 
 /**
- * Sign out of a subscription provider and disable its preference, converting
- * a preference-write failure into a reported (not thrown) `preferenceError`.
- * The command action or slash handler runs the program at its Promise edge.
+ * Sign out of a subscription provider; the app's sign-out also turns its
+ * preference off and reports a failed write in the result. The command
+ * action or slash handler runs the program at its Promise edge.
  */
 export const signOutCliSubscription = Effect.fn(
   'subscriptionLogin.signOutCliSubscription',
 )(function* (stores: SettingsStores, providerId: SubscriptionProviderId) {
-  const provider = subscriptionProvider(providerId);
-  yield* provider.signOut().pipe(Effect.mapError(ensureError));
-  return yield* provider.setPreferSubscription(stores, false).pipe(
-    Effect.mapError(ensureError),
-    Effect.match({
-      onFailure: (error): CliSubscriptionSignOutResult => ({
-        preferenceError: toErrorMessage(error),
-      }),
-      onSuccess: (): CliSubscriptionSignOutResult => ({}),
-    }),
-  );
+  return yield* subscriptionProvider(providerId)
+    .signOut(stores)
+    .pipe(Effect.mapError(ensureError));
 });
 
 /** The preference half of a sign-out report. */

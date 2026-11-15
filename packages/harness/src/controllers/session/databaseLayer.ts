@@ -14,6 +14,7 @@
  * ordinals, none of which a caller supplies.
  */
 import { randomUUID } from 'node:crypto';
+import { mkdirSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import * as SqliteClient from '@effect/sql-sqlite-node/SqliteClient';
 import * as Reactivity from 'effect/reactivity/Reactivity';
@@ -25,13 +26,14 @@ import {
   Layer,
   Option,
   Schedule,
+  Scheduler,
   Schema,
   Stream,
   SubscriptionRef,
 } from 'effect';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withLogChannel } from '@logger/effectLog';
+import { ensureError } from '@utils/errors/errorMessage';
 import {
   CURRENT_VALUE_VERSION,
   edgesOf,
@@ -44,6 +46,7 @@ import {
   type SessionRow,
   type SessionRowDraft,
   factName,
+  NonNegativeIntSchema,
 } from '@shared/schemas';
 import {
   NO_RUN_ROWS,
@@ -60,12 +63,10 @@ import {
   DatabaseReadFailed,
   DatabaseWriteFailed,
   RunChanged,
-  type SessionOpenError,
 } from '@shared/session/database';
 import { factKindsOf } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { currentValues, READ_RETRY } from './currentValues';
-import { localDatabasePath } from './localDatabasePath';
 import { LISTED_TYPES, projectionUpkeep, usageRows } from './projections';
 import {
   EVENT_COLUMNS,
@@ -86,8 +87,7 @@ import {
   AGGREGATE,
   callCard,
   DISPLAY_READ_TYPES,
-  PROJECTED_COLUMNS,
-  PROJECTED_FROM,
+  USAGE_ROWS,
   READ_LISTING,
   READ_RUN_RECORD,
   rowReader,
@@ -144,7 +144,7 @@ const RECORD_TYPES = JSON.stringify(RECORD_ROW_TYPES);
 /** A run's aggregate `logical_id` column as the `RunId` it is. */
 const runIdOf = Schema.decodeUnknownSync(RunIdSchema);
 /** The `event` table's autoincrement sequence: a non-negative integer. */
-const EventSeqSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+const EventSeqSchema = NonNegativeIntSchema;
 /** Where a display page after a commit ends: at the last of the stored rows
  *  it covers. A page may end at any row, as each display row is shown from
  *  one stored row. No row: the page runs to the end. Counted in rows, so a
@@ -153,8 +153,8 @@ const DISPLAY_PAGE_END = `SELECT "commit" AS through FROM event
   WHERE "commit" > ? ORDER BY "commit" LIMIT 1 OFFSET ${DISPLAY_PAGE_ROWS - 1}`;
 
 /**
- * The one display union: the `event` rows of the types bound first, every
- * projected row, and an optional further arm, narrowed by `where` over the
+ * The one display union: the `event` rows of the types bound first, the
+ * `usage` row of every priced row, and an optional further arm, narrowed by `where` over the
  * union's columns (`"commit"`, `kind`, `logicalId`, `seq`), which SQLite
  * pushes into each arm, so a range binds once.
  */
@@ -162,7 +162,7 @@ const displayUnion = (where: string, order: string, arm?: string) =>
   `SELECT * FROM (
     SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
       WHERE e.type IN (SELECT value FROM json_each(?))
-    UNION ALL SELECT ${PROJECTED_COLUMNS} FROM ${PROJECTED_FROM}
+    UNION ALL ${USAGE_ROWS}
     ${arm === undefined ? '' : `UNION ALL ${arm}`}
   ) WHERE ${where} ORDER BY ${order}`;
 /** What a display read shows of one decoded row: a display row itself, a
@@ -181,25 +181,18 @@ const displayRows = (rows: readonly SessionRow[]) =>
  *  (`persistent`) or only opened (`existing`), is held exclusively by this
  *  process for the connection's life; the `global` store is shared across
  *  processes and polled for their commits; `ephemeral` runs in memory. */
-export type StoreMode = 'persistent' | 'existing' | 'ephemeral' | 'global';
+type StoreMode = 'persistent' | 'existing' | 'ephemeral' | 'global';
 
 /** Why a project store did not open: another process holds it. */
 export const STORE_HELD_MESSAGE =
   'Another TeXRA process holds this project; close it there first.';
-
-/** Whether a session failed to open because another process holds its
- *  project store: what a service that replaces a retiring one waits out. */
-export const storeHeld = (error: SessionOpenError): boolean =>
-  error._tag === 'DatabaseOpenFailed' &&
-  error.cause instanceof Error &&
-  error.cause.message === STORE_HELD_MESSAGE;
 
 export const databaseLayer = (
   mode: StoreMode,
 ): Layer.Layer<
   Database,
   DatabaseOpenFailed,
-  WorkspaceRoots | FileSystem.FileSystem | ChildProcessSpawner | ToolRegistry
+  WorkspaceRoots | FileSystem.FileSystem | ToolRegistry
 > =>
   Layer.effect(
     Database,
@@ -213,14 +206,21 @@ export const databaseLayer = (
         new DatabaseOpenFailed({ path, cause });
       const create = mode !== 'existing';
       const exclusive = mode === 'persistent' || mode === 'existing';
+      // The store's directory is made here (not by SQLite, which makes
+      // only the file), unless the store must exist already.
       const filename =
         mode === 'ephemeral'
           ? IN_MEMORY_STORE
-          : yield* localDatabasePath(
-              roots.storage,
-              SESSION_DATABASE_FILE,
-              create,
-            ).pipe(Effect.mapError(openFailed));
+          : yield* Effect.try({
+              try: () => {
+                if (create) mkdirSync(roots.storage, { recursive: true });
+                return join(
+                  realpathSync.native(roots.storage),
+                  SESSION_DATABASE_FILE,
+                );
+              },
+              catch: (cause) => openFailed(ensureError(cause)),
+            });
       // A project store never waits for a lock: its one holder is this
       // process, and a lock another holds refuses the open at once, on the
       // fiber, never by blocking the thread in SQLite.
@@ -231,12 +231,6 @@ export const databaseLayer = (
             ? filename
             : `file:${filename.replaceAll(/[%?#]/g, encodeURIComponent)}?mode=rw`,
           disableWAL: mode === 'ephemeral',
-          busyTimeout,
-        }),
-        SqliteClient.make({
-          filename,
-          readonly: true,
-          disableWAL: true,
           busyTimeout,
         }),
         path,
@@ -326,7 +320,7 @@ export const databaseLayer = (
       const collectBlobs = `DELETE FROM blob
         WHERE digest IN (SELECT value FROM json_each(?))
           AND NOT EXISTS (SELECT 1 FROM event_blob r WHERE r.digest = blob.digest)`;
-      // The display types in a commit range, plus projected rows.
+      // The display types in a commit range, with the priced rows' usage.
       const display = displayUnion(
         '"commit" > ? AND "commit" <= ?',
         '"commit"',
@@ -339,7 +333,7 @@ export const databaseLayer = (
       // A deletion marker closes its run and stays its last row until collected.
       const pendingDeletions = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
         WHERE e.type = 'run.removed' ORDER BY e."commit"`;
-      // One aggregate's display rows, its projected rows among them.
+      // One aggregate's display rows, its priced rows' usage among them.
       const displayAggregate = displayUnion(
         'kind = ? AND logicalId = ? AND seq >= ?',
         'seq',
@@ -387,8 +381,21 @@ export const databaseLayer = (
       // transaction it is a savepoint. A busy lock, which only the global
       // store's other writers take, runs the transaction again whole; a
       // nested body never meets one, its transaction holding the lock already.
+      //
+      // The driver is synchronous and a body awaits nothing, so the only way
+      // another fiber could run between BEGIN and COMMIT is the scheduler
+      // taking the fiber off after its step budget. With that off, a
+      // transaction is one uninterrupted turn: transactions on this
+      // connection run in the order they are called, and none waits for
+      // another.
       const own = <A, E>(body: Effect.Effect<A, E>) =>
-        retryBusy(sql.withTransaction(body));
+        retryBusy(
+          Effect.provideService(
+            sql.withTransaction(body),
+            Scheduler.PreventSchedulerYield,
+            true,
+          ),
+        );
       const transaction = <A, E, EBody>(
         body: Effect.Effect<A, EBody>,
         failed: (cause: unknown) => E,
@@ -638,7 +645,7 @@ export const databaseLayer = (
                 );
                 return [
                   [...rows, ...kept]
-                    .sort((x, y) => x.commit - y.commit)
+                    .toSorted((x, y) => x.commit - y.commit)
                     .flatMap(shown),
                   through < top ? Option.some(through) : Option.none(),
                 ] as const;
@@ -813,11 +820,7 @@ export const storeOpenElsewhere = (filename: string) =>
  * poll fiber; an entry that must create none passes a refusing layer. */
 export const globalDatabaseLayer = (
   storage: string,
-): Layer.Layer<
-  GlobalDatabase,
-  DatabaseOpenFailed,
-  FileSystem.FileSystem | ChildProcessSpawner
-> =>
+): Layer.Layer<GlobalDatabase, DatabaseOpenFailed, FileSystem.FileSystem> =>
   Layer.effect(GlobalDatabase, Database).pipe(
     Layer.provide(
       databaseLayer('global').pipe(

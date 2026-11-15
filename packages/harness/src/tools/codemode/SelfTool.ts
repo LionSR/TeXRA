@@ -168,7 +168,7 @@ const runSelf = Effect.fn('self.call')(function* (
             instruction: task,
             displayInstruction: input.prompt,
             outputFiles: [],
-            cli: null,
+            launch: null,
           }),
           script: null,
           outputSchema: outputSchema ?? null,

@@ -45,25 +45,20 @@ export type NonRegexReplacementCategory =
 export type RegexReplacementCategory =
   (typeof REGEX_REPLACEMENT_CATEGORIES)[number];
 
-export const DEFAULT_ENABLED_REPLACEMENTS = [
-  'latex_spacing',
-  'equations',
-  'sections',
-  'latex_forbidden_commands',
-  'characters',
-  'font_commands',
-  'latex_xml',
-  'unicode',
-  'html_entities',
-  'latexdiff',
-  'gptness',
-] satisfies NonRegexReplacementCategory[];
+/** The presets a user opts into; every other category is on by default. */
+const OPT_IN_CATEGORIES: ReadonlySet<string> = new Set([
+  'personal_style',
+  'max_style',
+  'equation_macros',
+  'max_style_regex',
+] satisfies (NonRegexReplacementCategory | RegexReplacementCategory)[]);
 
-export const DEFAULT_ENABLED_REGEX_REPLACEMENTS = [
-  'fenced_latex_blocks',
-  'inline_math',
-  'parentheses',
-  'latexdiff_markup',
-  'equation_style',
-  'personal_style_contextual',
-] satisfies RegexReplacementCategory[];
+export const DEFAULT_ENABLED_REPLACEMENTS =
+  NON_REGEX_REPLACEMENT_CATEGORIES.filter(
+    (category) => !OPT_IN_CATEGORIES.has(category),
+  );
+
+export const DEFAULT_ENABLED_REGEX_REPLACEMENTS =
+  REGEX_REPLACEMENT_CATEGORIES.filter(
+    (category) => !OPT_IN_CATEGORIES.has(category),
+  );

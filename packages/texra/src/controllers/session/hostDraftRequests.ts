@@ -156,35 +156,43 @@ export class HostDraftRequests {
     target: string,
   ) {
     const stopped = yield* Latch.make(false);
-    if (this.take) {
-      return yield* new Rejected({
-        reason: 'A recording is already in progress.',
-      });
-    }
-    // The check above and this reservation are one synchronous step: a
-    // `yield*` between them would let a second Start pass the check too and
-    // put two recorders on the microphone.
-    const take: Take = { roots, port, stopped };
-    this.take = take;
-    yield* SubscriptionRef.set(this.recording, {
-      session: roots.storage,
-      target,
-    });
-    // The take runs in the recorder's own fiber, not the Start request's:
-    // Start can be interrupted (its window closing) while the take still has
-    // to wait for the microphone and kill it.
-    const fiber = yield* FiberHandle.run(
-      this.takes,
-      this.runTake(take).pipe(
-        Effect.ensuring(
-          Effect.andThen(
-            Effect.sync(() => {
-              if (this.take === take) this.take = undefined;
-            }),
-            SubscriptionRef.set(this.recording, null),
+    // The reservation, its publication and the hand-over to the recorder's
+    // fiber cannot be parted: interrupted between them, Start would leave
+    // the microphone reserved by a take nothing runs. The fiber releases
+    // it.
+    const fiber = yield* Effect.uninterruptible(
+      Effect.gen({ self: this }, function* () {
+        if (this.take) {
+          return yield* new Rejected({
+            reason: 'A recording is already in progress.',
+          });
+        }
+        // The check above and this reservation are one synchronous step: a
+        // `yield*` between them would let a second Start pass the check
+        // too and put two recorders on the microphone.
+        const take: Take = { roots, port, stopped };
+        this.take = take;
+        yield* SubscriptionRef.set(this.recording, {
+          session: roots.storage,
+          target,
+        });
+        // The take runs in the recorder's own fiber, not the Start
+        // request's: Start can be interrupted (its window closing) while
+        // the take still has to wait for the microphone and kill it.
+        return yield* FiberHandle.run(
+          this.takes,
+          this.runTake(take).pipe(
+            Effect.ensuring(
+              Effect.andThen(
+                Effect.sync(() => {
+                  if (this.take === take) this.take = undefined;
+                }),
+                SubscriptionRef.set(this.recording, null),
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      }),
     );
     // An interrupted take is a cancelled one.
     const exit = yield* Fiber.await(fiber);

@@ -46,7 +46,7 @@ function runGuardedSlashCommand(
           ? Effect.failCause(cause)
           : Effect.sync(() => {
               echo();
-              appendLocalErrorTranscript(toErrorMessage(Cause.squash(cause)));
+              appendLocalErrorTranscript(toErrorMessage(cause));
             }),
       ),
     );

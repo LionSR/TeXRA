@@ -64,10 +64,7 @@ const STRICTNESS: Readonly<Record<ApprovalPolicy, number>> = {
 };
 
 /** The stricter of two policies (`never` < `ask` < `yolo`). */
-export function stricterPolicy(
-  a: ApprovalPolicy,
-  b: ApprovalPolicy,
-): ApprovalPolicy {
+function stricterPolicy(a: ApprovalPolicy, b: ApprovalPolicy): ApprovalPolicy {
   return STRICTNESS[a] <= STRICTNESS[b] ? a : b;
 }
 
@@ -191,23 +188,6 @@ export function runBypasses<Id>(
     toolEdit: resolveBypass(source, runId, 'toolEdit') !== null,
     superYolo: resolveBypass(source, runId, 'superYolo') !== null,
   };
-}
-
-/** The grants a child keeps once its parent edge goes (its detach, or a
- *  birth a detach cut): what it inherits through `parentId` with `own` as
- *  its rows name them, which a view that has not folded the child lacks,
- *  its own goal grant kept. */
-export function grantsKept<Id>(
-  source: ApprovalGrantSource<Id>,
-  runId: Id,
-  parentId: Id,
-  own: ApprovalGrants,
-): ApprovalGrants {
-  const seeded: ApprovalGrantSource<Id> = {
-    runs: new Map(source.runs).set(runId, { parentId }),
-    policy: new Map(source.policy).set(runId, own),
-  };
-  return { ...inheritedGrants(seeded, runId), goal: own.goal };
 }
 
 /** The human values a run's ancestry gives it, as grants of its own: what a

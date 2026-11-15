@@ -20,18 +20,10 @@ import {
 } from '@texra/shared/model/modelPicker';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import type { ModelOption } from '@texra-ai/harness/host';
-import { formatCostUsd } from '@texra-ai/harness/schemas';
-
-const MILLION = 1_000_000;
-const THOUSAND = 1_000;
-
-/** Format a context window for display. */
-function formatContext(context: number | undefined): string | undefined {
-  if (context === undefined) return undefined;
-  if (context >= MILLION) return `${(context / MILLION).toFixed(1)}M`;
-  if (context >= THOUSAND) return `${Math.round(context / THOUSAND)}K`;
-  return context.toString();
-}
+import {
+  formatCompactTokenCount,
+  formatCostUsd,
+} from '@texra-ai/harness/schemas';
 
 /** Format per-million input and output prices for display. */
 function formatCost(
@@ -95,7 +87,10 @@ function optionRow(verdict: ModelOption): ModelOptionData {
     value: model,
     label: config.label,
     provider: source,
-    context: formatContext(config.contextWindow),
+    context:
+      config.contextWindow === undefined
+        ? undefined
+        : formatCompactTokenCount(config.contextWindow),
     cost: formatCost(config.inputPrice, config.outputPrice),
     // The tooltip describes the model as published; the window and prices
     // are the ones it runs with on its route.

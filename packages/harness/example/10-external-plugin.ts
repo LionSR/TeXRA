@@ -16,9 +16,8 @@
  *    resume of the run is refused as `pluginUnavailable`, naming the plugin,
  *    and the run listing shows the same reason.
  * 3. Reopens with the plugin again: the same fact reads interpreted, its
- *    value unchanged, and the run resumes with a message sent under an id,
- *    calls the tool and records the next note; the message's receipt
- *    (`followUp.receipt`) says a turn answered it.
+ *    value unchanged, and the run resumes with a message queued for it,
+ *    calls the tool, records the next note and ends.
  */
 import { Effect, Layer, Schema } from 'effect';
 import { Sessions } from '@texra-ai/harness';
@@ -160,35 +159,22 @@ await Effect.runPromise(
     )
       throw new Error(`restored fact: ${JSON.stringify(notes)}`);
     // A message to a run no process holds waits in its queue; the resume
-    // delivers it, and its receipt says when a turn answered it.
+    // delivers it, and the run, launched to run once, answers it and ends.
     yield* session.request({
       kind: 'followUp.send',
       runId,
-      id: 'second-note',
       text: 'Add a second note.',
     });
     const resumed = yield* session.resume(runId);
-    const { receipt } = yield* session
-      .request({
-        kind: 'followUp.receipt',
-        runId,
-        id: 'second-note',
-        wait: true,
-      })
-      .pipe(Effect.timeout('10 seconds'));
-    yield* session.request({
-      kind: 'run.stop',
-      runId: resumed.runId,
-      reason: 'user',
-    });
+    const end = yield* resumed.result.pipe(Effect.timeout('10 seconds'));
     yield* session.settled;
     const { notes: after } = yield* notesOf(withPlugin.platform, runId);
     if (
-      receipt.state !== 'answered' ||
+      end.outcome !== 'completed' ||
       JSON.stringify(after.at(-1)?.value) !== JSON.stringify(SECOND)
     )
       throw new Error(
-        `resume with the plugin: ${JSON.stringify({ receipt, after })}`,
+        `resume with the plugin: ${JSON.stringify({ end, after })}`,
       );
     console.log(
       `[10] with it again: the fact reads interpreted, value unchanged; the resumed run noted ${JSON.stringify(SECOND)}`,

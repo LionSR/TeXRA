@@ -13,12 +13,7 @@
  */
 import { ConfigProvider, Context, Effect, Layer, type Scope } from 'effect';
 import { HttpClient } from 'effect/http';
-import {
-  type ModelConfig,
-  type ModelError,
-  type ModelRoute,
-  selectModel,
-} from '@texra-ai/llm';
+import { type ModelConfig, type ModelRoute, selectModel } from '@texra-ai/llm';
 import { SubscriptionAccounts } from '@texra-ai/llm/node';
 
 import type { RoutePolicy } from '@agent/runtime/ModelRetryGate';
@@ -26,20 +21,11 @@ import { RouteUnavailable } from '@common/errors/agentErrors';
 import { readModelSettings } from '@model/modelSettings';
 import { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settings';
-import type {
-  CredentialSwitch,
-  DeclinableUsageRoute,
-  ModelBackend,
-} from '@shared/schemas';
+import type { DeclinableUsageRoute, ModelBackend } from '@shared/schemas';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 
 import { bindRoute } from './binding';
-import {
-  admitSwitch,
-  credentialSwitch,
-  decideRoute,
-  type SwitchRefusal,
-} from './routeDecision';
+import { admitSwitch, type SwitchRefusal } from './routeDecision';
 import type { Binding } from '@texra-ai/llm/node';
 import type { CallFailure } from './failureInfo';
 
@@ -103,13 +89,6 @@ export class ModelAccess extends Context.Service<
       current: BoundModel,
       declinedRoutes: readonly DeclinableUsageRoute[],
     ) => Effect.Effect<SwitchRefusal | null, RouteUnavailable>;
-    /** The move onto the user's own credential a used-up `quota` (llm's
-     *  verdict on a failure of `failed`) offers. */
-    readonly credentialSwitch: (
-      failed: BoundModel,
-      quota: ModelError['quota'],
-      declinedRoutes: readonly DeclinableUsageRoute[],
-    ) => Effect.Effect<CredentialSwitch | null>;
   }
 >()('@texra-ai/harness/ModelAccess') {}
 
@@ -119,40 +98,6 @@ const settingsOf = (stores: SettingsStores) =>
   Effect.mapError(readModelSettings(stores), (error) =>
     error instanceof RouteUnavailable ? error : RouteUnavailable.of(error),
   );
-
-/** Bind `request` over one settings read. */
-const bindOver = Effect.fn('ModelAccess.bind')(function* (
-  stores: SettingsStores,
-  request: BindRequest,
-): Effect.fn.Return<
-  BoundModel,
-  CallFailure,
-  Scope.Scope | HttpClient.HttpClient | Secrets | SubscriptionAccounts
-> {
-  const selected = selectModel(request.modelId);
-  const requested = request.config ?? selected?.config;
-  if (requested === undefined) {
-    return yield* RouteUnavailable.of(
-      new Error(`Model ${request.modelId} is not registered`),
-    );
-  }
-  const ask = selected?.request ?? {};
-  const settings = yield* settingsOf(stores);
-  const decision = yield* decideRoute(requested, settings, {
-    ...request,
-    mode: ask.mode,
-  });
-  return yield* bindRoute({
-    request,
-    requested,
-    // A rebind that keeps the route's overlay as `request.config` still
-    // reports its usage under the catalog entry.
-    catalogEntry: selected?.config ?? requested,
-    ask,
-    settings,
-    decision,
-  });
-});
 
 /**
  * Model access over `stores` (a session's setting slots), the process
@@ -183,7 +128,7 @@ export const modelAccessLayer = (
           Effect.provideService(SubscriptionAccounts, accounts),
         );
       return {
-        bind: (request) => inProject(bindOver(stores, request)),
+        bind: (request) => inProject(bindRoute(request, settingsOf(stores))),
         admit: (modelId, current, declined) => {
           if (current.modelId === modelId) return Effect.succeed(null);
           const selected = selectModel(modelId);
@@ -197,10 +142,6 @@ export const modelAccessLayer = (
             ),
           );
         },
-        credentialSwitch: (failed, quota, declined) =>
-          credentialSwitch(failed, quota, declined).pipe(
-            Effect.provideService(Secrets, secrets),
-          ),
       };
     }),
   );

@@ -1,9 +1,10 @@
 // Local imports
-import { GREEK_LETTERS } from './constants';
-import { NonRegexRuleSet, RegexRuleSet } from './types';
+import { LETTERS, UPPERCASE_LETTERS } from './constants';
+import type { RegexRuleSet } from './types';
 import {
   createPatterns,
   generateBackslashFixes,
+  generateLegacyFontFixes,
   type PatternDict,
 } from './patterns';
 
@@ -17,7 +18,7 @@ import {
  */
 function generateDecoratorShortcuts(
   decorator: string,
-  letters: string[],
+  letters: readonly string[],
   prefix: string,
 ): PatternDict {
   return createPatterns(letters, (letter) => [
@@ -43,21 +44,6 @@ function generateNestedDecoratorShortcuts(
       `\\${outerDecorator}{\\${innerCommand}{${letter}}}`,
       `\\${outerPrefix}${innerPrefix}${letter}`,
     ],
-  ]);
-}
-
-/**
- * Generate patterns to normalize legacy font commands like {\rm X}, {\bf X},
- * or {\cal X}.
- */
-function generateLegacyTextCommandNormalization(
-  terms: string[],
-  targetCommand: string,
-  variant: string,
-): PatternDict {
-  return createPatterns(terms, (term) => [
-    [`{\\${variant} ${term}}`, `\\${targetCommand}{${term}}`],
-    [`{\\${variant}{${term}}}`, `\\${targetCommand}{${term}}`],
   ]);
 }
 
@@ -201,29 +187,20 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
 
   // Greek Letters (Bold): bold Greek letters with \b prefix
   // prettier-ignore
-  const commonGreekSet = new Set(['alpha', 'beta', 'gamma', 'epsilon', 'eta', 'theta', 'mu', 'nu', 'omega', 'phi', 'sigma', 'xi', 'zeta']);
-  const commonGreekLetters = GREEK_LETTERS.filter((letter) =>
-    commonGreekSet.has(letter),
-  );
-  // prettier-ignore
-  const greekBoldLetters = [...commonGreekLetters, 'chi', 'pi', 'varphi', 'Sigma', 'lambda', 'Gamma', 'Lambda'];
+  const greekBoldLetters = 'alpha beta gamma epsilon zeta eta theta mu nu xi sigma phi omega chi pi varphi Sigma lambda Gamma Lambda'.split(' ');
 
   // Math font letter sets
-  const upperLetters = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
   const mathbbLetters = [...'CEINPQRTV'];
-  // 'f' stays out of lowerLetters: the MANUAL '\mathbf{f}' -> '\bbf'
-  // special case keeps '\bf' (KaTeX's legacy bold switch) out of max-style
-  // output.
-  const lowerLetters = [...'abcdeghjnpqrsuvwxyz'];
-  const mathbfUpperLetters = [...'ABCDEFGIJKMQRUVWXYZ'];
-  const alphabetLetters = [
-    ...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
-  ];
+  // 'f' stays out of the lowercase mathbf letters: the MANUAL
+  // '\mathbf{f}' -> '\bbf' special case keeps '\bf' (KaTeX's legacy bold
+  // switch) out of max-style output.
+  const mathbfLetters = [...'abcdeghjnpqrsuvwxyzABCDEFGIJKMQRUVWXYZ'];
+
+  const legacyFontSwitches = ['rm', 'bf', 'cal'];
 
   // Tilde variables
   const tildeLetters = [...'xzpqBFJMPTZ'];
-  const tildeLettersMathbf = [...'axpvwz'];
-  const tildeLettersMathbfUppercase = [...'MTX'];
+  const tildeLettersMathbf = [...'axpvwzMTX'];
   const tildeLettersMathcal = [...'HQSW'];
   const tildeGreekLetters = 'gamma lambda phi psi rho Sigma mu tau'.split(' ');
   const tildeGreekBoldLetters = 'zeta gamma lambda pi xi eta Gamma'.split(' ');
@@ -314,36 +291,27 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
     '\\bar{H}^{\\text{eff}}': '\\bar{\\effH}',
     '\\barH^{\\text{eff}}': '\\bar{\\effH}',
     // Mathcal: \mathcal{X} -> \cX
-    ...generateDecoratorShortcuts('mathcal', upperLetters, 'c'),
+    ...generateDecoratorShortcuts('mathcal', UPPERCASE_LETTERS, 'c'),
     // Mathbb: \mathbb{X} -> \eX
     ...generateDecoratorShortcuts('mathbb', mathbbLetters, 'e'),
-    // Mathbf lowercase: \mathbf{x} -> \bx
-    ...generateDecoratorShortcuts('mathbf', lowerLetters, 'b'),
-    // Mathbf uppercase: \mathbf{X} -> \bX
-    ...generateDecoratorShortcuts('mathbf', mathbfUpperLetters, 'b'),
-    // Normalize legacy font commands {\rm X}, {\bf X}, {\cal X}
-    ...generateLegacyTextCommandNormalization(alphabetLetters, 'mathrm', 'rm'),
-    ...generateLegacyTextCommandNormalization(alphabetLetters, 'mathbf', 'bf'),
-    ...generateLegacyTextCommandNormalization(
-      alphabetLetters,
-      'mathcal',
-      'cal',
+    // Mathbf: \mathbf{x} -> \bx, \mathbf{X} -> \bX
+    ...generateDecoratorShortcuts('mathbf', mathbfLetters, 'b'),
+    // Legacy font switches: {\rm X} -> \mathrm{X}, and the braced spelling
+    // {\rm{X}} -> \mathrm{X}
+    ...generateLegacyFontFixes(LETTERS, legacyFontSwitches),
+    ...createPatterns(legacyFontSwitches, (name) =>
+      LETTERS.map((letter): [string, string] => [
+        `{\\${name}{${letter}}}`,
+        `\\math${name}{${letter}}`,
+      ]),
     ),
     // Tilde variables: \tilde{x} -> \tx, \tilde{B} -> \tB
     ...generateDecoratorShortcuts('tilde', tildeLetters, 't'),
-    // Tilde with mathbf lowercase: \tilde{\mathbf{x}} -> \tbx
+    // Tilde with mathbf: \tilde{\mathbf{x}} -> \tbx, \tilde{\mathbf{M}} -> \tbM
     ...generateNestedDecoratorShortcuts(
       'tilde',
       'mathbf',
       tildeLettersMathbf,
-      't',
-      'b',
-    ),
-    // Tilde with mathbf uppercase: \tilde{\mathbf{M}} -> \tbM
-    ...generateNestedDecoratorShortcuts(
-      'tilde',
-      'mathbf',
-      tildeLettersMathbfUppercase,
       't',
       'b',
     ),
@@ -378,9 +346,7 @@ const MAX_AUTO_PATTERNS: Record<string, string> = (() => {
       boldsymbol: true,
     }),
     // Bold backslash fixes: \\ba -> \ba (lowercase), \\bA -> \bA (uppercase)
-    ...generateBackslashFixes(
-      [...lowerLetters, ...mathbfUpperLetters].map((letter) => `b${letter}`),
-    ),
+    ...generateBackslashFixes(mathbfLetters.map((letter) => `b${letter}`)),
     ...createPatterns(functionNames, (name) => [
       [`\\${name}_`, `${name}_`],
       [`\\${name}^`, `${name}^`],
@@ -461,10 +427,9 @@ const MAX_MANUAL_PATTERNS: Record<string, string> = {
   '\\tau_f': '\\tauf',
 
   // Equilibrium and steady state notation
-  // Subscript rho eq/st stay manual: the AUTO \text{eq}/\text{st} rules
-  // consume the fragment first (preserving \rho_\eq / \rho_\st), so
-  // these entries are inert for bare sources but document the intended
-  // compaction destinations.
+  // These run before the shorter AUTO \text{eq}/\text{st} rules (the engine
+  // applies the longest pattern first), so \rho_{\text{eq}} becomes \rhoeq
+  // and not \rho_\eq.
   '\\rho_{\\text{eq}}': '\\rhoeq',
   '\\rho_{\\text{st}}': '\\rhost',
   '\\rho^{\\text{ss}}': '\\rhost',
@@ -498,8 +463,6 @@ const MAX_MANUAL_PATTERNS: Record<string, string> = {
 
   '\\log\\': '\\log \\',
 
-  // '\\mathbf{I}': '\\bI',
-
   // Specialized replacements
   '+ O(': '+ \\cO(',
 
@@ -514,8 +477,9 @@ const MAX_MANUAL_PATTERNS: Record<string, string> = {
   antiIto: 'anti-Ito',
 };
 
-export const MAX_STYLE_REPLACEMENTS: NonRegexRuleSet = {
-  patterns: { ...MAX_AUTO_PATTERNS, ...MAX_MANUAL_PATTERNS },
+export const MAX_STYLE_REPLACEMENTS: PatternDict = {
+  ...MAX_AUTO_PATTERNS,
+  ...MAX_MANUAL_PATTERNS,
 };
 
 // prettier-ignore
@@ -527,7 +491,6 @@ const FULL_WORDS = [
   'define', 'Define', 'defines', 'Defines', 'defining', 'Defining', 'definition', 'Definition', 'definitions', 'Definitions', 
   'derive', 'Derive', 'derived', 'Derived', 'derives', 'Derives', 'deriving', 'Deriving', 
   'differentiate', 'Differentiate', 'differentiates', 'Differentiates', 'differentiating', 'Differentiating', 
-  // 'equation', 'Equation', 'equations', 'Equations', // Special word
   'express', 'Express', 'expresses', 'Expresses', 'expressing', 'Expressing', 'execute', 'Execute', 'executes', 'Executes', 'executing', 'Executing',
   'Finally', 
   'follow', 'Follow', 'follows', 'Follows', 'following', 'Following', 'for', 'For', 
@@ -543,7 +506,6 @@ const FULL_WORDS = [
   'rearrange', 'Rearrange', 'rearranged', 'Rearranged', 'rearranges', 'Rearranges', 'rearranging', 'Rearranging', 
   'rewrite', 'Rewrite', 'rewrites', 'Rewrites', 'rewriting', 'Rewriting', 
   'run', 'Run', 'running', 'Running', 'runs', 'Runs', 
-  // 'SDE', 'SDEs', // Special word
   'satisfy', 'Satisfy', 'satisfies', 'Satisfies', 'satisfying', 'Satisfying', 
   'see', 'See', 'seeing', 'Seeing', 'sees', 'Sees', 
   'show', 'Show', 'shown', 'Shown', 'shows', 'Shows', 'showing', 'Showing', 
@@ -551,7 +513,6 @@ const FULL_WORDS = [
   'state', 'State', 'states', 'States', 'stating', 'Stating', 
   'substitute', 'Substitute', 'substitutes', 'Substitutes', 'substituting', 'Substituting', 
   'that', 'That', 'Then', 
-  // 'theorem', 'Theorem', 'theorems', 'Theorems', 
   'to', 'To', 'under', 'Under', 
   'use', 'Use', 'uses', 'Uses', 'using', 'Using', 'used', 'Used',
   'particular',
@@ -632,27 +593,8 @@ export function restoreLatexSectionSign(text: string): string {
 }
 
 export const MAX_REGEX_REPLACEMENTS: RegexRuleSet = {
-  isRegex: true,
   flags: 'gms',
   patterns: {
-    // Subscript/superscript formatting
-
-    // MATHEMATICS STYLE
-    // Functions defined with domain/range should use \colon
-    // '([a-zA-Z]\\s*):([^:]+)\\\\to\\s*([A-Za-z])': '$1\\colon$2\\to $3',
-    // Functions defined with domain/range should use \colon (improved version)
-    // '(\\$[^$]*[a-zA-Z][a-zA-Z0-9]*(?:\\([^)]*\\))?\\s*):(?!:)(\\s*[^:$]+?\\\\to)':
-    // '$1\\colon$2',
-    // Not working, maybe we should limit the length
-    // This is too dangerous
-
-    // // Ellipses should be raised between operators but not between punctuation
-    // '([+\\-*\\/])\\s*\\.\\.\\.\\s*([+\\-*\\/])': '$1\\cdots$2',
-    // '([,;])\\s*\\.\\.\\.\\s*([,;])': '$1\\ldots$2',
-    // Max like ,..,
-
-    // PUNCTUATION AND SPACING
-
     // Spell words with the following preﬁxes solid and not hyphenated: anti, co, counter, extra, inter, intra, macro, micro, multi, non, over, post, pre, pro, pseudo, psycho, re, semi, socio, sub, trans.
     '\\b(anti|co|counter|extra|inter|intra|macro|micro|multi|non|over|post|pre|pro|pseudo|psycho|re|semi|socio|sub|trans)-([a-z]+)':
       '$1$2',
@@ -688,9 +630,6 @@ export const MAX_REGEX_REPLACEMENTS: RegexRuleSet = {
     // Capitalized Cref version
     '\\\\Cref\\{(eqn:[^,}]+)\\}': 'Eqn.~\\ref{$1}',
 
-    // General case for \cref{eqn:...} not covered by specific preceding words or parentheses
-    // '\\\\cref\\{(eqn:[^,}]+)\\}': 'eqn.~\\ref{$1}',
-
     // PARENTHESIZED REFERENCES
     // Single figure in parentheses (\cref{fig:...})
     '\\(\\\\cref\\{(fig:[^,}]+)\\}\\)': '(Figure~\\ref{$1})',
@@ -701,14 +640,5 @@ export const MAX_REGEX_REPLACEMENTS: RegexRuleSet = {
     // --- End of custom word list based \cref{fig:...} replacements ---
 
     '\\(see\\s+\\\\cref\\{(fig:[^,}]+)\\}\\)': '(see Figure~\\ref{$1})',
-
-    // General case for \cref{fig:...} not covered by specific preceding words or parentheses
-    // '\\\\cref\\{(fig:[^,}]+)\\}': 'Figure~\\ref{$1}',
-    // General case for \Cref{fig:...}
-    // '\\\\Cref\\{(fig:[^,}]+)\\}': 'Figure~\\ref{$1}',
-
-    // Next step
-    // \KL[|] -> \\KL[\|]
-    // get _ or - in the equation labels consistent.
   },
 };

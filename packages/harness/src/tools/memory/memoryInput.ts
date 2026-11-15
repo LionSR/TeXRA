@@ -12,6 +12,7 @@ import { MEMORY_DISPLAY_ROOT } from '@agent/memory/memoryUtils';
 // Local file imports
 import { nullishWithDefault } from '../core/inputSchema';
 import { ViewRangeSchema } from '../formatting';
+import { NonNegativeIntSchema } from '@shared/schemas';
 
 const MEMORY_PATH_DESCRIPTION = `Path under ${MEMORY_DISPLAY_ROOT} (e.g. ${MEMORY_DISPLAY_ROOT}/notes.md).`;
 
@@ -37,7 +38,7 @@ export const MemoryToolInputSchema = Schema.Union([
     view_range: Schema.optional(Schema.NullOr(ViewRangeSchema)),
     /** Zero-based offset for paginating directory listings (path points to a directory). */
     offset: nullishWithDefault(
-      Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+      NonNegativeIntSchema,
       LISTING_DEFAULT_OFFSET,
       `Zero-based offset into the directory listing. Use with limit for pagination. Default: ${LISTING_DEFAULT_OFFSET}.`,
     ),
@@ -65,7 +66,7 @@ export const MemoryToolInputSchema = Schema.Union([
   Schema.Struct({
     command: Schema.Literal('insert'),
     path: PathFieldSchema,
-    insert_line: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    insert_line: NonNegativeIntSchema,
     insert_text: Schema.optional(Schema.NullOr(Schema.String)).annotate({
       description: 'Text to insert. Aliased by `new_str` if omitted.',
     }),

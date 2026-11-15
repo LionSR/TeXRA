@@ -1,5 +1,6 @@
 // Layer 1: Base types (no dependencies on other schema files)
 export * from './identifiers';
+export * from './nonNegativeInt';
 export * from './jsonValue';
 export * from './agent';
 export * from './agentConfig';

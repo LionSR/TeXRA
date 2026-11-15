@@ -13,7 +13,7 @@ import {
   CODEX_MODEL_VALUES,
 } from '@texra/shared/agentCliSettings';
 import { type PluginSettingRow } from '@texra/shared/settingsView/settingRows';
-import type { TexraSettingRow } from '@texra/shared/settingsView/settingSurfaces';
+import type { TexraSettingRow } from '@texra/shared/settings/settingSurfaces';
 
 /** Where an external coding agent's row lives and shows: repo-scoped, on the
  *  approval tab and in `/config`. */

@@ -33,7 +33,7 @@ export function interruptedTasks(
         isInterrupted(run) &&
         run.actions.includes('resume'),
     )
-    .sort((a, b) => b.createdAt - a.createdAt)
+    .toSorted((a, b) => b.createdAt - a.createdAt)
     .map((run) => ({
       runId: run.id,
       title: run.title,

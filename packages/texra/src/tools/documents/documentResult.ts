@@ -111,7 +111,7 @@ function formatDocumentOutputs(
     byRound.size <= 1
       ? outputs.map(format)
       : [...byRound]
-          .sort(([a], [b]) => a - b)
+          .toSorted(([a], [b]) => a - b)
           .flatMap(([round, files]) => [
             `<round number="${round}">`,
             ...files.map(format),

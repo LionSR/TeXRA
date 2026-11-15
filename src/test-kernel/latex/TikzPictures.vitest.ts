@@ -3,7 +3,7 @@ import { Context, Effect, Layer } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { pathToLocationIn } from '@texra-ai/harness/host';
-import { TikzPictureManager } from '@latex/TikzPictureManager';
+import { extractTikzPictures } from '@latex/tikzPictures';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { FakeHost } from '@test/support/testKernel';
 
@@ -12,7 +12,7 @@ function extractFromPaper(content: string) {
     FakeHost.layer({ files: { '/workspace/paper.tex': content } }),
   ).pipe(
     Effect.andThen((context) =>
-      TikzPictureManager.extract(
+      extractTikzPictures(
         pathToLocationIn(
           Context.get(context, FakeHost).path('workspace'),
           'paper.tex',
@@ -23,7 +23,7 @@ function extractFromPaper(content: string) {
   );
 }
 
-describe('TikzPictureManager', () => {
+describe('extractTikzPictures', () => {
   it.live(
     'does not attribute an unlabeled figure to a later labeled figure',
     () =>

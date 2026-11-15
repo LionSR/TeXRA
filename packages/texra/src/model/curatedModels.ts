@@ -1,17 +1,13 @@
 /**
- * The models the harness starts with: the run default and the curated picker
- * list. They are the app's choices over the llm catalog, not
- * catalog facts, and the stored agent config (`agentConfig.ts`)
- * default to them, so they live with the storage and not in
- * `@texra-ai/llm`.
+ * TeXRA's model choices over the llm catalog: the launcher's default model
+ * and the curated picker list, which TeXRA's settings catalog hands the
+ * harness (`curatedModels`). They are not catalog facts, so they do not live
+ * in `@texra-ai/llm`, and not the harness's, which curates none.
  */
 
 /**
- * Default model used when a new agent run / proposal omits one. Single source of
- * truth shared by the agent config schema,
- * the main-view persisted state, and the progress-view proposal reconstruction —
- * so a change here propagates to all three instead of drifting per call site.
- * `DEFAULT_MODELS` leads with this model, so it must not be a Gemini id.
+ * The model a new launch starts on when the launcher has stored none.
+ * `CURATED_MODELS` leads with it, so it must not be a Gemini id.
  */
 export const DEFAULT_AGENT_MODEL = 'openai/gpt-6.1-sol';
 
@@ -22,7 +18,7 @@ export const DEFAULT_AGENT_MODEL = 'openai/gpt-6.1-sol';
  * deprecates an entry.
  */
 // `PinnedModels.vitest.ts` fails such a bump.
-export const DEFAULT_MODELS: readonly string[] = [
+export const CURATED_MODELS: readonly string[] = [
   // The picker / new-chat default leads. Do not lead with Gemini — GPT is the
   // quality default.
   DEFAULT_AGENT_MODEL,

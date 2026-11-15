@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { stripVTControlCharacters } from 'node:util';
 import { parseArgs as parseCittyArgs } from 'citty';
 
@@ -139,7 +140,7 @@ async function waitFor(label, check, timeoutMs = 120_000) {
   const deadline = Date.now() + timeoutMs;
   while (!check()) {
     assert(Date.now() < deadline, `timed out waiting for ${label}`);
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    await sleep(250);
   }
 }
 
@@ -1404,9 +1405,10 @@ function validateSdkInlinePersona() {
  * An SDK approval that outlives its process: an embedder on a persistent
  * session starts a run whose custom tool asks for approval, and its handler
  * receives the request and leaves it pending; the process is killed there.
- * A second embedder reopens the session's store, resumes the run with the
- * same custom tool, and its handler approves the same request, so the tool
- * runs once and the run completes. Both phases' output, the run's request
+ * A second embedder reopens the session's store and resumes the run with the
+ * same custom tool: the request the dead process left is cancelled, the call
+ * asks again and its handler approves that one, so the tool runs once and the
+ * run completes. Both phases' output, the run's request
  * and tool rows and the file the tool wrote are the artifact.
  */
 async function validateSdkResumeApproval() {
@@ -1514,14 +1516,22 @@ async function validateSdkResumeApproval() {
       approved,
     });
     const requests = rows.filter((row) => row.requestId !== null);
+    const [left, cancelled, again, decided] = requests;
     assert(
       answered.length === 1 &&
-        sameRequest(answered[0]) &&
-        requests.length === 2 &&
-        requests.every(sameRequest) &&
-        requests[1].type === 'request.decided' &&
-        requests[1].decision === 'approve',
-      `the resumed run's one request should be the one asked before the kill, approved after it (artifact: ${artifactPath})`,
+        !sameRequest(answered[0]) &&
+        requests.length === 4 &&
+        left.type === 'request.opened' &&
+        sameRequest(left) &&
+        cancelled.type === 'request.decided' &&
+        sameRequest(cancelled) &&
+        cancelled.decision === 'cancel' &&
+        again.type === 'request.opened' &&
+        !sameRequest(again) &&
+        decided.type === 'request.decided' &&
+        decided.requestId === again.requestId &&
+        decided.decision === 'approve',
+      `the resume should cancel the request asked before the kill and ask again, approved once (artifact: ${artifactPath})`,
     );
     assert(
       result?.outcome === 'completed' &&
@@ -1811,17 +1821,18 @@ prompt: |
 }
 
 /**
- * Background compaction end to end (durable harness H5, gap 4): at a 1%
- * threshold, a long first message puts the conversation over it. The
- * message starts a task in the service, which takes messages as a chat's
- * run does (a headless `texra run` takes none). The chat that resumes it
- * runs a turn that starts the summary off the loop and still sends the
- * whole history (the reply names the first message), and the turn after
- * lands it, as an edit of the messages before that turn's request,
- * keeping what followed (the reply names the summary and the new message
- * only). The store's `context.edit` rows are kept as the artifact.
+ * Threshold compaction end to end: at a 1% threshold, a long first message
+ * puts the conversation over it. The message starts a task in the service,
+ * which takes messages as a chat's run does (a headless `texra run` takes
+ * none). A threshold summary leaves the newest exchange as it is, so the
+ * chat that resumes it runs a turn with nothing older to summarize, which
+ * sends the whole history (the reply names the first message); the turn
+ * after waits for the summary of the three messages before its own
+ * exchange and sends the summary with that exchange (the reply names the
+ * summary and the new message only). The store's `context.edit` rows are
+ * kept as the artifact.
  */
-async function validateBackgroundCompaction() {
+async function validateThresholdCompaction() {
   const cwd = makeScratch('texra-cli-compaction-');
   try {
     const project = echoProject(cwd, {
@@ -1871,7 +1882,7 @@ async function validateBackgroundCompaction() {
     );
     project.stopService();
     const rows = project.readStore(VIEW_ROWS);
-    const artifactPath = writeArtifact('background-compaction.json', {
+    const artifactPath = writeArtifact('threshold-compaction.json', {
       source,
       replies,
       rows,
@@ -1882,7 +1893,7 @@ async function validateBackgroundCompaction() {
         edits[0].cause === 'compaction' &&
         edits[0].trigger === 'context-limit' &&
         JSON.parse(edits[0].range).to === 3,
-      `the summary should land as one edit of the three messages before the second turn's request (artifact: ${artifactPath})`,
+      `the summary should land as one edit of the three messages before the third turn's exchange (artifact: ${artifactPath})`,
     );
   } finally {
     removeScratch(cwd);
@@ -1944,7 +1955,7 @@ async function validateServiceChatsSeeEachOther() {
         Date.now() < deadline,
         `the first chat never answered\noutput:\n${stripVTControlCharacters(first?.output ?? '').slice(-3000)}`,
       );
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await sleep(250);
     }
     let phase = 'opening';
     let from = 0;
@@ -2054,13 +2065,6 @@ prompt: |
       return false;
     }
   };
-  const until = async (label, check) => {
-    const deadline = Date.now() + 30_000;
-    while (!check()) {
-      assert(Date.now() < deadline, `timed out waiting for ${label}`);
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    }
-  };
   let nextList;
   try {
     // A task at work in this build's service: its model call is held.
@@ -2096,18 +2100,30 @@ prompt: |
     let nextExit = null;
     nextList.on('exit', (code) => (nextExit = code ?? 1));
     let draining;
-    await until('the older service to drain', () => {
-      draining = status(binaryPath, 'service status (draining)');
-      return draining.draining === true;
-    });
+    await waitFor(
+      'the older service to drain',
+      () => {
+        draining = status(binaryPath, 'service status (draining)');
+        return draining.draining === true;
+      },
+      30_000,
+    );
     const waited = nextExit === null && alive(first.pid);
     writeFileSync(path.join(project.work, 'golden-park.release'), '');
-    await until('the newer client to finish', () => nextExit !== null);
+    await waitFor(
+      'the newer client to finish',
+      () => nextExit !== null,
+      30_000,
+    );
     assert(
       nextExit === 0,
       `texra tasks list (next build) should succeed once the older service exits (exit ${nextExit})\nstderr:\n${nextStderr}`,
     );
-    await until('the retired service to exit', () => !alive(first.pid));
+    await waitFor(
+      'the retired service to exit',
+      () => !alive(first.pid),
+      30_000,
+    );
     const next = status(nextBuildPath, 'service status (next build)');
     texraWith(
       binaryPath,
@@ -2319,13 +2335,6 @@ async function validateServiceSessionIdle() {
     assertSuccess(result, label);
     return result.stdout.trim();
   };
-  const waitFor = async (label, check, timeoutMs = 120_000) => {
-    const deadline = Date.now() + timeoutMs;
-    while (!check()) {
-      assert(Date.now() < deadline, `timed out waiting for ${label}`);
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    }
-  };
   const service = spawn(
     process.execPath,
     [binaryPath, 'serve', '--idle-timeout', '4'],
@@ -2492,7 +2501,7 @@ prompt: |
         : undefined) === undefined
     ) {
       assert(Date.now() < deadline, 'timed out waiting for the project store');
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await sleep(250);
     }
     writeFileSync(
       path.join(storage, dir, 'config.json'),
@@ -2515,10 +2524,7 @@ prompt: |
       { cwd: project.work, env },
     );
     assertSuccess(started, 'texra tasks start env_validation');
-    while (!existsSync(output)) {
-      assert(Date.now() < deadline, 'timed out waiting for env.txt');
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    }
+    await waitFor('env.txt', () => existsSync(output));
     const reported = readFileSync(output, 'utf8');
     const artifactPath = writeArtifact('service-project-env.json', {
       command: reported,
@@ -2551,11 +2557,7 @@ prompt: |
       { cwd: project.work, env },
     );
     assertSuccess(second, 'texra tasks start env_validation (edited)');
-    const editDeadline = Date.now() + 120_000;
-    while (!existsSync(output)) {
-      assert(Date.now() < editDeadline, 'timed out waiting for env.txt again');
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    }
+    await waitFor('env.txt again', () => existsSync(output));
     const edited = readFileSync(output, 'utf8');
     writeArtifact('service-project-env-edited.json', { command: edited });
     assert(
@@ -2664,7 +2666,7 @@ prompt: |
     let value;
     while ((value = found()) === undefined) {
       assert(Date.now() < deadline, `timed out waiting for ${what}`);
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await sleep(250);
     }
     return value;
   };
@@ -2775,13 +2777,6 @@ prompt: |
     assertSuccess(result, label);
     return result;
   };
-  const waitFor = async (label, check, timeoutMs = 120_000) => {
-    const deadline = Date.now() + timeoutMs;
-    while (!check()) {
-      assert(Date.now() < deadline, `timed out waiting for ${label}`);
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    }
-  };
   const storage = path.join(storageRoot, 'v1', 'workspace-storage');
   const projectDir = () => {
     const dir = existsSync(storage)
@@ -2865,7 +2860,7 @@ prompt: |
       firstWatch.events().some((row) => row.type === 'request.opened'),
     );
     // Long enough for an Auto-approve run to have run its command.
-    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    await sleep(3_000);
     const approved = path.join(project.work, 'approved.txt');
     const setting = JSON.parse(
       readFileSync(path.join(projectDir(), 'config.json'), 'utf8'),
@@ -2900,7 +2895,7 @@ prompt: |
     await waitFor('the narrowed command to wait for approval', () =>
       narrowWatch.events().some((row) => row.type === 'request.opened'),
     );
-    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    await sleep(3_000);
     const narrowedCommandRan = existsSync(approved);
     const narrowPrefix = narrowWatch.events();
     const narrowThrough = Math.max(...narrowPrefix.map((row) => row.commit));
@@ -3232,39 +3227,77 @@ async function validateServiceSharedTask() {
 }
 
 /**
- * Resume all and rename: a chat killed while it waits leaves its task
- * interrupted; the next `texra chat` resumes nothing until `/resume all`,
- * which names and resumes it. A resumed chat's
- * `/rename` then writes the user's title. `/resume all`'s line, the
- * activation counts and the task's `run.description` rows are the artifact.
+ * Resume all and rename: a chat killed in the middle of a turn leaves its
+ * task interrupted; the next `texra chat` resumes nothing until
+ * `/resume all`, which names and resumes it. A resumed chat's `/rename`
+ * then writes the user's title. `/resume all`'s line, the activation counts
+ * and the task's `run.description` rows are the artifact.
  */
 async function validateOpenTimePrompt() {
   const cwd = makeScratch('texra-cli-open-prompt-');
   try {
     const project = echoProject(cwd);
+    writeFileSync(
+      path.join(
+        cwd,
+        'home',
+        '.texra',
+        'v1',
+        'global-storage',
+        'custom_agents',
+        'park-validation.yaml',
+      ),
+      `name: park_validation
+description: Hold its model call until released.
+
+prompt: |
+  GOLDEN-PARK
+`,
+    );
     // The chat is its task's writer here, so killing it is the crash this
     // recovers from: a service would keep the task running past the kill.
-    project.ptyEnv.TEXRA_NO_SERVICE = '1';
-    const seed = project.firstRun('First message');
-    let killed = false;
-    const opening = await runTexraPty(['resume', seed, '--fork'], {
-      label: 'texra resume --fork, then SIGKILL',
-      cwd: project.work,
-      cols: 160,
-      rows: 40,
-      timeoutMs: 40_000,
-      env: project.ptyEnv,
-      onData: (_data, pty) => {
-        if (!killed && stripVTControlCharacters(pty.output).includes('Idle')) {
-          killed = true;
-          pty.setTimer(() => pty.kill('SIGKILL'), 800);
-        }
+    project.ptyEnv = {
+      ...project.ptyEnv,
+      TEXRA_NO_SERVICE: '1',
+      [VALIDATION_SCENARIOS.golden]: '1',
+    };
+    let asked = false;
+    const opening = await runTexraPty(
+      ['chat', '--agent', 'park_validation', '--model', 'openai/gpt-5.6-sol'],
+      {
+        label: 'texra chat, then SIGKILL in the middle of its turn',
+        cwd: project.work,
+        cols: 160,
+        rows: 40,
+        timeoutMs: 40_000,
+        env: project.ptyEnv,
+        onData: (_data, pty) => {
+          if (
+            asked ||
+            !stripVTControlCharacters(pty.output).includes('/ commands')
+          )
+            return;
+          asked = true;
+          pty.setTimer(() => pty.write('First message'), 500);
+          pty.setTimer(() => pty.write('\r'), 900);
+          // The turn's model request waits for a release file nobody has
+          // written, so the kill cuts the turn in the middle.
+          pty.setTimer(() => pty.kill('SIGKILL'), 4_000);
+        },
       },
-    });
-    const source = runStartForkedFrom(project.readStore(VIEW_ROWS), seed)?.run;
+    );
+    // The chat's task, cut after its first model request was recorded.
+    const source = project.readStore(
+      `SELECT s.logical_id AS run FROM event e
+       JOIN event_sequence s ON s.id = e.aggregate
+       WHERE e.type = 'model.message' AND s.id IN (
+         SELECT aggregate FROM event
+         WHERE type = 'run.start'
+           AND json_extract(data, '$.identity.agent') = 'park_validation')`,
+    )[0]?.run;
     assert(
-      killed && opening.exit.signal === 9 && source !== undefined,
-      `the forked chat should reach idle and be killed before testing resume (exit ${JSON.stringify(opening.exit)})\noutput:\n${stripVTControlCharacters(opening.output).slice(-3000)}`,
+      opening.exit.signal === 9 && source !== undefined,
+      `the chat should be killed while its model request is held (exit ${JSON.stringify(opening.exit)})\noutput:\n${stripVTControlCharacters(opening.output)}`,
     );
     const activations = () =>
       project.readStore(
@@ -3298,6 +3331,8 @@ async function validateOpenTimePrompt() {
     );
     const whileListed = activations();
 
+    // The resumed task sends its request again; this time it is answered.
+    writeFileSync(path.join(project.work, 'golden-park.release'), '');
     let phase = 'opening';
     let notice = [];
     const chat = await runTexraPty(['chat'], {
@@ -3359,8 +3394,9 @@ async function validateOpenTimePrompt() {
         WHERE s.logical_id = '${source}' AND e.type = 'run.description'
         ORDER BY e."commit"`,
     );
+    // The task's name when \`/resume all\` listed it: its first description.
+    const described = titles[0]?.description ?? '';
     const artifactPath = writeArtifact('open-time-prompt.json', {
-      seed,
       source,
       openingExit: opening.exit,
       notice,
@@ -3371,7 +3407,7 @@ async function validateOpenTimePrompt() {
       chat.exit.exitCode === 0 &&
         phase === 'resumed' &&
         notice.length === 1 &&
-        notice[0].includes('First message') &&
+        notice[0].includes(described) &&
         whileListed === interrupted &&
         resumed === interrupted + 1,
       `the chat should resume nothing at open, then /resume all should name and resume the interrupted task (artifact: ${artifactPath})\noutput:\n${stripVTControlCharacters(chat.output).slice(-3000)}`,
@@ -3450,12 +3486,22 @@ prompt: |
       const [kind, id] = JSON.parse(record.payload.aggregateId);
       return kind === 'run' ? id : undefined;
     };
-    // A run id is opaque: the script's children are the child rows its
-    // parent reports, never names parsed out of an id.
+    // A run id is opaque: the script's children are the runs whose
+    // `run.start` names the headless run as their parent, never names parsed
+    // out of an id. Not the `run.children` records: those report a live
+    // list as the view publishes it, and a list between two published
+    // levels is never written.
+    const rootId = runIdOf(
+      records.find(
+        (record) => record.kind === 'progress' && record.event === 'run.start',
+      ),
+    );
     const childIds = new Set(
       records.flatMap((record) =>
-        record.kind === 'progress' && record.event === 'run.children'
-          ? (record.payload?.children ?? []).map((child) => child.childRunId)
+        record.kind === 'progress' &&
+        record.event === 'run.start' &&
+        record.payload?.parent?.id === rootId
+          ? [runIdOf(record)]
           : [],
       ),
     );
@@ -3620,7 +3666,7 @@ async function validateCliRunArtifacts(options = {}) {
   await validateFork();
   await validateTuiFork();
   await validateMidTurnDelivery();
-  await validateBackgroundCompaction();
+  await validateThresholdCompaction();
   await validateOpenTimePrompt();
   await validateServiceSharedTask();
   await validateServiceTasksInTui();

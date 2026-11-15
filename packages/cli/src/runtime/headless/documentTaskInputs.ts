@@ -11,6 +11,7 @@ import { Effect, FileSystem, Scope } from 'effect';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { absentReason } from '@texra-ai/harness/node';
 import { CliUsageError } from '@cli/runtime/platform/cliContext';
+import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe at the call site below since the input is always a relative
@@ -288,8 +289,28 @@ const finishDocumentTaskInputExpansion = Effect.fn(
   return { files: deduped, stdinPath };
 });
 
+/**
+ * `files` split by what a run does with each: binary media travels as media,
+ * so it stays out of the text inputs a run interpolates and names its
+ * outputs after.
+ */
+export function classifyInputFiles(files: readonly string[]) {
+  const extensions = getIncludedExtensions('media');
+  const inputFiles: string[] = [];
+  const mediaFiles: string[] = [];
+  for (const file of files) {
+    if (extensions.includes(path.extname(file).toLowerCase()))
+      mediaFiles.push(file);
+    else inputFiles.push(file);
+  }
+  return { inputFiles, mediaFiles };
+}
+
 interface ExpandedRunInputs {
+  /** The `--input` files a run reads as text. */
   readonly inputFiles: string[];
+  /** The `--input` files that are binary media. */
+  readonly mediaFiles: string[];
   readonly contextFiles: string[];
   /** Path this invocation materialized stdin to, when the literal `-` token was
    *  expanded. Ground truth for "was this run's input read from stdin" — never
@@ -356,7 +377,7 @@ const expandRunInputs = Effect.fn('expandRunInputs')(function* (
     readStdinText,
   );
   return {
-    inputFiles: inputs.files,
+    ...classifyInputFiles(inputs.files),
     contextFiles: contexts.files,
     // `-` is rejected above when it appears in both, so at most one is set.
     stdinInputPath: inputs.stdinPath ?? contexts.stdinPath,

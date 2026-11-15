@@ -18,12 +18,15 @@ import { Effect, Schema } from 'effect';
 
 // Local imports
 import {
+  GIT_AUTHOR_EMAIL_SETTING,
+  GIT_AUTHOR_NAME_SETTING,
   HELPER_MODEL_SETTING,
   settingsCatalog,
   type SettingRow,
   type SettingsCatalog,
 } from '@texra-ai/harness/schemas';
 import { CliOutputFormatSchema } from '@texra/shared/cliOutputFormat';
+import { CURATED_MODELS } from '@texra/model/curatedModels';
 import { LATEX_FORMATTER_VALUES } from '@texra/shared/constants/latexConfig';
 import {
   DEFAULT_ENABLED_REGEX_REPLACEMENTS,
@@ -31,16 +34,16 @@ import {
   NON_REGEX_REPLACEMENT_CATEGORIES,
   REGEX_REPLACEMENT_CATEGORIES,
 } from '@texra/shared/constants/replacementCategories';
-import { DOCUMENTS_SETTINGS } from '@texra/shared/settingsView/documentsSettings';
+import { DOCUMENTS_SETTINGS } from '@texra/shared/settings/documentsSettings';
 import {
   CLAUDE_AGENT_SETTINGS,
   CODEX_SETTINGS,
-} from '@texra/shared/settingsView/integrationSettings';
+} from '@texra/shared/settings/integrationSettings';
 import {
   HARNESS_ROW_SURFACES,
   type SettingsViewRow,
   type TexraSettingRow,
-} from '@texra/shared/settingsView/settingSurfaces';
+} from '@texra/shared/settings/settingSurfaces';
 import type { SettingsViewSnapshot } from '@texra/shared/settingsView/settingsViewMessages';
 
 /** Standalone preamble used when extracting a TikZ figure for compilation. */
@@ -294,7 +297,34 @@ export const INLINE_CRITICISM_SETTING = {
 } as const satisfies TexraSettingRow<boolean>;
 
 /** TeXRA's rows no TeXRA UI shows, in catalog order. */
+/**
+ * The launcher's commit picker reads the count through the host snapshot on
+ * both GUI hosts; the CLI only writes it, through the setup assistant's
+ * `update_config`.
+ */
+export const GIT_COMMITS_TO_SHOW_SETTING = {
+  key: 'git.numberOfCommitsToShow',
+  slot: 'config',
+  schema: Schema.Int.check(
+    Schema.isBetween({ minimum: 1, maximum: 1000 }),
+  ).pipe(Schema.withDecodingDefault(Effect.succeed(20))),
+  title: 'Commits to show',
+  description:
+    'Number of recent commits to show in the commit selection dropdown',
+} as const satisfies SettingRow<number>;
+
+/** The audio tools' SoX binary, when automatic detection should not decide. */
+export const SOX_PATH_SETTING = {
+  key: 'audio.soxPath',
+  slot: 'config',
+  schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
+  title: 'SoX path',
+  description: 'Path to the SoX executable. Overrides automatic detection.',
+} as const satisfies SettingRow<string>;
+
 const TEXRA_UNSHOWN_ROWS: readonly SettingRow[] = [
+  GIT_COMMITS_TO_SHOW_SETTING,
+  SOX_PATH_SETTING,
   CLI_AGENT_SETTING,
   CLI_MODEL_SETTING,
   CLI_CHAT_SETTING,
@@ -335,7 +365,12 @@ const DEFAULT_HELPER_MODEL = 'deepseek/deepseek-flash@none';
 const catalog: SettingsCatalog = settingsCatalog({
   namespace: 'texra',
   rows: [...TEXRA_UNSHOWN_ROWS, ...TEXRA_PLACED_ROWS],
-  defaults: { [HELPER_MODEL_SETTING.key]: DEFAULT_HELPER_MODEL },
+  defaults: {
+    [HELPER_MODEL_SETTING.key]: DEFAULT_HELPER_MODEL,
+    [GIT_AUTHOR_NAME_SETTING.key]: 'texra-ai',
+    [GIT_AUTHOR_EMAIL_SETTING.key]: 'texra-ai@users.noreply.github.com',
+  },
+  curatedModels: CURATED_MODELS,
 });
 
 /** Each harness row's placement, by key. */

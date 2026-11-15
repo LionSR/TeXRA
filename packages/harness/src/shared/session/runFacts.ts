@@ -5,9 +5,9 @@
  * and where its turn policy stands (the final-tool nudge, the finalized
  * answer). The row handlers in `runState.ts` and `turnRowHandlers.ts` set these
  * fields, so the loop reads them off the same state on the live path and on
- * resume. The consumed follow-up is here too, as its writers commit it (its
- * receipt is `followUpReceipt`, in `runRowReads.ts`); the rules for which
- * pending rows a run reads are the reader's (`agent/followUp/FollowUpReader.ts`).
+ * resume. The consumed follow-up is here too, as its writers commit it; the
+ * rules for which pending rows a run reads are the reader's
+ * (`agent/followUp/FollowUpReader.ts`).
  * The lifecycle rows a run is registered, activated and ended with are
  * built here, beside the readers of their facts;
  * `agent/storage/runLifecycle.ts` commits them.
@@ -42,7 +42,7 @@ import {
 import { byId } from './runRows';
 import type { TurnResult } from '@texra-ai/llm';
 import type { RunHistoryDraft, RunInputDraft } from './runState';
-import type { Invocation, PendingResponse } from './inFlight';
+import type { PendingResponse } from './inFlight';
 
 /** The text a completed model turn or assistant message contains, in order. */
 export const turnText = (turn: Pick<TurnResult, 'content'>): string =>
@@ -80,10 +80,13 @@ export type RunFacts = {
   /** The result a script run's handed-down call finished with: no model
    *  answers it, so its turn ends there, and an error fails it. */
   readonly handedDown: ToolResultPayload['result'] | null;
-  /** The turn whose final-tool nudge was appended, so it is asked once. */
-  readonly finalToolTurn: number | null;
-  /** The final-tool nudge stands unanswered: the next response is forced. */
-  readonly forceFinalTool: boolean;
+  /** The final-tool nudge: the turn it was appended in, so a turn is asked
+   *  once, and whether the response it forces is still `owed`. A nudge of
+   *  an earlier turn forces nothing. */
+  readonly finalTool: {
+    readonly turn: number;
+    readonly owed: boolean;
+  } | null;
   /** The latest response's answer was finalized for display. */
   readonly answerFinalized: boolean;
   /** Each call a response issued, and each call a script of it issued, by
@@ -107,8 +110,7 @@ export const NO_FACTS: RunFacts = {
   toolCalls: 0,
   structured: null,
   handedDown: null,
-  finalToolTurn: null,
-  forceFinalTool: false,
+  finalTool: null,
   answerFinalized: false,
   calls: byId([]),
 };
@@ -205,14 +207,6 @@ export const boundsLifecycle = (
 ): boolean =>
   row.aggregateId === qualifyAggregateId('run', runId) &&
   (row.type === 'run.activate' || row.type === 'run.end');
-
-/** `invocation` once a shutdown stopped its open attempt (a `run.stop` whose
- *  `reason` is `shutdown`): none, or one with a recorded outcome, is as it was. */
-export function closedBy(invocation: Invocation | null): Invocation | null {
-  if (invocation === null || invocation.current.failed !== null)
-    return invocation;
-  return { ...invocation, current: { ...invocation.current, closed: true } };
-}
 
 /** What a run is registered with: the facts its `run.start` carries. */
 export interface RegisterRunOptions {

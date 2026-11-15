@@ -1,8 +1,13 @@
 // Third-party imports
 import { css } from 'lit';
 
+// Local imports - shared styles
+import { toneStyles } from '@ui/styles/toneStyles';
+
 /** Styles for the individual <run-tab> row. */
 export const runTabStyles = css`
+  ${toneStyles}
+
   :host {
     display: block;
     padding-block: var(--run-tab-row-gap, var(--wa-space-3xs));
@@ -28,28 +33,9 @@ export const runTabStyles = css`
     overflow: hidden;
   }
 
-  /* The session view spells the tone; the row only maps it to a hue. */
-  .tab-container.tone-running {
-    --run-status-color: var(--color-success);
-  }
-
-  .tab-container.tone-danger {
-    --run-status-color: var(--color-error);
-  }
-
-  .tab-container.tone-warning {
-    --run-status-color: var(--color-warning);
-  }
-
-  .tab-container.tone-success .tab-status-icon {
-    color: var(--color-success);
-  }
-
-  /* Finished neutral states need no extra status decoration. */
-
-  /* Pending approval uses the warning glyph. */
+  /* Pending approval uses the warning glyph and the warning tone's colour. */
   .tab-container.has-pending-approval {
-    --run-status-color: var(--color-warning);
+    --tone-color: var(--color-warning);
   }
 
   .tab-select-tooltip-anchor {
@@ -138,7 +124,7 @@ export const runTabStyles = css`
     inline-size: 1em;
     min-inline-size: 1em;
     block-size: 1em;
-    color: var(--run-status-color, var(--color-text-muted));
+    color: var(--tone-color, var(--color-text-muted));
   }
 
   .tab-status-label {
@@ -329,16 +315,8 @@ export const runTabStyles = css`
   }
 
   @media (forced-colors: active) {
-    .tab-container:is(.tone-running, .tone-warning, .has-pending-approval) {
-      --run-status-color: Highlight;
-    }
-
-    .tab-container.tone-danger {
-      --run-status-color: CanvasText;
-    }
-
-    .tab-container:is(.tone-success, .tone-neutral) {
-      --run-status-color: GrayText;
+    .tab-container.has-pending-approval {
+      --tone-color: Highlight;
     }
 
     /* System selection colors override authored status hues. The focused

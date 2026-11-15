@@ -23,9 +23,9 @@ import {
   setModelEnabled,
   StateWriteFailed,
   type StateReadFailed,
-  type StateStore,
   MODEL_SELECTION_KEY,
 } from '@texra-ai/harness/host';
+import type { SettingsStores } from '@texra-ai/harness/plugins';
 import { getModelLabel } from '@texra-ai/harness/schemas';
 
 import { resolveKnownCliModelId } from '../platform/cliConfig';
@@ -44,8 +44,8 @@ export interface CliEnabledModelRow {
  */
 export const listCliEnabledModelCatalog = Effect.fn(
   'listCliEnabledModelCatalog',
-)(function* (state: StateStore) {
-  const enabled = new Set(yield* getEnabledModels(state));
+)(function* (stores: Pick<SettingsStores, 'config' | 'globalState'>) {
+  const enabled = new Set(yield* getEnabledModels(stores));
   return MODELS.filter((id) => {
     const config = modelConfig(id);
     return config === undefined || !isUnservedModel(config);
@@ -77,7 +77,7 @@ export const listCliEnabledModelCatalog = Effect.fn(
  * at the call site.
  */
 export function setCliModelEnabled(
-  state: StateStore,
+  stores: Pick<SettingsStores, 'config' | 'globalState'>,
   modelInput: string,
   enabled: boolean,
 ): Effect.Effect<
@@ -106,7 +106,7 @@ export function setCliModelEnabled(
       );
     }
 
-    return setModelEnabled({ model, enabled, state }).pipe(
+    return setModelEnabled({ model, enabled, stores }).pipe(
       Effect.map((list) => ({ model, enabled: list.includes(model), list })),
     );
   });

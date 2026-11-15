@@ -50,11 +50,12 @@ import {
 } from './formatRepoEvent';
 import {
   pollGet,
+  copyLru,
   readNewItems,
+  type SeenItems,
   type PollEvent,
   type PollResult,
 } from './poller';
-import { copyLru, dedupeComments, type DedupedResource } from './pollingDedup';
 import {
   GhIssueCommentArraySchema,
   GhPullRequestSchema,
@@ -63,8 +64,8 @@ import {
   isDefiniteMergeableState,
   type GhIssueComment,
   type GhPullsListEntry,
-  type GhReviewComment,
 } from './prTypes';
+import { COALESCE_THRESHOLD } from './prSubscriptionConstants';
 import type { RepoTarget } from './subscriptionTarget';
 
 // We pull all "updated since" data; a sufficiently large window guarantees we
@@ -89,12 +90,6 @@ const MAX_PR_STATE_ENTRIES = 500;
 // PRs that aren't probed this tick simply wait their turn: the next push
 // or comment will bubble them back to the top of the updated-at order.
 const MAX_MERGEABLE_PROBES_PER_TICK = 5;
-// Coalesce per-tick merge-conflict events into a single summary above this
-// threshold. Mirrors the PR-poller `COALESCE_THRESHOLD`: the typical cause
-// of many simultaneous transitions is a base-branch update invalidating
-// every open PR, and one summary message is more useful to an orchestrator
-// than five individual events.
-const MERGE_CONFLICT_COALESCE_THRESHOLD = 3;
 
 type PullStateName = 'open' | 'closed' | 'merged';
 
@@ -115,8 +110,8 @@ export interface RepoState {
    * repeatedly. The pulls endpoint does NOT support `since`, so PR transitions
    * are tracked by the per-PR maps below instead.
    */
-  readonly issueComments: DedupedResource<GhIssueComment> | undefined;
-  readonly reviewComments: DedupedResource<GhReviewComment> | undefined;
+  readonly issueComments: SeenItems | undefined;
+  readonly reviewComments: SeenItems | undefined;
   /**
    * Per-PR last-known state, indexed by PR number. Lets us emit a single
    * "opened" / "closed" / "merged" event per transition rather than every
@@ -207,8 +202,10 @@ export const pollRepo = Effect.fn('github.pollRepo')(function* (
   }
 
   // An item whose URL names no number is recorded but not reported.
-  const issueComments = readNewItems(prior?.issueComments, issueRes, () =>
-    dedupeComments<GhIssueComment>({ sinceCursor: seedCursor }),
+  const issueComments = readNewItems(
+    prior?.issueComments,
+    issueRes,
+    seedCursor,
   );
   for (const c of issueComments.fresh) {
     const number = parseTargetNumberFromIssueUrl(c);
@@ -216,8 +213,10 @@ export const pollRepo = Effect.fn('github.pollRepo')(function* (
       events.push(formatRepoIssueComment(repo, number, c));
     }
   }
-  const reviewComments = readNewItems(prior?.reviewComments, reviewRes, () =>
-    dedupeComments<GhReviewComment>({ sinceCursor: seedCursor }),
+  const reviewComments = readNewItems(
+    prior?.reviewComments,
+    reviewRes,
+    seedCursor,
   );
   for (const c of reviewComments.fresh) {
     const prNumber = matchPositiveInt(PR_NUMBER_RE, c.html_url);
@@ -266,7 +265,7 @@ export const pollRepo = Effect.fn('github.pollRepo')(function* (
  * record the readings in `maps`, the poll's next state.
  *
  * Reports one event per PR that flipped to `'dirty'`, or a single coalesced
- * summary if `>= MERGE_CONFLICT_COALESCE_THRESHOLD` PRs flipped on the
+ * summary if `>= COALESCE_THRESHOLD` PRs flipped on the
  * same tick. We do NOT emit "resolved" notifications at the repo level —
  * an orchestrator monitoring conflicts wants the alert, and the agent it
  * delegates the fix to will run a per-PR subscription that surfaces the
@@ -336,7 +335,7 @@ const probeMergeableStates = Effect.fn('github.probeMergeableStates')(
       }
     }
 
-    if (newlyDirty.length >= MERGE_CONFLICT_COALESCE_THRESHOLD) {
+    if (newlyDirty.length >= COALESCE_THRESHOLD) {
       return [
         formatRepoMergeConflictSummary(
           repo,

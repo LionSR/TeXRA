@@ -10,6 +10,7 @@ import {
 } from '@texra-ai/harness/schemas';
 
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
+import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
 
 import { pairOutputsWithBases } from './lineageMapping';
 import type { AgentTrace } from '@texra-ai/harness/plugins';
@@ -32,17 +33,16 @@ const TEX_EXTENSION_REGEX = /\.tex$/i;
  *
  * @param baseFiles Base file paths
  * @param outputs The round's outputs with their reported sources
- * @param logger Optional logger for debug messages
  */
 export const replaceInputCommands = Effect.fn('documents.replaceInputCommands')(
   function* (
     baseFiles: FileLocation[],
     outputs: readonly Pick<OutputFileInfo, 'source' | 'location'>[],
-    logger?: AgentTrace,
+    logger: AgentTrace,
   ): Effect.fn.Return<void, never, FileSystem.FileSystem> {
     const fs = yield* FileSystem.FileSystem;
     if (baseFiles.length === 0 || outputs.length === 0) {
-      logger?.debug('No files to process for input command replacement');
+      logger.debug('No files to process for input command replacement');
       return;
     }
 
@@ -54,11 +54,11 @@ export const replaceInputCommands = Effect.fn('documents.replaceInputCommands')(
     }
 
     if (baseToOutputMap.size === 0) {
-      logger?.debug('No valid file mappings for input command replacement');
+      logger.debug('No valid file mappings for input command replacement');
       return;
     }
 
-    logger?.debug(
+    logger.debug(
       `File mappings for input replacement: ${[...baseToOutputMap.entries()]
         .map(
           ([basePath, outputLoc]) =>
@@ -103,7 +103,7 @@ export const replaceInputCommands = Effect.fn('documents.replaceInputCommands')(
     }
 
     if (replacementLookup.size === 0) {
-      logger?.debug('No replacement entries derived from file mappings');
+      logger.debug('No replacement entries derived from file mappings');
       return;
     }
 
@@ -130,17 +130,17 @@ export const replaceInputCommands = Effect.fn('documents.replaceInputCommands')(
 
           if (newContent !== content) {
             yield* fs.writeFileString(outputLocation.absolutePath, newContent);
-            logger?.debug(`Updated input commands in ${outputPath}`);
+            logger.debug(`Updated input commands in ${outputPath}`);
           }
         }).pipe(
           // One unreadable or unwritable output must not stop the rewrite of the
           // rest; the file keeps its original `\input{}` targets and says so.
-          Effect.catch((err) =>
-            Effect.sync(() => {
-              logger?.warn(
+          recoverLogged(
+            (err) =>
+              logger.warn(
                 `Error processing input commands in ${outputPath}: ${toErrorMessage(err)}`,
-              );
-            }),
+              ),
+            () => Effect.void,
           ),
         );
       },

@@ -29,7 +29,7 @@ import { nanoid } from 'nanoid';
 import React from 'react';
 
 import { apiKeySecretName } from '@texra-ai/llm';
-import { AgentCatalog, describeFollowUpFailure } from '@texra-ai/harness/host';
+import { AgentCatalog } from '@texra-ai/harness/host';
 import { Secrets } from '@texra-ai/harness/plugins';
 import {
   attachInteractions,
@@ -41,6 +41,7 @@ import {
   SessionRequests,
 } from '@agent/runtime/requests';
 import { queuedRow } from '@agent/followUp/followUpMessages';
+import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
@@ -56,7 +57,7 @@ import {
 import { acceptsFollowUp, descendantRuns } from '@shared/session/sessionView';
 import { runBypasses } from '@shared/approvalBypassKind';
 import { summarizeSubagentFollowup } from '@shared/subagentFollowup';
-import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
+import { CURATED_MODELS } from '@texra/model/curatedModels';
 import {
   parseApprovalPolicy,
   APPROVAL_POLICY_DEFAULT,
@@ -101,7 +102,7 @@ import {
   PROCESS,
   tail,
 } from '@test/shared/session/fanOutScenario';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import {
   buildDiffHunks,
@@ -403,7 +404,7 @@ if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {
   await harnessRuntime.runPromise(
     harnessRoots.globalState.update(MODEL_SELECTION_KEY.key, {
       enabledExtras: HARNESS_VISIBLE_MODELS,
-      disabledDefaults: DEFAULT_MODELS.filter(
+      disabledDefaults: CURATED_MODELS.filter(
         (model) => !HARNESS_VISIBLE_MODELS.includes(model),
       ),
     }),
@@ -1065,7 +1066,6 @@ function makeRetryApprovalPayload(): RetryRequest {
           kind: 'decline-route',
           route: 'chatgpt-subscription',
           provider: 'openai',
-          automatic: false,
         }
       : null,
   };

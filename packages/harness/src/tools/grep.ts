@@ -6,7 +6,11 @@ import { Effect, FileSystem, Schema } from 'effect';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - tools
-import { ToolError, type ToolResult } from '@shared/schemas';
+import {
+  ToolError,
+  type ToolResult,
+  NonNegativeIntSchema,
+} from '@shared/schemas';
 import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { executed } from '@tools/core/result';
@@ -37,21 +41,17 @@ const GrepInputSchema = Schema.Struct({
     'content',
     'Must be "content", "files_with_matches", or "count". For context lines around matches, use -C instead.',
   ),
-  '-B': Schema.optional(
-    Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
-  ).annotate({
+  '-B': Schema.optional(Schema.NullOr(NonNegativeIntSchema)).annotate({
     description:
       'Lines of context BEFORE each match (only with output_mode "content").',
   }),
-  '-A': Schema.optional(
-    Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
-  ).annotate({
+  '-A': Schema.optional(Schema.NullOr(NonNegativeIntSchema)).annotate({
     description:
       'Lines of context AFTER each match (only with output_mode "content").',
   }),
-  '-C': Schema.optional(
-    Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
-  ).annotate({ description: 'Lines of context before AND after each match.' }),
+  '-C': Schema.optional(Schema.NullOr(NonNegativeIntSchema)).annotate({
+    description: 'Lines of context before AND after each match.',
+  }),
   '-n': Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
     description: 'Show line numbers.',
   }),
@@ -61,11 +61,7 @@ const GrepInputSchema = Schema.Struct({
   type: Schema.optional(Schema.NullOr(Schema.String)).annotate({
     description: 'Ripgrep file type filter (e.g. "tex", "py").',
   }),
-  offset: nullishWithDefault(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-    0,
-    'Skip first N results.',
-  ),
+  offset: nullishWithDefault(NonNegativeIntSchema, 0, 'Skip first N results.'),
   head_limit: Schema.optional(
     Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
   ).annotate({ description: 'Limit to first N results.' }),

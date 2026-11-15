@@ -10,6 +10,7 @@ import {
   type TurnRequest,
 } from '../turn.js';
 import { boundTurn, resolveTurn } from './turnInput.js';
+import { onOpenAiEndpoint } from './responsesConfiguration.js';
 import { ModelError } from '../errors.js';
 import { responseInput, toolNamespaceOf } from './openaiResponsesLower.js';
 import type { ResponseOrigin } from './openaiResponsesCodec.js';
@@ -42,7 +43,7 @@ export const prepareResponsesTurn = (
           store: config.defaults.store,
           reasoning: config.defaults.reasoning,
           serviceTier: config.defaults.serviceTier,
-          ...(config.openaiEndpoint && author.cacheKey !== undefined
+          ...(onOpenAiEndpoint(config) && author.cacheKey !== undefined
             ? { promptCacheKey: author.cacheKey }
             : {}),
         },
@@ -235,14 +236,18 @@ export const bearerHeaders = (token: string) => ({
 });
 
 /** Ambient OpenAI headers would override the selected deployment. */
-export function refuseAmbientHeaders(): void {
-  if (process.env.OPENAI_CUSTOM_HEADERS)
-    throw new ModelError({
-      kind: 'invalid-request',
-      message:
-        'Ambient OpenAI headers cannot override the selected deployment.',
-    });
-}
+export const refuseAmbientHeaders: Effect.Effect<void, ModelError> =
+  Effect.suspend(() =>
+    process.env.OPENAI_CUSTOM_HEADERS
+      ? Effect.fail(
+          new ModelError({
+            kind: 'invalid-request',
+            message:
+              'Ambient OpenAI headers cannot override the selected deployment.',
+          }),
+        )
+      : Effect.void,
+  );
 
 /**
  * The SDK client for one selected Responses deployment: no retries, no

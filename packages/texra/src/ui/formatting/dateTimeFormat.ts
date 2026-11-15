@@ -14,7 +14,7 @@ export function cachedDateTimeFormat(
   // Sorted so the same options produce the same key regardless of property
   // order (plain `JSON.stringify` would key on insertion order instead).
   const key = Object.entries(options)
-    .sort(([a], [b]) => a.localeCompare(b))
+    .toSorted(([a], [b]) => a.localeCompare(b))
     .map(([k, v]) => `${k}:${v}`)
     .join(',');
   let formatter = formatters.get(key);
@@ -23,4 +23,24 @@ export function cachedDateTimeFormat(
     formatters.set(key, formatter);
   }
   return formatter;
+}
+
+/**
+ * A moment as every host prints it in a list or a row: locale-aware, short
+ * month, no seconds (`Nov 14, 2026, 09:12 AM`). `null` for a missing or
+ * unparseable value, which its caller words.
+ */
+export function formatShortDateTime(
+  value: string | number | Date | null | undefined,
+): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return cachedDateTimeFormat({
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
 }

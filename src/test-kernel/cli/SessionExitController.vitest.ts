@@ -74,7 +74,6 @@ const createController = (
       leaveProcess: () =>
         Effect.die(new Error('the exit left the process unexpectedly')),
       submitted,
-      rootRunEnded: Effect.void,
       getApprovalPolicy: () => 'ask',
       flushArtifacts: Effect.fail(new Error('disk full')),
       repaintAfterTerminalResume: () => {},

@@ -2,6 +2,12 @@
  * Utilities for managing text replacements in the codebase.
  */
 
+import {
+  DISPLAY_MATH_ENVIRONMENTS,
+  GREEK_LETTER_CHARACTERS,
+  UPPERCASE_GREEK_LETTER_CHARACTERS,
+  withStarredForms,
+} from '@replacement/constants';
 import { findBraceBalancedMacroCalls } from '@texra/utils/text/braceBalancedMacro';
 
 /**
@@ -123,171 +129,135 @@ export function escapeTextttUnderscores(text: string): string {
 
 // Map of Unicode characters to their LaTeX equivalents
 const MATH_UNICODE_MAP: Record<string, string> = {
-  // Greek letters (alphabetical)
-  α: '\\alpha', // alpha
-  β: '\\beta', // beta
-  χ: '\\chi', // chi
-  δ: '\\delta', // delta
-  Δ: '\\Delta', // Delta
-  ε: '\\epsilon', // epsilon
-  η: '\\eta', // eta
-  γ: '\\gamma', // gamma
-  Γ: '\\Gamma', // Gamma
-  ι: '\\iota', // iota
-  κ: '\\kappa', // kappa
-  λ: '\\lambda', // lambda
-  Λ: '\\Lambda', // Lambda
-  μ: '\\mu', // mu (U+03BC GREEK SMALL LETTER MU)
-  µ: '\\mu', // mu (U+00B5 MICRO SIGN)
-  ν: '\\nu', // nu
-  ω: '\\omega', // omega
-  Ω: '\\Omega', // Omega
-  φ: '\\phi', // phi
-  Φ: '\\Phi', // Phi
-  π: '\\pi', // pi
-  Π: '\\Pi', // Pi
-  ψ: '\\psi', // psi
-  Ψ: '\\Psi', // Psi
-  ρ: '\\rho', // rho
-  σ: '\\sigma', // sigma
-  Σ: '\\Sigma', // Sigma
-  τ: '\\tau', // tau
-  θ: '\\theta', // theta
-  Θ: '\\Theta', // Theta
-  υ: '\\upsilon', // upsilon
-  Υ: '\\Upsilon', // Upsilon
-  ξ: '\\xi', // xi
-  Ξ: '\\Xi', // Xi
-  ζ: '\\zeta', // zeta
+  // Greek letters: α -> \alpha, Δ -> \Delta. LaTeX has no \omicron, so ο
+  // is left as written.
+  ...Object.fromEntries(
+    Object.entries({
+      ...GREEK_LETTER_CHARACTERS,
+      ...UPPERCASE_GREEK_LETTER_CHARACTERS,
+    })
+      .filter(([name]) => name !== 'omicron')
+      .map(([name, char]) => [char, `\\${name}`]),
+  ),
+  µ: '\\mu', // U+00B5 MICRO SIGN, beside the Greek mu
 
-  // Mathematical operators and symbols
-  '−': '-', // minus sign (U+2212)
-  '×': '\\times', // multiplication (U+00D7 or U+22C2)
-  '÷': '\\div', // division
-  '≤': '\\leq', // less than or equal
-  '≥': '\\geq', // greater than or equal
-  '≠': '\\neq', // not equal
-  '≈': '\\approx', // approximately equal
-  '≡': '\\equiv', // equivalent to
-  '≅': '\\cong', // congruent to
-  '∼': '\\sim', // similar to
-  '∝': '\\propto', // proportional to
-  '≺': '\\prec', // precedes
-  '≻': '\\succ', // succeeds
-  '⊂': '\\subset', // subset
-  '⊃': '\\supset', // superset
-  '⊆': '\\subseteq', // subset or equal
-  '⊇': '\\supseteq', // superset or equal
-  '∈': '\\in', // element of
-  '∉': '\\notin', // not element of
-  '∋': '\\ni', // contains as member
-  '∩': '\\cap', // intersection
-  '∪': '\\cup', // union
-  '∅': '\\emptyset', // empty set
-  '∞': '\\infty', // infinity
-  '∇': '\\nabla', // nabla
-  '∂': '\\partial', // partial derivative
-  '∫': '\\int', // integral
-  '∬': '\\iint', // double integral
-  '∭': '\\iiint', // triple integral
-  '∮': '\\oint', // contour integral
-  '∑': '\\sum', // summation
-  '∏': '\\prod', // product
-  // '√': '\\sqrt{}', // square root (U+221A)
-  // '∛': '\\sqrt[3]{}', // cube root
-  '∠': '\\angle', // angle
-  '⊥': '\\perp', // perpendicular
-  '∥': '\\parallel', // parallel (U+2225)
-  '‖': '\\parallel', // parallel (U+2016, alternative)
-  '∧': '\\wedge', // logical and
-  '∨': '\\vee', // logical or
-  '¬': '\\neg', // logical not
-  '⇒': '\\Rightarrow', // implies (U+21D2)
-  '⇔': '\\Leftrightarrow', // if and only if (U+21D4)
-  '↑': '\\uparrow', // up arrow
-  '↓': '\\downarrow', // down arrow
-  '←': '\\leftarrow', // left arrow
-  '→': '\\rightarrow', // right arrow
-  '↔': '\\leftrightarrow', // left-right arrow
-  '⟨': '\\langle', // left angle bracket
-  '⟩': '\\rangle', // right angle bracket
-  '…': '\\ldots', // horizontal ellipsis
-  '⋅': '\\cdot', // center dot (U+22C5)
-  '·': '\\cdot', // middle dot (U+00B7, alternative)
-  '⋮': '\\vdots', // vertical ellipsis
-  '⋯': '\\cdots', // center ellipsis
-  '⋱': '\\ddots', // diagonal ellipsis
-  '°': '^{\\circ}', // degree
-  '′': '\\prime', // prime (U+2032)
-  '∗': '\\ast', // asterisk operator (U+2217)
-  '∘': '\\circ', // ring operator (U+2218)
-  '∆': '\\Delta', // increment / Laplacian (U+2206, distinct from Greek Delta U+0394 but often maps to \Delta)
-  '⌊': '\\lfloor', // left floor (U+230A)
-  '⌋': '\\rfloor', // right floor (U+230B)
+  // Operators, relations, arrows and dots. Look-alikes listed separately:
+  // the minus sign U+2212, both parallels U+2225 and U+2016, both dots
+  // U+22C5 and U+00B7, and the increment U+2206 beside Greek Delta.
+  '−': '-',
+  '×': '\\times',
+  '÷': '\\div',
+  '≤': '\\leq',
+  '≥': '\\geq',
+  '≠': '\\neq',
+  '≈': '\\approx',
+  '≡': '\\equiv',
+  '≅': '\\cong',
+  '∼': '\\sim',
+  '∝': '\\propto',
+  '≺': '\\prec',
+  '≻': '\\succ',
+  '⊂': '\\subset',
+  '⊃': '\\supset',
+  '⊆': '\\subseteq',
+  '⊇': '\\supseteq',
+  '∈': '\\in',
+  '∉': '\\notin',
+  '∋': '\\ni',
+  '∩': '\\cap',
+  '∪': '\\cup',
+  '∅': '\\emptyset',
+  '∞': '\\infty',
+  '∇': '\\nabla',
+  '∂': '\\partial',
+  '∫': '\\int',
+  '∬': '\\iint',
+  '∭': '\\iiint',
+  '∮': '\\oint',
+  '∑': '\\sum',
+  '∏': '\\prod',
+  '∠': '\\angle',
+  '⊥': '\\perp',
+  '∥': '\\parallel',
+  '‖': '\\parallel',
+  '∧': '\\wedge',
+  '∨': '\\vee',
+  '¬': '\\neg',
+  '⇒': '\\Rightarrow',
+  '⇔': '\\Leftrightarrow',
+  '↑': '\\uparrow',
+  '↓': '\\downarrow',
+  '←': '\\leftarrow',
+  '→': '\\rightarrow',
+  '↔': '\\leftrightarrow',
+  '⟨': '\\langle',
+  '⟩': '\\rangle',
+  '…': '\\ldots',
+  '⋅': '\\cdot',
+  '·': '\\cdot',
+  '⋮': '\\vdots',
+  '⋯': '\\cdots',
+  '⋱': '\\ddots',
+  '°': '^{\\circ}',
+  '′': '\\prime',
+  '∗': '\\ast',
+  '∘': '\\circ',
+  '∆': '\\Delta',
+  '⌊': '\\lfloor',
+  '⌋': '\\rfloor',
 
-  // Letter-like Symbols
-  ℝ: '\\mathbb{R}', // double-struck R (U+211D)
-  ℕ: '\\mathcal{N}', // User mapped DOUBLE-STRUCK CAPITAL N (U+2115) to \mathcal{N}
-  ℓ: '\\ell', // script small l (U+2113)
-  𝒜: '\\mathcal{A}', // script A (U+1D49C MATHEMATICAL SCRIPT CAPITAL A)
-  ℬ: '\\mathcal{B}', // script B (U+212C SCRIPT CAPITAL B)
-  // 'ℭ': '\\mathcal{C}', // User mapped BLACK-LETTER CAPITAL C (U+212D) to \mathcal{C}
-  𝒞: '\\mathcal{C}', // script C (U+1D49E MATHEMATICAL SCRIPT CAPITAL C)
-  𝒟: '\\mathcal{D}', // script D (U+1D49F MATHEMATICAL SCRIPT CAPITAL D)
-  ℰ: '\\mathcal{E}', // script E (U+2130 SCRIPT CAPITAL E)
-  ℱ: '\\mathcal{F}', // script F (U+2131 SCRIPT CAPITAL F)
-  𝒢: '\\mathcal{G}', // script G (U+1D4A2 MATHEMATICAL SCRIPT CAPITAL G)
-  ℋ: '\\mathcal{H}', // script H (U+210B SCRIPT CAPITAL H)
-  ℐ: '\\mathcal{I}', // script I (U+2110 SCRIPT CAPITAL I)
-  ℒ: '\\mathcal{L}', // script L (U+2112 SCRIPT CAPITAL L)
-  ℳ: '\\mathcal{M}', // script M (U+2133 SCRIPT CAPITAL M)
-  𝒩: '\\mathcal{N}', // script N (U+1D4A5 MATHEMATICAL SCRIPT CAPITAL N)
-  𝒪: '\\mathcal{O}', // script O (U+1D4A6 MATHEMATICAL SCRIPT CAPITAL O)
-  𝒫: '\\mathcal{P}', // script P (U+1D4A9 MATHEMATICAL SCRIPT CAPITAL P)
-  𝒬: '\\mathcal{Q}', // script Q (U+1D4AA MATHEMATICAL SCRIPT CAPITAL Q)
-  ℛ: '\\mathcal{R}', // script R (U+211B SCRIPT CAPITAL R)
-  𝒮: '\\mathcal{S}', // script S (U+1D4AE MATHEMATICAL SCRIPT CAPITAL S)
-  𝒯: '\\mathcal{T}', // script T (U+1D4AF MATHEMATICAL SCRIPT CAPITAL T)
-  𝒰: '\\mathcal{U}', // script U (U+1D4B0 MATHEMATICAL SCRIPT CAPITAL U)
-  𝒱: '\\mathcal{V}', // script V (U+1D4B1 MATHEMATICAL SCRIPT CAPITAL V)
-  𝒲: '\\mathcal{W}', // script W (U+1D4B2 MATHEMATICAL SCRIPT CAPITAL W)
-  𝒳: '\\mathcal{X}', // script X (U+1D4B3 MATHEMATICAL SCRIPT CAPITAL X)
-  𝒴: '\\mathcal{Y}', // script Y (U+1D4B4 MATHEMATICAL SCRIPT CAPITAL Y)
-  𝒵: '\\mathcal{Z}', // script Z (U+1D4B5 MATHEMATICAL SCRIPT CAPITAL Z)
-  𝒙: '\\mathbf{x}', // bold x (U+1D499)
-  𝒇: '\\mathbf{f}', // bold f (U+1D487)
+  // Letter-like symbols. The double-struck N maps to \mathcal{N}, not
+  // \mathbb{N}, by choice.
+  ℝ: '\\mathbb{R}',
+  ℕ: '\\mathcal{N}',
+  ℓ: '\\ell',
+  𝒜: '\\mathcal{A}',
+  ℬ: '\\mathcal{B}',
+  𝒞: '\\mathcal{C}',
+  𝒟: '\\mathcal{D}',
+  ℰ: '\\mathcal{E}',
+  ℱ: '\\mathcal{F}',
+  𝒢: '\\mathcal{G}',
+  ℋ: '\\mathcal{H}',
+  ℐ: '\\mathcal{I}',
+  ℒ: '\\mathcal{L}',
+  ℳ: '\\mathcal{M}',
+  𝒩: '\\mathcal{N}',
+  𝒪: '\\mathcal{O}',
+  𝒫: '\\mathcal{P}',
+  𝒬: '\\mathcal{Q}',
+  ℛ: '\\mathcal{R}',
+  𝒮: '\\mathcal{S}',
+  𝒯: '\\mathcal{T}',
+  𝒰: '\\mathcal{U}',
+  𝒱: '\\mathcal{V}',
+  𝒲: '\\mathcal{W}',
+  𝒳: '\\mathcal{X}',
+  𝒴: '\\mathcal{Y}',
+  𝒵: '\\mathcal{Z}',
+  𝒙: '\\mathbf{x}',
+  𝒇: '\\mathbf{f}',
 
-  // Unicode Subscripts/Superscripts to LaTeX
-  '₀': '_{0}', // subscript 0 (U+2080)
-  '₁': '_{1}', // subscript 1 (U+2081)
-  '₂': '_{2}', // subscript 2 (U+2082)
-  ₐ: '_{a}', // subscript a (U+2090)
-  // '₋': '_{-S}', // subscript minus (U+208B) - User commented out, LaTeX has no standard subscript minus
-  // '₍': '_{(}', // subscript left parenthesis (U+208D)
-  // '₎': '_{)}', // subscript right parenthesis (U+208E)
-  ₓ: '_{x}', // subscript x (U+2093)
-  ₜ: '_{t}', // subscript t (U+209C)
-  ₙ: '_{n}', // subscript n (U+2099)
-  ᵧ: '_{\\gamma}', // subscript gamma (U+1D67)
-  '⁻': '^{-}', // superscript minus (U+207B)
-  ⁿ: '^{n}', // superscript n (U+207F)
-  ᵀ: '^{T}', // superscript T (U+1D40)
-  ᵐ: '^{m}', // superscript m (U+1D50)
-
-  // Combining Diacritics (experimental - may need pre-processing for ideal LaTeX)
-  // '̇': '\\dot{}', // combining dot above (U+0307) - User commented out
+  // Subscripts and superscripts.
+  '₀': '_{0}',
+  '₁': '_{1}',
+  '₂': '_{2}',
+  ₐ: '_{a}',
+  ₓ: '_{x}',
+  ₜ: '_{t}',
+  ₙ: '_{n}',
+  ᵧ: '_{\\gamma}',
+  '⁻': '^{-}',
+  ⁿ: '^{n}',
+  ᵀ: '^{T}',
+  ᵐ: '^{m}',
 };
 
-// Math environment delimiters to search for
-const MATH_ENVIRONMENTS = [
-  { start: '\\begin{equation}', end: '\\end{equation}' },
-  { start: '\\begin{equation*}', end: '\\end{equation*}' },
-  { start: '\\begin{align}', end: '\\end{align}' },
-  { start: '\\begin{align*}', end: '\\end{align*}' },
-  { start: '\\begin{aligned}', end: '\\end{aligned}' },
-  { start: '\\begin{multline}', end: '\\end{multline}' },
-  { start: '\\begin{gather}', end: '\\end{gather}' },
-  { start: '\\begin{cases}', end: '\\end{cases}' },
+// Math delimiters to search for: the environments, then display brackets.
+const MATH_DELIMITERS = [
+  ...[...withStarredForms(DISPLAY_MATH_ENVIRONMENTS), 'aligned', 'cases'].map(
+    (name) => ({ start: `\\begin{${name}}`, end: `\\end{${name}}` }),
+  ),
   { start: '\\[', end: '\\]' },
   { start: '$$', end: '$$' },
 ];
@@ -336,7 +306,7 @@ export function replaceMathUnicode(text: string): string {
   }
 
   // Process each block math environment
-  for (const env of MATH_ENVIRONMENTS) {
+  for (const env of MATH_DELIMITERS) {
     let startIdx = 0;
     while ((startIdx = text.indexOf(env.start, startIdx)) !== -1) {
       const envStart = startIdx + env.start.length;

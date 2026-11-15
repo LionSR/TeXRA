@@ -8,26 +8,7 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 // Local imports
 import { credentialOriginLabel } from '@ui/copy/credentials';
 import type { ProviderKeyStatus } from '@texra/shared/settingsView/profileViewMessages';
-import type { IconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-
-/**
- * The icon buckets a script call's status sorts into (`ScriptStage`); a run's
- * and a stage's glyph come from `runStatus`'s tone table.
- */
-type TerminalStatusKind = 'cancelled' | 'completed' | 'failed' | 'running';
-
-const TERMINAL_STATUS_ICON: Readonly<Record<TerminalStatusKind, IconName>> = {
-  failed: 'circle-exclamation',
-  completed: 'check',
-  cancelled: 'circle-stop',
-  running: 'circle',
-};
-
-/** The steady wa-icon name for a terminal-run status bucket. */
-export function terminalStatusIcon(kind: TerminalStatusKind): IconName {
-  return TERMINAL_STATUS_ICON[kind];
-}
 
 type WaTagVariant = 'brand' | 'neutral' | 'success' | 'warning' | 'danger';
 

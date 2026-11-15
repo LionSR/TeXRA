@@ -150,7 +150,7 @@ function findBlockquotePairs(content: string): HtmlTagPair[] {
     });
   }
   // Nested pairs close inner-first, so closing order is not start order.
-  return pairs.sort((a, b) => a.start - b.start);
+  return pairs.toSorted((a, b) => a.start - b.start);
 }
 
 function convertEnvironmentBlockquotes(content: string): string {

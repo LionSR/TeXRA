@@ -1,9 +1,19 @@
 // Third-party imports
-import { Predicate } from 'effect';
+import { Cause, Predicate } from 'effect';
 
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
-/** `err` followed by its `cause` chain, outermost first; an
+/**
+ * What a failed Effect raised: a `Cause` read as the one error
+ * `Cause.squash` picks (a typed failure before a defect before an
+ * interruption), anything else as itself. Every reader of an `unknown`
+ * failure below starts here, so a caller holding a `Cause` passes it as is.
+ */
+const raisedBy = (err: unknown): unknown =>
+  Cause.isCause(err) ? Cause.squash(err) : err;
+
+/** `err` followed by its `cause` chain, outermost first; a `Cause` reads as
+ *  the error it raised; an
  *  `AggregateError`'s `errors` follow it before its cause, and an error
  *  whose `reason` carries the cause (a `PlatformError`, a `SqlError`) is
  *  followed by that cause. Shared traversal for messages and for
@@ -27,7 +37,7 @@ export function causeChain(err: unknown): unknown[] {
     )
       visit(current.reason.cause);
   };
-  visit(err);
+  visit(raisedBy(err));
   return chain;
 }
 
@@ -40,7 +50,7 @@ export function causeChain(err: unknown): unknown[] {
  */
 export function toErrorMessage(err: unknown): string {
   const nodes = causeChain(err);
-  if (nodes.length === 0) return String(err);
+  if (nodes.length === 0) return String(raisedBy(err));
   const messages = nodes
     .map((node) => (node instanceof Error ? node.message : String(node)))
     .filter((message) => message.trim() !== '');
@@ -70,9 +80,11 @@ export function formatError(prefix: string, err: unknown): string {
   return `${prefix}: ${detail}`;
 }
 
-/** Coerce any thrown value to an Error instance. */
+/** Coerce any thrown value, or the `Cause` of a failed Effect, to an Error
+ *  instance. */
 export function ensureError(err: unknown): Error {
-  return err instanceof Error ? err : new Error(toErrorMessage(err));
+  const raised = raisedBy(err);
+  return raised instanceof Error ? raised : new Error(toErrorMessage(raised));
 }
 
 /**

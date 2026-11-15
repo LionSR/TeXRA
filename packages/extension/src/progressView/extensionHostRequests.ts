@@ -20,7 +20,11 @@ import {
   type ProcessServices,
   pathToLocationIn,
 } from '@texra-ai/harness/host';
-import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
+import {
+  emitAppSignal,
+  withLogChannel,
+  WorkspaceFs,
+} from '@texra-ai/harness/plugins';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
 import {
   toErrorMessage,
@@ -33,7 +37,10 @@ import { downloadArXivSource } from '@commands/latex/arXivCommands';
 import { launchSetupAssistant } from '@commands/setup/setupAssistantCommand';
 import { createSampleProject } from '@commands/system/sampleProjectCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
-import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
+import {
+  openGuidePage,
+  VscodeExternalOpener,
+} from '@frontend/hosts/VscodeExternalOpener';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { openBuilt } from '@frontend/latex/openBuild';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
@@ -59,10 +66,7 @@ import {
   type TranscriptExportOpenKind,
 } from '@texra/controllers/progressView/exportTranscript';
 import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
-import {
-  fromHost,
-  hostFailure,
-} from '@texra/controllers/session/hostCallFailure';
+import { hostFailure } from '@texra/controllers/session/hostCallFailure';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import type {
   OwnHostArms,
@@ -158,10 +162,8 @@ const openExportPath = (
     });
   const uri = vscode.Uri.file(filePath);
   if (kind === 'external') {
-    return Effect.tryPromise({
-      try: () => vscode.env.openExternal(uri),
-      catch: failed,
-    }).pipe(Effect.asVoid);
+    // The opener also fails when VS Code declines the file.
+    return new VscodeExternalOpener().openExternal(uri.toString());
   }
   if (kind === 'pdf') {
     return executeVscodeCommand('vscode.open', uri).pipe(
@@ -250,11 +252,9 @@ export const createExtensionHostRequests = Effect.fn(
             patch: { commit: parsed.commitHash },
           });
         } else {
-          yield* Effect.forkDetach(
-            vscodeUi.notify(
-              'info',
-              `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
-            ),
+          yield* vscodeUi.notify(
+            'info',
+            `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
           );
         }
         const sourceLocation = pathToLocationIn(
@@ -273,11 +273,9 @@ export const createExtensionHostRequests = Effect.fn(
             paths: [parsed.sourcePath],
           } satisfies HostOutcome;
         }
-        yield* Effect.forkDetach(
-          vscodeUi.notify(
-            'info',
-            `The base file ${parsed.sourcePath} could not be found. Keeping ${currentOpenFile} selected.`,
-          ),
+        yield* vscodeUi.notify(
+          'info',
+          `The base file ${parsed.sourcePath} could not be found. Keeping ${currentOpenFile} selected.`,
         );
       }
     }
@@ -286,13 +284,6 @@ export const createExtensionHostRequests = Effect.fn(
       paths: [currentOpenFile],
     } satisfies HostOutcome;
   });
-
-  /** The reads a new credential invalidates: the credential, which the
-   *  funnel and the banner follow, and the catalogs. */
-  const refreshAfterCredentialChange = Effect.all(
-    [snapshot.refreshHostBanners, snapshot.refreshCatalogs],
-    { concurrency: 'unbounded', discard: true },
-  );
 
   /** What each getting-started action runs. */
   const gettingStarted = (action: GettingStartedAction) => {
@@ -339,27 +330,29 @@ export const createExtensionHostRequests = Effect.fn(
     },
     openSettings: (target) =>
       runHandler('openSettings', options.openSettings(target)),
-    // SecretManager has no key-changed event, so the set-key flow's
-    // completion is the explicit point to check the credential again.
+    // The key store announces the write (`credentialChanged`), which the
+    // launcher's credential check and catalogs follow.
     setApiKey: (provider) =>
-      runHandler('setApiKey', setApiKey(roots, provider)).pipe(
-        Effect.andThen(snapshot.refreshHostBanners),
-      ),
+      runHandler('setApiKey', setApiKey(roots, provider)),
+    // A link VS Code declines or cannot open is answered as a rejection, so
+    // the view shows which URL did not open.
     openExternal: (url) =>
-      Effect.asVoid(
-        fromHost('env.openExternal', () =>
-          vscode.env.openExternal(vscode.Uri.parse(url)),
+      new VscodeExternalOpener()
+        .openExternal(url)
+        .pipe(
+          Effect.mapError((failed) => new Rejected({ reason: failed.message })),
         ),
-      ),
     // The banner refresh probes the dependencies again; the banner shows
     // what is missing.
     recheckDependencies: snapshot.refreshHostBanners,
     // Every dependency the banner lists installs from the one guide page.
     openInstallGuide: runHandler('openDoc', openGuidePage('installation')),
     onboarding: {
+      // The sign-in's token write announces itself; its subscription
+      // preference write is announced here, as the settings view's is.
       signInChatGpt: Effect.gen(function* () {
         yield* signInWithSubscription(roots, 'chatgpt');
-        yield* refreshAfterCredentialChange;
+        yield* emitAppSignal('modelAccessChanged', undefined);
       }).pipe(withLogChannel(CHANNEL)),
       runSetup: (launch) =>
         runHandler(
@@ -382,7 +375,7 @@ export const createExtensionHostRequests = Effect.fn(
   /**
    * The arms this host performs its own way. The capabilities that still
    * answer with a promise - VS Code commands, the editor APIs - are lifted
-   * once (`executeVscodeCommand`, `fromHost`), and this extension's own
+   * once (`executeVscodeCommand`), and this extension's own
    * commands run as the programs behind them, so no arm re-enters the
    * runtime between here and the bridge that runs this program.
    */

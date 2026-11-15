@@ -1,4 +1,4 @@
-import { Cause, Effect } from 'effect';
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
@@ -40,7 +40,7 @@ export function initializeLatexSupport(
     ),
     Effect.catchCause((cause) =>
       Effect.logWarning(
-        `Failed to extend PATH with TeX directories: ${toErrorMessage(Cause.squash(cause))}`,
+        `Failed to extend PATH with TeX directories: ${toErrorMessage(cause)}`,
       ).pipe(withLogChannel(CHANNEL)),
     ),
   );
@@ -67,7 +67,7 @@ export function initializeLatexSupport(
   }).pipe(
     Effect.catchCause((cause) =>
       Effect.logError(
-        `Error initializing LaTeX support: ${toErrorMessage(Cause.squash(cause))}`,
+        `Error initializing LaTeX support: ${toErrorMessage(cause)}`,
       ),
     ),
     withLogChannel(CHANNEL),

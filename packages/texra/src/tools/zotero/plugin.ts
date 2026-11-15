@@ -15,7 +15,7 @@ import { ZoteroCollectionsTool } from './ZoteroCollectionsTool';
 import { ZoteroExportTool } from './ZoteroExportTool';
 import { ZoteroSearchTool } from './ZoteroSearchTool';
 import type { HttpClient, HttpClientError } from 'effect/http';
-import { ZOTERO_PORT_SETTING } from '@texra/shared/settingsView/texraSettings';
+import { ZOTERO_PORT_SETTING } from '@texra/shared/settings/texraSettings';
 
 const PROBE_TIMEOUT_MS = 2000;
 

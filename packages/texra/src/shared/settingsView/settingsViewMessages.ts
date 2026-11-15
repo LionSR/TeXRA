@@ -39,7 +39,7 @@ import {
   WebviewReadyMessageSchema,
 } from '@texra/shared/ipc';
 import { ToolDependencyStatusSchema } from '@texra-ai/harness/schemas';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { SettingsTargetSchema } from './settingsTarget';
 import { ProfilePageSchema } from './profileViewMessages';
 import {

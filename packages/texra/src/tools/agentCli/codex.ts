@@ -44,7 +44,8 @@ import {
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentCli/agentWorkspaceOptions';
 
 // Local file imports
-import { getCodexConfig, openCodexClient } from './codexImport';
+import { openCodexClient } from './codexImport';
+import { codexRun } from './codexConfig';
 import { CodexThreads } from './agentCliSessionStores';
 import {
   buildAgentCliTurn,
@@ -82,9 +83,8 @@ import type {
 
 // The sandbox-mode schema is imported eagerly from `@shared` (a light,
 // dependency-free leaf) since it is used at module level by the input schema.
-// The model and reasoning config are lazy-imported from codexConfig.ts at
-// runtime, off the tool-registration path. Setting reads are schema-typed and
-// land in SDK-typed fields, so a value the Codex union rejects fails to compile.
+// Setting reads are schema-typed and land in SDK-typed fields, so a value the
+// Codex union rejects fails to compile.
 
 // ============================================================================
 // Schema
@@ -347,12 +347,12 @@ function buildCodexTurn(params: {
     claim: params.claim,
     runProviderTurn: runStreamedTurn(thread, prompt, logger),
     getUsage: codexTurnUsage,
-    delivery: (turn, wallTimeMs) => ({
+    delivery: (turn, wallTime) => ({
       family: 'codex',
       runId,
       prompt,
       attributes: [{ name: 'thread-id', value: thread.id || null }],
-      wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
+      wallTime,
       response: turn.finalResponse,
       usage: codexTurnUsage(turn),
     }),
@@ -376,13 +376,12 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
   workingDir?: string,
 ) {
   const { codex, codexPath } = yield* openCodexClient();
-  const config = yield* getCodexConfig;
   // Resumed threads keep their stored workspace unless explicitly overridden.
   const workspace =
     workingDir || !input.thread_id
       ? buildAgentWorkspaceOptions(roots.workspace, workingDir)
       : {};
-  const run = yield* config.codexRun(roots, codexPath);
+  const run = yield* codexRun(roots, codexPath);
   if (run.note) {
     yield* Effect.logInfo(run.note).pipe(withLogChannel(CODEX_AGENT_NAME));
   }

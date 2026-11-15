@@ -20,7 +20,7 @@ import {
   type DocumentTaskOptions,
 } from '@texra/shared/plugins/documents';
 import type { SurfaceAction } from '@texra/shared/session/surface';
-import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { SortableController } from '@ui/litControllers/SortableController';
 import type { FileSelectConfig } from '@ui/copy/fileSelectConfigs';
 import { dropCueStyles } from '@ui/styles/commonViewStyles';

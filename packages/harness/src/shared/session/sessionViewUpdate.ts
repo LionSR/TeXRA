@@ -17,7 +17,7 @@
  *   view with the previous one by identity.
  *
  * An event re-derives its run and each ancestor up to the root; a text chunk
- * costs the chunk, never the row's text.
+ * repaints its one row, whose text is measured whole each time.
  */
 
 import { Equal, type Types } from 'effect';
@@ -320,7 +320,6 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     identity: event.identity,
     label,
     description: null,
-    descriptionBy: null,
     title: label,
     model: null,
     modelLabel: null,
@@ -728,10 +727,6 @@ function applyRunEvent(
         ...run,
         facts: { ...run.facts, [factName(event)]: event.value },
       };
-    case 'run.detach': // the attached parent goes; the launch parent stays
-      return run.parentId === null
-        ? run
-        : { ...run, parentId: record.parent?.id ?? null };
     case 'run.description':
       // A title the record did not take (a model's, under a user's) changes
       // nothing.
@@ -740,7 +735,6 @@ function applyRunEvent(
         : {
             ...run,
             description: event.description,
-            descriptionBy: event.by,
             title: event.description || run.label,
           };
     case 'run.end':
@@ -786,9 +780,9 @@ function applyPluginFact(u: Update, event: DisplayRow): void {
 
 /** One shared row, applied by `runRows.ts` and projected onto the session's
  *  containers and the run. `unresolved` is the partial read, not a defect: a
- *  cold listing delivers one request row per run, so the opening a decision
- *  answers may never have reached this view. A replayed row is below its
- *  `latest` entry and never reaches here. */
+ *  cold listing delivers only the requests still open, so the opening a
+ *  decision answers may never have reached this view. A replayed row is
+ *  below its `latest` entry and never reaches here. */
 function applyRowFacts(u: Update, run: RunView, event: SharedRunRow): RunView {
   const { rows } = u.state;
   const before = rows.get(run.id) ?? freshSharedRunRows();
@@ -898,7 +892,7 @@ function applyEvent(
       : false;
   const listingType = listingKeyOf(event);
   if (listingType === null) return transcriptChanged;
-  // Ordered by commit per (aggregate, listing type), whatever the read.
+  // Ordered by commit per (aggregate, listing key), whatever the read.
   const listingKey = `${event.aggregateId}/${listingType}`;
   const { latest } = u.state;
   const newest = latest.get(listingKey);

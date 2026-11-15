@@ -70,31 +70,6 @@ export const fileListStyles: CSSResult = css`
     font-weight: var(--font-weight-medium);
   }
 
-  .file-stats {
-    white-space: nowrap;
-    text-decoration: none;
-    flex-shrink: 0;
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .file-stats > .added {
-    margin-inline-start: 0;
-  }
-
-  .added {
-    color: var(--wa-color-chart-green, green);
-    margin-inline-start: var(--wa-space-2xs);
-    font-size: var(--font-size-sm);
-  }
-
-  .removed {
-    color: var(--wa-color-chart-red, red);
-    margin-inline-start: var(--wa-space-2xs);
-    font-size: var(--font-size-sm);
-  }
-
   .file-actions {
     display: flex;
     gap: var(--wa-space-2xs);

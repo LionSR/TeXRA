@@ -6,7 +6,7 @@ import { RunFileService } from '@texra-ai/harness/plugins';
 import { toPosixPath } from '@texra-ai/harness/host';
 import { absentReason, isNotADirectoryError } from '@texra-ai/harness/node';
 
-import { Effect, FileSystem, Path, PlatformError } from 'effect';
+import { Effect, FileSystem, Path, PlatformError, Schema } from 'effect';
 
 import {
   isTaskConfig,
@@ -423,12 +423,34 @@ export function formatDocumentTaskTextResult(
   return finalOutput?.absolutePath ?? result.runDirectory;
 }
 
+/**
+ * Where a command line copies a run's output (`--output`, `--output-dir`),
+ * kept in the run's `launch` record so a resume copies it to the same place.
+ */
+const CliLaunchOutputSchema = Schema.Struct({
+  /** Workspace file the run's output is copied to. */
+  outputFile: Schema.optional(Schema.NullOr(Schema.String)),
+  /** Workspace directory the run's output files are copied to. */
+  outputDirectory: Schema.optional(Schema.NullOr(Schema.String)),
+  /** Relative artifacts expected under `outputDirectory`. */
+  expectedOutputFiles: Schema.optional(
+    Schema.NullOr(Schema.Array(Schema.String)),
+  ),
+});
+
+/** The output targets a command-line launch recorded, `{}` for any other. */
+export function cliLaunchOutput(
+  config: Pick<AgentConfigPayload, 'launch'>,
+): typeof CliLaunchOutputSchema.Type {
+  return Schema.decodeUnknownSync(CliLaunchOutputSchema)(config.launch ?? {});
+}
+
 export function resumeDocumentTaskOutputFile(
   config: AgentConfigPayload,
 ): string | undefined {
   if (!isTaskConfig(config)) return undefined;
 
-  const cliOutputFile = config.cli?.outputFile;
+  const cliOutputFile = cliLaunchOutput(config).outputFile;
   if (typeof cliOutputFile === 'string' && cliOutputFile.trim() !== '') {
     if (!path.isAbsolute(cliOutputFile)) {
       throw new CliUsageError({
@@ -456,7 +478,7 @@ export function resumeDocumentTaskOutputDirectory(
 ): string | undefined {
   if (!isTaskConfig(config)) return undefined;
 
-  const outputDirectory = config.cli?.outputDirectory;
+  const outputDirectory = cliLaunchOutput(config).outputDirectory;
   if (typeof outputDirectory !== 'string' || outputDirectory.trim() === '')
     return undefined;
   if (!path.isAbsolute(outputDirectory)) {

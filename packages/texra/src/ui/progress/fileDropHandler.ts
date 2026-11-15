@@ -1,6 +1,6 @@
 // Local imports - shared schemas
 import type { DocumentFileType } from '@texra/shared/launcher/fileTypes';
-import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 
 // Third-party type imports
 import type { ReactiveController, ReactiveControllerHost } from 'lit';

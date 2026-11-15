@@ -6,7 +6,7 @@ import { Effect } from 'effect';
 
 // Local imports
 import { definePlugin } from '@texra-ai/harness/plugins';
-import { CODEX_SETTINGS } from '@texra/shared/settingsView/integrationSettings';
+import { CODEX_SETTINGS } from '@texra/shared/settings/integrationSettings';
 import { CodexThreads, codexThreadsLayer } from './agentCliSessionStores';
 import {
   preferredInstallCommand,

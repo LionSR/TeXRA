@@ -21,7 +21,7 @@ import {
   AGENT_MODE_PRESETS,
   STARTER_AGENT_MODE_PRESET,
 } from '@texra/shared/agentTeams';
-import { applyTeam } from '@texra/shared/teamPlan';
+import { applyTeam } from '@texra/agent/teams/teamPlan';
 
 /**
  * The built-in teams (the setup starter included), the list the agent list's

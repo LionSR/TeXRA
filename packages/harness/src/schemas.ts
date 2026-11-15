@@ -30,7 +30,6 @@ export type {
 // and its JSON with the fields its category hides dropped.
 export type { RunRecord } from '@agent/core/definition/RunRecord';
 export { serializeFilteredConfig } from '@tools/executions/configView';
-export { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
 // The subscriptions a model call can route through, by provider id.
 export {
   SUBSCRIPTION_AUTH_PROVIDERS,
@@ -66,14 +65,12 @@ export type {
 export { runActionRefusal } from '@shared/session/runActions';
 // What makes the views read-only all the way down.
 export type { ReadonlyDeep } from '@shared/session/readonlyDeep';
-// What a session store's reads answer with: an aggregate's state, a CLI
-// input-history row, the refusals, and the notice of a store moved aside
-// on open.
+// What a session store's reads answer with: a CLI input-history row, the
+// refusal of a closed aggregate, and the notice of a store moved aside on
+// open.
 export type {
-  AggregateState,
   DatabaseAggregateClosed,
   InputHistoryRecord,
-  RunChanged,
   SessionStoreMovedAside,
 } from '@shared/session/database';
 // Where a run stands, the pair of `RunView` fields a renderer reads.
@@ -95,11 +92,9 @@ export type {
   DeclinableUsageRoute,
   DispatchFacts,
   DisplayRow,
-  ErrorLogData,
   ExternalFileLocation,
   FileListEntry,
   FileLocation,
-  FollowUpContent,
   FollowUpSender,
   HookEvent,
   InlinePersona,
@@ -107,7 +102,6 @@ export type {
   JsonValue,
   LoadedMediaMetadata,
   LocalRuntimeState,
-  UnreadableRun,
   LogicalId,
   LogLevel,
   MediaAttachmentKind,
@@ -146,8 +140,7 @@ export type {
   WorkspaceFileLocation,
 } from '@shared/schemas';
 export { ResumeRefusalSchema } from '@shared/schemas';
-// The approval policy: its values, default, persisted key and tolerant
-// parse, and the denial a run that may not ask reports.
+// The approval policy: its values, defaults, schema and tolerant parse.
 export {
   APPROVAL_POLICIES,
   APPROVAL_POLICY_DEFAULT,
@@ -155,8 +148,6 @@ export {
   ApprovalPolicySchema,
   parseApprovalPolicy,
   type ApprovalPolicy,
-  type HumanInputDecision,
-  type RetryApprovalDecision,
 } from '@shared/approvalPolicy';
 // The approvals a run may skip, and how a run's own and inherited grants
 // resolve against the policy.
@@ -174,7 +165,6 @@ export {
 // answered with, and a run's start as data.
 export {
   Cancelled,
-  Conflict,
   OutcomeSchema,
   Rejected,
   RequestErrorSchema,
@@ -224,12 +214,10 @@ export {
   APPROVAL_POLICY_SETTING,
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
-  DETACH_SUBAGENTS_ON_STOP_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
   DISABLED_SKILLS_SETTING,
   GIT_AUTHOR_EMAIL_SETTING,
   GIT_AUTHOR_NAME_SETTING,
-  GIT_COMMITS_TO_SHOW_SETTING,
   GIT_MARK_COMMITS_SETTING,
   GIT_WORKTREE_SUPPORT_SETTING,
   GLM_CODING_PLAN_SETTING,
@@ -250,7 +238,6 @@ export {
   SAVE_MODEL_IO_SETTING,
   XAI_PREFER_SUBSCRIPTION_SETTING,
   settingsCatalog,
-  SOX_PATH_SETTING,
   TOOL_PATH_PROTECTION_SETTING,
   WEBSOCKET_OPENAI_SETTING,
   type HarnessRowKey,
@@ -262,28 +249,31 @@ export {
 } from '@shared/state/stateSettings';
 // What a `ConfigProvider` (root) writes to and reads back per scope.
 export type { ConfigInspection, ConfigTarget } from '@shared/config/settings';
-// The providers' custom-endpoint rows and China-region toggles, and a
-// provider's own, if it has them.
+// The providers' custom-endpoint and China-region rows, and a provider's
+// own, if it has them.
 export {
   DASHSCOPE_REGION_SETTING,
   GLM_ENDPOINT_SETTING,
   GLM_REGION_SETTING,
   MINIMAX_REGION_SETTING,
   MOONSHOT_REGION_SETTING,
-  PROVIDER_ENDPOINT_SETTINGS,
   providerEndpointSetting,
   providerRegionSetting,
 } from '@shared/state/providerSettings';
 
 // Text primitives: grapheme-safe truncation (plain, whitespace-collapsed, or
-// at the preview width), a text's content lines and their count, and
+// at the preview width), a clipped list, a text's content lines and their
+// count, and
 // control characters stripped so untrusted text cannot inject terminal
 // escapes.
 export {
+  collapseWhitespace,
   countLines,
+  formatClippedList,
   formatCompactDuration,
   formatCompactTokenCount,
   formatCostUsd,
+  formatResetDuration,
   formatResultCount,
   pluralize,
   previewLabel,
@@ -298,6 +288,7 @@ export {
 export {
   modelFailureMessage,
   runEndErrorMessage,
+  usageLimitMessage,
   usedUpPlanOf,
   type RunEndError,
   type UsedUpPlan,
@@ -322,13 +313,10 @@ export {
   AgentScanIssueSchema,
   AgentSourceSchema,
   type BashRequest,
-  blocksCaller,
   type ContextStateData,
   CredentialSwitchSchema,
-  DEFAULT_TASK_AGENT,
   type DiffStats,
   DiffStatsSchema,
-  emptyRunEndOutput,
   fileLocationAddressPath,
   fileLocationDisplayPath,
   FileLocationSchema,
@@ -348,9 +336,8 @@ export {
   isPlainAgentIdentity,
   isTaskConfig,
   JsonValueSchema,
-  type LaunchNotice,
   LaunchNoticeSchema,
-  LineCountSchema,
+  NonNegativeIntSchema,
   listingTypeOf,
   type McpToolOutput,
   MESSAGE_TYPES,
@@ -378,13 +365,13 @@ export {
   RequestShowErrorPayloadSchema,
   type RetryRequest,
   RUN_OUTCOME,
-  type RunEndOutput,
   RunEndSchema,
   runIdentityDisplayName,
   runIdentityName,
   RunIdSchema,
   RunRecordFieldsSchema,
   RunOutcomeSchema,
+  RunPositionSchema,
   RunResultSchema,
   type ProcessExit,
   type RunResult,
@@ -403,7 +390,6 @@ export {
   sumUsageStats,
   toJsonValue,
   type TokenUsageStats,
-  TOOL_CALL_STATUS,
   type UserQuestionAnswers,
   UserQuestionAnswersSchema,
   type UserQuestionRequest,

@@ -418,7 +418,7 @@ export class SessionBridge {
       result.pipe(
         Effect.catchCause((cause) =>
           Effect.logError(
-            `Request ${requestId} from port ${entry.port.id} failed: ${toErrorMessage(Cause.squash(cause))}`,
+            `Request ${requestId} from port ${entry.port.id} failed: ${toErrorMessage(cause)}`,
           ).pipe(
             withLogChannel(CHANNEL),
             Effect.as(refused(new Internal({ ref: requestId }))),

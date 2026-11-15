@@ -13,10 +13,12 @@ import {
   Layer,
   type PlatformError,
   Schema,
+  Semaphore,
 } from 'effect';
 
 import { LaunchRefused } from '@common/errors/agentErrors';
 import { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
+import { forgetHiddenAgent } from '@agent/workspaceAgents/workspaceAgentsState';
 import { withLogChannel } from '@logger/effectLog';
 import {
   AgentDirectories,
@@ -25,7 +27,10 @@ import {
 } from '@platform/interfaces';
 import { GlobalStorageFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { StateReadFailed } from '@shared/config/settings';
+import type {
+  StateReadFailed,
+  StateWriteFailed,
+} from '@shared/config/settings';
 import type {
   AgentDelegationScope,
   AgentScanIssue,
@@ -38,15 +43,15 @@ import {
   agentName,
 } from '@shared/schemas';
 import { ToolRegistry } from '@tools/toolTable';
+import { isStrictlyWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 
 import { scanDirectory } from './agentYamlScanner';
 import {
   agentSourceRoots,
+  AgentCustomizeRefused,
   customizeCopy,
   type AgentCustomization,
-  type AgentCustomizeRefused,
 } from './AgentDirectoryService';
 import { scanPluginAgents } from './pluginAgents';
 import type { AgentCatalogServices, AgentEntry } from './agentEntry';
@@ -87,6 +92,21 @@ export interface WorkspaceAgents extends WorkspaceAgentsController<AgentEntry> {
   ) => Effect.Effect<
     AgentEntry,
     AgentNotFound | AgentCatalogLoadError | StateReadFailed
+  >;
+  /**
+   * Delete the custom agent `name`: its file, and the workspace's hidden
+   * choice for it. Refused when the catalog holds no such custom agent
+   * (`noFile`) or its file lies outside the custom directory (`escapes`).
+   * The deleted file's path.
+   */
+  readonly removeCustom: (
+    name: string,
+  ) => Effect.Effect<
+    string,
+    | AgentCustomizeRefused
+    | AgentDirectoriesFailed
+    | StateWriteFailed
+    | PlatformError.PlatformError
   >;
 }
 
@@ -326,13 +346,10 @@ export class AgentCatalog extends Context.Service<
         changePending: false,
         teamMembers: Context.get(services, AgentDirectories).teamMembers,
       };
-      // Every load enters one lane: a fiber that arrives while a load runs
-      // waits for it, and a failed scan fails only its own caller.
-      const onLoadLane = withPerKeyLane(
-        new Map<string, PerKeyLane>(),
-        'agentCatalogLoad',
-      );
-      const refresh = onLoadLane(
+      // One load at a time: a fiber that arrives while a load runs waits for
+      // it, and a failed scan fails only its own caller.
+      const loads = yield* Semaphore.make(1);
+      const refresh = loads.withPermit(
         scanInto(state).pipe(
           Effect.provide(services),
           Effect.tap(() =>
@@ -348,7 +365,7 @@ export class AgentCatalog extends Context.Service<
         ),
       );
       const settled = Effect.suspend(() =>
-        state.changePending ? refresh : onLoadLane(Effect.void),
+        state.changePending ? refresh : loads.withPermit(Effect.void),
       );
       const reads = catalogReads(state);
       const { list, get, newerBuiltIn } = reads;
@@ -398,7 +415,34 @@ export class AgentCatalog extends Context.Service<
             message: missMessage(state, identifier),
           });
         });
-        return Object.assign(selection, { forLaunch });
+        const removeCustom = (name: string) =>
+          Effect.gen(function* () {
+            const entry = state.entries.get(
+              agentKey('custom', agentName(name)),
+            );
+            if (!entry) {
+              return yield* new AgentCustomizeRefused({
+                reason: 'noFile',
+                message: `Custom agent not found: ${name}`,
+              });
+            }
+            const customDir = yield* (yield* AgentDirectories).custom();
+            if (!isStrictlyWithin(customDir, entry.path)) {
+              return yield* new AgentCustomizeRefused({
+                reason: 'escapes',
+                path: entry.path,
+                message:
+                  'Refusing to delete: file is not inside the custom agents directory.',
+              });
+            }
+            // A file already gone is the result asked for, not a failure.
+            yield* FileSystem.FileSystem.use((fs) =>
+              fs.remove(entry.path, { force: true }),
+            );
+            yield* forgetHiddenAgent(repoState, name);
+            return entry.path;
+          }).pipe(Effect.provide(services));
+        return Object.assign(selection, { forLaunch, removeCustom });
       };
 
       const customize = (entry: AgentEntry, change: AgentCustomization) =>

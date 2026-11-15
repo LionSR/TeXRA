@@ -42,39 +42,21 @@ import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import {
   envDigest,
-  jsonSyntaxError,
   mcpPluginId,
   parseMcpServers,
   type McpServerConfig,
 } from '@common/plugins/mcpServers';
+import { readJsonFile } from '@common/plugins/pluginManifest';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import { sha256 } from '@utils/core/idHash';
-import { absentReason } from '@utils/files/fsEntryExists';
 
 import { acquireMcpServer } from './mcpServer';
 
 const McpConfigFileSchema = Schema.Struct({
   mcpServers: Schema.Record(Schema.String, Schema.Unknown),
 });
-
-/** The file's text, or `null` when it does not exist. */
-const readConfigText = (
-  file: string,
-): Effect.Effect<string | null, Error, FileSystem.FileSystem> =>
-  Effect.flatMap(FileSystem.FileSystem, (fs) =>
-    fs.readFileString(file).pipe(
-      Effect.map((text): string | null => text),
-      Effect.catchIf(absentReason, () => Effect.succeed(null)),
-      Effect.mapError(
-        (error) =>
-          new Error(`Could not read ${file}: ${error.message}`, {
-            cause: error,
-          }),
-      ),
-    ),
-  );
 
 /**
  * The config file's servers and the warnings its invalid entries raise, or
@@ -90,23 +72,8 @@ export const readMcpConfig: (
   FileSystem.FileSystem
 > = Effect.fn('readMcpConfig')(
   function* (file: string) {
-    const text = yield* readConfigText(file);
-    if (text === null) return null;
-    const json = yield* Effect.try({
-      try: (): unknown => JSON.parse(text),
-      catch: (error) =>
-        new Error(`${file} is not valid JSON: ${jsonSyntaxError(error)}`),
-    });
-    const config = yield* Schema.decodeUnknownEffect(McpConfigFileSchema)(
-      json,
-    ).pipe(
-      Effect.mapError(
-        (error) =>
-          new Error(
-            `${file} must be { "mcpServers": { ... } }: ${error.message}`,
-          ),
-      ),
-    );
+    const config = yield* readJsonFile(file, McpConfigFileSchema);
+    if (config === undefined) return null;
     return parseMcpServers(file, config.mcpServers);
   },
   Effect.catch((error) =>

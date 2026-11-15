@@ -15,7 +15,7 @@ const MAX_ATTRIBUTE_LENGTH = 512;
  * host's minimum level is the only filter: nothing here
  * drops a level the runtime admitted.
  */
-const diagnosticLogger = Logger.make<unknown, void>((options) => {
+export const diagnosticLogger = Logger.make<unknown, void>((options) => {
   const entry = logEntryOf(options);
   if (entry) writeLogEntry(entry);
 });

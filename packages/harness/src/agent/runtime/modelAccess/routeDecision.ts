@@ -9,7 +9,6 @@ import { Context, Effect, Option, Schema } from 'effect';
 
 import {
   decideModelRoute,
-  hasUsableApiKey,
   type Model,
   type ModelConfig,
   type ModelError,
@@ -24,7 +23,6 @@ import {
 import { RouteUnavailable } from '@common/errors/agentErrors';
 import { routeFactsFor, type ModelSettings } from '@model/modelSettings';
 import { decideReasoning, servingBackend } from '@model/reasoningLevel';
-import { Secrets } from '@platform/secrets';
 import {
   ModelBackendSchema,
   type CredentialSwitch,
@@ -157,11 +155,13 @@ export const admitSwitch = Effect.fn('admitSwitch')(
       declinedRoutes,
       mode: selected.request.mode,
     });
-    yield* decideReasoning(
-      selected.config,
-      selected.request,
-      settings.reasoningLevels[selected.config.ref],
-      decision.route,
+    yield* Effect.fromResult(
+      decideReasoning(
+        selected.config,
+        selected.request,
+        settings.reasoningLevels[selected.config.ref],
+        decision.route,
+      ),
     );
     return null;
   },
@@ -179,15 +179,13 @@ export const admitSwitch = Effect.fn('admitSwitch')(
  *   preference off, when that is a plain key route.
  * - A key whose upstream account ran out of credit needs a changed key.
  *
- * A coding-plan fallback is automatic when its key is already stored and the
- * run has not declined that route before; the subscriptions (ChatGPT, Grok)
- * stay explicit, because moving them onto a key starts spending API credit.
+ * Every move is the person's to take: the retry request offers it, and
+ * nothing switches a run onto a key that spends API credit unasked.
  */
-export const credentialSwitch = Effect.fn('credentialSwitch')(function* (
+export function credentialSwitch(
   failed: { readonly config: ModelConfig; readonly route: RunRoute },
   quota: ModelError['quota'],
-  declinedRoutes: readonly DeclinableUsageRoute[],
-): Effect.fn.Return<CredentialSwitch | null, never, Secrets> {
+): CredentialSwitch | null {
   if (quota === undefined) return null;
   const { route } = failed;
   // The account's own credit: the key the route bound is itself the broken
@@ -201,21 +199,9 @@ export const credentialSwitch = Effect.fn('credentialSwitch')(function* (
   if (fallback.kind !== 'api-key' || fallback.plan !== null) {
     return null;
   }
-  const automatic =
-    PLAN_ROUTES[declined].credential === 'key' &&
-    !declinedRoutes.includes(declined) &&
-    (yield* hasUsableApiKey(yield* Secrets, fallback.provider).pipe(
-      Effect.catchTag('SecretsFailed', (failure) =>
-        Effect.logWarning(
-          `Could not read the ${fallback.provider} API key; the quota fallback waits for a decision.`,
-          failure.cause,
-        ).pipe(Effect.as(false)),
-      ),
-    ));
   return {
     kind: 'decline-route',
     route: declined,
     provider: fallback.provider,
-    automatic,
   };
-});
+}

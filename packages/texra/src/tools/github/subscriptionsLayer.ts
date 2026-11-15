@@ -150,7 +150,8 @@ export const gitHubSubscriptionsLayer: Layer.Layer<
         );
     };
 
-    /** Deliver `events` to `runs` now, each as its own fiber in the drained set. */
+    /** Deliver `events` to `runs` now: one fiber a run in the drained set,
+     *  which sends that run its events in their order. */
     const deliverTo = (
       path: string,
       runs: ReadonlyMap<RunId, Binding>,
@@ -159,21 +160,21 @@ export const gitHubSubscriptionsLayer: Layer.Layer<
       Effect.forEach(
         [...runs],
         ([runId, binding]) =>
-          Effect.forEach(
-            events,
-            (event) => {
-              const text =
-                typeof event === 'string'
-                  ? event
-                  : event(binding.minAnnotationLevel);
-              return text === undefined
-                ? Effect.void
-                : FiberSet.run(
-                    deliveries,
-                    deliver(path, runId, binding.inbox, text),
-                  );
-            },
-            { discard: true },
+          FiberSet.run(
+            deliveries,
+            Effect.forEach(
+              events,
+              (event) => {
+                const text =
+                  typeof event === 'string'
+                    ? event
+                    : event(binding.minAnnotationLevel);
+                return text === undefined
+                  ? Effect.void
+                  : deliver(path, runId, binding.inbox, text);
+              },
+              { discard: true },
+            ),
           ),
         { discard: true },
       );

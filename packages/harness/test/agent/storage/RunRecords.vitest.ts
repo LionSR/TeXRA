@@ -63,6 +63,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               const records = getRunRecords(runId);
               const config = Schema.decodeUnknownSync(AgentConfigSchema)({
                 agent: 'worker',
+                model: 'openai/gpt-6.1-sol',
                 instruction: 'private instruction',
               });
               yield* seedRunRecord(session, runId, config);
@@ -96,6 +97,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               runId,
               Schema.decodeUnknownSync(AgentConfigSchema)({
                 agent: 'worker',
+                model: 'openai/gpt-6.1-sol',
               }),
             );
             yield* seedReport(session, 'retained report bytes');

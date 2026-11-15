@@ -12,10 +12,7 @@
 // beyond its plain-text projection.
 
 // Local imports - shared schemas and utilities
-import {
-  truncateWithEllipsis,
-  TOOL_CALL_STATUS,
-} from '@texra-ai/harness/schemas';
+import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
 import { buildDiffHunks } from '@texra-ai/harness/host';
 import {
   isMcpToolName,
@@ -32,11 +29,13 @@ import {
   textDisplayWidth,
   truncateSummaryToWidth,
 } from '@cli/runtime/terminal/terminalText';
-import { COLOR_ERROR, COLOR_HINT, COLOR_SUCCESS } from '@cli/tui/ui/colors';
+import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
 import { STATUS_DOT, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
+import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
 import type { ToolRow } from '@cli/chat/tui/state/sessionView';
-import { TOOL_STATUS_WORD } from '@ui/copy/runStatus';
+import { TOOL_STATUS } from '@ui/copy/runStatus';
 import { TOOL_CUT_BY_RUN_END_NOTE } from '@ui/copy/scriptStage';
+import { formatLineChanges } from '@ui/copy/format';
 
 // Local imports - CLI TUI rendering
 import {
@@ -153,13 +152,6 @@ function labeledLines(
   return lines.length === 1 ? [`${label} ${lines[0]}`] : [label, ...lines];
 }
 
-function toolStatusColor(model: ToolRow['model']): string | undefined {
-  if (model.isError) return COLOR_ERROR;
-  return model.status === TOOL_CALL_STATUS.COMPLETED
-    ? COLOR_SUCCESS
-    : undefined;
-}
-
 /** The failure block: the note for a call the run's end cut short, the error
  *  text when there is one, and a bare marker when a call failed without
  *  saying why. A user-feedback rejection has no error of its own — its
@@ -185,7 +177,7 @@ function sectionFileLine(file: ToolSectionFile): string {
   const from = file.from ? ` ← ${file.from}` : '';
   const note = file.note ? ` (${file.note})` : '';
   const changes = file.lineChanges
-    ? ` (+${file.lineChanges.added}/-${file.lineChanges.removed})`
+    ? ` (${formatLineChanges(file.lineChanges.added, file.lineChanges.removed)})`
     : '';
   return `${file.path}${from}${note}${changes}`;
 }
@@ -200,7 +192,7 @@ function sectionLines(section: ToolSection, elide: boolean): readonly string[] {
         ),
       ];
     case 'status':
-      return [labeled(section.label, TOOL_STATUS_WORD[section.status])];
+      return [labeled(section.label, TOOL_STATUS[section.status].word)];
     case 'badges':
       return [labeled(section.label, section.badges.join(', '))];
     case 'file': {
@@ -338,7 +330,11 @@ function buildStyledLines(
     budget > 0 && headerPreview
       ? truncateSummaryToWidth(safeTerminalText(headerPreview), budget)
       : '';
-  const statusColor = toolStatusColor(model);
+  // A call whose status was never recorded has no tone: a dim dot.
+  const statusTone = model.isError
+    ? 'danger'
+    : model.status && TOOL_STATUS[model.status].tone;
+  const statusColor = statusTone && TONE_PAINT[statusTone].color;
 
   const patchGroups = patchGroupsFromSections(model.sections, model.isError);
   const sectionRows = model.sections.flatMap((section) =>

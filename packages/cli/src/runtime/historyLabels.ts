@@ -1,3 +1,4 @@
+import { collapseWhitespace } from '@texra-ai/harness/schemas';
 import type { CliHistoryEntry } from './history';
 
 /**
@@ -11,7 +12,9 @@ export function formatCliHistorySubject(
   noInputLabel: string,
 ): string {
   if (entry.inputBasename !== '-') return entry.inputBasename;
-  return entry.description?.replaceAll(/\s+/g, ' ').trim() || noInputLabel;
+  return (
+    (entry.description && collapseWhitespace(entry.description)) || noInputLabel
+  );
 }
 
 export function formatCliHistoryAgentLabel(

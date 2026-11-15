@@ -75,7 +75,7 @@ const decisionOf = (
             withLogChannel(CHANNEL),
             Effect.as<RequestDecision>({
               action: 'deny',
-              reason: `The approval handler gave no usable decision: ${toErrorMessage(Cause.squash(cause))}`,
+              reason: `The approval handler gave no usable decision: ${toErrorMessage(cause)}`,
             }),
           ),
     ),

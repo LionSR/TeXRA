@@ -175,17 +175,22 @@ describe('run loop hooks', { timeout: REAL_RUN_TIMEOUT }, () => {
               { payload: { updatedInput: { command: rewritten } } },
             ]);
             // cast: a `request.opened` row's data carries its request's id.
-            const [pending] = rowsOf(storage, runId, 'request.opened') as {
-              requestId: string;
-            }[];
-            assert(pending !== undefined);
+            const requestsOf = () =>
+              rowsOf(storage, runId, 'request.opened') as {
+                requestId: string;
+              }[];
+            expect(requestsOf()).toHaveLength(1);
 
-            // A fresh process resumes the run; the person approves.
+            // A fresh process resumes the run: the request the dead one left
+            // is cancelled and the call asks again; the person approves.
             const session = yield* persistentTestSession({ ...roots, storage });
             const resumed = yield* resumeRun(runId, {}).pipe(
               Effect.provide(session),
             );
             expect(resumed).toMatchObject({ activation: expect.any(Number) });
+            yield* untilStored(storage, () => requestsOf().length > 1);
+            const pending = requestsOf().at(-1);
+            assert(pending !== undefined);
             expect(
               yield* decideRequest(runId, pending.requestId, {
                 action: 'approve',

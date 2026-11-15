@@ -18,12 +18,7 @@ import {
   selectModel,
 } from '@texra-ai/llm';
 import { Secrets } from '@platform/secrets';
-import {
-  StateWriteFailed,
-  type SettingsStores,
-  type StateStore,
-} from '@shared/config/settings';
-import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
+import { StateWriteFailed, type SettingsStores } from '@shared/config/settings';
 import {
   MODEL_AVAILABILITY_STATUS,
   type ModelAvailabilityKind,
@@ -268,7 +263,8 @@ const decideVerdicts = Effect.fn('decideVerdicts')(function* (
 });
 
 /**
- * The user's picker choices as a delta over {@link DEFAULT_MODELS}, so a change
+ * The user's picker choices as a delta over the catalog's curated models
+ * (`SettingsCatalog.curatedModels`), so a change
  * to the curated defaults reaches every user while a default they turned off
  * stays off and a model they turned on stays on.
  */
@@ -326,11 +322,14 @@ function isUnservedModelId(model: string): boolean {
  * An explicitly enabled default is also kept in `enabledExtras`, so it stays
  * on if the curated defaults later drop it; the set de-duplicates it.
  */
-function enabledModelsOf(selection: ModelSelection): readonly string[] {
+function enabledModelsOf(
+  curated: readonly string[],
+  selection: ModelSelection,
+): readonly string[] {
   const disabled = new Set(selection.disabledDefaults);
   return [
     ...new Set([
-      ...DEFAULT_MODELS.filter((model) => !disabled.has(model)),
+      ...curated.filter((model) => !disabled.has(model)),
       ...selection.enabledExtras,
     ]),
   ].filter((model) => !isUnservedModelId(model));
@@ -340,9 +339,12 @@ function enabledModelsOf(selection: ModelSelection): readonly string[] {
  * When every enabled extra is unserved and every default is off, the picker
  * would be empty with no way back out from the UI; it shows the defaults.
  */
-function enabledOrDefaults(selection: ModelSelection): readonly string[] {
-  const enabled = enabledModelsOf(selection);
-  return enabled.length > 0 ? enabled : DEFAULT_MODELS;
+function enabledOrDefaults(
+  curated: readonly string[],
+  selection: ModelSelection,
+): readonly string[] {
+  const enabled = enabledModelsOf(curated, selection);
+  return enabled.length > 0 ? enabled : curated;
 }
 
 /**
@@ -350,12 +352,12 @@ function enabledOrDefaults(selection: ModelSelection): readonly string[] {
  * {@link MODEL_SELECTION_KEY} for every host.
  */
 export const getEnabledModels = Effect.fn('getEnabledModels')(function* (
-  state: Pick<StateStore, 'get'>,
+  stores: Pick<SettingsStores, 'config' | 'globalState'>,
 ) {
-  const stored = yield* state.get(MODEL_SELECTION_KEY.key);
+  const stored = yield* stores.globalState.get(MODEL_SELECTION_KEY.key);
   const { selection, invalid } = selectionOf(stored);
   yield* reportInvalid(invalid);
-  return enabledOrDefaults(selection);
+  return enabledOrDefaults(stores.config.catalog.curatedModels, selection);
 });
 
 /**
@@ -368,8 +370,9 @@ export const getEnabledModels = Effect.fn('getEnabledModels')(function* (
 export function setModelEnabled(input: {
   readonly model: string;
   readonly enabled: boolean;
-  readonly state: StateStore;
+  readonly stores: Pick<SettingsStores, 'config' | 'globalState'>;
 }) {
+  const curated = input.stores.config.catalog.curatedModels;
   // Refusals are typed failures, never throws, so a UI can surface them.
   const refuse = (message: string) =>
     new StateWriteFailed({
@@ -390,11 +393,11 @@ export function setModelEnabled(input: {
   // explicit enable is recorded in `enabledExtras` even for a default, so it
   // survives the model later leaving the curated defaults. A helper model
   // disabled here is not rewritten: `getHelperModelName` checks it at read.
-  return input.state
+  return input.stores.globalState
     .modify(MODEL_SELECTION_KEY.key, (stored) => {
       const read = selectionOf(stored);
       invalid = read.invalid;
-      const others = enabledOrDefaults(read.selection).filter(
+      const others = enabledOrDefaults(curated, read.selection).filter(
         (model) => model !== input.model,
       );
       const toggled = input.enabled ? [...others, input.model] : others;
@@ -407,11 +410,9 @@ export function setModelEnabled(input: {
             ...(input.enabled ? [input.model] : []),
           ]),
         ],
-        disabledDefaults: DEFAULT_MODELS.filter(
-          (model) => !toggled.includes(model),
-        ),
+        disabledDefaults: curated.filter((model) => !toggled.includes(model)),
       };
-      return enabledModelsOf(next).length > 0
+      return enabledModelsOf(curated, next).length > 0
         ? Result.succeed(next)
         : Result.fail(
             refuse(
@@ -420,7 +421,7 @@ export function setModelEnabled(input: {
           );
     })
     .pipe(
-      Effect.map(enabledModelsOf),
+      Effect.map((next) => enabledModelsOf(curated, next)),
       Effect.ensuring(Effect.suspend(() => reportInvalid(invalid))),
     );
 }
@@ -532,11 +533,7 @@ export const readModelOptions = Effect.fn('readModelOptions')(function* (
 ) {
   const routeCtx = yield* buildAvailabilityContext(stores);
   const visible =
-    models ??
-    visibleModelsForAccess(
-      yield* getEnabledModels(stores.globalState),
-      routeCtx,
-    );
+    models ?? visibleModelsForAccess(yield* getEnabledModels(stores), routeCtx);
   const decided = yield* decideVerdicts(
     routeModels(visible, routeCtx),
     routeCtx,

@@ -44,7 +44,7 @@ import { type AgentRunServices, RunLive, RunRegistry } from './runRegistry';
 /** What a resume answers: the commit of the activation it opened, which
  *  the caller now holds; the refusal its records decided; or the owning
  *  parent whose open call owns the run, which resumes with that parent. */
-export type ResumeHandOff =
+type ResumeHandOff =
   | { readonly activation: CommitOrdinal }
   | { readonly failed: ResumeRefusal }
   | { readonly ownedBy: RunId };

@@ -3,7 +3,7 @@ import { parseCliHistoryId } from '../runtime/history';
 import { runResumeCommand } from './resumeRun';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { AGENT_RUN_GLOBAL_ARGS } from './_helpers/globalArgs';
+import { SKILL_SOURCE_ARGS } from './_helpers/globalArgs';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The task id `texra resume` was given, refused as a usage error when it
@@ -25,7 +25,7 @@ export const resumeCommand = defineCliCommand({
     description: 'Continue a stored task where it stopped',
   },
   args: {
-    ...AGENT_RUN_GLOBAL_ARGS,
+    ...SKILL_SOURCE_ARGS,
     id: {
       type: 'positional',
       required: true,

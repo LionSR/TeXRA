@@ -4,7 +4,8 @@
  * refresh tails and the same error sentences, drifting apart one case at a
  * time; the body lives here and a host binds a table of what it performs its
  * own way: how a message reaches its view, how it asks and tells the user,
- * how it opens a file or picks a folder, and how its launchers reload.
+ * and how it opens a file or picks a folder. The launchers follow the app
+ * signals its writes announce.
  *
  * The body answers every command; a host runs each message it has parsed at
  * its own edge through the body's `handleMessage`, and what only some hosts
@@ -58,8 +59,8 @@ import { buildProfilePage } from '@texra/controllers/settingsView/profileMessage
 import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
 import { settingsToolCommands } from '@texra/controllers/settingsView/settingsToolCommands';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
-import { buildSettingsSnapshotMessage } from '@texra/shared/settingsView/handlers/settingsSnapshot';
-import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
+import { buildSettingsSnapshotMessage } from '@texra/controllers/settingsView/settingsSnapshot';
+import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
 import {
   DERIVED_SETTINGS_SNAPSHOTS,
   type SettingsHostState,
@@ -108,7 +109,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
     const inputs = yield* PubSub.unbounded<SettingsInput>();
 
     const present = settingsPresentation(bindings, inputs);
-    const { notice, report, reported, changed } = present;
+    const { notice, alert, report, reported, changed } = present;
 
     // ── Controllers ──
 
@@ -169,10 +170,9 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
     // ── What a change runs beyond this view ──
 
     /**
-     * A credential changed: the probes outside this view first, since model
-     * availability reads the key state they produce, then the launchers'
-     * catalogs; this view's pages follow `credentials`, and a coding plan's
-     * usage is read again.
+     * A credential changed: this view's pages follow `credentials`, and a
+     * coding plan's usage is read again. The launchers follow the store's
+     * own `credentialChanged`.
      */
     const credentialsChanged: (
       usageProvider?: SubscriptionUsageProvider,
@@ -180,11 +180,16 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       usageProvider?: SubscriptionUsageProvider,
     ) {
       if (usageProvider) yield* usage.invalidate(usageProvider);
-      yield* bindings.refreshCredentialStatus;
-      yield* bindings.refreshCatalogs();
       yield* changed('credentials');
       if (usageProvider) yield* changed('usage');
     });
+    /** A write that re-routes models (a subscription preference, a routing
+     *  setting): the pages, and every launcher's catalogs through the
+     *  signal. */
+    const modelAccessChanged = Effect.andThen(
+      credentialsChanged(),
+      emitAppSignal('modelAccessChanged', undefined),
+    );
     /** Run a subscription mutation, report its failure, and say the
      *  subscription changed whatever the mutation did. */
     const subscriptionChange = <E>(
@@ -194,7 +199,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
     ) =>
       reported(failure, work).pipe(
         Effect.andThen(changed('subscriptions')),
-        Effect.andThen(credentialsChanged()),
+        Effect.andThen(modelAccessChanged),
       );
     const signInSubscription = (providerId: SubscriptionProviderId) =>
       subscriptionChange(
@@ -207,9 +212,15 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       return subscriptionChange(
         providerId,
         ports.accountCopy.signOutFailed(provider.displayName),
-        Effect.andThen(
-          provider.signOut(),
-          notice(ports.accountCopy.signedOut(provider.displayName)),
+        Effect.flatMap(provider.signOut(roots), ({ preferenceError }) =>
+          Effect.andThen(
+            notice(ports.accountCopy.signedOut(provider.displayName)),
+            preferenceError === undefined
+              ? Effect.void
+              : alert(
+                  `${provider.displayName} subscription could not be turned off: ${preferenceError}`,
+                ),
+          ),
         ),
       );
     };
@@ -251,13 +262,12 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       yield* changed('settings');
       if (result.kind !== 'applied') return;
       if (result.entry.onWrite?.invalidatesModelOptions) {
-        yield* credentialsChanged();
+        yield* modelAccessChanged;
       }
       if (codingPlanForUsageSetting(key) !== undefined) {
         yield* changed('usage');
       }
       if (key === APPROVAL_POLICY_SETTING.key) {
-        yield* bindings.refreshCatalogs();
         yield* emitAppSignal('approvalPolicyChanged', undefined);
       }
     });
@@ -328,11 +338,10 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
         setModelEnabled({
           model: message.modelName,
           enabled: message.enabled,
-          state: roots.globalState,
+          stores: roots,
         }).pipe(
           Effect.andThen(changed('settings')),
-          // The options cache is invalidated by the writer itself.
-          Effect.andThen(bindings.refreshCatalogs()),
+          Effect.andThen(emitAppSignal('modelAccessChanged', undefined)),
         ),
       setModelReasoningLevel: (message) =>
         setReasoningLevel(roots.globalState, {
@@ -438,7 +447,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
           // agent's `unset_api_key`, another window). OAuth tokens and other
           // secrets are not provider keys, so they change nothing here.
           followSignal('githubSubscriptionsChanged', () => changed('github')),
-          followSignal('workspaceAgentsChanged', () => agents.agentsChanged()),
+          followSignal('workspaceAgentsChanged', () => changed('agents')),
           followSignal('credentialChanged', ({ key }) => {
             const provider = apiKeyEntry(key);
             return provider === undefined || provider === 'unknown'

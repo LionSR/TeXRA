@@ -59,7 +59,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       Effect.gen(function* () {
         yield* cell.append([turn.append, snapshot()]);
         yield* cell.append([turn.attempt]);
-        yield* cell.append([turn.identified]);
         return yield* cell.append([turn.response, turn.intent]);
       });
 

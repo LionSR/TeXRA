@@ -24,7 +24,7 @@ import {
 } from '@texra/shared/settingsView/settingRows';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import type { StateSettingValue } from '@texra/shared/settingsView/settingsViewMessages';
 import type { SettingRow } from '@texra-ai/harness/schemas';
 import { readSelectValue } from '@ui/wa/selectTemplates';

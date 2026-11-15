@@ -3,7 +3,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
-import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { PLAN_CREDITS_SUMMARY } from '@ui/copy/modelAccess';
 import {
   ONBOARDING_CARD_LEDE,

@@ -23,6 +23,7 @@ import {
 } from '@texra/shared/contextGauge';
 import type { IconName } from '@ui/wa/iconNames';
 import { designTokens } from '@ui/styles';
+import { formatTokenCount } from '@ui/copy/format';
 import { usageCost, usageCostLabel } from '@ui/copy/modelAccess';
 import { focusRingStyles } from '@ui/styles/controlStyles';
 
@@ -96,7 +97,7 @@ function visibleTokenStats(usage: TokenUsageStats): TokenStat[] {
 }
 
 function renderTokenStat(stat: TokenStat): TemplateResult {
-  const tooltip = `${stat.tooltip}: ${stat.value.toLocaleString('en-US')}`;
+  const tooltip = `${stat.tooltip}: ${formatTokenCount(stat.value)}`;
   // prettier-ignore
   return html`<span id=${stat.id} class="token-stat" tabindex="0">${waIcon(stat.icon)}<span class="token-value">${formatCompactTokenCount(stat.value)}</span></span><wa-tooltip for=${stat.id}>${tooltip}</wa-tooltip>`;
 }

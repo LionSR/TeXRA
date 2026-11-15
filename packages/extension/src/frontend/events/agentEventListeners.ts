@@ -11,7 +11,7 @@
  */
 import { basename } from 'node:path';
 
-import { Cause, Effect, Scope } from 'effect';
+import { Effect, Scope } from 'effect';
 
 import {
   withProcessServices,
@@ -55,7 +55,7 @@ function warnOnFailure<E>(
 ): Effect.Effect<void> {
   return program.pipe(
     Effect.catchCause((cause) =>
-      Effect.logWarning(`${what}: ${toErrorMessage(Cause.squash(cause))}`).pipe(
+      Effect.logWarning(`${what}: ${toErrorMessage(cause)}`).pipe(
         withLogChannel(CHANNEL),
       ),
     ),
@@ -146,7 +146,7 @@ function handleRequestShowInstruction(
   ).pipe(
     Effect.catchCause((cause) =>
       Effect.logWarning(
-        `Failed to show instruction "${payload.key}": ${toErrorMessage(Cause.squash(cause))}`,
+        `Failed to show instruction "${payload.key}": ${toErrorMessage(cause)}`,
       ).pipe(
         withLogChannel(CHANNEL),
         // The instruction may be a launch failure's only surface, so fall

@@ -48,6 +48,8 @@ export {
   type ProcessServices,
 } from './effect/processLayer.js';
 export type { PlatformServices, PluginContext } from '@platform/processRuntime';
+// The run function a host callback starts Effect work with, owned by a scope.
+export { scopedFork, type ScopedFork } from '@platform/processRuntime';
 // What a run's program requires of the process, beneath `ProcessServices`.
 export type { RunServices } from '@agent/runtime/ToolServices';
 export type { AgentCatalogServices } from '@agent/index/agentEntry';
@@ -87,9 +89,8 @@ export type { ValueFamily } from '@shared/session/valueFamily';
 export {
   DatabaseWriteFailed,
   type CurrentValues,
-  type EventsRead,
 } from '@shared/session/database';
-export type { DraftBlob, WithBlobs } from '@shared/session/historyTurns';
+export type { DraftBlob } from '@shared/session/historyTurns';
 export type { AppStateStore } from '@platform/interfaces';
 export {
   deleteStorageInventory,
@@ -97,10 +98,7 @@ export {
   type StorageInventory,
 } from '@controllers/session/projectDatabase';
 // Follow-up delivery helpers hosts share.
-export {
-  describeFollowUpFailure,
-  presentFollowUpResult,
-} from '@agent/followUp/ToolUseFollowUp';
+export { presentFollowUpResult } from '@agent/followUp/ToolUseFollowUp';
 // A host's presentation surface: session and sessionless interactions, the
 // emit handlers (one per event), and a failed run's presentation, with the
 // notice a refused launch carries.
@@ -135,6 +133,7 @@ export {
 // and what hosts and the app publish and follow on it.
 export {
   appSignalStream,
+  subscribeAppSignal,
   onAppSignal,
   type AppSignal,
   type AppSignalEvent,
@@ -144,7 +143,6 @@ export {
 export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';
 // The canned model a package-validation build provides beneath the process.
 export { ValidationModel } from '@agent/runtime/modelAccess/routeDecision';
-export type { RouteCredential } from '@agent/runtime/modelAccess/credentials';
 // The models a host offers: each visible model's option, the enabled list and
 // its writer, run-model precedence, the reasoning policy, the helper model.
 export {
@@ -250,13 +248,16 @@ export {
 } from '@utils/core/pathCore';
 // The office formats the Read tool converts to text.
 export { OFFICE_EXTENSIONS } from '@utils/files/mimeUtils';
-// One exclusive FIFO lane per key, for work that must run one at a time per
-// key (a file, a project, a prompt queue).
+// One exclusive lane per key, for work that must run one at a time per
+// key (a project, a prompt queue).
 export {
   withPerKeyLane,
   type PerKeyLane,
   type PerKeyLanes,
 } from '@utils/core/perKeyQueue';
+// The one lane every writer of a file shares: a host's own save takes it
+// beside the harness's approved edits.
+export { withFileWriteLane } from '@utils/files/fileWriteLane';
 // Which external tools this machine has, as plugins' `availability` probes
 // answered; a host reads it and asks for a refresh.
 export {

@@ -627,13 +627,17 @@ const readFile = Effect.fn('ExecutionsTool.readFile')(function* (
   });
 });
 
+/** A run's record and the workspace file paths it recorded. */
+const readRecordAndWorkspaceFiles = (runId: RunId) => {
+  const records = getRunRecords(runId);
+  return Effect.all([records.readRunRecord(), records.readWorkspaceFiles()], {
+    concurrency: 2,
+  });
+};
+
 const listWorkspaceFiles = Effect.fn('ExecutionsTool.listWorkspaceFiles')(
   function* (context: RunToolContext, runId: RunId) {
-    const records = getRunRecords(runId);
-    const [record, paths] = yield* Effect.all(
-      [records.readRunRecord(), records.readWorkspaceFiles()],
-      { concurrency: 2 },
-    );
+    const [record, paths] = yield* readRecordAndWorkspaceFiles(runId);
     const entries = yield* listRunWorkspaceFiles(record, paths);
 
     if (entries.length === 0) {
@@ -656,11 +660,7 @@ const readWorkspaceFile = Effect.fn('ExecutionsTool.readWorkspaceFile')(
     filePath: string,
     viewRange?: readonly [number, number],
   ) {
-    const records = getRunRecords(runId);
-    const [record, paths] = yield* Effect.all(
-      [records.readRunRecord(), records.readWorkspaceFiles()],
-      { concurrency: 2 },
-    );
+    const [record, paths] = yield* readRecordAndWorkspaceFiles(runId);
     const recordedPaths = new Set(
       paths.flatMap((candidate) => {
         const resolvedCandidate = resolveRunWorkspaceFilePath(

@@ -112,7 +112,7 @@ import { wolfram } from './wolframPlugin';
 import { zotero } from './zotero/plugin';
 import type { InquiryPanelCapability } from './inquiry/ExternalInquiryTool';
 import { type WriteFilter, Settings } from '@texra-ai/harness/plugins';
-import { BIB_DEFAULT_PATH_SETTING } from '@texra/shared/settingsView/texraSettings';
+import { BIB_DEFAULT_PATH_SETTING } from '@texra/shared/settings/texraSettings';
 
 /** How a user gets a probed plugin's dependency installed and signed in. */
 export interface ToolPluginSetup {
@@ -135,7 +135,7 @@ export interface PluginCard {
   readonly name: string;
   readonly description: string;
   /** The plugin's catalog rows the card renders inline, in order; the
-   *  catalog itself takes them from TeXRA's rows (`@texra/shared/settingsView/texraSettings`). */
+   *  catalog itself takes them from TeXRA's rows (`@texra/shared/settings/texraSettings`). */
   readonly settings?: readonly PluginSettingRow[];
   /** Install and sign-in copy and actions; only a probed plugin's card
    *  shows them. */

@@ -40,7 +40,7 @@ import {
   Schema,
   Scope,
   ScopedRef,
-  SynchronizedRef,
+  Ref,
 } from 'effect';
 import { ModelProvider } from '@texra-ai/llm';
 import stableStringify from 'safe-stable-stringify';
@@ -57,6 +57,7 @@ import {
   qualifyAggregateId,
   SKILL_CATALOG_MAX_SKILLS,
   type OfferedTool,
+  SCRIPT_TOOL_NAME,
 } from '@shared/schemas';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
@@ -78,7 +79,7 @@ import {
 } from '../agentToolResolution';
 import { hostCapabilitiesOf, liveToolGates } from '../requests';
 import { blobRows, systemTextAt, stored } from '../run/recordedRequest';
-import { appendRow, SCRIPT_TOOL_NAME } from './rows';
+import { appendRow } from './rows';
 import { stepHooks, type StepHooks } from './hooks';
 import type { AgentRunShape } from '../run/AgentRun';
 import { AGENT_SKILLS_ENABLED_SETTING } from '@shared/state/stateSettings';
@@ -344,7 +345,7 @@ const openStep = Effect.fn('Step.open')(function* (
   }).pipe(Effect.onError(() => Scope.close(scope, Exit.void)));
   const { listed } = step;
   const tools: StepTools = step.tools;
-  const previous = yield* SynchronizedRef.getAndSet(run.steps, {
+  const previous = yield* Ref.getAndSet(run.steps, {
     tools,
     scope,
     withheld: step.withheld,
@@ -401,7 +402,7 @@ export const dispatchTools = Effect.fn('Step.dispatch')(function* (
   run: AgentRunShape,
   state: RunState,
 ) {
-  const open = yield* SynchronizedRef.get(run.steps);
+  const open = yield* Ref.get(run.steps);
   if (open !== null) return open.tools;
   const step = yield* openStep(
     run,
@@ -429,7 +430,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
   waits: boolean,
   openingSystem?: string,
 ) {
-  const open = yield* SynchronizedRef.get(run.steps);
+  const open = yield* Ref.get(run.steps);
   const held = open === null || open.holding;
   const step = yield* openStep(
     run,
@@ -504,10 +505,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
 /** What `run`'s current step offers: the tools a background script it
  *  launches now declares. */
 export const offeredBy = (run: Pick<AgentRunShape, 'steps'>) =>
-  Effect.map(
-    SynchronizedRef.get(run.steps),
-    (open) => open?.tools.offered ?? [],
-  );
+  Effect.map(Ref.get(run.steps), (open) => open?.tools.offered ?? []);
 
 /**
  * The skills of `names` a user just activated that `run`'s current step
@@ -518,7 +516,7 @@ export const offeredBy = (run: Pick<AgentRunShape, 'steps'>) =>
  */
 export const resolveActivations = Effect.fn('Step.resolveActivations')(
   function* (run: AgentRunShape, names: readonly string[]) {
-    const open = yield* SynchronizedRef.get(run.steps);
+    const open = yield* Ref.get(run.steps);
     if (open === null || names.length === 0) return [...names];
     const roots = yield* SessionRoots;
     const { named } = yield* loadRuntimeSkillCatalog({

@@ -20,7 +20,7 @@ export function prefixFingerprint(
     (_key, value: unknown) => {
       if (!Predicate.isObject(value)) return value;
       return Object.fromEntries(
-        Object.entries(value).sort(([left], [right]) =>
+        Object.entries(value).toSorted(([left], [right]) =>
           left < right ? -1 : Number(left > right),
         ),
       );

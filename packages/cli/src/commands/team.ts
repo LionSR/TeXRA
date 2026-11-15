@@ -3,8 +3,8 @@ import { defineCommand } from 'citty';
 
 import { AgentCatalog, type ProcessServices } from '@texra-ai/harness/host';
 import type { Sessions } from '@texra-ai/harness';
-import { canLaunchTeam, planTeamRuns } from '@texra/shared/teamLaunch';
-import { findTeamPreset, planTeamRun } from '@texra/shared/teamPlan';
+import { canLaunchTeam, planTeamRuns } from '@texra/agent/teams/teamLaunch';
+import { findTeamPreset, planTeamRun } from '@texra/agent/teams/teamPlan';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra/shared/constants/agents';
 
 import { missingAgentMessage, missingTeamMessage } from '../runtime/agents';
@@ -39,8 +39,7 @@ import { withUsageSections } from './_helpers/dispatch';
 import { formatTeamRunInstruction } from './_helpers/runInstructions';
 import { emitCliResult } from './_helpers/output';
 import {
-  AGENT_RUN_GLOBAL_ARGS,
-  GLOBAL_ARGS,
+  SKILL_SOURCE_ARGS,
   collectCommonAgentRunFlags,
   optString,
 } from './_helpers/globalArgs';
@@ -107,7 +106,6 @@ const runTeamList = Effect.fn('runTeamList')(function* (
     ndjson: cliTeamNdjsonRecords(plans),
     text: formatCliTeamList(plans),
   });
-  return CliExitCode.Success;
 });
 
 const runTeamShow = Effect.fn('runTeamShow')(function* (
@@ -121,7 +119,6 @@ const runTeamShow = Effect.fn('runTeamShow')(function* (
     ndjson: { kind: 'team-inspection', plan },
     text: formatCliTeamInspection(plan),
   });
-  return CliExitCode.Success;
 });
 
 const runTeam = Effect.fn('runTeam')(function* (
@@ -183,7 +180,12 @@ const runTeam = Effect.fn('runTeam')(function* (
       allowEmptyInput: hasInstruction,
       requireWorkspaceFiles: true,
     },
-    Effect.fnUntraced(function* ({ inputFiles, contextFiles, stdinInputPath }) {
+    Effect.fnUntraced(function* ({
+      inputFiles,
+      mediaFiles,
+      contextFiles,
+      stdinInputPath,
+    }) {
       if (runContext.approvalPolicy === 'never') {
         writeTextStderr(
           `WARN team ${plan.preset.id} may run without subagents because approval policy "never" denies approval-gated tools, the agent tool included. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
@@ -208,6 +210,7 @@ const runTeam = Effect.fn('runTeam')(function* (
         agentSource: rootAgent.source,
         model,
         inputFiles,
+        mediaFiles,
         contextFiles,
         instruction: formatTeamRunInstruction(plan.preset, {
           inputFiles,
@@ -218,7 +221,7 @@ const runTeam = Effect.fn('runTeam')(function* (
         }),
         displayInstruction,
         workingDirectory: runContext.cwd,
-        cli: { teamId: plan.preset.id },
+        launch: { teamId: plan.preset.id },
         delegationAgentScope: [...plan.agentKeys],
       };
 
@@ -250,9 +253,7 @@ const runTeam = Effect.fn('runTeam')(function* (
 
 const teamListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List teams' },
-  args: {
-    ...GLOBAL_ARGS,
-  },
+  args: {},
   run: Effect.fn('team.run')(function* () {
     const services = yield* cliPlatform;
     return yield* runTeamList(services);
@@ -265,7 +266,6 @@ const teamShowCommand = defineCliCommand({
     description: 'Show one team and its resolved agents',
   },
   args: {
-    ...GLOBAL_ARGS,
     team: {
       type: 'positional',
       required: true,
@@ -282,7 +282,7 @@ const teamRunCommand = withUsageSections(
   defineCliCommand({
     meta: { name: 'run', description: 'Run a team' },
     args: {
-      ...AGENT_RUN_GLOBAL_ARGS,
+      ...SKILL_SOURCE_ARGS,
       team: {
         type: 'positional',
         required: true,

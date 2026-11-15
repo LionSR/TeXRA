@@ -9,6 +9,7 @@ import katexStyles from 'katex/dist/katex.min.css?inline';
 // Shared styles
 import { commonViewStyles } from '@ui/styles';
 import { markdownStyles } from '@ui/styles/markdownStyles';
+import { lineChangeStatsStyles } from '@ui/styles/surfaceStyles';
 
 // Import individual style modules
 import { logEntryStyles } from './logEntryStyles';
@@ -83,4 +84,5 @@ export const logStyles = [
   codeBlockStyles,
   toolUseStyles,
   markdownStyles,
+  lineChangeStatsStyles,
 ];

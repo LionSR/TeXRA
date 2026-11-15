@@ -36,14 +36,14 @@ import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import { TEXRA_STORAGE_DIR_NAME } from '@texra/platform/defaults/nodeStorage';
 import { teamMembers } from '@texra/shared/agentTeams';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { makeEditorHost } from '@texra/tools/editorHost';
 import { texraPlugins } from '@texra/tools/registry';
 import type { Sessions } from '@texra-ai/harness';
 
 /** What a host decides about its process: its name and host-only plugin
  *  inputs (as `texraPlugins` takes them), and the facts below. */
-export interface TexraProcessHost extends Omit<
+interface TexraProcessHost extends Omit<
   Parameters<typeof texraPlugins>[0],
   'editors'
 > {

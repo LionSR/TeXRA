@@ -139,7 +139,8 @@ function rowRefusal({ commit, type, version: stored }: typeof RowSchema.Type) {
   if (retired === 'execution') return new DatabaseRowEarlier({ commit, type });
   if (!hasKind(type))
     return new DatabaseRowCorrupt({ commit, type, detail: 'an unknown kind' });
-  // A projected row has no version: this build's projector wrote it.
+  // A row a read derives (a priced row's `usage` row, the listing's
+  // spend) has no version: this build wrote the read.
   const { version } = ROW_KINDS[type];
   const at = stored ?? version;
   if (at > version) return new DatabaseStoreNewer({ type, version: at });

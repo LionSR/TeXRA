@@ -24,7 +24,7 @@ import {
   CLI_MODEL_SETTING,
   CLI_RUN_SETTING,
   TEXRA_SETTINGS,
-} from '@texra/shared/settingsView/texraSettings';
+} from '@texra/shared/settings/texraSettings';
 
 // Local imports - tools
 

@@ -5,8 +5,8 @@
  * A call's child is named by the call and its intent attempt
  * (`agentChildRunId`), so a resumed call finds what an earlier attempt
  * launched. The child's own aggregate says what became of it: `run.start` is
- * the launch, and its `run.end` is its durable answer. A child a crash or a
- * clean close cut short is resumed under its own id, not launched again;
+ * the launch, and its `run.end` is its durable answer. A child a process
+ * that exited left without an end is resumed under its own id, not launched again;
  * any other ended child's end is the call's answer, which the model reads
  * and decides on.
  *
@@ -19,7 +19,6 @@ import { createHash } from 'node:crypto';
 
 // Third-party imports
 import { Context, type Deferred, Effect, FileSystem, Stream } from 'effect';
-import { cutShort } from '@agent/runtime/leftoverChildren';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
 
 // Local imports
@@ -103,7 +102,8 @@ export const earlierChild = Effect.fn('agent.earlierChild')(function* (
 type ChildStanding =
   /** It ended after its work began: its end is the call's answer. */
   | { readonly kind: 'answered'; readonly result: RunEnd }
-  /** Cut short by a crash or a stop: it continues under its own id. */
+  /** Left with no end by a process that exited: it continues under its
+   *  own id. */
   | { readonly kind: 'resume' }
   /** It ended before any turn: nothing it did can be repeated. */
   | { readonly kind: 'fresh' };
@@ -113,10 +113,9 @@ const standingOf = Effect.fn('agent.childStanding')(function* (
 ): Effect.fn.Return<ChildStanding, DatabaseReadFailed, AgentRunServices> {
   const facts = yield* (yield* SessionLog).facts(runId);
   const end = yield* getRunRecords(runId).readRunEnd();
-  // Cut short (no end, or the end this process's clean close wrote):
-  // continues where it stopped. A stop of the person's ends the call.
-  if (end === null || facts === null || cutShort(facts))
-    return { kind: 'resume' };
+  // No end: its process exited, and it continues where it stopped. A
+  // stop ends the call.
+  if (end === null) return { kind: 'resume' };
   // Failed before its first turn began: nothing it did can be repeated.
   if (
     end.outcome === RUN_OUTCOME.FAILED &&
@@ -209,8 +208,7 @@ export const fingerprint = Effect.fn('agent.fingerprint')(function* (
  * The runs whose completed calls a call may reuse: the run that issued
  * the `script` call, and the background script runs it launched. A call of
  * a background script's run reaches its parent and its siblings this way.
- * Both follow each script's launch parent, which a detach leaves as it
- * was, so a script the person kept running stays in the scope.
+ * Both follow each script's launch parent.
  */
 const reuseScope = Effect.fn('agent.reuseScope')(function* (call: RunToolCall) {
   const { runId } = call.run;

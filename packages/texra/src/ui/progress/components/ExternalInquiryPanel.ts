@@ -30,7 +30,7 @@ import {
 } from '@texra/shared/plugins/externalInquiry';
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import type { Surface } from '@texra/shared/session/surface';
-import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { CopyButtonController } from '@ui/litControllers/CopyButtonController';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderDotMeta } from '@ui/wa/metaStrip';

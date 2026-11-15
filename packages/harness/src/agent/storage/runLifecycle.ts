@@ -118,10 +118,9 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
   return yield* Effect.gen(function* () {
     const prior = yield* getRunRecords(runId).exists();
     if (options.parentRunId !== undefined) {
-      // A barrier first (a queued `run.start` reads absent); the database
-      // refuses a closed or unborn parent, this only words the refusal.
+      // The database refuses a closed or unborn parent; this only words
+      // the refusal.
       const log = yield* SessionLog;
-      yield* log.transact([]);
       const parent = yield* log.facts(options.parentRunId);
       if (parent === null)
         return yield* Effect.fail(
@@ -153,8 +152,8 @@ export interface RunEnding {
   /** A child's report: its delivery, kept rendered as the run's
    *  `run.report` (the envelope its parent's model reads) and queued typed
    *  on the parent's input unless the parent's call awaits the child (it
-   *  reads the report itself) or the child was detached. Null, or absent:
-   *  nothing to report (a stop, a root). */
+   *  reads the report itself). Null, or absent: nothing to report (a stop,
+   *  a root). */
   readonly report?: ChildRunDelivery | null;
   /** Rows committed ahead of the end (a process run's exit). */
   readonly leading?: readonly UnfoldedDraft[];
@@ -162,13 +161,13 @@ export interface RunEnding {
 
 /** The `run.end` the store holds once the transaction committed, and
  *  whether this call wrote it (an earlier end of the lifecycle stands). */
-export interface EndedRun {
+interface EndedRun {
   readonly end: Omit<RunEnd, 'usage'> | null;
   readonly wrote: boolean;
 }
 
 /** What a run's end reads of its session. */
-export type EndServices = SessionLog | Inbox | RunHistory;
+type EndServices = SessionLog | Inbox | RunHistory;
 
 /** The caller's {@link EndServices}, for the end's transaction job. Picked
  *  when asked: the inbox's module and this one import each other. */
@@ -263,7 +262,7 @@ const parentDelivery = Effect.fn('parentDelivery')(function* (
  * rows this build cannot load ends unloaded, with a warning, requests
  * uncancelled.
  */
-export const endIn = Effect.fn('endIn')(function* (
+const endIn = Effect.fn('endIn')(function* (
   tx: Pick<SessionTransaction, 'append'>,
   input: RunEnding,
   leading: readonly UnfoldedDraft[] = [],
@@ -341,8 +340,7 @@ export const endRunRows = Effect.fn('endRunRows')(function* (
  * The rows a stop commits for `runId`: its `run.stop` row, and, for a run
  * no fiber here drives (`end`), its CANCELLED end in the same batch. A run
  * whose lifecycle ended gets none: there is nothing to stop. The first stop
- * of a lifecycle stands: a person's outranks the shutdown that follows it,
- * and a second ask adds no row. Answers whether the run has rows at all:
+ * of a lifecycle stands, and a second ask adds no row. Answers whether the run has rows at all:
  * one that has none yet is a launch that has not registered.
  */
 export const stopRun = Effect.fn('stopRun')(function* (

@@ -27,8 +27,8 @@ import {
   RUN_SECTION_LABELS,
   RUN_SECTION_ORDER,
   runStatus,
-  type RunSection,
 } from '@ui/copy/runStatus';
+import type { RunSection } from '@texra/shared/session/runStatusKey';
 import { sessionView } from './sessionView';
 import type { RootLaunch } from './sessionRunState';
 import type { LocalNotice } from './transcript';

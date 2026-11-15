@@ -77,11 +77,21 @@ export const LATEX_CITATION_COMMANDS: readonly string[] = Object.freeze([
   ),
 ]);
 
-/** Strips everything after an unescaped % on each line. */
-const COMMENT_PATTERN = /(^|[^\\])%.*$/gm;
+/**
+ * A comment, or a URL argument to keep whole. A `%` starts a comment unless
+ * an odd number of backslashes precedes it (`\%` is a percent sign, `\\%` a
+ * line break and then a comment). Inside the argument of `\url`, `\path`,
+ * `\nolinkurl` and the first argument of `\href`, a `%` is part of the URL.
+ */
+const COMMENT_PATTERN =
+  /(?<=(?<!\\)(?:\\\\)*)(?:(\\(?:url|nolinkurl|path|href)\s*\{[^{}\n]*\})|%.*$)/gm;
 
+/** Removes each comment, from its `%` to the end of the line. */
 export function stripLatexComments(content: string): string {
-  return content.replaceAll(COMMENT_PATTERN, '$1');
+  return content.replaceAll(
+    COMMENT_PATTERN,
+    (_match, url: string | undefined) => url ?? '',
+  );
 }
 
 /**

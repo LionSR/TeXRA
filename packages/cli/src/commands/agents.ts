@@ -1,11 +1,7 @@
 import { defineCommand } from 'citty';
-import { Effect, FileSystem } from 'effect';
+import { Effect } from 'effect';
 
-import {
-  AgentCatalog,
-  AgentDirectories,
-  isStrictlyWithin,
-} from '@texra-ai/harness/host';
+import { AgentCatalog } from '@texra-ai/harness/host';
 import { AGENT_SOURCE, agentKey, agentName } from '@texra-ai/harness/schemas';
 
 import {
@@ -23,7 +19,6 @@ import { cliPlatform } from '../runtime/platform/initPlatform';
 import { writeTextStderr } from '../runtime/platform/logSinks';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult, emitPagedCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/platform/cliContext';
 
@@ -62,7 +57,6 @@ const listAgents = Effect.fn('listAgents')(function* (
         context.outputFormat === 'text',
     }),
   });
-  return CliExitCode.Success;
 });
 
 const showAgent = Effect.fn('showAgent')(function* (
@@ -85,7 +79,6 @@ const showAgent = Effect.fn('showAgent')(function* (
     ndjson: { kind: 'agent', agent: entry },
     text: formatCliAgentDetails(entry),
   });
-  return CliExitCode.Success;
 });
 
 /** The bundled agent a bare name or a bundled `source:name` key names. */
@@ -136,7 +129,7 @@ const customizeAgent = Effect.fn('customizeAgent')(function* (name: string) {
               `Kept your existing ${file}; it differs from the built-in one.`,
           ),
         ].join('\n'),
-      }).pipe(Effect.as(CliExitCode.Success)),
+      }),
     ),
     Effect.catchTag('AgentCustomizeRefused', (refused) =>
       Effect.succeed(refuse(refused.message)),
@@ -152,23 +145,22 @@ const resetAgent = Effect.fn('resetAgent')(function* (name: string) {
   if (!custom || !(yield* bundledAgentNamed(name))) {
     return refuse(`${name} is not a custom copy of a built-in agent.`);
   }
-  const customDir = yield* (yield* AgentDirectories).custom();
-  if (!isStrictlyWithin(customDir, custom.path)) {
-    return refuse(
-      'Refusing to delete: file is not inside the custom agents directory.',
+  return yield* catalog
+    .workspaceAgents(services)
+    .removeCustom(name)
+    .pipe(
+      Effect.flatMap((path) =>
+        emitCopyResult({
+          action: 'reset',
+          name,
+          path,
+          text: `Removed ${path}; ${name} uses the built-in version again.`,
+        }),
+      ),
+      Effect.catchTag('AgentCustomizeRefused', (refused) =>
+        Effect.succeed(refuse(refused.message)),
+      ),
     );
-  }
-  yield* FileSystem.FileSystem.use((fs) =>
-    fs.remove(custom.path, { force: true }),
-  );
-  yield* catalog.workspaceAgents(services).forgetDeletedAgent(name);
-  yield* emitCopyResult({
-    action: 'reset',
-    name,
-    path: custom.path,
-    text: `Removed ${custom.path}; ${name} uses the built-in version again.`,
-  });
-  return CliExitCode.Success;
 });
 
 /** Keep the custom copy and dismiss its newer-built-in notice. */
@@ -184,7 +176,7 @@ const keepAgent = Effect.fn('keepAgent')(function* (name: string) {
         name,
         path: custom.path,
         text: `Kept your ${name}; it is now based on the current built-in version.`,
-      }).pipe(Effect.as(CliExitCode.Success)),
+      }),
     ),
     Effect.catchTag('AgentCustomizeRefused', (refused) =>
       Effect.succeed(refuse(refused.message)),
@@ -203,7 +195,7 @@ const agentsCustomizeCommand = defineCliCommand({
     name: 'customize',
     description: 'Copy a built-in agent into your custom agents folder to edit',
   },
-  args: { ...GLOBAL_ARGS, name: NAME_ARG },
+  args: { name: NAME_ARG },
   catchExitCode: CliExitCode.AgentError,
   run: (_, ctx) => customizeAgent(ctx.args.name),
 });
@@ -213,7 +205,7 @@ const agentsResetCommand = defineCliCommand({
     name: 'reset',
     description: 'Delete your copy of a built-in agent so the built-in is used',
   },
-  args: { ...GLOBAL_ARGS, name: NAME_ARG },
+  args: { name: NAME_ARG },
   catchExitCode: CliExitCode.AgentError,
   run: (_, ctx) => resetAgent(ctx.args.name),
 });
@@ -224,7 +216,7 @@ const agentsKeepCommand = defineCliCommand({
     description:
       'Keep your copy of a built-in agent and dismiss the newer-version notice',
   },
-  args: { ...GLOBAL_ARGS, name: NAME_ARG },
+  args: { name: NAME_ARG },
   catchExitCode: CliExitCode.AgentError,
   run: (_, ctx) => keepAgent(ctx.args.name),
 });
@@ -232,7 +224,6 @@ const agentsKeepCommand = defineCliCommand({
 const agentsListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List available agents' },
   args: {
-    ...GLOBAL_ARGS,
     all: {
       type: 'boolean',
       description:
@@ -253,7 +244,6 @@ const agentsListCommand = defineCliCommand({
 const agentsShowCommand = defineCliCommand({
   meta: { name: 'show', description: 'Show one agent' },
   args: {
-    ...GLOBAL_ARGS,
     name: {
       type: 'positional',
       required: true,

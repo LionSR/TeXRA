@@ -1,18 +1,13 @@
-import type { ProcessServices } from '@texra-ai/harness/host';
 import { Effect, Schema } from 'effect';
 
-import {
-  agentName,
-  type AgentConfig,
-  Cancelled,
-} from '@texra-ai/harness/schemas';
-import { presentRunFailure, type Notices } from '@texra-ai/harness/host';
+import { agentName, type AgentConfig } from '@texra-ai/harness/schemas';
+import type { Notices } from '@texra-ai/harness/host';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import type { Run, Session } from '@texra-ai/harness';
-import type { Secrets, SettingsStores } from '@texra-ai/harness/plugins';
+import type { SettingsStores } from '@texra-ai/harness/plugins';
 
 /** Instruction handed to the setup agent when launched. */
 const SETUP_INSTRUCTION =
@@ -105,27 +100,3 @@ export interface WindowSetupLaunch {
   readonly runValidated: HostRunActions['runValidated'];
   readonly present: Notices;
 }
-
-/**
- * Launch the setup conversation from the desktop's setup card through the
- * launch path of the window that asked, the one its Execute button uses.
- * Setup continues after its initiating request has completed, so a failure
- * before the launch is presented here (the launch path presents its own);
- * the kickoff finishes with the setup run, so a second Run Setup waits for
- * it. A setup run already live in the project is left to run alone.
- */
-export const kickoffDesktopSetup = (
-  launch: WindowSetupLaunch,
-): Effect.Effect<void, never, Secrets | ProcessServices> =>
-  launchSetup({
-    session: launch.session,
-    roots: launch.roots,
-    start: launch.runValidated,
-  }).pipe(
-    Effect.catchTag('SetupAlreadyRunning', () => Effect.void),
-    Effect.catch((error) =>
-      error instanceof Cancelled
-        ? Effect.void
-        : presentRunFailure(launch.present, error),
-    ),
-  );

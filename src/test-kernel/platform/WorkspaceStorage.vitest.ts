@@ -12,7 +12,7 @@ import { resolveWorkspaceStoragePath } from '@texra-ai/harness/node';
 import { nodePlatformLayer, pathExists } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 
 describe('workspace storage defaults', () => {
   const tempDirs = useTempDirs();

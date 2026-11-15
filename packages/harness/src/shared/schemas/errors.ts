@@ -6,7 +6,7 @@ import {
   providerDisplayName,
 } from '@texra-ai/llm';
 
-import { formatCompactDuration } from '@utils/text/stringUtils';
+import { formatResetDuration } from '@utils/text/stringUtils';
 
 import { type DeclinableUsageRoute, DeclinableUsageRouteSchema } from './usage';
 
@@ -26,12 +26,11 @@ export const SubscriptionSessionFailureSchema = Schema.Struct({
 /**
  * A model call's failure as a run records it: the verdict, never its words.
  * `model` is llm's verdict on the vendor's reply (its kind, the vendor's own
- * message and status, and the quota a used-up plan or credit names), `route`
- * is model access finding no route to send on (a missing key, a subscription
- * session that could not bill), and `interrupted` is an attempt the process
- * stopped during, which may have been billed without an answer. `provider`
- * is the binding's. Each reader words it ({@link modelFailureMessage}, or an
- * app's own copy), so a wording change is not a format change.
+ * message and status, and the quota a used-up plan or credit names), and
+ * `route` is model access finding no route to send on (a missing key, a
+ * subscription session that could not bill). `provider` is the binding's.
+ * Each reader words it ({@link modelFailureMessage}, or an app's own copy),
+ * so a wording change is not a format change.
  */
 export const ModelFailureSchema = Schema.Union([
   ModelErrorFieldsSchema.mapFields(
@@ -52,10 +51,6 @@ export const ModelFailureSchema = Schema.Union([
     /** The route's credential is not set anywhere the run reads. */
     missingApiKey: Schema.optional(Schema.Literal(true)),
     session: Schema.optional(SubscriptionSessionFailureSchema),
-  }),
-  Schema.Struct({
-    source: Schema.Literal('interrupted'),
-    provider: Schema.optional(Schema.String),
   }),
 ]);
 /** {@link ModelFailureSchema}'s value. */
@@ -88,12 +83,24 @@ export function reasonPhrase(statusCode: number): string | undefined {
  * own reads what ran out. An app's switch and sign-in labels are its copy,
  * worded from the same facts where it shows them.
  */
-export const planOwner = (plan: DeclinableUsageRoute): string =>
+const planOwner = (plan: DeclinableUsageRoute): string =>
   providerDisplayName(PLAN_ROUTES[plan].provider);
 
-/** What a person is told of an attempt the process stopped during. */
-const INTERRUPTED_MESSAGE =
-  'The process stopped while a model request was running, so it may have been billed without an answer. Retry again?';
+/**
+ * A used-up plan in plain words, under the names its reader knows the plan
+ * and its fallback by: what ran out, when it resets, and what to do.
+ */
+export function usageLimitMessage(
+  used: UsedUpPlan,
+  names: { readonly plan: string; readonly fallback: string },
+): string {
+  const tier = used.planType ? ` (${Str.capitalize(used.planType)} plan)` : '';
+  const reset =
+    used.resetsInMs === undefined
+      ? ''
+      : ` Resets in ${formatResetDuration(used.resetsInMs)}.`;
+  return `${names.plan} usage limit reached${tier}.${reset} Switch to ${names.fallback} to keep working, or wait until the limit resets.`;
+}
 
 /**
  * A model call's failure in plain words, the one wording of the verdict for
@@ -103,7 +110,6 @@ const INTERRUPTED_MESSAGE =
  * message under its status.
  */
 export function modelFailureMessage(failure: ModelFailure): string {
-  if (failure.source === 'interrupted') return INTERRUPTED_MESSAGE;
   if (failure.source === 'route') {
     const { message, session } = failure;
     if (session === undefined) return message;
@@ -113,17 +119,11 @@ export function modelFailureMessage(failure: ModelFailure): string {
     return `Your ${planOwner(session.route)} subscription is unavailable: ${message} ${remedy}, or turn the subscription off.`;
   }
   const plan = usedUpPlanOf(failure);
-  if (plan !== undefined) {
-    const tier = plan.planType ? ` ${Str.capitalize(plan.planType)}` : '';
-    const reset =
-      plan.resetsInMs === undefined
-        ? ''
-        : ` Resets in ${formatCompactDuration(plan.resetsInMs)}.`;
-    return (
-      `Usage limit reached on your ${planOwner(plan.plan)}${tier} plan.${reset}` +
-      ' Switch to your own API key to keep working, or wait until the limit resets.'
-    );
-  }
+  if (plan !== undefined)
+    return usageLimitMessage(plan, {
+      plan: `${planOwner(plan.plan)} subscription`,
+      fallback: 'your own API key',
+    });
   if (failure.kind === 'context-overflow')
     return (
       `${failure.message} Retrying would resend the same oversized request. ` +

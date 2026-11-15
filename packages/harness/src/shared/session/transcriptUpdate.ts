@@ -132,12 +132,17 @@ function closeCardStage(d: Draft, card: string, status: ToolCallStatus): void {
   d.touched = true;
 }
 
-// A card is a monotone machine: it opens once, takes progress while it is
-// open, and closes once. A second start reopens a running card (a re-run
-// attempt) and is a no-op on a closed one; progress after the close and a
-// close without an open are dropped. Under the one publisher those rows cannot
-// arrive out of order, so nothing here compensates for a race; the shape is
-// the card's definition.
+// A card is open while its status is in progress, and a stream while its
+// text row is running: the slot is the one holder of either fact. A card
+// closes on its own result, or is cut when its run waits or ends. A second
+// start reopens an open card (a re-run attempt) or a cut one (a resume
+// running the call again) and is a no-op on one its own result closed;
+// progress after the close and a close without an open are dropped. Under
+// the one publisher those rows cannot arrive out of order, so nothing here
+// compensates for a race; the shape is the card's definition.
+const isOpenCard = (slot: Extract<RowState, { kind: 'tool' }>): boolean =>
+  slot.log.status === TOOL_CALL_STATUS.IN_PROGRESS;
+
 function record(d: Draft, event: TraceRowFields): void {
   const { ix } = d;
   switch (event.type) {
@@ -174,7 +179,10 @@ function record(d: Draft, event: TraceRowFields): void {
       if (event.stageId !== undefined) openCardStage(d, event.stageId);
       const slot = ix.slots.get(event.logId);
       if (slot) {
-        if (slot.kind === 'tool' && ix.activeTools.has(event.logId)) {
+        if (
+          slot.kind === 'tool' &&
+          (isOpenCard(slot) || slot.call.cutByRunEnd === true)
+        ) {
           slot.log = log;
           slot.call = call;
           write(d, slot);
@@ -193,7 +201,6 @@ function record(d: Draft, event: TraceRowFields): void {
         log,
         call,
       });
-      ix.activeTools.add(event.logId);
       return;
     }
 
@@ -202,7 +209,7 @@ function record(d: Draft, event: TraceRowFields): void {
       const slot = ix.slots.get(event.logId);
       if (slot?.kind !== 'tool') return;
       const inProgress = event.status === TOOL_CALL_STATUS.IN_PROGRESS;
-      if (inProgress && !ix.activeTools.has(event.logId)) return;
+      if (inProgress && !isOpenCard(slot)) return;
       // The end carries the call's output and names no tool, input or card:
       // those are the ones its `tool.start` opened.
       const result: Record<PropertyKey, unknown> = Predicate.isObject(
@@ -222,7 +229,6 @@ function record(d: Draft, event: TraceRowFields): void {
       slot.call = call;
       if (!inProgress) {
         slot.base = settle(ix, slot.base);
-        ix.activeTools.delete(event.logId);
         closeCardStage(d, event.logId, event.status);
       }
       write(d, slot);
@@ -238,7 +244,6 @@ function record(d: Draft, event: TraceRowFields): void {
     case 'stream.start': {
       if (ix.closed) return;
       const messageType = event.kind;
-      ix.streams.add(event.id);
       if (messageType === MESSAGE_TYPES.MODEL_RESPONSE) {
         ix.pendingModelResponseId = event.id;
       }
@@ -254,11 +259,8 @@ function record(d: Draft, event: TraceRowFields): void {
 
     case 'stream.end': {
       const slot = ix.slots.get(event.id);
-      if (!ix.streams.has(event.id) || ix.closed || slot?.kind !== 'text') {
-        return;
-      }
+      if (ix.closed || slot?.kind !== 'text' || !slot.running) return;
       closeText(d, slot, event.finalText);
-      ix.streams.delete(event.id);
       return;
     }
 
@@ -272,7 +274,6 @@ function record(d: Draft, event: TraceRowFields): void {
       const correlatorId = ix.pendingModelResponseId;
       ix.pendingModelResponseId = undefined;
       if (correlatorId) {
-        ix.streams.delete(correlatorId);
         const slot = ix.slots.get(correlatorId);
         if (slot?.kind === 'text') {
           if (event.cut !== undefined) slot.cut = event.cut;
@@ -327,20 +328,14 @@ function applyStandingToTranscript(d: Draft, standing: RunStanding): void {
   }
   ix.closed = true;
   ix.pendingModelResponseId = undefined;
-  for (const id of ix.streams) {
-    const slot = ix.slots.get(id);
-    if (slot?.kind === 'text') closeText(d, slot, undefined);
-  }
-  ix.streams.clear();
-  for (const id of ix.activeTools) {
-    const slot = ix.slots.get(id);
-    if (slot?.kind !== 'tool') continue;
+  for (const slot of ix.slots.values()) {
+    if (slot.kind === 'text' && slot.running) closeText(d, slot, undefined);
+    if (slot.kind !== 'tool' || !isOpenCard(slot)) continue;
     slot.base = settle(ix, slot.base);
     slot.log = { ...slot.log, status: TOOL_CALL_STATUS.FAILED };
     slot.call = { ...slot.call, cutByRunEnd: true };
     write(d, slot);
   }
-  ix.activeTools.clear();
   const compactions = settleCompactionActivities(ix.compactionState, d.at);
   if (compactions.length > 0) {
     upsertCompactionRows(d, d.next, compactions);

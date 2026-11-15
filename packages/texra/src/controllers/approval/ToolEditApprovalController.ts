@@ -115,9 +115,7 @@ export function readToolEditPreview(
     Effect.catchCause((cause) =>
       Cause.hasInterruptsOnly(cause)
         ? Effect.interrupt
-        : unavailable(
-            `the session did not send it (${toErrorMessage(Cause.squash(cause))})`,
-          ),
+        : unavailable(`the session did not send it (${toErrorMessage(cause)})`),
     ),
   );
 }
@@ -446,11 +444,7 @@ export class ToolEditApprovalController {
 
   private report(failure: unknown): Effect.Effect<void> {
     return Effect.sync(() =>
-      this.options.host.reportError(
-        toErrorMessage(
-          Cause.isCause(failure) ? Cause.squash(failure) : failure,
-        ),
-      ),
+      this.options.host.reportError(toErrorMessage(failure)),
     );
   }
 }

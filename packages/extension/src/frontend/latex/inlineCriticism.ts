@@ -18,7 +18,7 @@
  */
 
 // Third-party imports
-import { Cause, Effect, FileSystem, Predicate, Stream } from 'effect';
+import { Effect, FileSystem, Predicate, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -40,7 +40,7 @@ import {
   Settings,
   type SettingsStores,
 } from '@texra-ai/harness/plugins';
-import { INLINE_CRITICISM_SETTING } from '@texra/shared/settingsView/texraSettings';
+import { INLINE_CRITICISM_SETTING } from '@texra/shared/settings/texraSettings';
 
 const CHANNEL = 'InlineCriticism';
 const COLLECTION_NAME = 'texra-criticism';
@@ -163,7 +163,7 @@ function showDiagnostics(
         ).pipe(
           Effect.catchCause((cause) =>
             Effect.logError(
-              `Failed to refresh criticism diagnostics: ${toErrorMessage(Cause.squash(cause))}`,
+              `Failed to refresh criticism diagnostics: ${toErrorMessage(cause)}`,
             ),
           ),
           Effect.forkChild,

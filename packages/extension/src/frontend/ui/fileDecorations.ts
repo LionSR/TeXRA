@@ -1,4 +1,4 @@
-import { Cause, Effect, Stream, type Scope } from 'effect';
+import { Effect, Stream, type Scope } from 'effect';
 import * as vscode from 'vscode';
 
 import { onAppSignal } from '@texra-ai/harness/host';
@@ -78,7 +78,7 @@ export const registerFileDecorations = Effect.fn('registerFileDecorations')(
         Effect.catchCause((cause) =>
           Effect.logWarning(
             'TeXRA stopped badging output files: the session read failed',
-          ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
+          ).pipe(Effect.annotateLogs({ data: cause })),
         ),
       ),
       { startImmediately: true },

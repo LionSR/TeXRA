@@ -17,6 +17,10 @@ import { Effect, Schema } from 'effect';
 // Local imports
 import type { SettingRow } from '@shared/state/stateSettings';
 
+/** The schema of a boolean setting: `value` when the key is absent. */
+export const booleanWithDefault = (value: boolean) =>
+  Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(value)));
+
 /** A provider's custom-endpoint row, stored as `<namespace>.endpoint.<id>`. */
 const endpointRow = <const Id extends string>(id: Id, displayName: string) =>
   ({
@@ -55,7 +59,7 @@ type RegionSettingRow = SettingRow<boolean> & { readonly provider: string };
 export const MOONSHOT_REGION_SETTING = {
   provider: 'moonshot',
   key: 'moonshot.useChina',
-  schema: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  schema: booleanWithDefault(true),
   title: 'Kimi/Moonshot China region',
   description:
     'Use the China endpoint instead of the international one. Enabled by default. Keys are platform-specific: a key from one region does not work on the other.',
@@ -65,9 +69,7 @@ export const MOONSHOT_REGION_SETTING = {
 export const DASHSCOPE_REGION_SETTING = {
   provider: 'dashscope',
   key: 'dashscope.useChina',
-  schema: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
+  schema: booleanWithDefault(false),
   title: 'Qwen China region (Bailian)',
   description:
     'Use the China region endpoint instead of the international one. Display name switches to "Bailian".',
@@ -77,9 +79,7 @@ export const DASHSCOPE_REGION_SETTING = {
 export const MINIMAX_REGION_SETTING = {
   provider: 'minimax',
   key: 'minimax.useChina',
-  schema: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
+  schema: booleanWithDefault(false),
   title: 'MiniMax China region',
   description:
     'Use the China region endpoint instead of the international one. API keys are region-specific — you must obtain a key from the matching region.',
@@ -91,7 +91,7 @@ export const MINIMAX_REGION_SETTING = {
 export const GLM_REGION_SETTING = {
   provider: 'glm',
   key: 'glm.useChina',
-  schema: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  schema: booleanWithDefault(true),
   title: 'GLM China region',
   description:
     'Use the China region endpoint instead of the international one. Enabled by default. API keys work with either endpoint.',

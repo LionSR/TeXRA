@@ -103,13 +103,14 @@ import {
   replayable,
   SKIPPED_AFTER_END_TURN,
   SKIPPED_NOT_STARTED,
+  SKIPPED_OUTCOME_UNKNOWN,
   skippedByScriptEnd,
-  unknownOutcome,
 } from '../run/tools';
 import {
   formatAttachmentSummary,
   formatToolResultAsText,
 } from '../run/toolResultText';
+import { decideRequest } from '../requests';
 import { callRequests, guardedToolCall } from './toolGuard';
 import { appendRow } from './rows';
 import type { AgentRunServices } from '../runRegistry';
@@ -329,8 +330,8 @@ const skipCall = (
  * stripped; a call after a group that `ended` the turn, one untouched in a
  * recovered response, and a started body that may have run and may not be
  * replayed are skipped, closing their cards; any other runs at the attempt
- * `resumedAttempt` continues, re-entering the request that attempt left
- * standing. A throwing tool is an error result; interruption leaves none.
+ * `resumedAttempt` names, asking again whatever it asked. A throwing tool
+ * is an error result; interruption leaves none.
  */
 const finishCall = Effect.fn('toolUse.finishCall')(function* (
   call: Call,
@@ -373,13 +374,14 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
   }
   if (
     entered.mayHaveRun &&
-    !(yield* replayable(fact, step.registry, input, logger, entered.attempt))
+    !(yield* replayable(fact, step.registry, input, logger))
   ) {
-    yield* skipCall(call, status, unknownOutcome(entered.attempt));
+    yield* skipCall(call, status, SKIPPED_OUTCOME_UNKNOWN);
     return;
   }
   const { attempt } = entered;
-  // Whether this attempt's intent is committed: a re-entered attempt's is.
+  // Whether this attempt's intent is committed: one that runs again at the
+  // attempt it started (it was waiting on a person) has it.
   let bodyStarted = status.kind === 'started' && status.attempt === attempt;
   // A tool the step offers but did not send (a script's own function, or any
   // tool while script-only tools are on) is reached from inside a script
@@ -401,14 +403,12 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     const { logId: id } = fact;
     log.publish(runId, { type: 'stream.chunk', id, text });
   };
-  const { requests, retireStanding } = callRequests({
+  const requests = callRequests({
     run,
     session,
-    cell,
     commit: (rows) => commit(call, rows),
     at,
     entered,
-    retireCause: 'The resumed call no longer asks it.',
   });
   // Its step's PreToolUse hooks, recorded before the chain decides.
   const pre =
@@ -422,8 +422,6 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     ));
   if (pre && pre.rows.length > 0) yield* commit(call, pre.rows);
   let result: ToolResult;
-  // What the body ran on, which the card shows; the issued input is recorded.
-  let ran = input;
   /** The card the call opens over `on`, with the stage it opens under. */
   const cardOver = (on: unknown) => ({
     logId: fact.logId,
@@ -444,7 +442,6 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     // From here the call may have run: its intent commits now, which opens
     // its card, unless this attempt's body already started (a re-entry).
     const bodyStarts = Effect.fn('bodyStarts')(function* (on: unknown) {
-      ran = on;
       if (!bodyStarted)
         yield* commit(call, [
           {
@@ -562,7 +559,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
           type: 'tool.start',
           aggregateId: dispatch.aggregateId,
           ...staged,
-          ...cardOver(ran),
+          ...cardOver(input),
           ...(attempt > 1 ? { attempt } : {}),
         },
       ];
@@ -572,13 +569,6 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
   const answered =
     sanitized.status === 'executed' ? (sanitized.consumedFollowUps ?? []) : [];
   const facts = factRows(extracted.facts, runId, plugin, log);
-  // A retirement refused outside the run history names a closed aggregate;
-  // it is worded as the cell words one of its own.
-  yield* retireStanding.pipe(
-    Effect.catchTag('DatabaseAggregateClosed', (refused) =>
-      Effect.fail(runRefusal(runId, refused)),
-    ),
-  );
   yield* commit(
     call,
     [
@@ -685,21 +675,23 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
                 stage: script.logId,
               };
               const at = { responseId, callId: fact.callId };
-              // A request the call was waiting on is withdrawn with it.
-              const { retireStanding } = callRequests({
-                run,
-                session,
-                cell,
-                commit: (rows) => commit(call, rows),
-                at,
-                entered: resumedAttempt(state, at, status),
-                retireCause: 'The script ended before this call settled.',
-              });
+              // A request the call was waiting on is withdrawn with it;
+              // one a surface answered meanwhile stands.
+              const { last } = resumedAttempt(state, at, status);
+              const withdrawn =
+                last === null || last.request.decision !== null
+                  ? Effect.void
+                  : decideRequest(run.runId, last.requestId, {
+                      action: 'cancel',
+                      cause: 'The script ended before this call settled.',
+                    }).pipe(
+                      Effect.provideService(
+                        SessionLog,
+                        Context.get(session, SessionLog),
+                      ),
+                    );
               const reason = skippedByScriptEnd(attemptOf(status) > 0);
-              return Effect.andThen(
-                retireStanding,
-                skipCall(call, status, reason),
-              );
+              return Effect.andThen(withdrawn, skipCall(call, status, reason));
             },
             { discard: true },
           ),

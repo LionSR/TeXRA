@@ -35,7 +35,7 @@ import {
   projectDisplayOf,
   type ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { serviceProjectState } from '@texra/controllers/server/serviceSession';
 import type { ServiceLink } from '@texra/controllers/server/client';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
@@ -239,18 +239,22 @@ export const readRememberedDesktopProjects = Effect.fn(
   } satisfies RememberedDesktopProjects;
 });
 
-/** Show `message` in a warning dialog without waiting on the user: a dialog
- *  that cannot be shown is logged, with the message it carried. */
-const warnInDialog = (message: string): Effect.Effect<void> =>
-  showDesktopWarningDialog(message).pipe(
-    Effect.catch((error) =>
-      Effect.logWarning(
-        `A warning dialog could not be shown (${toErrorMessage(error)}): ${message}`,
-      ).pipe(withLogChannel('desktop')),
-    ),
-    Effect.forkDetach,
-    Effect.asVoid,
-  );
+/** Show `message` in a warning dialog without waiting on the user, on a
+ *  fiber of `scope`, the process's: a dialog that cannot be shown is logged,
+ *  with the message it carried, and once that scope has closed a warning
+ *  starts nothing. */
+const warnInDialog =
+  (scope: Scope.Scope) =>
+  (message: string): Effect.Effect<void> =>
+    showDesktopWarningDialog(message).pipe(
+      Effect.catch((error) =>
+        Effect.logWarning(
+          `A warning dialog could not be shown (${toErrorMessage(error)}): ${message}`,
+        ).pipe(withLogChannel('desktop')),
+      ),
+      Effect.forkIn(scope),
+      Effect.asVoid,
+    );
 
 /**
  * Open one session over `roots`. Every fact this project's services answer
@@ -263,12 +267,14 @@ const openDesktopProject = Effect.fn('openDesktopProject')(function* (
   roots: WorkspaceRoots,
   scope: Scope.Closeable,
   service: Result.Result<ServiceLink, Error>,
+  /** Show a warning without waiting on the user. */
+  warn: (message: string) => Effect.Effect<void>,
 ): Effect.fn.Return<
   DesktopProject,
   Error,
   Scope.Scope | Sessions | HostWindows
 > {
-  const opened = yield* openProjectSession(roots, service, warnInDialog);
+  const opened = yield* openProjectSession(roots, service, warn);
   return {
     key: roots.storage,
     display: projectDisplayOf(roots.storage, root),
@@ -294,8 +300,15 @@ export const openDesktopProjectRegistry: (
     // The process's sessions and windows, which every project opens with.
     const sessions = yield* Sessions;
     const hosts = yield* HostWindows;
-    const openProject = (...args: Parameters<typeof openDesktopProject>) =>
-      openDesktopProject(...args).pipe(
+    // A project's warnings outlive its open and end with the process.
+    const warn = warnInDialog(options.processScope);
+    const openProject = (
+      root: string | undefined,
+      roots: WorkspaceRoots,
+      scope: Scope.Closeable,
+      service: Result.Result<ServiceLink, Error>,
+    ) =>
+      openDesktopProject(root, roots, scope, service, warn).pipe(
         Effect.provideService(Sessions, sessions),
         Effect.provideService(HostWindows, hosts),
       );
@@ -366,7 +379,7 @@ export const openDesktopProjectRegistry: (
             );
             for (const message of configWarnings) {
               yield* Effect.logWarning(message).pipe(withLogChannel('desktop'));
-              yield* warnInDialog(message);
+              yield* warn(message);
             }
             const roots = yield* openNodeWorkspaceRoots({
               workspaceRoot: root,

@@ -250,7 +250,6 @@ export const scriptedInvokerLayer = modelInvokerLayer().pipe(
               Effect.map(ScopedRef.get(run.model), (bound) => ({ ...bound })),
             admit: () =>
               Effect.die(new Error('A scripted run switches no model.')),
-            credentialSwitch: () => Effect.succeed(null),
           };
         }),
       ),

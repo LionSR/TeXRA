@@ -13,20 +13,21 @@ import {
   Ref,
   type Scope,
   Stream,
-  SubscriptionRef,
 } from 'effect';
 
 import { type HostInteractions } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { toErrorMessage, toJsonValue } from '@texra-ai/harness/schemas';
 import type { EditorCapabilities } from '@texra/tools/editorHost';
-import { WINDOW_OUTDATED, type ServiceLink } from './client';
+import { WINDOW_OUTDATED, linkOutage, type ServiceLink } from './client';
 
-import type {
-  HostAnswer,
-  HostCall,
-  HostCapability,
-  HostAttachFrame,
+import {
+  ANSWERED,
+  HostCapabilitySchema,
+  type HostAnswer,
+  type HostCall,
+  type HostCapability,
+  type HostAttachFrame,
 } from './hostCalls';
 
 const CHANNEL = 'WindowHost';
@@ -57,15 +58,12 @@ export interface WindowHost
   readonly filesWritten?: (absolutePaths: readonly string[]) => void;
 }
 
-function capabilitiesOf(host: WindowHost): HostCapability[] {
-  return [
-    ...(host.readDiagnostics ? (['readDiagnostics'] as const) : []),
-    ...(host.addCriticism ? (['addCriticism'] as const) : []),
-    ...(host.openPdf ? (['openPdf'] as const) : []),
-    ...(host.emit ? (['notices'] as const) : []),
-    ...(host.filesWritten ? (['filesWritten'] as const) : []),
-  ];
-}
+/** The calls `host` can carry out: each it has the member for, the runtime's
+ *  notices through `emit`. */
+const capabilitiesOf = (host: WindowHost): HostCapability[] =>
+  HostCapabilitySchema.literals.filter(
+    (kind) => host[kind === 'notices' ? 'emit' : kind] !== undefined,
+  );
 
 /** Carry out one call; its value, or the window's failure. */
 function perform(
@@ -86,7 +84,7 @@ function perform(
           })
           .pipe(Effect.as(null)) ?? unoffered(call)
       );
-    case 'notice':
+    case 'notices':
       return host.emit === undefined
         ? unoffered(call)
         : Effect.suspend(
@@ -135,7 +133,7 @@ export const attachWindowHost = Effect.fn('server.attachWindowHost')(function* <
   // window that hears it (a reconnect resets `refusalTold`, so a later
   // refusal is said again): every call it makes says it too.
   yield* Effect.forkScoped(
-    SubscriptionRef.changes(link.away).pipe(
+    linkOutage(link).pipe(
       Stream.filter((reason) => reason === WINDOW_OUTDATED),
       Stream.runForEach((message) =>
         Deferred.succeed(attached, undefined).pipe(
@@ -186,8 +184,9 @@ function attachTo(
     /** Carry out a call; an awaited one is answered however it ends, a
      *  defect included, so the service never waits on a call that died
      *  here; one nothing waits on says here when it could not be done. */
-    const answer = (id: string, call: HostCall, awaited: boolean) =>
-      perform(host, call).pipe(
+    const answer = (id: string, call: HostCall) => {
+      const awaited = Object.hasOwn(ANSWERED, call.kind);
+      return perform(host, call).pipe(
         Effect.matchCauseEffect({
           onSuccess: (value) =>
             awaited
@@ -199,20 +198,21 @@ function attachTo(
               : awaited
                 ? send(id, {
                     ok: false,
-                    message: toErrorMessage(Cause.squash(cause)),
+                    message: toErrorMessage(cause),
                   })
                 : Effect.logWarning(
                     `This window could not carry out a host call (${call.kind})`,
-                  ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
+                  ).pipe(Effect.annotateLogs({ data: cause })),
         }),
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
             ? Effect.void
             : Effect.logWarning(
                 `A host call (${call.kind}) was not answered`,
-              ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
+              ).pipe(Effect.annotateLogs({ data: cause })),
         ),
       );
+    };
     return yield* client['host.attach']({
       workspace,
       capabilities: capabilitiesOf(host),
@@ -233,7 +233,7 @@ function attachTo(
             ),
           );
         // Each call on its own fiber: a slow build never holds the next.
-        return Effect.forkScoped(answer(frame.id, frame.call, frame.awaited));
+        return Effect.forkScoped(answer(frame.id, frame.call));
       }),
     );
   }).pipe(
@@ -249,7 +249,7 @@ function attachTo(
           ? Effect.void
           : Effect.logWarning(
               `The TeXRA service stopped asking this window of ${workspace}; tasks there run without its editor until it reconnects`,
-            ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
+            ).pipe(Effect.annotateLogs({ data: cause })),
     }),
     Effect.ensuring(Deferred.succeed(attached, undefined)),
     Effect.scoped,

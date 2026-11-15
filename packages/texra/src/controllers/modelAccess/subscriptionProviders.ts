@@ -119,11 +119,17 @@ export interface SubscriptionProvider {
     HttpClient.HttpClient | SubscriptionAccounts
   >;
   /**
-   * The sign-out program. A host runs it at its own edge; a failure is the
-   * provider's own auth error or the secret store's rejection.
+   * The sign-out program, the mirror of `signIn`: the account signed out,
+   * then the provider's subscription preference turned off, so its models
+   * stop routing to an account that is gone. A host runs it at its own
+   * edge; a failure is the provider's own auth error or the secret store's
+   * rejection. A preference write that fails after the sign-out succeeded
+   * is reported in the result, since the account is already signed out.
    */
-  signOut(): Effect.Effect<
-    void,
+  signOut(
+    stores: SettingsStores,
+  ): Effect.Effect<
+    SubscriptionSignOutResult,
     SubscriptionStatusError,
     SubscriptionAccounts | HttpClient.HttpClient
   >;
@@ -146,6 +152,12 @@ export interface SubscriptionProvider {
     stores: SettingsStores,
     enabled: boolean,
   ): Effect.Effect<void, ConfigWriteFailed | Error>;
+}
+
+/** What a sign-out reports beside the sign-out itself: why the provider's
+ *  subscription preference could not be turned off, when it could not. */
+export interface SubscriptionSignOutResult {
+  readonly preferenceError?: string;
 }
 
 /** Fields the flow reads off a provider session; providers carry more. */
@@ -283,8 +295,19 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
     setPreferSubscription: (stores: SettingsStores, enabled: boolean) =>
       SubscriptionPreference.set(descriptor.id, stores, enabled),
     signIn,
-    signOut: () =>
-      Effect.flatMap(account, (coordinator) => coordinator.signOut()),
+    signOut: (stores: SettingsStores) =>
+      Effect.flatMap(account, (coordinator) => coordinator.signOut()).pipe(
+        Effect.andThen(
+          SubscriptionPreference.set(descriptor.id, stores, false).pipe(
+            Effect.match({
+              onFailure: (error): SubscriptionSignOutResult => ({
+                preferenceError: toErrorMessage(error),
+              }),
+              onSuccess: (): SubscriptionSignOutResult => ({}),
+            }),
+          ),
+        ),
+      ),
     getStatus: () =>
       Effect.flatMap(account, (coordinator) =>
         Effect.map(coordinator.getStatus(), (status) => ({

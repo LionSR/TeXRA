@@ -15,7 +15,7 @@ import {
   sessionFsLayer,
 } from '@texra-ai/harness/host';
 import { runDirUnder } from '@common/storage/storageLayout';
-import { LatexMediaManager } from '@latex/LatexMediaManager';
+import { processInputFiles } from '@latex/latexMedia';
 import type { FakePlatformOptions } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
@@ -36,7 +36,7 @@ const extractFiguresConfig: DocumentTaskOptions = {
 
 const tempDirs = useTempDirs();
 
-describe('LatexMediaManager figure extraction', () => {
+describe('latexMedia figure extraction', () => {
   async function writeFixture(): Promise<{
     texPath: string;
     figurePath: string;
@@ -100,17 +100,11 @@ describe('LatexMediaManager figure extraction', () => {
         yield* Layer.build(FakeHost.layer(host)),
         FakeHost,
       );
-      const manager = new LatexMediaManager(
-        logger,
-        roots,
-        new RunFileService(runId, roots),
-      );
-      const media = yield* manager
-        .processInputFiles(
-          [createWorkspaceLocation(texPath, 'main.tex')],
-          extractFiguresConfig,
-        )
-        .pipe(Effect.provide(sessionFsLayer(roots)));
+      const media = yield* processInputFiles(
+        { logger, roots, fileService: new RunFileService(runId, roots) },
+        [createWorkspaceLocation(texPath, 'main.tex')],
+        extractFiguresConfig,
+      ).pipe(Effect.provide(sessionFsLayer(roots)));
 
       expect(media.map((f) => f.absolutePath)).toEqual([figurePath]);
       yield* Effect.promise(() =>

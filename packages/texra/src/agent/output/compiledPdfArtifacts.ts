@@ -5,7 +5,6 @@ import {
   fileLocationDisplayPath,
   type RunId,
   type FileLocation,
-  type RunStorageFileLocation,
 } from '@texra-ai/harness/schemas';
 import { hasExtension, createRunStorageLocation } from '@texra-ai/harness/host';
 import { absentReason } from '@texra-ai/harness/node';
@@ -99,23 +98,3 @@ export const publishCompiledPdfArtifact = Effect.fn(
     options.runId,
   );
 });
-
-/**
- * Run a compiled-PDF publish as a best-effort side effect: a failed copy is
- * reported through `reportFailure` and yields `null` instead of failing the
- * caller, so a document that genuinely compiled is never reported as a compile
- * failure because of where its PDF landed. The reporter is the caller's, which
- * is what keeps each site's own warning message and diagnostic payload.
- */
-export const publishCompiledPdfArtifactBestEffort = <E, R>(
-  publish: Effect.Effect<RunStorageFileLocation | null, E, R>,
-  reportFailure: (error: E) => void,
-): Effect.Effect<RunStorageFileLocation | null, never, R> =>
-  publish.pipe(
-    Effect.catch((error) =>
-      Effect.sync((): RunStorageFileLocation | null => {
-        reportFailure(error);
-        return null;
-      }),
-    ),
-  );

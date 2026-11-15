@@ -20,14 +20,12 @@ import {
   Schema,
   Scope,
   Stream,
+  Struct,
   SubscriptionRef,
 } from 'effect';
+import type { RpcGroup } from 'effect/rpc';
 
-import {
-  LaunchRefused,
-  type LocalSession,
-  type RunRecords,
-} from '@texra-ai/harness';
+import { LaunchRefused, type LocalSession } from '@texra-ai/harness';
 import {
   type RunId,
   toErrorMessage,
@@ -39,9 +37,11 @@ import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 import {
   PROTOCOL,
   ProjectStateFailed,
+  RUN_RECORDS,
   TaskFailed,
   TaskRecordsFailed,
   TexraRpcs,
+  type RecordRpc,
   type ServiceInfo,
 } from './protocol';
 
@@ -103,20 +103,27 @@ export class ServiceControl extends Context.Service<
   }
 >()('@texra-ai/texra/server/ServiceControl') {}
 
-/** The tasks the service runs now, across its open projects: what its
- *  registry holds live, which a started run is before the view applies
- *  it. `atWork`: only those not waiting for their next message, a run the
- *  view does not show yet counted as at work. */
+/** The runs of `session` at work: those its registry holds live that are
+ *  not waiting for their next message. A started run is held before the
+ *  view applies it, and counts. The one reading of "at work": a project's
+ *  hold, the service's load and a drain's end all ask it. */
+export const runsAtWork = (session: LocalSession): number => {
+  const { runs } = session.view.current();
+  return session
+    .held()
+    .filter(({ runId }) => runs.get(runId)?.position !== 'waiting').length;
+};
+
+/** The tasks the service runs now, across its open projects: every run
+ *  its registries hold live, or with `atWork` only those at work
+ *  ({@link runsAtWork}). */
 export const runningTasks = Effect.fn('server.runningTasks')(function* (
   projects: Context.Service.Shape<typeof ServiceProjects>,
   atWork = false,
 ): Effect.fn.Return<number> {
   let running = 0;
-  for (const session of (yield* projects.opened).values()) {
-    const { runs } = session.view.current();
-    for (const { runId } of session.held())
-      if (!atWork || runs.get(runId)?.position !== 'waiting') running += 1;
-  }
+  for (const session of (yield* projects.opened).values())
+    running += atWork ? runsAtWork(session) : session.held().length;
   return running;
 });
 
@@ -170,7 +177,7 @@ function startDetached<A, E extends { readonly message: string }>(
                     onNone: () =>
                       Effect.fail(
                         new TaskFailed({
-                          message: toErrorMessage(Cause.squash(cause)),
+                          message: toErrorMessage(cause),
                         }),
                       ),
                   }),
@@ -227,14 +234,19 @@ export const serviceHandlers = TexraRpcs.toLayer(
           ),
         );
     const session = over((message) => new TaskFailed({ message }));
-    /** One member of `Session.records(runId)` over the project's session. */
-    const record =
-      <A>(read: (records: RunRecords) => Effect.Effect<A, Error>) =>
-      ({ workspace, runId }: { workspace: string; runId: RunId }) =>
-        over((message) => new TaskRecordsFailed({ runId, message }))(
-          workspace,
-          (held) => read(held.records(runId)),
-        );
+    // cast: each member's handler answers that member of the project's
+    // `Session.records(runId)`, which `RUN_RECORDS` types its procedure by.
+    const records = Object.fromEntries(
+      Struct.keys(RUN_RECORDS).map((member) => [
+        `records.${member}`,
+        ({ workspace, runId }: { workspace: string; runId: RunId }) =>
+          over((message) => new TaskRecordsFailed({ runId, message }))(
+            workspace,
+            (held): Effect.Effect<unknown, Error> =>
+              held.records(runId)[member],
+          ),
+      ]),
+    ) as unknown as RpcGroup.HandlersFrom<RecordRpc>;
     return {
       'service.hello': Effect.fn('handlers.service.hello')(function* () {
         return {
@@ -266,7 +278,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
             const key = session.roots.storage;
             return frameSubscription(
               { key, view: session.view },
-              { ...subscribe, session: key },
+              { kind: 'subscribe', generation: 0, ...subscribe, session: key },
             );
           }),
         ),
@@ -291,17 +303,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
         session(workspace, (held) => held.listRuns),
       'session.deleteRuns': ({ workspace, target }) =>
         session(workspace, (held) => held.deleteRuns(target)),
-      'records.exists': record((records) => records.exists),
-      'records.config': record((records) => records.readConfig),
-      'records.report': record((records) => records.readReport),
-      'records.runEnd': record((records) => records.readRunEnd),
-      'records.result': record((records) => records.readResult),
-      'records.workspaceFiles': record((records) => records.readWorkspaceFiles),
-      'records.skills': record((records) => records.readSkills),
-      'records.resumable': record((records) => records.readResumable),
-      'records.rejection': record((records) => records.readRejection),
-      'records.conversation': record((records) => records.readConversation),
-      'records.trace': record((records) => records.readTrace),
+      ...records,
       'task.request': ({ workspace, request }) =>
         Effect.scoped(
           projects.open(workspace).pipe(

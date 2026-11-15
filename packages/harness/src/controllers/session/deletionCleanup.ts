@@ -120,13 +120,14 @@ const removeRunDirectories: (
 type RemovalMarker = Extract<SessionRow, { type: 'run.removed' }>;
 
 /** The session's deletion collector ({@link deletionCollector}). */
-export interface DeletionCollector {
+interface DeletionCollector {
   /** One pass over the markers the store holds pending: those an earlier
    *  session committed and did not collect (the session runs it at open). */
   readonly pending: Effect.Effect<void>;
   /** Collect `marker`, which just committed: the session's delivery of its
-   *  committed rows hands each one here. */
-  readonly removed: (marker: RemovalMarker) => void;
+   *  committed rows hands each one here. One past the collector's bound
+   *  waits in the store for the next open's pass, and says so. */
+  readonly removed: (marker: RemovalMarker) => Effect.Effect<void>;
 }
 
 /**
@@ -160,7 +161,9 @@ export const deletionCollector = Effect.fn('deletionCleanup.deletionCollector')(
             ),
           ),
         );
-    const markers = yield* Queue.unbounded<RemovalMarker>();
+    // Bounded: a marker the queue refuses stays pending in the store, and
+    // the next open's `pending` pass collects it.
+    const markers = yield* Queue.dropping<RemovalMarker>(256);
     yield* Effect.forkScoped(
       Effect.forever(Effect.flatMap(Queue.take(markers), collect)),
     );
@@ -177,9 +180,14 @@ export const deletionCollector = Effect.fn('deletionCleanup.deletionCollector')(
     );
     return {
       pending,
-      removed: (marker) => {
-        Queue.offerUnsafe(markers, marker);
-      },
+      removed: (marker) =>
+        Effect.flatMap(Queue.offer(markers, marker), (queued) =>
+          queued
+            ? Effect.void
+            : Effect.logWarning(
+                `Deletion cleanup for ${marker.aggregateId} waits for the next open: the collector did not take it`,
+              ).pipe(withLogChannel(CHANNEL)),
+        ),
     };
   },
 );

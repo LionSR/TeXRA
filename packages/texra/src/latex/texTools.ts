@@ -19,7 +19,7 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import {
   INCLUDE_WORKSPACE_IN_TEXINPUTS_SETTING,
   TIKZ_INPUT_DIRECTORY_SETTING,
-} from '@texra/shared/settingsView/texraSettings';
+} from '@texra/shared/settings/texraSettings';
 
 // Raw tail, no TeX-log parsing -- a deliberate choice (see compileCheck.ts):
 // tex compile logs are noisy and heuristic parsing is a losing game, so every
@@ -155,7 +155,7 @@ function buildLatexSearchParts(input: {
  * own way. The file is not proven to be this run's: an earlier build's PDF
  * in a reused output directory also reads as success.
  */
-export type CompileLatex2PdfResult =
+type CompileLatex2PdfResult =
   | { ok: true; pdfPath: string }
   | { ok: false; logTail: string };
 

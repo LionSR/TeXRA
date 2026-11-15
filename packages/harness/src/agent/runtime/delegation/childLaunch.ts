@@ -56,7 +56,7 @@ const defectsAsErrors = <A, R>(
     Effect.catchCause((cause) =>
       Cause.hasInterruptsOnly(cause)
         ? Effect.failCause(cause)
-        : Effect.fail(ensureError(Cause.squash(cause))),
+        : Effect.fail(ensureError(cause)),
     ),
   );
 
@@ -145,37 +145,18 @@ const childRunEnd = Effect.fn('childRunEnd')(function* (
   if (live !== undefined)
     yield* live.drained.pipe(
       Effect.onInterrupt(() =>
-        runs.attachedParent(runId).pipe(
-          // An edge the store cannot give is no defect of this wait, whose
-          // interruption must stay one: the child is released, as an
-          // attached one is.
+        // The call let go: the child's stop says so, unless a stop of it
+        // (its parent's cascade) already did.
+        runs.stop(runId, 'released').pipe(
           Effect.catchCause((cause) =>
             Effect.logWarning(
-              `Subagent ${runId}: its parent edge could not be read; releasing it`,
+              `Subagent ${runId}: its release was not recorded`,
             ).pipe(
-              Effect.annotateLogs({ data: Cause.squash(cause) }),
-              Effect.as(undefined),
+              Effect.annotateLogs({ data: cause }),
+              Effect.andThen(Effect.sync(() => runs.interrupt(runId))),
             ),
           ),
-          Effect.flatMap((parent) => {
-            // A child the registry holds with no parent edge was detached:
-            // it runs on as a root, and only this wait ends.
-            if (runs.get(runId) !== undefined && parent === null)
-              return Effect.void;
-            // The call let go: the child's stop says so, unless a stop of it
-            // (its parent's cascade) already did.
-            return runs.stop(runId, 'released').pipe(
-              Effect.catchCause((cause) =>
-                Effect.logWarning(
-                  `Subagent ${runId}: its release was not recorded`,
-                ).pipe(
-                  Effect.annotateLogs({ data: Cause.squash(cause) }),
-                  Effect.andThen(Effect.sync(() => runs.interrupt(runId))),
-                ),
-              ),
-              Effect.andThen(runs.awaitDrained(runId)),
-            );
-          }),
+          Effect.andThen(runs.awaitDrained(runId)),
         ),
       ),
     );

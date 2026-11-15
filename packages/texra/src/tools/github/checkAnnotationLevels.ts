@@ -15,7 +15,7 @@ const ANNOTATION_LEVEL_RANK: Readonly<
 
 /** Every level, most severe first: the one order RANK declares, read back. */
 const ANNOTATION_LEVELS_BY_SEVERITY: readonly GitHubCheckAnnotationLevel[] =
-  Struct.keys(ANNOTATION_LEVEL_RANK).sort(
+  Struct.keys(ANNOTATION_LEVEL_RANK).toSorted(
     (a, b) => ANNOTATION_LEVEL_RANK[b] - ANNOTATION_LEVEL_RANK[a],
   );
 

@@ -33,7 +33,7 @@ import {
   pathToLocationIn,
   type AgentEntry,
 } from '@texra-ai/harness/host';
-import { LatexMediaManager } from '@latex/LatexMediaManager';
+import { processInputFiles } from '@latex/latexMedia';
 import { getTeXCountStats } from '@latex/texcount';
 import {
   DOCUMENT_OUTPUT_BASENAME,
@@ -333,18 +333,10 @@ const revisionMedia = Effect.fn('documents.revisionMedia')(function* (
   const bound = yield* ScopedRef.get(run.model);
   // The launch's media, as absolute paths: the revision's agent run reads
   // them from wherever the launch named them.
-  const configuredLocations = run.config.mediaFiles.map((file) =>
-    deps.fileService.createLocation(file),
-  );
-  const configured = configuredLocations.map(
-    (location) => location.absolutePath,
+  const configured = run.config.mediaFiles.map(
+    (file) => deps.fileService.createLocation(file).absolutePath,
   );
   if (!bound.config.capabilities.supportsVision) return configured;
-  const media = new LatexMediaManager(
-    deps.logger,
-    deps.roots,
-    deps.fileService,
-  );
   // Each revision is a fresh conversation: it gets the figures of the files
   // it works on (the last outputs, mirrored so their references resolve).
   const extracted = yield* Effect.exit(
@@ -354,10 +346,10 @@ const revisionMedia = Effect.fn('documents.revisionMedia')(function* (
           revisionLayout(revision).dir,
           { protectedStem: DOCUMENT_OUTPUT_BASENAME },
         );
-      return yield* media.processInputFiles(
+      return yield* processInputFiles(
+        deps,
         files,
         documentTaskOptions(run.config),
-        configuredLocations,
       );
     }),
   );

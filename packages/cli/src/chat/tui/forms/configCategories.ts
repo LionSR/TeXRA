@@ -5,7 +5,7 @@ import {
   SettingCategorySchema,
   type SettingCategory,
   type TexraSettingRow,
-} from '@texra/shared/settingsView/settingSurfaces';
+} from '@texra/shared/settings/settingSurfaces';
 
 /** Whether a picked value names a settings group, not a linked form. */
 export const isSettingCategory = Schema.is(SettingCategorySchema);

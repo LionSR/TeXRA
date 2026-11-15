@@ -136,9 +136,14 @@ export interface TestApp {
   readonly teamMembers?: AgentDirectoriesPort['teamMembers'];
 }
 
-/** The harness alone: its own settings rows and built-in plugins, no teams. */
+/** The harness alone: its own settings rows and built-in plugins, no teams,
+ *  and the models an embedder curates (the harness curates none). */
 export const HARNESS_APP: TestApp = Object.freeze({
-  settings: settingsCatalog({ namespace: 'texra', rows: [] }),
+  settings: settingsCatalog({
+    namespace: 'texra',
+    rows: [],
+    curatedModels: ['openai/gpt-6.1-sol', 'anthropic/claude-sonnet-5-5'],
+  }),
   plugins: () => harnessBuiltins,
 });
 

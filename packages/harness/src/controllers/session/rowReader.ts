@@ -49,16 +49,29 @@ import {
 /** One aggregate's surrogate, from its two columns. */
 export const AGGREGATE =
   '(SELECT id FROM event_sequence WHERE kind = ? AND logical_id = ?)';
-/** The event column tuple for a projected row, on its source row's
- *  envelope: this build's projector wrote it, so it is at the current
- *  version. */
-export const PROJECTED_COLUMNS = `p."commit" AS "commit", s.kind AS kind,
-  s.logical_id AS logicalId, e.seq AS seq, p.type AS type,
-  NULL AS version, e.at AS at, p.data AS data`;
-/** A projected row joined to its source row's envelope. */
-export const PROJECTED_FROM = `projected_row p
-  JOIN event e ON e."commit" = p."commit"
-  JOIN event_sequence s ON s.id = e.aggregate`;
+/** A priced row's usage, where its stored JSON holds it: a model call's
+ *  response or failure, a compaction summary, a model's title. */
+const PRICED_USAGE = `CASE
+  WHEN e.type = 'run.description' THEN e.data -> '$.usage'
+  WHEN e.type = 'context.edit' THEN e.data -> '$.payload.usage'
+  WHEN e.data ->> '$.payload.kind' IN ('response', 'failed')
+    THEN e.data -> '$.payload.usage' END`;
+/**
+ * The `usage` display row a priced row shows, read off that row on its
+ * envelope and at the current version: its counts, cost, route and plan,
+ * without the call's surface and response time (`usageRows`, which a
+ * committed batch's display rows come from, states the same rule). Nothing
+ * stores it: the priced row is the one record of the spend.
+ */
+export const USAGE_ROWS = `SELECT e."commit" AS "commit", s.kind AS kind,
+  s.logical_id AS logicalId, e.seq AS seq, 'usage' AS type,
+  NULL AS version, e.at AS at,
+  json_object('usage',
+    json_remove(${PRICED_USAGE}, '$.provider', '$.responseTimeMs')) AS data
+  FROM event e
+  JOIN event_sequence s ON s.id = e.aggregate
+  WHERE e.type IN ('model.message', 'context.edit', 'run.description')
+    AND json_type(${PRICED_USAGE}) = 'object'`;
 /** The kinds a display read selects, as the JSON list it binds: the display
  *  rows, and the call rows it shows as tool cards (`callCard`). */
 export const DISPLAY_READ_TYPES = JSON.stringify([
@@ -304,8 +317,8 @@ export function rowReader<E>(
       if (refusal !== undefined) return yield* refusal;
     }
     // The batch's blobs in one statement: a row carries addresses only. A
-    // projected row (no version) holds none, and its commit is its source
-    // row's, whose strings it would fetch for nothing.
+    // `usage` row read off a priced row (no version) holds none, and its
+    // commit is that row's, whose strings it would fetch for nothing.
     const texts: Blobs = yield* inflated(
       INLINE_BLOBS,
       rows.flatMap((row) =>

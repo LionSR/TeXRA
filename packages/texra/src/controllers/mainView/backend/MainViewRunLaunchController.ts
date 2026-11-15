@@ -18,8 +18,9 @@ import {
 import {
   formatTeamLaunchBlockedMessage,
   formatUnknownTeamMessage,
+  launchTeamId,
   resolveTeamLaunch,
-} from '@texra/shared/teamLaunch';
+} from '@texra/agent/teams/teamLaunch';
 import { isPastedImage } from '@texra/shared/utils/pastedImageName';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
@@ -47,7 +48,7 @@ const buildLaunchConfig = Effect.fn('buildLaunchConfig')(function* (
   roots: LaunchRoots,
   team?: {
     readonly delegationAgentScope: AgentDelegationScope;
-    readonly cli: { readonly teamId: string };
+    readonly launch: { readonly teamId: string };
   },
 ): Effect.fn.Return<AgentConfig, Rejected | StateReadFailed, AgentCatalog> {
   // The agent decides the mode: one with a document task runs it over the
@@ -122,7 +123,7 @@ const buildLaunchConfig = Effect.fn('buildLaunchConfig')(function* (
     ...(team
       ? {
           delegationAgentScope: team.delegationAgentScope,
-          cli: { teamId: team.cli.teamId },
+          launch: { teamId: team.launch.teamId },
         }
       : {}),
     // A task's output paths are implicit in the input list; the task
@@ -218,7 +219,7 @@ export function launchFormOf(
         reason: `'${config.agent}' was defined by the run that started it and is not in your agents, so the form cannot run it again.`,
       }),
     );
-  const teamId = config.cli?.teamId;
+  const teamId = launchTeamId(config);
   return Effect.succeed({
     ...documentTaskOptions(config),
     ...(teamId

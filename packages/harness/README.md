@@ -77,6 +77,7 @@ const program = Effect.gen(function* () {
   const run = yield* session.start({
     agent: 'polish',
     instruction: 'Tighten the summary in notes.md.',
+    model: 'anthropic/claude-sonnet-5-5',
   });
   // The events end when the run does; `responseText` keeps the answer's
   // text and drops the model's thinking and tool output.
@@ -116,6 +117,7 @@ const program = Effect.gen(function* () {
       tools: ['read_file', 'grep'],
     },
     instruction: 'Suggest a tighter summary for notes.md.',
+    model: 'anthropic/claude-sonnet-5-5',
   });
   return yield* run.result;
 });
@@ -196,6 +198,7 @@ const program = Effect.gen(function* () {
   const run = yield* session.start({
     agent: 'polish',
     instruction: 'Tighten the summary in notes.md.',
+    model: 'anthropic/claude-sonnet-5-5',
   });
   return yield* run.result;
 });
@@ -273,32 +276,27 @@ the guard is `processRoots` beside `SessionOwner`): share that session
 instead. Builds over different roots each work, and a later build after the
 first one is released is fine.
 
-### Messages to a run, and their receipts
+### Messages to a run
 
-`session.request({ kind: 'followUp.send', runId, text, id })` sends a run a
-message under the caller's `id` (one is minted and returned when absent).
+`session.request({ kind: 'followUp.send', runId, text })` sends a run a
+message and answers `{ kind: 'followUp', status }`:
 
-- A retry under the same `id` answers with the first send's receipt instead of
-  sending the message twice. That includes a retry after a lost reply and a
-  retry once the run takes no more input.
-- A different message under that `id` fails with `Conflict`. The id is
-  scoped to the run and to sends, and the comparison is on what the message
-  says (its text, media and hold), not on how it was serialized.
+- `sent`: a launch in this process holds the run, which reads the message
+  at its next model request (with `holdUntil: 'turn'`, when its current turn
+  ends);
+- `queued`: no launch here holds the run. The message waits in the run's
+  stored queue, and the send resumes the run for it when the run can
+  continue.
 
-`session.request({ kind: 'followUp.receipt', runId, id })` reads where the
-message stands, from the run's committed rows. Nothing extra is stored. The
-receipt is one of:
+A run that cannot take the message refuses it with `Unavailable`, which
+says why.
 
-- `accepted` while it is queued;
-- `incorporated` into turn `turn` while that turn runs;
-- `answered`, naming the row that answered it (`answer`, its `seq`);
-- `unanswered`, with the reason nothing will answer it: the turn failed, the
-  run ended before the turn did, or the message left the queue unread.
-
-With `wait: true` the read returns once the message is answered or
-unanswered. Messages that join one turn share that turn's answer. Wait on
-the receipt rather than counting model calls or watching for a `waiting`
-status.
+Each send queues one message, so a send repeated after a lost reply queues a
+second one. The answer says the message was accepted, not what the run made
+of it: read that from the run, as for any turn. Its view returns to
+`waiting` with a new `forkPoint` (the `seq` of its newest wait) when the turn
+that took the message ends; a run that ends answers through its handle's
+`result`.
 
 ## Durable invariants
 
@@ -348,8 +346,10 @@ happens without reading the code. The full table is kept with
 the session store's source; in short:
 
 - **S1** The store does not open (`DatabaseOpenFailed`): the session does
-  not open, and the error says why. A store written before 1.0, or one SQLite
-  reports damaged, is moved aside instead (`movedAside`), never read again.
+  not open, and the error says why. A store an earlier build wrote is
+  refused unchanged, and the error says to move it away. A store SQLite
+  reports damaged is moved aside instead (`storeMovedAside`), never read
+  again.
 - **S2** A store a newer build wrote (`DatabaseStoreNewer`, the cause of an
   open, read or write failure) is refused whole: nothing is read in part or
   written beside it.
@@ -376,7 +376,7 @@ the session store's source; in short:
 Under its storage root a session owns the store (`texra.db`) and one
 directory per run, `executions/<runId>/`, holding the files the run
 generated. A deletion removes nothing else: the project's own files are
-never touched, and a store moved aside (`texra.db.pre1`) is never read again
+never touched, and a store moved aside (`texra.db.corrupt-<ms>`) is never read again
 and goes only when a person deletes it (`deleteStorageInventory`, which
 `texra doctor --prune-storage` runs after asking).
 

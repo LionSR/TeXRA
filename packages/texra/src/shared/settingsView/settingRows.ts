@@ -6,7 +6,7 @@
  */
 import { Predicate, Schema, SchemaAST } from 'effect';
 
-import type { TexraSettingRow } from '@texra/shared/settingsView/settingSurfaces';
+import type { TexraSettingRow } from '@texra/shared/settings/settingSurfaces';
 import type { SettingRow } from '@texra-ai/harness/schemas';
 
 /** A row a plugin declares, with the short label its Plugins-page card shows

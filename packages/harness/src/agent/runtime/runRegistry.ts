@@ -33,24 +33,12 @@ import { stopRun } from '@agent/storage/runLifecycle';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
-import {
-  grantSource,
-  grantsKept,
-  type ApprovalGrants,
-} from '@shared/approvalBypassKind';
-import { Settings } from '@shared/config/settings';
-import { ancestryRows } from '@shared/session/runRelation';
-import {
-  qualifyAggregateId,
-  type RunId,
-  type RunStopReason,
-} from '@shared/schemas';
+import type { RunId, RunStopReason } from '@shared/schemas';
 import type { SessionLog } from '@shared/session/runHistory';
 
 import type { LiveRun, RunControls, RunsShape } from './runs';
 import type { RunServices } from './ToolServices';
 import type { SessionServices } from './rootLaunch';
-import { DETACH_SUBAGENTS_ON_STOP_SETTING } from '@shared/state/stateSettings';
 
 /** A launch already has the run here: the one refusal for that fact. Hosts
  *  word it from `message`; a resume reads the tag to report the run
@@ -75,12 +63,12 @@ type CapturedServices = Exclude<AgentRunServices, Runs | RunRegistry>;
 /** What the session hands its runs. They read a run's parent from the
  *  session's log and keep no copy of their own. */
 export interface RunRegistryInit {
-  /** The session's log: each run's parent edge and its detach batch. */
+  /** The session's log: each run's parent edge. */
   readonly log: SessionLog['Service'];
   /** Tell the session's view which runs are driven here (`runsHere`),
    *  called with the whole set as a fiber is forked or exits. */
   readonly runsHere: (runIds: readonly RunId[]) => void;
-  /** The session's roots: the stop policy's setting slots. */
+  /** The session's roots: the workspace a launch's environment reads. */
   readonly roots: WorkspaceRoots;
   /** Run `effect` in the caller's fiber on the session's context, never
    *  the caller's: a launch's opening, a stop's rows, a resume's decision.
@@ -110,6 +98,9 @@ type AnyFiber = Fiber.Fiber<unknown, unknown>;
 interface Opening {
   readonly kind: 'opening';
   stop: RunStopReason | null;
+  /** Whether the stop asked reaches the runs under this one: a stop under
+   *  an ancestor's cascade does not, the ancestor's covering them. */
+  cascade: boolean;
   readonly settled: Deferred.Deferred<void>;
 }
 
@@ -159,6 +150,22 @@ interface Pending {
  *  holds. */
 type RunEntry = Pending | Opening | Live | Ending | Busy;
 
+/** What a stop found and marked on its run ({@link SessionRunRegistry.stop}):
+ *  nothing to do, ask again once an operation ends, or the run in the state
+ *  the stop then acts on. */
+type StopClaim =
+  | { readonly kind: 'done'; readonly took: boolean }
+  | { readonly kind: 'again'; readonly after: Effect.Effect<void> }
+  | { readonly kind: 'live'; readonly live: Live }
+  | { readonly kind: 'ending'; readonly ending: Ending };
+
+/** How a stop went: whether a fiber here took it, and whether the run had
+ *  no rows to record it on. */
+interface StopResult {
+  readonly took: boolean;
+  readonly unknown: boolean;
+}
+
 /** A launch's two phases ({@link SessionRunRegistry.start}): what commits
  *  in the caller's fiber, and the program the run's own fiber then runs,
  *  both on the session's context. */
@@ -176,9 +183,15 @@ export interface Launch<A, E, B, E2> {
 export class SessionRunRegistry implements RunsShape {
   /** Each run id's state here. */
   private readonly entries = new Map<RunId, RunEntry>();
-  /** Run work is refused once the session is closing ({@link stopAll}) or
-   *  disposed. */
+  /** Run work is refused once the session is closing
+   *  ({@link interruptAll}) or disposed. */
   private session: 'open' | 'closing' | 'disposed' = 'open';
+
+  /** Whether the session is closing or closed: a run its close interrupts
+   *  is left as its rows stand, with no stop and no end. */
+  get closing(): boolean {
+    return this.session !== 'open';
+  }
 
   private readonly init: RunRegistryInit;
   constructor(init: RunRegistryInit) {
@@ -235,14 +248,6 @@ export class SessionRunRegistry implements RunsShape {
       () => this.liveRun(runId)?.drained ?? Effect.void,
     );
     return { runId, controls: undefined, drained };
-  }
-
-  /** The children one parent's detach covers: each run held here whose
-   *  edge names the parent. */
-  private childRunIds(parentRunId: RunId): Effect.Effect<readonly RunId[]> {
-    return this.heldWhere((id) =>
-      Effect.map(this.attachedParent(id), (parent) => parent === parentRunId),
-    );
   }
 
   /** The runs held here that `matches`, read from the store. The reads
@@ -321,35 +326,54 @@ export class SessionRunRegistry implements RunsShape {
     return Effect.suspend(() => {
       const held = this.heldIds();
       return Effect.flatMap(this.hasLiveDescendants(runId), (descendants) =>
-        // From here to the exclusion nothing yields: a launch that arrived
-        // while the edges were read is checked again first.
-        this.heldSince(held)
-          ? this.excluding(runId, descendants, operation)
-          : this.withInactiveRun(runId, operation),
+        // The check and the hold are one step, released on every exit: a
+        // launch that arrived while the edges were read is seen in it.
+        Effect.acquireUseRelease(
+          Effect.sync(() => this.holdInactive(runId, held, descendants)),
+          (hold): Effect.Effect<A, E | RunLive, R> => {
+            switch (hold.kind) {
+              case 'held':
+                return operation;
+              case 'live':
+                return Effect.fail(new RunLive({ runId }));
+              case 'again':
+                return Effect.andThen(
+                  hold.after,
+                  this.withInactiveRun(runId, operation),
+                );
+            }
+          },
+          (hold) =>
+            hold.kind === 'held'
+              ? Effect.sync(() => this.pass(runId, hold.busy, hold.busy.after))
+              : Effect.void,
+        ),
       );
     });
   }
 
-  /** {@link withInactiveRun}'s step once its descendants are read: it
-   *  checks and takes the exclusion as it is called, so nothing yields
-   *  between the two. */
-  private excluding<A, E, R>(
+  /** {@link withInactiveRun}'s hold, decided and taken in one step once
+   *  the run's descendants are read: the run is held, a launch drives it or
+   *  a run under it, or the question is asked again (the held runs changed
+   *  during the read, or another operation or a stop has the run). */
+  private holdInactive(
     runId: RunId,
+    held: readonly RunId[],
     descendants: boolean,
-    operation: Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, E | RunLive, R> {
-    if (descendants) return Effect.fail(new RunLive({ runId }));
+  ):
+    | { readonly kind: 'held'; readonly busy: Busy }
+    | { readonly kind: 'live' }
+    | { readonly kind: 'again'; readonly after: Effect.Effect<void> } {
+    if (!this.heldSince(held)) return { kind: 'again', after: Effect.void };
+    if (descendants) return { kind: 'live' };
     const entry = this.entries.get(runId);
     switch (entry?.kind) {
       case 'opening':
       case 'live':
-        return Effect.fail(new RunLive({ runId }));
+        return { kind: 'live' };
       case 'ending':
       case 'busy':
-        return Effect.andThen(
-          Deferred.await(entry.done),
-          this.withInactiveRun(runId, operation),
-        );
+        return { kind: 'again', after: Deferred.await(entry.done) };
     }
     const busy: Busy = {
       kind: 'busy',
@@ -357,9 +381,7 @@ export class SessionRunRegistry implements RunsShape {
       after: entry,
     };
     this.entries.set(runId, busy);
-    return operation.pipe(
-      Effect.ensuring(Effect.sync(() => this.pass(runId, busy, busy.after))),
-    );
+    return { kind: 'held', busy };
   }
 
   /** The stop asked of `runId` while its opening commits, if one was: an
@@ -416,12 +438,12 @@ export class SessionRunRegistry implements RunsShape {
    * on the session's context, and the fiber's exit lets the run go. A run
    * already driven here, or one still opening or stopping, refuses the
    * launch with `RunLive`; one a file operation holds waits for it. A stop
-   * asked while the opening committed (or the session's close) is applied
-   * as the opening answers: a failed opening's run ends on its rows; a
-   * committed one is forked and interrupted at once, so its one terminal
-   * ends it and releases what the opening acquired. Once the opening
-   * answered, the fork is not interruptible: a run with rows always has
-   * its fiber or its end.
+   * asked while the opening committed is applied as the opening answers: a
+   * failed opening's run ends on its rows; a committed one is forked and
+   * interrupted at once, so its one terminal ends it and releases what the
+   * opening acquired. Once the opening answered, the fork is not
+   * interruptible: a run with rows has its fiber or its end, unless the
+   * session closed meanwhile, which interrupts the fork and writes nothing.
    */
   start<A, E, B, E2>(
     runId: RunId,
@@ -430,133 +452,179 @@ export class SessionRunRegistry implements RunsShape {
     { readonly opened: A; readonly fiber: Fiber.Fiber<B, E2> },
     E | Error
   > {
-    return Effect.suspend(() => {
-      const refused = this.closedRefusal();
-      if (refused) return Effect.fail(refused);
-      const entry = this.entries.get(runId);
-      switch (entry?.kind) {
-        case 'opening':
-        case 'live':
-        case 'ending':
-          return Effect.fail(new RunLive({ runId }));
-        case 'busy':
-          return Effect.andThen(
-            Deferred.await(entry.done),
-            this.start(runId, launch),
-          );
-      }
-      // Held nowhere here: it opens, and a stop asked before it had rows is
-      // one asked as it opened.
-      const opening: Opening = {
-        kind: 'opening',
-        stop: entry?.reason ?? null,
-        settled: Deferred.makeUnsafe<void>(),
-      };
-      this.entries.set(runId, opening);
-      this.publishHeld();
-      // The rows of a stop asked meanwhile: the run's `run.stop` and, with
-      // `end`, its end, for a run with rows (an opening that failed before
-      // the run was registered has none to stop). One the store refused is
-      // said: the run reads as interrupted at its next open.
-      const stopRows = (reason: RunStopReason, end: boolean) =>
-        this.inSession(stopRun(runId, reason, end)).pipe(
-          Effect.catchCause((cause) =>
-            Effect.logWarning(
-              `Run ${runId}: the stop asked as it opened was not recorded`,
-            ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
-          ),
-        );
-      // Resolve the launch's environment before its opening acquires
-      // resources, then carry only those values into the run's fiber.
-      // Management stays on the session's stable services.
-      const open = Effect.gen(function* () {
-        const environment = Context.pick(
-          ConfigProvider.ConfigProvider,
-          ProjectEnvironment,
-        )(yield* Effect.context());
-        const opened = yield* launch.open;
-        return { opened, environment };
-      }).pipe(
-        Effect.provide(workspaceEnvironmentLayer(this.init.roots.workspace)),
-      );
-      return Effect.uninterruptibleMask((restore) =>
-        restore(this.inSession(open)).pipe(
-          // A stop asked meanwhile, or the caller's own interruption (its
-          // parent stopped as the child's rows committed): the run the
-          // opening registered ends on its rows, so none is left with
-          // neither fiber nor end.
-          Effect.tapCause((cause) =>
-            Effect.suspend(() => {
-              const stop =
-                opening.stop ??
-                (Cause.hasInterrupts(cause)
-                  ? this.session === 'open'
-                    ? 'user'
-                    : 'shutdown'
-                  : null);
-              return stop === null ? Effect.void : stopRows(stop, true);
-            }),
-          ),
-          Effect.flatMap(({ opened, environment }) =>
-            Effect.suspend(() => {
-              const stop =
-                opening.stop ?? (this.session === 'open' ? null : 'shutdown');
-              // The fiber takes the run as its first step, before its
-              // program runs, so the program finds its run live here; its
-              // exit lets the run go.
-              const program = Effect.withFiber((fiber) => {
-                const live: Live = {
-                  kind: 'live',
-                  fiber,
-                  controls: undefined,
-                  stop: null,
-                };
-                this.entries.set(runId, live);
-                fiber.addObserver(() => {
-                  if (this.entries.get(runId) !== live) return;
-                  // A stop still committing holds a launch off until its
-                  // rows are in.
-                  if (live.stop === 'committing')
-                    this.entries.set(runId, {
-                      kind: 'ending',
-                      done: Deferred.makeUnsafe<void>(),
-                    });
-                  else this.entries.delete(runId);
-                  this.publishHeld();
-                  this.init.wake(runId);
-                });
-                return launch.run(opened);
-              });
-              const forked = () => {
-                const fiber = this.init.fork(
-                  runId,
-                  this.provided(program.pipe(Effect.provide(environment))),
-                );
-                // A stop asked meanwhile: the run's stop row is in, and the
-                // run is interrupted before its first step, so its one
-                // terminal ends it (`endRun`) and releases its resources.
-                if (stop !== null) fiber.interruptUnsafe();
-                return { opened, fiber };
-              };
-              return stop === null
-                ? Effect.sync(forked)
-                : Effect.map(stopRows(stop, false), forked);
-            }),
+    type Started = { readonly opened: A; readonly fiber: Fiber.Fiber<B, E2> };
+    // The run enters here and leaves on every exit that did not fork it, in
+    // one step each.
+    return Effect.acquireUseRelease(
+      Effect.sync(() => this.enter(runId)),
+      (entered): Effect.Effect<Started, E | Error> => {
+        switch (entered.kind) {
+          case 'refused':
+            return Effect.fail(entered.error);
+          case 'again':
+            return Effect.andThen(entered.after, this.start(runId, launch));
+          case 'opening':
+            return this.launch(runId, entered.opening, launch);
+        }
+      },
+      (entered) =>
+        entered.kind === 'opening'
+          ? Effect.sync(() => {
+              // Not forked: the run leaves here.
+              if (this.entries.get(runId) === entered.opening) {
+                this.entries.delete(runId);
+                this.publishHeld();
+              }
+              Deferred.doneUnsafe(entered.opening.settled, Effect.void);
+            })
+          : Effect.void,
+    );
+  }
+
+  /** A launch's first step: the run starts opening here, the launch is
+   *  refused, or it asks again once the operation holding the run ends. */
+  private enter(
+    runId: RunId,
+  ):
+    | { readonly kind: 'opening'; readonly opening: Opening }
+    | { readonly kind: 'refused'; readonly error: RunAdmissionClosed | RunLive }
+    | { readonly kind: 'again'; readonly after: Effect.Effect<void> } {
+    const refused = this.closedRefusal();
+    if (refused) return { kind: 'refused', error: refused };
+    const entry = this.entries.get(runId);
+    switch (entry?.kind) {
+      case 'opening':
+      case 'live':
+      case 'ending':
+        return { kind: 'refused', error: new RunLive({ runId }) };
+      case 'busy':
+        return { kind: 'again', after: Deferred.await(entry.done) };
+    }
+    // Held nowhere here: it opens, and a stop asked before it had rows is
+    // one asked as it opened.
+    const opening: Opening = {
+      kind: 'opening',
+      stop: entry?.reason ?? null,
+      cascade: entry !== undefined,
+      settled: Deferred.makeUnsafe<void>(),
+    };
+    this.entries.set(runId, opening);
+    this.publishHeld();
+    return { kind: 'opening', opening };
+  }
+
+  /** A launch once its run is opening here: the opening in the caller's
+   *  fiber, then the fork. */
+  private launch<A, E, B, E2>(
+    runId: RunId,
+    opening: Opening,
+    launch: Launch<A, E, B, E2>,
+  ): Effect.Effect<
+    { readonly opened: A; readonly fiber: Fiber.Fiber<B, E2> },
+    E | Error
+  > {
+    // The rows of a stop asked meanwhile: the run's `run.stop` and, with
+    // `end`, its end, for a run with rows (an opening that failed before
+    // the run was registered has none to stop). One the store refused is
+    // said: the run reads as interrupted at its next open.
+    const stopRows = (reason: RunStopReason, end: boolean) =>
+      this.inSession(stopRun(runId, reason, end)).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning(
+            `Run ${runId}: the stop asked as it opened was not recorded`,
+          ).pipe(Effect.annotateLogs({ data: cause })),
+        ),
+        // Then the runs held under it, as a stop of a running run does: a
+        // parent resumed by a child's delivery has children running while
+        // it opens.
+        Effect.andThen(
+          Effect.suspend(() =>
+            opening.cascade ? this.stopUnder(runId, reason) : Effect.void,
           ),
         ),
-      ).pipe(
-        Effect.ensuring(
-          Effect.sync(() => {
-            // Not forked: the run leaves here.
-            if (this.entries.get(runId) === opening) {
-              this.entries.delete(runId);
-              this.publishHeld();
-            }
-            Deferred.doneUnsafe(opening.settled, Effect.void);
+        Effect.catchCause((cause) =>
+          Effect.logWarning(
+            `Run ${runId}: the stop asked as it opened did not reach the runs under it`,
+          ).pipe(Effect.annotateLogs({ data: cause })),
+        ),
+      );
+    // Resolve the launch's environment before its opening acquires
+    // resources, then carry only those values into the run's fiber.
+    // Management stays on the session's stable services.
+    const open = Effect.gen(function* () {
+      const environment = Context.pick(
+        ConfigProvider.ConfigProvider,
+        ProjectEnvironment,
+      )(yield* Effect.context());
+      const opened = yield* launch.open;
+      return { opened, environment };
+    }).pipe(
+      Effect.provide(workspaceEnvironmentLayer(this.init.roots.workspace)),
+    );
+    return Effect.uninterruptibleMask((restore) =>
+      restore(this.inSession(open)).pipe(
+        // A stop asked meanwhile, or the caller's own interruption (its
+        // parent stopped as the child's rows committed): the run the
+        // opening registered ends on its rows, so none is left with
+        // neither fiber nor end. A closing session's interruption writes
+        // nothing: the run is left as its rows stand.
+        Effect.tapCause((cause) =>
+          Effect.suspend(() => {
+            const stop =
+              opening.stop ??
+              (Cause.hasInterrupts(cause) && !this.closing ? 'user' : null);
+            return stop === null ? Effect.void : stopRows(stop, true);
           }),
         ),
-      );
-    });
+        Effect.flatMap(({ opened, environment }) =>
+          Effect.suspend(() => {
+            const { stop } = opening;
+            // The fiber takes the run as its first step, before its
+            // program runs, so the program finds its run live here; its
+            // exit lets the run go.
+            const program = Effect.withFiber((fiber) => {
+              const live: Live = {
+                kind: 'live',
+                fiber,
+                controls: undefined,
+                stop: null,
+              };
+              this.entries.set(runId, live);
+              fiber.addObserver(() => {
+                if (this.entries.get(runId) !== live) return;
+                // A stop still committing holds a launch off until its
+                // rows are in.
+                if (live.stop === 'committing')
+                  this.entries.set(runId, {
+                    kind: 'ending',
+                    done: Deferred.makeUnsafe<void>(),
+                  });
+                else this.entries.delete(runId);
+                this.publishHeld();
+                this.init.wake(runId);
+              });
+              return launch.run(opened);
+            });
+            const forked = () => {
+              const fiber = this.init.fork(
+                runId,
+                this.provided(program.pipe(Effect.provide(environment))),
+              );
+              // A stop asked meanwhile: the run's stop row is in, and the
+              // run is interrupted before its first step, so its one
+              // terminal ends it (`endRun`) and releases its resources. A
+              // session that closed meanwhile interrupts it the same way,
+              // with no row.
+              if (stop !== null || this.closing) fiber.interruptUnsafe();
+              return { opened, fiber };
+            };
+            return stop === null
+              ? Effect.sync(forked)
+              : Effect.map(stopRows(stop, false), forked);
+          }),
+        ),
+      ),
+    );
   }
 
   /** Attach a running loop's controls to its run for the caller's scope
@@ -593,118 +661,143 @@ export class SessionRunRegistry implements RunsShape {
   }
 
   /**
-   * Stop a run (`RunsShape.stop` says what each reason does to its
-   * children). Its `run.stop` row first, so a child registering under it
-   * meanwhile is refused (`registrationRows`) and none escapes; then every
-   * run held here under it, at any depth (a user's stop detaches its
-   * children instead when "Keep agents running" is on); then the
+   * Stop a run (`RunsShape.stop`). Its `run.stop` row first, so a child
+   * registering under it meanwhile is refused (`registrationRows`) and none
+   * escapes; then every run held here under it, at any depth; then the
    * interruption of the fiber driving it here. A run no fiber drives here
    * gets its end in the same batch as the stop. A run still opening takes
-   * the stop once its opening committed: its start forks it and interrupts
+   * the stop once its opening committed: its start writes the row, stops
+   * the runs held under it as any other stop does, forks it and interrupts
    * it at once. So does a run whose id has no rows yet, when it starts. A
-   * run a file operation holds is stopped once the operation ends.
+   * run a file operation holds is stopped once the operation ends. A
+   * closing session records no stop: the fiber is interrupted and the run
+   * left as its rows stand.
    */
   stop(runId: RunId, reason: RunStopReason): Effect.Effect<boolean, Error> {
-    return Effect.suspend(() => {
-      const entry = this.entries.get(runId);
-      switch (entry?.kind) {
-        case 'opening':
-          entry.stop ??= reason;
-          return Effect.succeed(true);
-        case 'live':
-          if (entry.stop !== null) return Effect.succeed(true);
-          entry.stop = 'committing';
-          return this.stopLive(
-            runId,
-            entry,
-            reason,
-            this.stopUnder(runId, reason),
-          );
-        case 'ending':
-        case 'pending':
-          return Effect.succeed(false);
-        case 'busy':
-          return Effect.andThen(
-            Deferred.await(entry.done),
-            this.stop(runId, reason),
-          );
-      }
-      // No fiber here drives it: its end commits with its stop, and a
-      // launch is refused until it has.
-      const ending: Ending = {
-        kind: 'ending',
-        done: Deferred.makeUnsafe<void>(),
-      };
-      this.entries.set(runId, ending);
-      return this.inSession(stopRun(runId, reason, true)).pipe(
-        Effect.tap((known) =>
-          known ? this.stopUnder(runId, reason) : Effect.void,
-        ),
-        // No rows: the launch has not registered yet, and takes the stop
-        // when it starts.
-        Effect.onExit((exit) =>
-          Effect.sync(() =>
-            this.pass(
-              runId,
-              ending,
-              Exit.isSuccess(exit) && !exit.value
-                ? { kind: 'pending', reason }
-                : undefined,
-            ),
-          ),
-        ),
-        Effect.as(false),
-      );
-    });
+    return Effect.suspend(() =>
+      this.closing
+        ? Effect.succeed(this.interrupt(runId))
+        : this.stopping(runId, reason, true),
+    );
   }
 
-  /** What a stop of `runId` does to the runs held here under it: a user's
-   *  stop detaches its children while "Keep agents running" is on; any
-   *  other stop ends every run under it, at any depth. */
+  /**
+   * One stop of one run: what it does is decided and marked on the run in
+   * one step (`claimStop`), carried out, and the mark settled on every
+   * exit. `cascade` is whether it reaches the runs under it and ends a run
+   * no fiber here drives; a stop under an ancestor's cascade does neither,
+   * the ancestor's covering the whole tree. Answers whether a fiber here
+   * took the stop.
+   */
+  private stopping(
+    runId: RunId,
+    reason: RunStopReason,
+    cascade: boolean,
+  ): Effect.Effect<boolean, Error> {
+    const under = cascade ? this.stopUnder(runId, reason) : Effect.void;
+    return Effect.acquireUseRelease(
+      Effect.sync(() => this.claimStop(runId, reason, cascade)),
+      (claim): Effect.Effect<StopResult, Error> => {
+        switch (claim.kind) {
+          case 'done':
+            return Effect.succeed({ took: claim.took, unknown: false });
+          case 'again':
+            return Effect.map(
+              Effect.andThen(
+                claim.after,
+                this.stopping(runId, reason, cascade),
+              ),
+              (took) => ({ took, unknown: false }),
+            );
+          // Its `run.stop` row, then the runs under it, then its fiber's
+          // interruption.
+          case 'live':
+            return this.inSession(stopRun(runId, reason, false)).pipe(
+              Effect.andThen(under),
+              Effect.andThen(
+                Effect.sync(() => claim.live.fiber.interruptUnsafe()),
+              ),
+              Effect.as({ took: true, unknown: false }),
+            );
+          // No fiber here drives it: its end commits with its stop. No
+          // rows: the launch has not registered yet.
+          case 'ending':
+            return this.inSession(stopRun(runId, reason, true)).pipe(
+              Effect.tap((known) => (known ? under : Effect.void)),
+              Effect.map((known) => ({ took: false, unknown: !known })),
+            );
+        }
+      },
+      (claim, exit) =>
+        Effect.sync(() => {
+          if (claim.kind === 'live') {
+            const entry = this.entries.get(runId);
+            // Committed, it holds until the fiber it interrupted ends; one
+            // that failed can be asked again.
+            if (entry === claim.live)
+              claim.live.stop = Exit.isSuccess(exit) ? 'committed' : null;
+            // The fiber exited as the rows committed: what waited for them
+            // goes on.
+            else if (entry?.kind === 'ending') this.pass(runId, entry);
+          } else if (claim.kind === 'ending')
+            // A run with no rows takes the stop when it starts.
+            this.pass(
+              runId,
+              claim.ending,
+              Exit.isSuccess(exit) && exit.value.unknown
+                ? { kind: 'pending', reason }
+                : undefined,
+            );
+        }),
+    ).pipe(Effect.map(({ took }) => took));
+  }
+
+  /** A stop's first step: what the run's state here makes of it, marked on
+   *  the run so a second stop records nothing and a launch waits. */
+  private claimStop(
+    runId: RunId,
+    reason: RunStopReason,
+    cascade: boolean,
+  ): StopClaim {
+    const entry = this.entries.get(runId);
+    switch (entry?.kind) {
+      case 'opening':
+        // The first stop's reason stands; the launch applies it, with its
+        // cascade, once the opening answered.
+        entry.stop ??= reason;
+        entry.cascade ||= cascade;
+        return { kind: 'done', took: true };
+      case 'live':
+        if (entry.stop !== null) return { kind: 'done', took: true };
+        entry.stop = 'committing';
+        return { kind: 'live', live: entry };
+      case 'ending':
+      case 'pending':
+        return { kind: 'done', took: false };
+      case 'busy':
+        return cascade
+          ? { kind: 'again', after: Deferred.await(entry.done) }
+          : { kind: 'done', took: false };
+    }
+    if (!cascade) return { kind: 'done', took: false };
+    // A launch is refused until the end is in.
+    const ending: Ending = {
+      kind: 'ending',
+      done: Deferred.makeUnsafe<void>(),
+    };
+    this.entries.set(runId, ending);
+    return { kind: 'ending', ending };
+  }
+
+  /** A stop of `runId` stops every run held here under it, at any depth. */
   private stopUnder(
     runId: RunId,
     reason: RunStopReason,
   ): Effect.Effect<void, Error> {
-    return Effect.gen({ self: this }, function* () {
-      const detach =
-        reason === 'user' &&
-        (yield* Settings.get(
-          this.init.roots,
-          DETACH_SUBAGENTS_ON_STOP_SETTING,
-        ));
-      if (detach) yield* this.detachActiveChildren(runId);
-      else
-        for (const id of yield* this.heldUnder(runId))
-          yield* this.stopHeld(id, reason);
-    });
-  }
-
-  /** The stop of a run whose fiber is `live` here, its stop marked
-   *  committing: its `run.stop` row, then `under` (what the stop does to
-   *  the runs under it), then its fiber's interruption. Answers that a
-   *  fiber here took the stop. */
-  private stopLive(
-    runId: RunId,
-    live: Live,
-    reason: RunStopReason,
-    under: Effect.Effect<void, Error>,
-  ): Effect.Effect<boolean, Error> {
-    return this.inSession(stopRun(runId, reason, false)).pipe(
-      Effect.andThen(under),
-      Effect.andThen(Effect.sync(() => live.fiber.interruptUnsafe())),
-      Effect.onExit((exit) =>
-        Effect.sync(() => {
-          const entry = this.entries.get(runId);
-          // Committed, it holds until the fiber it interrupted ends; one
-          // that failed can be asked again.
-          if (entry === live)
-            live.stop = Exit.isSuccess(exit) ? 'committed' : null;
-          // The fiber exited as the rows committed: what waited for them
-          // goes on.
-          else if (entry?.kind === 'ending') this.pass(runId, entry);
-        }),
-      ),
-      Effect.as(true),
+    return Effect.flatMap(this.heldUnder(runId), (held) =>
+      Effect.forEach(held, (id) => this.stopHeld(id, reason), {
+        discard: true,
+      }),
     );
   }
 
@@ -716,72 +809,21 @@ export class SessionRunRegistry implements RunsShape {
     runId: RunId,
     reason: RunStopReason,
   ): Effect.Effect<void, Error> {
-    return Effect.suspend(() => {
-      const entry = this.entries.get(runId);
-      switch (entry?.kind) {
-        case 'opening':
-          entry.stop ??= reason;
-          return Effect.void;
-        case 'live':
-          if (entry.stop !== null) return Effect.void;
-          entry.stop = 'committing';
-          return Effect.asVoid(
-            this.stopLive(runId, entry, reason, Effect.void),
-          );
-        default:
-          return Effect.void;
-      }
-    });
+    return Effect.asVoid(this.stopping(runId, reason, false));
   }
 
   /** The session is closing: refuse every run started from here on, and
-   *  stop every run driven here whose parent is not (that parent's cascade
-   *  stops the rest), for the shutdown. A stop whose rows the store
-   *  refused, or that the session's view (dead by then) never applied, is
-   *  logged; the fiber is interrupted either way. */
-  stopAll(): Effect.Effect<void> {
-    return Effect.suspend(() => {
-      if (this.session === 'open') this.session = 'closing';
+   *  interrupt the fiber of every run driven here. Nothing is written: a
+   *  run the close cuts is left as its rows stand and reads as interrupted,
+   *  resumable, at the next open, as after a crash. A launch still opening
+   *  is interrupted as its opening answers ({@link start}). */
+  interruptAll(): void {
+    if (this.session === 'open') this.session = 'closing';
+    for (const [runId, entry] of this.entries) {
       // A launch that never started is refused from here on anyway.
-      for (const [runId, entry] of this.entries)
-        if (entry.kind === 'pending') this.entries.delete(runId);
-      const held = this.heldIds();
-      // The held forest's roots: each run's cascade covers what is under it.
-      const roots = Effect.filter(held, (id) =>
-        Effect.map(
-          this.ancestorsOf(id),
-          (line) => !line.some((an) => held.includes(an)),
-        ),
-      ).pipe(
-        // A store that cannot say which run is under which: each held run
-        // is stopped by name.
-        Effect.catchCause((cause) =>
-          Effect.logWarning(
-            "The held runs' parents could not be read at shutdown; stopping each",
-          ).pipe(
-            Effect.annotateLogs({ data: Cause.squash(cause) }),
-            Effect.as(held),
-          ),
-        ),
-      );
-      return Effect.flatMap(roots, (roots) =>
-        Effect.forEach(
-          roots,
-          (runId) =>
-            this.stop(runId, 'shutdown').pipe(
-              Effect.catchCause((cause) =>
-                Effect.logWarning(
-                  `Run ${runId}: its shutdown stop was not recorded`,
-                ).pipe(
-                  Effect.annotateLogs({ data: Cause.squash(cause) }),
-                  Effect.andThen(Effect.sync(() => this.interrupt(runId))),
-                ),
-              ),
-            ),
-          { discard: true },
-        ),
-      );
-    });
+      if (entry.kind === 'pending') this.entries.delete(runId);
+      else if (entry.kind === 'live') entry.fiber.interruptUnsafe();
+    }
   }
 
   /** Resolve once `runId` (or every run held here) is neither live nor
@@ -797,40 +839,6 @@ export class SessionRunRegistry implements RunsShape {
         discard: true,
       }).pipe(Effect.andThen(this.awaitDrained(runId)));
     });
-  }
-
-  // ---------------------------------------------------------------- detach
-
-  /**
-   * Detach the children driven here from a parent, promoting them to
-   * top-level: they keep running and deliver through the follow-up queue.
-   * One job severs each durably, keeping the grants each inherited.
-   */
-  private detachActiveChildren(parentRunId: RunId): Effect.Effect<void, Error> {
-    const { log } = this.init;
-    return log.transact((tx) =>
-      Effect.gen({ self: this }, function* () {
-        // Each child's kept grants, from its rows and its ancestors'.
-        const kept = new Map<RunId, ApprovalGrants>();
-        for (const id of yield* this.childRunIds(parentRunId)) {
-          const facts = yield* log.facts(id);
-          if (facts?.start == null || facts.grants === null) continue;
-          const parent = facts.start.parent?.id ?? parentRunId;
-          const line = yield* ancestryRows((run) => log.facts(run), parent);
-          kept.set(id, grantsKept(grantSource(line), id, parent, facts.grants));
-        }
-        if (kept.size > 0)
-          yield* tx.append(
-            [...kept].flatMap(([id, snapshot]) => {
-              const aggregateId = qualifyAggregateId('run', id);
-              return [
-                { type: 'run.detach', aggregateId },
-                { type: 'approval.policy', aggregateId, snapshot },
-              ] as const;
-            }),
-          );
-      }),
-    );
   }
 
   // ----------------------------------------------------------------- close

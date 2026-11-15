@@ -13,13 +13,12 @@ import {
 } from '../runtime/memory';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 
 const runMemoryList = Effect.fn('runMemoryList')(function* () {
   const services = yield* cliPlatform;
   // Pass the full list to `formatCliMemoryList`; it owns truncation (the
-  // `Memories (N):` total and `... N more` overflow line) and JSON/NDJSON
+  // `Memories (N):` total and `… N more rows` overflow line) and JSON/NDJSON
   // consumers should see every memory, not a capped slice.
   const items = yield* withSessionFs(services.roots, MemoryStore.list);
 
@@ -28,7 +27,6 @@ const runMemoryList = Effect.fn('runMemoryList')(function* () {
     ndjson: items.map((memory) => ({ kind: 'memory', memory })),
     text: formatCliMemoryList(items),
   });
-  return CliExitCode.Success;
 });
 
 const runMemoryShow = Effect.fn('runMemoryShow')(function* (inputPath: string) {
@@ -42,12 +40,10 @@ const runMemoryShow = Effect.fn('runMemoryShow')(function* (inputPath: string) {
     ndjson: { kind: 'memory-detail', ...record },
     text: formatCliMemoryPreview(record),
   });
-  return CliExitCode.Success;
 });
 
 const memoryListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List stored memories' },
-  args: { ...GLOBAL_ARGS },
   catchExitCode: CliExitCode.AgentError,
   run: runMemoryList,
 });
@@ -55,7 +51,6 @@ const memoryListCommand = defineCliCommand({
 const memoryShowCommand = defineCliCommand({
   meta: { name: 'show', description: 'Show one stored memory' },
   args: {
-    ...GLOBAL_ARGS,
     path: {
       type: 'positional',
       required: true,

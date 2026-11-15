@@ -18,7 +18,7 @@ import {
 } from '@cli/tui/selectWindow';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import type { TeamOptionData } from '@texra/shared/pickerOptions';
-import { loadTeamOptions } from '@texra/shared/teamLaunch';
+import { loadTeamOptions } from '@texra/agent/teams/teamLaunch';
 import type { DocumentAgentOption } from '@texra/shared/plugins/documents';
 import { agentOptionsData } from '@texra/tools/documents/documentTask';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';

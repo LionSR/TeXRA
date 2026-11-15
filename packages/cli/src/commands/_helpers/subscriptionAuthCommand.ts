@@ -99,7 +99,6 @@ export function defineSubscriptionAuthCommand(
         ndjson: { kind: ndjsonKind, ...payload },
         text: `${signedIn}\n${provider.displayName} subscription enabled for ${provider.modelFamily}.`,
       });
-      return CliExitCode.Success;
     });
   }
 
@@ -109,7 +108,6 @@ export function defineSubscriptionAuthCommand(
       description: options.loginDescription,
     },
     args: {
-      ...GLOBAL_ARGS,
       device: {
         type: 'boolean',
         description:
@@ -133,7 +131,6 @@ export function defineSubscriptionAuthCommand(
       name: 'logout',
       description: options.logoutDescription,
     },
-    args: { ...GLOBAL_ARGS },
     run: Effect.fn('subscriptionAuthCommand.run')(function* () {
       const services = yield* cliPlatform;
       const signOutResult = yield* withCliAuthError(
@@ -153,7 +150,6 @@ export function defineSubscriptionAuthCommand(
         ndjson: { kind: ndjsonKind, ...payload },
         text: subscriptionSignOutOutcomeMessage(options.providerId, update),
       });
-      return CliExitCode.Success;
     }),
   });
 
@@ -162,7 +158,6 @@ export function defineSubscriptionAuthCommand(
       name: 'status',
       description: options.statusDescription,
     },
-    args: { ...GLOBAL_ARGS },
     run: Effect.fn('subscriptionAuthCommand.run')(function* () {
       yield* cliPlatform;
       const statusResult = yield* withCliAuthError(provider.getStatus());
@@ -173,9 +168,8 @@ export function defineSubscriptionAuthCommand(
         ndjson: { kind: `${ndjsonKind}-status`, ...status },
         text: status.signedIn
           ? ACCOUNT_OUTCOME.signedInAs(provider.displayName, label)
-          : `Not signed in with ${provider.displayName}.`,
+          : ACCOUNT_OUTCOME.notSignedIn(provider.displayName),
       });
-      return CliExitCode.Success;
     }),
   });
 

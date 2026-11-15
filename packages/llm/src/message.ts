@@ -294,7 +294,7 @@ type HistoryMessage = typeof MessageSchema.Type;
 type ToolMessage = Extract<HistoryMessage, { readonly role: 'tool' }>;
 
 /** A local call and the result that answers it. */
-export interface AnsweredCall {
+interface AnsweredCall {
   readonly call: typeof LocalCallPartSchema.Type;
   readonly result: ToolMessage['results'][number];
 }

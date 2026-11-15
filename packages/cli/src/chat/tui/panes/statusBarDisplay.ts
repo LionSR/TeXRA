@@ -371,7 +371,7 @@ function fitStatusBarLeftSegments(
   if (statusBarSegmentsWidth(segments) <= innerWidth) return segments;
 
   // Lowest priority first, the later of two equals first.
-  const yieldOrder = [...segments.keys()].sort(
+  const yieldOrder = [...segments.keys()].toSorted(
     (a, b) => segments[a].priority - segments[b].priority || b - a,
   );
   const fitted: Array<StatusBarSegment | undefined> = [...segments];

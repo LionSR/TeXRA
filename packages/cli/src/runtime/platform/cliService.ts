@@ -41,22 +41,22 @@ import { openLocalSession } from '@texra/controllers/session/openProjectSession'
 import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
 import { type ServiceInfo } from '@texra/controllers/server/protocol';
-import type {
-  ServiceLoad,
-  ServiceProject,
-  ServiceProjects,
+import {
+  runsAtWork,
+  type ServiceLoad,
+  type ServiceProject,
+  type ServiceProjects,
 } from '@texra/controllers/server/service';
 import {
   isOlder,
   linkService,
   probeRecordedService,
   spawnService,
-  type ServiceConnection,
   type ServiceLink,
   type ServiceUnavailable,
   WINDOWS_UNSUPPORTED,
 } from '@texra/controllers/server/client';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 
 import { readCliEntrypointPath } from './cliContext';
@@ -178,7 +178,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     // (registered after them, so released first); the service's exit
     // closes every session ahead of that (`serve`'s settle).
     const session = yield* openLocalSession(sessions, roots);
-    // A store moved aside at open (pre-1.0 or corrupt) is said once, in
+    // A damaged store moved aside at open is said once, in
     // the service's log and to the project's first window: the windows
     // open no store of their own to notice it.
     const moved = session.storeMovedAside;
@@ -219,11 +219,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     yield* Effect.forkScoped(
       Stream.runForEach(
         session.view.changes.pipe(
-          Stream.map((view) =>
-            [...view.runs.values()].some(
-              (run) => run.holder === 'here' && run.position !== 'waiting',
-            ),
-          ),
+          Stream.map(() => runsAtWork(session) > 0),
           Stream.changes,
         ),
         follow,
@@ -339,16 +335,3 @@ export const linkCliService = Effect.fn('linkCliService')(function* (
     ? reach(linked.failure.reason)
     : linked.success;
 });
-
-/** The service's client through `link`, for one connection's use; a link
- *  that holds none now fails with why. */
-export const linkClient = (
-  link: ServiceLink,
-): Effect.Effect<Pick<ServiceConnection, 'client'>, Error> =>
-  Effect.flatMap(link.client.get, (client) =>
-    client === null
-      ? Effect.flatMap(SubscriptionRef.get(link.away), (away) =>
-          Effect.fail(new Error(away)),
-        )
-      : Effect.succeed({ client }),
-  );

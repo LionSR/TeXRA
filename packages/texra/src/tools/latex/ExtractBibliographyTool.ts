@@ -29,7 +29,7 @@ import {
   resolveLatexFile,
   texPathField,
 } from './figureExtractionShared';
-import { BIB_DEFAULT_PATH_SETTING } from '@texra/shared/settingsView/texraSettings';
+import { BIB_DEFAULT_PATH_SETTING } from '@texra/shared/settings/texraSettings';
 
 const ExtractBibliographyInputSchema = Schema.Struct({
   texPath: texPathField('Path to the LaTeX file to scan for citations.'),

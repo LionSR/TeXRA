@@ -11,7 +11,7 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
-import { Cause, Clock, Effect, Fiber, Result, Schema } from 'effect';
+import { Clock, Effect, Fiber, Result, Schema } from 'effect';
 
 import { isStrictlyWithin } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
@@ -278,7 +278,7 @@ const getClientProvider = Effect.fn('getClientProvider')(function* (
     }).pipe(
       Effect.catchCause((cause) =>
         Effect.logWarning(
-          `Could not offer the Lean 4 install prompt: ${toErrorMessage(Cause.squash(cause))}`,
+          `Could not offer the Lean 4 install prompt: ${toErrorMessage(cause)}`,
         ),
       ),
       withLogChannel(CHANNEL),

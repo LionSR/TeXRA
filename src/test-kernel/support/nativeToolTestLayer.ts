@@ -6,7 +6,7 @@ import {
   Schema,
   ScopedRef,
   Semaphore,
-  SynchronizedRef,
+  Ref,
 } from 'effect';
 
 import { RunFileService } from '@texra-ai/harness/plugins';
@@ -43,7 +43,7 @@ type TestCallRun = Pick<RunCallShape['run'], 'runId' | 'toolPolicy'> &
   };
 
 /** A run that has opened no step yet. */
-const noStep = () => SynchronizedRef.makeUnsafe<OpenStep | null>(null);
+const noStep = () => Ref.makeUnsafe<OpenStep | null>(null);
 
 /** A run fixture's step fields: no step opened yet, and every step offers
  *  exactly `tools`, as the run's own tools over an empty catalog. */
@@ -144,12 +144,10 @@ export function nativeToolTestLayer(
           callRequests({
             run: toolRun,
             session,
-            cell,
             commit: cell.append,
             at: { responseId: runCall.responseId, callId },
-            entered: { attempt: 1, raised: 0, own: null },
-            retireCause: 'The test call ended.',
-          }).requests,
+            entered: { attempt: 1, raised: 0 },
+          }),
       );
       return Layer.mergeAll(
         // A run's call is dispatched in its session's fiber, which the

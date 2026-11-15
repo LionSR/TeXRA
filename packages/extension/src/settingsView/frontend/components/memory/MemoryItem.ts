@@ -28,32 +28,8 @@ import {
   type IconActionButtonOptions,
 } from '@ui/wa/actionButtons';
 import { metaStripStyles, renderDotMeta } from '@ui/wa/metaStrip';
-import { cachedDateTimeFormat } from '@ui/formatting/dateTimeFormat';
-import { formatBytes } from '@ui/copy/format';
+import { memoryItemFacts } from '@ui/copy/memory';
 import type { MemoryViewItem } from '@texra-ai/harness/schemas';
-import { formatResultCount } from '@texra-ai/harness/schemas';
-
-const SHORT_DATE_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
-  year: 'numeric',
-  month: 'short',
-  day: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-};
-
-/**
- * Compact, locale-aware absolute timestamp (short month, no seconds) for the
- * Memory list items. Returns `null` for missing/invalid input so the meta
- * strip can fall back to its "Updated: unknown" copy.
- */
-function formatShortDateTime(
-  value: string | number | Date | null | undefined,
-): string | null {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return cachedDateTimeFormat(SHORT_DATE_TIME_OPTIONS).format(date);
-}
 
 @customElement('memory-item')
 export class MemoryItem extends LitElement {
@@ -156,23 +132,6 @@ export class MemoryItem extends LitElement {
     postMessage(SETTINGS_VIEW_COMMANDS.GET_MEMORY_PREVIEW, {
       storagePath: this.item.storagePath,
     });
-  }
-
-  private renderMeta(item: MemoryViewItem): TemplateResult {
-    const parts: string[] = [];
-    if (item.pinned) {
-      parts.push('Pinned');
-    }
-    parts.push(formatBytes(item.size ?? 0));
-    if (typeof item.lineCount === 'number') {
-      parts.push(formatResultCount(item.lineCount, 'line'));
-    }
-    const updated = formatShortDateTime(item.mtime);
-    parts.push(updated ? `Updated ${updated}` : 'Updated: unknown');
-    if (item.modifiedBy) {
-      parts.push(`by ${item.modifiedBy}`);
-    }
-    return renderDotMeta(parts);
   }
 
   protected override willUpdate(changedProperties: PropertyValues<this>): void {
@@ -284,7 +243,7 @@ export class MemoryItem extends LitElement {
           ${this.renderActionGroup()}
         </div>
         <div class="text-secondary meta-strip">
-          ${this.renderMeta(this.item)}
+          ${renderDotMeta(memoryItemFacts(this.item))}
         </div>
         <wa-details
           class="collapsible-quiet memory-contents"

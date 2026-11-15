@@ -50,10 +50,10 @@ import { buildAgentWorkspaceOptions } from '@texra/tools/agentCli/agentWorkspace
 // Local file imports
 import { ClaudeBackgroundTaskTracker } from './claudeAgentBackgroundTasks';
 import {
-  getClaudeAgentConfig,
   importClaudeAgentSdk,
   findClaudeBinaryPath,
 } from './claudeAgentImport';
+import { buildClaudeAgentEnv } from './claudeAgentConfig';
 import { ClaudeAgentSessions } from './agentCliSessionStores';
 import {
   buildAgentCliTurn,
@@ -361,12 +361,12 @@ function buildClaudeAgentTurn(params: {
     turnErrorMessage: (turn) =>
       turn.errorMessage ||
       'Claude Code reported a failed turn without throwing.',
-    delivery: (turn, wallTimeMs) => ({
+    delivery: (turn, wallTime) => ({
       family: 'claude-agent',
       runId,
       prompt,
       attributes: [{ name: 'session-id', value: turn.sessionId || null }],
-      wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
+      wallTime,
       response: turn.finalResponse,
       usage: turn.usage,
       lines: claudeCostLines(turn),
@@ -449,7 +449,6 @@ const launchClaudeAgentSession = Effect.fn(
   ToolError,
   Secrets | PluginToolServices | ChildProcessSpawner | FileSystem.FileSystem
 > {
-  const config = yield* getClaudeAgentConfig;
   const { roots, workingDirectory: parentWorkingDirectory } =
     (yield* ToolContext).env;
   // Mirrors codex so subagents can see the project: a call from inside the
@@ -459,17 +458,15 @@ const launchClaudeAgentSession = Effect.fn(
   const { workingDirectory, additionalDirectories } =
     buildAgentWorkspaceOptions(roots.workspace, parentWorkingDirectory);
   // The env block reads the process environment and `Secrets`: no workspace.
-  const env = yield* config
-    .buildClaudeAgentEnv()
-    .pipe(
-      Effect.mapError(
-        (failure) =>
-          new ToolError(
-            `Could not read the managed Anthropic API key: ${failure.message}`,
-            { cause: failure },
-          ),
-      ),
-    );
+  const env = yield* buildClaudeAgentEnv().pipe(
+    Effect.mapError(
+      (failure) =>
+        new ToolError(
+          `Could not read the managed Anthropic API key: ${failure.message}`,
+          { cause: failure },
+        ),
+    ),
+  );
   const pathToClaudeCodeExecutable = yield* findClaudeBinaryPath().pipe(
     Effect.mapError(
       (failure) =>

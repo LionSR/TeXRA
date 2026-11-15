@@ -33,6 +33,7 @@ import {
   type RequestPayload,
   type RunId,
   FactNameSchema,
+  NonNegativeIntSchema,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript/transcriptRow';
 import type {
@@ -44,7 +45,7 @@ import type {
 const SessionKeySchema = Schema.String.check(Schema.isMinLength(1));
 
 /** The integer fields' shapes: `Count` from zero, `Positive` from one. */
-const Count = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+const Count = NonNegativeIntSchema;
 const Positive = Schema.Int.check(Schema.isGreaterThan(0));
 
 /**
@@ -71,7 +72,7 @@ const TranscriptViewSchema = Schema.Struct({
 export type TranscriptView = typeof TranscriptViewSchema.Type;
 
 /** One run as every renderer reads it; `SessionView.runs` holds them. */
-export const RunViewSchema = Schema.Struct({
+const RunViewSchema = Schema.Struct({
   /** The run id: the aggregate's logical id, minted once at launch. */
   id: RunIdSchema,
   /** From `run.start`; every run has one. */
@@ -80,8 +81,6 @@ export const RunViewSchema = Schema.Struct({
   label: Schema.String,
   /** The run's title: the user's rename, else the AI one-liner. */
   description: Schema.NullOr(Schema.String),
-  /** Who wrote `description`: a user title outlives later model ones. */
-  descriptionBy: Schema.NullOr(Schema.Literals(['model', 'user'])),
   /** What every surface names the run by: `description`, else `label`. */
   title: Schema.String,
   model: Schema.NullOr(Schema.String),
@@ -135,11 +134,13 @@ export const RunViewSchema = Schema.Struct({
   takesFollowUps: Schema.Boolean,
   /** Latest `context.state`. */
   context: Schema.NullOr(ContextStateDataSchema),
-  /** The run it is attached to now: its launcher until a detach. */
+  /** The run it is listed under: its launcher, while the view lists
+   *  that run. */
   parentId: Schema.NullOr(RunIdSchema),
-  /** Its launch edge (`run.start.parent`), which a detach keeps: the run
-   *  that launched it, and that run's tool card it was launched from
-   *  (`parent.call.card`; null for a launch no call made). Null for a root. */
+  /** Its launch edge (`run.start.parent`), kept when its launcher is no
+   *  longer listed: the run that launched it, and that run's tool card it
+   *  was launched from (`parent.call.card`; null for a launch no call
+   *  made). Null for a root. */
   launch: Schema.NullOr(
     Schema.Struct({ id: RunIdSchema, card: Schema.NullOr(Schema.String) }),
   ),
@@ -193,8 +194,8 @@ export type RunView = typeof RunViewSchema.Type;
  * What `children` and their descendants count toward a parent's `rollup`:
  * the view's count over the run tree (each child's own `rollup` below it),
  * and the dispatch card's over the tree it lists (`below` recurses through
- * the children it lists instead). A child waiting between turns (held) or
- * paused, nothing asked of the user, has delivered its turn: it counts as
+ * the children it lists instead). A child waiting between turns, held or
+ * not, nothing asked of the user, has delivered its turn: it counts as
  * finished, not running.
  */
 export function rollupOf(
@@ -203,10 +204,7 @@ export function rollupOf(
 ): ReadRunView['rollup'] {
   const rollup = { total: 0, running: 0, finished: 0 };
   for (const child of children) {
-    const idle =
-      child.holder === 'here' &&
-      child.position === 'waiting' &&
-      child.approval !== 'own';
+    const idle = child.position === 'waiting' && child.approval !== 'own';
     const under = below(child);
     rollup.total += 1 + under.total;
     rollup.running +=
@@ -217,11 +215,14 @@ export function rollupOf(
   return rollup;
 }
 
-/** Whether nobody drives the run although it has not ended: its process
- *  stopped before it finished, and a resume continues it. */
+/** Whether the run was cut while it worked: it has not ended, nobody
+ *  drives it, and it does not stand between turns. A resume continues it.
+ *  A run left waiting for its next message is not interrupted, whoever
+ *  held it: nothing of it was in flight, and that message continues it. */
 export const isInterrupted = (
-  run: Pick<ReadRunView, 'holder' | 'outcome'>,
-): boolean => run.holder === 'none' && run.outcome === null;
+  run: Pick<ReadRunView, 'holder' | 'outcome' | 'position'>,
+): boolean =>
+  run.holder === 'none' && run.outcome === null && run.position !== 'waiting';
 
 /** Whether the run is working a turn in this process right now (a pending
  *  approval or question is still the turn's). */

@@ -126,7 +126,7 @@ const OWN_REQUEST_LABEL = {
 } as const satisfies Partial<Record<HostCommand['kind'], string>>;
 
 /** The requests a host answers its own way. */
-export type OwnHostCommand = Extract<
+type OwnHostCommand = Extract<
   HostCommand,
   { kind: keyof typeof OWN_REQUEST_LABEL }
 >;
@@ -510,11 +510,9 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
             getIncludedExtensions(request.category),
           );
           if (attached.attachedCount > 0 && attached.rejectedCount > 0) {
-            yield* Effect.forkDetach(
-              host.notify(
-                'info',
-                `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
-              ),
+            yield* host.notify(
+              'info',
+              `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
             );
           }
           return { kind: 'files', paths: attached.paths };

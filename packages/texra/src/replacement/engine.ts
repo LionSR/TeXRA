@@ -2,7 +2,7 @@
  * Utilities for managing text replacements in the codebase.
  */
 
-import { Effect, Result, Array as Arr } from 'effect';
+import { Effect, Result } from 'effect';
 import { LRUCache } from 'lru-cache';
 
 import { Settings, withLogChannel } from '@texra-ai/harness/plugins';
@@ -12,7 +12,8 @@ import type {
   RegexReplacementCategory,
 } from '@texra/shared/constants/replacementCategories';
 
-import { NonRegexRuleSet, RegexRuleSet } from './types';
+import type { PatternDict } from './patterns';
+import type { RegexRuleSet } from './types';
 import {
   applyLatexQuotesFormatting,
   type ReplacementDiagnostic,
@@ -55,7 +56,7 @@ import {
   CUSTOM_REPLACEMENTS_SETTING,
   ENABLED_REGEX_REPLACEMENTS_SETTING,
   ENABLED_REPLACEMENTS_SETTING,
-} from '@texra/shared/settingsView/texraSettings';
+} from '@texra/shared/settings/texraSettings';
 
 const CHANNEL = 'ReplacementEngine';
 
@@ -67,10 +68,10 @@ const CHANNEL = 'ReplacementEngine';
  */
 interface OrderedRuleSet {
   readonly rules: readonly (readonly [from: string, to: string])[];
-  readonly isRegex?: false;
 }
 
-type ReplacementRuleSet = OrderedRuleSet | RegexRuleSet;
+/** One pass: the ordered plain rules, or the regex categories in order. */
+type ReplacementPass = OrderedRuleSet | readonly RegexRuleSet[];
 
 /**
  * Replaced text plus what the passes had to say about it. The engine is pure,
@@ -94,16 +95,28 @@ export function logReplacementDiagnostics(
   ).pipe(withLogChannel(CHANNEL));
 }
 
-function applyNonRegexPolicy(
+/**
+ * Run rule passes in order, each over the trimmed output of the one before.
+ * A plain-string pass is followed by the critique wrapping; whole-document
+ * cleanup runs once, in the last pass.
+ */
+function runPasses(
   text: string,
-  config: ConfigProvider,
+  passes: readonly ReplacementPass[],
 ): ReplacementResult {
-  const processed = applyReplacements(text, getAllReplacements(config));
-  const trimmed = processed.text.trim();
-  return {
-    text: wrapCritiqueInAlign(trimmed),
-    diagnostics: processed.diagnostics,
-  };
+  const diagnostics: ReplacementDiagnostic[] = [];
+  let result = text;
+  for (const [index, rules] of passes.entries()) {
+    const applied = applyReplacements(result, rules, {
+      cleanupPasses: index === passes.length - 1,
+    });
+    diagnostics.push(...applied.diagnostics);
+    result = applied.text.trim();
+    if ('rules' in rules) {
+      result = wrapCritiqueInAlign(result);
+    }
+  }
+  return { text: result, diagnostics };
 }
 
 function applyAllPolicy(
@@ -111,25 +124,11 @@ function applyAllPolicy(
   config: ConfigProvider,
 ): ReplacementResult {
   const replacements = getAllReplacements(config);
-
-  const nonRegex = applyReplacements(text, replacements, {
-    cleanupPasses: false,
-  });
-  let result = nonRegex.text.trim();
-  result = wrapCritiqueInAlign(result);
-  const regex = applyReplacements(result, getAllReplacementsRegex(config), {
-    cleanupPasses: false,
-  });
-  const final = applyReplacements(regex.text.trim(), replacements);
-  result = final.text.trim();
-  return {
-    text: wrapCritiqueInAlign(result),
-    diagnostics: [
-      ...nonRegex.diagnostics,
-      ...regex.diagnostics,
-      ...final.diagnostics,
-    ],
-  };
+  return runPasses(text, [
+    replacements,
+    getAllReplacementsRegex(config),
+    replacements,
+  ]);
 }
 
 /**
@@ -156,11 +155,10 @@ const replacementEngine = {
    * {@link applyAll}.
    */
   applyToXmlContent(text: string, config: ConfigProvider): ReplacementResult {
-    const nonRegex = applyNonRegexPolicy(text, config);
-    const fenced = applyReplacements(
-      nonRegex.text,
+    const nonRegex = runPasses(text, [getAllReplacements(config)]);
+    const fenced = applyReplacements(nonRegex.text, [
       FENCED_LATEX_BLOCK_REPLACEMENTS,
-    );
+    ]);
     return {
       text: fenced.text,
       diagnostics: [...nonRegex.diagnostics, ...fenced.diagnostics],
@@ -184,7 +182,7 @@ const replacementEngine = {
  * accept a no-op category nor run one nobody can enable. A key two
  * categories share takes the later category's value.
  */
-const NON_REGEX_RULES: Record<NonRegexReplacementCategory, NonRegexRuleSet> = {
+const NON_REGEX_RULES: Record<NonRegexReplacementCategory, PatternDict> = {
   // LaTeX content formatting
   equations: EQUATION_REPLACEMENTS,
   sections: SECTION_REPLACEMENTS,
@@ -237,7 +235,7 @@ function getAllReplacements(config: ConfigProvider): OrderedRuleSet {
     {},
     ...Object.entries(NON_REGEX_RULES)
       .filter(([name]) => enabled.has(name))
-      .map(([, rules]) => rules.patterns),
+      .map(([, rules]) => rules),
     customReplacements,
   );
 
@@ -267,10 +265,7 @@ function getAllReplacementsRegex(config: ConfigProvider): RegexRuleSet[] {
     return enabledRules;
   }
 
-  return [
-    ...enabledRules,
-    { isRegex: true, flags: 'g', patterns: customReplacements },
-  ];
+  return [...enabledRules, { flags: 'g', patterns: customReplacements }];
 }
 
 /**
@@ -304,11 +299,12 @@ function getCompiledRegex(pattern: string, flags: string): RegExp {
 }
 
 /**
- * Apply replacements to text, handling both regex and non-regex patterns.
+ * Apply one pass to text: the ordered plain rules, or each regex category in
+ * order.
  */
 function applyReplacements(
   text: string,
-  replacements: ReplacementRuleSet | ReplacementRuleSet[],
+  pass: ReplacementPass,
   options?: {
     /** Whether to run trailing whole-document cleanup passes (defaults to true). */
     cleanupPasses?: boolean;
@@ -318,8 +314,12 @@ function applyReplacements(
   // Apply Unicode replacements in math environments first.
   let result = replaceMathUnicode(text);
 
-  for (const category of Arr.ensure(replacements)) {
-    if (category.isRegex) {
+  if ('rules' in pass) {
+    for (const [from, to] of pass.rules) {
+      result = result.replaceAll(from, to);
+    }
+  } else {
+    for (const category of pass) {
       for (const [pattern, repl] of Object.entries(category.patterns)) {
         const current = result;
         const replaced = Result.try({
@@ -343,10 +343,6 @@ function applyReplacements(
             message: `Error with regex pattern "${pattern}": ${replaced.failure}`,
           });
         }
-      }
-    } else {
-      for (const [from, to] of category.rules) {
-        result = result.replaceAll(from, to);
       }
     }
   }

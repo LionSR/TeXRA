@@ -329,14 +329,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
   authentication: ModelCredential,
 ): Effect.fn.Return<Model, ModelError, Scope.Scope> {
   const origin = originOf(config);
-  yield* Effect.try({
-    try: refuseAmbientHeaders,
-    catch: (cause) => cause,
-  }).pipe(
-    Effect.catch((cause) =>
-      cause instanceof ModelError ? Effect.fail(cause) : Effect.die(cause),
-    ),
-  );
+  yield* refuseAmbientHeaders;
   const bearer = bearerOf(authentication);
   const endpoint = new URL(config.deployment.endpoint);
   if (endpoint.username || endpoint.password)

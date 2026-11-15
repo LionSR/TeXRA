@@ -12,12 +12,12 @@ import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
   AgentCatalog,
   AgentDirectories,
-  isStrictlyWithin,
   readCustomAgentDir,
   registerCustomAgentRoot,
   CUSTOM_AGENT_DIR_KEY,
 } from '@texra-ai/harness/host';
 import { entryTypeIn, readNormalizedFile } from '@texra-ai/harness/node';
+import { emitAppSignal } from '@texra-ai/harness/plugins';
 import {
   AGENT_FILE_EXTENSION,
   agentKey,
@@ -25,9 +25,9 @@ import {
   toErrorMessage,
   formatResultCount,
 } from '@texra-ai/harness/schemas';
-import { workspaceTeams } from '@texra/shared/agentTeams';
-import { formatUnknownTeamMessage } from '@texra/shared/teamLaunch';
-import { applyTeam } from '@texra/shared/teamPlan';
+import { launchableTeams, workspaceTeams } from '@texra/shared/agentTeams';
+import { formatUnknownTeamMessage } from '@texra/agent/teams/teamLaunch';
+import { applyTeam } from '@texra/agent/teams/teamPlan';
 import {
   AGENT_TEMPLATE_FILES,
   agentFileFromTemplate,
@@ -168,9 +168,8 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       Effect.gen(function* () {
         const { catalog, workspaceAgents } = yield* page;
         return {
-          // The setup starter is a selectable agent list, not a team card.
-          presets: (yield* workspaceTeams(ports.roots.repoState)).filter(
-            (preset) => !preset.setupOnly,
+          presets: launchableTeams(
+            yield* workspaceTeams(ports.roots.repoState),
           ),
           orchestratorAgents: catalog.getOrchestratorAgentNames(),
           activePresetId: yield* workspaceAgents.getActiveTeamId(),
@@ -179,12 +178,15 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     ),
   ];
 
-  /** The agents changed: the pages follow, and every launcher's catalogs
-   *  reload, selecting the tool-use root a team just applied named. */
+  /** The agents changed: every agent list view follows the signal, these
+   *  pages and every launcher, and the launcher selects the tool-use root a
+   *  team just applied named. */
   const agentsChanged = (selectedToolUseAgent?: string): HostEffect =>
     Effect.andThen(
-      present.changed('agents'),
-      bindings.refreshCatalogs(selectedToolUseAgent),
+      emitAppSignal('workspaceAgentsChanged', undefined),
+      selectedToolUseAgent === undefined
+        ? Effect.void
+        : bindings.selectLauncherAgent(selectedToolUseAgent),
     );
   /** A mutation moved agent files: the registry is read again first, so
    *  nothing that follows paints the catalog it replaced. */
@@ -306,19 +308,11 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
           if (activeDeletions.has(message.agentName)) return Effect.void;
           activeDeletions.add(message.agentName);
           return Effect.gen(function* () {
-            const entryPath = (yield* AgentCatalog).get(
-              agentKey('custom', message.agentName),
-            )?.path;
-            if (!entryPath) {
+            if (
+              !(yield* AgentCatalog).get(agentKey('custom', message.agentName))
+            ) {
               return yield* present.alert(
                 `Custom agent not found: ${message.agentName}`,
-              );
-            }
-
-            const customDir = yield* customDirectory;
-            if (!isStrictlyWithin(customDir, entryPath)) {
-              return yield* present.alert(
-                'Refusing to delete: file is not inside the custom agents directory.',
               );
             }
 
@@ -328,13 +322,18 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
             });
             if (!confirmed) return;
 
-            const fs = yield* FileSystem.FileSystem;
-            // `force` is the facade's delete: a path already gone is the
-            // post-condition, not a failure.
-            yield* fs.remove(entryPath, { force: true });
-            // The removal is real only here: the agent list forgets its choice.
+            // The removal is real only here: the file goes, and the agent
+            // list forgets its choice.
             const { workspaceAgents } = yield* page;
-            yield* workspaceAgents.forgetDeletedAgent(message.agentName);
+            const refused = yield* workspaceAgents
+              .removeCustom(message.agentName)
+              .pipe(
+                Effect.as(undefined),
+                Effect.catchTag('AgentCustomizeRefused', (error) =>
+                  Effect.succeed(error),
+                ),
+              );
+            if (refused) return yield* present.alert(refused.message);
             yield* present.notice(`Deleted custom agent: ${message.agentName}`);
             yield* agentFilesChanged;
           }).pipe(
@@ -509,5 +508,5 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       ),
   } satisfies Partial<SettingsViewInboundHandlerRegistry>;
 
-  return { handlers, pages, agentsChanged };
+  return { handlers, pages };
 }

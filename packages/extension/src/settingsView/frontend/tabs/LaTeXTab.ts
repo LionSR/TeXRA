@@ -56,7 +56,7 @@ import { latexTabStyles } from './LaTeXTab.styles';
 import {
   INLINE_CRITICISM_SETTING,
   LATEX_FORMATTER_SETTING,
-} from '@texra/shared/settingsView/texraSettings';
+} from '@texra/shared/settings/texraSettings';
 import {
   LATEXDIFF_BETWEEN_ROUNDS_SETTING,
   LATEXDIFF_CHANGES_ONLY_SETTING,
@@ -64,7 +64,7 @@ import {
   DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING,
   DOCUMENTS_OPEN_PDF_SETTING,
   DOCUMENTS_REJECT_ON_COMPILE_FAILURE_SETTING,
-} from '@texra/shared/settingsView/documentsSettings';
+} from '@texra/shared/settings/documentsSettings';
 
 /** Path keys in LatexSettingsStatus for tool paths. */
 type ToolPathKey = Extract<keyof LatexSettingsStatus, `${string}Path`>;

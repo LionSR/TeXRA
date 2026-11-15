@@ -10,7 +10,6 @@
 import {
   Cause,
   Exit,
-  Clock,
   Context,
   Effect,
   FiberMap,
@@ -47,7 +46,7 @@ import type { SessionServices } from '@agent/runtime/rootLaunch';
 import type { SessionHandleInit } from '@agent/runtime/SessionHandle';
 import type { RunServices } from '@agent/runtime/ToolServices';
 import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionEventsLayer';
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure, withLogChannel } from '@logger/effectLog';
 import { SessionRoots, sessionFsLayer } from '@platform/rootedFs';
 import type { RunId, SessionCloseReport } from '@shared/schemas';
 import { Database, type DatabaseReadFailed } from '@shared/session/database';
@@ -80,28 +79,21 @@ import { sweepLeftoverRuns } from './sweepLeftoverRuns';
 
 const CHANNEL = 'sessionOwners';
 
-/** Log a failure on this channel, with the failure attached as its `data`. */
-const logFailure =
-  (message: string, log = Effect.logWarning) =>
-  (data: unknown) =>
-    log(message).pipe(Effect.annotateLogs({ data }), withLogChannel(CHANNEL));
-
-/** Stop every run of `session`, cascading, and wait for them to end within
- *  the close budget, which starts before the stop rows: their writes are
- *  durable appends and run whole, and the wait gets what they left of the
- *  budget. The runs still live past it are abandoned. */
+/** Interrupt every run of `session` and wait for their fibers to exit
+ *  within the close budget. Nothing is written for them: each is left as
+ *  its rows stand. The runs still live past the budget are abandoned. */
 export const stopSessionRuns = (
   session: Context.Context<SessionServices>,
 ): Effect.Effect<SessionCloseReport> =>
   Effect.gen(function* () {
     const runs = Context.get(session, RunRegistry);
-    const closeBy =
-      (yield* Clock.currentTimeMillis) + SESSION_CLOSE_DEADLINE_MS;
-    yield* runs.stopAll();
-    const left = closeBy - (yield* Clock.currentTimeMillis);
+    runs.interruptAll();
     yield* runs
       .awaitDrained()
-      .pipe(Effect.interruptible, Effect.timeoutOption(Math.max(left, 0)));
+      .pipe(
+        Effect.interruptible,
+        Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
+      );
     const abandoned = runs.get().map((run) => run.runId);
     return { settled: abandoned.length === 0, abandoned };
   });
@@ -110,7 +102,7 @@ export const stopSessionRuns = (
  * The services of one root over its graph, one scoped program. The entry's
  * scope is the session's one lifetime (`closeSession` and disposal close
  * it): what is acquired later is released earlier, so the runs are
- * disposed before the inbox and the host, the store's publisher drains
+ * disposed before the inbox and the host, the store's publisher closes
  * after the runs' fibers published their last rows, and the readers of its
  * tails, acquired first, live until the end.
  */
@@ -145,12 +137,12 @@ export const sessionOwnersLayer = (
         roots.storage,
       );
       const view = yield* makeSessionViewAccess(roots.storage, store.closed);
-      // The publisher drains inside the close deadline, after the runs'
-      // fibers published their last rows.
+      // The publisher closes after the runs' fibers published their last
+      // rows.
       yield* Effect.addFinalizer(() => store.close);
       // The runs' fibers (one per run, under its id) and the session's own,
       // interrupted after the services above them are disposed and before
-      // the publisher drains.
+      // the publisher closes.
       const runFibers = yield* FiberMap.make<RunId>();
       const fibers = yield* FiberSet.make();
 
@@ -201,13 +193,19 @@ export const sessionOwnersLayer = (
           aggregateState: database.aggregateState,
           removeRun: (id, expectedStartCommit) =>
             Effect.tap(store.removeRun(id, expectedStartCommit), (rows) =>
-              Effect.sync(() => {
-                for (const row of rows) {
-                  if (row.type !== 'run.removed') continue;
-                  for (const runId of row.runIds) inbox.forget(runId);
-                  deletions.removed(row);
-                }
-              }),
+              // One step once the removal has committed: an interruption
+              // between rows must not leave a removed run in the inbox.
+              Effect.uninterruptible(
+                Effect.forEach(
+                  rows,
+                  (row) => {
+                    if (row.type !== 'run.removed') return Effect.void;
+                    for (const runId of row.runIds) inbox.forget(runId);
+                    return deletions.removed(row);
+                  },
+                  { discard: true },
+                ),
+              ),
             ),
         },
         plugins: yield* ToolRegistry,
@@ -218,9 +216,10 @@ export const sessionOwnersLayer = (
       const budget = yield* resolveChildRunConcurrencyBudget(roots).pipe(
         Effect.map((permits) => Semaphore.makeUnsafe(permits)),
         Effect.catch((error) =>
-          logFailure('The child-run budget setting could not be read.')(
-            error,
-          ).pipe(Effect.as(ChildRunBudget.defaultValue())),
+          logFailure(
+            CHANNEL,
+            'The child-run budget setting could not be read.',
+          )(error).pipe(Effect.as(ChildRunBudget.defaultValue())),
         ),
       );
       const withRequests = withPolicy.pipe(
@@ -295,9 +294,10 @@ export const sessionOwnersLayer = (
           yield* presentTerminalResult(event).pipe(
             Effect.provide(session),
             Effect.catchCause((cause) =>
-              logFailure('Terminal result presentation threw')(
-                Cause.squash(cause),
-              ),
+              logFailure(
+                CHANNEL,
+                'Terminal result presentation threw',
+              )(Cause.squash(cause)),
             ),
           );
         }),

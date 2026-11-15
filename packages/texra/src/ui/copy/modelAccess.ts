@@ -12,10 +12,9 @@ import {
   type ErrorRow,
   type TranscriptText,
 } from '@texra-ai/harness/transcript';
-import { absurd, String as Str } from 'effect';
+import { absurd } from 'effect';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
-import { formatResetDuration } from '@ui/copy/format';
 import type {
   DeclinableUsageRoute,
   ModelAvailabilityKind,
@@ -26,6 +25,7 @@ import type {
 import {
   formatCostUsd,
   modelFailureMessage,
+  usageLimitMessage,
   usedUpPlanOf,
 } from '@texra-ai/harness/schemas';
 
@@ -115,14 +115,9 @@ export function modelFailureText(failure: ModelFailure): string {
     return `${subscriptionLabel} unavailable: ${failure.message} ${remedy}, or turn off "${subscriptionLabel}".`;
   }
   const used = usedUpPlanOf(failure);
-  if (used === undefined) return modelFailureMessage(failure);
-  const { plan, fallback } = PLAN_NAMES[used.plan];
-  const tier = used.planType ? ` (${Str.capitalize(used.planType)} plan)` : '';
-  const reset =
-    used.resetsInMs === undefined
-      ? ''
-      : ` Resets in ${formatResetDuration(used.resetsInMs)}.`;
-  return `${plan} usage limit reached${tier}.${reset} Switch to ${fallback} to keep working, or wait until the limit resets.`;
+  return used === undefined
+    ? modelFailureMessage(failure)
+    : usageLimitMessage(used, PLAN_NAMES[used.plan]);
 }
 
 /** A failure a host shows: a model call's in {@link modelFailureText}'s
@@ -163,12 +158,6 @@ export function errorRowText({ summary, details, failure }: ErrorRow): {
         .join('\n'),
     ),
   };
-}
-
-/** The notice of a used-up plan's automatic retry on the model's own key. */
-export function quotaFallbackNoticeText(route: DeclinableUsageRoute): string {
-  const { plan, fallback } = PLAN_NAMES[route];
-  return `${plan} usage limit reached; retrying with ${fallback}.`;
 }
 
 /** Model calls paid for by your own provider accounts. */

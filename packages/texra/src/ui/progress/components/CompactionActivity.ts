@@ -2,22 +2,12 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { LitElement, css, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import type { IconName } from '@ui/wa/iconNames';
+import { COMPACTION_ACTIVITY_TONE, statusGlyph } from '@ui/copy/runStatus';
 import { designTokens, commonViewStyles } from '@ui/styles';
+import { toneStyles } from '@ui/styles/toneStyles';
 import { stopSpinnerMotion } from '@ui/wa/spinner';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type { CompactionActivityStatus } from '@texra-ai/harness/transcript';
-
-const ACTIVITY_ICON: Record<
-  Exclude<CompactionActivityStatus, 'running'>,
-  IconName
-> = {
-  completed: 'circle-check',
-  failed: 'circle-xmark',
-  cancelled: 'ban',
-  skipped: 'circle-info',
-  interrupted: 'circle-exclamation',
-};
 
 /** Non-collapsible transcript activity row for one context compaction. */
 @customElement('compaction-activity')
@@ -25,6 +15,7 @@ export class CompactionActivity extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    toneStyles,
     css`
       :host {
         display: block;
@@ -46,21 +37,10 @@ export class CompactionActivity extends LitElement {
 
       .icon {
         flex: 0 0 auto;
-        color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
-      }
-
-      .activity--completed .icon {
-        color: var(--color-success);
-      }
-
-      .activity--failed .icon {
-        color: var(--color-error);
-      }
-
-      .activity--running .icon {
+        color: var(--tone-color);
         /* wa-spinner ignores color; it strokes via --indicator-color, a
            custom property that inherits through its shadow root. */
-        --indicator-color: var(--wa-color-chart-blue);
+        --indicator-color: var(--tone-color);
       }
 
       .label {
@@ -75,8 +55,9 @@ export class CompactionActivity extends LitElement {
   @property({ attribute: false }) label = '';
 
   override render(): TemplateResult {
+    const tone = COMPACTION_ACTIVITY_TONE[this.status];
     return html`<div
-      class=${`activity activity--${this.status}`}
+      class=${`activity tone-${tone}`}
       role="status"
       aria-live="polite"
     >
@@ -87,7 +68,7 @@ export class CompactionActivity extends LitElement {
               aria-hidden="true"
               ${stopSpinnerMotion()}
             ></wa-spinner>`
-          : waIcon(ACTIVITY_ICON[this.status], { className: 'icon' })
+          : waIcon(statusGlyph({ tone }), { className: 'icon' })
       }
       <span class="label">${this.label}</span>
     </div>`;

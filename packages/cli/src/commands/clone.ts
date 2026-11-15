@@ -30,8 +30,7 @@ import { askCliQuestion, writeTextStderr } from '../runtime/platform/logSinks';
 // Local imports - command helpers
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
-import { GLOBAL_ARGS } from './_helpers/globalArgs';
-import { writeCliResult } from './_helpers/output';
+import { commandResult, writeCliResult } from './_helpers/output';
 
 function buildOverleafClonePorts(
   context: CliContext,
@@ -118,11 +117,14 @@ function buildOverleafClonePorts(
           host: remote.host,
           destination: canonicalWorkspacePath,
         };
-        writeCliResult(context.outputFormat, {
-          json: result,
-          ndjson: { kind: 'result', result: { command: 'clone', ...result } },
-          text: `${label} project cloned into ${canonicalWorkspacePath}.`,
-        });
+        writeCliResult(
+          context.outputFormat,
+          commandResult(
+            'clone',
+            result,
+            `${label} project cloned into ${canonicalWorkspacePath}.`,
+          ),
+        );
       }),
     showAuthFailure: (failedRemote) =>
       Effect.sync(() => {
@@ -152,7 +154,6 @@ export const cloneCommand = withUsageSections(
         'Clone an Overleaf or ShareLaTeX project into a destination directory',
     },
     args: {
-      ...GLOBAL_ARGS,
       project: {
         type: 'positional',
         required: true,
@@ -196,7 +197,7 @@ export const cloneCommand = withUsageSections(
         );
         switch (outcome.status) {
           case 'success':
-            return CliExitCode.Success;
+            return;
           case 'cancelled':
             writeTextStderr('Clone cancelled.');
             return CliExitCode.Cancelled;

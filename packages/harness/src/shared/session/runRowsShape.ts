@@ -52,7 +52,7 @@ export type RowOf<T extends SessionRow['type']> = Extract<
 >;
 
 /** The follow-ups these rows say a run has not taken. */
-export type PendingFollowUps = {
+type PendingFollowUps = {
   /** Queued without consumed, in commit order. */
   readonly followUps: readonly QueuedFollowUp[];
   /**
@@ -81,8 +81,7 @@ export type SharedRunRows = RunRowState & PendingFollowUps;
  * what the session view keeps per run for the fields it shows.
  */
 export type RunRows = {
-  /** Its `run.start`, and its parent edge: the start's, until a
-   *  `run.detach` severs it. */
+  /** Its `run.start`, and its parent edge: the start's. */
   readonly start: RowOf<'run.start'> | null;
   readonly parent: RowOf<'run.start'>['parent'];
   /** Its latest `run.activate`, and the `run.end` of the lifecycle that

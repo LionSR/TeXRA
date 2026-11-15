@@ -16,7 +16,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { type Run, type RunStopReason, type Session } from '@texra-ai/harness';
+import type { Run, Session } from '@texra-ai/harness';
 import {
   presentFollowUpResult,
   presentRunFailure,
@@ -43,7 +43,6 @@ import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
 } from '@cli/runtime/models/modelAccess';
-import { setCliHelperModel } from '@cli/runtime/platform/initPlatform';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import {
@@ -73,6 +72,7 @@ import type { TuiSession } from './tui/state/sessionRunState';
 import { oneShotResumeNotice } from './tui/state/resumeHint';
 import { currentView, runViewOf, sessionView } from './tui/state/sessionView';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
+import { launchTeamId } from '@texra/agent/teams/teamLaunch';
 import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import {
@@ -146,7 +146,7 @@ export interface ChatSessionController {
 
   /** Request stop of the root run using the configured child policy, for
    *  `reason`: a `user` stop also cancels its remote background work. */
-  stop(reason: RunStopReason): void;
+  stop(): void;
 
   /**
    * The composer's submit path: a slash command, the first
@@ -161,10 +161,6 @@ export interface ChatSessionController {
   /** Succeeds once every message submitted so far has been sent, or has
    *  started its run. */
   readonly submitted: Effect.Effect<void>;
-  /** Succeeds once the root launch on its way has reached its end and the
-   *  chat's root run is no longer live here: what an exit that stopped the
-   *  root waits for. */
-  readonly rootRunEnded: Effect.Effect<void>;
   /** Activate a skill for the next submitted message. */
   activateSkill(selection: SkillActivation): void;
   /** Drop every activated skill. */
@@ -272,17 +268,6 @@ export function createChatSessionController(
   const requests: SessionRequests = runSession;
   // The fold the chat's runs appear in: the service's, or this session's.
   const viewChanges: Stream.Stream<SessionView> = runSession.view.changes;
-  /** A run that is no longer live here: its generation let go. */
-  const endedHere = (runId: RunId): Effect.Effect<void> =>
-    viewChanges.pipe(
-      Stream.filter((view) => {
-        const run = view.runs.get(runId);
-        return run === undefined || run.holder !== 'here';
-      }),
-      Stream.runHead,
-      Effect.asVoid,
-    );
-
   /** Issue one request to the session's runtime and read its Effect result
    *  as the response: the refusal text, or undefined on success. */
   const request = (req: RuntimeCommand): Effect.Effect<string | undefined> =>
@@ -297,11 +282,11 @@ export function createChatSessionController(
   const adoptRunConfig = Effect.fn('adoptRunConfig')(function* (
     config: Pick<
       AgentConfig,
-      'agent' | 'agentSource' | 'model' | 'cli' | 'delegationAgentScope'
+      'agent' | 'agentSource' | 'model' | 'launch' | 'delegationAgentScope'
     >,
     modelSource?: 'history',
   ) {
-    const cliTeamId = config.cli?.teamId ?? undefined;
+    const cliTeamId = launchTeamId(config);
     const teamName = yield* readCliTeamName(
       runSession.roots.repoState,
       cliTeamId,
@@ -358,7 +343,7 @@ export function createChatSessionController(
 
   // One interaction host for the chat session's lifetime, as the extension
   // and desktop attach theirs. The session routes every request to its last
-  // attachment, so a detached child of an earlier turn keeps an answerable
+  // attachment, so a background child of an earlier turn keeps an answerable
   // approval path after its root finalizes, with no per-turn generation.
   const presentationHost = createCliRuntimeHost(sessionContext);
   runtime.runSync(
@@ -567,12 +552,15 @@ export function createChatSessionController(
           if (isTaskConfig(config)) {
             appendLocalNotice(`Resuming document task ${id}. Tab lists it.`);
             yield* endWithout(CliExitCode.Success);
-            yield* Effect.forkDetach(
+            // Owned by the process's shutdown scope, as the chat's own
+            // resume is: an exit interrupts a resume still on its way.
+            yield* Effect.forkIn(
               resumeTask(id).pipe(
                 Effect.catch((refusal) =>
                   Effect.sync(() => appendLocalRequestRefusal(refusal, id)),
                 ),
               ),
+              shutdownScope,
             );
             return;
           }
@@ -614,7 +602,6 @@ export function createChatSessionController(
             return yield* Effect.fail(
               new Error(`Run ${run.runId} has no configuration to resume`),
             );
-          yield* setCliHelperModel(stores.globalState, adoptedConfig.model);
           yield* adoptRunConfig(adoptedConfig, 'history');
           clearLocalTranscript();
           // The transcript and the work plan are the view's: the TUI
@@ -651,7 +638,7 @@ export function createChatSessionController(
       }),
     );
 
-  /** Adopt a resumed run's configuration and helper model. A failure is the
+  /** Adopt a resumed run's configuration. A failure is the
    *  chat's own line (the TUI's log sink is silent): the run goes on, but the
    *  chat's model and settings may not be the run's. */
   const adoptRunRecord = (runId: RunId) =>
@@ -660,7 +647,6 @@ export function createChatSessionController(
       if (!config)
         return yield* Effect.fail(new Error('it has no stored configuration'));
       yield* adoptRunConfig(config, 'history');
-      yield* setCliHelperModel(stores.globalState, config.model);
     }).pipe(
       Effect.catch((error) =>
         Effect.sync(() =>
@@ -729,14 +715,9 @@ export function createChatSessionController(
 
   /** A stop lands on the root the session holds. One asked while a launch
    *  is still entering the session waits for it, then lands on the run that
-   *  launch reached (a stop of a run that already ended is a no-op).
-   *  Ctrl-C leaves the child policy unset, so the stop itself (`Runs.stop`)
-   *  applies the configured "Keep agents running"; why the run then stops
-   *  is the run registry's fact. */
-  const stop = (reason: RunStopReason): void => {
-    // A chat of the background service leaves its task running when the
-    // terminal goes: only the user's own stop reaches it.
-    if (reason === 'shutdown' && served) return;
+   *  launch reached (a stop of a run that already ended is a no-op). It
+   *  is the person's stop: leaving the chat stops nothing. */
+  const stop = (): void => {
     const launched = session.launched;
     if (launched === undefined && heldRoot() === undefined) return;
     runtime.runFork(
@@ -747,7 +728,7 @@ export function createChatSessionController(
         Effect.flatMap((runId) =>
           runId == null
             ? Effect.void
-            : request({ kind: 'run.stop', runId, reason }),
+            : request({ kind: 'run.stop', runId, reason: 'user' }),
         ),
       ),
     );
@@ -771,7 +752,6 @@ export function createChatSessionController(
             ),
           },
         );
-        yield* setCliHelperModel(stores.globalState, selection.model);
         return {
           agent: meta.agent,
           agentSource: meta.agentSource,
@@ -780,7 +760,7 @@ export function createChatSessionController(
           ...(displayInstruction !== undefined ? { displayInstruction } : {}),
           workingDirectory: cwd,
           ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
-          ...(meta.cliTeamId ? { cli: { teamId: meta.cliTeamId } } : {}),
+          ...(meta.cliTeamId ? { launch: { teamId: meta.cliTeamId } } : {}),
           ...(meta.delegationAgentScope
             ? { delegationAgentScope: meta.delegationAgentScope }
             : {}),
@@ -974,7 +954,7 @@ export function createChatSessionController(
         Cause.hasInterruptsOnly(cause)
           ? Effect.interrupt
           : Effect.sync(() =>
-              appendLocalErrorTranscript(toErrorMessage(Cause.squash(cause))),
+              appendLocalErrorTranscript(toErrorMessage(cause)),
             ),
       ),
     );
@@ -1014,19 +994,6 @@ export function createChatSessionController(
       inOrder(Effect.void),
       FiberSet.awaitEmpty(sending),
     ),
-    rootRunEnded: Effect.suspend(() => {
-      const launched = session.launched;
-      return (
-        launched === undefined ? Effect.void : Deferred.await(launched)
-      ).pipe(
-        Effect.andThen(
-          Effect.suspend(() => {
-            const runId = rootRunId.get();
-            return runId === undefined ? Effect.void : endedHere(runId);
-          }),
-        ),
-      );
-    }),
     activateSkill,
     performHost: interactions.performHost,
     clearPendingSkills: () =>

@@ -1,5 +1,25 @@
 import { css } from 'lit';
 
+/** The line-change chip `buildLineChangeStats` draws, wherever it sits. */
+export const lineChangeStatsStyles = css`
+  .file-stats {
+    display: inline-flex;
+    gap: var(--wa-space-2xs);
+    flex-shrink: 0;
+    white-space: nowrap;
+    font-size: var(--font-size-sm);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .file-stats > .added {
+    color: var(--color-added);
+  }
+
+  .file-stats > .removed {
+    color: var(--color-removed);
+  }
+`;
+
 /** Shared frame for messages, requests, notices, and expandable log entries. */
 export const panelFrameStyles = css`
   box-sizing: border-box;

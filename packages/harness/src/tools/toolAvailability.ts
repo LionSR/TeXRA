@@ -193,11 +193,14 @@ export const toolAvailabilityLayer: Layer.Layer<
           const requests = yield* SubscriptionRef.make<
             ProbeRequest | undefined
           >(undefined);
+          // Rounds are answered in increasing order and a waiter wants the
+          // first at or past its own, so the newest answer is the only one
+          // a subscriber needs: a newer one replaces any it has not read.
           const answers = yield* Effect.acquireRelease(
-            PubSub.unbounded<{
+            PubSub.sliding<{
               readonly round: number;
               readonly probed: Exit.Exit<ProbeResults>;
-            }>({ replay: 1 }),
+            }>({ capacity: 1, replay: 1 }),
             PubSub.shutdown,
           );
           // Subscribed before the root's first round reads a secret, so no

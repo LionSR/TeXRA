@@ -70,10 +70,11 @@ export const extractFigurePathsFromLatex = Effect.fn(
 )(function* (latexFileLocation: FileLocation) {
   const latexDir = yield* resolveLatexDir(latexFileLocation.absolutePath);
 
-  // Regular expressions to match figure inclusion commands
+  // The figure inclusion commands; LaTeX allows whitespace before each
+  // argument.
   const figurePatterns = [
-    /\\includegraphics(?:\[.*?\])?\{(.+?)\}/g,
-    /\\begin\{overpic\}(?:\[.*?\])?\{(.+?)\}/g,
+    /\\includegraphics\s*(?:\[.*?\])?\s*\{(.+?)\}/g,
+    /\\begin\{overpic\}\s*(?:\[.*?\])?\s*\{(.+?)\}/g,
   ];
 
   const fs = yield* FileSystem.FileSystem;

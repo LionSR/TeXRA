@@ -43,7 +43,7 @@ search, and mouse-scroll for finalized history, so don't reinvent them.
   pending entries through the bounded row-budgeted path; full child history
   belongs to that child's Static scrollback owner. Ctrl-T opens the focused
   stream's full output in a scrollable, closable `TranscriptReader`
-  (`panes/TranscriptReader.tsx`) rendered in the live region — `Esc` closes it
+  (`panes/ReaderPane.tsx`) rendered in the live region — `Esc` closes it
   and restores the conversation exactly as it was; `↑/↓` scrolls line by line
   and `PgUp/PgDn` pages. The reader
   never takes over the viewport (the TUI avoids the alternate screen), so it is

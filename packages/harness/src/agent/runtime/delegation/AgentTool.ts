@@ -33,6 +33,7 @@ import {
   type ToolResult,
   type AgentConfig,
   isTaskConfig,
+  AGENT_TOOL_NAME,
 } from '@shared/schemas';
 import { attemptRequests, callRequestId } from '@shared/session/inFlight';
 import {
@@ -42,7 +43,7 @@ import {
 } from '@shared/session/runHistory';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { defineTool, type DefinedTool } from '@tools/core/definition';
-import { nullishWithDefault } from '@tools/core/inputSchema';
+import { nullishWithDefault, timeoutMsField } from '@tools/core/inputSchema';
 import { errorResult, executed } from '@tools/core/result';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { sha256 } from '@utils/core/idHash';
@@ -125,13 +126,7 @@ export const CALL_FIELDS = Object.freeze({
   label: Schema.optional(Schema.NullOr(Schema.String)).annotate({
     description: 'A short title for the call’s card.',
   }),
-  timeoutMs: Schema.optional(
-    Schema.NullOr(
-      Schema.Int.check(Schema.isGreaterThanOrEqualTo(1000)).check(
-        Schema.isLessThanOrEqualTo(24 * 60 * 60 * 1000),
-      ),
-    ),
-  ).annotate({
+  timeoutMs: timeoutMsField.annotate({
     description: 'Stops the agent after this many milliseconds: `TimedOut`.',
   }),
   background: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
@@ -187,10 +182,10 @@ export type ChildLaunch = {
 
 /**
  * One request shared by a script's `agent` calls and all its attempts
- * (attempt 0), recovered from rows after restart: one still standing is
- * joined on the one wait (`decisionOf`), a fresh one opens through the
- * call's requests. A stop cancels it, and the next request takes the next
- * ordinal.
+ * (attempt 0), read from the run's rows: the script's calls wait together
+ * on the one that is open (`decisionOf`) and take the answer a person gave
+ * it; a stop or a resume cancels it, and the next request takes the next
+ * ordinal through the call's requests.
  */
 const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
   call: RunToolCall,
@@ -205,10 +200,13 @@ const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
   };
   const from = (yield* SessionLog).now();
   const state = yield* (yield* RunHistory).load(runId);
-  const { raised, own } = attemptRequests(state?.requests ?? {}, shared);
-  if (own?.request.decision === null)
-    return yield* decisionOf(runId, own.requestId, from);
-  if (own !== null) return own.request.decision;
+  const { raised, last } = attemptRequests(state?.requests ?? {}, shared);
+  if (last !== null) {
+    const { decision } = last.request;
+    if (decision === null)
+      return yield* decisionOf(runId, last.requestId, from);
+    if (decision.action !== 'cancel') return decision;
+  }
   const calls = yield* script.calls;
   return yield* call.requests
     .open({
@@ -537,7 +535,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
 
 export const agentTool = (): DefinedTool<AgentInput, PluginToolServices> =>
   defineTool({
-    name: 'agent',
+    name: AGENT_TOOL_NAME,
     requiresApproval: 'inBody',
     // A resumed call finds the child its earlier attempt launched and settles
     // from it, or resumes it under its own id: it never launches a second one.
@@ -558,7 +556,7 @@ Its result is the agent's final reply, or a \`schema\` value. Pick the agent who
     schema: AgentInputSchema,
     execute: (input: AgentInput) =>
       launchChildAgent({
-        tool: 'agent',
+        tool: AGENT_TOOL_NAME,
         agentName: input.agentName,
         persona: input.persona && {
           name: input.agentName,

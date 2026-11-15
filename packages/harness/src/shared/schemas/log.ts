@@ -1,4 +1,5 @@
 import { Schema } from 'effect';
+import { NonNegativeIntSchema } from './nonNegativeInt';
 
 export const LOG_LEVELS = {
   ERROR: 'error',
@@ -19,7 +20,6 @@ export const MESSAGE_TYPES = {
   MODEL_RESPONSE: 'modelResponse',
   USER_MESSAGE: 'userMessage',
   PROGRESS_STATUS: 'progressStatus',
-  QUOTA_FALLBACK: 'quotaFallback',
   CONTEXT_COMPACTION_ACTIVITY: 'contextCompactionActivity',
   ERROR: 'error',
   CONTEXT_MANAGEMENT: 'contextManagement',
@@ -39,12 +39,12 @@ const LoadedMediaMetadataSchema = Schema.Union([
      */
     kind: Schema.Literal('image'),
     mimeType: Schema.String.check(Schema.isMinLength(1)),
-    sizeBytes: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    sizeBytes: NonNegativeIntSchema,
   }),
   Schema.Struct({
     kind: Schema.Literal('audio'),
     mimeType: Schema.String.check(Schema.isMinLength(1)),
-    sizeBytes: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    sizeBytes: NonNegativeIntSchema,
   }),
 ]);
 export type LoadedMediaMetadata = typeof LoadedMediaMetadataSchema.Type;

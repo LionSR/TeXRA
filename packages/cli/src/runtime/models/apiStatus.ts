@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Clock, Effect } from 'effect';
 
 import {
   API_KEY_PROVIDER_IDS,
@@ -8,7 +8,7 @@ import {
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
 import { Secrets, type SettingsStores } from '@texra-ai/harness/plugins';
 import type { SubscriptionUsageSnapshot } from '@texra/shared/model/subscriptionUsage';
-import { formatSubscriptionUsageSummary } from '@texra/shared/subscriptionUsagePresentation';
+import { formatSubscriptionUsageSummary } from '@ui/copy/subscriptionUsage';
 import { SubscriptionUsageService } from '@texra/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@texra/shared/model/codingPlans';
 import { SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
@@ -114,13 +114,14 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
     { concurrency: 'unbounded' },
   );
   const codingPlanUsage = new Map(codingPlanUsageEntries);
+  const now = yield* Clock.currentTimeMillis;
   const lines: string[] = [];
   const withUsage = (
     line: string,
     snapshot: SubscriptionUsageSnapshot | undefined,
   ): string => {
     if (!snapshot) return line;
-    const summary = formatSubscriptionUsageSummary(snapshot);
+    const summary = formatSubscriptionUsageSummary(snapshot, now);
     return summary ? `${line} · ${summary}` : line;
   };
 

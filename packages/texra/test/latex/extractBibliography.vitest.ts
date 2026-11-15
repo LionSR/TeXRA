@@ -67,4 +67,36 @@ describe('extractBibliography helpers', () => {
       ),
     );
   });
+
+  const citationKeysOf = (tex: string) => {
+    const texPath = path.join('/workspace', 'main.tex');
+    return extractBibliographyContext(texPath).pipe(
+      Effect.map((result) => result.citationKeys),
+      Effect.provide(filesLayer({ [texPath]: tex })),
+    );
+  };
+
+  it.effect('drops a citation commented out after a line break', () =>
+    Effect.gen(function* () {
+      // `\\` ends the row; the `%` after it starts a comment.
+      const keys = yield* citationKeysOf(
+        'a & b \\\\% \\cite{dropped}\n\\cite{kept}',
+      );
+      assert.deepStrictEqual(keys, ['kept']);
+    }),
+  );
+
+  it.effect('keeps a citation after a URL with a percent escape', () =>
+    Effect.gen(function* () {
+      const keys = yield* citationKeysOf('\\url{http://a/b%20c} \\cite{real}');
+      assert.deepStrictEqual(keys, ['real']);
+    }),
+  );
+
+  it.effect('reads a citation with a space before its optional argument', () =>
+    Effect.gen(function* () {
+      const keys = yield* citationKeysOf('\\cite [p.~3]{spaced}');
+      assert.deepStrictEqual(keys, ['spaced']);
+    }),
+  );
 });

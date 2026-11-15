@@ -31,7 +31,7 @@ import {
 import type { RunServices } from '@agent/runtime/ToolServices';
 import type { SessionHandleInit } from '@agent/runtime/SessionHandle';
 import { mcpConfigPathOf } from '@common/plugins/mcpServers';
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure, withLogChannel } from '@logger/effectLog';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { AppSignals } from '@platform/appSignals';
 import { AgentDirectories, AppState } from '@platform/interfaces';
@@ -73,12 +73,6 @@ import { sessionInputsLayer } from './sessionInputsLayer';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
 const CHANNEL = 'sessionLayer';
-
-/** Log a failure on this channel, with the failure attached as its `data`. */
-const logFailure =
-  (message: string, log = Effect.logWarning) =>
-  (data: unknown) =>
-    log(message).pipe(Effect.annotateLogs({ data }), withLogChannel(CHANNEL));
 
 /**
  * Which session an entry is: its storage root (`SessionView.key`), with what
@@ -238,9 +232,10 @@ const listSessions = Effect.gen(function* () {
 const unopenedEntry =
   (key: SessionKey) =>
   (error: SessionOpenError): Effect.Effect<Option.Option<never>> =>
-    logFailure(`Session ${key.storage} failed to open; it holds no session.`)(
-      error,
-    ).pipe(Effect.as(Option.none()));
+    logFailure(
+      CHANNEL,
+      `Session ${key.storage} failed to open; it holds no session.`,
+    )(error).pipe(Effect.as(Option.none()));
 
 /** The session held for `root`, if the map holds one: an entry still building
  *  is waited for, never skipped, which is what lets a close issued right after
@@ -259,12 +254,13 @@ const heldSession = Effect.fn('heldSession')(function* (root: string) {
 
 /**
  * Close the session of one root, the one way a session ends: refuse new
- * runs; stop every run, cascading, and wait for them to end within its
+ * runs; interrupt every run and wait for its fiber to exit within its
  * budget ({@link SESSION_CLOSE_DEADLINE_MS}); release the entry, whose
- * finalizers flush and unwind. A shutdown writes no end of its own: a run
- * still live past the budget is reported abandoned and left resumable, its
- * state classified from its checkpoint by the next launch. Uninterruptible:
- * the budget is its one cancellation, and every step after it still runs. */
+ * finalizers flush and unwind. A close writes no stop and no end: each run
+ * is left as its rows stand and reads as interrupted, resumable, at the
+ * next open, as after a crash. One still live past the budget is reported
+ * abandoned. Uninterruptible: the budget is its one cancellation, and
+ * every step after it still runs. */
 const closeSession = (root: string) =>
   Effect.gen(function* () {
     const sessions = yield* SessionMap;
@@ -275,7 +271,7 @@ const closeSession = (root: string) =>
     const { settled, abandoned } = yield* stopSessionRuns(held.session);
     if (abandoned.length > 0)
       yield* Effect.logWarning(
-        `Session ${root} closed with runs still live past its budget; the next launch classifies them from their checkpoints: ${abandoned.join(', ')}`,
+        `Session ${root} closed with runs still live past its budget; they read as interrupted at the next open: ${abandoned.join(', ')}`,
       ).pipe(withLogChannel(CHANNEL));
     yield* sessions.invalidate(held.key);
     return { settled, abandoned } satisfies SessionCloseReport;
@@ -417,9 +413,10 @@ export function ownerProcessLayer(
 
 /**
  * The owner over the map: each method runs on its caller's fiber with the
- * map provided. A close, of one session or of all, drains the plugins
- * first: what a plugin admitted for a session (a GitHub poll round's
- * delivery) lands before that session closes, not after. Its release
+ * map provided. The shutdown (`closeAll`) drains the plugins first: what a
+ * plugin's process-wide work took in (a GitHub poll round's delivery) lands
+ * before the sessions close. One session's close drains nothing, because a
+ * drain ends that work for every session of the process. Its release
  * closes what is still open before the map's own release unwinds the
  * entries.
  */
@@ -443,8 +440,7 @@ const sessionOwnerLayer = Layer.effect(
     return {
       open: (init) => withMap(openSession(init)),
       list: withMap(listSessions),
-      close: (root) =>
-        withMap(Effect.andThen(catalog.drain, closeSession(root))),
+      close: (root) => withMap(closeSession(root)),
       closeAll,
     };
   }),

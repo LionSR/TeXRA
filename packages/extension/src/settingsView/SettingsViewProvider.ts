@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
-import { Effect, Fiber, Latch, Result, Schema } from 'effect';
+import { Effect, Latch, Result, Schema } from 'effect';
 
 import { Skills, hasExtension } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
@@ -28,7 +28,11 @@ import { makeSettingsViewBody } from '@texra/controllers/settingsView/settingsVi
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
+import type {
+  ProcessRuntime,
+  ProcessServices,
+  ScopedFork,
+} from '@texra-ai/harness/host';
 
 /** Lift VS Code's rejected post at the typed settings transport boundary. */
 function postToWebview(
@@ -77,14 +81,17 @@ export class SettingsViewProvider {
     ReturnType<typeof makeSettingsViewBody>
   >;
 
-  private readonly runtime: ProcessRuntime;
+  /** The activation's run function: the panel's callbacks start their work
+   *  there, and the activation's close ends it. */
+  private readonly fork: ScopedFork<ProcessServices>;
   constructor(
     context: vscode.ExtensionContext,
     runtime: ProcessRuntime,
+    fork: ScopedFork<ProcessServices>,
     roots: WorkspaceRoots,
     progressView: ProgressViewProvider,
   ) {
-    this.runtime = runtime;
+    this.fork = fork;
     this.contentProvider = new BundledViewContentProvider(
       context,
       'SettingsView',
@@ -136,14 +143,8 @@ export class SettingsViewProvider {
               selectFolder({ title, openLabel: 'Select Folder' }),
               (selected) => selected ?? undefined,
             ),
-          refreshCatalogs: (selectedAgent) =>
-            progressView.refreshCatalogs({
-              agentCatalogAlreadyFresh: true,
-              selectedAgent,
-            }),
-          // The launcher's API-key banner reads the same credential probe from
-          // the host snapshot; the funnel follows the banner.
-          refreshCredentialStatus: progressView.refreshApiKeyStatus,
+          selectLauncherAgent: (agent) =>
+            progressView.selectLauncherAgent(agent),
           signInSubscription: (providerId) =>
             Effect.asVoid(signInWithSubscription(roots, providerId)),
           revealRun: (runId) => progressView.revealRun(runId),
@@ -160,13 +161,9 @@ export class SettingsViewProvider {
       }),
     );
 
-    // One fiber owns every page follower: disposing interrupts them all.
-    const following = runtime.runFork(
-      this.body.follow.pipe(withLogChannel(CHANNEL)),
-    );
-    context.subscriptions.push({
-      dispose: () => runtime.runFork(Fiber.interrupt(following)),
-    });
+    // One fiber owns every page follower: the activation's close interrupts
+    // them all.
+    fork(this.body.follow.pipe(withLogChannel(CHANNEL)));
   }
 
   /**
@@ -233,9 +230,7 @@ export class SettingsViewProvider {
     }
     // The tab goes once the frontend is ready, off this command. Waiting
     // requests post in the order they were made, so the latest one wins.
-    this.runtime.runFork(
-      panel.ready.whenOpen(postTab).pipe(withLogChannel(CHANNEL)),
-    );
+    this.fork(panel.ready.whenOpen(postTab).pipe(withLogChannel(CHANNEL)));
   });
 
   /**
@@ -249,7 +244,7 @@ export class SettingsViewProvider {
   }: SettingsPanel): vscode.Disposable {
     // The template is read off this tick (it never rejects: a failed render
     // is a logged error page); a panel closed before it lands is not painted.
-    this.runtime.runFork(
+    this.fork(
       this.contentProvider.getHtmlContent(panel.webview).pipe(
         Effect.flatMap((html) =>
           Effect.sync(() => {
@@ -260,7 +255,7 @@ export class SettingsViewProvider {
       ),
     );
     return panel.webview.onDidReceiveMessage((message) => {
-      this.runtime.runFork(
+      this.fork(
         Effect.gen({ self: this }, function* () {
           if (this.panel?.view !== panel) return;
           const parsed = Schema.decodeUnknownResult(

@@ -54,7 +54,7 @@ export class SettingsAgentCatalogController {
     return this.deps
       .getAgents()
       .map((entry) => this.toSelectionItem(entry, enabledKeys))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .toSorted((a, b) => a.name.localeCompare(b.name));
   });
 
   readonly getCustomPreset = Effect.fn(
@@ -72,7 +72,7 @@ export class SettingsAgentCatalogController {
     for (const agent of this.deps.getAgents()) {
       if (agent.tools?.includes(AGENT_TOOL_NAME)) names.add(agent.name);
     }
-    return [...names].sort();
+    return [...names].toSorted();
   }
 
   readonly saveCurrentPreset = Effect.fn(

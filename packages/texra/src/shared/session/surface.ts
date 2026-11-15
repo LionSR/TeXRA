@@ -14,9 +14,9 @@
 import { Effect, Option, Schema, SchemaGetter, Struct } from 'effect';
 
 import { modelRefOf } from '@texra-ai/llm';
+import { DEFAULT_AGENT_MODEL } from '@texra/model/curatedModels';
 
 import {
-  DEFAULT_AGENT_MODEL,
   NullableFileFieldsSchema,
   RunIdSchema,
   isModelOptionAvailable,

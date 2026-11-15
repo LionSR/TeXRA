@@ -1,4 +1,5 @@
 import { Schema, Struct } from 'effect';
+import { NonNegativeIntSchema } from '@texra-ai/harness/schemas';
 
 /**
  * The subscriptions whose usage is reported. Storage owns the enum, so a
@@ -25,7 +26,7 @@ const SubscriptionUsageWindowSchema = Schema.Struct({
   percentRemaining: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)).check(
     Schema.isLessThanOrEqualTo(100),
   ),
-  resetAt: Schema.optional(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
+  resetAt: Schema.optional(NonNegativeIntSchema),
   limitWindowSeconds: Schema.optional(
     Schema.Int.check(Schema.isGreaterThan(0)),
   ),
@@ -36,7 +37,7 @@ export type SubscriptionUsageWindow =
 const SubscriptionUsageSnapshotBaseSchema = Schema.Struct({
   providerName: Schema.String.check(Schema.isMinLength(1)),
   planName: Schema.String.check(Schema.isMinLength(1)),
-  fetchedAt: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  fetchedAt: NonNegativeIntSchema,
 });
 
 const SubscriptionUsageSnapshotSchema = Schema.Union([

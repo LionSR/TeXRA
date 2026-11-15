@@ -43,12 +43,10 @@ export interface SettingsHostBindings {
   /** Show YAML the user must not save back over where it came from. */
   showReadOnlyYaml(filePath: string, text: string): HostEffect;
   pickFolder(title: string): HostEffect<string | undefined>;
-  /** Reload the agent, team and model catalogs every open launcher shows,
-   *  selecting the tool-use root a team just applied named. */
-  refreshCatalogs(selectedToolUseAgent?: string): HostEffect;
-  /** Re-read the credential probes outside this view: the launcher's
-   *  banners and the onboarding funnel. */
-  readonly refreshCredentialStatus: HostEffect;
+  /** Select the tool-use root a team just applied named in the launcher
+   *  of the project this view belongs to. Every launcher's catalogs follow
+   *  the agent list on their own (`workspaceAgentsChanged`). */
+  selectLauncherAgent(agent: string): HostEffect;
   /** Run one subscription's sign-in, its routing preference included. */
   signInSubscription(providerId: SubscriptionProviderId): HostEffect;
   /** Select a run in the host's run view. */
@@ -129,7 +127,7 @@ export function settingsPresentation(
   inputs: PubSub.PubSub<SettingsInput>,
 ): SettingsPresentation {
   const shown = (level: NoticeLevel, message: string) =>
-    Effect.asVoid(Effect.forkDetach(bindings.dialogs.notify(level, message)));
+    bindings.dialogs.notify(level, message);
   const alert = (message: string) =>
     Effect.andThen(
       Effect.logError(message).pipe(withLogChannel(SETTINGS_LOG_CHANNEL)),

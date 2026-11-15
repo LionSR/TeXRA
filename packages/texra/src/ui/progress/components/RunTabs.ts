@@ -14,7 +14,7 @@ import { when } from 'lit/directives/when.js';
 // Local imports
 import { shownRun, type Surface } from '@texra/shared/session/surface';
 import { unseenRuns } from '@texra/shared/session/unseenRuns';
-import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 import {
   RUN_SECTION_LABELS,
   RUN_SECTION_ORDER,
@@ -68,10 +68,7 @@ export class RunTabs extends LitElement {
         font-weight: var(--font-weight-normal);
         color: var(--color-text-muted);
       }
-      .group-heading.group-waiting {
-        color: var(--color-warning);
-      }
-      .group-heading.group-interrupted {
+      .group-heading:is(.group-waiting, .group-interrupted) {
         color: var(--color-warning);
       }
     `,

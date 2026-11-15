@@ -2,7 +2,6 @@ import { Effect, Schema, Struct } from 'effect';
 
 import { ModelFailureSchema } from './errors';
 import { RunIdSchema, Sha256Schema } from './identifiers';
-import { LineCountSchema } from './lineChanges';
 import { PlanSchema } from './plan';
 import { MODEL_PROVIDERS } from './runInput';
 import {
@@ -10,6 +9,7 @@ import {
   TaskProposalFieldsSchema,
 } from './proposalFields';
 import { DeclinableUsageRouteSchema } from './usage';
+import { NonNegativeIntSchema } from './nonNegativeInt';
 
 /** The fields the bash, tool edit and question requests share. */
 const RequestBaseSchema = Schema.Struct({
@@ -22,8 +22,8 @@ export const ToolEditRequestSchema = RequestBaseSchema.mapFields(
     path: Schema.String,
     relativePath: Schema.String,
     sourceTool: Schema.String,
-    addedLines: LineCountSchema,
-    removedLines: LineCountSchema,
+    addedLines: NonNegativeIntSchema,
+    removedLines: NonNegativeIntSchema,
     /** The address of the proposal's content (`ToolEditContent`: the
      *  original and proposed text with their diff) in the session's blob
      *  store, stored with the request's row; `request.preview` reads it. */
@@ -54,9 +54,7 @@ export const ToolEditContentSchema = Schema.Struct({
   originalContent: Schema.String,
   proposedContent: Schema.String,
   hunks: Schema.Array(DiffHunkSchema),
-  firstChangedLine: Schema.NullOr(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
+  firstChangedLine: Schema.NullOr(NonNegativeIntSchema),
 });
 /** A pending tool edit's content. */
 export type ToolEditContent = typeof ToolEditContentSchema.Type;
@@ -120,15 +118,13 @@ const ApiKeyProviderIdSchema = Schema.Literals([
  * re-derive it from the error.
  */
 export const CredentialSwitchSchema = Schema.Union([
-  /** A subscription or coding-plan quota ran out: the run declines `route`
-   *  and retries on the model's own `provider` key. `automatic` records that
-   *  the invoker took the switch itself (a coding plan whose fallback key is
-   *  already stored), so no one was asked. */
+  /** A subscription or coding-plan quota ran out: answered with the
+   *  person's own key, the run declines `route` and retries on the model's
+   *  own `provider` key. */
   Schema.Struct({
     kind: Schema.Literal('decline-route'),
     route: DeclinableUsageRouteSchema,
     provider: ApiKeyProviderIdSchema,
-    automatic: Schema.Boolean,
   }),
   /** The account behind the stored `provider` key is out of credit, so only
    *  a changed key can succeed. */

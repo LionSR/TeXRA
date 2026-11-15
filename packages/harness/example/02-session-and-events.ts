@@ -41,7 +41,11 @@ const program = Effect.gen(function* () {
 
   // 2. Typed launch refusal when an agent does not exist
   const refusal = yield* Effect.flip(
-    session.start({ agent: 'no-such-agent', instruction: 'Nothing to do.' }),
+    session.start({
+      agent: 'no-such-agent',
+      instruction: 'Nothing to do.',
+      model: route.model,
+    }),
   );
   console.log(`[02] refusal: ${refusal._tag} - ${refusal.message}`);
 

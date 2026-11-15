@@ -17,7 +17,7 @@ import { repeat } from 'lit/directives/repeat.js';
 // Local imports - main view
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { SurfaceAction } from '@texra/shared/session/surface';
-import { SessionUiEvents } from '@texra/shared/session/uiEvents';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 import type { IconName } from '@ui/wa/iconNames';
 import { buttonStyles } from '@ui/styles/controlStyles';
 import { compactFormControlStyles, designTokens } from '@ui/styles';

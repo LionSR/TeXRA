@@ -5,10 +5,14 @@
  */
 
 // Third-party imports
-import { String as Str } from 'effect';
+import { Schema, String as Str } from 'effect';
 import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
-import { agentKeyOf, type AgentSource } from '@texra-ai/harness/schemas';
-import type { TeamPreset } from '@texra/shared/agentTeams';
+import {
+  agentKeyOf,
+  type AgentConfig,
+  type AgentSource,
+} from '@texra-ai/harness/schemas';
+import { launchableTeams, type TeamPreset } from '@texra/shared/agentTeams';
 import type { TeamOptionData } from '@texra/shared/pickerOptions';
 import {
   findTeamPreset,
@@ -16,8 +20,25 @@ import {
   type TeamCatalogAgent,
   type TeamRunOptions,
   type TeamRunPlan,
-} from '@texra/shared/teamPlan';
+} from '@texra/agent/teams/teamPlan';
 import type { AgentDelegationScope } from '@texra-ai/harness/host';
+
+/** The team a run was launched as, the one key TeXRA keeps in a run's
+ *  `launch` record for every host (a command line adds its output targets). */
+const TeamLaunchSchema = Schema.Struct({
+  teamId: Schema.optional(Schema.NullOr(Schema.String)),
+});
+
+/** The team preset a run was launched from, read back from its `launch`
+ *  record so a resume or Run again keeps the team. */
+export function launchTeamId(
+  config: Pick<AgentConfig, 'launch'>,
+): string | undefined {
+  const { teamId } = Schema.decodeUnknownSync(TeamLaunchSchema)(
+    config.launch ?? {},
+  );
+  return teamId?.trim() || undefined;
+}
 
 export function planTeamRuns<T extends TeamCatalogAgent>(
   presets: readonly TeamPreset[],
@@ -98,12 +119,12 @@ function teamExecutionFields<T extends TeamCatalogAgent>(
 ): {
   agent: string;
   delegationAgentScope: AgentDelegationScope;
-  cli: { teamId: string };
+  launch: { teamId: string };
 } {
   return {
     agent: agentKeyOf(plan.rootAgent),
     delegationAgentScope: [...plan.agentKeys],
-    cli: { teamId: plan.preset.id },
+    launch: { teamId: plan.preset.id },
   };
 }
 
@@ -135,16 +156,12 @@ function buildTeamOptions(plans: readonly TeamRunPlan[]): TeamOptionData[] {
     });
 }
 
-/** The catalog's launchable teams: every preset but the setup starter. */
-const launchable = (presets: readonly TeamPreset[]): TeamPreset[] =>
-  presets.filter((preset) => !preset.setupOnly);
-
 export function loadTeamOptions<T extends TeamCatalogAgent>(
   ports: Omit<TeamRunOptions<T>, 'agentOverride'> & {
     presets: readonly TeamPreset[];
   },
 ): TeamOptionData[] {
-  return buildTeamOptions(planTeamRuns(launchable(ports.presets), ports));
+  return buildTeamOptions(planTeamRuns(launchableTeams(ports.presets), ports));
 }
 
 type TeamLaunchResolution =
@@ -162,7 +179,7 @@ export function resolveTeamLaunch<T extends TeamCatalogAgent>(
     presets: readonly TeamPreset[];
   },
 ): TeamLaunchResolution {
-  const preset = findTeamPreset(launchable(args.presets), args.teamId);
+  const preset = findTeamPreset(launchableTeams(args.presets), args.teamId);
   if (!preset) return { status: 'unknown-team' };
 
   const plan = planTeamRun(preset, args);

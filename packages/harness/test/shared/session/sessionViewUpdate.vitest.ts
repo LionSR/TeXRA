@@ -13,6 +13,7 @@ import {
   MESSAGE_TYPES,
   needsUser,
   qualifyAggregateId,
+  rollupOf,
   type RunId,
   RunIdSchema,
   type RunView,
@@ -83,6 +84,37 @@ describe('session view update', () => {
       running: 0,
       waiting: 0,
       interrupted: 3,
+    });
+  });
+
+  // A process that exits writes nothing for its runs, so a conversation
+  // left idle between turns is found with no holder at every restart:
+  // nothing of it was in flight, and its next message continues it.
+  it('reads an idle run nobody holds as waiting, not interrupted', () => {
+    const log = new Log();
+    log.emit(ROOT, T.root, {
+      type: 'run.start',
+      identity: { kind: 'agent', agent: 'custom:search' },
+      parent: null,
+      provenance: null,
+      takesFollowUps: true,
+    });
+    log.emit(ROOT, T.root, { type: 'run.activate' });
+    log.emit(ROOT, T.root + 1, {
+      type: 'run.position',
+      payload: { at: 'waiting', turn: 1 },
+    });
+    const view = viewOf([...log.events.map(tail), nobody]);
+    const idle = runView(view, ROOT);
+    expect(idle.position).toBe('waiting');
+    expect(isInterrupted(idle)).toBe(false);
+    expect(needsUser(idle, view.runs)).toBe(false);
+    expect(view.rollup.interrupted).toBe(0);
+    // As a child it has delivered its turn: a parent counts it finished.
+    expect(rollupOf([idle])).toStrictEqual({
+      total: 1,
+      running: 0,
+      finished: 1,
     });
   });
 
@@ -181,7 +213,6 @@ const TURN_ROWS: readonly RunHistoryRow[] = [
   toolTurn.append,
   position('turn.ready', 0),
   toolTurn.attempt,
-  toolTurn.identified,
   toolTurn.response,
   toolTurn.intent,
   toolTurn.result('call-a'),
@@ -259,7 +290,7 @@ describe('applyRunRows', () => {
   ])('%s', (_name, check) => check());
 
   it('delivers the paid assistant turn once and derives usage from the rows', () => {
-    const state = stateOf(through(10));
+    const state = stateOf(through(9));
     expect(state?.messages.map((m) => m.role)).toEqual([
       'user',
       'assistant',
@@ -271,8 +302,8 @@ describe('applyRunRows', () => {
     // The turn's stamped price: a settlement adds nothing to it.
     expect(state?.usage.cost).toBe(0.25);
     // Incremental and cold folds are the same computation.
-    const half = stateOf(applyRunRows(null, TURN_ROWS.slice(0, 6)));
-    expect(stateOf(applyRunRows(half, TURN_ROWS.slice(6)))).toEqual(state);
+    const half = stateOf(applyRunRows(null, TURN_ROWS.slice(0, 5)));
+    expect(stateOf(applyRunRows(half, TURN_ROWS.slice(5)))).toEqual(state);
   });
 
   it.each([
@@ -282,7 +313,7 @@ describe('applyRunRows', () => {
       'out-of-order',
       () =>
         through(
-          6,
+          5,
           {
             ...toolTurn.intent,
             payload: { ...toolTurn.intent.payload, attempt: 2 },
@@ -293,7 +324,7 @@ describe('applyRunRows', () => {
     [
       // A call settles once.
       'orphan-settlement',
-      () => through(7, toolTurn.result('call-a', { attempt: 2 })),
+      () => through(6, toolTurn.result('call-a', { attempt: 2 })),
     ],
   ])('refuses loudly: %s', (reason, run) => {
     expect(reasonOf(run())).toBe(reason);
@@ -306,7 +337,7 @@ describe('applyRunRows', () => {
   it('folds a structured output a script submitted', () => {
     const state = stateOf(
       through(
-        5,
+        4,
         {
           type: 'script.call',
           payload: {
@@ -327,6 +358,28 @@ describe('applyRunRows', () => {
       ),
     );
     expect(state?.structured).toEqual({ value: { a: 1 } });
+  });
+
+  // A forced request that fails or is stopped leaves its nudge owed. The
+  // loop forces only for a nudge of the turn it stands in, so the nudge must
+  // keep the turn it was appended in once the next turn begins.
+  it('keeps a final-tool nudge on the turn it was appended in', () => {
+    const state = stateOf(
+      through(
+        8,
+        message({
+          kind: 'append',
+          sourceResponse: null,
+          messages: [
+            { role: 'user', content: [{ kind: 'text', text: 'submit' }] },
+          ],
+          reason: 'final-tool',
+        }),
+        position('turn.begin', 1),
+      ),
+    );
+    expect(state?.finalTool).toEqual({ turn: 0, owed: true });
+    expect(state?.turn).toBe(1);
   });
 
   it('binds every row to the turn it describes', () => {

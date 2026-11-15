@@ -73,14 +73,7 @@ export const openaiResponsesModel = Effect.fn('llm.responses.model')(function* (
   },
 ): Effect.fn.Return<Model, ModelError, Scope.Scope> {
   const origin = originOf(config);
-  yield* Effect.try({
-    try: refuseAmbientHeaders,
-    catch: (cause) => cause,
-  }).pipe(
-    Effect.catch((cause) =>
-      cause instanceof ModelError ? Effect.fail(cause) : Effect.die(cause),
-    ),
-  );
+  yield* refuseAmbientHeaders;
   const bearer = bearerOf(transport.authentication);
   const client = openaiClient(
     config.deployment.endpoint,

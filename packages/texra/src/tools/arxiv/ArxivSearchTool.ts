@@ -15,7 +15,11 @@ import { Duration, Effect, Schema } from 'effect';
 import * as RateLimiter from 'effect/persistence/RateLimiter';
 
 // Local imports
-import { toErrorMessage, pluralize } from '@texra-ai/harness/schemas';
+import {
+  toErrorMessage,
+  pluralize,
+  NonNegativeIntSchema,
+} from '@texra-ai/harness/schemas';
 import {
   nullishWithDefault,
   executed,
@@ -130,7 +134,7 @@ const ArxivSearchInputSchema = Schema.Struct({
     'Maximum number of papers to return.',
   ),
   start: nullishWithDefault(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    NonNegativeIntSchema,
     0,
     'Zero-based result offset for pagination.',
   ),

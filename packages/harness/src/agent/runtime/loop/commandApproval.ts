@@ -44,7 +44,7 @@ export const askCommandApproval = Effect.fn('askCommandApproval')(function* (
     {
       kind: 'bash',
       data: {
-        requestId: requests.nextId('bash'),
+        requestId: requests.nextId(),
         command: ask.command,
         ...(cwd && { cwd }),
         runId,

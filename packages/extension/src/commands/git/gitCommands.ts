@@ -65,7 +65,7 @@ const promptInput = Effect.fn('promptInput')(function* (
   if (!trimmed) {
     // Show cancellation message only if user dismissed with empty string (not Escape)
     if (val !== undefined) {
-      yield* Effect.forkDetach(vscodeUi.notify('warning', 'Clone cancelled.'));
+      yield* vscodeUi.notify('warning', 'Clone cancelled.');
     }
     return null;
   }
@@ -161,9 +161,7 @@ function buildOverleafClonePorts(
       Effect.logError(`readDir failed: ${toErrorMessage(e)}`).pipe(
         withLogChannel(CHANNEL),
         Effect.andThen(
-          Effect.forkDetach(
-            vscodeUi.notify('error', 'Cannot read workspace folder.'),
-          ),
+          vscodeUi.notify('error', 'Cannot read workspace folder.'),
         ),
       ),
     showWorkspaceNotEmpty: () =>
@@ -178,9 +176,7 @@ function buildOverleafClonePorts(
         () => gitClone(clone, workspaceRoot),
       ),
     showCloneSucceeded: (label) =>
-      Effect.forkDetach(
-        vscodeUi.notify('info', `${label} project cloned.`),
-      ).pipe(Effect.asVoid),
+      vscodeUi.notify('info', `${label} project cloned.`),
     showAuthFailure: Effect.fn('gitCommands.showAuthFailure')(function* (r) {
       const detail = r.isOverleaf
         ? 'Your git token may be invalid or expired.'
@@ -199,8 +195,7 @@ function buildOverleafClonePorts(
         yield* openUrl(OVERLEAF_TOKEN_DOCS_URL);
       }
     }),
-    showCloneFailed: (message) =>
-      Effect.forkDetach(vscodeUi.notify('error', message)).pipe(Effect.asVoid),
+    showCloneFailed: (message) => vscodeUi.notify('error', message),
     logCloneError: (message) =>
       Effect.logError(`Clone failed: ${message}`).pipe(withLogChannel(CHANNEL)),
   };

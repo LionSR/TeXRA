@@ -14,7 +14,7 @@ import {
   Scope,
   ScopedRef,
   Semaphore,
-  SynchronizedRef,
+  Ref,
 } from 'effect';
 
 import type { ITool } from '@agent/core/tools/ToolTypes';
@@ -42,6 +42,7 @@ import {
   type RunId,
   type SubagentProgressUpdate,
   type AgentConfig,
+  SCRIPT_TOOL_NAME,
 } from '@shared/schemas';
 import type {
   RegisterRunOptions,
@@ -69,8 +70,7 @@ const sessionModelAccess = Layer.unwrap(
  */
 interface LaunchEntry {
   /** The parent this activation runs under, read once as it starts (a
-   *  fresh run's launch, else its rows' edge): a child detached mid-run
-   *  keeps child behaviour until its next activation. */
+   *  fresh run's launch, else its rows' edge). */
   readonly parent: RunId | null;
   /** The parent's call awaits the child and reads its end itself: the
    *  end delivers nothing to the parent's input, and the run takes no
@@ -107,9 +107,6 @@ interface RunCallbacks {
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
 }
 
-/** The tool a script's run makes its one call to. */
-const SCRIPT_TOOL = 'script';
-
 /** What a launch resolved for its run (`buildAgentLaunchContext`), which
  *  the run's `AgentRun` carries whole. */
 export interface RunLaunch {
@@ -142,7 +139,7 @@ export interface AgentRunShape extends RunLaunch {
    * catalog generation, replaced by each new step. A background script
    * reads what its parent's step offered here.
    */
-  readonly steps: SynchronizedRef.SynchronizedRef<OpenStep | null>;
+  readonly steps: Ref.Ref<OpenStep | null>;
   /** The synthetic terminal tool, when the config declares an output schema. */
   readonly finalToolName: string | null;
   /**
@@ -255,7 +252,7 @@ export const agentRunLayer = (
       // its persona's.
       let tools = persona.tools;
       if (script !== null)
-        tools = [SCRIPT_TOOL, ...script.tools].map((name) => ({ name }));
+        tools = [SCRIPT_TOOL_NAME, ...script.tools].map((name) => ({ name }));
       else if (inherits)
         tools = CLAUDE_COUNTERPART_TOOLS.map((name) => ({ name }));
       // The loaded plugins (MCP servers) the declared tools name, held in
@@ -318,7 +315,7 @@ export const agentRunLayer = (
         ...launch,
         fileService: new RunFileService(runId, roots),
         toolInputs,
-        steps: yield* SynchronizedRef.make<OpenStep | null>(null),
+        steps: yield* Ref.make<OpenStep | null>(null),
         finalToolName,
         model,
         scope,

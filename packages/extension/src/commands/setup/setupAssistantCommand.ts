@@ -12,8 +12,7 @@ import type { Session, WorkspaceRoots } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness/host';
 
 /** The setup assistant's log channel, for its launch and what follows it. */
-export const SETUP_ASSISTANT_CHANNEL = 'SetupAssistant';
-const CHANNEL = SETUP_ASSISTANT_CHANNEL;
+const CHANNEL = 'SetupAssistant';
 
 /**
  * The launch program the command surface runs on the process runtime: a
@@ -60,19 +59,15 @@ export const launchSetupAssistant = Effect.fn('launchSetupAssistant')(
     // That is a cancellation, not a launch failure: re-raise it so no
     // error notification appears during teardown.
     if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
-    const error = Cause.squash(cause);
     return Effect.logError('Setup assistant failed to launch.').pipe(
-      Effect.annotateLogs({ data: error }),
+      Effect.annotateLogs({ data: cause }),
       withLogChannel(CHANNEL),
       Effect.andThen(
-        Effect.forkDetach(
-          vscodeUi.notify(
-            'error',
-            `Failed to launch setup assistant: ${toErrorMessage(error)}`,
-          ),
+        vscodeUi.notify(
+          'error',
+          `Failed to launch setup assistant: ${toErrorMessage(cause)}`,
         ),
       ),
-      Effect.asVoid,
     );
   }),
   withLogChannel(CHANNEL),

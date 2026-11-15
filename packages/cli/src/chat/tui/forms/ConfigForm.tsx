@@ -17,7 +17,7 @@ import { settingEnumOptions } from '@texra/shared/settingsView/settingRows';
 import type {
   SettingCategory,
   TexraSettingRow,
-} from '@texra/shared/settingsView/settingSurfaces';
+} from '@texra/shared/settings/settingSurfaces';
 
 import {
   buildConfigCategoryItems,

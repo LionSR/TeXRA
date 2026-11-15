@@ -26,7 +26,7 @@ import {
   type Scope,
   Semaphore,
   Stream,
-  SubscriptionRef,
+  Struct,
 } from 'effect';
 
 import {
@@ -52,34 +52,42 @@ import { requestErrorText } from '@ui/copy/requestErrors';
 
 import { attachWindowHost } from './windowHost';
 import {
+  SERVICE_OFFLINE,
   WINDOW_OUTDATED,
   environmentApiKeys,
+  linkOutage,
+  linkedClient,
   requestOnService,
   type ServiceClient,
   type ServiceLink,
 } from './client';
-import type { ProjectStateFailed, TaskFailed } from './protocol';
+import {
+  RUN_RECORDS,
+  type ProjectStateFailed,
+  type TaskFailed,
+} from './protocol';
 import type {
   CommitOrdinal,
   TranscriptInterest,
   TranscriptSubscription,
 } from '@texra-ai/harness/transcript';
 
-/** The service's client now; `offline` words a call made while the link
- *  holds none, with why it holds none (`ServiceLink.away`). A reconnect
- *  needs nothing here: the next call takes it. */
+/** A call through `link`'s client now; `offline` words a call made while
+ *  the link holds none, with why it holds none. */
 const callService = <A, E>(
   link: ServiceLink,
   offline: (reason: string) => E,
   use: (client: ServiceClient) => Effect.Effect<A, E>,
 ): Effect.Effect<A, E> =>
-  Effect.flatMap(link.client.get, (client) =>
-    client === null
-      ? Effect.flatMap(SubscriptionRef.get(link.away), (reason) =>
-          Effect.fail(offline(reason)),
-        )
-      : use(client),
+  linkedClient(link).pipe(
+    Effect.mapError((away) => offline(away.message)),
+    Effect.flatMap(use),
   );
+
+/** A call that reached no answer, a lost link or a failed transport, as
+ *  the window's user reads it. */
+const unanswered = (reason: string) =>
+  `The TeXRA service did not answer: ${reason}`;
 
 /** A call the service answers or fails as the session's own `Error`: the
  *  service's refusal as the class it failed with, a transport failure or
@@ -90,12 +98,12 @@ const asked = <A>(
 ): Effect.Effect<A, Error> =>
   callService(
     link,
-    (reason) => new Error(`The TeXRA service did not answer: ${reason}`),
+    (reason) => new Error(unanswered(reason)),
     (client) =>
       use(client).pipe(
         Effect.mapError((error) =>
           Predicate.isTagged(error, 'RpcClientError')
-            ? new Error(`The TeXRA service did not answer: ${error.message}`)
+            ? new Error(unanswered(error.message))
             : error,
         ),
       ),
@@ -133,7 +141,7 @@ export const serviceProjectState = (
             failed(
               error._tag === 'ProjectStateFailed'
                 ? error.message
-                : `The TeXRA service did not answer: ${error.message}`,
+                : unanswered(error.message),
               error,
             ),
           ),
@@ -263,7 +271,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       Stream.filter(Predicate.isNotNull),
       Stream.map((client) => ({ client })),
     ),
-    SubscriptionRef.changes(link.away).pipe(
+    linkOutage(link).pipe(
       Stream.filter((reason) => reason === WINDOW_OUTDATED),
       Stream.map((refused) => ({ refused })),
     ),
@@ -310,8 +318,6 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         client['task.watch']({
           workspace,
           subscribe: {
-            kind: 'subscribe',
-            generation: 0,
             debug: view.debug,
             cursor: view.cursor,
             aggregates,
@@ -375,10 +381,12 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
               `The TeXRA service stopped before task ${runId} ended`,
             ).pipe(
               Effect.annotateLogs({ data: error }),
-              Effect.andThen(SubscriptionRef.get(link.away)),
-              // The link's reason once it has one; until then the call's.
-              Effect.flatMap((reason) =>
-                Effect.fail(runFailure(reason || error.message)),
+              Effect.andThen(link.state.get),
+              // Why the link is away, or offline when it has not heard yet.
+              Effect.flatMap((state) =>
+                Effect.fail(
+                  runFailure('away' in state ? state.away : SERVICE_OFFLINE),
+                ),
               ),
             ),
       ),
@@ -415,9 +423,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           Effect.mapError((error) => {
             switch (error._tag) {
               case 'RpcClientError':
-                return new Rejected({
-                  reason: `The TeXRA service did not answer: ${error.message}`,
-                });
+                return new Rejected({ reason: unanswered(error.message) });
               case 'Invalid':
               case 'Internal':
                 return new Rejected({ reason: requestErrorText(error) });
@@ -444,8 +450,6 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
                     client['task.watch']({
                       workspace,
                       subscribe: {
-                        kind: 'subscribe',
-                        generation: 0,
                         debug: from.debug,
                         cursor: at,
                         aggregates: [...set],
@@ -467,7 +471,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
                             `The TeXRA service stopped sending ${workspace}; the watch resumes when the service is back`,
                           ).pipe(
                             Effect.annotateLogs({
-                              data: Cause.squash(cause),
+                              data: cause,
                             }),
                           ),
                         ).pipe(Stream.drain),
@@ -553,32 +557,18 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           tools: tools.map((tool) => tool.definition.name),
           message: "The TeXRA service cannot run a window's own tools.",
         });
-  /** `Session.records`: each member one procedure of the service. */
-  const records = (runId: RunId): RunRecords => {
-    const ask = <A>(
-      read: (
-        client: ServiceClient,
-        input: { workspace: string; runId: RunId },
-      ) => Effect.Effect<A, Error>,
-    ) => asked(link, (client) => read(client, { workspace, runId }));
-    return {
-      exists: ask((client, input) => client['records.exists'](input)),
-      readConfig: ask((client, input) => client['records.config'](input)),
-      readReport: ask((client, input) => client['records.report'](input)),
-      readRunEnd: ask((client, input) => client['records.runEnd'](input)),
-      readResult: ask((client, input) => client['records.result'](input)),
-      readWorkspaceFiles: ask((client, input) =>
-        client['records.workspaceFiles'](input),
-      ),
-      readSkills: ask((client, input) => client['records.skills'](input)),
-      readResumable: ask((client, input) => client['records.resumable'](input)),
-      readRejection: ask((client, input) => client['records.rejection'](input)),
-      readConversation: ask((client, input) =>
-        client['records.conversation'](input),
-      ),
-      readTrace: ask((client, input) => client['records.trace'](input)),
-    };
-  };
+  /** `Session.records`: each member its procedure of the service. */
+  const records = (runId: RunId): RunRecords =>
+    // cast: each entry is its member's procedure, whose answer `RUN_RECORDS`
+    // types as that member's.
+    Object.fromEntries(
+      Struct.keys(RUN_RECORDS).map((member) => [
+        member,
+        asked<unknown>(link, (client) =>
+          client[`records.${member}`]({ workspace, runId }),
+        ),
+      ]),
+    ) as unknown as RunRecords;
   return {
     roots,
     view: {

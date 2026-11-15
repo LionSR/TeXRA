@@ -343,63 +343,12 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         }),
       );
 
-      // Failure mode: a response that kills the process while it is handled is
-      // sent again on every open, without bound, because the attempt it cut
-      // records no outcome.
-      it.effect(
-        'spends a retry on each attempt the process stopped during',
-        () =>
-          Effect.gen(function* () {
-            const session = yield* isolatedTestSession();
-            const requests = yield* autoDecideRequests(session, () => ({
-              action: 'deny',
-              reason: 'Denied by the approval policy.',
-            }));
-            const stub = scriptedModel([
-              'hang',
-              'hang',
-              textTurn('sent again'),
-            ]);
-            // The model tells the case each attempt it starts to serve.
-            const sent = yield* Queue.unbounded<void>();
-            const model: Model = {
-              ...stub.model,
-              streamTurn: (turn) =>
-                Stream.unwrap(
-                  Effect.as(
-                    Queue.offer(sent, undefined),
-                    stub.model.streamTurn(turn),
-                  ),
-                ),
-            };
-            const kit = yield* openRun(session, model, {
-              automaticRetries: 1,
-            });
-            // Each open sends one attempt, and the process stops while it runs.
-            let cell = kit.cell;
-            for (const _open of [1, 2]) {
-              const fiber = yield* Effect.forkChild(invokeOn({ ...kit, cell }));
-              yield* Queue.take(sent);
-              yield* Fiber.interrupt(fiber);
-              cell = yield* Context.get(session, RunHistory).open(kit.runId);
-            }
-            const resumed = yield* invokeOn({ ...kit, cell });
-
-            // The second open resent within the budget; the third asks before
-            // sending, and the denial ends the invocation with its failure.
-            expect(resumed.kind).toBe('failed');
-            expect(resumed.state.lastError).not.toBeNull();
-            expect(stub.attempts()).toBe(2);
-            expect(requests.opened).toHaveLength(1);
-          }),
-      );
-
       // Failure modes: a user stop leaves the remote job billing; a
-      // cancelled operation is re-observed on resume; a shutdown (or any
-      // interrupt without a `user` stop reason) cancels work a resume should
-      // pick back up.
+      // cancelled operation is re-observed on resume; a process that exits
+      // (an interrupt with no stop asked) cancels work a resume should pick
+      // back up.
       it.effect(
-        'cancels an observed background response on a user stop, never on shutdown',
+        'cancels an observed background response on a user stop, never when the process exits',
         () =>
           Effect.gen(function* () {
             const session = yield* isolatedTestSession();
@@ -409,7 +358,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               providerResponseId: 'resp-background',
             });
             const scenario = Effect.fn('scenario')(function* (
-              reason: 'user' | 'shutdown',
+              stop: 'user' | null,
             ) {
               const calls = { submit: 0, observe: 0, cancel: 0 };
               const observing = yield* Deferred.make<void>();
@@ -459,14 +408,16 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               yield* Deferred.await(observing);
               // The stop's `run.stop` row, committed before the fiber is
               // interrupted, as `RunsShape.stop` commits it: what the
-              // interrupted invocation reads its reason from.
-              yield* seedRows(Context.get(session, SessionLog))([
-                {
-                  type: 'run.stop',
-                  aggregateId: qualifyAggregateId('run', kit.runId),
-                  reason,
-                },
-              ]);
+              // interrupted invocation reads. A process that exits writes
+              // none.
+              if (stop !== null)
+                yield* seedRows(Context.get(session, SessionLog))([
+                  {
+                    type: 'run.stop',
+                    aggregateId: qualifyAggregateId('run', kit.runId),
+                    reason: stop,
+                  },
+                ]);
               yield* Fiber.interrupt(fiber);
               // What a resume reads: whether the stop retired the operation.
               const stopped = (yield* modelMessages(session, kit.runId)).map(
@@ -483,7 +434,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             expect(user.stopped).toEqual([
               'append',
               'attempt',
-              'identified',
               'accepted',
               'cancelled',
             ]);
@@ -491,20 +441,15 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             expect(user.calls).toEqual({ submit: 2, observe: 1, cancel: 1 });
             expect(user.resumed.kind).toBe('response');
 
-            const shutdown = yield* scenario('shutdown');
-            expect(shutdown.stopped).toEqual([
-              'append',
-              'attempt',
-              'identified',
-              'accepted',
-            ]);
-            // The resume observes the operation the shutdown left running.
-            expect(shutdown.calls).toEqual({
+            const exited = yield* scenario(null);
+            expect(exited.stopped).toEqual(['append', 'attempt', 'accepted']);
+            // The resume observes the operation the exit left running.
+            expect(exited.calls).toEqual({
               submit: 1,
               observe: 2,
               cancel: 0,
             });
-            expect(shutdown.resumed.kind).toBe('response');
+            expect(exited.resumed.kind).toBe('response');
           }),
       );
     });

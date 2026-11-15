@@ -2,16 +2,10 @@
  * Timestamp formatting utilities for progress view formatters.
  */
 
-import { cachedDateTimeFormat } from '@ui/formatting/dateTimeFormat';
-
-const DATETIME_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-};
+import {
+  cachedDateTimeFormat,
+  formatShortDateTime,
+} from '@ui/formatting/dateTimeFormat';
 
 const TIME_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
   hour: '2-digit',
@@ -23,6 +17,8 @@ export function getTimeFormatter(): Intl.DateTimeFormat {
   return cachedDateTimeFormat(TIME_FORMAT_OPTIONS);
 }
 
+/** A row's time of day, and the full moment for its tooltip in the short
+ *  date-time every host prints. */
 export function formatDisplayTimestamp(
   date: Date,
   precision: 'minute' | 'second' = 'second',
@@ -37,8 +33,6 @@ export function formatDisplayTimestamp(
             date,
           )
         : getTimeFormatter().format(date),
-    tooltipTimestamp: cachedDateTimeFormat(DATETIME_FORMAT_OPTIONS).format(
-      date,
-    ),
+    tooltipTimestamp: formatShortDateTime(date) ?? '',
   };
 }

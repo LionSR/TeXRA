@@ -102,5 +102,5 @@ export const listWorkspaceFiles = Effect.fn(
     '',
     filters.map((_, i) => i),
   );
-  return results.map((paths) => paths.sort((a, b) => a.localeCompare(b)));
+  return results.map((paths) => paths.toSorted((a, b) => a.localeCompare(b)));
 });

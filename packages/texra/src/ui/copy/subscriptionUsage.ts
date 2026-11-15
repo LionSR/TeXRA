@@ -1,7 +1,13 @@
+/**
+ * How a subscription's usage reads in every host: its windows, percentages,
+ * reset and freshness, as the settings view and the CLI status print them.
+ */
 import type {
   SubscriptionUsageSnapshot,
   SubscriptionUsageWindow,
 } from '@texra/shared/model/subscriptionUsage';
+import { formatResetDuration } from '@texra-ai/harness/schemas';
+import { formatRelativeTime } from '@ui/copy/format';
 
 const STALE_AFTER_MS = 2 * 60_000;
 
@@ -44,35 +50,28 @@ export function formatSubscriptionUsageReset(
   if (resetAt === undefined) return undefined;
   const remaining = resetAt - now;
   if (remaining <= 0) return 'reset due';
-  const minutes = Math.max(1, Math.floor(remaining / 60_000));
-  const days = Math.floor(minutes / (24 * 60));
-  const hours = Math.floor((minutes % (24 * 60)) / 60);
-  if (days > 0) return `resets in ${days}d${hours > 0 ? ` ${hours}h` : ''}`;
-  if (hours > 0) return `resets in ${hours}h`;
-  return `resets in ${minutes}m`;
+  return `resets in ${formatResetDuration(remaining)}`;
 }
 
 export function formatSubscriptionUsageUpdated(
   fetchedAt: number,
   now: number,
 ): string {
-  const age = Math.max(0, now - fetchedAt);
-  if (age >= STALE_AFTER_MS) {
-    return `stale · updated ${Math.floor(age / 60_000)}m ago`;
-  }
-  return 'updated just now';
+  return now - fetchedAt >= STALE_AFTER_MS
+    ? `stale · updated ${formatRelativeTime(fetchedAt, now)}`
+    : 'updated just now';
 }
 
 /** Compact provider usage text shared by settings and the detailed CLI status. */
 export function formatSubscriptionUsageSummary(
   snapshot: SubscriptionUsageSnapshot,
+  now: number,
 ): string | undefined {
   if (snapshot.state === 'unavailable') {
     return snapshot.reason === 'missing_credentials'
       ? undefined
       : 'usage unavailable';
   }
-  const now = Date.now();
   return snapshot.windows
     .map((window) => {
       const reset = formatSubscriptionUsageReset(window.resetAt, now);

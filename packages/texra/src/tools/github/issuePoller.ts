@@ -20,15 +20,11 @@ import { withSince } from './githubPaths';
 import {
   pollGet,
   readNewItems,
+  type SeenItems,
   type PollEvent,
   type PollResult,
 } from './poller';
-import { dedupeComments, type DedupedResource } from './pollingDedup';
-import {
-  GhIssueCommentArraySchema,
-  GhIssueSchema,
-  type GhIssueComment,
-} from './prTypes';
+import { GhIssueCommentArraySchema, GhIssueSchema } from './prTypes';
 import type { IssueTarget } from './subscriptionTarget';
 
 /** What an issue's next poll starts from. */
@@ -36,7 +32,7 @@ export interface IssueState {
   /** The last state read from a valid issue payload. */
   readonly state: 'open' | 'closed' | undefined;
   /** `undefined` until a valid comments list has been read. */
-  readonly comments: DedupedResource<GhIssueComment> | undefined;
+  readonly comments: SeenItems | undefined;
   readonly etags: { readonly issue?: string; readonly comments?: string };
 }
 
@@ -79,11 +75,7 @@ export const pollIssue = Effect.fn('github.pollIssue')(function* (
     state = issueData.state;
   }
 
-  const comments = readNewItems(
-    prior?.comments,
-    commentsRes,
-    dedupeComments<GhIssueComment>,
-  );
+  const comments = readNewItems(prior?.comments, commentsRes);
   events.push(...comments.fresh.map((c) => formatCommentEvent(issue, c)));
 
   return {

@@ -38,7 +38,7 @@ const CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
 
 /**
  * A registry of its own over the default session, whose runs start on
- * `fork`: its close (`stopAll`) is the test's, not the session's. Its stops
+ * `fork`: its close (`interruptAll`) is the test's, not the session's. Its stops
  * commit on the session; the process services are the caller's.
  */
 function createRegistry(
@@ -93,7 +93,7 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
             ),
           );
           yield* Deferred.await(ended);
-          yield* registry.stopAll();
+          registry.interruptAll();
           expect(registry.get(runId)).toBeDefined();
           const drain = yield* Effect.forkChild(
             registry
@@ -108,6 +108,43 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
           yield* Fiber.await(generation);
           yield* Fiber.join(drain);
           expect(registry.get(runId)).toBeUndefined();
+        }),
+    );
+
+    it.effect(
+      'stops the children of a run that is stopped while it opens',
+      () =>
+        Effect.gen(function* () {
+          const session = yield* defaultSession;
+          const runs = Context.get(session, RunRegistry);
+          // A parent with rows and a background child running under it, as
+          // when a child's delivery resumes a parent that had ended.
+          const parentId = yield* publishTestRunStart(session);
+          const childId = yield* publishTestRunStart(session, undefined, {
+            parent: parentId,
+          });
+          const child = yield* Effect.forkChild(
+            startAwaited(runs, childId, Effect.never),
+            { startImmediately: true },
+          );
+          const opened = yield* Deferred.make<void>();
+          const parent = yield* Effect.forkChild(
+            runs.start(parentId, {
+              open: Deferred.await(opened),
+              run: () => Effect.never,
+            }),
+            { startImmediately: true },
+          );
+          expect(yield* runs.stop(parentId, 'user')).toBe(true);
+          yield* Deferred.succeed(opened, undefined);
+          yield* Fiber.await(parent);
+          yield* runs.awaitDrained(childId).pipe(
+            Effect.timeoutOrElse({
+              duration: '2 seconds',
+              orElse: () => Effect.die(new Error('The child was not stopped')),
+            }),
+          );
+          yield* Fiber.await(child);
         }),
     );
 
