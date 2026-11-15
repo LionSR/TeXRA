@@ -2,12 +2,13 @@
  * AgentTrace — agent-general SDK surface.
  *
  * Discriminated-event channel for an agent run. Every {@link AgentEvent}
- * reaches the sinks the trace was built with ({@link AgentTraceSink}). Every other method on this interface is sugar
- * over `emit()` so the trace channel remains a single source of truth.
+ * reaches the sink the trace was built with ({@link AgentTraceSink}). Every
+ * other method on this interface is sugar over `emit()` so the trace channel
+ * remains a single source of truth.
  *
- * App-specific helpers (`logSdkError`/`logUserMessage`/etc.) are plain functions in `helpers.ts` that operate on
- * this interface — there is no host subtype. SDK consumers program directly
- * against `AgentTrace`.
+ * App-specific helpers (`logSdkError`, `logUserMessage`, …) are plain
+ * functions in `traceLogs.ts` that operate on this interface — there is no
+ * host subtype. SDK consumers program directly against `AgentTrace`.
  */
 import type { Effect } from 'effect';
 
@@ -15,8 +16,8 @@ import type { MessageType, ToolUseLog } from '@shared/schemas';
 
 import type { AgentEvent } from '@shared/session/agentEvent';
 
-/** A sink the trace was built with: it receives every event emitted on the
- *  trace until the trace closes. */
+/** The sink the trace was built with: it receives every event emitted on
+ *  the trace until the trace closes. */
 export type AgentTraceSink = (event: AgentEvent) => void;
 
 /** Handle returned by `openRun` — append chunks then finalize. */
@@ -63,7 +64,7 @@ export interface LogOptions {
 /**
  * Agent-general SDK surface. Every method ultimately reduces to `emit()` so
  * the trace channel is a single source of truth. App-specific helpers are
- * plain functions over this interface (see `helpers.ts`).
+ * plain functions over this interface (see `traceLogs.ts`).
  */
 export interface AgentTrace {
   // ─── SSoT primitives ────────────────────────────────────────────────
