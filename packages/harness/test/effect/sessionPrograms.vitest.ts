@@ -9,9 +9,6 @@
  *   parent's handle; the redirect leaves a listener of its own subscribed.
  * - A labelled run's label request is left out of its result's usage or its
  *   view's, or the two disagree.
- * - A host's shutdown that stops a launch still opening, then interrupts
- *   it (the CLI's), leaves the run ended without the shutdown's reason, so
- *   a resume reads its turn as unanswered rather than continued.
  * - A stop that reaches a launch still opening, or before it registered,
  *   leaves the run without the stop's row or without an end.
  * - A run whose end the store refused fails its result with "ended without
