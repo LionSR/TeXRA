@@ -15,6 +15,7 @@ import {
   Effect,
   FileSystem,
   type Path,
+  Schema,
   Scope,
   type Semaphore,
 } from 'effect';
@@ -23,6 +24,7 @@ import {
   isStrictlyWithin,
   createExternalLocation,
   createWorkspaceLocation,
+  withSessionFs,
 } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { absentReason } from '@texra-ai/harness/node';
@@ -30,6 +32,7 @@ import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import { collectFilesFromPatterns } from '@housekeeping/artifactFiles';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { latexdiff } from '@latex/latexdiff';
+import { compileLatex2Pdf } from '@latex/texTools';
 import {
   generateDiffFileName,
   WORKSPACE_DIFF_SUFFIX,
@@ -48,6 +51,54 @@ export type BuildDisplayFn = (
   location: FileLocation,
   options?: { preserveFocus?: boolean },
 ) => Effect.Effect<void, Error, PreviewServices>;
+
+/**
+ * A TeX file a host could not compile to show it. The message is the whole
+ * sentence the user reads.
+ */
+export class DisplayCompileFailed extends Schema.TaggedError<DisplayCompileFailed>()(
+  'DisplayCompileFailed',
+  { message: Schema.String },
+) {}
+
+/**
+ * Compile a TeX file to show it, into `outputDirectory` (where the host's
+ * viewer reads the PDF), answering the PDF's path. A missing compiler or a
+ * failed build fails with the sentence the host shows. A failed build's log
+ * tail goes to the app log, not the sentence: a toast or a native dialog
+ * cannot scroll a log of a few hundred lines, and in the message rather than
+ * a `data` annotation because the sink bounds an annotation to 2000
+ * characters.
+ */
+export const compileForDisplay = Effect.fn('latexPreview.compileForDisplay')(
+  function* (
+    roots: WorkspaceRoots,
+    location: FileLocation,
+    outputDirectory: string,
+  ): Effect.fn.Return<string, DisplayCompileFailed, PreviewServices> {
+    const sourcePath = location.absolutePath;
+    const built = yield* withSessionFs(
+      roots,
+      compileLatex2Pdf(location, roots, { outputDirectory }),
+    ).pipe(
+      // No compiler to drive: the message names it and how to install one.
+      Effect.catchTag('ToolMissing', (missing) =>
+        Effect.fail(
+          new DisplayCompileFailed({
+            message: `Cannot preview ${sourcePath}: ${missing.message}`,
+          }),
+        ),
+      ),
+    );
+    if (built.ok) return built.pdfPath;
+    yield* Effect.logError(
+      `LaTeX build failed for ${sourcePath}:\n${built.logTail}`,
+    ).pipe(withLogChannel(CHANNEL));
+    return yield* new DisplayCompileFailed({
+      message: `LaTeX build failed for ${sourcePath}. See the LaTeX log in ${outputDirectory} for details.`,
+    });
+  },
+);
 
 interface LatexPreviewDisplayOptions {
   openBuildDisplay: BuildDisplayFn;
