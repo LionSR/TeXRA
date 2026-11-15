@@ -1,6 +1,6 @@
 ---
 created: 2026-11-03
-status: proposed (item 1 done 2026-11-05, #14742; item 2 open)
+status: done (item 1 2026-11-05, #14742; item 2 by the rename to `subscriptionAuthStatus.ts`)
 ---
 
 # Overlapping responsibilities: git reads and subscription provider facts
