@@ -182,7 +182,7 @@ const summarize = Effect.fn('compaction.summarize')(function* (
     activity.finish('failed');
     logger.warn(
       `Compaction failed, continuing with original messages: ${toErrorMessage(summarized.cause)}`,
-      { data: Cause.squash(summarized.cause) },
+      { data: summarized.cause },
     );
     return null;
   }

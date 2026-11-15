@@ -53,6 +53,8 @@ export interface ToolCardHandle {
 
 /** Sugar passed to debug/info/warn/error. */
 export interface LogOptions {
+  /** The payload the log row stores as JSON; a `Cause` stores as the error
+   *  it raised. */
   readonly data?: unknown;
   /** The row's category; subscribers pick a render style from it. */
   readonly messageType?: MessageType;

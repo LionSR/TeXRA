@@ -14,6 +14,7 @@
  */
 import { Effect, Exit, Stream } from 'effect';
 
+import { raisedBy } from '@logger/formatLogData';
 import { writeLogLine } from '@logger/logSink';
 import {
   MESSAGE_TYPES,
@@ -109,7 +110,7 @@ export class TraceEmitter implements AgentTrace {
       // JSON RPC encodes an explicit undefined as null, a different payload.
       ...(options.data === undefined
         ? {}
-        : { data: toJsonValue(options.data) }),
+        : { data: toJsonValue(raisedBy(options.data)) }),
       messageType: options.messageType,
     });
   }

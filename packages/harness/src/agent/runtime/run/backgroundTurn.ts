@@ -4,7 +4,7 @@
  * `ModelInvoker` owns the attempt around it; this is the part that talks to
  * `Model.background`.
  */
-import { Cause, Clock, Effect, Exit, Stream } from 'effect';
+import { Clock, Effect, Exit, Stream } from 'effect';
 
 import {
   ModelError,
@@ -70,7 +70,7 @@ export const observeBackground = (
         Effect.sync(() =>
           run.logger.warn(
             `The background response ${id} was cancelled, but its cancelled row was not written; a resume observes it again.`,
-            { data: Cause.squash(cause) },
+            { data: cause },
           ),
         ),
       ),
@@ -83,7 +83,7 @@ export const observeBackground = (
         Effect.sync(() =>
           run.logger.warn(
             `Could not cancel the stopped background response ${id}; it may keep running and billing until it finishes.`,
-            { data: Cause.squash(cause) },
+            { data: cause },
           ),
         ),
     }),
