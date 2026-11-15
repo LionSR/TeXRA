@@ -147,7 +147,7 @@ export const revise = async ({
     await tools.document_diff({ revision });
     critique = null;
     if (revision + 1 === requests.length || !(verify || reflect)) continue;
-    const evidence = await tools.document_review({ revision, requests });
+    const evidence = await tools.document_review({ revision });
     const notes = [];
     const problem = verify ? verify(evidence.diffs) : null;
     if (problem) notes.push(problem);
@@ -236,28 +236,18 @@ export default (args) =>
 
 const TRANSCRIBE_MODULE = String.raw`import { revise } from 'builtIn:revise';
 
-const AUDIO = /\.(mp3|wav|m4a|flac|ogg|aac|opus|webm)$/i;
-
-export default (args) => {
-  const audio = (args.mediaFiles ?? []).some((file) => AUDIO.test(file));
-  return revise({
+export default (args) =>
+  revise({
     ...args,
     name: 'transcribe',
     creates: true,
-    system: audio
-      ? 'You transcribe audio into LaTeX: the spoken words with speakers and timestamps, a short opening summary, logical sections, and spoken mathematics as LaTeX equations. Several recordings are one session, in the order given.'
-      : 'You convert handwritten or scanned mathematical content from images into LaTeX. Several images are pages of one text, in the order given. You match the notation and style of the context documents.',
+    system: 'You turn attached media into LaTeX. Images of handwriting or scans are pages of one text, in the order given: you write their content in the notation and style of the context documents. Recordings are one session, in the order given: you transcribe the spoken words with speakers and timestamps, a short opening summary and logical sections, and write spoken mathematics as LaTeX equations.',
     intro: 'Transcribe the attached media into one LaTeX document that compiles on its own. Any documents below are context for its notation and style.',
     requests: [
-      audio
-        ? 'Transcribe the recording. Open with a short summary of the topics, then write each utterance as "[HH:MM:SS] Speaker: text", grouped into sections, with spoken mathematics as LaTeX. Do not use markdown.'
-        : 'Write the LaTeX for the content of the images, with the document class, notation, environments and symbols of the context documents when there are any.',
-      audio
-        ? 'Review the transcript against the recording and output the final one: fix misheard words, speaker labels, timestamps and equations.'
-        : 'Review the conversion against the images and output the final document: fix symbols you misread or that differ from the context documents\' notation, subscripts and superscripts, and environments.',
+      'Write the document. For images, use the document class, notation, environments and symbols of the context documents when there are any. For a recording, open with a short summary of the topics, then write each utterance as "[HH:MM:SS] Speaker: text", grouped into sections; do not use markdown.',
+      'Review your transcription against the media and output the final document. For images, fix symbols you misread or that differ from the context documents\' notation, subscripts and superscripts, and environments. For a recording, fix misheard words, speaker labels, timestamps and equations.',
     ],
-  });
-};`;
+  });`;
 
 const SLIDES_MODULE = String.raw`import { revise } from 'builtIn:revise';
 
@@ -335,7 +325,7 @@ export const THEORY_PROGRAMS = {
     'Implement the fixes that inline annotations from an earlier review ask for.',
   ),
   merge: program(
-    'Merge a partial edit (`editedFile`) back into the full original document.',
+    'Merge a partial edit back into the full original document. Started by the Merge action, which supplies the edited file.',
   ),
   transcribe: program(
     'Turn `mediaFiles` (handwriting or scans, or audio) into a LaTeX document.',

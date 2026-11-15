@@ -69,18 +69,14 @@ const compileEvidence = Effect.fn('document_review.compile')(function* (
 export const DocumentReviewTool = defineTool({
   name: 'document_review',
   description:
-    "The evidence about a revision: the user's instruction, the task's `requests` so far, the diff of each output against the document it started from, and the compile result. Resolves to `{ prompt, diffs }`: `prompt` holds it all for a critic's `agent()` call, and `diffs` lists each output's unified diff as `{ path, text, cut }` (`text` null for an unchanged output, `cut` when it was too long to show whole) for a check in code.",
+    "The evidence about a revision: the user's instruction, the task's requests so far, the diff of each output against the document it started from, and the compile result. Resolves to `{ prompt, diffs }`: `prompt` holds it all for a critic's `agent()` call, and `diffs` lists each output's unified diff as `{ path, text, cut }` (`text` null for an unchanged output, `cut` when it was too long to show whole) for a check in code.",
   scriptReturns:
     '{ prompt: string; diffs: { path: string; text: string | null; cut: boolean }[] }',
   replay: 'safe',
-  schema: Schema.Struct({
-    revision: RevisionSchema,
-    requests: Schema.Array(Schema.String).annotate({
-      description: "The task's requests, as passed to `document_context`.",
-    }),
-  }),
-  execute: Effect.fn('document_review')(function* ({ revision, requests }) {
+  schema: Schema.Struct({ revision: RevisionSchema }),
+  execute: Effect.fn('document_review')(function* ({ revision }) {
     const docs = yield* documentsOfCall();
+    const { requests } = docs.task;
     const round = roundOf(docs.rounds, revision);
     const fs = yield* FileSystem.FileSystem;
     const instruction = docs.run.config.instruction.trim();

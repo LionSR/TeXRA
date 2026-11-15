@@ -172,29 +172,17 @@ export const openDocuments = Effect.fn('documents.open')(function* (
 /** What a `document_context` call asks of one revision's prompt, beside
  *  the task itself. */
 export interface RevisionRequest extends InputMediaOptions {
-  /** What the prompt opens with, before the documents. */
-  readonly intro: string;
-  /** Every request of the task, in order: the prompt quotes those before
-   *  `revision` with their replies and ends with its own. */
-  readonly requests: readonly string[];
   /** Whether the prompt carries the documents' TeXCount statistics. */
   readonly attachTeXCount: boolean;
 }
 
 /** Where the plugin's template files ship, under the host's packaged
  *  resources; undefined for a host that ships none. */
-const templateDirectory = Effect.map(AgentDirectories, ({ resourcesRoot }) =>
+export const templateDirectory = Effect.map(AgentDirectories, ({ resourcesRoot }) =>
   resourcesRoot === undefined
     ? undefined
     : join(resourcesRoot, 'plugins', 'theory', 'templates'),
 );
-
-/** The directories a task's templates live in: where its compile check
- *  also searches, so a template's theme files resolve. */
-export const templateDirectories = (task: DocumentTaskSpec) =>
-  Effect.map(templateDirectory, (directory) =>
-    task.templates.length > 0 && directory !== undefined ? [directory] : [],
-  );
 
 /** The task's template files, read: each is a document of the prompt, under
  *  its file name. A template that does not read fails the step. */
@@ -260,7 +248,7 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
     inputs.ALL_INPUTS,
   ].filter(Boolean);
   parts.push(
-    asked.intro.trim(),
+    task.intro.trim(),
     ...(documents.length > 0
       ? [`<documents>\n${documents.join('\n')}\n</documents>`]
       : []),
@@ -283,7 +271,7 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
   );
   for (const [earlier, reply] of replies.entries())
     parts.push(
-      (asked.requests[earlier] ?? '').trim(),
+      (task.requests[earlier] ?? '').trim(),
       `<your_reply revision="${earlier + 1}">\n${reply.trim()}\n</your_reply>`,
     );
   // The compile failures that rejected the last revision, from the logs its
@@ -295,7 +283,7 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
     if (read.kind === 'unreadable') deps.logger.warn(read.warning);
     else feedback = read.text;
   }
-  const request = (asked.requests[revision] ?? '').trim();
+  const request = (task.requests[revision] ?? '').trim();
   // The reply format the program parses, written here so no task restates
   // it: one document per name the revision writes (its outputs, or the
   // inputs it rewrites), in order.

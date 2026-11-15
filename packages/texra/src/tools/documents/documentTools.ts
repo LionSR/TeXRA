@@ -49,7 +49,7 @@ import {
   openDocuments,
   revisionPrompt,
   roundOf,
-  templateDirectories,
+  templateDirectory,
   withRound,
   type Documents,
   type RevisionRequest,
@@ -82,14 +82,6 @@ export const documentsOfCall = Effect.fn('documents.ofCall')(function* (
 ) {
   return yield* openDocuments(yield* ToolContext, described);
 });
-
-/** The fact that records `rounds` (and, once proposed, the `diffs`) as the
- *  documents of `docs`'s run. */
-const outputFact = (
-  docs: Documents,
-  rounds: readonly RoundOutput[],
-  diffs?: Parameters<typeof documentsOutputFact>[2],
-) => documentsOutputFact(docs.task, rounds, diffs);
 
 /** Open `locations` for the user, beside what they are looking at. */
 const present = (docs: Documents, locations: readonly FileLocation[]) =>
@@ -188,7 +180,7 @@ const optionalFlag = (description: string) =>
 export const DocumentContextTool = defineTool({
   name: 'document_context',
   description:
-    "A document program's revision prompt: `intro`, the launch's documents and the `templates`, the instruction, every earlier request of `requests` with the reply it got, and this revision's request with the compile failures that rejected the last one and the `critique` of it, if any. Pass the same `intro`, `requests`, `templates` and `creates` for every revision of a run: the first call records them. Resolves to `{ prompt, mediaFiles, memories }`, for the revision's `agent()` call; `memories` are the launch's.",
+    "A document program's revision prompt: `intro`, the launch's documents and the `templates`, the instruction, every earlier request of `requests` with the reply it got, and this revision's request with the compile failures that rejected the last one and the `critique` of it, if any. The call for revision 0 records `intro`, `requests`, `templates` and `creates` as the run's task; a later call's are not read. Resolves to `{ prompt, mediaFiles, memories }`, for the revision's `agent()` call; `memories` are the launch's.",
   scriptReturns: '{ prompt: string; mediaFiles: string[]; memories: string[] }',
   replay: 'safe',
   schema: Schema.Struct({
@@ -230,11 +222,12 @@ export const DocumentContextTool = defineTool({
   execute: Effect.fn('document_context')(function* (input) {
     const { revision, requests } = input;
     const docs = yield* documentsOfCall({
-      revisions: requests.length,
+      intro: input.intro ?? '',
+      requests,
       templates: [...(input.templates ?? [])],
       creates: input.creates ?? false,
     });
-    const { revisions } = docs.task;
+    const revisions = docs.task.requests.length;
     if (revision >= revisions)
       return yield* Effect.fail(
         new ToolError(
@@ -242,8 +235,6 @@ export const DocumentContextTool = defineTool({
         ),
       );
     const asked: RevisionRequest = {
-      intro: input.intro ?? '',
-      requests,
       attachTeXCount: input.attachTeXCount ?? false,
       autoExtractFigure: input.autoExtractFigure ?? false,
       autoExtractTikzFigure: input.autoExtractTikzFigure ?? false,
@@ -280,7 +271,7 @@ export const DocumentContextTool = defineTool({
         memories: docs.run.config.memories,
       },
       // The first step records the task, which every later step reads.
-      facts: revision === 0 ? [outputFact(docs, docs.rounds)] : [],
+      facts: revision === 0 ? [documentsOutputFact(docs.task, docs.rounds)] : [],
     };
   }),
 });
@@ -399,7 +390,7 @@ export const DocumentExtractTool = defineTool({
         `${formatRoundLabel(revision)}: ${files.length} files`,
       ),
       value: { files, missing },
-      facts: [outputFact(docs, withRound(docs.rounds, round))],
+      facts: [documentsOutputFact(docs.task, withRound(docs.rounds, round))],
     };
   }),
 });
@@ -419,7 +410,11 @@ export const DocumentCompileTool = defineTool({
     const recorded = roundOf(docs.rounds, revision);
     // The compile searches where the task's templates live, so a
     // template's theme files resolve as they do for the prompt.
-    const inputDirs = yield* templateDirectories(docs.task);
+    const directory = yield* templateDirectory;
+    const inputDirs =
+      docs.task.templates.length > 0 && directory !== undefined
+        ? [directory]
+        : [];
     const check = yield* runCompileCheck(
       { roots, fileService, logger, runId: docs.run.runId, inputDirs },
       revision,
@@ -456,7 +451,7 @@ export const DocumentCompileTool = defineTool({
     const facts =
       recorded === undefined
         ? []
-        : [outputFact(docs, withRound(docs.rounds, { ...recorded, compile }))];
+        : [documentsOutputFact(docs.task, withRound(docs.rounds, { ...recorded, compile }))];
     if (yield* autoOpensPdf(docs))
       yield* present(
         docs,
@@ -563,8 +558,8 @@ export const DocumentDiffTool = defineTool({
       ...executed(lines.join('\n'), summary),
       value: { diffs, failed, notRun },
       facts: [
-        outputFact(
-          docs,
+        documentsOutputFact(
+          docs.task,
           withRound(docs.rounds, { ...recorded, latexdiffs: entries }),
         ),
       ],
@@ -611,7 +606,7 @@ export const DocumentProposeTool = defineTool({
       docs.run.runId,
       roundOutputsToOutputSummaries([last]),
     );
-    const fact = outputFact(docs, docs.rounds, diffs);
+    const fact = documentsOutputFact(docs.task, docs.rounds, diffs);
     return {
       ...executed(`Proposed: ${files.join(', ')}`, `${files.length} documents`),
       value: { files },

@@ -606,7 +606,12 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       version: DOCUMENTS_OUTPUT_KIND.version,
       parent: null,
       value: {
-        task: { revisions: 3, templates: [], creates: false },
+        task: {
+          intro: '',
+          requests: ['Revise.', 'Review.', 'Finish.'],
+          templates: [],
+          creates: false,
+        },
         rounds: [0, 1].map((round) => ({
           round,
           outputs: [],

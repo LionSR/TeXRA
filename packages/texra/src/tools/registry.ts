@@ -302,12 +302,20 @@ const theory: TexraPlugin = {
   prompt: ({ offered }) =>
     offered.includes('program')
       ? [
-          `\`program\` starts a document program over files (\`inputFiles\`, with \`contextFiles\` it may read and not change): ${Object.entries(
-            THEORY_PROGRAMS,
-          )
-            .map(([name, { description }]) => `\`${name}\` (${description})`)
-            .join('; ')}.`,
+          '`program` starts a document program over files (`inputFiles`, with `contextFiles` it may read and not change).',
+          // The script tool's description lists the programs; a run without
+          // it reads them here.
+          ...(offered.includes('script')
+            ? []
+            : [
+                `The programs: ${Object.entries(THEORY_PROGRAMS)
+                  .map(
+                    ([name, { description }]) => `\`${name}\` (${description})`,
+                  )
+                  .join('; ')}.`,
+              ]),
           'Each rewrites whole documents in fixed revisions, with compile checks and diffs, and proposes the result for the user to accept; it reads only the files you pass. What to change, how far and from which point of view is the `prompt`: one program covers a proofread and a restructuring, a referee and a first reader.',
+          "Its `args` may switch on `reflect` (a critic reviews each revision but the last), `attachTeXCount` (word counts in the prompt), and `autoExtractFigure`, `autoExtractTikzFigure` or `autoCompileInputPdf` (the inputs' figures, compiled TikZ pictures or PDF as media, for a model that reads images).",
           'Its delivery lists each proposed file with a `diff` attribute, the diff against the document the program started from, readable among the run\'s files (`/executions/{id}/files/<diff>`), and `large-change="true"` when the file changed extensively; a diff may be truncated.',
           "The host compiles each .tex the program writes: a file that failed to build leaves its log at `compile/r{n}_<name>.log` among the run's files, which the delivery's `<compile-failures>` names (read it at `/executions/{id}/files/<log>`), and no log means every build passed or no LaTeX toolchain is installed.",
           ...(offered.includes('script')

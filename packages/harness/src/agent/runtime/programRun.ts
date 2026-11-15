@@ -84,9 +84,7 @@ export const programLaunch = Effect.fn('programLaunch')(function* (
 });
 
 /** The call the script run of `config` makes ({@link ScriptCall}), or null
- *  for a run that asks its model. A program is called with its launch's
- *  arguments beside the launch's instruction and files, which the config
- *  records once. */
+ *  for a run that asks its model. */
 export const scriptCallOf = Effect.fn('scriptCallOf')(function* (
   config: AgentConfig,
 ): Effect.fn.Return<ScriptCall | null, ProgramNotRegistered, ToolRegistry> {
@@ -101,15 +99,7 @@ export const scriptCallOf = Effect.fn('scriptCallOf')(function* (
       registered: [...programs.keys()],
     });
   return {
-    code: programScript(script.name, {
-      ...script.args,
-      instruction: config.instruction,
-      inputFiles: config.inputFiles,
-      contextFiles: config.contextFiles,
-      mediaFiles: config.mediaFiles,
-      outputFiles: config.outputFiles,
-      editedFile: config.editedFile ?? null,
-    }),
+    code: programScript(script.name, script.args),
     title: script.name,
     tools: program.tools,
   };
