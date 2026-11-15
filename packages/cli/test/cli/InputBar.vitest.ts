@@ -8,6 +8,7 @@ import {
   insertText,
   previousGraphemeCursor,
 } from '@cli/chat/tui/input/textInputEditing';
+import { applyTerminalInputChunk } from '@cli/chat/tui/input/textInputBindings';
 import { slashCommands } from '@cli/chat/tui/commands/slashRegistry';
 import { SessionGraph } from '@test/support/testKernel';
 import { boundTestSessionView } from '@test/cli/fixtures/sessionViewFixture';
@@ -71,6 +72,8 @@ test('the input edits and measures an emoji sequence as one character', () => {
   // A regional indicator typed before a flag joins it; the caret follows
   // to the end of the joined character.
   expect(insertText('🇺🇸', 0, '🇨')).toEqual({ value: '🇨🇺🇸', cursor: 4 });
+  // A sequence arriving in one chunk goes in whole, before what follows.
+  expect(applyTerminalInputChunk('👩', 0, '👨‍👧').value).toBe('👨‍👧👩');
   // Two columns wide, so two of them fill a four-column row; the caret
   // takes the second row.
   expect(textInputCappedRowCount(family + family, 4, 8)).toBe(2);

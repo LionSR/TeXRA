@@ -71,7 +71,9 @@ function textInputDisplayRows(
     if (point === undefined) break;
 
     if (point.text.endsWith('\n')) {
-      rows.push({ start: rowStart, end: index, breakKind: 'hard' });
+      // The row ends at the newline itself: a CR before it stays in the row,
+      // so the line-end cursor (the newline's offset) is inside it.
+      rows.push({ start: rowStart, end: point.end - 1, breakKind: 'hard' });
       rowStart = point.end;
       index = point.end;
       column = 0;
