@@ -14,6 +14,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
 import { DatabaseSync } from 'node:sqlite';
 import { setTimeout as sleep } from 'node:timers/promises';
 import {
@@ -1420,7 +1421,7 @@ async function validateSdkResumeApproval() {
     let asked = '';
     asking.stdout.on('data', (chunk) => (asked += chunk));
     asking.stderr.on('data', () => {});
-    const exited = new Promise((resolve) => asking.on('close', resolve));
+    const exited = once(asking, 'close');
     const line = (key) =>
       asked
         .split('\n')
@@ -2211,7 +2212,7 @@ prompt: |
     const state = { child, stdout: '', stderr: '' };
     child.stdout.on('data', (chunk) => (state.stdout += chunk));
     child.stderr.on('data', (chunk) => (state.stderr += chunk));
-    state.exited = new Promise((resolve) => child.on('close', resolve));
+    state.exited = once(child, 'close');
     windows.push(state);
     await waitFor(`the ${mode} window to attach`, () =>
       state.stdout.includes('ATTACHED'),
@@ -2807,7 +2808,7 @@ prompt: |
     windowA = {
       child,
       stdout: '',
-      exited: new Promise((resolve) => child.on('close', resolve)),
+      exited: once(child, 'close'),
     };
     child.stdout.on('data', (chunk) => (windowA.stdout += chunk));
     await waitFor('window A to attach', () =>

@@ -88,6 +88,7 @@
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { once } from 'node:events';
 import {
   cpSync,
   existsSync,
@@ -421,7 +422,7 @@ process.stdin.on('end', function answer() {
     service.on('exit', () => spawned.delete(service));
     let log = '';
     service.stderr.on('data', (data) => (log += data));
-    const exited = new Promise((resolve) => service.on('exit', resolve));
+    const exited = once(service, 'exit');
     const handle = { done: () => service.exitCode !== null, output: () => log };
     // Up once its record names it: what every client finds it by.
     const { socket } = await until(
@@ -466,7 +467,7 @@ process.stdin.on('end', function answer() {
     const client = (command) => run(command, undefined, serviceEnv);
     await use({ client, call, handle });
     run(['service', 'stop']);
-    const code = await exited;
+    const [code] = await exited;
     if (code !== 0) fail(`texra serve exited ${code}\n${log}`);
   };
   // A headless run in the background, for the generator to kill.
