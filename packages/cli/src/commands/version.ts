@@ -15,14 +15,15 @@ export const versionCommand = defineCliCommand({
   // No runtime: the version is the build's, and the output format the
   // context's, read as every other command reads it.
   layer: () => Layer.empty,
-  run: () =>
-    Effect.sync(() => {
-      const version = readCliVersion();
+  run: () => {
+    const version = readCliVersion();
+    return Effect.as(
       emitCliResult({
         json: { version },
         ndjson: { kind: 'version', version },
         text: version,
-      });
-      return CliExitCode.Success;
-    }),
+      }),
+      CliExitCode.Success,
+    );
+  },
 });
