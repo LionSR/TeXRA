@@ -1,22 +1,23 @@
 <script setup>
 // Frameless figure for the two ways an agent runs that the guide explains in
-// two run-on prose paragraphs: a document task (a structured pipeline that
+// two run-on prose paragraphs: a program (a structured pipeline that
 // writes versioned, diffable output files) vs a chat (conversational,
 // read/edit + search/compile with tools). Side-by-side cards make the
-// dichotomy scannable; each agent becomes a labelled pill.
+// dichotomy scannable; each program and agent becomes a labelled pill.
 //
 // Frameless and .mockup-scoped, so it inherits --mk-* and flips with the theme.
 // Composes StatusPill for the agent lists — no bespoke pill CSS.
 import StatusPill from './StatusPill.vue';
 
 const workflow = [
-  'polish',
-  'correct',
+  'edit',
+  'annotate',
+  'enhance',
+  'apply',
   'merge',
-  'ocr',
-  'transcribe_audio',
-  'paper2slide',
-  'paper2poster',
+  'transcribe',
+  'slides',
+  'poster',
 ];
 const toolUse = [
   'research',
@@ -35,11 +36,11 @@ const tools = ['arXiv', 'Lean', 'Wolfram', 'compile', 'files', 'shell'];
 
 <template>
   <div class="mockup ac" role="group" aria-label="Agent classes">
-    <!-- Document tasks -->
+    <!-- Programs -->
     <section class="ac-col">
       <header class="ac-head ac-head--workflow">
         <wa-icon class="ac-ic" library="texra" name="diagram-project"></wa-icon>
-        <span class="ac-title">Document tasks</span>
+        <span class="ac-title">Programs</span>
       </header>
       <p class="ac-sub">
         Run a structured pipeline → save versioned output files with a diff.

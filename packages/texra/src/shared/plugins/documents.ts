@@ -185,8 +185,3 @@ export function documentsOf(
  *  run's first step writes the row. */
 export const isDocumentTaskRun = (run: Pick<RunView, 'facts'>): boolean =>
   DOCUMENTS_OUTPUT_KEY in run.facts;
-
-/** What a proposal launches, as its approval copy names it. */
-export const agentProposalLabel = (proposal: {
-  readonly task: boolean;
-}): string => (proposal.task ? 'program' : 'agent');

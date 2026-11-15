@@ -15,7 +15,6 @@ import QuickStartHero from '../components/QuickStartHero.vue';
 import LatexDiffHero from '../components/LatexDiffHero.vue';
 import FileSelectHero from '../components/FileSelectHero.vue';
 import ApiKeysHero from '../components/ApiKeysHero.vue';
-import ToolConfigHero from '../components/ToolConfigHero.vue';
 import CompareHero from '../components/CompareHero.vue';
 import MemoryHero from '../components/MemoryHero.vue';
 import MemoryCommandsHero from '../components/MemoryCommandsHero.vue';
@@ -34,8 +33,6 @@ import ToolCallPanel from '../components/ToolCallPanel.vue';
 import FeatureCards from '../components/FeatureCards.vue';
 import DropdownMenu from '../components/DropdownMenu.vue';
 import FlowSteps from '../components/FlowSteps.vue';
-import TemplateVarsPalette from '../components/TemplateVarsPalette.vue';
-import AgentCatalog from '../components/AgentCatalog.vue';
 
 let waRegistered = false;
 
@@ -95,7 +92,6 @@ export default {
     app.component('LatexDiffHero', LatexDiffHero);
     app.component('FileSelectHero', FileSelectHero);
     app.component('ApiKeysHero', ApiKeysHero);
-    app.component('ToolConfigHero', ToolConfigHero);
     app.component('CompareHero', CompareHero);
     app.component('MemoryHero', MemoryHero);
     app.component('MemoryCommandsHero', MemoryCommandsHero);
@@ -110,8 +106,6 @@ export default {
     app.component('FeatureCards', FeatureCards);
     app.component('DropdownMenu', DropdownMenu);
     app.component('FlowSteps', FlowSteps);
-    app.component('TemplateVarsPalette', TemplateVarsPalette);
-    app.component('AgentCatalog', AgentCatalog);
 
     // Side-effects (client only): load WA components + register the texra icon
     // library, and keep the WA color scheme in sync with the docs theme.

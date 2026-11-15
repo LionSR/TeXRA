@@ -9,7 +9,6 @@ import { customElement, property, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 import type { DocumentFileType } from '@texra/shared/launcher/fileTypes';

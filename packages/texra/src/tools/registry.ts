@@ -336,7 +336,7 @@ const theory: TexraPlugin = {
     DocumentReviewTool,
     DocumentProposeTool,
   ],
-  factKinds: APP_FACT_KINDS.documents,
+  factKinds: APP_FACT_KINDS.theory,
 };
 
 /** TeXRA's plugins, in dashboard order. */

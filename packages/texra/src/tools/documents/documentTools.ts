@@ -8,7 +8,7 @@
  * a resumed program replays against the rows.
  */
 // Node imports
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 
 // Third-party imports
 import { Effect, FileSystem, Schema } from 'effect';
@@ -22,6 +22,7 @@ import {
   Settings,
   type AgentTrace,
 } from '@texra-ai/harness/plugins';
+import { hasExtension } from '@texra-ai/harness/host';
 import {
   fileLocationDisplayPath,
   MESSAGE_TYPES,
@@ -55,7 +56,6 @@ import {
   type RevisionRequest,
 } from '@texra/tools/documents/documentState';
 import { computeDocumentDiffs } from '@texra/tools/documents/documentResult';
-import { rejectOversizedBibAttachments } from '@texra/tools/documents/documentTask';
 import {
   compileFailuresOf,
   latexdiffDisplayName,
@@ -97,6 +97,60 @@ const present = (docs: Documents, locations: readonly FileLocation[]) =>
 
 const autoOpensPdf = (docs: Documents) =>
   Settings.get(docs.deps.roots, DOCUMENTS_OPEN_PDF_SETTING);
+
+/** The largest `.bib` a program attaches whole as context. */
+const LARGE_BIB_LIMIT_BYTES = 100 * 1024;
+
+/**
+ * Fail a context that attaches an oversized bibliography file, before any
+ * model reads it. `workspaceRoot` is the owning session's workspace folder,
+ * handed in as data so a relative path resolves against its own session.
+ */
+const rejectOversizedBibAttachments = Effect.fn(
+  'rejectOversizedBibAttachments',
+)(function* (
+  workspaceRoot: string | undefined,
+  contextFiles: readonly string[],
+): Effect.fn.Return<void, Error, FileSystem.FileSystem> {
+  const fs = yield* FileSystem.FileSystem;
+  const bibFiles = contextFiles
+    .filter((file) => file.trim() !== '')
+    .filter((file) => hasExtension(file, '.bib'));
+
+  for (const bibFile of bibFiles) {
+    // A relative path names a workspace file, which needs a folder open.
+    let absolute = bibFile;
+    if (!isAbsolute(bibFile)) {
+      if (!workspaceRoot) {
+        return yield* Effect.fail(
+          new Error('Workspace path is not available.'),
+        );
+      }
+      absolute = join(workspaceRoot, bibFile);
+    }
+    // `FileSystem.stat` follows a link; a link whose target does not
+    // resolve is measured as no file, as a path `readLink` cannot name is
+    // no entry at all.
+    const stats = yield* fs.stat(absolute).pipe(
+      Effect.catch((error) =>
+        fs.readLink(absolute).pipe(
+          Effect.as(undefined),
+          Effect.mapError(() => error),
+        ),
+      ),
+    );
+    if (stats === undefined) continue;
+    if (Number(stats.size) <= LARGE_BIB_LIMIT_BYTES) continue;
+
+    const sizeBytes = Number(stats.size);
+    const message = `${bibFile} is ${sizeBytes} bytes, over the ${LARGE_BIB_LIMIT_BYTES} byte limit. Call extract_bib_entries first if citations are needed, then start the program again without the full .bib file.`;
+    return yield* Effect.fail(
+      new ToolError(message, {
+        summary: 'Rejected oversized BibTeX attachment',
+      }),
+    );
+  }
+});
 
 /**
  * What the first revision checks before the task does any work, whichever

@@ -367,8 +367,8 @@ export const executeCliRun = Effect.fn('executeCliRun')(function* (
     afterRun: Effect.fn('workflow.afterRun')(function* (ended) {
       // The defaults the run executed, as its recorded configuration
       // states them (the launch resolves an empty output list to the
-      // agent's declared ones); the input-derived
-      // `cli.expectedOutputFiles` stand in when the agent declares none.
+      // program's own, `Program.outputs`); the input-derived
+      // `cli.expectedOutputFiles` stand in when the program declares none.
       // A configuration that does not read leaves the copy undone: that
       // fails the command when a completed run's copy was asked for, and
       // only warns otherwise.
@@ -433,7 +433,7 @@ export const executeCliRun = Effect.fn('executeCliRun')(function* (
   }
   if (!documentTaskResult) {
     return yield* Effect.die(
-      new Error('Document task output was not finalized before the run ended.'),
+      new Error('Program output was not finalized before the run ended.'),
     );
   }
 

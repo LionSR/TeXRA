@@ -10,7 +10,6 @@ import { Context, type Deferred, Effect, Exit } from 'effect';
 
 // Local imports
 import {
-  AgentCatalog,
   findAgentByIdentifier,
   type WorkspaceAgentsStores,
 } from '@agent/index/agentCatalog';
@@ -49,16 +48,12 @@ const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
 ].join(' ');
 
 /** Resolve `name` from the agents `run` may launch, listing them on
- *  failure. A program's calls resolve in the catalog, past any scope
- *  or shadowing. */
+ *  failure. */
 export const requireAgent = Effect.fn('requireAgent')(function* (
   stores: WorkspaceAgentsStores,
   name: string,
   run: Pick<RunToolCall['run'], 'config'>,
 ) {
-  const catalog = yield* AgentCatalog;
-  const pinned = programOf(run.config) !== null ? catalog.get(name) : undefined;
-  if (pinned) return pinned;
   const agents = yield* delegationAgents(
     stores,
     run.config.delegationAgentScope,
@@ -196,7 +191,7 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
 );
 
 /** The fields an approval changed from the proposal, other than its agent
- *  and model: the instruction, the file lists and the plugin's options. */
+ *  and model: the instruction and the file lists. */
 function formEdits(
   proposal: AgentProposal,
   approval: Extract<DecisionOf<'proposal'>, { action: 'approve' }>,
@@ -208,8 +203,7 @@ function formEdits(
     edited != null &&
     (edited.length !== proposed.length ||
       edited.some((file, index) => file !== proposed[index]));
-  const { instruction, inputFiles, contextFiles, mediaFiles, options } =
-    approval;
+  const { instruction, inputFiles, contextFiles, mediaFiles } = approval;
   return {
     ...(instruction != null &&
       instruction !== proposal.instruction && { instruction }),
@@ -223,7 +217,6 @@ function formEdits(
     ...(changed(mediaFiles, proposal.mediaFiles) && {
       mediaFiles: [...mediaFiles],
     }),
-    ...(options != null && proposal.task && { options }),
   };
 }
 
@@ -318,7 +311,7 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
 
   // What the person changed in the launch form besides the agent and model.
   // A changed input list drops the proposal's outputs: they were named for
-  // its inputs, and the task names its own for the new ones.
+  // its inputs, and a program names its own for the new ones.
   const edited = changes ? formEdits(proposal, result) : {};
   return {
     proposal: {

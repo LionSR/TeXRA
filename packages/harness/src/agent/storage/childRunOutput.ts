@@ -45,16 +45,14 @@ const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
       );
     }
     // A completed program's changes are its declared outputs: the files it
-    // wrote, which its block names (`Program.result.changes`).
+    // wrote, which its registration names (`Program.result.changes`).
     const program =
       runEnd?.outcome === RUN_OUTCOME.COMPLETED
         ? yield* readProgramResult(config, reference.runId, yield* SessionRoots)
         : undefined;
     if (program === undefined) {
       return yield* Effect.fail(
-        new Error(
-          `Run ${reference.runId} has no completed task output manifest.`,
-        ),
+        new Error(`Run ${reference.runId} is no completed program's run.`),
       );
     }
     const declared = program.changes.some(

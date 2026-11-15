@@ -82,8 +82,8 @@ export function runActions(
 
 /**
  * Whether a run continues from its own rows: a loop-driven run (born with
- * its opening) does, whatever its outcome, unless it is a task that
- * ended (its program's result is settled, so it runs again). The one standing
+ * its opening) does, whatever its outcome, unless it is a program's run
+ * that ended (its result is final, so it runs again). The one standing
  * `deriveResumability` reads from a run's records and `runActions` from its
  * view, so the two never decide apart.
  */

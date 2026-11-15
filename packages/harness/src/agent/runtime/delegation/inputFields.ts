@@ -31,7 +31,7 @@ import { Settings, type SettingsStores } from '@shared/config/settings';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
 import type { ToolRegistry } from '@tools/toolTable';
-import { nullishWithDefault } from '@tools/core/inputSchema';
+import { nullishWithDefault, timeoutMsField } from '@tools/core/inputSchema';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { absentReason, entryExists } from '@utils/files/fsEntryExists';
 import { ensureError, formatError } from '@utils/errors/errorMessage';
@@ -44,7 +44,7 @@ import { GIT_WORKTREE_SUPPORT_SETTING } from '@shared/state/stateSettings';
  * (prefix + traversal checks). Existence is NOT checked — getAttachedMemories
  * handles read failures gracefully, avoiding a TOCTOU race.
  */
-export const memoriesField = nullishWithDefault(
+const memoriesField = nullishWithDefault(
   Schema.Array(Schema.String),
   [],
   'Memory file paths to attach (e.g. /memories/conventions.md). Content is injected into the agent prompt as read-only context. Use for project conventions, style guides, or accumulated knowledge the agent should follow.',
@@ -143,9 +143,7 @@ export const personaField = Schema.optional(
  * canonical `string | undefined` value — no trimming or absolute-path checks
  * needed at the call site.
  */
-export const workingDirectoryField = Schema.optional(
-  Schema.NullOr(Schema.String),
-)
+const workingDirectoryField = Schema.optional(Schema.NullOr(Schema.String))
   .annotate({
     description:
       'Absolute path for the subagent to operate in (e.g. a git worktree). All tool calls within the subagent will automatically use this as their root directory. Defaults to workspace root. Only accepted when git worktree support (`git.worktreeSupport`) is enabled for this workspace.',
@@ -170,6 +168,33 @@ export const workingDirectoryField = Schema.optional(
       encode: SchemaGetter.passthrough(),
     }),
   );
+
+/** A list of file paths, empty when the call names none. */
+export const fileList = (
+  description: string,
+): ReturnType<typeof nullishWithDefault<Schema.$Array<Schema.String>>> =>
+  nullishWithDefault(Schema.Array(Schema.String), [], description);
+
+/** The fields every child launch takes beside its own: memories, the call's
+ *  reuse id and card label, its time limit, and whether a script waits. */
+export const CALL_FIELDS = Object.freeze({
+  memories: memoriesField,
+  working_directory: workingDirectoryField,
+  id: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+    description:
+      'Tells apart two otherwise identical calls: a completed call is reused by a later one with the same prompt, options and files.',
+  }),
+  label: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+    description: 'A short title for the call’s card.',
+  }),
+  timeoutMs: timeoutMsField.annotate({
+    description: 'Stops the agent after this many milliseconds: `TimedOut`.',
+  }),
+  background: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
+    description:
+      'In a script: return `{ runId }` at once; the result arrives as a follow-up. A direct call always runs in the background, except in a one-shot run.',
+  }),
+});
 
 /**
  * `workspaceAbsolutePath` validates the path it resolved and throws when the

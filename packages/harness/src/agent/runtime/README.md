@@ -66,8 +66,9 @@ is the module map by concern. Run-loop rules are in
   `nativeSubagentStrategy`; `scriptRun`; `programRun`; `childDelivery`
   (what a child's end delivers, typed) and `deliveryEnvelope` (the one
   renderer of a delivery's XML envelope);
-  `delegation/` (the child launches: the `agent` tool and `ChildRuns`, a
-  detached or process child, and which models a child may use).
+  `delegation/` (the child launches: the `agent` and `program` tools,
+  `AgentTool` and `ProgramTool` over one launch core; `ChildRuns`, a process
+  child; and which models a child may use).
 - **Control**: `runApprovalQueue` (a run's grants); `requests` (a run's
   questions to a person: opened through its cell with the policy's answer,
   decided once, cancelled with the run's end).

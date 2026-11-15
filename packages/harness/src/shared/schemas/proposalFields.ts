@@ -35,9 +35,9 @@ export const BaseProposalFieldsSchema = Schema.Struct({
   ),
 });
 
-/** A task's files and the options its launching plugin gives it (as the
- *  plugin reads them; the harness reads nothing inside); a chat delegation
- *  has no files and no options. */
+/** A program's files and its arguments (`options`, as the program reads
+ *  them; the harness reads nothing inside); a chat delegation has no
+ *  arguments. */
 export const TaskProposalFieldsSchema = NullableFileFieldsSchema.mapFields(
   Struct.omit(['editedFile']),
 ).mapFields(

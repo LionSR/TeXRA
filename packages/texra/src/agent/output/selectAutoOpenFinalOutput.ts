@@ -14,7 +14,7 @@ import { AUTO_OPEN_FINAL_SETTING } from '@texra/shared/settings/texraSettings';
  * Hosts ask once the launch has returned, so this presentation never runs
  * inside the run whose outcome it shows:
  *
- * - Only a `completed` document task (a run of the `revise` program)
+ * - Only a `completed` run that recorded documents (its documents row)
  *   qualifies — failed or cancelled runs may hold partial outputs.
  * - Gated by `texra.agentOutputs.autoOpenFinal` (default true).
  * - Which file counts as final is {@link finalDocumentOutput}'s call, shared

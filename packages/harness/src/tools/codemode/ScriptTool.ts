@@ -319,8 +319,8 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
         : `Script finished: ${input.title}`,
     ),
     ...(files.length > 0 && { files }),
-    // Its return as data: what a script's run ends with (a task's
-    // documents), journaled with the call.
+    // Its return as data: what a script's run ends with (a program's
+    // value), journaled with the call.
     ...(Result.isSuccess(returned) && { value: returned.success }),
   };
 });

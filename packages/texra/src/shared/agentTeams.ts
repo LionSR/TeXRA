@@ -2,7 +2,7 @@
  * Agent teams - predefined collections of enabled agents
  * for different academic disciplines.
  *
- * Each team lists the agents it enables, tasks included.
+ * Each team lists the chat agents it enables.
  * Agent names are plain strings (not source-prefixed keys) so they
  * match across built-in and custom sources.
  */

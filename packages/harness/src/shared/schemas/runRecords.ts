@@ -28,9 +28,9 @@ export const RunRecordFieldsSchema = Schema.Union([
  *  or null for any other run. A program's run is a script that ends: its
  *  value and its children's spend are its output, its end its record, and
  *  it takes no later message. A plugin wrote the program, not a model, so
- *  the launch that chose it granted it: tools fixed past any switch, the
- *  catalog's agents under the launch's approval, its prompts and files
- *  passed as written, and no skill activated by its instruction. */
+ *  the launch that chose it granted it: tools fixed past any switch, its
+ *  delegations under the launch's approval, its prompts and files passed
+ *  as written, and no skill activated by its instruction. */
 export const programOf = (
   config: typeof RunRecordFieldsSchema.Encoded,
 ): string | null =>

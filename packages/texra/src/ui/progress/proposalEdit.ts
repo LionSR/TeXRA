@@ -64,8 +64,10 @@ function proposalAgentOptions(
   run: RunView | undefined,
   host: HostSnapshot,
 ): HostSnapshot['agentOptions'] {
+  const proposed = { value: proposedAgentKey(data), label: data.agent };
+  if (data.task) return [proposed];
   const scope = run?.agentScope ?? null;
-  const chats =
+  const agents =
     scope === null
       ? host.agentOptions
       : scope.flatMap((key) => {
@@ -78,10 +80,9 @@ function proposalAgentOptions(
               : [];
           return [option];
         });
-  const agents = data.task ? [] : chats;
   return agents.some((option) => isProposedAgent(option.value, data))
     ? agents
-    : [{ value: proposedAgentKey(data), label: data.agent }, ...agents];
+    : [proposed, ...agents];
 }
 
 /** The catalogs as the launch form offers them: while it is open on a
@@ -124,8 +125,7 @@ export function proposalLaunchPatch(
 
 /** The approval the form's Send answers: the proposal with the form's
  *  agent and model when they differ from it, and its instruction and
- *  files, which the run compares with the proposal. A program keeps the
- *  arguments it was proposed with. */
+ *  files, which the run compares with the proposal. */
 export function proposalApproval(
   data: AgentProposalRequest,
   launch: Launch,
@@ -138,6 +138,5 @@ export function proposalApproval(
     inputFiles: [...launch.inputFiles],
     contextFiles: [...launch.contextFiles],
     mediaFiles: [...launch.mediaFiles],
-    options: null,
   };
 }

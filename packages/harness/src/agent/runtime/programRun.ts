@@ -53,6 +53,20 @@ export class ProgramNotRegistered extends Schema.TaggedError<ProgramNotRegistere
   }
 }
 
+/** The program a plugin registers under `name`. */
+const registeredProgram = Effect.fn('registeredProgram')(function* (
+  name: string,
+) {
+  const { programs } = yield* ToolRegistry;
+  const program = programs.get(name);
+  if (program === undefined)
+    return yield* new ProgramNotRegistered({
+      name,
+      registered: [...programs.keys()],
+    });
+  return program;
+});
+
 /**
  * What launches the program `name` as a run of its own: the run is named
  * for the program and has no agent's prompt or tools (its script is all it
@@ -64,13 +78,7 @@ export const programLaunch = Effect.fn('programLaunch')(function* (
   args: Readonly<Record<string, JsonValue>>,
   files: Pick<AgentConfig, 'inputFiles' | 'outputFiles'>,
 ) {
-  const { programs } = yield* ToolRegistry;
-  const program = programs.get(name);
-  if (program === undefined)
-    return yield* new ProgramNotRegistered({
-      name,
-      registered: [...programs.keys()],
-    });
+  const program = yield* registeredProgram(name);
   const named = files.outputFiles.filter(Boolean);
   return {
     agent: name,
@@ -91,13 +99,7 @@ export const scriptCallOf = Effect.fn('scriptCallOf')(function* (
   const { script } = config;
   if (script == null) return null;
   if (script.kind === 'background') return script;
-  const { programs } = yield* ToolRegistry;
-  const program = programs.get(script.name);
-  if (program === undefined)
-    return yield* new ProgramNotRegistered({
-      name: script.name,
-      registered: [...programs.keys()],
-    });
+  const program = yield* registeredProgram(script.name);
   return {
     code: programScript(script.name, script.args),
     title: script.name,
@@ -117,10 +119,10 @@ interface ProgramRunResult {
 /**
  * The result of the completed run `runId`, launched with `config`, or
  * undefined for a run that is no program's (or has no recorded config). A
- * program that registers no result reports no files. A run with no row of
- * the result's fact kind, or a row its schema refuses, is logged and read
- * as no files; the refusal is also the delivery, so the launching model
- * sees it.
+ * program that registers no result reports no files. A run of a program no
+ * plugin registers, with no row of the result's fact kind, or with a row
+ * its schema refuses, is logged and read as no files; the refusal is also
+ * the delivery, so the launching model sees it.
  */
 export const readProgramResult = Effect.fn('readProgramResult')(function* (
   config: Pick<AgentConfig, 'script'> | null,
@@ -134,11 +136,6 @@ export const readProgramResult = Effect.fn('readProgramResult')(function* (
   const script = config?.script;
   if (script?.kind !== 'program') return undefined;
   const { name } = script;
-  const result = (yield* ToolRegistry).programs.get(name)?.result;
-  if (result === undefined) return { name, delivery: [], changes: [] };
-  const { schema } = result.fact;
-  const fact = factName(result.fact);
-  const row = (yield* (yield* SessionLog).facts(runId))?.facts[fact];
   const refused = (reason: string) =>
     Effect.logWarning(
       `Run ${runId} of the program '${name}' reports nothing its registration reads: ${reason}`,
@@ -150,6 +147,14 @@ export const readProgramResult = Effect.fn('readProgramResult')(function* (
         changes: [],
       }),
     );
+  const registered = yield* Effect.result(registeredProgram(name));
+  if (Result.isFailure(registered))
+    return yield* refused(registered.failure.message);
+  const { result } = registered.success;
+  if (result === undefined) return { name, delivery: [], changes: [] };
+  const { schema } = result.fact;
+  const fact = factName(result.fact);
+  const row = (yield* (yield* SessionLog).facts(runId))?.facts[fact];
   if (row === undefined)
     return yield* refused(`the run recorded no '${fact}' row`);
   const parsed = Schema.decodeUnknownResult(schema)(row.value, {

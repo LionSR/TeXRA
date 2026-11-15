@@ -9,9 +9,11 @@ import {
 import { COLOR_ACCENT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { confirmCardContentWidth } from '@cli/tui/ui/theme';
 import { wrappedRowCount } from '@cli/tui/ansiWrap';
-import { formatAgentProposalFileGroup } from '@cli/runtime/approval/approvalSummaries';
+import {
+  agentProposalLabel,
+  formatAgentProposalFileGroup,
+} from '@cli/runtime/approval/approvalSummaries';
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
-import { agentProposalLabel } from '@texra/shared/plugins/documents';
 import {
   DEFINED_AGENT_COPY,
   DELEGATION_APPROVAL_COPY,

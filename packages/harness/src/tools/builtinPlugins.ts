@@ -103,7 +103,7 @@ export const goal: Plugin = definePlugin({
 export const multiAgent: Plugin = definePlugin({
   id: 'multi-agent',
   tools: [agentTool(), programTool()],
-  // The one delegation tool: the built-in orchestrators need it.
+  // The delegation tools: the built-in orchestrators need them.
   toggle: 'on',
 });
 

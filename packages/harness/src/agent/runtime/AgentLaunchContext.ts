@@ -93,8 +93,8 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     // FAILED execution, and its caller shows only the instruction it carries.
     const modelConfig = yield* validateModelExists(fullConfig.model);
 
-    // The resolved source is stamped (`agent` stays as spelled); a task's
-    // outputs are its plugin's, stamped by the launch that built it.
+    // The resolved source is stamped (`agent` stays as spelled); a program's
+    // outputs are its registration's, stamped by its launch (`programLaunch`).
     const config: AgentConfig = {
       ...fullConfig,
       agentSource: agentEntry.source,

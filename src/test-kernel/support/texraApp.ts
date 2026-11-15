@@ -33,7 +33,7 @@ export const texraHosted = Layer.provideMerge(
  *  test reads their rows with, and a catalog under test scans the bundled
  *  agents with. */
 const FACT_KIND_PLUGINS: readonly Plugin[] = [
-  { id: 'theory', factKinds: APP_FACT_KINDS.documents },
+  { id: 'theory', factKinds: APP_FACT_KINDS.theory },
   { id: 'external-inquiry', factKinds: APP_FACT_KINDS['external-inquiry'] },
 ];
 
