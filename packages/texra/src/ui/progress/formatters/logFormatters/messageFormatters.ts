@@ -90,7 +90,7 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
   );
 
   const worded = errorRowText(row);
-  const summaryText = worded.summary.trim() || 'Error occurred';
+  const summaryText = worded.summary;
   const detailText = worded.detailText.full;
   const hasDetails = row.details.length > 0;
   const rawContent = detailText || summaryText;

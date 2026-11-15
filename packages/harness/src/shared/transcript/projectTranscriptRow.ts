@@ -131,7 +131,8 @@ function errorRow(
   return {
     ...base,
     kind: 'error',
-    summary: transcriptText(summary),
+    // An error logged with no words still reads as one, on every host.
+    summary: transcriptText(summary.trim() === '' ? 'Error occurred' : summary),
     details: errorDetails(data, summary),
     ...(data?.failure !== undefined && { failure: data.failure }),
   };
