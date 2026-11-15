@@ -188,15 +188,17 @@ const ModelSelectionItemSchema = Schema.Struct({
   deprecated: Schema.Boolean,
   contextWindow: Schema.optional(Schema.String),
   cost: Schema.optional(Schema.String),
-  /** Whether this model supports user-configurable reasoning effort. */
-  supportsReasoningLevel: Schema.optional(Schema.Boolean),
-  /** The model's default reasoning level from its static config. */
-  defaultReasoningLevel: Schema.optional(ReasoningEffortSchema),
-  /** The user's chosen reasoning level override (undefined = use default). */
-  reasoningLevel: Schema.optional(ReasoningEffortSchema),
-  /** Exact registry-declared effort vocabulary for this model. */
-  supportedReasoningLevels: Schema.optional(
-    Schema.Array(ReasoningEffortSchema),
+  /** The row's reasoning choice; absent where its route carries one level
+   *  or none. */
+  reasoning: Schema.optional(
+    Schema.Struct({
+      /** The levels the route can carry. */
+      levels: Schema.Array(ReasoningEffortSchema),
+      /** The level a run sends with none saved. */
+      default: Schema.optional(ReasoningEffortSchema),
+      /** The level a run sends for the saved one. */
+      saved: Schema.optional(ReasoningEffortSchema),
+    }),
   ),
   /** Whether this model qualifies as a "fast first response" pick (price-based). */
   isFast: Schema.optional(Schema.Boolean),

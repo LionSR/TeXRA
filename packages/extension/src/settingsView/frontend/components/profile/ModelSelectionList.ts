@@ -136,11 +136,12 @@ export class ModelSelectionList extends SignalWatcher(LitElement) {
   private renderReasoningDropdown(
     model: ModelSelectionItem,
   ): TemplateResult | typeof nothing {
-    if (!model.supportsReasoningLevel) return nothing;
+    const { reasoning } = model;
+    if (reasoning === undefined) return nothing;
 
-    const currentValue = model.reasoningLevel ?? '';
-    const defaultLabel = model.defaultReasoningLevel
-      ? `Default (${REASONING_LEVEL_LABELS[model.defaultReasoningLevel]})`
+    const currentValue = reasoning.saved ?? '';
+    const defaultLabel = reasoning.default
+      ? `Default (${REASONING_LEVEL_LABELS[reasoning.default]})`
       : 'Default';
 
     return html`
@@ -154,10 +155,8 @@ export class ModelSelectionList extends SignalWatcher(LitElement) {
           >Reasoning level for ${model.label}</span
         >
         <wa-option value=""> ${defaultLabel} </wa-option>
-        ${REASONING_LEVEL_OPTIONS.filter(
-          (option) =>
-            !model.supportedReasoningLevels?.length ||
-            model.supportedReasoningLevels.includes(option.value),
+        ${REASONING_LEVEL_OPTIONS.filter((option) =>
+          reasoning.levels.includes(option.value),
         ).map(
           (option) => html`
             <wa-option value=${option.value}> ${option.label} </wa-option>
