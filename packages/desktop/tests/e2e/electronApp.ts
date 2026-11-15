@@ -7,8 +7,7 @@ import {
 } from 'node:fs';
 import type { ChildProcess } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, resolve } from 'node:path';
 import { _electron as electron, test as base, expect } from '@playwright/test';
 import {
   loadDatabaseFixture,
@@ -20,7 +19,7 @@ import { isolatedHomeEnv } from '../../../../scripts/isolated-home.mjs';
 import { cleanupDirectory } from './workspaceStorageFixture.js';
 import type { ElectronApplication, Locator, Page } from '@playwright/test';
 
-const HERE = dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 const PACKAGE_ROOT = resolve(HERE, '..', '..');
 const MAIN_ENTRY = join(PACKAGE_ROOT, 'dist', 'main', 'index.js');
 const HEADLESS = process.env.TEXRA_DESKTOP_E2E_HEADED !== '1';
