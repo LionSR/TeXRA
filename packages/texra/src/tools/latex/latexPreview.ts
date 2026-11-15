@@ -80,7 +80,7 @@ export interface LatexPreviewEntry {
   onError: (message: string) => void;
 }
 
-/** Length of the random suffix for temp file names (8 nanoid chars ≈ 2^47 combinations, sufficient for uniqueness) */
+/** Length of the random suffix for temp file names (8 hex digits of a UUID, 2^32 combinations) */
 const TEMP_ID_LENGTH = 8;
 
 /**

@@ -11,6 +11,7 @@ import {
   utimesSync,
   writeFileSync,
 } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
@@ -25,7 +26,6 @@ import {
   Scope,
   SubscriptionRef,
 } from 'effect';
-import { nanoid } from 'nanoid';
 import React from 'react';
 
 import { apiKeySecretName } from '@texra-ai/llm';
@@ -1033,7 +1033,7 @@ function makeBashApprovalPayload(index = 1) {
 
 function makeRetryApprovalPayload(): RetryRequest {
   return {
-    requestId: `harness-retry-${nanoid()}`,
+    requestId: `harness-retry-${randomUUID()}`,
     runId: HARNESS_RUN_ID,
     operation: 'Model request',
     model: HARNESS_MODEL,
