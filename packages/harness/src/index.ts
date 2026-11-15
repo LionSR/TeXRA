@@ -69,7 +69,7 @@ export type {
 // What a run reports while it runs, and how it ended.
 export type { AgentEvent, StreamChunkEvent } from '@shared/session/agentEvent';
 export { responseText } from '@agent/trace/TraceEmitter';
-export type { RunEnd, RunStopReason } from '@shared/schemas';
+export type { RunEnd } from '@shared/schemas';
 
 // A session's stored runs: their listing, records, and deletion.
 export type {

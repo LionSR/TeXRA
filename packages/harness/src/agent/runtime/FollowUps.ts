@@ -46,8 +46,8 @@ import {
   skippedMediaPart,
   storedMediaPart,
   storedPdfPages,
-  type InputPart,
 } from './run/mediaInput';
+import type { InputPart } from '@texra-ai/llm';
 import { blobRows } from './run/recordedRequest';
 import { appendRow, positionRow } from './loop/rows';
 import { hooksOf } from './loop/hooks';

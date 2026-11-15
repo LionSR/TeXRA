@@ -334,7 +334,7 @@ export const factRow = (
  *  (`FactKind.accepts`) rejected it against the aggregate's latest row, or
  *  it moves a plugin's aggregate under a run the store no longer holds
  *  open. Nothing was written. */
-export class PluginFactRejected extends Schema.TaggedError<PluginFactRejected>()(
+class PluginFactRejected extends Schema.TaggedError<PluginFactRejected>()(
   'PluginFactRejected',
   { aggregateId: Schema.String, reason: Schema.String },
 ) {

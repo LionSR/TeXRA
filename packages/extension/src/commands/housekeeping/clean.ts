@@ -8,7 +8,7 @@ import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
 // Local file imports
 import { CHANNEL } from '@housekeeping/constants';
 import { GlobFailed } from '@housekeeping/artifactFiles';
-import { EXCLUDED_DIRS } from '@texra/shared/constants/excludedDirs';
+import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
 
 /**
  * Every `build/` directory under the session's workspace, relative to its
@@ -20,7 +20,9 @@ export const findBuildDirectories = Effect.gen(function* () {
   const workspaceRoot = (yield* WorkspaceFs).root;
   if (!workspaceRoot) return [];
 
-  const ignorePatterns = [...EXCLUDED_DIRS]
+  // A `build/` inside a package or environment tree is not this project's
+  // LaTeX output, so those trees are not searched.
+  const ignorePatterns = FILE_HANDLING_RULES.ignored.bulkOperationDirectories
     .filter((dir) => dir !== 'build')
     .map((dir) => `**/${dir}/**`);
 

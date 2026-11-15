@@ -35,6 +35,7 @@ import { environment, ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import { IS_WINDOWS, withCommandDirs } from '@utils/system/platformPaths';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { appendTail } from '@utils/text/appendTail';
 
 import type { LoadedPluginTools } from './mcpConfig';
 
@@ -273,7 +274,7 @@ const connect = Effect.fn('connect')(function* (config: McpServerConfig) {
       Stream.decodeText(),
       Stream.runForEach((chunk) =>
         Effect.sync(() => {
-          stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_LIMIT);
+          stderrTail = appendTail(stderrTail, chunk, STDERR_TAIL_LIMIT);
         }),
       ),
       Effect.ignore,

@@ -26,6 +26,7 @@ import type { FileSelectConfig } from '@ui/copy/fileSelectConfigs';
 import { dropCueStyles } from '@ui/styles/commonViewStyles';
 import { designTokens } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
+import { placeholderStyles, renderEmptyMessage } from '@ui/wa/emptyState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { FileDropController, postDroppedFiles } from '../fileDropHandler';
 import { fileSelectStyles } from '../fileSelectStyles';
@@ -36,6 +37,7 @@ export class FileSelectGroup extends LitElement {
   static override styles = [
     designTokens,
     ...fileSelectStyles,
+    placeholderStyles,
     css`
       :host {
         display: block;
@@ -197,9 +199,7 @@ export class FileSelectGroup extends LitElement {
 
   private renderFileList(): TemplateResult {
     if (this.files.length === 0) {
-      return html`<div class="file-list-placeholder">
-        No files selected. Add or drop files here.
-      </div>`;
+      return renderEmptyMessage('No files selected. Add or drop files here.');
     }
 
     const movable = this.files.length > 1;

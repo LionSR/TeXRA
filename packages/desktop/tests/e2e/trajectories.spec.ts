@@ -257,8 +257,9 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
   await expect(review.locator('.desktop-review-file')).toContainText(
     'paper.tex',
   );
-  await expect(review.locator('.desktop-review-counts')).toContainText('+1');
-  await expect(review.locator('.desktop-review-counts')).toContainText('-1');
+  const counts = review.locator('.desktop-review-summary .file-stats');
+  await expect(counts).toContainText('+1');
+  await expect(counts).toContainText('-1');
   // Both sides of the change, as the diff editor renders them.
   const diff = review.locator('.monaco-diff-editor');
   await expect(diff).toContainText('old body');

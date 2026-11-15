@@ -1,4 +1,4 @@
-import { absurd, Effect, Result, Schema, SchemaIssue } from 'effect';
+import { absurd, Effect, Result, Schema } from 'effect';
 
 import { type StartInput } from '@texra-ai/harness';
 import {
@@ -13,6 +13,7 @@ import {
   agentKeyOf,
   agentName,
   type AgentConfig,
+  formatIssuesForDiagnostics,
   Rejected,
 } from '@texra-ai/harness/schemas';
 import { launchTeamId, resolveTeamLaunch } from '@texra/agent/teams/teamLaunch';
@@ -94,15 +95,8 @@ const buildLaunchConfig = Effect.fn('buildLaunchConfig')(function* (
     ? Schema.decodeUnknownResult(DocumentTaskOptionsSchema)(launch)
     : undefined;
   if (optionsResult !== undefined && !Result.isSuccess(optionsResult)) {
-    const [issue] = SchemaIssue.makeFormatterStandardSchemaV1()(
-      optionsResult.failure.issue,
-    ).issues;
-    const path =
-      issue?.path
-        ?.map((segment) =>
-          String(typeof segment === 'object' ? segment.key : segment),
-        )
-        .join('.') || 'options';
+    const [issue] = formatIssuesForDiagnostics(optionsResult.failure);
+    const path = issue?.path || 'options';
     return yield* new Rejected({
       reason: `Invalid task options (${path}): ${issue?.message ?? 'validation failed'}`,
     });

@@ -1053,14 +1053,6 @@ interface LogOptions {
 }
 ```
 
-## LogWriteError
-
-A write the store refused: nothing was written.
-
-```ts
-type LogWriteError = DatabaseAggregateClosed | DatabaseWriteFailed;
-```
-
 ## makeJsonRpcConnection
 
 ```ts
@@ -1287,20 +1279,6 @@ interface PluginDefinition<ROut> extends Omit<
    *  are offered while its layer is up, read with `Effect.serviceOption`. */
   readonly availability?: ToolAvailabilityChecks;
 }
-```
-
-## PluginFactRejected
-
-A plugin fact its writer refused in the job: its kind's rule
-(`FactKind.accepts`) rejected it against the aggregate's latest row, or
-it moves a plugin's aggregate under a run the store no longer holds
-open. Nothing was written.
-
-```ts
-class PluginFactRejected extends Schema.TaggedError<PluginFactRejected>()(
-  'PluginFactRejected',
-  { aggregateId: Schema.String, reason: Schema.String },
-)
 ```
 
 ## PluginHold

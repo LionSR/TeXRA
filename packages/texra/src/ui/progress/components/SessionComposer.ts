@@ -43,6 +43,7 @@ import {
 } from '@texra/shared/utils/clipboardImages';
 import { generatePastedImageName } from '@texra/shared/utils/pastedImageName';
 import { designTokens, commonViewStyles } from '@ui/styles';
+import { overlineDeclarations } from '@ui/styles/commonViewStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -220,11 +221,7 @@ export class SessionComposer extends LitElement {
       }
       .menu-heading {
         padding: var(--wa-space-3xs) var(--wa-space-xs);
-        font-size: var(--font-size-xs);
-        font-weight: var(--font-weight-semibold);
-        text-transform: uppercase;
-        letter-spacing: 0.02em;
-        color: var(--color-text-muted);
+        ${overlineDeclarations}
       }
 
       .recording::part(base) {

@@ -5,9 +5,11 @@
 import {
   DISPLAY_MATH_ENVIRONMENTS,
   GREEK_LETTER_CHARACTERS,
+  MATH_SYMBOL_SPELLINGS,
   UPPERCASE_GREEK_LETTER_CHARACTERS,
   withStarredForms,
 } from '@replacement/constants';
+import { createPatterns } from '@replacement/patterns';
 import { findBraceBalancedMacroCalls } from '@texra/utils/text/braceBalancedMacro';
 
 /**
@@ -139,69 +141,39 @@ const MATH_UNICODE_MAP: Record<string, string> = {
       .filter(([name]) => name !== 'omicron')
       .map(([name, char]) => [char, `\\${name}`]),
   ),
-  µ: '\\mu', // U+00B5 MICRO SIGN, beside the Greek mu
 
-  // Operators, relations, arrows and dots. Look-alikes listed separately:
-  // the minus sign U+2212, both parallels U+2225 and U+2016, both dots
-  // U+22C5 and U+00B7, and the increment U+2206 beside Greek Delta.
-  '−': '-',
-  '×': '\\times',
-  '÷': '\\div',
-  '≤': '\\leq',
-  '≥': '\\geq',
-  '≠': '\\neq',
+  // Operators, relations, arrows and dots that also have an HTML-entity
+  // spelling: MATH_SYMBOL_SPELLINGS owns the command, and its glyphs come in
+  // here (both dots ⋅ U+22C5 and · U+00B7 among them).
+  ...createPatterns(MATH_SYMBOL_SPELLINGS, (symbol) =>
+    symbol.glyphs.map((glyph): [string, string] => [glyph, symbol.command]),
+  ),
+
+  // Operators and relations with no HTML-entity twin.
   '≈': '\\approx',
   '≡': '\\equiv',
   '≅': '\\cong',
   '∼': '\\sim',
-  '∝': '\\propto',
   '≺': '\\prec',
   '≻': '\\succ',
-  '⊂': '\\subset',
-  '⊃': '\\supset',
-  '⊆': '\\subseteq',
-  '⊇': '\\supseteq',
-  '∈': '\\in',
-  '∉': '\\notin',
-  '∋': '\\ni',
-  '∩': '\\cap',
-  '∪': '\\cup',
   '∅': '\\emptyset',
-  '∞': '\\infty',
-  '∇': '\\nabla',
-  '∂': '\\partial',
-  '∫': '\\int',
   '∬': '\\iint',
   '∭': '\\iiint',
   '∮': '\\oint',
-  '∑': '\\sum',
-  '∏': '\\prod',
   '∠': '\\angle',
-  '⊥': '\\perp',
+  // Both parallels, U+2225 and U+2016.
   '∥': '\\parallel',
   '‖': '\\parallel',
-  '∧': '\\wedge',
-  '∨': '\\vee',
   '¬': '\\neg',
-  '⇒': '\\Rightarrow',
-  '⇔': '\\Leftrightarrow',
-  '↑': '\\uparrow',
-  '↓': '\\downarrow',
-  '←': '\\leftarrow',
-  '→': '\\rightarrow',
-  '↔': '\\leftrightarrow',
   '⟨': '\\langle',
   '⟩': '\\rangle',
-  '…': '\\ldots',
-  '⋅': '\\cdot',
-  '·': '\\cdot',
   '⋮': '\\vdots',
   '⋯': '\\cdots',
   '⋱': '\\ddots',
-  '°': '^{\\circ}',
   '′': '\\prime',
   '∗': '\\ast',
   '∘': '\\circ',
+  // The increment U+2206, beside Greek Delta.
   '∆': '\\Delta',
   '⌊': '\\lfloor',
   '⌋': '\\rfloor',

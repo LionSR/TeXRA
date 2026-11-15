@@ -21,6 +21,7 @@ import {
   runStatus,
 } from '@ui/copy/runStatus';
 import { designTokens, commonViewStyles } from '@ui/styles';
+import { overlineDeclarations } from '@ui/styles/commonViewStyles';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
@@ -58,11 +59,7 @@ export class RunTabs extends LitElement {
         align-items: center;
         gap: var(--wa-space-2xs);
         padding: var(--wa-space-xs) var(--wa-space-xs) var(--wa-space-3xs);
-        font-size: var(--font-size-xs);
-        font-weight: var(--font-weight-semibold);
-        letter-spacing: 0.02em;
-        text-transform: uppercase;
-        color: var(--color-text-secondary);
+        ${overlineDeclarations}
       }
       .group-heading .group-count {
         font-weight: var(--font-weight-normal);
@@ -247,7 +244,6 @@ export class RunTabs extends LitElement {
               title: 'No tasks yet',
               body: 'Tasks you start appear here.',
               headingTag: 'h3',
-              className: 'log-placeholder',
             }),
           )}
         </div>

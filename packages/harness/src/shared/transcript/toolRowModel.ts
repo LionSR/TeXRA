@@ -19,6 +19,11 @@ import {
   type ToolCallStatus,
 } from '@shared/schemas';
 import {
+  BASH_TOOL_DEFAULT_TIMEOUT_MS,
+  EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
+  executionsWaitTimeoutSeconds,
+} from '@shared/toolUse';
+import {
   executionsSubagentSummary,
   type RunLabels,
 } from '@shared/tools/executionsDisplay';
@@ -175,6 +180,9 @@ export interface ToolRowModel {
   readonly isError: boolean;
   readonly isUserFeedback: boolean;
   readonly isInProgress: boolean;
+  /** The limit a running call is stopped at, the one its tool enforces;
+   *  absent once it finished, and on a call with no limit. */
+  readonly timeoutMs?: number;
   readonly exitCode?: number;
 }
 
@@ -289,6 +297,40 @@ function outputSuppression(
 }
 
 // ---------------------------------------------------------------------------
+// Timeout
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-tool default timeouts. Every entry is a timeout the tool actually
+ * enforces: a tool with no timeout has no entry, so its row carries no limit
+ * it will never hit. `action`, where present, is the one action value the
+ * limit applies to; the tool's other actions have none.
+ */
+const TOOL_DEFAULT_TIMEOUTS: Readonly<
+  Record<string, { readonly ms: number; readonly action?: string }>
+> = {
+  bash: { ms: BASH_TOOL_DEFAULT_TIMEOUT_MS },
+  executions: {
+    ms: EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS * 1000,
+    action: 'wait',
+  },
+};
+
+/** The effective timeout of a call, from its input. */
+function toolTimeoutMs(toolName: string, input: unknown): number | undefined {
+  if (!Object.hasOwn(TOOL_DEFAULT_TIMEOUTS, toolName)) return undefined;
+  const spec = TOOL_DEFAULT_TIMEOUTS[toolName];
+  if (!Predicate.isObject(input)) return spec.ms;
+  if (spec.action && input.action !== spec.action) return undefined;
+  // A background call returns at once: the limit is not what it waits on.
+  if (input.run_in_background === true) return undefined;
+  if (toolName === 'executions') {
+    return executionsWaitTimeoutSeconds(input.timeout) * 1000;
+  }
+  return typeof input.timeout === 'number' ? input.timeout : spec.ms;
+}
+
+// ---------------------------------------------------------------------------
 // Fold
 // ---------------------------------------------------------------------------
 
@@ -356,6 +398,10 @@ export function toolRowModel(
   const userInstruction = normalized.userInstructionText
     ? transcriptText(normalized.userInstructionText)
     : undefined;
+  const isInProgress = normalized.status === TOOL_CALL_STATUS.IN_PROGRESS;
+  const timeoutMs = isInProgress
+    ? toolTimeoutMs(normalized.toolName, normalized.input)
+    : undefined;
 
   return {
     headerLabel: card?.title ?? displayToolName(normalized.toolName),
@@ -374,7 +420,8 @@ export function toolRowModel(
     ...(normalized.status ? { status: normalized.status } : {}),
     isError: normalized.status === TOOL_CALL_STATUS.FAILED,
     isUserFeedback: normalized.isUserFeedback,
-    isInProgress: normalized.status === TOOL_CALL_STATUS.IN_PROGRESS,
+    isInProgress,
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
     ...(normalized.exitCode !== undefined
       ? { exitCode: normalized.exitCode }
       : {}),

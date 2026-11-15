@@ -33,7 +33,9 @@ import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { GuiWindowHost } from '@texra/controllers/session/openGuiWindow';
 import {
   INSTRUCTION_ACTION,
+  INSTRUCTION_ACTION_BUTTON_LABELS,
   instructionActions,
+  READ_GUIDE_BUTTON_LABEL,
   type InstructionAction,
 } from '@ui/copy/instructionActions';
 import { shownFailureText } from '@ui/copy/modelAccess';
@@ -58,32 +60,19 @@ function warnOnFailure<E>(
 }
 
 /**
- * The button label and the program this host runs for each action token the
- * app offers beside an instruction (`instructionActions`): the binding to
- * VS Code commands is the extension's alone.
+ * The program this host runs for each action token the app offers beside
+ * an instruction (`instructionActions`): the binding to VS Code commands is
+ * the extension's alone.
  */
-const INSTRUCTION_ACTION_VIEW: Record<
+const INSTRUCTION_ACTION_RUN: Record<
   InstructionAction,
-  {
-    title: string;
-    run: (
-      roots: WorkspaceRoots,
-      runtime: ProcessRuntime,
-    ) => Effect.Effect<void, Error>;
-  }
+  (roots: WorkspaceRoots, runtime: ProcessRuntime) => Effect.Effect<void, Error>
 > = {
-  [INSTRUCTION_ACTION.SET_API_KEY]: {
-    title: 'Set API Key',
-    run: (roots, runtime) => withProcessServices(runtime, setApiKey(roots)),
-  },
-  [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]: {
-    title: 'Open Settings Guide',
-    run: () => openGuidePage('configuration'),
-  },
-  [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: {
-    title: 'Model Documentation',
-    run: () => openGuidePage('models'),
-  },
+  [INSTRUCTION_ACTION.SET_API_KEY]: (roots, runtime) =>
+    withProcessServices(runtime, setApiKey(roots)),
+  [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]: () =>
+    openGuidePage('configuration'),
+  [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: () => openGuidePage('models'),
 };
 
 function handleRequestShowError(
@@ -96,7 +85,7 @@ function handleRequestShowError(
   // becoming an unhandled rejection. A docs page is offered as a button.
   return vscodeUi
     .ask('error', shownFailureText(failure), {
-      items: docsPage ? ['View Docs'] : [],
+      items: docsPage ? [READ_GUIDE_BUTTON_LABEL] : [],
     })
     .pipe(
       Effect.flatMap((choice) =>
@@ -117,13 +106,13 @@ function handleRequestShowInstruction(
   payload: RequestShowInstructionPayload,
 ): Effect.Effect<void, Error> {
   const actions = instructionActions(payload.key).map((token) => {
-    const view = INSTRUCTION_ACTION_VIEW[token];
+    const title = INSTRUCTION_ACTION_BUTTON_LABELS[token];
     return {
-      title: view.title,
+      title,
       callback: () =>
         warnOnFailure(
-          view.run(roots, runtime),
-          `The instruction action "${view.title}" failed`,
+          INSTRUCTION_ACTION_RUN[token](roots, runtime),
+          `The instruction action "${title}" failed`,
         ),
     };
   });

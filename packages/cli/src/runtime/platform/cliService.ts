@@ -27,6 +27,7 @@ import {
   StateStores,
 } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
+import { SERVICE_SUBCOMMAND } from '@texra/controllers/server/discovery';
 import {
   openNodeWorkspaceRoots,
   canonicalizeWorkspaceRoot,
@@ -267,7 +268,7 @@ const spawnOwnService = (storageRoot: string) =>
   spawnService(storageRoot, process.execPath, [
     ...process.execArgv,
     readCliEntrypointPath(),
-    'serve',
+    SERVICE_SUBCOMMAND,
   ]);
 
 /** What the link's starter says instead of starting a service. */

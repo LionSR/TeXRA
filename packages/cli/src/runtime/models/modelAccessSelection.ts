@@ -1,6 +1,7 @@
 import { Effect, Schema } from 'effect';
 
-import { hasUsableApiKey } from '@texra-ai/llm';
+import { hasUsableApiKey, providerDisplayName } from '@texra-ai/llm';
+import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import { Secrets, type SettingsStores } from '@texra-ai/harness/plugins';
 import {
   toErrorMessage,
@@ -15,6 +16,7 @@ import {
   subscriptionProvider,
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
+import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 import {
@@ -118,7 +120,10 @@ const updateSubscriptionCliModelAccess = Effect.fn(
           new ModelAccessPreferenceFailed({
             member: 'setPreferSubscription',
             subscription: providerId,
-            message: `${displayName} subscription could not be disabled: ${toErrorMessage(cause)}`,
+            message: ACCOUNT_OUTCOME.subscriptionNotDisabled(
+              displayName,
+              toErrorMessage(cause),
+            ),
             cause,
           }),
       ),
@@ -193,7 +198,7 @@ const updateKeyedCliModelAccess = Effect.fn(
   const keySet = yield* hasUsableApiKey(secrets, plan.apiProvider);
   if (!keySet) {
     return {
-      message: `No ${plan.credentialName} API key configured — add one with /key or /config → API keys (get one at ${plan.credentialSetupUrl}).`,
+      message: `No ${providerDisplayName(plan.apiProvider)} API key configured — add one with /key or /config → API keys (get one at ${yield* getProviderKeyUrl(stores, plan.apiProvider)}).`,
     } satisfies CliModelAccessSelectionResult;
   }
   yield* runtime.setEnabled(stores, true).pipe(

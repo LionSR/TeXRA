@@ -9,7 +9,7 @@ import { expect } from 'vitest';
 // Local imports
 import { type RootedFileSystem } from '@texra-ai/harness/host';
 import { StorageFs } from '@texra-ai/harness/plugins';
-import { MEMORY_DISPLAY_ROOT } from '@agent/memory/memoryUtils';
+import { MEMORY_DISPLAY_ROOT } from '@agent/memory/memoryLayout';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { SessionGraph } from '@test/support/testKernel';

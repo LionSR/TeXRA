@@ -81,7 +81,7 @@ function conversationNodesForRow(
               kind: 'user-message',
               parts: [
                 { type: 'text', text: row.text.full },
-                ...(row.attachments ?? []).map((attachmentType) => ({
+                ...row.attachments.map((attachmentType) => ({
                   type: 'attachment' as const,
                   attachmentType,
                 })),

@@ -37,13 +37,8 @@ export const SKIP_CIRCLE = '⊘';
 /** Hollow dot: the off beat of a pulse, and a step queued but not started. */
 export const HOLLOW_DOT = '○';
 
-/** Script-call states beside the shared ones: half-filled while running,
- *  dashed when interrupted, a loop for a result reused from an earlier run,
- *  and a middle dot for a call the script never reached. */
-export const RUNNING_HALF = '◐';
-export const INTERRUPTED_CIRCLE = '◌';
+/** A script call whose result was reused from an earlier run. */
 export const REUSED = '↺';
-export const NOT_RUN = '·';
 
 /** Inline separator between facts on one line and between key hints. */
 export const SEPARATOR = ' · ';

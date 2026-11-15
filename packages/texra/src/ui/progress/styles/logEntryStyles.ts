@@ -98,6 +98,10 @@ export const logEntryStyles = css`
 
   /* Note: .detail-item base styles are in commonViewStyles; this adds log-specific variants */
 
+  .file-load-icon {
+    color: var(--tone-color);
+  }
+
   .file-link {
     color: var(--color-text-link);
     cursor: pointer;
@@ -134,13 +138,6 @@ export const logEntryStyles = css`
     display: flex;
     flex-direction: column;
     gap: var(--wa-space-3xs);
-  }
-
-  /* Per-file +added/-removed line-change counts in tool detail rows. The
-     inline-flex gap spaces the two counts without a per-span inline style. */
-  .file-stats {
-    display: inline-flex;
-    gap: var(--wa-space-2xs);
   }
 
   /* Note: .details-summary base styles are in commonViewStyles */

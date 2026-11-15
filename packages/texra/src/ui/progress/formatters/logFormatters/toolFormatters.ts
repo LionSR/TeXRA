@@ -20,17 +20,14 @@ import {
   normalizeToolName,
 } from '@texra-ai/harness/transcript';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
-import { runStatusLabel, statusGlyph } from '@ui/copy/runStatus';
+import { runStatusLabel, statusGlyph, TOOL_STATUS } from '@ui/copy/runStatus';
 import { TOOL_CUT_BY_RUN_END_NOTE } from '@ui/copy/scriptStage';
 import { ICON_NAMES, type IconName } from '@ui/wa/iconNames';
 
 // Local imports - formatter helpers
 import { buildToolUseSection, wrapInPre } from '../htmlBuilders';
 
-import {
-  buildToolUseDetails,
-  getToolTimeoutMs,
-} from './toolFormatters/toolCard';
+import { buildToolUseDetails } from './toolFormatters/toolCard';
 import {
   buildTerminalSection,
   buildToolSection,
@@ -64,7 +61,7 @@ export function formatToolUseTemplate(
   const { toolUse, model } = row;
   const running = model.isInProgress && !interrupted;
   const stopped = model.isInProgress && interrupted;
-  const { toolName, input } = toolUse;
+  const { toolName } = toolUse;
   const normalizedToolName = normalizeToolName(toolName);
   const displayKind = toolDisplayKind(toolName);
   const showAsError = model.isError && !model.isUserFeedback;
@@ -142,9 +139,8 @@ export function formatToolUseTemplate(
   const shouldOpen = running;
 
   // Live timer for in-progress tools, with timeout limit when available
-  const toolTimeoutMs = getToolTimeoutMs(toolName, input);
   // prettier-ignore
-  const timerTemplate = running ? html`<tool-timer .startTime=${row.timestamp} .timeoutMs=${toolTimeoutMs ?? 0}></tool-timer>` : nothing;
+  const timerTemplate = running ? html`<tool-timer .startTime=${row.timestamp} .timeoutMs=${model.timeoutMs ?? 0}></tool-timer>` : nothing;
 
   // prettier-ignore
   const stoppedTemplate = stopped ? html`<span class="tool-interrupted">${runStatusLabel('interrupted')}</span>` : nothing;
@@ -162,6 +158,7 @@ export function formatToolUseTemplate(
     extraClasses: {
       'tool-use-user-feedback': model.isUserFeedback,
       'tool-use-in-progress': running,
+      [`tone-${TOOL_STATUS.in_progress.tone}`]: running,
       'tool-use-interrupted': stopped,
     },
     extraContent,

@@ -1738,7 +1738,7 @@ prompt: |
               const releaseOnceQueued = () => {
                 const shown = stripVTControlCharacters(pty.output);
                 if (
-                  !shown.includes('Queued follow-ups (1)') ||
+                  !shown.includes('Queued message (1)') ||
                   !shown.includes(`1. ${message}`)
                 )
                   return pty.setTimer(releaseOnceQueued, 250);
