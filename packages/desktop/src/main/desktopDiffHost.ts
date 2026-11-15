@@ -4,10 +4,11 @@ import { Effect, FileSystem } from 'effect';
 
 import {
   buildDiffHunks,
+  countLineChanges,
   type ProcessRuntime,
+  reportDiffTimeout,
   withProcessServices,
 } from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
 import type { DiffLabel, DiffSource, DiffViewHost } from '@texra/hosts/uiHosts';
 import { monacoLanguageForPath } from '../shared/monacoLanguage';
 
@@ -95,12 +96,8 @@ export function createDesktopDiffHost(
         // Compare opens pairs no approval diffed, so this diff reports its
         // own timeout.
         const diff = buildDiffHunks(originalContent, proposedContent);
-        if (diff.timeout !== undefined) {
-          yield* Effect.logWarning(diff.timeout).pipe(
-            withLogChannel('unifiedDiff'),
-          );
-        }
-        const changed = diff.hunks.flatMap((hunk) => hunk.lines);
+        yield* reportDiffTimeout(diff.timeout);
+        const { added, removed } = countLineChanges(diff.hunks);
         options.postToRenderer({
           command: DESKTOP_DIFF_COMMANDS.SHOW_DIFF,
           session: reviewSession,
@@ -109,8 +106,8 @@ export function createDesktopDiffHost(
           displayPath,
           originalText: originalContent,
           proposedText: proposedContent,
-          additions: changed.filter((line) => line.startsWith('+')).length,
-          deletions: changed.filter((line) => line.startsWith('-')).length,
+          additions: added,
+          deletions: removed,
           language: monacoLanguageForPath(proposed.filePath),
         } satisfies DesktopShowDiffMessage);
       }),
