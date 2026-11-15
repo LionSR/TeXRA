@@ -49,8 +49,10 @@ export interface TranscriptRowBase {
   /** The writing event's id (a card's, a stream's, a stage's) or its durable
    *  coordinates; stable across deltas. */
   readonly id: string;
-  /** First-appearance order of the row within its run's transcript. */
-  readonly seqNo?: number;
+  /** First-appearance order of the row within its run's transcript: the
+   *  fold's slot counter. A host-local row carries the position it was
+   *  written after (0: before every row), which places it in the merge. */
+  readonly seqNo: number;
   /** Order in which the source row became printable, when it has settled. */
   readonly settlementSeqNo?: number;
   readonly timestamp: number;

@@ -1,10 +1,11 @@
 /**
  * Local CLI rows: notices the TUI itself prints into a conversation (a model
  * fallback, a skill activation, a slash-command result). They are not
- * events and never part of the session view; they are one list of `{ runId, afterSeq, row }`, and the conversation panes
- * merge them into the run's rows by `afterSeq` at render: a join
- * of two inputs ordered by the same transcript seq, so a row the session view's
- * residency cap drops never shifts a notice.
+ * events and never part of the session view; they are one list of `{ runId, row }`, and the conversation panes
+ * merge them into the run's rows by the notice row's `seqNo` (the position
+ * it was written after) at render: a join of two inputs ordered by the same
+ * transcript seq, so a row the session view's residency cap drops never
+ * shifts a notice.
  */
 import { randomUUID } from 'node:crypto';
 
@@ -42,14 +43,13 @@ export const paintedRunIds = computed((): readonly RunId[] => {
 
 export interface LocalNotice {
   readonly runId: RunId;
-  /** The settlement seq of the row the notice follows; 0 before any. */
-  readonly afterSeq: number;
+  /** Its `seqNo` is the transcript seq of the row it follows; 0 before any. */
   readonly row: TranscriptRow;
 }
 
 /** The transcript seq a row finishes at, for the notice join. */
-function rowSeq(row: TranscriptRow | undefined): number {
-  return row?.settlementSeqNo ?? row?.seqNo ?? 0;
+function rowSeq(row: TranscriptRow): number {
+  return row.settlementSeqNo ?? row.seqNo;
 }
 
 export const notices = chatField('localNotices');
@@ -72,9 +72,10 @@ export function appendLocalUserTranscript(text: string): void {
 function localTranscriptRow(
   kind: 'notice' | 'error' | 'user',
   id: string,
+  seqNo: number,
   text: string,
 ): TranscriptRow {
-  const base = { id, origin: 'local', timestamp: Date.now() } as const;
+  const base = { id, seqNo, origin: 'local', timestamp: Date.now() } as const;
   const body = transcriptText(text);
   if (kind === 'error') {
     return {
@@ -109,13 +110,17 @@ function appendLocalTranscriptEntry(
       ? CLI_LOCAL_RUN_ID
       : (runViewOf(view, active)?.parentId ?? active));
   focusRun(runId, { when: 'unset' });
-  const afterSeq = rowSeq(runViewOf(view, runId)?.transcript.rows.at(-1));
+  const last = runViewOf(view, runId)?.transcript.rows.at(-1);
   notices.set([
     ...notices.get(),
     {
       runId,
-      afterSeq,
-      row: localTranscriptRow(kind, `local:${randomUUID()}`, normalized),
+      row: localTranscriptRow(
+        kind,
+        `local:${randomUUID()}`,
+        last === undefined ? 0 : rowSeq(last),
+        normalized,
+      ),
     },
   ]);
 }
@@ -130,7 +135,7 @@ export function moveLocalTranscriptToRun(runId: RunId): void {
   notices.set(
     current.map((notice) =>
       notice.runId === CLI_LOCAL_RUN_ID
-        ? { ...notice, runId, afterSeq: 0 }
+        ? { runId, row: { ...notice.row, seqNo: 0 } }
         : notice,
     ),
   );
@@ -155,7 +160,7 @@ export function noticesFor(
 
 /**
  * The run's rows with its notices inserted after the last row whose seq is at
- * or below their `afterSeq`, in notice order: the merged index is the print
+ * or below their own `seqNo`, in notice order: the merged index is the print
  * order. A notice written before the run's first row goes ahead of it. The
  * merged `settledRows` is the finished prefix plus every notice anchored
  * inside it (a notice is immutable the moment it is written, and keeps its
@@ -177,16 +182,18 @@ export function mergeLocalNotices(
       next += 1;
     }
   };
-  for (const notice of runNotices.toSorted((a, b) => a.afterSeq - b.afterSeq)) {
-    flushThrough(notice.afterSeq);
-    out.push(notice.row);
+  for (const { row } of runNotices.toSorted(
+    (a, b) => a.row.seqNo - b.row.seqNo,
+  )) {
+    flushThrough(row.seqNo);
+    out.push(row);
   }
   for (; next < rows.length; next += 1) out.push(rows[next]);
   return {
     rows: out,
     settledRows:
       settledRows +
-      runNotices.filter((notice) => notice.afterSeq <= settledSeq).length,
+      runNotices.filter((notice) => notice.row.seqNo <= settledSeq).length,
   };
 }
 
