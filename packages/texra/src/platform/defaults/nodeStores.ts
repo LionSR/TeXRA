@@ -47,12 +47,12 @@ import {
  * project cannot supply. The home is never chosen by writability, so no value
  * can be stranded in a store another open did not pick. A read-only project
  * reads its file and fails loudly at the first write. A file that cannot be
- * read (missing permissions, malformed JSON) is reported through `warn` and
+ * read (missing permissions, malformed JSON) is reported in `warnings` and
  * serves as an empty, effectively read-only view: every write re-reads the
  * file and fails rather than overwriting it.
  *
  * A project file that sets a row the catalog scopes to the user (the approval
- * settings) is ignored, and `warn` names each such key: a cloned repository
+ * settings) is ignored, and `warnings` names each such key: a cloned repository
  * must not loosen approvals, and the person must not find out by surprise.
  * A project opt-out of telemetry is honoured, not ignored, so it is not warned.
  * The file is left as it is, so the warning repeats until the key is removed.
@@ -66,8 +66,8 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
   catalog: SettingsCatalog,
   storageRoot: string,
   workspaceRoot: string | undefined,
-  warn: (message: string) => void,
 ) {
+  const warnings: string[] = [];
   const openLocal = JsonStore.open(
     path.join(
       resolveWorkspaceStoragePath(storageRoot, workspaceRoot),
@@ -76,7 +76,7 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
   );
   if (!workspaceRoot) {
     const store = yield* openLocal;
-    return { workspace: store, local: store };
+    return { workspace: store, local: store, warnings };
   }
   const projectConfigPath = workspaceTexraConfigPath(workspaceRoot);
   const [workspace, local] = yield* Effect.all(
@@ -84,7 +84,7 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
       JsonStore.open(projectConfigPath).pipe(
         Effect.catch((error) =>
           Effect.sync(() =>
-            warn(
+            warnings.push(
               `Cannot read ${projectConfigPath}; project settings are ignored and cannot be saved until it is fixed. Cause: ${toErrorMessage(error)}`,
             ),
           ).pipe(Effect.andThen(JsonStore.unreadable(projectConfigPath))),
@@ -97,11 +97,11 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
   for (const key of workspace.keys()) {
     const row = catalog.byStoredKey(key);
     if (!projectValueIgnored(row, workspace.get(key))) continue;
-    warn(
+    warnings.push(
       `Ignoring "${key}" in ${projectConfigPath}: a project file cannot set it. Set it in the settings view or with /config.`,
     );
   }
-  return { workspace, local };
+  return { workspace, local, warnings };
 });
 
 /**
@@ -109,7 +109,8 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
  * workspace `workspaceRoot` under `storageRoot`. Neither store creates
  * anything on open, so a caller that must not create a directory under the
  * storage root (the CLI's pre-platform startup read, whose `clone` entry may
- * only be able to read it) is served too.
+ * only be able to read it) is served too. `warnings` is what the workspace
+ * open reported.
  */
 export const openTexraConfigStores = Effect.fn(
   'nodeStores.openTexraConfigStores',
@@ -117,11 +118,10 @@ export const openTexraConfigStores = Effect.fn(
   catalog: SettingsCatalog,
   storageRoot: string,
   workspaceRoot: string | undefined,
-  warn: (message: string) => void,
 ) {
-  const [{ workspace, local }, global] = yield* Effect.all(
+  const [{ workspace, local, warnings }, global] = yield* Effect.all(
     [
-      openTexraWorkspaceConfigStores(catalog, storageRoot, workspaceRoot, warn),
+      openTexraWorkspaceConfigStores(catalog, storageRoot, workspaceRoot),
       JsonStore.open(
         path.join(
           resolveGlobalStoragePath(storageRoot),
@@ -132,9 +132,12 @@ export const openTexraConfigStores = Effect.fn(
     { concurrency: 'unbounded' },
   );
   return {
-    workspace,
-    global,
-    local,
-    catalog,
-  } satisfies JsonConfigProviderOptions;
+    stores: {
+      workspace,
+      global,
+      local,
+      catalog,
+    } satisfies JsonConfigProviderOptions,
+    warnings,
+  };
 });

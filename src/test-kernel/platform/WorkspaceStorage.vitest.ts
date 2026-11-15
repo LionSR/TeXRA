@@ -59,13 +59,10 @@ describe('workspace storage defaults', () => {
         yield* Effect.promise(() =>
           writeFile(join(workspaceRoot, '.texra', 'config.json'), '{ broken'),
         );
-        const warnings: string[] = [];
-
-        const stores = yield* openTexraConfigStores(
+        const { stores, warnings } = yield* openTexraConfigStores(
           TEXRA_SETTINGS.catalog,
           root,
           workspaceRoot,
-          (m: string) => warnings.push(m),
         );
         const write = yield* Effect.exit(
           stores.workspace.set('texra.files.exclude', ['dist']),
