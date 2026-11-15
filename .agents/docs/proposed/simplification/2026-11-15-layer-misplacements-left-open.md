@@ -57,24 +57,7 @@ Decision needed: the capability's name on the model config, and whether
 `IS_ANTHROPIC_MODEL` is dropped (it breaks a user agent that reads it) or
 kept as a derived value for one release. It changes the plugins API report.
 
-## 3. What a setup launch's outcomes mean is decided per GUI host
-
-`launchSetup` (`packages/texra/src/controllers/onboarding/setupLaunch.ts`)
-fails with `SetupAlreadyRunning` or `NoSetupModel`, and each host maps them:
-
-| Outcome         | Extension (`commands/setup/setupAssistantCommand.ts`) | Desktop (`main/desktopWindowOnboarding.ts`) |
-| --------------- | ----------------------------------------------------- | ------------------------------------------- |
-| already running | a notice, then the task list                          | nothing                                     |
-| no setup model  | the Connect-a-model card                              | an error dialog                             |
-| double click    | no guard                                              | `FiberHandle.run(…, { onlyIfMissing })`     |
-
-The `runSetup` arm of `openGuiWindow` holds everything both read. It can own
-the mapping and the one-launch-at-a-time guard, with the host supplying only
-`connectModel` and `showTasks`. Decision needed: which of the three rows is
-intended on the desktop. The "no setup model" difference may be deliberate
-(the desktop shows no API-key banner); the other two look accidental.
-
-## 4. Provider usage endpoints live in app controllers
+## 3. Provider usage endpoints live in app controllers
 
 `packages/texra/src/controllers/modelAccess/subscriptionUsage/` calls the Kimi
 and GLM quota endpoints and picks the GLM host by region, which
@@ -85,7 +68,7 @@ the plan routes in `packages/llm`; the app keeps the cache
 The refuted `G11g-usage-region-out-of-cache-key` is about the cache key, not
 this.
 
-## 5. The merge feature's edited file is a harness launch field
+## 4. The merge feature's edited file is a harness launch field
 
 `editedFile` on the harness's `AgentConfig`
 (`packages/harness/src/shared/schemas/fileFields.ts`) and the `EDITED_*`
@@ -96,7 +79,7 @@ already render its own variables beside the harness's, so the documents
 plugin can own it. `AgentConfig` is stored in run rows, so this is a row
 version change.
 
-## 6. The run list is built twice
+## 5. The run list is built twice
 
 `packages/texra/src/ui/progress/components/RunTabs.ts` and
 `packages/cli/src/chat/tui/state/cliState.ts` each group top-level runs by
@@ -108,7 +91,7 @@ The copies differ in scope (the terminal lists one session's runs and appends
 detached children; the web has search and an active-only filter), so the
 function takes those as arguments. About 40 lines.
 
-## 7. Web components replace the status word `runStatus` decides
+## 6. Web components replace the status word `runStatus` decides
 
 `RunHeader.ts` shows "Ready" for a finished run that accepts a follow-up and
 `RunTab.ts` shows "Needs approval" when a descendant waits; the terminal
@@ -117,7 +100,7 @@ and "Completed" in the web tab and the terminal. Either the two readings
 become keys in `packages/texra/src/shared/session/runStatusKey.ts`, or the
 overrides go. Decision needed: which word is right.
 
-## 8. A tool call's time limit and its interrupted reading are decided in the web renderer
+## 7. A tool call's time limit and its interrupted reading are decided in the web renderer
 
 - `getToolTimeoutMs` in
   `packages/texra/src/ui/progress/formatters/logFormatters/toolFormatters/toolCard.ts`
@@ -132,7 +115,7 @@ overrides go. Decision needed: which word is right.
 
 Both change the transcript entry's API report.
 
-## 9. Child counts call every descendant an agent
+## 8. Child counts call every descendant an agent
 
 `rollup.total` counts commands and scripts as well as agents, and
 `nestedRollupLabel`, `RunTab.ts` and the terminal status bar label the total
@@ -142,7 +125,7 @@ commands in the background" on the card. The rollup needs a count per
 identity kind (it is computed once in the session view update), which is a
 view shape change.
 
-## 10. The harness classifies the Claude Code plugin's raw tool names
+## 9. The harness classifies the Claude Code plugin's raw tool names
 
 `packages/harness/src/shared/tools/toolKind.ts` and
 `shared/transcript/toolRowSections.ts` special-case `edit`, `multiedit`,
@@ -156,14 +139,11 @@ the repo.
 
 ## Checked and left alone
 
-- The settings view's `revealRun`, `runLabel` and `selectLauncherAgent`
-  bindings are written per host over the same session and bridge, but the
-  hosts differ in which project they address (the desktop's settings view
-  spans projects and has an `unavailable` case; the extension reveals its
-  view between the check and the selection). Moving them saves under ten
-  lines and adds three members to the window's return.
-- The rejected-GitHub-token notice differs by host on purpose: the extension
-  offers a button that opens the Git settings tab.
+- What a setup launch's outcomes do per GUI host, the settings view's run
+  verbs and the rejected-GitHub-token notice were verified here too. #14952's
+  note (`2026-11-15-host-rules-and-app-facts-with-two-owners.md`, same
+  directory once it merges) records them with the decision each needs, so
+  they are not repeated.
 - `recoverLogged` (`packages/texra/src/utils/diagnostics/recoverLogged.ts`) is
   generic, but moving it to the harness pays only if harness call sites adopt
   it.
