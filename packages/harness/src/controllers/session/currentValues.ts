@@ -41,11 +41,12 @@ ON CONFLICT(family, key) DO UPDATE SET
   value = excluded.value, at = excluded.at
 `;
 
-/** The keys' rows in key order: their text is equal exactly when no value
- *  changed. */
-const SNAPSHOT = `SELECT key, value FROM current_value
-  WHERE family = ? AND key IN (SELECT value FROM json_each(?))
-  ORDER BY key`;
+/** The keys' rows in key order as one JSON text: equal exactly when no
+ *  value changed. */
+const SNAPSHOT = `SELECT json_group_array(json_array(key, value) ORDER BY key)
+    AS snapshot
+  FROM current_value
+  WHERE family = ? AND key IN (SELECT value FROM json_each(?))`;
 
 /** Append an entry unless it repeats the latest; a row back when it did. */
 const APPEND_HISTORY = `INSERT INTO input_history (at, value)
@@ -188,15 +189,8 @@ export function currentValues(store: {
     changes: (family, keys) =>
       SubscriptionRef.changes(written).pipe(
         Stream.mapEffect(() =>
-          exec(SNAPSHOT, [family.name, JSON.stringify(keys)]).pipe(
-            Effect.map((rows) =>
-              JSON.stringify(
-                rows.map((row) => [
-                  decodeString(row.key),
-                  decodeString(row.value),
-                ]),
-              ),
-            ),
+          execOne(SNAPSHOT, [family.name, JSON.stringify(keys)]).pipe(
+            Effect.map((row) => row?.snapshot),
             Effect.tapError((error) =>
               Effect.logWarning(
                 `Could not read whether ${keys.join(', ')} changed; retrying.`,
