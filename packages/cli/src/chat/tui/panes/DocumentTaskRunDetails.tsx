@@ -30,6 +30,7 @@ import {
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
 import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
+import { formatLineChanges } from '@ui/copy/format';
 import { stageStatus } from '@ui/copy/runStatus';
 
 interface DocumentTaskRunDetailLine {
@@ -116,7 +117,9 @@ function documentTaskRunDetailGroups(
       });
       for (const [index, file] of outputs.entries()) {
         const counts = outputDiffCounts(file.diff);
-        const diff = counts ? ` (+${counts.added} -${counts.removed})` : '';
+        const diff = counts
+          ? ` (${formatLineChanges(counts.added, counts.removed)})`
+          : '';
         lines.push({
           key: `output:${round}:${file.location.absolutePath}:${index}`,
           // Neutral bullet, not `›` — POINTER means "focused row / your

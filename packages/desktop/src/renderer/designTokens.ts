@@ -7,8 +7,8 @@
 // Adopted sheets cascade after the document's own, so the shared base goes
 // in a layer: any unlayered renderer rule then refines it, whatever order
 // the sheets load in.
-import { designTokens } from '@ui/styles';
-import { noticeStyles } from '@ui/styles/surfaceStyles';
+import { designTokens, visuallyHiddenStyles } from '@ui/styles';
+import { lineChangeStatsStyles, noticeStyles } from '@ui/styles/surfaceStyles';
 import { toneStyles } from '@ui/styles/toneStyles';
 import {
   buttonStyles,
@@ -30,6 +30,8 @@ shared.replaceSync(
     settingsRowStyles,
     noticeStyles,
     toneStyles,
+    visuallyHiddenStyles,
+    lineChangeStatsStyles,
   ]
     .map((sheet) => sheet.cssText)
     .join('\n')}\n}`,

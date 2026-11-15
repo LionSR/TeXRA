@@ -36,22 +36,6 @@
   white-space: nowrap;
 }
 
-.desktop-review-counts {
-  display: inline-flex;
-  flex: none;
-  gap: var(--wa-space-2xs);
-  font-family: var(--wa-font-family-mono);
-  font-size: var(--font-size-sm);
-}
-
-.desktop-review-counts .is-added {
-  color: var(--color-success);
-}
-
-.desktop-review-counts .is-deleted {
-  color: var(--color-error);
-}
-
 .desktop-review-file-count {
   flex: none;
   margin-left: auto;
