@@ -1,5 +1,5 @@
 import { textDisplayWidth } from '@cli/runtime/terminal/terminalText';
-import { clampCursor, graphemeAt } from './textInputEditing';
+import { clampCursor, graphemesOf } from './textInputEditing';
 
 interface TextInputDisplayWindow {
   readonly value: string;
@@ -30,10 +30,14 @@ function shouldWrapAtPreviousSoftBreak(
   return column - lastSoftBreakColumn <= Math.max(8, Math.floor(width / 4));
 }
 
-function softBreakRunEnd(value: string, start: number): number {
+function softBreakRunEnd(
+  value: string,
+  graphemeAt: ReturnType<typeof graphemesOf>,
+  start: number,
+): number {
   let index = start;
   while (index < value.length) {
-    const point = graphemeAt(value, index);
+    const point = graphemeAt(index);
     if (point === undefined || !isSoftBreakChar(point.text)) break;
     index = point.end;
   }
@@ -55,6 +59,7 @@ function textInputDisplayRows(
   width: number,
 ): TextInputDisplayRow[] {
   const rows: TextInputDisplayRow[] = [];
+  const graphemeAt = graphemesOf(value);
   let rowStart = 0;
   let column = 0;
   let lastSoftBreakIndex: number | undefined;
@@ -62,7 +67,7 @@ function textInputDisplayRows(
 
   let index = 0;
   while (index < value.length) {
-    const point = graphemeAt(value, index);
+    const point = graphemeAt(index);
     if (point === undefined) break;
 
     if (point.text.endsWith('\n')) {
@@ -79,7 +84,7 @@ function textInputDisplayRows(
     if (column + charWidth > width && column > 0) {
       let wrapIndex = index;
       if (isSoftBreakChar(point.text)) {
-        wrapIndex = softBreakRunEnd(value, index);
+        wrapIndex = softBreakRunEnd(value, graphemeAt, index);
       } else if (
         lastSoftBreakIndex !== undefined &&
         lastSoftBreakIndex > rowStart &&
@@ -144,9 +149,10 @@ function leadingEllipsisDisplay(
   }
 
   const budget = width - textDisplayWidth('…');
+  const graphemeAt = graphemesOf(text);
   let start = text.length;
   while (start > 0) {
-    const point = graphemeAt(text, start - 1);
+    const point = graphemeAt(start - 1);
     if (point === undefined) break;
     if (textDisplayWidth(text.slice(point.start)) > budget) break;
     start = point.start;

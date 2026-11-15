@@ -17,24 +17,37 @@ export function clampCursor(cursor: number, length: number): number {
 
 const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
+interface Grapheme {
+  readonly text: string;
+  readonly start: number;
+  readonly end: number;
+}
+
 /**
- * The grapheme cluster holding code unit `index`: the unit a caret steps
- * over and a delete removes, so an emoji sequence or a letter with combining
- * marks is never cut inside. `undefined` at or past the end of `value`.
+ * Looks up the grapheme cluster holding a code unit of `value`: the unit a
+ * caret steps over and a delete removes, so an emoji sequence or a letter
+ * with combining marks is never cut inside. The lookup answers `undefined`
+ * at or past the end. A pass over a whole value takes one lookup and reuses
+ * it: segmenting again for every character is quadratic.
  */
-export function graphemeAt(
+export function graphemesOf(
   value: string,
-  index: number,
-):
-  | { readonly text: string; readonly start: number; readonly end: number }
-  | undefined {
-  const found = GRAPHEMES.segment(value).containing(index);
-  if (found === undefined) return undefined;
-  return {
-    text: found.segment,
-    start: found.index,
-    end: found.index + found.segment.length,
+): (index: number) => Grapheme | undefined {
+  const segments = GRAPHEMES.segment(value);
+  return (index) => {
+    const found = segments.containing(index);
+    if (found === undefined) return undefined;
+    return {
+      text: found.segment,
+      start: found.index,
+      end: found.index + found.segment.length,
+    };
   };
+}
+
+/** The grapheme cluster holding code unit `index` of `value`. */
+export function graphemeAt(value: string, index: number): Grapheme | undefined {
+  return graphemesOf(value)(index);
 }
 
 /** ← target: the start of the grapheme before the cursor. */
