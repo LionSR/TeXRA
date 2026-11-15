@@ -1,6 +1,6 @@
 Read at `cb22acd`. Covered: `packages/texra/src/controllers/`, `hosts/`, `platform/`, `housekeeping/`, `telemetry/`, compared with `packages/extension/src/progressView/extensionHostRequests.ts` and `packages/desktop/src/main/desktopHostRequests.ts`.
 
-Status: in progress. Findings below are verified in the source; later sections are appended as the audit continues.
+Status: complete. TC2-1 to TC2-6 are the first auditor's, spot-checked (two line ranges corrected in TC2-2; TC2-4 is fixed by open PR #14953 and kept only so the ids stay stable); TC2-7 to TC2-13 continue the slice.
 
 ### TC2-1: The resources directory and the export's LaTeX preamble are process facts that each host threads through its window
 
@@ -23,7 +23,7 @@ Status: in progress. Findings below are verified in the source; later sections a
 - **Evidence:**
   - `texraProcessLayer` serves the function as the harness's `CommandDirs` reference (`controllers/texraProcessLayer.ts:123`), and the harness offers `withCommandDirs(env)` (`packages/harness/src/utils/system/platformPaths.ts:112-115`).
   - Ten call sites in eight files skip the service and import `commandDirs` from `platform/defaults/commandDirs.ts`: `tools/media/audio.ts:183`, `tools/agentCli/vendorPackages.ts:231`, `tools/setup/ProbeEnvironmentTool.ts:123`, `utils/system/binaryResolver.ts:78,101`, `utils/system/toolChecks.ts:196`, `packages/desktop/src/main/desktopPtyHost.ts:119`, `packages/extension/src/frontend/setup.ts:28`. Four of them write `withExtendedPath(env, commandDirs())`, which is `withCommandDirs(env)`.
-  - The function memoizes in `let cachedExtraDirs: string[] | null = null` (`commandDirs.ts:13,71-74,261-262`): module-level mutable state with no reset handle, returned unfrozen across the module boundary. G11h (round 2) named the two caches in `binaryResolver` and `toolChecks`; this one feeds both and was not listed. `warnSkippedDir` (`:21-23`) writes the log sink directly because "there is no fiber to log from", which is a consequence of the same choice.
+  - The function memoizes in `let cachedExtraDirs: string[] | null = null` (`commandDirs.ts:17,79-82,261-262`): module-level mutable state with no reset handle, returned unfrozen across the module boundary. G11h (round 2) named the two caches in `binaryResolver` and `toolChecks`; this one feeds both and was not listed. `warnSkippedDir` (`:25-27`) writes the log sink directly because "there is no fiber to log from", which is a consequence of the same choice. (LR's desktop `pathFix` finding is a third PATH writer beside this owner; this finding is the owner's own two access paths.)
 - **Better design:** the directories are computed once by the layer that serves them (`Layer.sync`/`Layer.effect(CommandDirs)`, where the skipped-directory warnings are `Effect.logWarning`), and app code inside a fiber reads `CommandDirs` (`withCommandDirs`). The two host sites that run outside a fiber (`desktopPtyHost`, the extension's `setup.ts`) read the value from their process runtime.
 - **Deleted:** `cachedExtraDirs`, `warnSkippedDir` and its direct `writeLogLine`, seven direct imports of `commandDirs`, four `withExtendedPath(…, commandDirs())` spellings.
 - **Size:** about 80 lines, 9 files.
@@ -47,6 +47,7 @@ Status: in progress. Findings below are verified in the source; later sections a
 
 ### TC2-4: Each host re-tags a failed capability by hand where `hostFailure` is the one wording
 
+- **Status:** fixed by open PR #14953 (`claude/optimistic-cori-q0n270`): it adds `hostFailed(member, cause)` to `hostCallFailure.ts` and uses it at all three sites (`git show origin/claude/optimistic-cori-q0n270:packages/desktop/src/main/desktopHostRequests.ts`, lines 189 and 201; the extension's `failed`, line 161). Drop it from the catalogue; kept here so the ids stay stable.
 - **Package:** extension, desktop (the owner is texra's `hostCallFailure.ts`)
 - **Flags:** repetition
 - **Evidence:** `hostFailure(member, cause)` (`controllers/session/hostCallFailure.ts:45-52`) builds `new HostFailed({ member, message: toErrorMessage(cause), cause })` and keeps a refusal as itself. The same literal is written out at `packages/extension/src/progressView/extensionHostRequests.ts:139-144` (`failed`), `packages/desktop/src/main/desktopHostRequests.ts:184-190` (`openDiff`) and `:204-211` (`openPath`). The hand-written ones also wrap a `Rejected`/`Cancelled` the callee already worded, which `hostFailure` would pass through.

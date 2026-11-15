@@ -51,6 +51,7 @@ Read on `main` at `cb22acd`. Covered: `packages/extension/src/` (`extension.ts`,
 - **Deleted:** four parameters, one interface member, one class field, the destructuring at `extension.ts:460`.
 - **Size:** ~20 lines, 3 files.
 - **Risk / owner decision:** none. `ProgressViewProvider.ts` is in open PR scope (see "Open PRs" below); rebase on it.
+- **Earlier record:** the pass-through lens listed this threading under M8 (`../2026-11-07-design-red-flags-lenses/pass-through.md:578-598`), whose fix was to drop `WorkspaceRoots.globalState`; that part was refused (`PLATFORM-roots-drop-global-slots` in `refuted-candidates.json`). The fix here is the opposite direction and consistent with the refusal: the field stays on the roots, and the second copy beside them goes. The lens's `extensionHostRequests` hop (`options.globalState`) is already gone.
 
 ### EX-5: The progress view's placement verbs exist three times, and five of them reach its own host table through a `Deferred`
 
