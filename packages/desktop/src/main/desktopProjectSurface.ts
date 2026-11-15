@@ -142,27 +142,13 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
             projects.active().root ?? app.getPath('home'),
             ['openDirectory', 'createDirectory'],
           ),
-        // Catalog refresh leaves each Surface's selections intact. Applying
-        // an agent mode separately sends the chosen root to that project's
-        // launcher. Each project's catalogs answer for that project: its
-        // snapshot source was built over its own roots.
-        refreshCatalogs: Effect.fn('refreshCatalogs')(
-          function* (selectedAgent) {
-            yield* bindings.eachSnapshot(
-              (snapshot) => snapshot.refreshCatalogs,
-            );
-            if (!selectedAgent) return;
+        // Applying a team sends its root to this project's launcher only.
+        selectLauncherAgent: (agent) =>
+          Effect.sync(() => {
             const binding = bindings.get(project.key);
             if (!binding || binding !== documentBinding) return;
-            binding.bridge.surfaceAction({
-              kind: 'launch',
-              patch: { agent: selectedAgent },
-            });
-          },
-        ),
-        refreshCredentialStatus: Effect.suspend(() =>
-          bindings.eachSnapshot((snapshot) => snapshot.refreshHostBanners),
-        ),
+            binding.bridge.surfaceAction({ kind: 'launch', patch: { agent } });
+          }),
         // Selection is the surface's: a settings jump asks the shown
         // project's surface to select the run, and reports a run the view no
         // longer holds as missing.

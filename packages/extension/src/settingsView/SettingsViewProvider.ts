@@ -143,14 +143,8 @@ export class SettingsViewProvider {
               selectFolder({ title, openLabel: 'Select Folder' }),
               (selected) => selected ?? undefined,
             ),
-          refreshCatalogs: (selectedAgent) =>
-            progressView.refreshCatalogs({
-              agentCatalogAlreadyFresh: true,
-              selectedAgent,
-            }),
-          // The launcher's API-key banner reads the same credential probe from
-          // the host snapshot; the funnel follows the banner.
-          refreshCredentialStatus: progressView.refreshApiKeyStatus,
+          selectLauncherAgent: (agent) =>
+            progressView.selectLauncherAgent(agent),
           signInSubscription: (providerId) =>
             Effect.asVoid(signInWithSubscription(roots, providerId)),
           revealRun: (runId) => progressView.revealRun(runId),

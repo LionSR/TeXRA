@@ -14,12 +14,16 @@
  * and then writes its own fields, so the last write of a field wins and no
  * producer waits on another; the snapshot is the inputs mapped, so a field
  * derived from several inputs (the funnel, a banner's visibility) is never
- * stored.
+ * stored. The catalogs and the credential follow the app signals that
+ * announce their changes, written by any writer in the process, so no host
+ * or settings page pushes a reload; the approval policy is read live as
+ * each snapshot is mapped.
  */
 import {
   Effect,
   type FileSystem,
   Option,
+  Predicate,
   type Path,
   type Scope,
   Semaphore,
@@ -29,8 +33,8 @@ import {
 import {
   AgentDirectories,
   AppState,
-  appSignalStream,
   getEnabledModels,
+  subscribeAppSignal,
   readModelOptions,
   workspaceEnvironmentLayer,
 } from '@texra-ai/harness/host';
@@ -41,7 +45,11 @@ import {
   type Secrets,
   type SettingsStores,
 } from '@texra-ai/harness/plugins';
-import { APPROVAL_POLICY_SETTING } from '@texra-ai/harness/schemas';
+import {
+  APPROVAL_POLICY_SETTING,
+  ensureError,
+} from '@texra-ai/harness/schemas';
+import { apiKeyEntry } from '@texra-ai/llm';
 import { GIT_COMMITS_TO_SHOW_SETTING } from '@texra/shared/settings/texraSettings';
 import { loadTeamOptions } from '@texra/agent/teams/teamLaunch';
 import type {
@@ -150,14 +158,6 @@ export interface HostSnapshotSource {
     | Path.Path
     | ChildProcessSpawner
   >;
-  /** The agent, team, and model catalogs changed (an agent list edit, a
-   *  credential, a sign-in). The model catalog reads the process `Secrets`
-   *  and its subscription accounts. */
-  readonly refreshCatalogs: Effect.Effect<
-    void,
-    never,
-    AgentCatalog | Secrets | SubscriptionAccounts
-  >;
   /** The project's files changed on disk, or the surface asked for a relist. */
   readonly refreshFiles: Effect.Effect<
     void,
@@ -165,8 +165,8 @@ export interface HostSnapshotSource {
     FileSystem.FileSystem | Path.Path
   >;
   readonly refreshCommits: Effect.Effect<void, never, ChildProcessSpawner>;
-  /** The host's own banners changed (a key stored, a tool installed): the
-   *  credential and the missing tools are checked again. */
+  /** A tool may have been installed: the missing tools are checked again,
+   *  with the credential. */
   readonly refreshHostBanners: Effect.Effect<
     void,
     never,
@@ -211,8 +211,8 @@ const keepOnFailure =
 
 /**
  * The project's display record and the catalogs, assembled per session for
- * the caller's scope: the scope holds the followers of the onboarding flags
- * and of credential changes.
+ * the caller's scope: the scope holds the followers of the onboarding flags,
+ * the catalogs, the credential and the approval policy.
  */
 export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
   function* (
@@ -220,7 +220,12 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
   ): Effect.fn.Return<
     HostSnapshotSource,
     never,
-    Scope.Scope | AppState | AppSignals | Secrets | SubscriptionAccounts
+    | Scope.Scope
+    | AppState
+    | AppSignals
+    | AgentCatalog
+    | Secrets
+    | SubscriptionAccounts
   > {
     const { stores } = options;
     const appState = yield* AppState;
@@ -287,6 +292,15 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         }));
       }),
     );
+    // The project's `.env` over the process's: the keys a run of this
+    // project would use, for its models as for its credential below. An
+    // unreadable `.env` dies in its layer; here it fails the read, so the
+    // producer keeps the field's last value and says why.
+    const underProjectEnv = <A, E, R>(read: Effect.Effect<A, E, R>) =>
+      read.pipe(
+        Effect.provide(workspaceEnvironmentLayer(options.root)),
+        Effect.catchDefect((defect) => Effect.fail(ensureError(defect))),
+      );
     const loadModels = yield* producer(
       'the models',
       Effect.gen(function* () {
@@ -299,7 +313,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
           ...s,
           catalogs: { ...s.catalogs, modelOptions },
         }));
-      }),
+      }).pipe(underProjectEnv),
     );
     const loadFiles = yield* producer(
       'the project files',
@@ -324,12 +338,9 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         write({ missingTools }),
       ),
     );
-    // Asked under the project's `.env` over the process's: the key a run of
-    // this project would use.
     const loadCredential = yield* producer(
       'the provider credentials',
-      hasUsableSetupCredential(stores).pipe(
-        Effect.provide(workspaceEnvironmentLayer(options.root)),
+      underProjectEnv(hasUsableSetupCredential(stores)).pipe(
         Effect.flatMap((credential) => write({ credential })),
       ),
     );
@@ -349,15 +360,69 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       discard: true,
     });
 
-    // The flags are user-scoped and may be written by another process; the
-    // credential changes with any stored key or sign-in.
+    // The flags are user-scoped and may be written by another process.
     yield* appState.changes(ONBOARDING_FLAG_KEYS).pipe(
       Stream.runForEach(() => loadFlags),
       Effect.forkScoped,
     );
-    yield* appSignalStream('credentialChanged').pipe(
-      Stream.runForEach(() => loadCredential),
-      Effect.forkScoped,
+    /** Run `load` after each element of `signals`, a subscription the
+     *  source's scope already holds (`subscribeAppSignal`), so no signal
+     *  published after the source opens is missed. Signals that arrive
+     *  during a load are answered by one more load, not one each. A defect
+     *  is logged and the following goes on. */
+    const follow = <R>(
+      signals: Stream.Stream<unknown>,
+      load: Effect.Effect<void, never, R>,
+    ) =>
+      signals.pipe(
+        Stream.buffer({ capacity: 1, strategy: 'sliding' }),
+        Stream.runForEach(() =>
+          load.pipe(
+            Effect.catchDefect((defect) =>
+              Effect.logWarning('The host snapshot could not reload').pipe(
+                Effect.annotateLogs({ data: defect }),
+                withLogChannel(CHANNEL),
+              ),
+            ),
+          ),
+        ),
+        Effect.forkScoped,
+      );
+    // The agent catalog reloaded, a team was applied or the agent list was
+    // edited (`workspaceAgentsChanged`).
+    yield* follow(
+      yield* subscribeAppSignal('workspaceAgentsChanged'),
+      catalogs,
+    );
+    // Any secret written (`credentialChanged`) may change the credential;
+    // only a provider's API key, or a model-access preference or
+    // enabled-model write (`modelAccessChanged`), changes the models listed,
+    // so an OAuth refresh or a GitHub token reloads no catalog. A sign-in
+    // announces its token write, then its preference (`modelAccessChanged`).
+    const providerKey = ({ key }: { readonly key: string }) =>
+      (apiKeyEntry(key) ?? 'unknown') !== 'unknown';
+    yield* follow(
+      Stream.filter(
+        yield* subscribeAppSignal('credentialChanged'),
+        Predicate.not(providerKey),
+      ),
+      loadCredential,
+    );
+    yield* follow(
+      Stream.merge(
+        Stream.filter(
+          yield* subscribeAppSignal('credentialChanged'),
+          providerKey,
+        ),
+        yield* subscribeAppSignal('modelAccessChanged'),
+      ),
+      Effect.andThen(loadCredential, catalogs),
+    );
+    // The approval policy is read live as each snapshot is mapped; a
+    // settings view's write republishes the inputs so the change shows.
+    yield* follow(
+      yield* subscribeAppSignal('approvalPolicyChanged'),
+      SubscriptionRef.update(inputs, (current) => ({ ...current })),
     );
     // Configuring a credential clears a previous "Skip for now", so a user
     // who later loses every credential sees the picker again.
@@ -436,7 +501,6 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         [catalogs, loadFiles, loadCommits, hostBanners, loadFlags],
         { concurrency: 'unbounded', discard: true },
       ).pipe(Effect.andThen(write({ loaded: true }))),
-      refreshCatalogs: catalogs,
       refreshFiles: loadFiles,
       refreshCommits: loadCommits,
       refreshHostBanners: hostBanners,

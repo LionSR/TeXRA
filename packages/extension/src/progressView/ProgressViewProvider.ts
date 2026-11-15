@@ -23,7 +23,6 @@ import {
   type FileLocation,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import { appSignalStream } from '@texra-ai/harness/host';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import {
   createAgentPresentationHost,
@@ -70,8 +69,6 @@ import type {
 } from '@texra-ai/harness/host';
 
 const CHANNEL = 'ProgressViewProvider';
-const CATALOG_RESCAN_FAILED =
-  'Agent catalog rescan after an agent-directory change failed';
 
 type ProgressRunRevealResult = 'revealed' | 'missing';
 
@@ -345,9 +342,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public readonly runValidated: HostRunActions['runValidated'];
   /** Where this window's runs run: the service's session, or this one. */
   private readonly runSession: Session;
-  /** A credential may have changed: check it again, with the host's other
-   *  banners. The funnel, the banner and the setup pill follow the answer. */
-  public readonly refreshApiKeyStatus: HostSnapshotSource['refreshHostBanners'];
 
   private readonly attention = new RequestAttention({
     sidebar: () => this.surfaces.sidebar?.view,
@@ -370,7 +364,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.credentialUsable = parts.snapshot.credentialUsable;
     this.runValidated = parts.runValidated;
     this.runSession = parts.runSession;
-    this.refreshApiKeyStatus = parts.snapshot.refreshHostBanners;
     this.globalState = parts.globalState;
     this.runtime = parts.runtime;
     this.fork = parts.fork;
@@ -378,8 +371,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   // --- The host snapshot's producers ---
 
-  /** Follow the workspace for the view's lifetime: its files, its folders
-   *  and its agents. */
+  /** Follow the workspace for the view's lifetime: its files and its
+   *  folders. */
   private readonly followWorkspace = Effect.fn(
     'ProgressViewProvider.followWorkspace',
   )({ self: this }, function* () {
@@ -432,42 +425,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         Stream.runForEach(() => this.snapshot.refreshFiles),
       ),
     );
-    // The catalog reloads itself on every change to its sources
-    // (`agentCatalogFollower`); this launcher repaints what it lists, at
-    // most once per 300ms burst of changes.
-    yield* Effect.forkScoped(
-      appSignalStream('workspaceAgentsChanged').pipe(
-        Stream.debounce('300 millis'),
-        Stream.runForEach(() =>
-          this.refreshCatalogs({ agentCatalogAlreadyFresh: true }).pipe(
-            Effect.ignore({ log: 'Warn', message: CATALOG_RESCAN_FAILED }),
-          ),
-        ),
-        withLogChannel(CHANNEL),
-      ),
-    );
   });
 
-  /** The agent, team, and model catalogs. */
-  public refreshCatalogs(
-    options: {
-      agentCatalogAlreadyFresh?: boolean;
-      selectedAgent?: string;
-    } = {},
-  ) {
-    return Effect.suspend(() =>
-      options.agentCatalogAlreadyFresh
-        ? Effect.void
-        : AgentCatalog.use((catalog) => catalog.refresh),
-    ).pipe(
-      Effect.andThen(this.snapshot.refreshCatalogs),
-      Effect.andThen(
-        Effect.sync(() => {
-          const agent = options.selectedAgent;
-          if (agent)
-            this.bridge.surfaceAction({ kind: 'launch', patch: { agent } });
-        }),
-      ),
+  /** Select `agent` in the launcher. */
+  public selectLauncherAgent(agent: string) {
+    return Effect.sync(() =>
+      this.bridge.surfaceAction({ kind: 'launch', patch: { agent } }),
     );
   }
 

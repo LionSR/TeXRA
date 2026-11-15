@@ -17,6 +17,7 @@ import {
   CUSTOM_AGENT_DIR_KEY,
 } from '@texra-ai/harness/host';
 import { entryTypeIn, readNormalizedFile } from '@texra-ai/harness/node';
+import { emitAppSignal } from '@texra-ai/harness/plugins';
 import {
   AGENT_FILE_EXTENSION,
   agentKey,
@@ -177,12 +178,15 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     ),
   ];
 
-  /** The agents changed: the pages follow, and every launcher's catalogs
-   *  reload, selecting the tool-use root a team just applied named. */
+  /** The agents changed: every agent list view follows the signal, these
+   *  pages and every launcher, and the launcher selects the tool-use root a
+   *  team just applied named. */
   const agentsChanged = (selectedToolUseAgent?: string): HostEffect =>
     Effect.andThen(
-      present.changed('agents'),
-      bindings.refreshCatalogs(selectedToolUseAgent),
+      emitAppSignal('workspaceAgentsChanged', undefined),
+      selectedToolUseAgent === undefined
+        ? Effect.void
+        : bindings.selectLauncherAgent(selectedToolUseAgent),
     );
   /** A mutation moved agent files: the registry is read again first, so
    *  nothing that follows paints the catalog it replaced. */
@@ -504,5 +508,5 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       ),
   } satisfies Partial<SettingsViewInboundHandlerRegistry>;
 
-  return { handlers, pages, agentsChanged };
+  return { handlers, pages };
 }
