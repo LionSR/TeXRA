@@ -29,10 +29,10 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * process can act on can be renamed, and a conversation whose first turn has
  * ended forked (at its latest settled point, before any turn it is in now). After, a
  * run can be deleted and its files worked on (`run.files`); a plain
- * agent's run again. Resume is offered where it is the way to
- * continue: on any loop-driven run that was interrupted, and on a background
- * script that did not complete. A settled task runs again; a
- * settled conversation continues through its composer. Whether a resume can
+ * agent's conversation run again from the launch form. Resume is offered
+ * where it is the way to continue: on any loop-driven run that was
+ * interrupted, and on a background script that did not complete. A settled
+ * conversation continues through its composer. Whether a resume can
  * proceed is `deriveResumability`'s.
  */
 export function runActions(
@@ -72,7 +72,9 @@ export function runActions(
   )
     actions.push('resume');
   if (isPlainAgentIdentity(run.identity)) {
-    actions.push('runAgain');
+    // A program is started by an agent or a command, not by the launch
+    // form Run again opens.
+    if (!run.program) actions.push('runAgain');
     if (forkable(run)) actions.push('fork');
   }
   return [...actions, ...inspectActions()];
