@@ -9,14 +9,14 @@
  */
 import type { KeyPlanRoute } from '@texra-ai/llm';
 
-/** One coding plan's identity and presentation, keyed by its usage route. */
+/** One coding plan's identity and presentation, keyed by its usage route.
+ *  The key that pays for it is `apiProvider`'s, so that provider's name and
+ *  key page (`providerDisplayName`, `providerKeyUrl`) are the credential's. */
 interface CodingPlanSubscriptionDescriptor {
   readonly id: 'glmCodingPlan' | 'kimiCode';
   readonly cliProvider: 'glm-code' | 'kimi-code';
   readonly apiProvider: 'glm' | 'kimiCode';
   readonly exclusiveCredential: boolean;
-  readonly credentialName: string;
-  readonly credentialSetupUrl: string;
   readonly usageProvider: 'glmCodingPlan' | 'kimiCode';
   readonly usageRoute: KeyPlanRoute;
   readonly displayName: string;
@@ -31,8 +31,6 @@ export const CODING_PLAN_SUBSCRIPTIONS = Object.freeze([
     cliProvider: 'kimi-code',
     apiProvider: 'kimiCode',
     exclusiveCredential: true,
-    credentialName: 'Kimi Code',
-    credentialSetupUrl: 'https://www.kimi.com/code/console',
     usageProvider: 'kimiCode',
     usageRoute: 'kimi-code-subscription',
     displayName: 'Kimi Code',
@@ -44,8 +42,6 @@ export const CODING_PLAN_SUBSCRIPTIONS = Object.freeze([
     cliProvider: 'glm-code',
     apiProvider: 'glm',
     exclusiveCredential: false,
-    credentialName: 'GLM',
-    credentialSetupUrl: 'https://open.bigmodel.cn or https://z.ai',
     usageProvider: 'glmCodingPlan',
     usageRoute: 'glm-coding-plan-subscription',
     displayName: 'GLM Coding Plan',
