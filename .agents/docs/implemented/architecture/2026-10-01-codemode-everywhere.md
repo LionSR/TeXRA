@@ -420,10 +420,15 @@ Rulings 9 to 13: "do as you recommend… they look fine" (2026-10-02).
   passed because its `bash` call attached no PDF, not because of code mode.
   The Google codec now carries a document, audio or video part in a
   `user_input` step after the function results, labeled with its call.
-- **The per-model fallback flag (Q3).** A model that fails the bar keeps
-  direct tools. The flag is meant to live on `BoundModel`
-  (`agent/runtime/modelAccess/ModelAccess.ts`) beside the vendor
-  capabilities; it is not built, since nothing has flipped.
+- **The per-model fallback (Q3).** `codeMode.scriptOnly` is on by default
+  in TeXRA's catalog since 2026-11-14 (the harness row stays off), ahead of
+  the Q10 window. A model that keeps direct tools reads the setting as off:
+  `keepsDirectToolCalls` beside `BoundModel`
+  (`agent/runtime/modelAccess/ModelAccess.ts`). Its one member is the
+  validation model, whose canned conversations call tools directly; no real
+  model is listed until one is measured below the bar. The journey script
+  runs the "only" arm by default and the other with `--direct`, which
+  replaced `--script-only`.
 - **After the fallback retires:** duplicate detection and response
   partitioning (`DispatchFacts.duplicateOf` and `partition`), the provider
   input preprocess shims, and `.optional()` for new tool inputs.

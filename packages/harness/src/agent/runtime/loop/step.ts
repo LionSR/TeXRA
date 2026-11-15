@@ -79,6 +79,7 @@ import {
   resolveStepTools,
   type ResolvedTools,
 } from '../agentToolResolution';
+import { keepsDirectToolCalls } from '../modelAccess/ModelAccess';
 import { hostCapabilitiesOf, liveToolGates } from '../requests';
 import { blobRows, systemTextAt, stored } from '../run/recordedRequest';
 import { appendRow } from './rows';
@@ -235,6 +236,7 @@ const openStep = Effect.fn('Step.open')(function* (
       ...run.toolInputs,
       ...gates,
       hostCapabilities: yield* hostCapabilitiesOf(pinned, scope),
+      directToolCalls: keepsDirectToolCalls(yield* ScopedRef.get(run.model)),
       ...(trusted && { approvalPromptsUnavailable: false }),
     });
     const held = recorded === null ? null : heldToRecord(resolved, recorded);

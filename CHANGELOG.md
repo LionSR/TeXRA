@@ -1303,11 +1303,14 @@ All notable changes to this project will be documented in this file.
   modules its run recorded, never a newer copy shipped since. SDK: a
   plugin ships modules as `Plugin.scriptModules` (module source by name,
   imported as `builtIn:<name>`).
-- **Script-only tools.** The `texra.codeMode.scriptOnly` setting (off by
-  default; CLI `/config`) gives chat agents the `script` tool and their own
-  tools alone, with every other tool called from inside a script. A run
-  keeps the tool set it started with when it resumes, even if the setting
-  changed in between.
+- **Script-only tools, on by default.** The `texra.codeMode.scriptOnly`
+  setting (Settings → Agents → Advanced, or CLI `/config`) gives chat
+  agents the `script` tool and their own tools alone, with every other tool
+  called from inside a script; turn it off to send every tool directly. A
+  run keeps the tool set it started with when it resumes, even if the
+  setting changed in between. SDK: the harness row stays off, so an
+  embedder's agent is sent the tools it declares unless its catalog's
+  `defaults` turns the row on.
 - **Scripts can run their agent again: `self(prompt, options)`.** It runs
   the same agent with the same tools as a child of the call, forked from
   the conversation as it stood when the script started (or from the prompt

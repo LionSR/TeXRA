@@ -60,6 +60,15 @@ export interface BoundModel extends Binding {
   readonly routes: readonly [RoutePolicy, RoutePolicy];
 }
 
+/**
+ * Whether the model is sent every tool it may call, whatever the script-only
+ * setting says: a model listed here reads `codeMode.scriptOnly` as off. The
+ * validation model is the one member, because its canned conversations call
+ * tools directly; no real model is listed.
+ */
+export const keepsDirectToolCalls = (bound: Pick<BoundModel, 'route'>) =>
+  bound.route.kind === 'validation';
+
 /** What a run asks to bind. */
 export interface BindRequest {
   /** The run's model string; it also carries the effort, thinking and mode. */
