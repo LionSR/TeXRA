@@ -144,17 +144,24 @@ function toZoteroItem(item: typeof ZoteroItemSchema.Type): ZoteroConnectorItem {
   // BibTeX's name rules: "Last, First" as well as "First Last", with a
   // particle ("van der") kept on the last name. With no first name the
   // lower-case words are not a particle ("bell hooks"), so they are it.
+  // A suffix ("Last, Jr., First") follows the first name after a comma,
+  // which is how Zotero writes one; no part of the name is dropped.
   const creators: ZoteroCreator[] | undefined = item.authors?.length
     ? item.authors.map((name) => {
-        const { firstNames, vons, lastNames } = parseAuthorName([name.trim()]);
+        const { firstNames, vons, lastNames, jrs } = parseAuthorName([
+          name.trim(),
+        ]);
         const [first, last] =
           firstNames.length > 0
             ? [firstNames, [...vons, ...lastNames]]
             : [vons, lastNames];
-        return first.length === 0
+        const firstName = [first.join(' '), jrs.join(' ')]
+          .filter((part) => part !== '')
+          .join(', ');
+        return firstName === ''
           ? { name: last.join(' '), creatorType: 'author' as const }
           : {
-              firstName: first.join(' '),
+              firstName,
               lastName: last.join(' '),
               creatorType: 'author' as const,
             };
