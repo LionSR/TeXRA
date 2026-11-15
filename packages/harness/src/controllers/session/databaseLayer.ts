@@ -117,8 +117,10 @@ RETURNING "commit" AS "commit"
 /** A blob is stored once per store, whichever run wrote it first. */
 const INSERT_BLOB = `INSERT INTO blob (digest, value) VALUES (?, ?)
   ON CONFLICT(digest) DO NOTHING`;
-const INSERT_REF = `INSERT INTO event_blob ("commit", digest, inline)
-  VALUES (?, ?, ?)`;
+/** Link a row to its blobs, bound as one `json_each(?)` array of
+ *  `[digest, inline]` pairs. */
+const INSERT_REFS = `INSERT INTO event_blob ("commit", digest, inline)
+  SELECT ?, value ->> 0, value ->> 1 FROM json_each(?)`;
 /** Record the kinds written, bound as one `json_each(?)` array of
  *  `[type, version]` pairs; a kind keeps the highest version written. */
 const UPSERT_KINDS = `INSERT INTO stored_kind (type, version)
@@ -567,13 +569,19 @@ export const databaseLayer = (
           return yield* invariant(
             `No commit assigned for aggregate ${draft.aggregateId}`,
           );
-        for (const { digest, value, inline } of encoded.blobs) {
+        for (const { digest, value } of encoded.blobs)
           yield* exec(INSERT_BLOB, [digest, value]);
-          yield* exec(INSERT_REF, [commit, digest, inline ? 1 : 0]);
-        }
-        // Linked, not written: the foreign key refuses a blob that is gone.
-        for (const digest of encoded.references)
-          yield* exec(INSERT_REF, [commit, digest, 0]);
+        // References are linked, not written: the foreign key refuses a
+        // blob that is gone.
+        const links = [
+          ...encoded.blobs.map(({ digest, inline }) => [
+            digest,
+            inline ? 1 : 0,
+          ]),
+          ...encoded.references.map((digest) => [digest, 0]),
+        ];
+        if (links.length > 0)
+          yield* exec(INSERT_REFS, [commit, JSON.stringify(links)]);
         if (seq === 1) {
           yield* exec(
             'UPDATE event_sequence SET start_commit = ? WHERE id = ?',
