@@ -151,7 +151,9 @@ export const attachTask = Effect.fn('attachTask')(function* (
         output.columns,
       );
       const text = lines.join('\n');
-      writeTextStdout(`${output.color ? text : stripVTControlCharacters(text)}\n`);
+      writeTextStdout(
+        `${output.color ? text : stripVTControlCharacters(text)}\n`,
+      );
     }
   };
   const last = yield* watchTask(client, task, (frame) => {

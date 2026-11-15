@@ -1,6 +1,5 @@
 import { stripVTControlCharacters } from 'node:util';
 
-
 import {
   rowHeadline,
   type TranscriptRowKind,

@@ -392,9 +392,7 @@ export function createDesktopWorkspaceIpc(
     return Effect.gen(function* () {
       const session = yield* options.ptyHost
         .create({ id: sessionId, cols, rows })
-        .pipe(
-          Effect.mapError((cause) => hostFailed('ptyHost.create', cause)),
-        );
+        .pipe(Effect.mapError((cause) => hostFailed('ptyHost.create', cause)));
       if (!session) return;
       if (initialCommand) {
         session.write(`${initialCommand}\r`);

@@ -305,8 +305,7 @@ export const responseInput = Effect.fn('llm.responses.input')(function* (
   if (
     !sameModelOrigin(turn, continuation.origin) ||
     continuation.coveredMessages > turn.messages.length ||
-    continuation.anchor.coveredItems !==
-      coveredItemCount(prefix) ||
+    continuation.anchor.coveredItems !== coveredItemCount(prefix) ||
     continuation.prefixFingerprint !==
       prefixFingerprint(
         RESPONSES_PREFIX_DOMAIN,

@@ -66,7 +66,10 @@ import {
   type TranscriptExportOpenKind,
 } from '@texra/controllers/progressView/exportTranscript';
 import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
-import { hostFailed, hostFailure } from '@texra/controllers/session/hostCallFailure';
+import {
+  hostFailed,
+  hostFailure,
+} from '@texra/controllers/session/hostCallFailure';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import type {
   OwnHostArms,
