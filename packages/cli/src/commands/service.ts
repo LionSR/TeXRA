@@ -6,7 +6,10 @@ import { formatResultCount } from '@texra-ai/harness/schemas';
 import { entryChannel, entryMessage, setLogSink } from '@texra-ai/harness/node';
 import { holdSignals } from '@cli/runtime/platform/processSignals';
 import { stopService } from '@texra/controllers/server/client';
-import { servicePaths } from '@texra/controllers/server/discovery';
+import {
+  SERVICE_SUBCOMMAND,
+  servicePaths,
+} from '@texra/controllers/server/discovery';
 import { ServiceProjects } from '@texra/controllers/server/service';
 import { serve } from '@texra/controllers/server/serve';
 import { PROTOCOL, type ServiceInfo } from '@texra/controllers/server/protocol';
@@ -130,7 +133,7 @@ const runServe = Effect.fn('runServe')(function* (
 
 export const serveCommand = defineCliCommand({
   meta: {
-    name: 'serve',
+    name: SERVICE_SUBCOMMAND,
     description:
       'Run the TeXRA service in the foreground (windows start it on their own)',
   },

@@ -1,34 +1,29 @@
-import { defineCommand } from 'citty';
-import { Schema } from 'effect';
+import { Effect, Layer } from 'effect';
 
-import {
-  CliOutputFormatSchema,
-  type CliOutputFormat,
-} from '@texra/shared/cliOutputFormat';
-import { cliEnvValue, readCliVersion } from '../runtime/platform/cliContext';
+import { readCliVersion } from '../runtime/platform/cliContext';
+import { CliExitCode } from '../runtime/platform/exitCodes';
 
-import { writeCliResult } from './_helpers/output';
+import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
+import { emitCliResult } from './_helpers/output';
 
-const isCliOutputFormat = Schema.is(CliOutputFormatSchema);
-
-function parseVersionOutputFormat(flagValue: unknown): CliOutputFormat {
-  if (isCliOutputFormat(flagValue)) return flagValue;
-  const envValue = cliEnvValue('TEXRA_OUTPUT_FORMAT')?.trim();
-  return isCliOutputFormat(envValue) ? envValue : 'text';
-}
-
-export const versionCommand = defineCommand({
+export const versionCommand = defineCliCommand({
   meta: { name: 'version', description: 'Print the CLI version' },
   args: {
     ...GLOBAL_ARGS,
   },
-  run(ctx) {
+  // No runtime: the version is the build's, and the output format the
+  // context's, read as every other command reads it.
+  layer: () => Layer.empty,
+  run: () => {
     const version = readCliVersion();
-    writeCliResult(parseVersionOutputFormat(ctx.args['output-format']), {
-      json: { version },
-      ndjson: { kind: 'version', version },
-      text: version,
-    });
+    return Effect.as(
+      emitCliResult({
+        json: { version },
+        ndjson: { kind: 'version', version },
+        text: version,
+      }),
+      CliExitCode.Success,
+    );
   },
 });
