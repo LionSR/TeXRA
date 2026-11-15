@@ -1,6 +1,5 @@
 import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { build } from 'esbuild';
 
@@ -17,7 +16,7 @@ import {
 // llm build passes its own root). Each is checked against what it publishes:
 // `publishConfig.exports`, as the workspace `exports` name sources.
 const packageRoot = path.resolve(
-  process.argv[2] ?? fileURLToPath(new URL('..', import.meta.url)),
+  process.argv[2] ?? path.join(import.meta.dirname, '..'),
 );
 const repositoryRoot = path.resolve(packageRoot, '../..');
 const distRoot = path.join(packageRoot, 'dist');

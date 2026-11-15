@@ -20,6 +20,7 @@
 
 import { existsSync, readdirSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
+import { parseArgs } from 'node:util';
 import {
   publicRootDocs,
   publicRootDirs,
@@ -30,15 +31,18 @@ import { walkFiles } from '../../scripts/walkFiles.mjs';
 const docsDir = join(import.meta.dirname, '..');
 const ghError = process.env.GITHUB_ACTIONS === 'true' ? '::error::' : '';
 
-const distFlag = process.argv.indexOf('--dist');
-if (distFlag !== -1) {
-  const distDir = process.argv[distFlag + 1];
-  if (!distDir) {
-    console.error('Usage: check-root-docs.mjs --dist <build output dir>');
-    process.exit(2);
-  }
-  process.exit(checkDist(distDir));
+let distDir;
+try {
+  ({
+    values: { dist: distDir },
+  } = parseArgs({ options: { dist: { type: 'string' } } }));
+} catch (error) {
+  console.error(
+    `${error.message}\nUsage: check-root-docs.mjs [--dist <build output dir>]`,
+  );
+  process.exit(2);
 }
+if (distDir !== undefined) process.exit(checkDist(distDir));
 
 /**
  * Compare a finished build's root against the declared public surface.

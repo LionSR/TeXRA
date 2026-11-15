@@ -19,20 +19,13 @@ const serviceLog = path.join(serviceRun, 'serve.log');
  */
 async function step(label, program, ms = 90_000) {
   console.log(`[texra e2e] ${label}`);
-  let timer;
-  try {
-    return await Promise.race([
-      program(),
-      new Promise((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error(`timed out after ${ms} ms: ${label}`)),
-          ms,
-        );
-      }),
-    ]);
-  } finally {
-    clearTimeout(timer);
-  }
+  return await Promise.race([
+    program(),
+    // Unreferenced, so a step that finished leaves nothing holding the host.
+    sleep(ms, undefined, { ref: false }).then(() => {
+      throw new Error(`timed out after ${ms} ms: ${label}`);
+    }),
+  ]);
 }
 
 async function run() {
