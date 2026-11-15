@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { Effect, Layer } from 'effect';
 
@@ -89,7 +89,7 @@ export function loadDatabaseFixture() {
 }
 
 async function bundleDatabaseFixture() {
-  const root = fileURLToPath(new URL('..', import.meta.url));
+  const root = join(import.meta.dirname, '..');
   const bundle = join(
     mkdtempSync(join(tmpdir(), 'texra-fixture-')),
     'session-database-fixture.mjs',

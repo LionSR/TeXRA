@@ -19,10 +19,9 @@ import {
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
-const packageRoot = fileURLToPath(new URL('..', import.meta.url));
+const packageRoot = join(import.meta.dirname, '..');
 const {
   values: { acceptance },
 } = parseArgs({
