@@ -211,16 +211,10 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   height: 6px;
   border-radius: 50%;
   justify-self: center;
+  background: var(--tone-color);
 }
-.shell-project-status[data-tone='running'] {
-  background: var(--wa-color-success-fill-loud);
-}
-.shell-project-status[data-tone='waiting'],
-.shell-project-status[data-tone='interrupted'] {
-  background: var(--wa-color-warning-fill-loud);
-}
-.shell-project-status[data-tone='unseen'] {
-  background: var(--wa-color-brand-fill-loud);
+.shell-project-status.tone-unseen {
+  --tone-color: var(--wa-color-brand-fill-loud);
 }
 .shell-project-menu {
   display: block;

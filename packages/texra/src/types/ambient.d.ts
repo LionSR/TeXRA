@@ -5,27 +5,6 @@
  * what its own sources import, in `packages/harness/src/types/ambient.d.ts`.
  */
 
-declare module 'bibtex' {
-  export interface BibEntry {
-    _id?: string;
-    type?: string;
-    fields: Record<string, unknown>;
-    getField(field: string): unknown;
-  }
-
-  export interface BibLibrary {
-    entries_raw: BibEntry[];
-    entries$: Record<string, BibEntry | undefined>;
-    getEntry(id: string): BibEntry | undefined;
-  }
-
-  export function parseBibFile(content: string): BibLibrary;
-
-  // No default export on purpose: bibtex's UMD bundle sets `__esModule: true`
-  // on its CJS exports, so a default import type-checks but bundles to
-  // `undefined` under esbuild's ESM interop. Named imports only.
-}
-
 /**
  * Type declarations for CSS imports.
  *

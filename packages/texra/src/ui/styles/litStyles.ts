@@ -34,9 +34,6 @@ export const designTokens: CSSResult = css`
     --color-status-ok: var(--wa-color-testing-passed);
     --color-status-error: var(--wa-color-testing-failed);
 
-    /* In-progress / pending accent (running-tool spinner, timers). */
-    --color-pending: var(--wa-color-chart-yellow);
-
     /* Diff foreground colors (added/removed/modified lines in tool diffs). */
     --color-diff-added: var(--wa-color-git-added);
     --color-diff-removed: var(--wa-color-git-deleted);

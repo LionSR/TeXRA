@@ -1,6 +1,5 @@
 // Inline loading-state pattern shared between hosts. Counterpart to
-// renderEmptyState: consumers style via the .loading-state class hook
-// (shared rule in commonViewStyles); the helper owns the structure.
+// renderEmptyState, styled by the same sheet (placeholderStyles).
 
 import { html, type TemplateResult } from 'lit';
 

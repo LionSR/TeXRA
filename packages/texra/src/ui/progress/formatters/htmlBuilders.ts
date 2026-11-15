@@ -4,11 +4,7 @@
  */
 
 // Third-party imports
-import {
-  formatResultCount,
-  getBasename,
-  type FileListEntry,
-} from '@texra-ai/harness/schemas';
+import { formatResultCount, getBasename } from '@texra-ai/harness/schemas';
 import { html, nothing, type TemplateResult } from 'lit';
 import { classMap } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
@@ -23,6 +19,7 @@ import { waSpinner } from '@ui/wa/spinner';
 import { renderStatusBadge } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { formatMediaLabel } from '@ui/copy/format';
+import { fileLoadTone, statusGlyph } from '@ui/copy/runStatus';
 
 // Side-effect import - register the <copy-button> element drawn below
 import '@ui/progress/components/CopyButton';
@@ -198,27 +195,25 @@ export function buildLineChangeStats(changes: {
 }
 
 /** Build the `<li>` rows for a file-list banner. The summary line above them
- *  is the row's (`FileListRow.summary`), not derived here. `media` is the
- *  row's own subset — a file that reached the model as an image or audio clip
+ *  is the row's (`FileListRow.summary`), not derived here. A file that
+ *  reached the model as an image or audio clip carries its `media`, and
  *  reports its kind and size beside its name. */
 export function buildFileListRender(
-  files: readonly FileListEntry[],
-  media: FileListRow['media'],
+  files: FileListRow['files'],
 ): TemplateResult {
-  const mediaByPath = new Map(media.map((ref) => [ref.path, ref.media]));
   // prettier-ignore
   return html`${files.map((file) => {
-    const iconName = file.ok ? 'check' : 'triangle-exclamation';
+    const tone = fileLoadTone(file.ok);
     const filePath = file.path;
     const fileName = getBasename(filePath);
-    const loaded = mediaByPath.get(filePath);
+    const loaded = file.media;
 
     // The one rule for a loaded file's source label, shared with the CLI
     // (transcriptRowLines): paint `sourceDisplay`, nothing else — an entry
     // worth labelling sets `sourceDisplay`, so no host needs a fallback to
     // spell it out.
     // prettier-ignore
-    return html`<li class="detail-item" title=${filePath}>${waIcon(iconName)} ${buildFileLinkSpan(filePath, html`<bdi dir="auto">${fileName}</bdi>`)}${file.varName ? html` <span class="file-var">[<bdi dir="auto">${file.varName}</bdi>]</span>` : ''}${file.sourceDisplay ? html` <span class="file-source">(<bdi dir="auto">${file.sourceDisplay}</bdi>)</span>` : ''}${loaded ? html` <span class="file-media"><bdi dir="ltr">${formatMediaLabel(loaded)}</bdi></span>` : ''}</li>`;
+    return html`<li class="detail-item" title=${filePath}>${waIcon(statusGlyph({ tone }), { className: `file-load-icon tone-${tone}` })} ${buildFileLinkSpan(filePath, html`<bdi dir="auto">${fileName}</bdi>`)}${file.varName ? html` <span class="file-var">[<bdi dir="auto">${file.varName}</bdi>]</span>` : ''}${file.sourceDisplay ? html` <span class="file-source">(<bdi dir="auto">${file.sourceDisplay}</bdi>)</span>` : ''}${loaded ? html` <span class="file-media"><bdi dir="ltr">${formatMediaLabel(loaded)}</bdi></span>` : ''}</li>`;
   })}`;
 }
 

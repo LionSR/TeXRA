@@ -15,7 +15,6 @@ import {
   formatClippedList,
   formatCompactDuration,
   pluralize,
-  FACT_SEPARATOR,
   joinFacts,
 } from '@texra-ai/harness/schemas';
 import {
@@ -86,7 +85,6 @@ export function createRunProgressRenderer(
   });
 }
 class DefaultRunProgressRenderer implements RunProgressRenderer {
-  private readonly attachedAt: number;
   private readonly write: (text: string) => void = writeRawStderr;
   private readonly nowMs: () => number = Date.now;
   private readonly minIntervalMs = 100;
@@ -114,7 +112,6 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }) {
     this.ansi = init.colorEnabled;
     this.getColumns = init.getColumns;
-    this.attachedAt = this.nowMs();
   }
 
   attach(
@@ -274,8 +271,12 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     parts.push(subject || phase || runStatusLabel('running'));
     if (subject && phase && phase !== runStatusLabel('running'))
       parts.push(phase);
-    const runStartedAt = root.runStartedAt ?? this.attachedAt;
-    const elapsed = formatCompactDuration(now - runStartedAt);
+    // The turn's clock, while the view says one runs; a run between turns
+    // or waiting on a person shows none.
+    const elapsed =
+      root.runStartedAt === null
+        ? undefined
+        : formatCompactDuration(now - root.runStartedAt);
     const children = this.liveChildren();
     const nameOnlySubagents = formatActiveChildren(children, 0);
     if (nameOnlySubagents) {
@@ -299,17 +300,17 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private descriptionColumnBudget(
     fixedParts: readonly string[],
     nameOnlySubagents: string,
-    elapsed: string,
+    elapsed: string | undefined,
   ): number {
     const columns = normalizeTerminalColumns(this.getColumns());
     if (!this.ansi || columns == null) {
       return ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH;
     }
-    const lineWithoutDescription = [
+    const lineWithoutDescription = joinFacts([
       ...fixedParts,
       nameOnlySubagents,
       elapsed,
-    ].join(FACT_SEPARATOR);
+    ]);
     return Math.min(
       ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH,
       Math.max(

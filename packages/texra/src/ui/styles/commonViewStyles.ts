@@ -1,5 +1,6 @@
 import { css, type CSSResult } from 'lit';
 import { noticeStyles } from './surfaceStyles';
+import { placeholderStyles } from '@ui/wa/emptyState';
 
 import {
   buttonStyles,
@@ -37,6 +38,53 @@ export const visuallyHiddenDeclarations: CSSResult = css`
 export const visuallyHiddenStyles: CSSResult = css`
   .visually-hidden {
     ${visuallyHiddenDeclarations}
+  }
+`;
+
+/**
+ * The small-caps label over a group of rows (a run-list section, a menu
+ * group, a palette group): one type treatment wherever a list is grouped.
+ * Interpolate it into the rule that places the label; the desktop's light
+ * DOM uses {@link overlineStyles}.
+ */
+export const overlineDeclarations: CSSResult = css`
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-caps);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+`;
+
+/** {@link overlineDeclarations} as a class, for a tree that adopts sheets
+ *  rather than composing rules (the desktop's light DOM). */
+export const overlineStyles: CSSResult = css`
+  .overline {
+    ${overlineDeclarations}
+  }
+`;
+
+/**
+ * The chevron of a disclosure: it turns to point down while the control
+ * around it (anything carrying `aria-expanded`) is open.
+ */
+export const disclosureChevronStyles: CSSResult = css`
+  .disclosure-chevron {
+    display: inline-grid;
+    width: 1em;
+    height: 1em;
+    flex: 0 0 1em;
+    place-items: center;
+    color: var(--color-text-secondary);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .disclosure-chevron {
+      transition: transform var(--transition-fast);
+    }
+  }
+
+  [aria-expanded='true'] .disclosure-chevron {
+    transform: rotate(90deg);
   }
 `;
 
@@ -181,20 +229,7 @@ export const commonViewStyles: CSSResult = css`
     background: transparent;
   }
 
-  .settings-disclosure-chevron {
-    display: grid;
-    width: 1em;
-    height: 1em;
-    flex: 0 0 1em;
-    place-items: center;
-    color: var(--color-text-secondary);
-    transition: transform var(--transition-fast);
-  }
-
-  .settings-disclosure-toggle[aria-expanded='true']
-    .settings-disclosure-chevron {
-    transform: rotate(90deg);
-  }
+  ${disclosureChevronStyles}
 
   .settings-disclosure-status,
   .settings-disclosure-actions {
@@ -307,6 +342,7 @@ export const commonViewStyles: CSSResult = css`
 
   ${visuallyHiddenStyles}
   ${settingsRowStyles}
+  ${placeholderStyles}
 
   wa-checkbox,
   wa-radio,
@@ -382,50 +418,6 @@ export const commonViewStyles: CSSResult = css`
 
   .text-secondary {
     color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
-  }
-
-  .empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--wa-space-xs);
-    margin-top: calc(var(--wa-space-l) * 2);
-    color: var(--color-text-secondary);
-    font-style: italic;
-  }
-
-  /* Structure owned by the shared renderLoadingState helper (@ui/wa) */
-  .loading-state {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--wa-space-xs);
-    padding: var(--wa-space-l);
-    color: var(--color-text-secondary);
-  }
-
-  .empty-state wa-icon {
-    font-size: calc(var(--font-size) * 2.5);
-    color: var(--color-text-muted);
-  }
-
-  /* Class hooks consumed by the shared renderEmptyState() helper
-     (@ui/wa/emptyState). Neutralizes the UA heading chrome on
-     .empty-state-title (bold weight, larger size, block margins) so it
-     reads like the plain paragraph text these lists used before adopting
-     the helper; color/italic still cascade from .empty-state. */
-  .empty-state .empty-state-title {
-    margin: 0;
-    font-size: var(--font-size);
-    font-weight: var(--wa-font-weight-regular, normal);
-  }
-
-  .empty-state .empty-state-body {
-    margin: 0;
-    /* Body copy was <p class="text-secondary"> before the helper: keep the
-       smaller secondary sizing so it stays subordinate to the title (color
-       already cascades from .empty-state). */
     font-size: var(--font-size-sm);
   }
 

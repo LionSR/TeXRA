@@ -25,27 +25,13 @@ import {
   type KeyHint,
 } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
-import {
-  CROSS,
-  HOLLOW_DOT,
-  INTERRUPTED_CIRCLE,
-  NOT_RUN,
-  REUSED,
-  RUNNING_HALF,
-  SKIP_CIRCLE,
-  STATUS_DIAMOND,
-  TICK,
-} from '@cli/tui/ui/glyphs';
-import {
-  COLOR_BORDER,
-  COLOR_ERROR,
-  COLOR_HINT,
-  COLOR_SUCCESS,
-  COLOR_WARNING,
-} from '@cli/tui/ui/colors';
+import { HOLLOW_DOT, REUSED, STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
+import { COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
+import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
 import { fillRows, safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import {
   SCRIPT_CALL_STATUS_LABEL,
+  SCRIPT_CALL_STATUS_LOOK,
   scriptCallSummary,
   scriptStageSummary,
 } from '@ui/copy/scriptStage';
@@ -63,29 +49,13 @@ import type { RuntimeCommand, RunId } from '@texra-ai/harness/schemas';
 /** Rows the popup paints besides its list: the focused call's facts. */
 const POPUP_EXTRA_ROWS = 1;
 
-const STATUS_GLYPH = {
+/** The terminal markers of the statuses whose look carries a glyph of its
+ *  own (`SCRIPT_CALL_STATUS_LOOK`): a queued call has not started and a
+ *  reused one ran nothing this time, so neither shows its tone's marker. */
+const OWN_MARKER: Partial<Record<ScriptCallView['status'], string>> = {
   queued: HOLLOW_DOT,
-  running: RUNNING_HALF,
-  interrupted: INTERRUPTED_CIRCLE,
-  finished: TICK,
   reused: REUSED,
-  skipped: SKIP_CIRCLE,
-  cancelled: SKIP_CIRCLE,
-  failed: CROSS,
-  'not run': NOT_RUN,
-} as const satisfies Record<ScriptCallView['status'], string>;
-
-const STATUS_COLOR = {
-  queued: undefined,
-  running: COLOR_HINT,
-  interrupted: COLOR_WARNING,
-  finished: COLOR_SUCCESS,
-  reused: COLOR_SUCCESS,
-  skipped: COLOR_BORDER,
-  cancelled: COLOR_BORDER,
-  failed: COLOR_ERROR,
-  'not run': COLOR_BORDER,
-} as const satisfies Record<ScriptCallView['status'], string | undefined>;
+};
 
 /** One list entry: a section heading, or a call. */
 type Entry =
@@ -103,14 +73,12 @@ function CallRow({
 }): React.JSX.Element {
   const waiting = call.needsYou;
   const last = scriptCallSummary(call);
+  const paint = TONE_PAINT[SCRIPT_CALL_STATUS_LOOK[call.status].tone];
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
       <Box flexShrink={0}>
-        <Text
-          aria-hidden
-          color={waiting ? COLOR_WARNING : STATUS_COLOR[call.status]}
-        >
-          {fillRows(` ${STATUS_GLYPH[call.status]}`, 3)}
+        <Text aria-hidden color={waiting ? COLOR_WARNING : paint.color}>
+          {fillRows(` ${OWN_MARKER[call.status] ?? paint.marker}`, 3)}
         </Text>
       </Box>
       <RowSegment flexShrink={0}>

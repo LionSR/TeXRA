@@ -297,6 +297,11 @@ export {
 } from '@shared/schemas';
 // Escaping for an XML or HTML attribute value and for element text.
 export { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
+// A schema failure as one dotted field path and message per leaf issue.
+export {
+  formatIssuesForDiagnostics,
+  type FormattedIssue,
+} from '@shared/schemas';
 
 // Agents, request payloads, harness setting keys, skills, and run outputs.
 export {

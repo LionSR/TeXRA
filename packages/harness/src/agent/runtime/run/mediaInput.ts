@@ -35,13 +35,7 @@ import { getExtensionLowercase } from '@utils/core/pathCore';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { getBase64EncodedMedia, rasterizePdfPages } from './img';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import type { MessageSchema } from '@texra-ai/llm';
-
-/** One element of a canonical user or tool-result message. */
-export type InputPart = Extract<
-  typeof MessageSchema.Type,
-  { role: 'user' }
->['content'][number];
+import type { InputPart } from '@texra-ai/llm';
 
 interface MediaCapabilities {
   readonly supportsVision: boolean;

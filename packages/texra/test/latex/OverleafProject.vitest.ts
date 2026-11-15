@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { overleafGitClone } from '@latex/overleafProject';
+import { overleafGitClone, parseLatexGitUrl } from '@latex/overleafProject';
 
 const ID = '0123456789abcdef01234567';
 
@@ -26,4 +26,10 @@ describe('overleafGitClone', () => {
       'protocol=https\nhost=git.overleaf.com\nusername=git\npassword=olp_a/b+c\n\n',
     );
   });
+});
+
+it('keeps a credential typed into the URL out of the remote host', () => {
+  expect(parseLatexGitUrl(`https://me:secret@Git.Overleaf.com/${ID}`)).toEqual(
+    OVERLEAF_REMOTE,
+  );
 });

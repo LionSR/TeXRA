@@ -29,9 +29,10 @@ import type {
   SubscriptionUsageSnapshot,
 } from '@texra/shared/model/subscriptionUsage';
 import {
-  contextGaugeBand,
+  contextGaugeTone,
+  contextUsageText,
   roundedContextPercent,
-} from '@texra/shared/contextGauge';
+} from '@ui/copy/contextGauge';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { usageRouteBadge } from '@ui/copy/modelAccess';
 import { runStatus } from '@ui/copy/runStatus';
@@ -273,23 +274,18 @@ function formatUsage(
   // Occupancy is the run's `contextTokens` (the last response's input plus
   // output, then an estimate of what was added since), carried in the wire
   // field named `inputTokens`.
-  const { inputTokens: used, contextWindow, utilizationPercent } = contextState;
-  const percent = roundedContextPercent(utilizationPercent);
-  // Reads the run's own `utilizationPercent`, not a used/contextWindow
-  // re-derivation (drifts); shared bands/rounding with UsagePanel's gauge.
-  const band = contextGaugeBand(utilizationPercent);
-  let color: StatusBarColor | undefined;
-  if (band === 'error') color = COLOR_ERROR;
-  else if (band === 'warning') color = COLOR_WARNING;
+  const tone = contextGaugeTone(contextState.utilizationPercent);
   return {
     ...base,
-    text: `${formatCompactTokenCount(used)}/${formatCompactTokenCount(
-      contextWindow,
-    )} (${percent}%)`,
+    text: contextUsageText(contextState),
     // Keep context visibility on narrow terminals: degrade to the bare
     // percentage instead of dropping the segment entirely.
-    compactText: `${percent}%`,
-    ...(color === undefined ? { dim: true } : { color }),
+    compactText: `${roundedContextPercent(contextState.utilizationPercent)}%`,
+    // A window with room left stays dim: the bar calls attention only once
+    // it is getting full, in its tone's colour.
+    ...(tone === 'success'
+      ? { dim: true }
+      : { color: tone === 'danger' ? COLOR_ERROR : COLOR_WARNING }),
   };
 }
 

@@ -511,14 +511,6 @@ interface RunRecords {
 }
 ```
 
-## RunStopReason
-
-Why a run stops: a `user` stop, or its awaiting call's `released`.
-
-```ts
-type RunStopReason = typeof RunStopReasonSchema.Type;
-```
-
 ## Session
 
 One workspace's runs, the view of them, its store's records, and the

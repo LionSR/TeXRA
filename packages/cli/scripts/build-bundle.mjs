@@ -5,24 +5,37 @@ import process from 'node:process';
 import { chmod, readFile, writeFile } from 'node:fs/promises';
 
 import { fileURLToPath, URL } from 'node:url';
+import { parseArgs } from 'node:util';
 
 const reactDevtoolsStub = fileURLToPath(
   new URL('./react-devtools-core-stub.mjs', import.meta.url),
 );
 
-// `--harness` bundles the PTY validator's TUI harness (scripts/tui-harness.tsx)
-// through this same build graph, so validate-tui exercises the configuration
-// that ships. It stays unminified for readable failure traces.
-const harness = process.argv.includes('--harness');
-// `--serve` bundles the headless background service (`texra serve` with no
-// chat TUI), the file the VS Code extension and the desktop app ship.
-const serve = process.argv.includes('--serve');
-// `--host-harness` bundles the validator's editor-less window
-// (scripts/service-host-harness.ts), which attaches to the service.
-const hostHarness = process.argv.includes('--host-harness');
-// `--sdk-harness` bundles the validator's SDK embedder
-// (scripts/sdk-harness.ts), which runs an inline persona.
-const sdkHarness = process.argv.includes('--sdk-harness');
+const {
+  values: {
+    // `--harness` bundles the PTY validator's TUI harness (scripts/tui-harness.tsx)
+    // through this same build graph, so validate-tui exercises the configuration
+    // that ships. It stays unminified for readable failure traces.
+    harness,
+    // `--serve` bundles the headless background service (`texra serve` with no
+    // chat TUI), the file the VS Code extension and the desktop app ship.
+    serve,
+    // `--host-harness` bundles the validator's editor-less window
+    // (scripts/service-host-harness.ts), which attaches to the service.
+    'host-harness': hostHarness,
+    // `--sdk-harness` bundles the validator's SDK embedder
+    // (scripts/sdk-harness.ts), which runs an inline persona.
+    'sdk-harness': sdkHarness,
+  },
+} = parseArgs({
+  args: process.argv.slice(2).filter((arg) => arg !== '--'),
+  options: {
+    harness: { type: 'boolean' },
+    serve: { type: 'boolean' },
+    'host-harness': { type: 'boolean' },
+    'sdk-harness': { type: 'boolean' },
+  },
+});
 const configuredOutfile = process.env.TEXRA_CLI_BUNDLE_OUTFILE?.trim();
 const entryPoint = harness
   ? 'scripts/tui-harness.tsx'

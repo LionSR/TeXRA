@@ -190,12 +190,6 @@ const multiFilesStyles = css`
   .remove-button {
     flex-shrink: 0;
   }
-
-  .file-list-placeholder {
-    color: var(--color-text-secondary);
-    font-style: italic;
-    padding: var(--wa-space-3xs) var(--wa-space-2xs);
-  }
 `;
 
 /** Outline cue for the file-select button when document options are active.

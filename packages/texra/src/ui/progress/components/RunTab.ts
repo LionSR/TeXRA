@@ -46,14 +46,12 @@ import {
   TASK_ACTIONS,
 } from '@ui/copy/nestedRuns';
 import { formatRelativeTime } from '@ui/copy/format';
+import { TickerController } from '@ui/litControllers/TickerController';
 import { runTabStyles } from './RunTab.styles';
 import type { RunView } from '@texra-ai/harness/schemas';
 
-function buildTooltip(run: RunView): string {
-  const modelDisplay =
-    run.identity.kind === 'agent' && run.model
-      ? (run.modelLabel ?? run.model)
-      : undefined;
+function buildTooltip(run: RunView, nowMs: number): string {
+  const modelDisplay = run.identity.kind === 'agent' ? run.modelLabel : null;
   const worktree = run.worktree;
   const worktreeDisplay = worktree
     ? `Worktree: ${getBasename(worktree.workingDirectory)}`
@@ -65,7 +63,7 @@ function buildTooltip(run: RunView): string {
     modelDisplay && `Model: ${modelDisplay}`,
     worktreeDisplay,
   ]);
-  const lastSeen = formatRelativeTime(run.lastTimestamp);
+  const lastSeen = formatRelativeTime(run.lastTimestamp, nowMs);
   // No raw id: two parallel agents differ by title, model and time, and
   // the id is for bug reports ("Copy diagnostics").
   return [
@@ -86,9 +84,10 @@ function runDecorator(run: RunView) {
 }
 
 /**
- * One run row. Re-renders only when its own `.run` ref or a flag
- * changes; the session view replaces a run's value only when that run changes,
- * so rows of untouched runs skip rendering on every update.
+ * One run row. Re-renders when its own `.run` ref or a flag changes (the
+ * session view replaces a run's value only when that run changes, so rows of
+ * untouched runs skip rendering on every update), and on its clock's tick,
+ * which keeps the tooltip's "Last activity" age current.
  */
 @customElement('run-tab')
 export class RunTab extends LitElement {
@@ -101,6 +100,7 @@ export class RunTab extends LitElement {
   ];
 
   @property({ attribute: false }) run!: RunView;
+  private readonly ticker = new TickerController(this, 30_000);
   @property({ type: Boolean }) active = false;
   /** Children are shown beneath this row. */
   @property({ type: Boolean, reflect: true }) expanded = false;
@@ -163,7 +163,7 @@ export class RunTab extends LitElement {
       ? 'Needs approval'
       : status.word;
     const runTitle = run.title;
-    const tooltip = buildTooltip(run);
+    const tooltip = buildTooltip(run, this.ticker.now);
     const deleteLabel =
       run.parentId === null ? TASK_ACTIONS.delete : TASK_ACTIONS.deleteAgent;
     const childCountLabel = formatResultCount(
@@ -208,7 +208,7 @@ export class RunTab extends LitElement {
                   data-action="toggle-children"
                   aria-label=${childToggleLabel}
                   aria-expanded=${this.expanded ? 'true' : 'false'}
-                  >${waIcon('chevron-right')}</wa-button
+                  >${waIcon('chevron-right', { className: 'disclosure-chevron' })}</wa-button
                 ><wa-tooltip for="run-tab-expand-button"
                   >${childToggleLabel}</wa-tooltip
                 >`
@@ -287,9 +287,7 @@ export class RunTab extends LitElement {
               ></wa-relative-time>
               <span class="model"
                 >${
-                  run.identity.kind === 'agent'
-                    ? (run.modelLabel ?? run.model ?? '')
-                    : ''
+                  run.identity.kind === 'agent' ? run.modelLabel : nothing
                 }</span
               >
               ${waIcon(this.decorator.icon, { id: 'run-tab-kind', className: 'run-kind' })}

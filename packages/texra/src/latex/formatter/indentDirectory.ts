@@ -9,13 +9,17 @@ import {
   entryTypeIn,
 } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { EXCLUDED_DIRS } from '@texra/shared/constants/excludedDirs';
+import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
 
 import type { ToolMissing } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 import { LatexProgress } from '../progress';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { LatexFormatter } from './texFormatter';
+
+const SKIPPED_DIRECTORIES: ReadonlySet<string> = new Set(
+  FILE_HANDLING_RULES.ignored.bulkOperationDirectories,
+);
 
 export type IndentLatexResult =
   | {
@@ -105,7 +109,7 @@ export const indentLatexFilesInDirectory = Effect.fn(
   > {
     const entries = yield* readDirectoryTypedTolerant(dirPath);
     for (const [name, type] of entries) {
-      if (EXCLUDED_DIRS.has(name.toLowerCase()) || name.includes('Diffs')) {
+      if (SKIPPED_DIRECTORIES.has(name.toLowerCase())) {
         continue;
       }
 

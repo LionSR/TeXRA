@@ -49,7 +49,7 @@ export function responseLines(content: string): string[] {
  *
  * Parses backtick/tilde fence delimiter lines and strips a fence that wraps
  * an entire block of lines, following CommonMark's closing-fence rule (same
- * marker, at least the opening delimiter's length).
+ * marker, at least the opening delimiter's length, no info string).
  */
 
 export type MarkdownFence = {
@@ -66,11 +66,14 @@ export function parseMarkdownFenceDelimiter(
     return null;
   }
   const delimiter = match[1];
-  return {
-    marker: delimiter.startsWith('`') ? '`' : '~',
-    length: delimiter.length,
-    info: (match[2] ?? '').trim(),
-  };
+  const marker = delimiter.startsWith('`') ? '`' : '~';
+  const info = (match[2] ?? '').trim();
+  // A backtick fence's info string holds no backtick (CommonMark), so a
+  // one-line code span such as ```latex``` opens nothing.
+  if (marker === '`' && info.includes('`')) {
+    return null;
+  }
+  return { marker, length: delimiter.length, info };
 }
 
 export function isLatexMarkdownFence(fence: MarkdownFence): boolean {
@@ -84,6 +87,7 @@ export function isClosingMarkdownFence(
   const closingFence = parseMarkdownFenceDelimiter(line);
   return (
     closingFence !== null &&
+    closingFence.info === '' &&
     closingFence.marker === openingFence.marker &&
     closingFence.length >= openingFence.length
   );
@@ -160,10 +164,20 @@ export function stripSurroundingMarkdownFence(
 // contentSimilarity
 // ---------------------------------------------------------------------------
 
-/** Opening delimiter for a fenced block explicitly tagged as latex/tex. */
-const LATEX_FENCE_OPEN_REGEX = /^(`{3,}|~{3,})\s*(?:latex|tex)\s*$/i;
+/** The info string of a fenced block explicitly tagged as latex/tex. */
+const LATEX_FENCE_INFO = /^(?:latex|tex)$/i;
 
-/** Collect the content of every ```latex/```tex fenced block, in document order. */
+/**
+ * Collect the content of every ```latex/```tex fenced block, in document
+ * order, at any indentation. Every fence is followed to its close, not only
+ * the latex ones: a fence inside another fence is content (an example a
+ * four-backtick wrapper shows is not a document), and only a bare delimiter
+ * closes one (a ```python line inside a latex block is part of it). A
+ * wrapper that shows a fence is longer than the fence it shows, so a latex
+ * fence line at least as long as the other fence it sits in means that fence
+ * was never closed, and the latex block starts there. A latex fence the
+ * response never closes is dropped and reported.
+ */
 export function collectLatexFencedBlocks(
   content: string,
   options: {
@@ -178,22 +192,35 @@ export function collectLatexFencedBlocks(
 
   for (const line of lines) {
     if (!openFence) {
-      if (LATEX_FENCE_OPEN_REGEX.test(line.trim())) {
-        openFence = parseMarkdownFenceDelimiter(line);
-        current = [];
-      }
+      openFence = parseMarkdownFenceDelimiter(line);
+      current = [];
       continue;
     }
     if (isClosingMarkdownFence(line, openFence)) {
       const block = current.join('\n').trim();
-      if (block) blocks.push(block);
+      if (block && LATEX_FENCE_INFO.test(openFence.info)) blocks.push(block);
       openFence = null;
+      continue;
+    }
+    const inner = parseMarkdownFenceDelimiter(line);
+    if (
+      inner &&
+      LATEX_FENCE_INFO.test(inner.info) &&
+      !LATEX_FENCE_INFO.test(openFence.info) &&
+      inner.marker === openFence.marker &&
+      inner.length >= openFence.length
+    ) {
+      openFence = inner;
       current = [];
       continue;
     }
     current.push(line);
   }
-  if (openFence && current.some((line) => line.trim() !== '')) {
+  if (
+    openFence &&
+    LATEX_FENCE_INFO.test(openFence.info) &&
+    current.some((line) => line.trim() !== '')
+  ) {
     options.onUnclosedFence?.(current.length);
   }
   return blocks;

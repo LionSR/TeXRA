@@ -47,22 +47,15 @@ type ToolSectionOptions = {
   extraClass?: string;
 };
 
-function toolDisplayText(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (value == null) return '';
-  return String(value);
-}
-
 /**
  * Build a tool section with appropriate code highlighting based on tool type.
  */
 export function buildToolSection(
   label: string,
-  text: unknown,
+  text: string,
   options: ToolSectionOptions = {},
 ): TemplateResult {
   const { toolName = '', language: contentLanguage, extraClass = '' } = options;
-  const displayText = toolDisplayText(text);
 
   // Determine language: tool config > content metadata > plaintext
   const language =
@@ -70,8 +63,8 @@ export function buildToolSection(
   const shouldHighlight = language !== 'plaintext';
 
   const content = shouldHighlight
-    ? buildCodeBlock(displayText, language, extraClass)
-    : wrapInPre(displayText, extraClass);
+    ? buildCodeBlock(text, language, extraClass)
+    : wrapInPre(text, extraClass);
 
   return buildToolUseSection(label, content);
 }
@@ -79,13 +72,13 @@ export function buildToolSection(
 /** Build a read-only terminal section for shell output. */
 export function buildTerminalSection(
   label: string,
-  text: unknown,
+  text: string,
 ): TemplateResult {
   return buildToolUseSection(
     label,
     html`<terminal-output
       class="tool-output-terminal"
-      .text=${toolDisplayText(text)}
+      .text=${text}
     ></terminal-output>`,
   );
 }

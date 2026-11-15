@@ -4,7 +4,7 @@
  * The verdict (`verdict.ts`) is decided over this reading.
  */
 // Third-party imports
-import { Predicate } from 'effect';
+import { Option, Predicate, Schema } from 'effect';
 
 // Local imports
 import type { ModelError } from '../errors.js';
@@ -59,14 +59,13 @@ export const firstNumber = (body: unknown, key: string): number | undefined =>
     .map((candidate) => numberField(candidate, key))
     .find(Predicate.isNotUndefined);
 
+const decodeJsonText = Schema.decodeUnknownOption(
+  Schema.fromJsonString(Schema.Unknown),
+);
+
 /** JSON text, or `undefined` when it is not JSON. */
-function parsedJson(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
-}
+const parsedJson = (text: string): unknown =>
+  Option.getOrUndefined(decodeJsonText(text));
 
 /** The status a provider's error type or code stands for, when the reply lost its status. */
 const STATUS_BY_ERROR_TYPE: ReadonlyMap<string, number> = new Map([

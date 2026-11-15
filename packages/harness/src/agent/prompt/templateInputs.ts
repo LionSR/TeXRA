@@ -4,7 +4,7 @@ import { Effect, FileSystem, Schema } from 'effect';
 
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { parseFrontmatter } from '@agent/memory/memoryMeta';
-import { displayToStoragePath } from '@agent/memory/memoryUtils';
+import { displayToStoragePath } from '@agent/memory/memoryLayout';
 import {
   isTaskConfig,
   type AgentConfig,

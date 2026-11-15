@@ -19,7 +19,7 @@ import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { designTokens } from '@ui/styles';
-import { getComposedPathElement } from './composedPath';
+import { delegateKeyActivation, getComposedPathElement } from './composedPath';
 import { logStyles } from '../styles/logStyles';
 import type { RunView, SessionView, RunId } from '@texra-ai/harness/schemas';
 import type { StageList } from './StageList';
@@ -133,13 +133,9 @@ export class LogList extends LitElement {
 
   private handleKeyEvent = (event: Event): void => {
     if (!(event instanceof KeyboardEvent)) return;
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    if (event.defaultPrevented) return;
-    if (!getComposedPathElement(event, '.file-link, .latex-ref', HTMLElement)) {
-      return;
-    }
-    event.preventDefault();
-    this.activateLinkFromEvent(event);
+    delegateKeyActivation(event, '.file-link, .latex-ref', () =>
+      this.activateLinkFromEvent(event),
+    );
   };
 
   private activateLinkFromEvent(event: Event): void {

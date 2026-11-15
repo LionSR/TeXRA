@@ -120,11 +120,12 @@ function sessionHeaderIdentityLine(
   child?: ChildHeader,
 ): string {
   if (child) {
-    const model = child.modelLabel ?? getModelLabel(meta.model || '-');
+    // A child the view gives no model (a process) names none: the
+    // session's model is another run's.
     return joinFacts([
       `${child.childKind}: ${child.label}`,
       `parent: ${child.parentLabel}`,
-      `model: ${model}`,
+      child.modelLabel !== null && `model: ${child.modelLabel}`,
     ]);
   }
   const model = getModelLabel(meta.model || '-');

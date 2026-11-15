@@ -7,8 +7,9 @@ import { styleMap } from 'lit/directives/style-map.js';
 import { formatResultCount } from '@texra-ai/harness/schemas';
 
 import { DESKTOP_THEME_KIND, type Theme } from '@texra/shared/ipc';
+import { buildLineChangeStats } from '@ui/progress/formatters/htmlBuilders';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
-import { renderEmptyState } from '@ui/wa/emptyState';
+import { renderEmptyMessage, renderEmptyState } from '@ui/wa/emptyState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import { buildEditorTree, type EditorTreeNode } from './editorTree';
@@ -149,10 +150,7 @@ export function createReviewPane(): ReviewPaneController {
         <header class="desktop-review-toolbar">
           <div class="desktop-review-summary">
             <strong>${selected?.title ?? 'Review changes'}</strong>
-            <span class="desktop-review-counts">
-              <span class="is-added">+${additions}</span>
-              <span class="is-deleted">-${deletions}</span>
-            </span>
+            ${buildLineChangeStats({ added: additions, removed: deletions })}
           </div>
           <span class="desktop-review-file-count">
             ${formatResultCount(shown.size, 'file')}
@@ -212,11 +210,7 @@ export function createReviewPane(): ReviewPaneController {
                         })),
                       ),
                     )
-                  : html`
-                      <div class="desktop-review-no-results">
-                        No matching files
-                      </div>
-                    `
+                  : renderEmptyMessage('No matching files')
               }
             </div>
           </aside>

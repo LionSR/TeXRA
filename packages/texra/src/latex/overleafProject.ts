@@ -7,9 +7,6 @@
  */
 
 const PROJECT_ID_PATTERN = /^[a-f0-9]{24}$/i;
-const GIT_URL_PATTERN =
-  /^https?:\/\/(?:git@)?([^/]+)(\/git)?\/([a-f0-9]{24})$/i;
-const PROJECT_URL_PATTERN = /^https?:\/\/([^/]+)\/project\/([a-f0-9]{24})\/?$/i;
 
 export const OVERLEAF_GIT_TOKEN_URL = 'https://www.overleaf.com/user/settings';
 export const OVERLEAF_TOKEN_DOCS_URL =
@@ -38,34 +35,40 @@ export interface OverleafRemote {
 export function parseLatexGitUrl(input: string): OverleafRemote | null {
   const trimmed = input.trim();
 
-  // Full git URL (e.g. https://git.overleaf.com/<id>)
-  const match = GIT_URL_PATTERN.exec(trimmed);
-  if (match) {
-    const [, host, hasGit, id] = match;
+  // Bare project ID -> Overleaf
+  if (PROJECT_ID_PATTERN.test(trimmed)) {
+    return { host: 'git.overleaf.com', path: `/${trimmed}`, isOverleaf: true };
+  }
+
+  // `URL` separates the host from any `user:password@` before it, so a
+  // credential typed into the URL never reaches the recorded remote.
+  const url = URL.parse(trimmed);
+  if (url === null || !['https:', 'http:'].includes(url.protocol)) return null;
+  const segments = url.pathname.split('/').filter((part) => part !== '');
+  const id = segments.at(-1);
+  if (id === undefined || !PROJECT_ID_PATTERN.test(id)) return null;
+  const kind = segments.length === 1 ? '' : segments[0]?.toLowerCase();
+  if (segments.length > 2) return null;
+
+  // Git URL (e.g. https://git.overleaf.com/<id>)
+  if (kind === '' || kind === 'git') {
     return {
-      host,
-      path: hasGit ? `/git/${id}` : `/${id}`,
-      isOverleaf: host === 'git.overleaf.com',
+      host: url.host,
+      path: kind === 'git' ? `/git/${id}` : `/${id}`,
+      isOverleaf: url.host === 'git.overleaf.com',
     };
   }
 
   // Project URL (e.g. https://www.overleaf.com/project/<id> or
   // https://sharelatex.example.com/project/<id>)
-  const projectMatch = PROJECT_URL_PATTERN.exec(trimmed);
-  if (projectMatch) {
-    const [, rawHost, id] = projectMatch;
-    const host = rawHost.replace(/^www\./, '');
+  if (kind === 'project') {
+    const host = url.host.replace(/^www\./, '');
     const isOverleaf = host === 'overleaf.com';
     return {
       host: isOverleaf ? 'git.overleaf.com' : host,
       path: isOverleaf ? `/${id}` : `/git/${id}`,
       isOverleaf,
     };
-  }
-
-  // Bare project ID -> Overleaf
-  if (PROJECT_ID_PATTERN.test(trimmed)) {
-    return { host: 'git.overleaf.com', path: `/${trimmed}`, isOverleaf: true };
   }
 
   return null;

@@ -30,9 +30,9 @@ import {
   outputDisplayName,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
+import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
+import { formatLineChanges } from '@ui/copy/format';
 import { stageStatus } from '@ui/copy/runStatus';
-
-import { COMPACTION_ACTIVITY_STATUS_STYLE } from './transcriptEntryLayout';
 
 interface DocumentTaskRunDetailLine {
   readonly key: string;
@@ -60,7 +60,7 @@ function stageLine(
   stage: Stage,
   status: ReturnType<typeof stageStatus>,
 ): DocumentTaskRunDetailLine {
-  const appearance = COMPACTION_ACTIVITY_STATUS_STYLE[status.key];
+  const appearance = TONE_PAINT[status.tone];
   const duration =
     stage.endTime !== undefined &&
     formatCompactDuration(stage.endTime - stage.startTime);
@@ -120,7 +120,9 @@ function documentTaskRunDetailGroups(
       });
       for (const [index, file] of outputs.entries()) {
         const counts = outputDiffCounts(file.diff);
-        const diff = counts ? ` (+${counts.added} -${counts.removed})` : '';
+        const diff = counts
+          ? ` (${formatLineChanges(counts.added, counts.removed)})`
+          : '';
         lines.push({
           key: `output:${round}:${file.location.absolutePath}:${index}`,
           // Neutral bullet, not `›` — POINTER means "focused row / your

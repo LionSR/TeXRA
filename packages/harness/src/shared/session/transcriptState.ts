@@ -15,7 +15,6 @@ import {
   type ToolUseLog,
 } from '@shared/schemas';
 import type { CompactionActivityProjection } from '@shared/runs/compactionActivityProjection';
-import { compareBySeqNo } from '@shared/runs/runOrdering';
 import type { RunLabels } from '@shared/tools/executionsDisplay';
 import {
   compactionActivityRow,
@@ -206,15 +205,12 @@ export function upsertRow(
     rows[at] = row;
     return;
   }
-  const seqOf = (candidate: TranscriptRow) => candidate.seqNo;
-  const timeOf = (candidate: TranscriptRow) => candidate.timestamp;
+  // Rows order by their slot's first appearance, a tie (a compaction row
+  // and the row that opened it) by time.
+  const after = (candidate: TranscriptRow) =>
+    (candidate.seqNo - row.seqNo || candidate.timestamp - row.timestamp) > 0;
   let position = rows.length;
-  while (
-    position > 0 &&
-    compareBySeqNo(rows[position - 1], row, seqOf, timeOf) > 0
-  ) {
-    position -= 1;
-  }
+  while (position > 0 && after(rows[position - 1])) position -= 1;
   if (position === rows.length) {
     rowIndex.set(row.id, rows.length);
     rows.push(row);

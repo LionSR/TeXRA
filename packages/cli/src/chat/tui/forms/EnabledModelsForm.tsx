@@ -13,6 +13,7 @@ import {
 import { AsyncListForm } from './_shared/ListForm';
 import type { ProcessRuntime } from '@texra-ai/harness/host';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
+import { enabledLabel } from '@ui/copy/format';
 
 interface EnabledModelsFormProps {
   readonly availableRows?: number;
@@ -29,7 +30,7 @@ interface EnabledModelsFormProps {
 
 function formatEnabledModelDescription(model: CliEnabledModelRow): string {
   return joinFacts([
-    model.enabled ? 'enabled' : 'disabled',
+    enabledLabel(model.enabled),
     model.provider,
     model.deprecated && 'deprecated',
   ]);

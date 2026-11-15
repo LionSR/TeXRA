@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { format } from 'node:util';
 import { normalizeFilePath } from '@texra-ai/harness/schemas';
 
-import escapeRegExp from 'escape-string-regexp';
+import { RegExp as EffectRegExp } from 'effect';
 import {
   app,
   type WebContents,
@@ -219,7 +219,7 @@ function redactPathPrefixes(
       if (segments.every((segment) => segment === '')) {
         return redacted.replaceAll(/(?<![A-Za-z0-9:/])\//g, '[path]');
       }
-      const pattern = segments.map(escapeRegExp).join('[\\\\/]+');
+      const pattern = segments.map(EffectRegExp.escape).join('[\\\\/]+');
       // A separator-terminated prefix already ends on a boundary; any other
       // must stop where the path does, never inside a longer sibling name.
       const boundary =

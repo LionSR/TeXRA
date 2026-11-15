@@ -234,7 +234,7 @@ function configFileWarnings(
 /**
  * The CLI config provider's pre-runtime open, already provided with the file
  * services it needs: `buildCliContext` yields it before the command's runtime
- * exists, and `contextFromArgs` is the one
+ * exists, and `loadConfigAndWarn` is the one
  * place the whole pre-runtime program is run.
  */
 export function loadCliStartupConfig(

@@ -8,6 +8,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import { commonViewStyles, designTokens } from '@ui/styles';
+import { renderEmptyMessage } from '@ui/wa/emptyState';
 import { readSelectValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { settingsCatalogStyles } from './SettingsCatalog.styles';
@@ -205,18 +206,16 @@ export class SettingsCatalog extends LitElement {
           )}
           ${
             items.length === 0
-              ? html`<p class="catalog-empty">
-                  ${
-                    this.items.length
-                      ? `No matching ${this.label.toLocaleLowerCase()}. Try another search or source.`
-                      : `No ${this.label.toLocaleLowerCase()} found.`
-                  }
-                </p>`
+              ? renderEmptyMessage(
+                  this.items.length
+                    ? `No matching ${this.label.toLocaleLowerCase()}. Try another search or source.`
+                    : `No ${this.label.toLocaleLowerCase()} found.`,
+                )
               : nothing
           }
         </div>
         <div class="catalog-detail" id="catalog-detail">
-          ${this.activeKey ? html`<slot name="detail"></slot>` : html`<p class="catalog-empty">Select an item to inspect its details.</p>`}
+          ${this.activeKey ? html`<slot name="detail"></slot>` : renderEmptyMessage('Select an item to inspect its details.')}
         </div>
       </div>
       <div class="catalog-count" role="status">
