@@ -36,7 +36,7 @@ import { lineChangeStatsStyles } from '@ui/styles/surfaceStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { buildLineChangeStats } from '@ui/progress/formatters/htmlBuilders';
-import { getComposedPathElement } from './composedPath';
+import { delegateKeyActivation, getComposedPathElement } from './composedPath';
 
 // Local imports - styles
 import { fileListStyles } from './FileList.styles';
@@ -347,15 +347,9 @@ export class FileList extends LitElement {
   // the generated-files list is reachable without a mouse — mirrors the click
   // delegation for file-path spans without intercepting native wa-button keys.
   private handleFileKey(event: KeyboardEvent): void {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    const actionEl = getComposedPathElement(
-      event,
-      '.file-path[data-command]',
-      HTMLElement,
+    delegateKeyActivation(event, '.file-path[data-command]', (actionEl) =>
+      this.dispatchFileAction(actionEl),
     );
-    if (!actionEl) return;
-    event.preventDefault();
-    this.dispatchFileAction(actionEl);
   }
 
   private dispatchFileAction(actionEl: HTMLElement): void {

@@ -15,6 +15,7 @@ import { customElement, property } from 'lit/decorators.js';
 // Local imports
 import { CopyButtonController } from '@ui/litControllers/CopyButtonController';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { isActivationKey } from '@ui/wa/keyActivation';
 
 /** The three places a template puts a Copy button, each with its look. */
 type CopyButtonLook = 'icon' | 'labeled' | 'code';
@@ -32,8 +33,7 @@ const LOOK_CLASS: Readonly<Record<CopyButtonLook, string>> = {
  * The click the browser synthesizes from the key still happens.
  */
 function stopSummaryToggleKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Enter' && event.key !== ' ') return;
-  event.stopPropagation();
+  if (isActivationKey(event)) event.stopPropagation();
 }
 
 @customElement('copy-button')
