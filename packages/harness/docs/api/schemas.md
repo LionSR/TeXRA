@@ -791,6 +791,18 @@ policy: a `,1` range is omitted, the form `diff -u` and `git diff` emit.
 function formatHunkLines(hunks: ToolEditContent['hunks']): string[]
 ```
 
+## formatIssuesForDiagnostics
+
+Flatten a schema failure's issue tree into one row per leaf issue: the
+dotted path of the field and the message, which a malformed-payload
+diagnostic names the fields by.
+
+```ts
+function formatIssuesForDiagnostics(
+  error: Schema.SchemaError,
+): FormattedIssue[]
+```
+
 ## formatResetDuration
 
 A coarse wait (`1d 20h`, `20h 22m`, `5m`), as a used-up plan's reset is
@@ -813,6 +825,17 @@ function formatResultCount(
   singular: string,
   plural?: string,
 ): string
+```
+
+## FormattedIssue
+
+One schema issue: the dotted path of the field and the issue's message.
+
+```ts
+interface FormattedIssue {
+  readonly path: string;
+  readonly message: string;
+}
 ```
 
 ## generateRunId
