@@ -818,8 +818,10 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   (`agent/runtime/requests.ts#the session closed before it was decided`).
 - An interrupted asker writes nothing: the request a stopped or failed run
   leaves open is cancelled with the run's end, in the end's batch, so no
-  surface keeps offering it (`agent/storage/runLifecycle.ts#cancelledRequests`);
-  one a dead process left is the next resume's to cancel.
+  surface keeps offering it (`agent/storage/runLifecycle.ts#'The run ended.'`);
+  one a dead process left is the next resume's to cancel. Both cancel the
+  same requests, the open ones that block their caller
+  (`shared/session/runState.ts#cancelRequestRows`).
 - A request is a row, so it outlives its process. A resume cancels every open
   one that blocks its caller (section 7.2), and the call that asked asks again
   (`shared/session/inFlight.ts#resumedAttempt`). An open request that does not
