@@ -4,6 +4,7 @@
  * that use it. Every word comes from the row copy (`@ui/copy/plugins`).
  */
 
+import { joinFacts } from '@texra-ai/harness/schemas';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -442,7 +443,7 @@ export class PluginCard extends LitElement {
         </div>
         <div class="plugin-summary">
           <p class="plugin-line">
-            ${pluginRowSummary(row)}${trust ? ` · ${trust}` : ''}
+            ${joinFacts([pluginRowSummary(row), trust])}
           </p>
           ${
             problem

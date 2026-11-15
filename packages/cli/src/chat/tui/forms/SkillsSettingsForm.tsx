@@ -7,6 +7,7 @@ import {
   type SkillDisplayItem,
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
+  joinFacts,
 } from '@texra-ai/harness/schemas';
 import { type WorkspaceRoots } from '@texra-ai/harness';
 import { Skills, type ProcessRuntime } from '@texra-ai/harness/host';
@@ -82,7 +83,11 @@ export function SkillsSettingsForm(
         ...data.skills.map((skill) => ({
           value: { kind: 'skill' as const, name: skill.name },
           label: skill.name,
-          description: `${skill.label} · ${enabledLabel(skill.enabled)} · ${skill.description}`,
+          description: joinFacts([
+            skill.label,
+            enabledLabel(skill.enabled),
+            skill.description,
+          ]),
         })),
       ]}
       availableRows={props.availableRows}

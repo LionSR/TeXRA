@@ -10,6 +10,7 @@ import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages'
 import {
   formatClippedList,
   formatResultCount,
+  joinFacts,
 } from '@texra-ai/harness/schemas';
 
 /** The page's own copy. */
@@ -94,9 +95,11 @@ export function pluginRowName(row: PluginRow): string {
 export function pluginRowSummary(row: PluginRow): string {
   switch (row.kind) {
     case 'texra':
-      return row.item.tools.length === 0
-        ? 'TeXRA plugin'
-        : `TeXRA plugin · ${formatResultCount(row.item.tools.length, 'tool')}`;
+      return joinFacts([
+        'TeXRA plugin',
+        row.item.tools.length > 0 &&
+          formatResultCount(row.item.tools.length, 'tool'),
+      ]);
     case 'installed': {
       const { plugin } = row;
       const adds = [
@@ -108,12 +111,10 @@ export function pluginRowSummary(row: PluginRow): string {
       const parts = adds
         .filter(([count]) => count > 0)
         .map(([count, noun]) => formatResultCount(count, noun));
-      return parts.length === 0
-        ? 'Claude Code or Codex plugin'
-        : `Claude Code or Codex plugin · ${parts.join(', ')}`;
+      return joinFacts(['Claude Code or Codex plugin', parts.join(', ')]);
     }
     case 'mcp':
-      return `MCP server in mcp.json · ${row.command}`;
+      return joinFacts(['MCP server in mcp.json', row.command]);
   }
 }
 

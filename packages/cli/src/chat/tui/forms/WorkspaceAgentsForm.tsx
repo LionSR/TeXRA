@@ -11,6 +11,7 @@ import {
   agentKeyOf,
   formatResultCount,
   type WorkspaceAgentsSelection,
+  joinFacts,
 } from '@texra-ai/harness/schemas';
 import {
   readCliWorkspaceAgents,
@@ -305,7 +306,10 @@ export function WorkspaceAgentsForm(
       const key = agentKeyOf(agent);
       return {
         value: key,
-        label: `${selected.has(key) ? `${TICK} ` : ''}${agent.name}${documentTaskOf(agent) === null ? '' : ' · document task'}`,
+        label: joinFacts([
+          `${selected.has(key) ? `${TICK} ` : ''}${agent.name}`,
+          documentTaskOf(agent) !== null && 'document task',
+        ]),
         description: agent.description,
       };
     }),

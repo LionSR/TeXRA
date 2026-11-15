@@ -2,7 +2,12 @@ import { Box, Text } from 'ink';
 import { useEffect, useRef, type ReactNode } from 'react';
 
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
-import { KeyHints, type KeyHint, NAVIGATE_HINT } from '@cli/tui/ui/KeyHints';
+import {
+  ENTER_OR_ESC_CLOSE_HINTS,
+  KeyHints,
+  type KeyHint,
+  NAVIGATE_HINT,
+} from '@cli/tui/ui/KeyHints';
 import {
   Select,
   selectIndexForHotkeyInput,
@@ -82,13 +87,7 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
         {props.detail}
         {props.emptyClosesOnEnter ? (
           <Box marginTop={1}>
-            <KeyHints
-              hints={[
-                { key: 'Enter', action: 'close' },
-                { key: 'Esc', action: 'close' },
-              ]}
-              confirmCancel={false}
-            />
+            <KeyHints hints={ENTER_OR_ESC_CLOSE_HINTS} confirmCancel={false} />
           </Box>
         ) : null}
       </FormFrame>

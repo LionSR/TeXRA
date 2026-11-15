@@ -9,7 +9,11 @@ import {
   type ScriptCallView,
   type ScriptStageView,
 } from '@texra-ai/harness/transcript';
-import { formatCostUsd, formatResultCount } from '@texra-ai/harness/schemas';
+import {
+  formatCostUsd,
+  formatResultCount,
+  joinFacts,
+} from '@texra-ai/harness/schemas';
 import type { StatusLook } from '@ui/copy/runStatus';
 
 /** The error a tool card shows when the run's end cut its call short
@@ -81,18 +85,15 @@ export function scriptCallSummary(call: ScriptCallView): string | undefined {
 
 /** A call's one line: `Running: drafter · gpt-5 — Wants bash: make`. */
 export function scriptCallLine(call: ScriptCallView): string {
-  const facts = call.facts.length > 0 ? ` · ${call.facts.join(' · ')}` : '';
   const detail = call.detail ? ` — ${detailText(call.detail)}` : '';
-  return `${SCRIPT_CALL_STATUS_LABEL[call.status]}: ${call.label}${facts}${detail}`;
+  return `${SCRIPT_CALL_STATUS_LABEL[call.status]}: ${joinFacts([call.label, ...call.facts])}${detail}`;
 }
 
 /** `3 agents · 1 needs you · $0.840`; a count or cost of zero is left out. */
 export function scriptStageSummary(stage: ScriptStageView): string {
-  return [
-    stage.agents > 0 ? formatResultCount(stage.agents, 'agent') : undefined,
-    stage.needsYou > 0 ? `${stage.needsYou} needs you` : undefined,
-    stage.costUsd > 0 ? formatCostUsd(stage.costUsd) : undefined,
-  ]
-    .filter((part) => part !== undefined)
-    .join(' · ');
+  return joinFacts([
+    stage.agents > 0 && formatResultCount(stage.agents, 'agent'),
+    stage.needsYou > 0 && `${stage.needsYou} needs you`,
+    stage.costUsd > 0 && formatCostUsd(stage.costUsd),
+  ]);
 }

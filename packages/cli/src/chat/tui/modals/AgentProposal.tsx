@@ -5,6 +5,7 @@ import {
   getProposalFileGroups,
   type AgentProposalRequest,
   type ApprovalBypassKind,
+  FACT_SEPARATOR,
 } from '@texra-ai/harness/schemas';
 import { COLOR_ACCENT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { confirmCardContentWidth } from '@cli/tui/ui/theme';
@@ -27,7 +28,6 @@ import {
   ScrollableModalText,
   scrollableModalTextRowsBudget,
 } from './ScrollableModalText';
-import { SEPARATOR } from '@cli/tui/ui/glyphs';
 
 interface AgentProposalProps {
   readonly availableRows?: number;
@@ -145,7 +145,7 @@ function agentProposalMetadataLines({
       segments: [
         { text: 'Model: ', bold: true },
         { text: getModelLabel(payload.model) },
-        { text: SEPARATOR },
+        { text: FACT_SEPARATOR },
         { text: 'Kind: ', bold: true },
         { text: agentProposalLabel(payload) },
       ],
