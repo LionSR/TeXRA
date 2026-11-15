@@ -9,7 +9,11 @@
  */
 import { signal, type Signal } from '@lit-labs/signals';
 import { Cause, Stream } from 'effect';
-import { isInterrupted, type RunId } from '@texra-ai/harness/schemas';
+import {
+  isInterrupted,
+  isWorking,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import { toSignal, type StreamSignal } from '@texra/shared/signals';
 import type {
   RunView,
@@ -109,16 +113,17 @@ export function runLabelOf(run: RunView): string {
 }
 
 /**
- * The direct children in the RUNNING phase. The session view's `rollup.running`
- * counts every descendant still working a turn, a child waiting on the user
- * included; the TUI's "active" is direct children in the RUNNING phase, so
- * it reads each child's status fact rather than the rollup.
+ * The direct children working a turn here. The session view's
+ * `rollup.running` counts every descendant, a child waiting on the user
+ * included; the TUI's "active" is direct children, by the view's one reading
+ * of working, so a child cut while it ran is not counted as active.
  */
 export function runningChildCount(
   view: SessionView,
   run: RunView | undefined,
 ): number {
-  return (run?.childIds ?? []).filter(
-    (id) => view.runs.get(id)?.position === 'running',
-  ).length;
+  return (run?.childIds ?? []).filter((id) => {
+    const child = view.runs.get(id);
+    return child !== undefined && isWorking(child);
+  }).length;
 }

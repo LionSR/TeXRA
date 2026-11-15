@@ -31,16 +31,12 @@ import {
   STATUS_DIAMOND,
   TICK,
 } from '@cli/tui/ui/glyphs';
-import {
-  COLOR_BORDER,
-  COLOR_ERROR,
-  COLOR_HINT,
-  COLOR_SUCCESS,
-  COLOR_WARNING,
-} from '@cli/tui/ui/colors';
+import { COLOR_ERROR } from '@cli/tui/ui/colors';
+import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
 import { fillRows, safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import {
   SCRIPT_CALL_STATUS_LABEL,
+  SCRIPT_CALL_STATUS_LOOK,
   scriptCallSummary,
   scriptStageSummary,
 } from '@ui/copy/scriptStage';
@@ -70,18 +66,6 @@ const STATUS_GLYPH = {
   'not run': NOT_RUN,
 } as const satisfies Record<ScriptCallView['status'], string>;
 
-const STATUS_COLOR = {
-  queued: undefined,
-  running: COLOR_HINT,
-  interrupted: COLOR_WARNING,
-  finished: COLOR_SUCCESS,
-  reused: COLOR_SUCCESS,
-  skipped: COLOR_BORDER,
-  cancelled: COLOR_BORDER,
-  failed: COLOR_ERROR,
-  'not run': COLOR_BORDER,
-} as const satisfies Record<ScriptCallView['status'], string | undefined>;
-
 /** One list entry: a section heading, or a call. */
 type Entry =
   | { readonly kind: 'heading'; readonly key: string; readonly text: string }
@@ -103,7 +87,11 @@ function CallRow({
       <Box flexShrink={0}>
         <Text
           aria-hidden
-          color={waiting ? COLOR_WARNING : STATUS_COLOR[call.status]}
+          color={
+            TONE_PAINT[
+              waiting ? 'warning' : SCRIPT_CALL_STATUS_LOOK[call.status].tone
+            ].color
+          }
         >
           {fillRows(` ${STATUS_GLYPH[call.status]}`, 3)}
         </Text>
