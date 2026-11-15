@@ -170,9 +170,8 @@ function modelWrites(
     }
     case 'handed-down':
       return [issue(p.call, p.argumentsText)];
-    // Provider identity, an accepted remote operation and the messages a
-    // run appends end no request and issue no call.
-    case 'identified':
+    // An accepted remote operation and the messages a run appends end no
+    // request and issue no call.
     case 'accepted':
     case 'append':
       return [];

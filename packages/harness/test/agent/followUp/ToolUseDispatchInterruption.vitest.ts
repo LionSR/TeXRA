@@ -182,10 +182,11 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     );
 
     /**
-     * Failure mode: a replay-safe call that stops the process (running it out
-     * of memory, say) starts again on every resume, so every start stops.
+     * Failure mode: a replay-safe call a person stopped, or an app close cut,
+     * three times is refused on its fourth start, though every resume is a
+     * person's act.
      */
-    it.effect('stops replaying a call cut short at each of its attempts', () =>
+    it.effect('replays a replay-safe call however often it was cut short', () =>
       Effect.gen(function* () {
         const session = yield* isolatedTestSession({ emit: () => {} });
         const runId = generateRunId();
@@ -197,7 +198,10 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           started += 1;
           return started <= 3
             ? Queue.offer(starts, undefined).pipe(Effect.andThen(Effect.never))
-            : Effect.succeed({ status: 'executed' as const, output: 'ran' });
+            : Effect.succeed({
+                status: 'executed' as const,
+                output: 'fourth start finished',
+              });
         });
         const tools: Record<string, ITool> = {
           toolB: {
@@ -223,9 +227,9 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           yield* Fiber.interrupt(fiber);
         }
 
-        const resumed = yield* run(true, [textTurn('It was not run again.')]);
+        const resumed = yield* run(true, [textTurn('It ran.')]);
         expect(resumed.outcome).toBe('completed');
-        expect(call).toHaveBeenCalledTimes(3);
+        expect(call).toHaveBeenCalledTimes(4);
         const delivered = yield* Context.get(session, RunHistory)
           .load(runId)
           .pipe(Effect.orDie);
@@ -234,7 +238,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         );
         expect(
           group?.role === 'tool' ? JSON.stringify(group.results[0]) : '',
-        ).toContain('so it was not run again');
+        ).toContain('fourth start finished');
       }),
     );
   },

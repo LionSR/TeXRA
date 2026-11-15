@@ -247,12 +247,9 @@ const DisplayRowDraftSchema = Schema.Union([
     config: RunRecordFieldsSchema,
     binding: Schema.optional(Schema.NullOr(RunBindingSchema)),
   }),
-  /** The parent edge severed by a stop that detaches the run: the only
-   *  fact after `run.start` that moves the edge. */
-  durable('run.detach', {}),
   /**
-   * A stop asked of the run, and why: a person's, or this process's
-   * shutdown. Committed before the run's fiber is interrupted, so the end
+   * A stop asked of the run, and why: a person's, or the call that
+   * awaited it letting go. Committed before the run's fiber is interrupted, so the end
    * that follows reads the reason here; a run with no fiber here ends in
    * the same batch. The one row every reader of "why it stopped" reads.
    */
@@ -429,7 +426,6 @@ export function edgesOf(draft: SessionRowDraft): AggregateEdges {
       return { parent: null, closes: true };
     case 'run.activate':
     case 'run.config':
-    case 'run.detach':
     case 'run.stop':
     case 'run.end':
     case 'run.description':

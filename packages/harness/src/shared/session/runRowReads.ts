@@ -5,16 +5,13 @@
  * rows, typed as them, into what it answers (`foldRunRows`). A run's record
  * (`RunRows`) is its record rows applied one at a time by {@link recordAfter},
  * the one statement of the record's rules, whoever reads it. Beside them: a
- * row as the decision of a request (`isRequestDecision`), where a row leaves
- * its run (`standingAfter`, `closesRunWindow`), and what became of one input
- * (`followUpReceipt`).
+ * row as the decision of a request (`isRequestDecision`), and where a row
+ * leaves its run (`standingAfter`, `closesRunWindow`).
  *
  * Pure: no IO, no clock, no platform, no synthetic id.
  */
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
-  runEndErrorMessage,
-  type FollowUpReceipt,
   type RunOutcome,
   type RunPosition,
   type SessionRow,
@@ -78,7 +75,6 @@ export const RUN_ROW_READS = {
       'followup.queued',
       'followup.consumed',
       'run.start',
-      'run.detach',
       'run.activate',
       'run.stop',
       'run.end',
@@ -145,7 +141,6 @@ export function foldRunRows<R extends RunRowRead>(
 export const RECORD_ROW_TYPES = [
   'run.start',
   'approval.policy',
-  'run.detach',
   'run.activate',
   'run.stop',
   'run.end',
@@ -180,8 +175,8 @@ export const NO_RUN_ROWS: RunRows = Object.freeze({
 /**
  * A run's record after `row`, applied in commit order: the one statement of
  * what each record row changes, which the store's record read, the input
- * read, a follow-up's receipt and the session view all apply. Each field
- * holds what the latest row of a kind says and one row can start over
+ * read and the session view all apply. Each field holds what the latest
+ * row of a kind says and one row can start over
  * (an activation), so a run's latest row of each kind, each plugin fact and
  * each title's author gives the same record as all its rows do.
  */
@@ -197,8 +192,6 @@ export function recordAfter(record: RunRows, row: SessionRow): RunRows {
       };
     case 'approval.policy':
       return { ...record, grants: row.snapshot };
-    case 'run.detach':
-      return { ...record, parent: null };
     // A resumed run never carries the previous lifecycle's end or stop, and
     // its input is open again.
     case 'run.activate':
@@ -288,101 +281,3 @@ export function closesRunWindow(row: SessionRow): boolean {
   const standing = standingAfter(row);
   return standing !== null && standing.position !== 'running';
 }
-
-/** The row kinds a follow-up's receipt reads ({@link followUpReceipt}). */
-export const RECEIPT_ROW_TYPES = [
-  'followup.queued',
-  'followup.consumed',
-  'run.position',
-  'run.activate',
-  'run.stop',
-  'run.end',
-  'run.removed',
-] as const satisfies readonly SessionRow['type'][];
-
-/** One input as its run's rows record it: the `followup.queued` row it was
- *  accepted as, and where it stands now. */
-export interface FollowUpRecord {
-  readonly queued: RowOf<'followup.queued'>;
-  readonly receipt: FollowUpReceipt;
-}
-
-/**
- * Input `followUpId` of the run whose rows of the {@link RECEIPT_ROW_TYPES}
- * are `rows`, in seq order: `unknown` for an id no row queued, `deleted`
- * for a run deleted since, its inputs with it. A turn's input is answered at that turn's `turn.end` when
- * the turn completed, and unanswered when it failed, or when the run ended
- * with the turn open and no activation followed (a clean close is not an
- * end: the input is still the resumable run's). An activation after the end
- * continues the turn, and its input with it.
- */
-export function followUpReceipt(
-  rows: readonly SessionRow[],
-  followUpId: string,
-): FollowUpRecord | 'unknown' | 'deleted' {
-  if (rows.some((row) => row.type === 'run.removed')) return 'deleted';
-  const at = rows.findIndex(
-    (row) => row.type === 'followup.queued' && row.followUpId === followUpId,
-  );
-  if (at < 0) return 'unknown';
-  // cast: the row `findIndex` matched is a `followup.queued`.
-  const queued = rows[at] as RowOf<'followup.queued'>;
-  const took = rows.findIndex(
-    (row, index) =>
-      index > at &&
-      row.type === 'followup.consumed' &&
-      row.followUpId === followUpId,
-  );
-  if (took < 0) return { queued, receipt: { state: 'accepted' } };
-  // cast: the row `findIndex` matched is a `followup.consumed`.
-  const consumed = rows[took] as RowOf<'followup.consumed'>;
-  const { disposition } = consumed;
-  const receipt = ((): FollowUpReceipt => {
-    switch (disposition.kind) {
-      case 'answered':
-      case 'applied':
-        return { state: 'answered', answer: consumed.seq };
-      case 'dropped':
-        return { state: 'unanswered', reason: disposition.reason };
-      case 'turn':
-        return turnReceipt(rows.slice(took + 1), disposition.turn);
-    }
-  })();
-  return { queued, receipt };
-}
-
-/** Where an input of turn `turn` stands, from the rows after it joined. */
-function turnReceipt(
-  after: readonly SessionRow[],
-  turn: number,
-): FollowUpReceipt {
-  let record = NO_RUN_ROWS;
-  for (const row of after) {
-    record = recordAfter(record, row);
-    if (row.type !== 'run.position') continue;
-    const { at, outcome } = row.payload;
-    const rowTurn = row.payload.turn ?? 0;
-    if (at === 'turn.end' && rowTurn === turn)
-      return outcome === 'completed'
-        ? { state: 'answered', turn, answer: row.seq }
-        : { state: 'unanswered', turn, reason: 'failed' };
-    // Past the turn with no end of it: the end that cut it short says why.
-    if (rowTurn > turn) return unansweredBy(turn, record.end);
-  }
-  // A shutdown cut the turn, which the resume continues.
-  return record.end === null || record.stop?.reason === 'shutdown'
-    ? { state: 'incorporated', turn }
-    : unansweredBy(turn, record.end);
-}
-
-/** A turn's input the run's end left unanswered: the end's outcome and
- *  error, or `ended` when no end is in view. */
-const unansweredBy = (
-  turn: number,
-  end: RowOf<'run.end'> | null,
-): FollowUpReceipt => ({
-  state: 'unanswered',
-  turn,
-  reason: end?.outcome ?? 'ended',
-  ...(end?.error != null && { error: runEndErrorMessage(end.error) }),
-});

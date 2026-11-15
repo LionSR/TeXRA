@@ -205,7 +205,6 @@ function livePayload(
   p: typeof ModelMessagePayloadSchema.Type,
 ): ModelMessagePayload {
   switch (p.kind) {
-    case 'identified':
     case 'failed':
     case 'cancelled':
     case 'handed-down':

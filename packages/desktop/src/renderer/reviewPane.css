@@ -104,7 +104,7 @@
 .desktop-review-directory::part(header) {
   min-height: var(--height-control-compact);
   padding: 0;
-  padding-inline-start: calc(var(--review-tree-depth, 0) * var(--wa-space-s));
+  padding-inline-start: calc(var(--tree-depth, 0) * var(--wa-space-s));
   border-radius: var(--wa-border-radius-s);
 }
 
@@ -141,7 +141,7 @@
   display: block;
   width: 100%;
   padding-inline-start: calc(
-    var(--wa-space-xs) + var(--review-tree-depth, 0) * var(--wa-space-s)
+    var(--wa-space-xs) + var(--tree-depth, 0) * var(--wa-space-s)
   );
 }
 

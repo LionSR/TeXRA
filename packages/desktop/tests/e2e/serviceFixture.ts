@@ -7,7 +7,6 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import {
   VALIDATION_FLAG,
@@ -16,7 +15,7 @@ import {
   VALIDATION_SWITCH,
 } from '../../../cli/src/runtime/models/validationSwitch';
 
-const HERE = dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 const REPO_ROOT = resolve(HERE, '..', '..', '..', '..');
 const CLI_ROOT = join(REPO_ROOT, 'packages', 'cli');
 

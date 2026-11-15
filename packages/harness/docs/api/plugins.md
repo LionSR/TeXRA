@@ -335,20 +335,16 @@ const CALL_FIELDS: Readonly<{ memories: decodeTo<toType<$Array<String>>, optiona
 ## CallRequests
 
 The requests one tool call raises, opened through its run's loop. Each
-carries an id its attempt derives, so a person's pending approval outlives
-the process that asked: a resume re-enters the call, and the call opens
-that same request again, joining it instead of asking twice.
+carries an id its attempt derives. A request still open when its run
+stops is cancelled, and the resumed call asks again under a new id.
 
 ```ts
 interface CallRequests {
-  /** The id the call's next request of `kind` opens under: the request a
-   *  resumed call left standing, when it is of this kind, else the
-   *  attempt's next derived id. A request is staged under this id before
-   *  it opens. */
-  readonly nextId: (kind: RequestPayload['kind']) => string;
-  /** Open the request (or re-enter the standing one) and wait for its
-   *  decision. The returned payload is the request actually answered,
-   *  which on resume may differ from the proposal recomputed by the caller.
+  /** The id the call's next request opens under: the attempt's next
+   *  derived id. A request is staged under this id before it opens. */
+  readonly nextId: () => string;
+  /** Open the request and wait for its decision. The returned payload is
+   *  the request as it opened.
    *  `blobs` are the strings the payload names by address, stored with its
    *  row. `operation` is what a command (`bash`) asks permission for: the
    *  shell's (`'bash'`, which the run's command grant answers) or another
@@ -468,8 +464,8 @@ interface ChildRunsShape {
   ) => Effect.Effect<RunId, Error, ToolContext | RunServices>;
   /** The run's input: what a tool sends it, and when it takes no more. */
   readonly inbox: (runId: RunId) => Effect.Effect<RunInbox, Error>;
-  /** Its attached parent as the rows record it (`run.start`, then a
-   *  `run.detach`): null for a root, or a run that is not there. */
+  /** Its parent as the rows record it (`run.start`): null for a root, or
+   *  a run that is not there. */
   readonly parent: (runId: RunId) => Effect.Effect<RunId | null, Error>;
   /** Its records: whether the store still lists it, and its terminal
    *  result (null before it ends). */
@@ -821,10 +817,6 @@ type InboxItem = (
   readonly deliveryId?: string;
   /** A request of the run's own (`/compact`, a model switch), not a message. */
   readonly control?: QueuedFollowUp['control'];
-  /** The id a caller named the message by (`followUp.send`; `deliveryId`
-   *  is its `sentFollowUpId`): a retry under it answers with the first
-   *  send's receipt, another message under it fails `Conflict`. */
-  readonly caller?: string;
 };
 ```
 

@@ -200,13 +200,10 @@ export class TuiSession {
 
   /**
    * On exit, a tool-use session suspended at a wait (idle/WAITING) is not
-   * stopped the way a Ctrl-C stops a turn: the user's stop policy
-   * (`detachSubagentsOnStop`) does not apply, and the exit needs no second
-   * Ctrl-C. The session's close still ends the generation, which records its
-   * terminal `run.end` as cancelled ("Stopped"): every activation ends with
-   * one, and a run left without it would read as interrupted by a crash.
-   * Resumability survives either way: a run's rows stay until the run is
-   * explicitly deleted.
+   * stopped the way a Ctrl-C stops a turn, and the exit needs no second
+   * Ctrl-C. The session's close writes nothing for it: the run is left as
+   * its rows stand and reads as waiting at the next open, where its next
+   * message continues it.
    */
   isResumableIdle(): boolean {
     // The service holds the task: the chat leaves it as it is, any time.

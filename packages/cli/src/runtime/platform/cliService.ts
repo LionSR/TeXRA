@@ -94,14 +94,10 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     workspace: string | undefined,
     within: Scope.Scope,
   ) {
-    // The config open reports through a plain callback while it runs; its
-    // warnings are logged once it has.
-    const warnings: string[] = [];
-    const configs = yield* openTexraWorkspaceConfigStores(
+    const { warnings, ...configs } = yield* openTexraWorkspaceConfigStores(
       TEXRA_SETTINGS.catalog,
       storageRoot,
       workspace,
-      (message) => warnings.push(message),
     );
     yield* Effect.forEach(
       warnings,
@@ -178,7 +174,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     // (registered after them, so released first); the service's exit
     // closes every session ahead of that (`serve`'s settle).
     const session = yield* openLocalSession(sessions, roots);
-    // A store moved aside at open (pre-1.0 or corrupt) is said once, in
+    // A damaged store moved aside at open is said once, in
     // the service's log and to the project's first window: the windows
     // open no store of their own to notice it.
     const moved = session.storeMovedAside;

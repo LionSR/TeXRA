@@ -34,6 +34,7 @@ import {
 import { NO_IMAGE_PASTES, type ImagePastes } from './imagePasteQueue';
 import { useActiveDraft } from './activeDraft';
 import type { ProcessServices } from '@texra-ai/harness/host';
+import { GLYPH_CARET } from '@cli/tui/ui/glyphs';
 
 const IMAGE_PASTE_TIMEOUT_MS = 15_000;
 
@@ -402,7 +403,7 @@ export function TextInput(props: TextInputProps): React.JSX.Element {
   // place (same column budget as inverse) so near-full lines do not rewrap.
   const glyphCaret = !isTuiColorEnabled();
   const caretCell = (cell = ' ') =>
-    glyphCaret ? <Text>▏</Text> : <Text inverse>{cell}</Text>;
+    glyphCaret ? <Text>{GLYPH_CARET}</Text> : <Text inverse>{cell}</Text>;
 
   if (value.length === 0) {
     if (!focus) {

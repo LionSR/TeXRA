@@ -20,7 +20,11 @@ import {
   type ProcessServices,
   pathToLocationIn,
 } from '@texra-ai/harness/host';
-import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
+import {
+  emitAppSignal,
+  withLogChannel,
+  WorkspaceFs,
+} from '@texra-ai/harness/plugins';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
 import {
   toErrorMessage,
@@ -281,13 +285,6 @@ export const createExtensionHostRequests = Effect.fn(
     } satisfies HostOutcome;
   });
 
-  /** The reads a new credential invalidates: the credential, which the
-   *  funnel and the banner follow, and the catalogs. */
-  const refreshAfterCredentialChange = Effect.all(
-    [snapshot.refreshHostBanners, snapshot.refreshCatalogs],
-    { concurrency: 'unbounded', discard: true },
-  );
-
   /** What each getting-started action runs. */
   const gettingStarted = (action: GettingStartedAction) => {
     switch (action) {
@@ -333,12 +330,10 @@ export const createExtensionHostRequests = Effect.fn(
     },
     openSettings: (target) =>
       runHandler('openSettings', options.openSettings(target)),
-    // SecretManager has no key-changed event, so the set-key flow's
-    // completion is the explicit point to check the credential again.
+    // The key store announces the write (`credentialChanged`), which the
+    // launcher's credential check and catalogs follow.
     setApiKey: (provider) =>
-      runHandler('setApiKey', setApiKey(roots, provider)).pipe(
-        Effect.andThen(snapshot.refreshHostBanners),
-      ),
+      runHandler('setApiKey', setApiKey(roots, provider)),
     // A link VS Code declines or cannot open is answered as a rejection, so
     // the view shows which URL did not open.
     openExternal: (url) =>
@@ -353,9 +348,11 @@ export const createExtensionHostRequests = Effect.fn(
     // Every dependency the banner lists installs from the one guide page.
     openInstallGuide: runHandler('openDoc', openGuidePage('installation')),
     onboarding: {
+      // The sign-in's token write announces itself; its subscription
+      // preference write is announced here, as the settings view's is.
       signInChatGpt: Effect.gen(function* () {
         yield* signInWithSubscription(roots, 'chatgpt');
-        yield* refreshAfterCredentialChange;
+        yield* emitAppSignal('modelAccessChanged', undefined);
       }).pipe(withLogChannel(CHANNEL)),
       runSetup: (launch) =>
         runHandler(

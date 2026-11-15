@@ -28,6 +28,7 @@ import {
   createMarkdownRenderer,
   type MarkdownItInstance,
 } from '@ui/markdown/createMarkdownRenderer';
+import { LIST_BULLET, QUOTE_BAR, RULE } from '@cli/tui/ui/glyphs';
 
 /** SGR open/close codes wrapped through String.fromCharCode so the ESC byte
  *  is never a literal in source (pre-commit hooks have been known to mangle
@@ -210,7 +211,7 @@ function configureAnsi(
   let linkText = '';
 
   const quotePrefix = (): string =>
-    quoteDepth > 0 ? style.dim('│ '.repeat(quoteDepth)) : '';
+    quoteDepth > 0 ? style.dim(QUOTE_BAR.repeat(quoteDepth)) : '';
 
   const quoteBlockStart = (
     tokens: Parameters<RendererRule>[0],
@@ -327,7 +328,9 @@ function configureAnsi(
   // their parent instead of flattening to one level.
   r.list_item_open = (tokens, idx) => {
     const token = tokens[idx];
-    const marker = token?.info ? `${token.info}${token.markup || '.'}` : '•';
+    const marker = token?.info
+      ? `${token.info}${token.markup || '.'}`
+      : LIST_BULLET;
     const prev = tokens[idx - 1]?.type;
     const fresh = prev === 'bullet_list_open' || prev === 'ordered_list_open';
     const indent = '  '.repeat(Math.max(1, listDepth));
@@ -338,7 +341,7 @@ function configureAnsi(
   r.blockquote_open = (tokens, idx) => {
     quoteDepth += 1;
     return tokens[idx - 1]?.type === 'blockquote_open'
-      ? style.dim('│ ')
+      ? style.dim(QUOTE_BAR)
       : quotePrefix();
   };
   r.blockquote_close = () => {
@@ -348,7 +351,7 @@ function configureAnsi(
 
   r.hr = (tokens, idx) =>
     `${quoteBlockStart(tokens, idx)}${style.dim(
-      '─'.repeat(Num.clamp(width, { minimum: 1, maximum: 40 })),
+      RULE.repeat(Num.clamp(width, { minimum: 1, maximum: 40 })),
     )}\n`;
 
   // Emit raw SGR codes so the styling stays open across the link body. The

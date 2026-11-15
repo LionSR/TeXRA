@@ -22,7 +22,6 @@ import {
 } from '@shared/approvalBypassKind';
 import {
   AgentConfigSchema,
-  FollowUpReceiptSchema,
   InlinePersonaSchema,
   RequestDecisionSchema,
   RunIdSchema,
@@ -83,15 +82,11 @@ export const RuntimeCommandSchema = Schema.Union([
       Schema.Struct({ op: Schema.Literal('remove') }),
     ]),
   }),
-  /** A message to the run, under the caller's `id` (minted when absent): a
-   *  retry under it answers with the first send's receipt, even once the run
-   *  takes no more input; another message under it is a {@link Conflict}. */
+  /** A message to the run. Each send queues one message: a caller that
+   *  sends again sends a second one. */
   Schema.Struct({
     kind: Schema.Literal('followUp.send'),
     ...runScoped,
-    id: Schema.optional(
-      Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
-    ),
     text: Schema.String.check(Schema.isMinLength(1)),
     displayText: Schema.optional(Schema.NullOr(Schema.String)),
     /** What the message attaches: a file (a pasted image's), read and
@@ -108,14 +103,6 @@ export const RuntimeCommandSchema = Schema.Union([
      *  start carries them (`StartOptions.apiKeys`): what the run resumes
      *  with if this message wakes it. Never stored. */
     apiKeys: Schema.optional(Schema.Record(Schema.String, Schema.String)),
-  }),
-  /** The receipt of the message sent under `id`; with `wait`, once it is
-   *  answered or unanswered. */
-  Schema.Struct({
-    kind: Schema.Literal('followUp.receipt'),
-    ...runScoped,
-    id: Schema.String.check(Schema.isMinLength(1)),
-    wait: Schema.optional(Schema.NullOr(Schema.Boolean)),
   }),
   /**
    * The one answer to a `request.opened` (one run model, section 3.7): the
@@ -185,16 +172,11 @@ export type RunFilesResult = typeof RunFilesResultSchema.Type;
 /** What the runtime answers with: a typed value the host renders. */
 export const OutcomeSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('done') }),
-  /** A message accepted, now or by an earlier send under its `id`. */
+  /** A message accepted: `sent` to a run a launch here holds, `queued` for
+   *  the run's next resume. */
   Schema.Struct({
     kind: Schema.Literal('followUp'),
-    id: Schema.String,
     status: Schema.Literals(['sent', 'queued']),
-    receipt: FollowUpReceiptSchema,
-  }),
-  Schema.Struct({
-    kind: Schema.Literal('receipt'),
-    receipt: FollowUpReceiptSchema,
   }),
   Schema.Struct({ kind: Schema.Literal('forked'), runId: RunIdSchema }),
   Schema.Struct({
@@ -214,7 +196,6 @@ const OUTCOME_KIND = {
   'run.fork': 'forked',
   'run.files': 'runFiles',
   'followUp.send': 'followUp',
-  'followUp.receipt': 'receipt',
   'request.preview': 'preview',
 } as const satisfies Partial<Record<RuntimeCommand['kind'], Outcome['kind']>>;
 
@@ -259,16 +240,6 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()(
   { runId: RunIdSchema, reason: Schema.String },
 ) {}
 
-/** A `followUp.send` under an `id` the run holds another message under. */
-export class Conflict extends Schema.TaggedError<Conflict>()('Conflict', {
-  runId: RunIdSchema,
-  id: Schema.String,
-}) {
-  override get message(): string {
-    return `A different message was already sent under id ${this.id}.`;
-  }
-}
-
 /** Nothing is left to tell the user: they cancelled the operation, or the
  *  host has already told them why it did not go through. No refusal notice
  *  is needed. */
@@ -296,7 +267,6 @@ export const RequestErrorSchema = Schema.Union([
   Unavailable,
   Cancelled,
   Rejected,
-  Conflict,
 ]);
 /** How a runtime request fails: one of the tagged errors above. */
 export type RequestError = typeof RequestErrorSchema.Type;

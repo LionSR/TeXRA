@@ -337,14 +337,6 @@ export function logPayloadRow(
         summary: transcriptText(text.trim() || 'Status update'),
       };
 
-    case MESSAGE_TYPES.QUOTA_FALLBACK:
-      return {
-        ...base,
-        kind: 'progressStatus',
-        summary: transcriptText(text),
-        quotaFallback: payload.data.route,
-      };
-
     case MESSAGE_TYPES.DEFAULT:
       return plainLogRow(base, text);
 

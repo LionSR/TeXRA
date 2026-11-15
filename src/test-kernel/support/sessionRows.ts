@@ -140,15 +140,6 @@ export function toolUseTurn(runId: RunId) {
       origin: ORIGIN,
     },
   };
-  const identified: HistoryDraft<'model.message'> = {
-    type: 'model.message',
-    aggregateId,
-    payload: {
-      kind: 'identified',
-      invocation: INVOCATION,
-      providerResponseId: TURN.providerResponseId,
-    },
-  };
   const response: HistoryDraft<'model.message'> = {
     type: 'model.message',
     aggregateId,
@@ -217,7 +208,6 @@ export function toolUseTurn(runId: RunId) {
     calls: CALLS,
     append,
     attempt,
-    identified,
     response,
     intent,
     delivery,

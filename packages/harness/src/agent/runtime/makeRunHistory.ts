@@ -8,6 +8,7 @@
 import { Effect, Predicate, Result, SynchronizedRef, absurd } from 'effect';
 
 import {
+  blocksCaller,
   qualifyAggregateId,
   type RunId,
   type SessionRow,
@@ -28,7 +29,6 @@ import {
   cancelRequestRows,
   isRunStateRow,
   RunHistoryInconsistent,
-  unboundRequests,
   type RunHistoryDraft,
   type RunState,
 } from '@shared/session/runState';
@@ -108,7 +108,6 @@ function rowOrigins(row: RunHistoryDraft): readonly ModelOrigin[] {
         : [p.turn.requestedOrigin, continuation.origin];
     }
     // These carry no origin: a new kind is placed here or above.
-    case 'identified':
     case 'failed':
     case 'cancelled':
     case 'handed-down':
@@ -335,9 +334,12 @@ export function makeRunHistory(
   );
 
   /**
-   * A resume's one transaction, over one read: the activation's rows, and
-   * the cancellation of the requests no attempt re-enters
-   * (`unboundRequests`), so no surface outlives the process that asked.
+   * A resume's one transaction, over one read: the cancellation of every
+   * request a dead process left waiting on a person, so no surface outlives
+   * the process that asked and the call or turn that asked asks again, then
+   * the activation's rows. The cancellations come first: a decision before
+   * the activation is not one its owner was given. A request that does not
+   * block its caller keeps nothing waiting and stays open.
    */
   const activate = <E>(
     run: RunId,
@@ -352,12 +354,15 @@ export function makeRunHistory(
           );
           const cancels = cancelRequestRows(
             run,
-            before === null ? [] : unboundRequests(before),
+            Object.entries(before?.requests ?? {}).flatMap(
+              ([requestId, { decision, payload }]) =>
+                decision === null && blocksCaller(payload) ? [requestId] : [],
+            ),
             'The process that asked exited.',
           );
           const rows: readonly SessionRowDraft[] = [
-            ...(yield* activation(before)),
             ...cancels,
+            ...(yield* activation(before)),
           ];
           const written =
             rows.length === 0 ? [] : yield* runStateAppend(tx.append)(rows);

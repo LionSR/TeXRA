@@ -17,6 +17,8 @@
 
   /* A cool neutral canvas, ink text, and one blue interaction accent.
      All components receive this palette through the Web Awesome bridge. */
+  /* The main process paints these two before the renderer loads
+     (`desktopBrowserWindow.ts`); change them together. */
   --desktop-color-background: light-dark(#fbfcfe, #1b1e23);
   --desktop-color-foreground: light-dark(#202632, #e9edf3);
   --desktop-color-muted: light-dark(#626d7d, #a8b1be);

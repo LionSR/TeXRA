@@ -34,6 +34,7 @@ import {
 } from '@ui/copy/plugins';
 
 import { AsyncListForm } from './_shared/ListForm';
+import { SEPARATOR } from '@cli/tui/ui/glyphs';
 
 interface PluginsListFormProps {
   readonly availableRows?: number;
@@ -62,7 +63,7 @@ function rowDescription(row: PluginRow): string {
     pluginRowUsedBy(row),
   ]
     .filter(Predicate.isNotNull)
-    .join(' · ');
+    .join(SEPARATOR);
 }
 
 export function PluginsListForm(

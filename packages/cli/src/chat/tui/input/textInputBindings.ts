@@ -36,6 +36,7 @@ import {
   type CursorEdit,
   type TextEdit,
 } from './textInputEditing';
+import { SEPARATOR } from '@cli/tui/ui/glyphs';
 
 /** Structural subset of Ink's `Key` consulted by the keymap matchers. */
 interface TextInputKey {
@@ -173,7 +174,7 @@ export function matchTextInputBinding(
 export function textInputEditingHelp(): string {
   return TEXT_INPUT_BINDINGS.filter((binding) => binding.advertise)
     .map((binding) => `\`${binding.keys}\` ${binding.action}`)
-    .join(' · ');
+    .join(SEPARATOR);
 }
 
 export interface TextInputChunkEdit extends TextEdit {

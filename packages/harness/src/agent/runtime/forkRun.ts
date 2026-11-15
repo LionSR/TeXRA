@@ -175,7 +175,6 @@ const viewRows = (
       payload: {
         cause: 'fork',
         trigger: null,
-        base: null,
         range: { from: 0, to: 0 },
         messages: copied.messages,
         usage: null,

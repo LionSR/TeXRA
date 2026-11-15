@@ -26,7 +26,7 @@ export const codeBlockStyles = css`
   }
 
   .code-block-language {
-    color: var(--wa-color-text-quiet, #888);
+    color: var(--wa-color-text-quiet);
     text-transform: uppercase;
     letter-spacing: var(--letter-spacing-caps);
     font-weight: var(--font-weight-medium);
@@ -70,7 +70,7 @@ export const codeBlockStyles = css`
     padding: var(--wa-space-2xs) var(--wa-space-xs);
     border: none;
     background: transparent;
-    color: var(--wa-color-text-quiet, #888);
+    color: var(--wa-color-text-quiet);
     border-radius: var(--border-radius-small);
   }
 
@@ -79,7 +79,7 @@ export const codeBlockStyles = css`
   }
 
   .code-block-copy.copy-success::part(base) {
-    color: var(--wa-color-git-added, #3fb950);
+    color: var(--wa-color-git-added);
   }
 
   /* Kept rather than deleted like the others: the focus-visible rule in
@@ -121,14 +121,14 @@ export const codeBlockStyles = css`
   .hljs-regexp,
   .hljs-template-tag,
   .hljs-template-variable {
-    color: var(--wa-color-debug-string, #a31515);
+    color: var(--wa-color-debug-string);
   }
 
   .hljs-number,
   .hljs-literal,
   .hljs-built_in,
   .hljs-type {
-    color: var(--wa-color-debug-number, #098658);
+    color: var(--wa-color-debug-number);
   }
 
   .hljs-variable,
@@ -140,13 +140,13 @@ export const codeBlockStyles = css`
   .hljs-function,
   .hljs-title,
   .hljs-title.function_ {
-    color: var(--wa-color-symbol-function, #795e26);
+    color: var(--wa-color-symbol-function);
   }
 
   .hljs-class .hljs-title,
   .hljs-title.class_,
   .hljs-title.class_.inherited__ {
-    color: var(--wa-color-symbol-class, #267f99);
+    color: var(--wa-color-symbol-class);
   }
 
   .hljs-property,
@@ -173,12 +173,12 @@ export const codeBlockStyles = css`
 
   .hljs-addition {
     background-color: var(--wa-color-diff-inserted);
-    color: var(--wa-color-git-added, #3fb950);
+    color: var(--wa-color-git-added);
   }
 
   .hljs-deletion {
     background-color: var(--wa-color-diff-removed);
-    color: var(--wa-color-git-deleted, #b31d28);
+    color: var(--wa-color-git-deleted);
   }
 
   .hljs-emphasis {
@@ -191,7 +191,7 @@ export const codeBlockStyles = css`
 
   .hljs-symbol,
   .hljs-bullet {
-    color: var(--wa-color-symbol-constant, #36acaa);
+    color: var(--wa-color-symbol-constant);
   }
 
   .hljs-link {
