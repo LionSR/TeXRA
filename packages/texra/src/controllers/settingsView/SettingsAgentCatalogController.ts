@@ -90,11 +90,13 @@ export class SettingsAgentCatalogController {
       agents,
     };
 
-    return yield* this.deps.repoState
-      .modify(CUSTOM_TEAMS_KEY, (stored) =>
-        Result.map(presetRecords(stored), (records) => [...records, preset]),
-      )
-      .pipe(Effect.as(preset));
+    return yield* this.deps.repoState.modify([CUSTOM_TEAMS_KEY], (stored) =>
+      Result.map(
+        presetRecords(stored[CUSTOM_TEAMS_KEY]),
+        (records) =>
+          [preset, { [CUSTOM_TEAMS_KEY]: [...records, preset] }] as const,
+      ),
+    );
   });
 
   readonly deleteCustomPreset = Effect.fn(
@@ -103,15 +105,21 @@ export class SettingsAgentCatalogController {
     if (!(yield* this.getCustomPreset(presetId))) return;
 
     yield* this.deps.workspaceAgents.removeTeamPreset(presetId, () =>
-      this.deps.repoState
-        .modify(CUSTOM_TEAMS_KEY, (stored) =>
-          Result.map(presetRecords(stored), (records) =>
-            records.filter(
-              (record) => !Predicate.isObject(record) || record.id !== presetId,
-            ),
-          ),
-        )
-        .pipe(Effect.asVoid),
+      this.deps.repoState.modify([CUSTOM_TEAMS_KEY], (stored) =>
+        Result.map(
+          presetRecords(stored[CUSTOM_TEAMS_KEY]),
+          (records) =>
+            [
+              undefined,
+              {
+                [CUSTOM_TEAMS_KEY]: records.filter(
+                  (record) =>
+                    !Predicate.isObject(record) || record.id !== presetId,
+                ),
+              },
+            ] as const,
+        ),
+      ),
     );
   });
 

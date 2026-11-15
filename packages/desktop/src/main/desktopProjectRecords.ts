@@ -56,11 +56,16 @@ export const openDesktopProjectRecords = (values: CurrentValues) => {
   const readRecent = Effect.map(lists, ({ recent }) => recent);
   // Both lists are one value, so a close that changes both is one write.
   const update = (change: (lists: ProjectLists) => ProjectLists) =>
-    values.modify(DESKTOP_PROJECTS, PROFILE, (stored) => {
-      const next = change(stored ?? EMPTY);
+    values.modify(DESKTOP_PROJECTS, [PROFILE], ({ profile }) => {
+      const next = change(profile ?? EMPTY);
       return Result.succeed([
         undefined,
-        { remembered: [...next.remembered], recent: [...next.recent] },
+        {
+          profile: {
+            remembered: [...next.remembered],
+            recent: [...next.recent],
+          },
+        },
       ] as const);
     });
   const withoutRecent = (recent: readonly string[], root: string) =>

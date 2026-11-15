@@ -121,8 +121,8 @@ it.live(
       );
       yield* Deferred.await(ready);
       const writer = yield* values
-        .modify(family, 'enabled', () =>
-          Result.succeed([undefined, true] as const),
+        .modify(family, ['enabled'], () =>
+          Result.succeed([undefined, { enabled: true }] as const),
         )
         .pipe(Effect.forkScoped);
       yield* Deferred.await(committed);
@@ -140,8 +140,8 @@ it.live(
 
       const rolledBack = yield* transaction(
         values
-          .modify(family, 'enabled', () =>
-            Result.succeed([undefined, false] as const),
+          .modify(family, ['enabled'], () =>
+            Result.succeed([undefined, { enabled: false }] as const),
           )
           .pipe(Effect.andThen(Effect.fail('rollback'))),
       ).pipe(Effect.exit);

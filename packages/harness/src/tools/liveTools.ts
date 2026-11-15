@@ -200,14 +200,18 @@ export const toolCatalogLayer = (
         setEnabled: (id, enabled) =>
           (table.entries.get(id)?.toggle === undefined
             ? Effect.logWarning(`Plugin ${id} has no switch; nothing written.`)
-            : Effect.asVoid(
-                state.modify(DISABLED_TOOLS_KEY.key, (stored) =>
-                  Result.map(storedDisabledTools(stored), (current) => {
+            : state.modify([DISABLED_TOOLS_KEY.key], (stored) =>
+                Result.map(
+                  storedDisabledTools(stored[DISABLED_TOOLS_KEY.key]),
+                  (current) => {
                     const disabled = new Set(current);
                     if (enabled) disabled.delete(id);
                     else disabled.add(id);
-                    return [...disabled];
-                  }),
+                    return [
+                      undefined,
+                      { [DISABLED_TOOLS_KEY.key]: [...disabled] },
+                    ] as const;
+                  },
                 ),
               )
           ).pipe(withLogChannel('toolAvailability')),

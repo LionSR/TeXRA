@@ -131,7 +131,7 @@ export function recordCustomChoices(
   // value fails and nothing is written, since a write from none would erase
   // every stored choice.
   return Effect.asVoid(
-    repoState.modify(key, (stored) =>
+    repoState.modify([key], ({ [key]: stored }) =>
       Result.match(
         Schema.decodeUnknownResult(HIDDEN_CUSTOM_AGENTS_KEY.schema)(stored),
         {
@@ -151,7 +151,7 @@ export function recordCustomChoices(
               if (listNames(selection, entry)) hidden.delete(agentKey);
               else hidden.add(agentKey);
             }
-            return Result.succeed([...hidden]);
+            return Result.succeed([undefined, { [key]: [...hidden] }] as const);
           },
         },
       ),
@@ -171,22 +171,24 @@ export function forgetHiddenAgent(
   name: string,
 ): Effect.Effect<void, StateWriteFailed> {
   const key = agentKeyOf({ source: AGENT_SOURCE.CUSTOM, name });
+  const hiddenKey = HIDDEN_CUSTOM_AGENTS_KEY.key;
   return serializeWorkspaceWrite(
     repoState,
-    Effect.asVoid(
-      repoState.modify(HIDDEN_CUSTOM_AGENTS_KEY.key, (stored) => {
-        const hidden = Schema.decodeUnknownResult(HiddenCustomAgentKeysSchema)(
-          stored,
-        );
-        // Absent or malformed (which every read reports): nothing to
-        // forget, so the stored value stays.
-        return Result.succeed(
-          Result.isSuccess(hidden)
-            ? hidden.success.filter((k) => k !== key)
-            : stored,
-        );
-      }),
-    ),
+    repoState.modify([hiddenKey], ({ [hiddenKey]: stored }) => {
+      const hidden = Schema.decodeUnknownResult(HiddenCustomAgentKeysSchema)(
+        stored,
+      );
+      // Absent or malformed (which every read reports): nothing to
+      // forget, so the stored value stays.
+      return Result.succeed(
+        Result.isSuccess(hidden)
+          ? ([
+              undefined,
+              { [hiddenKey]: hidden.success.filter((k) => k !== key) },
+            ] as const)
+          : ([undefined] as const),
+      );
+    }),
   );
 }
 
