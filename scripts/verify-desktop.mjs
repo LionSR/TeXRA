@@ -1181,10 +1181,7 @@ function appendDiagnostic(label, value) {
 
 function createRuntimeFailureSignal() {
   let firstError;
-  let resolveFirstError;
-  const promise = new Promise((resolvePromise) => {
-    resolveFirstError = resolvePromise;
-  });
+  const { promise, resolve: resolveFirstError } = Promise.withResolvers();
   return {
     get error() {
       return firstError;
