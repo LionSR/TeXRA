@@ -2,19 +2,16 @@
 
 <script setup>
 import ToolCategoriesHero from '../.vitepress/components/ToolCategoriesHero.vue';
-import AgentAnatomyHero from '../.vitepress/components/AgentAnatomyHero.vue';
-import OutputMappingHero from '../.vitepress/components/OutputMappingHero.vue';
-import CliAgentShowHero from '../.vitepress/components/CliAgentShowHero.vue';
 </script>
 
-Every agent in TeXRA is a YAML file. You can copy and edit any built-in agent or write a new one from scratch—for example, to check derivations against your group's conventions, enforce journal formatting rules, or run a custom multi-pass review.
+Every agent in TeXRA is a YAML file: a chat persona with a prompt and a list of tools. You can copy and edit any built-in agent or write a new one from scratch—for example, to check derivations against your group's conventions or to manage a bibliography.
 
 This guide shows how to create and test your own `.yaml` agent definitions.
 
 ::: info Agent fundamentals
 Before creating a custom agent, it helps to understand the underlying concepts:
 
-- <wa-icon library="texra" name="symbol-structure"></wa-icon> **Agent architecture and execution flow**: the `.yaml` structure, settings, prompts, and how agents run. Read the [Document tasks: how they work](./agent-architecture.md) guide.
+- <wa-icon library="texra" name="symbol-structure"></wa-icon> **Agent architecture and execution flow**: how chats and programs run. Read the [Agent architecture](./agent-architecture.md) guide.
 - <wa-icon library="texra" name="sparkle"></wa-icon> **Built-in agents**: the standard agents TeXRA provides, useful as examples. Read the [Built-in agent reference](./built-in-agents.md).
 - <wa-icon library="texra" name="dashboard"></wa-icon> **Agents tab**: browse and manage agent files from the **Agents** tab (<wa-icon library="texra" name="sparkle"></wa-icon>) in the TeXRA Settings.
 :::
@@ -34,121 +31,54 @@ To have TeXRA draft an agent for you, chat with the built-in [`creator`](./built
 
 ### <wa-icon library="texra" name="file-add"></wa-icon> Step 2: create a new YAML file
 
-1. In the **Agents** tab, open **New agent** and pick **Chat agent** or **Document task agent** to create a new agent YAML file from a template in your custom agents directory.
+1. In the **Agents** tab, select **New agent** to create a new agent YAML file from a template in your custom agents directory.
 2. Alternatively, select the folder icon (<wa-icon library="texra" name="folder-open"></wa-icon>, **Open custom agents folder**) in the directory info bar to open the directory and create a `.yaml` file manually.
 3. Choose a descriptive file name ending with `.yaml` (for example `literature_review_generator.yaml`).
 
 ### <wa-icon library="texra" name="edit"></wa-icon> Step 3: define the agent
 
-Open the new `.yaml` file. A starter template is already inserted. An agent is three labelled sections plus one mapping to keep in mind:
-
-<AgentAnatomyHero />
-
-<p class="hero-caption">An agent file is its identity (<code>name</code>, <code>description</code>) + a persona (<code>prompt</code>, <code>temperature</code>) + a <code>task</code> block; the <code>task.requests</code> list maps position-by-position onto revisions (<code>requests[0]</code> is Revision 1, <code>requests[1]</code> Revision 2).</p>
-
-Customize it to define your agent's structure. These are the key fields:
+Open the new `.yaml` file. A starter template is already inserted. An agent file has five fields:
 
 ```yaml
 name: notation_checker # Letters, digits, underscores, or dashes; starts with a letter or digit.
-description: Standardizes notation across the selected documents.
-
-# --- Persona ---
+description: Checks notation across the project's documents.
 temperature: 0.1 # Optional, 0 to 1 (default 1.0). Lower is more deterministic.
+tools: # The tools the agent may call.
+  - read_file
+  - edit_file
+  - glob
+  - grep
 
 prompt: |
-  # The system prompt: the AI's role, core instructions, constraints, overall persona.
-  # Sent once at the beginning (for supported models).
+  # The system prompt: the AI's role, core instructions and constraints.
   [Define the AI's role and core instructions]
-
-# --- Document task ---
-# A `task` block lets this agent also run as a document task. Without it,
-# the agent only chats (see below). A file with `task` cannot also list `tools`.
-task:
-  # File Handling (Optional - Advanced)
-  # files:
-  #   STYLE_GUIDE: styles/internal_style.sty # Map variable names to files the agent bundles, relative to its YAML file location. Workspace files are attached per run as context files instead.
-  # outputs: # Used when the agent writes new files with fixed names.
-  #   - 'introduction.tex'
-  #   - 'methods.tex'
-
-  prefix: |
-    # Provides introductory text, main context (input files, user instruction).
-    # Variables like `{{ INPUT_CONTENT }}`, `{{ INSTRUCTION }}`, `{{ ALL_CONTEXTS }}` are substituted here.
-    [Define context, instructions, and input variables like `{{ INPUT_CONTENT }}`]
-
-  requests:
-    - |
-      # The prompt for the AI's first revision.
-      # Often includes guidance for thinking (<scratchpad>). TeXRA appends the <documents> reply format itself.
-      [Define the initial task prompt, potentially including scratchpad guidance]
-    - |
-      # Optional follow-up prompt for a reflection revision.
-      # Each entry is one revision: add or remove entries to control how many run.
-      [Define how the model should critique or iterate on its previous output]
 ```
 
 The file is flat and strict: a key TeXRA does not know is refused, and the
 older nested `settings:` / `prompts:` layout is not read. There is no `model`
 field; you choose the model when you run the agent.
 
-> **Reflection tips:** TeXRA takes the first `requests` entry as the initial
-> request and each remaining entry as one reflection prompt, in order. The
-> number of entries is the number of revisions.
+::: warning No `task` block
+Earlier versions let an agent file define a document task in a `task:` block
+(`prefix`, `requests`, `files`, `outputs` and template variables). That block
+no longer exists, and a file that has it is refused as an unrecognized key.
+Documents are revised by the built-in [programs](./built-in-agents.md#programs)
+instead.
+:::
 
-#### <wa-icon library="texra" name="symbol-variable"></wa-icon> Using variables in prompts (Nunjucks templating)
+### <wa-icon library="texra" name="link"></wa-icon> Custom document workflows
 
-Prompts use Nunjucks templating (Jinja2-style syntax). TeXRA populates built-in `{{ variable_name }}` placeholders from the files and instruction you select in the UI. For example, your main input file's text is `{{ INPUT_CONTENT }}`, and all selected inputs wrapped in XML are `{{ ALL_INPUTS }}`.
+User-defined programs are not available yet. To get a custom document workflow:
 
-<TemplateVarsPalette />
-
-The naming follows one rule: `*_FILE` gives you a path, `*_CONTENT` gives you
-that file's text, `ALL_*` bundles every selected file into one
-`<document name="...">…</document>` XML string, and `LIST_OF_*` gives the same
-set as a comma-separated path list. Media is the exception: `MEDIA_FILE` is a
-path, but the media itself is sent to multimodal models separately rather than
-inlined as text (read [Working with figures](./working-with-figures.md)).
-
-**Multiple document output:**
-
-- &#123;&#123; INPUT_FILES &#125;&#125;: Array of input filenames. An editing
-  task's reply holds one `<document name="...">` block per input filename, in
-  input order; TeXRA appends that reply format to each request. Use
-  `{{ INPUT_FILES | join(", ") }}` for a human-readable list. Read
-  [Handling multiple files](./multiple-output.md).
-- &#123;&#123; OUTPUT_FILES &#125;&#125;: Array of declared generated output filenames.
-  This is only populated for agents that set `task.outputs` or receive an
-  explicit generated output list.
-
-**Custom variables (from `task.files`):**
-
-- Each file bound in `task.files` is available as `{{ VARNAME_FILE }}` (its path) and `{{ VARNAME_CONTENT }}` (its text); a binding `TEMPLATE: template.tex` gives `{{ TEMPLATE_CONTENT }}`.
-
-**Example usage in `task.prefix`:**
-
-```yaml
-task:
-  prefix: |
-    Please process the main document: {{ INPUT_FILE }}
-    <document name="{{ INPUT_FILE }}">
-    {{ INPUT_CONTENT }}
-    </document>
-
-    Refer to these context files:
-    {{ ALL_CONTEXTS }}
-
-    Apply the following instruction:
-    <instruction>{{ INSTRUCTION }}</instruction>
-```
-
-### <wa-icon library="texra" name="link"></wa-icon> Chaining agents together
-
-After a document task finishes, its result lists the output files, so follow-up steps can reuse them without another trip through the file picker. For example, an orchestrator agent can run `polish` with the `program` tool (`name: 'revise'`) and pass the resulting files directly to a `correct` task in one session.
+- **Write the request in the instruction.** The programs take their scope and point of view from the instruction, so "read as a referee for a physics journal and mark every unsupported claim" needs no new agent, only `annotate` with that sentence.
+- **Ask an agent to chain programs.** A program's result lists the files it wrote, so an agent can pass them to the next program in the same session, for example `annotate`, then `apply`. Read [Multi-agent workflows](./multi-agent-workflows.md).
+- **Put project conventions in `AGENTS.md`.** Notation rules, journal style and anything else every run should follow belong in the project's `AGENTS.md`, not in an agent file.
 
 ### <wa-icon library="texra" name="tools"></wa-icon> Agents with tools
 
-An agent without a `task` block works in a chat: instead of producing a single revised file, it holds a conversation and calls tools to read and edit files, run commands, search the web, and look up papers.
+An agent works in a chat: it holds a conversation and calls tools to read and edit files, run commands, search the web, and look up papers.
 
-To create an agent with tools, omit the `task` block and list the tools to grant under `tools:`. What you type in the composer is sent directly as the user message. TeXRA groups tools by plugin (listed on **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>)); each chip below is a tool name you can place in `tools:`:
+List the tools to grant under `tools:`. What you type in the composer is sent directly as the user message. TeXRA groups tools by plugin (listed on **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>)); each chip below is a tool name you can place in `tools:`:
 
 <ToolCategoriesHero />
 
@@ -175,47 +105,19 @@ prompt: |
 
 The ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>) logs every tool call and its result, so you can always see what the agent is doing.
 
-### <wa-icon library="texra" name="files"></wa-icon> Example: multiple output agent
-
-A document task that writes several files declares their names in
-`task.outputs`; TeXRA ends each request with the reply format, one
-`<document name="...">` block per name, so the request says only what to
-write. Below is a simplified template for a document task that writes two
-generated output files:
-
-```yaml
-name: intro_and_conclusion
-description: Writes an introduction and a conclusion.
-task:
-  outputs:
-    - introduction.tex
-    - conclusion.tex
-  requests:
-    - |
-      Write an introduction and a conclusion for the paper. Plan each
-      file in a <scratchpad> first.
-```
-
-This structure lets TeXRA save each `<document>` block to the corresponding
-filename from the selected input list or from `task.outputs`:
-
-<OutputMappingHero />
-
-<p class="hero-caption">Each <code>&lt;document name="…"&gt;</code> block is saved to the file whose name matches; a <code>name</code> that isn't in the declared list is skipped and nothing is written.</p>
-
-Read [Handling multiple files](./multiple-output.md) for more details.
-
 ### <wa-icon library="texra" name="save"></wa-icon> Step 4: save and run
 
 1. Save your `.yaml` file.
 2. TeXRA watches the custom agents directory, so your new agent appears in the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>) of the TeXRA UI. No window reload needed.
 
-From a terminal the iteration loop is faster, with no window reload needed.
-Verify the agent registered, then smoke-test it in one go:
+From a terminal, verify the agent registered, then smoke-test it in one go:
 
-<CliAgentShowHero />
+```bash
+texra agents show bib_helper
+texra run bib_helper --instruction "List the entries in refs.bib that main.tex never cites."
+```
 
-<p class="hero-caption"><code>agents show</code> confirms the registration (<code>source: custom</code> plus the file it loaded), and a one-shot <code>texra run</code> proves the prompts work before you polish the YAML further.</p>
+`agents show` prints the agent's name, its source (`custom`) and the file it loaded.
 
 ### <wa-icon library="texra" name="sync"></wa-icon> Customized built-in agents and updates
 
@@ -223,8 +125,4 @@ Built-in agents ship with TeXRA and update when TeXRA does. A custom agent with 
 
 When an update changes that built-in, the Agents tab marks your copy and offers **View built-in**, **Reset to built-in** (deletes your copy so the new version is used), and **Keep mine** (keeps your copy and dismisses the notice). In the terminal, `texra agents list` and `texra agents show` print the same notice, and `texra agents reset <name>` or `texra agents keep <name>` resolve it. An agent you wrote yourself under a built-in's name has no `basedOn:` line and is never flagged.
 
-### <wa-icon library="texra" name="shield"></wa-icon> Strict XML extraction
-
-TeXRA expects the model to wrap each file in a `<document name="...">` block whose `name` is one of the files the task writes. When a reply lacks those tags, TeXRA tries to recover the expected files from filename headers or `latex` code fences, and reports each expected file the reply did not deliver. A reply from which nothing can be extracted writes no files; its raw text is kept for recovery. Check the ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>) logs for details.
-
-For more examples and advanced options, browse the built-in agent definitions through the **Agents** tab (<wa-icon library="texra" name="sparkle"></wa-icon>) in the TeXRA Settings.
+For more examples, browse the built-in agent definitions through the **Agents** tab (<wa-icon library="texra" name="sparkle"></wa-icon>) in the TeXRA Settings.

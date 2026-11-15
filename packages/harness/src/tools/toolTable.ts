@@ -5,42 +5,32 @@
  * the catalog built over it. This module imports no tool or plugin layer, so
  * a reader of the tag loads none of them.
  */
-// Node imports
-import * as path from 'node:path';
-
 // Third-party imports
 import {
   Context,
   Effect,
-  FileSystem,
+  type FileSystem,
   type Layer,
   type Path,
-  type PlatformError,
-  Schema,
+  type Schema,
 } from 'effect';
 
 // Local imports
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { InboxItem } from '@agent/followUp/Inbox';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
-import type { AgentEntry } from '@agent/index/agentEntry';
 import type { AppSignals } from '@platform/appSignals';
 import type { AppState } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { GlobalValues } from '@platform/processRuntime';
 import type { ConfigProvider } from '@shared/config/settings';
-import type { AgentCatalog } from '@agent/index/agentCatalog';
-import {
-  AgentDefinitionSchema,
-  type AgentProposal,
-  type JsonValue,
-  type PluginRequest,
-  type RequestDecision,
-  type RunId,
-  type ToolFact,
+import type {
+  PluginRequest,
+  RequestDecision,
+  RunId,
+  ToolFact,
 } from '@shared/schemas';
 import type { ToolCatalog } from '@tools/liveTools';
-import { readNormalizedFile } from '@utils/files/fsDurability';
 import type { Plugin } from '@tools/plugins';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -137,32 +127,12 @@ export interface RequestDecisionRecord {
 }
 
 /**
- * A top-level block a plugin owns in an agent file (such as `task:`). The
- * catalog scan checks a file's block against `schema`
- * and keeps the parsed value on the entry (`AgentEntry.blocks`); a file
- * whose block fails it, or that holds a key no listed plugin owns, is
- * refused like any other invalid definition. An agent with a block declares
- * no tools, and delegation marks it for the `program` tool: a program of
- * the block's plugin runs it. The harness reads nothing inside it.
- */
-export interface AgentBlock<A = unknown> {
-  /** The key in an agent file: unique across the plugin list, and never a
-   *  key of the persona itself. */
-  readonly key: string;
-  /** The block as written, to its value with defaults applied. */
-  readonly schema: Schema.Codec<A, unknown>;
-  /** The files the block binds, relative to its agent file: part of the
-   *  agent, so a customized copy carries them and the file's digest covers
-   *  them. */
-  files?(block: A): readonly string[];
-}
-
-/**
  * One of a plugin's script modules that a person or a model starts by name
  * (`Plugin.programs`): the module's default export is
  * `async (args) => result`, and a run opened on it
  * (`AgentConfig.script` of kind `program`) is a script run that imports the
- * module and calls that export with the launch's `args`. The plugin wrote
+ * module and calls that export with the launch's `args`, its instruction
+ * and its files. The plugin wrote
  * it, not a model, so the launch that chose it granted it: its tools are
  * the listed ones past any switch, its `agent` calls run under the launch's
  * approval, and its prompts and files pass as written.
@@ -176,21 +146,10 @@ export interface Program<R = unknown> {
   /** How a completed run of it reads to whoever launched it. Without one,
    *  the run delivers its reply alone. */
   readonly result?: ProgramResult<R>;
-  /**
-   * What a launch through the `program` tool adds to the child's config,
-   * from the launch as approved: the `args` its script is called with (the
-   * approved `options` when the program has no `configure`) and the output
-   * files it writes when the launch names none. A failure refuses the
-   * launch with its message.
-   */
-  readonly configure?: (approved: AgentProposal) => Effect.Effect<
-    {
-      readonly args: Readonly<Record<string, JsonValue>>;
-      readonly outputFiles: readonly string[];
-    },
-    Error,
-    AgentCatalog
-  >;
+  /** The files its run writes when its launch names none, for a program
+   *  that creates documents (a deck, a transcript) and does not rewrite
+   *  its inputs. */
+  readonly outputs?: readonly string[];
 }
 
 /**
@@ -234,54 +193,6 @@ export interface ProgramChange {
   readonly removed: number | null;
 }
 
-/** The files the blocks of an agent file bind (`AgentBlock.files`),
- *  relative to it, in block order; `owners` is the plugin table's blocks. */
-export function boundFiles(
-  blocks: Readonly<Record<string, unknown>>,
-  owners: ReadonlyMap<string, AgentBlock>,
-): readonly string[] {
-  return Object.entries(blocks).flatMap(
-    ([key, value]) => owners.get(key)?.files?.(value) ?? [],
-  );
-}
-
-/**
- * The file an agent file at `agentPath` binds as `file`: where it is
- * (beside the agent file, or an absolute path as written) and how to read
- * it. A file that cannot be read fails the read; every reader of a bound
- * file goes through this, so none mistakes a missing file for an empty or
- * a changed one.
- */
-export function boundFile(
-  agentPath: string,
-  file: string,
-): {
-  readonly path: string;
-  readonly read: Effect.Effect<
-    string,
-    PlatformError.PlatformError,
-    FileSystem.FileSystem
-  >;
-} {
-  const boundPath = path.resolve(path.dirname(agentPath), file);
-  return {
-    path: boundPath,
-    read: Effect.flatMap(FileSystem.FileSystem, (fs) =>
-      readNormalizedFile(fs, boundPath),
-    ),
-  };
-}
-
-/** The value of `block` on `entry`, as the catalog scan parsed it with the
- *  block's schema; undefined when the agent has none. */
-export function agentBlockOf<A>(
-  entry: Pick<AgentEntry, 'blocks'>,
-  block: AgentBlock<A>,
-): A | undefined {
-  // cast: the scan stored this key's value as `block.schema` parsed it.
-  return entry.blocks[block.key] as A | undefined;
-}
-
 /** The process's plugins by plugin id: what each contributes (its tools,
  *  prompt section and layers) is read off its value. */
 export interface ToolTable {
@@ -290,8 +201,6 @@ export interface ToolTable {
   /** The tool registered under `name` in any plugin, typed as plugins
    *  declare their tools (`Plugin.tools`). */
   readonly get: (name: string) => ITool<Error, PluginToolServices> | undefined;
-  /** The agent-file blocks the plugins own, by key (`Plugin.agentBlock`). */
-  readonly blocks: ReadonlyMap<string, AgentBlock>;
   /** The programs the plugins register, by name (`Plugin.programs`). */
   readonly programs: ReadonlyMap<string, Program>;
 }
@@ -304,10 +213,9 @@ const NEEDS_NOTHING: NonNullable<Plugin['availability']> = {
 /**
  * The table over `plugins`, which the app lists in order. A list that
  * spells an id other than lowercase letters, digits and dashes, repeats a
- * plugin id, a tool name or a script module's name, claims an agent-file
- * block another plugin or the persona owns, registers a program that is not
- * one of its own script modules, or lacks a plugin another `requires` is a
- * defect of the list, rejected when it is built. A plugin
+ * plugin id, a tool name or a script module's name, registers a program
+ * that is not one of its own script modules, or lacks a plugin another
+ * `requires` is a defect of the list, rejected when it is built. A plugin
  * with a switch and no availability probe is probed as needing nothing.
  */
 export function toolTable(plugins: readonly Plugin[]): ToolTable {
@@ -343,13 +251,6 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
     ),
   );
   if (missing !== undefined) refuse(`${missing}, which is not listed.`);
-  const owned = plugins.flatMap(({ agentBlock }) => agentBlock ?? []);
-  const blocks = new Map(owned.map((block) => [block.key, block] as const));
-  if (
-    blocks.size !== owned.length ||
-    owned.some(({ key }) => key in AgentDefinitionSchema.fields)
-  )
-    refuse('an agent-file key is owned twice, or is a persona key.');
   const modules = plugins.flatMap(({ scriptModules = {} }) =>
     Object.keys(scriptModules),
   );
@@ -364,7 +265,7 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
         refuse(`program ${name} of plugin ${id} is not one of its modules.`);
       programs.set(name, program);
     }
-  return { entries, get: (name) => byName.get(name), blocks, programs };
+  return { entries, get: (name) => byName.get(name), programs };
 }
 
 /** The process's plugin table, which every run's offered tools come from. */

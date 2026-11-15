@@ -17,7 +17,7 @@ import {
   TeamOptionDataSchema,
 } from '@texra/shared/pickerOptions';
 
-import { DocumentAgentOptionSchema } from '@texra/shared/plugins/documents';
+import { AgentOptionDataSchema } from '@texra/shared/pickerOptions';
 
 /** Open workspace folder offered as a run working directory. */
 const WorkspaceRootOptionDataSchema = Schema.Struct({
@@ -83,7 +83,7 @@ export type OnboardingFunnelState = typeof OnboardingFunnelStateSchema.Type;
 export const HostSnapshotSchema = Schema.Struct({
   project: ProjectDisplaySchema,
   /** Every agent; one that is also a document task carries its `rounds`. */
-  agentOptions: Schema.Array(DocumentAgentOptionSchema),
+  agentOptions: Schema.Array(AgentOptionDataSchema),
   modelOptions: Schema.Array(ModelOptionDataSchema),
   teamOptions: Schema.Array(TeamOptionDataSchema),
   /** How a tool call is painted, from what the process's plugins declare

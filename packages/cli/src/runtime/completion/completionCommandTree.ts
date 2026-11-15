@@ -205,22 +205,20 @@ export function commandKey(path: readonly string[]): string {
 
 /**
  * A completable resource, read at completion time from a `texra` listing
- * command whose Nth whitespace column holds the value. Every shell generator
- * renders these into its own syntax, so a listing command or column only ever
- * changes here.
+ * command whose first whitespace column holds the value. Every shell generator
+ * renders these into its own syntax, so a listing command only ever changes
+ * here.
  */
 export interface CompletionSource {
   /** Shell function name used by the generators that declare one (bash, zsh). */
   readonly shellFunction: string;
   readonly command: string;
-  readonly column: number;
 }
 
 const COMPLETION_SOURCES = {
   agents: {
     shellFunction: '_texra_agents',
     command: 'agents list --quiet',
-    column: 2,
   },
   /**
    * Every launchable agent, hidden ones included. The name column prints the
@@ -230,12 +228,10 @@ const COMPLETION_SOURCES = {
   launchableAgents: {
     shellFunction: '_texra_launchable_agents',
     command: 'agents list --quiet --all',
-    column: 2,
   },
   models: {
     shellFunction: '_texra_models',
     command: 'models list --quiet',
-    column: 1,
   },
 } as const satisfies Record<string, CompletionSource>;
 
@@ -276,5 +272,5 @@ export function allCompletionSources(): CompletionSource[] {
 
 /** The listing pipeline a shell function body runs, shared by bash and zsh. */
 export function completionSourceListing(source: CompletionSource): string {
-  return `texra ${source.command} 2>/dev/null | awk '{print $${source.column}}'`;
+  return `texra ${source.command} 2>/dev/null | awk '{print $1}'`;
 }

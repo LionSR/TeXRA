@@ -49,7 +49,7 @@ interface CompileCheckContext {
   logger: AgentTrace;
   runId: RunId;
   /** Directories the compile searches besides the output's own: where the
-   *  task's bound files live (a poster's theme `.sty` beside its agent). */
+   *  task's templates live (a poster's theme `.sty`). */
   inputDirs: readonly string[];
 }
 

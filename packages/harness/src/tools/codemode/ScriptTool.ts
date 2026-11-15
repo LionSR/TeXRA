@@ -88,7 +88,7 @@ const DescribeArgsSchema = Schema.Tuple([Schema.NonEmptyString]);
 /** What one host-function op answers, as a settled call. */
 const answerOf = (
   op: ScriptOp,
-  catalog: ScriptDoor['catalog'],
+  { catalog, modules }: Pick<ScriptDoor, 'catalog' | 'modules'>,
 ): ToolResultPayload['result'] => {
   const failed = (error: string) => ({ status: 'error' as const, error });
   if (op.name === `${SEARCH_TOOLS}()`) {
@@ -109,10 +109,16 @@ const answerOf = (
   const args = Schema.decodeUnknownResult(DescribeArgsSchema)(op.input);
   if (!Result.isSuccess(args)) return failed(args.failure.message);
   const [name] = args.success;
-  const declaration = describeTool(catalog, name);
+  // A tool's declaration, or the source of a module the script may import
+  // (a program's included), by its specifier or its bare name.
+  const declaration =
+    describeTool(catalog, name) ??
+    modules[name] ??
+    modules[`builtIn:${name}`] ??
+    null;
   return declaration === null
     ? failed(
-        `No tool named "${name}" is offered to this script; searchTools(query) finds the ones that are.`,
+        `No tool or module named "${name}" is offered to this script; searchTools(query) finds the tools that are.`,
       )
     : { status: 'executed', output: declaration, summary: name };
 };
@@ -247,9 +253,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
         }
         return op.name.endsWith('()')
           ? Effect.flatMap(
-              scriptCalls.answer(op, script, () =>
-                answerOf(op, scriptCalls.catalog),
-              ),
+              scriptCalls.answer(op, script, () => answerOf(op, scriptCalls)),
               (result) => settlementOf(result, op),
             )
           : issue(op);
@@ -326,7 +330,7 @@ const SURFACE = [
     'Globals:',
     '- `tools.<name>(args)` calls a tool you are offered, other than `script`, with the arguments of a direct call, and resolves to `{ output, summary }`. A failed call rejects with an Error named `ToolFailed`. Use `Promise.all` to run calls together and try/catch to recover.',
     '- `searchTools(query, { limit })` ranks every tool you can call, those not declared below included (MCP and plugin tools), and resolves to the best `limit` (default 8, at most 50) as `{ name, line }[]`.',
-    "- `describeTool(name)` resolves to a tool's full declaration, with the description of each field.",
+    "- `describeTool(name)` resolves to a tool's full declaration, with the description of each field, or to the source of a module or program named `name`.",
     '- A tool declared below as a function is also a global: its first argument is one field of its arguments, its second an object of the rest. A tool that resolves to more than `{ output, summary }` declares what, and its description names the errors it rejects with other than `ToolFailed`.',
     '- `self(prompt, { fork, schema, label })` runs you again on `prompt` and resolves to its `{ response, structured?, cost, spent, … }`: forked (the default) from this conversation as it stood when the script started, or with `fork: false` with no earlier conversation; either way it is told `prompt` is its one part of the work. A loop of `self()` calls that checks each reply is how a goal runs until it is met.',
     '- `section(title)` labels the calls that follow; `console.log` lines stream to the card and the last 80 return with the result.',

@@ -293,6 +293,7 @@ export function buildScenario({ proposal = false } = {}) {
     version: DOCUMENTS_OUTPUT_KIND.version,
     parent: null,
     value: {
+      task: { revisions: 2, templates: [], creates: false },
       rounds: [
         {
           round: 1,

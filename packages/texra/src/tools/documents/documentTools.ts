@@ -1,5 +1,5 @@
 /**
- * The document tools a document task's program (`./documentRecipe`) calls,
+ * The document tools a document program (`../theory/programs`) calls,
  * one step each over one revision of its run's documents (`./documents`):
  * the revision's prompt, the files its reply holds, their compile check,
  * their latexdiff, and the proposal the task ends with (a critic's review
@@ -14,7 +14,6 @@ import { dirname, join } from 'node:path';
 import { Effect, FileSystem, Schema } from 'effect';
 
 import {
-  boundFile,
   ChildRuns,
   ToolContext,
   executed,
@@ -36,7 +35,7 @@ import replacementEngine, {
 } from '@replacement/engine';
 import {
   documentsOutputFact,
-  documentTaskOptions,
+  type DocumentTaskSpec,
 } from '@texra/shared/plugins/documents';
 import { runCompileCheck } from '@texra/agent/output/compileCheck';
 import { extractFilesFromXml } from '@texra/agent/output/outputFileExtraction';
@@ -50,8 +49,10 @@ import {
   openDocuments,
   revisionPrompt,
   roundOf,
+  templateDirectories,
   withRound,
   type Documents,
+  type RevisionRequest,
 } from '@texra/tools/documents/documentState';
 import { computeDocumentDiffs } from '@texra/tools/documents/documentResult';
 import { rejectOversizedBibAttachments } from '@texra/tools/documents/documentTask';
@@ -74,10 +75,21 @@ export const RevisionSchema = NonNegativeIntSchema.annotate({
   description: 'The revision, from 0, in the order the task runs them.',
 });
 
-/** The documents of the run the calling tool serves. */
-export const documentsOfCall = Effect.fn('documents.ofCall')(function* () {
-  return yield* openDocuments(yield* ToolContext);
+/** The documents of the run the calling tool serves; `described` is the
+ *  task as the call describes it (`openDocuments`). */
+export const documentsOfCall = Effect.fn('documents.ofCall')(function* (
+  described?: DocumentTaskSpec,
+) {
+  return yield* openDocuments(yield* ToolContext, described);
 });
+
+/** The fact that records `rounds` (and, once proposed, the `diffs`) as the
+ *  documents of `docs`'s run. */
+const outputFact = (
+  docs: Documents,
+  rounds: readonly RoundOutput[],
+  diffs?: Parameters<typeof documentsOutputFact>[2],
+) => documentsOutputFact(docs.task, rounds, diffs);
 
 /** Open `locations` for the user, beside what they are looking at. */
 const present = (docs: Documents, locations: readonly FileLocation[]) =>
@@ -138,7 +150,7 @@ const openTask = Effect.fn('documents.openTask')(function* (
   if (inputs.length === 0 || unreadable.length > 0)
     return yield* Effect.fail(
       new ToolError(
-        `The document task of '${config.agent}' needs readable inputFiles or mediaFiles (its result carries output files and diffs, not response text): ${
+        `The document program '${config.agent}' needs readable inputFiles or mediaFiles (its result carries output files and diffs, not response text): ${
           unreadable.length > 0
             ? `cannot read ${unreadable.map((input) => `${input.path} (${input.error})`).join(', ')}.`
             : 'it has none.'
@@ -167,67 +179,108 @@ const openTask = Effect.fn('documents.openTask')(function* (
   logCategory('Context Files', contexts);
 });
 
+const optionalFlag = (description: string) =>
+  Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({ description });
+
 /** `document_context`: the prompt and media of one revision. */
 export const DocumentContextTool = defineTool({
   name: 'document_context',
   description:
-    "A document task's revision prompt: the task's documents, every earlier request with the reply it got, and this revision's request with the compile failures that rejected the last one and the `critique` of it, if any. Resolves to `{ prompt, mediaFiles, memories, revisions, reflect }`: `memories` are the launch's, for the revision's agent; `reflect` says the task reviews each revision but the last (`document_review`).",
-  scriptReturns:
-    '{ prompt: string; mediaFiles: string[]; memories: string[]; revisions: number; reflect: boolean }',
+    "A document program's revision prompt: `intro`, the launch's documents and the `templates`, the instruction, every earlier request of `requests` with the reply it got, and this revision's request with the compile failures that rejected the last one and the `critique` of it, if any. Pass the same `intro`, `requests`, `templates` and `creates` for every revision of a run: the first call records them. Resolves to `{ prompt, mediaFiles, memories }`, for the revision's `agent()` call; `memories` are the launch's.",
+  scriptReturns: '{ prompt: string; mediaFiles: string[]; memories: string[] }',
   replay: 'safe',
   schema: Schema.Struct({
     revision: RevisionSchema,
-    critique: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-      description: "The critic's review of the last revision.",
+    requests: Schema.Array(Schema.String.check(Schema.isMinLength(1)))
+      .check(Schema.isMinLength(1))
+      .annotate({
+        description:
+          'What each revision is asked, in order: one revision per request.',
+      }),
+    intro: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+      description: 'What the prompt opens with, before the documents.',
     }),
+    critique: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+      description: 'What a check or a critic said of the last revision.',
+    }),
+    templates: Schema.optional(
+      Schema.NullOr(Schema.Array(Schema.String.check(Schema.isMinLength(1)))),
+    ).annotate({
+      description:
+        "TeXRA's template files the revisions read as documents, by file name.",
+    }),
+    creates: optionalFlag(
+      'The program writes new documents (a deck, a transcript), not rewrites of its inputs.',
+    ),
+    attachTeXCount: optionalFlag(
+      "Add each document's texcount statistics to the prompt.",
+    ),
+    autoExtractFigure: optionalFlag(
+      'Attach the figures the input LaTeX includes as media.',
+    ),
+    autoExtractTikzFigure: optionalFlag(
+      'Compile the input LaTeX TikZ figures and attach them.',
+    ),
+    autoCompileInputPdf: optionalFlag(
+      'Compile each input LaTeX file and attach its PDF.',
+    ),
   }),
-  execute: Effect.fn('document_context')(function* ({ revision, critique }) {
-    const docs = yield* documentsOfCall();
-    if (revision !== 0)
-      return yield* revisionContext(docs, revision, critique, null);
+  execute: Effect.fn('document_context')(function* (input) {
+    const { revision, requests } = input;
+    const docs = yield* documentsOfCall({
+      revisions: requests.length,
+      templates: [...(input.templates ?? [])],
+      creates: input.creates ?? false,
+    });
+    const { revisions } = docs.task;
+    if (revision >= revisions)
+      return yield* Effect.fail(
+        new ToolError(
+          `The task has ${revisions} revisions; revision ${revision} is not one of them.`,
+        ),
+      );
+    const asked: RevisionRequest = {
+      intro: input.intro ?? '',
+      requests,
+      attachTeXCount: input.attachTeXCount ?? false,
+      autoExtractFigure: input.autoExtractFigure ?? false,
+      autoExtractTikzFigure: input.autoExtractTikzFigure ?? false,
+      autoCompileInputPdf: input.autoCompileInputPdf ?? false,
+    };
     // The first revision's checks and file cards nest under a stage that
     // closes with the call, on the call's own outcome.
-    return yield* docs.run.logger.stage('Revision 1', (stage) =>
-      Effect.andThen(
-        openTask(docs, stage),
-        revisionContext(docs, revision, critique, stage),
-      ),
-    );
+    const revised =
+      revision === 0
+        ? yield* docs.run.logger.stage('Revision 1', (stage) =>
+            Effect.gen(function* () {
+              yield* openTask(docs, stage);
+              const first = yield* revisionPrompt(
+                docs,
+                revision,
+                asked,
+                input.critique,
+              );
+              if (first.loaded.length > 0)
+                stage.info('', {
+                  messageType: MESSAGE_TYPES.FILE_LIST,
+                  data: first.loaded,
+                });
+              return first;
+            }),
+          )
+        : yield* revisionPrompt(docs, revision, asked, input.critique);
+    const { prompt } = revised;
+    return {
+      ...executed(prompt, `${formatRoundLabel(revision)} of ${revisions}`),
+      value: {
+        prompt,
+        mediaFiles: revised.media,
+        memories: docs.run.config.memories,
+      },
+      // The first step records the task, which every later step reads.
+      facts: revision === 0 ? [outputFact(docs, docs.rounds)] : [],
+    };
   }),
-});
-
-/** The prompt and media of `revision`; the first revision's (`stage`, its
- *  stage) also logs the template files its prompt read. */
-const revisionContext = Effect.fn('documents.revisionContext')(function* (
-  docs: Documents,
-  revision: number,
-  critique: string | null | undefined,
-  stage: AgentTrace | null,
-) {
-  const revisions = docs.task.requests.length;
-  if (revision >= revisions)
-    return yield* Effect.fail(
-      new ToolError(
-        `The task has ${revisions} revisions; revision ${revision} is not one of them.`,
-      ),
-    );
-  const revised = yield* revisionPrompt(docs, revision, critique);
-  if (stage !== null && revised.loaded.length > 0)
-    stage.info('', {
-      messageType: MESSAGE_TYPES.FILE_LIST,
-      data: revised.loaded,
-    });
-  const { prompt } = revised;
-  return {
-    ...executed(prompt, `${formatRoundLabel(revision)} of ${revisions}`),
-    value: {
-      prompt,
-      mediaFiles: revised.media,
-      memories: docs.run.config.memories,
-      revisions,
-      reflect: documentTaskOptions(docs.run.config).reflect,
-    },
-  };
 });
 
 /** `document_extract`: the files a revision's reply holds. */
@@ -277,9 +330,9 @@ export const DocumentExtractTool = defineTool({
       extracted.outputs,
       roots.workspace,
       docs.baseFiles,
-      // A task that names no outputs rewrites its inputs: its outputs descend
-      // from them, even when a launch names where they are written.
-      docs.task.outputs.length === 0,
+      // A task that creates no documents rewrites its inputs: its outputs
+      // descend from them, even when a launch names where they are written.
+      !docs.task.creates,
     );
     // Without the model's version, a later Accept cannot tell the model
     // what the user changed: reported, and the revision keeps its outputs.
@@ -344,7 +397,7 @@ export const DocumentExtractTool = defineTool({
         `${formatRoundLabel(revision)}: ${files.length} files`,
       ),
       value: { files, missing },
-      facts: [documentsOutputFact(withRound(docs.rounds, round))],
+      facts: [outputFact(docs, withRound(docs.rounds, round))],
     };
   }),
 });
@@ -362,16 +415,9 @@ export const DocumentCompileTool = defineTool({
     const docs = yield* documentsOfCall();
     const { roots, fileService, logger } = docs.deps;
     const recorded = roundOf(docs.rounds, revision);
-    // The compile searches where the task's bound files live (`task.files`,
-    // read from beside its agent file), so a template's theme files resolve
-    // as they do for the prompt.
-    const inputDirs = [
-      ...new Set(
-        Object.values(docs.task.files)
-          .filter((file): file is string => Boolean(file))
-          .map((file) => dirname(boundFile(docs.entry.path, file).path)),
-      ),
-    ];
+    // The compile searches where the task's templates live, so a
+    // template's theme files resolve as they do for the prompt.
+    const inputDirs = yield* templateDirectories(docs.task);
     const check = yield* runCompileCheck(
       { roots, fileService, logger, runId: docs.run.runId, inputDirs },
       revision,
@@ -408,11 +454,7 @@ export const DocumentCompileTool = defineTool({
     const facts =
       recorded === undefined
         ? []
-        : [
-            documentsOutputFact(
-              withRound(docs.rounds, { ...recorded, compile }),
-            ),
-          ];
+        : [outputFact(docs, withRound(docs.rounds, { ...recorded, compile }))];
     if (yield* autoOpensPdf(docs))
       yield* present(
         docs,
@@ -519,7 +561,8 @@ export const DocumentDiffTool = defineTool({
       ...executed(lines.join('\n'), summary),
       value: { diffs, failed, notRun },
       facts: [
-        documentsOutputFact(
+        outputFact(
+          docs,
           withRound(docs.rounds, { ...recorded, latexdiffs: entries }),
         ),
       ],
@@ -566,7 +609,7 @@ export const DocumentProposeTool = defineTool({
       docs.run.runId,
       roundOutputsToOutputSummaries([last]),
     );
-    const fact = documentsOutputFact(docs.rounds, diffs);
+    const fact = outputFact(docs, docs.rounds, diffs);
     return {
       ...executed(`Proposed: ${files.join(', ')}`, `${files.length} documents`),
       value: { files },

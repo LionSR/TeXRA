@@ -24,8 +24,8 @@ import { ResumeRefusalSchema } from '@shared/schemas';
  * The plugin list cannot be composed, for a defect `toolTable` refuses: an
  * id that is not lowercase letters, digits and dashes, an id or tool name
  * listed twice, a switch on a plugin with no availability probe, a
- * `requires` naming a plugin not listed, an agent-file block owned twice or
- * keyed by a persona key, or two script modules of one name.
+ * `requires` naming a plugin not listed, two script modules of one name, or
+ * a program that is not one of its plugin's script modules.
  */
 export class PluginsRefused extends Schema.TaggedError<PluginsRefused>()(
   'PluginsRefused',

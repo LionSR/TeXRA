@@ -2,13 +2,12 @@
 
 <script setup>
 import MediaSectionPanel from '../.vitepress/components/MediaSectionPanel.vue';
-import AutoExtractMenu from '../.vitepress/components/AutoExtractMenu.vue';
 </script>
 
 Figures carry a lot of the evidence in theoretical work: a plot that a derivation predicts, a diagram of a construction, a page of a reference PDF. TeXRA lets agents analyze, reference, and generate figures inside your documents, from `.png` screenshots to embedded TikZ diagrams and PDFs.
 
 ::: tip CLI
-This page covers the VS Code **Media** selector. From the [`texra` CLI](./texra-cli.md),
+This page covers attaching media in the VS Code panel. From the [`texra` CLI](./texra-cli.md),
 work with a figure conversationally in `texra chat`, pass it to
 `texra run` with `--input` (which takes supported media files and attaches
 them), or let an agent pull figures out of your documents with the built-in
@@ -18,19 +17,18 @@ and `.bib` sources, not images.)
 
 ## <wa-icon library="texra" name="rocket"></wa-icon> Quick task: add a figure caption
 
-1. Select the `polish` agent from the agent dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>).
+1. Keep the default agent, or pick `assistant`, from the agent dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>).
 2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>), for example `openai/gpt-6.1-sol`, `anthropic/claude-sonnet-5-5`, or `google/gemini-4-argon`.
-3. Select your figure in the **Media** (<wa-icon library="texra" name="file-media"></wa-icon>) section.
+3. Select **Attach** (<wa-icon library="texra" name="file-media"></wa-icon>) in the instruction box and pick your figure, or paste it.
 4. Type the instruction: "Write a detailed caption for this figure."
 5. Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>, the arrow button at the end of the composer).
 
 ## <wa-icon library="texra" name="file-media"></wa-icon> The Media section
 
-The **Media** section in the TeXRA panel holds images, PDFs, and audio files for the run:
+A chat takes media through **Attach** in the instruction box, or by pasting. A program run has a **Media** group next to Input and Context: select **Edit** on the proposal card of a program run to see it. It holds images, PDFs, and audio files for the run:
 
 <MediaSectionPanel />
 
-- **Auto Extract Dropdown** (<wa-icon library="texra" name="wand"></wa-icon>): configure automatic figure extraction (`Figures`, `TikZ Figures`, `Compile Input PDF`).
 - **Add opened files as media** (<wa-icon library="texra" name="folder-opened"></wa-icon>): append every open editor tab with a supported media extension.
 - **Clear all media files** (<wa-icon library="texra" name="trash"></wa-icon>): empty the media list.
 - **Add media files** (<wa-icon library="texra" name="add"></wa-icon>): open a file picker to append figures, or drag and drop files directly onto the section. Drag rows to reorder them.
@@ -89,18 +87,15 @@ PDFs use native multimodal support when the provider offers it; otherwise TeXRA 
 
 ## <wa-icon library="texra" name="clippy"></wa-icon> Clipboard images
 
-Paste any copied image directly into the instruction box with `Ctrl+V` / `Cmd+V`. TeXRA saves it as `[pasted_timestamp_hash.ext]`, adds it to the **Media** list automatically, and cleans up temporary pasted files after 3 days.
+Paste any copied image directly into the instruction box with `Ctrl+V` / `Cmd+V`. TeXRA saves it as `[pasted_timestamp_hash.ext]`, attaches it, and cleans up temporary pasted files after 3 days.
 
 ## <wa-icon library="texra" name="wand"></wa-icon> Automatic figure extraction
 
-Enable extraction from the **Auto Extract** dropdown (<wa-icon library="texra" name="wand"></wa-icon>) near the Media label:
+A program can attach the figures of its input files itself. An agent switches this on with the `args` of its `program` call; ask for it in plain words ("attach the paper's figures"):
 
-<AutoExtractMenu />
-
-<p class="hero-caption">The lit wand button opens a checkbox menu with Figures, TikZ Figures, and Compile Input PDF.</p>
-
-- **Figures** (<wa-icon library="texra" name="file-media"></wa-icon>): extracts images from `\includegraphics` commands.
-- **TikZ Figures** (<wa-icon library="texra" name="symbol-structure"></wa-icon>): extracts `tikzpicture` environments as standalone `.tex` files and compiles them.
+- `autoExtractFigure`: attaches the images that `\includegraphics` commands include.
+- `autoExtractTikzFigure`: extracts `tikzpicture` environments as standalone `.tex` files, compiles them and attaches the result.
+- `autoCompileInputPdf`: compiles each input file and attaches its PDF.
 
 ## <wa-icon library="texra" name="tools"></wa-icon> Figure extraction tools
 
@@ -157,9 +152,9 @@ When you provide media files, they are handed to the model according to its capa
 
 Common use cases:
 
-- <wa-icon library="texra" name="pencil"></wa-icon> Write captions for images (`polish` agent)
-- <wa-icon library="texra" name="check"></wa-icon> Verify text matches figures (`correct` agent)
-- <wa-icon library="texra" name="file-text"></wa-icon> Generate text from images/PDFs (`ocr` agent)
-- <wa-icon library="texra" name="unmute"></wa-icon> Transcribe audio (`transcribe_audio` agent)
+- <wa-icon library="texra" name="pencil"></wa-icon> Write captions for images (a chat agent, or the `edit` program)
+- <wa-icon library="texra" name="check"></wa-icon> Verify text matches figures (the `review` agent, or the `annotate` program)
+- <wa-icon library="texra" name="file-text"></wa-icon> Turn handwriting or scans into LaTeX (the `transcribe` program)
+- <wa-icon library="texra" name="unmute"></wa-icon> Transcribe audio (the `transcribe` program)
 
 For TikZ-specific workflows, read the [TikZ figures guide](./tikz-figures.md).

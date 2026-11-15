@@ -10,6 +10,7 @@ import { Effect, Result, Schema, SchemaIssue } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
+  AGENT_SOURCE,
   factName,
   type AgentConfig,
   type JsonValue,
@@ -25,7 +26,7 @@ import { ToolRegistry, type ProgramChange } from '@tools/toolTable';
  * `name` and call its default export with `args`. What that resolves to is
  * the script's return, so the run ends with it as its structured output.
  */
-export const programScript = (
+const programScript = (
   name: string,
   args: Readonly<Record<string, JsonValue>>,
 ): string =>
@@ -52,10 +53,45 @@ export class ProgramNotRegistered extends Schema.TaggedError<ProgramNotRegistere
   }
 }
 
-/** The call a run opened on `script` makes ({@link ScriptCall}). */
+/**
+ * What launches the program `name` as a run of its own: the run is named
+ * for the program and has no agent's prompt or tools (its script is all it
+ * runs), and it writes the program's own outputs unless the launch names
+ * files other than its inputs.
+ */
+export const programLaunch = Effect.fn('programLaunch')(function* (
+  name: string,
+  args: Readonly<Record<string, JsonValue>>,
+  files: Pick<AgentConfig, 'inputFiles' | 'outputFiles'>,
+) {
+  const { programs } = yield* ToolRegistry;
+  const program = programs.get(name);
+  if (program === undefined)
+    return yield* new ProgramNotRegistered({
+      name,
+      registered: [...programs.keys()],
+    });
+  const named = files.outputFiles.filter(Boolean);
+  return {
+    agent: name,
+    agentSource: AGENT_SOURCE.INLINE,
+    persona: { name },
+    outputFiles: named.some((file) => !files.inputFiles.includes(file))
+      ? named
+      : [...(program.outputs ?? [])],
+    script: { kind: 'program' as const, name, args },
+  } satisfies Partial<AgentConfig>;
+});
+
+/** The call the script run of `config` makes ({@link ScriptCall}), or null
+ *  for a run that asks its model. A program is called with its launch's
+ *  arguments beside the launch's instruction and files, which the config
+ *  records once. */
 export const scriptCallOf = Effect.fn('scriptCallOf')(function* (
-  script: NonNullable<AgentConfig['script']>,
-): Effect.fn.Return<ScriptCall, ProgramNotRegistered, ToolRegistry> {
+  config: AgentConfig,
+): Effect.fn.Return<ScriptCall | null, ProgramNotRegistered, ToolRegistry> {
+  const { script } = config;
+  if (script == null) return null;
   if (script.kind === 'background') return script;
   const { programs } = yield* ToolRegistry;
   const program = programs.get(script.name);
@@ -65,7 +101,15 @@ export const scriptCallOf = Effect.fn('scriptCallOf')(function* (
       registered: [...programs.keys()],
     });
   return {
-    code: programScript(script.name, script.args),
+    code: programScript(script.name, {
+      ...script.args,
+      instruction: config.instruction,
+      inputFiles: config.inputFiles,
+      contextFiles: config.contextFiles,
+      mediaFiles: config.mediaFiles,
+      outputFiles: config.outputFiles,
+      editedFile: config.editedFile ?? null,
+    }),
     title: script.name,
     tools: program.tools,
   };

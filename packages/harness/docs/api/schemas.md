@@ -1051,8 +1051,7 @@ type InlinePersona = typeof InlinePersonaSchema.Encoded;
 
 A persona an embedder passes inline (`StartInput.agent`) instead of a
 file: the same definition with nothing a file alone can mean. It has no
-bundled original and no plugin's block (a task is its plugin's program);
-each is refused as an unrecognized key.
+bundled original, so `basedOn` is refused as an unrecognized key.
 
 ```ts
 const InlinePersonaSchema: Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<NonEmptyString>>; }>

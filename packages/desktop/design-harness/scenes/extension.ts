@@ -59,10 +59,8 @@ function host(): HostSnapshot {
     ...emptyHostSnapshot(PROJECT),
     agentOptions: [
       { value: 'orchestrator', label: 'orchestrator', isOrchestrator: true },
-      { value: 'polish', label: 'polish' },
       { value: 'search', label: 'search' },
-      { value: 'correct', label: 'correct', rounds: 1 },
-      { value: 'review', label: 'review', rounds: 3 },
+      { value: 'review', label: 'review' },
     ],
     modelOptions: [
       { value: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
@@ -597,7 +595,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       type: 'run.config',
       config: Schema.decodeUnknownSync(AgentConfigSchema)({
         agent: 'review',
-        script: { kind: 'program', name: 'revise', args: {} },
+        script: { kind: 'program', name: 'annotate', args: {} },
       }),
     });
     log.emit(ROOT, T.root, { type: 'run.activate' });
@@ -608,6 +606,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       version: DOCUMENTS_OUTPUT_KIND.version,
       parent: null,
       value: {
+        task: { revisions: 3, templates: [], creates: false },
         rounds: [0, 1].map((round) => ({
           round,
           outputs: [],

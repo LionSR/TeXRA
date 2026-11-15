@@ -1,112 +1,98 @@
 <script setup>
-import AgentYamlHero from '../.vitepress/components/AgentYamlHero.vue'
 import RoundOutputTree from '../.vitepress/components/RoundOutputTree.vue'
-import AgentModesCompare from '../.vitepress/components/AgentModesCompare.vue'
 import CliRunHero from '../.vitepress/components/CliRunHero.vue'
 </script>
 
-# Document tasks: how they work
+# Programs: how they work
 
-A document task takes your input files, context references, and instruction, calls the model once per revision, and writes versioned diffs to run storage. This page covers the YAML format, prompt templates, execution stages, and reflection passes.
+A program takes your input files, context references, and instruction, has a model write each revision, and writes versioned diffs to run storage. This page covers how agents and programs differ, the stages of a program run, and reflection passes.
 
-::: tip When to run a document task
-Document tasks are built for **deep, single-shot thinking**: deriving or checking equations step by step, rewriting a whole section, converting a paper to slides, or merging edits. They plan in a `<scratchpad>`, produce a full XML-wrapped output, and optionally reflect on it in another revision, so runs with frontier reasoning models can take **10–30 minutes** to finish.
+::: tip When to run a program
+Programs are built for **deep, single-shot thinking**: deriving or checking equations step by step, rewriting a whole section, converting a paper to slides, or merging edits. Each revision produces a full XML-wrapped output, and most programs review it in a second revision, so runs with frontier reasoning models can take **10–30 minutes** to finish.
 
-If you want a faster turnaround (quick polishes, small corrections), pick a **smaller or faster model** in the model dropdown: output quality drops somewhat, but wall-clock time drops a lot. For short, conversational edits or read-only questions, chat with an agent (`assistant`, `research`, `review`) instead: a chat streams back in seconds and skips the document pipeline. For a problem too big for one agent, a team lead can run several document tasks at once; read [Multi-agent workflows](./multi-agent-workflows.md).
+If you want a faster turnaround (quick polishes, small corrections), pick a **smaller or faster model**: output quality drops somewhat, but wall-clock time drops a lot. For short, conversational edits or read-only questions, chat with an agent (`assistant`, `research`, `review`) instead: a chat streams back in seconds and skips the document pipeline. For a problem too big for one run, a team lead can start several programs at once; read [Multi-agent workflows](./multi-agent-workflows.md).
 :::
 
-Only an agent whose file has a `task` block runs a document task. The agent picker marks those agents with a file icon, and picking one starts its document task on your files; any other agent chats.
+## Agents and programs
 
-<AgentModesCompare />
-<p class="hero-caption">A document task reasons once per revision and writes a versioned, diffable file; a chat converses and calls tools turn by turn. This is the first thing to pick for any task. On the CLI, <code>texra run polish --input …</code> runs a document task and <code>texra chat --agent research</code> opens a chat.</p>
+An **agent** is a chat persona defined in a flat `.yaml` file: `name`, `description`, `prompt` (the system prompt), `tools` and `temperature`. It converses and calls its tools turn by turn. Browse these files from the **Agents** tab in the TeXRA Settings, or create your own (see [Custom agents](./custom-agents.md)).
 
-## Agent definition files (`.yaml`)
+A **program** is a fixed procedure that ships with TeXRA: `edit`, `annotate`, `enhance`, `apply`, `merge`, `transcribe`, `slides` and `poster` (see the [program reference](./built-in-agents.md#programs)). A program is not in the agent picker. It is started in one of three ways:
 
-Each agent is defined in a `.yaml` file that tells TeXRA what to say to the AI model and how to handle the response. Browse and manage these files from the **Agents** tab in the TeXRA Settings, or create your own (see [Custom agents](./custom-agents.md)).
+- an agent you chat with calls the `program` tool, and you approve the proposed run;
+- `texra run <program> --input …` in the terminal;
+- the **Merge** action, which starts `merge`.
 
-## Understanding the YAML structure
-
-These `.yaml` files are flat. An agent with a document task has two main parts:
-
-<AgentYamlHero />
-<p class="hero-caption">Top-level fields set the persona (<code>prompt</code>, <code>temperature</code>); a <code>task</code> block holds the document templates, and its <code>requests</code> list has one entry per revision.</p>
-
-1.  **The persona** (top-level fields): how the model behaves.
-    - `prompt`: The system prompt. Sets the overall role and high-level instructions for the LLM.
-    - `temperature` and (for agents without a `task` block only) `tools`. See [Custom agents](./custom-agents.md) for details.
-2.  **`task`**: Present only on agents with a document task. Text templates that TeXRA fills with your context (input files, instruction) to guide the LLM at each stage, plus output settings:
-    - `prefix`: Provides the main context, including your input file(s) (available as `{{ INPUT_CONTENT }}`) and the instruction you typed in the UI (available as `{{ INSTRUCTION }}`).
-    - `requests`: A list with one entry per revision. The first entry asks the LLM to perform the initial task (the first revision). It often instructs the LLM to think within `<scratchpad>` tags. TeXRA appends the reply format to every request itself: the fixed `<documents>` container, with one `<document name="...">...</document>` entry per output file. Each further entry drives one reflection revision.
-    - `outputs` and `files`: the files a generator agent writes (an agent that names none edits its inputs), and template files kept beside the YAML.
-
-_(Prompts use Nunjucks templating (Jinja2-style syntax). For the list of available variables such as `{{ INPUT_CONTENT }}` and how to use them, read the [Custom agents](./custom-agents.md) guide.)_
+By default a chat agent is sent one tool, `script`, and calls its other tools from the JavaScript it writes there (the **script-only tools** setting under **Settings → Agents → Advanced**), so a `program` call often appears inside a script.
 
 ## Basic execution flow
 
-When you launch a document task in the TeXRA UI, TeXRA runs the document recipe: for each revision it builds the prompt from the agent's `task` templates and your inputs, calls the agent once with it, and extracts, compiles and diffs the documents in the reply:
+A program's run asks no model itself. For each revision it builds a prompt, hands it to a fresh child agent, and then extracts, compiles and diffs the documents in the child's reply:
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant TeXRA UI
-    participant Agent Backend
-    participant LLM API
+    participant Agent
+    participant Program
+    participant Child agent
 
-    User->>TeXRA UI: Selects files, agent, instruction, model
-    User->>TeXRA UI: Launches the document task
-    TeXRA UI->>Agent Backend: run(config)
-    Agent Backend->>Agent Backend: Initialize (Load agent definition, read files)
-    Note over Agent Backend: Revision prompt from task.prefix + task.requests + User Input; system prompt from prompt
-    Agent Backend->>LLM API: Create Response (Revision 1 Prompt)
-    Note over LLM API: Processes request based on prompts
-    LLM API-->>Agent Backend: Response (Text + Usage + StopReason)
-    Agent Backend->>Agent Backend: Process Response (Save r0/output.* output)
-    Agent Backend-->>TeXRA UI: Update ProgressBoard / Signal Completion
+    User->>Agent: "Polish section 2 of main.tex"
+    Agent->>User: Proposes a program run (edit, files, instruction)
+    User->>Agent: Approves
+    Agent->>Program: program('edit', { prompt, inputFiles })
+    loop each revision
+        Program->>Program: Build the prompt (documents, earlier requests and replies, this request)
+        Program->>Child agent: Prompt
+        Child agent-->>Program: Reply with the documents
+        Program->>Program: Extract, compile, diff
+        opt reflection on, not the last revision
+            Program->>Child agent: Critic reviews the diff
+        end
+    end
+    Program-->>Agent: Proposes the last revision
 ```
 
-**Key stages:**
+**Key stages of a revision:**
 
-1.  **Initialization:** TeXRA loads the agent definition and reads the files you selected.
-2.  **Prompt construction:** TeXRA renders `task.prefix` (filled with your files and instruction) and the revision's `task.requests` entry into one message, and calls the agent with it; the agent's `prompt` is the system prompt.
-3.  **LLM interaction (first revision):** TeXRA sends the prompt to the selected LLM API. The LLM generates a response, typically including reasoning (`<scratchpad>`) and the final answer wrapped in the fixed `<documents><document name="...">...</document></documents>` container.
-4.  **Processing:** TeXRA saves the raw LLM response (as `r{n}/output.xml`, where `r0/` is the first revision). It then parses this file and extracts the content of each `<document name="...">` entry into its own file under the revision's directory in run storage, named after that entry's `name` (a polish run on `paper.tex` produces `r0/paper.tex` for the first revision and `r1/paper.tex` for the second; a `<document name="chapters/main.tex">` entry lands as `r{n}/chapters/main.tex`; only the raw response uses the fixed `output.xml` stem, and a document literally named `output.tex` is renamed `output_extracted.tex` so it cannot clobber it). You can follow this in the [ProgressBoard](./progress-board.md), where each revision's agent call shows as a child run. For LaTeX files, TeXRA compiles each output and can also generate a `latexdiff` file comparing it to its input. When the last revision is done, TeXRA proposes one revised document per input file for you to accept. Read the [LaTeX Diff guide](./latex-diff.md) for details.
+1.  **Prompt construction:** TeXRA builds one message from the program's opening text, the files you selected, your instruction, each earlier request with the reply it got, and this revision's request. The program supplies the child's system prompt.
+2.  **Child agent:** A fresh child agent answers the prompt with the final documents wrapped in the fixed `<documents><document name="...">...</document></documents>` container. You can follow this in the [ProgressBoard](./progress-board.md), where each revision's agent call shows as a child run.
+3.  **Extraction:** TeXRA saves the raw reply (as `r{n}/output.xml`, where `r0/` is the first revision). It then extracts the content of each `<document name="...">` entry into its own file under the revision's directory in run storage, named after that entry's `name` (an `edit` run on `paper.tex` produces `r0/paper.tex` for the first revision and `r1/paper.tex` for the second; a `<document name="chapters/main.tex">` entry lands as `r{n}/chapters/main.tex`; only the raw reply uses the fixed `output.xml` stem, and a document literally named `output.tex` is renamed `output_extracted.tex` so it cannot clobber it).
+4.  **Compile check and diff:** For LaTeX files, TeXRA compiles each output and generates a `latexdiff` file comparing it to its input. Read the [LaTeX Diff guide](./latex-diff.md) for details.
+5.  **Optional critic:** With reflection on, a critic reviews every revision but the last (see below).
+6.  **Proposal:** When the last revision is done, TeXRA proposes one revised document per input file for you to accept. `transcribe`, `slides` and `poster` propose the new document they wrote instead.
 
-The UI is not the only way in. The same
-load-definition → prompt → revisions → save-to-run-storage pipeline runs
-headlessly from the terminal:
+The same pipeline runs headlessly from the terminal:
 
 <CliRunHero
-  command="texra run polish --input paper.tex --output paper.polished.tex"
+  command="texra run edit --input paper.tex --instruction 'Polish the prose' --output paper.polished.tex"
   :rounds="[
     { label: 'Revision 1: draft', state: 'done' },
-    { label: 'Revision 2: reflection pass', state: 'done' },
+    { label: 'Revision 2: review pass', state: 'done' },
   ]"
   :outputs="['paper.polished.tex']"
-  note="Same agent definition, same revisions, same run storage: no UI attached."
+  note="Same program, same revisions, same run storage: no UI attached."
 />
 
 Each revision lands in its own folder under run storage:
 
 <RoundOutputTree />
-<p class="hero-caption">Every revision saves the raw <code>output.xml</code>, one extracted file per <code>&lt;document name&gt;</code> (named after the input file, for example <code>paper.tex</code>), and an optional <code>latexdiff</code> PDF. <code>r0/</code> is the first revision (the draft); <code>r1/</code> and later are reflection passes.</p>
+<p class="hero-caption">Every revision saves the raw <code>output.xml</code>, one extracted file per <code>&lt;document name&gt;</code> (named after the input file, for example <code>paper.tex</code>), and a <code>latexdiff</code> PDF. <code>r0/</code> is the first revision (the draft); <code>r1/</code> and later are review passes.</p>
 
-**Output limit:** If the LLM response is cut off by the model's max output tokens before the closing `</documents>` tag, TeXRA keeps what the model wrote as that revision's output and warns in the transcript that it may be incomplete. Raise the model's max output tokens if a long document gets cut off.
+**Output limit:** If the reply is cut off by the model's max output tokens before the closing `</documents>` tag, TeXRA keeps what the model wrote as that revision's output and warns in the transcript that it may be incomplete. Raise the model's max output tokens if a long document gets cut off.
 
 ### What goes into the prompt
 
-Each revision's prompt is one message holding the conversation so far: `task.prefix` with the content you selected, then each earlier request with the reply it got, then this revision's request (with the compile errors that failed the last revision, when failed compiles are rejected). If **Attach TeX Count** is on, that information is included too. Figures and audio files are sent alongside the text for models that support them. The model then reasons through the task and produces its output.
+Each revision's prompt is one message holding the conversation so far: the program's opening text with the content you selected, then each earlier request with the reply it got, then this revision's request (with the compile errors that failed the last revision, when failed compiles are rejected). Figures and audio files are sent alongside the text for models that support them.
 
-**Reflection revisions:**
+A `program` call can switch on extra context with `args`, each a boolean: `attachTeXCount` adds word counts, `autoExtractFigure` and `autoExtractTikzFigure` attach the figures the input includes, and `autoCompileInputPdf` attaches the compiled input PDF.
 
-The number of revisions is the number of `task.requests` entries. An agent with two entries runs a first revision plus one reflection; an agent with one entry runs only the first, as `correct` and `merge` do. After the first revision completes, each additional one works like this:
+**Review revisions:**
 
-1.  **Reflection prompt:** TeXRA renders the reflection template from the next `task.requests` entry to ask the LLM to critique and improve its earlier output (included in the revision prompt).
-2.  **LLM interaction (second revision):** The LLM generates a revised response.
-3.  **Processing:** TeXRA saves the refined output to a separate revision path (`r{n}/<name>`, e.g. `r1/paper.tex` for the first reflection, `r2/paper.tex` for the next).
+Each program fixes its own number of revisions. `edit`, `annotate`, `enhance`, `transcribe`, `slides` and `poster` run two: a first revision, then one that reviews the first against the original and outputs the corrected documents. `apply` and `merge` run one. A second revision is saved to its own path (`r1/paper.tex`). A run ends earlier only on failure or cancellation.
 
-Control how many revisions run by editing the agent YAML: add or remove entries in `task.requests`. A run ends earlier only on failure or cancellation.
+`annotate` also checks each revision itself: when a revision changed text outside its `\criticize{}` comments, the next one is told to restore the original.
 
-**Critic review (opt-in):** Launched with reflection on (`texra run <agent> --reflect` on the CLI, or `args: { reflect: true }` on a lead's `program` call), a document task has the bundled `critic` agent review every revision but the last. After the revision is compiled and diffed, the critic reads the requests so far, the diff of each output against the document the task started from, and the compile result, and answers with grounded corrections, each tied to a location, plus the single most valuable optional improvement. The next revision's prompt carries that critique in a `<critique>` block. The revision count stays the number of `task.requests` entries; reflection adds one critic call between revisions.
+**Critic review (opt-in):** Started with `args: { reflect: true }` on a `program` call, a program has a critic review every revision but the last. After the revision is compiled and diffed, the critic reads the requests so far, the diff of each output against the document the run started from, and the compile result, and answers with grounded corrections, each tied to a location, plus the single most valuable optional improvement. The next revision's prompt carries that critique in a `<critique>` block. The revision count stays the same; reflection adds one critic call between revisions, so it has no effect on `apply` and `merge`.
 
 ::: warning Potential XML Issues
 Occasionally an LLM generates slightly malformed XML, especially for very long or complex outputs. TeXRA closes an unclosed `<document>` tag itself and tries to recover untagged files, and it keeps every revision's raw reply (`r{n}/output.xml`, for example `r0/output.xml`). If a file still fails to extract, open that `.xml` file to recover the text. Read the [Troubleshooting guide](./troubleshooting.md#missing-or-truncated-output-files) for details.
@@ -114,7 +100,7 @@ Occasionally an LLM generates slightly malformed XML, especially for very long o
 
 ### Reflection
 
-After the first revision (`r0/`), agents that define a reflection request evaluate and refine their work in the second (`r1/`):
+After the first revision (`r0/`), a two-revision program evaluates and refines its work in the second (`r1/`):
 
 <div class="reflection-pdf-viewer">
   <div class="pdf-tabs">

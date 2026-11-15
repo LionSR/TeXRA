@@ -5,20 +5,19 @@ import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 
 import {
-  AGENT_TEMPLATE_FILES,
+  AGENT_TEMPLATE_FILE,
   agentFileFromTemplate,
 } from '@texra/agent/templates/agentTemplates';
 
 describe('agentFileFromTemplate', () => {
-  // A task's templates render when it runs, over the run's files. Rendered
-  // at creation, a loop over `INPUT_FILES` walked the characters of its
-  // placeholder and asked for documents named `{`, `I`, `N`, ….
-  it('writes the document task template with only its name and description changed', () => {
+  // The prompt template renders when the agent runs, so creating the file
+  // must leave its placeholders as written.
+  it('writes the chat template with only its name and description changed', () => {
     const raw = readFileSync(
       path.join(
         process.cwd(),
         'packages/extension/resources/templates',
-        AGENT_TEMPLATE_FILES.documentTask,
+        AGENT_TEMPLATE_FILE,
       ),
       'utf8',
     );

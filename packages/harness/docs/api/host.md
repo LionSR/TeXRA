@@ -77,8 +77,8 @@ class AgentCatalogLoadError extends Schema.TaggedError<AgentCatalogLoadError>()(
 
 The services an agent catalog load reads: the global and filesystem views
 the local agent directories are scanned through, the app state the
-disabled-plugin switch is read from, and the plugin table whose agent-file
-blocks a scan admits.
+disabled-plugin switch is read from, and the plugin table whose switched
+plugins' bundled agent directories are scanned.
 
 ```ts
 type AgentCatalogServices =
@@ -131,13 +131,12 @@ interface AgentCatalogShape {
   /** One workspace's agents over this catalog, its stores captured. */
   readonly workspaceAgents: (stores: WorkspaceAgentsStores) => WorkspaceAgents;
   /** Change a custom copy of `entry` (see {@link AgentCustomization}):
-   *  the copy's path, and the files the agent binds that were already
-   *  beside it and kept although they differ from the bundled ones. */
+   *  the copy's path. */
   readonly customize: (
     entry: AgentEntry,
     change: AgentCustomization,
   ) => Effect.Effect<
-    { readonly path: string; readonly keptDiffering: readonly string[] },
+    { readonly path: string },
     | AgentCustomizeRefused
     | AgentDirectoriesFailed
     | StateReadFailed
@@ -149,7 +148,7 @@ interface AgentCatalogShape {
 ## AgentCustomization
 
 A change to a custom copy of a bundled agent: `copy` writes a new one
-into the custom directory, with the files its blocks bind beside it, stamped with the bundled file's digest
+into the custom directory, stamped with the bundled file's digest
 (`basedOn`), and is refused when one is there; `overwrite` replaces it;
 `keep` re-stamps the user's copy with the changed bundled version, which
 dismisses its newer-version notice and touches nothing else.
@@ -161,10 +160,9 @@ type AgentCustomization = 'copy' | 'overwrite' | 'keep';
 ## AgentCustomizeRefused
 
 `customize` or `removeCustom` refused the change: the entry has no file of
-its own to copy or delete (`noFile`), its copy would land outside the
-custom directory, a file it binds lies outside its own directory or the
-file to delete lies outside the custom directory (`escapes`), a copy is
-already there (`exists`, at `path`), or a copy has no newer bundled version
+its own to copy or delete (`noFile`), its copy or the file to delete
+would lie outside the custom directory (`escapes`), a copy is already
+there (`exists`, at `path`), or a copy has no newer bundled version
 to keep (`current`).
 
 ```ts
@@ -305,8 +303,7 @@ interface AgentDirectoryServiceOptions {
 
 An agent as the catalog lists it, and as a launch runs it: the scan
 validated the whole definition (defaults applied), so
-an entry that exists can launch. Every entry is a persona; one holding a
-plugin's block (`AgentBlock`) is also launchable as that plugin's task.
+an entry that exists can launch. Every entry is a persona.
 
 ```ts
 interface AgentEntry {
@@ -315,16 +312,12 @@ interface AgentEntry {
   path: string; // absolute path to the definition file
   description?: string;
   tools?: string[]; // tool names, for display
-  /** Digest of the definition file and the files its blocks bind; absent
-   *  on a plugin agent. */
+  /** Digest of the definition file; absent on a plugin agent. */
   digest?: string;
   /** A customized copy's `basedOn`: the bundled file's digest it began from. */
   basedOn?: string;
   /** The model agent the entry names. */
   persona: Persona;
-  /** The plugins' blocks the file holds, by key, as their schemas parsed
-   *  them (`agentBlockOf` reads one); empty for a chat agent. */
-  blocks: Readonly<Record<string, unknown>>;
 }
 ```
 
@@ -1653,8 +1646,8 @@ own global dispatcher: its model traffic carries the transport anyway.
 A plugin list the harness cannot compose (the defects `toolTable`
 refuses: an id that is not lowercase letters, digits and dashes, an id or
 tool name listed twice, a switch on a plugin with no availability probe,
-a `requires` naming a plugin not listed, an agent-file block owned twice or keyed by a persona key,
-two script modules of one name) fails the build with {@link PluginsRefused} before
+a `requires` naming a plugin not listed, two script modules of one name,
+a program that is not one of its plugin's script modules) fails the build with {@link PluginsRefused} before
 anything is built, so the refusal names the plugin rather than failing
 the first session open. A global store the process builds itself is
 seeded with the first-install tool switches; a store handed in is left as
@@ -1775,6 +1768,29 @@ interface ProcessServicesOptions {
   /** A single-project host's folder, whose `.env` its own reads see. */
   readonly workspace?: string;
 }
+```
+
+## programLaunch
+
+What launches the program `name` as a run of its own: the run is named
+for the program and has no agent's prompt or tools (its script is all it
+runs), and it writes the program's own outputs unless the launch names
+files other than its inputs.
+
+```ts
+const programLaunch: (name: string, args: Readonly<Record<string, Json>>, files: Pick<{ readonly agent: string; readonly model: string; readonly instruction: string; readonly editedFile: string | null; readonly inputFiles: readonly string[]; readonly contextFiles: readonly string[]; readonly mediaFiles: readonly string[]; readonly outputFiles: readonly string[]; readonly memories: readonly string[]; readonly script?: { readonly kind: "background"; readonly title: string; readonly tools: readonly string[]; readonly code: string; readonly timeoutMs?: number | null | undefined; } | { readonly kind: "program"; readonly name: string; readonly args: { readonly [x: string]: Json; }; } | null | undefined; readonly workingDirectory?: string | null | undefined; readonly agentSource?: "plugin" | "custom" | "builtIn" | "inline" | null | undefined; readonly persona?: { readonly name: string; readonly description?: string | undefined; readonly prompt?: string | undefined; readonly tools?: readonly string[] | undefined; readonly temperature?: number | undefined; } | null | undefined; readonly asCaller?: boolean | null | undefined; readonly rootUserInstruction?: string | null | undefined; readonly displayInstruction?: string | null | undefined; readonly launch?: { readonly [x: string]: Json; } | null | undefined; readonly delegationAgentScope?: readonly string[] | null | undefined; readonly outputSchema?: { readonly [x: string]: unknown; } | null | undefined; }, "inputFiles" | "outputFiles">) => Effect<{ agent: string; agentSource: "inline"; persona: { name: string; }; outputFiles: string[]; script: { kind: "program"; name: string; args: Readonly<Record<string, Json>>; }; }, ProgramNotRegistered, ToolRegistry>
+```
+
+## ProgramNotRegistered
+
+A run names a program no listed plugin registers: an earlier build's
+run, or one of a plugin this process does not load.
+
+```ts
+class ProgramNotRegistered extends Schema.TaggedError<ProgramNotRegistered>()(
+  'ProgramNotRegistered',
+  { name: Schema.String, registered: Schema.Array(Schema.String) },
+)
 ```
 
 ## ProviderError

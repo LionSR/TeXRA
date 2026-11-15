@@ -54,10 +54,8 @@ whenever it is offered the tool, so an agent's prompt does not restate it.
 - `agent` — run a named agent as a child of this run, with a prompt.
   Gated by the "Multi-Agent Workflow" switch in Settings → Plugins, which
   removes it from every agent when off.
-- `program` — start a program a plugin ships, as a child of this run.
-  `name: 'revise'` runs the document task of the agent passed as
-  `agentName` over files; only an agent with a `task` block has a
-  document task. Gated by the "Multi-Agent Workflow" switch, like `agent`.
+- `program` — start a program a plugin ships (such as the built-in
+  document revisions), as a child of this run. Gated by the "Multi-Agent Workflow" switch, like `agent`.
 - `script` — run a JavaScript program that calls the agent's other tools,
   `agent` and `program` included, and joins their results in code.
   Offering it also offers `self`, which a script calls to run the agent
@@ -68,7 +66,7 @@ whenever it is offered the tool, so an agent's prompt does not restate it.
   `action: "send"` on `/executions/<id>` messages another run, such as a
   follow-up to a WAITING subagent.
 - `accept_run_files` — accept output files from a completed execution, such
-  as the documents a document task proposed.
+  as the documents a document program proposed.
 
 ## External coding agents
 

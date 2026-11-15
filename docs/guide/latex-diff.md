@@ -11,14 +11,14 @@ When an agent revises a derivation, proof, or section of your manuscript, you ne
 
 <p class="hero-caption">Pick a base and an edited file (or a git commit), press latexdiff, and TeXRA compiles and opens the marked-up PDF: additions underlined in blue, deletions struck through in red.</p>
 
-TeXRA generates diff files after agent runs that modify `.tex` files (such as `correct` or `polish`), comparing the agent's run-storage output (for example `r0/intro.tex` or `r1/intro.tex` for an `intro.tex` input) against the original input or the previous revision's output. You can see what the agent did as soon as the run finishes.
+TeXRA generates diff files after program runs that modify `.tex` files (such as `edit` or `apply`), comparing the run-storage output (for example `r0/intro.tex` or `r1/intro.tex` for an `intro.tex` input) against the original input or the previous revision's output. You can see what the program did as soon as the run finishes.
 
 This guide explains how to use TeXRA's LaTeXdiff features to compare arbitrary file versions and how to read the results.
 
 ::: tip CLI
 The LaTeXDiffs section buttons described below belong to the VS Code
 extension. The automatic post-run diffs are generated on every host, including
-`texra run polish` or `texra run correct` in the CLI, where the TUI lists each one
+`texra run edit` in the CLI, where the TUI lists each one
 as a "Latexdiff:" line under its revision. To diff two arbitrary files from the terminal, use the
 [`latexDiff` agent](./built-in-agents.md#latexdiff), which wraps `latexdiff`
 to compare two LaTeX versions.
@@ -26,7 +26,7 @@ to compare two LaTeX versions.
 
 ### Controlling between-revision diffs
 
-TeXRA compares each revision of agent output to your original input and can also create diffs between consecutive revisions (`_diffr1r0.tex` for the r0→r1 comparison). Between-revision diffs are off by default. Enable **Diff consecutive revisions** on **Settings → LaTeX → Compile & diff** (the `texra.latexdiff.generateBetweenRoundDiffs` setting). When off, the run command and progress notifications only account for the original-vs-revision comparisons, so fewer diff files are created.
+TeXRA compares each revision of a program's output to your original input and can also create diffs between consecutive revisions (`_diffr1r0.tex` for the r0→r1 comparison). Between-revision diffs are off by default. Enable **Diff consecutive revisions** on **Settings → LaTeX → Compile & diff** (the `texra.latexdiff.generateBetweenRoundDiffs` setting). When off, the run command and progress notifications only account for the original-vs-revision comparisons, so fewer diff files are created.
 
 ### Focusing diff PDFs on changed pages
 
@@ -96,7 +96,7 @@ TeXRA runs the same five-stage pipeline shown above. This route uses the `latexd
 
 After generating a Git-based diff with **Diff vs. commit**, you can manage the resulting files from the Commit section's **Move to Diffs folder** (<wa-icon library="texra" name="archive"></wa-icon>) and **Delete diff files** (<wa-icon library="texra" name="trash"></wa-icon>) buttons. Move to Diffs folder moves the diff `.tex` and `.pdf` into a dated folder under `Diffs/` and deletes their build files; Delete diff files removes them all.
 
-Each diff route writes its own predictably named artifacts. `latexdiff` names its output after the edited file (`<edited>_diff.tex`) and `latexdiff-vc` appends the commit hash to the base file's name (`-diff<hash>.tex`), both alongside the base file. Document tasks write per-revision (`_diff.tex`) and between-revision (`_diffr<newer>r<older>.tex`) diffs into the run folder. Every `.tex` compiles to a matching `.pdf`. Both buttons act on the selected commit's diff files:
+Each diff route writes its own predictably named artifacts. `latexdiff` names its output after the edited file (`<edited>_diff.tex`) and `latexdiff-vc` appends the commit hash to the base file's name (`-diff<hash>.tex`), both alongside the base file. Programs write per-revision (`_diff.tex`) and between-revision (`_diffr<newer>r<older>.tex`) diffs into the run folder. Every `.tex` compiles to a matching `.pdf`. Both buttons act on the selected commit's diff files:
 
 <DiffArtifactsHero />
 
@@ -117,7 +117,7 @@ By default, latexdiff wraps each edit in a markup command that is defined in the
 ### Math markup and multi-file projects
 
 - **Math environments**: The **Math markup in diffs** setting on **Settings → LaTeX** (`texra.latexdiff.mathMarkup`) controls how changes inside equations are marked (suppress markup, equation-level, within equations, or small changes inside equations) across every diff route.
-- **Comparing multiple files**: For documents split across several files, use the [`merge`](./intelligent-merge.md) agent on each original/edited file pair, then diff the merged output against its original.
+- **Comparing multiple files**: For documents split across several files, use the [`merge`](./intelligent-merge.md) program on each original/edited file pair, then diff the merged output against its original.
 
 ## Troubleshooting
 

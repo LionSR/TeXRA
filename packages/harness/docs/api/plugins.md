@@ -34,9 +34,8 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
   [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
   [`RequestDecisionHook`](#requestdecisionhook) (what commits with the
   decision: [`RequestDecisionRecord`](#requestdecisionrecord)),
-  [`FactKind`](#factkind), [`AgentBlock`](#agentblock)
-  ([`agentBlockOf`](#agentblockof)), and [`Program`](#program) (how its
-  run reads: [`ProgramResult`](#programresult)).
+  [`FactKind`](#factkind), and [`Program`](#program) (how its run
+  reads: [`ProgramResult`](#programresult)).
 
 ## AGENT_TOOL_NAME
 
@@ -44,42 +43,6 @@ The tool that runs a named agent as a child of the calling run.
 
 ```ts
 const AGENT_TOOL_NAME: "agent"
-```
-
-## AgentBlock
-
-A top-level block a plugin owns in an agent file (such as `task:`). The
-catalog scan checks a file's block against `schema`
-and keeps the parsed value on the entry (`AgentEntry.blocks`); a file
-whose block fails it, or that holds a key no listed plugin owns, is
-refused like any other invalid definition. An agent with a block declares
-no tools, and delegation marks it for the `program` tool: a program of
-the block's plugin runs it. The harness reads nothing inside it.
-
-```ts
-interface AgentBlock<A = unknown> {
-  /** The key in an agent file: unique across the plugin list, and never a
-   *  key of the persona itself. */
-  readonly key: string;
-  /** The block as written, to its value with defaults applied. */
-  readonly schema: Schema.Codec<A, unknown>;
-  /** The files the block binds, relative to its agent file: part of the
-   *  agent, so a customized copy carries them and the file's digest covers
-   *  them. */
-  files?(block: A): readonly string[];
-}
-```
-
-## agentBlockOf
-
-The value of `block` on `entry`, as the catalog scan parsed it with the
-block's schema; undefined when the agent has none.
-
-```ts
-function agentBlockOf<A>(
-  entry: Pick<AgentEntry, 'blocks'>,
-  block: AgentBlock<A>,
-): A | undefined
 ```
 
 ## AgentTrace
@@ -197,28 +160,6 @@ Fail when a raw tool path contains a parent-directory segment.
 const assertNoParentTraversal: (targetPath: string) => Effect<void, ToolError, never>
 ```
 
-## boundFile
-
-The file an agent file at `agentPath` binds as `file`: where it is
-(beside the agent file, or an absolute path as written) and how to read
-it. A file that cannot be read fails the read; every reader of a bound
-file goes through this, so none mistakes a missing file for an empty or
-a changed one.
-
-```ts
-function boundFile(
-  agentPath: string,
-  file: string,
-): {
-  readonly path: string;
-  readonly read: Effect.Effect<
-    string,
-    PlatformError.PlatformError,
-    FileSystem.FileSystem
-  >;
-}
-```
-
 ## BoundModel
 
 One bound model: llm's `Binding` (or the validation model's) and the facts
@@ -290,15 +231,6 @@ interface BuildFileAttachmentOptions {
 }
 ```
 
-## CALL_FIELDS
-
-The fields every child launch takes beside its own: memories, the call's
-reuse id and card label, its time limit, and whether a script waits.
-
-```ts
-const CALL_FIELDS: Readonly<{ memories: decodeTo<toType<$Array<String>>, optional<NullOr<$Array<String>>>, never, never>; working_directory: decodeTo<optional<String>, optional<NullOr<String>>, never, never>; id: optional<NullOr<String>>; label: optional<NullOr<String>>; timeoutMs: optional<NullOr<Int>>; background: optional<NullOr<Boolean>>; }>
-```
-
 ## CallRequests
 
 The requests one tool call raises, opened through its run's loop. Each
@@ -346,50 +278,6 @@ type CellError =
   | DatabaseReadFailed;
 ```
 
-## ChildLaunch
-
-One child launch as the shared core runs it: the agent and its prompt,
-and what the child is. A chat (`program: null`) may ask for a value of
-`schema` and attaches `mediaFiles` to its prompt. A program's child opens
-on the registered program `name` and works over `files`; its proposal
-shows `args` as its options, and the program's own `configure` turns the
-approved launch into the arguments its script is called with. `tool`
-names the launching tool in its reuse key and its copy.
-
-```ts
-type ChildLaunch = {
-  readonly tool: string;
-  readonly agentName: string;
-  /** An agent the call defines, named `agentName`: no catalog entry. */
-  readonly persona?: AgentProposal['persona'];
-  readonly prompt: string;
-  readonly model: string | null | undefined;
-  readonly memories: readonly string[];
-  readonly workingDirectory: string | null | undefined;
-  readonly id: string | null | undefined;
-  readonly timeoutMs: number | null | undefined;
-  readonly background: boolean | null | undefined;
-} & (
-  | {
-      readonly program: null;
-      readonly schema: Record<string, unknown> | null | undefined;
-      readonly mediaFiles: readonly string[];
-    }
-  | {
-      readonly program: {
-        readonly name: string;
-        readonly args: Readonly<Record<string, JsonValue>>;
-      };
-      readonly files: {
-        readonly inputFiles: readonly string[];
-        readonly contextFiles: readonly string[];
-        readonly mediaFiles: readonly string[];
-        readonly outputFiles: readonly string[];
-      };
-    }
-);
-```
-
 ## ChildRunDelivery
 
 A child run's report to its parent ({@link ChildRunDeliverySchema}).
@@ -410,20 +298,15 @@ class ChildRuns extends Context.Service<ChildRuns, ChildRunsShape>()(
 
 ## ChildRunsShape
 
-A plugin tool's one door to the session's runs. It launches children of
-its call's run: an agent's (`launch`: the child's result, or its receipt
-for a background launch) or an external process's (`launchProcess`: its
-run id, outside the child-run budget); a plugin's tool reaches no other
-launch. And it reaches a
-run of the session by id: its input, live parent edge, records, whether
+A plugin tool's one door to the session's runs. It launches an external
+process as a child of its call's run (`launchProcess`: its run id,
+outside the child-run budget); a plugin's tool reaches no other launch.
+And it reaches a run of the session by id: its input, live parent edge, records, whether
 it holds a request, and the plugin's own facts on it, each over the
 call's run.
 
 ```ts
 interface ChildRunsShape {
-  readonly launch: (
-    launch: ChildLaunch,
-  ) => Effect.Effect<ToolResult, Error, PluginToolServices>;
   readonly launchProcess: (
     launch: ProcessChildLaunch,
   ) => Effect.Effect<RunId, Error, ToolContext | RunServices>;
@@ -655,14 +538,6 @@ interface FactKind {
    *  write as it hears its own. */
   readonly writes?: (value: JsonValue) => readonly string[];
 }
-```
-
-## fileList
-
-A list of file paths, empty when the call names none.
-
-```ts
-const fileList: (description: string) => decodeTo<toType<$Array<String>>, optional<NullOr<$Array<String>>>, never, never>
 ```
 
 ## fileOps
@@ -1218,8 +1093,6 @@ interface Plugin {
   readonly decision?: RequestDecisionHook;
   /** The row kinds it owns (`plugin.fact`), on or off: rows outlive it. */
   readonly factKinds?: readonly FactKind[];
-  /** The agent-file block it owns (`AgentBlock`), on or off. */
-  readonly agentBlock?: AgentBlock;
   /** Script module sources by name, imported as `builtIn:<name>`. */
   readonly scriptModules?: Readonly<Record<string, string>>;
   /** Those of its `scriptModules` a person or a model starts by name
@@ -1393,7 +1266,8 @@ One of a plugin's script modules that a person or a model starts by name
 (`Plugin.programs`): the module's default export is
 `async (args) => result`, and a run opened on it
 (`AgentConfig.script` of kind `program`) is a script run that imports the
-module and calls that export with the launch's `args`. The plugin wrote
+module and calls that export with the launch's `args`, its instruction
+and its files. The plugin wrote
 it, not a model, so the launch that chose it granted it: its tools are
 the listed ones past any switch, its `agent` calls run under the launch's
 approval, and its prompts and files pass as written.
@@ -1408,21 +1282,10 @@ interface Program<R = unknown> {
   /** How a completed run of it reads to whoever launched it. Without one,
    *  the run delivers its reply alone. */
   readonly result?: ProgramResult<R>;
-  /**
-   * What a launch through the `program` tool adds to the child's config,
-   * from the launch as approved: the `args` its script is called with (the
-   * approved `options` when the program has no `configure`) and the output
-   * files it writes when the launch names none. A failure refuses the
-   * launch with its message.
-   */
-  readonly configure?: (approved: AgentProposal) => Effect.Effect<
-    {
-      readonly args: Readonly<Record<string, JsonValue>>;
-      readonly outputFiles: readonly string[];
-    },
-    Error,
-    AgentCatalog
-  >;
+  /** The files its run writes when its launch names none, for a program
+   *  that creates documents (a deck, a transcript) and does not rewrite
+   *  its inputs. */
+  readonly outputs?: readonly string[];
 }
 ```
 
@@ -2286,8 +2149,6 @@ interface ToolTable {
   /** The tool registered under `name` in any plugin, typed as plugins
    *  declare their tools (`Plugin.tools`). */
   readonly get: (name: string) => ITool<Error, PluginToolServices> | undefined;
-  /** The agent-file blocks the plugins own, by key (`Plugin.agentBlock`). */
-  readonly blocks: ReadonlyMap<string, AgentBlock>;
   /** The programs the plugins register, by name (`Plugin.programs`). */
   readonly programs: ReadonlyMap<string, Program>;
 }

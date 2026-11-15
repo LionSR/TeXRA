@@ -6,23 +6,42 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
-- **`program` replaces `document_task`, and a plugin registers programs.**
-  A document task is started with the `program` tool:
-  `program('revise', { agentName, inputFiles, … })`, with a task's switches
-  under `args` (`args: { reflect: true }`). The script module
-  `builtIn:documents` (`revise`, `from`) is gone; chain tasks by passing a
-  result's `changes` as the next call's `inputFiles`. A custom agent that
-  lists `document_task` in its tools must list `program`, which the
-  Multi-Agent Workflow switch gates. A run stored by an earlier build
+- **Document tasks are programs, not agents.** The agents `correct`,
+  `polish`, `generic`, `devise`, `criticize`, `firstread`, `logic`,
+  `notation`, `enhance`, `apply`, `merge`, `ocr`, `transcribe_audio`,
+  `paper2slide`, `paper2poster` and `critic` are removed. Eight programs
+  replace them: `edit`, `annotate`, `enhance`, `apply`, `merge`,
+  `transcribe`, `slides` and `poster`. What to change, how far and from
+  which point of view is the instruction: `edit` covers a proofread and a
+  restructuring, `annotate` a referee and a first reader, `enhance` the
+  mathematics, the logic and the notation. Start one with
+  `texra run <program> --input <file>`, or ask an agent, which calls
+  `program('edit', { prompt, inputFiles })`; the `document_task` tool and
+  the script module `builtIn:documents` are gone, and the Multi-Agent
+  Workflow switch gates `program`. The launch form no longer lists
+  document tasks or their switches, and `texra run` no longer takes
+  `--reflect`, `--attachTeXCount`, `--autoExtractFigure`,
+  `--autoExtractTikzFigure` or `--autoCompileInputPdf`: an agent passes
+  them as `args`.
+- **An agent file has no `task:` block.** A custom agent is a chat persona
+  (`name`, `description`, `prompt`, `tools`, `temperature`); a file with a
+  `task:` block is refused as an unrecognized key, and Settings → Agents
+  creates chat agents only. A run stored by an earlier build
   (`script.kind: 'recipe'`, the `documents` plugin's rows) is not resumed.
-  A script can no longer reach a module through a relative specifier.
-- **SDK: `Plugin.programs`.** A plugin registers those of its
-  `scriptModules` that are started by name (`Program`: a description, its
-  tools, and how its run reads, `ProgramResult`). `AgentConfig.script` of
-  kind `program` holds `{ name, args }` where kind `recipe` held source, a
-  block and options; `isTaskConfig` and `recipeBlockOf` are `programOf`,
-  `RunView.recipe` is `RunView.program`, `AgentBlock.result` moved to
-  `Program.result`, and `ITool.launchesTasks` is removed.
+- **A script imports modules by their exact specifier.** A relative
+  specifier no longer reaches a module. `describeTool(name)` also returns
+  the source of a module or program.
+- **SDK: `Plugin.programs` replaces `Plugin.agentBlock`.** A plugin
+  registers those of its `scriptModules` that are started by name
+  (`Program`: a description, its tools, the files it writes by default and
+  how its run reads, `ProgramResult`); `programLaunch` (from
+  `@texra-ai/harness/host`) builds the config that starts one.
+  `AgentConfig.script` of kind `program` holds `{ name, args }` where kind
+  `recipe` held source, a block and options; `isTaskConfig` and
+  `recipeBlockOf` are `programOf`, and `RunView.recipe` is
+  `RunView.program`. `AgentBlock`, `agentBlockOf`, `boundFile`,
+  `AgentEntry.blocks`, `ITool.launchesTasks`, `ChildRuns.launch`,
+  `CALL_FIELDS` and `fileList` are removed.
 - **SDK: a store an earlier build wrote is refused, never moved aside.**
   Opening a session store stamped with another build's schema fails and
   changes nothing in the file; the error says to move it away. Only a

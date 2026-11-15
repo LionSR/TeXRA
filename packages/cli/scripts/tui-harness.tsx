@@ -1394,7 +1394,7 @@ function seedRunningScript(): void {
     harnessRunId('aaaa000bf10e'),
   ]) {
     seedRun(agentRunId, {
-      identity: { kind: 'agent', agent: 'correct' },
+      identity: { kind: 'agent', agent: 'review' },
       parentRunId: scriptRunId,
       takesFollowUps: false,
     });

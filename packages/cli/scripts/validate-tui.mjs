@@ -98,8 +98,6 @@ const PHYSICIST_AGENTS = [
   'latexFixer',
   'numerics',
   'presenter',
-  'correct',
-  'polish',
 ].join('||');
 const TWO_OPENAI_MODELS = [
   'openai/gpt-5.5-2026-04-23',
@@ -621,8 +619,6 @@ const SCENARIOS = [
     expect: [
       '/agent',
       'Agents',
-      'correct · document task',
-      'polish · document task',
       'Choose an agent, or a team it leads, for this chat.',
     ],
     unexpect: ['//agent', 'Harness received: //agent', '/agent - error'],
@@ -685,7 +681,6 @@ const SCENARIOS = [
       'research',
       'review',
       'latexFixer',
-      'correct · document task',
       'Current: chat (hidden from picker)',
       'Choose an agent, or a team it leads, for this chat.',
       'Esc cancel',
@@ -720,7 +715,6 @@ const SCENARIOS = [
       'research',
       'review',
       'latexFixer',
-      'correct · document task',
       'Current: chat (hidden from picker)',
       'Choose an agent, or a team it leads, for this chat.',
       'Esc cancel',

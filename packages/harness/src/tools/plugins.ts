@@ -11,7 +11,7 @@
  * Rules: an id is persisted (the disabled-tools key, and the plugin a run's
  * offered tool records), so it never changes and is never reused; every
  * tool belongs to exactly one plugin (checked when the table is built). No
- * hooks or second event channels; one agent-file block at most. A program
+ * hooks or second event channels. A program
  * (`programs`) is one of its script modules, started by name. A plugin
  * holds state only in its process or session layer and writes rows only of
  * its own kinds (`factKinds`), through the one publisher.
@@ -47,7 +47,6 @@ import type { SessionLogShape } from '@shared/session/sessionLog';
 import type { SettingRow } from '@shared/state/stateSettings';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
 import type {
-  AgentBlock,
   PluginHold,
   ProcessPluginLayer,
   Program,
@@ -146,8 +145,6 @@ export interface Plugin {
   readonly decision?: RequestDecisionHook;
   /** The row kinds it owns (`plugin.fact`), on or off: rows outlive it. */
   readonly factKinds?: readonly FactKind[];
-  /** The agent-file block it owns (`AgentBlock`), on or off. */
-  readonly agentBlock?: AgentBlock;
   /** Script module sources by name, imported as `builtIn:<name>`. */
   readonly scriptModules?: Readonly<Record<string, string>>;
   /** Those of its `scriptModules` a person or a model starts by name

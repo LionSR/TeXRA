@@ -213,8 +213,8 @@ TeXRA's native configuration.
 
 ## Agent execution settings (webview interface)
 
-Per-run controls in the task composer affect only the task being launched. They
-include attached files and optional context helpers such as TeX count.
+Per-run controls in the task composer affect only the task being launched: the
+agent, the model, the approval policy and attached media.
 Persistent agent visibility and team selection belong in Settings instead.
 
 ## Debugging

@@ -21,26 +21,22 @@ const AGENTS: SettingsAgentCatalogEntry[] = [
   {
     source: 'plugin',
     name: 'writer',
-    blocks: {},
     description: 'Plugin writer',
   },
   {
     source: 'builtIn',
     name: 'correct',
-    blocks: {},
     path: '/agents/correct.yaml',
   },
   {
     source: 'builtIn',
     name: 'review',
-    blocks: {},
     path: '/tools/review.yaml',
     tools: ['grep'],
   },
   {
     source: 'custom',
     name: 'customTool',
-    blocks: {},
     path: '/custom/customTool.yaml',
   },
 ];

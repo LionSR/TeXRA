@@ -7,7 +7,6 @@ import {
   type AgentProposalRequest,
   getModelLabel,
 } from '@texra-ai/harness/schemas';
-import { Record as Rec, Result, Schema } from 'effect';
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
@@ -25,10 +24,6 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { APPROVE_SESSION_ACTION } from '@texra/shared/session/surfaceDecision';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
-import {
-  DOCUMENT_TASK_OPTIONS,
-  DocumentTaskOptionsSchema,
-} from '@texra/shared/plugins/documents';
 import { DEFINED_AGENT_COPY } from '@ui/copy/delegationApproval';
 
 // Local imports - shared utils
@@ -319,13 +314,10 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   private renderOptionBadges(
     data: AgentProposalRequest,
   ): TemplateResult | typeof nothing {
-    // Options the theory plugin cannot read show no flags.
-    const options = Result.getOrUndefined(
-      Schema.decodeUnknownResult(DocumentTaskOptionsSchema)(data.options ?? {}),
+    // A program's arguments that are switched on, by name.
+    const flags = Object.entries(data.options ?? {}).flatMap(([key, value]) =>
+      value === true ? [key] : [],
     );
-    const flags = Rec.toEntries(DOCUMENT_TASK_OPTIONS)
-      .filter(([key]) => options?.[key] === true)
-      .map(([, row]) => row.label);
     if (flags.length === 0) return nothing;
     return html`<div class="workflow-proposal__option-badges">
       ${repeat(

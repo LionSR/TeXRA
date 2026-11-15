@@ -17,28 +17,16 @@ import { afterEach, assert, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { setLogSink } from '@texra-ai/harness/node';
-import { CUSTOM_AGENTS_STORAGE_DIR } from '@common/storage/storageLayout';
-import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { runCli } from '@cli/commands/root';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { REAL_RUN_TIMEOUT, validationHost } from '@test/support/storeFaults';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 
-/** A document task whose every model call the provider refuses as too long
- *  (`GOLDEN-OVERFLOW`), so the run fails. */
-const FAILING_TASK = `name: overflow_polish
-description: A document task the provider refuses every call of.
-prompt: |-
-  GOLDEN-OVERFLOW: refuse every call.
-task:
-  prefix: |
-    <documents>
-    {{ ALL_INPUTS }}
-    </documents>
-  requests:
-    - Polish the document.
-`;
+/** Project instructions that reach every run's system text: the provider
+ *  refuses each call that carries the marker as too long
+ *  (`GOLDEN-OVERFLOW`), so a program's revision fails and its run with it. */
+const OVERFLOWING_PROJECT = 'GOLDEN-OVERFLOW: refuse every call.\n';
 
 const decodeRunDirectory = Schema.decodeUnknownSync(
   Schema.Struct({ runDirectory: Schema.String }),
@@ -59,14 +47,9 @@ const cliProcess = Effect.gen(function* () {
   vi.stubEnv('TEXRA_NO_SERVICE', '1');
   vi.stubEnv('TEXRA_NO_TELEMETRY', '1');
   vi.stubEnv('OPENAI_API_KEY', 'validation-fake-key');
-  const agents = path.join(
-    resolveGlobalStoragePath(path.join(home, '.texra')),
-    CUSTOM_AGENTS_STORAGE_DIR,
+  yield* Effect.promise(() =>
+    fs.writeFile(path.join(workspace, 'AGENTS.md'), OVERFLOWING_PROJECT),
   );
-  yield* Effect.promise(async () => {
-    await fs.mkdir(agents, { recursive: true });
-    await fs.writeFile(path.join(agents, 'overflow_polish.yaml'), FAILING_TASK);
-  });
   return { home, workspace };
 });
 
@@ -110,7 +93,7 @@ describe('texra run, document tasks', { timeout: REAL_RUN_TIMEOUT }, () => {
               const { exitCode } = yield* Effect.promise(() =>
                 runCli([
                   'run',
-                  'overflow_polish',
+                  'edit',
                   '--input',
                   'paper.tex',
                   '--output',
