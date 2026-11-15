@@ -432,10 +432,8 @@ export function TextInput(props: TextInputProps): React.JSX.Element {
 
   if (!focus) return <Text>{shownValue}</Text>;
 
-  // An insertion can join its neighbour into one grapheme and leave the
-  // cursor inside it, so the text before the caret ends where the cell starts.
+  const before = shownValue.slice(0, display.cursor);
   const cell = graphemeAt(shownValue, display.cursor);
-  const before = shownValue.slice(0, cell?.start ?? display.cursor);
   const ch = cell?.text;
   const after = shownValue.slice(cell?.end ?? shownValue.length);
   // Inverse-on-newline collapses to nothing visible; render the caret as a

@@ -72,15 +72,24 @@ export function maskDisplayValue(value: string): string {
   return value.replaceAll(/[^\n]/g, '•');
 }
 
+/**
+ * Insert `text` at the cursor and leave the caret after it. Text that joins
+ * what follows into one grapheme (a regional indicator before another, a
+ * joiner between emoji) carries the caret to that grapheme's end, so the
+ * stored cursor is never inside a grapheme.
+ */
 export function insertText(
   value: string,
   cursor: number,
   text: string,
 ): TextEdit {
   const c = clampCursor(cursor, value.length);
+  const next = value.slice(0, c) + text + value.slice(c);
+  const after = c + text.length;
+  const joined = graphemeAt(next, after);
   return {
-    value: value.slice(0, c) + text + value.slice(c),
-    cursor: c + text.length,
+    value: next,
+    cursor: joined !== undefined && joined.start < after ? joined.end : after,
   };
 }
 
@@ -110,9 +119,13 @@ export function nextWordCursor(value: string, cursor: number): number {
   return c + (/^\s*\S*/.exec(value.slice(c))?.[0].length ?? 0);
 }
 
-/** Delete the span [from, to) and leave the caret at its start. */
+/**
+ * Delete the span [from, to) and leave the caret at its start, or at the
+ * start of the grapheme the two sides now join into.
+ */
 function deleteSpan(value: string, from: number, to: number): TextEdit {
-  return { value: value.slice(0, from) + value.slice(to), cursor: from };
+  const next = value.slice(0, from) + value.slice(to);
+  return { value: next, cursor: graphemeAt(next, from)?.start ?? from };
 }
 
 export function deleteBeforeCursor(value: string, cursor: number): TextEdit {

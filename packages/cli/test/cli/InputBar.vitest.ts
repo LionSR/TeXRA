@@ -5,6 +5,7 @@ import { expect, it as test } from 'vitest';
 import { textInputCappedRowCount } from '@cli/chat/tui/input/textInputDisplay';
 import {
   deleteBeforeCursor,
+  insertText,
   previousGraphemeCursor,
 } from '@cli/chat/tui/input/textInputEditing';
 import { slashCommands } from '@cli/chat/tui/commands/slashRegistry';
@@ -67,6 +68,9 @@ test('the input edits and measures an emoji sequence as one character', () => {
     cursor: 1,
   });
   expect(previousGraphemeCursor(draft, draft.length)).toBe(1);
+  // A regional indicator typed before a flag joins it; the caret follows
+  // to the end of the joined character.
+  expect(insertText('🇺🇸', 0, '🇨')).toEqual({ value: '🇨🇺🇸', cursor: 4 });
   // Two columns wide, so two of them fill a four-column row; the caret
   // takes the second row.
   expect(textInputCappedRowCount(family + family, 4, 8)).toBe(2);
