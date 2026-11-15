@@ -6,6 +6,10 @@
  * diff, so blocks can be routed to filenames without trusting response order.
  */
 
+// Third-party imports
+import MarkdownIt from 'markdown-it';
+
+// Local imports
 import { diffTextLevenshtein } from '@texra/utils/text/diff';
 import type { NamedDocument } from '@texra/utils/text/xmlExtraction';
 import { SCRATCHPAD_TAG } from '@texra/shared/plugins/documentOutputs';
@@ -49,7 +53,9 @@ export function responseLines(content: string): string[] {
  *
  * Parses backtick/tilde fence delimiter lines and strips a fence that wraps
  * an entire block of lines, following CommonMark's closing-fence rule (same
- * marker, at least the opening delimiter's length).
+ * marker, at least the opening delimiter's length, no info string). The
+ * filename-header scan reads delimiters line by line; whole-response block
+ * collection reads markdown-it's fence tokens instead.
  */
 
 export type MarkdownFence = {
@@ -84,6 +90,7 @@ export function isClosingMarkdownFence(
   const closingFence = parseMarkdownFenceDelimiter(line);
   return (
     closingFence !== null &&
+    closingFence.info === '' &&
     closingFence.marker === openingFence.marker &&
     closingFence.length >= openingFence.length
   );
@@ -160,10 +167,16 @@ export function stripSurroundingMarkdownFence(
 // contentSimilarity
 // ---------------------------------------------------------------------------
 
-/** Opening delimiter for a fenced block explicitly tagged as latex/tex. */
-const LATEX_FENCE_OPEN_REGEX = /^(`{3,}|~{3,})\s*(?:latex|tex)\s*$/i;
+const markdown = new MarkdownIt();
 
-/** Collect the content of every ```latex/```tex fenced block, in document order. */
+/**
+ * Collect the content of every ```latex/```tex fenced block, in document
+ * order. Fence recognition is markdown-it's (CommonMark): a fence inside
+ * another fence is content, and only a bare delimiter closes one. The block
+ * text is the raw response lines between the delimiters, so indentation
+ * inside a list item survives as written. A fence the response never closes
+ * (markdown-it closes it at the end of input) is dropped and reported.
+ */
 export function collectLatexFencedBlocks(
   content: string,
   options: {
@@ -173,28 +186,33 @@ export function collectLatexFencedBlocks(
   const lines = responseLines(content);
 
   const blocks: string[] = [];
-  let openFence: MarkdownFence | null = null;
-  let current: string[] = [];
-
-  for (const line of lines) {
-    if (!openFence) {
-      if (LATEX_FENCE_OPEN_REGEX.test(line.trim())) {
-        openFence = parseMarkdownFenceDelimiter(line);
-        current = [];
+  for (const token of markdown.parse(lines.join('\n'), {})) {
+    if (
+      token.type !== 'fence' ||
+      token.map === null ||
+      !/^(?:latex|tex)$/i.test(token.info.trim())
+    ) {
+      continue;
+    }
+    const [start, end] = token.map;
+    // A fence inside a container that prefixes its lines (a blockquote's
+    // `> `) never held a reply's document.
+    const openingFence = parseMarkdownFenceDelimiter(lines[start]);
+    if (openingFence === null) continue;
+    const closed =
+      end - 1 > start && isClosingMarkdownFence(lines[end - 1], openingFence);
+    if (!closed) {
+      const rest = lines.slice(start + 1);
+      if (rest.some((line) => line.trim() !== '')) {
+        options.onUnclosedFence?.(rest.length);
       }
       continue;
     }
-    if (isClosingMarkdownFence(line, openFence)) {
-      const block = current.join('\n').trim();
-      if (block) blocks.push(block);
-      openFence = null;
-      current = [];
-      continue;
-    }
-    current.push(line);
-  }
-  if (openFence && current.some((line) => line.trim() !== '')) {
-    options.onUnclosedFence?.(current.length);
+    const block = lines
+      .slice(start + 1, end - 1)
+      .join('\n')
+      .trim();
+    if (block) blocks.push(block);
   }
   return blocks;
 }

@@ -299,6 +299,41 @@ layer(
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
+  // CommonMark: a closing fence carries no info string, and a fence inside
+  // another fence is that fence's content, not a block of its own.
+  it.effect(
+    'reads an unlabeled latex fence to its real close, past inner and nested fences',
+    () =>
+      Effect.gen(function* () {
+        yield* writeAndSplitDocuments([
+          '```latex',
+          '\\begin{lstlisting}',
+          '```python',
+          'print(1)',
+          '\\end{lstlisting}',
+          'real tail',
+          '```',
+        ]);
+        yield* expectWritten(
+          'paper.tex',
+          '\\begin{lstlisting}\n```python\nprint(1)\n\\end{lstlisting}\nreal tail\n',
+        );
+
+        yield* writeAndSplitDocuments([
+          'Here is how to answer:',
+          '````markdown',
+          '```latex',
+          'EXAMPLE',
+          '```',
+          '````',
+          '```latex',
+          'REAL',
+          '```',
+        ]);
+        yield* expectWritten('paper.tex', 'REAL\n');
+      }).pipe(Effect.provide(nodePlatformLayer)),
+  );
+
   it.effect(
     'leaves an unlabeled block unmatched when identical base files make the match ambiguous',
     () =>

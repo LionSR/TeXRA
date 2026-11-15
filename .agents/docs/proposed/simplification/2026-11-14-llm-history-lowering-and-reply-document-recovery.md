@@ -165,6 +165,15 @@ lines, which exists only for step 5), and most of
 is the worse one: a wrong guess writes prose or a scratch draft into a
 user's file as if it were the answer, and the round reads as a success.
 
+Fence recognition for steps 3 and 5 is now markdown-it's
+(`collectLatexFencedBlocks` reads its `fence` tokens), which fixed two
+defects of the hand-written scanner: a line such as ` ```python ` inside a
+LaTeX fence closed it, silently truncating the document there (CommonMark
+closes a fence only with a bare delimiter, a rule the line-level
+`isClosingMarkdownFence` step 2 uses now follows too), and a ` ```latex `
+example nested inside a four-backtick wrapper was collected as a document of
+its own. The steps themselves and their order are unchanged.
+
 ### A stricter protocol
 
 Three options, from least to most change:
