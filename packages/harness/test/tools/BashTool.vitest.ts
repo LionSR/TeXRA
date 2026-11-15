@@ -32,6 +32,7 @@ import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { Inbox } from '@agent/followUp/Inbox';
 import { SessionViewAccess } from '@shared/session/runHistory';
+import { outputOf } from '@test/support/toolResultFields';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
@@ -92,7 +93,7 @@ const BASH_PLATFORM_OPTIONS = {
 
 /** The run id a background launch reports in its output. */
 function launchedRunId(result: ToolResult): RunId | undefined {
-  const reported = /Run ID: (\S+)/.exec(String(result.output ?? ''))?.[1];
+  const reported = /Run ID: (\S+)/.exec(String(outputOf(result) ?? ''))?.[1];
   return reported === undefined
     ? undefined
     : Schema.decodeSync(RunIdSchema)(reported);
@@ -219,7 +220,7 @@ layer(
             ),
           );
 
-          const [head] = String(result.output ?? '').split('\n\n[... ');
+          const [head] = String(outputOf(result) ?? '').split('\n\n[... ');
           assert.equal(head, 'a'.repeat(3_999));
         }),
     );

@@ -4,6 +4,7 @@ import { Effect } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
+import { outputOf } from '@test/support/toolResultFields';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { ReadFileTool } from '@tools/ReadTool';
@@ -45,8 +46,9 @@ layer(SessionGraph.hosted)('read_file line ranges', (it) => {
         const result = yield* callRead({ path: 'small.txt', range });
 
         expect(result.summary).toBe(summary);
-        for (const line of contains) expect(result.output).toContain(line);
-        for (const line of excludes) expect(result.output).not.toContain(line);
+        for (const line of contains) expect(outputOf(result)).toContain(line);
+        for (const line of excludes)
+          expect(outputOf(result)).not.toContain(line);
       }),
     );
 
@@ -60,7 +62,7 @@ layer(SessionGraph.hosted)('read_file line ranges', (it) => {
           });
 
           expect(result.summary).toBe('Read lines 2-2001 of large.txt');
-          expect(result.output).toContain('...(truncated, 499 more lines)');
+          expect(outputOf(result)).toContain('...(truncated, 499 more lines)');
         }),
     );
   });

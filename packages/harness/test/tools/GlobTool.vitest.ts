@@ -6,6 +6,7 @@ import { Glob } from 'glob';
 
 import { expect, vi } from 'vitest';
 
+import { errorOf, outputOf } from '@test/support/toolResultFields';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
@@ -80,7 +81,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               );
 
               expect(result).toMatchObject({ status: 'executed' });
-              expect(result.output).toContain('(no matches)');
+              expect(outputOf(result)).toContain('(no matches)');
             }),
           );
         }),
@@ -99,7 +100,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 const result = yield* GlobTool.call({ pattern });
 
                 expect(result.status).toBe('error');
-                expect(result.error).toContain(
+                expect(errorOf(result)).toContain(
                   'must stay under the search directory',
                 );
               }
@@ -137,7 +138,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                   });
 
                   expect(result).toMatchObject({ status: 'executed' });
-                  expect(result.output).toContain('external.tex');
+                  expect(outputOf(result)).toContain('external.tex');
                 }),
               );
             }),

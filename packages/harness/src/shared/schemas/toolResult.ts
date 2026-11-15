@@ -127,7 +127,6 @@ const ExecutedResultFieldsSchema = Schema.Struct({
   summary: Schema.optional(Schema.String),
   /** End the current model turn after this successful tool result is paired. */
   endTurn: Schema.optional(Schema.Boolean),
-  error: Schema.optional(Schema.Undefined),
   /** Records of edits made during tool run */
   edits: Schema.optional(Schema.Array(EditRecordSchema)),
   /** The files the call read, spelled as `edits[].path` spells a file: a
@@ -175,9 +174,6 @@ const ErrorToolResultSchema = Schema.Struct({
   name: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
   /** Brief summary for human-facing logs */
   summary: Schema.optional(Schema.String),
-  output: Schema.optional(Schema.Undefined),
-  edits: Schema.optional(Schema.Undefined),
-  files: Schema.optional(Schema.Undefined),
   ...ToolResultSharedFields,
 });
 
