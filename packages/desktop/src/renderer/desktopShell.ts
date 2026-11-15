@@ -21,6 +21,7 @@ import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
+import { inlineRenameField } from '@ui/wa/inlineRename';
 import { afterDropdownHides } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type { Shell } from './shell';
@@ -122,26 +123,13 @@ function projectSection(
     <div class="shell-project-item ${active ? 'is-active' : ''}">
       ${
         model.renamingProjectKey === key
-          ? html`<input
-              class="shell-project-row shell-project-rename inline-rename"
-              aria-label="Project display name"
-              maxlength="80"
-              .value=${name}
-              @keydown=${(event: KeyboardEvent) => {
-                event.stopPropagation();
-                if (
-                  event.key === 'Enter' &&
-                  event.currentTarget instanceof HTMLInputElement
-                )
-                  callbacks.onRenameProject?.(key, event.currentTarget.value);
-                if (event.key === 'Escape')
-                  callbacks.onRenameProject?.(key, null);
-              }}
-              @blur=${(event: FocusEvent) => {
-                if (event.currentTarget instanceof HTMLInputElement)
-                  callbacks.onRenameProject?.(key, event.currentTarget.value);
-              }}
-            />`
+          ? inlineRenameField({
+              value: name,
+              label: 'Project display name',
+              className: 'shell-project-row shell-project-rename',
+              maxLength: 80,
+              onFinish: (value) => callbacks.onRenameProject?.(key, value),
+            })
           : html`<wa-button
               type="button"
               class="shell-project-row btn-ghost is-row-content"

@@ -11,8 +11,8 @@ import {
   formatResultCount,
 } from '@texra-ai/harness/schemas';
 import { isWorking } from '@texra-ai/harness/schemas';
-import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
-import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
+import { keyHintText } from '@cli/tui/ui/KeyHints';
+import { SEPARATOR, STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import {
   firstFittingCandidate,
@@ -408,13 +408,13 @@ function fitStatusBarLeftSegments(
 }
 
 // Bindings use the shared KeyHints vocabulary (`key action` joined with
-// KEY_HINT_SEPARATOR) so the status bar and modal footers read as one system.
+// SEPARATOR) so the status bar and modal footers read as one system.
 function statusBarBindingRow(
   bindings: readonly (string | false | undefined)[],
 ): string {
   return bindings
     .filter((binding): binding is string => !!binding)
-    .join(KEY_HINT_SEPARATOR);
+    .join(SEPARATOR);
 }
 
 // Every bindings row below is a widest-first `firstFittingCandidate` cascade.

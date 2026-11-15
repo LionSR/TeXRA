@@ -39,6 +39,7 @@ import type {
   AgentDelegationScope,
 } from '@texra-ai/harness/host';
 import type { RunView } from '@texra-ai/harness/schemas';
+import { SEPARATOR } from '@cli/tui/ui/glyphs';
 
 // ---------------------------------------------------------------------------
 // types
@@ -523,7 +524,9 @@ export function setTransientNotice(
   options: TransientNoticeOptions = {},
 ): void {
   const ttlMs = options.ttlMs ?? DEFAULT_TRANSIENT_NOTICE_TTL_MS;
-  const singleLineText = text.replaceAll(/[ \t]*\r?\n[ \t]*/g, ' · ').trim();
+  const singleLineText = text
+    .replaceAll(/[ \t]*\r?\n[ \t]*/g, SEPARATOR)
+    .trim();
   const notice: TransientNotice =
     options.kind === 'exit'
       ? { kind: 'exit', text: singleLineText, resumeId: options.resumeId }

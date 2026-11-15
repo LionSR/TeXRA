@@ -6,8 +6,17 @@ import {
   ANSI_ESCAPE_START,
   ansiEscapeEnd,
 } from '@cli/runtime/terminal/ansiEscapes';
+import { LIST_BULLET, QUOTE_BAR } from '@cli/tui/ui/glyphs';
 
 const MIN_WRAP_WIDTH = 1;
+
+// The list and quote prefixes the Markdown renderer (`ansiMarkdown`) emits,
+// built from the same glyphs so a marker change cannot break continuation
+// indents. Neither glyph is a regex metacharacter.
+const LIST_LINE = new RegExp(
+  String.raw`^((?:${QUOTE_BAR})*)( {2,}(?:${LIST_BULLET}|\d+[.)]) )`,
+);
+const QUOTE_LINE = new RegExp(`^((?:${QUOTE_BAR})+)`);
 
 function isAnsiControlStart(char: string | undefined): boolean {
   return char === ANSI_ESCAPE_START || char === ANSI_C1_CSI_START;
@@ -45,7 +54,7 @@ function markdownContinuationPrefix(line: string):
     }
   | undefined {
   const plain = stripAnsi(line);
-  const list = plain.match(/^((?:│ )*)( {2,}(?:•|\d+[.)]) )/);
+  const list = plain.match(LIST_LINE);
   if (list) {
     const quote = list[1];
     const marker = list[2];
@@ -62,7 +71,7 @@ function markdownContinuationPrefix(line: string):
     };
   }
 
-  const quote = plain.match(/^((?:│ )+)/);
+  const quote = plain.match(QUOTE_LINE);
   if (quote) {
     const prefixWidth = quote[1].length;
     const first = splitRawAtVisiblePrefix(line, prefixWidth);

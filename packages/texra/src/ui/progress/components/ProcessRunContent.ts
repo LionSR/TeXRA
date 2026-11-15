@@ -56,7 +56,7 @@ export class ProcessRunContent extends BaseRunContent {
       }
 
       .prompt {
-        color: var(--wa-color-terminal-ansi-green, var(--color-success, #0a0));
+        color: var(--wa-color-terminal-ansi-green);
         font-weight: var(--font-weight-semibold);
         user-select: none;
         flex: 0 0 auto;

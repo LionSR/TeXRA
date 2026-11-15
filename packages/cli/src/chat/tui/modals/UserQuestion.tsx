@@ -13,7 +13,7 @@ import {
   selectVisibleInlineOverflowText,
 } from '@cli/tui/overflowText';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
-import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
+import { KeyHints, type KeyHint, NAVIGATE_HINT } from '@cli/tui/ui/KeyHints';
 import { Select } from '@cli/tui/ui/Select';
 import { COLOR_SUCCESS } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
@@ -97,10 +97,7 @@ function userQuestionChoiceHints({
   readonly optionCount: number;
   readonly shortcutAction: string;
 }): KeyHint[] {
-  return [
-    { key: '↑/↓', action: 'navigate' },
-    { key: `1-${optionCount}`, action: shortcutAction },
-  ];
+  return [NAVIGATE_HINT, { key: `1-${optionCount}`, action: shortcutAction }];
 }
 
 function isCompactUserQuestionRows(availableRows: number | undefined): boolean {

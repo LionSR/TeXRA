@@ -6,7 +6,7 @@ import {
   COLOR_SUCCESS,
   COLOR_WARNING,
 } from '@cli/tui/ui/colors';
-import { STATUS_DOT, TOKENS_GENERATED } from '@cli/tui/ui/glyphs';
+import { STATUS_DOT, TOKENS_GENERATED, SEPARATOR } from '@cli/tui/ui/glyphs';
 import type { RunTone } from '@ui/copy/runStatus';
 
 // Local imports - TUI state
@@ -66,7 +66,7 @@ export function childRowMetadataText({
       ? `${TOKENS_GENERATED}${formatCompactTokenCount(outputTokens)}`
       : undefined;
   const parts = [elapsed, toolCalls, tokens].filter(Boolean);
-  return parts.length > 0 ? parts.join(' · ') : undefined;
+  return parts.length > 0 ? parts.join(SEPARATOR) : undefined;
 }
 
 /** Compact "waiting on what" display for a row. The first kind and overflow

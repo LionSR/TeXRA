@@ -22,6 +22,7 @@ import { designTokens, commonViewStyles } from '@ui/styles';
 import { statusIndicatorStyles } from '@ui/styles/statusIndicatorStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { afterDropdownHides, selectedItemValue } from '@ui/wa/selectTemplates';
+import { inlineRenameField } from '@ui/wa/inlineRename';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import '@ui/progress/components/ToolTimer';
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -271,20 +272,14 @@ export class RunHeader extends LitElement {
 
   private startRename(): void {
     this.renaming = true;
-    void this.updateComplete.then(() => {
-      const input =
-        this.renderRoot.querySelector<HTMLInputElement>('.rename-input');
-      input?.focus();
-      input?.select();
-    });
   }
 
   /** Enter or leaving the field saves a changed title; Esc keeps the old. */
-  private finishRename(run: RunView, input: HTMLInputElement, save: boolean) {
+  private finishRename(run: RunView, value: string | null) {
     if (!this.renaming) return;
     this.renaming = false;
-    const title = input.value.trim();
-    if (!save || title === '' || title === run.title) return;
+    const title = value?.trim();
+    if (!title || title === run.title) return;
     this.dispatchEvent(
       SessionUiEvents.runtime({ kind: 'run.rename', runId: run.id, title }),
     );
@@ -292,21 +287,12 @@ export class RunHeader extends LitElement {
 
   private renderTitle(run: RunView): TemplateResult {
     if (this.renaming)
-      return html`<input
-        class="rename-input inline-rename"
-        aria-label="Task title"
-        .value=${run.title}
-        @keydown=${(event: KeyboardEvent) => {
-          const input = event.target;
-          if (!(input instanceof HTMLInputElement)) return;
-          if (event.key === 'Enter') this.finishRename(run, input, true);
-          else if (event.key === 'Escape') this.finishRename(run, input, false);
-        }}
-        @blur=${(event: FocusEvent) => {
-          if (event.target instanceof HTMLInputElement)
-            this.finishRename(run, event.target, true);
-        }}
-      />`;
+      return inlineRenameField({
+        value: run.title,
+        label: 'Task title',
+        className: 'rename-input',
+        onFinish: (value) => this.finishRename(run, value),
+      });
     return html`<h1 id=${ELEMENT_IDS.ACTIVE_RUN_NAME} data-run=${run.id}>
         ${run.title}
       </h1>

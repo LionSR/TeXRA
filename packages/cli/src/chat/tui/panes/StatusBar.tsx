@@ -7,7 +7,7 @@ import { appSignalStream, readModelOptions } from '@texra-ai/harness/host';
 import { isEmptyUsage, toErrorMessage } from '@texra-ai/harness/schemas';
 import { isWorking } from '@texra-ai/harness/schemas';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
-import { COLOR_ERROR } from '@cli/tui/ui/colors';
+import { COLOR_BADGE_TEXT, COLOR_ERROR } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { SubscriptionUsageService } from '@texra/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 
@@ -278,7 +278,9 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
                 backgroundColor={segment.badgeColor ?? COLOR_ERROR}
               >
                 {' '}
-                <Text color="black">{segment.text.toUpperCase()}</Text>{' '}
+                <Text color={COLOR_BADGE_TEXT}>
+                  {segment.text.toUpperCase()}
+                </Text>{' '}
               </Text>
             ) : (
               <Text

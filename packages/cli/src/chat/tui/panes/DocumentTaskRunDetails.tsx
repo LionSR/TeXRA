@@ -14,7 +14,13 @@ import {
 } from '@texra-ai/harness/schemas';
 import { safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import { COLOR_BORDER, COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
-import { CROSS, PENDING_BOX, TICK, WARNING } from '@cli/tui/ui/glyphs';
+import {
+  CROSS,
+  PENDING_BOX,
+  TICK,
+  WARNING,
+  LIST_BULLET,
+} from '@cli/tui/ui/glyphs';
 import {
   compileFailuresOf,
   formatRoundLabel,
@@ -116,7 +122,7 @@ function documentTaskRunDetailGroups(
           key: `output:${round}:${file.location.absolutePath}:${index}`,
           // Neutral bullet, not `›` — POINTER means "focused row / your
           // input" everywhere else, and these are static file rows.
-          text: `    • ${safeTerminalText(
+          text: `    ${LIST_BULLET} ${safeTerminalText(
             file.location.kind === 'external'
               ? fileLocationDisplayPath(file.location)
               : outputDisplayName(file),
