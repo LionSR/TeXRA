@@ -25,7 +25,7 @@ import {
 interface SettingsAgentCatalogEntry {
   name: string;
   source: AgentSource;
-  /** The plugins' blocks its file holds (the documents plugin's `task`). */
+  /** The plugins' blocks its file holds (the theory plugin's `task`). */
   blocks: Readonly<Record<string, unknown>>;
   description?: string;
   path?: string;

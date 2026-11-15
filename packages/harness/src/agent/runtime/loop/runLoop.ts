@@ -19,7 +19,7 @@
  * ended (`turn.end`) launched again waits for its input.
  *
  * A run opened on a script (`AgentConfig.script`: a background script, a
- * task's recipe) opens on that one call, handed down in its opening batch
+ * plugin's program) opens on that one call, handed down in its opening batch
  * instead of asked of its model; `RunState.handedDown` ends the turn.
  */
 
@@ -51,6 +51,7 @@ import { mediaInputParts } from '../run/mediaInput';
 import type { InputPart } from '@texra-ai/llm';
 import { claimFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
+import { scriptCallOf } from '../programRun';
 import { resumeLeftoverChildren } from '../leftoverChildren';
 import {
   appendRow,
@@ -185,8 +186,8 @@ export const openToolUse = Effect.fn('toolUse.open')(function* (
   const { content, offered, handed } = yield* Effect.interruptible(
     Effect.gen(function* () {
       // A script's run renders no prompt: what it runs is its call.
-      const { script } = run.config;
-      if (script != null) {
+      if (run.config.script != null) {
+        const script = yield* scriptCallOf(run.config.script);
         const step = yield* stepFor(run, opening, false);
         const content: InputPart[] = [
           { kind: 'text', text: `Run the script "${script.title}".` },
@@ -500,7 +501,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     output: {
       response: turnResponse(at),
       files: [...at.edited],
-      // A recipe's return value, which its block reads (`AgentBlock.result`).
+      // A program's return value, which its registration reads (`Program.result`).
       ...(at.structured?.value !== undefined && {
         structured: at.structured.value,
       }),

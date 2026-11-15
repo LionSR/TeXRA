@@ -37,7 +37,6 @@ export type DefineToolOptions<T, R = never> = Required<
   Pick<
     ITool,
     | 'hostCapability'
-    | 'launchesTasks'
     | 'lane'
     | 'scriptGlobal'
     | 'replay'

@@ -142,7 +142,7 @@ task:
 
 ### <wa-icon library="texra" name="link"></wa-icon> Chaining agents together
 
-After a document task finishes, its result lists the output files, so follow-up steps can reuse them without another trip through the file picker. For example, an orchestrator agent can run `polish` with the `document_task` tool and pass the resulting files directly to a `correct` task in one session.
+After a document task finishes, its result lists the output files, so follow-up steps can reuse them without another trip through the file picker. For example, an orchestrator agent can run `polish` with the `program` tool (`name: 'revise'`) and pass the resulting files directly to a `correct` task in one session.
 
 ### <wa-icon library="texra" name="tools"></wa-icon> Agents with tools
 

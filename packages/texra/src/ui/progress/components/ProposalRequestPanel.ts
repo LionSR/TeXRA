@@ -319,7 +319,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   private renderOptionBadges(
     data: AgentProposalRequest,
   ): TemplateResult | typeof nothing {
-    // Options the documents plugin cannot read show no flags.
+    // Options the theory plugin cannot read show no flags.
     const options = Result.getOrUndefined(
       Schema.decodeUnknownResult(DocumentTaskOptionsSchema)(data.options ?? {}),
     );

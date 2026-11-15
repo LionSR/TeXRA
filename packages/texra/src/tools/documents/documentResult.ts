@@ -1,6 +1,6 @@
 /**
  * How a document task's run reads to whoever launched it
- * (`DOCUMENT_TASK_RESULT`, the documents plugin's `AgentBlock.result`), read
+ * (`DOCUMENT_TASK_RESULT`, the theory plugin's `Program.result`), read
  * from its documents row: its delivery to the launching model (every
  * revision's outputs, the proposed revision's diffs, and the compile
  * failures), the files it wrote for a script's summary, and the diffs
@@ -38,8 +38,8 @@ import {
 } from '@texra/shared/plugins/documents';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import {
-  type AgentBlockResult,
-  type RecipeChange,
+  type ProgramResult,
+  type ProgramChange,
   withLogChannel,
 } from '@texra-ai/harness/plugins';
 
@@ -169,7 +169,7 @@ function deliveredFilePath(
 function documentChanges(
   value: DocumentsResult,
   roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>,
-): RecipeChange[] {
+): ProgramChange[] {
   return value.outputs
     .toSorted((a, b) => a.round - b.round)
     .map((output) => ({
@@ -183,7 +183,7 @@ function documentChanges(
 
 /** How a document task's run reads to whoever launched it: from its
  *  documents row. */
-export const DOCUMENT_TASK_RESULT: AgentBlockResult<DocumentsOutput> =
+export const DOCUMENT_TASK_RESULT: ProgramResult<DocumentsOutput> =
   Object.freeze({
     fact: DOCUMENTS_OUTPUT_KIND,
     delivery: (value: DocumentsOutput, runId: RunId) =>

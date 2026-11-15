@@ -135,20 +135,26 @@ const openRealm = Effect.fn('worker.openRealm')(function* (
     (runtime) => Effect.sync(() => runtime.dispose()),
   );
   // A specifier names a module whole: one the host passed loads, any
-  // other (a relative path included) rejects the import.
+  // other (a relative path included) rejects the import. The specifier
+  // is looked up as written: QuickJS's own normalizer would resolve a
+  // relative one against the importer first, so `./builtIn:goal` would
+  // load `builtIn:goal`.
   const offered = Object.keys(input.modules).map((name) => `"${name}"`);
-  runtime.setModuleLoader((name) => {
-    const source = Object.hasOwn(input.modules, name)
-      ? input.modules[name]
-      : undefined;
-    return (
-      source ?? {
-        error: new Error(
-          `No module "${name}" is offered to this script; it may import ${offered.length === 0 ? 'none' : offered.join(', ')}.`,
-        ),
-      }
-    );
-  });
+  runtime.setModuleLoader(
+    (name) => {
+      const source = Object.hasOwn(input.modules, name)
+        ? input.modules[name]
+        : undefined;
+      return (
+        source ?? {
+          error: new Error(
+            `No module "${name}" is offered to this script; it may import ${offered.length === 0 ? 'none' : offered.join(', ')}.`,
+          ),
+        }
+      );
+    },
+    (_importer, specifier) => specifier,
+  );
   const context = yield* Effect.acquireRelease(
     Effect.try({ try: () => runtime.newContext(), catch: ensureError }),
     (context) => Effect.sync(() => context.dispose()),

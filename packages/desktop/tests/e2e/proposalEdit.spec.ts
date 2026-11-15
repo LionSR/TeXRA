@@ -89,10 +89,11 @@ test('a proposal edited in the app runs its child with the edits, Back leaves it
   const { home, dataRoot, workspaceRoot: work } = profile;
   const agents = join(dataRoot, 'v1', 'global-storage', 'custom_agents');
   mkdirSync(agents, { recursive: true });
-  // The asking task: its scripted model calls `document_task` with this
+  // The asking task: its scripted model calls `program` with this
   // input. The model is one the form lists, with an effort, so Run again
   // keeps both.
   const proposal = {
+    name: 'revise',
     agentName: 'revise_validation',
     model: 'openai/gpt-6.1-sol@high',
     inputFiles: ['draft.tex'],
@@ -100,7 +101,7 @@ test('a proposal edited in the app runs its child with the edits, Back leaves it
   };
   writeFileSync(
     join(agents, 'propose-validation.yaml'),
-    `name: propose_validation\ndescription: Propose a document task over the draft.\ntools: [document_task]\n\nprompt: |\n  GOLDEN-APPROVAL document_task ${JSON.stringify(proposal)}\n`,
+    `name: propose_validation\ndescription: Propose a document task over the draft.\ntools: [program]\n\nprompt: |\n  GOLDEN-APPROVAL program ${JSON.stringify(proposal)}\n`,
   );
   // The document task it proposes: one revision, which the scripted model
   // answers with a document.
@@ -336,9 +337,9 @@ test('a proposal edited in the app runs its child with the edits, Back leaves it
     mediaFiles: [],
     workingDirectory: work,
     script: {
-      kind: 'recipe',
-      block: 'task',
-      title: 'custom:revise_validation',
+      kind: 'program',
+      name: 'revise',
+      args: { agent: 'custom:revise_validation' },
     },
   });
   saveArtifact('child-run-config.json', childConfig);
@@ -370,8 +371,8 @@ test('a proposal edited in the app runs its child with the edits, Back leaves it
   });
   await page.getByRole('button', { name: 'Start task', exact: true }).click();
 
-  // A new task runs the child's setup: the same recipe (which names the
-  // agent's exact entry) on the same model, instruction and files, in
+  // A new task runs the child's setup: the same program (whose arguments
+  // name the agent's exact entry) on the same model, instruction and files, in
   // the project folder, where a form launch runs by default.
   await expect
     .poll(() => runsStartedBy(null), { timeout: 60_000 })

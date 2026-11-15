@@ -1,9 +1,9 @@
 /**
- * What the documents plugin reads of an agent's `task:` block
+ * What the theory plugin reads of an agent's `task:` block
  * (`DOCUMENT_TASK_BLOCK`, `@texra/shared/plugins/documents`): the task, its
  * `files` template variables, the options every launcher lists with their
  * revision counts, and the `.bib` check its first revision runs. An agent
- * with the block is also launchable as a document task, which its recipe
+ * with the block is also launchable as a document task, which its program
  * (`documentRecipe.ts`) runs over the persona; nothing outside this plugin
  * reads inside it.
  */

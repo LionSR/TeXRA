@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import { recipeBlockOf, type ResumeRefusal, type RunId } from '@shared/schemas';
+import { programOf, type ResumeRefusal, type RunId } from '@shared/schemas';
 import { continuesFromRows } from '@shared/session/runActions';
 import { runReadRefusal, SessionLog } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -24,7 +24,7 @@ type ResumabilityDecision =
 /**
  * The one answer to "can this run resume?". An opened run continues whatever its outcome: rows live
  * until deletion, so a failed or cancelled run continues from where they
- * left it. A task that ended does not: its recipe's result is
+ * left it. A task that ended does not: its program's result is
  * settled, so it runs again instead. One holding a fact of a plugin this
  * process does not load waits for it: the plugin's state is part of where
  * it continues from.
@@ -61,7 +61,7 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
     facts?.start == null ||
     !continuesFromRows({
       ended: facts.end !== null,
-      recipe: facts.config === null ? null : recipeBlockOf(facts.config),
+      program: facts.config === null ? null : programOf(facts.config),
       identity: facts.start.identity,
     })
   )

@@ -29,8 +29,11 @@ import type { AppState } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { GlobalValues } from '@platform/processRuntime';
 import type { ConfigProvider } from '@shared/config/settings';
+import type { AgentCatalog } from '@agent/index/agentCatalog';
 import {
   AgentDefinitionSchema,
+  type AgentProposal,
+  type JsonValue,
   type PluginRequest,
   type RequestDecision,
   type RunId,
@@ -138,19 +141,16 @@ export interface RequestDecisionRecord {
  * catalog scan checks a file's block against `schema`
  * and keeps the parsed value on the entry (`AgentEntry.blocks`); a file
  * whose block fails it, or that holds a key no listed plugin owns, is
- * refused like any other invalid definition. An agent with a block is a
- * task: it declares no tools, delegation marks it for the tools that
- * `launchesTasks`, and it runs as one only through a launch its plugin
- * builds (a `script` of kind `recipe`). The harness reads nothing inside it.
+ * refused like any other invalid definition. An agent with a block declares
+ * no tools, and delegation marks it for the `program` tool: a program of
+ * the block's plugin runs it. The harness reads nothing inside it.
  */
-export interface AgentBlock<A = unknown, R = unknown> {
+export interface AgentBlock<A = unknown> {
   /** The key in an agent file: unique across the plugin list, and never a
    *  key of the persona itself. */
   readonly key: string;
   /** The block as written, to its value with defaults applied. */
   readonly schema: Schema.Codec<A, unknown>;
-  /** How a run of this block's recipe reads to whoever launched it. */
-  readonly result?: AgentBlockResult<R>;
   /** The files the block binds, relative to its agent file: part of the
    *  agent, so a customized copy carries them and the file's digest covers
    *  them. */
@@ -158,13 +158,49 @@ export interface AgentBlock<A = unknown, R = unknown> {
 }
 
 /**
- * How a completed recipe run reads: to the launching model, and to a
+ * One of a plugin's script modules that a person or a model starts by name
+ * (`Plugin.programs`): the module's default export is
+ * `async (args) => result`, and a run opened on it
+ * (`AgentConfig.script` of kind `program`) is a script run that imports the
+ * module and calls that export with the launch's `args`. The plugin wrote
+ * it, not a model, so the launch that chose it granted it: its tools are
+ * the listed ones past any switch, its `agent` calls run under the launch's
+ * approval, and its prompts and files pass as written.
+ */
+export interface Program<R = unknown> {
+  /** One line: what the program does and the `args` it reads. The script
+   *  tool's description lists it. */
+  readonly description: string;
+  /** The tools its run is offered, by name. */
+  readonly tools: readonly string[];
+  /** How a completed run of it reads to whoever launched it. Without one,
+   *  the run delivers its reply alone. */
+  readonly result?: ProgramResult<R>;
+  /**
+   * What a launch through the `program` tool adds to the child's config,
+   * from the launch as approved: the `args` its script is called with (the
+   * approved `options` when the program has no `configure`) and the output
+   * files it writes when the launch names none. A failure refuses the
+   * launch with its message.
+   */
+  readonly configure?: (approved: AgentProposal) => Effect.Effect<
+    {
+      readonly args: Readonly<Record<string, JsonValue>>;
+      readonly outputFiles: readonly string[];
+    },
+    Error,
+    AgentCatalog
+  >;
+}
+
+/**
+ * How a completed program run reads: to the launching model, and to a
  * script's summary of the files its calls wrote. What it reports is the
  * run's latest row of the plugin's own `fact` kind (`Plugin.factKinds`),
- * the one record of it; the recipe's return value is not read. The harness
+ * the one record of it; the program's return value is not read. The harness
  * reads the row only through these.
  */
-export interface AgentBlockResult<R = unknown> {
+export interface ProgramResult<R = unknown> {
   /** The plugin's row kind that records what the run did, and the schema
    *  its value decodes with. A completed run with no such row, or one that
    *  fails the schema, is delivered as an invalid result naming the issue,
@@ -176,20 +212,20 @@ export interface AgentBlockResult<R = unknown> {
   };
   /** The delivery body inside the harness's own result envelope. */
   delivery(value: R, runId: RunId): readonly string[];
-  /** The files the recipe wrote, in the order it wrote them (a document
+  /** The files the program wrote, in the order it wrote them (a document
    *  revised twice appears twice, the later entry its latest): the files a
    *  parent may read of its child's storage, and a script's summary. */
   changes(
     value: R,
     roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>,
-  ): readonly RecipeChange[];
+  ): readonly ProgramChange[];
 }
 
-/** One file a recipe wrote, as a script summary counts it. */
-export interface RecipeChange {
+/** One file a program wrote, as a script summary counts it. */
+export interface ProgramChange {
   /** The workspace path the file replaces. */
   readonly path: string;
-  /** The file the recipe wrote. */
+  /** The file the program wrote. */
   readonly absolutePath: string;
   /** The file it was diffed against, when it continues one: an earlier
    *  call's `absolutePath` continues that call's row. */
@@ -256,6 +292,8 @@ export interface ToolTable {
   readonly get: (name: string) => ITool<Error, PluginToolServices> | undefined;
   /** The agent-file blocks the plugins own, by key (`Plugin.agentBlock`). */
   readonly blocks: ReadonlyMap<string, AgentBlock>;
+  /** The programs the plugins register, by name (`Plugin.programs`). */
+  readonly programs: ReadonlyMap<string, Program>;
 }
 
 /** The probe of a switched plugin that names none: it needs nothing. */
@@ -267,8 +305,9 @@ const NEEDS_NOTHING: NonNullable<Plugin['availability']> = {
  * The table over `plugins`, which the app lists in order. A list that
  * spells an id other than lowercase letters, digits and dashes, repeats a
  * plugin id, a tool name or a script module's name, claims an agent-file
- * block another plugin or the persona owns, or lacks a plugin another
- * `requires` is a defect of the list, rejected when it is built. A plugin
+ * block another plugin or the persona owns, registers a program that is not
+ * one of its own script modules, or lacks a plugin another `requires` is a
+ * defect of the list, rejected when it is built. A plugin
  * with a switch and no availability probe is probed as needing nothing.
  */
 export function toolTable(plugins: readonly Plugin[]): ToolTable {
@@ -316,7 +355,16 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
   );
   if (new Set(modules).size !== modules.length)
     refuse('two plugins ship a script module of one name.');
-  return { entries, get: (name) => byName.get(name), blocks };
+  // A program is started by its module's name, which the check above keeps
+  // unique across the list.
+  const programs = new Map<string, Program>();
+  for (const { id, programs: own = {}, scriptModules = {} } of plugins)
+    for (const [name, program] of Object.entries(own)) {
+      if (!Object.hasOwn(scriptModules, name))
+        refuse(`program ${name} of plugin ${id} is not one of its modules.`);
+      programs.set(name, program);
+    }
+  return { entries, get: (name) => byName.get(name), blocks, programs };
 }
 
 /** The process's plugin table, which every run's offered tools come from. */

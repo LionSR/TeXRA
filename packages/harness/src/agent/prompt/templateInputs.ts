@@ -6,7 +6,7 @@ import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { parseFrontmatter } from '@agent/memory/memoryMeta';
 import { displayToStoragePath } from '@agent/memory/memoryLayout';
 import {
-  isTaskConfig,
+  programOf,
   type AgentConfig,
   type AttachedMemoryMiss,
 } from '@shared/schemas';
@@ -149,10 +149,11 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
   return {
     inputs,
     // What the launch instruction activates (`/skills`): each step resolves
-    // the names against its own catalog; a task's recipe's, none.
-    activated: isTaskConfig(agentConfig)
-      ? []
-      : activatedSkillNames([agentConfig.instruction]),
+    // the names against its own catalog; a program's, none.
+    activated:
+      programOf(agentConfig) !== null
+        ? []
+        : activatedSkillNames([agentConfig.instruction]),
     attachedMemories: attachedMemories.xml,
     attachedMemoryMisses: attachedMemories.misses,
   };

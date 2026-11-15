@@ -317,7 +317,7 @@ function formatScanFailure(error: unknown): string {
  * The entry a definition makes: its persona with the schema's defaults
  * applied, and the plugins' blocks it holds, the one validation a launch
  * reads, for a file and an inline persona alike. An agent with a block is a
- * task, which its plugin's recipe runs over a text-only persona, so a
+ * task, which its plugin's program runs over a text-only persona, so a
  * definition that names tools beside a block is refused rather than run with
  * tools it would never be offered. Throws the validation's error.
  */

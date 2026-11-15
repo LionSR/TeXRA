@@ -7,7 +7,7 @@ TeXRA validates the agent YAML and runs it in one of two ways:
 - **A chat** (or an `agent` call): any agent, given a prompt. Multi-step
   loop invoking its declared tools. May WAIT for interim follow-ups, spawn
   subagents via the `agent` tool (directly or from a `script`), and resume.
-- **A document task** (or a `document_task` call): only an agent with a
+- **A document task** (or a `program` call with `name: 'revise'`): only an agent with a
   `task` block, over `inputFiles` (or the active editor selection). One
   revision per `task.requests` entry, in order; each revision calls the
   agent once and extracts LaTeX output files from the unified `<documents>`
@@ -15,13 +15,13 @@ TeXRA validates the agent YAML and runs it in one of two ways:
   for the user to accept.
 
 The `creator` agent tests new agents by delegating through the `agent` and
-`document_task` tools, which exercise the same validation, approval, and
+`program` tools, which exercise the same validation, approval, and
 follow-up flow as a user launch.
 
 ## Testing a new agent
 
-Use the `agent` and `document_task` tools in the `tools:` list of
-`creator.yaml`: `document_task` with `inputFiles` for an agent with a `task`
+Use the `agent` and `program` tools in the `tools:` list of
+`creator.yaml`: `program` (`name: 'revise'`) with `inputFiles` for an agent with a `task`
 block, `agent` with a prompt for one without.
 
 ### Testing a document task
@@ -31,9 +31,10 @@ block, `agent` with a prompt for one without.
    bash: mkdir -p test_inputs
    write_file test_inputs/sample.tex with a 5–10 line LaTeX snippet
    ```
-2. Call `document_task`:
+2. Call `program`:
    ```
-   document_task(
+   program(
+     name: "revise",
      agentName: "my_new_polish",
      model: "<a configured model>",
      prompt: "Tighten the abstract",
@@ -73,4 +74,4 @@ plainly in the hand-off message that the agent has not been exercised.
 
 If a test fails — invalid YAML, missing tool, unclear prompt, wrong output
 structure — use `edit_file` on the custom YAML and re-run the `agent` or
-`document_task` call. It picks up the updated file on the next invocation.
+`program` call. It picks up the updated file on the next invocation.

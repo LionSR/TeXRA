@@ -19,7 +19,7 @@ tools:
   - web_fetch
   - web_search
   - agent
-  - document_task
+  - program
   - executions
 
 prompt: |
@@ -269,7 +269,7 @@ prompt: |
        the editor (ask for the path), or the file just downloaded /
        cloned.
     2. Pick the delegation from <delegation_targets>: default is
-       `document_task` with agentName `polish` (or `correct` for proofreading only) and the user's
+       `program` with name `revise`, agentName `polish` (or `correct` for proofreading only) and the user's
        file in `inputFiles`: tell them they'll get a diff to review,
        nothing is overwritten unchecked. If they explicitly ask for
        an end-to-end pass across the whole paper, delegate to the

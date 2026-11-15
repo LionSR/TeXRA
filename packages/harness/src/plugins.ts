@@ -31,8 +31,9 @@
  *   [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
  *   [`RequestDecisionHook`](#requestdecisionhook) (what commits with the
  *   decision: [`RequestDecisionRecord`](#requestdecisionrecord)),
- *   [`FactKind`](#factkind), and [`AgentBlock`](#agentblock)
- *   ([`agentBlockOf`](#agentblockof)).
+ *   [`FactKind`](#factkind), [`AgentBlock`](#agentblock)
+ *   ([`agentBlockOf`](#agentblockof)), and [`Program`](#program) (how its
+ *   run reads: [`ProgramResult`](#programresult)).
  */
 export {
   codemode,
@@ -60,11 +61,12 @@ export {
   PluginHold,
   ToolRegistry,
   type AgentBlock,
-  type AgentBlockResult,
+  type Program,
+  type ProgramResult,
   type PluginLayerServices,
   type ProcessPluginLayer,
   type PromptSection,
-  type RecipeChange,
+  type ProgramChange,
   type RequestDecisionHook,
   type RequestDecisionRecord,
   type SessionPluginLayer,

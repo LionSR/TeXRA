@@ -36,9 +36,9 @@ literals.
 `code` is the body of an async function. `await agent(prompt, opts)` runs
 one agent and resolves to `{ response, files, structured?, runId, outcome,
 cost, spent }`: `response` is its reply, or `structured` holds a value when you pass
-`schema`. `await document_task(prompt, opts)` runs an agent's document task
-over `inputFiles` and resolves to `{ response, changes, runId, outcome,
-cost }`: `changes` lists every revision's files in order, each with `path`
+`schema`. `await program('revise', { agentName, prompt, inputFiles })` runs
+that agent's document task over `inputFiles` and resolves to
+`{ response, changes, runId, outcome, cost }`: `changes` lists every revision's files in order, each with `path`
 (the workspace file) and `absolutePath` (the revised copy, which you can pass
 to the next call).
 `Promise.all` runs calls together, `try`/`catch` recovers, `section(title)`
@@ -283,7 +283,7 @@ The return value comes back to you as JSON with the script's result, next to
 the last lines it logged. Return compact, structured results you can act on:
 the suspect claims with their reasons, counts of what passed, and anything
 that was not covered. Do not return prose for its own sake, and do not return
-whole documents; `document_task` calls already report their output files,
+whole documents; document tasks already report their output files,
 which you review and accept with `accept_run_files`.
 
 ## Scale and honesty

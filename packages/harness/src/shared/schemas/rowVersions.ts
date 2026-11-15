@@ -137,7 +137,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v6: no Copilot backend.
   // v7: the app's launch facts are an opaque `launch` record, not a `cli`
   // block (an earlier build's team and output fields would be dropped).
-  'run.config': { version: 7, listing: 'own' },
+  // v8: a plugin's script is a `program` named by its registration, with
+  // its `args`; no `recipe` kind with its source, block and options.
+  'run.config': { version: 8, listing: 'own' },
   // v2: no `shutdown` reason: a process that exits writes nothing for its
   // runs (an earlier build's shutdown stop would fail as damaged).
   'run.stop': { version: 2, listing: 'own' },

@@ -7,7 +7,7 @@ import type { RunRecord } from '@agent/core/definition/RunRecord';
 
 /**
  * Per-category config-field exclusions: a conversation (`agent`) hides the
- * task's file fields, a `task` hides its recipe's source. Unknown
+ * task's file fields, a `task` hides its program's source. Unknown
  * categories get no filtering.
  */
 const HIDDEN_CONFIG_FIELDS_BY_CATEGORY: Readonly<

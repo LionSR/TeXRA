@@ -274,14 +274,17 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
           failed([
             [
               `The script threw ${fault.name}: ${fault.message}`,
-              // The guest's own frames: the realm's bridge and natives
-              // locate nothing in the script.
+              // The guest's own frames, in the script or in a module it
+              // imported: the realm's bridge and natives locate nothing.
               ...(fault.stack ?? '')
                 .split('\n')
                 .map((line) => line.trim())
                 .filter(
                   (line) =>
-                    line.startsWith('at ') && line.includes('script.js'),
+                    line.startsWith('at ') &&
+                    ['script.js', ...Object.keys(scriptCalls.modules)].some(
+                      (file) => line.includes(file),
+                    ),
                 )
                 .slice(0, FAULT_FRAMES),
             ].join('\n    '),
@@ -338,7 +341,7 @@ export const ScriptTool = defineTool({
   // each settled call is handed back from its row, never run twice.
   replay: 'safe',
   description: SURFACE,
-  describe: (declared, modules) =>
+  describe: (declared, modules, programs) =>
     [
       SURFACE,
       // A module no tool's description names is found only here.
@@ -346,6 +349,16 @@ export const ScriptTool = defineTool({
         ? []
         : [
             `The modules you may import: ${modules.map((specifier) => `\`${specifier}\``).join(', ')}.`,
+          ]),
+      ...(programs.length === 0
+        ? []
+        : [
+            [
+              'The programs `program(name, opts)` starts:',
+              ...programs.map(
+                ({ name, description }) => `- \`${name}\`: ${description}`,
+              ),
+            ].join('\n'),
           ]),
       'The tools you declared, as TypeScript (more are callable: `searchTools` finds them):',
       [

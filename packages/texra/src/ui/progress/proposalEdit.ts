@@ -116,7 +116,7 @@ export function proposalLaunchPatch(
     proposalAgentOptions(data, run, host).find((option) =>
       isProposedAgent(option.value, data),
     )?.value ?? data.agent;
-  // Options the documents plugin cannot read open as its defaults.
+  // Options the theory plugin cannot read open as its defaults.
   const options =
     Result.getOrUndefined(
       Schema.decodeUnknownResult(DocumentTaskOptionsSchema)(data.options ?? {}),

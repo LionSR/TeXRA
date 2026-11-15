@@ -35,7 +35,7 @@ import { childAnswer } from './toolRowSections';
 import type { ToolRow as FoldedToolRow, TranscriptRow } from './transcriptRow';
 import { transcriptTimeline } from './transcriptTimeline';
 
-/** An `agent` call's agent as the card shows it: a recipe names its
+/** An `agent` call's agent as the card shows it: a program names its
  *  agents by `source:name` key, and the card shows the name. */
 const nameOf = (value: unknown): string | undefined => {
   const key = stringOf(value);

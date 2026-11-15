@@ -62,7 +62,7 @@ is the module map by concern. Run-loop rules are in
   process is, and its end; a native child is `executeAgent` for one cycle);
   `childRunBudget` (per-session concurrency);
   `ModelRetryGate` (process-shared recovery probes per model route);
-  `scriptRun`; `recipeResult`; `childDelivery`
+  `nativeSubagentStrategy`; `scriptRun`; `programRun`; `childDelivery`
   (what a child's end delivers, typed) and `deliveryEnvelope` (the one
   renderer of a delivery's XML envelope);
   `delegation/` (the child launches: the `agent` tool and `ChildRuns`, a

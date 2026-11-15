@@ -11,14 +11,14 @@ Normally the lead calls specialists one turn at a time, reads what comes back, a
 Three tools drive delegation:
 
 - `agent` runs a named agent with a prompt as a child of the lead's run.
-- `document_task` runs a named agent's document task over files as a child run.
-- `script` runs a short JavaScript program that can call `agent` and `document_task` many times.
+- `program` starts a program TeXRA ships as a child run. The one that runs a named agent's document task over files is `revise`.
+- `script` runs a short JavaScript program that can call `agent` and `program` many times.
 
 You do not write these calls yourself: the lead proposes them, you approve them, and the child runs appear in the progress view like any other delegation.
 
 ## When the lead reaches for a script
 
-Most coordination is the lead calling `agent` or `document_task` directly. It launches the independent calls in one turn, keeps working while they run, reads each result when it arrives as a follow-up, and routes the next step itself. The children do not talk to each other; everything passes through the lead. This is right whenever the next decision depends on reading the previous result.
+Most coordination is the lead calling `agent` or `program` directly. It launches the independent calls in one turn, keeps working while they run, reads each result when it arrives as a follow-up, and routes the next step itself. The children do not talk to each other; everything passes through the lead. This is right whenever the next decision depends on reading the previous result.
 
 A script is for the other case: the complete fan-out and join are known before anything runs. Typical shapes:
 
@@ -28,9 +28,9 @@ A script is for the other case: the complete fan-out and join are known before a
 
 The lead still plans in conversation with you first. It reads the project, proposes an interpretation, and only then writes the script. For larger work it runs several scripts in sequence, reading each result before writing the next, and keeps any decision that is yours out of the scripts.
 
-## The `agent` and `document_task` tools
+## The `agent` and `program` tools
 
-`agent` takes a `prompt` and an `agentName`. The agent works with its own tools and returns its final reply, or a validated value when the call passes a `schema`. `document_task` takes an `agentName` and the files passed as `inputFiles` (with optional `contextFiles`, `mediaFiles`, and `outputFiles`, and an optional `prompt`), and runs that agent's document task over them: one revised document each, in the revisions its `task` block defines. Only an agent with a `task` block has a document task. Every call of either tool may set `model` (with an `@effort` suffix such as `@high`), `memories`, a `label` for its card, and `timeoutMs`.
+`agent` takes a `prompt` and an `agentName`. The agent works with its own tools and returns its final reply, or a validated value when the call passes a `schema`. `program` takes the program's `name` (`revise` for a document task), an `agentName` and the files passed as `inputFiles` (with optional `contextFiles`, `mediaFiles`, and `outputFiles`, and an optional `prompt`), and runs that agent's document task over them: one revised document each, in the revisions its `task` block defines. Only an agent with a `task` block has a document task. Every call of either tool may set `model` (with an `@effort` suffix such as `@high`), `memories`, a `label` for its card, and `timeoutMs`.
 
 Called directly, the child runs in the background and its result reaches the lead as a follow-up message; each direct call asks for your approval on its own. In a one-shot run, such as `texra run`, the call waits for the child instead.
 
@@ -42,8 +42,9 @@ A script is the body of an async JavaScript function. It calls tools with `await
 section('Fix');
 const fixed = await Promise.allSettled(
   ['drafts/a.tex', 'drafts/b.tex'].map((file) =>
-    document_task('Fix spelling errors only.', {
+    program('revise', {
       agentName: 'correct',
+      prompt: 'Fix spelling errors only.',
       inputFiles: [file],
       label: `Fix: ${file}`,
     }),
@@ -55,29 +56,30 @@ const correctedFiles = fixed
     result.value.changes.map((change) => change.absolutePath),
   );
 section('Merge');
-return document_task('Merge the corrected drafts.', {
+return program('revise', {
   agentName: 'merge',
+  prompt: 'Merge the corrected drafts.',
   inputFiles: correctedFiles,
 });
 ```
 
-This fixes two drafts in parallel, then merges the corrected files. `Promise.allSettled` keeps the fixes that succeeded, so a failed or skipped fix is left out of the merge rather than stopping the script. Each `document_task` call resolves to a result whose `changes` list the files it produced, and each one's `absolutePath` can be handed straight to the next call.
+This fixes two drafts in parallel, then merges the corrected files. `Promise.allSettled` keeps the fixes that succeeded, so a failed or skipped fix is left out of the merge rather than stopping the script. Each `program` call resolves to a result whose `changes` list the files it produced, and each one's `absolutePath` can be handed straight to the next call.
 
 What a script can use:
 
-| Name                             | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| :------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `agent(prompt, options)`         | Runs one agent and waits for it. Resolves to `{ response, files, structured?, runId, outcome, cost, spent }` (`structured` with a `schema`): `cost` is what that agent and the agents under it spent, `spent` what the script's run has spent in all so far. Takes the same options as the `agent` tool. With `persona: { prompt, tools }` it runs an agent the script defines, named by `agentName`, with only the tools the lead has. With `background: true` it resolves to `{ runId }` at once. |
-| `document_task(prompt, options)` | Runs one agent's document task and waits for it. Resolves to `{ changes, runId, outcome, cost }`: `changes` lists every revision's files in order, each with `path` (the workspace file) and `absolutePath` (the revised copy). Takes the same options as the `document_task` tool. With `background: true` it resolves to `{ runId }` at once.                                                                                                                                                     |
-| `self(prompt, options)`          | Runs this agent again and waits for it: forked from the conversation as it stood when the script started, or from `prompt` alone with `fork: false`. Resolves as `agent()` does; `schema` and `label` work as for `agent()`.                                                                                                                                                                                                                                                                        |
-| `tools.<name>(args)`             | Calls any other tool the lead has, with the same arguments as a direct call, and resolves to `{ output, summary }`.                                                                                                                                                                                                                                                                                                                                                                                 |
-| `section(title)`                 | Groups the calls that follow under a title in the progress view.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `console.log(...)`               | Writes a line to the script's card; the last 80 lines return to the lead with the result.                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `searchTools`, `describeTool`    | Find a tool by keyword and read its full declaration.                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Name                          | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| :---------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agent(prompt, options)`      | Runs one agent and waits for it. Resolves to `{ response, files, structured?, runId, outcome, cost, spent }` (`structured` with a `schema`): `cost` is what that agent and the agents under it spent, `spent` what the script's run has spent in all so far. Takes the same options as the `agent` tool. With `persona: { prompt, tools }` it runs an agent the script defines, named by `agentName`, with only the tools the lead has. With `background: true` it resolves to `{ runId }` at once. |
+| `program(name, options)`      | Starts a program and waits for it; `program('revise', { agentName, … })` runs that agent's document task. Resolves to `{ changes, runId, outcome, cost }`: `changes` lists every revision's files in order, each with `path` (the workspace file) and `absolutePath` (the revised copy). Takes the same options as the `program` tool, with `args` for the program's own switches. With `background: true` it resolves to `{ runId }` at once.                                                      |
+| `self(prompt, options)`       | Runs this agent again and waits for it: forked from the conversation as it stood when the script started, or from `prompt` alone with `fork: false`. Resolves as `agent()` does; `schema` and `label` work as for `agent()`.                                                                                                                                                                                                                                                                        |
+| `tools.<name>(args)`          | Calls any other tool the lead has, with the same arguments as a direct call, and resolves to `{ output, summary }`.                                                                                                                                                                                                                                                                                                                                                                                 |
+| `section(title)`              | Groups the calls that follow under a title in the progress view.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `console.log(...)`            | Writes a line to the script's card; the last 80 lines return to the lead with the result.                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `searchTools`, `describeTool` | Find a tool by keyword and read its full declaration.                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 The inputs are literals in the code: a script has no arguments, no bound files, and no saved script file. Its `return` value comes back to the lead as JSON.
 
-A script can import modules with `await import(…)`. The document tasks come as one: `const { revise, from } = await import('builtIn:documents')`. `revise(agentName, options)` runs that agent's document task, taking the same options as `document_task`, and resolves to its result. `from(result, options)` returns `options` with that result's revised files as the input files, so `await revise('correct', from(await revise('polish', { inputFiles: ['main.tex'] })))` polishes a draft and then corrects the polished copy. A resumed script loads the modules it first ran with, even if TeXRA has been updated since.
+A script can import the modules TeXRA lists in the `script` tool's description with `await import(…)`; a relative path is refused. To chain document tasks, pass the last `absolutePath` of each `path` in one result's `changes` as the next call's `inputFiles`. A resumed script loads the modules it first ran with, even if TeXRA has been updated since.
 
 A failed call rejects with an error named `AgentFailed`; a call you stopped rejects with `Skipped`, one past its `timeoutMs` with `TimedOut`, and one whose model is not available with `ModelUnavailable`. `try`/`catch` works as usual, and an uncaught error ends the script. `Promise.all` rejects at the first failure without stopping the calls beside it, so a script that should keep going past failures catches inside each branch or uses `Promise.allSettled`. Two calls in one script with the same prompt, options, and files must carry distinct `id`s.
 
@@ -87,7 +89,7 @@ The lead reads the bundled `multi-agent-orchestration` skill for how to shape th
 
 ## What a run looks like
 
-1. **One approval for the script.** Before anything runs, the script is shown as a request with its title and full source. Approving it covers every `agent` and `document_task` call the script makes. **Approve** (`y`) runs it; the ▾ next to it offers **Approve all agent work in this task** (`a`), which also stops asking about later agent work, file edits, and shell commands in the task. **Reject** (`n`) declines in one click, and **Add a note…** lets you tell the lead what to change.
+1. **One approval for the script.** Before anything runs, the script is shown as a request with its title and full source. Approving it covers every `agent` and `program` call the script makes. **Approve** (`y`) runs it; the ▾ next to it offers **Approve all agent work in this task** (`a`), which also stops asking about later agent work, file edits, and shell commands in the task. **Reject** (`n`) declines in one click, and **Add a note…** lets you tell the lead what to change.
 2. **Calls grouped by section.** The script's card holds one card per call, grouped by the `section()` that was current when the call was made. Each shows the agent and model, the files it was handed, and its status: running, finished, reused (an identical call already finished, so nothing ran again), skipped, or failed. A finished call adds its elapsed time and cost. When a child is waiting on you, such as a file edit to approve, **Review** takes you to it.
 3. **Open a child run.** A call's card opens the child run it launched, with its own transcript.
 4. **Skip a call.** Stopping a child run skips its call: the call rejects with `Skipped` in the script, which then carries on or stops depending on how it handles failures. A skipped call is not retried for you; ask the lead if you want it redone.
@@ -105,7 +107,7 @@ A script normally runs as one of the lead's tool calls, and the lead waits for i
 
 Every call a script makes is recorded in the run's history as it finishes. If the app restarts or the run is interrupted, the script runs again from the top against those records: calls that finished are handed back from the run history and are not run or billed again, and only unfinished calls run.
 
-A completed `agent` or `document_task` call is also reused by a later identical call in the same run, matched on its prompt, options, and the contents of its files. So when a script fails partway through, on a bug or a timeout, the lead fixes the code and sends it again: everything that already finished comes back as **Reused** at no cost. Editing one of a call's files makes that call run again.
+A completed `agent` or `program` call is also reused by a later identical call in the same run, matched on its prompt, options, and the contents of its files. So when a script fails partway through, on a bug or a timeout, the lead fixes the code and sends it again: everything that already finished comes back as **Reused** at no cost. Editing one of a call's files makes that call run again.
 
 In the CLI, `texra resume <id>` continues a stopped run, a background script run included, and honors `--print`, `--output-format`, and `--no-input`. Read [Execution history in the CLI guide](./texra-cli.md#execution-history) for the commands.
 
@@ -115,13 +117,13 @@ In the CLI, `texra resume <id>` continues a stopped run, a background script run
 - The session's child-run budget sets how many agents run at once.
 - The script's own code gets 30 seconds of CPU and 64 MB of memory. Time spent waiting on agents does not count, so this only stops a loop that never waits.
 - The wall clock defaults to 60 minutes and can be set from 1 second to 24 hours with `timeoutMs`.
-- There are no timers, no `Date.now()`, no `Math.random()`, and no imports beyond the modules TeXRA provides (such as `builtIn:documents`), so a resumed script makes the same calls in the same order.
+- There are no timers, no `Date.now()`, no `Math.random()`, and no imports beyond the modules TeXRA provides (such as `builtIn:goal`), so a resumed script makes the same calls in the same order.
 
 ## Where it is available
 
-**Agents.** A tool is only offered to agents whose configuration names it. The `orchestrator` lead (the Physicist, Mathematician, and Computer Scientist teams), `leanOrchestrator` (the Lean Project team), and the `engineer` lead (the Software Engineer team) name `agent`, `document_task` and `script`; `assistant` names all three too, and `creator` and `setup` name `agent` and `document_task`. A [custom agent](./custom-agents.md) can list them in its tools.
+**Agents.** A tool is only offered to agents whose configuration names it. The `orchestrator` lead (the Physicist, Mathematician, and Computer Scientist teams), `leanOrchestrator` (the Lean Project team), and the `engineer` lead (the Software Engineer team) name `agent`, `program` and `script`; `assistant` names all three too, and `creator` and `setup` name `agent` and `program`. A [custom agent](./custom-agents.md) can list them in its tools.
 
-**The global switch.** The **Multi-Agent Workflow** switch on **Settings → Plugins** gates `agent`: when it is off, `agent` is removed from every agent's tool list, whatever the agent's configuration says. `document_task` is not behind this switch. It is on by default; in the terminal client, the same switch is the **Multi-Agent Workflow** row in `/plugins`.
+**The global switch.** The **Multi-Agent Workflow** switch on **Settings → Plugins** gates `agent`: when it is off, `agent` is removed from every agent's tool list, whatever the agent's configuration says. `program` is behind the same switch. It is on by default; in the terminal client, the same switch is the **Multi-Agent Workflow** row in `/plugins`.
 
 **Hosts.** The VS Code extension, the desktop app, and the CLI show the script request, the calls grouped by section, and the result. In a headless `texra run`, no approval prompt can be shown, so the approval policy you pass decides the script request and what its child agents may edit or execute.
 
@@ -135,7 +137,7 @@ In the CLI, `texra resume <id>` continues a stopped run, a background script run
 
 **"'...' needs files: pass `inputFiles` or `mediaFiles`".** A document task was called without files. A document task works on files, so each call needs `inputFiles` (or, for a task such as `ocr` or `transcribe_audio`, `mediaFiles`). Analysis that returns a value rather than a file belongs in an `agent` call with `schema`.
 
-**"'...' has no document task: call `agent` to run it with a prompt".** `document_task` named an agent without a `task` block. Call it with `agent` instead.
+**"'...' has no document task: call `agent` to run it with a prompt".** `program` with `name: 'revise'` named an agent without a `task` block. Call it with `agent` instead.
 
 **"Another agent call of this script has the same prompt, options and files".** Two calls in one script would do exactly the same work, which usually means a retry loop or a panel of identical voters. The lead gives each call its own `id`, or better, each voter its own angle.
 
@@ -145,6 +147,6 @@ In the CLI, `texra resume <id>` continues a stopped run, a background script run
 
 - [Built-in agents](./built-in-agents.md#built-in-teams): the teams whose leads run scripts
 - [TeXRA CLI](./texra-cli.md#teams): running a team from the terminal
-- [Document tasks](./agent-architecture.md): what a single `document_task` call does
+- [Document tasks](./agent-architecture.md): what a single `program` call does
 - [Agent integrations](./agent-integrations.md): the Plugins page and approval settings
 - [Custom agents](./custom-agents.md): give your own lead agent these tools

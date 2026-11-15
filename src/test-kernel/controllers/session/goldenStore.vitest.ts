@@ -127,7 +127,7 @@ const KILLED = Schema.decodeUnknownSync(RunIdSchema)('a00000000010');
  *  service's resume closed, is a finished shell the deletion's open swept
  *  (its rows stay, under its deletion marker, for the next open to collect). */
 const SERVICE_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000012');
-/** The `texra run --output` document task and the revisions its recipe
+/** The `texra run --output` document task and the revisions its program
  *  ran, named by the calls that launched them. */
 const DOCUMENT_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000005');
 const REVISIONS = ['5e635e24c44c38717d06c117', 'f67ab3ad610d33f7b85cbf1c'];
@@ -324,7 +324,7 @@ describe('the golden 1.0 store', () => {
           ),
         ).toEqual([
           [PARENT, 'validation-agent-3'],
-          // Each revision is an `agent` call in the recipe's script.
+          // Each revision is an `agent` call in the program's script.
           [DOCUMENT_TASK, 'script/1'],
           [DOCUMENT_TASK, 'script/6'],
           // The goal is the plan call's child; its round, its program's.
@@ -409,7 +409,7 @@ describe('the golden 1.0 store', () => {
         run(DELEGATED, 'golden_child', { parent: PARENT }),
         run('a00000000003', 'review'),
         run('a00000000004', 'review'),
-        // The document task and the two revisions its recipe ran.
+        // The document task and the two revisions its program ran.
         run(DOCUMENT_TASK, 'polish', { children: REVISIONS }),
         // Listed in start order, while the parent names them sorted.
         ...REVISIONS.toReversed().map((id) =>

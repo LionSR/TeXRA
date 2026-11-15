@@ -128,7 +128,7 @@ const JOURNEYS = {
       compile(dir, 'paper.polished.tex');
     },
   },
-  // A script imports the document tasks and chains two: `correct` must read
+  // A script chains two document tasks: `correct` must read
   // polish's last round, and the result keeps polish's edits.
   imports: {
     fixture: 'polish',
@@ -136,10 +136,10 @@ const JOURNEYS = {
     instruction: [
       'Make exactly one `script` call with this code, unchanged, and then report what it returned:',
       '```js',
-      "const { revise, from } = await import('builtIn:documents');",
-      `const polished = await revise('polish', { prompt: ${JSON.stringify(POLISH_PROMPT)}, inputFiles: ['paper.tex'] });`,
-      "const corrected = await revise('correct', from(polished, { prompt: 'Fix only outright typos. Change nothing else.' }));",
-      'return { polished: polished.documents.outputs.map((o) => o.absolutePath), corrected: corrected.documents.outputs.map((o) => o.absolutePath) };',
+      `const polished = await program('revise', { agentName: 'polish', prompt: ${JSON.stringify(POLISH_PROMPT)}, inputFiles: ['paper.tex'] });`,
+      'const latest = new Map(polished.changes.map((change) => [change.path, change.absolutePath]));',
+      "const corrected = await program('revise', { agentName: 'correct', prompt: 'Fix only outright typos. Change nothing else.', inputFiles: [...latest.values()] });",
+      'return { polished: [...latest.values()], corrected: [...new Map(corrected.changes.map((change) => [change.path, change.absolutePath])).values()] };',
       '```',
     ].join('\n'),
     approval: 'yolo',

@@ -23,7 +23,7 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * so it offers delete beside inspection, the one way to clear it. A run
  * this process holds (working, waiting, or spawned and not started yet) can
  * be stopped; an agent's run takes approval grants, and a conversation (not
- * a task's recipe) its compaction, unless it is still starting (no loop
+ * a program) its compaction, unless it is still starting (no loop
  * step and no settled point yet). Nothing that rewrites or
  * removes a run's files or history is offered while it is live. Any run this
  * process can act on can be renamed, and a conversation whose first turn has
@@ -43,7 +43,7 @@ export function runActions(
     | 'position'
     | 'turn'
     | 'identity'
-    | 'recipe'
+    | 'program'
     | 'forkPoint'
   >,
   stranded: boolean,
@@ -53,7 +53,7 @@ export function runActions(
     const agent = run.identity.kind === 'agent';
     // Nothing to compact while its first activation has taken no loop step.
     const starting = run.turn === null && run.forkPoint === null;
-    const compact = agent && !run.recipe && !starting;
+    const compact = agent && !run.program && !starting;
     return [
       'stop',
       ...(agent ? (['grant'] as const) : []),
@@ -81,20 +81,20 @@ export function runActions(
 /**
  * Whether a run continues from its own rows: a loop-driven run (born with
  * its opening) does, whatever its outcome, unless it is a task that
- * ended (its recipe's result is settled, so it runs again). The one standing
+ * ended (its program's result is settled, so it runs again). The one standing
  * `deriveResumability` reads from a run's records and `runActions` from its
  * view, so the two never decide apart.
  */
 export const continuesFromRows = (
-  run: Pick<RunView, 'identity' | 'recipe'> & { readonly ended: boolean },
-): boolean => isLoopDriven(run.identity) && !(run.ended && run.recipe);
+  run: Pick<RunView, 'identity' | 'program'> & { readonly ended: boolean },
+): boolean => isLoopDriven(run.identity) && !(run.ended && run.program);
 
 /** A conversation with a settled point to cut at: a plain agent's run, not
- *  a task's recipe, whose first turn has ended. */
+ *  a program, whose first turn has ended. */
 const forkable = (
-  run: Pick<RunView, 'identity' | 'recipe' | 'forkPoint'>,
+  run: Pick<RunView, 'identity' | 'program' | 'forkPoint'>,
 ): boolean =>
-  isPlainAgentIdentity(run.identity) && !run.recipe && run.forkPoint !== null;
+  isPlainAgentIdentity(run.identity) && !run.program && run.forkPoint !== null;
 
 /** Why a run no longer takes `action`: the refusal every handler words. */
 export function runActionRefusal(

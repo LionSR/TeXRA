@@ -24,24 +24,18 @@ export const RunRecordFieldsSchema = Schema.Union([
   AgentConfigSchema,
 ]);
 
-/** Whether the run is a task (an agent carrying a plugin's block, run on
- *  its recipe): its value and its children's spend are its output, its end
- *  its record; it resumes from its checkpoint, its opening rebuilt. The app
- *  wrote its recipe, not a model, so the launch that chose the task granted
- *  it: tools fixed past any switch, the catalog's agents under the launch's
- *  approval, its prompts and files passed as written, and no skill
- *  activated by its instruction. */
-export const isTaskConfig = (
-  config: typeof RunRecordFieldsSchema.Encoded,
-): boolean => recipeBlockOf(config) !== null;
-
-/** The block key of the plugin whose recipe the run opened on
- *  (`script.block`), or null for a run that is no task. */
-export const recipeBlockOf = (
+/** The name of the registered program the run opened on (`script.name`),
+ *  or null for any other run. A program's run is a script that ends: its
+ *  value and its children's spend are its output, its end its record, and
+ *  it takes no later message. A plugin wrote the program, not a model, so
+ *  the launch that chose it granted it: tools fixed past any switch, the
+ *  catalog's agents under the launch's approval, its prompts and files
+ *  passed as written, and no skill activated by its instruction. */
+export const programOf = (
   config: typeof RunRecordFieldsSchema.Encoded,
 ): string | null =>
-  'script' in config && config.script?.kind === 'recipe'
-    ? config.script.block
+  'script' in config && config.script?.kind === 'program'
+    ? config.script.name
     : null;
 
 /**
@@ -91,8 +85,7 @@ const RunEndOutputSchema = Schema.Struct({
   /** Workspace-relative paths of files edited by tool calls during the run. */
   files: Schema.Array(Schema.String),
   /** Value captured by the `submit_output` terminal tool, or the value a
-   *  recipe's script returned (its plugin's block reads it:
-   *  `AgentBlock.result`). */
+   *  program's script returned. */
   structured: Schema.optional(JsonValueSchema),
 });
 export type RunEndOutput = typeof RunEndOutputSchema.Type;

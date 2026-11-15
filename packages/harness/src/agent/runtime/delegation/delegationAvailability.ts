@@ -29,6 +29,7 @@ import { decideRunModel } from '@model/runModelDecision';
 import {
   AGENT_TOOL_NAME,
   MODEL_AVAILABILITY_STATUS,
+  PROGRAM_TOOL_NAME,
   type AgentDelegationScope,
   type DelegationTargets,
 } from '@shared/schemas';
@@ -65,7 +66,7 @@ export const delegationAgents = Effect.fn('delegationAgents')(function* (
  * hold no delegation tool: the run's pinned delegation scope's agents, or
  * the workspace's visible ones, each marked when it is a task (it holds a
  * plugin's block);
- * only those when a tool that launches tasks is offered without `agent`.
+ * only those when `program` is offered without `agent`.
  */
 export const readDelegationTargets = Effect.fn('readDelegationTargets')(
   function* (
@@ -74,9 +75,7 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
     scope: AgentDelegationScope | undefined,
   ) {
     const chats = registry.get(AGENT_TOOL_NAME) !== undefined;
-    const tasks = definitions.some(
-      ({ name }) => registry.get(name)?.launchesTasks,
-    );
+    const tasks = definitions.some(({ name }) => name === PROGRAM_TOOL_NAME);
     if (!chats && !tasks) return undefined;
     const agents = (yield* delegationAgents(stores, scope)).flatMap(
       ({ name, description, tools: agentTools, blocks }) => {
@@ -147,7 +146,7 @@ export function delegationSection(targets: DelegationTargets): string {
           // one; the harness says only that the marker names such an agent.
           ...(targets.agents.some(({ task }) => task)
             ? [
-                "An agent marked (task) also runs as its plugin's task, through that plugin's task tool where it is offered.",
+                "An agent marked (task) is one a plugin's program runs as, through `program` with it as `agentName` where that tool is offered.",
               ]
             : []),
         ];

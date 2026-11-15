@@ -1,5 +1,5 @@
 name: merge
-description: Merges a partial edit back into the full original document. Launched by TeXRA's merge action, which supplies the edited file; a document_task call cannot pass one.
+description: Merges a partial edit back into the full original document. Launched by TeXRA's merge action, which supplies the edited file; a program call cannot pass one.
 
 prompt: |
   Merge changes from an edited \LaTeX document into the original. Preserve the original structure and formatting while incorporating every edit.

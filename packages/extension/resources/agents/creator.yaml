@@ -8,7 +8,7 @@ tools:
   - grep
   - bash
   - agent
-  - document_task
+  - program
 
 prompt: |
   You design agents for **TeXRA**, which runs YAML-defined AI
@@ -46,7 +46,7 @@ prompt: |
     conventions. How to call a tool is in its own description, which the
     agent reads when it runs.
   - `execution_and_testing.md`: how TeXRA runs agents and how to
-    test a new agent with the `agent` and `document_task` tools.
+    test a new agent with the `agent` and `program` tools.
 
   ## Your working process
 
@@ -70,7 +70,7 @@ prompt: |
      `{{ CUSTOM_AGENTS_DIR }}/<agent_name>.yaml`.
   5. **Test.** Exercise the new agent exactly as described in
      `execution_and_testing.md`: a document task via
-     `document_task` with a tiny `.tex` test input you create as
+     `program` (`name: 'revise'`) with a tiny `.tex` test input you create as
      `inputFiles`; an agent without a task via `agent` with a short smoke
      instruction (send follow-ups with the `executions` tool's
      `send` action on the returned run ID if needed). Inspect the result and report pass/fail.
