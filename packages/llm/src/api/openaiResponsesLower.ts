@@ -1,5 +1,5 @@
 // Third-party imports
-import { Clock, Effect, Schema } from 'effect';
+import { Clock, Effect, Number as Num, Schema } from 'effect';
 import OpenAI from 'openai';
 
 // Local imports - canonical model contract
@@ -38,21 +38,21 @@ const documentAccess = Effect.fn('llm.responses.documentAccess')(function* (
 });
 
 /**
- * The items one admitted message lowers to: one per tool result, one per
- * user message, one per assistant content part. A continuation's covered
- * prefix is counted with this instead of lowered, so the bytes it covers
- * are never materialized again; a count that drifts from the lowering fails
- * the continuation's `coveredItems` check loudly.
+ * How many items the messages lower to: one per tool result, one per user
+ * message, one per assistant content part. A continuation's covered prefix is
+ * counted with this instead of lowered, so the bytes it covers are never
+ * materialized again; a count that drifts from the lowering fails the
+ * continuation's `coveredItems` check loudly.
  */
-const loweredItemCount = (
-  message: Extract<
-    ResolvedTurn,
-    { protocol: 'openai-responses' }
-  >['messages'][number],
-): number => {
-  if (message.role === 'tool') return message.results.length;
-  return message.role === 'assistant' ? message.content.length : 1;
-};
+const coveredItemCount = (
+  prefix: Extract<ResolvedTurn, { protocol: 'openai-responses' }>['messages'],
+): number =>
+  Num.sumAll(
+    prefix.map((message) => {
+      if (message.role === 'tool') return message.results.length;
+      return message.role === 'assistant' ? message.content.length : 1;
+    }),
+  );
 
 /**
  * The messages as Responses input items. Each tool result names its call
@@ -278,10 +278,7 @@ export const withResponsesContinuation = Effect.fn(
       responseId: result.providerResponseId,
       // Counted, not lowered: the covered prefix is never materialized
       // again, and the same count validates the continuation later.
-      coveredItems: prefix.reduce(
-        (count, message) => count + loweredItemCount(message),
-        0,
-      ),
+      coveredItems: coveredItemCount(prefix),
     },
   });
   return { ...result, continuation };
@@ -309,7 +306,7 @@ export const responseInput = Effect.fn('llm.responses.input')(function* (
     !sameModelOrigin(turn, continuation.origin) ||
     continuation.coveredMessages > turn.messages.length ||
     continuation.anchor.coveredItems !==
-      prefix.reduce((count, message) => count + loweredItemCount(message), 0) ||
+      coveredItemCount(prefix) ||
     continuation.prefixFingerprint !==
       prefixFingerprint(
         RESPONSES_PREFIX_DOMAIN,

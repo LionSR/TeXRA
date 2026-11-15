@@ -7,6 +7,7 @@ import { glob } from 'glob';
 import {
   Effect,
   FileSystem,
+  Order,
   Result,
   Schema,
   SchemaIssue,
@@ -144,7 +145,7 @@ export function scanDirectory(
     const parsed: ParsedAgentYaml[] = [];
     for (const result of yield* Effect.forEach(
       // Code-unit order, which the default sort gave one directory's paths.
-      [...rootOf].toSorted(([a], [b]) => Number(a > b) - Number(a < b)),
+      [...rootOf].toSorted(([a], [b]) => Order.String(a, b)),
       ([yamlPath, root]) =>
         Effect.result(readYamlDefinition(yamlPath, root, fileSchema, blocks)),
       { concurrency: 8 },

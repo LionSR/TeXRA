@@ -6,7 +6,7 @@
 // strings, and the runtime tool status. This module is the
 // single entry point for that derivation so hosts don't drift.
 
-import { Predicate, Result, Schema } from 'effect';
+import { Number as Num, Predicate, Result, Schema } from 'effect';
 import yaml from 'yaml';
 
 import {
@@ -201,9 +201,9 @@ export const EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS = 1800;
  */
 export function executionsWaitTimeoutSeconds(timeout: unknown): number {
   return typeof timeout === 'number' && Number.isFinite(timeout)
-    ? Math.max(
-        EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
-        Math.min(EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS, timeout),
-      )
+    ? Num.clamp(timeout, {
+        minimum: EXECUTIONS_WAIT_MIN_TIMEOUT_SECONDS,
+        maximum: EXECUTIONS_WAIT_MAX_TIMEOUT_SECONDS,
+      })
     : EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS;
 }
