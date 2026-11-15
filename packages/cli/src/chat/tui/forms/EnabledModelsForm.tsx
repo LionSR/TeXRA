@@ -14,6 +14,7 @@ import { AsyncListForm } from './_shared/ListForm';
 import type { ProcessRuntime } from '@texra-ai/harness/host';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
 import { SEPARATOR } from '@cli/tui/ui/glyphs';
+import { enabledLabel } from '@ui/copy/format';
 
 interface EnabledModelsFormProps {
   readonly availableRows?: number;
@@ -30,7 +31,7 @@ interface EnabledModelsFormProps {
 
 function formatEnabledModelDescription(model: CliEnabledModelRow): string {
   const parts = [
-    model.enabled ? 'enabled' : 'disabled',
+    enabledLabel(model.enabled),
     model.provider,
     model.deprecated ? 'deprecated' : undefined,
   ].filter(Predicate.isNotNullish);
