@@ -1,13 +1,9 @@
+import { Clock, Duration, Effect, Result, Schema, SemVer } from 'effect';
 import {
-  Clock,
-  Duration,
-  Effect,
-  Predicate,
-  Result,
-  Schema,
-  SemVer,
-} from 'effect';
-import { HttpClient, HttpClientResponse } from 'effect/http';
+  HttpClient,
+  HttpClientResponse,
+  HttpIncomingMessage,
+} from 'effect/http';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { GlobalValues, type ValueFamily } from '@texra-ai/harness/host';
@@ -150,9 +146,10 @@ interface FetchJsonStringFieldOptions {
 }
 
 /**
- * Fetch one string field from a JSON response. Update checks are best-effort:
- * non-success responses, malformed payloads, timeouts, and network failures
- * all yield `undefined`, logged at debug (a warning would print on every
+ * Fetch one non-empty string field from a JSON response. Update checks are
+ * best-effort: non-success responses, malformed payloads (the field missing
+ * included), timeouts, and network failures all yield `undefined`, logged at
+ * debug (a warning would print on every
  * offline CLI start).
  */
 export const fetchJsonStringField = ({
@@ -167,14 +164,22 @@ export const fetchJsonStringField = ({
 > =>
   HttpClient.get(url, { headers }).pipe(
     Effect.flatMap(HttpClientResponse.filterStatusOk),
-    Effect.flatMap((response) => response.json),
-    Effect.map((body) => {
-      const value = Predicate.isObject(body) ? body[field] : undefined;
-      return typeof value === 'string' && value !== '' ? value : undefined;
-    }),
+    Effect.flatMap(
+      HttpIncomingMessage.schemaBodyJson(
+        Schema.Struct({
+          [field]: Schema.String.check(Schema.isMinLength(1)),
+        }),
+      ),
+    ),
+    Effect.map((body): string | undefined => body[field]),
     Effect.timeout(Duration.millis(timeoutMs)),
     Effect.catch(
-      (error: HttpClientError.HttpClientError | Cause.TimeoutError) =>
+      (
+        error:
+          | HttpClientError.HttpClientError
+          | Schema.SchemaError
+          | Cause.TimeoutError,
+      ) =>
         Effect.logDebug(`Update check of ${url} failed: ${error.message}`).pipe(
           withLogChannel('updateCheck'),
           Effect.as(undefined),
