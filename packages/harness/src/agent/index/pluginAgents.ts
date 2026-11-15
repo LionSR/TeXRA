@@ -107,7 +107,6 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
       prompt: systemPrompt,
       tools: tools ?? [],
     }),
-    blocks: {},
   };
   return {
     entry,

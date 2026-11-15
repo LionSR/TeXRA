@@ -81,8 +81,6 @@ export const STARTER_AGENT_MODE_PRESET: AgentModePreset = {
     'latexFixer',
     'setup',
     'orchestrator',
-    'correct',
-    'polish',
   ],
 };
 
@@ -126,12 +124,6 @@ export const AGENT_MODE_PRESETS: readonly AgentModePreset[] = Object.freeze(
         'latexFixer',
         'progressCheck',
         'search',
-        'correct',
-        'polish',
-        'generic',
-        'devise',
-        'apply',
-        'criticize',
       ],
     },
     {
@@ -150,12 +142,6 @@ export const AGENT_MODE_PRESETS: readonly AgentModePreset[] = Object.freeze(
         'latexFixer',
         'progressCheck',
         'orchestrator',
-        'correct',
-        'polish',
-        'generic',
-        'devise',
-        'apply',
-        'criticize',
       ],
     },
     {
@@ -176,11 +162,6 @@ export const AGENT_MODE_PRESETS: readonly AgentModePreset[] = Object.freeze(
         'simplifier',
         'latexFixer',
         'progressCheck',
-        'criticize',
-        'generic',
-        'devise',
-        'apply',
-        'polish',
       ],
     },
     {

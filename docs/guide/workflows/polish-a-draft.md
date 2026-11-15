@@ -6,43 +6,49 @@ import CliRunHero from '../../.vitepress/components/CliRunHero.vue';
 
 # Polish a draft
 
-Once the results are in, polish rewrites a LaTeX draft for clarity. It keeps
-math, citations, and structure intact and outputs a reviewable diff.
+Once the results are in, a polish rewrites a LaTeX draft for clarity. It keeps
+math, citations, and structure intact and outputs a reviewable diff. A polish
+is the `edit` program with an instruction that asks for one.
 
-## What polish does
+## What a polish does
 
 - Reads your input `.tex` file (and any context files you attach).
 - Produces a revised draft that follows your instruction.
-- Runs a built-in critique pass that rereads its own output and revises it.
+- Runs a second revision that rereads its own output and corrects it.
 
-Polish is a **document task**: it writes to disk and produces a diff.
-Run as a document task, it does not call tools or verify citations.
+`edit` is a **program**: it writes to disk and produces a diff. It does not
+call tools or verify citations.
+
+The instruction decides how far `edit` goes. With no instruction it only
+proofreads (typos, grammar, LaTeX formatting); asked to polish, it may rewrite
+sentences and paragraphs; asked for new content, it adds it. So say what you
+want and what to keep.
 
 ## When to use it
 
-Use `polish` when technical content and mathematical arguments are settled, but the prose requires tightening before submission:
+Polish when technical content and mathematical arguments are settled, but the prose requires tightening before submission:
 
 - Eliminate hedging, verbosity, and repetitive phrasing.
 - Sharpen precision and flow between sentences and sections.
 - Enforce consistent terminology across sections.
 
-Do not use polish to add content, change math, or restructure sections.
-For those, use the [Orchestrator](../built-in-agents.md) or the
-`research` agent.
+To add content or change the mathematics, say so in the instruction, or work
+with the [Orchestrator](../built-in-agents.md) or the `research` agent, which
+can compute and check as they go.
 
 ## Run it from the CLI
 
 ```sh
-texra run polish \
+texra run edit \
   --input intro.tex \
   --instruction "Tighten prose. Preserve all math and citations."
 ```
 
 <CliRunHero
-  command='texra run polish --input intro.tex --instruction "Tighten prose. Preserve all math and citations."'
+  command='texra run edit --input intro.tex --instruction "Tighten prose. Preserve all math and citations."'
   :rounds="[
     { label: 'r0: first revision', state: 'done' },
-    { label: 'r1: critique-and-revise pass', state: 'done' },
+    { label: 'r1: review-and-correct pass', state: 'done' },
   ]"
   :outputs="['executions/c4e19b07a52d/r1/intro.tex']"
 />
@@ -53,24 +59,24 @@ Each revision writes its output into `executions/<run-id>/` under TeXRA's worksp
 
 <PolishRoundsTree />
 
-<p class="hero-caption">Both revisions reuse your input filename: <code>r0/intro.tex</code> holds the first revision, and <code>r1/intro.tex</code> holds the critique-and-revise pass.</p>
+<p class="hero-caption">Both revisions reuse your input filename: <code>r0/intro.tex</code> holds the first revision, and <code>r1/intro.tex</code> holds the review-and-correct pass.</p>
 
 To write the final revision next to your input instead:
 
 ```sh
-texra run polish --input intro.tex --output intro.polished.tex
+texra run edit --input intro.tex --instruction "Tighten prose." --output intro.polished.tex
 ```
 
 ## Run it in VS Code
 
-1. Open `intro.tex`.
+1. Open the folder that holds `intro.tex`.
 2. Select the TeXRA icon in the Secondary Side Bar.
-3. Pick **polish** as the agent. Pick a model.
-4. Under **Documents and attachments**, in the **Input** group, select <wa-icon library="texra" name="add"></wa-icon> **Add input files** and pick `intro.tex` from the file picker.
-5. Type the instruction. Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>; Enter also sends it).
+3. Keep the default agent (`orchestrator`) and pick a model.
+4. Type what you want in plain words, for example "Polish intro.tex: tighten the prose, preserve all math and citations." Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>; Enter also sends it).
+5. The agent proposes an `edit` run. The proposal card shows the instruction and the files; edit them if needed, then approve.
 6. When the run completes, open the diff from the **ProgressBoard**.
 
-Same run, same history, same output files, whichever surface you used.
+Same program, same output files, whichever surface you used.
 
 ## Reviewing the output
 
@@ -92,30 +98,31 @@ For a **compiled PDF comparison** (additions in blue, deletions in red),
 use the LaTeXdiff feature in the TeXRA panel. Read the
 [LaTeX Diff](../latex-diff.md) guide.
 
-## How the critique pass works
+## How the second revision works
 
-After the first revision, polish re-prompts itself to check
-for common failure modes:
+After the first revision, `edit` asks for a second one that reviews the
+changes against the original and the instruction:
 
 <CritiquePassCard />
 
-<p class="hero-caption">The second revision rereads the first and checks six failure modes before revising again: weakened or unnecessary edits, missing math, notation used before definition, generic filler, added sentences that do not read as plain technical English, and out-of-scope changes.</p>
+<p class="hero-caption">The second revision rereads the first and corrects it: it reverts changes the instruction did not ask for, restores mathematics or reasoning that went missing, fixes notation used before it is defined, and removes sentences that say nothing specific.</p>
 
 The result is written to `r1/`. Use **the first revision** (`r0/`) for fast
 iteration. Use **the second** (`r1/`) when the draft is close to final.
 
 ## Limits
 
-- Operates on one revision per input file. For multi-file projects,
+- Writes one revised file per input file. For multi-file projects,
   list each file with `--input` or use the Orchestrator.
-- No tool access: polish cannot compile, search citations, or run code.
-- No new sections, equations, or references: polish only rewrites
-  what is already there.
+- No tool access: `edit` cannot search citations or run code. TeXRA
+  compiles each revision to check it.
+- A polish only rewrites what is already there; new sections, equations or
+  references need an instruction that asks for them.
 
 ## See also
 
-- [Built-in agents](../built-in-agents.md): the full catalog of agents
+- [Built-in agents](../built-in-agents.md): the full catalog of agents and programs
 - [LaTeX Diff](../latex-diff.md): compiled PDF comparison of revisions
-- [Models](../models.md): picking a model for polish
+- [Models](../models.md): picking a model for a polish
 - [Configuration](../configuration.md): workspace defaults
-- [Agent architecture](../agent-architecture.md): revisions and the optional `--reflect` critic review
+- [Agent architecture](../agent-architecture.md): revisions and the optional critic review

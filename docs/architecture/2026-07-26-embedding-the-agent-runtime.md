@@ -249,9 +249,9 @@ with a `Rejected` naming the first issue, and starts the decoded
 (`packages/harness/src/shared/schemas/agentConfig.ts`). A launch names no agent
 category: every agent runs as a chat, and launch resolution
 (`AgentCatalog.forLaunch` in `packages/harness/src/agent/index/agentCatalog.ts`) finds the
-agent by name across sources. Running an agent's document task instead
-means opening the run on the document recipe
-(`documentTaskConfig` in `packages/texra/src/agent/output/documentRecipe.ts`).
+agent by name across sources. A document task is not an agent's: it is a run opened
+on one of the theory plugin's programs
+(`packages/texra/src/tools/theory/programs.ts`, started with `programLaunch`).
 
 ---
 

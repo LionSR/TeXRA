@@ -58,7 +58,7 @@ import type {
   MissingTool,
   ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
-import { agentOptionsData } from '@texra/tools/documents/documentTask';
+import { agentOptionsData } from '@texra/controllers/session/agentOptions';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';

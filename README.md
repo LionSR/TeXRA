@@ -64,7 +64,7 @@ In the terminal:
 
 ```sh
 texra chat                                  # interactive tool-use session
-texra run polish --input paper.tex          # one-shot workflow
+texra run edit --input paper.tex            # one-shot document program
 texra team run physicist --instruction "Check this derivation"  # named team
 ```
 
@@ -87,10 +87,10 @@ run <preset>`. Or save the agents you have shown as your own team.
 
 ## Agents
 
-**Document tasks** process selected files and produce reviewable LaTeX diffs:
-`polish`, `correct`, `merge`, `ocr`, `transcribe_audio`, `paper2slide`, and
-`paper2poster`, plus the specialist task passes `apply`, `criticize`, `devise`,
-`enhance`, `firstread`, `generic`, `logic`, and `notation`.
+**Document programs** process selected files and produce reviewable LaTeX diffs:
+`edit`, `annotate`, `enhance`, `apply`, `merge`, `transcribe`, `slides`, and
+`poster`. The instruction says what to change and from which point of view;
+an agent starts one for you, or run `texra run <program> --input <file>`.
 
 **Chat agents** work conversationally with file, shell, and search tools:
 `orchestrator`, `assistant`, `research`, `numerics`, `review`, `search`,

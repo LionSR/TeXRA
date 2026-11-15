@@ -19,6 +19,9 @@ export { processLayer } from './effect/processLayer.js';
 // for a session whose runs run elsewhere (a window over the background
 // service).
 export { replayTrace } from '@controllers/session/runTrace';
+// What launches a registered program as a run of its own: the config a
+// host or an app's command starts it with.
+export { programLaunch, ProgramNotRegistered } from '@agent/runtime/programRun';
 export {
   activationView,
   type ActivationViewSource,

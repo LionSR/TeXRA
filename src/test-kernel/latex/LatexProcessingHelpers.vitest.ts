@@ -21,17 +21,14 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { FakeHost } from '@test/support/testKernel';
-import type { DocumentTaskOptions } from '@texra/shared/plugins/documents';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 const logger = spiedTrace();
 
-const extractFiguresConfig: DocumentTaskOptions = {
+const extractFiguresConfig = {
   autoExtractFigure: true,
   autoExtractTikzFigure: false,
-  attachTeXCount: false,
   autoCompileInputPdf: false,
-  reflect: false,
 };
 
 const tempDirs = useTempDirs();

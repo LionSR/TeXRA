@@ -148,13 +148,12 @@ export interface AgentCatalogShape {
   /** One workspace's agents over this catalog, its stores captured. */
   readonly workspaceAgents: (stores: WorkspaceAgentsStores) => WorkspaceAgents;
   /** Change a custom copy of `entry` (see {@link AgentCustomization}):
-   *  the copy's path, and the files the agent binds that were already
-   *  beside it and kept although they differ from the bundled ones. */
+   *  the copy's path. */
   readonly customize: (
     entry: AgentEntry,
     change: AgentCustomization,
   ) => Effect.Effect<
-    { readonly path: string; readonly keptDiffering: readonly string[] },
+    { readonly path: string },
     | AgentCustomizeRefused
     | AgentDirectoriesFailed
     | StateReadFailed

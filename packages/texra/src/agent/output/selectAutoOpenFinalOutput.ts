@@ -1,10 +1,10 @@
 import { Effect } from 'effect';
 import { Settings, type SettingsStores } from '@texra-ai/harness/plugins';
-import { programOf, RUN_OUTCOME } from '@texra-ai/harness/schemas';
+import { RUN_OUTCOME } from '@texra-ai/harness/schemas';
 import { finalDocumentOutput } from '@texra/shared/plugins/documentOutputs';
-import { DOCUMENT_PROGRAM, documentsOf } from '@texra/shared/plugins/documents';
+import { documentsOf } from '@texra/shared/plugins/documents';
 import type { RunEnd } from '@texra-ai/harness';
-import type { AgentConfig, RunView } from '@texra-ai/harness/schemas';
+import type { RunView } from '@texra-ai/harness/schemas';
 import { AUTO_OPEN_FINAL_SETTING } from '@texra/shared/settings/texraSettings';
 
 /**
@@ -31,16 +31,11 @@ import { AUTO_OPEN_FINAL_SETTING } from '@texra/shared/settings/texraSettings';
 export const selectAutoOpenFinalOutput = Effect.fn('selectAutoOpenFinalOutput')(
   function* (
     stores: SettingsStores,
-    config: AgentConfig,
     result: Pick<RunEnd, 'outcome'>,
     run: Pick<RunView, 'facts'> | undefined,
   ) {
     const documents = run && documentsOf(run);
-    if (
-      programOf(config) !== DOCUMENT_PROGRAM ||
-      documents === undefined ||
-      result.outcome !== RUN_OUTCOME.COMPLETED
-    )
+    if (documents === undefined || result.outcome !== RUN_OUTCOME.COMPLETED)
       return undefined;
     if (!(yield* Settings.get(stores, AUTO_OPEN_FINAL_SETTING))) {
       return undefined;

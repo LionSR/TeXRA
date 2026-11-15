@@ -410,10 +410,10 @@ describe('the golden 1.0 store', () => {
         run('a00000000003', 'review'),
         run('a00000000004', 'review'),
         // The document task and the two revisions its program ran.
-        run(DOCUMENT_TASK, 'polish', { children: REVISIONS }),
+        run(DOCUMENT_TASK, 'edit', { children: REVISIONS }),
         // Listed in start order, while the parent names them sorted.
         ...REVISIONS.toReversed().map((id) =>
-          run(id, 'polish', { parent: DOCUMENT_TASK }),
+          run(id, 'edit', { parent: DOCUMENT_TASK }),
         ),
         // The user stopped its held turn with Ctrl-C, after its Codex
         // child's turn had ended.

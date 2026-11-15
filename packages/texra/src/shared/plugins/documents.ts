@@ -5,12 +5,9 @@
  * a run last accepted into the workspace are its `theory/accepted`. Core
  * stores and applies the rows without reading them (`RunView.facts`); this
  * module is their schemas and their one reader, which hosts, webviews and the
- * plugin's own tools share. It also holds the `task:` block of an agent
- * file the plugin owns (`DOCUMENT_TASK_BLOCK`), which the catalog scans
- * with, and the name of the program a document task runs. Browser-safe:
- * it imports only schemas.
+ * plugin's own tools share. Browser-safe: it imports only schemas.
  */
-import { Effect, Record as Rec, Result, Schema, Struct } from 'effect';
+import { Schema } from 'effect';
 
 import { factName, type ToolFact } from '@texra-ai/harness/schemas';
 import {
@@ -22,19 +19,29 @@ import {
   type DocumentsResult,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
-import { AgentOptionDataSchema } from '@texra/shared/pickerOptions';
-import type { RunView, AgentConfig } from '@texra-ai/harness/schemas';
-import type { AgentBlock } from '@texra-ai/harness/plugins';
+import type { RunView } from '@texra-ai/harness/schemas';
 
 /** The id of the plugin that owns the document programs, their tools and
  *  their rows. */
 const THEORY_PLUGIN = 'theory';
 
-/** The program a document task runs: the plugin's `revise` module, started
- *  by this name (`AgentConfig.script.name`). */
-export const DOCUMENT_PROGRAM = 'revise';
+/** What a document program told its first `document_context` call about
+ *  itself, which its later steps read back. */
+const DocumentTaskSpecSchema = Schema.Struct({
+  /** How many revisions it runs: the M of "Pass N of M". */
+  revisions: Schema.Int.check(Schema.isGreaterThan(0)),
+  /** The plugin's template files its revisions read, by name. */
+  templates: Schema.Array(Schema.String),
+  /** It writes new documents (a deck, a transcript) and not rewrites of
+   *  its inputs: its outputs descend from no input. */
+  creates: Schema.Boolean,
+});
+/** A document program's own facts, as its first step recorded them. */
+export type DocumentTaskSpec = typeof DocumentTaskSpecSchema.Type;
 
 const DocumentsOutputSchema = Schema.Struct({
+  /** The program, as its first step recorded it. */
+  task: DocumentTaskSpecSchema,
   /** Every revision so far, by its zero-based `round`. */
   rounds: Schema.Array(RoundOutputSchema),
   /** The proposed revision's diffs, once the task proposed: the one record
@@ -52,10 +59,10 @@ export const DOCUMENTS_OUTPUT_KIND = {
   // v2: a proposed task's fact carries its `diffs`. v3: each round holds
   // its `latexdiffs` and its `reply`, which were log rows. v4: a round's
   // compile check is its `compile` outcome, an output's lineage is its
-  // `base` and `document`, and a latexdiff records its math markup. An
-  // earlier version is an earlier build's row, and an earlier build reads a
-  // v4 one as a newer build's.
-  version: 4,
+  // `base` and `document`, and a latexdiff records its math markup. v5: the
+  // row carries its program's `task`. An earlier version is an earlier
+  // build's row, and an earlier build reads a v5 one as a newer build's.
+  version: 5,
   schema: DocumentsOutputSchema,
   // A document task runs a program, which is never forked.
   fork: 'drop',
@@ -65,8 +72,10 @@ export const DOCUMENTS_OUTPUT_KIND = {
 const DOCUMENTS_OUTPUT_KEY = factName(DOCUMENTS_OUTPUT_KIND);
 
 /** The fact that makes `rounds` (and, once proposed, the final `diffs`)
- *  the calling run's documents, for its call's result (`ToolResult.facts`). */
+ *  the documents of the calling run of `task`, for its call's result
+ *  (`ToolResult.facts`). */
 export function documentsOutputFact(
+  task: DocumentTaskSpec,
   rounds: readonly RoundOutput[],
   diffs: DocumentDiffs = {},
 ): ToolFact {
@@ -75,6 +84,7 @@ export function documentsOutputFact(
     kind: DOCUMENTS_OUTPUT_KIND.kind,
     version: DOCUMENTS_OUTPUT_KIND.version,
     value: Schema.decodeUnknownSync(DocumentsOutputSchema)({
+      task,
       rounds,
       ...diffs,
     }),
@@ -119,16 +129,28 @@ export function documentsAcceptedFact(
   };
 }
 
-/** A run's documents rounds, from its latest documents row; none for a
- *  run that recorded none. */
-export function documentRoundsOf(
+/** A run's documents row, decoded; undefined for a run that recorded
+ *  none. */
+const documentsRowOf = (
   run: Pick<RunView, 'facts'>,
-): readonly RoundOutput[] {
+): DocumentsOutput | undefined => {
   const value = run.facts[DOCUMENTS_OUTPUT_KEY];
   return value === undefined
-    ? []
-    : Schema.decodeUnknownSync(DocumentsOutputSchema)(value).rounds;
-}
+    ? undefined
+    : Schema.decodeUnknownSync(DocumentsOutputSchema)(value);
+};
+
+/** A run's documents rounds, from its latest documents row; none for a
+ *  run that recorded none. */
+export const documentRoundsOf = (
+  run: Pick<RunView, 'facts'>,
+): readonly RoundOutput[] => documentsRowOf(run)?.rounds ?? [];
+
+/** How many revisions a document task runs, once its first step recorded
+ *  it. */
+export const documentRevisionsOf = (
+  run: Pick<RunView, 'facts'>,
+): number | undefined => documentsRowOf(run)?.task.revisions;
 
 /** What a document task reports of its documents: every revision's
  *  outputs and compile failures, and the proposed diffs. A projection of
@@ -151,129 +173,18 @@ export function documentsSummary({
 export function documentsOf(
   run: Pick<RunView, 'facts'>,
 ): DocumentsResult | undefined {
-  const value = run.facts[DOCUMENTS_OUTPUT_KEY];
-  return value === undefined
-    ? undefined
-    : documentsSummary(Schema.decodeUnknownSync(DocumentsOutputSchema)(value));
+  const row = documentsRowOf(run);
+  return row === undefined ? undefined : documentsSummary(row);
 }
 
-/**
- * A document task: what the `revise` program runs over its persona. Each
- * request (Nunjucks) opens one revision, in order, after the `prefix` that
- * lays out the documents; `outputs` are the files a task writes when the
- * launch names none, and `files` binds template variables to files beside
- * the YAML (`X` renders as `X_FILE` and `X_CONTENT`).
- */
-const DocumentTaskSchema = Schema.Struct({
-  outputs: Schema.Array(Schema.String).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
-  files: Schema.Record(Schema.String, Schema.String).pipe(
-    Schema.withDecodingDefault(Effect.succeed({})),
-  ),
-  prefix: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
-  requests: Schema.Array(Schema.String).check(Schema.isMinLength(1)),
-});
-/** A document task with its defaults applied. */
-export type DocumentTask = typeof DocumentTaskSchema.Type;
-
-/** The `task:` block of an agent file, owned by the theory plugin. */
-export const DOCUMENT_TASK_BLOCK: AgentBlock<DocumentTask> = Object.freeze({
-  key: 'task',
-  schema: DocumentTaskSchema,
-  files: (task: DocumentTask) =>
-    Object.values(task.files).filter((file) => file !== ''),
-});
-
-/** Whether `run` is a document task: opened on this plugin's program, not
- *  on another plugin's. */
-export const isDocumentTaskRun = (run: Pick<RunView, 'program'>): boolean =>
-  run.program === DOCUMENT_PROGRAM;
-
-/** An agent option as every launcher lists it: one that is also a document
- *  task carries its revision count (the header's "Pass 2 of 3"). */
-export const DocumentAgentOptionSchema = AgentOptionDataSchema.mapFields(
-  Struct.assign({
-    rounds: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
-  }),
-);
-export type DocumentAgentOption = typeof DocumentAgentOptionSchema.Type;
-
-/**
- * The switches a document task's launch may set, under the key its run's
- * program arguments (`script.args`) store them by and its approval shows
- * them (`AgentProposal.options`). The launch form's menu items and
- * `texra run`'s flags render from this table, and the program's
- * description names them; `menu` is the launch form's file group whose header menu offers
- * the switch.
- */
-export const DOCUMENT_TASK_OPTIONS = Object.freeze({
-  attachTeXCount: Object.freeze({
-    label: 'Attach TeX Count',
-    description:
-      "Add each input document's texcount statistics to the prompt, so the agent knows its size and structure.",
-    menu: 'input',
-  }),
-  reflect: Object.freeze({
-    label: 'Critic review',
-    description:
-      'Have the `critic` agent review each revision but the last; the next revision reads its critique.',
-    menu: 'input',
-  }),
-  autoExtractFigure: Object.freeze({
-    label: 'Figures',
-    description: 'Attach the figures the input LaTeX includes as media.',
-    menu: 'media',
-  }),
-  autoExtractTikzFigure: Object.freeze({
-    label: 'TikZ Figures',
-    description: 'Compile the input LaTeX TikZ figures and attach them.',
-    menu: 'media',
-  }),
-  autoCompileInputPdf: Object.freeze({
-    label: 'Compile Input PDF',
-    description: 'Compile each input LaTeX file and attach its PDF.',
-    menu: 'media',
-  }),
-} satisfies Record<
-  string,
-  {
-    readonly label: string;
-    readonly description: string;
-    readonly menu: 'input' | 'media';
-  }
->);
-
-/** The switches as a run stores them, each off unless the launch set it. */
-export const DocumentTaskOptionsSchema = Schema.Struct(
-  Rec.map(DOCUMENT_TASK_OPTIONS, () =>
-    Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  ),
-);
-/** A document task's launch options with their defaults applied. */
-export type DocumentTaskOptions = typeof DocumentTaskOptionsSchema.Type;
-
-/** The options a document task's run was launched with: those among its
- *  program's arguments (`script.args`), defaults for any it does not name. */
-export const documentTaskOptions = (
-  config: Pick<AgentConfig, 'script'>,
-): DocumentTaskOptions =>
-  Schema.decodeUnknownSync(DocumentTaskOptionsSchema)(
-    config.script?.kind === 'program' ? config.script.args : {},
-  );
+/** Whether `run` is a document task: a program's run that works on
+ *  documents with this plugin's tools. Its documents row says so, whatever
+ *  program it opened on, so a program a model wrote reads the same; the
+ *  run's first step writes the row. */
+export const isDocumentTaskRun = (run: Pick<RunView, 'facts'>): boolean =>
+  DOCUMENTS_OUTPUT_KEY in run.facts;
 
 /** What a proposal launches, as its approval copy names it. */
-export function agentProposalLabel(proposal: {
+export const agentProposalLabel = (proposal: {
   readonly task: boolean;
-  readonly options?: Readonly<Record<string, unknown>> | null;
-}): string {
-  if (!proposal.task) return 'agent';
-  // A reflecting task also runs a critic after every revision but the last;
-  // options this plugin cannot read name no critic.
-  const options = Schema.decodeUnknownResult(DocumentTaskOptionsSchema)(
-    proposal.options ?? {},
-  );
-  return Result.isSuccess(options) && options.success.reflect
-    ? 'document task, with critic'
-    : 'document task';
-}
+}): string => (proposal.task ? 'program' : 'agent');

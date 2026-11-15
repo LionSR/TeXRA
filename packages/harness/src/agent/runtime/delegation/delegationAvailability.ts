@@ -29,7 +29,6 @@ import { decideRunModel } from '@model/runModelDecision';
 import {
   AGENT_TOOL_NAME,
   MODEL_AVAILABILITY_STATUS,
-  PROGRAM_TOOL_NAME,
   type AgentDelegationScope,
   type DelegationTargets,
 } from '@shared/schemas';
@@ -62,40 +61,28 @@ export const delegationAgents = Effect.fn('delegationAgents')(function* (
 });
 
 /**
- * The targets the offered `definitions` can launch, or `undefined` when they
- * hold no delegation tool: the run's pinned delegation scope's agents, or
- * the workspace's visible ones, each marked when it is a task (it holds a
- * plugin's block);
- * only those when `program` is offered without `agent`.
+ * The targets the `agent` tool can launch, or `undefined` when the step's
+ * tools hold none: the run's pinned delegation scope's agents, or the
+ * workspace's visible ones.
  */
 export const readDelegationTargets = Effect.fn('readDelegationTargets')(
   function* (
-    { definitions, registry }: Pick<StepTools, 'definitions' | 'registry'>,
+    { registry }: Pick<StepTools, 'registry'>,
     stores: SettingsStores,
     scope: AgentDelegationScope | undefined,
   ) {
-    const chats = registry.get(AGENT_TOOL_NAME) !== undefined;
-    const tasks = definitions.some(({ name }) => name === PROGRAM_TOOL_NAME);
-    if (!chats && !tasks) return undefined;
-    const agents = (yield* delegationAgents(stores, scope)).flatMap(
-      ({ name, description, tools: agentTools, blocks }) => {
-        const task = Object.keys(blocks).length > 0;
-        return chats || task
-          ? [
-              {
-                name,
-                // One line per agent: a blank line in a (user-defined)
-                // description would otherwise read as the end of the list.
-                description: (description || 'No description').replaceAll(
-                  /\s*\n\s*/g,
-                  ' ',
-                ),
-                tools: agentTools ?? [],
-                task,
-              },
-            ]
-          : [];
-      },
+    if (registry.get(AGENT_TOOL_NAME) === undefined) return undefined;
+    const agents = (yield* delegationAgents(stores, scope)).map(
+      ({ name, description, tools: agentTools }) => ({
+        name,
+        // One line per agent: a blank line in a (user-defined) description
+        // would otherwise read as the end of the list.
+        description: (description || 'No description').replaceAll(
+          /\s*\n\s*/g,
+          ' ',
+        ),
+        tools: agentTools ?? [],
+      }),
     );
     const models = yield* readModelOptions(stores).pipe(
       Effect.map(availableModelNames),
@@ -112,9 +99,7 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
     return {
       agents,
       models,
-      worktree: chats
-        ? yield* Settings.get(stores, GIT_WORKTREE_SUPPORT_SETTING)
-        : null,
+      worktree: yield* Settings.get(stores, GIT_WORKTREE_SUPPORT_SETTING),
     } satisfies DelegationTargets;
   },
 );
@@ -139,16 +124,9 @@ export function delegationSection(targets: DelegationTargets): string {
       : [
           head,
           ...targets.agents.map(
-            ({ name, description, tools: agentTools, task }) =>
-              `- ${name}${task ? ' (task)' : ''}: ${description}${agentTools.length > 0 ? `\n  Tools: ${agentTools.join(', ')}` : ''}`,
+            ({ name, description, tools: agentTools }) =>
+              `- ${name}: ${description}${agentTools.length > 0 ? `\n  Tools: ${agentTools.join(', ')}` : ''}`,
           ),
-          // What a task is belongs to the plugin whose block makes the agent
-          // one; the harness says only that the marker names such an agent.
-          ...(targets.agents.some(({ task }) => task)
-            ? [
-                "An agent marked (task) is one a plugin's program runs as, through `program` with it as `agentName` where that tool is offered.",
-              ]
-            : []),
         ];
   if (targets.models === null)
     lines.push(

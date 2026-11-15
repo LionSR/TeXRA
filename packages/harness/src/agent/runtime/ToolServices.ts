@@ -5,10 +5,6 @@ import { runInbox, type RunInbox } from '@agent/followUp/ToolUseFollowUp';
 import { Inbox } from '@agent/followUp/Inbox';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import {
-  launchChildAgent,
-  type ChildLaunch,
-} from '@agent/runtime/delegation/AgentTool';
-import {
   launchProcessChild,
   type ProcessChildLaunch,
 } from '@agent/runtime/processRun';
@@ -18,7 +14,6 @@ import {
   qualifyAggregateId,
   type RunEnd,
   type RunId,
-  type ToolResult,
   factName,
 } from '@shared/schemas';
 import {
@@ -70,19 +65,14 @@ export type PluginToolServices =
   | Scope.Scope;
 
 /**
- * A plugin tool's one door to the session's runs. It launches children of
- * its call's run: an agent's (`launch`: the child's result, or its receipt
- * for a background launch) or an external process's (`launchProcess`: its
- * run id, outside the child-run budget); a plugin's tool reaches no other
- * launch. And it reaches a
- * run of the session by id: its input, live parent edge, records, whether
+ * A plugin tool's one door to the session's runs. It launches an external
+ * process as a child of its call's run (`launchProcess`: its run id,
+ * outside the child-run budget); a plugin's tool reaches no other launch.
+ * And it reaches a run of the session by id: its input, live parent edge, records, whether
  * it holds a request, and the plugin's own facts on it, each over the
  * call's run.
  */
 export interface ChildRunsShape {
-  readonly launch: (
-    launch: ChildLaunch,
-  ) => Effect.Effect<ToolResult, Error, PluginToolServices>;
   readonly launchProcess: (
     launch: ProcessChildLaunch,
   ) => Effect.Effect<RunId, Error, ToolContext | RunServices>;
@@ -161,7 +151,6 @@ export const childRuns = (
   const inSession = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     Effect.provide(effect, session);
   return {
-    launch: (launch) => inSession(launchChildAgent(launch)),
     launchProcess: (launch) =>
       inSession(launchProcessChild({ runId, logId: call.logId }, launch)),
     inbox: (id) => Effect.succeed(runInbox(id, session)),

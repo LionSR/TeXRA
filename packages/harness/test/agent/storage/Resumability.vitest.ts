@@ -87,7 +87,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 type: 'run.config',
                 aggregateId: qualifyAggregateId('run', runId),
                 config: Schema.decodeUnknownSync(AgentConfigSchema)(
-                  asDocumentTask({ agent: 'polish', model: 'test-model' }),
+                  asDocumentTask({ model: 'test-model' }),
                 ),
               },
             ]);

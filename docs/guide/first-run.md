@@ -6,7 +6,7 @@ import CliRunHero from '../.vitepress/components/CliRunHero.vue';
 
 # First run
 
-This walkthrough runs your first agent—`polish`—on a `.tex` file and shows how to inspect the resulting diff in VS Code or the terminal. It takes under five minutes.
+This walkthrough runs your first program—a polish with `edit`—on a `.tex` file and shows how to inspect the resulting diff in VS Code or the terminal. It takes under five minutes.
 
 If you don't have TeXRA yet, read the [installation guide](./installation.md).
 
@@ -58,18 +58,19 @@ demonstrate this in the following sections through various experiments.
 EOF
 ```
 
-## Run polish
+## Run a polish
 
 ### In VS Code
 
-1. Open `draft.tex`.
+1. Open the folder that holds `draft.tex`.
 2. Select the TeXRA icon in the Secondary Side Bar.
-3. Pick **polish** from the **Agent** menu and **anthropic/claude-sonnet-5-5** from the
-   **Model** menu (or any available model).
-4. Open **Documents and attachments**, select <wa-icon library="texra" name="add"></wa-icon> **Add input files** under **Input**, and pick `draft.tex` from the file picker.
-5. Type an instruction:
-   > Tighten the prose. Preserve all math and citations.
-6. Select **Start task** (the arrow button).
+3. Keep the default agent in the **Agent** menu and pick
+   **anthropic/claude-sonnet-5-5** from the **Model** menu (or any available model).
+4. Type an instruction that names the file:
+   > Polish draft.tex: tighten the prose. Preserve all math and citations.
+5. Select **Start task** (the arrow button).
+6. The agent proposes an `edit` run on `draft.tex`. Check the files and the
+   instruction on the proposal card, then approve it.
 
 The ProgressBoard opens and streams the run. When it finishes, a
 **diff** icon appears on the completed stream. Select it to see what
@@ -78,28 +79,28 @@ changed.
 ### In the terminal
 
 ```sh
-texra run polish \
+texra run edit \
   --input draft.tex \
   --instruction "Tighten the prose. Preserve all math and citations."
 ```
 
 <CliRunHero
-  command='texra run polish --input draft.tex --instruction "Tighten the prose. Preserve all math and citations."'
+  command='texra run edit --input draft.tex --instruction "Tighten the prose. Preserve all math and citations."'
   :rounds="[
     { label: 'Revision 1: draft  ·  r0/draft.tex written', state: 'done' },
-    { label: 'Revision 2: critique, rereading its own output', state: 'active' },
+    { label: 'Revision 2: review, rereading its own output', state: 'active' },
   ]"
 />
 
-<p class="hero-caption">Mid-run: the first revision is written and the second is critiquing and revising it. The live status line on stderr tracks the current revision. When the run completes, the path to the final document prints on stdout.</p>
+<p class="hero-caption">Mid-run: the first revision is written and the second is reviewing and correcting it. The live status line on stderr tracks the current revision. When the run completes, the path to the final document prints on stdout.</p>
 
 The run streams reasoning, tool calls, and the assembled output.
-When it completes, polish has written one folder per revision in the run's
+When it completes, `edit` has written one folder per revision in the run's
 storage folder (`executions/<run-id>/` under TeXRA's workspace storage):
 
 <PolishRunTree />
 
-<p class="hero-caption">Each revision lands in its own folder and keeps the input filename: <code>r0/draft.tex</code> is the first revision, <code>r1/draft.tex</code> the critique pass and final. Add <code>--output draft.polished.tex</code> to write the result next to your input instead.</p>
+<p class="hero-caption">Each revision lands in its own folder and keeps the input filename: <code>r0/draft.tex</code> is the first revision, <code>r1/draft.tex</code> the review pass and final. Add <code>--output draft.polished.tex</code> to write the result next to your input instead.</p>
 
 To diff against your original, use the final-document path printed on
 stdout:
@@ -110,26 +111,26 @@ diff -u draft.tex <path-to-r1/draft.tex-from-stdout>
 
 ## What just happened
 
-Polish ran two passes: a first revision, then a critique pass that
-rereads its own output and revises again.
+`edit` ran two passes: a first revision, then a review pass that
+rereads its own output and corrects it.
 
 <FlowSteps :steps="[
   { n: 1, icon: 'wand', title: 'Revision 1: draft', desc: 'Reads draft.tex, applies your instruction, writes the first revision.', chips: [{ text: 'r0/draft.tex', variant: 'info', icon: 'file-code' }] },
-  { n: 2, icon: 'search', title: 'Revision 2: critique', desc: 'Rereads its own first revision, then revises again.', chips: [{ text: 'missing math', variant: 'warning' }, { text: 'weakened sentences', variant: 'warning' }, { text: 'generic filler', variant: 'warning' }, { text: 'out-of-scope edits', variant: 'warning' }, { text: 'r1/draft.tex', variant: 'info', icon: 'file-code' }] }
+  { n: 2, icon: 'search', title: 'Revision 2: review', desc: 'Rereads its own first revision against the original, then corrects it.', chips: [{ text: 'missing math', variant: 'warning' }, { text: 'weakened sentences', variant: 'warning' }, { text: 'generic filler', variant: 'warning' }, { text: 'out-of-scope edits', variant: 'warning' }, { text: 'r1/draft.tex', variant: 'info', icon: 'file-code' }] }
 ]" />
 
-<p class="hero-caption">Polish is a two-revision document task: the first revision drafts from your instruction, the second critiques its own output against a fixed checklist and revises into <code>r1/draft.tex</code>.</p>
+<p class="hero-caption"><code>edit</code> is a two-revision program: the first revision drafts from your instruction, the second reviews its own output against a fixed checklist and corrects it into <code>r1/draft.tex</code>.</p>
 
-A document task like `polish` does not call tools. It reads input, runs
-its revisions, and writes a diff. The next step up, agents with tools,
+A program like `edit` does not call tools. It reads input, runs
+its revisions, and writes a diff. Agents with tools
 can read across your project, search literature, verify algebra in
 Wolfram, prove theorems in Lean 4, and compile LaTeX. Read the
 [built-in agents catalog](./built-in-agents.md).
 
 ## Next steps
 
-- [**Polish a draft**](./workflows/polish-a-draft.md): the document task in depth: revisions, limits, multi-file projects
-- [**Built-in agents**](./built-in-agents.md): the full catalog, including `correct`, `research`, `review`, and `lean`
+- [**Polish a draft**](./workflows/polish-a-draft.md): the `edit` program in depth: revisions, limits, multi-file projects
+- [**Built-in agents**](./built-in-agents.md): the full catalog, including the programs and the `research`, `review`, and `lean` agents
 - [**Models**](./models.md): choosing a model that matches the work
 - [**TeXRA CLI**](./texra-cli.md): sign-in, workspace defaults, headless output formats
 - [**LaTeX Diff**](./latex-diff.md): compiled PDF comparison of revisions

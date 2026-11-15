@@ -1,39 +1,17 @@
 // Local imports
 import type { AgentConfig } from '@shared/schemas';
-import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
 
 /**
- * `config` opened on the document program for its agent, as a launcher builds
- * it once the catalog resolved an entry with a `task:` block; the outputs
- * stay as the case wrote them.
+ * `config` opened on the theory plugin's `edit` program, as a launcher
+ * builds a document run: an inline `edit` persona the program runs under,
+ * and the caller's other fields as the case wrote them.
  */
-export function asDocumentTask<
-  C extends Pick<AgentConfig, 'agent'> & Partial<AgentConfig>,
->(config: C) {
-  const source = config.agentSource ?? 'builtIn';
-  const patch = documentTaskPatch(
-    {
-      agent: config.agent,
-      agentSource: config.agentSource,
-      inputFiles: config.inputFiles ?? [],
-      outputFiles: config.outputFiles ?? [],
-    },
-    {
-      name: config.agent,
-      source,
-      path: `/agents/${config.agent}.yaml`,
-      persona: { prompt: '', tools: [], temperature: 1 },
-      blocks: {
-        task: {
-          outputs: [],
-          files: {},
-          prefix: '',
-          requests: ['Revise.'],
-        },
-      },
-    },
-  );
-  if (patch === null) throw new Error('a task entry always patches');
-  // The program only: the launch's outputs stay as the case wrote them.
-  return { ...config, script: patch.script };
+export function asDocumentTask<C extends Partial<AgentConfig>>(config: C) {
+  return {
+    ...config,
+    agent: 'edit',
+    agentSource: 'inline',
+    persona: { name: 'edit' },
+    script: { kind: 'program', name: 'edit', args: {} },
+  } as const;
 }

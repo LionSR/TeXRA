@@ -9,7 +9,7 @@ import MergePanelHero from '../.vitepress/components/MergePanelHero.vue';
 
 When an agent edits only one section of a long document, its output (`r0/draft.tex` or `r1/draft.tex`) may contain just the modified fragment rather than the full file. Running `latexdiff` directly between a partial fragment and the full original produces a broken diff.
 
-**Intelligent Merge** runs the `merge` agent to splice the edited fragment back into your full **Base File**, producing a complete `.tex` document that you can compile and compare cleanly with `latexdiff`.
+**Intelligent Merge** runs the `merge` program to splice the edited fragment back into your full **Base File**, producing a complete `.tex` document that you can compile and compare cleanly with `latexdiff`.
 
 <MergeFlowHero />
 
@@ -27,7 +27,7 @@ Open the merge action from the "LaTeXDiffs" sheet in the main TeXRA interface (h
 2.  **Select the edited file**: Choose the document containing the suggested changes from the "Edited File" dropdown (<wa-icon library="texra" name="edit"></wa-icon> Edited).
 3.  **Select Merge**: Select the "Merge" button (<wa-icon library="texra" name="merge"></wa-icon>) in the "Edited File" row. The merge runs on TeXRA's **helper model**, set from Settings → Models → Models. Models with strong reasoning (such as Claude Opus 5, GPT-6 / GPT-5.6, or Gemini 3.1 Pro) are recommended for complex merges.
 
-There is a second entry point. In the [ProgressBoard](./progress-board.md), each generated output file has a **Merge edits** action ("Merge edits into the workspace file") that runs the same `merge` agent against the corresponding workspace file, with no dropdowns to fill in.
+There is a second entry point. In the [ProgressBoard](./progress-board.md), each generated output file has a **Merge edits** action ("Merge edits into the workspace file") that runs the same `merge` program against the corresponding workspace file, with no dropdowns to fill in.
 
 ::: info Extension and desktop feature
 The Intelligent Merge action pairs a base file with a separate **Edited
@@ -40,7 +40,7 @@ workflow is not available from the CLI.
 
 ## Output
 
-The `merge` agent writes the combined document to run storage under the base file's name (`r0/<base filename>.tex`) and streams its progress in the [ProgressBoard](./progress-board.md). Once the run completes, compare `r0/<base filename>.tex` against your original file with `latexdiff` (or accept the merged file back into the workspace).
+The `merge` program writes the combined document to run storage under the base file's name (`r0/<base filename>.tex`) and streams its progress in the [ProgressBoard](./progress-board.md). Once the run completes, compare `r0/<base filename>.tex` against your original file with `latexdiff` (or accept the merged file back into the workspace).
 
 ## Next steps
 

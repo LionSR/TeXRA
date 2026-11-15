@@ -31,9 +31,8 @@
  *   [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
  *   [`RequestDecisionHook`](#requestdecisionhook) (what commits with the
  *   decision: [`RequestDecisionRecord`](#requestdecisionrecord)),
- *   [`FactKind`](#factkind), [`AgentBlock`](#agentblock)
- *   ([`agentBlockOf`](#agentblockof)), and [`Program`](#program) (how its
- *   run reads: [`ProgramResult`](#programresult)).
+ *   [`FactKind`](#factkind), and [`Program`](#program) (how its run
+ *   reads: [`ProgramResult`](#programresult)).
  */
 export {
   codemode,
@@ -56,11 +55,8 @@ export {
 } from '@tools/plugins';
 export type { WriteFilter } from '@tools/WriteTool';
 export {
-  agentBlockOf,
-  boundFile,
   PluginHold,
   ToolRegistry,
-  type AgentBlock,
   type Program,
   type ProgramResult,
   type PluginLayerServices,
@@ -168,15 +164,8 @@ export { Secrets, type PlatformSecrets } from '@platform/secrets';
 export { AppSignals, emitAppSignal } from '@platform/appSignals';
 export { withLogChannel } from '@logger/effectLog';
 export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionEventsLayer';
-// What `ChildRuns` launches: an agent's child, or an external process's
-// with the one turn it runs. A tool that launches children takes the
-// call fields every child launch takes (`CALL_FIELDS`) and its file lists
-// as `fileList` fields.
-export {
-  CALL_FIELDS,
-  fileList,
-  type ChildLaunch,
-} from '@agent/runtime/delegation/AgentTool';
+// What `ChildRuns` launches: an external process's child, with the one
+// turn it runs.
 export type {
   ProcessChildLaunch,
   ProcessReport,

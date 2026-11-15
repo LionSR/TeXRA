@@ -6,8 +6,6 @@
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
-import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
-import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import { SignalWatcher } from '@lit-labs/signals';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -108,8 +106,8 @@ export class AgentsTab extends SignalWatcher(LitElement) {
     postMessage(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER);
   }
 
-  private handleCreateAgent(task: boolean): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.CREATE_AGENT, { task });
+  private handleCreateAgent(): void {
+    postMessage(SETTINGS_VIEW_COMMANDS.CREATE_AGENT);
   }
 
   private handleChangeCustomDir(): void {
@@ -148,17 +146,14 @@ export class AgentsTab extends SignalWatcher(LitElement) {
   private renderAgentList(): TemplateResult {
     return html`
       <agent-selection-panel .agents=${this.agents}>
-        <wa-dropdown slot="actions">
-          <wa-button slot="trigger" variant="brand" size="s">
-            ${waIcon('plus', { slot: 'start' })}New agent
-          </wa-button>
-          <wa-dropdown-item @click=${() => this.handleCreateAgent(false)}>
-            ${waIcon('comment', { slot: 'icon' })}Chat agent
-          </wa-dropdown-item>
-          <wa-dropdown-item @click=${() => this.handleCreateAgent(true)}>
-            ${waIcon('file-lines', { slot: 'icon' })}Document task agent
-          </wa-dropdown-item>
-        </wa-dropdown>
+        <wa-button
+          slot="actions"
+          variant="brand"
+          size="s"
+          @click=${this.handleCreateAgent}
+        >
+          ${waIcon('plus', { slot: 'start' })}New agent
+        </wa-button>
       </agent-selection-panel>
     `;
   }

@@ -181,8 +181,8 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 
 - **Rate limits and quota**: Check your provider dashboard if requests fail with quota or billing errors.
 - **Large documents**: If a run times out or hits the output token limit on a long `.tex` file, split the file into per-section inputs or raise the model's max output tokens.
-- **Slow turnaround**: Document tasks run multi-pass reasoning and can take 10–30 minutes on frontier reasoning models. For quick edits, pick a faster model (`google/gemini-3.8-flash`, `anthropic/claude-haiku-5-5`, `deepseek/deepseek-flash`, or `openai/gpt-6-luna`), or use an interactive chat agent instead.
-- **Stronger reasoning**: For hard derivations, proofs, or complex merges, use a flagship model (`anthropic/claude-fable-5-1`, `anthropic/claude-opus-5-5`, `openai/gpt-6-astra`, `openai/gpt-6.1-sol`, or `google/gemini-4-argon`) and enable reflection with `--reflect` (add `task.requests` entries if you want extra revision passes).
+- **Slow turnaround**: Programs run multi-pass reasoning and can take 10–30 minutes on frontier reasoning models. For quick edits, pick a faster model (`google/gemini-3.8-flash`, `anthropic/claude-haiku-5-5`, `deepseek/deepseek-flash`, or `openai/gpt-6-luna`), or use an interactive chat agent instead.
+- **Stronger reasoning**: For hard derivations, proofs, or complex merges, use a flagship model (`anthropic/claude-fable-5-1`, `anthropic/claude-opus-5-5`, `openai/gpt-6-astra`, `openai/gpt-6.1-sol`, or `google/gemini-4-argon`). An agent can also start a program with a critic reviewing each revision (`args: { reflect: true }`).
 
 ### Missing or truncated output files
 
@@ -190,7 +190,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
    - In VS Code, check **Generated files** in the ProgressBoard or choose **Open task folder** (<wa-icon library="texra" name="folder-open"></wa-icon>) from the task's `⋯` menu to open `executions/<run-id>/`.
    - Each revision writes its extracted file under its input filename (e.g., `r0/draft.tex`, `r1/draft.tex`), alongside the raw model response `r0/output.xml`.
 2. **Repair malformed XML**:
-   - Document tasks wrap their output in `<documents><document name="...">...</document></documents>`.
+   - Programs wrap their output in `<documents><document name="...">...</document></documents>`.
    - TeXRA closes an unclosed `<document>` tag itself and tries to recover files that have no tags. If the model hit its output token limit or the reply is malformed in another way and a file still fails to extract, open `r0/output.xml` in the run folder and repair the tags to recover the text:
 
 <XmlRepairCard />

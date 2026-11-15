@@ -17,7 +17,7 @@
  */
 
 // Third-party imports
-import { getBasename, agentName } from '@texra-ai/harness/schemas';
+import { getBasename } from '@texra-ai/harness/schemas';
 import { html, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -36,7 +36,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared webview
 import '@ui/wa/spinner';
-import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
+import { documentRevisionsOf } from '@texra/shared/plugins/documents';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { shownRun, type Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
@@ -55,21 +55,6 @@ import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 import { ONBOARDING_SETUP_HANDOFF } from '@ui/copy/onboarding';
 import { requestErrorText } from '@ui/copy/requestErrors';
 
-/** A document task's planned pass count: its agent's catalog entry, by the
- *  key the launch recorded or, for a plain name only, the agent name. A
- *  source-qualified key names one agent exactly, so a same-named agent from
- *  another source never lends it its count. */
-function plannedPassesOf(run: RunView, host: HostSnapshot): number | undefined {
-  if (!isDocumentTaskRun(run) || run.identity.kind !== 'agent') {
-    return undefined;
-  }
-  const id = run.identity.agent;
-  return host.agentOptions.find(
-    (option) =>
-      option.value === id || (agentName(id) === id && option.label === id),
-  )?.rounds;
-}
-
 // Local imports - progress view frontend
 import { progressAppStyles } from './progressAppStyles';
 import './components/RunTabs';
@@ -84,7 +69,6 @@ import './components/FileSelectGroup';
 import './components/GettingStartedBanner';
 import './components/OnboardingWelcomeCard';
 import './components/RunHeader';
-import { launchAgentOption } from './components/composerChipMenus';
 import { editedProposal, formHost } from './proposalEdit';
 import type { HeaderMenuItem } from './components/RunHeader';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
@@ -285,7 +269,7 @@ export class ProgressApp extends LitElement {
                     .run=${run}
                     .view=${view}
                     .menuItems=${this.windowItems()}
-                    .plannedPasses=${plannedPassesOf(run, host)}
+                    .plannedPasses=${documentRevisionsOf(run)}
                     >${onDesktop ? nothing : sessions.button}${end.map((b) => b.button)}</run-header
                   >${onDesktop ? nothing : sessions.tooltip}${end.map((b) => b.tooltip)}`
               : html`${sessions.button}${sessions.tooltip}
@@ -457,20 +441,11 @@ export class ProgressApp extends LitElement {
       `;
     }
     const { launch } = surface;
-    // Only a document task reads Input and Context, so only an agent with
-    // one gets the file section; a chat attaches through the composer alone.
-    // The selected option's `rounds` decides, and the host's launch keeps to
-    // the same options: a selection naming none of them (an agent hidden
-    // since it was chosen) gets no file section, and its launch is refused.
-    // Open on a proposal, its own `task` flag decides: the form offers only
-    // agents of the proposal's kind, and a team's hidden member's option
-    // carries no `rounds` to read.
+    // Only a program reads Input and Context, and the form starts none
+    // itself: the file section shows while the form is open on a program's
+    // proposal. A chat attaches through the composer alone.
     const edited = editedProposal(surface, view);
-    const documentPass =
-      edited !== null
-        ? edited.data.task
-        : launch.launchTarget === 'agent' &&
-          launchAgentOption(launch, host)?.rounds !== undefined;
+    const documentPass = edited?.data.task === true;
     const selectedFiles = FILE_SELECT_CONFIGS.flatMap(
       (config) => launch[LAUNCH_FILE_LISTS[config.type]],
     );
@@ -501,7 +476,6 @@ export class ProgressApp extends LitElement {
                         <file-select-group
                           .config=${config}
                           .files=${launch[LAUNCH_FILE_LISTS[config.type]]}
-                          .checkboxValues=${launch}
                         ></file-select-group>
                       `,
                     )}

@@ -14,7 +14,7 @@
 import { Effect, Result, Schema, ScopedRef } from 'effect';
 
 // Local imports
-import { readProgramResult } from '@agent/runtime/programRun';
+import { programLaunch, readProgramResult } from '@agent/runtime/programRun';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { inRunSession, noLaterTurn } from '@agent/runtime/RunCall';
 import { decisionOf } from '@agent/runtime/requests';
@@ -46,7 +46,6 @@ import { defineTool, type DefinedTool } from '@tools/core/definition';
 import { nullishWithDefault, timeoutMsField } from '@tools/core/inputSchema';
 import { errorResult, executed } from '@tools/core/result';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
-import { ToolRegistry } from '@tools/toolTable';
 import { sha256 } from '@utils/core/idHash';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -143,11 +142,11 @@ type AgentInput = typeof AgentInputSchema.Type;
  * and what the child is. A chat (`program: null`) may ask for a value of
  * `schema` and attaches `mediaFiles` to its prompt. A program's child opens
  * on the registered program `name` and works over `files`; its proposal
- * shows `args` as its options, and the program's own `configure` turns the
- * approved launch into the arguments its script is called with. `tool`
+ * shows `args` as its options, and the options as approved are the
+ * arguments its script is called with. `tool`
  * names the launching tool in its reuse key and its copy.
  */
-export type ChildLaunch = {
+type ChildLaunch = {
   readonly tool: string;
   readonly agentName: string;
   /** An agent the call defines, named `agentName`: no catalog entry. */
@@ -304,12 +303,13 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const script = call.script ?? undefined;
   const { runId: parentRunId } = run;
   const { program, persona } = launch;
-  const { programs } = yield* ToolRegistry;
-  const registered = program === null ? null : programs.get(program.name);
-  if (registered === undefined)
-    return errorResult(
-      `No program is named '${program?.name}'. The programs are: ${[...programs.keys()].join(', ') || 'none'}.`,
+  // A name no plugin registers fails before anyone is asked to approve it.
+  if (program !== null) {
+    const known = yield* Effect.result(
+      programLaunch(program.name, program.args, launch.files),
     );
+    if (Result.isFailure(known)) return errorResult(known.failure.message);
+  }
   // A chat's files are the media on its prompt; a program names its four
   // lists.
   const files =
@@ -483,23 +483,6 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     },
   );
 
-  // The arguments and outputs the program's own rule gives a launch
-  // (`Program.configure`); without one, the launch's as given.
-  const configure = (chosen: AgentProposal) =>
-    registered?.configure === undefined
-      ? Effect.succeed({
-          args: chosen.options ?? {},
-          outputFiles: chosen.outputFiles,
-        })
-      : registered.configure(chosen);
-  // A launch the program refuses fails before anyone is asked to approve it.
-  if (program !== null) {
-    const refused = yield* Effect.flip(configure(proposal)).pipe(
-      Effect.catch(() => Effect.succeed(null)),
-    );
-    if (refused !== null) return errorResult(toErrorMessage(refused));
-  }
-
   const decided = yield* decideDelegation(
     call,
     proposal,
@@ -515,15 +498,17 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
 
   // The asking script's `script`; the child's (with its arguments) is set
   // below.
-  const { task: _t, script: _s, options: _o, ...approved } = decided.proposal;
-  // An approval may pick another agent and other options: the program's
-  // arguments follow the launch as approved.
-  const configured =
+  const { task: _t, script: _s, options, ...approved } = decided.proposal;
+  // A program's run is the program's own, whatever agent an approval named;
+  // its arguments are the options as approved.
+  const programConfig =
     program === null
-      ? undefined
-      : yield* Effect.result(configure(decided.proposal));
-  if (configured !== undefined && Result.isFailure(configured))
-    return errorResult(toErrorMessage(configured.failure));
+      ? null
+      : yield* Effect.result(
+          programLaunch(program.name, options ?? {}, approved),
+        );
+  if (programConfig !== null && Result.isFailure(programConfig))
+    return errorResult(programConfig.failure.message);
   const childApproval = decided.approvalMeta.childApproval ?? 'inherit';
   const grants = delegatedChildGrants(childApproval);
   const configPayload = {
@@ -533,15 +518,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       approved.agentSource === AGENT_SOURCE.INLINE ? approved.persona : null,
     ...(outputSchema !== undefined && { outputSchema }),
     delegationAgentScope: run.config.delegationAgentScope,
-    ...(program !== null &&
-      configured !== undefined && {
-        outputFiles: configured.success.outputFiles,
-        script: {
-          kind: 'program' as const,
-          name: program.name,
-          args: configured.success.args,
-        },
-      }),
+    ...(programConfig !== null && programConfig.success),
   };
   if (!awaited) {
     const runId = agentChildRunId(call);

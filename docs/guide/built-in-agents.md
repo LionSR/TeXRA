@@ -1,22 +1,22 @@
 <script setup>
 import DropdownMenu from '../.vitepress/components/DropdownMenu.vue';
 import AgentModeShapes from '../.vitepress/components/AgentModeShapes.vue';
-import CliAgentsListHero from '../.vitepress/components/CliAgentsListHero.vue';
 </script>
 
 # Built-in agent reference
 
-TeXRA includes built-in agents for derivations, formal proofs, literature search, manuscript editing, LaTeX debugging, figures, and slides. Pick an agent from the dropdown menu in the TeXRA panel or run it from the CLI.
+TeXRA includes built-in agents for derivations, formal proofs, literature search, LaTeX debugging, figures, and code, and eight [programs](#programs) that revise or create LaTeX documents. Pick an agent from the dropdown menu in the TeXRA panel or run it from the CLI; start a program by asking an agent for the edit, or with `texra run <program>`.
 
 <DropdownMenu
   label="Agent"
-  value="polish"
-  valueIcon="sparkle"
+  value="orchestrator"
+  valueIcon="robot"
   maxWidth="480px"
   columns="2"
   :groups="[
     {
       items: [
+        { name: 'orchestrator', icon: 'robot', active: true },
         { name: 'assistant', icon: 'comment' },
         { name: 'prover', icon: 'lightbulb' },
         { name: 'research', icon: 'robot' },
@@ -30,41 +30,22 @@ TeXRA includes built-in agents for derivations, formal proofs, literature search
         { name: 'creator', icon: 'wand' },
       ],
     },
-    {
-      items: [
-        { name: 'correct', icon: 'check' },
-        { name: 'polish', icon: 'sparkle', active: true },
-        { name: 'paper2slide', icon: 'file-pdf' },
-        { name: 'paper2poster', icon: 'file-pdf' },
-        { name: 'ocr', icon: 'file-code' },
-        { name: 'transcribe_audio', icon: 'mic' },
-        { name: 'merge', icon: 'merge' },
-      ],
-    },
   ]"
 />
 
-<p class="hero-caption">The agent picker lists each agent once: the chat agents (a few shown on the left) and the agents with a document task (right). In the picker itself, each document agent carries a file icon. Picking one, like the selected <code>polish</code>, starts its document task on your files.</p>
+<p class="hero-caption">The agent picker lists the chat agents enabled for the workspace (a few shown here). Programs are not in the picker: an agent starts one for you.</p>
 
-The same catalog is available from any terminal:
-
-<CliAgentsListHero />
-
-<p class="hero-caption">One <code>kind &nbsp;name&nbsp; description</code> row per agent, tab-separated and stable for scripts, the kind <code>task</code> for an agent with a document task and <code>chat</code> otherwise; <code>--tasks</code> lists only the agents with a document task, <code>--all</code> includes hidden agents.</p>
+The same catalog is available from any terminal with `texra agents list`: one tab-separated `name  description` row per agent, stable for scripts; `--all` includes hidden agents.
 
 ## Quick reference
 
-Every agent chats: it converses and calls its tools in a loop. An agent
-whose file has a `task` block can also run a document task, a fixed
-pipeline over the files you select:
-
-<AgentCatalog />
-
-The two shapes behave differently once they run:
+An agent chats: it converses and calls its tools in a loop until the work is
+done. A program is a fixed procedure over the files you name: it revises them
+in a set number of revisions and hands back a versioned diff for you to accept.
 
 <AgentModeShapes />
 
-<p class="hero-caption">A chat loops: the agent converses and calls tools until done. A document task revises the input files in fixed revisions and hands back a versioned diff.</p>
+<p class="hero-caption">A chat loops: the agent converses and calls tools until done. A program revises the input files in fixed revisions and hands back a versioned diff.</p>
 
 ::: warning Prompts may change
 The prompts and specific behaviors of these built-in agents may change slightly between TeXRA versions. If you need precise, unchanging behavior or want to customize the process in depth, create a [custom agent](./custom-agents.md) based on these examples.
@@ -172,7 +153,7 @@ informal outline, then produce Lean code and iterate until it compiles.
 
 ### `presenter`
 
-Builds and refines LaTeX Beamer presentations, posters, and other visual materials for scientific code, methods, and results, working interactively with you. It reads your project and any template you provide, plans the deck, writes and compiles the slides, generates figures by running code, and visually checks every compiled page (overflow, overlaps, unreadable text, broken TikZ) until the output is clean. To convert a finished paper into a deck without the back-and-forth, use the `paper2slide` agent (a document task).
+Builds and refines LaTeX Beamer presentations, posters, and other visual materials for scientific code, methods, and results, working interactively with you. It reads your project and any template you provide, plans the deck, writes and compiles the slides, generates figures by running code, and visually checks every compiled page (overflow, overlaps, unreadable text, broken TikZ) until the output is clean. To convert a finished paper into a deck without the back-and-forth, use the [`slides` program](#programs).
 
 **Best for:** Conference talks, seminar presentations, lightning talks
 
@@ -184,58 +165,73 @@ algorithm, key results, and future work. Use the metropolis theme and include Ti
 diagrams for the architecture.
 ```
 
-## Research writing agents
+## Programs
 
-These are document tasks; `generic`, `devise`, `criticize` and `apply` are
-members of the Physicist, Mathematician, and Computer Scientist teams.
-`criticize` and `firstread` only leave inline comments; `logic`, `notation`
-and `enhance` revise the paper and mark their changes and suggestions with
-inline comments; `generic` and `devise` rewrite it, and `apply` works through
-the comments the reviewers left.
+The `theory` plugin ships eight programs. Each takes input files and an
+optional instruction; the instruction decides how far the program goes and
+from which point of view it reads.
 
-| Agent       | What it does                                                                                                   |
-| :---------- | :------------------------------------------------------------------------------------------------------------- |
-| `generic`   | Edits the paper by your instruction, keeping academic and LaTeX conventions and the paper's own comment style. |
-| `devise`    | Rewrites in two phases: adds rigorous derivations, then revises to publication-ready style.                    |
-| `criticize` | Reviews the paper critically and inserts inline comments.                                                      |
-| `firstread` | Reads the paper top to bottom as a first-time reader and notes where it loses the thread.                      |
-| `logic`     | Improves the argument's structure and coherence.                                                               |
-| `notation`  | Makes symbol usage consistent across the document.                                                             |
-| `enhance`   | Looks for stronger results and more elegant proofs.                                                            |
-| `apply`     | Reads the inline comments the reviewers left and applies the fixes.                                            |
+| Program      | What it does                                                                                       | What the instruction decides                                                                                               |
+| :----------- | :------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------- |
+| `edit`       | Rewrites the documents.                                                                            | How far to go: a proofread, a polish for clarity and flow, or new and expanded content. With no instruction it proofreads. |
+| `annotate`   | Reviews the documents by adding `\criticize{}` comments. It never rewrites.                        | The point of view, for example a first-time reader. With none it reads as a referee of the mathematics.                    |
+| `enhance`    | Improves the substance: makes the changes it can carry out in full and annotates the rest.         | What to look at: the mathematics, the logical structure, or the notation.                                                  |
+| `apply`      | Implements the fixes that inline comments from an earlier review ask for.                          | Which comments to handle. With none it handles them all.                                                                   |
+| `merge`      | Merges a partial edit back into the full original document.                                        | Started by the [Merge action](./intelligent-merge.md).                                                                     |
+| `transcribe` | Turns media files into a LaTeX document: handwriting or scans, or audio, by the media file's type. | Anything specific about the content, such as who the speakers are.                                                         |
+| `slides`     | Turns a paper into a Beamer slide deck on the bundled template.                                    | Length, emphasis and audience.                                                                                             |
+| `poster`     | Turns a paper into a Beamer poster on the bundled template.                                        | Emphasis and audience.                                                                                                     |
 
-A typical loop is `criticize` (or `firstread`, `logic`, `notation`), then
-`apply`. Each is a YAML file you can read and copy into a
-[custom agent](./custom-agents.md) to change.
+A point of view is a sentence of the instruction, not a separate program:
+"read as a first-time reader" for `annotate`, "check that the notation is
+consistent" for `enhance`. A typical loop is `annotate`, then `apply`.
 
-## Correction & polishing agents
+### Starting a program
 
-### `correct`
+- **In the app**: ask an agent in plain words, for example "polish section 2
+  of main.tex" to the default `orchestrator` (or to `assistant`). The agent
+  proposes a `program` run; the proposal card shows the program, the
+  instruction and the files, and you can edit them before you approve.
+- **From the terminal**: `texra run <program> --input <file>`, with an
+  optional `--instruction`:
 
-Fixes typos, grammatical errors, and LaTeX syntax issues without changing the style or technical content of your document.
+  ```bash
+  texra run edit --input paper.tex --instruction "Polish the introduction"
+  texra run annotate --input paper.tex --instruction "Read as a first-time reader"
+  ```
 
-**Best for:** Final proofreading before submission, fixing errors across collaborative drafts, standardizing notation and formatting
+  Read the [CLI guide](./texra-cli.md#running-agents) for the other flags.
 
-**Example instruction:**
+- **From a script**: `program('edit', { prompt, inputFiles })`; read
+  [Multi-agent workflows](./multi-agent-workflows.md).
+
+Programs are part of the **Multi-Agent Workflow** plugin's `program` tool, so
+an agent can start one only while that plugin is enabled.
+
+### `edit`
+
+**Best for:** Proofreading before submission, tightening prose whose math and structure are settled, adding a derivation the draft skips
+
+**Example instructions:**
 
 ```
-Fix grammatical errors, typos, and LaTeX syntax issues throughout the document.
-Ensure consistent notation for mathematical symbols and equations.
-Don't change the technical content or writing style.
+Fix typos, grammar and LaTeX syntax. Do not change the technical content or the writing style.
 ```
 
-### `polish`
+```
+Polish the introduction for clarity and flow. Keep every equation and citation.
+```
 
-Tightens prose and improves readability while preserving equations, citations, and technical meaning.
-
-**Best for:** Drafts whose math and structure are settled but need clearer writing before submission
+```
+Expand the derivation of equation (12), showing every intermediate step.
+```
 
 #### Example output
 
-Run `polish` on the [sample document](/examples/draft.pdf) to see a color-coded diff showing exactly what changed. The agent produces versioned output files with latexdiff highlighting additions in blue and deletions in red.
+A polish of the [sample document](/examples/draft.pdf) produces a color-coded diff showing exactly what changed: versioned output files, with latexdiff highlighting additions in blue and deletions in red.
 
 <div class="agent-pdf-viewer">
-  <iframe src="/examples/draft_polish_r1_gemini25p_diff.pdf" title="Polish Agent Example" class="agent-pdf-frame"></iframe>
+  <iframe src="/examples/draft_polish_r1_gemini25p_diff.pdf" title="Polish example" class="agent-pdf-frame"></iframe>
   <a href="/examples/draft_polish_r1_gemini25p_diff.pdf" target="_blank" class="agent-pdf-link">View example</a>
 </div>
 
@@ -269,35 +265,59 @@ Run `polish` on the [sample document](/examples/draft.pdf) to see a color-coded 
 }
 </style>
 
-## Content generation & transformation agents
+### `annotate`
 
-### `paper2slide`
-
-Converts a research paper into a LaTeX Beamer presentation in a two-pass document task (draft, then review and fix).
-
-**Best for:** Conference talks, lecture slides, seminar decks from an existing manuscript
+Each comment is `\criticize{comment}{severity}{confidence}`, placed where the issue is: severity runs from 5 (invalidates a main claim) down to 1 (cosmetic), with 0 for a point verified correct, and confidence from 1 (a guess) to 5 (certain). The program checks that a revision changed nothing outside its comments.
 
 **Example instruction:**
 
 ```
-Convert this paper into a beamer presentation with approximately 15-20 slides.
-Include a title slide, outline, introduction, methodology, results, and conclusion.
-Use bullet points for clarity and add slide titles. Include the key figures and tables.
+Read as a first-time reader and mark every place where you lose the thread.
 ```
 
-### `paper2poster`
+### `enhance`
 
-Converts a paper into an A5 Beamer conference poster built on a bundled template, in a two-pass document task (draft, then review and fix).
-
-**Best for:** Conference posters and visual research summaries
+Marks each change it made with a comment that starts with "Implemented:" and each improvement it left to the authors with one that starts with "Suggestion:".
 
 **Example instruction:**
 
 ```
-Convert this paper into an academic poster using the bundled Beamer poster template.
-Include sections for Introduction, Methodology, Results, and Conclusions.
-Highlight key figures and tables. Make it visually appealing with appropriate columns.
+Make the notation consistent across the sections and the appendix.
 ```
+
+### `apply`
+
+Reads `\criticize{}`, `\todo{}`, `\comment{}` and `%` comments, applies the fix each asks for, and removes a comment once it is handled. A comment it cannot resolve stays in place.
+
+**Example instruction:**
+
+```
+Handle only the comments with severity 3 or higher.
+```
+
+### `transcribe`
+
+For images, converts handwritten or scanned mathematics into LaTeX that matches the notation of the context documents. For audio, writes a transcript with timestamps, speaker labels, and spoken mathematics typeset as equations; audio needs a model with native audio support (read [Working with figures](./working-with-figures.md)). The output is `transcript.tex`.
+
+**Example instruction:**
+
+```
+The recording is a lecture with questions from the audience. Label the speakers Lecturer and Questioner 1, 2, ...
+```
+
+### `slides` and `poster`
+
+Each writes a draft, then reviews and fixes it. `slides` writes `slides.tex`, a deck of 10 to 15 slides unless the instruction says otherwise; `poster` writes `poster.tex`.
+
+**Example instruction:**
+
+```
+A 20-minute seminar talk for non-specialists: spend more slides on motivation and state the main theorem without its proof.
+```
+
+### `merge`
+
+Takes a partially edited document (one that shows only the changed parts and marks the rest "unchanged") and rebuilds the complete document: it applies every edit as written and copies the unchanged parts from your original verbatim, preserving the structure so latexdiff can compare the versions. Read [Intelligent merge](./intelligent-merge.md) for the workflow.
 
 ::: tip Creating figures
 To generate or improve TikZ figures, chat with `research` or `presenter` and describe the figure. The agent writes compilable TikZ, compiles it, and visually verifies the result. Read [Working with figures](./working-with-figures.md) and [TikZ figures](./tikz-figures.md).
@@ -330,49 +350,6 @@ Generates a visual diff PDF between two LaTeX versions using `latexdiff`, so you
 Produce a latexdiff PDF comparing the submitted version (v1/main.tex) with the
 current revision (main.tex), highlighting additions and deletions.
 ```
-
-## Figure & media agents
-
-### `ocr`
-
-Converts handwritten equations and notes from images into LaTeX that matches your document's notation.
-
-**Best for:** Handwritten derivations, whiteboard photos, scanned mathematical notes
-
-**Example instruction:**
-
-```
-Convert the handwritten derivation in [notes.png] into LaTeX, matching the notation used in the attached document.
-```
-
-### `transcribe_audio`
-
-Transcribes audio recordings (lectures, talks, voice notes) into a LaTeX transcript with timestamps, speaker labels, and equations typeset as math. Requires a model with native audio support; read [Working with figures](./working-with-figures.md).
-
-**Best for:** Recorded lectures, seminar talks, voice memos
-
-**Example instruction:**
-
-```
-Transcribe the provided lecture audio file [lecture.mp3], identifying different speakers if possible (e.g., Lecturer, Questioner 1).
-```
-
-## Merge agent
-
-### `merge`
-
-Takes a partially edited document (one that shows only the changed parts and marks the rest "unchanged") and rebuilds the complete document: it applies every edit as written and copies the unchanged parts from your original verbatim, preserving the structure so latexdiff can compare the versions.
-
-**Best for:** Turning an abbreviated AI edit into a complete document, applying edits from output files
-
-**Example instruction:**
-
-```
-Merge the edited file into the original document. Copy every section marked
-"unchanged" from the original and keep its notation and citations.
-```
-
-Read [Intelligent merge](./intelligent-merge.md) for details on the merge workflow.
 
 ## Software engineering agents
 
@@ -504,9 +481,7 @@ Teams are predefined collections of agents for a discipline. Pick one from the
 | Software Engineer  | A project's code: implementation, review, debugging, and testing across specialists                                   | `engineer`         |
 
 Every team except Software Engineer bundles the `progressCheck` audit helper
-and `latexFixer`. Every member ships with TeXRA, including the `generic`,
-`devise`, `apply`, and `criticize` document tasks the Physicist,
-Mathematician, and Computer Scientist teams list, so no team needs a sign-in.
+and `latexFixer`. Every member ships with TeXRA, so no team needs a sign-in.
 Every lead can also run its specialists in parallel as a
 [multi-agent workflow](./multi-agent-workflows.md).
 

@@ -367,12 +367,12 @@ function validateTeamListAvailability() {
 
 function validateFileFlagMissingValues() {
   assertUsageError(
-    run(process.execPath, [binaryPath, 'run', 'polish', '--input', '--print']),
+    run(process.execPath, [binaryPath, 'run', 'edit', '--input', '--print']),
     'texra run missing --input value',
     'Missing value for --input',
   );
   assertUsageError(
-    run(process.execPath, [binaryPath, 'run', 'polish', '-i', '-p']),
+    run(process.execPath, [binaryPath, 'run', 'edit', '-i', '-p']),
     'texra run missing -i value',
     'Missing value for -i',
   );
@@ -380,7 +380,7 @@ function validateFileFlagMissingValues() {
     run(process.execPath, [
       binaryPath,
       'run',
-      'polish',
+      'edit',
       '--input',
       'paper.tex',
       '--output',
@@ -645,7 +645,7 @@ function validateRunCommand() {
     const baseArgs = [
       binaryPath,
       'run',
-      'polish',
+      'edit',
       '--input',
       'paper.tex',
       '--output',
@@ -678,19 +678,6 @@ function validateRunCommand() {
     assert(
       !text.stderr.includes(' · Stopped ·'),
       `a successful text run should not report the cancelled stopped label\nstderr:\n${text.stderr}`,
-    );
-
-    // Opt-in reflection: the bundled critic reviews revision 1, and revision
-    // 2 reads its critique.
-    const reflected = run(process.execPath, [...baseArgs, '--reflect'], {
-      cwd: repoRoot,
-      validationModel: true,
-      validationFlagPath,
-    });
-    assertSuccess(reflected, 'texra run --reflect');
-    assert(
-      reflected.stderr.includes('Critique 1 · critic'),
-      `a --reflect run should call the critic between revisions\nstderr:\n${reflected.stderr}`,
     );
 
     const json = run(

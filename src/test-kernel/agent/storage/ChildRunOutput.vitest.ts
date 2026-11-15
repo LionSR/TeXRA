@@ -25,14 +25,8 @@ import {
   sessionHandleOf,
   TestSession,
 } from '@test/support/testKernel';
-import {
-  DOCUMENT_PROGRAM,
-  documentsOutputFact,
-} from '@texra/shared/plugins/documents';
-import {
-  REVISE_MODULE,
-  REVISE_PROGRAM,
-} from '@texra/agent/output/documentRecipe';
+import { documentsOutputFact } from '@texra/shared/plugins/documents';
+import { THEORY_MODULES, THEORY_PROGRAMS } from '@texra/tools/theory/programs';
 import {
   RoundOutputSchema,
   type RoundOutput,
@@ -83,8 +77,8 @@ const resolveLayer = Layer.merge(
     toolTable([
       {
         id: 'theory',
-        scriptModules: { [DOCUMENT_PROGRAM]: REVISE_MODULE },
-        programs: { [DOCUMENT_PROGRAM]: REVISE_PROGRAM },
+        scriptModules: THEORY_MODULES,
+        programs: THEORY_PROGRAMS,
       },
     ]),
   ),
@@ -113,7 +107,7 @@ const persistCompletedChild = (
         config: Schema.decodeUnknownSync(AgentConfigSchema)({
           agent: 'draft',
           model: 'openai/gpt-6.1-sol',
-          script: { kind: 'program', name: DOCUMENT_PROGRAM, args: {} },
+          script: { kind: 'program', name: 'edit', args: {} },
         }),
       },
     ]);
@@ -124,7 +118,10 @@ const persistCompletedChild = (
         type: 'plugin.fact',
         aggregateId: qualifyAggregateId('run', childRunId),
         parent: null,
-        ...documentsOutputFact(workflowRounds(absolutePath)),
+        ...documentsOutputFact(
+          { revisions: 1, templates: [], creates: false },
+          workflowRounds(absolutePath),
+        ),
       },
       {
         type: 'run.end',

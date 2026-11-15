@@ -18,12 +18,9 @@ const ProgramInputSchema = Schema.Struct({
   name: Schema.String.check(Schema.isMinLength(1)).annotate({
     description: 'The program to start, by its name.',
   }),
-  agentName: Schema.String.check(Schema.isMinLength(1)).annotate({
-    description: 'The agent the program runs as.',
-  }),
   prompt: Schema.optional(Schema.NullOr(Schema.String)).annotate({
     description:
-      'The instruction the program follows, in plain prose: what to change and what to keep. Omit for the program as written.',
+      'The instruction the program follows, in plain prose: what to change, from which point of view, and what to keep. Omit for the program as written.',
   }),
   model: Schema.optional(Schema.NullOr(Schema.String)).annotate({
     description:
@@ -63,7 +60,9 @@ From a script, \`program(name, opts)\` waits for the program and resolves to its
     execute: (input: ProgramInput) =>
       launchChildAgent({
         tool: PROGRAM_TOOL_NAME,
-        agentName: input.agentName,
+        // The child is the program's own run, named for it.
+        agentName: input.name,
+        persona: { name: input.name },
         prompt: input.prompt ?? '',
         model: input.model,
         memories: input.memories,

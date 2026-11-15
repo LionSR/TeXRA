@@ -91,8 +91,8 @@ A [`PluginDefinition`](./harness/plugins#plugindefinition) can declare:
 - **`prompt`**: [`PromptSection`](./harness/plugins#promptsection) appended to the system prompt while active.
 - **`decision`**: [`RequestDecisionHook`](./harness/plugins#requestdecisionhook) run when a request of the plugin's kind is decided.
 - **`factKinds`**: [`FactKind`](./harness/plugins#factkind) schemas and fork policy for versioned `plugin.fact` rows committed by the plugin (latest values appear on `RunView.facts`; `fork: 'copy'` carries a run's row into its forks).
-- **`agentBlock`**: [`AgentBlock`](./harness/plugins#agentblock) claiming a top-level YAML key in agent definitions (read via [`agentBlockOf`](./harness/plugins#agentblockof)) to run a structured recipe script.
 - **`scriptModules`** and **`requires`**: script module sources a `script` imports as `builtIn:<name>`, and the ids of the plugins this one runs on.
+- **`programs`**: those of its `scriptModules` that are started by name ([`Program`](./harness/plugins#program)): each a run opened on `script.kind: 'program'`, which imports the module and calls its default export with the launch's arguments, instruction and files.
 
 An availability `check(inputs)` returns `{ available, statusLabel?, statusDetail? }` from one observation of the asking workspace. The check owns optional-detail failures: log the cause and retain an availability result already established. The harness owns the complete check's deadline, cached results and refresh.
 

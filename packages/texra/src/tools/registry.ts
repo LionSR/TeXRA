@@ -30,14 +30,7 @@ import replacementEngine, {
 import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import type { PluginSettingRow } from '@texra/shared/settingsView/settingRows';
-import {
-  DOCUMENT_PROGRAM,
-  DOCUMENT_TASK_BLOCK,
-} from '@texra/shared/plugins/documents';
-import {
-  REVISE_MODULE,
-  REVISE_PROGRAM,
-} from '@texra/agent/output/documentRecipe';
+import { THEORY_MODULES, THEORY_PROGRAMS } from './theory/programs';
 import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
 import { isTexFile } from '@texra/shared/latexFileTypes';
 
@@ -300,29 +293,32 @@ const setup = (
     ],
   });
 
-/** The theorist's programs: the `revise` program a document task runs,
- *  the `task:` block of an agent file it reads, the tools it calls, and
- *  accepting the documents a run produced into the workspace. */
+/** The theorist's programs: the document programs a person or a model
+ *  starts by name, the tools they call, and accepting the documents a run
+ *  produced into the workspace. */
 const theory: TexraPlugin = {
   id: 'theory',
   icons: { accept_run_files: 'check' },
-  agentBlock: DOCUMENT_TASK_BLOCK,
-  // The delegation targets mark a task's agent `(task)`.
   prompt: ({ offered }) =>
     offered.includes('program')
       ? [
-          `An agent marked (task) in the available agents runs a document task over files with \`program\`: \`name: '${DOCUMENT_PROGRAM}'\`, the agent as \`agentName\`, and the files as \`inputFiles\`.`,
-          'Its delivery lists each proposed file with a `diff` attribute, the diff against the document the task started from, readable among the run\'s files (`/executions/{id}/files/<diff>`), and `large-change="true"` when the file changed extensively; a diff may be truncated.',
-          "The host compiles each .tex the task writes: a file that failed to build leaves its log at `compile/r{n}_<name>.log` among the run's files, which the delivery's `<compile-failures>` names (read it at `/executions/{id}/files/<log>`), and no log means every build passed or no LaTeX toolchain is installed.",
+          `\`program\` starts a document program over files (\`inputFiles\`, with \`contextFiles\` it may read and not change): ${Object.entries(
+            THEORY_PROGRAMS,
+          )
+            .map(([name, { description }]) => `\`${name}\` (${description})`)
+            .join('; ')}.`,
+          'Each rewrites whole documents in fixed revisions, with compile checks and diffs, and proposes the result for the user to accept; it reads only the files you pass. What to change, how far and from which point of view is the `prompt`: one program covers a proofread and a restructuring, a referee and a first reader.',
+          'Its delivery lists each proposed file with a `diff` attribute, the diff against the document the program started from, readable among the run\'s files (`/executions/{id}/files/<diff>`), and `large-change="true"` when the file changed extensively; a diff may be truncated.',
+          "The host compiles each .tex the program writes: a file that failed to build leaves its log at `compile/r{n}_<name>.log` among the run's files, which the delivery's `<compile-failures>` names (read it at `/executions/{id}/files/<log>`), and no log means every build passed or no LaTeX toolchain is installed.",
           ...(offered.includes('script')
             ? [
-                `In a script, \`program('${DOCUMENT_PROGRAM}', { agentName, inputFiles })\` resolves to the task's result, whose \`changes\` list each revision's files in order: pass the last \`absolutePath\` of each \`path\` as the \`inputFiles\` of the next task to chain them.`,
+                "In a script, `program(name, { prompt, inputFiles })` resolves to the program's result, whose `changes` list each revision's files in order: pass the last `absolutePath` of each `path` as the `inputFiles` of the next program to chain them. `describeTool(name)` shows a program's source, and `builtIn:revise` exports what the programs are built from.",
               ]
             : []),
         ].join(' ')
       : '',
-  scriptModules: { [DOCUMENT_PROGRAM]: REVISE_MODULE },
-  programs: { [DOCUMENT_PROGRAM]: REVISE_PROGRAM },
+  scriptModules: THEORY_MODULES,
+  programs: THEORY_PROGRAMS,
   tools: [
     AcceptRunFilesTool,
     DocumentContextTool,
