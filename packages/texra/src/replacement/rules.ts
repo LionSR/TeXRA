@@ -7,6 +7,7 @@ import {
   LATEX_ENVIRONMENTS,
   LETTERS,
   MATH_OPERATORS,
+  MATH_SYMBOL_SPELLINGS,
   SECTION_TYPES,
   UPPERCASE_GREEK_LETTER_CHARACTERS,
   UPPERCASE_LETTERS,
@@ -324,19 +325,18 @@ export const HTML_ENTITY_REPLACEMENTS: PatternDict = {
   '&apos;': "'",
   '&nbsp;': '~',
 
-  // Basic comparison operators frequently appear in HTML-escaped math
-  '&le;': '\\leq',
-  '&ge;': '\\geq',
-  '&ne;': '\\neq',
+  // Math symbols that also have a glyph spelling: MATH_SYMBOL_SPELLINGS owns
+  // the command, and its entity names come in here (&crarr;, the carriage-
+  // return arrow, among those that fall back to \leftarrow).
+  ...createPatterns(MATH_SYMBOL_SPELLINGS, (symbol) =>
+    symbol.entities.map((name): [string, string] => [
+      `&${name};`,
+      symbol.command,
+    ]),
+  ),
 
-  // Math operators and punctuation
+  // Math operators with no glyph twin
   '&plusmn;': '\\pm',
-  '&minus;': '-',
-  '&times;': '\\times',
-  '&divide;': '\\div',
-  '&middot;': '\\cdot',
-  '&sdot;': '\\cdot',
-  '&hellip;': '\\ldots',
 
   // Fraction glyphs
   '&frac12;': '\\frac{1}{2}',
@@ -344,7 +344,6 @@ export const HTML_ENTITY_REPLACEMENTS: PatternDict = {
   '&frac34;': '\\frac{3}{4}',
 
   // Miscellaneous glyphs
-  '&deg;': '^{\\circ}',
   '&micro;': '\\mu',
 
   // Greek letters: &alpha; -> \alpha. LaTeX has no \omicron, and the
@@ -356,47 +355,17 @@ export const HTML_ENTITY_REPLACEMENTS: PatternDict = {
     [`&${name};`, `\\${name}`],
   ]),
 
-  // Logical and set operators
+  // Logical and set operators with no glyph twin
   '&forall;': '\\forall',
   '&exist;': '\\exists',
-  '&nabla;': '\\nabla',
-  '&infin;': '\\infty',
-  '&and;': '\\wedge',
-  '&or;': '\\vee',
-  '&cap;': '\\cap',
-  '&cup;': '\\cup',
-  '&int;': '\\int',
-  '&sum;': '\\sum',
-  '&prod;': '\\prod',
   '&there4;': '\\therefore',
-  '&part;': '\\partial',
-  '&prop;': '\\propto',
-
-  // Relations
-  '&isin;': '\\in',
-  '&notin;': '\\notin',
-  '&ni;': '\\ni',
-  '&sub;': '\\subset',
-  '&sup;': '\\supset',
-  '&sube;': '\\subseteq',
-  '&supe;': '\\supseteq',
   '&oplus;': '\\oplus',
   '&otimes;': '\\otimes',
-  '&perp;': '\\perp',
 
-  // Directional arrows
-  '&larr;': '\\leftarrow',
-  '&rarr;': '\\rightarrow',
-  '&uarr;': '\\uparrow',
-  '&darr;': '\\downarrow',
-  '&harr;': '\\leftrightarrow',
+  // Directional arrows with no glyph twin
   '&lArr;': '\\Leftarrow',
-  '&rArr;': '\\Rightarrow',
   '&uArr;': '\\Uparrow',
   '&dArr;': '\\Downarrow',
-  '&hArr;': '\\Leftrightarrow',
-  // Return arrow is less common; fall back to a plain left arrow
-  '&crarr;': '\\leftarrow',
 };
 
 export const LATEX_XML_REPLACEMENTS: PatternDict = (() => {

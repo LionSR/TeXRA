@@ -32,6 +32,64 @@ export const UPPERCASE_GREEK_LETTER_CHARACTERS: Readonly<Record<string, string>>
   Sigma: 'Σ', Upsilon: 'Υ', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω',
 });
 
+/** A math symbol that has both a Unicode glyph and an HTML-entity spelling. */
+export interface MathSymbolSpelling {
+  /** The LaTeX each spelling is rewritten to. */
+  readonly command: string;
+  /** Unicode glyphs rewritten to `command` inside math (one per look-alike). */
+  readonly glyphs: readonly string[];
+  /** HTML entity names (without `&` and `;`) rewritten to `command` anywhere. */
+  readonly entities: readonly string[];
+}
+
+/**
+ * The math symbols with more than one source spelling, as the one owner of the
+ * command each spelling means. The math-only glyph pass (`MATH_UNICODE_MAP` in
+ * `advanced.ts`) and the global HTML-entity pass (`HTML_ENTITY_REPLACEMENTS` in
+ * `rules.ts`) derive their rows from this list, so neither can drift to a
+ * different command for the same symbol. A command may have more than one glyph
+ * (look-alikes, e.g. ⋅ U+22C5 and · U+00B7 for `\cdot`) or entity (`&crarr;`,
+ * the carriage-return arrow, falls back to a plain `\leftarrow`). Glyphs or
+ * entities with no twin stay listed at their table.
+ */
+export const MATH_SYMBOL_SPELLINGS: readonly MathSymbolSpelling[] = [
+  { command: '-', glyphs: ['−'], entities: ['minus'] },
+  { command: '\\times', glyphs: ['×'], entities: ['times'] },
+  { command: '\\div', glyphs: ['÷'], entities: ['divide'] },
+  { command: '\\leq', glyphs: ['≤'], entities: ['le'] },
+  { command: '\\geq', glyphs: ['≥'], entities: ['ge'] },
+  { command: '\\neq', glyphs: ['≠'], entities: ['ne'] },
+  { command: '\\propto', glyphs: ['∝'], entities: ['prop'] },
+  { command: '\\subset', glyphs: ['⊂'], entities: ['sub'] },
+  { command: '\\supset', glyphs: ['⊃'], entities: ['sup'] },
+  { command: '\\subseteq', glyphs: ['⊆'], entities: ['sube'] },
+  { command: '\\supseteq', glyphs: ['⊇'], entities: ['supe'] },
+  { command: '\\in', glyphs: ['∈'], entities: ['isin'] },
+  { command: '\\notin', glyphs: ['∉'], entities: ['notin'] },
+  { command: '\\ni', glyphs: ['∋'], entities: ['ni'] },
+  { command: '\\cap', glyphs: ['∩'], entities: ['cap'] },
+  { command: '\\cup', glyphs: ['∪'], entities: ['cup'] },
+  { command: '\\infty', glyphs: ['∞'], entities: ['infin'] },
+  { command: '\\nabla', glyphs: ['∇'], entities: ['nabla'] },
+  { command: '\\partial', glyphs: ['∂'], entities: ['part'] },
+  { command: '\\int', glyphs: ['∫'], entities: ['int'] },
+  { command: '\\sum', glyphs: ['∑'], entities: ['sum'] },
+  { command: '\\prod', glyphs: ['∏'], entities: ['prod'] },
+  { command: '\\perp', glyphs: ['⊥'], entities: ['perp'] },
+  { command: '\\wedge', glyphs: ['∧'], entities: ['and'] },
+  { command: '\\vee', glyphs: ['∨'], entities: ['or'] },
+  { command: '\\Rightarrow', glyphs: ['⇒'], entities: ['rArr'] },
+  { command: '\\Leftrightarrow', glyphs: ['⇔'], entities: ['hArr'] },
+  { command: '\\uparrow', glyphs: ['↑'], entities: ['uarr'] },
+  { command: '\\downarrow', glyphs: ['↓'], entities: ['darr'] },
+  { command: '\\leftarrow', glyphs: ['←'], entities: ['larr', 'crarr'] },
+  { command: '\\rightarrow', glyphs: ['→'], entities: ['rarr'] },
+  { command: '\\leftrightarrow', glyphs: ['↔'], entities: ['harr'] },
+  { command: '\\ldots', glyphs: ['…'], entities: ['hellip'] },
+  { command: '\\cdot', glyphs: ['⋅', '·'], entities: ['middot', 'sdot'] },
+  { command: '^{\\circ}', glyphs: ['°'], entities: ['deg'] },
+];
+
 // Section commands for LaTeX documents
 export const SECTION_TYPES = Object.freeze([
   'chapter',
