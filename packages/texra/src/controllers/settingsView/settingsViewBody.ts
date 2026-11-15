@@ -27,7 +27,6 @@ import {
   emitAppSignal,
 } from '@texra-ai/harness/plugins';
 import {
-  APPROVAL_POLICY_SETTING,
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
 } from '@texra-ai/harness/schemas';
