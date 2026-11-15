@@ -12,7 +12,7 @@ import {
   MAX_PINNED_MEMORIES,
   MEMORY_DISPLAY_ROOT,
   toDisplayPath,
-} from '@agent/memory/memoryUtils';
+} from '@agent/memory/memoryLayout';
 import {
   createMeta,
   formatAttribution,
@@ -509,7 +509,7 @@ const unpin = Effect.fn('MemoryTool.unpin')(function* (loc: MemoryLocation) {
 const buildDirectoryListing = Effect.fn('MemoryTool.buildDirectoryListing')(
   function* (resolvedPath: string, rootStats: FileSystem.File.Info) {
     const entries = yield* Stream.runCollect(
-      walkMemoryDirectory(resolvedPath, '', {
+      walkMemoryDirectory(resolvedPath, {
         maxDepth: DIRECTORY_LISTING_DEPTH,
         includeDirs: true,
       }),

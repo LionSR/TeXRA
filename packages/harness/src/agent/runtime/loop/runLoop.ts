@@ -47,7 +47,8 @@ import { sha256 } from '@utils/core/idHash';
 
 import { AgentRun } from '../run/AgentRun';
 import { compactAfterOverflow, compactAtBoundary } from '../run/compaction';
-import { mediaInputParts, type InputPart } from '../run/mediaInput';
+import { mediaInputParts } from '../run/mediaInput';
+import type { InputPart } from '@texra-ai/llm';
 import { claimFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
 import { resumeLeftoverChildren } from '../leftoverChildren';

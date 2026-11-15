@@ -42,7 +42,7 @@ import { runCompileCheck } from '@texra/agent/output/compileCheck';
 import { extractFilesFromXml } from '@texra/agent/output/outputFileExtraction';
 import { computeOutputDiffStats } from '@texra/agent/output/diffComputation';
 import { revisionLatexdiffs } from '@texra/agent/output/revisionLatexdiffs';
-import { ensureCorrectXmlStructure } from '@texra/agent/output/replyDocuments';
+import { normalizeReplyXml } from '@texra/agent/output/replyDocuments';
 import { revisionLayout } from '@texra/shared/constants/revisionLayout';
 import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
 import {
@@ -62,6 +62,7 @@ import {
   OUTPUT_END_TAG,
   type CompileOutcome,
   type RoundOutput,
+  formatRoundLabel,
 } from '@texra/shared/plugins/documentOutputs';
 import {
   DOCUMENTS_OPEN_PDF_SETTING,
@@ -220,7 +221,7 @@ const revisionContext = Effect.fn('documents.revisionContext')(function* (
     });
   const { prompt } = revised;
   return {
-    ...executed(prompt, `Revision ${revision + 1} of ${revisions}`),
+    ...executed(prompt, `${formatRoundLabel(revision)} of ${revisions}`),
     value: {
       prompt,
       mediaFiles: revised.media,
@@ -262,7 +263,7 @@ export const DocumentExtractTool = defineTool({
     const location = yield* keepReply(docs, revision, reply);
     // A broken structure costs the repair, not the revision: reported, and
     // extraction reads the reply as it is.
-    yield* ensureCorrectXmlStructure(location, roots.config, logger).pipe(
+    yield* normalizeReplyXml(location, roots.config, logger).pipe(
       recoverLogged(
         (error) => logger.warn(`XML structure: ${toErrorMessage(error)}`),
         () => Effect.void,
@@ -320,7 +321,7 @@ export const DocumentExtractTool = defineTool({
     // An open reply was cut off: the model hit its output limit.
     const truncated = reply.includes(OUTPUT_END_TAG)
       ? undefined
-      : `Revision ${revision + 1} did not close its documents, so its output may be incomplete. Raise the model's max output tokens to let it finish.`;
+      : `${formatRoundLabel(revision)} did not close its documents, so its output may be incomplete. Raise the model's max output tokens to let it finish.`;
     if (truncated !== undefined) {
       logger.warn(truncated);
       yield* docs.requests.present('requestShowInstruction', {
@@ -338,11 +339,11 @@ export const DocumentExtractTool = defineTool({
     return {
       ...executed(
         (files.length > 0
-          ? `Revision ${revision + 1} wrote: ${files.join(', ')}.`
-          : `Revision ${revision + 1} wrote no documents.`) +
+          ? `${formatRoundLabel(revision)} wrote: ${files.join(', ')}.`
+          : `${formatRoundLabel(revision)} wrote no documents.`) +
           (missing.length > 0 ? ` Missing: ${missing.join(', ')}.` : '') +
           (truncated === undefined ? '' : ` ${truncated}`),
-        `Revision ${revision + 1}: ${files.length} files`,
+        `${formatRoundLabel(revision)}: ${files.length} files`,
       ),
       value: { files, missing },
       facts: [documentsOutputFact(withRound(docs.rounds, round))],
@@ -448,9 +449,9 @@ export const DocumentCompileTool = defineTool({
         facts,
       };
     }
-    let message = `Revision ${revision + 1} compiles.`;
+    let message = `${formatRoundLabel(revision)} compiles.`;
     if (failures.length > 0)
-      message = `Revision ${revision + 1} failed to compile: ${summary.map((f) => `${f.output} (${f.log})`).join(', ')}`;
+      message = `${formatRoundLabel(revision)} failed to compile: ${summary.map((f) => `${f.output} (${f.log})`).join(', ')}`;
     return {
       ...executed(
         message,
@@ -478,7 +479,7 @@ export const DocumentDiffTool = defineTool({
     if (recorded === undefined || outputs.length === 0)
       return {
         ...executed(
-          `Revision ${revision + 1} has no outputs to diff.`,
+          `${formatRoundLabel(revision)} has no outputs to diff.`,
           'Nothing to diff',
         ),
         value: { diffs: [], failed: [], notRun: null },
@@ -501,10 +502,12 @@ export const DocumentDiffTool = defineTool({
     const pdfs = artifacts.map(fileLocationDisplayPath);
     // What the model reads: the diffs, each failed pair with its error, and
     // why no pair ran, each said apart from a revision with nothing to diff.
-    let lines = [`Revision ${revision + 1} has no document pairs to diff.`];
+    let lines = [
+      `${formatRoundLabel(revision)} has no document pairs to diff.`,
+    ];
     let summary = `${diffs.length} diffs`;
     if (notRun !== null) {
-      lines = [`No diffs for revision ${revision + 1}: ${notRun}.`];
+      lines = [`${formatRoundLabel(revision)} has no diffs: ${notRun}.`];
       summary = 'No diffs ran';
     } else if (entries.length > 0) {
       lines = [
