@@ -3,11 +3,13 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import './TexraDiffView';
 import { html, nothing, render, type TemplateResult } from 'lit';
+import { styleMap } from 'lit/directives/style-map.js';
 import { formatResultCount } from '@texra-ai/harness/schemas';
 
 import { DESKTOP_THEME_KIND, type Theme } from '@texra/shared/ipc';
+import { buildLineChangeStats } from '@ui/progress/formatters/htmlBuilders';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
-import { renderEmptyState } from '@ui/wa/emptyState';
+import { renderEmptyMessage, renderEmptyState } from '@ui/wa/emptyState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import { buildEditorTree, type EditorTreeNode } from './editorTree';
@@ -79,7 +81,7 @@ export function createReviewPane(): ReviewPaneController {
         return html`
           <wa-details
             class="desktop-review-directory"
-            style=${`--review-tree-depth: ${depth}`}
+            style=${styleMap({ '--tree-depth': String(depth) })}
             icon-placement="start"
             open
           >
@@ -98,7 +100,7 @@ export function createReviewPane(): ReviewPaneController {
         <wa-button
           type="button"
           class="desktop-review-file btn-ghost"
-          style=${`--review-tree-depth: ${depth}`}
+          style=${styleMap({ '--tree-depth': String(depth) })}
           appearance="plain"
           size="s"
           data-active=${active ? 'true' : 'false'}
@@ -148,10 +150,7 @@ export function createReviewPane(): ReviewPaneController {
         <header class="desktop-review-toolbar">
           <div class="desktop-review-summary">
             <strong>${selected?.title ?? 'Review changes'}</strong>
-            <span class="desktop-review-counts">
-              <span class="is-added">+${additions}</span>
-              <span class="is-deleted">-${deletions}</span>
-            </span>
+            ${buildLineChangeStats({ added: additions, removed: deletions })}
           </div>
           <span class="desktop-review-file-count">
             ${formatResultCount(shown.size, 'file')}
@@ -211,11 +210,7 @@ export function createReviewPane(): ReviewPaneController {
                         })),
                       ),
                     )
-                  : html`
-                      <div class="desktop-review-no-results">
-                        No matching files
-                      </div>
-                    `
+                  : renderEmptyMessage('No matching files')
               }
             </div>
           </aside>

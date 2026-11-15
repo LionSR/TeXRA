@@ -31,11 +31,14 @@ import {
   insertText,
   lineEndCursor,
   lineStartCursor,
+  nextGraphemeCursor,
   nextWordCursor,
+  previousGraphemeCursor,
   previousWordCursor,
   type CursorEdit,
   type TextEdit,
 } from './textInputEditing';
+import { SEPARATOR } from '@cli/tui/ui/glyphs';
 
 /** Structural subset of Ink's `Key` consulted by the keymap matchers. */
 interface TextInputKey {
@@ -125,13 +128,13 @@ const TEXT_INPUT_BINDINGS: readonly TextInputBinding[] = [
     keys: '←',
     action: 'left',
     matches: (_input, key) => key.leftArrow === true,
-    move: (_value, cursor) => cursor - 1,
+    move: previousGraphemeCursor,
   },
   {
     keys: '→',
     action: 'right',
     matches: (_input, key) => key.rightArrow === true,
-    move: (_value, cursor) => cursor + 1,
+    move: nextGraphemeCursor,
   },
   {
     keys: 'Home / Ctrl-A',
@@ -173,7 +176,7 @@ export function matchTextInputBinding(
 export function textInputEditingHelp(): string {
   return TEXT_INPUT_BINDINGS.filter((binding) => binding.advertise)
     .map((binding) => `\`${binding.keys}\` ${binding.action}`)
-    .join(' · ');
+    .join(SEPARATOR);
 }
 
 export interface TextInputChunkEdit extends TextEdit {
@@ -189,17 +192,25 @@ export function applyTerminalInputChunk(
 ): TextInputChunkEdit {
   let edit: TextEdit = { value, cursor: clampCursor(cursor, value.length) };
   let submit = false;
+  // Text waiting to be inserted. A run goes in whole: inserted one code
+  // point at a time, the first half of an emoji sequence could join what
+  // follows the cursor and the second half would land after it.
+  let run = '';
+  const insertRun = () => {
+    if (run !== '') edit = insertText(edit.value, edit.cursor, run);
+    run = '';
+  };
 
   const chars = [...input];
   for (let index = 0; index < chars.length; index += 1) {
     const ch = chars[index];
     if (ch === '\n') {
-      edit = insertText(edit.value, edit.cursor, '\n');
+      run += '\n';
       continue;
     }
     if (ch === '\r') {
       if (chars[index + 1] === '\n' && index + 2 < chars.length) {
-        edit = insertText(edit.value, edit.cursor, '\n');
+        run += '\n';
         index += 1;
         continue;
       }
@@ -209,6 +220,7 @@ export function applyTerminalInputChunk(
 
     const binding = matchTextInputBinding(ch, {});
     if (binding) {
+      insertRun();
       edit =
         'edit' in binding
           ? binding.edit(edit.value, edit.cursor)
@@ -218,10 +230,9 @@ export function applyTerminalInputChunk(
             };
       continue;
     }
-    if (!isUnhandledControlInput(ch)) {
-      edit = insertText(edit.value, edit.cursor, ch);
-    }
+    if (!isUnhandledControlInput(ch)) run += ch;
   }
+  insertRun();
 
   return { ...edit, submit };
 }

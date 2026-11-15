@@ -11,14 +11,13 @@ import { Effect } from 'effect';
 import {
   toErrorMessage,
   Cancelled,
-  Conflict,
   Rejected,
   Unavailable,
 } from '@texra-ai/harness/schemas';
 import { HostFailed } from '@texra/hosts/uiHosts';
 
 /**
- * How a host's request handler fails: with a tagged error, always. The four
+ * How a host's request handler fails: with a tagged error, always. The three
  * {@link RequestRefusal}s reach the surface as themselves; every other tag
  * is a defect the bridge logs and answers `Internal`, but a named one, so
  * the log says which capability produced it. The bound is structural
@@ -30,17 +29,16 @@ export interface HostCommandFailure extends Error {
   readonly _tag: string;
 }
 
-/** A request's refusal, as opposed to its defect: the four a handler may
+/** A request's refusal, as opposed to its defect: the three a handler may
  *  answer the surface with. */
-export type RequestRefusal = Cancelled | Unavailable | Rejected | Conflict;
+export type RequestRefusal = Cancelled | Unavailable | Rejected;
 
-/** Whether a failure is one of the four the bridge answers on the wire. */
+/** Whether a failure is one of the three the bridge answers on the wire. */
 export function isRequestRefusal(error: unknown): error is RequestRefusal {
   return (
     error instanceof Cancelled ||
     error instanceof Unavailable ||
-    error instanceof Rejected ||
-    error instanceof Conflict
+    error instanceof Rejected
   );
 }
 

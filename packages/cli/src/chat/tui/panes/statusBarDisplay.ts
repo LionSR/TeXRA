@@ -11,8 +11,8 @@ import {
   formatResultCount,
 } from '@texra-ai/harness/schemas';
 import { isWorking } from '@texra-ai/harness/schemas';
-import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
-import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
+import { keyHintText } from '@cli/tui/ui/KeyHints';
+import { SEPARATOR, STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import {
   firstFittingCandidate,
@@ -24,9 +24,10 @@ import type {
   SubscriptionUsageSnapshot,
 } from '@texra/shared/model/subscriptionUsage';
 import {
-  contextGaugeBand,
+  contextGaugeTone,
+  contextUsageText,
   roundedContextPercent,
-} from '@texra/shared/contextGauge';
+} from '@ui/copy/contextGauge';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { usageRouteBadge } from '@ui/copy/modelAccess';
 import { runStatus } from '@ui/copy/runStatus';
@@ -268,23 +269,18 @@ function formatUsage(
   // Occupancy is the run's `contextTokens` (the last response's input plus
   // output, then an estimate of what was added since), carried in the wire
   // field named `inputTokens`.
-  const { inputTokens: used, contextWindow, utilizationPercent } = contextState;
-  const percent = roundedContextPercent(utilizationPercent);
-  // Reads the run's own `utilizationPercent`, not a used/contextWindow
-  // re-derivation (drifts); shared bands/rounding with UsagePanel's gauge.
-  const band = contextGaugeBand(utilizationPercent);
-  let color: StatusBarColor | undefined;
-  if (band === 'error') color = COLOR_ERROR;
-  else if (band === 'warning') color = COLOR_WARNING;
+  const tone = contextGaugeTone(contextState.utilizationPercent);
   return {
     ...base,
-    text: `${formatCompactTokenCount(used)}/${formatCompactTokenCount(
-      contextWindow,
-    )} (${percent}%)`,
+    text: contextUsageText(contextState),
     // Keep context visibility on narrow terminals: degrade to the bare
     // percentage instead of dropping the segment entirely.
-    compactText: `${percent}%`,
-    ...(color === undefined ? { dim: true } : { color }),
+    compactText: `${roundedContextPercent(contextState.utilizationPercent)}%`,
+    // A window with room left stays dim: the bar calls attention only once
+    // it is getting full, in its tone's colour.
+    ...(tone === 'success'
+      ? { dim: true }
+      : { color: tone === 'danger' ? COLOR_ERROR : COLOR_WARNING }),
   };
 }
 
@@ -408,13 +404,13 @@ function fitStatusBarLeftSegments(
 }
 
 // Bindings use the shared KeyHints vocabulary (`key action` joined with
-// KEY_HINT_SEPARATOR) so the status bar and modal footers read as one system.
+// SEPARATOR) so the status bar and modal footers read as one system.
 function statusBarBindingRow(
   bindings: readonly (string | false | undefined)[],
 ): string {
   return bindings
     .filter((binding): binding is string => !!binding)
-    .join(KEY_HINT_SEPARATOR);
+    .join(SEPARATOR);
 }
 
 // Every bindings row below is a widest-first `firstFittingCandidate` cascade.

@@ -21,6 +21,7 @@
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
+import { styleMap } from 'lit/directives/style-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Side-effect imports - register WA components used by this template
@@ -47,6 +48,8 @@ import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { TickerController } from '@ui/litControllers/TickerController';
 import { runStatus } from '@ui/copy/runStatus';
 import { designTokens, commonViewStyles } from '@ui/styles';
+import { toneStyles } from '@ui/styles/toneStyles';
+import { overlineDeclarations } from '@ui/styles/commonViewStyles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { dispatchSummary, NESTED_NOUNS } from '@ui/copy/nestedRuns';
 import { getTimeFormatter } from '../formatters/timestampUtils';
@@ -61,6 +64,7 @@ export class BackgroundTasksPanel extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    toneStyles,
     css`
       :host {
         display: block;
@@ -108,11 +112,7 @@ export class BackgroundTasksPanel extends LitElement {
         align-items: center;
         gap: var(--wa-space-2xs);
         padding: var(--wa-space-2xs) var(--wa-space-xs) var(--wa-space-3xs);
-        font-size: var(--font-size-xs);
-        font-weight: var(--font-weight-semibold);
-        color: var(--color-text-secondary);
-        text-transform: uppercase;
-        letter-spacing: var(--letter-spacing-caps);
+        ${overlineDeclarations}
       }
 
       /* One row per child: the tone glyph, the label, the latest line, the
@@ -124,6 +124,9 @@ export class BackgroundTasksPanel extends LitElement {
         width: 100%;
         min-height: 1.75rem;
         padding: var(--wa-space-3xs) var(--wa-space-xs);
+        padding-inline-start: calc(
+          var(--wa-space-xs) + var(--tree-depth, 0) * var(--wa-space-m)
+        );
         border: 0;
         border-radius: var(--border-radius-small);
         background: transparent;
@@ -144,21 +147,7 @@ export class BackgroundTasksPanel extends LitElement {
       .task-icon {
         flex-shrink: 0;
         font-size: var(--font-size-sm);
-      }
-      .tone-running .task-icon {
-        color: var(--color-success);
-      }
-      .tone-success .task-icon {
-        color: var(--color-success);
-      }
-      .tone-danger .task-icon {
-        color: var(--color-error);
-      }
-      .tone-warning .task-icon {
-        color: var(--color-warning);
-      }
-      .tone-neutral .task-icon {
-        color: var(--color-text-muted);
+        color: var(--tone-color);
       }
 
       .task-name {
@@ -340,7 +329,7 @@ export class BackgroundTasksPanel extends LitElement {
           ${repeat(
             inquiries,
             (thread) => thread.threadId,
-            (thread, index) => this.renderInquiryItem(thread, index),
+            (thread) => this.renderInquiryItem(thread),
           )}
         </div>
       </wa-details>
@@ -383,7 +372,7 @@ export class BackgroundTasksPanel extends LitElement {
           'task-row': true,
           [`tone-${status.tone}`]: true,
         })}
-        style=${`padding-inline-start: calc(var(--wa-space-xs) + ${depth} * var(--wa-space-m))`}
+        style=${styleMap({ '--tree-depth': String(depth) })}
         aria-label=${label}
         @click=${() => this.navigateToRun(child.id)}
       >
@@ -396,12 +385,11 @@ export class BackgroundTasksPanel extends LitElement {
     `;
   }
 
-  private renderInquiryItem(
-    thread: InquiryThreadSummary,
-    index: number,
-  ): TemplateResult {
+  private renderInquiryItem(thread: InquiryThreadSummary): TemplateResult {
     const preview = thread.lastQuestionPreview || '(empty question)';
-    const idPrefix = `background-inquiry-${index}`;
+    // The thread's id (`ei_` and hex) names its tooltip anchors: a position
+    // would move a tooltip onto another thread's row when the list changes.
+    const idPrefix = `background-inquiry-${thread.threadId}`;
     return html`
       <div class="task-row" role="listitem">
         ${waIcon('circle-question', { className: 'task-icon' })}

@@ -56,7 +56,7 @@ export class ProcessRunContent extends BaseRunContent {
       }
 
       .prompt {
-        color: var(--wa-color-terminal-ansi-green, var(--color-success, #0a0));
+        color: var(--wa-color-terminal-ansi-green);
         font-weight: var(--font-weight-semibold);
         user-select: none;
         flex: 0 0 auto;
@@ -72,9 +72,9 @@ export class ProcessRunContent extends BaseRunContent {
     const run = this.run;
     if (!run) return nothing;
 
-    // The full command that spawned the process, from `run.start`; the
-    // toolbar itself stays neutral for a process identity.
-    const command = (run.command ?? run.description ?? '').trim();
+    // The full command that spawned the process, from its launch's
+    // `run.config`; the toolbar itself stays neutral for a process identity.
+    const command = run.command?.trim();
 
     return html`
       <div class="conversation-content">

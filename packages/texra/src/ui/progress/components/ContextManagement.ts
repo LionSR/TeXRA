@@ -4,6 +4,7 @@
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
+import { styleMap } from 'lit/directives/style-map.js';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/details/details.js';
@@ -64,7 +65,7 @@ export class ContextManagement extends LitElement {
       <wa-details
         class="banner-details"
         appearance="plain"
-        style="--accent-color: ${this.config.color}"
+        style=${styleMap({ '--accent-color': this.config.color })}
       >
         ${buildDetailsSummary({
           iconName: this.config.icon,

@@ -7,25 +7,16 @@
 
 import { homedir } from 'node:os';
 
-import {
-  Cause,
-  Effect,
-  Exit,
-  Layer,
-  Queue,
-  Scope,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Effect, Exit, Queue, Scope, Stream, SubscriptionRef } from 'effect';
 
 import {
-  workspaceEnvironmentLayer,
   type ProcessRuntime,
   type ProcessServices,
   ToolAvailability,
   type Notices,
 } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
+import { ensureError } from '@texra-ai/harness/schemas';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { type HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
@@ -69,9 +60,6 @@ interface ProjectBinding {
   readonly present: Notices;
   readonly workspace: ReturnType<typeof createDesktopWorkspaceIpc>;
   readonly browserViews: DesktopBrowserViews;
-  /** The project's `.env` over the process's: every question about this
-   *  project's models (its catalogs, its banners) is answered under it. */
-  readonly env: Layer.Layer<never>;
   /** The binding's lifetime; closing it releases everything above. */
   readonly scope: Scope.Closeable;
 }
@@ -81,11 +69,6 @@ export interface ProjectBindings {
   /** The binding of the project the window shows. */
   active(): ProjectBinding | undefined;
   all(): readonly ProjectBinding[];
-  /** Run `op` on every binding's snapshot source, each under its project's
-   *  own environment. */
-  eachSnapshot<E, R>(
-    op: (snapshot: ProjectBinding['snapshot']) => Effect.Effect<void, E, R>,
-  ): Effect.Effect<void, E, R>;
   /** Bind a project that opened and release one that closed. */
   readonly sync: Effect.Effect<void, never, ProcessServices>;
   /** Release every binding: a navigation destroys the document's request
@@ -121,30 +104,33 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
      *  process cwd (`/` when launched from the dock). `os.homedir()` throws
      *  where no home can be determined (some containers and remote hosts);
      *  only then does the process cwd stand, and the warning says why. */
-    const terminalCwd = (root: string | undefined): string => {
-      if (root !== undefined) return root;
-      try {
-        return homedir();
-      } catch (error) {
-        console.warn(
-          '[desktop] No home directory could be determined; the terminal opens in the app directory.',
-          error,
-        );
-        return process.cwd();
-      }
-    };
+    const terminalCwd = (root: string | undefined): Effect.Effect<string> =>
+      root !== undefined
+        ? Effect.succeed(root)
+        : Effect.try({ try: homedir, catch: ensureError }).pipe(
+            Effect.catch((error) =>
+              Effect.logWarning(
+                'No home directory could be determined; the terminal opens in the app directory.',
+              ).pipe(
+                Effect.annotateLogs({ data: error }),
+                withLogChannel('desktop'),
+                Effect.as(process.cwd()),
+              ),
+            ),
+          );
     /** Each document/project owns one auxiliary transport and its resources.
      *  Callbacks capture the project before any asynchronous file or PTY work,
      *  and a released binding's late callbacks are dropped. */
     const createProjectWorkspace = (
       project: DesktopProject,
       spawn: DesktopSpawn,
+      cwd: string,
     ) => {
       let released = false;
       const post = (message: DesktopWorkspaceReply) =>
         !released && host.post({ ...message, session: project.key });
       const ptyHost = createDesktopPtyHost({
-        cwd: terminalCwd(project.root),
+        cwd,
         onData: (sessionId, data) =>
           post({
             command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_DATA,
@@ -216,6 +202,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       const { workspace, browserViews, release } = createProjectWorkspace(
         project,
         spawn,
+        yield* terminalCwd(project.root),
       );
       const hosts = host.forProject(project);
       const files = createDesktopFileSelection({
@@ -310,8 +297,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         (attached) => attached.close,
       ).pipe(Effect.orDie);
       yield* Effect.addFinalizer(() => release);
-      const env = workspaceEnvironmentLayer(project.root);
-      yield* Effect.forkScoped(Effect.provide(snapshot.refresh, env));
+      yield* Effect.forkScoped(snapshot.refresh);
       return {
         project,
         bridge,
@@ -321,7 +307,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         present,
         workspace,
         browserViews,
-        env,
       };
     });
 
@@ -349,26 +334,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       get: (key) => bindings.get(key),
       active,
       all: () => [...bindings.values()],
-      eachSnapshot: (op) =>
-        Effect.forEach(
-          [...bindings.values()],
-          // One project's failure (its unreadable `.env`) is that project's:
-          // logged, and never stops the others' refresh.
-          (b) =>
-            Effect.provide(op(b.snapshot), b.env).pipe(
-              Effect.catchCause((cause) =>
-                Cause.hasInterruptsOnly(cause)
-                  ? Effect.failCause(cause)
-                  : Effect.logWarning(
-                      `The project ${b.project.root ?? b.project.key} did not refresh: ${Cause.pretty(cause)}`,
-                    ),
-              ),
-            ),
-          {
-            concurrency: 'unbounded',
-            discard: true,
-          },
-        ),
       sync: Effect.gen(function* () {
         const open = new Map(
           [projects.fallback(), ...projects.list()].map(

@@ -5,14 +5,16 @@
  * the window's tasks running after the window closes, and a window of a
  * newer build retires an older one.
  */
-import * as path from 'node:path';
-
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import {
   linkService,
   spawnService,
   type ServiceLink,
 } from '@texra/controllers/server/client';
+import {
+  SERVICE_SUBCOMMAND,
+  serviceBundlePath,
+} from '@texra/controllers/server/discovery';
 import type { GlobalValues } from '@texra-ai/harness/host';
 import { Effect, type Scope } from 'effect';
 
@@ -25,7 +27,7 @@ export function reachExtensionService(
     spawnService(
       defaultNodeStorageRoot(),
       process.execPath,
-      [path.join(extensionPath, 'serve', 'texra-serve.mjs'), 'serve'],
+      [serviceBundlePath(extensionPath), SERVICE_SUBCOMMAND],
       { ELECTRON_RUN_AS_NODE: '1' },
     ),
     Effect.logWarning,

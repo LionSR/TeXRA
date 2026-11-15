@@ -133,6 +133,7 @@ export {
 // and what hosts and the app publish and follow on it.
 export {
   appSignalStream,
+  subscribeAppSignal,
   onAppSignal,
   type AppSignal,
   type AppSignalEvent,

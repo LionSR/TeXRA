@@ -141,22 +141,19 @@ export function scanDirectory(
         if (!rootOf.has(yamlPath)) rootOf.set(yamlPath, root);
       }
     }
-    const parsed: ParsedAgentYaml[] = [];
-    for (const result of yield* Effect.forEach(
+    const [parsed, unreadable] = yield* Effect.partition(
       // Code-unit order, which the default sort gave one directory's paths.
       [...rootOf].toSorted(([a], [b]) => Number(a > b) - Number(a < b)),
       ([yamlPath, root]) =>
-        Effect.result(readYamlDefinition(yamlPath, root, fileSchema, blocks)),
+        readYamlDefinition(yamlPath, root, fileSchema, blocks),
       { concurrency: 8 },
-    )) {
-      if (Result.isSuccess(result)) parsed.push(result.success);
-      else {
-        issues.push({
-          path: result.failure.path,
-          message: result.failure.message,
-        });
-      }
-    }
+    );
+    issues.push(
+      ...unreadable.map((failure) => ({
+        path: failure.path,
+        message: failure.message,
+      })),
+    );
     const entries: AgentEntry[] = [];
     for (const entry of yield* entriesWithUniqueNames(parsed, issues)) {
       const scanned = yield* Effect.result(scanYaml(entry, source));

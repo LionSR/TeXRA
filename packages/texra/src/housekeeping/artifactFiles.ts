@@ -95,8 +95,8 @@ export const collectFilesFromPatterns = Effect.fn(
 )(function* (
   workspaceRoot: string,
   inputDir: string,
-  patterns: string[],
-  extensions: string[],
+  patterns: readonly string[],
+  extensions: readonly string[],
 ) {
   yield* Effect.logDebug(
     `Finding files in ${inputDir} using patterns ${patterns} and extensions ${extensions}`,

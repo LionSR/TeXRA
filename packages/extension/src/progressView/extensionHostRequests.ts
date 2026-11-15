@@ -43,12 +43,12 @@ import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
 import { withVSCodeProgress } from '@frontend/ui/progress';
-import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { previewFinalOutput } from '@frontend/agents/finalOutputOpener';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
+import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import type {
   GettingStartedAction,
   HostCommand,
@@ -83,7 +83,7 @@ import { openFile } from './openFile';
 
 const CHANNEL = 'ExtensionHostRequests';
 
-interface ExtensionHostRequestsOptions {
+export interface ExtensionHostRequestsOptions {
   /** Where this window's runs run: the session here, or the service's. */
   readonly runSession: Session;
   readonly roots: WorkspaceRoots;
@@ -101,6 +101,11 @@ interface ExtensionHostRequestsOptions {
   /** The settings view at a target (`texra.showDashboard`). */
   openSettings(
     target: SettingsTarget | undefined,
+  ): Effect.Effect<void, Error, ProcessServices>;
+  /** One subscription's sign-in as the settings view runs it, which tells
+   *  the user how it ended and repaints what follows the account. */
+  signInSubscription(
+    providerId: SubscriptionProviderId,
   ): Effect.Effect<void, Error, ProcessServices>;
   /** Bring the "Connect a model" card into view (the setup assistant's
    *  answer when no credential is usable). */
@@ -281,13 +286,6 @@ export const createExtensionHostRequests = Effect.fn(
     } satisfies HostOutcome;
   });
 
-  /** The reads a new credential invalidates: the credential, which the
-   *  funnel and the banner follow, and the catalogs. */
-  const refreshAfterCredentialChange = Effect.all(
-    [snapshot.refreshHostBanners, snapshot.refreshCatalogs],
-    { concurrency: 'unbounded', discard: true },
-  );
-
   /** What each getting-started action runs. */
   const gettingStarted = (action: GettingStartedAction) => {
     switch (action) {
@@ -333,12 +331,10 @@ export const createExtensionHostRequests = Effect.fn(
     },
     openSettings: (target) =>
       runHandler('openSettings', options.openSettings(target)),
-    // SecretManager has no key-changed event, so the set-key flow's
-    // completion is the explicit point to check the credential again.
+    // The key store announces the write (`credentialChanged`), which the
+    // launcher's credential check and catalogs follow.
     setApiKey: (provider) =>
-      runHandler('setApiKey', setApiKey(roots, provider)).pipe(
-        Effect.andThen(snapshot.refreshHostBanners),
-      ),
+      runHandler('setApiKey', setApiKey(roots, provider)),
     // A link VS Code declines or cannot open is answered as a rejection, so
     // the view shows which URL did not open.
     openExternal: (url) =>
@@ -353,10 +349,12 @@ export const createExtensionHostRequests = Effect.fn(
     // Every dependency the banner lists installs from the one guide page.
     openInstallGuide: runHandler('openDoc', openGuidePage('installation')),
     onboarding: {
-      signInChatGpt: Effect.gen(function* () {
-        yield* signInWithSubscription(roots, 'chatgpt');
-        yield* refreshAfterCredentialChange;
-      }).pipe(withLogChannel(CHANNEL)),
+      signInChatGpt: runHandler(
+        'signInChatGpt',
+        // Suspended: the settings view this waits for is asked when the
+        // card's program runs, not when this table is built.
+        Effect.suspend(() => options.signInSubscription('chatgpt')),
+      ),
       runSetup: (launch) =>
         runHandler(
           'runSetupAssistant',

@@ -287,7 +287,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         // plain div, not a heading, so there's no h1/h2 in this sidebar
         // subtree to nest under.
         headingTag: 'h2',
-        className: 'desktop-editor-tree-empty desktop-editor-tree-empty-state',
+        className: 'is-compact',
       });
     }
     return html`

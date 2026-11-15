@@ -65,6 +65,9 @@ export const COLOR_INFO = 'blue';
  *  neither success nor failure — see TeXRA#8115/#8188). */
 export const COLOR_BORDER = 'gray';
 
+/** Text on a filled status-bar badge, whatever the badge's own color. */
+export const COLOR_BADGE_TEXT = 'black';
+
 // Not on this palette, by design:
 //  - `render/DiffView.tsx`'s hex constants are paired background+foreground
 //    bands tuned for WCAG contrast on both light and dark terminals, not

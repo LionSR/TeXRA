@@ -21,7 +21,6 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import * as os from 'node:os';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -88,10 +87,6 @@ import { foldRunRows, RUN_ROW_READS } from '@shared/session/runRowReads';
 import type { SessionLogShape } from '@shared/session/sessionLog';
 import { SessionEvents } from '@shared/session/sessionEvents';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import {
-  nodeSpawnerLayer,
-  scriptedSpawnerLayer,
-} from '@test/support/childProcessTestLayer';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { runStart } from '@test/support/sessionRows';
 import { readStoreSnapshot } from '@test/support/storeFaults';
@@ -105,12 +100,7 @@ import {
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { ownFactsChecked } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-vi.mock('node:os', async (importOriginal) => ({
-  ...(await importOriginal<typeof os>()),
-  platform: vi.fn(() => process.platform),
-}));
 vi.mock('@texra/tools/lean/direct/leanServerPool', async () => {
   const { Layer } = await import('effect');
   const { LeanLanguageServices } =
@@ -231,7 +221,7 @@ const graph = (
   store: Layer.Layer<
     Database,
     never,
-    WorkspaceRoots | FileSystem.FileSystem | ChildProcessSpawner
+    WorkspaceRoots | FileSystem.FileSystem
   > = databaseLayer('ephemeral').pipe(
     Layer.orDie,
     Layer.provide(storePluginsLayer),
@@ -617,14 +607,10 @@ describe('the session event table and its one publisher', () => {
     for (const root of roots) rmSync(root, { recursive: true, force: true });
   });
 
-  const substrate = (
-    storage: string,
-    spawner: Layer.Layer<ChildProcessSpawner> = nodeSpawnerLayer,
-  ) =>
+  const substrate = (storage: string) =>
     databaseLayer('persistent').pipe(
       Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
       Layer.provide(storePluginsLayer),
-      Layer.provide(spawner),
       Layer.provide(nodePlatformLayer),
       Layer.fresh,
     );
@@ -639,23 +625,6 @@ describe('the session event table and its one publisher', () => {
     db.exec('PRAGMA foreign_keys = ON');
     return db;
   };
-
-  it.effect('rejects a remote mount before creating the database', () => {
-    const storage = workspace();
-    const resolved = realpathSync.native(storage);
-    const system = vi.mocked(os.platform).mockReturnValue('darwin');
-    const mount = scriptedSpawnerLayer(() => ({
-      stdout: `server:/paper on ${resolved} (nfs, nodev)\n`,
-    }));
-    return Effect.gen(function* () {
-      const failure = yield* Effect.flip(
-        Database.pipe(Effect.provide(substrate(storage, mount.layer))),
-      );
-      expect(failure._tag).toBe('DatabaseOpenFailed');
-      expect(String(failure.cause)).toContain('verified local filesystem');
-      expect(existsSync(join(storage, 'texra.db'))).toBe(false);
-    }).pipe(Effect.ensuring(Effect.sync(() => system.mockRestore())));
-  });
 
   /** A store holding one run row, then re-stamped as another build's. */
   const storeOfFormat = (storage: string, format: number) =>
@@ -672,123 +641,6 @@ describe('the session event table and its one publisher', () => {
           }
         }),
       ),
-    );
-
-  /** A store as a pre-1.0 build left it: its `event` and `event_sequence`
-   *  keyed by `aggregate_id`, one event, one setting and one line of input
-   *  history, stamped `format`. */
-  const legacyStore = (storage: string, format: number) =>
-    Effect.sync(() => {
-      const connection = reader(storage);
-      try {
-        connection.exec(`
-          CREATE TABLE event_sequence (aggregate_id TEXT PRIMARY KEY, seq INTEGER);
-          CREATE TABLE event ("commit" INTEGER PRIMARY KEY, aggregate_id TEXT, data TEXT);
-          CREATE TABLE current_value (family TEXT, key TEXT, value TEXT);
-          CREATE TABLE input_history (id INTEGER PRIMARY KEY, at INTEGER, value TEXT);
-          INSERT INTO event_sequence VALUES ('["run","ab12cd"]', 1);
-          INSERT INTO event VALUES (1, '["run","ab12cd"]', '{}');
-          INSERT INTO current_value VALUES ('setting', 'k', '1');
-          INSERT INTO input_history VALUES (1, 1, 'an earlier prompt');
-          PRAGMA user_version = ${format};
-        `);
-      } finally {
-        connection.close();
-      }
-    });
-
-  it.effect('retires a store written before 1.0 whole and starts clean', () => {
-    const storage = workspace();
-    const format = 44;
-    return Effect.gen(function* () {
-      yield* legacyStore(storage, format);
-      const reopenedStore = yield* Database.pipe(
-        Effect.flatMap((database) =>
-          Effect.map(database.readListing(), (listing) => ({
-            listing,
-            movedAside: database.movedAside,
-          })),
-        ),
-        Effect.provide(substrate(storage)),
-      );
-      const asidePath = join(realpathSync.native(storage), 'texra.db.pre1');
-      expect(reopenedStore).toEqual({
-        listing: [],
-        movedAside: {
-          path: join(storage, 'texra.db'),
-          aside: asidePath,
-          reason: 'pre-1.0',
-        },
-      });
-      const aside = new DatabaseSync(asidePath);
-      try {
-        expect(aside.prepare('PRAGMA user_version').get()).toEqual({
-          user_version: format,
-        });
-        expect(
-          aside.prepare('SELECT count(*) AS rows FROM event').get(),
-        ).toEqual({ rows: 1 });
-      } finally {
-        aside.close();
-      }
-      // Nothing is kept, current values and input history included, and
-      // the file carries the 1.0 header.
-      const reopened = reader(storage);
-      try {
-        expect(reopened.prepare('PRAGMA user_version').get()).toEqual({
-          user_version: 105,
-        });
-        expect(reopened.prepare('PRAGMA auto_vacuum').get()).toEqual({
-          auto_vacuum: 2,
-        });
-        for (const table of ['current_value', 'input_history'])
-          expect(
-            reopened.prepare(`SELECT count(*) AS rows FROM ${table}`).get(),
-          ).toEqual({ rows: 0 });
-      } finally {
-        reopened.close();
-      }
-    });
-  });
-
-  // Another tool's database at the store's path: unstamped, or stamped with
-  // its own id even at the 1.0 schema's number.
-  for (const stamp of [
-    '',
-    'PRAGMA application_id = 1234; PRAGMA user_version = 102;',
-  ])
-    it.effect(
-      `refuses another application's SQLite file untouched (${stamp || 'unstamped'})`,
-      () => {
-        const storage = workspace();
-        return Effect.gen(function* () {
-          yield* Effect.sync(() => {
-            const connection = reader(storage);
-            try {
-              connection.exec(
-                `CREATE TABLE notes (body TEXT); INSERT INTO notes VALUES ('mine');
-             ${stamp}`,
-              );
-            } finally {
-              connection.close();
-            }
-          });
-          const failure = yield* Effect.flip(
-            Database.pipe(Effect.provide(substrate(storage))),
-          );
-          expect(failure._tag).toBe('DatabaseOpenFailed');
-          expect(failure.message).toContain('is not a session store');
-          expect(failure.message).toContain('application id');
-          const stored = reader(storage);
-          try {
-            expect(stored.prepare('SELECT body FROM notes').all()).toEqual([
-              { body: 'mine' },
-            ]);
-          } finally {
-            stored.close();
-          }
-        });
-      },
     );
 
   it.effect('moves a truncated store aside and opens a fresh one', () =>
@@ -815,7 +667,6 @@ describe('the session event table and its one publisher', () => {
           movedAside: {
             path: file,
             aside: expect.stringMatching(/texra\.db\.corrupt-\d+$/),
-            reason: 'corrupt',
           },
           commit: 0,
         });

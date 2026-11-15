@@ -153,8 +153,8 @@ export interface RunEnding {
   /** A child's report: its delivery, kept rendered as the run's
    *  `run.report` (the envelope its parent's model reads) and queued typed
    *  on the parent's input unless the parent's call awaits the child (it
-   *  reads the report itself) or the child was detached. Null, or absent:
-   *  nothing to report (a stop, a root). */
+   *  reads the report itself). Null, or absent: nothing to report (a stop,
+   *  a root). */
   readonly report?: ChildRunDelivery | null;
   /** Rows committed ahead of the end (a process run's exit). */
   readonly leading?: readonly UnfoldedDraft[];
@@ -344,8 +344,7 @@ export const endRunRows = Effect.fn('endRunRows')(function* (
  * The rows a stop commits for `runId`: its `run.stop` row, and, for a run
  * no fiber here drives (`end`), its CANCELLED end in the same batch. A run
  * whose lifecycle ended gets none: there is nothing to stop. The first stop
- * of a lifecycle stands: a person's outranks the shutdown that follows it,
- * and a second ask adds no row. Answers whether the run has rows at all:
+ * of a lifecycle stands, and a second ask adds no row. Answers whether the run has rows at all:
  * one that has none yet is a launch that has not registered.
  */
 export const stopRun = Effect.fn('stopRun')(function* (

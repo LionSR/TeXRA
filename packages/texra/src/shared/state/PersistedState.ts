@@ -1,4 +1,6 @@
-import { Predicate, Result, Schema, SchemaIssue } from 'effect';
+import { Predicate, Result, Schema } from 'effect';
+
+import { formatIssuesForDiagnostics } from '@texra-ai/harness/schemas';
 
 /** A renderer's synchronous key-value store; `undefined` removes a key. */
 export interface KeyValueStore {
@@ -144,17 +146,7 @@ function describeStored(value: unknown): string {
 
 /** First few schema issues, trimmed so the console stays readable. */
 function summarizeIssues(error: Schema.SchemaError): Record<string, unknown>[] {
-  return formatIssues(error.issue)
-    .issues.slice(0, 5)
-    .map((issue) => ({
-      path:
-        issue.path
-          ?.map((segment) =>
-            String(typeof segment === 'object' ? segment.key : segment),
-          )
-          .join('.') || '(root)',
-      message: issue.message,
-    }));
+  return formatIssuesForDiagnostics(error)
+    .slice(0, 5)
+    .map(({ path, message }) => ({ path: path || '(root)', message }));
 }
-
-const formatIssues = SchemaIssue.makeFormatterStandardSchemaV1();

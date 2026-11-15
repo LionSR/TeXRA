@@ -1,13 +1,5 @@
 // Local imports - shared formatting
-import {
-  COLOR_BORDER,
-  COLOR_ERROR,
-  COLOR_HINT,
-  COLOR_SUCCESS,
-  COLOR_WARNING,
-} from '@cli/tui/ui/colors';
-import { STATUS_DOT, TOKENS_GENERATED } from '@cli/tui/ui/glyphs';
-import type { RunTone } from '@ui/copy/runStatus';
+import { STATUS_DOT, TOKENS_GENERATED, SEPARATOR } from '@cli/tui/ui/glyphs';
 
 // Local imports - TUI state
 import type { PendingRequestKind } from '../state/approvalQueue';
@@ -15,16 +7,6 @@ import {
   formatCompactTokenCount,
   formatResultCount,
 } from '@texra-ai/harness/schemas';
-
-/** The app's copy owns status meaning; terminal colors express only its tone. */
-export const CHILD_TONE_COLOR: Readonly<Record<RunTone, string>> =
-  Object.freeze({
-    running: COLOR_HINT,
-    warning: COLOR_WARNING,
-    danger: COLOR_ERROR,
-    success: COLOR_SUCCESS,
-    neutral: COLOR_BORDER,
-  });
 
 /** A steady marker, so list updates never animate the whole live region. */
 export const CHILD_STATUS_MARKER = `${STATUS_DOT} `;
@@ -66,7 +48,7 @@ export function childRowMetadataText({
       ? `${TOKENS_GENERATED}${formatCompactTokenCount(outputTokens)}`
       : undefined;
   const parts = [elapsed, toolCalls, tokens].filter(Boolean);
-  return parts.length > 0 ? parts.join(' · ') : undefined;
+  return parts.length > 0 ? parts.join(SEPARATOR) : undefined;
 }
 
 /** Compact "waiting on what" display for a row. The first kind and overflow

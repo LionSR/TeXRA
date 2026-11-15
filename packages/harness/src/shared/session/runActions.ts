@@ -38,7 +38,13 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
 export function runActions(
   run: Pick<
     RunView,
-    'holder' | 'outcome' | 'turn' | 'identity' | 'recipe' | 'forkPoint'
+    | 'holder'
+    | 'outcome'
+    | 'position'
+    | 'turn'
+    | 'identity'
+    | 'recipe'
+    | 'forkPoint'
   >,
   stranded: boolean,
 ): RunAction[] {

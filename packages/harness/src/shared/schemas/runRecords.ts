@@ -48,17 +48,12 @@ export const recipeBlockOf = (
  * Why a run stops. `user` is an explicit stop of the work (a stop button,
  * Ctrl-C on a running turn, an agent's kill); `released`, the end of the
  * call that awaited a child (its script ended, its batch was cut). Both
- * cancel the remote background operation the run is observing.
- * `shutdown` only ends this process's hold on the run (an exit, a signal, a
- * session close), leaving that operation for a resume to observe.
+ * cancel the remote background operation the run is observing. A process
+ * that exits stops nothing: its runs are left as their rows stand, with no
+ * stop and no end, and read as interrupted at the next open.
  */
-export const RunStopReasonSchema = Schema.Literals([
-  'user',
-  'released',
-  'shutdown',
-]);
-/** Why a run stops: a `user` stop, its awaiting call's `released`, or this
- *  process's `shutdown`. */
+export const RunStopReasonSchema = Schema.Literals(['user', 'released']);
+/** Why a run stops: a `user` stop, or its awaiting call's `released`. */
 export type RunStopReason = typeof RunStopReasonSchema.Type;
 
 /** Why a run ended failed: a local failure in its own words, or a model

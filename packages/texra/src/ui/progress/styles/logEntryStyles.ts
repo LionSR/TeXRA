@@ -98,6 +98,10 @@ export const logEntryStyles = css`
 
   /* Note: .detail-item base styles are in commonViewStyles; this adds log-specific variants */
 
+  .file-load-icon {
+    color: var(--tone-color);
+  }
+
   .file-link {
     color: var(--color-text-link);
     cursor: pointer;
@@ -134,13 +138,6 @@ export const logEntryStyles = css`
     display: flex;
     flex-direction: column;
     gap: var(--wa-space-3xs);
-  }
-
-  /* Per-file +added/-removed line-change counts in tool detail rows. The
-     inline-flex gap spaces the two counts without a per-span inline style. */
-  .file-stats {
-    display: inline-flex;
-    gap: var(--wa-space-2xs);
   }
 
   /* Note: .details-summary base styles are in commonViewStyles */
@@ -212,11 +209,11 @@ export const logEntryStyles = css`
   }
 
   .level-debug {
-    color: var(--wa-color-debug-name, #4b9ef9);
+    color: var(--wa-color-debug-name);
   }
 
   .level-info {
-    color: var(--wa-color-icon-info, #75beff);
+    color: var(--wa-color-icon-info);
   }
 
   .level-warn,
@@ -230,7 +227,7 @@ export const logEntryStyles = css`
   }
 
   .message-debug {
-    color: var(--wa-color-text-preformat, #a9b7c6);
+    color: var(--wa-color-text-preformat);
   }
 
   .message-info {

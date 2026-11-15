@@ -1,14 +1,14 @@
 /**
  * `executeCliConfig`, the headless run every CLI command starts, over a real
  * session on the validation model: the CLI's own host interactions attach,
- * and the platform's shutdown scope stops the run.
+ * and the platform's shutdown leaves the run as it stands.
  *
  * Failure modes:
  * - a headless run (no prompt can be answered) is offered an approval-gated
  *   tool, under the default policy or `ask`;
- * - a run the platform's shutdown stopped does not store its cancelled end
- *   before the command exits, exits as anything but an interruption (130),
- *   or leaves no resume hint.
+ * - a run the platform's shutdown cut gets a stop or an end written for it
+ *   (it would read as stopped, not interrupted), the command exits as
+ *   anything but an interruption (130), or leaves no resume hint.
  */
 // Third-party imports
 import { layer } from '@effect/vitest';
@@ -48,11 +48,6 @@ const decodePayloadKind = Schema.decodeUnknownSync(
   ),
 );
 
-/** A stored `run.end` row's outcome. */
-const decodeOutcome = Schema.decodeUnknownSync(
-  Schema.fromJsonString(Schema.Struct({ outcome: Schema.String })),
-);
-
 /** The CLI context of a headless run in the host's workspace. */
 const headless = (overrides: Partial<CliContext> = {}) =>
   Effect.map(FakeHost, ({ roots }) =>
@@ -67,7 +62,6 @@ const runHeadless = (config: AgentConfigPayload, context: CliContext) =>
     return yield* executeCliToolUseConfig(config, context, {
       services: {
         session: Effect.succeed(session),
-        runtime: yield* SessionGraph.runtime,
         shutdownScope: (yield* FakeHost).platform.shutdownScope,
       },
       recoveryInputIsDurable: true,
@@ -120,7 +114,7 @@ describe('executeCliConfig', { timeout: REAL_RUN_TIMEOUT }, () => {
       );
 
       it.effect(
-        'stores a run the platform shutdown stopped as cancelled and exits 130',
+        'leaves a run the platform shutdown cut without a stop or an end and exits 130',
         () =>
           Effect.gen(function* () {
             const { platform, roots } = yield* FakeHost;
@@ -146,17 +140,19 @@ describe('executeCliConfig', { timeout: REAL_RUN_TIMEOUT }, () => {
             yield* Scope.close(platform.shutdownScope, Exit.void);
 
             const ended = yield* Fiber.join(run);
-            assert(ended.ok, 'the stopped run answers its end');
-            const { runId } = ended.result;
-            expect(ended).toMatchObject({
+            expect(ended).toEqual({
+              ok: false,
               exitCode: CliExitCode.Interrupted,
-              result: { outcome: 'cancelled' },
             });
+            const rows = storedRows(roots.storage);
+            const runId = rows.find((row) => row.type === 'run.start')?.run;
+            assert(runId !== undefined, 'the run registered');
             expect(
-              storedRows(roots.storage)
-                .filter((row) => row.run === runId && row.type === 'run.end')
-                .map((row) => decodeOutcome(row.data).outcome),
-            ).toEqual(['cancelled']);
+              rows
+                .filter((row) => row.run === runId)
+                .map((row) => row.type)
+                .filter((type) => type === 'run.stop' || type === 'run.end'),
+            ).toEqual([]);
             expect(stderr).toContain(`texra resume ${runId}`);
           }),
       );

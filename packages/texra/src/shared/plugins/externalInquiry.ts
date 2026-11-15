@@ -324,4 +324,4 @@ export class InquiryRecords extends Context.Service<
       runId?: RunId;
     }) => Effect.Effect<InquiryThreadSummary[], Error>;
   }
->()('@texra/InquiryRecords') {}
+>()('@texra-ai/texra/tools/InquiryRecords') {}

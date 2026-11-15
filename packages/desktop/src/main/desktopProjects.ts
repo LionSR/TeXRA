@@ -366,17 +366,12 @@ export const openDesktopProjectRegistry: (
           yield* records.remember(root);
           const projectScope = yield* Scope.make();
           return yield* Effect.gen(function* () {
-            // The stores report while they open, through a plain callback:
-            // their warnings are logged and shown once the open returns.
-            const configWarnings: string[] = [];
-            const workspaceConfigs = yield* openTexraWorkspaceConfigStores(
-              TEXRA_SETTINGS.catalog,
-              options.dataRoot,
-              root,
-              (message) => {
-                configWarnings.push(message);
-              },
-            );
+            const { warnings: configWarnings, ...workspaceConfigs } =
+              yield* openTexraWorkspaceConfigStores(
+                TEXRA_SETTINGS.catalog,
+                options.dataRoot,
+                root,
+              );
             for (const message of configWarnings) {
               yield* Effect.logWarning(message).pipe(withLogChannel('desktop'));
               yield* warn(message);

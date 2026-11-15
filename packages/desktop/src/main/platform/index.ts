@@ -65,12 +65,12 @@ export const initializeElectronPlatform = Effect.fn(
         mainDir,
         app.isPackaged,
       );
-      const configStores = yield* openTexraConfigStores(
+      const { stores: configStores, warnings } = yield* openTexraConfigStores(
         TEXRA_SETTINGS.catalog,
         dataRoot,
         undefined,
-        (message) => console.warn(`[desktop] ${message}`),
       );
+      for (const message of warnings) console.warn(`[desktop] ${message}`);
       return { mainDir, resourcesPath, configStores };
     },
   ).pipe(Effect.provide(nodeFileServices));

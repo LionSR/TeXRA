@@ -2,9 +2,8 @@ import { spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const packageRoot = fileURLToPath(new URL('..', import.meta.url));
+const packageRoot = join(import.meta.dirname, '..');
 
 /** Run one Node entry point in the package root; a failed step ends the build. */
 const runNode = (args) => {

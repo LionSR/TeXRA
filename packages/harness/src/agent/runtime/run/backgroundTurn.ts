@@ -36,9 +36,8 @@ const BACKGROUND_CANCEL_TIMEOUT_MS = 15_000;
 /**
  * Observe an accepted operation, cancelling it if the run unwinds from a user
  * stop: a confirmed cancel commits the `cancelled` row that retires the
- * operation, so a resume starts anew. Any other interrupt (a shutdown, an
- * unanswered recovery question) has no `user` stop reason and leaves the
- * operation for a resume to observe. A cancel the provider does not confirm,
+ * operation, so a resume starts anew. An interrupt with no stop asked (the
+ * session closing) leaves the operation for a resume to observe. A cancel the provider does not confirm,
  * that fails, or that outlasts its budget is logged loudly and leaves no
  * row, so the operation stays observable; the stop proceeds either way.
  */
@@ -94,10 +93,7 @@ export const observeBackground = (
       Exit.hasInterrupts(exit)
         ? Effect.flatMap(
             Effect.flatMap(SessionLog, (log) => log.facts(run.runId)),
-            (facts) =>
-              facts?.stop == null || facts.stop.reason === 'shutdown'
-                ? Effect.void
-                : cancel,
+            (facts) => (facts?.stop == null ? Effect.void : cancel),
           ).pipe(Effect.orDie)
         : Effect.void,
     ),
@@ -140,15 +136,6 @@ export const submitAndObserve = (
       const aggregateId = qualifyAggregateId('run', run.runId);
       const { operation } = submission;
       yield* cell.append([
-        {
-          type: 'model.message',
-          aggregateId,
-          payload: {
-            kind: 'identified',
-            invocation,
-            providerResponseId: operation.providerResponseId,
-          },
-        },
         {
           type: 'model.message',
           aggregateId,

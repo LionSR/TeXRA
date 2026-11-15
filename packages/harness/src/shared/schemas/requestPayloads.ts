@@ -118,15 +118,13 @@ const ApiKeyProviderIdSchema = Schema.Literals([
  * re-derive it from the error.
  */
 export const CredentialSwitchSchema = Schema.Union([
-  /** A subscription or coding-plan quota ran out: the run declines `route`
-   *  and retries on the model's own `provider` key. `automatic` records that
-   *  the invoker took the switch itself (a coding plan whose fallback key is
-   *  already stored), so no one was asked. */
+  /** A subscription or coding-plan quota ran out: answered with the
+   *  person's own key, the run declines `route` and retries on the model's
+   *  own `provider` key. */
   Schema.Struct({
     kind: Schema.Literal('decline-route'),
     route: DeclinableUsageRouteSchema,
     provider: ApiKeyProviderIdSchema,
-    automatic: Schema.Boolean,
   }),
   /** The account behind the stored `provider` key is out of credit, so only
    *  a changed key can succeed. */

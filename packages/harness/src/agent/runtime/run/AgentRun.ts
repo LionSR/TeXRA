@@ -70,8 +70,7 @@ const sessionModelAccess = Layer.unwrap(
  */
 interface LaunchEntry {
   /** The parent this activation runs under, read once as it starts (a
-   *  fresh run's launch, else its rows' edge): a child detached mid-run
-   *  keeps child behaviour until its next activation. */
+   *  fresh run's launch, else its rows' edge). */
   readonly parent: RunId | null;
   /** The parent's call awaits the child and reads its end itself: the
    *  end delivers nothing to the parent's input, and the run takes no

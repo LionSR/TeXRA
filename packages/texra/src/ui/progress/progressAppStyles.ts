@@ -4,6 +4,7 @@ import { css } from 'lit';
 // Shared styles
 import { visuallyHiddenStyles } from '@ui/styles';
 import { buttonStyles } from '@ui/styles/controlStyles';
+import { overlineDeclarations } from '@ui/styles/commonViewStyles';
 import { noticeStyles, readingColumnStyles } from '@ui/styles/surfaceStyles';
 
 import { heroStyles } from './components/NewTaskHero';
@@ -268,11 +269,7 @@ export const progressAppStyles = css`
 
   .active-label {
     padding: 0 var(--wa-space-2xs) var(--wa-space-3xs);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semibold);
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-    color: var(--color-text-secondary);
+    ${overlineDeclarations}
   }
 
   .active-now run-tabs {

@@ -1,5 +1,4 @@
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import type { TestInfo } from '@playwright/test';
 
 import {
@@ -22,7 +21,7 @@ import {
 // settings surfaces. Their behaviour is asserted in `trajectories.spec.ts`,
 // which CI runs; this project runs on request.
 
-const HERE = dirname(fileURLToPath(import.meta.url));
+const HERE = import.meta.dirname;
 const BASELINE_SCREENSHOTS_DIR = join(HERE, '__screenshots__');
 const UPDATE_BASELINE_SCREENSHOTS =
   process.env.TEXRA_UPDATE_E2E_SCREENSHOTS === '1';

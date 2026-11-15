@@ -165,7 +165,6 @@ export {
 // answered with, and a run's start as data.
 export {
   Cancelled,
-  Conflict,
   OutcomeSchema,
   Rejected,
   RequestErrorSchema,
@@ -215,7 +214,6 @@ export {
   APPROVAL_POLICY_SETTING,
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
-  DETACH_SUBAGENTS_ON_STOP_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
   DISABLED_SKILLS_SETTING,
   GIT_AUTHOR_EMAIL_SETTING,
@@ -297,6 +295,11 @@ export {
 } from '@shared/schemas';
 // Escaping for an XML or HTML attribute value and for element text.
 export { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
+// A schema failure as one dotted field path and message per leaf issue.
+export {
+  formatIssuesForDiagnostics,
+  type FormattedIssue,
+} from '@shared/schemas';
 
 // Agents, request payloads, harness setting keys, skills, and run outputs.
 export {

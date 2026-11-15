@@ -18,7 +18,8 @@ import {
 } from '@cli/tui/inputKeys';
 import { isTuiColorEnabled } from '@cli/tui/noColorOutput';
 import {
-  clampCursor,
+  restingCursor,
+  graphemeAt,
   insertText,
   maskDisplayValue,
   verticalCursorMove,
@@ -34,6 +35,7 @@ import {
 import { NO_IMAGE_PASTES, type ImagePastes } from './imagePasteQueue';
 import { useActiveDraft } from './activeDraft';
 import type { ProcessServices } from '@texra-ai/harness/host';
+import { GLYPH_CARET } from '@cli/tui/ui/glyphs';
 
 const IMAGE_PASTE_TIMEOUT_MS = 15_000;
 
@@ -113,7 +115,7 @@ export function TextInput(props: TextInputProps): React.JSX.Element {
   } = props;
 
   const [internalCursor, setInternalCursor] = useState<number>(value.length);
-  const cursor = clampCursor(internalCursor, value.length);
+  const cursor = restingCursor(value, internalCursor);
 
   // Mirror the latest value/cursor for async handlers (image paste): a
   // clipboard probe that resolves after the user keeps typing must insert at
@@ -136,7 +138,7 @@ export function TextInput(props: TextInputProps): React.JSX.Element {
 
   const moveCursor = useCallback((next: number) => {
     const latest = latestStateRef.current;
-    const c = clampCursor(next, latest.value.length);
+    const c = restingCursor(latest.value, next);
     latestStateRef.current = { value: latest.value, cursor: c };
     setInternalCursor(c);
   }, []);
@@ -151,7 +153,7 @@ export function TextInput(props: TextInputProps): React.JSX.Element {
 
   const applyEdit = useCallback(
     (edit: TextEdit) => {
-      const c = clampCursor(edit.cursor, edit.value.length);
+      const c = restingCursor(edit.value, edit.cursor);
       latestStateRef.current = { value: edit.value, cursor: c };
       lastEmittedValueRef.current = edit.value;
       onChange(edit.value);
@@ -166,7 +168,7 @@ export function TextInput(props: TextInputProps): React.JSX.Element {
     if (externalValue === undefined || externalValue === latest.value) {
       return latest;
     }
-    const cursor = clampCursor(latest.cursor, externalValue.length);
+    const cursor = restingCursor(externalValue, latest.cursor);
     const next = { value: externalValue, cursor };
     latestStateRef.current = next;
     setInternalCursor(cursor);
@@ -178,7 +180,7 @@ export function TextInput(props: TextInputProps): React.JSX.Element {
   const adoptEdit = useCallback((edit: TextEdit): TextEdit => {
     const next = {
       value: edit.value,
-      cursor: clampCursor(edit.cursor, edit.value.length),
+      cursor: restingCursor(edit.value, edit.cursor),
     };
     latestStateRef.current = next;
     lastEmittedValueRef.current = next.value;
@@ -402,7 +404,7 @@ export function TextInput(props: TextInputProps): React.JSX.Element {
   // place (same column budget as inverse) so near-full lines do not rewrap.
   const glyphCaret = !isTuiColorEnabled();
   const caretCell = (cell = ' ') =>
-    glyphCaret ? <Text>▏</Text> : <Text inverse>{cell}</Text>;
+    glyphCaret ? <Text>{GLYPH_CARET}</Text> : <Text inverse>{cell}</Text>;
 
   if (value.length === 0) {
     if (!focus) {
@@ -431,11 +433,12 @@ export function TextInput(props: TextInputProps): React.JSX.Element {
   if (!focus) return <Text>{shownValue}</Text>;
 
   const before = shownValue.slice(0, display.cursor);
-  const ch = shownValue[display.cursor];
-  const after = shownValue.slice(display.cursor + 1);
+  const cell = graphemeAt(shownValue, display.cursor);
+  const ch = cell?.text;
+  const after = shownValue.slice(cell?.end ?? shownValue.length);
   // Inverse-on-newline collapses to nothing visible; render the caret as a
   // leading space and let the literal newline carry the line break.
-  if (ch === '\n') {
+  if (ch?.endsWith('\n')) {
     return (
       <Text>
         {before}

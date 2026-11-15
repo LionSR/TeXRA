@@ -9,7 +9,6 @@
 import { Effect, Latch } from 'effect';
 
 import { COMPACTION_REQUEST } from '@agent/runtime/run/compaction';
-import { isInstruction } from '@shared/session/runFacts';
 import { isMessage, type QueuedFollowUp } from '@shared/session/runRows';
 import type { RunRowsRead } from '@shared/session/runRowReads';
 
@@ -19,28 +18,15 @@ type InputPoint = 'request' | 'turn' | 'idle';
 
 /**
  * The pending messages a run reads at `at`, in commit order. A row held
- * until an instruction (a stopped script's notice) is read only beside
- * one. A row held until the turn ends is not read before a request inside
- * the turn.
+ * until the turn ends is not read before a request inside the turn.
  */
 function readableMessages(
   rows: readonly QueuedFollowUp[],
   at: InputPoint,
 ): QueuedFollowUp[] {
-  const messages = rows.filter(isMessage);
-  const asked = messages.some(
-    (f) => f.holdUntil === undefined && isInstruction(f.content),
+  return rows.filter(
+    (f) => isMessage(f) && (f.holdUntil === undefined || at !== 'request'),
   );
-  return messages.filter((f) => {
-    switch (f.holdUntil) {
-      case 'instruction':
-        return asked;
-      case 'turn':
-        return at !== 'request';
-      case undefined:
-        return true;
-    }
-  });
 }
 
 /**

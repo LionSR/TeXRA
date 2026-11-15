@@ -57,6 +57,36 @@ export function renderSettingsSectionHeading(
   `;
 }
 
+interface DisclosureToggleOptions {
+  readonly expanded: boolean;
+  readonly onToggle: () => void;
+  /** What the toggle shows after its chevron. */
+  readonly content: TemplateResult;
+  readonly label?: string;
+  readonly title?: string;
+}
+
+/** The toggle row of a settings disclosure (`.settings-disclosure`): a plain
+ *  button whose chevron turns while its section is open. */
+export function renderDisclosureToggle(
+  options: DisclosureToggleOptions,
+): TemplateResult {
+  return html`
+    <wa-button
+      class="settings-disclosure-toggle"
+      appearance="plain"
+      size="s"
+      aria-expanded=${String(options.expanded)}
+      aria-label=${options.label ?? nothing}
+      title=${options.title ?? nothing}
+      @click=${options.onToggle}
+    >
+      ${waIcon('chevron-right', { className: 'disclosure-chevron' })}
+      ${options.content}
+    </wa-button>
+  `;
+}
+
 interface SettingsToggleRowOptions {
   readonly label: string;
   readonly description?: string;

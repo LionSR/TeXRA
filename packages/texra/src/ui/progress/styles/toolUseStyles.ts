@@ -107,7 +107,7 @@ export const toolUseStyles = css`
 
   .tool-use-in-progress > .details-summary :is(.tool-use-title, wa-icon),
   .tool-use-in-progress > .details-summary :is(wa-spinner, tool-timer) {
-    color: var(--color-pending);
+    color: var(--tone-color);
   }
 
   /* An open call on an interrupted run: stopped, waiting for Resume. */
@@ -194,13 +194,13 @@ export const toolUseStyles = css`
   }
 
   .diff-inline-del {
-    background-color: var(--wa-color-diff-removed, rgba(255, 0, 0, 0.2));
+    background-color: var(--wa-color-diff-removed);
     color: var(--color-diff-removed);
     text-decoration: line-through;
   }
 
   .diff-inline-add {
-    background-color: var(--wa-color-diff-inserted, rgba(0, 255, 0, 0.2));
+    background-color: var(--wa-color-diff-inserted);
     color: var(--color-diff-added);
   }
 `;

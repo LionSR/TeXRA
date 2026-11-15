@@ -14,10 +14,13 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
 import { DatabaseSync } from 'node:sqlite';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { stripVTControlCharacters } from 'node:util';
-import { parseArgs as parseCittyArgs } from 'citty';
+import {
+  parseArgs as parseNodeArgs,
+  stripVTControlCharacters,
+} from 'node:util';
 
 import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
 import {
@@ -176,48 +179,25 @@ function printUsage(stream = console.log) {
   stream(formatUsage());
 }
 
-const PARSE_ARGS_DEF = {
-  help: { type: 'boolean', alias: 'h' },
-  // citty's parser intercepts any `--no-X` token as negation of `X` before
-  // the schema is even consulted, so a literal `noBuild: {type:'boolean'}`
-  // can never observe `--no-build` (it lands on the nonexistent `build`
-  // property instead). Modeling the positive form and negating it is the
-  // only way citty's `--no-*` negation syntax can drive this flag.
-  build: { type: 'boolean', default: true },
-};
-const KNOWN_FLAG_TOKENS = new Set(['--help', '-h', '--no-build']);
-
 function parseArgs(argv) {
   // pnpm can forward a leading separator to scripts (`pnpm run x -- --flag`).
   // Treat that package-manager separator as transparent when it precedes a
-  // script option; a later `--` still marks end-of-options below.
+  // script option.
   const rest =
     argv[0] === '--' && argv[1]?.startsWith('-') ? argv.slice(1) : argv;
 
-  // This script never accepts positional arguments, so anything at or past
-  // an end-of-options `--` is unconditionally an error, same as an
-  // unrecognized flag before it.
-  const separatorIndex = rest.indexOf('--');
-  const flagTokens =
-    separatorIndex === -1 ? rest : rest.slice(0, separatorIndex);
-  const trailingToken =
-    separatorIndex === -1 ? undefined : rest[separatorIndex + 1];
-
-  const unknownToken =
-    flagTokens.find((token) => !KNOWN_FLAG_TOKENS.has(token)) ?? trailingToken;
-  if (unknownToken !== undefined) {
-    console.error(`[validate-run] unknown argument: ${unknownToken}`);
-    printUsage(console.error);
-    process.exit(2);
-  }
-
   let args;
   try {
-    args = parseCittyArgs(flagTokens, PARSE_ARGS_DEF);
+    ({ values: args } = parseNodeArgs({
+      args: rest,
+      options: {
+        help: { type: 'boolean', short: 'h' },
+        'no-build': { type: 'boolean' },
+      },
+    }));
   } catch (error) {
-    console.error(
-      `[validate-run] ${error instanceof Error ? error.message : String(error)}`,
-    );
+    console.error(`[validate-run] ${error.message}`);
+    printUsage(console.error);
     process.exit(2);
   }
   if (args.help) {
@@ -225,7 +205,7 @@ function parseArgs(argv) {
     process.exit(0);
   }
 
-  return { noBuild: args.build === false };
+  return { noBuild: args['no-build'] ?? false };
 }
 
 function preflightExistingValidationBundle() {
@@ -1405,9 +1385,10 @@ function validateSdkInlinePersona() {
  * An SDK approval that outlives its process: an embedder on a persistent
  * session starts a run whose custom tool asks for approval, and its handler
  * receives the request and leaves it pending; the process is killed there.
- * A second embedder reopens the session's store, resumes the run with the
- * same custom tool, and its handler approves the same request, so the tool
- * runs once and the run completes. Both phases' output, the run's request
+ * A second embedder reopens the session's store and resumes the run with the
+ * same custom tool: the request the dead process left is cancelled, the call
+ * asks again and its handler approves that one, so the tool runs once and the
+ * run completes. Both phases' output, the run's request
  * and tool rows and the file the tool wrote are the artifact.
  */
 async function validateSdkResumeApproval() {
@@ -1440,7 +1421,7 @@ async function validateSdkResumeApproval() {
     let asked = '';
     asking.stdout.on('data', (chunk) => (asked += chunk));
     asking.stderr.on('data', () => {});
-    const exited = new Promise((resolve) => asking.on('close', resolve));
+    const exited = once(asking, 'close');
     const line = (key) =>
       asked
         .split('\n')
@@ -1515,14 +1496,22 @@ async function validateSdkResumeApproval() {
       approved,
     });
     const requests = rows.filter((row) => row.requestId !== null);
+    const [left, cancelled, again, decided] = requests;
     assert(
       answered.length === 1 &&
-        sameRequest(answered[0]) &&
-        requests.length === 2 &&
-        requests.every(sameRequest) &&
-        requests[1].type === 'request.decided' &&
-        requests[1].decision === 'approve',
-      `the resumed run's one request should be the one asked before the kill, approved after it (artifact: ${artifactPath})`,
+        !sameRequest(answered[0]) &&
+        requests.length === 4 &&
+        left.type === 'request.opened' &&
+        sameRequest(left) &&
+        cancelled.type === 'request.decided' &&
+        sameRequest(cancelled) &&
+        cancelled.decision === 'cancel' &&
+        again.type === 'request.opened' &&
+        !sameRequest(again) &&
+        decided.type === 'request.decided' &&
+        decided.requestId === again.requestId &&
+        decided.decision === 'approve',
+      `the resume should cancel the request asked before the kill and ask again, approved once (artifact: ${artifactPath})`,
     );
     assert(
       result?.outcome === 'completed' &&
@@ -1749,7 +1738,7 @@ prompt: |
               const releaseOnceQueued = () => {
                 const shown = stripVTControlCharacters(pty.output);
                 if (
-                  !shown.includes('Queued follow-ups (1)') ||
+                  !shown.includes('Queued message (1)') ||
                   !shown.includes(`1. ${message}`)
                 )
                   return pty.setTimer(releaseOnceQueued, 250);
@@ -1812,17 +1801,18 @@ prompt: |
 }
 
 /**
- * Background compaction end to end (durable harness H5, gap 4): at a 1%
- * threshold, a long first message puts the conversation over it. The
- * message starts a task in the service, which takes messages as a chat's
- * run does (a headless `texra run` takes none). The chat that resumes it
- * runs a turn that starts the summary off the loop and still sends the
- * whole history (the reply names the first message), and the turn after
- * lands it, as an edit of the messages before that turn's request,
- * keeping what followed (the reply names the summary and the new message
- * only). The store's `context.edit` rows are kept as the artifact.
+ * Threshold compaction end to end: at a 1% threshold, a long first message
+ * puts the conversation over it. The message starts a task in the service,
+ * which takes messages as a chat's run does (a headless `texra run` takes
+ * none). A threshold summary leaves the newest exchange as it is, so the
+ * chat that resumes it runs a turn with nothing older to summarize, which
+ * sends the whole history (the reply names the first message); the turn
+ * after waits for the summary of the three messages before its own
+ * exchange and sends the summary with that exchange (the reply names the
+ * summary and the new message only). The store's `context.edit` rows are
+ * kept as the artifact.
  */
-async function validateBackgroundCompaction() {
+async function validateThresholdCompaction() {
   const cwd = makeScratch('texra-cli-compaction-');
   try {
     const project = echoProject(cwd, {
@@ -1872,7 +1862,7 @@ async function validateBackgroundCompaction() {
     );
     project.stopService();
     const rows = project.readStore(VIEW_ROWS);
-    const artifactPath = writeArtifact('background-compaction.json', {
+    const artifactPath = writeArtifact('threshold-compaction.json', {
       source,
       replies,
       rows,
@@ -1883,7 +1873,7 @@ async function validateBackgroundCompaction() {
         edits[0].cause === 'compaction' &&
         edits[0].trigger === 'context-limit' &&
         JSON.parse(edits[0].range).to === 3,
-      `the summary should land as one edit of the three messages before the second turn's request (artifact: ${artifactPath})`,
+      `the summary should land as one edit of the three messages before the third turn's exchange (artifact: ${artifactPath})`,
     );
   } finally {
     removeScratch(cwd);
@@ -2222,7 +2212,7 @@ prompt: |
     const state = { child, stdout: '', stderr: '' };
     child.stdout.on('data', (chunk) => (state.stdout += chunk));
     child.stderr.on('data', (chunk) => (state.stderr += chunk));
-    state.exited = new Promise((resolve) => child.on('close', resolve));
+    state.exited = once(child, 'close');
     windows.push(state);
     await waitFor(`the ${mode} window to attach`, () =>
       state.stdout.includes('ATTACHED'),
@@ -2818,7 +2808,7 @@ prompt: |
     windowA = {
       child,
       stdout: '',
-      exited: new Promise((resolve) => child.on('close', resolve)),
+      exited: once(child, 'close'),
     };
     child.stdout.on('data', (chunk) => (windowA.stdout += chunk));
     await waitFor('window A to attach', () =>
@@ -3217,39 +3207,77 @@ async function validateServiceSharedTask() {
 }
 
 /**
- * Resume all and rename: a chat killed while it waits leaves its task
- * interrupted; the next `texra chat` resumes nothing until `/resume all`,
- * which names and resumes it. A resumed chat's
- * `/rename` then writes the user's title. `/resume all`'s line, the
- * activation counts and the task's `run.description` rows are the artifact.
+ * Resume all and rename: a chat killed in the middle of a turn leaves its
+ * task interrupted; the next `texra chat` resumes nothing until
+ * `/resume all`, which names and resumes it. A resumed chat's `/rename`
+ * then writes the user's title. `/resume all`'s line, the activation counts
+ * and the task's `run.description` rows are the artifact.
  */
 async function validateOpenTimePrompt() {
   const cwd = makeScratch('texra-cli-open-prompt-');
   try {
     const project = echoProject(cwd);
+    writeFileSync(
+      path.join(
+        cwd,
+        'home',
+        '.texra',
+        'v1',
+        'global-storage',
+        'custom_agents',
+        'park-validation.yaml',
+      ),
+      `name: park_validation
+description: Hold its model call until released.
+
+prompt: |
+  GOLDEN-PARK
+`,
+    );
     // The chat is its task's writer here, so killing it is the crash this
     // recovers from: a service would keep the task running past the kill.
-    project.ptyEnv.TEXRA_NO_SERVICE = '1';
-    const seed = project.firstRun('First message');
-    let killed = false;
-    const opening = await runTexraPty(['resume', seed, '--fork'], {
-      label: 'texra resume --fork, then SIGKILL',
-      cwd: project.work,
-      cols: 160,
-      rows: 40,
-      timeoutMs: 40_000,
-      env: project.ptyEnv,
-      onData: (_data, pty) => {
-        if (!killed && stripVTControlCharacters(pty.output).includes('Idle')) {
-          killed = true;
-          pty.setTimer(() => pty.kill('SIGKILL'), 800);
-        }
+    project.ptyEnv = {
+      ...project.ptyEnv,
+      TEXRA_NO_SERVICE: '1',
+      [VALIDATION_SCENARIOS.golden]: '1',
+    };
+    let asked = false;
+    const opening = await runTexraPty(
+      ['chat', '--agent', 'park_validation', '--model', 'openai/gpt-5.6-sol'],
+      {
+        label: 'texra chat, then SIGKILL in the middle of its turn',
+        cwd: project.work,
+        cols: 160,
+        rows: 40,
+        timeoutMs: 40_000,
+        env: project.ptyEnv,
+        onData: (_data, pty) => {
+          if (
+            asked ||
+            !stripVTControlCharacters(pty.output).includes('/ commands')
+          )
+            return;
+          asked = true;
+          pty.setTimer(() => pty.write('First message'), 500);
+          pty.setTimer(() => pty.write('\r'), 900);
+          // The turn's model request waits for a release file nobody has
+          // written, so the kill cuts the turn in the middle.
+          pty.setTimer(() => pty.kill('SIGKILL'), 4_000);
+        },
       },
-    });
-    const source = runStartForkedFrom(project.readStore(VIEW_ROWS), seed)?.run;
+    );
+    // The chat's task, cut after its first model request was recorded.
+    const source = project.readStore(
+      `SELECT s.logical_id AS run FROM event e
+       JOIN event_sequence s ON s.id = e.aggregate
+       WHERE e.type = 'model.message' AND s.id IN (
+         SELECT aggregate FROM event
+         WHERE type = 'run.start'
+           AND json_extract(data, '$.identity.agent') = 'park_validation')`,
+    )[0]?.run;
     assert(
-      killed && opening.exit.signal === 9 && source !== undefined,
-      `the forked chat should reach idle and be killed before testing resume (exit ${JSON.stringify(opening.exit)})\noutput:\n${stripVTControlCharacters(opening.output).slice(-3000)}`,
+      opening.exit.signal === 9 && source !== undefined,
+      `the chat should be killed while its model request is held (exit ${JSON.stringify(opening.exit)})\noutput:\n${stripVTControlCharacters(opening.output)}`,
     );
     const activations = () =>
       project.readStore(
@@ -3283,6 +3311,8 @@ async function validateOpenTimePrompt() {
     );
     const whileListed = activations();
 
+    // The resumed task sends its request again; this time it is answered.
+    writeFileSync(path.join(project.work, 'golden-park.release'), '');
     let phase = 'opening';
     let notice = [];
     const chat = await runTexraPty(['chat'], {
@@ -3344,8 +3374,9 @@ async function validateOpenTimePrompt() {
         WHERE s.logical_id = '${source}' AND e.type = 'run.description'
         ORDER BY e."commit"`,
     );
+    // The task's name when \`/resume all\` listed it: its first description.
+    const described = titles[0]?.description ?? '';
     const artifactPath = writeArtifact('open-time-prompt.json', {
-      seed,
       source,
       openingExit: opening.exit,
       notice,
@@ -3356,7 +3387,7 @@ async function validateOpenTimePrompt() {
       chat.exit.exitCode === 0 &&
         phase === 'resumed' &&
         notice.length === 1 &&
-        notice[0].includes('First message') &&
+        notice[0].includes(described) &&
         whileListed === interrupted &&
         resumed === interrupted + 1,
       `the chat should resume nothing at open, then /resume all should name and resume the interrupted task (artifact: ${artifactPath})\noutput:\n${stripVTControlCharacters(chat.output).slice(-3000)}`,
@@ -3435,12 +3466,22 @@ prompt: |
       const [kind, id] = JSON.parse(record.payload.aggregateId);
       return kind === 'run' ? id : undefined;
     };
-    // A run id is opaque: the script's children are the child rows its
-    // parent reports, never names parsed out of an id.
+    // A run id is opaque: the script's children are the runs whose
+    // `run.start` names the headless run as their parent, never names parsed
+    // out of an id. Not the `run.children` records: those report a live
+    // list as the view publishes it, and a list between two published
+    // levels is never written.
+    const rootId = runIdOf(
+      records.find(
+        (record) => record.kind === 'progress' && record.event === 'run.start',
+      ),
+    );
     const childIds = new Set(
       records.flatMap((record) =>
-        record.kind === 'progress' && record.event === 'run.children'
-          ? (record.payload?.children ?? []).map((child) => child.childRunId)
+        record.kind === 'progress' &&
+        record.event === 'run.start' &&
+        record.payload?.parent?.id === rootId
+          ? [runIdOf(record)]
           : [],
       ),
     );
@@ -3605,7 +3646,7 @@ async function validateCliRunArtifacts(options = {}) {
   await validateFork();
   await validateTuiFork();
   await validateMidTurnDelivery();
-  await validateBackgroundCompaction();
+  await validateThresholdCompaction();
   await validateOpenTimePrompt();
   await validateServiceSharedTask();
   await validateServiceTasksInTui();

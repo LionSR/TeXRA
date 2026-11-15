@@ -14,6 +14,7 @@
  * ordinals, none of which a caller supplies.
  */
 import { randomUUID } from 'node:crypto';
+import { mkdirSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import * as SqliteClient from '@effect/sql-sqlite-node/SqliteClient';
 import * as Reactivity from 'effect/reactivity/Reactivity';
@@ -30,9 +31,9 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withLogChannel } from '@logger/effectLog';
+import { ensureError } from '@utils/errors/errorMessage';
 import {
   CURRENT_VALUE_VERSION,
   edgesOf,
@@ -66,7 +67,6 @@ import {
 import { factKindsOf } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { currentValues, READ_RETRY } from './currentValues';
-import { localDatabasePath } from './localDatabasePath';
 import { LISTED_TYPES, projectionUpkeep, usageRows } from './projections';
 import {
   EVENT_COLUMNS,
@@ -117,9 +117,14 @@ RETURNING "commit" AS "commit"
 /** A blob is stored once per store, whichever run wrote it first. */
 const INSERT_BLOB = `INSERT INTO blob (digest, value) VALUES (?, ?)
   ON CONFLICT(digest) DO NOTHING`;
-const INSERT_REF = `INSERT INTO event_blob ("commit", digest, inline)
-  VALUES (?, ?, ?)`;
-const UPSERT_KIND = `INSERT INTO stored_kind (type, version) VALUES (?, ?)
+/** Link a row to its blobs, bound as one `json_each(?)` array of
+ *  `[digest, inline]` pairs. */
+const INSERT_REFS = `INSERT INTO event_blob ("commit", digest, inline)
+  SELECT ?, value ->> 0, value ->> 1 FROM json_each(?)`;
+/** Record the kinds written, bound as one `json_each(?)` array of
+ *  `[type, version]` pairs; a kind keeps the highest version written. */
+const UPSERT_KINDS = `INSERT INTO stored_kind (type, version)
+  SELECT value ->> 0, value ->> 1 FROM json_each(?) WHERE true
   ON CONFLICT(type) DO UPDATE
   SET version = max(stored_kind.version, excluded.version)`;
 
@@ -128,14 +133,14 @@ const UPSERT_KIND = `INSERT INTO stored_kind (type, version) VALUES (?, ?)
 const AGGREGATE_LIST = `SELECT s.id FROM json_each(?) l
   CROSS JOIN event_sequence s
     ON s.kind = l.value ->> 0 AND s.logical_id = l.value ->> 1`;
-/** Aggregates' existence, the list bound as `AGGREGATE_LIST` binds. */
-const READ_STATE = `
+/** Aggregates' existence, for the ids a `WHERE` on `s.id` selects. */
+const STATE_COLUMNS = `
 SELECT s.kind, s.logical_id AS logicalId, s.uid,
   s.closed_by IS NOT NULL AS closed, p.kind AS parentKind,
   p.logical_id AS parentLogicalId, s.start_commit AS startCommit
-FROM event_sequence s LEFT JOIN event_sequence p ON p.id = s.parent_id
-WHERE s.id IN (${AGGREGATE_LIST})
-`;
+FROM event_sequence s LEFT JOIN event_sequence p ON p.id = s.parent_id`;
+/** Aggregates' existence, the list bound as `AGGREGATE_LIST` binds. */
+const READ_STATE = `${STATE_COLUMNS} WHERE s.id IN (${AGGREGATE_LIST})`;
 
 /** The stored rows one display page covers. */
 const DISPLAY_PAGE_ROWS = 2000;
@@ -192,7 +197,7 @@ export const databaseLayer = (
 ): Layer.Layer<
   Database,
   DatabaseOpenFailed,
-  WorkspaceRoots | FileSystem.FileSystem | ChildProcessSpawner | ToolRegistry
+  WorkspaceRoots | FileSystem.FileSystem | ToolRegistry
 > =>
   Layer.effect(
     Database,
@@ -206,14 +211,21 @@ export const databaseLayer = (
         new DatabaseOpenFailed({ path, cause });
       const create = mode !== 'existing';
       const exclusive = mode === 'persistent' || mode === 'existing';
+      // The store's directory is made here (not by SQLite, which makes
+      // only the file), unless the store must exist already.
       const filename =
         mode === 'ephemeral'
           ? IN_MEMORY_STORE
-          : yield* localDatabasePath(
-              roots.storage,
-              SESSION_DATABASE_FILE,
-              create,
-            ).pipe(Effect.mapError(openFailed));
+          : yield* Effect.try({
+              try: () => {
+                if (create) mkdirSync(roots.storage, { recursive: true });
+                return join(
+                  realpathSync.native(roots.storage),
+                  SESSION_DATABASE_FILE,
+                );
+              },
+              catch: (cause) => openFailed(ensureError(cause)),
+            });
       // A project store never waits for a lock: its one holder is this
       // process, and a lock another holds refuses the open at once, on the
       // fiber, never by blocking the thread in SQLite.
@@ -224,12 +236,6 @@ export const databaseLayer = (
             ? filename
             : `file:${filename.replaceAll(/[%?#]/g, encodeURIComponent)}?mode=rw`,
           disableWAL: mode === 'ephemeral',
-          busyTimeout,
-        }),
-        SqliteClient.make({
-          filename,
-          readonly: true,
-          disableWAL: true,
           busyTimeout,
         }),
         path,
@@ -301,9 +307,8 @@ export const databaseLayer = (
         SELECT child.id FROM event_sequence child
         JOIN dependents parent ON child.parent_id = parent.id
       )`;
-      const dependentKeys = `${dependents}
-        SELECT kind, logical_id AS logicalId FROM event_sequence
-        WHERE id IN (SELECT id FROM dependents) ORDER BY kind, logical_id`;
+      const dependentStates = `${dependents} ${STATE_COLUMNS}
+        WHERE s.id IN (SELECT id FROM dependents)`;
       const deletionRuns = `${dependents}
         SELECT logical_id AS runId FROM event_sequence
         WHERE id IN (SELECT id FROM dependents) AND kind = 'run'
@@ -313,12 +318,6 @@ export const databaseLayer = (
         UPDATE event_sequence SET closed_by = ?
         WHERE id IN (SELECT id FROM dependents)
       `;
-      const dependentBlobs = `${dependents} SELECT DISTINCT r.digest FROM event_blob r
-        JOIN event e ON e."commit" = r."commit" WHERE e.aggregate IN (SELECT id FROM dependents)`;
-      /** Blob collection is by reachability: a digest no row references. */
-      const collectBlobs = `DELETE FROM blob
-        WHERE digest IN (SELECT value FROM json_each(?))
-          AND NOT EXISTS (SELECT 1 FROM event_blob r WHERE r.digest = blob.digest)`;
       // The display types in a commit range, with the priced rows' usage.
       const display = displayUnion(
         '"commit" > ? AND "commit" <= ?',
@@ -416,13 +415,14 @@ export const databaseLayer = (
       const reparent = `UPDATE event_sequence SET parent_id = ${AGGREGATE}
         WHERE id = ? AND closed_by IS NULL`;
       // A closed aggregate's sequence row, collected with its dependents
-      // and rows by the foreign keys' cascade.
+      // and rows by the foreign keys' cascade, and the blobs no other row
+      // links by the schema's `event_blob_collect`.
       const closedBy = `SELECT id FROM event_sequence
         WHERE kind = ? AND logical_id = ? AND closed_by = ?`;
       const collectClosed = `DELETE FROM event_sequence
         WHERE kind = ? AND logical_id = ? AND closed_by = ?`;
-      const readState = (ids: readonly AggregateId[]) =>
-        Effect.map(exec(READ_STATE, [aggregateList(ids)]), (rows) =>
+      const states = (statement: string, params: readonly unknown[]) =>
+        Effect.map(exec(statement, params), (rows) =>
           rows.map((row) =>
             Schema.decodeUnknownSync(AggregateStateSchema)({
               ...row,
@@ -434,15 +434,8 @@ export const databaseLayer = (
             }),
           ),
         );
-      const readDependents = Effect.fn('readDependents')(function* (
-        id: AggregateId,
-      ) {
-        return yield* readState(
-          (yield* exec(dependentKeys, aggregateColumns(id))).map((row) =>
-            aggregateOf(row.kind, row.logicalId),
-          ),
-        );
-      });
+      const readState = (ids: readonly AggregateId[]) =>
+        states(READ_STATE, [aggregateList(ids)]);
       /** A row whose aggregate is closed rejects this writer; one whose
        *  aggregate was never created is the caller's defect. */
       const refuseWriter = Effect.fn('refuseWriter')(function* (
@@ -472,8 +465,7 @@ export const databaseLayer = (
               : []),
           ]),
         );
-        for (const [type, version] of kinds)
-          yield* exec(UPSERT_KIND, [type, version]);
+        yield* exec(UPSERT_KINDS, [JSON.stringify([...kinds])]);
         yield* upkeep.follow(committed);
         return committed;
       });
@@ -577,13 +569,19 @@ export const databaseLayer = (
           return yield* invariant(
             `No commit assigned for aggregate ${draft.aggregateId}`,
           );
-        for (const { digest, value, inline } of encoded.blobs) {
+        for (const { digest, value } of encoded.blobs)
           yield* exec(INSERT_BLOB, [digest, value]);
-          yield* exec(INSERT_REF, [commit, digest, inline ? 1 : 0]);
-        }
-        // Linked, not written: the foreign key refuses a blob that is gone.
-        for (const digest of encoded.references)
-          yield* exec(INSERT_REF, [commit, digest, 0]);
+        // References are linked, not written: the foreign key refuses a
+        // blob that is gone.
+        const links = [
+          ...encoded.blobs.map(({ digest, inline }) => [
+            digest,
+            inline ? 1 : 0,
+          ]),
+          ...encoded.references.map((digest) => [digest, 0]),
+        ];
+        if (links.length > 0)
+          yield* exec(INSERT_REFS, [commit, JSON.stringify(links)]);
         if (seq === 1) {
           yield* exec(
             'UPDATE event_sequence SET start_commit = ? WHERE id = ?',
@@ -682,7 +680,9 @@ export const databaseLayer = (
           afterCommit: sql.afterCommit,
           written: valuesWritten,
           valueWritten: Effect.asVoid(
-            exec(UPSERT_KIND, [CURRENT_VALUE_KIND, CURRENT_VALUE_VERSION]),
+            exec(UPSERT_KINDS, [
+              JSON.stringify([[CURRENT_VALUE_KIND, CURRENT_VALUE_VERSION]]),
+            ]),
           ),
         }),
         readAggregate: (id, fromSeq, types, toSeq = Number.MAX_SAFE_INTEGER) =>
@@ -722,7 +722,10 @@ export const databaseLayer = (
         runRemoval: (id, expectedStartCommit) =>
           transaction(
             Effect.gen(function* () {
-              const observed = yield* readDependents(id);
+              const observed = yield* states(
+                dependentStates,
+                aggregateColumns(id),
+              );
               const target = observed.find((row) => row.aggregateId === id);
               if (target === undefined || observed.some((row) => row.closed))
                 return yield* new DatabaseAggregateClosed({ aggregateId: id });
@@ -754,14 +757,7 @@ export const databaseLayer = (
             // Filesystem promises cannot be undone by fiber interruption.
             yield* cleanup(tombstone.runIds).pipe(Effect.uninterruptible);
             yield* transact(
-              Effect.gen(function* () {
-                const digests = (yield* exec(dependentBlobs, columns)).map(
-                  (row) => row.digest,
-                );
-                yield* exec(collectClosed, [...columns, tombstone.commit]);
-                if (digests.length > 0)
-                  yield* exec(collectBlobs, [JSON.stringify(digests)]);
-              }),
+              exec(collectClosed, [...columns, tombstone.commit]),
             );
             yield* reclaimFreePages(sql, path);
           }),
@@ -819,11 +815,7 @@ export const storeOpenElsewhere = (filename: string) =>
  * poll fiber; an entry that must create none passes a refusing layer. */
 export const globalDatabaseLayer = (
   storage: string,
-): Layer.Layer<
-  GlobalDatabase,
-  DatabaseOpenFailed,
-  FileSystem.FileSystem | ChildProcessSpawner
-> =>
+): Layer.Layer<GlobalDatabase, DatabaseOpenFailed, FileSystem.FileSystem> =>
   Layer.effect(GlobalDatabase, Database).pipe(
     Layer.provide(
       databaseLayer('global').pipe(

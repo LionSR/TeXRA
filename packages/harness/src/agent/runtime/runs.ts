@@ -41,13 +41,9 @@ export interface LiveRun {
 export interface RunsShape {
   /** Stop a run for `reason`: its `run.stop` row commits, then the fiber
    *  driving it here is interrupted, whose end reads the reason from that
-   *  row. A `user` stop is an explicit stop of the work: the run cancels
-   *  the remote background operation it is observing, and its children
-   *  follow the session's "Keep agents running" setting, read as the stop
-   *  runs (a detached child runs on as a root, and an in-band call awaiting
-   *  it stops only its wait). A `shutdown` stop only ends this process's
-   *  hold on the run, leaving that operation for a resume to observe, and
-   *  ends its children's holds with it. A run no fiber here drives ends
+   *  row. A stop stops the run's children with it, at any depth. A `user`
+   *  stop is an explicit stop of the work: the run cancels the remote
+   *  background operation it is observing. A run no fiber here drives ends
    *  CANCELLED in the batch that records the stop. Resolves to whether a
    *  fiber here took the stop; fails when the rows the stop owed storage
    *  were refused. */

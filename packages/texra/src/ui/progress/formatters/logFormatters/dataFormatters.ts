@@ -25,5 +25,5 @@ export function formatFileListTemplate(row: FileListRow): FormatResult {
     iconName: 'file',
     label: row.summary,
     labelClass: 'summary-text',
-  })}<ul class="file-list-content" data-log-id=${ifDefined(row.id)}>${buildFileListRender(row.files, row.media)}</ul></wa-details>`;
+  })}<ul class="file-list-content" data-log-id=${ifDefined(row.id)}>${buildFileListRender(row.files)}</ul></wa-details>`;
 }

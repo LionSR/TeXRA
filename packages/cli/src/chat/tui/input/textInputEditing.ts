@@ -15,6 +15,64 @@ export function clampCursor(cursor: number, length: number): number {
   return Num.clamp(cursor, { minimum: 0, maximum: length });
 }
 
+const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+interface Grapheme {
+  readonly text: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+/**
+ * Looks up the grapheme cluster holding a code unit of `value`: the unit a
+ * caret steps over and a delete removes, so an emoji sequence or a letter
+ * with combining marks is never cut inside. The lookup answers `undefined`
+ * at or past the end. A pass over a whole value takes one lookup and reuses
+ * it: segmenting again for every character is quadratic.
+ */
+export function graphemesOf(
+  value: string,
+): (index: number) => Grapheme | undefined {
+  const segments = GRAPHEMES.segment(value);
+  return (index) => {
+    const found = segments.containing(index);
+    if (found === undefined) return undefined;
+    return {
+      text: found.segment,
+      start: found.index,
+      end: found.index + found.segment.length,
+    };
+  };
+}
+
+/** The grapheme cluster holding code unit `index` of `value`. */
+export function graphemeAt(value: string, index: number): Grapheme | undefined {
+  return graphemesOf(value)(index);
+}
+
+/**
+ * A cursor the input may store: inside `value`, and never inside a
+ * grapheme. Every position the input keeps goes through here, so a move
+ * that lands mid-grapheme (a word boundary after a space that carries a
+ * combining mark, a column on another line) rests at that grapheme's start.
+ */
+export function restingCursor(value: string, cursor: number): number {
+  const c = clampCursor(cursor, value.length);
+  return graphemeAt(value, c)?.start ?? c;
+}
+
+/** ← target: the start of the grapheme before the cursor. */
+export function previousGraphemeCursor(value: string, cursor: number): number {
+  const c = clampCursor(cursor, value.length);
+  return graphemeAt(value, c - 1)?.start ?? 0;
+}
+
+/** → target: the end of the grapheme at the cursor. */
+export function nextGraphemeCursor(value: string, cursor: number): number {
+  const c = clampCursor(cursor, value.length);
+  return graphemeAt(value, c)?.end ?? value.length;
+}
+
 /**
  * Replace every visible glyph with a bullet for masked (secret) display,
  * preserving newlines and code-unit length so the caret index stays aligned
@@ -25,15 +83,24 @@ export function maskDisplayValue(value: string): string {
   return value.replaceAll(/[^\n]/g, '•');
 }
 
+/**
+ * Insert `text` at the cursor and leave the caret after it. Text that joins
+ * what follows into one grapheme (a regional indicator before another, a
+ * joiner between emoji) carries the caret to that grapheme's end, so the
+ * stored cursor is never inside a grapheme.
+ */
 export function insertText(
   value: string,
   cursor: number,
   text: string,
 ): TextEdit {
   const c = clampCursor(cursor, value.length);
+  const next = value.slice(0, c) + text + value.slice(c);
+  const after = c + text.length;
+  const joined = graphemeAt(next, after);
   return {
-    value: value.slice(0, c) + text + value.slice(c),
-    cursor: c + text.length,
+    value: next,
+    cursor: joined !== undefined && joined.start < after ? joined.end : after,
   };
 }
 
@@ -63,19 +130,23 @@ export function nextWordCursor(value: string, cursor: number): number {
   return c + (/^\s*\S*/.exec(value.slice(c))?.[0].length ?? 0);
 }
 
-/** Delete the span [from, to) and leave the caret at its start. */
+/**
+ * Delete the span [from, to) and leave the caret at its start, or at the
+ * start of the grapheme the two sides now join into.
+ */
 function deleteSpan(value: string, from: number, to: number): TextEdit {
-  return { value: value.slice(0, from) + value.slice(to), cursor: from };
+  const next = value.slice(0, from) + value.slice(to);
+  return { value: next, cursor: graphemeAt(next, from)?.start ?? from };
 }
 
 export function deleteBeforeCursor(value: string, cursor: number): TextEdit {
   const c = clampCursor(cursor, value.length);
-  return deleteSpan(value, Math.max(0, c - 1), c);
+  return deleteSpan(value, previousGraphemeCursor(value, c), c);
 }
 
 export function deleteAtCursor(value: string, cursor: number): TextEdit {
   const c = clampCursor(cursor, value.length);
-  return deleteSpan(value, c, c + 1);
+  return deleteSpan(value, c, nextGraphemeCursor(value, c));
 }
 
 /** Ctrl-U: delete from the start of the current line to the cursor. */

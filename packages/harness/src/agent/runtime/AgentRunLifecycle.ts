@@ -24,7 +24,7 @@ import {
 import { ensureError } from '@utils/errors/errorMessage';
 import { childEndReport } from './childDelivery';
 import type { RunReport } from './runReport';
-import type { AgentRunServices } from './runRegistry';
+import { RunRegistry, type AgentRunServices } from './runRegistry';
 import type { RunLaunch } from './run/AgentRun';
 
 const CHANNEL = 'agentRunLifecycle';
@@ -74,15 +74,16 @@ type ResolvedEnd = Pick<RunEnding, 'outcome' | 'error'>;
 
 /**
  * The one end both run programs commit, from the verdict each reached on
- * its own (`ending`): rows the store refused (`log.lost`) fail the run
- * unless a stop ended it, whoever ends it, and are its error unless it has
- * one of its own; the `run.end` commits in one transaction with everything
- * the end decides (`endRunRows`), the report `report` builds for the
- * outcome and error it commits among them; an end the store refused fails
- * the fiber once, logged, and the run reads as interrupted at its next
- * open; and a stop stays the fiber's exit once the end committed.
- * Uninterruptible: a stop lands before this or after its row, never
- * inside.
+ * its own (`ending`): a run the session's close interrupted, with no stop
+ * asked, gets no end at all and is left as its rows stand; rows the store
+ * refused (`log.lost`) fail the run unless a stop ended it, whoever ends
+ * it, and are its error unless it has one of its own; the `run.end`
+ * commits in one transaction with everything the end decides
+ * (`endRunRows`), the report `report` builds for the outcome and error it
+ * commits among them; an end the store refused fails the fiber once,
+ * logged, and the run reads as interrupted at its next open; and a stop
+ * stays the fiber's exit once the end committed. Uninterruptible: a stop
+ * lands before this or after its row, never inside.
  */
 export const commitEnd = Effect.fn('commitEnd')(function* (
   exit: Exit.Exit<unknown, Error>,
@@ -92,6 +93,15 @@ export const commitEnd = Effect.fn('commitEnd')(function* (
   ) => Effect.Effect<RunEnding['report'], Error, AgentRunServices>,
 ): Effect.fn.Return<void, Error, AgentRunServices> {
   const { runId } = ending;
+  // The process is going, and nobody stopped the run: it gets no end, and
+  // reads as interrupted, resumable, at the next open, as after a crash.
+  if (
+    Exit.isFailure(exit) &&
+    Cause.hasInterrupts(exit.cause) &&
+    (yield* RunRegistry).closing &&
+    (yield* (yield* SessionLog).facts(runId))?.stop == null
+  )
+    return yield* Effect.failCause(exit.cause);
   const lost = yield* (yield* SessionLog).lost(runId);
   const end: ResolvedEnd = {
     outcome:
@@ -171,7 +181,7 @@ export const endRun = Effect.fn('endRun')(function* (
               }
             : classified;
         })();
-  // Read once as the run entered: a child detached mid-run ends as a child.
+  // Read once as the run entered.
   const parentRunId = ctx.entry.parent;
   if (thrown !== undefined && error !== undefined) {
     if (verdict.outcome === RUN_OUTCOME.CANCELLED)

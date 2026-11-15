@@ -36,22 +36,6 @@
   white-space: nowrap;
 }
 
-.desktop-review-counts {
-  display: inline-flex;
-  flex: none;
-  gap: var(--wa-space-2xs);
-  font-family: var(--wa-font-family-mono);
-  font-size: var(--font-size-sm);
-}
-
-.desktop-review-counts .is-added {
-  color: var(--color-success);
-}
-
-.desktop-review-counts .is-deleted {
-  color: var(--color-error);
-}
-
 .desktop-review-file-count {
   flex: none;
   margin-left: auto;
@@ -104,7 +88,7 @@
 .desktop-review-directory::part(header) {
   min-height: var(--height-control-compact);
   padding: 0;
-  padding-inline-start: calc(var(--review-tree-depth, 0) * var(--wa-space-s));
+  padding-inline-start: calc(var(--tree-depth, 0) * var(--wa-space-s));
   border-radius: var(--wa-border-radius-s);
 }
 
@@ -141,7 +125,7 @@
   display: block;
   width: 100%;
   padding-inline-start: calc(
-    var(--wa-space-xs) + var(--review-tree-depth, 0) * var(--wa-space-s)
+    var(--wa-space-xs) + var(--tree-depth, 0) * var(--wa-space-s)
   );
 }
 
@@ -164,45 +148,13 @@
   background: var(--surface-selected);
 }
 
-.desktop-review-empty,
-.desktop-review-no-results {
-  display: grid;
-  place-items: center;
-  color: var(--wa-color-text-quiet);
-}
-
 .desktop-review-empty {
   height: 100%;
-  align-content: center;
-  gap: var(--wa-space-xs);
-}
-
-.desktop-review-empty .empty-state-icon {
-  font-size: var(--font-size-h1);
-}
-
-.desktop-review-empty .empty-state-title {
-  margin: 0;
-  font-size: inherit;
-  font-weight: var(--wa-font-weight-bold, bold);
 }
 
 /* With no entries the empty state is the pane's only child: span both rows. */
 .desktop-review-pane > .desktop-review-empty {
   grid-row: 1 / -1;
-  padding: var(--wa-space-l);
-  text-align: center;
-}
-
-.desktop-review-empty .empty-state-body {
-  margin: 0;
-  max-width: 36ch;
-  font-size: var(--font-size-sm);
-}
-
-.desktop-review-no-results {
-  min-height: 96px;
-  font-size: var(--font-size-sm);
 }
 
 @container desktop-review (max-width: 680px) {

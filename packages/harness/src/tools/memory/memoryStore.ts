@@ -19,7 +19,7 @@ import {
   MAX_PINNED_MEMORIES,
   MEMORY_DISPLAY_ROOT,
   toDisplayPath,
-} from '@agent/memory/memoryUtils';
+} from '@agent/memory/memoryLayout';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import type { StorageFs } from '@platform/rootedFs';
 import { ToolError } from '@shared/schemas';

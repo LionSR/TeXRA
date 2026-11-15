@@ -5,9 +5,9 @@
  * and where its turn policy stands (the final-tool nudge, the finalized
  * answer). The row handlers in `runState.ts` and `turnRowHandlers.ts` set these
  * fields, so the loop reads them off the same state on the live path and on
- * resume. The consumed follow-up is here too, as its writers commit it (its
- * receipt is `followUpReceipt`, in `runRowReads.ts`); the rules for which
- * pending rows a run reads are the reader's (`agent/followUp/FollowUpReader.ts`).
+ * resume. The consumed follow-up is here too, as its writers commit it; the
+ * rules for which pending rows a run reads are the reader's
+ * (`agent/followUp/FollowUpReader.ts`).
  * The lifecycle rows a run is registered, activated and ended with are
  * built here, beside the readers of their facts;
  * `agent/storage/runLifecycle.ts` commits them.
@@ -42,7 +42,7 @@ import {
 import { byId } from './runRows';
 import type { TurnResult } from '@texra-ai/llm';
 import type { RunHistoryDraft, RunInputDraft } from './runState';
-import type { Invocation, PendingResponse } from './inFlight';
+import type { PendingResponse } from './inFlight';
 
 /** The text a completed model turn or assistant message contains, in order. */
 export const turnText = (turn: Pick<TurnResult, 'content'>): string =>
@@ -207,14 +207,6 @@ export const boundsLifecycle = (
 ): boolean =>
   row.aggregateId === qualifyAggregateId('run', runId) &&
   (row.type === 'run.activate' || row.type === 'run.end');
-
-/** `invocation` once a shutdown stopped its open attempt (a `run.stop` whose
- *  `reason` is `shutdown`): none, or one with a recorded outcome, is as it was. */
-export function closedBy(invocation: Invocation | null): Invocation | null {
-  if (invocation === null || invocation.current.failed !== null)
-    return invocation;
-  return { ...invocation, current: { ...invocation.current, closed: true } };
-}
 
 /** What a run is registered with: the facts its `run.start` carries. */
 export interface RegisterRunOptions {

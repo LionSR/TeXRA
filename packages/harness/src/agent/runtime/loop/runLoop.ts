@@ -7,7 +7,7 @@
  *
  * The write points, in order: the opening batch of a fresh run (its message
  * and input, its `run.config` binding, `turn.ready`); `turn.begin`; per round
- * the invoker's `attempt` / `identified` / `response` rows; per barrier call
+ * the invoker's `attempt` / `response` rows; per barrier call
  * its `tool.intent`; per settled call its `tool.result` with its card; the
  * delivering `append` with the complete tool group; a follow-up consumed at a
  * request or a nudge, each an `append`; `turn.end` and `waiting`; the
@@ -46,8 +46,9 @@ import { sentDefinitions } from '@tools/catalogEntries';
 import { sha256 } from '@utils/core/idHash';
 
 import { AgentRun } from '../run/AgentRun';
-import { backgroundCompaction } from '../run/compaction';
-import { mediaInputParts, type InputPart } from '../run/mediaInput';
+import { compactAfterOverflow, compactAtBoundary } from '../run/compaction';
+import { mediaInputParts } from '../run/mediaInput';
+import type { InputPart } from '@texra-ai/llm';
 import { claimFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
 import { resumeLeftoverChildren } from '../leftoverChildren';
@@ -268,15 +269,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const isChild = () => run.entry.parent !== null;
   // A conversation claims its own input lease, never a parent's (FollowUps).
   const followUps = yield* claimFollowUps(run);
-  const compaction = yield* backgroundCompaction({
-    runId,
-    logger,
-    invoker,
-    stores: roots,
-  });
 
   // ---------------------------------------------------------------- state
   const { cell } = opened;
+  /** What a compaction of this run reads, but its request's binding. */
+  const compaction = { runId, logger, invoker, cell, stores: roots };
 
   // ------------------------------------------------------------ host port
   const controls: RunControls = modelSwitchPort(
@@ -311,7 +308,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     for (;;) {
       state = yield* applyPendingModelSwitch(
         cell,
-        compaction,
         yield* followUps.reader.controls,
       );
       if (state.pendingResponse !== null) {
@@ -342,8 +338,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       const bound = yield* ScopedRef.get(run.model);
       // A message typed while the turn ran joins the request after the tool
       // results (past a context update), never a user message: read before
-      // the step opens, so a skill it activates is the step's, and before a
-      // summary lands, which keeps what the loop appended after its base.
+      // the step opens, so a skill it activates is the step's, and before
+      // the boundary's compaction, whose summary then covers it.
       const tail = state.messages.findLast((m) => m.role !== 'system');
       if (state.invocation === null && tail?.role === 'tool') {
         const queued = yield* followUps.reader.read('request');
@@ -363,7 +359,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         const compacts = consumedRows(runId, 'compact');
         const controls = yield* followUps.reader.controls;
         const requests = compacts(controls, { kind: 'applied' });
-        state = yield* compaction.atBoundary(cell, bound, requests);
+        state = yield* compactAtBoundary({ ...compaction, bound }, requests);
         // A compaction dropped the context updates: a new step renders them.
         if (state.offeredContext === null) {
           step = yield* stepFor(run, state, false);
@@ -395,7 +391,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       if (outcome.kind === 'cancelled')
         return { state, outcome: 'cancelled' } as const;
       if (outcome.kind !== 'failed') continue;
-      const compacted = yield* compaction.afterOverflow(cell, bound);
+      const compacted = yield* compactAfterOverflow({ ...compaction, bound });
       if (compacted === null) return { state, outcome: 'failed' } as const;
       state = compacted;
     }
@@ -452,11 +448,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       if (turn.outcome === 'cancelled') {
         return finish(state, RUN_OUTCOME.CANCELLED);
       }
-      // A summary the turn started lands before the turn ends.
-      state = yield* compaction.landPending(cell);
       // The turn boundary, in one batch: Stop hooks, the steps (`waiting`
-      // closes open streams and is the rest a resume's receipt reads), and
-      // a Stop hook's block or input already queued.
+      // closes open streams), and a Stop hook's block or input already
+      // queued.
       const reply = turnResponse(turn.state);
       const { rows: hooks, block } = yield* (yield* hooksOf(run)).stop(
         turn,
@@ -524,14 +518,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   // settles the cell; `cell.append` protects each commit from interruption.
   yield* (yield* RunRegistry).attachControls(runId, controls);
   return yield* loopBody(cell).pipe(
-    // However the run ends (a stop's interruption included), a finished
-    // summary lands before the halt (its usage is the run's); one still running
-    // stops with the run. A refused summary fails the run, which its end records.
-    Effect.onExit((exit) =>
-      compaction
-        .landPending(cell, 'the run stopped')
-        .pipe(Effect.asVoid, Effect.ensuring(settleRun(cell, followUps)(exit))),
-    ),
+    Effect.onExit(settleRun(cell, followUps)),
     Effect.map((loop) => result(loop.outcome, loop.state)),
   );
 }, Effect.scoped);

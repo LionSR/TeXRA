@@ -2,14 +2,11 @@
  * Handle a surface's request once, with an `Outcome` or request error.
  * Check sequence rows and ownership first; `submitFollowUp` checks messages.
  */
-import { randomUUID } from 'node:crypto';
-
 import { Context, Effect, FileSystem, Path } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import { submitFollowUp, wakeIfOwed } from '@agent/followUp/ToolUseFollowUp';
 import { Inbox } from '@agent/followUp/Inbox';
-import { sentFollowUpId, sentReceipt } from '@agent/followUp/followUpMessages';
 import {
   narrows,
   decideUnderGrant,
@@ -34,7 +31,6 @@ import {
 } from '@shared/schemas';
 import type { AggregateState, Database } from '@shared/session/database';
 import {
-  Conflict,
   Rejected,
   Unavailable,
   type Outcome,
@@ -185,7 +181,8 @@ const decideSurfaceRequest = (
     // A request that blocks its caller is answered by the fiber waiting on it,
     // and that fiber died with the owner this decision takes over from:
     // recording a decision would clear the panel without doing what it says.
-    // Resuming the run re-enters the call, which asks again and is answered then.
+    // Resuming the run cancels this request; the call asks again and is
+    // answered then.
     if (!heldHere && blocksCaller(pending.payload)) {
       return yield* new Unavailable({
         runId: req.runId,
@@ -345,45 +342,29 @@ export function sessionRequests(
     req: RuntimeCommand,
   ) {
     // A message skips `admit`: `submitFollowUp` refuses on the run's rows
-    // and keeps its run's sends in order, its media read included; a
-    // receipt is read past the run's end too.
-    if (req.kind === 'followUp.receipt')
-      return {
-        kind: 'receipt' as const,
-        receipt: yield* sentReceipt(deps.sessionLog, req),
-      };
+    // and keeps its run's sends in order, its media read included.
     if (req.kind === 'followUp.send') {
       const attach = Effect.provideContext(
         attachedMedia(req.media ?? [], yield* SessionRoots),
         mediaReadOf(deps.services),
       );
-      const id = req.id ?? randomUUID();
       const result = yield* submitFollowUp(
         req.runId,
         {
           text: req.text,
           from: { kind: 'user' },
           ...(req.displayText == null ? {} : { displayText: req.displayText }),
-          deliveryId: sentFollowUpId(id),
-          ...(req.id != null && { caller: req.id }),
         },
         { hold: req.holdUntil ?? undefined, attach, apiKeys: req.apiKeys },
       ).pipe(
-        Effect.catchIf(
-          (e): e is Error => !(e instanceof Rejected || e instanceof Conflict),
-          Effect.die,
-        ),
+        Effect.catchIf((e): e is Error => !(e instanceof Rejected), Effect.die),
       );
       if (result.status === 'failed')
         return yield* new Unavailable({
           runId: req.runId,
           reason: result.message,
         });
-      const receipt = yield* sentReceipt(deps.sessionLog, {
-        runId: req.runId,
-        id,
-      });
-      return { kind: 'followUp' as const, id, ...result, receipt };
+      return { kind: 'followUp' as const, ...result };
     }
     const runs = yield* RunRegistry;
     if (req.kind === 'run.stop') {

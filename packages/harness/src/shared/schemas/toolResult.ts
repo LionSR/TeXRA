@@ -60,7 +60,7 @@ export type EditRecord = typeof EditRecordSchema.Type;
 // ============================================================================
 
 /** One schema issue: the dotted path of the field and the issue's message. */
-interface FormattedIssue {
+export interface FormattedIssue {
   readonly path: string;
   readonly message: string;
 }

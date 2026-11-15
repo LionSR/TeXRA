@@ -84,7 +84,6 @@ export class MemoryList extends LitElement {
         title: 'No saved memories yet',
         body: 'Memories are created automatically when the assistant learns something worth remembering across conversations.',
         headingTag: 'h3',
-        className: 'empty-state',
       });
     }
 

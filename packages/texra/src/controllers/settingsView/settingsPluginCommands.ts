@@ -121,10 +121,9 @@ export function settingsPluginCommands(ports: {
                 `Plugin ${message.action} failed`,
                 act({ ...message, action: message.action }),
               )
-              .pipe(
-                Effect.andThen(bindings.refreshCatalogs()),
-                Effect.andThen(present.changed('plugins')),
-              ),
+              // The agent catalog follows the install record on its own, and
+              // every launcher follows the catalog.
+              .pipe(Effect.andThen(present.changed('plugins'))),
     },
   };
 }

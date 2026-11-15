@@ -1,11 +1,9 @@
 /**
- * The session store's aside copies: the files a store open moved beside it
- * (a pre-1.0 store to `.pre1`, a damaged file to `.corrupt-<stamp>`), each
- * at a name no earlier copy holds and kept until a storage prune deletes
- * them; the outermost transaction's busy retry; and the test of whether a
- * failed open is SQLite reporting the file damaged.
+ * The session store's aside copies: the damaged files a store open renamed
+ * beside it (`.corrupt-<stamp>`), kept until a storage prune deletes them;
+ * the outermost transaction's busy retry; and the test of whether a failed
+ * open is SQLite reporting the file damaged.
  */
-import { randomUUID } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
 import {
   type Cause,
@@ -23,16 +21,6 @@ export type Sql = SqlClient.SqlClient;
 
 /** A store's file and the two SQLite keeps beside it in WAL mode. */
 export const STORE_FILE_SUFFIXES = Object.freeze(['', '-wal', '-shm'] as const);
-
-/** The names an open leaves beside a store: a pre-1.0 store moved aside
- *  whole, a damaged file, and the staged copy `underCopy` makes before it
- *  takes a name. `ASIDE` below matches each, and what goes with it. */
-export const asideName = Object.freeze({
-  pre1: (filename: string): string => `${filename}.pre1`,
-  corrupt: (filename: string, at: number): string =>
-    `${filename}.corrupt-${at}`,
-  staged: (base: string): string => `${base}.${randomUUID()}.partial`,
-});
 
 export const run = (sql: Sql, statement: string) => sql.unsafe(statement, []);
 
@@ -57,75 +45,9 @@ export const isBusy = (error: unknown): boolean =>
 export const retryBusy = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   effect.pipe(Effect.retry({ schedule: BUSY_RETRY, while: isBusy }));
 
-/**
- * The first of `base`, `base.2`, `base.3`, … that names no file (with its
- * `-wal` and `-shm` companions, for a whole database moved aside): an
- * earlier copy is never replaced, on any platform's `rename`.
- */
-export const freeName = Effect.fnUntraced(function* (base: string) {
-  const fs = yield* FileSystem.FileSystem;
-  for (let n = 1; ; n += 1) {
-    const name = n === 1 ? base : `${base}.${n}`;
-    const taken = yield* Effect.forEach(
-      STORE_FILE_SUFFIXES,
-      (suffix) => fs.exists(`${name}${suffix}`),
-      { concurrency: 'unbounded' },
-    );
-    if (!taken.some(Boolean)) return name;
-  }
-});
-
-/**
- * Keep a copy of the store beside it, at the first free name from `base`
- * ({@link freeName}), then run `body` under the write lock only if nothing
- * committed since the copy: `VACUUM INTO` cannot run inside a transaction,
- * so the transaction re-reads `user_version` and `data_version` (which moves
- * on every other connection's commit) and, if either moved, discards the
- * copy and answers null for the caller to start over from what the store
- * now is. The name is chosen under the lock, so two processes retiring one
- * store never pick the same one. Answers the copy's path.
- */
-export const underCopy = Effect.fnUntraced(function* <E>(
-  sql: Sql,
-  base: string,
-  body: Effect.Effect<void, E>,
-) {
-  const fs = yield* FileSystem.FileSystem;
-  const stamp = yield* pragmaValue(sql, 'user_version');
-  const version = yield* pragmaValue(sql, 'data_version');
-  const staged = asideName.staged(base);
-  yield* sql.unsafe('VACUUM INTO ?', [staged]);
-  // A changed store leaves this transaction before any rename or write.
-  const moved = yield* Effect.gen(function* () {
-    if (
-      (yield* pragmaValue(sql, 'user_version')) !== stamp ||
-      (yield* pragmaValue(sql, 'data_version')) !== version
-    ) {
-      return null;
-    }
-    const aside = yield* freeName(base);
-    yield* fs.rename(staged, aside);
-    yield* body;
-    return aside;
-  }).pipe(
-    sql.withTransaction,
-    Effect.onError(() =>
-      fs.remove(staged, { force: true }).pipe(
-        Effect.ignore({
-          log: 'Warn',
-          message: `A staged store copy stays behind: ${staged}`,
-        }),
-      ),
-    ),
-  );
-  if (moved === null) yield* fs.remove(staged, { force: true });
-  return moved;
-});
-
-/** An `asideName` suffix, the `.<n>` of a taken name, and a moved WAL or
- *  shared-memory file. Never a staged copy: its name cannot tell one a kill
- *  left behind from one an open holds between its copy and its rename. */
-const ASIDE = /^\.(?:pre1|corrupt-\d+)(?:\.\d+)?(?:-wal|-shm)?$/;
+/** The suffix of a damaged store an open renamed aside (`openStore`), and
+ *  of its WAL or shared-memory file. */
+const ASIDE = /^\.corrupt-\d+(?:-wal|-shm)?$/;
 
 /** The aside copies beside the store at `filename`, with their sizes. */
 export const asideCopies = Effect.fnUntraced(function* (filename: string) {
@@ -174,7 +96,8 @@ export function isDamaged(cause: Cause.Cause<unknown>): boolean {
 }
 
 /** Whether a failed open is SQLite unable to open the file at all
- *  (`SQLITE_CANTOPEN`, 14): for a read-only probe, no store there yet. */
+ *  (`SQLITE_CANTOPEN`, 14): for an open that creates no file, no store
+ *  there yet. */
 export function cannotOpen(cause: Cause.Cause<unknown>): boolean {
   return hasSqliteCode(cause, [14]);
 }

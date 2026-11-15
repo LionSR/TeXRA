@@ -123,9 +123,8 @@ export function settingsToolCommands(ports: {
       Effect.flatMap(ToolCatalog, (catalog) =>
         catalog.setEnabled(toolId, enabled),
       ).pipe(
-        // A plugin's bundled agents follow its switch (`pluginCatalogLayer`):
-        // reload them before the rows read who uses what.
-        Effect.andThen(bindings.refreshCatalogs()),
+        // A plugin's bundled agents follow its switch, and every launcher
+        // follows the agent catalog (`agentCatalogFollower`).
         Effect.andThen(changed('plugins')),
       ),
     // The command is looked up from the plugin's card, never taken from

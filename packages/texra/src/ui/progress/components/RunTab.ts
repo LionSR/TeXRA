@@ -24,6 +24,7 @@ import {
 } from '@ui/styles/controlStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { afterDropdownHides } from '@ui/wa/selectTemplates';
+import { inlineRenameField } from '@ui/wa/inlineRename';
 import { AGENT_DECORATORS, type RunDecorator } from '@ui/wa/icons';
 
 // Side-effect imports - register WA components
@@ -41,14 +42,12 @@ import {
   TASK_ACTIONS,
 } from '@ui/copy/nestedRuns';
 import { formatRelativeTime } from '@ui/copy/format';
+import { TickerController } from '@ui/litControllers/TickerController';
 import { runTabStyles } from './RunTab.styles';
 import type { RunView } from '@texra-ai/harness/schemas';
 
-function buildTooltip(run: RunView): string {
-  const modelDisplay =
-    run.identity.kind === 'agent' && run.model
-      ? (run.modelLabel ?? run.model)
-      : undefined;
+function buildTooltip(run: RunView, nowMs: number): string {
+  const modelDisplay = run.identity.kind === 'agent' ? run.modelLabel : null;
   const worktree = run.worktree;
   const worktreeDisplay = worktree
     ? `Worktree: ${getBasename(worktree.workingDirectory)}`
@@ -62,7 +61,7 @@ function buildTooltip(run: RunView): string {
   ]
     .filter(Boolean)
     .join(' · ');
-  const lastSeen = formatRelativeTime(run.lastTimestamp);
+  const lastSeen = formatRelativeTime(run.lastTimestamp, nowMs);
   // No raw id: two parallel agents differ by title, model and time, and
   // the id is for bug reports ("Copy diagnostics").
   return [
@@ -83,9 +82,10 @@ function runDecorator(run: RunView) {
 }
 
 /**
- * One run row. Re-renders only when its own `.run` ref or a flag
- * changes; the session view replaces a run's value only when that run changes,
- * so rows of untouched runs skip rendering on every update.
+ * One run row. Re-renders when its own `.run` ref or a flag changes (the
+ * session view replaces a run's value only when that run changes, so rows of
+ * untouched runs skip rendering on every update), and on its clock's tick,
+ * which keeps the tooltip's "Last activity" age current.
  */
 @customElement('run-tab')
 export class RunTab extends LitElement {
@@ -98,6 +98,7 @@ export class RunTab extends LitElement {
   ];
 
   @property({ attribute: false }) run!: RunView;
+  private readonly ticker = new TickerController(this, 30_000);
   @property({ type: Boolean }) active = false;
   /** Children are shown beneath this row. */
   @property({ type: Boolean, reflect: true }) expanded = false;
@@ -115,19 +116,13 @@ export class RunTab extends LitElement {
   private startRename(): void {
     if (!this.run.actions.includes('rename')) return;
     this.renaming = true;
-    void this.updateComplete.then(() => {
-      const input =
-        this.renderRoot.querySelector<HTMLInputElement>('.tab-rename');
-      input?.focus();
-      input?.select();
-    });
   }
 
-  private finishRename(input: HTMLInputElement, save: boolean): void {
+  private finishRename(value: string | null): void {
     if (!this.renaming) return;
     this.renaming = false;
-    const title = input.value.trim();
-    if (save && title && title !== (this.run.description || this.run.label)) {
+    const title = value?.trim();
+    if (title && title !== (this.run.description || this.run.label)) {
       this.dispatchEvent(
         SessionUiEvents.runtime({
           kind: 'run.rename',
@@ -166,7 +161,7 @@ export class RunTab extends LitElement {
       ? 'Needs approval'
       : status.word;
     const runTitle = run.title;
-    const tooltip = buildTooltip(run);
+    const tooltip = buildTooltip(run, this.ticker.now);
     const deleteLabel =
       run.parentId === null ? TASK_ACTIONS.delete : TASK_ACTIONS.deleteAgent;
     const childCountLabel = formatResultCount(
@@ -211,7 +206,7 @@ export class RunTab extends LitElement {
                   data-action="toggle-children"
                   aria-label=${childToggleLabel}
                   aria-expanded=${this.expanded ? 'true' : 'false'}
-                  >${waIcon('chevron-right')}</wa-button
+                  >${waIcon('chevron-right', { className: 'disclosure-chevron' })}</wa-button
                 ><wa-tooltip for="run-tab-expand-button"
                   >${childToggleLabel}</wa-tooltip
                 >`
@@ -220,22 +215,12 @@ export class RunTab extends LitElement {
         <div class="tab-select-tooltip-anchor">
           ${
             this.renaming
-              ? html`<input
-                  class="tab-rename inline-rename"
-                  aria-label="Task title"
-                  .value=${runTitle}
-                  @keydown=${(event: KeyboardEvent) => {
-                    event.stopPropagation();
-                    const input = event.target;
-                    if (!(input instanceof HTMLInputElement)) return;
-                    if (event.key === 'Enter') this.finishRename(input, true);
-                    if (event.key === 'Escape') this.finishRename(input, false);
-                  }}
-                  @blur=${(event: FocusEvent) => {
-                    if (event.target instanceof HTMLInputElement)
-                      this.finishRename(event.target, true);
-                  }}
-                />`
+              ? inlineRenameField({
+                  value: runTitle,
+                  label: 'Task title',
+                  className: 'tab-rename',
+                  onFinish: (value) => this.finishRename(value),
+                })
               : nothing
           }
           <button
@@ -300,9 +285,7 @@ export class RunTab extends LitElement {
               ></wa-relative-time>
               <span class="model"
                 >${
-                  run.identity.kind === 'agent'
-                    ? (run.modelLabel ?? run.model ?? '')
-                    : ''
+                  run.identity.kind === 'agent' ? run.modelLabel : nothing
                 }</span
               >
               ${waIcon(this.decorator.icon, { id: 'run-tab-kind', className: 'run-kind' })}

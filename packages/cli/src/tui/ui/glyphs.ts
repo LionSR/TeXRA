@@ -37,6 +37,24 @@ export const SKIP_CIRCLE = '⊘';
 /** Hollow dot: the off beat of a pulse, and a step queued but not started. */
 export const HOLLOW_DOT = '○';
 
+/** A script call whose result was reused from an earlier run. */
+export const REUSED = '↺';
+
+/** Inline separator between facts on one line and between key hints. */
+export const SEPARATOR = ' · ';
+
+/** Unordered list item marker, also a neutral static-row bullet. */
+export const LIST_BULLET = '•';
+
+/** Blockquote gutter, repeated per nesting level (trailing space included). */
+export const QUOTE_BAR = '│ ';
+
+/** Horizontal rule segment. */
+export const RULE = '─';
+
+/** Text caret drawn in place of reverse video when color is off. */
+export const GLYPH_CARET = '▏';
+
 /** Disclosure markers for a collapsible tree row. */
 export const EXPANDED = '▾';
 export const COLLAPSED = '▸';

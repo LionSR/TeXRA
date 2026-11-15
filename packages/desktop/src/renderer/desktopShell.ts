@@ -16,11 +16,13 @@ import { getBasename, type SessionView } from '@texra-ai/harness/schemas';
 import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { unseenRuns } from '@texra/shared/session/unseenRuns';
+import { sectionCountLabel, type RunTone } from '@ui/copy/runStatus';
 import type { IconName } from '@ui/wa/iconNames';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
+import { inlineRenameField } from '@ui/wa/inlineRename';
 import { afterDropdownHides } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type { Shell } from './shell';
@@ -91,17 +93,29 @@ function sidebarAction(options: {
 /**
  * A project's one status, read from its view's rollup and its surface: what
  * needs the user first (waiting, then interrupted), then work in progress,
- * then runs that finished while the user was elsewhere.
+ * then runs that finished while the user was elsewhere. The first three are
+ * run sections, worded and toned as the run list words them; unseen is the
+ * rail's own.
  */
 function projectStatus(
   project: RailProject,
-): { readonly tone: string; readonly label: string } | undefined {
+): { readonly tone: RunTone | 'unseen'; readonly label: string } | undefined {
   const { waiting, interrupted, running } = project.view.rollup;
   if (waiting > 0)
-    return { tone: 'waiting', label: `${waiting} waiting for you` };
+    return {
+      tone: 'warning',
+      label: sectionCountLabel('waiting', String(waiting)),
+    };
   if (interrupted > 0)
-    return { tone: 'interrupted', label: `${interrupted} interrupted` };
-  if (running > 0) return { tone: 'running', label: `${running} running` };
+    return {
+      tone: 'warning',
+      label: sectionCountLabel('interrupted', String(interrupted)),
+    };
+  if (running > 0)
+    return {
+      tone: 'running',
+      label: sectionCountLabel('running', String(running)),
+    };
   const unseen = unseenRuns(project.surface, project.view).size;
   if (unseen > 0) return { tone: 'unseen', label: `${unseen} finished` };
   return undefined;
@@ -122,26 +136,13 @@ function projectSection(
     <div class="shell-project-item ${active ? 'is-active' : ''}">
       ${
         model.renamingProjectKey === key
-          ? html`<input
-              class="shell-project-row shell-project-rename inline-rename"
-              aria-label="Project display name"
-              maxlength="80"
-              .value=${name}
-              @keydown=${(event: KeyboardEvent) => {
-                event.stopPropagation();
-                if (
-                  event.key === 'Enter' &&
-                  event.currentTarget instanceof HTMLInputElement
-                )
-                  callbacks.onRenameProject?.(key, event.currentTarget.value);
-                if (event.key === 'Escape')
-                  callbacks.onRenameProject?.(key, null);
-              }}
-              @blur=${(event: FocusEvent) => {
-                if (event.currentTarget instanceof HTMLInputElement)
-                  callbacks.onRenameProject?.(key, event.currentTarget.value);
-              }}
-            />`
+          ? inlineRenameField({
+              value: name,
+              label: 'Project display name',
+              className: 'shell-project-row shell-project-rename',
+              maxLength: 80,
+              onFinish: (value) => callbacks.onRenameProject?.(key, value),
+            })
           : html`<wa-button
               type="button"
               class="shell-project-row btn-ghost is-row-content"
@@ -168,8 +169,7 @@ function projectSection(
         // The dot is the row's whole status line; its words are the tooltip.
         status
           ? html`<span
-              class="shell-project-status"
-              data-tone=${status.tone}
+              class="shell-project-status tone-${status.tone}"
               role="img"
               aria-label=${status.label}
               title=${status.label}

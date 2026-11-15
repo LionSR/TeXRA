@@ -67,12 +67,6 @@ const StepAfterFailureSchema = Schema.Union([
     requestId: Schema.String.check(Schema.isMinLength(1)),
   }),
   Schema.Struct({ kind: Schema.Literal('stop') }),
-  /** The plan the attempt billed ran out and the run declines its `route`:
-   *  the next attempt is sent at once on the user's own key, nobody asked. */
-  Schema.Struct({
-    kind: Schema.Literal('decline'),
-    route: DeclinableUsageRouteSchema,
-  }),
 ]);
 /** The step a `failed` row records after its attempt. */
 export type StepAfterFailure = typeof StepAfterFailureSchema.Type;
@@ -99,8 +93,7 @@ export const RunPositionPayloadSchema = Schema.Struct({
   at: PositionAtSchema,
   turn: Schema.optional(Schema.NullOr(NonNegativeIntSchema)),
   /** A `turn.end`'s: how the turn ended, `completed` with its answer or
-   *  `failed` without one, which a follow-up's receipt reads. The run's
-   *  own end is its `run.end` row. */
+   *  `failed` without one. The run's own end is its `run.end` row. */
   outcome: Schema.optional(Schema.NullOr(RunOutcomeSchema)),
 }).check(
   Schema.makeFilter((p) => (p.at === 'turn.end') === (p.outcome != null), {
@@ -140,12 +133,6 @@ export const ModelMessagePayloadSchema = Schema.Union([
     invocation: InvocationRefSchema,
     request: Sha256Schema,
     origin: StoredOriginSchema,
-  }),
-  /** Provider identity observed before completion. */
-  Schema.Struct({
-    kind: Schema.Literal('identified'),
-    invocation: InvocationRefSchema,
-    providerResponseId: Schema.String.check(Schema.isMinLength(1)),
   }),
   /** The attempt failed: what went wrong, as its verdict (llm's on the
    *  vendor's reply, or the route's), and what the invoker does next,
@@ -288,20 +275,20 @@ export const ModelMessagePayloadSchema = Schema.Union([
  * continuation, which was over the old view, and the offered system text.
  * `trigger` says what asked for a compaction: the threshold
  * (`context-limit`), the user's `/compact` (`user`), or a request the
- * model's window could not hold (`overflow`); null for the other causes. A fork's seed carries the source's `input` with its messages. `base` is the `seq` of the edit the view stood at when this one
- * was computed (`null`: none), and the fold refuses an edit whose base is no
- * longer the latest. `usage` is a summary call's priced usage, folded as a
- * response's (`null` when no model was called). Compaction (`run/compaction.ts`)
- * and the fork seed (`forkRun.ts`) write it. Whether the result is preparable is the run
- * history's check, at write and cold load: a payload cannot see the
- * history it edits.
+ * model's window could not hold (`overflow`); null for the other causes. A
+ * fork's seed carries the source's `input` with its messages. `usage` is a
+ * summary call's priced usage, folded as a response's (`null` when no model
+ * was called). Compaction (`run/compaction.ts`), on the run's own fiber, and
+ * the fork seed (`forkRun.ts`), a run's first row, write it, so an edit
+ * always applies to the view it was computed from. Whether the result is
+ * preparable is the run history's check, at write and cold load: a payload
+ * cannot see the history it edits.
  */
 export const ContextEditPayloadSchema = Schema.Struct({
   cause: Schema.Literals(['compaction', 'fork']),
   trigger: Schema.NullOr(
     Schema.Literals(['context-limit', 'user', 'overflow']),
   ),
-  base: Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
   range: Schema.Struct({
     from: NonNegativeIntSchema,
     to: NonNegativeIntSchema,

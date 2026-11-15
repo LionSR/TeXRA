@@ -14,7 +14,13 @@ import {
 } from '@texra-ai/harness/schemas';
 import { safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import { COLOR_BORDER, COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
-import { CROSS, PENDING_BOX, TICK, WARNING } from '@cli/tui/ui/glyphs';
+import {
+  CROSS,
+  PENDING_BOX,
+  TICK,
+  WARNING,
+  LIST_BULLET,
+} from '@cli/tui/ui/glyphs';
 import {
   compileFailuresOf,
   formatRoundLabel,
@@ -23,9 +29,9 @@ import {
   outputDisplayName,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
+import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
+import { formatLineChanges } from '@ui/copy/format';
 import { stageStatus } from '@ui/copy/runStatus';
-
-import { COMPACTION_ACTIVITY_STATUS_STYLE } from './transcriptEntryLayout';
 
 interface DocumentTaskRunDetailLine {
   readonly key: string;
@@ -38,7 +44,7 @@ interface DocumentTaskRunDetailLine {
 type DocumentTaskRunFacts = {
   readonly stages: readonly Stage[];
   /** The run the stages are of: an open one reads as the run reads. */
-  readonly run: Pick<RunView, 'holder' | 'outcome'>;
+  readonly run: Pick<RunView, 'holder' | 'outcome' | 'position'>;
   /** The run's rounds, as its documents fact records them. */
   readonly rounds: readonly RoundOutput[];
 };
@@ -53,7 +59,7 @@ function stageLine(
   stage: Stage,
   status: ReturnType<typeof stageStatus>,
 ): DocumentTaskRunDetailLine {
-  const appearance = COMPACTION_ACTIVITY_STATUS_STYLE[status.key];
+  const appearance = TONE_PAINT[status.tone];
   const duration =
     stage.endTime !== undefined
       ? ` · ${formatCompactDuration(stage.endTime - stage.startTime)}`
@@ -111,12 +117,14 @@ function documentTaskRunDetailGroups(
       });
       for (const [index, file] of outputs.entries()) {
         const counts = outputDiffCounts(file.diff);
-        const diff = counts ? ` (+${counts.added} -${counts.removed})` : '';
+        const diff = counts
+          ? ` (${formatLineChanges(counts.added, counts.removed)})`
+          : '';
         lines.push({
           key: `output:${round}:${file.location.absolutePath}:${index}`,
           // Neutral bullet, not `›` — POINTER means "focused row / your
           // input" everywhere else, and these are static file rows.
-          text: `    • ${safeTerminalText(
+          text: `    ${LIST_BULLET} ${safeTerminalText(
             file.location.kind === 'external'
               ? fileLocationDisplayPath(file.location)
               : outputDisplayName(file),

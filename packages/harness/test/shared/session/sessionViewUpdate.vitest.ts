@@ -13,6 +13,7 @@ import {
   MESSAGE_TYPES,
   needsUser,
   qualifyAggregateId,
+  rollupOf,
   type RunId,
   RunIdSchema,
   type RunView,
@@ -24,8 +25,6 @@ import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 
 import type { RunHistoryRow } from '@shared/session/historyTurns';
 import { applyRunRows, type RunHistoryDraft } from '@shared/session/runState';
-import { nextAttempt, type Invocation } from '@shared/session/inFlight';
-import type { RunRowState } from '@shared/session/runRowsShape';
 
 import { toolUseTurn } from '@test/support/sessionRows';
 import {
@@ -85,6 +84,37 @@ describe('session view update', () => {
       running: 0,
       waiting: 0,
       interrupted: 3,
+    });
+  });
+
+  // A process that exits writes nothing for its runs, so a conversation
+  // left idle between turns is found with no holder at every restart:
+  // nothing of it was in flight, and its next message continues it.
+  it('reads an idle run nobody holds as waiting, not interrupted', () => {
+    const log = new Log();
+    log.emit(ROOT, T.root, {
+      type: 'run.start',
+      identity: { kind: 'agent', agent: 'custom:search' },
+      parent: null,
+      provenance: null,
+      takesFollowUps: true,
+    });
+    log.emit(ROOT, T.root, { type: 'run.activate' });
+    log.emit(ROOT, T.root + 1, {
+      type: 'run.position',
+      payload: { at: 'waiting', turn: 1 },
+    });
+    const view = viewOf([...log.events.map(tail), nobody]);
+    const idle = runView(view, ROOT);
+    expect(idle.position).toBe('waiting');
+    expect(isInterrupted(idle)).toBe(false);
+    expect(needsUser(idle, view.runs)).toBe(false);
+    expect(view.rollup.interrupted).toBe(0);
+    // As a child it has delivered its turn: a parent counts it finished.
+    expect(rollupOf([idle])).toStrictEqual({
+      total: 1,
+      running: 0,
+      finished: 1,
     });
   });
 
@@ -183,7 +213,6 @@ const TURN_ROWS: readonly RunHistoryRow[] = [
   toolTurn.append,
   position('turn.ready', 0),
   toolTurn.attempt,
-  toolTurn.identified,
   toolTurn.response,
   toolTurn.intent,
   toolTurn.result('call-a'),
@@ -261,7 +290,7 @@ describe('applyRunRows', () => {
   ])('%s', (_name, check) => check());
 
   it('delivers the paid assistant turn once and derives usage from the rows', () => {
-    const state = stateOf(through(10));
+    const state = stateOf(through(9));
     expect(state?.messages.map((m) => m.role)).toEqual([
       'user',
       'assistant',
@@ -273,8 +302,8 @@ describe('applyRunRows', () => {
     // The turn's stamped price: a settlement adds nothing to it.
     expect(state?.usage.cost).toBe(0.25);
     // Incremental and cold folds are the same computation.
-    const half = stateOf(applyRunRows(null, TURN_ROWS.slice(0, 6)));
-    expect(stateOf(applyRunRows(half, TURN_ROWS.slice(6)))).toEqual(state);
+    const half = stateOf(applyRunRows(null, TURN_ROWS.slice(0, 5)));
+    expect(stateOf(applyRunRows(half, TURN_ROWS.slice(5)))).toEqual(state);
   });
 
   it.each([
@@ -284,7 +313,7 @@ describe('applyRunRows', () => {
       'out-of-order',
       () =>
         through(
-          6,
+          5,
           {
             ...toolTurn.intent,
             payload: { ...toolTurn.intent.payload, attempt: 2 },
@@ -295,7 +324,7 @@ describe('applyRunRows', () => {
     [
       // A call settles once.
       'orphan-settlement',
-      () => through(7, toolTurn.result('call-a', { attempt: 2 })),
+      () => through(6, toolTurn.result('call-a', { attempt: 2 })),
     ],
   ])('refuses loudly: %s', (reason, run) => {
     expect(reasonOf(run())).toBe(reason);
@@ -308,7 +337,7 @@ describe('applyRunRows', () => {
   it('folds a structured output a script submitted', () => {
     const state = stateOf(
       through(
-        5,
+        4,
         {
           type: 'script.call',
           payload: {
@@ -337,7 +366,7 @@ describe('applyRunRows', () => {
   it('keeps a final-tool nudge on the turn it was appended in', () => {
     const state = stateOf(
       through(
-        9,
+        8,
         message({
           kind: 'append',
           sourceResponse: null,
@@ -407,39 +436,5 @@ describe('applyRunRows', () => {
     expect(rowAccepted(attachment({ thumbnail: new Uint8Array([3]) }))).toBe(
       false,
     );
-  });
-});
-
-describe('nextAttempt', () => {
-  // A run stopped at its retry prompt ends with the prompt cancelled, as its
-  // end cancels every open request. That cancel is no answer: read as one,
-  // every resume would end the run cancelled again before taking any input.
-  it('asks again about a retry prompt an earlier lifecycle cancelled', () => {
-    const asked: Invocation = {
-      current: {
-        ref: { invocationId: '0'.repeat(8), attempt: 1 },
-        sent: null,
-        providerResponseId: null,
-        accepted: null,
-        failed: {
-          error: { source: 'interrupted' },
-          next: { kind: 'ask', requestId: 'retry-1' },
-        },
-        closed: false,
-      },
-      earlier: [],
-    };
-    const cancelledAt = (decidedAt: number) =>
-      ({
-        'retry-1': {
-          decision: { action: 'cancel', cause: 'The run ended.' },
-          decidedAt,
-        },
-        // cast: the rule reads a request's decision and when it was made.
-      }) as unknown as RunRowState['requests'];
-    // Cancelled at seq 5; the run was activated again at seq 9.
-    expect(nextAttempt(asked, cancelledAt(5), 0, 9).kind).toBe('reask');
-    // Cancelled by the person while this activation (seq 9) held the run.
-    expect(nextAttempt(asked, cancelledAt(12), 0, 9).kind).toBe('cancel');
   });
 });

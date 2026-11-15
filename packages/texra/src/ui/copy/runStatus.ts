@@ -44,6 +44,11 @@ export const RUN_SECTION_LABELS: Readonly<Record<RunSection, string>> =
     recent: 'Recent',
   });
 
+/** A count of runs in one section, as a rollup reads it: `2 waiting on you`. */
+export function sectionCountLabel(section: RunSection, count: string): string {
+  return `${count} ${RUN_SECTION_LABELS[section].toLowerCase()}`;
+}
+
 /** Section order, in the table's own order. */
 export const RUN_SECTION_ORDER: readonly RunSection[] = Object.freeze(
   Object.keys(RUN_SECTION_LABELS).filter((key): key is RunSection =>
@@ -99,6 +104,11 @@ export function statusGlyph(look: StatusLook): IconName {
   return look.glyph ?? TONE_GLYPH[look.tone];
 }
 
+/** The tone of a file the run tried to read: loaded, or not. */
+export function fileLoadTone(ok: boolean): RunTone {
+  return ok ? 'success' : 'danger';
+}
+
 /** How a tool card's status section reads. */
 export const TOOL_STATUS: Readonly<Record<ToolCallStatus, StatusWord>> =
   Object.freeze({
@@ -148,7 +158,7 @@ export function runStatusLabel(key: RunStatusKey): string {
  *  transcript shown without its run (null) reads an open stage as running. */
 export function stageStatus(
   stage: Pick<Stage, 'outcome'>,
-  run: Pick<RunView, 'holder' | 'outcome'> | null,
+  run: Pick<RunView, 'holder' | 'outcome' | 'position'> | null,
 ): Pick<RunStatus, 'word' | 'tone' | 'glyph'> & {
   readonly key: RunOutcome | 'running' | 'interrupted';
 } {
@@ -165,7 +175,7 @@ export function stageStatus(
  * outrank an interrupted run, which outranks a result its end lost.
  */
 export function runNoticeText(
-  run: Pick<RunView, 'statusNotice' | 'holder' | 'outcome'>,
+  run: Pick<RunView, 'statusNotice' | 'holder' | 'outcome' | 'position'>,
 ): string | null {
   const notice = run.statusNotice;
   switch (notice?.kind) {

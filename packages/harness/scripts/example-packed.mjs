@@ -19,10 +19,15 @@ import {
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 
-const packageRoot = fileURLToPath(new URL('..', import.meta.url));
-const acceptance = process.argv.includes('--acceptance');
+const packageRoot = join(import.meta.dirname, '..');
+const {
+  values: { acceptance },
+} = parseArgs({
+  args: process.argv.slice(2).filter((arg) => arg !== '--'),
+  options: { acceptance: { type: 'boolean' } },
+});
 const model = process.env.TEXRA_EXAMPLE_MODEL?.trim();
 if (acceptance && !model?.includes('/')) {
   console.error('--acceptance needs TEXRA_EXAMPLE_MODEL=provider/model.');

@@ -1,7 +1,7 @@
 /** Log channel shared by every housekeeping operation. */
 export const CHANNEL = 'Housekeeping';
 
-export const TEMP_EXTENSIONS = [
+export const TEMP_EXTENSIONS = Object.freeze([
   '.bak*',
   '.pdf',
   '.aux',
@@ -19,6 +19,6 @@ export const TEMP_EXTENSIONS = [
   '.toc',
   '-blx.bib',
   'Notes.bib',
-];
+]);
 
 export const HISTORY_DIR = 'History';
