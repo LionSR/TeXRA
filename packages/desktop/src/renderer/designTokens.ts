@@ -9,6 +9,7 @@
 // the sheets load in.
 import { designTokens } from '@ui/styles';
 import { noticeStyles } from '@ui/styles/surfaceStyles';
+import { toneStyles } from '@ui/styles/toneStyles';
 import {
   buttonStyles,
   focusRingStyles,
@@ -28,6 +29,7 @@ shared.replaceSync(
     formControlStyles,
     settingsRowStyles,
     noticeStyles,
+    toneStyles,
   ]
     .map((sheet) => sheet.cssText)
     .join('\n')}\n}`,

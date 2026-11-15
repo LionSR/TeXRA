@@ -48,6 +48,7 @@ import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { TickerController } from '@ui/litControllers/TickerController';
 import { runStatus } from '@ui/copy/runStatus';
 import { designTokens, commonViewStyles } from '@ui/styles';
+import { toneStyles } from '@ui/styles/toneStyles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { dispatchSummary, NESTED_NOUNS } from '@ui/copy/nestedRuns';
 import { getTimeFormatter } from '../formatters/timestampUtils';
@@ -62,6 +63,7 @@ export class BackgroundTasksPanel extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    toneStyles,
     css`
       :host {
         display: block;
@@ -148,21 +150,7 @@ export class BackgroundTasksPanel extends LitElement {
       .task-icon {
         flex-shrink: 0;
         font-size: var(--font-size-sm);
-      }
-      .tone-running .task-icon {
-        color: var(--color-success);
-      }
-      .tone-success .task-icon {
-        color: var(--color-success);
-      }
-      .tone-danger .task-icon {
-        color: var(--color-error);
-      }
-      .tone-warning .task-icon {
-        color: var(--color-warning);
-      }
-      .tone-neutral .task-icon {
-        color: var(--color-text-muted);
+        color: var(--tone-color);
       }
 
       .task-name {
