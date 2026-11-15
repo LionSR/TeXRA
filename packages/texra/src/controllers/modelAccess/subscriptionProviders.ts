@@ -280,7 +280,13 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
                 },
               ),
             );
-      yield* setPreference(options.stores, true).pipe(
+      // The session is stored by now, so the change is announced whether
+      // or not the preference write follows it, as the sign-out's is.
+      yield* SubscriptionPreference.set(
+        descriptor.id,
+        options.stores,
+        true,
+      ).pipe(
         Effect.mapError(
           (cause) =>
             new Error(
@@ -288,6 +294,7 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
               { cause },
             ),
         ),
+        Effect.ensuring(emitAppSignal('modelAccessChanged', undefined)),
       );
       return {
         signedIn: true,
