@@ -16,11 +16,14 @@ import {
 } from '@shared/approvalBypassKind';
 import {
   AgentConfigSchema,
+  ToolError,
   type RunId,
   type SubagentProgressUpdate,
   type AgentConfigPayload,
 } from '@shared/schemas';
 import { executed } from '@tools/core/result';
+import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { startChildRun } from './childLaunch';
@@ -30,7 +33,7 @@ import { startChildRun } from './childLaunch';
  * `agent` call streams it to its card. Returns undefined for updates with
  * nothing worth a line.
  */
-export function describeSubagentProgress(
+function describeSubagentProgress(
   agentName: string,
   update: SubagentProgressUpdate,
 ): string | undefined {
@@ -45,6 +48,30 @@ export function describeSubagentProgress(
       return `Subagent '${agentName}': ${update.toolCallCount} tool calls, ${update.filesChanged.length} files changed`;
   }
 }
+
+/** Prints an awaited child's progress on its call's card: transient text,
+ *  never a row of the run. The child's own run is where its progress is kept. */
+export const printSubagentProgress =
+  (agentName: string, emit: (text: string) => void) =>
+  (update: SubagentProgressUpdate): void => {
+    const line = describeSubagentProgress(agentName, update);
+    if (line) emit(`${line}\n`);
+  };
+
+/** The JSON Schema a child's structured output must match, from the `schema`
+ *  its call named; a call that named none has none. */
+export const childOutputSchema = (
+  schema: Record<string, unknown> | null | undefined,
+) =>
+  schema == null
+    ? Effect.succeed(undefined)
+    : Effect.try({
+        try: () => normalizeStructuredOutputSchema(schema).jsonSchema,
+        catch: (error) =>
+          new ToolError(
+            `\`schema\` is not a supported object-root JSON Schema: ${toErrorMessage(error)}`,
+          ),
+      });
 
 /** How a delegation was approved, as the child's own grants record it:
  *  by the user's one-off answer (`inherit`), or by the run's proposal
