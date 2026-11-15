@@ -13,7 +13,6 @@ import {
   agentKeyOf,
   agentName,
   type AgentConfig,
-  programOf,
   Rejected,
 } from '@texra-ai/harness/schemas';
 import {
@@ -162,8 +161,8 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
 /**
  * The launcher's selections that would launch `config` again, the reverse
  * of {@link buildLaunchConfig}: Run again… opens the form on them. An
- * agent its caller defined (inline) and a program's run are in no catalog,
- * so the form cannot hold them and Run again… refuses.
+ * agent its caller defined (inline) is in no catalog, so the form cannot
+ * hold it and Run again… refuses.
  */
 export function launchFormOf(
   config: AgentConfig,
@@ -171,10 +170,7 @@ export function launchFormOf(
   if (config.agentSource === AGENT_SOURCE.INLINE)
     return Effect.fail(
       new Rejected({
-        reason:
-          programOf(config) === null
-            ? `'${config.agent}' was defined by the run that started it and is not in your agents, so the form cannot run it again.`
-            : `'${config.agent}' is a program, which the form does not start: ask an agent to run it again.`,
+        reason: `'${config.agent}' was defined by the run that started it and is not in your agents, so the form cannot run it again.`,
       }),
     );
   const teamId = launchTeamId(config);
