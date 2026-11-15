@@ -86,8 +86,9 @@ export interface AppSignalPayloads {
    *
    * Emitted by the app's writers themselves, so no caller announces for
    * them: a subscription's sign-in, sign-out and preference write, a coding
-   * plan's toggle, the settings write path for a row that re-routes models,
-   * and the settings view's enabled-model write. Consumed by: the CLI chat
+   * plan's toggle, and the settings write path for a row that re-routes
+   * models. The enabled-model write is the one still announced by its
+   * caller, the settings view (`settingsViewBody.ts`). Consumed by: the CLI chat
    * TUI's status bar, which re-reads the route and quota it shows, and the extension's
    * and desktop's launchers (`hostSnapshotSource.ts`), which re-read their
    * credential check and model catalog.
