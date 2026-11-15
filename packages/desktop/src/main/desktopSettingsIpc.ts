@@ -108,48 +108,42 @@ export function createDesktopSettingsIpc(
     const signInSubscription = (providerId: SubscriptionProviderId) => {
       const provider = subscriptionProvider(providerId);
       const { displayName } = provider;
-      return Effect.gen(function* () {
-        const account = yield* provider.signIn({
-          transport: 'auto',
-          stores: options.roots,
-          present: {
-            presentDeviceCode: (prompt) =>
-              reportPresentation(
+      return provider.signIn({
+        transport: 'auto',
+        stores: options.roots,
+        present: {
+          presentDeviceCode: (prompt) =>
+            reportPresentation(
+              displayName,
+              signInPresentation.presentSubscriptionDeviceCode(
+                prompt,
                 displayName,
-                signInPresentation.presentSubscriptionDeviceCode(
-                  prompt,
-                  displayName,
-                ),
               ),
-            presentSignInUrl: (url) =>
-              signInPresentation.openSubscriptionSignInUrl(url).pipe(
-                Effect.mapError(
-                  (failure) =>
-                    new LoopbackTransportUnavailableError({
-                      message: `Could not open a browser for ${displayName} sign-in.`,
-                      cause: failure.cause,
-                    }),
-                ),
-                Effect.andThen(
-                  Effect.sync(() =>
-                    spawn(
-                      reportPresentation(
+            ),
+          presentSignInUrl: (url) =>
+            signInPresentation.openSubscriptionSignInUrl(url).pipe(
+              Effect.mapError(
+                (failure) =>
+                  new LoopbackTransportUnavailableError({
+                    message: `Could not open a browser for ${displayName} sign-in.`,
+                    cause: failure.cause,
+                  }),
+              ),
+              Effect.andThen(
+                Effect.sync(() =>
+                  spawn(
+                    reportPresentation(
+                      displayName,
+                      signInPresentation.presentSubscriptionSignInUrl(
+                        url,
                         displayName,
-                        signInPresentation.presentSubscriptionSignInUrl(
-                          url,
-                          displayName,
-                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-          },
-        });
-        yield* bindings.dialogs.notify(
-          'info',
-          ACCOUNT_OUTCOME.signedInAs(displayName, account.label),
-        );
+            ),
+        },
       });
     };
 

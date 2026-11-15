@@ -15,6 +15,7 @@ import {
   subscriptionProvider,
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
+import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 import {
@@ -118,7 +119,10 @@ const updateSubscriptionCliModelAccess = Effect.fn(
           new ModelAccessPreferenceFailed({
             member: 'setPreferSubscription',
             subscription: providerId,
-            message: `${displayName} subscription could not be disabled: ${toErrorMessage(cause)}`,
+            message: ACCOUNT_OUTCOME.subscriptionNotDisabled(
+              displayName,
+              toErrorMessage(cause),
+            ),
             cause,
           }),
       ),

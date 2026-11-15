@@ -146,7 +146,7 @@ export class SettingsViewProvider {
           selectLauncherAgent: (agent) =>
             progressView.selectLauncherAgent(agent),
           signInSubscription: (providerId) =>
-            Effect.asVoid(signInWithSubscription(roots, providerId)),
+            signInWithSubscription(roots, providerId),
           revealRun: (runId) => progressView.revealRun(runId),
           runLabel: (runId) => progressView.runLabel(runId),
           runInTerminal: (name, command) =>
