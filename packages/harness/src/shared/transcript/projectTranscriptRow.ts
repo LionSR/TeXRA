@@ -30,7 +30,6 @@ import {
   type ErrorDetailKey,
   type ErrorRow,
   type ErrorRowDetail,
-  type LoadedMediaRef,
   type LogRow,
   type StatItem,
   type StreamingTextRow,
@@ -149,11 +148,11 @@ function fileListSummary(files: readonly FileListEntry[]): string {
   return `Files (${loaded}/${files.length} loaded${failedSuffix})`;
 }
 
-function loadedMedia(files: readonly FileListEntry[]): LoadedMediaRef[] {
-  return files.flatMap((file) =>
-    file.ok && file.media && file.path.trim()
-      ? [{ path: file.path, media: file.media }]
-      : [],
+/** The entries as a host lists them: a file that did not load, or names no
+ *  path, shows no media label. */
+function listedFiles(files: readonly FileListEntry[]): FileListEntry[] {
+  return files.map(({ media, ...file }) =>
+    file.ok && media && file.path.trim() ? { ...file, media } : file,
   );
 }
 
@@ -269,9 +268,8 @@ export function logPayloadRow(
       return {
         ...base,
         kind: 'fileList',
-        files,
+        files: listedFiles(files),
         summary: fileListSummary(files),
-        media: loadedMedia(files),
       };
     }
 

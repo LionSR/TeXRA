@@ -72,7 +72,6 @@ export type {
   ErrorRow,
   ErrorRowDetail,
   FileListRow,
-  LoadedMediaRef,
   LogRow,
   ProgressStatusRow,
   StatItem,

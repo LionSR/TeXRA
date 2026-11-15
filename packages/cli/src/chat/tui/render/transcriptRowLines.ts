@@ -73,9 +73,8 @@ function cornerBlock(lines: readonly string[]): string[] {
 }
 
 function fileListLines(row: Extract<TranscriptRow, { kind: 'fileList' }>) {
-  const mediaByPath = new Map(row.media.map((ref) => [ref.path, ref.media]));
   return row.files.map((file) => {
-    const media = mediaByPath.get(file.path);
+    const { media } = file;
     const { marker } = TONE_PAINT[fileLoadTone(file.ok)];
     const name = file.varName ? `${file.varName}: ` : '';
     const source = file.sourceDisplay ? ` (${file.sourceDisplay})` : '';

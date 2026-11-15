@@ -231,13 +231,12 @@ const EventInputSchema: TaggedStruct<"event", { readonly read: Literals<readonly
 ```ts
 interface FileListRow extends TranscriptRowBase {
   readonly kind: 'fileList';
-  /** Every entry the loader reported, loaded and failed alike. */
+  /** Every entry the loader reported, loaded and failed alike. An entry's
+   *  `media` (the kind and size a host shows beside its name) is kept only
+   *  on a file that loaded through the media pipeline. */
   readonly files: readonly FileListEntry[];
   /** `Files (3/4 loaded, 1 not found)` — the one statement of partial load. */
   readonly summary: string;
-  /** The subset a host can preview inline. Kept beside `files`, not instead
-   *  of it: a failed or non-media attachment must stay visible. */
-  readonly media: readonly LoadedMediaRef[];
 }
 ```
 
@@ -262,17 +261,6 @@ function isScriptCall(row: ReadonlyDeep<TranscriptRow>): row is Extract<
   { kind: 'tool' }
 > & {
   readonly stageId: string;
-}
-```
-
-## LoadedMediaRef
-
-A file that came through the media pipeline as visual/audio model input.
-
-```ts
-interface LoadedMediaRef {
-  readonly path: string;
-  readonly media: LoadedMediaMetadata;
 }
 ```
 
