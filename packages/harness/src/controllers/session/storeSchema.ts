@@ -107,9 +107,6 @@ const ADDITIVE = [
     version        INTEGER NOT NULL,
     through_commit INTEGER NOT NULL
   ) STRICT, WITHOUT ROWID`,
-  // A table earlier builds kept a copy of each priced row's usage in: no
-  // build reads it now, and every row of it was derived.
-  `DROP TABLE IF EXISTS projected_row`,
   `CREATE TABLE IF NOT EXISTS listing_entry (
     aggregate INTEGER NOT NULL REFERENCES event_sequence(id) ON DELETE CASCADE,
     key       TEXT NOT NULL,
