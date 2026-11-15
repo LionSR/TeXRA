@@ -110,7 +110,7 @@ export interface RunDeletion {
 
 const heldRun = (run: LiveRun): HeldRun => ({
   runId: run.runId,
-  drained: run.drained,
+  drained: Effect.asVoid(run.drained),
   modelSwitchDisabledReason: (model) =>
     run.controls?.modelSwitchDisabledReason(model) ?? Effect.succeed(undefined),
 });

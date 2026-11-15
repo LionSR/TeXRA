@@ -231,14 +231,23 @@ export const isOutcomeOf = <K extends RuntimeCommand['kind']>(
 /** A launch here holds the run this request would act on. */
 export class RunActive extends Schema.TaggedError<RunActive>()('RunActive', {
   runId: RunIdSchema,
-}) {}
+}) {
+  override get message(): string {
+    return `Run ${this.runId} is running here; stop it first.`;
+  }
+}
 
 /** The stream, request, or run the request names is gone or not in a state
- *  that can take it. */
+ *  that can take it. `reason` says which, and is also its `message`, so a
+ *  caller that only formats errors still shows why. */
 export class Unavailable extends Schema.TaggedError<Unavailable>()(
   'Unavailable',
   { runId: RunIdSchema, reason: Schema.String },
-) {}
+) {
+  override get message(): string {
+    return this.reason;
+  }
+}
 
 /** Nothing is left to tell the user: they cancelled the operation, or the
  *  host has already told them why it did not go through. No refusal notice

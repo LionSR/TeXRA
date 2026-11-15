@@ -267,12 +267,12 @@ export const goalGrant =
   (kinds: readonly ApprovalBypassKind[]) =>
   (grants: ApprovalGrants): ApprovalGrants => ({ ...grants, goal: kinds });
 
-/** How a session write the request made fails it: the `Unavailable` that
- *  `unavailable` describes, a closed run's included. */
+/** How a session write the request made fails it: an `Unavailable` that
+ *  says what was not written (`unwritten`) and why, a closed run's included. */
 export const writeRejection =
-  (unavailable: ConstructorParameters<typeof Unavailable>[0]) =>
-  (): RequestError =>
-    new Unavailable(unavailable);
+  (runId: RunId, unwritten: string) =>
+  (cause: Error): RequestError =>
+    new Unavailable({ runId, reason: `${unwritten}: ${cause.message}` });
 
 type PolicyChange = Extract<RuntimeCommand, { kind: 'policy.set' }>['change'];
 type Answer<A, R> = Effect.Effect<A, RequestError, R>;
@@ -314,10 +314,7 @@ export function setPolicy<A, R>(
     approvals.change(change.runId, policyEdit(change)),
   ).pipe(
     Effect.mapError(
-      writeRejection({
-        runId: change.runId,
-        reason: 'The approval change could not be saved.',
-      }),
+      writeRejection(change.runId, 'The approval change could not be saved'),
     ),
     Effect.andThen(decide),
   );
@@ -337,10 +334,7 @@ export const decideUnderGrant = <A, R>(
   ) => Answer<A, R>,
 ): Answer<A, R | Approvals | SessionLog> => {
   const { runId, requestId, decision, grant } = req;
-  const rejected = writeRejection({
-    runId,
-    reason: 'The decision could not be recorded.',
-  });
+  const rejected = writeRejection(runId, 'The decision could not be recorded');
   const write: Effect.Effect<boolean, RequestError, SessionLog | Approvals> =
     grant == null
       ? decideRequest(runId, requestId, decision).pipe(

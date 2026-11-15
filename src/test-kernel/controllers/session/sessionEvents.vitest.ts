@@ -466,8 +466,10 @@ describe('session events and view', () => {
  * holds ends.
  */
 describe('Sessions owner', () => {
-  // A missing plugin must not clear a durable request whose answer it delivers.
-  it.live('keeps a plugin request pending when its plugin is absent', () =>
+  // Neither a missing plugin nor its run's end may clear a durable request
+  // whose answer the plugin delivers: nothing waits on it, and the answer
+  // resumes the run.
+  it.live('keeps a plugin request pending without its plugin or its run', () =>
     Effect.gen(function* () {
       const directory = mkdtempSync(join(tmpdir(), 'texra-missing-plugin-'));
       yield* Effect.addFinalizer(() =>
@@ -532,6 +534,20 @@ describe('Sessions owner', () => {
           _tag: 'Unavailable',
           reason: expect.stringContaining('example'),
         });
+        // A caller that only formats the error still shows why.
+        expect(error.message).toContain('example');
+        expect((yield* session.view.read([RUN])).requests).toHaveLength(1);
+        yield* session.request({
+          kind: 'run.stop',
+          runId: RUN,
+          reason: 'user',
+        });
+        yield* Stream.runHead(
+          Stream.filter(
+            session.view.changes,
+            (view) => view.runs.get(RUN)?.outcome != null,
+          ),
+        );
         expect((yield* session.view.read([RUN])).requests).toHaveLength(1);
       }).pipe(Effect.provide(Sessions.layer({ platform, plugins: [] })));
     }),

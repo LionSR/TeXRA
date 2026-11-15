@@ -26,8 +26,10 @@ export interface LiveRun {
   readonly runId: RunId;
   /** Its running loop's controls, while one runs here. */
   readonly controls: RunControls | undefined;
-  /** Resolves once the fiber driving it here has exited. */
-  readonly drained: Effect.Effect<void>;
+  /** Resolves once the fiber driving it here has exited, with the failure
+   *  it exited on: none when it returned or a stop interrupted it. A run
+   *  with no stored end failed for that reason (its end was not saved). */
+  readonly drained: Effect.Effect<Error | undefined>;
 }
 
 /**
