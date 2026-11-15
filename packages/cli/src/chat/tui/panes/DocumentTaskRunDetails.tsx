@@ -29,9 +29,8 @@ import {
   outputDisplayName,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
+import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
 import { stageStatus } from '@ui/copy/runStatus';
-
-import { COMPACTION_ACTIVITY_STATUS_STYLE } from './transcriptEntryLayout';
 
 interface DocumentTaskRunDetailLine {
   readonly key: string;
@@ -59,7 +58,7 @@ function stageLine(
   stage: Stage,
   status: ReturnType<typeof stageStatus>,
 ): DocumentTaskRunDetailLine {
-  const appearance = COMPACTION_ACTIVITY_STATUS_STYLE[status.key];
+  const appearance = TONE_PAINT[status.tone];
   const duration =
     stage.endTime !== undefined
       ? ` · ${formatCompactDuration(stage.endTime - stage.startTime)}`
