@@ -53,8 +53,8 @@ export const emitCliResult = (result: CliResult) =>
     writeCliResult(context.outputFormat, result),
   );
 
-/** {@link emitCliResult} for `texra version`, which runs no program and
- *  reads its format itself. */
+/** {@link emitCliResult} for a caller that holds the context's format and
+ *  runs outside the invocation's program (the clone workflow's ports). */
 export function writeCliResult(
   outputFormat: CliOutputFormat,
   result: CliResult,
