@@ -42,22 +42,6 @@ interface MathSymbolSpelling {
   readonly entities: readonly string[];
 }
 
-/** Freeze a spelling table down to each row and its glyph and entity lists,
- *  so no consumer can mutate the shared catalog. */
-function freezeSpellings(
-  spellings: readonly MathSymbolSpelling[],
-): readonly MathSymbolSpelling[] {
-  return Object.freeze(
-    spellings.map((spelling) =>
-      Object.freeze({
-        ...spelling,
-        glyphs: Object.freeze(spelling.glyphs),
-        entities: Object.freeze(spelling.entities),
-      }),
-    ),
-  );
-}
-
 /**
  * The math symbols with more than one source spelling, as the one owner of the
  * command each spelling means. The math-only glyph pass (`MATH_UNICODE_MAP` in
@@ -69,44 +53,52 @@ function freezeSpellings(
  * entities with no twin stay listed at their table.
  */
 export const MATH_SYMBOL_SPELLINGS: readonly MathSymbolSpelling[] =
-  freezeSpellings([
-    { command: '-', glyphs: ['−'], entities: ['minus'] },
-    { command: '\\times', glyphs: ['×'], entities: ['times'] },
-    { command: '\\div', glyphs: ['÷'], entities: ['divide'] },
-    { command: '\\leq', glyphs: ['≤'], entities: ['le'] },
-    { command: '\\geq', glyphs: ['≥'], entities: ['ge'] },
-    { command: '\\neq', glyphs: ['≠'], entities: ['ne'] },
-    { command: '\\propto', glyphs: ['∝'], entities: ['prop'] },
-    { command: '\\subset', glyphs: ['⊂'], entities: ['sub'] },
-    { command: '\\supset', glyphs: ['⊃'], entities: ['sup'] },
-    { command: '\\subseteq', glyphs: ['⊆'], entities: ['sube'] },
-    { command: '\\supseteq', glyphs: ['⊇'], entities: ['supe'] },
-    { command: '\\in', glyphs: ['∈'], entities: ['isin'] },
-    { command: '\\notin', glyphs: ['∉'], entities: ['notin'] },
-    { command: '\\ni', glyphs: ['∋'], entities: ['ni'] },
-    { command: '\\cap', glyphs: ['∩'], entities: ['cap'] },
-    { command: '\\cup', glyphs: ['∪'], entities: ['cup'] },
-    { command: '\\infty', glyphs: ['∞'], entities: ['infin'] },
-    { command: '\\nabla', glyphs: ['∇'], entities: ['nabla'] },
-    { command: '\\partial', glyphs: ['∂'], entities: ['part'] },
-    { command: '\\int', glyphs: ['∫'], entities: ['int'] },
-    { command: '\\sum', glyphs: ['∑'], entities: ['sum'] },
-    { command: '\\prod', glyphs: ['∏'], entities: ['prod'] },
-    { command: '\\perp', glyphs: ['⊥'], entities: ['perp'] },
-    { command: '\\wedge', glyphs: ['∧'], entities: ['and'] },
-    { command: '\\vee', glyphs: ['∨'], entities: ['or'] },
-    { command: '\\Rightarrow', glyphs: ['⇒'], entities: ['rArr'] },
-    { command: '\\Leftrightarrow', glyphs: ['⇔'], entities: ['hArr'] },
-    { command: '\\uparrow', glyphs: ['↑'], entities: ['uarr'] },
-    { command: '\\downarrow', glyphs: ['↓'], entities: ['darr'] },
-    { command: '\\leftarrow', glyphs: ['←'], entities: ['larr', 'crarr'] },
-    { command: '\\rightarrow', glyphs: ['→'], entities: ['rarr'] },
-    { command: '\\leftrightarrow', glyphs: ['↔'], entities: ['harr'] },
-    { command: '\\ldots', glyphs: ['…'], entities: ['hellip'] },
-    { command: '\\cdot', glyphs: ['⋅', '·'], entities: ['middot', 'sdot'] },
-    { command: '^{\\circ}', glyphs: ['°'], entities: ['deg'] },
-    { command: '\\mu', glyphs: ['µ'], entities: ['micro'] },
-  ]);
+  Object.freeze(
+    [
+      { command: '-', glyphs: ['−'], entities: ['minus'] },
+      { command: '\\times', glyphs: ['×'], entities: ['times'] },
+      { command: '\\div', glyphs: ['÷'], entities: ['divide'] },
+      { command: '\\leq', glyphs: ['≤'], entities: ['le'] },
+      { command: '\\geq', glyphs: ['≥'], entities: ['ge'] },
+      { command: '\\neq', glyphs: ['≠'], entities: ['ne'] },
+      { command: '\\propto', glyphs: ['∝'], entities: ['prop'] },
+      { command: '\\subset', glyphs: ['⊂'], entities: ['sub'] },
+      { command: '\\supset', glyphs: ['⊃'], entities: ['sup'] },
+      { command: '\\subseteq', glyphs: ['⊆'], entities: ['sube'] },
+      { command: '\\supseteq', glyphs: ['⊇'], entities: ['supe'] },
+      { command: '\\in', glyphs: ['∈'], entities: ['isin'] },
+      { command: '\\notin', glyphs: ['∉'], entities: ['notin'] },
+      { command: '\\ni', glyphs: ['∋'], entities: ['ni'] },
+      { command: '\\cap', glyphs: ['∩'], entities: ['cap'] },
+      { command: '\\cup', glyphs: ['∪'], entities: ['cup'] },
+      { command: '\\infty', glyphs: ['∞'], entities: ['infin'] },
+      { command: '\\nabla', glyphs: ['∇'], entities: ['nabla'] },
+      { command: '\\partial', glyphs: ['∂'], entities: ['part'] },
+      { command: '\\int', glyphs: ['∫'], entities: ['int'] },
+      { command: '\\sum', glyphs: ['∑'], entities: ['sum'] },
+      { command: '\\prod', glyphs: ['∏'], entities: ['prod'] },
+      { command: '\\perp', glyphs: ['⊥'], entities: ['perp'] },
+      { command: '\\wedge', glyphs: ['∧'], entities: ['and'] },
+      { command: '\\vee', glyphs: ['∨'], entities: ['or'] },
+      { command: '\\Rightarrow', glyphs: ['⇒'], entities: ['rArr'] },
+      { command: '\\Leftrightarrow', glyphs: ['⇔'], entities: ['hArr'] },
+      { command: '\\uparrow', glyphs: ['↑'], entities: ['uarr'] },
+      { command: '\\downarrow', glyphs: ['↓'], entities: ['darr'] },
+      { command: '\\leftarrow', glyphs: ['←'], entities: ['larr', 'crarr'] },
+      { command: '\\rightarrow', glyphs: ['→'], entities: ['rarr'] },
+      { command: '\\leftrightarrow', glyphs: ['↔'], entities: ['harr'] },
+      { command: '\\ldots', glyphs: ['…'], entities: ['hellip'] },
+      { command: '\\cdot', glyphs: ['⋅', '·'], entities: ['middot', 'sdot'] },
+      { command: '^{\\circ}', glyphs: ['°'], entities: ['deg'] },
+      { command: '\\mu', glyphs: ['µ'], entities: ['micro'] },
+    ].map((spelling) =>
+      Object.freeze({
+        ...spelling,
+        glyphs: Object.freeze(spelling.glyphs),
+        entities: Object.freeze(spelling.entities),
+      }),
+    ),
+  );
 
 // Section commands for LaTeX documents
 export const SECTION_TYPES = Object.freeze([
