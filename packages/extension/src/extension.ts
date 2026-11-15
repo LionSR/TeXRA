@@ -282,11 +282,15 @@ const NO_FOLDER_COMMANDS = {
           ),
         ),
       ),
-      Effect.catch((error) =>
-        error instanceof Cancelled
+      // A defect is reported like a failure, as the settings body reports
+      // one; an interrupt is the window closing, not a failed sign-in.
+      Effect.catchCause((cause) => {
+        if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt;
+        const error = Cause.squash(cause);
+        return error instanceof Cancelled
           ? Effect.void
-          : showLoggedErrorMessage(`${displayName} sign-in failed`, error),
-      ),
+          : showLoggedErrorMessage(`${displayName} sign-in failed`, error);
+      }),
       withLogChannel('welcomeView'),
     );
   },
