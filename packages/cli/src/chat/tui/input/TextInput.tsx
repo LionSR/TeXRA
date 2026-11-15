@@ -19,6 +19,7 @@ import {
 import { isTuiColorEnabled } from '@cli/tui/noColorOutput';
 import {
   clampCursor,
+  graphemeAt,
   insertText,
   maskDisplayValue,
   verticalCursorMove,
@@ -432,11 +433,12 @@ export function TextInput(props: TextInputProps): React.JSX.Element {
   if (!focus) return <Text>{shownValue}</Text>;
 
   const before = shownValue.slice(0, display.cursor);
-  const ch = shownValue[display.cursor];
-  const after = shownValue.slice(display.cursor + 1);
+  const cell = graphemeAt(shownValue, display.cursor);
+  const ch = cell?.text;
+  const after = shownValue.slice(cell?.end ?? shownValue.length);
   // Inverse-on-newline collapses to nothing visible; render the caret as a
   // leading space and let the literal newline carry the line break.
-  if (ch === '\n') {
+  if (ch?.endsWith('\n')) {
     return (
       <Text>
         {before}

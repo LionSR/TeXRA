@@ -1,7 +1,12 @@
 import { layer } from '@effect/vitest';
 import { Layer } from 'effect';
-import { expect } from 'vitest';
+import { expect, it as test } from 'vitest';
 
+import { textInputCappedRowCount } from '@cli/chat/tui/input/textInputDisplay';
+import {
+  deleteBeforeCursor,
+  previousGraphemeCursor,
+} from '@cli/chat/tui/input/textInputEditing';
 import { slashCommands } from '@cli/chat/tui/commands/slashRegistry';
 import { SessionGraph } from '@test/support/testKernel';
 import { boundTestSessionView } from '@test/cli/fixtures/sessionViewFixture';
@@ -52,4 +57,17 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
       expect(!commands.shouldRedact(input)).toBe(expected);
     }
   });
+});
+
+test('the input edits and measures an emoji sequence as one character', () => {
+  const family = '👨‍👩‍👧';
+  const draft = `a${family}`;
+  expect(deleteBeforeCursor(draft, draft.length)).toEqual({
+    value: 'a',
+    cursor: 1,
+  });
+  expect(previousGraphemeCursor(draft, draft.length)).toBe(1);
+  // Two columns wide, so two of them fill a four-column row; the caret
+  // takes the second row.
+  expect(textInputCappedRowCount(family + family, 4, 8)).toBe(2);
 });

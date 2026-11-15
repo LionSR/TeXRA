@@ -15,6 +15,40 @@ export function clampCursor(cursor: number, length: number): number {
   return Num.clamp(cursor, { minimum: 0, maximum: length });
 }
 
+const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+/**
+ * The grapheme cluster holding code unit `index`: the unit a caret steps
+ * over and a delete removes, so an emoji sequence or a letter with combining
+ * marks is never cut inside. `undefined` at or past the end of `value`.
+ */
+export function graphemeAt(
+  value: string,
+  index: number,
+):
+  | { readonly text: string; readonly start: number; readonly end: number }
+  | undefined {
+  const found = GRAPHEMES.segment(value).containing(index);
+  if (found === undefined) return undefined;
+  return {
+    text: found.segment,
+    start: found.index,
+    end: found.index + found.segment.length,
+  };
+}
+
+/** ← target: the start of the grapheme before the cursor. */
+export function previousGraphemeCursor(value: string, cursor: number): number {
+  const c = clampCursor(cursor, value.length);
+  return graphemeAt(value, c - 1)?.start ?? 0;
+}
+
+/** → target: the end of the grapheme at the cursor. */
+export function nextGraphemeCursor(value: string, cursor: number): number {
+  const c = clampCursor(cursor, value.length);
+  return graphemeAt(value, c)?.end ?? value.length;
+}
+
 /**
  * Replace every visible glyph with a bullet for masked (secret) display,
  * preserving newlines and code-unit length so the caret index stays aligned
@@ -70,12 +104,12 @@ function deleteSpan(value: string, from: number, to: number): TextEdit {
 
 export function deleteBeforeCursor(value: string, cursor: number): TextEdit {
   const c = clampCursor(cursor, value.length);
-  return deleteSpan(value, Math.max(0, c - 1), c);
+  return deleteSpan(value, previousGraphemeCursor(value, c), c);
 }
 
 export function deleteAtCursor(value: string, cursor: number): TextEdit {
   const c = clampCursor(cursor, value.length);
-  return deleteSpan(value, c, c + 1);
+  return deleteSpan(value, c, nextGraphemeCursor(value, c));
 }
 
 /** Ctrl-U: delete from the start of the current line to the cursor. */
@@ -134,5 +168,8 @@ export function verticalCursorMove(
   if (target < 0 || target >= lines.length) return undefined;
 
   const column = c - (starts[lineIndex] ?? 0);
-  return (starts[target] ?? 0) + Math.min(column, lines[target]?.length ?? 0);
+  const moved =
+    (starts[target] ?? 0) + Math.min(column, lines[target]?.length ?? 0);
+  // The same column on the other line can fall inside a grapheme.
+  return graphemeAt(value, moved)?.start ?? moved;
 }

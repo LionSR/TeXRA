@@ -1,5 +1,5 @@
 import { textDisplayWidth } from '@cli/runtime/terminal/terminalText';
-import { clampCursor } from './textInputEditing';
+import { clampCursor, graphemeAt } from './textInputEditing';
 
 interface TextInputDisplayWindow {
   readonly value: string;
@@ -17,18 +17,8 @@ interface LeadingEllipsisDisplay {
   readonly removedPrefixCodeUnits: number;
 }
 
-function codePointAtIndex(
-  value: string,
-  index: number,
-): { readonly char: string; readonly nextIndex: number } | undefined {
-  const codePoint = value.codePointAt(index);
-  if (codePoint === undefined) return undefined;
-  const char = String.fromCodePoint(codePoint);
-  return { char, nextIndex: index + char.length };
-}
-
 function isSoftBreakChar(char: string): boolean {
-  return char !== '\n' && /\s/u.test(char);
+  return !char.includes('\n') && /^\s/u.test(char);
 }
 
 function shouldWrapAtPreviousSoftBreak(
@@ -43,9 +33,9 @@ function shouldWrapAtPreviousSoftBreak(
 function softBreakRunEnd(value: string, start: number): number {
   let index = start;
   while (index < value.length) {
-    const point = codePointAtIndex(value, index);
-    if (point === undefined || !isSoftBreakChar(point.char)) break;
-    index = point.nextIndex;
+    const point = graphemeAt(value, index);
+    if (point === undefined || !isSoftBreakChar(point.text)) break;
+    index = point.end;
   }
   return index;
 }
@@ -72,23 +62,23 @@ function textInputDisplayRows(
 
   let index = 0;
   while (index < value.length) {
-    const point = codePointAtIndex(value, index);
+    const point = graphemeAt(value, index);
     if (point === undefined) break;
 
-    if (point.char === '\n') {
+    if (point.text.endsWith('\n')) {
       rows.push({ start: rowStart, end: index, breakKind: 'hard' });
-      rowStart = point.nextIndex;
-      index = point.nextIndex;
+      rowStart = point.end;
+      index = point.end;
       column = 0;
       lastSoftBreakIndex = undefined;
       lastSoftBreakColumn = undefined;
       continue;
     }
 
-    const charWidth = textDisplayWidth(point.char);
+    const charWidth = textDisplayWidth(point.text);
     if (column + charWidth > width && column > 0) {
       let wrapIndex = index;
-      if (isSoftBreakChar(point.char)) {
+      if (isSoftBreakChar(point.text)) {
         wrapIndex = softBreakRunEnd(value, index);
       } else if (
         lastSoftBreakIndex !== undefined &&
@@ -107,11 +97,11 @@ function textInputDisplayRows(
     }
 
     column += charWidth;
-    if (isSoftBreakChar(point.char)) {
-      lastSoftBreakIndex = point.nextIndex;
+    if (isSoftBreakChar(point.text)) {
+      lastSoftBreakIndex = point.end;
       lastSoftBreakColumn = column;
     }
-    index = point.nextIndex;
+    index = point.end;
   }
 
   if (rowStart < value.length || rows.at(-1)?.breakKind !== 'soft') {
@@ -153,16 +143,15 @@ function leadingEllipsisDisplay(
     return { text: `…${text}`, removedPrefixCodeUnits: 0 };
   }
 
-  let suffix = '';
-  for (const char of [...text].toReversed()) {
-    const candidate = `${char}${suffix}`;
-    if (textDisplayWidth(candidate) > width - textDisplayWidth('…')) break;
-    suffix = candidate;
+  const budget = width - textDisplayWidth('…');
+  let start = text.length;
+  while (start > 0) {
+    const point = graphemeAt(text, start - 1);
+    if (point === undefined) break;
+    if (textDisplayWidth(text.slice(point.start)) > budget) break;
+    start = point.start;
   }
-  return {
-    text: `…${suffix}`,
-    removedPrefixCodeUnits: text.length - suffix.length,
-  };
+  return { text: `…${text.slice(start)}`, removedPrefixCodeUnits: start };
 }
 
 /** True when the soft-break last row already fills `columns`, so an
