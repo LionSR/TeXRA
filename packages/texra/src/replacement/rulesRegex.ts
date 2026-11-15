@@ -39,25 +39,12 @@ const convertFencedLatexBlock: ReplacementFunction = (
   return `${safeLeadingBreak}${safeIndent}\\begin{${safeEnvironment}}${newline}${emptyBodyPadding}${bodyWithTrailingBreak}${safeIndent}\\end{${safeEnvironment}}`;
 };
 
-function hasBalancedBraces(value: string): boolean {
-  let depth = 0;
-  for (const char of value) {
-    if (char === '{') {
-      depth += 1;
-    } else if (char === '}') {
-      if (depth === 0) return false;
-      depth -= 1;
-    }
-  }
-  return depth === 0;
-}
-
 function createCaptionTrimmer(
   command: '\\caption' | '\\caption*',
 ): ReplacementFunction {
   return (match, content) => {
     if (typeof content !== 'string') return match;
-    if (!hasBalancedBraces(content) || /[\r\n]/.test(content)) return match;
+    if (/[\r\n]/.test(content)) return match;
 
     const trimmed = content.replace(/^[\t ]+/, '').replace(/[\t ]+$/, '');
     return trimmed === content ? match : `${command}{${trimmed}}`;
