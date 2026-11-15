@@ -14,7 +14,7 @@ import type { RunView } from '@texra-ai/harness/schemas';
  * printed empty.
  */
 export function formatTaskDiagnostics(run: RunView): string {
-  const model = run.modelLabel ?? run.model;
+  const model = run.modelLabel;
   const rounds = documentRoundsOf(run);
   const outputs = rounds.filter((round) => round.outputs.length > 0);
   const failures = rounds.filter(

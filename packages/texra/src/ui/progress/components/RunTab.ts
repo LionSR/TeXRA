@@ -46,10 +46,7 @@ import { runTabStyles } from './RunTab.styles';
 import type { RunView } from '@texra-ai/harness/schemas';
 
 function buildTooltip(run: RunView): string {
-  const modelDisplay =
-    run.identity.kind === 'agent' && run.model
-      ? (run.modelLabel ?? run.model)
-      : undefined;
+  const modelDisplay = run.identity.kind === 'agent' ? run.modelLabel : null;
   const worktree = run.worktree;
   const worktreeDisplay = worktree
     ? `Worktree: ${getBasename(worktree.workingDirectory)}`
@@ -285,9 +282,7 @@ export class RunTab extends LitElement {
               ></wa-relative-time>
               <span class="model"
                 >${
-                  run.identity.kind === 'agent'
-                    ? (run.modelLabel ?? run.model ?? '')
-                    : ''
+                  run.identity.kind === 'agent' ? run.modelLabel : nothing
                 }</span
               >
               ${waIcon(this.decorator.icon, { id: 'run-tab-kind', className: 'run-kind' })}
