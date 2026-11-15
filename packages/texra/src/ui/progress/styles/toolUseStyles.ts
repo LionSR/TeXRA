@@ -107,7 +107,7 @@ export const toolUseStyles = css`
 
   .tool-use-in-progress > .details-summary :is(.tool-use-title, wa-icon),
   .tool-use-in-progress > .details-summary :is(wa-spinner, tool-timer) {
-    color: var(--color-pending);
+    color: var(--tone-color);
   }
 
   /* An open call on an interrupted run: stopped, waiting for Resume. */

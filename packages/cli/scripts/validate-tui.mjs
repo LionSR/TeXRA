@@ -339,7 +339,7 @@ const SCENARIOS = [
     bootExpect: 'queued 2',
     frame: 'viewport',
     expect: [
-      'Queued follow-ups (2)',
+      'Queued messages (2)',
       '1. First queued follow-up',
       '2. Second queued follow-up',
       'queued 2',
@@ -361,7 +361,7 @@ const SCENARIOS = [
     expect: [
       'queued follow-ups: 1',
       '1. ✓ reviewer completed All good <ok>',
-      'Queued follow-ups (1)',
+      'Queued message (1)',
     ],
     unexpect: ['(empty follow-up)', '<subagent-result'],
   },
@@ -376,7 +376,7 @@ const SCENARIOS = [
     bootExpect: 'queued 1',
     frame: 'viewport',
     expect: [
-      'Queued follow-ups (1)',
+      'Queued message (1)',
       '1. ✗ review failed (retryable)',
       'queued 1',
     ],
@@ -395,7 +395,7 @@ const SCENARIOS = [
     bootExpect: 'queued 2',
     frame: 'viewport',
     expect: [
-      'Queued follow-ups (2)',
+      'Queued messages (2)',
       '1. First queued follow-up',
       '2. Second queued follow-up',
       '│ ›',

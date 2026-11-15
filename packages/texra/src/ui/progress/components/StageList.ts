@@ -39,6 +39,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
+import { renderEmptyMessage } from '@ui/wa/emptyState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - progress view constants
@@ -456,15 +457,11 @@ export class StageList extends LitElement {
     if (this.rows.length === 0 && this.stages.length === 0) {
       const active = this.run !== null && isWorking(this.run);
       const noun = this.run?.parentId ? 'agent' : 'task';
-      return html`
-        <div class="log-placeholder">
-          ${
-            active
-              ? `${Str.capitalize(noun)} is starting. Progress updates will appear here.`
-              : `No log output for this ${noun} yet.`
-          }
-        </div>
-      `;
+      return renderEmptyMessage(
+        active
+          ? `${Str.capitalize(noun)} is starting. Progress updates will appear here.`
+          : `No log output for this ${noun} yet.`,
+      );
     }
 
     if (this.terminal) {

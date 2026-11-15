@@ -12,10 +12,12 @@ import {
 } from '@texra-ai/harness/transcript';
 import { safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import { hiddenRowsText } from '@cli/tui/overflowText';
-import { CROSS, TICK, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
+import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
+import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 import { formatMediaLabel } from '@ui/copy/format';
 import { errorRowText } from '@ui/copy/modelAccess';
+import { fileLoadTone } from '@ui/copy/runStatus';
 
 // A body block can be arbitrarily large (a 50 KB tool dump, a long error
 // payload). Finalized scrollback and the live region show a head+tail slice
@@ -74,7 +76,7 @@ function fileListLines(row: Extract<TranscriptRow, { kind: 'fileList' }>) {
   const mediaByPath = new Map(row.media.map((ref) => [ref.path, ref.media]));
   return row.files.map((file) => {
     const media = mediaByPath.get(file.path);
-    const marker = file.ok ? TICK : CROSS;
+    const { marker } = TONE_PAINT[fileLoadTone(file.ok)];
     const name = file.varName ? `${file.varName}: ` : '';
     const source = file.sourceDisplay ? ` (${file.sourceDisplay})` : '';
     const size = media ? ` ${formatMediaLabel(media)}` : '';

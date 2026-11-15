@@ -7,14 +7,15 @@ import { memo } from 'react';
 import { Box, Text } from 'ink';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
+import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
 import { fillRows } from '@cli/runtime/terminal/terminalText';
 
 // Local imports - CLI TUI rendering
 import { RESPONSE_CUT_NOTE } from '@ui/copy/responseCut';
+import { COMPACTION_ACTIVITY_TONE } from '@ui/copy/runStatus';
 import { Markdown } from '../render/Markdown';
 import { ToolUseRow } from './ToolUseRow';
 import {
-  COMPACTION_ACTIVITY_STATUS_STYLE,
   boundedTranscriptEntryLayout,
   transcriptEntryLayout,
   type TranscriptEntryLayout,
@@ -71,7 +72,7 @@ function PlainEntryRows({
   if (entry.kind === 'error') {
     rowColor = COLOR_ERROR;
   } else if (entry.kind === 'compactionActivity') {
-    rowColor = COMPACTION_ACTIVITY_STATUS_STYLE[entry.block.status].color;
+    rowColor = TONE_PAINT[COMPACTION_ACTIVITY_TONE[entry.block.status]].color;
   }
 
   return (

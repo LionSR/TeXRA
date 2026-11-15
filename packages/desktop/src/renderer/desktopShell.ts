@@ -16,6 +16,7 @@ import { getBasename, type SessionView } from '@texra-ai/harness/schemas';
 import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { unseenRuns } from '@texra/shared/session/unseenRuns';
+import { sectionCountLabel, type RunTone } from '@ui/copy/runStatus';
 import type { IconName } from '@ui/wa/iconNames';
 import {
   renderIconActionButton,
@@ -92,17 +93,29 @@ function sidebarAction(options: {
 /**
  * A project's one status, read from its view's rollup and its surface: what
  * needs the user first (waiting, then interrupted), then work in progress,
- * then runs that finished while the user was elsewhere.
+ * then runs that finished while the user was elsewhere. The first three are
+ * run sections, worded and toned as the run list words them; unseen is the
+ * rail's own.
  */
 function projectStatus(
   project: RailProject,
-): { readonly tone: string; readonly label: string } | undefined {
+): { readonly tone: RunTone | 'unseen'; readonly label: string } | undefined {
   const { waiting, interrupted, running } = project.view.rollup;
   if (waiting > 0)
-    return { tone: 'waiting', label: `${waiting} waiting for you` };
+    return {
+      tone: 'warning',
+      label: sectionCountLabel('waiting', String(waiting)),
+    };
   if (interrupted > 0)
-    return { tone: 'interrupted', label: `${interrupted} interrupted` };
-  if (running > 0) return { tone: 'running', label: `${running} running` };
+    return {
+      tone: 'warning',
+      label: sectionCountLabel('interrupted', String(interrupted)),
+    };
+  if (running > 0)
+    return {
+      tone: 'running',
+      label: sectionCountLabel('running', String(running)),
+    };
   const unseen = unseenRuns(project.surface, project.view).size;
   if (unseen > 0) return { tone: 'unseen', label: `${unseen} finished` };
   return undefined;
@@ -156,8 +169,7 @@ function projectSection(
         // The dot is the row's whole status line; its words are the tooltip.
         status
           ? html`<span
-              class="shell-project-status"
-              data-tone=${status.tone}
+              class="shell-project-status tone-${status.tone}"
               role="img"
               aria-label=${status.label}
               title=${status.label}

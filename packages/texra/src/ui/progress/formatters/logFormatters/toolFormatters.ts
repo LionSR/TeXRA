@@ -20,7 +20,7 @@ import {
   normalizeToolName,
 } from '@texra-ai/harness/transcript';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
-import { runStatusLabel, statusGlyph } from '@ui/copy/runStatus';
+import { runStatusLabel, statusGlyph, TOOL_STATUS } from '@ui/copy/runStatus';
 import { TOOL_CUT_BY_RUN_END_NOTE } from '@ui/copy/scriptStage';
 import { ICON_NAMES, type IconName } from '@ui/wa/iconNames';
 
@@ -162,6 +162,7 @@ export function formatToolUseTemplate(
     extraClasses: {
       'tool-use-user-feedback': model.isUserFeedback,
       'tool-use-in-progress': running,
+      [`tone-${TOOL_STATUS.in_progress.tone}`]: running,
       'tool-use-interrupted': stopped,
     },
     extraContent,

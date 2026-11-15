@@ -15,6 +15,7 @@ import {
   formatResultCount,
 } from '@texra-ai/harness/schemas';
 import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
+import { sectionCountLabel } from '@ui/copy/runStatus';
 import type { Session } from '@texra-ai/harness';
 import type { SessionView, RunId } from '@texra-ai/harness/schemas';
 import type * as vscode from 'vscode';
@@ -70,7 +71,10 @@ export class RequestAttention {
         ? undefined
         : {
             value: count,
-            tooltip: `${formatResultCount(count, 'request')} waiting for you`,
+            tooltip: sectionCountLabel(
+              'waiting',
+              formatResultCount(count, 'request'),
+            ),
           };
     const sidebar = this.surface.sidebar();
     if (sidebar) this.paint(sidebar);
