@@ -329,7 +329,7 @@ export class BackgroundTasksPanel extends LitElement {
           ${repeat(
             inquiries,
             (thread) => thread.threadId,
-            (thread, index) => this.renderInquiryItem(thread, index),
+            (thread) => this.renderInquiryItem(thread),
           )}
         </div>
       </wa-details>
@@ -385,12 +385,11 @@ export class BackgroundTasksPanel extends LitElement {
     `;
   }
 
-  private renderInquiryItem(
-    thread: InquiryThreadSummary,
-    index: number,
-  ): TemplateResult {
+  private renderInquiryItem(thread: InquiryThreadSummary): TemplateResult {
     const preview = thread.lastQuestionPreview || '(empty question)';
-    const idPrefix = `background-inquiry-${index}`;
+    // The thread's id (`ei_` and hex) names its tooltip anchors: a position
+    // would move a tooltip onto another thread's row when the list changes.
+    const idPrefix = `background-inquiry-${thread.threadId}`;
     return html`
       <div class="task-row" role="listitem">
         ${waIcon('circle-question', { className: 'task-icon' })}
