@@ -170,9 +170,6 @@ importers:
       '@types/node':
         specifier: ^22.20.5
         version: 22.20.5
-      '@types/semver':
-        specifier: ^7.8.0
-        version: 7.8.0
       '@types/vscode':
         specifier: ^1.125.0
         version: 1.125.0
@@ -245,9 +242,6 @@ importers:
       '@types/react':
         specifier: ^19.3.0
         version: 19.3.0
-      '@types/semver':
-        specifier: ^7.8.0
-        version: 7.8.0
       '@typescript/native':
         specifier: npm:typescript@^7.0.2
         version: typescript@7.0.2
@@ -674,9 +668,6 @@ importers:
       pretty-ms:
         specifier: 'catalog:'
         version: 10.0.0
-      semver:
-        specifier: ^7.8.6
-        version: 7.8.6
       sortablejs:
         specifier: ^1.15.7
         version: 1.15.7
@@ -693,9 +684,6 @@ importers:
       '@types/diff-match-patch':
         specifier: ^1.0.36
         version: 1.0.36
-      '@types/semver':
-        specifier: ^7.8.0
-        version: 7.8.0
       '@types/sortablejs':
         specifier: ^1.15.9
         version: 1.15.9
@@ -2082,9 +2070,6 @@ packages:
 
   '@types/retry@0.12.0':
     resolution: {integrity: sha512-wWKOClTTiizcZhXnPY4wikVAwmdYHp8q6DmC+EJUzAMsycb7HB32Kh9RN4+0gExjmPmZSAQjgURXIGATPegAvA==}
-
-  '@types/semver@7.8.0':
-    resolution: {integrity: sha512-1mAINjtQCXXeLkJ9ehXkwOcBpqtLxiVtKhpUf83DdRNdQKV0iXZpaHYqRr7nj+wvxuJzoAmAwXI+sCNMv1CzLQ==}
 
   '@types/sortablejs@1.15.9':
     resolution: {integrity: sha512-7HP+rZGE2p886PKV9c9OJzLBI6BBJu1O7lJGYnPyG3fS4/duUCcngkNCjsLwIMV+WMqANe3tt4irrXHSIe68OQ==}
@@ -6133,8 +6118,6 @@ snapshots:
       '@types/node': 22.20.5
 
   '@types/retry@0.12.0': {}
-
-  '@types/semver@7.8.0': {}
 
   '@types/sortablejs@1.15.9': {}
 

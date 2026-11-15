@@ -36,7 +36,6 @@
     "openai": "catalog:",
     "pretty-bytes": "catalog:",
     "pretty-ms": "catalog:",
-    "semver": "^7.8.6",
     "sortablejs": "^1.15.7",
     "tar": "catalog:",
     "which": "catalog:",
@@ -44,7 +43,6 @@
   },
   "devDependencies": {
     "@types/diff-match-patch": "^1.0.36",
-    "@types/semver": "^7.8.0",
     "@types/sortablejs": "^1.15.9"
   }
 }

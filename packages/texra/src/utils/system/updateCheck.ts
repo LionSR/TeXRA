@@ -1,6 +1,13 @@
-import { Clock, Duration, Effect, Predicate, Result, Schema } from 'effect';
+import {
+  Clock,
+  Duration,
+  Effect,
+  Predicate,
+  Result,
+  Schema,
+  SemVer,
+} from 'effect';
 import { HttpClient, HttpClientResponse } from 'effect/http';
-import { gt as semverGt, valid as semverValid } from 'semver';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { GlobalValues, type ValueFamily } from '@texra-ai/harness/host';
@@ -26,18 +33,21 @@ type UpdateCheckRecord = typeof UpdateCheckRecordSchema.Type;
  * precedence (a plain release outranks any prerelease of the same `x.y.z`, and
  * prereleases compare numerically — so `1.2.0-rc.10` correctly beats
  * `1.2.0-rc.2`). Unparseable inputs yield `false` so a malformed
- * registry/release response can never push a bogus update prompt. The
- * leading `v` some tags carry is tolerated by `semver`.
+ * registry/release response can never push a bogus update prompt. Parsing is
+ * strict: the desktop strips a release tag's leading `v` before it gets here.
  *
  * Shared by the CLI (`updateChecker.ts`) and desktop (`desktopUpdateChecker.ts`)
  * update checks, which otherwise poll different sources on the same daily
  * cadence and notify through the same env-var kill switch.
  */
 function isNewerSemverVersion(latest: string, current: string): boolean {
-  const a = semverValid(latest.trim(), { loose: true });
-  const b = semverValid(current.trim(), { loose: true });
-  if (!a || !b) return false;
-  return semverGt(a, b);
+  const a = SemVer.parse(latest.trim());
+  const b = SemVer.parse(current.trim());
+  return (
+    Result.isSuccess(a) &&
+    Result.isSuccess(b) &&
+    SemVer.isGreaterThan(a.success, b.success)
+  );
 }
 
 /** Poll for updates at most once per day. */
