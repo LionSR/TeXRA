@@ -7,7 +7,7 @@ import { Schema } from 'effect';
  * that can seed an autonomous goal verbatim.
  */
 export const PlanSchema = Schema.Struct({
-  objective: Schema.String.check(Schema.isMinLength(1)).annotate({
+  objective: Schema.NonEmptyString.annotate({
     description:
       'The plan document: what to achieve, the approach, and a verifiable stopping condition',
   }),

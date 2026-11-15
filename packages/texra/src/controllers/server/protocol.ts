@@ -89,7 +89,7 @@ export const BUILD_VERSION: string =
 /** What `service.hello` and `texra service status` report. */
 export const ServiceInfoSchema = Schema.Struct({
   /** The protocol the service speaks: {@link PROTOCOL}'s digest. */
-  protocol: Schema.String.check(Schema.isMinLength(1)),
+  protocol: Schema.NonEmptyString,
   /** The build that is serving: the package version. */
   version: Schema.String,
   pid: Schema.Int.check(Schema.isGreaterThan(0)),
@@ -109,9 +109,7 @@ export type ServiceInfo = typeof ServiceInfoSchema.Type;
  *  Its protocol and build are the hello's, read from the socket. */
 const ServiceRecordSchema = ServiceInfoSchema.mapFields(
   Struct.pick(['pid', 'startedAt']),
-).mapFields(
-  Struct.assign({ socket: Schema.String.check(Schema.isMinLength(1)) }),
-);
+).mapFields(Struct.assign({ socket: Schema.NonEmptyString }));
 export type ServiceRecord = typeof ServiceRecordSchema.Type;
 
 /** The storage root's running service: one row of the global root's

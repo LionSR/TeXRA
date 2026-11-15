@@ -3,7 +3,7 @@ import { Schema } from 'effect';
 import { RunOutcomeSchema } from './run';
 
 export const StageSchema = Schema.Struct({
-  id: Schema.String.check(Schema.isMinLength(1)),
+  id: Schema.NonEmptyString,
   name: Schema.String,
   /** Its first-appearance position among its run's transcript rows
    *  (`TranscriptRowBase.seqNo`), which orders it among them. */

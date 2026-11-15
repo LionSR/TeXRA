@@ -41,7 +41,7 @@ export const UpdateMemoryPreviewMessageSchema = Schema.Struct({
 
 /** Memory path message for file operations (reusable field schema) */
 const MemoryPathMessageSchema = Schema.Struct({
-  storagePath: Schema.String.check(Schema.isMinLength(1)),
+  storagePath: Schema.NonEmptyString,
 });
 
 // Inbound messages with command literals
@@ -69,7 +69,7 @@ export const OpenMemoryFolderMessageSchema = commandOnly(
 export const DeleteMemoryMessageSchema = MemoryPathMessageSchema.mapFields(
   Struct.assign({
     command: Schema.Literal(SETTINGS_VIEW_COMMANDS.DELETE_MEMORY),
-    displayPath: Schema.String.check(Schema.isMinLength(1)),
+    displayPath: Schema.NonEmptyString,
   }),
 );
 

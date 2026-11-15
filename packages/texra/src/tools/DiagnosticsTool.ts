@@ -68,7 +68,7 @@ const DiagnosticsInputSchema = Schema.Union([
     line: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).annotate({
       description: '1-based line number where the issue occurs.',
     }),
-    message: Schema.String.check(Schema.isMinLength(1)).annotate({
+    message: Schema.NonEmptyString.annotate({
       description: 'Description of the issue.',
     }),
     severity: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))

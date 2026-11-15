@@ -89,11 +89,11 @@ export const fileList = (
 
 /** The fields that name what an `agent` call runs and with which model. */
 const LAUNCH_FIELDS = {
-  prompt: Schema.String.check(Schema.isMinLength(1)).annotate({
+  prompt: Schema.NonEmptyString.annotate({
     description:
       'The task, in plain prose. Name the files it concerns and copy every constraint the agent must follow: it does not see your conversation.',
   }),
-  agentName: Schema.String.check(Schema.isMinLength(1)).annotate({
+  agentName: Schema.NonEmptyString.annotate({
     description: 'The agent to run. It works with its own tools.',
   }),
   persona: personaField,

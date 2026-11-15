@@ -38,7 +38,7 @@ const YEAR_DESCRIPTION = 'Filter by publication year (exact match).';
 const ZoteroSearchInputSchema = Schema.Struct({
   query: Schema.optional(
     Schema.NullOr(
-      Schema.String.check(Schema.isMinLength(1)).annotate({
+      Schema.NonEmptyString.annotate({
         description: QUERY_DESCRIPTION,
       }),
     ),

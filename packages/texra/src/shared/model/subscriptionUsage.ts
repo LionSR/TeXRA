@@ -19,7 +19,7 @@ export type SubscriptionUsageProvider =
   (typeof SubscriptionUsageProviderSchema)['Type'];
 
 const SubscriptionUsageWindowSchema = Schema.Struct({
-  name: Schema.String.check(Schema.isMinLength(1)),
+  name: Schema.NonEmptyString,
   percentUsed: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)).check(
     Schema.isLessThanOrEqualTo(100),
   ),
@@ -35,8 +35,8 @@ export type SubscriptionUsageWindow =
   (typeof SubscriptionUsageWindowSchema)['Type'];
 
 const SubscriptionUsageSnapshotBaseSchema = Schema.Struct({
-  providerName: Schema.String.check(Schema.isMinLength(1)),
-  planName: Schema.String.check(Schema.isMinLength(1)),
+  providerName: Schema.NonEmptyString,
+  planName: Schema.NonEmptyString,
   fetchedAt: NonNegativeIntSchema,
 });
 

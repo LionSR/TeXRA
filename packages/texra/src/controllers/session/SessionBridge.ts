@@ -80,7 +80,7 @@ const CHANNEL = 'SessionBridge';
 const RequestEnvelopeSchema = Schema.Struct({
   kind: Schema.Literals(['runtime.request', 'host.request']),
   session: Schema.String,
-  requestId: Schema.String.check(Schema.isMinLength(1)),
+  requestId: Schema.NonEmptyString,
 });
 
 interface SessionBridgeOptions {

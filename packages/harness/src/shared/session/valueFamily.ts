@@ -42,5 +42,5 @@ export const REPO_STATE: ValueFamily<JsonValue> = {
  */
 export const WORKSPACE_STORES: ValueFamily<{ readonly root: string }> = {
   name: 'workspace-store',
-  schema: Schema.Struct({ root: Schema.String.check(Schema.isMinLength(1)) }),
+  schema: Schema.Struct({ root: Schema.NonEmptyString }),
 };

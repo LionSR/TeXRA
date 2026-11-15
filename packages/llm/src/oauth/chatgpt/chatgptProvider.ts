@@ -102,10 +102,10 @@ const CHATGPT_REGISTRATION_SECRET_KEY = 'auth.chatgpt.registration';
 /** The persisted OAuth session bundle (stored as JSON under one secret key). */
 const ChatgptSessionSchema = SubscriptionSessionBaseSchema.mapFields(
   Struct.assign({
-    accountId: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
-    email: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+    accountId: Schema.optional(Schema.NonEmptyString),
+    email: Schema.optional(Schema.NonEmptyString),
     /** The ChatGPT plan the token was issued for (`plus`, `pro`, ...). */
-    planType: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+    planType: Schema.optional(Schema.NonEmptyString),
   }),
 );
 /** A stored ChatGPT session. */

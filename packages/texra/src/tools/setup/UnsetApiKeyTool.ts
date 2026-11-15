@@ -19,7 +19,7 @@ import {
 // Local file imports
 
 const UnsetApiKeyInputSchema = Schema.Struct({
-  provider: Schema.String.check(Schema.isMinLength(1)).annotate({
+  provider: Schema.NonEmptyString.annotate({
     description: 'Provider name to remove the stored key for.',
   }),
 });

@@ -2567,7 +2567,7 @@ number, `timestamp` a UTC ISO 8601 date-time and every string non-empty,
 `provider` and `usageRoute` included.
 
 ```ts
-const UsageLogEntrySchema: Struct<{ readonly timestamp: String; readonly model: String; readonly provider: Literals<readonly ["google-interactions", "openai-responses", "anthropic-messages"]>; readonly agentName: optional<String>; readonly usageRoute: optional<Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription", "api-key"]>>; readonly streamId: optional<String>; readonly inputTokens: Int; readonly outputTokens: Int; readonly listCost: Finite; readonly responseTimeMs: optional<Int>; readonly cachedInputTokens: optional<Int>; readonly reasoningTokens: optional<Int>; readonly extensionVersion: optional<String>; readonly editorType: optional<String>; }>
+const UsageLogEntrySchema: Struct<{ readonly timestamp: String; readonly model: NonEmptyString; readonly provider: Literals<readonly ["google-interactions", "openai-responses", "anthropic-messages"]>; readonly agentName: optional<NonEmptyString>; readonly usageRoute: optional<Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription", "api-key"]>>; readonly streamId: optional<NonEmptyString>; readonly inputTokens: Int; readonly outputTokens: Int; readonly listCost: Finite; readonly responseTimeMs: optional<Int>; readonly cachedInputTokens: optional<Int>; readonly reasoningTokens: optional<Int>; readonly extensionVersion: optional<NonEmptyString>; readonly editorType: optional<NonEmptyString>; }>
 ```
 
 ## ValidationModel

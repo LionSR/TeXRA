@@ -19,10 +19,10 @@ const EndpointSchema = Schema.String.check(
   ),
 );
 export const BindingSchema = Schema.Struct({
-  requestedModel: Schema.String.check(Schema.isMinLength(1)),
+  requestedModel: Schema.NonEmptyString,
   deployment: Schema.Struct({
     endpoint: EndpointSchema,
-    credentialScope: Schema.String.check(Schema.isMinLength(1)),
+    credentialScope: Schema.NonEmptyString,
   }),
 });
 /**

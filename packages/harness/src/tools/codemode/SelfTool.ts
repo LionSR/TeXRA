@@ -29,16 +29,13 @@ import {
   childOutputSchema,
   printSubagentProgress,
 } from '@agent/runtime/delegation/subagentRun';
-import {
-  AgentConfigSchema,
-  ToolError,
-} from '@shared/schemas';
+import { AgentConfigSchema, ToolError } from '@shared/schemas';
 import { RunHistory, SessionLog } from '@shared/session/runHistory';
 import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 
 const SelfInputSchema = Schema.Struct({
-  prompt: Schema.String.check(Schema.isMinLength(1)).annotate({
+  prompt: Schema.NonEmptyString.annotate({
     description: 'What this run of you works on.',
   }),
   fork: nullishWithDefault(

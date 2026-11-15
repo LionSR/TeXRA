@@ -75,7 +75,7 @@ export const chainedContinuation = (state: RunState, origin: ModelOrigin) =>
     : {};
 
 const DeclarationSchema = Schema.Struct({
-  name: Schema.String.check(Schema.isMinLength(1)),
+  name: Schema.NonEmptyString,
   description: Schema.String,
   parameters: JsonObjectSchema,
 });

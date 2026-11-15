@@ -29,7 +29,7 @@ const DocumentTaskInputSchema = Schema.Struct({
     description:
       'The instruction the task follows, in plain prose: what to change and what to keep. Empty for the task as its agent defines it.',
   }),
-  agentName: Schema.String.check(Schema.isMinLength(1)).annotate({
+  agentName: Schema.NonEmptyString.annotate({
     description: 'The agent whose document task to run.',
   }),
   model: Schema.optional(Schema.NullOr(Schema.String)).annotate({

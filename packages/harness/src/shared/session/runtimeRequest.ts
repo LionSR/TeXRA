@@ -65,7 +65,7 @@ export const RuntimeCommandSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('run.model'),
     ...runScoped,
-    model: Schema.String.check(Schema.isMinLength(1)),
+    model: Schema.NonEmptyString,
   }),
   /**
    * A stopped run's directory, copied to `to` (workspace-relative) or
@@ -77,7 +77,7 @@ export const RuntimeCommandSchema = Schema.Union([
     files: Schema.Union([
       Schema.Struct({
         op: Schema.Literal('copy'),
-        to: Schema.String.check(Schema.isMinLength(1)),
+        to: Schema.NonEmptyString,
       }),
       Schema.Struct({ op: Schema.Literal('remove') }),
     ]),
@@ -87,7 +87,7 @@ export const RuntimeCommandSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('followUp.send'),
     ...runScoped,
-    text: Schema.String.check(Schema.isMinLength(1)),
+    text: Schema.NonEmptyString,
     displayText: Schema.optional(Schema.NullOr(Schema.String)),
     /** What the message attaches: a file (a pasted image's), read and
      *  stored once here, or media the store already holds (a fork's). */
@@ -117,7 +117,7 @@ export const RuntimeCommandSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('request.decide'),
     ...runScoped,
-    requestId: Schema.String.check(Schema.isMinLength(1)),
+    requestId: Schema.NonEmptyString,
     decision: RequestDecisionSchema,
     grant: Schema.optional(
       Schema.NullOr(Schema.Literals(APPROVAL_BYPASS_KINDS)),
@@ -128,7 +128,7 @@ export const RuntimeCommandSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('request.preview'),
     ...runScoped,
-    requestId: Schema.String.check(Schema.isMinLength(1)),
+    requestId: Schema.NonEmptyString,
   }),
   /** The field-level mutation, not a snapshot: the authority applies it and
    *  publishes the resulting `approval.policy`. */

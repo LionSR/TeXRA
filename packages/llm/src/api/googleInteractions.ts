@@ -711,7 +711,7 @@ export function googleInteractionsModel(
       );
       // Retain a real accepted identifier even if later snapshot validation fails.
       const identity = yield* decodeWireOrFail(
-        Schema.Struct({ id: Schema.String.check(Schema.isMinLength(1)) }),
+        Schema.Struct({ id: Schema.NonEmptyString }),
         'Google returned no background interaction identifier.',
         raw,
       );
