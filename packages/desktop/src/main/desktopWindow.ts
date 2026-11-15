@@ -115,19 +115,21 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   // routes and bindings they hand messages to are read as a message arrives,
   // which is only once the page has loaded at the end of this open.
   const commandRoutes = new Map<string, DesktopCommandRoute>();
+  const dropped = (what: string) =>
+    Effect.logWarning(`Dropped ${what}`).pipe(withLogChannel('desktop'));
   const bridge = yield* installDesktopHostBridge(window, {
     onCommand: (message) => {
       const named = Schema.decodeUnknownResult(DesktopCommandMessageSchema)(
         message,
       );
       if (!Result.isSuccess(named)) {
-        console.warn('Dropped a renderer command with no command name');
+        spawn(dropped('a renderer command with no command name'));
         return;
       }
       const command = named.success;
       const route = commandRoutes.get(command.command);
       if (!route) {
-        console.warn(`Dropped ${command.command}: no surface routes it`);
+        spawn(dropped(`${command.command}: no surface routes it`));
         return;
       }
       // The one run site for every command's program, and its one
@@ -142,7 +144,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
         SessionMessageEnvelopeSchema,
       )(message);
       if (!Result.isSuccess(addressed)) {
-        console.warn('Dropped a session message with no session key');
+        spawn(dropped('a session message with no session key'));
         return;
       }
       const { session } = addressed.success;
@@ -150,9 +152,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
         const binding = bindings.get(session);
         return binding
           ? binding.port.receive(message)
-          : Effect.logWarning(
-              `Dropped a renderer message for session ${session}: not open`,
-            ).pipe(withLogChannel('desktop'));
+          : dropped(`a renderer message for session ${session}: not open`);
       });
       spawn(routing(receive), { startImmediately: true });
     },
@@ -326,9 +326,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
       const settings = surface.settings();
       return settings
         ? settings.route(message)
-        : Effect.logWarning(
-            `Dropped ${message.command}: no project shows settings`,
-          ).pipe(withLogChannel('desktop'));
+        : dropped(`${message.command}: no project shows settings`);
     }),
     claim(DESKTOP_WORKSPACE_INBOUND_COMMANDS, (message) =>
       routing(Effect.suspend(() => bindings.workspaceRoute(message))),
@@ -355,8 +353,8 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
             message.root,
           )
             ? navigation.open(message.root)
-            : Effect.logWarning(
-                `Dropped ${message.command}: ${message.root} is not a recent project`,
+            : dropped(
+                `${message.command}: ${message.root} is not a recent project`,
               ),
       ),
     },

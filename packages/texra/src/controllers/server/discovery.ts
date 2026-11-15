@@ -50,6 +50,13 @@ interface ServicePaths {
 const SOCKET_NAME = /^serve-(\d+)\.sock$/;
 const socketName = (pid: number) => `serve-${pid}.sock`;
 
+/** The subcommand that runs the service, and the headless bundle a GUI
+ *  host runs it from under its resources or extension root. */
+export const SERVICE_SUBCOMMAND = 'serve';
+export function serviceBundlePath(root: string): string {
+  return path.join(root, 'serve', 'texra-serve.mjs');
+}
+
 /** The service files of `storageRoot` (`~/.texra` in production). */
 export function servicePaths(storageRoot: string): ServicePaths {
   const runDirectory = path.join(storageRoot, 'run');

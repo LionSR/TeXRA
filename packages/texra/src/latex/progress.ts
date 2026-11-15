@@ -8,4 +8,6 @@ import { Context } from 'effect';
  */
 export const LatexProgress = Context.Reference<
   (message: string, increment?: number) => void
->('@texra/latex/LatexProgress', { defaultValue: () => () => undefined });
+>('@texra-ai/texra/latex/LatexProgress', {
+  defaultValue: () => () => undefined,
+});

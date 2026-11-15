@@ -177,18 +177,16 @@ const openTask = Effect.fn('documents.openTask')(function* (
         return fs.stat(absolutePath).pipe(
           Effect.flatMap((info) =>
             info.type === 'File'
-              ? fs.access(absolutePath, { readable: true })
-              : Effect.fail(new Error(`not a file (${info.type})`)),
+              ? Effect.as(fs.access(absolutePath, { readable: true }), null)
+              : Effect.succeed(`not a file (${info.type})`),
           ),
-          Effect.match({
-            onSuccess: () => ({ path: file, absolutePath, error: null }),
-            onFailure: (error) => ({
-              path: file,
-              absolutePath,
-              error: toErrorMessage(error),
-            }),
-          }),
-          Effect.map((read) => ({ ...read, ok: read.error === null })),
+          Effect.catch((error) => Effect.succeed(toErrorMessage(error))),
+          Effect.map((error) => ({
+            path: file,
+            absolutePath,
+            error,
+            ok: error === null,
+          })),
         );
       },
       { concurrency: 8 },

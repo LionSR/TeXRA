@@ -2,9 +2,10 @@
 
 Generated from `packages/harness/src/node.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 48
+Exports: 49
 
 - `absentReason` — `const absentReason: (error: unknown) => boolean`
+- `APPROVAL_POLICY_ENV` — `const APPROVAL_POLICY_ENV: "TEXRA_APPROVAL_POLICY"`
 - `canonicalizeWorkspaceRoot` — `function canonicalizeWorkspaceRoot: (workspaceRoot: string) => string`
 - `CommandDirs` — `const CommandDirs: Reference<() => readonly string[]>`
 - `ConfigStore` — `interface ConfigStore { get(key: string): unknown; set(key: string, value: unknown): Effect.Effect<void, Error>; }`
