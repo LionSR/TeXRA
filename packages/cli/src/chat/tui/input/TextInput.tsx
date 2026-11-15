@@ -18,7 +18,7 @@ import {
 } from '@cli/tui/inputKeys';
 import { isTuiColorEnabled } from '@cli/tui/noColorOutput';
 import {
-  clampCursor,
+  restingCursor,
   graphemeAt,
   insertText,
   maskDisplayValue,
@@ -115,7 +115,7 @@ export function TextInput(props: TextInputProps): React.JSX.Element {
   } = props;
 
   const [internalCursor, setInternalCursor] = useState<number>(value.length);
-  const cursor = clampCursor(internalCursor, value.length);
+  const cursor = restingCursor(value, internalCursor);
 
   // Mirror the latest value/cursor for async handlers (image paste): a
   // clipboard probe that resolves after the user keeps typing must insert at
@@ -138,7 +138,7 @@ export function TextInput(props: TextInputProps): React.JSX.Element {
 
   const moveCursor = useCallback((next: number) => {
     const latest = latestStateRef.current;
-    const c = clampCursor(next, latest.value.length);
+    const c = restingCursor(latest.value, next);
     latestStateRef.current = { value: latest.value, cursor: c };
     setInternalCursor(c);
   }, []);
@@ -153,7 +153,7 @@ export function TextInput(props: TextInputProps): React.JSX.Element {
 
   const applyEdit = useCallback(
     (edit: TextEdit) => {
-      const c = clampCursor(edit.cursor, edit.value.length);
+      const c = restingCursor(edit.value, edit.cursor);
       latestStateRef.current = { value: edit.value, cursor: c };
       lastEmittedValueRef.current = edit.value;
       onChange(edit.value);
@@ -168,7 +168,7 @@ export function TextInput(props: TextInputProps): React.JSX.Element {
     if (externalValue === undefined || externalValue === latest.value) {
       return latest;
     }
-    const cursor = clampCursor(latest.cursor, externalValue.length);
+    const cursor = restingCursor(externalValue, latest.cursor);
     const next = { value: externalValue, cursor };
     latestStateRef.current = next;
     setInternalCursor(cursor);
@@ -180,7 +180,7 @@ export function TextInput(props: TextInputProps): React.JSX.Element {
   const adoptEdit = useCallback((edit: TextEdit): TextEdit => {
     const next = {
       value: edit.value,
-      cursor: clampCursor(edit.cursor, edit.value.length),
+      cursor: restingCursor(edit.value, edit.cursor),
     };
     latestStateRef.current = next;
     lastEmittedValueRef.current = next.value;

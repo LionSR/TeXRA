@@ -50,6 +50,17 @@ export function graphemeAt(value: string, index: number): Grapheme | undefined {
   return graphemesOf(value)(index);
 }
 
+/**
+ * A cursor the input may store: inside `value`, and never inside a
+ * grapheme. Every position the input keeps goes through here, so a move
+ * that lands mid-grapheme (a word boundary after a space that carries a
+ * combining mark, a column on another line) rests at that grapheme's start.
+ */
+export function restingCursor(value: string, cursor: number): number {
+  const c = clampCursor(cursor, value.length);
+  return graphemeAt(value, c)?.start ?? c;
+}
+
 /** ← target: the start of the grapheme before the cursor. */
 export function previousGraphemeCursor(value: string, cursor: number): number {
   const c = clampCursor(cursor, value.length);
@@ -194,8 +205,5 @@ export function verticalCursorMove(
   if (target < 0 || target >= lines.length) return undefined;
 
   const column = c - (starts[lineIndex] ?? 0);
-  const moved =
-    (starts[target] ?? 0) + Math.min(column, lines[target]?.length ?? 0);
-  // The same column on the other line can fall inside a grapheme.
-  return graphemeAt(value, moved)?.start ?? moved;
+  return (starts[target] ?? 0) + Math.min(column, lines[target]?.length ?? 0);
 }
