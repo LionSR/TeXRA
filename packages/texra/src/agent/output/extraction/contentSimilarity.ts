@@ -172,8 +172,11 @@ const LATEX_FENCE_INFO = /^(?:latex|tex)$/i;
  * order, at any indentation. Every fence is followed to its close, not only
  * the latex ones: a fence inside another fence is content (an example a
  * four-backtick wrapper shows is not a document), and only a bare delimiter
- * closes one (a ```python line inside a latex block is part of it). A latex
- * fence the response never closes is dropped and reported.
+ * closes one (a ```python line inside a latex block is part of it). A
+ * wrapper that shows a fence is longer than the fence it shows, so a latex
+ * fence line at least as long as the other fence it sits in means that fence
+ * was never closed, and the latex block starts there. A latex fence the
+ * response never closes is dropped and reported.
  */
 export function collectLatexFencedBlocks(
   content: string,
@@ -197,6 +200,18 @@ export function collectLatexFencedBlocks(
       const block = current.join('\n').trim();
       if (block && LATEX_FENCE_INFO.test(openFence.info)) blocks.push(block);
       openFence = null;
+      continue;
+    }
+    const inner = parseMarkdownFenceDelimiter(line);
+    if (
+      inner &&
+      LATEX_FENCE_INFO.test(inner.info) &&
+      !LATEX_FENCE_INFO.test(openFence.info) &&
+      inner.marker === openFence.marker &&
+      inner.length >= openFence.length
+    ) {
+      openFence = inner;
+      current = [];
       continue;
     }
     current.push(line);

@@ -341,6 +341,16 @@ layer(
           '```',
         ]);
         yield* expectWritten('paper.tex', 'AFTER SPAN\n');
+
+        // An earlier fence the reply never closed does not hide the document.
+        yield* writeAndSplitDocuments([
+          '```python',
+          'print(1)',
+          '```latex',
+          'AFTER OPEN FENCE',
+          '```',
+        ]);
+        yield* expectWritten('paper.tex', 'AFTER OPEN FENCE\n');
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
