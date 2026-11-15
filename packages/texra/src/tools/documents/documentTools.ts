@@ -325,7 +325,8 @@ export const DocumentContextTool = defineTool({
         memories: docs.run.config.memories,
       },
       // The first step records the task, which every later step reads.
-      facts: revision === 0 ? [documentsOutputFact(docs.task, docs.rounds)] : [],
+      facts:
+        revision === 0 ? [documentsOutputFact(docs.task, docs.rounds)] : [],
     };
   }),
 });
@@ -505,7 +506,12 @@ export const DocumentCompileTool = defineTool({
     const facts =
       recorded === undefined
         ? []
-        : [documentsOutputFact(docs.task, withRound(docs.rounds, { ...recorded, compile }))];
+        : [
+            documentsOutputFact(
+              docs.task,
+              withRound(docs.rounds, { ...recorded, compile }),
+            ),
+          ];
     if (yield* autoOpensPdf(docs))
       yield* present(
         docs,

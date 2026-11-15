@@ -91,7 +91,9 @@ test('an agent hidden in Settings after it was picked is refused at launch', asy
 
   await agentChip.click();
   await page
-    .locator('session-composer wa-dropdown-item[value="agent:builtIn:research"]')
+    .locator(
+      'session-composer wa-dropdown-item[value="agent:builtIn:research"]',
+    )
     .click();
   await expect(agentChip).toContainText('research');
 
