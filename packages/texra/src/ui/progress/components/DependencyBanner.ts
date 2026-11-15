@@ -10,12 +10,8 @@ import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderWarningBanner } from '@ui/wa/bannerFrame';
 
-/** What TeXRA can't do: "a", "a or b", "a, b or c". */
-function eitherOf(items: readonly string[]): string {
-  return items.length < 2
-    ? (items[0] ?? '')
-    : `${items.slice(0, -1).join(', ')} or ${items.at(-1)}`;
-}
+/** Joins what TeXRA can't do: "a", "a or b", "a, b or c". */
+const EITHER_OF = new Intl.ListFormat('en-GB', { type: 'disjunction' });
 
 /**
  * The missing-tools warning: one sentence naming what is missing and what
@@ -92,7 +88,7 @@ export class DependencyBanner extends LitElement {
       body: html`
         <span class="message"
           >${names} ${single ? "isn't" : "aren't"} installed, so TeXRA can't
-          ${eitherOf(uses)}.</span
+          ${EITHER_OF.format(uses)}.</span
         >
         <div class="actions">
           ${
