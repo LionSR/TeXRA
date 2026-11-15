@@ -1,0 +1,28 @@
+Read on `main` at `cb22acd`. Covered: `packages/harness/src/shared/` (schemas, session row model, transcript row model, state, config, tools) and `packages/harness/src/transcript/`.
+
+### HS-1: A call's edited files are written three times on its card and read by nobody
+
+- **Package:** harness
+- **Flags:** repetition (a fact with two owners); export with no consumer; a field constant across all producers
+- **Evidence:**
+  - `packages/harness/src/controllers/session/rowReader.ts:419-451` (`callCard`) builds one `FileListEntry[]` from the result's `edits` and puts it in three places on the projected `tool.end`: `result.output.editedFiles` (`:432`), `result.files` (`:438`) and the row's own `files` (`:450`). Every entry carries `source: 'tool'`, `sourceDisplay: 'Tool use'` (`:426-427`), constants.
+  - `packages/harness/src/shared/schemas/traceEvent.ts:82` declares `files: Schema.optional(Schema.Array(FileListEntrySchema))` on `tool.end`. The only reader of a `tool.end`, `packages/harness/src/shared/session/transcriptUpdate.ts:207-235`, reads `event.result` and `event.status`; `event.files` is never read. `TraceEmitter.ts:178,210` (the other producer, agent-CLI cards) never writes it.
+  - `editedFiles`: one occurrence in the repo's source (`rowReader.ts:432`); zero in `packages/*/src` readers, zero in tests. `files` reaches `ToolUseLog` only as an undeclared rest key (`shared/toolUse.ts:129-143`, "Fields outside ToolUseLogSchema (e.g. `toolUseDispatch.ts`'s `files`) are kept"; `toolUseDispatch.ts` writes no `files`) and no section builder in `shared/transcript/toolRowSections.ts` or `toolRowModel.ts` reads `log.files`: the file sections come from `output.edits` and the call's input.
+  - `FileListEntrySchema.source` (`shared/schemas/log.ts:55`): three writers (`rowReader.ts:426`, `packages/texra/src/tools/documents/documentTask.ts:130`, `documentTools.ts:163`), no reader in `packages/*/src` (both hosts paint `sourceDisplay` only: `packages/texra/src/ui/progress/formatters/htmlBuilders.ts:215-218`, `packages/cli/src/chat/tui/render/transcriptRowLines.ts:80`).
+- **Better design:** the card's result is the stored result; what a call edited is `result.edits`, its one owner. `callCard` returns `{ ...envelope, type: 'tool.end', logId, status, result }`.
+- **Deleted:** `tool.end.files` (schema field), `editedFiles`, the `files` key inside `result`, `FileListEntrySchema.source` and its three writes, the false comment at `toolUse.ts:130`, the `logPayload.ts:32` "e.g. `files`" comment.
+- **Size:** about 40 lines, 6 files.
+- **Risk / owner decision:** `tool.end` is stored for agent-CLI children, but no producer of a stored `tool.end` writes `files`, so no row version changes. The note `.agents/docs/proposed/simplification/2026-11-14-tool-card-result-and-delivery-shapes.md` §1 (typed `result` on `tool.end`) does not list these fields; this is its first step and stands alone.
+
+### HS-2: Three `log` payload cases have no producer: `scratchpad`, `toolUse`, and a text row's `status`
+
+- **Package:** harness (readers in cli and texra)
+- **Flags:** a union with a case nothing produces; special and general code mixed; a comment that is false
+- **Evidence:**
+  - `MESSAGE_TYPES.SCRATCHPAD` (`shared/schemas/log.ts:16`). Every writer of a `log` row's `messageType` or a stream's kind in `packages/*/src`: `ModelInvoker.ts:258-259` (`THINKING`, `MODEL_RESPONSE` streams), `traceLogs.ts:84,111,160,178`, `ModelInvoker.ts:739`, `agentCli/claudeAgent.ts:158,272,282`, `agentCli/codex.ts:117,120,124,218`, `documents/documentTools.ts:166,219`. None writes `scratchpad`; zero occurrences in `src/` and `packages/*/test`. It is still carried by `LOG_PAYLOAD_SCHEMAS` (`logPayload.ts:30`), `STREAMING_TEXT_ROW_KIND` (`session/transcriptLogRows.ts:25,84`), `StreamingTextRow.kind` (`transcript/transcriptRow.ts:80,288,323`), `LogRowPayload` (`projectTranscriptRow.ts:227`), `completedRunArchive.ts:110-113` (whose comment, "a derived view carved from the model response's raw text", describes code that no longer exists), the CLI (`transcriptRowLines.ts:98`, `transcriptEntryLayout.ts:77`, `transcriptEntries.ts:135`) and the progress view (`formatters/index.ts:55`, `bannerFormatters.ts:50-55`, two style rules).
+  - A `log` row with `messageType: 'toolUse'`: no producer (cards are `tool.start` / `tool.end` or a call's rows). `LOG_PAYLOAD_SCHEMAS[TOOL_USE]` (`logPayload.ts:33-35`) and `transcriptLogRows.ts:93-95` decode and place a row nothing writes. The literal itself stays: it is the `messageType` of a tool row's base (`transcriptUpdate.ts:198`).
+  - `StreamingTextDataSchema` (`logPayload.ts:16-21`, a `StructWithRest` with `status: 'running' | 'completed'`): no `log` producer passes `data` on a text row (`claudeAgent.ts:271-273`, `codex.ts:117,120`), so `running: payload.data?.status === 'running'` (`transcriptLogRows.ts:90`) is always `false`; live text is `stream.start` / `stream.end`.
+- **Better design:** the log payload table lists what is written. A text `log` row is settled text (`running: false`), payload `Schema.Undefined` like `PROGRESS_STATUS`; `StreamingTextRow.kind` is `'assistant' | 'thinking'`.
+- **Deleted:** `MESSAGE_TYPES.SCRATCHPAD` and its eleven reader cases across harness, cli and texra; `StreamingTextDataSchema`; the `TOOL_USE` entry of `LOG_PAYLOAD_SCHEMAS` and its `recordLogRow` case (`MessageTypeSchema` for a `log` row narrows to the types a log can carry).
+- **Size:** about 90 lines, 14 files.
+- **Risk / owner decision:** **owner decision**: `messageType` is a stored literal on `log` and `stream.start`; dropping `scratchpad` bumps `log` (v10) and `stream.start` (v1) so an earlier build's row reads as that build's. `MessageType` is exported from `@texra-ai/harness/schemas`.
