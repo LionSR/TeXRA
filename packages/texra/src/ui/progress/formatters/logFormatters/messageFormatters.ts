@@ -61,7 +61,7 @@ function logLineTimestamp(
 export function formatUserMessageTemplate(row: UserRow): FormatResult {
   const { id, timestamp, scriptSummary, forkAt, media } = row;
   // prettier-ignore
-  return html`<user-message .text=${row.text.full} .logId=${id} .timestamp=${timestamp} .scriptSummary=${scriptSummary ?? null} .forkAt=${forkAt ?? null} .media=${media ?? []}></user-message>`;
+  return html`<user-message .text=${row.text.full} .logId=${id} .timestamp=${timestamp} .scriptSummary=${scriptSummary ?? null} .forkAt=${forkAt ?? null} .media=${media}></user-message>`;
 }
 
 /** Format progress status entry as TemplateResult. */
@@ -90,7 +90,7 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
   );
 
   const worded = errorRowText(row);
-  const summaryText = worded.summary.trim() || 'Error occurred';
+  const summaryText = worded.summary;
   const detailText = worded.detailText.full;
   const hasDetails = row.details.length > 0;
   const rawContent = detailText || summaryText;

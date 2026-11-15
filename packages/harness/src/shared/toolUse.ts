@@ -157,10 +157,9 @@ export function decodeToolUseLog(data: Record<string, unknown>): ToolUseLog {
 // Shared tool limits
 // ============================================================================
 //
-// Shared between the tool implementations and the host UIs that display a
-// running-tool countdown (extension/desktop progress view). Keep these here —
-// not re-declared per host — so the displayed limit always matches what the
-// tool actually enforces.
+// Shared between the tool implementations and the transcript's tool row
+// model, which states a running call's limit (`ToolRowModel.timeoutMs`), so
+// the displayed limit always matches what the tool actually enforces.
 
 /** Default `bash` tool timeout (ms) when the model omits `timeout`. */
 export const BASH_TOOL_DEFAULT_TIMEOUT_MS = 120_000;

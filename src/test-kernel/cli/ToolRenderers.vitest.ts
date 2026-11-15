@@ -29,6 +29,7 @@ function toolUse(
   return {
     kind: 'tool',
     id: `tool-${toolName}`,
+    seqNo: 1,
     timestamp: 0,
     level: 'info',
     toolUse: normalized,
