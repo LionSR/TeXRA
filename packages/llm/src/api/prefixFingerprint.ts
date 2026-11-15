@@ -2,7 +2,7 @@
 import { hash } from 'node:crypto';
 
 // Third-party imports
-import { Predicate } from 'effect';
+import { Order, Predicate } from 'effect';
 
 // Local imports - canonical model contract
 import type { ModelOrigin } from '../protocol.js';
@@ -21,7 +21,7 @@ export function prefixFingerprint(
       if (!Predicate.isObject(value)) return value;
       return Object.fromEntries(
         Object.entries(value).toSorted(([left], [right]) =>
-          left < right ? -1 : Number(left > right),
+          Order.String(left, right),
         ),
       );
     },

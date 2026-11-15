@@ -18,7 +18,7 @@ import { callBetterBibTeX } from './bbtClient';
 const ZOTERO_EXPORT_TIMEOUT_MS = 30_000; // 30 s
 
 const ZoteroExportInputSchema = Schema.Struct({
-  citekeys: Schema.Array(Schema.String.check(Schema.isMinLength(1)))
+  citekeys: Schema.Array(Schema.NonEmptyString)
     .check(Schema.isMinLength(1))
     .check(Schema.isMaxLength(50))
     .annotate({

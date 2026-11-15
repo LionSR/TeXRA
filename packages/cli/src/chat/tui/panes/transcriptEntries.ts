@@ -1,4 +1,4 @@
-import stripAnsi from 'strip-ansi';
+import { stripVTControlCharacters } from 'node:util';
 
 import {
   rowHeadline,
@@ -29,7 +29,7 @@ function isInvisibleTranscriptChar(char: string | undefined): boolean {
 
 function terminalVisibleTranscriptText(text: string): string {
   let out = '';
-  for (const char of stripAnsi(text)) {
+  for (const char of stripVTControlCharacters(text)) {
     if (!isInvisibleTranscriptChar(char)) out += char;
   }
   return out;

@@ -14,18 +14,18 @@ export const RunIdentitySchema = Schema.Union([
     kind: Schema.Literal('agent'),
     /** The run config's agent identifier, possibly source-qualified
      * ("custom:name") — the same value `AgentConfig.agent` carries. */
-    agent: Schema.String.check(Schema.isMinLength(1)),
+    agent: Schema.NonEmptyString,
     /** External CLI driving this agent ("codex", "claude_code"); absent for native. */
-    tool: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+    tool: Schema.optional(Schema.NonEmptyString),
   }),
   Schema.Struct({
     kind: Schema.Literal('process'),
-    tool: Schema.String.check(Schema.isMinLength(1)),
+    tool: Schema.NonEmptyString,
   }),
   /** A `script` call sent to the background: one run that runs it. */
   Schema.Struct({
     kind: Schema.Literal('script'),
-    title: Schema.String.check(Schema.isMinLength(1)),
+    title: Schema.NonEmptyString,
   }),
 ]);
 

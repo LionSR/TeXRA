@@ -9,6 +9,7 @@ import {
   type FileLocation,
 } from '@texra-ai/harness/schemas';
 
+import { readNormalizedFile } from '@texra-ai/harness/node';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
 
@@ -114,9 +115,10 @@ export const replaceInputCommands = Effect.fn('documents.replaceInputCommands')(
         const outputPath = fileLocationDisplayPath(outputLocation);
 
         return Effect.gen(function* () {
-          const content = (yield* fs.readFileString(
+          const content = yield* readNormalizedFile(
+            fs,
             outputLocation.absolutePath,
-          )).replaceAll('\r\n', '\n');
+          );
           const newContent = content.replaceAll(
             /\\input{([^}]+)}/g,
             (match, rawPath) => {

@@ -67,9 +67,7 @@ const DesktopTerminalStartMessageSchema =
       sessionId: Schema.String,
       cols: Schema.Int.check(Schema.isGreaterThan(0)),
       rows: Schema.Int.check(Schema.isGreaterThan(0)),
-      initialCommand: Schema.optional(
-        Schema.String.check(Schema.isMinLength(1)),
-      ),
+      initialCommand: Schema.optional(Schema.NonEmptyString),
     }),
   );
 
@@ -131,7 +129,7 @@ export const DesktopTerminalOpenCommandMessageSchema =
   DesktopWorkspaceMessageSchema.mapFields(
     Struct.assign({
       command: Schema.Literal(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_OPEN_COMMAND),
-      initialCommand: Schema.String.check(Schema.isMinLength(1)),
+      initialCommand: Schema.NonEmptyString,
     }),
   );
 

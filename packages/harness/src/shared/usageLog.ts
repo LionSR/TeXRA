@@ -22,7 +22,6 @@ export function usageAgentName(
 }
 
 const Count = NonNegativeIntSchema;
-const Text = Schema.String.check(Schema.isMinLength(1));
 
 /**
  * One entry of the usage log's wire, a body of the `log-usage-v2` edge
@@ -43,15 +42,15 @@ export const UsageLogEntrySchema = Schema.Struct({
     }),
   ),
   /** The catalog id, before any route's rewrite. */
-  model: Text,
+  model: Schema.NonEmptyString,
   /** Wire surface of the turn (`openai-responses`, `anthropic-messages`,
    *  ...), stored in the `provider` column. */
   provider: TurnProtocolSchema,
-  agentName: Schema.optional(Text),
+  agentName: Schema.optional(Schema.NonEmptyString),
   /** The route the call was billed through. */
   usageRoute: Schema.optional(UsageRouteSchema),
   /** The run id, stored as `stream_id`: the edge function's name for it. */
-  streamId: Schema.optional(Text),
+  streamId: Schema.optional(Schema.NonEmptyString),
   /** Cache-miss input tokens; the cache reads are `cachedInputTokens`. */
   inputTokens: Count,
   outputTokens: Count,
@@ -63,8 +62,8 @@ export const UsageLogEntrySchema = Schema.Struct({
   responseTimeMs: Schema.optional(Count),
   cachedInputTokens: Schema.optional(Count),
   reasoningTokens: Schema.optional(Count),
-  extensionVersion: Schema.optional(Text),
-  editorType: Schema.optional(Text),
+  extensionVersion: Schema.optional(Schema.NonEmptyString),
+  editorType: Schema.optional(Schema.NonEmptyString),
 });
 
 export type UsageLogEntry = typeof UsageLogEntrySchema.Type;

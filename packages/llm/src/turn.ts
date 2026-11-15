@@ -38,7 +38,7 @@ import {
 } from './errors.js';
 
 const ToolDefinitionSchema = Schema.Struct({
-  name: Schema.String.check(Schema.isMinLength(1)),
+  name: Schema.NonEmptyString,
   description: Schema.String,
   parameters: JsonObjectSchema,
 });
@@ -51,7 +51,7 @@ const ToolDefinitionsSchema = Schema.Array(ToolDefinitionSchema).check(
 
 const ToolChoiceSchema = Schema.Union([
   Schema.Literal('auto'),
-  Schema.Struct({ name: Schema.String.check(Schema.isMinLength(1)) }),
+  Schema.Struct({ name: Schema.NonEmptyString }),
 ]);
 // The turn contract spells efforts in its own literals, not llm-zoo's
 // `ReasoningEffort` enum; the enum is checked against them by assignment in
@@ -120,7 +120,7 @@ export const TurnRequestSchema = Schema.Struct({
   continuation: Schema.optional(ContinuationSchema),
   /** Groups the requests that share a prefix (a run's), for a provider
    *  that routes its prompt cache by key. */
-  cacheKey: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+  cacheKey: Schema.optional(Schema.NonEmptyString),
 });
 /** A turn as the caller asks for it, before the binding's defaults apply. */
 export type TurnRequest = typeof TurnRequestSchema.Type;
@@ -140,7 +140,7 @@ const ResponsesControlsSchema = Schema.Struct({
   toolChoice: ToolChoiceSchema,
   reasoning: ResponsesReasoningSchema,
   serviceTier: Schema.NullOr(Schema.Literal('fast')),
-  promptCacheKey: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+  promptCacheKey: Schema.optional(Schema.NonEmptyString),
 });
 // API version 2026-10-21 refuses sampling parameters on every model, and the
 // current models refuse a forced tool, so neither is representable here.
@@ -272,9 +272,9 @@ export const ResolvedTurnSchema = Schema.Union([
 export type ResolvedTurn = typeof ResolvedTurnSchema.Type;
 
 const IdentitySchema = Schema.Struct({
-  providerResponseId: Schema.String.check(Schema.isMinLength(1)),
+  providerResponseId: Schema.NonEmptyString,
   requestedOrigin: ModelOriginSchema,
-  returnedModel: Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  returnedModel: Schema.NullOr(Schema.NonEmptyString),
 });
 
 /*
@@ -326,11 +326,9 @@ export const TurnResultSchema = Schema.Struct({
       Schema.Struct({
         kind: Schema.Literal('google-interactions'),
         // Preserve Google's open status vocabulary verbatim.
-        status: Schema.String.check(Schema.isMinLength(1)),
+        status: Schema.NonEmptyString,
         // Google currently reports no terminal reason.
-        terminalReason: Schema.NullOr(
-          Schema.String.check(Schema.isMinLength(1)),
-        ),
+        terminalReason: Schema.NullOr(Schema.NonEmptyString),
       }),
       Schema.Struct({
         kind: Schema.Literal('openai-responses'),
@@ -445,7 +443,7 @@ export const BackgroundSubmissionSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('accepted'),
     operation: RemoteOperationSchema,
-    returnedModel: Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+    returnedModel: Schema.NullOr(Schema.NonEmptyString),
   }),
   CompletedEventSchema,
 ]);
@@ -458,8 +456,8 @@ export const ObservationPolicySchema = Schema.Struct({
 
 /** The bytes an upload takes. */
 export const FileUploadSchema = Schema.Struct({
-  mimeType: Schema.String.check(Schema.isMinLength(1)),
-  filename: Schema.String.check(Schema.isMinLength(1)),
+  mimeType: Schema.NonEmptyString,
+  filename: Schema.NonEmptyString,
   base64: Schema.String.check(Schema.isBase64()),
 });
 /** {@link FileUploadSchema}'s value. */

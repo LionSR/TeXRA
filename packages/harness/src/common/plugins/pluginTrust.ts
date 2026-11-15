@@ -15,7 +15,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Result } from 'effect';
+import { Effect, FileSystem, Number as Num, Result } from 'effect';
 
 // Local imports - shared contracts
 import type { InstalledPlugin, PluginTrust } from '@shared/schemas';
@@ -103,16 +103,20 @@ export interface PluginReview {
   readonly lines: readonly string[];
 }
 
+/** How many skills the plugin's skill directories hold. */
+const pluginSkillCount = (record: InstalledPlugin, plugin: ResolvedPlugin) =>
+  Effect.forEach(
+    plugin.skills.map((skill) => path.join(record.path, skill)),
+    countSkills,
+    { concurrency: 'unbounded' },
+  ).pipe(Effect.map(Num.sumAll));
+
 /** The capabilities a plugin declares, as the trust prompt lists them. */
 const reviewLines = Effect.fn('pluginTrust.reviewLines')(function* (
   record: InstalledPlugin,
   plugin: ResolvedPlugin,
 ) {
-  const skillCount = (yield* Effect.forEach(
-    plugin.skills.map((skill) => path.join(record.path, skill)),
-    countSkills,
-    { concurrency: 'unbounded' },
-  )).reduce((sum, count) => sum + count, 0);
+  const skillCount = yield* pluginSkillCount(record, plugin);
   const lines = [
     `Source: ${record.commit ? `${record.source} at ${record.commit.slice(0, 12)}` : `${record.source} (local)`}`,
     `Skills: ${skillCount}; commands: ${plugin.commands.length}; agents: ${plugin.agents.length} (loaded as ${plugin.name}:<name>)`,
@@ -243,16 +247,12 @@ export const listPlugins = Effect.fn('listPlugins')(function* (env: PluginEnv) {
       Effect.gen(function* () {
         const plugin = yield* rereadPlugin(record);
         const key = yield* trustKey(record, plugin, envKey);
-        const counts = yield* Effect.forEach(
-          plugin.skills.map((skill) => path.join(record.path, skill)),
-          countSkills,
-          { concurrency: 'unbounded' },
-        );
+        const skillCount = yield* pluginSkillCount(record, plugin);
         return {
           ...record,
           version: plugin.version,
           description: plugin.description,
-          skillCount: counts.reduce((sum, count) => sum + count, 0),
+          skillCount,
           commandCount: plugin.commands.length,
           agentCount: plugin.agents.length,
           mcpServers: plugin.mcpServers.map((server) => server.name),

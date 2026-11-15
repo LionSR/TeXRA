@@ -1,3 +1,5 @@
+import { stripVTControlCharacters } from 'node:util';
+
 import {
   collapseWhitespace,
   stripControlCharacters,
@@ -5,11 +7,10 @@ import {
 import cliTruncate from 'cli-truncate';
 import sliceAnsi from 'slice-ansi';
 import stringWidth from 'string-width';
-import stripAnsi from 'strip-ansi';
 
 /** Remove terminal control sequences while preserving printable text and line breaks. */
 export function safeTerminalText(text: string): string {
-  return stripAnsi(text)
+  return stripVTControlCharacters(text)
     .replaceAll('\r\n', '\n')
     .replaceAll('\r', '\n')
     .replaceAll('\t', '  ')

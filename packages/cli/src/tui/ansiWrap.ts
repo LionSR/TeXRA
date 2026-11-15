@@ -1,4 +1,5 @@
-import stripAnsi from 'strip-ansi';
+import { stripVTControlCharacters } from 'node:util';
+
 import wrapAnsi from 'wrap-ansi';
 
 import {
@@ -53,7 +54,7 @@ function markdownContinuationPrefix(line: string):
       width: number;
     }
   | undefined {
-  const plain = stripAnsi(line);
+  const plain = stripVTControlCharacters(line);
   const list = plain.match(LIST_LINE);
   if (list) {
     const quote = list[1];

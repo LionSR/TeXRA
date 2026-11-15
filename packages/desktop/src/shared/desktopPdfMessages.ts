@@ -20,7 +20,7 @@ export const DESKTOP_PDF_COMMANDS = {
 } as const;
 
 export const DesktopShowPdfMessageSchema = Schema.Struct({
-  session: Schema.String.check(Schema.isMinLength(1)),
+  session: Schema.NonEmptyString,
   command: Schema.Literal(DESKTOP_PDF_COMMANDS.SHOW_PDF),
   title: Schema.String,
   pdfUrl: Schema.String.check(

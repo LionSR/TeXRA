@@ -15,9 +15,11 @@
  * program reports as `outputLost` rather than a rejection nobody is waiting on.
  */
 
+// Node built-ins
+import { stripVTControlCharacters } from 'node:util';
+
 // Third-party imports
 import { Cause, Effect, Fiber, Option, Ref, Stream } from 'effect';
-import stripAnsi from 'strip-ansi';
 import * as vscode from 'vscode';
 
 // Local imports - common
@@ -222,5 +224,5 @@ function describeOutputLoss(failure: Error | Cause.TimeoutError): string {
 
 /** Strip ANSI control sequences and retain the captured output tail. */
 function truncateTerminalOutput(output: string): string {
-  return stripAnsi(output).slice(-TERMINAL_OUTPUT_MAX_CHARS);
+  return stripVTControlCharacters(output).slice(-TERMINAL_OUTPUT_MAX_CHARS);
 }

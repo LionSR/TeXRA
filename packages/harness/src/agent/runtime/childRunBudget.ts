@@ -1,5 +1,5 @@
 import * as os from 'node:os';
-import { Context, Effect, Semaphore } from 'effect';
+import { Context, Effect, Number as Num, Semaphore } from 'effect';
 /**
  * One child-run concurrency budget per session: the cap on concurrently live
  * native child model conversations, one semaphore the session layer
@@ -38,10 +38,10 @@ export const resolveChildRunConcurrencyBudget = Effect.fn(
   if (configured !== CHILD_RUN_CONCURRENCY_BUDGET_RANGE.auto) {
     return configured;
   }
-  return Math.min(
-    CHILD_RUN_CONCURRENCY_BUDGET_RANGE.max,
-    Math.max(1, os.availableParallelism()),
-  );
+  return Num.clamp(os.availableParallelism(), {
+    minimum: 1,
+    maximum: CHILD_RUN_CONCURRENCY_BUDGET_RANGE.max,
+  });
 });
 
 /**
