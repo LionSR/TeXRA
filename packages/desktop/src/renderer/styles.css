@@ -296,11 +296,6 @@ wa-input.desktop-command-palette-input::part(input) {
   margin: 0;
   padding: var(--wa-space-xs) var(--wa-space-2xs) var(--wa-space-3xs);
   background: var(--wa-color-menu-background);
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--letter-spacing-caps);
-  text-transform: uppercase;
 }
 
 .desktop-command-palette-item {

@@ -49,6 +49,7 @@ import { TickerController } from '@ui/litControllers/TickerController';
 import { runStatus } from '@ui/copy/runStatus';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { toneStyles } from '@ui/styles/toneStyles';
+import { overlineDeclarations } from '@ui/styles/commonViewStyles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { dispatchSummary, NESTED_NOUNS } from '@ui/copy/nestedRuns';
 import { getTimeFormatter } from '../formatters/timestampUtils';
@@ -111,11 +112,7 @@ export class BackgroundTasksPanel extends LitElement {
         align-items: center;
         gap: var(--wa-space-2xs);
         padding: var(--wa-space-2xs) var(--wa-space-xs) var(--wa-space-3xs);
-        font-size: var(--font-size-xs);
-        font-weight: var(--font-weight-semibold);
-        color: var(--color-text-secondary);
-        text-transform: uppercase;
-        letter-spacing: var(--letter-spacing-caps);
+        ${overlineDeclarations}
       }
 
       /* One row per child: the tone glyph, the label, the latest line, the

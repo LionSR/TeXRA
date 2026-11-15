@@ -42,6 +42,28 @@ export const visuallyHiddenStyles: CSSResult = css`
 `;
 
 /**
+ * The small-caps label over a group of rows (a run-list section, a menu
+ * group, a palette group): one type treatment wherever a list is grouped.
+ * Interpolate it into the rule that places the label; the desktop's light
+ * DOM uses {@link overlineStyles}.
+ */
+export const overlineDeclarations: CSSResult = css`
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-caps);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+`;
+
+/** {@link overlineDeclarations} as a class, for a tree that adopts sheets
+ *  rather than composing rules (the desktop's light DOM). */
+export const overlineStyles: CSSResult = css`
+  .overline {
+    ${overlineDeclarations}
+  }
+`;
+
+/**
  * Busy state for an icon action button: a spinner overlays the button while
  * it works, instead of taking its own slot. The button stays in the flow
  * (so the toolbar never shifts when the busy flag toggles) and its glyph is

@@ -226,7 +226,7 @@ export function createDesktopCommandPalette({
               >
                 <h2
                   id=${`command-group-${slugify(category)}`}
-                  class="desktop-command-palette-group-label"
+                  class="desktop-command-palette-group-label overline"
                 >
                   ${category}
                 </h2>
