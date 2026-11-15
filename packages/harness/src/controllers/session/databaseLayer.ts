@@ -119,7 +119,10 @@ const INSERT_BLOB = `INSERT INTO blob (digest, value) VALUES (?, ?)
   ON CONFLICT(digest) DO NOTHING`;
 const INSERT_REF = `INSERT INTO event_blob ("commit", digest, inline)
   VALUES (?, ?, ?)`;
-const UPSERT_KIND = `INSERT INTO stored_kind (type, version) VALUES (?, ?)
+/** Record the kinds written, bound as one `json_each(?)` array of
+ *  `[type, version]` pairs; a kind keeps the highest version written. */
+const UPSERT_KINDS = `INSERT INTO stored_kind (type, version)
+  SELECT value ->> 0, value ->> 1 FROM json_each(?) WHERE true
   ON CONFLICT(type) DO UPDATE
   SET version = max(stored_kind.version, excluded.version)`;
 
@@ -460,8 +463,7 @@ export const databaseLayer = (
               : []),
           ]),
         );
-        for (const [type, version] of kinds)
-          yield* exec(UPSERT_KIND, [type, version]);
+        yield* exec(UPSERT_KINDS, [JSON.stringify([...kinds])]);
         yield* upkeep.follow(committed);
         return committed;
       });
@@ -670,7 +672,9 @@ export const databaseLayer = (
           afterCommit: sql.afterCommit,
           written: valuesWritten,
           valueWritten: Effect.asVoid(
-            exec(UPSERT_KIND, [CURRENT_VALUE_KIND, CURRENT_VALUE_VERSION]),
+            exec(UPSERT_KINDS, [
+              JSON.stringify([[CURRENT_VALUE_KIND, CURRENT_VALUE_VERSION]]),
+            ]),
           ),
         }),
         readAggregate: (id, fromSeq, types, toSeq = Number.MAX_SAFE_INTEGER) =>
