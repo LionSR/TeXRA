@@ -27,13 +27,11 @@ import {
   type ScopedFork,
   scopedFork,
   withProcessServices,
-  StateStores,
   ToolAvailability,
 } from '@texra-ai/harness/host';
 import { withLogChannel, Settings } from '@texra-ai/harness/plugins';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import {
-  openNodeWorkspaceRoots,
   canonicalizeWorkspaceRoot,
   effectDiagnosticsLayer,
   setLogSink,
@@ -76,15 +74,16 @@ import {
 } from '@frontend/comments/inlineComments';
 import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
-import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
+import { openTexraGlobalConfigStore } from '@texra/platform/defaults/nodeStores';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
-import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
   settingsTabByCommand,
   type ExtensionCommandId,
 } from '@texra/shared/commands/catalog';
-import { serviceProjectState } from '@texra/controllers/server/serviceSession';
-import { openProjectSession } from '@texra/controllers/session/openProjectSession';
+import {
+  openProjectRoots,
+  openProjectSession,
+} from '@texra/controllers/session/openProjectSession';
 import type { ServiceLink } from '@texra/controllers/server/client';
 import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
@@ -219,11 +218,12 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
             );
       // VS Code restarts the extension host when the first workspace folder
       // changes, so the configuration stores stay pinned for this process.
-      const { stores: config, warnings } = yield* openTexraConfigStores(
-        TEXRA_SETTINGS.catalog,
+      const { roots, warnings } = yield* openProjectRoots(
         defaultNodeStorageRoot(),
         workspaceRoot,
-      );
+        yield* openTexraGlobalConfigStore(defaultNodeStorageRoot()),
+        Result.isSuccess(reached) ? reached.success : undefined,
+      ).pipe(Scope.provide(projectScope));
       // Forked: a notification waits for the person, and activation does not.
       for (const message of warnings) {
         fork(
@@ -233,17 +233,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
           ),
         );
       }
-      const roots = yield* openNodeWorkspaceRoots({
-        workspaceRoot,
-        storageRoot: defaultNodeStorageRoot(),
-        config,
-        ...(Result.isSuccess(reached) &&
-          workspaceRoot !== undefined && {
-            workspaceState: serviceProjectState(reached.success, workspaceRoot),
-          }),
-        stateStores: yield* StateStores,
-        globalState: yield* AppState,
-      }).pipe(Scope.provide(projectScope));
       // The one-time telemetry notice, one information message; VS Code's own
       // switch being off means nothing is sent, so nothing to announce.
       const notice = vscode.env.isTelemetryEnabled
