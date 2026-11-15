@@ -2,11 +2,13 @@
 import { css } from 'lit';
 
 // Local imports - shared styles
+import { disclosureChevronStyles } from '@ui/styles/commonViewStyles';
 import { toneStyles } from '@ui/styles/toneStyles';
 
 /** Styles for the individual <run-tab> row. */
 export const runTabStyles = css`
   ${toneStyles}
+  ${disclosureChevronStyles}
 
   :host {
     display: block;
@@ -277,16 +279,6 @@ export const runTabStyles = css`
 
   .tab-expand wa-icon {
     font-size: var(--font-size-xs);
-  }
-
-  @media (prefers-reduced-motion: no-preference) {
-    .tab-expand wa-icon {
-      transition: transform var(--transition-fast);
-    }
-  }
-
-  .tab-expand[aria-expanded='true'] wa-icon {
-    transform: rotate(90deg);
   }
 
   /* The chip shares the meta row with the timestamp and model — keep it

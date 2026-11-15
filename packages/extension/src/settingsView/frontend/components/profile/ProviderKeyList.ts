@@ -23,9 +23,11 @@ import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
 import { TickerController } from '@ui/litControllers/TickerController';
 import { planCreditsHint, type PlanCredits } from '@ui/copy/modelAccess';
 import { commonViewStyles, designTokens } from '@ui/styles';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
-import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
+import {
+  renderDisclosureToggle,
+  renderSettingsSectionHeading,
+} from '@ui/wa/settingsSection';
 import { renderKeyStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
 
 // Side-effect imports - register WA icon component
@@ -203,22 +205,15 @@ export class ProviderKeyList extends LitElement {
     return html`
       <section class="settings-disclosure" role="listitem">
         <div class="settings-disclosure-summary">
-          <wa-button
-            class="settings-disclosure-toggle"
-            appearance="plain"
-            size="s"
-            aria-expanded=${String(isExpanded)}
-            aria-label=${`${entry.displayName} settings`}
-            title="${isExpanded ? 'Collapse settings' : 'Expand settings'}"
-            @click=${() => this.toggleExpanded(entry.provider)}
-          >
-            ${waIcon('chevron-right', {
-              className: 'settings-disclosure-chevron',
-            })}
-            <span class="provider-name"
+          ${renderDisclosureToggle({
+            expanded: isExpanded,
+            onToggle: () => this.toggleExpanded(entry.provider),
+            label: `${entry.displayName} settings`,
+            title: isExpanded ? 'Collapse settings' : 'Expand settings',
+            content: html`<span class="provider-name"
               ><bdi dir="auto">${entry.displayName}</bdi></span
-            >
-          </wa-button>
+            >`,
+          })}
           <span class="settings-disclosure-status">
             ${renderKeyStatusIcon(entry.status)}
           </span>

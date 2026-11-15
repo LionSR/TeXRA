@@ -28,7 +28,10 @@ import {
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderKeyStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
 import { modelAvailabilityLabel } from '@ui/copy/modelAccess';
-import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
+import {
+  renderDisclosureToggle,
+  renderSettingsSectionHeading,
+} from '@ui/wa/settingsSection';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -272,21 +275,15 @@ export class ModelSelectionList extends SignalWatcher(LitElement) {
     return html`
       <section class="provider-group settings-disclosure">
         <div class="provider-group-header settings-disclosure-summary">
-          <wa-button
-            class="provider-group-toggle settings-disclosure-toggle"
-            appearance="plain"
-            variant="neutral"
-            aria-expanded=${String(isExpanded)}
-            @click=${() => this.toggleProvider(group.provider)}
-          >
-            ${waIcon('chevron-right', {
-              className: 'settings-disclosure-chevron',
-            })}
-            <span class="provider-group-name">${group.displayName}</span>
-            <span class="provider-group-count">
-              ${enabledCount} of ${totalCount} enabled
-            </span>
-          </wa-button>
+          ${renderDisclosureToggle({
+            expanded: isExpanded,
+            onToggle: () => this.toggleProvider(group.provider),
+            content: html`<span class="provider-group-name"
+                >${group.displayName}</span
+              ><span class="provider-group-count"
+                >${enabledCount} of ${totalCount} enabled</span
+              >`,
+          })}
           <div class="provider-group-actions settings-disclosure-actions">
             ${providerKeyStatus}
           </div>
@@ -324,11 +321,7 @@ export class ModelSelectionList extends SignalWatcher(LitElement) {
         aria-expanded=${String(isOpen)}
         @click=${() => this.toggleDeprecated(group.provider)}
       >
-        ${waIcon('chevron-right', {
-          className: isOpen
-            ? 'provider-group-chevron expanded'
-            : 'provider-group-chevron',
-        })}
+        ${waIcon('chevron-right', { className: 'disclosure-chevron' })}
         ${group.deprecated.length}
         ${pluralize(group.deprecated.length, 'deprecated model', 'deprecated models')}
       </wa-button>

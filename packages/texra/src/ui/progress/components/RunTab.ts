@@ -206,7 +206,7 @@ export class RunTab extends LitElement {
                   data-action="toggle-children"
                   aria-label=${childToggleLabel}
                   aria-expanded=${this.expanded ? 'true' : 'false'}
-                  >${waIcon('chevron-right')}</wa-button
+                  >${waIcon('chevron-right', { className: 'disclosure-chevron' })}</wa-button
                 ><wa-tooltip for="run-tab-expand-button"
                   >${childToggleLabel}</wa-tooltip
                 >`

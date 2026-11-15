@@ -64,6 +64,31 @@ export const overlineStyles: CSSResult = css`
 `;
 
 /**
+ * The chevron of a disclosure: it turns to point down while the control
+ * around it (anything carrying `aria-expanded`) is open.
+ */
+export const disclosureChevronStyles: CSSResult = css`
+  .disclosure-chevron {
+    display: inline-grid;
+    width: 1em;
+    height: 1em;
+    flex: 0 0 1em;
+    place-items: center;
+    color: var(--color-text-secondary);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .disclosure-chevron {
+      transition: transform var(--transition-fast);
+    }
+  }
+
+  [aria-expanded='true'] .disclosure-chevron {
+    transform: rotate(90deg);
+  }
+`;
+
+/**
  * Busy state for an icon action button: a spinner overlays the button while
  * it works, instead of taking its own slot. The button stays in the flow
  * (so the toolbar never shifts when the busy flag toggles) and its glyph is
@@ -204,20 +229,7 @@ export const commonViewStyles: CSSResult = css`
     background: transparent;
   }
 
-  .settings-disclosure-chevron {
-    display: grid;
-    width: 1em;
-    height: 1em;
-    flex: 0 0 1em;
-    place-items: center;
-    color: var(--color-text-secondary);
-    transition: transform var(--transition-fast);
-  }
-
-  .settings-disclosure-toggle[aria-expanded='true']
-    .settings-disclosure-chevron {
-    transform: rotate(90deg);
-  }
+  ${disclosureChevronStyles}
 
   .settings-disclosure-status,
   .settings-disclosure-actions {
