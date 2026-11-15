@@ -72,12 +72,15 @@ export const USAGE_ROWS = `SELECT e."commit" AS "commit", s.kind AS kind,
   JOIN event_sequence s ON s.id = e.aggregate
   WHERE e.type IN ('model.message', 'context.edit', 'run.description')
     AND json_type(${PRICED_USAGE}) = 'object'`;
+/** The call rows a display read shows as tool cards: {@link callCard} has
+ *  a case for each, which the compiler checks. */
+const CARD_ROW_TYPES = ['tool.intent', 'tool.result'] as const;
+const CARD_KINDS: readonly string[] = CARD_ROW_TYPES;
 /** The kinds a display read selects, as the JSON list it binds: the display
- *  rows, and the call rows it shows as tool cards (`callCard`). */
+ *  rows, and the call rows it shows as tool cards. */
 export const DISPLAY_READ_TYPES = JSON.stringify([
   ...DISPLAY_ROW_TYPES,
-  'tool.intent',
-  'tool.result',
+  ...CARD_ROW_TYPES,
 ]);
 /** The listing (each aggregate's `listing_entry` rows and each run's spend
  *  on its newest priced row's envelope, in commit order), driven from `listing_entry` (`CROSS JOIN` holds the order: a
@@ -381,6 +384,11 @@ function bareStart(input: SqlRow): SessionRow | null {
   };
 }
 
+const isCardRow = (
+  row: SessionRow,
+): row is Extract<SessionRow, { type: (typeof CARD_ROW_TYPES)[number] }> =>
+  CARD_KINDS.includes(row.type);
+
 /**
  * The tool card row a call row shows, on that row's envelope, or none: a
  * `tool.intent` opens its call's card (`tool.start`), and a `tool.result`
@@ -390,7 +398,7 @@ function bareStart(input: SqlRow): SessionRow | null {
  * one.
  */
 export function callCard(row: SessionRow): readonly DisplayRow[] {
-  if (row.type !== 'tool.intent' && row.type !== 'tool.result') return [];
+  if (!isCardRow(row)) return [];
   const { aggregateId, seq, commit, at, stageId } = row;
   const envelope = {
     aggregateId,
