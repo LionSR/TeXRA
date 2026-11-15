@@ -16,14 +16,20 @@ import {
   spawnService,
   type ServiceLink,
 } from '@texra/controllers/server/client';
+import {
+  SERVICE_SUBCOMMAND,
+  serviceBundlePath,
+} from '@texra/controllers/server/discovery';
 import type { GlobalValues } from '@texra-ai/harness/host';
 
 /** The service bundle: the packaged app's, or the extension build's in a
  *  development run, as `app.isPackaged` says. */
 const serviceBundle = (mainDir: string): string =>
-  app.isPackaged
-    ? path.join(process.resourcesPath, 'serve', 'texra-serve.mjs')
-    : path.join(mainDir, '../../../extension/serve/texra-serve.mjs');
+  serviceBundlePath(
+    app.isPackaged
+      ? process.resourcesPath
+      : path.join(mainDir, '../../../extension'),
+  );
 
 /**
  * Hold the service of `dataRoot`, starting it when none answers, for the
@@ -40,7 +46,7 @@ export function reachDesktopService(
         new Error(`this build has no service bundle at ${bundle}`),
       );
     return linkService(
-      spawnService(dataRoot, process.execPath, [bundle, 'serve'], {
+      spawnService(dataRoot, process.execPath, [bundle, SERVICE_SUBCOMMAND], {
         ELECTRON_RUN_AS_NODE: '1',
       }),
       Effect.logWarning,

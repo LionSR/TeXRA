@@ -7,6 +7,7 @@ import {
   truncateSummaryToWidth,
 } from '@cli/runtime/terminal/terminalText';
 import { pluralize } from '@texra-ai/harness/schemas';
+import { queuedMessagesTitle } from '@ui/copy/queuedMessages';
 
 const QUEUED_FOLLOW_UP_PANEL_MAX_ROWS = 3;
 
@@ -42,7 +43,7 @@ function queuedFollowUpPanelDisplay({
 
   const contentWidth = Math.max(0, width - 2);
   const title = truncateSummaryToWidth(
-    `Queued follow-ups (${messages.length})`,
+    queuedMessagesTitle(messages.length),
     contentWidth,
   );
   const messageSlots = Math.max(0, maxRows - 1);
@@ -71,7 +72,7 @@ function queuedFollowUpPanelDisplay({
       text: truncateSummaryToWidth(
         hiddenRowsText(
           hiddenCount,
-          pluralize(hiddenCount, 'queued follow-up', 'queued follow-ups'),
+          pluralize(hiddenCount, 'queued message', 'queued messages'),
         ),
         contentWidth,
       ),

@@ -1,5 +1,6 @@
 // Third-party imports
-import { truncateWithEllipsis, pluralize } from '@texra-ai/harness/schemas';
+import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
+import { queuedMessagesTitle } from '@ui/copy/queuedMessages';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -113,7 +114,7 @@ export class QueuedFollowUps extends LitElement {
     // mounted-but-empty host would still consume the parent's flex gap.
     if (this.messages.length === 0) return nothing;
     const messageCount = this.messages.length;
-    const summary = `${pluralize(messageCount, 'Queued message', 'Queued messages')} (${messageCount})`;
+    const summary = queuedMessagesTitle(messageCount);
     return html`
       <wa-details class="queued-collapsible" summary=${summary} open>
         <ol class="queued-follow-ups-list" aria-label="Queued messages">

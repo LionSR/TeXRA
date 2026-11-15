@@ -30,6 +30,7 @@ import {
   APPROVAL_POLICY_SETTING,
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
+  Cancelled,
 } from '@texra-ai/harness/schemas';
 import { appSignalStream } from '@texra-ai/harness/host';
 import type { SubscriptionUsageProvider } from '@texra/shared/model/subscriptionUsage';
@@ -92,6 +93,15 @@ interface SettingsViewBodyPorts {
   /** The account copy (`src/ui`), which controllers likewise take from
    *  their host. */
   readonly accountCopy: {
+    signedInEnabled(
+      providerDisplayName: string,
+      accountLabel: string,
+      modelFamily: string,
+    ): string;
+    subscriptionNotDisabled(
+      providerDisplayName: string,
+      reason: string,
+    ): string;
     signedOut(providerDisplayName: string): string;
     signOutFailed(providerDisplayName: string): string;
   };
@@ -193,7 +203,6 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
     /** Run a subscription mutation, report its failure, and say the
      *  subscription changed whatever the mutation did. */
     const subscriptionChange = <E>(
-      providerId: SubscriptionProviderId,
       failure: string,
       work: Effect.Effect<void, E, ProcessServices>,
     ) =>
@@ -201,16 +210,34 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
         Effect.andThen(changed('subscriptions')),
         Effect.andThen(modelAccessChanged),
       );
-    const signInSubscription = (providerId: SubscriptionProviderId) =>
-      subscriptionChange(
-        providerId,
-        `${subscriptionProvider(providerId).displayName} sign-in failed`,
-        bindings.signInSubscription(providerId),
+    /** Every sign-in entry point of a window (the Models page, the
+     *  onboarding card, a command) ends here, so each tells the user the
+     *  same thing and repaints the same pages. */
+    const signInSubscription = (providerId: SubscriptionProviderId) => {
+      const provider = subscriptionProvider(providerId);
+      return subscriptionChange(
+        `${provider.displayName} sign-in failed`,
+        bindings.signInSubscription(providerId).pipe(
+          Effect.flatMap((account) =>
+            notice(
+              ports.accountCopy.signedInEnabled(
+                provider.displayName,
+                account.label,
+                provider.modelFamily,
+              ),
+            ),
+          ),
+          // The user backed out of the host's prompt: nothing failed.
+          Effect.catchIf(
+            (error) => error instanceof Cancelled,
+            () => Effect.void,
+          ),
+        ),
       );
+    };
     const signOutSubscription = (providerId: SubscriptionProviderId) => {
       const provider = subscriptionProvider(providerId);
       return subscriptionChange(
-        providerId,
         ports.accountCopy.signOutFailed(provider.displayName),
         Effect.flatMap(provider.signOut(roots), ({ preferenceError }) =>
           Effect.andThen(
@@ -218,7 +245,10 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
             preferenceError === undefined
               ? Effect.void
               : alert(
-                  `${provider.displayName} subscription could not be turned off: ${preferenceError}`,
+                  ports.accountCopy.subscriptionNotDisabled(
+                    provider.displayName,
+                    preferenceError,
+                  ),
                 ),
           ),
         ),
@@ -230,7 +260,6 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
     ) => {
       const provider = subscriptionProvider(providerId);
       return subscriptionChange(
-        providerId,
         `Could not update the ${provider.displayName} subscription preference`,
         provider.setPreferSubscription(roots, enabled),
       );

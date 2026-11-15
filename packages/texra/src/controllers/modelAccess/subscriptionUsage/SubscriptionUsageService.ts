@@ -14,7 +14,7 @@ import {
 } from '@texra-ai/harness/plugins';
 import { HttpClientError } from 'effect/http';
 
-import { apiKey } from '@texra-ai/llm';
+import { apiKey, providerDisplayName } from '@texra-ai/llm';
 import { toErrorMessage, GLM_REGION_SETTING } from '@texra-ai/harness/schemas';
 import type {
   SubscriptionUsageProvider,
@@ -250,7 +250,7 @@ export class SubscriptionUsageService {
   ): Effect.Effect<SubscriptionUsageSnapshot> {
     return Effect.map(Clock.currentTimeMillis, (fetchedAt) => ({
       state: 'unavailable',
-      providerName: PLAN_BY_PROVIDER[provider].credentialName,
+      providerName: providerDisplayName(PLAN_BY_PROVIDER[provider].apiProvider),
       planName: PLAN_BY_PROVIDER[provider].displayName,
       windows: [],
       fetchedAt,
@@ -264,7 +264,7 @@ export class SubscriptionUsageService {
   ): Effect.Effect<SubscriptionUsageSnapshot> {
     return Effect.map(Clock.currentTimeMillis, (fetchedAt) => ({
       state: 'available',
-      providerName: PLAN_BY_PROVIDER[provider].credentialName,
+      providerName: providerDisplayName(PLAN_BY_PROVIDER[provider].apiProvider),
       planName: parsed.planName ?? PLAN_BY_PROVIDER[provider].displayName,
       windows: [...parsed.windows],
       fetchedAt,

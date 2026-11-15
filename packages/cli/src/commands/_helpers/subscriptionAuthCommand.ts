@@ -90,14 +90,14 @@ export function defineSubscriptionAuthCommand(
         ...options.loginPayloadExtras?.(account),
         preferSubscription: true,
       };
-      const signedIn = ACCOUNT_OUTCOME.signedInAs(
-        provider.displayName,
-        account.label,
-      );
       yield* emitCliResult({
         json: payload,
         ndjson: { kind: ndjsonKind, ...payload },
-        text: `${signedIn}\n${provider.displayName} subscription enabled for ${provider.modelFamily}.`,
+        text: ACCOUNT_OUTCOME.signedInEnabled(
+          provider.displayName,
+          account.label,
+          provider.modelFamily,
+        ),
       });
     });
   }

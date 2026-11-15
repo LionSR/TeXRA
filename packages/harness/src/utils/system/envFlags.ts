@@ -65,12 +65,16 @@ export const envFlag = (
     ? Effect.map(envVar(name), isEnvFlagValueOn)
     : Effect.succeed(isEnvFlagValueOn(env[name]));
 
+/** The variable a person's own invocation requests an approval policy
+ *  with; never a project's `.env`, and never a nested process's. */
+export const APPROVAL_POLICY_ENV = 'TEXRA_APPROVAL_POLICY';
+
 /**
  * The environment a child process the harness spawns starts from: this
  * process's with its project's `.env` variables over it (`environment`),
  * minus every provider API-key variable the harness reads as its own credential
  * ({@link API_KEY_ENV_NAMES}) and the requested approval policy
- * (`TEXRA_APPROVAL_POLICY`). What a child prints lands in tool results and
+ * ({@link APPROVAL_POLICY_ENV}). What a child prints lands in tool results and
  * the transcript, so the key is never there to print. `keep` names the one
  * provider whose key a child agent CLI authenticates with itself. Windows
  * matches variable names case-insensitively, as its environment does.
@@ -86,7 +90,7 @@ export const inheritedEnv = Effect.fn('envFlags.inheritedEnv')(function* (
   const withheld = new Set(
     [
       ...API_KEY_ENV_NAMES.filter((name) => name !== kept),
-      'TEXRA_APPROVAL_POLICY',
+      APPROVAL_POLICY_ENV,
     ].map(fold),
   );
   return Object.fromEntries(

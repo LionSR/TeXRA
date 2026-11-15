@@ -371,35 +371,41 @@ const writeDocuments = Effect.fn('replyDocuments.write')(function* (
 
 /** Apply the session's XML-content replacements to the reply kept at
  *  `fileLocation`, and close a `<documents>` container it left open. */
-export const ensureCorrectXmlStructure = Effect.fn(
-  'replyDocuments.ensureCorrectXmlStructure',
-)(function* (
-  fileLocation: FileLocation,
-  /** The run's session configuration: the replacement rules it applies. */
-  config: ConfigProvider,
-  logger: AgentTrace,
-): Effect.fn.Return<void, Error, FileSystem.FileSystem> {
-  const fs = yield* FileSystem.FileSystem;
-  logger.debug(`Ensuring correct XML structure: ${fileLocation.absolutePath}`);
-  const originalContent = (yield* fs.readFileString(
-    fileLocation.absolutePath,
-  )).replaceAll('\r\n', '\n');
-  const replaced = replacementEngine.applyToXmlContent(originalContent, config);
-  yield* logReplacementDiagnostics(replaced.diagnostics);
-  let content = replaced.text;
+export const normalizeReplyXml = Effect.fn('replyDocuments.normalizeReplyXml')(
+  function* (
+    fileLocation: FileLocation,
+    /** The run's session configuration: the replacement rules it applies. */
+    config: ConfigProvider,
+    logger: AgentTrace,
+  ): Effect.fn.Return<void, Error, FileSystem.FileSystem> {
+    const fs = yield* FileSystem.FileSystem;
+    logger.debug(
+      `Ensuring correct XML structure: ${fileLocation.absolutePath}`,
+    );
+    const originalContent = (yield* fs.readFileString(
+      fileLocation.absolutePath,
+    )).replaceAll('\r\n', '\n');
+    const replaced = replacementEngine.applyToXmlContent(
+      originalContent,
+      config,
+    );
+    yield* logReplacementDiagnostics(replaced.diagnostics);
+    let content = replaced.text;
 
-  const closeTag = `</${OUTPUT_DOCUMENTS_TAG}>`;
-  const openTag = `<${OUTPUT_DOCUMENTS_TAG}>`;
+    const closeTag = `</${OUTPUT_DOCUMENTS_TAG}>`;
+    const openTag = `<${OUTPUT_DOCUMENTS_TAG}>`;
 
-  if (content.includes(openTag) && !content.endsWith(closeTag)) {
-    content =
-      content.replace(new RegExp(`${closeTag}.*$`, 's'), '') + `\n${closeTag}`;
-  }
+    if (content.includes(openTag) && !content.endsWith(closeTag)) {
+      content =
+        content.replace(new RegExp(`${closeTag}.*$`, 's'), '') +
+        `\n${closeTag}`;
+    }
 
-  if (content !== originalContent) {
-    yield* fs.writeFileString(fileLocation.absolutePath, content);
-  }
-});
+    if (content !== originalContent) {
+      yield* fs.writeFileString(fileLocation.absolutePath, content);
+    }
+  },
+);
 
 function cleanExtractedDocumentContent(
   logger: AgentTrace,

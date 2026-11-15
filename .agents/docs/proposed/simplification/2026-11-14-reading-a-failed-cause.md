@@ -55,15 +55,9 @@ not a rendering.
 These came out of the same harvest, are still true, and change behavior or
 wording, so they were not folded into a refactor:
 
-- Signing out from the settings view leaves the subscription preference on;
-  `texra logout` turns it off
-  (`packages/texra/src/controllers/settingsView/settingsViewBody.ts`,
-  `packages/cli/src/runtime/models/subscriptionLogin.ts`). The provider's
-  `signOut` should own the preference write, as its `signIn` does since
-  #14907; the CLI then reports a preference failure as an error, not a note.
-- The extension's onboarding "Sign in with ChatGPT"
-  (`packages/extension/src/progressView/extensionHostRequests.ts`) bypasses
-  the settings body's sign-in and its change notices.
+- Done: the provider's `signOut` owns the preference write, and the
+  extension's onboarding "Sign in with ChatGPT" runs the settings body's
+  sign-in (2026-11-15).
 - A setup-assistant launch failure has one policy per GUI host
   (`packages/texra/src/controllers/onboarding/setupLaunch.ts`,
   `packages/extension/src/commands/setup/setupAssistantCommand.ts`).

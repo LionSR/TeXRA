@@ -1,8 +1,6 @@
 // Declarative conversation-entry geometry shared by Ink renderers, viewport
 // budgeting, static scrollback, and print-once full output.
 
-import { Record as Rec } from 'effect';
-
 import { textDisplayWidth } from '@cli/runtime/terminal/terminalText';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
@@ -109,13 +107,6 @@ const ROW_GEOMETRY = {
     marginTopRows: USER_ENTRY_MARGIN_TOP_ROWS,
   },
 } as const satisfies Record<TranscriptRowKind, RowGeometry>;
-
-/** Marker and color per activity status, painted from its tone: compaction
- *  activity rows and stages (whose `stageStatus` keys are a subset) share it. */
-export const COMPACTION_ACTIVITY_STATUS_STYLE = Rec.map(
-  COMPACTION_ACTIVITY_TONE,
-  (tone) => TONE_PAINT[tone],
-);
 
 export interface TranscriptEntryLayout {
   readonly columns: number;
@@ -233,7 +224,7 @@ function entryLines(
         ...wrapWithPrefix(
           headline,
           columns,
-          `${COMPACTION_ACTIVITY_STATUS_STYLE[row.block.status].marker} `,
+          `${TONE_PAINT[COMPACTION_ACTIVITY_TONE[row.block.status]].marker} `,
           ACTIVITY_GEOMETRY.continuationPrefix,
         ),
         ...body,

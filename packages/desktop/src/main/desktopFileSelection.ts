@@ -12,7 +12,6 @@ interface DesktopFileSelectionDialogOptions {
   title: string;
   defaultPath?: string;
   filters: Array<{ name: string; extensions: string[] }>;
-  allowMultiple?: boolean;
 }
 
 interface DesktopFileSelectionOptions {
@@ -69,7 +68,6 @@ export function createDesktopFileSelection(
         .showOpenFileDialog({
           title: DIALOG_TITLE_BY_FILE_TYPE[fileType],
           defaultPath: workspaceRoot,
-          allowMultiple: true,
           filters: [
             {
               name: 'Supported files',

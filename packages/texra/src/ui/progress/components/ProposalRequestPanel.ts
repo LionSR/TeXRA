@@ -50,7 +50,7 @@ import { proposalRequestPanelStyles } from './ProposalRequestPanel.styles';
 import { buildStatusBadge } from '../formatters/htmlBuilders';
 import { renderMarkdownHtml } from '../formatters/markdownRenderer';
 import { proposalLaunchPatch } from '../proposalEdit';
-import { getComposedPathElement } from './composedPath';
+import { delegateKeyActivation } from './composedPath';
 import type { RunView } from '@texra-ai/harness/schemas';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
@@ -393,16 +393,14 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   // Keyboard activation parity for the clickable file-name spans (Enter/Space),
   // mirroring FileList.ts's handleFileKey delegate for the same job.
   private handleFileKey = (event: KeyboardEvent): void => {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    const fileEl = getComposedPathElement(
+    delegateKeyActivation(
       event,
       '.workflow-proposal__file-name[data-file]',
-      HTMLElement,
+      (fileEl) => {
+        const file = fileEl.dataset.file;
+        if (file) this.openFile(file);
+      },
     );
-    if (!fileEl) return;
-    event.preventDefault();
-    const file = fileEl.dataset.file;
-    if (file) this.openFile(file);
   };
 }
 

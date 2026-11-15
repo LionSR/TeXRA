@@ -199,12 +199,12 @@ export function createDesktopWindowHost(options: {
         },
         catch: ensureError,
       }),
-    /** The files the user picked, or undefined when they cancelled. */
+    /** The files the user picked (one or several), or undefined when they
+     *  cancelled. */
     openFileDialog: (dialogOptions: {
       title: string;
       defaultPath?: string;
       filters: Array<{ name: string; extensions: string[] }>;
-      allowMultiple?: boolean;
     }) =>
       Effect.tryPromise({
         try: async () => {
@@ -212,9 +212,7 @@ export function createDesktopWindowHost(options: {
             title: dialogOptions.title,
             defaultPath: dialogOptions.defaultPath,
             filters: dialogOptions.filters,
-            properties: dialogOptions.allowMultiple
-              ? ['openFile', 'multiSelections']
-              : ['openFile'],
+            properties: ['openFile', 'multiSelections'],
           });
           return result.canceled ? undefined : result.filePaths;
         },

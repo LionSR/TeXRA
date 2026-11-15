@@ -14,19 +14,11 @@ import {
 } from '@texra/hosts/uiHosts';
 import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import {
-  INSTRUCTION_ACTION,
+  INSTRUCTION_ACTION_BUTTON_LABELS,
+  READ_GUIDE_BUTTON_LABEL,
   type InstructionAction,
 } from '@ui/copy/instructionActions';
 import type { DesktopSpawn } from './desktopWindows.js';
-
-// Button labels for the instruction dialog below. Desktop has one settings
-// home (Settings tab), so SET_API_KEY opens it directly rather than the
-// extension's separate "enter a key" quick pick.
-const INSTRUCTION_ACTION_BUTTON_LABELS: Record<InstructionAction, string> = {
-  [INSTRUCTION_ACTION.SET_API_KEY]: 'Set API Key',
-  [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]: 'Configuration Guide',
-  [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: 'Model Documentation',
-};
 
 /** The project as the title where the platform draws one, and as a line of
  *  detail on macOS, which draws none. */
@@ -124,7 +116,7 @@ export function createDesktopDialogs(
             type: 'error',
             message,
             ...inProject(project),
-            buttons: ['Read the guide', 'OK'],
+            buttons: [READ_GUIDE_BUTTON_LABEL, 'OK'],
             defaultId: 1,
             cancelId: 1,
           }),

@@ -203,7 +203,7 @@ Each row kind carries its own version
 (`shared/schemas/rowVersions.ts#ROW_KINDS`). A row MUST be written at its kind's
 current version (`controllers/session/rowCodec.ts#prepareEventDraft`). The
 `stored_kind` table records the highest version each kind was written at
-(`controllers/session/databaseLayer.ts#UPSERT_KIND`).
+(`controllers/session/databaseLayer.ts#UPSERT_KINDS`).
 
 The store gate refuses a store that names a core kind this build lacks, or a
 known kind at a version above the one this build reads

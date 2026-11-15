@@ -7,8 +7,11 @@
 // Adopted sheets cascade after the document's own, so the shared base goes
 // in a layer: any unlayered renderer rule then refines it, whatever order
 // the sheets load in.
-import { designTokens } from '@ui/styles';
-import { noticeStyles } from '@ui/styles/surfaceStyles';
+import { designTokens, visuallyHiddenStyles } from '@ui/styles';
+import { overlineStyles } from '@ui/styles/commonViewStyles';
+import { placeholderStyles } from '@ui/wa/emptyState';
+import { lineChangeStatsStyles, noticeStyles } from '@ui/styles/surfaceStyles';
+import { toneStyles } from '@ui/styles/toneStyles';
 import {
   buttonStyles,
   focusRingStyles,
@@ -28,6 +31,11 @@ shared.replaceSync(
     formControlStyles,
     settingsRowStyles,
     noticeStyles,
+    toneStyles,
+    visuallyHiddenStyles,
+    lineChangeStatsStyles,
+    placeholderStyles,
+    overlineStyles,
   ]
     .map((sheet) => sheet.cssText)
     .join('\n')}\n}`,

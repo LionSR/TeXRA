@@ -8,6 +8,7 @@ import { html, nothing, render } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import type { IconName } from '@ui/wa/iconNames';
+import { renderEmptyMessage } from '@ui/wa/emptyState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { formatDesktopAccelerator } from '../shared/accelerators';
 import type { OsPlatform } from '@texra/shared/osPlatform';
@@ -214,9 +215,7 @@ export function createDesktopCommandPalette({
         >
           ${
             visibleEntries.length === 0
-              ? html`<div class="desktop-command-palette-empty" role="status">
-                  No matching commands
-                </div>`
+              ? renderEmptyMessage('No matching commands')
               : nothing
           }
           ${groups.map(
@@ -227,7 +226,7 @@ export function createDesktopCommandPalette({
               >
                 <h2
                   id=${`command-group-${slugify(category)}`}
-                  class="desktop-command-palette-group-label"
+                  class="desktop-command-palette-group-label overline"
                 >
                   ${category}
                 </h2>

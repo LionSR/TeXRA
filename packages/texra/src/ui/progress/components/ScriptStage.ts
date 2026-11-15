@@ -28,6 +28,7 @@ import {
 } from '@ui/copy/scriptStage';
 import { designTokens } from '@ui/styles';
 import { toneStyles } from '@ui/styles/toneStyles';
+import { isActivationKey } from '@ui/wa/keyActivation';
 import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type {
@@ -259,7 +260,7 @@ export class ScriptStage extends LitElement {
         target === undefined
           ? nothing
           : (event: KeyboardEvent) => {
-              if (event.key !== 'Enter' && event.key !== ' ') return;
+              if (!isActivationKey(event)) return;
               event.preventDefault();
               this.select(target);
             }

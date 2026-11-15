@@ -6,6 +6,7 @@ import { formatError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { ToolMissing } from '@texra/utils/system/toolChecks';
+import { READ_GUIDE_BUTTON_LABEL } from '@ui/copy/instructionActions';
 
 /** Valid documentation identifiers for error messages. */
 type DocId = 'custom-agents' | 'latex-diff';
@@ -93,17 +94,13 @@ export const showLoggedInfoMessage = Effect.fn('showLoggedInfoMessage')(
 
 /** Log an error message, display it with a docs action, and open the docs if selected. */
 export const showLoggedMessageWithDocs = Effect.fn('showLoggedMessageWithDocs')(
-  function* (
-    message: string,
-    docId: DocId,
-    actionLabel = 'View Docs',
-  ): Effect.fn.Return<void> {
+  function* (message: string, docId: DocId): Effect.fn.Return<void> {
     yield* Effect.logError(message);
     const selection = yield* announce(
-      vscodeUi.ask('error', message, { items: [actionLabel] }),
+      vscodeUi.ask('error', message, { items: [READ_GUIDE_BUTTON_LABEL] }),
       undefined,
     );
-    if (selection !== actionLabel) return;
+    if (selection !== READ_GUIDE_BUTTON_LABEL) return;
 
     yield* openGuidePage(docId).pipe(
       Effect.catch((err) =>

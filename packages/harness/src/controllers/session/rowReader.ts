@@ -239,15 +239,14 @@ export function rowReader<E>(
   /** Find, once, every run holding an earlier build's row. */
   const scan = Effect.gen(function* () {
     if (scanned) return;
-    for (const [statement, params] of EARLIER_RUNS)
-      for (const row of yield* exec(statement, params)) {
-        const { logicalId, commit, type } =
-          Schema.decodeUnknownSync(EarlierRowSchema)(row);
-        markEarlier(
-          Schema.decodeUnknownSync(RunIdSchema)(logicalId),
-          new DatabaseRowEarlier({ commit, type }),
-        );
-      }
+    for (const row of yield* exec(...EARLIER_RUNS)) {
+      const { logicalId, commit, type } =
+        Schema.decodeUnknownSync(EarlierRowSchema)(row);
+      markEarlier(
+        Schema.decodeUnknownSync(RunIdSchema)(logicalId),
+        new DatabaseRowEarlier({ commit, type }),
+      );
+    }
     for (const row of floored ? yield* exec(RUN_PLUGIN_FACTS, []) : []) {
       const { logicalId, commit } = Schema.decodeUnknownSync(
         EarlierRowSchema.mapFields(Struct.omit(['type'])),

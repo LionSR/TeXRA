@@ -38,7 +38,7 @@ export function transcriptTimeline<
   let next = 0;
   const { stages } = transcript;
   for (const row of loose) {
-    while (next < stages.length && stages[next].seqNo < (row.seqNo ?? 0)) {
+    while (next < stages.length && stages[next].seqNo < row.seqNo) {
       const stage = stages[next];
       entries.push({ kind: 'stage', stage, rows: members.get(stage.id) ?? [] });
       next += 1;

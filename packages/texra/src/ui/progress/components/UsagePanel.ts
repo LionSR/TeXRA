@@ -3,7 +3,6 @@ import { Number as Num } from 'effect';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { join } from 'lit/directives/join.js';
-import { styleMap } from 'lit/directives/style-map.js';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -17,15 +16,13 @@ import {
   type TokenUsageStats,
   formatCompactTokenCount,
 } from '@texra-ai/harness/schemas';
-import {
-  contextGaugeBand,
-  roundedContextPercent,
-} from '@texra/shared/contextGauge';
+import { contextGaugeTone, contextUsageText } from '@ui/copy/contextGauge';
 import type { IconName } from '@ui/wa/iconNames';
 import { designTokens } from '@ui/styles';
 import { formatTokenCount } from '@ui/copy/format';
 import { usageCost, usageCostLabel } from '@ui/copy/modelAccess';
 import { focusRingStyles } from '@ui/styles/controlStyles';
+import { toneStyles } from '@ui/styles/toneStyles';
 
 // Local imports - shared icons and utils
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -102,19 +99,12 @@ function renderTokenStat(stat: TokenStat): TemplateResult {
   return html`<span id=${stat.id} class="token-stat" tabindex="0">${waIcon(stat.icon)}<span class="token-value">${formatCompactTokenCount(stat.value)}</span></span><wa-tooltip for=${stat.id}>${tooltip}</wa-tooltip>`;
 }
 
-/** Solid fill color based on context utilization. */
-function fillColor(percent: number): string {
-  const band = contextGaugeBand(percent);
-  if (band === 'error') return 'var(--color-status-error)';
-  if (band === 'warning') return 'var(--color-warning)';
-  return 'var(--color-success)';
-}
-
 @customElement('usage-panel')
 export class UsagePanel extends LitElement {
   static override styles = [
     designTokens,
     focusRingStyles,
+    toneStyles,
     css`
       :host {
         display: block;
@@ -192,6 +182,7 @@ export class UsagePanel extends LitElement {
         width: 100%;
         --track-height: var(--gauge-height);
         --track-color: var(--wa-color-surface-border);
+        --indicator-color: var(--tone-color);
       }
 
       .run-summary {
@@ -327,36 +318,26 @@ export class UsagePanel extends LitElement {
 
   private renderContext(): TemplateResult | typeof nothing {
     if (!this.contextState) return nothing;
-    const { inputTokens, contextWindow, utilizationPercent } =
-      this.contextState;
+    const { utilizationPercent } = this.contextState;
     // The bar is a widget that cannot overflow its own track, so it takes the
-    // clamped value. The *text* states what the handler measured, floored at
-    // 1% so a window that is genuinely in use never reads as `0% context
-    // used` — the rule `roundedContextPercent` sets and the CLI status bar
-    // already applies to this same number.
+    // clamped value; the text states what the run measured.
     const clamped = Num.clamp(utilizationPercent, { minimum: 0, maximum: 100 });
-    const roundedPercent = roundedContextPercent(utilizationPercent);
-    const percentLabel = `${roundedPercent}% context used`;
+    const usageText = contextUsageText(this.contextState);
 
     return html`
       <span id="usage-context-gauge" class="context-gauge" tabindex="0">
         <span class="context-label">Context</span>
         <span class="context-gauge__track">
           <wa-progress-bar
-            class="context-gauge__bar"
+            class="context-gauge__bar tone-${contextGaugeTone(clamped)}"
             value=${clamped}
-            label=${percentLabel}
-            style=${styleMap({ '--indicator-color': fillColor(clamped) })}
+            label="Context used"
           ></wa-progress-bar>
         </span>
-        <span class="context-state__value">
-          ${formatCompactTokenCount(inputTokens)} /
-          ${formatCompactTokenCount(contextWindow)}
-        </span>
+        <span class="context-state__value">${usageText}</span>
       </span>
       <wa-tooltip for="usage-context-gauge"
-        >${percentLabel} (${formatCompactTokenCount(inputTokens)} of
-        ${formatCompactTokenCount(contextWindow)} tokens)</wa-tooltip
+        >Context used: ${usageText}</wa-tooltip
       >
     `;
   }

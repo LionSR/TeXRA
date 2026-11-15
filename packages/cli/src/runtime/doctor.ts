@@ -1,6 +1,13 @@
 // Third-party imports
-import { Effect, FileSystem, PlatformError, Schema } from 'effect';
-import { satisfies as semverSatisfies } from 'semver';
+import {
+  Effect,
+  FileSystem,
+  PlatformError,
+  Result,
+  Schema,
+  SemVer,
+  SemVerRange,
+} from 'effect';
 
 // Local imports
 import {
@@ -150,9 +157,15 @@ function failFromError(
   return fail(id, name, message, extractErrorMessage(error));
 }
 
+const SUPPORTED_NODE_RANGE = SemVerRange.parseUnsafe(
+  TEXRA_CLI_SUPPORTED_NODE_RANGE,
+);
+
 function checkNode(version: string): DoctorCheck {
+  const parsed = SemVer.parse(version);
   if (
-    semverSatisfies(version, TEXRA_CLI_SUPPORTED_NODE_RANGE, { loose: true })
+    Result.isSuccess(parsed) &&
+    SemVerRange.matches(SUPPORTED_NODE_RANGE, parsed.success)
   ) {
     return pass('node', 'Node.js', `Node ${version}`);
   }

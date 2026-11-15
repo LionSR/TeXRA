@@ -91,11 +91,8 @@ import { getBasename } from '@utils/core/pathBasics';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
-import {
-  captureAttachments,
-  storedMediaPart,
-  type InputPart,
-} from '../run/mediaInput';
+import { captureAttachments, storedMediaPart } from '../run/mediaInput';
+import type { InputPart } from '@texra-ai/llm';
 import { stored } from '../run/recordedRequest';
 import {
   localCallsOf,

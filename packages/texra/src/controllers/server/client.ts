@@ -22,13 +22,14 @@ import {
   Option,
   Predicate,
   Ref,
+  Result,
   Schedule,
   Schema,
   Scope,
+  SemVer,
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { gt as semverGt, lt as semverLt, valid as semverValid } from 'semver';
 import { RpcClient, RpcSerialization, type RpcClientError } from 'effect/rpc';
 
 import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
@@ -155,22 +156,27 @@ export const compatible = (info: ServiceInfo): boolean =>
  *  `unknown`, is neither older nor newer). */
 const builds = (
   info: ServiceInfo,
-  order: (service: string, own: string) => boolean,
-): boolean =>
-  semverValid(info.version) !== null &&
-  semverValid(BUILD_VERSION) !== null &&
-  order(info.version, BUILD_VERSION);
+  order: (service: SemVer.SemVer, own: SemVer.SemVer) => boolean,
+): boolean => {
+  const service = SemVer.parse(info.version);
+  const own = SemVer.parse(BUILD_VERSION);
+  return (
+    Result.isSuccess(service) &&
+    Result.isSuccess(own) &&
+    order(service.success, own.success)
+  );
+};
 
 /** A service of a newer build speaking another protocol: left running,
  *  and this client refused. */
 const isNewer = (info: ServiceInfo): boolean =>
-  !compatible(info) && builds(info, semverGt);
+  !compatible(info) && builds(info, SemVer.isGreaterThan);
 
 /** A service the caller should retire: an older build, or one of another
  *  protocol that is not a newer build (a development build restarts the
  *  service it cannot speak to). */
 export const isOlder = (info: ServiceInfo): boolean =>
-  builds(info, semverLt) || (!compatible(info) && !isNewer(info));
+  builds(info, SemVer.isLessThan) || (!compatible(info) && !isNewer(info));
 
 /** A client over `socket`, held for the caller's scope. `onDisconnect`
  *  runs whenever the connection ends, or an attempt to open it fails. */
