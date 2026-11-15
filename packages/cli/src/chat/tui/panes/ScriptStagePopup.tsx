@@ -7,7 +7,7 @@
 // call's agent, which the script sees as `Skipped`.
 
 // Third-party imports
-import { Predicate } from 'effect';
+import { joinFacts } from '@texra-ai/harness/schemas';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
 // Local imports - TUI primitives
@@ -26,7 +26,6 @@ import {
   NOT_RUN,
   REUSED,
   RUNNING_HALF,
-  SEPARATOR,
   SKIP_CIRCLE,
   STATUS_DIAMOND,
   TICK,
@@ -109,7 +108,10 @@ function CallRow({
         </Text>
       </Box>
       <RowSegment flexShrink={0}>
-        {`${safeTerminalText(call.label)} · ${SCRIPT_CALL_STATUS_LABEL[call.status]}`}
+        {joinFacts([
+          safeTerminalText(call.label),
+          SCRIPT_CALL_STATUS_LABEL[call.status],
+        ])}
       </RowSegment>
       {last ? (
         <RowSegment
@@ -209,13 +211,11 @@ export function ScriptStagePopup({
     { key: 'Ctrl-T', action: 'transcript' },
     { key: 'Esc', action: 'close' },
   ];
-  const title = [
+  const title = joinFacts([
     'Script',
-    stages.length > 1 ? `${stageIndex + 1}/${stages.length}` : undefined,
+    stages.length > 1 && `${stageIndex + 1}/${stages.length}`,
     (stage && scriptStageSummary(stage)) || `${stage?.calls.length ?? 0} calls`,
-  ]
-    .filter(Predicate.isNotUndefined)
-    .join(SEPARATOR);
+  ]);
   const layout = readerLayout({
     availableRows,
     extraRows: POPUP_EXTRA_ROWS,
@@ -299,7 +299,7 @@ export function ScriptStagePopup({
         )}
         <Box height={1} overflowY="hidden">
           <Text dimColor wrap="truncate-end">
-            {safeTerminalText(call?.facts.join(SEPARATOR) ?? '')}
+            {safeTerminalText(joinFacts(call?.facts ?? []))}
           </Text>
         </Box>
       </Box>

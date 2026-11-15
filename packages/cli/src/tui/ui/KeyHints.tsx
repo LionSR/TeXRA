@@ -3,9 +3,8 @@
 // The footer convention: each row carries scope-specific keys first, navigation in the middle, and
 // `Enter confirm · Esc cancel` last. Ad-hoc footer text is a review-blocker.
 
+import { FACT_SEPARATOR, joinFacts } from '@texra-ai/harness/schemas';
 import { Box, Text } from 'ink';
-
-import { SEPARATOR } from '@cli/tui/ui/glyphs';
 
 export interface KeyHint {
   /** Key glyph (e.g. `Enter`, `Ctrl-R`, `↑/↓`). */
@@ -36,7 +35,7 @@ export function keyHintText(hint: KeyHint): string {
  *  component below renders it. Width math and row-budget math measure this
  *  rather than re-deriving the separator. */
 export function keyHintsText(hints: readonly KeyHint[]): string {
-  return hints.map(keyHintText).join(SEPARATOR);
+  return joinFacts(hints.map(keyHintText));
 }
 
 const DEFAULT_TAIL: readonly KeyHint[] = Object.freeze([
@@ -79,7 +78,7 @@ export function keyHintSpans(
 ): readonly React.JSX.Element[] {
   return hints.map((hint, index) => (
     <Text key={`${hint.key}-${hint.action}-${index}`}>
-      {index > 0 ? SEPARATOR : ''}
+      {index > 0 ? FACT_SEPARATOR : ''}
       <Text bold>{hint.key}</Text> {hint.action}
     </Text>
   ));

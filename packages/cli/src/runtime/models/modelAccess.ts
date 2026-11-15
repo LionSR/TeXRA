@@ -13,6 +13,7 @@ import type { SettingsStores } from '@texra-ai/harness/plugins';
 import {
   type UsageRoute,
   isModelOptionAvailable,
+  joinFacts,
 } from '@texra-ai/harness/schemas';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
@@ -155,9 +156,10 @@ export function modelSelectItemsForCli(
         ? yield* getModelSwitchDisabledReason(model.model.value)
         : undefined;
       const access = formatModelStatusForCli(model);
-      const status = model.model.reasoning
-        ? `${access} · reasoning setting: ${model.model.reasoning}`
-        : access;
+      const status = joinFacts([
+        access,
+        model.model.reasoning && `reasoning setting: ${model.model.reasoning}`,
+      ]);
       return {
         value: model.model.value,
         label: model.model.label || model.model.value,

@@ -9,6 +9,7 @@
  */
 
 // Third-party imports
+import { joinFacts } from '@texra-ai/harness/schemas';
 import { css, html, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -287,7 +288,7 @@ export class ScriptStage extends LitElement {
       }
       ${
         call.facts.length > 0
-          ? html`<span class="row-meta">${call.facts.join(' · ')}</span>`
+          ? html`<span class="row-meta">${joinFacts(call.facts)}</span>`
           : nothing
       }
       ${this.renderActions(call)}

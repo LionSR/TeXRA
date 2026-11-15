@@ -7,7 +7,7 @@
 
 import { Effect, SubscriptionRef } from 'effect';
 
-import { getModelLabel } from '@texra-ai/harness/schemas';
+import { getModelLabel, joinFacts } from '@texra-ai/harness/schemas';
 import type { ProcessRuntime } from '@texra-ai/harness/host';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 
@@ -121,14 +121,20 @@ function sessionHeaderIdentityLine(
 ): string {
   if (child) {
     const model = child.modelLabel ?? getModelLabel(meta.model || '-');
-    return `${child.childKind}: ${child.label} · parent: ${child.parentLabel} · model: ${model}`;
+    return joinFacts([
+      `${child.childKind}: ${child.label}`,
+      `parent: ${child.parentLabel}`,
+      `model: ${model}`,
+    ]);
   }
   const model = getModelLabel(meta.model || '-');
   const agent = meta.agent || 'chat';
-  if (meta.teamName) {
-    return `team: ${meta.teamName} · root: ${agent} · model: ${model}`;
-  }
-  return `agent: ${agent} · model: ${model}`;
+  return joinFacts([
+    ...(meta.teamName
+      ? [`team: ${meta.teamName}`, `root: ${agent}`]
+      : [`agent: ${agent}`]),
+    `model: ${model}`,
+  ]);
 }
 
 // Dedupe `<Static>` rows by the entry's own id (a random id from the

@@ -45,9 +45,6 @@ export const INTERRUPTED_CIRCLE = '◌';
 export const REUSED = '↺';
 export const NOT_RUN = '·';
 
-/** Inline separator between facts on one line and between key hints. */
-export const SEPARATOR = ' · ';
-
 /** Unordered list item marker, also a neutral static-row bullet. */
 export const LIST_BULLET = '•';
 

@@ -2,7 +2,7 @@
 // lead-model picker. Distinct from `/model`, which only chooses the active
 // model among those already enabled and runnable.
 
-import { Predicate } from 'effect';
+import { joinFacts } from '@texra-ai/harness/schemas';
 import { Text } from 'ink';
 
 import {
@@ -13,7 +13,6 @@ import {
 import { AsyncListForm } from './_shared/ListForm';
 import type { ProcessRuntime } from '@texra-ai/harness/host';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
-import { SEPARATOR } from '@cli/tui/ui/glyphs';
 
 interface EnabledModelsFormProps {
   readonly availableRows?: number;
@@ -29,12 +28,11 @@ interface EnabledModelsFormProps {
 }
 
 function formatEnabledModelDescription(model: CliEnabledModelRow): string {
-  const parts = [
+  return joinFacts([
     model.enabled ? 'enabled' : 'disabled',
     model.provider,
-    model.deprecated ? 'deprecated' : undefined,
-  ].filter(Predicate.isNotNullish);
-  return parts.join(SEPARATOR);
+    model.deprecated && 'deprecated',
+  ]);
 }
 
 export function EnabledModelsForm(

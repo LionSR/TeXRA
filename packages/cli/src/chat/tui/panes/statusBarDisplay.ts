@@ -9,10 +9,11 @@ import {
   formatCompactTokenCount,
   formatCostUsd,
   formatResultCount,
+  joinFacts,
 } from '@texra-ai/harness/schemas';
 import { isWorking } from '@texra-ai/harness/schemas';
 import { keyHintText } from '@cli/tui/ui/KeyHints';
-import { SEPARATOR, STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
+import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import {
   firstFittingCandidate,
@@ -407,16 +408,8 @@ function fitStatusBarLeftSegments(
   return given.filter(Predicate.isNotNullish);
 }
 
-// Bindings use the shared KeyHints vocabulary (`key action` joined with
-// SEPARATOR) so the status bar and modal footers read as one system.
-function statusBarBindingRow(
-  bindings: readonly (string | false | undefined)[],
-): string {
-  return bindings
-    .filter((binding): binding is string => !!binding)
-    .join(SEPARATOR);
-}
-
+// Bindings use the shared KeyHints vocabulary (`key action`, joined as facts)
+// so the status bar and modal footers read as one system.
 // Every bindings row below is a widest-first `firstFittingCandidate` cascade.
 // The chat row names keys only; commands are one `/` away in the palette and
 // `/help`, so the bar never advertises individual slash commands.
@@ -454,7 +447,7 @@ function statusBarBindingsText(
   return firstFittingCandidate({
     candidates: [
       hold &&
-        statusBarBindingRow([
+        joinFacts([
           parentBack,
           childList,
           fullOutput,
@@ -463,18 +456,11 @@ function statusBarBindingsText(
           commands,
           ctrlC,
         ]),
-      statusBarBindingRow([
-        parentBack,
-        childList,
-        fullOutput,
-        script,
-        commands,
-        ctrlC,
-      ]),
-      statusBarBindingRow([parentBack, childList, fullOutput, script, ctrlC]),
-      statusBarBindingRow([parentBack, childList, fullOutput, ctrlC]),
-      statusBarBindingRow([parentBack, childList, ctrlC]),
-      parentBack && statusBarBindingRow([parentBack, ctrlC]),
+      joinFacts([parentBack, childList, fullOutput, script, commands, ctrlC]),
+      joinFacts([parentBack, childList, fullOutput, script, ctrlC]),
+      joinFacts([parentBack, childList, fullOutput, ctrlC]),
+      joinFacts([parentBack, childList, ctrlC]),
+      parentBack && joinFacts([parentBack, ctrlC]),
       // Past Ctrl-C's width, the one navigation key still beats it: Ctrl-C
       // works without being named, the way out of a child view does not.
       parentBack,
@@ -508,7 +494,7 @@ function childListBindingsText(
   const escBinding = keyHintText({ key: 'Esc', action: 'input' });
   return firstFittingCandidate({
     candidates: [
-      statusBarBindingRow([
+      joinFacts([
         selectBinding,
         enterBinding,
         expandBinding,
@@ -517,15 +503,10 @@ function childListBindingsText(
         ctrlCBinding,
       ]),
       selectionKillable &&
-        statusBarBindingRow([
-          selectBinding,
-          killBinding,
-          inputBinding,
-          ctrlCBinding,
-        ]),
-      statusBarBindingRow([enterBinding, inputBinding, ctrlCBinding]),
+        joinFacts([selectBinding, killBinding, inputBinding, ctrlCBinding]),
+      joinFacts([enterBinding, inputBinding, ctrlCBinding]),
       // The narrow row keeps the way back to input; Esc alone still fits.
-      statusBarBindingRow([enterBinding, escBinding, ctrlCBinding]),
+      joinFacts([enterBinding, escBinding, ctrlCBinding]),
       ctrlCBinding,
     ],
     fallback: ctrlCBinding,
