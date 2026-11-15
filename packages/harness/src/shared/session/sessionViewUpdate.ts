@@ -220,29 +220,35 @@ function countGroups(view: ViewDraft): void {
 // State kept beside the view
 // ---------------------------------------------------------------------------
 
+/** What the updates keep for one run beside its `RunView`. */
+interface RunWork {
+  /** What the rows `runRows.ts` reads say about the run: `view.requests`,
+   *  `view.queuedFollowUps` and `RunView.turn` are built from it. */
+  rows: SharedRunRows;
+  /** The run's record (`recordAfter`): its title, its attached parent and
+   *  what its end left are read off it, so the view states none of those
+   *  rules itself. */
+  record: RunRows;
+  /** The run's transcript working state (`transcriptState.ts`). */
+  transcript: TranscriptIndexes;
+  /** Whether the run's current turn is over ({@link turnIsOver}) as last
+   *  derived, so a change finishes its transcript once. */
+  turnOver: boolean;
+}
+
 /** What one session's updates keep beside its view, never on it. */
 interface SessionState {
   /** The aggregates the listing named since the last `replay.complete`. */
   readonly listed: Set<AggregateId>;
-  /** What the rows `runRows.ts` reads say about each run: `view.requests`,
-   *  `view.queuedFollowUps` and `RunView.turn` are built from it. */
-  readonly rows: Map<RunId, SharedRunRows>;
-  /** Each run's record (`recordAfter`): its title, its attached parent and
-   *  what its end left are read off it, so the view states none of those
-   *  rules itself. */
-  readonly records: Map<RunId, RunRows>;
+  /** Each run the view holds, from its `run.start` to its removal. */
+  readonly runs: Map<RunId, RunWork>;
   /** One entry per `${aggregate}/${listing type}`: the commit of the newest
    *  listing fact applied for it, so an older one a later read replays is
    *  skipped. The lifecycle entry outlives its run: it keeps a replayed
    *  `run.start` from bringing a removed run back. */
   readonly latest: Map<string, number>;
-  /** Each run's transcript working state (`transcriptState.ts`). */
-  readonly transcripts: Map<RunId, TranscriptIndexes>;
   /** The runs this build cannot open, and why (`ExistenceReconciliation`). */
   readonly unreadable: Map<RunId, UnreadableRun['reason']>;
-  /** The runs whose current turn is over ({@link turnIsOver}) as last
-   *  derived, so a change finishes their transcript once. */
-  readonly turnOver: Set<RunId>;
   /** The latest local runtime snapshot. */
   local: LocalRuntimeState;
 }
@@ -250,12 +256,9 @@ interface SessionState {
 function emptySessionState(): SessionState {
   return {
     listed: new Set(),
-    rows: new Map(),
-    records: new Map(),
+    runs: new Map(),
     latest: new Map(),
-    transcripts: new Map(),
     unreadable: new Map(),
-    turnOver: new Set(),
     local: { runsHere: [] },
   };
 }
@@ -293,11 +296,16 @@ function setRun(u: Update, run: RunView): void {
   u.view.runs = writable(u, u.view.runs).set(run.id, run);
 }
 
+/** The working state of a run the view holds. */
+function runWork(u: Update, runId: RunId): RunWork {
+  const work = u.state.runs.get(runId);
+  if (!work) throw new Error(`Run ${runId} has no working state`);
+  return work;
+}
+
 /** The run's transcript working state, with the arrays this call owns. */
 function transcriptWork(u: Update, runId: RunId): TranscriptWork {
-  const ix = u.state.transcripts.get(runId);
-  if (!ix) throw new Error(`Run ${runId} has no transcript state`);
-  return { ix, owned: u.owned };
+  return { ix: runWork(u, runId).transcript, owned: u.owned };
 }
 
 // ---------------------------------------------------------------------------
@@ -313,7 +321,12 @@ function runIdOf(aggregateId: AggregateId): RunId | null {
 /** A run in its initial shape, created by its `run.start` alone. Its owner
  *  comes from the existence marker that ends the same batch. */
 function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
-  u.state.transcripts.set(id, emptyTranscriptIndexes());
+  u.state.runs.set(id, {
+    rows: freshSharedRunRows(),
+    record: NO_RUN_ROWS,
+    transcript: emptyTranscriptIndexes(),
+    turnOver: false,
+  });
   const label = runIdentityDisplayName(event.identity);
   const common = {
     id,
@@ -477,9 +490,9 @@ function withAggregates(u: Update, run: RunView): RunView {
     statusNotice,
   });
   const turnOver = turnIsOver(next);
-  if (turnOver === u.state.turnOver.has(run.id)) return next;
-  if (turnOver) u.state.turnOver.add(run.id);
-  else u.state.turnOver.delete(run.id);
+  const work = runWork(u, run.id);
+  if (turnOver === work.turnOver) return next;
+  work.turnOver = turnOver;
   // A turn its rows ended finished its compactions at the transcript's
   // boundary; one whose holder went away has written no such row.
   const transcript = turnOver
@@ -609,7 +622,7 @@ function advanceSettledRows(
  *  and `latestLine`. Once the turn is over nothing streams or compacts. */
 function withTranscriptFacts(u: Update, run: RunView): RunView {
   const { transcript } = run;
-  const turnOver = u.state.turnOver.has(run.id);
+  const { turnOver } = runWork(u, run.id);
   const settledRows = advanceSettledRows(
     transcript.rows,
     transcript.settledRows,
@@ -784,8 +797,8 @@ function applyPluginFact(u: Update, event: DisplayRow): void {
  *  decision answers may never have reached this view. A replayed row is
  *  below its `latest` entry and never reaches here. */
 function applyRowFacts(u: Update, run: RunView, event: SharedRunRow): RunView {
-  const { rows } = u.state;
-  const before = rows.get(run.id) ?? freshSharedRunRows();
+  const work = runWork(u, run.id);
+  const before = work.rows;
   const verdict = applyRunRow(before, event);
   if (verdict.kind === 'contradiction') {
     throw new Error(`${event.type} on ${run.id}: ${verdict.detail}`);
@@ -793,7 +806,7 @@ function applyRowFacts(u: Update, run: RunView, event: SharedRunRow): RunView {
   if (verdict.kind !== 'applied') return run;
   const moved = verdict.rows;
   const after: SharedRunRows = { ...before, ...moved };
-  rows.set(run.id, after);
+  work.rows = after;
   if (moved.requests !== undefined) projectRequests(u.view, run.id, after);
   if (moved.followUps !== undefined) projectFollowUps(u, run.id, after);
   // A position moves the turn, and a wait is a point a fork may cut at;
@@ -915,9 +928,9 @@ function applyEvent(
   latest.set(listingKey, event.commit);
   if (event.type === 'run.removed') return removeRun(u, runId);
   const created = !known;
-  const { records } = u.state;
-  const record = recordAfter(records.get(runId) ?? NO_RUN_ROWS, event);
-  records.set(runId, record);
+  const work = runWork(u, runId);
+  const record = recordAfter(work.record, event);
+  work.record = record;
   // Its grants, before its own change, whose derived fields read them.
   if (record.grants !== null && u.view.policy.get(runId) !== record.grants)
     u.view.policy = writable(u, u.view.policy).set(runId, record.grants);
@@ -1004,10 +1017,7 @@ function removeRun(u: Update, runId: RunId): boolean {
   view.runs = without(u, view.runs, run.id);
   view.policy = without(u, view.policy, run.id);
   view.queuedFollowUps = without(u, view.queuedFollowUps, run.id);
-  state.rows.delete(run.id);
-  state.records.delete(run.id);
-  state.transcripts.delete(run.id);
-  state.turnOver.delete(run.id);
+  state.runs.delete(run.id);
   const aggregateId = qualifyAggregateId('run', run.id);
   view.transcriptSeq = without(u, view.transcriptSeq, aggregateId);
   if (view.requests.some((r) => r.runId === run.id)) {
@@ -1069,7 +1079,7 @@ function applySubscriptions(
     const runId = runIdOf(id);
     const run = runId === null ? undefined : view.runs.get(runId);
     if (!run) continue;
-    u.state.transcripts.set(run.id, emptyTranscriptIndexes());
+    runWork(u, run.id).transcript = emptyTranscriptIndexes();
     setRun(
       u,
       withTranscriptFacts(u, { ...run, transcript: emptyTranscript() }),
