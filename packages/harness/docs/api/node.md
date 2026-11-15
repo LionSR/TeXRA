@@ -42,6 +42,15 @@ absence and propagates from a caller that recovers only this.
 const absentReason: (error: unknown) => boolean
 ```
 
+## APPROVAL_POLICY_ENV
+
+The variable a person's own invocation requests an approval policy
+with; never a project's `.env`, and never a nested process's.
+
+```ts
+const APPROVAL_POLICY_ENV: "TEXRA_APPROVAL_POLICY"
+```
+
 ## canonicalizeWorkspaceRoot
 
 Resolve one physical workspace identity for storage and host adapters.
@@ -292,15 +301,6 @@ const homeDirectory: Effect.Effect<string | undefined>
 ```
 
 ## inheritedEnv
-
-The environment a child process the harness spawns starts from: this
-process's with its project's `.env` variables over it (`environment`),
-minus every provider API-key variable the harness reads as its own credential
-({@link API_KEY_ENV_NAMES}) and the requested approval policy
-(`TEXRA_APPROVAL_POLICY`). What a child prints lands in tool results and
-the transcript, so the key is never there to print. `keep` names the one
-provider whose key a child agent CLI authenticates with itself. Windows
-matches variable names case-insensitively, as its environment does.
 
 ```ts
 const inheritedEnv: (keep?: "xai" | "anthropic" | "openai" | "google" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode" | undefined) => Effect<Record<string, string>, never, never>

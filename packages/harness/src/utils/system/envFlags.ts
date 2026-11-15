@@ -75,6 +75,10 @@ export const envFlag = (
  * provider whose key a child agent CLI authenticates with itself. Windows
  * matches variable names case-insensitively, as its environment does.
  */
+/** The variable a person's own invocation requests an approval policy
+ *  with; never a project's `.env`, and never a nested process's. */
+export const APPROVAL_POLICY_ENV = 'TEXRA_APPROVAL_POLICY';
+
 export const inheritedEnv = Effect.fn('envFlags.inheritedEnv')(function* (
   keep?: ApiKeyProviderId,
 ): Effect.fn.Return<Record<string, string>> {
@@ -86,7 +90,7 @@ export const inheritedEnv = Effect.fn('envFlags.inheritedEnv')(function* (
   const withheld = new Set(
     [
       ...API_KEY_ENV_NAMES.filter((name) => name !== kept),
-      'TEXRA_APPROVAL_POLICY',
+      APPROVAL_POLICY_ENV,
     ].map(fold),
   );
   return Object.fromEntries(
