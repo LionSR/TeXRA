@@ -28,6 +28,7 @@ import {
 
 import { type Session, type WorkspaceRoots } from '@texra-ai/harness';
 import {
+  AgentCatalog,
   AgentDirectories,
   presenterOn,
   sessionFsLayer,
@@ -43,6 +44,7 @@ import {
   type StorageFs,
   type WorkspaceFs,
 } from '@texra-ai/harness/plugins';
+import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type {
   FileOpResult,
@@ -99,6 +101,7 @@ import { SessionBridge } from './SessionBridge';
 import { findLabelInWorkspace } from './workspaceFileOptions';
 import type { RunId } from '@texra-ai/harness/schemas';
 import {
+  agentKeyOf,
   formatResultCount,
   Cancelled,
   Rejected,
@@ -327,6 +330,27 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     handleHostCommand: handle,
     onPortClosed: draftRequests.closePort,
   }).pipe(Scope.provide(bridgeScope));
+  // Entering the setup step selects the setup agent on the launcher; a
+  // snapshot already there leaves a user who switched agents alone. It
+  // never starts setup: the user launches it from the setup card.
+  const catalog = yield* AgentCatalog;
+  yield* Effect.forkScoped(
+    snapshot.changes.pipe(
+      Stream.map((current) => current.onboarding),
+      Stream.changes,
+      Stream.filter((step) => step === 'setup'),
+      Stream.runForEach(() =>
+        Effect.sync(() => {
+          // The catalog's key, so the launcher's list matches by value.
+          const entry = catalog.get(SETUP_AGENT_NAME);
+          bridge.surfaceAction({
+            kind: 'launch',
+            patch: { agent: entry ? agentKeyOf(entry) : SETUP_AGENT_NAME },
+          });
+        }),
+      ),
+    ),
+  );
   const host = yield* ports.host({ bridge, snapshot });
 
   // The window is its project's window wherever its runs run: here,

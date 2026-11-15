@@ -16,7 +16,6 @@ import { Effect, Scope } from 'effect';
 import {
   withProcessServices,
   type ProcessRuntime,
-  type HostPresentation,
 } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
