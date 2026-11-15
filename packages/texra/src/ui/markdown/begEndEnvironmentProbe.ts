@@ -12,7 +12,10 @@ import {
   MARKDOWN_PARSER_OPTIONS,
   type MarkdownItInstance,
 } from './createMarkdownRenderer';
-import { DISPLAY_MATH_SPAN_PATTERNS } from './latexPlaceholders';
+import {
+  DISPLAY_MATH_SPAN_PATTERNS,
+  holdPlaceholder,
+} from './latexPlaceholders';
 
 interface BegEndEnvironmentMatch {
   readonly start: number;
@@ -272,8 +275,7 @@ export function applyEnvironmentShields(
         (moveIndentIntoItem ? remainder : '') +
         content.slice(contentStart, contentEnd);
       if (item.length > 0) {
-        const index = items.push(item) - 1;
-        pieces.push(`@@${tag}-${index}@@`);
+        pieces.push(holdPlaceholder(items, tag, item));
       }
       if (!isLast) pieces.push(content.slice(lineEnd, lineStarts[line + 1]));
     }
