@@ -23,8 +23,8 @@
  *   is refused: a one-shot parent never reads a message. Headless
  *   delegation runs in band, so every row commits in one order.
  * - two `review` runs over the same notes: the context blobs they share.
- * - a `polish` document task with `--output`: the documents plugin's output
- *   fact, its diffs included, and the recipe's `run.end` with its documents
+ * - a `polish` document task with `--output`: the theory plugin's output
+ *   fact, its diffs included, and the program's `run.end` with its documents
  *   as `output.structured`. Its documents have no `\documentclass` and no
  *   document environment, so its compile check and latexdiff run no TeX
  *   tool. The TeX tools it could run by name are stand-ins first on PATH,
@@ -580,8 +580,8 @@ async function generate(root) {
       '--print',
     ]);
 
-  // A document task through `texra run --output`: the documents plugin's
-  // output fact, diffs included, and the recipe's `run.end` (`structured`).
+  // A document task through `texra run --output`: the theory plugin's
+  // output fact, diffs included, and the program's `run.end` (`structured`).
   cli.run([
     'run',
     'polish',

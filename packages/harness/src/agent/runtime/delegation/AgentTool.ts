@@ -1,8 +1,8 @@
 /**
  * The `agent` tool: run a named agent as a child of the calling run, with
  * its prompt and its own tools. `launchChildAgent` is the launch it shares
- * with a plugin's task tools (`launchesTasks`), which open the same child on
- * the plugin's recipe. A script's `agent` calls share one approval request
+ * with the `program` tool (`./ProgramTool`), which opens the same child on
+ * a registered program. A script's `agent` calls share one approval request
  * showing its source; a direct call proposes itself. A completed awaited
  * call is reused by a later call with the same key in the same run or a
  * background script run of it, and a call cut short finds the child its
@@ -14,7 +14,7 @@
 import { Effect, Result, Schema, ScopedRef } from 'effect';
 
 // Local imports
-import { readRecipeResult } from '@agent/runtime/recipeResult';
+import { readProgramResult } from '@agent/runtime/programRun';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { inRunSession, noLaterTurn } from '@agent/runtime/RunCall';
 import { decisionOf } from '@agent/runtime/requests';
@@ -31,8 +31,8 @@ import {
   type RunId,
   type SubagentProgressUpdate,
   type ToolResult,
-  type AgentConfig,
-  isTaskConfig,
+  type JsonValue,
+  programOf,
   AGENT_TOOL_NAME,
 } from '@shared/schemas';
 import { attemptRequests, callRequestId } from '@shared/session/inFlight';
@@ -46,6 +46,7 @@ import { defineTool, type DefinedTool } from '@tools/core/definition';
 import { nullishWithDefault, timeoutMsField } from '@tools/core/inputSchema';
 import { errorResult, executed } from '@tools/core/result';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
+import { ToolRegistry } from '@tools/toolTable';
 import { sha256 } from '@utils/core/idHash';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -139,12 +140,12 @@ type AgentInput = typeof AgentInputSchema.Type;
 
 /**
  * One child launch as the shared core runs it: the agent and its prompt,
- * and what the child is. A chat (`task: null`) may ask for a value of
- * `schema` and attaches `mediaFiles` to its prompt. A task opens on what
- * the launching plugin builds for the approved agent (`configFor`: its
- * recipe and outputs, null for an agent with no task block) and works over
- * `files` with `options`, as its proposal says. `tool` names the launching
- * tool in its reuse key and its copy.
+ * and what the child is. A chat (`program: null`) may ask for a value of
+ * `schema` and attaches `mediaFiles` to its prompt. A program's child opens
+ * on the registered program `name` and works over `files`; its proposal
+ * shows `args` as its options, and the program's own `configure` turns the
+ * approved launch into the arguments its script is called with. `tool`
+ * names the launching tool in its reuse key and its copy.
  */
 export type ChildLaunch = {
   readonly tool: string;
@@ -160,16 +161,14 @@ export type ChildLaunch = {
   readonly background: boolean | null | undefined;
 } & (
   | {
-      readonly task: null;
+      readonly program: null;
       readonly schema: Record<string, unknown> | null | undefined;
       readonly mediaFiles: readonly string[];
     }
   | {
-      readonly task: {
-        readonly configFor: (
-          chosen: AgentProposal,
-        ) => Pick<AgentConfig, 'script' | 'outputFiles'> | null;
-        readonly options: NonNullable<AgentProposal['options']>;
+      readonly program: {
+        readonly name: string;
+        readonly args: Readonly<Record<string, JsonValue>>;
       };
       readonly files: {
         readonly inputFiles: readonly string[];
@@ -232,8 +231,8 @@ const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
 });
 
 /** What an ended child becomes for its call: the report its end stored,
- *  the envelope its parent's model reads (a recipe's read through its
- *  block), or the error a script's `await` throws for it. */
+ *  the envelope its parent's model reads (a program's read through its
+ *  registered result), or the error a script's `await` throws for it. */
 export const childResult = Effect.fn('AgentTool.childResult')(function* (
   call: RunToolCall,
   agentName: string,
@@ -263,12 +262,12 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
     );
   const config = yield* records.readConfig();
   const view = yield* (yield* SessionViewAccess).read([]);
-  const recipe = yield* readRecipeResult(config, runId, call.env.roots);
+  const program = yield* readProgramResult(config, runId, call.env.roots);
   return {
     ...executed(report, `Completed '${agentName}'`),
     value: toJsonValue({
       ...result.output,
-      ...(recipe !== undefined && { changes: recipe.changes }),
+      ...(program !== undefined && { changes: program.changes }),
       runId,
       outcome: result.outcome,
       cost: treeCostOf(view, runId),
@@ -304,10 +303,17 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const { run } = call;
   const script = call.script ?? undefined;
   const { runId: parentRunId } = run;
-  const { task, persona } = launch;
-  // A chat's files are the media on its prompt; a task names its four lists.
+  const { program, persona } = launch;
+  const { programs } = yield* ToolRegistry;
+  const registered = program === null ? null : programs.get(program.name);
+  if (registered === undefined)
+    return errorResult(
+      `No program is named '${program?.name}'. The programs are: ${[...programs.keys()].join(', ') || 'none'}.`,
+    );
+  // A chat's files are the media on its prompt; a program names its four
+  // lists.
   const files =
-    launch.task === null
+    launch.program === null
       ? {
           inputFiles: [],
           contextFiles: [],
@@ -324,7 +330,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     launch.workingDirectory ?? undefined,
   );
   if (unusable) return unusable;
-  const schema = launch.task === null ? launch.schema : null;
+  const schema = launch.program === null ? launch.schema : null;
   const outputSchema =
     schema == null
       ? undefined
@@ -336,8 +342,8 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
             ),
         });
   // The call's files: a run-storage file must be this run's own or a declared
-  // output of a completed child of it; a task's recipe's files pass as named.
-  const trusted = isTaskConfig(run.config);
+  // output of a completed child of it; a program's files pass as named.
+  const trusted = programOf(run.config) !== null;
   const resolved = yield* Effect.result(
     Effect.all(
       (
@@ -364,9 +370,10 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const oneShot = noLaterTurn(run);
   const awaited =
     oneShot || (script !== undefined && launch.background !== true);
-  // A task launch, a structured call and a call from a task's recipe reach the child
-  // verbatim; any other is handed off with the parent's instruction.
-  const handsOff = task === null && outputSchema === undefined && !trusted;
+  // A program's launch, a structured call and a call from a program reach
+  // the child verbatim; any other is handed off with the parent's
+  // instruction.
+  const handsOff = program === null && outputSchema === undefined && !trusted;
   // A completed call with the same prompt, options and file bytes is reused.
   // The requested model, not the one availability resolves to, so a reuse
   // does not depend on which credentials are configured now.
@@ -381,7 +388,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
           model: launch.model ?? null,
           schema: outputSchema ?? null,
           ...files,
-          options: task?.options ?? null,
+          program,
           memories: launch.memories,
           workingDirectory: launch.workingDirectory ?? null,
           id: launch.id ?? null,
@@ -462,7 +469,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       model: selected.success.model,
       memories: launch.memories,
       ...(workingDirectory !== undefined && { workingDirectory }),
-      task: task !== null,
+      task: program !== null,
       instruction: handsOff
         ? withToolUseSubagentHandoffInstruction(launch.prompt, call.instruction)
         : launch.prompt,
@@ -470,11 +477,28 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       contextFiles,
       mediaFiles: media.map(({ file }) => file),
       outputFiles: files.outputFiles,
-      // A task's options reach the child through its plugin's recipe.
-      ...(task !== null && { options: task.options }),
-      ...(task === null && { rootUserInstruction: call.instruction }),
+      // The arguments, which an approval may edit as the proposal's options.
+      ...(program !== null && { options: program.args }),
+      ...(program === null && { rootUserInstruction: call.instruction }),
     },
   );
+
+  // The arguments and outputs the program's own rule gives a launch
+  // (`Program.configure`); without one, the launch's as given.
+  const configure = (chosen: AgentProposal) =>
+    registered?.configure === undefined
+      ? Effect.succeed({
+          args: chosen.options ?? {},
+          outputFiles: chosen.outputFiles,
+        })
+      : registered.configure(chosen);
+  // A launch the program refuses fails before anyone is asked to approve it.
+  if (program !== null) {
+    const refused = yield* Effect.flip(configure(proposal)).pipe(
+      Effect.catch(() => Effect.succeed(null)),
+    );
+    if (refused !== null) return errorResult(toErrorMessage(refused));
+  }
 
   const decided = yield* decideDelegation(
     call,
@@ -489,12 +513,17 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     if (limited !== null) return limited;
   }
 
-  // The asking script's `script`; the child's (with `options`) is set below.
+  // The asking script's `script`; the child's (with its arguments) is set
+  // below.
   const { task: _t, script: _s, options: _o, ...approved } = decided.proposal;
-  // An approval may pick another agent: a task's recipe is that agent's.
-  const taskConfig = task?.configFor(decided.proposal);
-  if (taskConfig === null)
-    return errorResult(`'${approved.agent}' has no task block.`);
+  // An approval may pick another agent and other options: the program's
+  // arguments follow the launch as approved.
+  const configured =
+    program === null
+      ? undefined
+      : yield* Effect.result(configure(decided.proposal));
+  if (configured !== undefined && Result.isFailure(configured))
+    return errorResult(toErrorMessage(configured.failure));
   const childApproval = decided.approvalMeta.childApproval ?? 'inherit';
   const grants = delegatedChildGrants(childApproval);
   const configPayload = {
@@ -504,7 +533,15 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       approved.agentSource === AGENT_SOURCE.INLINE ? approved.persona : null,
     ...(outputSchema !== undefined && { outputSchema }),
     delegationAgentScope: run.config.delegationAgentScope,
-    ...taskConfig,
+    ...(program !== null &&
+      configured !== undefined && {
+        outputFiles: configured.success.outputFiles,
+        script: {
+          kind: 'program' as const,
+          name: program.name,
+          args: configured.success.args,
+        },
+      }),
   };
   if (!awaited) {
     const runId = agentChildRunId(call);
@@ -572,6 +609,6 @@ Its result is the agent's final reply, or a \`schema\` value. Pick the agent who
         timeoutMs: input.timeoutMs,
         background: input.background,
         mediaFiles: input.mediaFiles,
-        task: null,
+        program: null,
       }),
   });

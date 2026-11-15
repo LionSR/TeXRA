@@ -54,11 +54,12 @@ whenever it is offered the tool, so an agent's prompt does not restate it.
 - `agent` — run a named agent as a child of this run, with a prompt.
   Gated by the "Multi-Agent Workflow" switch in Settings → Plugins, which
   removes it from every agent when off.
-- `document_task` — run a named agent's document task over files, as a
-  child of this run. Only an agent with a `task` block has a document
-  task. Not gated by the "Multi-Agent Workflow" switch.
+- `program` — start a program a plugin ships, as a child of this run.
+  `name: 'revise'` runs the document task of the agent passed as
+  `agentName` over files; only an agent with a `task` block has a
+  document task. Gated by the "Multi-Agent Workflow" switch, like `agent`.
 - `script` — run a JavaScript program that calls the agent's other tools,
-  `agent` and `document_task` included, and joins their results in code.
+  `agent` and `program` included, and joins their results in code.
   Offering it also offers `self`, which a script calls to run the agent
   itself again on one part of the work. Use it when the whole fan-out and
   join is known up front; call `agent` directly when the next step depends
@@ -136,7 +137,7 @@ extract_bib_entries, extract_tikz_figures`
 zotero_search, zotero_add, zotero_export`
 
 **Orchestrator agent:**
-`bash, read_file, write_file, glob, grep, agent, document_task, script,
+`bash, read_file, write_file, glob, grep, agent, program, script,
 executions, accept_run_files`. `agent` needs the "Multi-Agent Workflow"
 switch on (see above).
 

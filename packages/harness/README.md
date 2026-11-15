@@ -55,10 +55,11 @@ The package's surface is Effect: `Sessions.layer({ platform, plugins })`
 composes the process and provides the session owner for one `Scope`, and the
 embedder runs the program at its own entry point. `plugins` is the list of
 what the runs can use: the harness's built-ins (`harnessBuiltins`) and any
-plugin of the embedder's own beside them. `session.start` runs an agent as a conversation. A plugin can also register a
-custom YAML task block via `Plugin.agentBlock` (an `AgentBlock`) and run agents
-that declare that block with its own recipe script; `@texra-ai/harness` ships
-no built-in task-block plugins.
+plugin of the embedder's own beside them. `session.start` runs an agent as a conversation. A plugin can also register
+a program (`Plugin.programs`): one of its script modules, started by name
+with the `program` tool or a `script` of kind `program`, whose run is that
+module's default export called with the launch's arguments.
+`@texra-ai/harness` ships no built-in programs.
 
 ```ts
 import { Effect, Stream } from 'effect';
@@ -409,11 +410,11 @@ run's `result` succeeds with that end, and fails with `RunFailure` only when
 no end was stored. Every run's
 output is one shape, `{ response, files, structured? }`: the reply text, the
 workspace-relative files its tool calls edited, and the `structured` value of
-a `submit_output` tool when the run used one. A recipe's run (`script.kind:
-'recipe'`) ends with its script's return value as `structured`; the plugin
-that owns the recipe's block reads it (`AgentBlock.result`, exported from
-`@texra-ai/harness/plugins`: the value's schema, its delivery body, and the
-files it changed). There is no category to switch on.
+a `submit_output` tool when the run used one. A program's run (`script.kind:
+'program'`) ends with its script's return value as `structured`; how the run
+reads to whoever launched it is the program's registered result
+(`ProgramResult`, exported from `@texra-ai/harness/plugins`: the schema of
+the plugin's fact it reads, its delivery body, and the files it changed). There is no category to switch on.
 
 `run.result` is terminal-only. A run of this package runs one cycle and
 ends; one waiting on a request (an approval, a retry, a question) has no
@@ -424,7 +425,7 @@ lists what it waits for.
 Accounting is `usage`, present once a round recorded any: one totals record
 covering the run and its subagents, whose `usage.cost` is the run's cost
 and the only cost this surface states. The harness computes no diffs: a
-recipe's plugin records any it computes in its own value, and otherwise the
+program's plugin records any it computes in its own value, and otherwise the
 embedding contract leaves diffing to the embedder, which already owns the
 files.
 

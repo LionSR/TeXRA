@@ -24,7 +24,7 @@ import {
   type CommitOrdinal,
   NO_USAGE,
   qualifyAggregateId,
-  isTaskConfig,
+  programOf,
   sumUsageStats,
   RunWorkspaceFilesSchema,
   type RunEnd,
@@ -129,7 +129,7 @@ export const owningCall = Effect.fn('owningCall')(function* (runId: RunId) {
  * The terminal result of the lifecycle the `lifecycles` rows end with: its
  * `run.end`'s outcome, error and output, and the usage its activation
  * spent: its `history` rows from its own `run.activate` on and its label's
- * request (a recipe's with its children's then); none with no end. An
+ * request (a program's with its children's then); none with no end. An
  * unreadable fold is logged and reads as no usage.
  */
 const runEndOf = Effect.fn('runEndOf')(function* (
@@ -184,7 +184,7 @@ const runEndOf = Effect.fn('runEndOf')(function* (
   // what it cost: those this activation started, each as it had ended
   // by this end, whatever a later resume of it spent.
   const children =
-    held.config && isTaskConfig(held.config)
+    held.config && programOf(held.config) !== null
       ? yield* Effect.forEach(
           // The view rebuilt from the log at this call, not the current
           // one, which trails it.
@@ -299,7 +299,7 @@ export function getRunRecords(runId: RunId) {
     /** The run's result: its producer record joined to its terminal result,
      *  the output as delivered (the subagent's reply, which only its record
      *  holds, over the run's own output). A background
-     *  command's record is its own result, and an ended recipe's run (whose
+     *  command's record is its own result, and an ended program's run (whose
      *  value is its result) needs none. Null otherwise with no record. */
     readResult: Effect.fn('runRecords.readResult')(
       function* (): Effect.fn.Return<

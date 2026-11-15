@@ -33,7 +33,7 @@ import {
   type AgentConfigPayload,
   escapeText,
   generateRunId,
-  isTaskConfig,
+  programOf,
   type RunId,
   acceptsFollowUp,
   toErrorMessage,
@@ -549,7 +549,7 @@ export function createChatSessionController(
           }
           // A document task takes no chat: it resumes beside this one, as
           // `/resume all` resumes it, and joins the agent list.
-          if (isTaskConfig(config)) {
+          if (programOf(config) !== null) {
             appendLocalNotice(`Resuming document task ${id}. Tab lists it.`);
             yield* endWithout(CliExitCode.Success);
             // Owned by the process's shutdown scope, as the chat's own

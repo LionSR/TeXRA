@@ -3,7 +3,7 @@ import type { AgentConfig } from '@shared/schemas';
 import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
 
 /**
- * `config` opened on the document recipe of its agent, as a launcher builds
+ * `config` opened on the document program for its agent, as a launcher builds
  * it once the catalog resolved an entry with a `task:` block; the outputs
  * stay as the case wrote them.
  */
@@ -34,6 +34,6 @@ export function asDocumentTask<
     },
   );
   if (patch === null) throw new Error('a task entry always patches');
-  // The recipe only: the launch's outputs stay as the case wrote them.
+  // The program only: the launch's outputs stay as the case wrote them.
   return { ...config, script: patch.script };
 }

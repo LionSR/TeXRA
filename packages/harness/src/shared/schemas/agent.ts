@@ -164,7 +164,7 @@ export type AgentDefinition = typeof AgentDefinitionSchema.Type;
 /**
  * A persona an embedder passes inline (`StartInput.agent`) instead of a
  * file: the same definition with nothing a file alone can mean. It has no
- * bundled original and no plugin's block (a task is its plugin's recipe);
+ * bundled original and no plugin's block (a task is its plugin's program);
  * each is refused as an unrecognized key.
  */
 export const InlinePersonaSchema = AgentDefinitionSchema.mapFields(

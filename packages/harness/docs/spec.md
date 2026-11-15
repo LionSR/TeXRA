@@ -913,7 +913,7 @@ What survives at each commit point follows from sections 2 to 8:
   `results.ready` (`shared/session/turnRowHandlers.ts#'results.ready'`).
 - `request.opened`: The request stays pending under the same id, or is cancelled
   if unbound (section 7.2).
-- `run.end`: The lifecycle is over. A recipe task stays finished, and a
+- `run.end`: The lifecycle is over. A program's run stays finished, and a
   resume answers `finished`
   (`agent/storage/resumability.ts#deriveResumability`); a loop-driven
   conversation continues on a resume in a new lifecycle

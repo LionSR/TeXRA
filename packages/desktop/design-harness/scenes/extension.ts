@@ -597,14 +597,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       type: 'run.config',
       config: Schema.decodeUnknownSync(AgentConfigSchema)({
         agent: 'review',
-        script: {
-          code: 'return await tools.document_propose({});',
-          title: 'review',
-          tools: ['agent'],
-          kind: 'recipe',
-          block: 'task',
-          options: {},
-        },
+        script: { kind: 'program', name: 'revise', args: {} },
       }),
     });
     log.emit(ROOT, T.root, { type: 'run.activate' });

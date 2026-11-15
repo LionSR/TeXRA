@@ -30,7 +30,14 @@ import replacementEngine, {
 import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import type { PluginSettingRow } from '@texra/shared/settingsView/settingRows';
-import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
+import {
+  DOCUMENT_PROGRAM,
+  DOCUMENT_TASK_BLOCK,
+} from '@texra/shared/plugins/documents';
+import {
+  REVISE_MODULE,
+  REVISE_PROGRAM,
+} from '@texra/agent/output/documentRecipe';
 import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
 import { isTexFile } from '@texra/shared/latexFileTypes';
 
@@ -55,9 +62,6 @@ import {
   DocumentProposeTool,
 } from './documents/documentTools';
 import { DocumentReviewTool } from './documents/DocumentReviewTool';
-import { DocumentTaskTool } from './documents/DocumentTaskTool';
-import { DOCUMENT_TASK_RESULT } from './documents/documentResult';
-import { DOCUMENTS_MODULE } from './documents/documentsModule';
 import { ExtractBibliographyTool } from './latex/ExtractBibliographyTool';
 import { ExtractLatexFiguresTool } from './latex/ExtractFiguresTool';
 import { ExtractTikzFiguresTool } from './latex/ExtractTikzFiguresTool';
@@ -296,35 +300,31 @@ const setup = (
     ],
   });
 
-/** Document tasks: the `task:` block of an agent file, the tools their
- *  recipe calls, launching one as a child (`document_task`), and accepting
- *  the documents a run produced into the workspace. */
-const documents: TexraPlugin = {
-  id: 'documents',
+/** The theorist's programs: the `revise` program a document task runs,
+ *  the `task:` block of an agent file it reads, the tools it calls, and
+ *  accepting the documents a run produced into the workspace. */
+const theory: TexraPlugin = {
+  id: 'theory',
   icons: { accept_run_files: 'check' },
-  // The `task:` block, and how its runs read (`DOCUMENT_TASK_RESULT`).
-  agentBlock: Object.freeze({
-    ...DOCUMENT_TASK_BLOCK,
-    result: DOCUMENT_TASK_RESULT,
-  }),
+  agentBlock: DOCUMENT_TASK_BLOCK,
   // The delegation targets mark a task's agent `(task)`.
   prompt: ({ offered }) =>
-    offered.includes('document_task')
+    offered.includes('program')
       ? [
-          'An agent marked (task) in the available agents runs a document task over files with `document_task`.',
+          `An agent marked (task) in the available agents runs a document task over files with \`program\`: \`name: '${DOCUMENT_PROGRAM}'\`, the agent as \`agentName\`, and the files as \`inputFiles\`.`,
           'Its delivery lists each proposed file with a `diff` attribute, the diff against the document the task started from, readable among the run\'s files (`/executions/{id}/files/<diff>`), and `large-change="true"` when the file changed extensively; a diff may be truncated.',
           "The host compiles each .tex the task writes: a file that failed to build leaves its log at `compile/r{n}_<name>.log` among the run's files, which the delivery's `<compile-failures>` names (read it at `/executions/{id}/files/<log>`), and no log means every build passed or no LaTeX toolchain is installed.",
           ...(offered.includes('script')
             ? [
-                "In a script, `const { revise, from } = await import('builtIn:documents')`: `revise(agentName, args)` runs a task (`args` as `document_task`'s) and resolves to its result; `from(result, args)` is `args` with that result's revised files as the input files, to chain tasks.",
+                `In a script, \`program('${DOCUMENT_PROGRAM}', { agentName, inputFiles })\` resolves to the task's result, whose \`changes\` list each revision's files in order: pass the last \`absolutePath\` of each \`path\` as the \`inputFiles\` of the next task to chain them.`,
               ]
             : []),
         ].join(' ')
       : '',
-  scriptModules: { documents: DOCUMENTS_MODULE },
+  scriptModules: { [DOCUMENT_PROGRAM]: REVISE_MODULE },
+  programs: { [DOCUMENT_PROGRAM]: REVISE_PROGRAM },
   tools: [
     AcceptRunFilesTool,
-    DocumentTaskTool,
     DocumentContextTool,
     DocumentExtractTool,
     DocumentCompileTool,
@@ -439,6 +439,6 @@ export const texraPlugins = (host: {
     core(editors, host.inlineComments),
     { ...codemode, icons: { script: 'code' } },
     setup(host.setup ?? {}, host.name, host.editor),
-    documents,
+    theory,
   ];
 };

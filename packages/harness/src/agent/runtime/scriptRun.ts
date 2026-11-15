@@ -102,7 +102,7 @@ export const scriptRunCalls = Effect.fn('scriptRun.calls')(function* (
 });
 
 /** The files a call's child wrote, when its value is a run's envelope: a
- *  recipe's changes (`AgentBlock.result.changes`, in the order it wrote
+ *  program's changes (`Program.result.changes`, in the order it wrote
  *  them), or an agent's edits. */
 const EnvelopeFilesSchema = Schema.Struct({
   files: Schema.Array(Schema.String),

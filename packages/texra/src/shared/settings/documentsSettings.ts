@@ -1,5 +1,5 @@
 /**
- * The documents plugin's setting rows: the compile check after a revision
+ * The theory plugin's setting rows: the compile check after a revision
  * (`documents.*`) and the diffs between revisions (`latexdiff.*`), which
  * TeXRA's catalog lists (`./texraSettings`). They live here, in a
  * browser-safe module, because the settings view's webview renders them.
@@ -44,7 +44,7 @@ export const DOCUMENTS_OPEN_PDF_SETTING = {
     'After auto-compile, open the PDF when it succeeds or the LaTeX log when it fails.',
   category: 'documents',
   slot: 'workspaceState',
-  // Read by the documents plugin, but the emitted `openFile` notice has no
+  // Read by the theory plugin, but the emitted `openFile` notice has no
   // CLI handler (headless), so the CLI ignores it.
   surfaces: { settingsView: 'latex' },
 } as const satisfies TexraSettingRow<boolean>;
@@ -60,7 +60,7 @@ export const DOCUMENTS_REJECT_ON_COMPILE_FAILURE_SETTING = {
   surfaces: { settingsView: 'latex', cliConfig: true },
 } as const satisfies TexraSettingRow<boolean>;
 
-// Run by the documents plugin, so every host honors them. The timeout is
+// Run by the theory plugin, so every host honors them. The timeout is
 // kept out of the settings view (an insider knob) and edited from CLI
 // `/config`; the rest are deferred from `/config` by product decision.
 
@@ -121,7 +121,7 @@ export const LATEXDIFF_CHANGES_ONLY_SETTING = {
   surfaces: { settingsView: 'latex' },
 } as const satisfies TexraSettingRow<boolean>;
 
-/** The documents plugin's rows, in catalog order. */
+/** The theory plugin's rows, in catalog order. */
 export const DOCUMENTS_SETTINGS: readonly TexraSettingRow[] = [
   DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING,
   DOCUMENTS_COMPILE_TIMEOUT_SETTING,

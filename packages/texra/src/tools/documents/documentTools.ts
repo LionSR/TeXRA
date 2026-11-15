@@ -1,11 +1,11 @@
 /**
- * The document tools a document task's recipe (`./documentRecipe`) calls,
+ * The document tools a document task's program (`./documentRecipe`) calls,
  * one step each over one revision of its run's documents (`./documents`):
  * the revision's prompt, the files its reply holds, their compile check,
  * their latexdiff, and the proposal the task ends with (a critic's review
  * of a revision is `./DocumentReviewTool`). Each reads the run's documents
  * from its rows and commits them again; none holds state between calls, so
- * a resumed recipe replays against the rows.
+ * a resumed program replays against the rows.
  */
 // Node imports
 import { dirname, join } from 'node:path';

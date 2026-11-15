@@ -25,7 +25,7 @@ import {
   aggregateTarget,
   qualifyAggregateId,
   MESSAGE_TYPES,
-  recipeBlockOf,
+  programOf,
   listingKeyOf,
   isTranscriptEvent,
   blocksCaller,
@@ -364,7 +364,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     latestLine: null,
     transcript: emptyTranscript(),
   };
-  return { ...common, recipe: null };
+  return { ...common, program: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -530,7 +530,7 @@ function nonEmpty(text: string | undefined): string | undefined {
 }
 
 /** A run's newest operational summary, for one with no reply to show (a
- *  script's run, a task's recipe): what its tool, card, error, or
+ *  script's run, a program): what its tool, card, error, or
  *  plain log row last said. */
 function operationalLatestLine(
   rows: TranscriptView['rows'],
@@ -707,7 +707,7 @@ function applyRunEvent(
         inputFiles: 'inputFiles' in config ? config.inputFiles : [],
         agentScope: { delegationAgentScope: null, ...config }
           .delegationAgentScope,
-        recipe: recipeBlockOf(config),
+        program: programOf(config),
       };
     }
     case 'context.state':

@@ -6,19 +6,6 @@ import { AgentDelegationScopeSchema } from './workspaceAgents';
 import { NullableFileFieldsSchema } from './fileFields';
 import { JsonValueSchema } from './jsonValue';
 
-/** What every script a run opens on records: its source, title, the tools
- *  it is offered, and its wall-clock limit. */
-const ScriptFieldsSchema = Schema.Struct({
-  code: Schema.String.check(Schema.isMinLength(1)),
-  title: Schema.String.check(Schema.isMinLength(1)),
-  /** The tools the run offers the script, by name. */
-  tools: Schema.Array(Schema.String.check(Schema.isMinLength(1))),
-  /** The script's wall-clock limit, when it set one. */
-  timeoutMs: Schema.optional(
-    Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
-  ),
-});
-
 /** A run's launch configuration, as its `run.config` row records it. */
 const AgentConfigObjectSchema = NullableFileFieldsSchema.mapFields(
   Struct.assign({
@@ -79,31 +66,36 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.mapFields(
       Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown)),
     ),
     /**
-     * The `script` call this run makes instead of asking its model: it opens
-     * with that call as its one response, offers exactly `tools`, and ends when
-     * the call settles. A script a parent sent to the background, or a
-     * task's recipe. Absent for every other run.
+     * What a run does instead of asking its model: it opens with one
+     * `script` call as its one response and ends when that call does. A
+     * script a parent sent to the background, or a plugin's program. Absent
+     * for every other run.
      */
     script: Schema.optional(
       Schema.NullOr(
         Schema.Union([
           /** The parent's model wrote it and sent it to the background; the run
            *  is that script, and its `agent` calls propose themselves. */
-          ScriptFieldsSchema.mapFields(
-            Struct.assign({ kind: Schema.Literal('background') }),
-          ),
-          /** A plugin wrote it: a task's recipe. The run is its agent's, and its
-           *  `agent` calls were approved with its launch. */
-          ScriptFieldsSchema.mapFields(
-            Struct.assign({
-              kind: Schema.Literal('recipe'),
-              /** The agent-file block (`AgentBlock.key`) whose task it runs. */
-              block: Schema.String.check(Schema.isMinLength(1)),
-              /** The launch's options for that task, as its plugin reads them
-               *  (the switches that plugin defines). */
-              options: Schema.Record(Schema.String, JsonValueSchema),
-            }),
-          ),
+          Schema.Struct({
+            kind: Schema.Literal('background'),
+            code: Schema.String.check(Schema.isMinLength(1)),
+            title: Schema.String.check(Schema.isMinLength(1)),
+            /** The tools the run offers the script, by name. */
+            tools: Schema.Array(Schema.String.check(Schema.isMinLength(1))),
+            /** The script's wall-clock limit, when it set one. */
+            timeoutMs: Schema.optional(
+              Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
+            ),
+          }),
+          /** A plugin's program, by the name its plugin registers it under
+           *  (`Plugin.programs`): the run's script imports that module and
+           *  calls its default export with `args`. The registration lists
+           *  its tools, and its `agent` calls were approved with its launch. */
+          Schema.Struct({
+            kind: Schema.Literal('program'),
+            name: Schema.String.check(Schema.isMinLength(1)),
+            args: Schema.Record(Schema.String, JsonValueSchema),
+          }),
         ]),
       ),
     ),

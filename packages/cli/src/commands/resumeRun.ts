@@ -7,7 +7,7 @@ import {
   ensureError,
   agentKey,
   agentName,
-  isTaskConfig,
+  programOf,
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { forkRun } from '@texra/controllers/session/runActionPolicy';
@@ -110,7 +110,7 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
     writeTextStderr(`Run not found: ${id}`);
     return CliExitCode.Usage;
   }
-  const documentTask = isTaskConfig(config);
+  const documentTask = programOf(config) !== null;
   if (fork && documentTask) {
     writeTextStderr(
       `Task ${id} is a document task: only a conversation can be forked.`,

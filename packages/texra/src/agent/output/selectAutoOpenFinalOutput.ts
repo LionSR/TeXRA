@@ -1,11 +1,8 @@
 import { Effect } from 'effect';
 import { Settings, type SettingsStores } from '@texra-ai/harness/plugins';
-import { RUN_OUTCOME } from '@texra-ai/harness/schemas';
+import { programOf, RUN_OUTCOME } from '@texra-ai/harness/schemas';
 import { finalDocumentOutput } from '@texra/shared/plugins/documentOutputs';
-import {
-  DOCUMENT_TASK_BLOCK,
-  documentsOf,
-} from '@texra/shared/plugins/documents';
+import { DOCUMENT_PROGRAM, documentsOf } from '@texra/shared/plugins/documents';
 import type { RunEnd } from '@texra-ai/harness';
 import type { AgentConfig, RunView } from '@texra-ai/harness/schemas';
 import { AUTO_OPEN_FINAL_SETTING } from '@texra/shared/settings/texraSettings';
@@ -17,7 +14,7 @@ import { AUTO_OPEN_FINAL_SETTING } from '@texra/shared/settings/texraSettings';
  * Hosts ask once the launch has returned, so this presentation never runs
  * inside the run whose outcome it shows:
  *
- * - Only a `completed` document task (its recipe runs the documents block)
+ * - Only a `completed` document task (a run of the `revise` program)
  *   qualifies — failed or cancelled runs may hold partial outputs.
  * - Gated by `texra.agentOutputs.autoOpenFinal` (default true).
  * - Which file counts as final is {@link finalDocumentOutput}'s call, shared
@@ -40,8 +37,7 @@ export const selectAutoOpenFinalOutput = Effect.fn('selectAutoOpenFinalOutput')(
   ) {
     const documents = run && documentsOf(run);
     if (
-      config.script?.kind !== 'recipe' ||
-      config.script.block !== DOCUMENT_TASK_BLOCK.key ||
+      programOf(config) !== DOCUMENT_PROGRAM ||
       documents === undefined ||
       result.outcome !== RUN_OUTCOME.COMPLETED
     )

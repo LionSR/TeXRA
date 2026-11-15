@@ -1,6 +1,6 @@
 import { Effect, type FileSystem } from 'effect';
 
-import { readRecipeResult } from '@agent/runtime/recipeResult';
+import { readProgramResult } from '@agent/runtime/programRun';
 import { RunFileService } from '@common/storage/runStorage';
 import { runStorageLocationUnder } from '@common/storage/storageLayout';
 import { SessionRoots } from '@platform/rootedFs';
@@ -44,20 +44,20 @@ const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
         ),
       );
     }
-    // A completed recipe's changes are its declared outputs: the files it
-    // wrote, which its block names (`AgentBlock.result.changes`).
-    const recipe =
+    // A completed program's changes are its declared outputs: the files it
+    // wrote, which its block names (`Program.result.changes`).
+    const program =
       runEnd?.outcome === RUN_OUTCOME.COMPLETED
-        ? yield* readRecipeResult(config, reference.runId, yield* SessionRoots)
+        ? yield* readProgramResult(config, reference.runId, yield* SessionRoots)
         : undefined;
-    if (recipe === undefined) {
+    if (program === undefined) {
       return yield* Effect.fail(
         new Error(
           `Run ${reference.runId} has no completed task output manifest.`,
         ),
       );
     }
-    const declared = recipe.changes.some(
+    const declared = program.changes.some(
       ({ absolutePath }) =>
         normalizeFilePath(absolutePath) ===
         normalizeFilePath(reference.absolutePath),
@@ -73,7 +73,7 @@ const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
 );
 
 /**
- * Resolve a file of the calling run's own storage (a recipe's
+ * Resolve a file of the calling run's own storage (a program's
  * figures), or a declared output of a completed direct child run. The
  * absolute path is only a lookup token; persisted lineage and result
  * metadata are the source of authority.

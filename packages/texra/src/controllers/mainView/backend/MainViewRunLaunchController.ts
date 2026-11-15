@@ -127,7 +127,7 @@ const buildLaunchConfig = Effect.fn('buildLaunchConfig')(function* (
       isPastedImage(file) ? pastedImageFullPath(roots.storage, file) : file,
     ),
   };
-  // A document task runs its agent's recipe over the files, with the
+  // A document task runs its agent's program over the files, with the
   // form's switches checked above.
   const patch = task ? documentTaskPatch(config, task, launch) : null;
   return yield* decodeLaunchConfig(patch ? { ...config, ...patch } : config);

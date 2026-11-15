@@ -11,7 +11,8 @@
  * Rules: an id is persisted (the disabled-tools key, and the plugin a run's
  * offered tool records), so it never changes and is never reused; every
  * tool belongs to exactly one plugin (checked when the table is built). No
- * hooks or second event channels; one agent-file block at most. A plugin
+ * hooks or second event channels; one agent-file block at most. A program
+ * (`programs`) is one of its script modules, started by name. A plugin
  * holds state only in its process or session layer and writes rows only of
  * its own kinds (`factKinds`), through the one publisher.
  */
@@ -49,6 +50,7 @@ import type {
   AgentBlock,
   PluginHold,
   ProcessPluginLayer,
+  Program,
   PromptSection,
   RequestDecisionHook,
   SessionPluginLayer,
@@ -129,7 +131,7 @@ export interface Plugin {
    *  while the plugin is on and a boolean catalog setting is on: tool name to
    *  setting row, or `true` for no setting but the plugin's own switch. An
    *  injected tool still passes the host and approval gates; a script's
-   *  run (a task's recipe) and a text-only persona get none. */
+   *  run (a program) and a text-only persona get none. */
   readonly injectedWhen?: Readonly<Record<string, SettingRow<boolean> | true>>;
   /** Its section of each request's system text, pinned while it is on. */
   readonly prompt?: PromptSection;
@@ -148,6 +150,9 @@ export interface Plugin {
   readonly agentBlock?: AgentBlock;
   /** Script module sources by name, imported as `builtIn:<name>`. */
   readonly scriptModules?: Readonly<Record<string, string>>;
+  /** Those of its `scriptModules` a person or a model starts by name
+   *  (`Program`), each under its module's name. */
+  readonly programs?: Readonly<Record<string, Program>>;
   /** The plugins it runs on, by id; a list lacking one is rejected. */
   readonly requires?: readonly string[];
 }

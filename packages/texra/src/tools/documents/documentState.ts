@@ -1,12 +1,12 @@
 /**
- * The documents plugin's state of one document task run, rebuilt from the
+ * The theory plugin's state of one document task run, rebuilt from the
  * run's rows on every call: the task (its agent's `task:` block, read from
  * the catalog), its launch inputs, and the revisions
  * its latest `documents/output` row records. Each document tool
  * (`./documentTools`) opens it, does its one step over one revision, and
  * commits the revisions with that one's next record. Nothing is held
  * between calls, except the task's file variables, read once per opening,
- * so a resumed recipe sees what the rows say.
+ * so a resumed program sees what the rows say.
  *
  * A revision is one call of the task's persona. Its prompt is the whole
  * conversation so far as one message: the task's prefix (the documents),
@@ -90,7 +90,7 @@ export interface Documents {
    *  records them. A step commits the next list
    *  (`documentsOutputFact(withRound(...))`) in its result's facts; a call
    *  running beside it would commit a list without the other's revision, so
-   *  one run's document tools run one at a time (the recipe's order). */
+   *  one run's document tools run one at a time (the program's order). */
   readonly rounds: readonly RoundOutput[];
   /** Where each base file's pre-run content lives: every revision diffs
    *  against these, never the live file an in-place revision overwrote. */
@@ -237,7 +237,7 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
     task.requests[revision] ?? '',
     inputs,
   )).trim();
-  // The reply format the recipe parses, written here so no task restates
+  // The reply format the program parses, written here so no task restates
   // it: one document per name the revision writes (its outputs, or the
   // inputs it rewrites), in order.
   const names =
@@ -253,7 +253,7 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
     `</${OUTPUT_DOCUMENTS_TAG}>`,
   ].join('\n');
   // The critic's review of the last revision goes with this revision's
-  // request; the reply format stays last, where the recipe's parser needs
+  // request; the reply format stays last, where the program's parser needs
   // the model to have read it most recently.
   const review = critique?.trim();
   parts.push(

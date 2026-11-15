@@ -9,7 +9,7 @@ import { absentReason, isNotADirectoryError } from '@texra-ai/harness/node';
 import { Effect, FileSystem, Path, PlatformError, Schema } from 'effect';
 
 import {
-  isTaskConfig,
+  programOf,
   RUN_OUTCOME,
   formatResultCount,
   pluralize,
@@ -302,7 +302,7 @@ export const resolveDocumentTaskOutput = Effect.fn('resolveDocumentTaskOutput')(
     context: CliContext,
     options: DocumentTaskOutputResolutionOptions,
   ): Effect.fn.Return<CliDocumentTaskResult, Error, FileSystem.FileSystem> {
-    // A recipe returns no value: its documents are its documents row.
+    // A program returns no value: its documents are its documents row.
     const { structured: _none, ...output } = result.output;
     const documents = reported ?? {
       outputs: [],
@@ -448,7 +448,7 @@ export function cliLaunchOutput(
 export function resumeDocumentTaskOutputFile(
   config: AgentConfigPayload,
 ): string | undefined {
-  if (!isTaskConfig(config)) return undefined;
+  if (programOf(config) === null) return undefined;
 
   const cliOutputFile = cliLaunchOutput(config).outputFile;
   if (typeof cliOutputFile === 'string' && cliOutputFile.trim() !== '') {
@@ -476,7 +476,7 @@ export function resumeDocumentTaskOutputFile(
 export function resumeDocumentTaskOutputDirectory(
   config: AgentConfigPayload,
 ): string | undefined {
-  if (!isTaskConfig(config)) return undefined;
+  if (programOf(config) === null) return undefined;
 
   const outputDirectory = cliLaunchOutput(config).outputDirectory;
   if (typeof outputDirectory !== 'string' || outputDirectory.trim() === '')

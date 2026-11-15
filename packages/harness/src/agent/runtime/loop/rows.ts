@@ -140,7 +140,11 @@ export function configRow(
  */
 export const handedDown = Effect.fn('rows.handedDown')(function* (
   run: Pick<AgentRunShape, 'steps' | 'logger' | 'runId'>,
-  call: NonNullable<AgentRunShape['config']['script']>,
+  call: {
+    readonly code: string;
+    readonly title: string;
+    readonly timeoutMs?: number | null;
+  },
 ) {
   const { runId } = run;
   const argumentsText = JSON.stringify({

@@ -1,13 +1,14 @@
 /**
- * The documents plugin's rows (its `factKinds`, `@tools/plugins`): a
- * document task's documents are its latest `plugin.fact` of kind
- * `documents/output`, which carries every revision's outputs, and the files
- * a run last accepted into the workspace are its `documents/accepted`. Core
+ * The `theory` plugin's document rows (its `factKinds`, `@tools/plugins`):
+ * a document task's documents are its latest `plugin.fact` of kind
+ * `theory/output`, which carries every revision's outputs, and the files
+ * a run last accepted into the workspace are its `theory/accepted`. Core
  * stores and applies the rows without reading them (`RunView.facts`); this
  * module is their schemas and their one reader, which hosts, webviews and the
  * plugin's own tools share. It also holds the `task:` block of an agent
  * file the plugin owns (`DOCUMENT_TASK_BLOCK`), which the catalog scans
- * with. Browser-safe: it imports only schemas.
+ * with, and the name of the program a document task runs. Browser-safe:
+ * it imports only schemas.
  */
 import { Effect, Record as Rec, Result, Schema, Struct } from 'effect';
 
@@ -25,6 +26,14 @@ import { AgentOptionDataSchema } from '@texra/shared/pickerOptions';
 import type { RunView, AgentConfig } from '@texra-ai/harness/schemas';
 import type { AgentBlock } from '@texra-ai/harness/plugins';
 
+/** The id of the plugin that owns the document programs, their tools and
+ *  their rows. */
+const THEORY_PLUGIN = 'theory';
+
+/** The program a document task runs: the plugin's `revise` module, started
+ *  by this name (`AgentConfig.script.name`). */
+export const DOCUMENT_PROGRAM = 'revise';
+
 const DocumentsOutputSchema = Schema.Struct({
   /** Every revision so far, by its zero-based `round`. */
   rounds: Schema.Array(RoundOutputSchema),
@@ -36,9 +45,9 @@ const DocumentsOutputSchema = Schema.Struct({
 /** A document task's documents, as its latest documents row holds them. */
 export type DocumentsOutput = typeof DocumentsOutputSchema.Type;
 
-/** The documents plugin's one row kind. */
+/** The theory plugin's one row kind. */
 export const DOCUMENTS_OUTPUT_KIND = {
-  plugin: 'documents',
+  plugin: THEORY_PLUGIN,
   kind: 'output',
   // v2: a proposed task's fact carries its `diffs`. v3: each round holds
   // its `latexdiffs` and its `reply`, which were log rows. v4: a round's
@@ -48,7 +57,7 @@ export const DOCUMENTS_OUTPUT_KIND = {
   // v4 one as a newer build's.
   version: 4,
   schema: DocumentsOutputSchema,
-  // A document task runs a recipe script, which is never forked.
+  // A document task runs a program, which is never forked.
   fork: 'drop',
 } as const;
 
@@ -83,7 +92,7 @@ const DocumentsAcceptedSchema = Schema.Struct({
  *  write path: what every process that applies the run announces
  *  (`workspaceFilesWritten`). */
 export const DOCUMENTS_ACCEPTED_KIND = {
-  plugin: 'documents',
+  plugin: THEORY_PLUGIN,
   kind: 'accepted',
   version: 1,
   schema: DocumentsAcceptedSchema,
@@ -149,7 +158,7 @@ export function documentsOf(
 }
 
 /**
- * A document task: what the documents recipe runs over its persona. Each
+ * A document task: what the `revise` program runs over its persona. Each
  * request (Nunjucks) opens one revision, in order, after the `prefix` that
  * lays out the documents; `outputs` are the files a task writes when the
  * launch names none, and `files` binds template variables to files beside
@@ -168,7 +177,7 @@ const DocumentTaskSchema = Schema.Struct({
 /** A document task with its defaults applied. */
 export type DocumentTask = typeof DocumentTaskSchema.Type;
 
-/** The `task:` block of an agent file, owned by the documents plugin. */
+/** The `task:` block of an agent file, owned by the theory plugin. */
 export const DOCUMENT_TASK_BLOCK: AgentBlock<DocumentTask> = Object.freeze({
   key: 'task',
   schema: DocumentTaskSchema,
@@ -176,10 +185,10 @@ export const DOCUMENT_TASK_BLOCK: AgentBlock<DocumentTask> = Object.freeze({
     Object.values(task.files).filter((file) => file !== ''),
 });
 
-/** Whether `run` is a document task: opened on this plugin's recipe, not
+/** Whether `run` is a document task: opened on this plugin's program, not
  *  on another plugin's. */
-export const isDocumentTaskRun = (run: Pick<RunView, 'recipe'>): boolean =>
-  run.recipe === DOCUMENT_TASK_BLOCK.key;
+export const isDocumentTaskRun = (run: Pick<RunView, 'program'>): boolean =>
+  run.program === DOCUMENT_PROGRAM;
 
 /** An agent option as every launcher lists it: one that is also a document
  *  task carries its revision count (the header's "Pass 2 of 3"). */
@@ -192,10 +201,10 @@ export type DocumentAgentOption = typeof DocumentAgentOptionSchema.Type;
 
 /**
  * The switches a document task's launch may set, under the key its run's
- * `script.options` stores them by and its approval shows them
- * (`AgentProposal.options`). The launch form's menu items, the
- * `document_task` tool's fields and `texra run`'s flags render from this
- * table; `menu` is the launch form's file group whose header menu offers
+ * program arguments (`script.args`) store them by and its approval shows
+ * them (`AgentProposal.options`). The launch form's menu items and
+ * `texra run`'s flags render from this table, and the program's
+ * description names them; `menu` is the launch form's file group whose header menu offers
  * the switch.
  */
 export const DOCUMENT_TASK_OPTIONS = Object.freeze({
@@ -244,13 +253,13 @@ export const DocumentTaskOptionsSchema = Schema.Struct(
 /** A document task's launch options with their defaults applied. */
 export type DocumentTaskOptions = typeof DocumentTaskOptionsSchema.Type;
 
-/** The options a document task's run was launched with: its recipe's
- *  `script.options`, defaults for any it does not name. */
+/** The options a document task's run was launched with: those among its
+ *  program's arguments (`script.args`), defaults for any it does not name. */
 export const documentTaskOptions = (
   config: Pick<AgentConfig, 'script'>,
 ): DocumentTaskOptions =>
   Schema.decodeUnknownSync(DocumentTaskOptionsSchema)(
-    config.script?.kind === 'recipe' ? config.script.options : {},
+    config.script?.kind === 'program' ? config.script.args : {},
   );
 
 /** What a proposal launches, as its approval copy names it. */

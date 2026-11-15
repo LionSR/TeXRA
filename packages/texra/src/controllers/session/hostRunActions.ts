@@ -24,8 +24,7 @@ import { Effect, FileSystem, Scope } from 'effect';
 
 import {
   toErrorMessage,
-  isTaskConfig,
-  recipeBlockOf,
+  programOf,
   runActionRefusal,
   type RunAction,
   type RunId,
@@ -41,7 +40,7 @@ import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { packDestination } from '@texra/tools/documents/runOutputs';
 import type { FileOpResult } from '@texra/shared/session/hostRequest';
 import {
-  DOCUMENT_TASK_BLOCK,
+  DOCUMENT_PROGRAM,
   documentRoundsOf,
 } from '@texra/shared/plugins/documents';
 import type { Dialogs, HostFailed } from '@texra/hosts/uiHosts';
@@ -224,7 +223,7 @@ export const createHostRunActions = Effect.fn(
     Effect.gen(function* () {
       const result = yield* run.result;
       const config = yield* readConfig(run.runId);
-      if (config === undefined || !isTaskConfig(config)) return;
+      if (config === undefined || programOf(config) === null) return;
       const stored = yield* session.view.read([]);
       const output = yield* selectAutoOpenFinalOutput(
         roots,
@@ -315,7 +314,7 @@ export const createHostRunActions = Effect.fn(
         return yield* new Rejected({
           reason: 'This run saved no setup to act on.',
         });
-      if (recipeBlockOf(config) !== DOCUMENT_TASK_BLOCK.key)
+      if (programOf(config) !== DOCUMENT_PROGRAM)
         return yield* new Rejected({
           reason: 'This action applies to a document task.',
         });
