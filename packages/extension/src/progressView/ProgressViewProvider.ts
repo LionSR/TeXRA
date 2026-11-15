@@ -41,7 +41,6 @@ import {
   type EditorCapabilities,
 } from '@texra/tools/editorHost';
 import { projectDisplayOf } from '@texra/shared/session/hostSnapshot';
-import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { DownWire } from '@texra/shared/session/sessionFrames';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
@@ -58,7 +57,10 @@ import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOp
 import { checkCoreDependencies } from './checkCoreDependencies';
 import { BundledViewContentProvider } from '../common/webview/BundledViewContentProvider';
 
-import { createExtensionHostRequests } from './extensionHostRequests';
+import {
+  createExtensionHostRequests,
+  type ExtensionHostRequestsOptions,
+} from './extensionHostRequests';
 import { RequestAttention } from './requestAttention';
 import type { Session, WorkspaceRoots } from '@texra-ai/harness';
 import type {
@@ -156,11 +158,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       /** Where this window's runs run: the service's session, or this
        *  process's own with the handle that owns it. */
       windowSession: GuiSession,
-      /** The settings view at a target. The settings view is built after
-       *  this one, so this waits for it. */
-      openSettings: (
-        target: SettingsTarget | undefined,
-      ) => Effect.Effect<void, Error, ProcessServices>,
+      /** The settings view's verbs this view's cards and links run. The
+       *  settings view is built after this one, so each waits for it. */
+      settings: Pick<
+        ExtensionHostRequestsOptions,
+        'openSettings' | 'signInSubscription'
+      >,
     ) {
       const scope = yield* Scope.Scope;
       const fork = yield* scopedFork<ProcessServices>();
@@ -270,7 +273,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             runtime,
             extensionPath: context.extensionPath,
             extensionId: context.extension.id,
-            openSettings,
+            ...settings,
             showConnectModel: () => onView((view) => view.showConnectModel()),
             showProgressView: () => onView((view) => view.showProgressView()),
             revealProgress: (config) =>

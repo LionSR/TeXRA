@@ -27,7 +27,10 @@ import {
   type CliLoginSlashArgs,
   type CliLogoutTarget,
 } from '@cli/runtime/models/loginOptions';
-import { type SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
+import {
+  subscriptionProvider,
+  type SubscriptionProviderId,
+} from '@texra/controllers/modelAccess/subscriptionProviders';
 import { ACCOUNT_OUTCOME, SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 
 import {
@@ -67,8 +70,9 @@ const loginToSubscription = Effect.fn('loginToSubscription')(function* (
     writeProgress: output.writeProgress,
   });
   yield* emitAppSignal('modelAccessChanged', undefined);
+  const { displayName, modelFamily } = subscriptionProvider(providerId);
   output.appendOutcome(
-    SUBSCRIPTION_AUTH_COPY[providerId].signedInEnabled(account.label),
+    ACCOUNT_OUTCOME.signedInEnabled(displayName, account.label, modelFamily),
   );
 });
 

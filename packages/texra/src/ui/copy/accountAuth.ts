@@ -35,8 +35,6 @@ export const CHATGPT_AUTH = {
   startingDevice: 'Starting ChatGPT device-code sign-in.',
   startingNoBrowser: 'Starting ChatGPT sign-in.',
   startingBrowser: 'Opening browser for ChatGPT sign-in...',
-  signedInEnabled: (accountLabel: string): string =>
-    `Signed in with ChatGPT as ${accountLabel} (OpenAI models enabled).`,
 } as const;
 
 /** Grok / xAI subscription account. */
@@ -50,8 +48,6 @@ export const GROK_AUTH = {
   startingDevice: 'Starting Grok device-code sign-in.',
   startingNoBrowser: 'Starting Grok sign-in.',
   startingBrowser: 'Opening browser for Grok sign-in...',
-  signedInEnabled: (accountLabel: string): string =>
-    `Signed in with Grok as ${accountLabel} (xAI models enabled).`,
 } as const;
 
 /** Each OAuth subscription's copy, keyed by the provider id it belongs to. */
@@ -68,14 +64,27 @@ export const SUBSCRIPTION_AUTH_COPY = {
  * parameterized by the provider's display name.
  *
  * All three hosts drive these from the one `subscriptionProvider(id)`
- * descriptor and reported the outcome in their own words: the CLI auth command
- * and launcher, the desktop credential controller, and the extension's
- * settings handlers. One outcome of one operation on one account gets one
- * sentence.
+ * descriptor: the CLI auth command and launcher, and the settings body the
+ * extension and the desktop share. One outcome of one operation on one
+ * account gets one sentence.
  */
 export const ACCOUNT_OUTCOME = {
   signedInAs: (providerDisplayName: string, accountLabel: string): string =>
     `Signed in with ${providerDisplayName} as ${accountLabel}.`,
+  /** What a finished sign-in reports: it also turned the subscription on
+   *  for `modelFamily` (the provider's 'OpenAI models', 'xAI models'). */
+  signedInEnabled: (
+    providerDisplayName: string,
+    accountLabel: string,
+    modelFamily: string,
+  ): string =>
+    `Signed in with ${providerDisplayName} as ${accountLabel} (${modelFamily} enabled).`,
+  /** A sign-out that could not turn the subscription off afterwards. */
+  subscriptionNotDisabled: (
+    providerDisplayName: string,
+    reason: string,
+  ): string =>
+    `${providerDisplayName} subscription could not be disabled: ${reason}`,
   signedOut: (providerDisplayName: string): string =>
     `Signed out of ${providerDisplayName}.`,
   notSignedIn: (providerDisplayName: string): string =>

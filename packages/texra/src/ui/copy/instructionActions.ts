@@ -1,8 +1,7 @@
 /**
  * What TeXRA offers beside an instruction notice, by the notice's key: the
- * action tokens each host renders its own way (the VS Code extension as
- * buttons bound to commands, the desktop as dialog buttons, the CLI as a
- * trailing hint). The harness emits only the key and the message; which
+ * action tokens, the label a window's button carries, and the hint the CLI
+ * prints in its place. The harness emits only the key and the message; which
  * affordances a key gets is the application's to say, here, once.
  */
 
@@ -50,6 +49,19 @@ function isHarnessKey(key: string): key is HarnessInstructionKey {
 export function instructionActions(key: string): readonly InstructionAction[] {
   return isHarnessKey(key) ? ACTIONS_BY_KEY[key] : NO_ACTIONS;
 }
+
+/** The button a window shows for each action. What the button runs is the
+ *  host's: the extension binds a command, the desktop opens its settings. */
+export const INSTRUCTION_ACTION_BUTTON_LABELS: Readonly<
+  Record<InstructionAction, string>
+> = Object.freeze({
+  [INSTRUCTION_ACTION.SET_API_KEY]: 'Set API Key',
+  [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]: 'Configuration Guide',
+  [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: 'Model Documentation',
+});
+
+/** The button beside a failure that names a guide page. */
+export const READ_GUIDE_BUTTON_LABEL = 'Read the guide';
 
 const CLI_INSTRUCTION_ACTION_HINTS: Record<InstructionAction, string> = {
   [INSTRUCTION_ACTION.SET_API_KEY]: 'set your API key (texra setup)',
