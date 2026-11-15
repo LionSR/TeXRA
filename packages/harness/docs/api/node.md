@@ -302,6 +302,15 @@ const homeDirectory: Effect.Effect<string | undefined>
 
 ## inheritedEnv
 
+The environment a child process the harness spawns starts from: this
+process's with its project's `.env` variables over it (`environment`),
+minus every provider API-key variable the harness reads as its own credential
+({@link API_KEY_ENV_NAMES}) and the requested approval policy
+({@link APPROVAL_POLICY_ENV}). What a child prints lands in tool results and
+the transcript, so the key is never there to print. `keep` names the one
+provider whose key a child agent CLI authenticates with itself. Windows
+matches variable names case-insensitively, as its environment does.
+
 ```ts
 const inheritedEnv: (keep?: "xai" | "anthropic" | "openai" | "google" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode" | undefined) => Effect<Record<string, string>, never, never>
 ```
