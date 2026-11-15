@@ -46,10 +46,8 @@ export const retryBusy = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   effect.pipe(Effect.retry({ schedule: BUSY_RETRY, while: isBusy }));
 
 /** The suffix of a damaged store an open renamed aside (`openStore`), and
- *  of its WAL or shared-memory file. `.pre1` and a `.<n>` after either are
- *  copies earlier builds left: none is written now, and the storage prune
- *  still lists them so that it can delete them. */
-const ASIDE = /^\.(?:pre1|corrupt-\d+)(?:\.\d+)?(?:-wal|-shm)?$/;
+ *  of its WAL or shared-memory file. */
+const ASIDE = /^\.corrupt-\d+(?:-wal|-shm)?$/;
 
 /** The aside copies beside the store at `filename`, with their sizes. */
 export const asideCopies = Effect.fnUntraced(function* (filename: string) {
