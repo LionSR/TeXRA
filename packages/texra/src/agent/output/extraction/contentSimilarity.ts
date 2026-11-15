@@ -66,11 +66,14 @@ export function parseMarkdownFenceDelimiter(
     return null;
   }
   const delimiter = match[1];
-  return {
-    marker: delimiter.startsWith('`') ? '`' : '~',
-    length: delimiter.length,
-    info: (match[2] ?? '').trim(),
-  };
+  const marker = delimiter.startsWith('`') ? '`' : '~';
+  const info = (match[2] ?? '').trim();
+  // A backtick fence's info string holds no backtick (CommonMark), so a
+  // one-line code span such as ```latex``` opens nothing.
+  if (marker === '`' && info.includes('`')) {
+    return null;
+  }
+  return { marker, length: delimiter.length, info };
 }
 
 export function isLatexMarkdownFence(fence: MarkdownFence): boolean {

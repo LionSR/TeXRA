@@ -331,6 +331,16 @@ layer(
           '```',
         ]);
         yield* expectWritten('paper.tex', 'REAL\n');
+
+        // A one-line code span is not an opening fence.
+        yield* writeAndSplitDocuments([
+          'Wrap the answer like this:',
+          '```latex```',
+          '```latex',
+          'AFTER SPAN',
+          '```',
+        ]);
+        yield* expectWritten('paper.tex', 'AFTER SPAN\n');
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
