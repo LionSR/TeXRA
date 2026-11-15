@@ -149,9 +149,7 @@ interface CliAmbientState {
   readonly stdoutIsTty: boolean;
   readonly stderrIsTty: boolean;
   readonly termIsDumb?: boolean;
-  /** Color is allowed on stdout. */
   readonly stdoutColorEnabled: boolean;
-  /** Color is allowed on stderr. */
   readonly stderrColorEnabled: boolean;
 }
 

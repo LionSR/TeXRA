@@ -13,7 +13,10 @@ import type {
   NoticeLevel,
 } from '@texra/hosts/uiHosts';
 import type { EditorIntegrationShape } from '@texra/hosts/editorIntegration';
-import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
+import type {
+  SubscriptionAccount,
+  SubscriptionProviderId,
+} from '@texra/controllers/modelAccess/subscriptionProviders';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type {
   SettingsHostPage,
@@ -47,8 +50,13 @@ export interface SettingsHostBindings {
    *  of the project this view belongs to. Every launcher's catalogs follow
    *  the agent list on their own (`workspaceAgentsChanged`). */
   selectLauncherAgent(agent: string): HostEffect;
-  /** Run one subscription's sign-in, its routing preference included. */
-  signInSubscription(providerId: SubscriptionProviderId): HostEffect;
+  /** Run one subscription's sign-in (`SubscriptionProvider.signIn`) over
+   *  this host's prompts and answer the account. The body tells the user how
+   *  it ended; a user who backs out of a prompt fails with `Cancelled`,
+   *  which the body leaves unsaid. */
+  signInSubscription(
+    providerId: SubscriptionProviderId,
+  ): HostEffect<SubscriptionAccount>;
   /** Select a run in the host's run view. */
   revealRun(runId: RunId): HostEffect<'revealed' | 'missing' | 'unavailable'>;
   runLabel(runId: RunId): string | undefined;

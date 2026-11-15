@@ -1,5 +1,22 @@
 import { WORKSPACE_DIFF_SUFFIX } from '@latex/latexdiff/diffFileNameManager';
 
+/**
+ * Directories that never hold a source the user works on: build output,
+ * package and environment trees, and the folders TeXRA writes its own
+ * versions, history and diffs into. Every listing and every bulk operation
+ * skips them, so each list below starts from this one. Lowercase; a
+ * directory name is compared case-insensitively.
+ */
+const MANAGED_DIRECTORIES = Object.freeze([
+  'build',
+  'node_modules',
+  '__pycache__',
+  'venv',
+  'versions',
+  'history',
+  'diffs',
+]);
+
 /** Built-in file discovery rules. These are product behavior, not settings. */
 export const FILE_HANDLING_RULES = Object.freeze({
   /** Extensions listed per extension category (`ExtensionCategory`). */
@@ -56,29 +73,27 @@ export const FILE_HANDLING_RULES = Object.freeze({
       'preamble.tex',
       'yaml',
     ]),
-    mediaDirectories: Object.freeze([
-      'build',
-      'node_modules',
-      '__pycache__',
-      'versions',
-      'history',
-      'venv',
-      'Diffs',
-    ]),
+    mediaDirectories: MANAGED_DIRECTORIES,
+    /** Skipped when listing the text files a run can take. */
     directories: Object.freeze([
-      'build',
-      'node_modules',
-      '__pycache__',
+      ...MANAGED_DIRECTORIES,
       'figures',
       'media',
       'figs',
-      'versions',
-      'history',
       'stuff',
       'draft',
       'miscellaneous',
-      'diffs',
-      'venv',
+    ]),
+    /** Skipped by the operations that walk a whole workspace (formatting,
+     *  finding `build/` directories to clean): figures and notes are not
+     *  LaTeX sources to rewrite. */
+    bulkOperationDirectories: Object.freeze([
+      ...MANAGED_DIRECTORIES,
+      'figs',
+      'figures',
+      'media',
+      'medias',
+      'notes',
     ]),
     keywords: Object.freeze([
       'Makefile',

@@ -42,6 +42,7 @@ export type {
   TurnRequest,
   TurnResult,
 } from './turn.js';
+export type { InputPart } from './api/parts.js';
 export {
   JsonObjectSchema,
   ModelOriginSchema,

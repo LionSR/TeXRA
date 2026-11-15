@@ -1,9 +1,9 @@
 // Third-party imports
-import { Cause, Effect, Schema } from 'effect';
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { ensureError } from '@texra-ai/harness/schemas';
+import { Cancelled, ensureError } from '@texra-ai/harness/schemas';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
@@ -18,32 +18,12 @@ import {
   type SubscriptionProviderId,
   type SubscriptionSignInPresenter,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
-import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import type { HttpClient } from 'effect/http';
 
 const OPEN_DEFAULT_BROWSER = 'Open in Default Browser';
 const COPY_SIGN_IN_LINK = 'Copy Sign-in Link';
-
-/** Dismissing the browser-choice dialog cancels sign-in, matching this
- * repo's modal convention (e.g. authCommands.ts, compareFiles.ts). */
-class SubscriptionSignInCancelled extends Schema.TaggedError<SubscriptionSignInCancelled>()(
-  'SubscriptionSignInCancelled',
-  {},
-) {}
-
-/**
- * The OAuth leg's failure, carrying whatever the transport threw so the same
- * value reaches the same report. A dismissed browser-choice dialog arrives
- * here too, as a {@link SubscriptionSignInCancelled} cause.
- */
-class SubscriptionSignInFailed extends Schema.TaggedError<SubscriptionSignInFailed>()(
-  'SubscriptionSignInFailed',
-  {
-    cause: Schema.Defect(),
-  },
-) {}
 
 const externalOpener = new VscodeExternalOpener();
 
@@ -109,8 +89,10 @@ function vscodePresenter(
           );
           return;
         }
+        // Dismissing the browser-choice dialog cancels the sign-in, as this
+        // host's other modals do.
         if (choice !== OPEN_DEFAULT_BROWSER) {
-          return yield* new SubscriptionSignInCancelled();
+          return yield* new Cancelled();
         }
         yield* externalOpener.openExternal(url);
       },
@@ -119,62 +101,35 @@ function vscodePresenter(
 }
 
 /**
- * Run subscription sign-in and enable subscription routing for the provider's
- * models. The whole flow is one program the caller settles at its own
- * boundary: the OAuth leg is a step of it, under a progress notification that
- * lives for exactly as long as that step. Its lines take the caller's log
- * channel.
+ * Run one subscription's sign-in over VS Code's prompts, under a progress
+ * notification that lives for exactly as long as the sign-in. The caller
+ * tells the user how it ended; a dismissed browser-choice dialog fails with
+ * `Cancelled`.
  */
 export function signInWithSubscription(
   stores: SettingsStores,
   providerId: SubscriptionProviderId,
-): Effect.Effect<boolean, never, HttpClient.HttpClient | SubscriptionAccounts> {
+): Effect.Effect<
+  SubscriptionAccount,
+  Error,
+  HttpClient.HttpClient | SubscriptionAccounts
+> {
   const provider = subscriptionProvider(providerId);
-  const { displayName, modelFamily } = provider;
-
-  return Effect.gen(function* () {
-    const account: SubscriptionAccount = yield* withVSCodeProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: `Signing in with ${displayName}...`,
-        cancellable: false,
-      },
-      () =>
-        provider.signIn({
-          // Remote windows cannot reach the extension host's loopback port
-          // from the user's local browser. Locally, `auto` drops to a device
-          // code when the callback ports are taken (another sign-in holding
-          // them) instead of failing with a bind error.
-          transport: vscode.env.remoteName ? 'device' : 'auto',
-          present: vscodePresenter(provider),
-          stores,
-        }),
-    ).pipe(
-      // A transport defect is reported the same as its typed failure. An
-      // interrupt is not: shutdown cancelling the sign-in is not a sign-in
-      // failure.
-      Effect.catchCause((cause) =>
-        Cause.hasInterruptsOnly(cause)
-          ? Effect.interrupt
-          : Effect.fail(
-              new SubscriptionSignInFailed({ cause: Cause.squash(cause) }),
-            ),
-      ),
-    );
-
-    yield* showLoggedInfoMessage(
-      `${ACCOUNT_OUTCOME.signedInAs(displayName, account.label)} ${displayName} subscription is enabled for ${modelFamily}.`,
-    );
-    return true;
-  }).pipe(
-    Effect.catchTags({
-      SubscriptionSignInFailed: (failure) =>
-        failure.cause instanceof SubscriptionSignInCancelled
-          ? Effect.succeed(false)
-          : showLoggedErrorMessage(
-              `${displayName} sign-in failed`,
-              failure.cause,
-            ).pipe(Effect.as(false)),
-    }),
+  return withVSCodeProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: `Signing in with ${provider.displayName}...`,
+      cancellable: false,
+    },
+    () =>
+      provider.signIn({
+        // Remote windows cannot reach the extension host's loopback port
+        // from the user's local browser. Locally, `auto` drops to a device
+        // code when the callback ports are taken (another sign-in holding
+        // them) instead of failing with a bind error.
+        transport: vscode.env.remoteName ? 'device' : 'auto',
+        present: vscodePresenter(provider),
+        stores,
+      }),
   );
 }

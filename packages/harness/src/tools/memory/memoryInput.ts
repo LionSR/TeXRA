@@ -7,7 +7,7 @@
 import { Schema } from 'effect';
 
 // Local imports
-import { MEMORY_DISPLAY_ROOT } from '@agent/memory/memoryUtils';
+import { MEMORY_DISPLAY_ROOT } from '@agent/memory/memoryLayout';
 
 // Local file imports
 import { nullishWithDefault } from '../core/inputSchema';

@@ -18,7 +18,7 @@ import {
 
 // Local imports
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
-import { displayToStoragePath } from '@agent/memory/memoryUtils';
+import { displayToStoragePath } from '@agent/memory/memoryLayout';
 import { runStorageLocationUnder } from '@common/storage/storageLayout';
 import { SessionRoots } from '@platform/rootedFs';
 import type { RunId } from '@shared/schemas';

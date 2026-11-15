@@ -38,7 +38,11 @@ import {
   effectDiagnosticsLayer,
   setLogSink,
 } from '@texra-ai/harness/node';
-import { toErrorMessage, type StateKey } from '@texra-ai/harness/schemas';
+import {
+  Cancelled,
+  toErrorMessage,
+  type StateKey,
+} from '@texra-ai/harness/schemas';
 import { appSignalStream } from '@texra-ai/harness/host';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
@@ -55,11 +59,15 @@ import { vscodeSetupPlatform } from '@frontend/vscodeSetupPlatform';
 import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
 import {
   announce,
+  showLoggedErrorMessage,
+  showLoggedInfoMessage,
   showLoggedMessageWithDocs,
 } from '@frontend/ui/errorHandlingUtils';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
+import { subscriptionProvider } from '@texra/controllers/modelAccess/subscriptionProviders';
+import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { createVscodeLeanLanguageServices } from '@frontend/lean/VscodeIntegration';
 import { followInlineCriticism } from '@frontend/latex/inlineCriticism';
 import {
@@ -260,10 +268,32 @@ const NO_FOLDER_COMMANDS = {
     createSampleProjectWithoutWorkspace(context.extensionPath),
   'texra.openGettingStarted': (context) =>
     openGettingStarted(context.extension.id),
-  'texra.auth.chatgpt.signIn': (_context, roots) =>
-    signInWithSubscription(roots, 'chatgpt').pipe(
+  // This window has no settings view to tell the user how the sign-in
+  // ended, so the command does, in the same sentence.
+  'texra.auth.chatgpt.signIn': (_context, roots) => {
+    const { displayName, modelFamily } = subscriptionProvider('chatgpt');
+    return signInWithSubscription(roots, 'chatgpt').pipe(
+      Effect.flatMap((account) =>
+        showLoggedInfoMessage(
+          ACCOUNT_OUTCOME.signedInEnabled(
+            displayName,
+            account.label,
+            modelFamily,
+          ),
+        ),
+      ),
+      // A defect is reported like a failure, as the settings body reports
+      // one; an interrupt is the window closing, not a failed sign-in.
+      Effect.catchCause((cause) => {
+        if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt;
+        const error = Cause.squash(cause);
+        return error instanceof Cancelled
+          ? Effect.void
+          : showLoggedErrorMessage(`${displayName} sign-in failed`, error);
+      }),
       withLogChannel('welcomeView'),
-    ),
+    );
+  },
   'texra.setApiKey': (_context, roots) => apiSetApiKey(roots),
 } satisfies Partial<
   Record<
@@ -463,10 +493,16 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     runtime,
     roots,
     windowSession,
-    (target) =>
-      Effect.flatMap(Deferred.await(settingsView), (view) =>
-        view.showSettingsView(target),
-      ),
+    {
+      openSettings: (target) =>
+        Effect.flatMap(Deferred.await(settingsView), (view) =>
+          view.showSettingsView(target),
+        ),
+      signInSubscription: (providerId) =>
+        Effect.flatMap(Deferred.await(settingsView), (view) =>
+          view.signInSubscription(providerId),
+        ),
+    },
   );
   yield* Effect.forkScoped(
     Stream.runForEach(progressViewProvider.credentialUsable, (usable) =>

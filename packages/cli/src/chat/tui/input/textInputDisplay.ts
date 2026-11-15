@@ -1,5 +1,5 @@
 import { textDisplayWidth } from '@cli/runtime/terminal/terminalText';
-import { clampCursor } from './textInputEditing';
+import { clampCursor, graphemesOf } from './textInputEditing';
 
 interface TextInputDisplayWindow {
   readonly value: string;
@@ -17,18 +17,8 @@ interface LeadingEllipsisDisplay {
   readonly removedPrefixCodeUnits: number;
 }
 
-function codePointAtIndex(
-  value: string,
-  index: number,
-): { readonly char: string; readonly nextIndex: number } | undefined {
-  const codePoint = value.codePointAt(index);
-  if (codePoint === undefined) return undefined;
-  const char = String.fromCodePoint(codePoint);
-  return { char, nextIndex: index + char.length };
-}
-
 function isSoftBreakChar(char: string): boolean {
-  return char !== '\n' && /\s/u.test(char);
+  return !char.includes('\n') && /^\s/u.test(char);
 }
 
 function shouldWrapAtPreviousSoftBreak(
@@ -40,12 +30,16 @@ function shouldWrapAtPreviousSoftBreak(
   return column - lastSoftBreakColumn <= Math.max(8, Math.floor(width / 4));
 }
 
-function softBreakRunEnd(value: string, start: number): number {
+function softBreakRunEnd(
+  value: string,
+  graphemeAt: ReturnType<typeof graphemesOf>,
+  start: number,
+): number {
   let index = start;
   while (index < value.length) {
-    const point = codePointAtIndex(value, index);
-    if (point === undefined || !isSoftBreakChar(point.char)) break;
-    index = point.nextIndex;
+    const point = graphemeAt(index);
+    if (point === undefined || !isSoftBreakChar(point.text)) break;
+    index = point.end;
   }
   return index;
 }
@@ -65,6 +59,7 @@ function textInputDisplayRows(
   width: number,
 ): TextInputDisplayRow[] {
   const rows: TextInputDisplayRow[] = [];
+  const graphemeAt = graphemesOf(value);
   let rowStart = 0;
   let column = 0;
   let lastSoftBreakIndex: number | undefined;
@@ -72,24 +67,26 @@ function textInputDisplayRows(
 
   let index = 0;
   while (index < value.length) {
-    const point = codePointAtIndex(value, index);
+    const point = graphemeAt(index);
     if (point === undefined) break;
 
-    if (point.char === '\n') {
-      rows.push({ start: rowStart, end: index, breakKind: 'hard' });
-      rowStart = point.nextIndex;
-      index = point.nextIndex;
+    if (point.text.endsWith('\n')) {
+      // The row ends at the newline itself: a CR before it stays in the row,
+      // so the line-end cursor (the newline's offset) is inside it.
+      rows.push({ start: rowStart, end: point.end - 1, breakKind: 'hard' });
+      rowStart = point.end;
+      index = point.end;
       column = 0;
       lastSoftBreakIndex = undefined;
       lastSoftBreakColumn = undefined;
       continue;
     }
 
-    const charWidth = textDisplayWidth(point.char);
+    const charWidth = textDisplayWidth(point.text);
     if (column + charWidth > width && column > 0) {
       let wrapIndex = index;
-      if (isSoftBreakChar(point.char)) {
-        wrapIndex = softBreakRunEnd(value, index);
+      if (isSoftBreakChar(point.text)) {
+        wrapIndex = softBreakRunEnd(value, graphemeAt, index);
       } else if (
         lastSoftBreakIndex !== undefined &&
         lastSoftBreakIndex > rowStart &&
@@ -107,11 +104,11 @@ function textInputDisplayRows(
     }
 
     column += charWidth;
-    if (isSoftBreakChar(point.char)) {
-      lastSoftBreakIndex = point.nextIndex;
+    if (isSoftBreakChar(point.text)) {
+      lastSoftBreakIndex = point.end;
       lastSoftBreakColumn = column;
     }
-    index = point.nextIndex;
+    index = point.end;
   }
 
   if (rowStart < value.length || rows.at(-1)?.breakKind !== 'soft') {
@@ -153,16 +150,16 @@ function leadingEllipsisDisplay(
     return { text: `…${text}`, removedPrefixCodeUnits: 0 };
   }
 
-  let suffix = '';
-  for (const char of [...text].toReversed()) {
-    const candidate = `${char}${suffix}`;
-    if (textDisplayWidth(candidate) > width - textDisplayWidth('…')) break;
-    suffix = candidate;
+  const budget = width - textDisplayWidth('…');
+  const graphemeAt = graphemesOf(text);
+  let start = text.length;
+  while (start > 0) {
+    const point = graphemeAt(start - 1);
+    if (point === undefined) break;
+    if (textDisplayWidth(text.slice(point.start)) > budget) break;
+    start = point.start;
   }
-  return {
-    text: `…${suffix}`,
-    removedPrefixCodeUnits: text.length - suffix.length,
-  };
+  return { text: `…${text.slice(start)}`, removedPrefixCodeUnits: start };
 }
 
 /** True when the soft-break last row already fills `columns`, so an

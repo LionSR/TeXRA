@@ -29,7 +29,7 @@ import {
   MAX_PREVIEW_CHARS,
   MAX_PREVIEW_LINES,
   relativeToDisplayPath,
-} from '@agent/memory/memoryUtils';
+} from '@agent/memory/memoryLayout';
 import {
   buildFile,
   parseFrontmatter,
@@ -61,7 +61,7 @@ interface MemoryWalkOptions {
 
 /** One filesystem entry discovered while walking the memory tree. */
 interface MemoryWalkEntry {
-  /** Path relative to the walk root (matches the `relativeRoot` passed in). */
+  /** Path relative to the walk root. */
   relativePath: string;
   storagePath: string;
   size: number;
@@ -318,18 +318,16 @@ function walkLevel(
  * are read. An unreadable directory or entry fails the stream with the
  * `PlatformError` the filesystem raised.
  * @param storagePath - Directory to start walking from (paths join with '/')
- * @param relativeRoot - Path prefix used to build each entry's relativePath
  * @param options - `maxDepth` (levels below the root; unlimited if omitted)
  *   and `includeDirs` (whether directory entries themselves are yielded)
  */
 export function walkMemoryDirectory(
   storagePath: string,
-  relativeRoot = '',
   options: MemoryWalkOptions = {},
 ): Stream.Stream<MemoryWalkEntry, PlatformError.PlatformError, StorageFs> {
   return Stream.unwrap(
     Effect.map(Semaphore.make(MEMORY_LISTING_CONCURRENCY), (permits) =>
-      walkLevel(storagePath, relativeRoot, 0, options, permits),
+      walkLevel(storagePath, '', 0, options, permits),
     ),
   );
 }
@@ -363,22 +361,19 @@ export const loadMemoryItems = Effect.fn('memoryFileSystem.loadMemoryItems')(
 );
 
 /**
- * Count pinned memory files under the memory directory. `limit` bounds the
- * walk — the stream is interrupted once that many pinned files are seen, so
- * the remaining metadata reads never happen. Returns 0 if the storage root
- * does not exist.
+ * Count pinned memory files under the memory directory, up to the pin cap:
+ * the walk stops once that many are seen, so the remaining metadata reads
+ * never happen. Returns 0 if the storage root does not exist.
  */
 const countPinnedMemories = Effect.fn('memoryFileSystem.countPinnedMemories')(
-  function* (limit?: number) {
+  function* () {
     const exists = yield* memoryPathExists(WORKSPACE_STORAGE_LAYOUT.memory);
     if (!exists) return 0;
 
     const pinned = walkMemoryDirectory(WORKSPACE_STORAGE_LAYOUT.memory).pipe(
       Stream.filter((entry) => entry.meta?.pinned === true),
     );
-    return yield* Stream.runCount(
-      limit === undefined ? pinned : Stream.take(pinned, limit),
-    );
+    return yield* Stream.runCount(Stream.take(pinned, MAX_PINNED_MEMORIES));
   },
 );
 
@@ -420,7 +415,7 @@ export const pinMemory = Effect.fn('memoryFileSystem.pinMemory')(function* (
   const file = yield* readMemoryFile(storagePath);
   if (file.meta?.pinned)
     return { status: 'already' } satisfies MemoryPinOutcome;
-  const priorPinned = yield* countPinnedMemories(MAX_PINNED_MEMORIES);
+  const priorPinned = yield* countPinnedMemories();
   if (priorPinned >= MAX_PINNED_MEMORIES)
     return { status: 'cap-reached' } satisfies MemoryPinOutcome;
   yield* writePinned(storagePath, file, true);

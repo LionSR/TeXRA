@@ -1,6 +1,8 @@
 // Shared clipboard-image extraction for webview paste handlers (main view +
-// progress-view follow-up). Browser-only — relies on FileReader/DataTransfer
+// progress-view follow-up). Browser-only — relies on File/DataTransfer
 // and has no Node imports, so it is safe in both webview bundles.
+
+import * as Base64 from 'effect/encoding/Base64';
 
 import { ensureError } from '@texra-ai/harness/schemas';
 
@@ -55,32 +57,18 @@ type ClipboardImageRead =
   | { readonly ok: false; readonly error: Error };
 
 /** Read a File to base64. A failure carries its cause for the caller to show. */
-export function readFileAsBase64(file: File): Promise<ClipboardImageRead> {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result;
-      const base64 =
-        typeof result === 'string' ? result.split(',')[1] : undefined;
-      resolve(
-        base64
-          ? { ok: true, base64 }
-          : { ok: false, error: new Error('The image held no readable data.') },
-      );
-    };
-    reader.onerror = () =>
-      resolve({
-        ok: false,
-        error: reader.error ?? new Error('The image could not be read.'),
-      });
-    try {
-      reader.readAsDataURL(file);
-    } catch (error) {
-      // Browsers may synchronously reject a clipboard-owned File that became
-      // unreadable before FileReader started. This matches reader.onerror:
-      // that attachment fails with its cause, while the paste event and other
-      // files continue.
-      resolve({ ok: false, error: ensureError(error) });
-    }
-  });
+export async function readFileAsBase64(
+  file: File,
+): Promise<ClipboardImageRead> {
+  try {
+    const base64 = Base64.encode(new Uint8Array(await file.arrayBuffer()));
+    return base64
+      ? { ok: true, base64 }
+      : { ok: false, error: new Error('The image held no readable data.') };
+  } catch (error) {
+    // A clipboard-owned File can become unreadable before it is read. That
+    // attachment fails with its cause, while the paste event and other files
+    // continue.
+    return { ok: false, error: ensureError(error) };
+  }
 }
