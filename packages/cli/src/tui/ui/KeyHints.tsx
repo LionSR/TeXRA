@@ -39,10 +39,10 @@ export function keyHintsText(hints: readonly KeyHint[]): string {
   return hints.map(keyHintText).join(SEPARATOR);
 }
 
-const DEFAULT_TAIL: readonly KeyHint[] = [
-  { key: 'Enter', action: 'confirm' },
-  { key: 'Esc', action: 'cancel' },
-];
+const DEFAULT_TAIL: readonly KeyHint[] = Object.freeze([
+  Object.freeze({ key: 'Enter', action: 'confirm' }),
+  Object.freeze({ key: 'Esc', action: 'cancel' }),
+]);
 
 /** The arrow-key hint every list surface binds. */
 export const NAVIGATE_HINT: KeyHint = Object.freeze({
@@ -51,9 +51,9 @@ export const NAVIGATE_HINT: KeyHint = Object.freeze({
 });
 
 /** The whole footer of a surface Esc only closes. */
-export const CLOSE_HINTS: readonly KeyHint[] = [
-  { key: 'Esc', action: 'close' },
-];
+export const CLOSE_HINTS: readonly KeyHint[] = Object.freeze([
+  Object.freeze({ key: 'Esc', action: 'close' }),
+]);
 
 /** The ↑/↓ + PgUp/PgDn pair a scrollable body binds while it can scroll. */
 export function scrollKeyHints(action: string): readonly KeyHint[] {
@@ -65,10 +65,10 @@ export function scrollKeyHints(action: string): readonly KeyHint[] {
 
 /** The fullest footer a closable scroll-only reader (transcript, work plan)
  *  paints, which its row budget measures. */
-export const READER_SCROLL_HINTS: readonly KeyHint[] = [
-  ...scrollKeyHints('scroll'),
+export const READER_SCROLL_HINTS: readonly KeyHint[] = Object.freeze([
+  ...scrollKeyHints('scroll').map((hint) => Object.freeze(hint)),
   ...CLOSE_HINTS,
-];
+]);
 
 /** Hint spans without the surrounding dim/truncating `<Text>`. Callers that
  *  cannot use {@link KeyHints} because the strip has to share one terminal row

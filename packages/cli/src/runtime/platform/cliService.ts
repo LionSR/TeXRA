@@ -94,14 +94,10 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     workspace: string | undefined,
     within: Scope.Scope,
   ) {
-    // The config open reports through a plain callback while it runs; its
-    // warnings are logged once it has.
-    const warnings: string[] = [];
-    const configs = yield* openTexraWorkspaceConfigStores(
+    const { warnings, ...configs } = yield* openTexraWorkspaceConfigStores(
       TEXRA_SETTINGS.catalog,
       storageRoot,
       workspace,
-      (message) => warnings.push(message),
     );
     yield* Effect.forEach(
       warnings,

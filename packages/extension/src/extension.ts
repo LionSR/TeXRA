@@ -211,19 +211,20 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
             );
       // VS Code restarts the extension host when the first workspace folder
       // changes, so the configuration stores stay pinned for this process.
-      const config = yield* openTexraConfigStores(
+      const { stores: config, warnings } = yield* openTexraConfigStores(
         TEXRA_SETTINGS.catalog,
         defaultNodeStorageRoot(),
         workspaceRoot,
-        (message) => {
-          fork(
-            Effect.logWarning(message).pipe(
-              withLogChannel(EXTENSION_CHANNEL),
-              Effect.andThen(vscodeUi.notify('warning', message)),
-            ),
-          );
-        },
       );
+      // Forked: a notification waits for the person, and activation does not.
+      for (const message of warnings) {
+        fork(
+          Effect.logWarning(message).pipe(
+            withLogChannel(EXTENSION_CHANNEL),
+            Effect.andThen(vscodeUi.notify('warning', message)),
+          ),
+        );
+      }
       const roots = yield* openNodeWorkspaceRoots({
         workspaceRoot,
         storageRoot: defaultNodeStorageRoot(),

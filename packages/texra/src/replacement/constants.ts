@@ -33,17 +33,17 @@ export const UPPERCASE_GREEK_LETTER_CHARACTERS: Readonly<Record<string, string>>
 });
 
 // Section commands for LaTeX documents
-export const SECTION_TYPES = [
+export const SECTION_TYPES = Object.freeze([
   'chapter',
   'section',
   'subsection',
   'subsubsection',
   'paragraph',
-];
+]);
 
 // Common math operator names
 // prettier-ignore
-export const MATH_OPERATORS = [
+export const MATH_OPERATORS = Object.freeze([
   'cos',
   'sin',
   'tan',
@@ -74,7 +74,7 @@ export const MATH_OPERATORS = [
   'coth',
   'dim',
   'liminf',
-];
+]);
 
 /**
  * The math environments the replacement rules and the latexdiff clean-up
@@ -202,7 +202,7 @@ const BASE_LATEX_ENVIRONMENTS = [
   'array',
 ];
 
-export const LATEX_ENVIRONMENTS = [
+export const LATEX_ENVIRONMENTS = Object.freeze([
   ...BASE_LATEX_ENVIRONMENTS,
   ...FENCED_LATEX_ENVIRONMENTS,
-];
+]);

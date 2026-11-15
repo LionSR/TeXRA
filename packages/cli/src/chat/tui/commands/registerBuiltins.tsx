@@ -1,7 +1,7 @@
 // The built-in slash commands, built once per chat from what the chat's
 // surface does with each choice.
 
-import { Effect, Result, type Scope } from 'effect';
+import { Effect, Result } from 'effect';
 
 import { type RunId, runBypasses } from '@texra-ai/harness/schemas';
 import { type WorkspaceRoots } from '@texra-ai/harness';
@@ -10,7 +10,7 @@ import type { GetModelSwitchDisabledReason } from '@cli/runtime/models/modelAcce
 import { parseCliHistoryId } from '@cli/runtime/history';
 import type { CliModelAccessSelection } from '@cli/runtime/models/modelAccessRoute';
 import type { LoginFormValue } from '@cli/runtime/models/loginOptions';
-import type { ServiceConnection } from '@texra/controllers/server/client';
+import type { ConnectService } from '../state/attachedTask';
 import { RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { PLUGINS_TUI } from '@ui/copy/plugins';
 
@@ -67,11 +67,7 @@ import {
   modelAccessContribution,
 } from './modelAccessContribution';
 import type { Session } from '@texra-ai/harness';
-import type {
-  GlobalValues,
-  ProcessRuntime,
-  ProcessServices,
-} from '@texra-ai/harness/host';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
 import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 
@@ -125,11 +121,7 @@ export function builtinSlashCommands(options: {
   onSkillSelect: SelectHandler<SkillActivation>;
   /** The TeXRA service's client (`/tasks`), through the chat's link; absent
    *  where the chat holds none, and `/tasks` with it. */
-  connectService?: () => Effect.Effect<
-    Pick<ServiceConnection, 'client'>,
-    Error,
-    Scope.Scope | GlobalValues
-  >;
+  connectService?: ConnectService;
   /** The project roots `/config` reads and writes. */
   configRoots: WorkspaceRoots;
   onError: ErrorHandler;
