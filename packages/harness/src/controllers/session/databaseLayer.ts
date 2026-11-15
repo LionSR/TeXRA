@@ -226,9 +226,10 @@ export const databaseLayer = (
               },
               catch: (cause) => openFailed(ensureError(cause)),
             });
-      // A project store never waits for a lock: its one holder is this
-      // process, and a lock another holds refuses the open at once, on the
-      // fiber, never by blocking the thread in SQLite.
+      // A project store has one holder, this process, so the driver opens
+      // it with no busy wait: a lock another process holds refuses the open
+      // instead of waiting out the driver's timeout. The exclusive lock
+      // below waits at most the 25 ms slice `prepareStore` leaves set.
       const busyTimeout = exclusive ? 0 : '5 seconds';
       const { sql, movedAside } = yield* openStore(
         SqliteClient.make({

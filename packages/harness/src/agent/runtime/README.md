@@ -7,14 +7,14 @@ is the module map by concern. Run-loop rules are in
 
 ## Subdirectories
 
-- `loop/`: the run program. `toolUse` and `toolUseDispatch` (the loop),
+- `loop/`: the run program. `runLoop` and `toolUseDispatch` (the loop),
   `runProgram` (`RunCell`, the run's one state holder and writer), `rows`
   (every draft the loop appends), `step` (where tools and prompt contributions
   change, and the change is recorded), `hooks` (plugin hooks at loop points),
   `toolGuard` (path checks and command approval before a tool body),
   `modelSwitch` (a host's model switch, applied at the next model call).
 - `run/`: the per-run services the loop takes from context. `AgentRun`,
-  `invocation` (the one model-call retry loop), `modelCall`, `pricing`,
+  `modelCall` (a model call off the run's rows), `pricing`,
   `compaction`, `contextTokens`, `mediaInput`, `tools`,
   `toolResultText`, `recordedRequest`, and `backgroundTurn`.
 - `modelAccess/`: the one path from settings to a bound llm `Model`
@@ -26,17 +26,16 @@ is the module map by concern. Run-loop rules are in
 
 - **Launch and configuration**: `AgentLaunchContext` (the definition a
   launch resolves before its run exists: agent, tools, model);
-  `agentToolResolution` (the effective tool list); `runLaunchGuard` (the
-  ends a run's driver does not write: a failed process-child hand-off, a
-  held child's end, and the children a dead process left under a resuming
-  run).
+  `agentToolResolution` (the effective tool list); `leftoverChildren`
+  (what a process that exited left of a run's children, finished as the
+  parent resumes).
 - **Start, resume and end**: `rootLaunch` (what `session.start` runs:
   registers the run under the id the start minted, and runs it);
   `executeAgent` (the one run program, fresh or resumed: the run's entry,
   its services, its description, and the masked region whose exit is its
   terminal);
   `AgentRunLifecycle` (the end: `endRun`, the terminal's classification of
-  an exit, and `endActivation`, the one end of an activation, through
+  an exit, and `commitEnd`, the one end both run programs commit, through
   `agent/storage/runLifecycle`'s `endRunRows`); `runReport` (a run's
   unclassified report to its terminal); `resumeRun` (the cross-host resume entry, root or recovered child: the
   run's activation from the call, joined by a second resume);
@@ -56,14 +55,14 @@ is the module map by concern. Run-loop rules are in
 - **History and per-call services**: `RunHistory` (reads and writes
   through `SessionLog`); `FollowUps` (pending
   follow-up input, consumed one batch at a time); `ModelInvoker` (the one
-  caller of the llm `Model`); `storedTurn` (turn conversion at the history
-  boundary); `RunCall` and `ToolServices` (one tool invocation's
+  caller of the llm `Model`); `storedTurn` (in `shared/schemas`: turn conversion at
+  the history boundary); `RunCall` and `ToolServices` (one tool invocation's
   capabilities).
-- **Child runs**: `childRunLoop` (the single driver for every child-run
-  type); `childTurnResult` (a child turn's rows and its delivery to the
-  parent, in one transaction); `childRunBudget` (per-session concurrency);
+- **Child runs**: `processRun` (a process child: the one turn an external
+  process is, and its end; a native child is `executeAgent` for one cycle);
+  `childRunBudget` (per-session concurrency);
   `ModelRetryGate` (process-shared recovery probes per model route);
-  `nativeSubagentStrategy`; `scriptRun`; `recipeResult`; `childDelivery`
+  `scriptRun`; `recipeResult`; `childDelivery`
   (what a child's end delivers, typed) and `deliveryEnvelope` (the one
   renderer of a delivery's XML envelope);
   `delegation/` (the child launches: the `agent` tool and `ChildRuns`, a

@@ -126,7 +126,7 @@ const RunViewSchema = Schema.Struct({
   runStartedAt: Schema.NullOr(Positive),
   lastTimestamp: Schema.Number,
   /** The run's one-based turn, from its latest `run.position` (the loop
-   *  commits `state.turn + 1`; the row's `round` counts model calls). Null
+   *  commits `state.turn + 1`). Null
    *  before the first position, after every activation, and for a process
    *  run, which has no loop of its own. */
   turn: Schema.NullOr(Count),

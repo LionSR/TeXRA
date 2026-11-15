@@ -280,9 +280,10 @@ export const sessionOwnersLayer = (
       // and the dependency probes, held for its life and probed beside the
       // open (the gate withholds nothing until they answer).
       const plugins = yield* ToolRegistry;
-      // The registry's phase notification rides the applied rows: its
-      // waiters read `RunView.status` once the view holds a row's state.
-      // Host notices go to the author. `log.settled` waits for this reader.
+      // The one reader of the rows the view has applied: a fact that wrote
+      // workspace files is announced, and a run's end is presented to the
+      // host, each once the view holds the row. `log.settled` waits for
+      // this reader.
       const announce = announceWrites(factKindsOf(plugins.entries.values()));
       yield* Stream.runForEach(
         store.applied,

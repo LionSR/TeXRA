@@ -257,8 +257,8 @@ const DisplayRowDraftSchema = Schema.Union([
    * The terminal fact: outcome, the classified error behind a failure, and
    * a tool-use run's reply (usage and output files have their own rows).
    * Written once per lifecycle, by the storage finalizer, after the run's
-   * last transcript row; the fold derives the terminal phase from it and
-   * from nothing else.
+   * last transcript row; the view reads the run's outcome from it and from
+   * nothing else.
    */
   durable('run.end', RunEndRowSchema.fields),
   /** A run's title, and who gave it: the model's summary, or the user's
