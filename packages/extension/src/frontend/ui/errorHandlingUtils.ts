@@ -1,5 +1,4 @@
 // Third-party imports
-import { READ_GUIDE_BUTTON_LABEL } from '@ui/copy/instructionActions';
 import { Effect } from 'effect';
 
 // Local imports
@@ -7,6 +6,7 @@ import { formatError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { ToolMissing } from '@texra/utils/system/toolChecks';
+import { READ_GUIDE_BUTTON_LABEL } from '@ui/copy/instructionActions';
 
 /** Valid documentation identifiers for error messages. */
 type DocId = 'custom-agents' | 'latex-diff';
