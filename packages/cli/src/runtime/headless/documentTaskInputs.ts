@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import { text as streamText } from 'node:stream/consumers';
 import {
   isPathWithin,
   isStrictlyWithin,
@@ -74,14 +75,8 @@ interface PreparedDocumentTaskInputExpansion {
 }
 
 const readProcessStdinText: Effect.Effect<string, Error> = Effect.tryPromise({
-  try: async () => {
-    process.stdin.setEncoding('utf8');
-    const chunks: string[] = [];
-    for await (const chunk of process.stdin) {
-      chunks.push(String(chunk));
-    }
-    return chunks.join('');
-  },
+  // With an encoding set the chunks are strings, so a leading BOM is kept.
+  try: () => streamText(process.stdin.setEncoding('utf8')),
   catch: ensureError,
 });
 

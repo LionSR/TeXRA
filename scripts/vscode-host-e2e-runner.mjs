@@ -18,6 +18,7 @@ import { spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { parseArgs } from 'node:util';
 import { runTests } from '@vscode/test-electron';
 
 import { isolatedHomeEnv } from './isolated-home.mjs';
@@ -26,9 +27,13 @@ import { walkFiles } from './walkFiles.mjs';
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const extensionPath = path.join(repoRoot, 'packages/extension');
 
-const flag = process.argv.indexOf('--vscode');
-const requested = flag === -1 ? 'stable' : process.argv[flag + 1];
-if (requested === undefined) throw new Error('--vscode needs a value');
+// `pnpm run test:vscode -- --vscode x` forwards the separator itself.
+const {
+  values: { vscode: requested },
+} = parseArgs({
+  args: process.argv.slice(2).filter((arg) => arg !== '--'),
+  options: { vscode: { type: 'string', default: 'stable' } },
+});
 const version =
   requested === 'minimum'
     ? JSON.parse(

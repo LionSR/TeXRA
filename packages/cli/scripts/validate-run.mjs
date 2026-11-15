@@ -14,10 +14,13 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
 import { DatabaseSync } from 'node:sqlite';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { stripVTControlCharacters } from 'node:util';
-import { parseArgs as parseCittyArgs } from 'citty';
+import {
+  parseArgs as parseNodeArgs,
+  stripVTControlCharacters,
+} from 'node:util';
 
 import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
 import {
@@ -176,48 +179,25 @@ function printUsage(stream = console.log) {
   stream(formatUsage());
 }
 
-const PARSE_ARGS_DEF = {
-  help: { type: 'boolean', alias: 'h' },
-  // citty's parser intercepts any `--no-X` token as negation of `X` before
-  // the schema is even consulted, so a literal `noBuild: {type:'boolean'}`
-  // can never observe `--no-build` (it lands on the nonexistent `build`
-  // property instead). Modeling the positive form and negating it is the
-  // only way citty's `--no-*` negation syntax can drive this flag.
-  build: { type: 'boolean', default: true },
-};
-const KNOWN_FLAG_TOKENS = new Set(['--help', '-h', '--no-build']);
-
 function parseArgs(argv) {
   // pnpm can forward a leading separator to scripts (`pnpm run x -- --flag`).
   // Treat that package-manager separator as transparent when it precedes a
-  // script option; a later `--` still marks end-of-options below.
+  // script option.
   const rest =
     argv[0] === '--' && argv[1]?.startsWith('-') ? argv.slice(1) : argv;
 
-  // This script never accepts positional arguments, so anything at or past
-  // an end-of-options `--` is unconditionally an error, same as an
-  // unrecognized flag before it.
-  const separatorIndex = rest.indexOf('--');
-  const flagTokens =
-    separatorIndex === -1 ? rest : rest.slice(0, separatorIndex);
-  const trailingToken =
-    separatorIndex === -1 ? undefined : rest[separatorIndex + 1];
-
-  const unknownToken =
-    flagTokens.find((token) => !KNOWN_FLAG_TOKENS.has(token)) ?? trailingToken;
-  if (unknownToken !== undefined) {
-    console.error(`[validate-run] unknown argument: ${unknownToken}`);
-    printUsage(console.error);
-    process.exit(2);
-  }
-
   let args;
   try {
-    args = parseCittyArgs(flagTokens, PARSE_ARGS_DEF);
+    ({ values: args } = parseNodeArgs({
+      args: rest,
+      options: {
+        help: { type: 'boolean', short: 'h' },
+        'no-build': { type: 'boolean' },
+      },
+    }));
   } catch (error) {
-    console.error(
-      `[validate-run] ${error instanceof Error ? error.message : String(error)}`,
-    );
+    console.error(`[validate-run] ${error.message}`);
+    printUsage(console.error);
     process.exit(2);
   }
   if (args.help) {
@@ -225,7 +205,7 @@ function parseArgs(argv) {
     process.exit(0);
   }
 
-  return { noBuild: args.build === false };
+  return { noBuild: args['no-build'] ?? false };
 }
 
 function preflightExistingValidationBundle() {
@@ -1441,7 +1421,7 @@ async function validateSdkResumeApproval() {
     let asked = '';
     asking.stdout.on('data', (chunk) => (asked += chunk));
     asking.stderr.on('data', () => {});
-    const exited = new Promise((resolve) => asking.on('close', resolve));
+    const exited = once(asking, 'close');
     const line = (key) =>
       asked
         .split('\n')
@@ -2232,7 +2212,7 @@ prompt: |
     const state = { child, stdout: '', stderr: '' };
     child.stdout.on('data', (chunk) => (state.stdout += chunk));
     child.stderr.on('data', (chunk) => (state.stderr += chunk));
-    state.exited = new Promise((resolve) => child.on('close', resolve));
+    state.exited = once(child, 'close');
     windows.push(state);
     await waitFor(`the ${mode} window to attach`, () =>
       state.stdout.includes('ATTACHED'),
@@ -2828,7 +2808,7 @@ prompt: |
     windowA = {
       child,
       stdout: '',
-      exited: new Promise((resolve) => child.on('close', resolve)),
+      exited: once(child, 'close'),
     };
     child.stdout.on('data', (chunk) => (windowA.stdout += chunk));
     await waitFor('window A to attach', () =>

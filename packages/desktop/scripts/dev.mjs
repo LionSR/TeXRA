@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { resolve } from 'node:path';
@@ -38,23 +39,15 @@ function packageManagerCommand(args) {
   };
 }
 
-function runPackageScript(script) {
+async function runPackageScript(script) {
   const invocation = packageManagerCommand(['run', script]);
-  return new Promise((resolveRun, rejectRun) => {
-    const child = spawnLogged(invocation.command, invocation.args);
-    child.once('error', rejectRun);
-    child.once('exit', (code, signal) => {
-      if (code === 0) {
-        resolveRun();
-        return;
-      }
-      rejectRun(
-        new Error(
-          `${script} failed${signal ? ` after ${signal}` : ` with code ${code}`}`,
-        ),
-      );
-    });
-  });
+  const child = spawnLogged(invocation.command, invocation.args);
+  const [code, signal] = await once(child, 'exit');
+  if (code !== 0) {
+    throw new Error(
+      `${script} failed${signal ? ` after ${signal}` : ` with code ${code}`}`,
+    );
+  }
 }
 
 async function waitForRenderer(url, vite) {
@@ -73,26 +66,13 @@ async function waitForRenderer(url, vite) {
   throw new Error(`Timed out waiting for ${url}.`);
 }
 
-function findAvailablePort() {
-  return new Promise((resolvePort, rejectPort) => {
-    const server = createServer();
-    server.once('error', rejectPort);
-    server.listen(0, '127.0.0.1', () => {
-      const address = server.address();
-      if (address == null || typeof address === 'string') {
-        server.close();
-        rejectPort(new Error('Could not allocate a desktop development port.'));
-        return;
-      }
-      server.close((error) => {
-        if (error) {
-          rejectPort(error);
-          return;
-        }
-        resolvePort(address.port);
-      });
-    });
-  });
+async function findAvailablePort() {
+  const server = createServer().listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const { port } = server.address();
+  server.close();
+  await once(server, 'close');
+  return port;
 }
 
 function stop(exitCode) {

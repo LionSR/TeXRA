@@ -37,7 +37,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { spawnSync } from 'node:child_process';
-import { parseArgs as parseCittyArgs } from 'citty';
+import { parseArgs as parseNodeArgs } from 'node:util';
 
 import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
 import { isolateProcessHome } from '../../../scripts/isolated-home.mjs';
@@ -2821,93 +2821,59 @@ function printScenarioList() {
   console.log(SCENARIOS.map((scenario) => scenario.name).join('\n'));
 }
 
-const PARSE_ARGS_DEF = {
-  help: { type: 'boolean', alias: 'h' },
-  list: { type: 'boolean' },
-  listScenarios: { type: 'boolean' },
-  listSelected: { type: 'boolean' },
-  // citty's parser intercepts any `--no-X` token as negation of `X` before
-  // the schema is even consulted, so a literal `noBuild: {type:'boolean'}`
-  // can never observe `--no-build` (it lands on the nonexistent `build`
-  // property instead). Modeling the positive form and negating it is the
-  // only way citty's `--no-*` negation syntax can drive this flag.
-  build: { type: 'boolean', default: true },
-  smoke: { type: 'boolean' },
-  snapshotDir: { type: 'string' },
-};
-const KNOWN_FLAG_TOKENS = new Set([
-  '--help',
-  '-h',
-  '--list',
-  '--list-scenarios',
-  '--list-selected',
-  '--no-build',
-  '--smoke',
-  '--snapshot-dir',
-]);
-
 function parseArgs(argv) {
   // pnpm forwards a leading separator to scripts (`pnpm run x -- --flag`).
   // Treat that package-manager separator as transparent when it precedes a
-  // script option; a later `--` still marks end-of-options below.
+  // script option; a later `--` still marks end-of-options.
   const rest =
     argv[0] === '--' && argv[1]?.startsWith('-') ? argv.slice(1) : argv;
 
-  // citty's parser is intentionally lenient about unrecognized flags, so
-  // reject them ourselves before handing off — a typo'd flag should fail
-  // loudly, not silently fall through as a stray positional.
-  for (let index = 0; index < rest.length; index += 1) {
-    const token = rest[index];
-    if (token === '--') break; // end-of-options marker; rest are positionals
-    if (token === '--snapshot-dir') {
-      index += 1; // its value is free-form and may itself start with '-'
-      continue;
-    }
-    const isKnownFlag =
-      KNOWN_FLAG_TOKENS.has(token) || token.startsWith('--snapshot-dir=');
-    if (token.startsWith('-') && !isKnownFlag) {
-      console.error(`[validate-tui] unknown option: ${token}`);
-      printUsage(console.error);
-      process.exit(1);
-    }
-  }
-
-  let args;
+  let parsed;
   try {
-    args = parseCittyArgs(rest, PARSE_ARGS_DEF);
+    parsed = parseNodeArgs({
+      args: rest,
+      allowPositionals: true,
+      options: {
+        help: { type: 'boolean', short: 'h' },
+        list: { type: 'boolean' },
+        'list-scenarios': { type: 'boolean' },
+        'list-selected': { type: 'boolean' },
+        'no-build': { type: 'boolean' },
+        smoke: { type: 'boolean' },
+        'snapshot-dir': { type: 'string' },
+      },
+    });
   } catch (error) {
-    console.error(
-      `[validate-tui] ${error instanceof Error ? error.message : String(error)}`,
-    );
+    console.error(`[validate-tui] ${error.message}`);
+    printUsage(console.error);
     process.exit(1);
   }
+  const args = parsed.values;
 
   if (args.help) {
     printUsage();
     process.exit(0);
   }
-  if (args.list || args.listScenarios) {
+  if (args.list || args['list-scenarios']) {
     printScenarioList();
     process.exit(0);
   }
 
   let snapshotDir;
-  if (args.snapshotDir !== undefined) {
-    if (!args.snapshotDir) {
+  if (args['snapshot-dir'] !== undefined) {
+    if (!args['snapshot-dir']) {
       console.error('[validate-tui] --snapshot-dir requires a directory');
       process.exit(1);
     }
-    snapshotDir = path.resolve(process.cwd(), args.snapshotDir);
+    snapshotDir = path.resolve(process.cwd(), args['snapshot-dir']);
   }
 
-  const scenarios = args._.filter((token) => token !== '--');
-
   return {
-    scenarios,
+    scenarios: parsed.positionals,
     snapshotDir,
-    listSelected: Boolean(args.listSelected),
-    noBuild: args.build === false,
-    smoke: Boolean(args.smoke),
+    listSelected: args['list-selected'] ?? false,
+    noBuild: args['no-build'] ?? false,
+    smoke: args.smoke ?? false,
   };
 }
 

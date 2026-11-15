@@ -2,6 +2,7 @@ import console from 'node:console';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
+import { parseArgs } from 'node:util';
 
 // Code-generate each app host's NOTICE.txt from the root NOTICE — the single
 // hand-edited source of truth for the attribution of what the app bundles.
@@ -22,7 +23,12 @@ const PACKAGE_NOTICES = [
   'packages/extension/NOTICE.txt',
 ];
 
-const check = process.argv.includes('--check');
+const {
+  values: { check },
+} = parseArgs({
+  args: process.argv.slice(2).filter((arg) => arg !== '--'),
+  options: { check: { type: 'boolean' } },
+});
 const sourcePath = path.join(rootDir, 'NOTICE');
 const sourceText = await readFile(sourcePath, 'utf8');
 

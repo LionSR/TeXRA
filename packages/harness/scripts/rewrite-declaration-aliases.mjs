@@ -1,11 +1,10 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { walkFiles } from '../../../scripts/walkFiles.mjs';
 import { isFile } from './fsWalk.mjs';
 
-const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+const packageRoot = path.resolve(import.meta.dirname, '..');
 const repositoryRoot = path.resolve(packageRoot, '../..');
 const outputRoot = path.join(packageRoot, 'dist/types');
 const tsconfig = JSON.parse(
