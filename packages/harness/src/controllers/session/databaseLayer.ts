@@ -128,14 +128,14 @@ const UPSERT_KIND = `INSERT INTO stored_kind (type, version) VALUES (?, ?)
 const AGGREGATE_LIST = `SELECT s.id FROM json_each(?) l
   CROSS JOIN event_sequence s
     ON s.kind = l.value ->> 0 AND s.logical_id = l.value ->> 1`;
-/** Aggregates' existence, the list bound as `AGGREGATE_LIST` binds. */
-const READ_STATE = `
+/** Aggregates' existence, for the ids a `WHERE` on `s.id` selects. */
+const STATE_COLUMNS = `
 SELECT s.kind, s.logical_id AS logicalId, s.uid,
   s.closed_by IS NOT NULL AS closed, p.kind AS parentKind,
   p.logical_id AS parentLogicalId, s.start_commit AS startCommit
-FROM event_sequence s LEFT JOIN event_sequence p ON p.id = s.parent_id
-WHERE s.id IN (${AGGREGATE_LIST})
-`;
+FROM event_sequence s LEFT JOIN event_sequence p ON p.id = s.parent_id`;
+/** Aggregates' existence, the list bound as `AGGREGATE_LIST` binds. */
+const READ_STATE = `${STATE_COLUMNS} WHERE s.id IN (${AGGREGATE_LIST})`;
 
 /** The stored rows one display page covers. */
 const DISPLAY_PAGE_ROWS = 2000;
@@ -302,9 +302,8 @@ export const databaseLayer = (
         SELECT child.id FROM event_sequence child
         JOIN dependents parent ON child.parent_id = parent.id
       )`;
-      const dependentKeys = `${dependents}
-        SELECT kind, logical_id AS logicalId FROM event_sequence
-        WHERE id IN (SELECT id FROM dependents) ORDER BY kind, logical_id`;
+      const dependentStates = `${dependents} ${STATE_COLUMNS}
+        WHERE s.id IN (SELECT id FROM dependents)`;
       const deletionRuns = `${dependents}
         SELECT logical_id AS runId FROM event_sequence
         WHERE id IN (SELECT id FROM dependents) AND kind = 'run'
@@ -422,8 +421,8 @@ export const databaseLayer = (
         WHERE kind = ? AND logical_id = ? AND closed_by = ?`;
       const collectClosed = `DELETE FROM event_sequence
         WHERE kind = ? AND logical_id = ? AND closed_by = ?`;
-      const readState = (ids: readonly AggregateId[]) =>
-        Effect.map(exec(READ_STATE, [aggregateList(ids)]), (rows) =>
+      const states = (statement: string, params: readonly unknown[]) =>
+        Effect.map(exec(statement, params), (rows) =>
           rows.map((row) =>
             Schema.decodeUnknownSync(AggregateStateSchema)({
               ...row,
@@ -435,15 +434,8 @@ export const databaseLayer = (
             }),
           ),
         );
-      const readDependents = Effect.fn('readDependents')(function* (
-        id: AggregateId,
-      ) {
-        return yield* readState(
-          (yield* exec(dependentKeys, aggregateColumns(id))).map((row) =>
-            aggregateOf(row.kind, row.logicalId),
-          ),
-        );
-      });
+      const readState = (ids: readonly AggregateId[]) =>
+        states(READ_STATE, [aggregateList(ids)]);
       /** A row whose aggregate is closed rejects this writer; one whose
        *  aggregate was never created is the caller's defect. */
       const refuseWriter = Effect.fn('refuseWriter')(function* (
@@ -723,7 +715,10 @@ export const databaseLayer = (
         runRemoval: (id, expectedStartCommit) =>
           transaction(
             Effect.gen(function* () {
-              const observed = yield* readDependents(id);
+              const observed = yield* states(
+                dependentStates,
+                aggregateColumns(id),
+              );
               const target = observed.find((row) => row.aggregateId === id);
               if (target === undefined || observed.some((row) => row.closed))
                 return yield* new DatabaseAggregateClosed({ aggregateId: id });
