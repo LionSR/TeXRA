@@ -88,6 +88,7 @@
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { once } from 'node:events';
 import {
   cpSync,
   existsSync,
@@ -106,6 +107,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
+import { parseArgs } from 'node:util';
 import { zstdDecompressSync } from 'node:zlib';
 import { build as bundle } from 'esbuild';
 import stableStringify from 'safe-stable-stringify';
@@ -150,20 +152,28 @@ const PROVIDER_KEYS = [
   'GLM_API_KEY',
 ];
 
-const args = process.argv.slice(2).filter((arg) => arg !== '--');
-const noBuild = args.includes('--no-build');
-const keep = args.includes('--keep');
-// Generate twice and fail when the two dumps differ, so a source of
-// nondeterminism shows up here and not as noise in a later fixture diff.
-const twice = args.includes('--twice');
 /** The processes a step starts, reaped however the generation ends. */
 const spawned = new Set();
-if (args.some((arg) => !['--no-build', '--keep', '--twice'].includes(arg))) {
+let options;
+try {
+  ({ values: options } = parseArgs({
+    args: process.argv.slice(2).filter((arg) => arg !== '--'),
+    options: {
+      'no-build': { type: 'boolean' },
+      keep: { type: 'boolean' },
+      // Generate twice and fail when the two dumps differ, so a source of
+      // nondeterminism shows up here and not as noise in a later fixture diff.
+      twice: { type: 'boolean' },
+    },
+  }));
+} catch (error) {
+  console.error(`[golden-store] ${error.message}`);
   console.error(
     'usage: node scripts/generate-golden-store.mjs [--no-build] [--keep] [--twice]',
   );
   process.exit(2);
 }
+const { 'no-build': noBuild, keep, twice } = options;
 
 function fail(message) {
   throw new Error(`[golden-store] ${message}`);
@@ -412,7 +422,7 @@ process.stdin.on('end', function answer() {
     service.on('exit', () => spawned.delete(service));
     let log = '';
     service.stderr.on('data', (data) => (log += data));
-    const exited = new Promise((resolve) => service.on('exit', resolve));
+    const exited = once(service, 'exit');
     const handle = { done: () => service.exitCode !== null, output: () => log };
     // Up once its record names it: what every client finds it by.
     const { socket } = await until(
@@ -457,7 +467,7 @@ process.stdin.on('end', function answer() {
     const client = (command) => run(command, undefined, serviceEnv);
     await use({ client, call, handle });
     run(['service', 'stop']);
-    const code = await exited;
+    const [code] = await exited;
     if (code !== 0) fail(`texra serve exited ${code}\n${log}`);
   };
   // A headless run in the background, for the generator to kill.

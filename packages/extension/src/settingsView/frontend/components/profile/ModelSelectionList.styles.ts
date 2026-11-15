@@ -38,21 +38,6 @@ export const modelSelectionListStyles: CSSResult = css`
     max-width: 300px;
   }
 
-  .provider-group-chevron {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    margin-inline-end: var(--wa-space-2xs);
-    transition: transform var(--transition-fast);
-    color: var(--color-text-secondary);
-  }
-
-  .provider-group-chevron.expanded {
-    transform: rotate(90deg);
-  }
-
   .provider-group-name {
     font-weight: var(--font-weight-medium);
     flex: 1;

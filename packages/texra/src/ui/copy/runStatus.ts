@@ -44,6 +44,11 @@ export const RUN_SECTION_LABELS: Readonly<Record<RunSection, string>> =
     recent: 'Recent',
   });
 
+/** A count of runs in one section, as a rollup reads it: `2 waiting on you`. */
+export function sectionCountLabel(section: RunSection, count: string): string {
+  return `${count} ${RUN_SECTION_LABELS[section].toLowerCase()}`;
+}
+
 /** Section order, in the table's own order. */
 export const RUN_SECTION_ORDER: readonly RunSection[] = Object.freeze(
   Object.keys(RUN_SECTION_LABELS).filter((key): key is RunSection =>
@@ -97,6 +102,11 @@ export interface StatusLook {
 /** The web glyph a status shows: its own, else its tone's. */
 export function statusGlyph(look: StatusLook): IconName {
   return look.glyph ?? TONE_GLYPH[look.tone];
+}
+
+/** The tone of a file the run tried to read: loaded, or not. */
+export function fileLoadTone(ok: boolean): RunTone {
+  return ok ? 'success' : 'danger';
 }
 
 /** How a tool card's status section reads. */

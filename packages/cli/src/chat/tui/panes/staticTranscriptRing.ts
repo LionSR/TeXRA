@@ -120,8 +120,11 @@ function sessionHeaderIdentityLine(
   child?: ChildHeader,
 ): string {
   if (child) {
-    const model = child.modelLabel ?? getModelLabel(meta.model || '-');
-    return `${child.childKind}: ${child.label} · parent: ${child.parentLabel} · model: ${model}`;
+    // A child the view gives no model (a process) names none: the
+    // session's model is another run's.
+    const model =
+      child.modelLabel === null ? '' : ` · model: ${child.modelLabel}`;
+    return `${child.childKind}: ${child.label} · parent: ${child.parentLabel}${model}`;
   }
   const model = getModelLabel(meta.model || '-');
   const agent = meta.agent || 'chat';

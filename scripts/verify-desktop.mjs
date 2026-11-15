@@ -37,7 +37,6 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, posix, relative, resolve } from 'node:path';
 import process from 'node:process';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { fileURLToPath } from 'node:url';
 
 // Local imports - shared packaging invariants
 import {
@@ -57,7 +56,7 @@ import {
   waitForTermination,
 } from './smoke-process-utils.mjs';
 
-const repoRoot = fileURLToPath(new URL('..', import.meta.url));
+const repoRoot = join(import.meta.dirname, '..');
 const desktopRoot = join(repoRoot, 'packages', 'desktop');
 
 function repoRelative(filePath) {
@@ -1174,10 +1173,7 @@ function appendDiagnostic(label, value) {
 
 function createRuntimeFailureSignal() {
   let firstError;
-  let resolveFirstError;
-  const promise = new Promise((resolvePromise) => {
-    resolveFirstError = resolvePromise;
-  });
+  const { promise, resolve: resolveFirstError } = Promise.withResolvers();
   return {
     get error() {
       return firstError;

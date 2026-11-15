@@ -49,7 +49,7 @@ import { type RunCell, SessionLog } from '@shared/session/runHistory';
 import { workAutoApproved } from '../requests';
 import type { SessionServices } from '../rootLaunch';
 import type { AgentRunShape } from '../run/AgentRun';
-import type { InputPart } from '../run/mediaInput';
+import type { InputPart } from '@texra-ai/llm';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** One installed plugin's command hook, as a step pinned it. */

@@ -427,6 +427,17 @@ Combines context window size and pricing info.
 declare function hint(model: ModelConfig | string): string;
 ```
 
+## InputPart
+
+One part of a user turn or a tool result.
+
+```ts
+type InputPart = Extract<
+  ResolvedTurn['messages'][number],
+  { role: 'user' }
+>['content'][number];
+```
+
 ## isApiProvider
 
 Runtime-checked narrowing for provider strings.

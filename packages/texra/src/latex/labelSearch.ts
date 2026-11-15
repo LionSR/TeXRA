@@ -1,8 +1,5 @@
 // Third-party imports
-import { Effect, Option, Result } from 'effect';
-
-// Local imports - utilities
-import escapeRegExp from 'escape-string-regexp';
+import { Effect, Option, RegExp as EffectRegExp, Result } from 'effect';
 
 /**
  * Scan candidate files for `\label{<label>}` and hand the first match to
@@ -27,7 +24,10 @@ export function openFirstLabelMatch<ReadError, MatchError, R>(
   ) => Effect.Effect<unknown, MatchError, R>,
 ): Effect.Effect<boolean, MatchError, R> {
   // A regex matching `\label{<label>}` for a literal label string.
-  const pattern = new RegExp(`\\\\label\\{${escapeRegExp(label)}\\}`, 'm');
+  const pattern = new RegExp(
+    `\\\\label\\{${EffectRegExp.escape(label)}\\}`,
+    'm',
+  );
   return Effect.gen(function* () {
     let unhandled: Option.Option<MatchError> = Option.none();
     for (const file of files) {

@@ -1,7 +1,8 @@
-// The one "… N previous / more / hidden rows" vocabulary for every TUI
-// overflow marker (scrollable bodies, lists, elided output; "lines" where
-// the unit is source lines), plus the compact "+N earlier, +N more" suffix
-// Select puts inline on the focused row instead of on its own line.
+// The one "… N previous / more / hidden rows" vocabulary for every terminal
+// overflow marker: the TUI's scrollable bodies, lists and elided output
+// ("lines" where the unit is source lines), and the plain text the headless
+// commands print (the memory list, approval summaries); plus the compact
+// "+N earlier, +N more" suffix Select puts inline on the focused row.
 
 export function previousRowsText(count: number): string {
   return `… ${count} previous rows`;

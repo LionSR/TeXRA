@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { COLLAPSED, EXPANDED, TICK } from '@cli/tui/ui/glyphs';
+import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { finishedToolCalls } from '@cli/runtime/headless/runProgressRenderer';
 import { truncateSummaryToWidth } from '@cli/runtime/terminal/terminalText';
@@ -16,7 +17,6 @@ import {
   CHILD_ROW_METADATA_MIN_COLUMNS,
   CHILD_STATUS_MARKER,
   childRowMetadataText,
-  CHILD_TONE_COLOR,
   pendingApprovalRowDisplay,
 } from './SubagentListDisplay';
 import {
@@ -117,7 +117,7 @@ function SessionRow({
       })
     : undefined;
   const summary = run.description;
-  const color = CHILD_TONE_COLOR[runStatus(run).tone];
+  const color = TONE_PAINT[runStatus(run).tone].color;
   const rollup =
     !expanded && run.rollup.total > 0
       ? nestedRollupLabel(run.rollup)

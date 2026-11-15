@@ -94,40 +94,21 @@ function protectLatexReferences(
   };
 }
 
-/**
- * Two FNV-1a lanes → one base-36 key. Cheap, no crypto needs here — but the
- * digest is the cache's identity key, so a collision would render one message
- * as another. 32 bits is not enough for that over a long session (a 2000-entry
- * window churns far more than 2000 distinct bodies), so two lanes run with
- * different primes and are joined by a delimiter (concatenating two
- * variable-length forms would re-import collisions across the boundary), with
- * the length mixed in as a third component.
- */
-function hashContent(str: string): string {
-  let a = 2166136261;
-  let b = 2166136261;
-  for (let i = 0; i < str.length; i++) {
-    const code = str.charCodeAt(i);
-    a = ((a ^ code) * 16777619) >>> 0;
-    b = ((b ^ code) * 16777639) >>> 0;
-  }
-  return `${a.toString(36)}.${b.toString(36)}.${str.length.toString(36)}`;
-}
-
 export function createMarkdownProcessor(
   config: MarkdownProcessorConfig,
 ): MarkdownProcessor {
   const format = config.formatLatexReference ?? defaultFormatLatexReference;
+  // Keyed by the source text itself: a digest key could render one message
+  // as another on a collision. The key counts toward the size bound.
   const cache = new LRUCache<string, string>({
     max: MAX_CACHE_ENTRIES,
     maxSize: MAX_CACHE_TOTAL_CHARS,
-    sizeCalculation: (value) => value.length,
+    sizeCalculation: (value, key) => value.length + key.length,
   });
   let environmentProbe: BegEndEnvironmentProbe | undefined;
 
   return (content: string): string => {
-    const key = hashContent(content);
-    const cached = cache.get(key);
+    const cached = cache.get(content);
     if (cached !== undefined) return cached;
 
     // The CLI shield records offsets against the string markdown-it parses.
@@ -176,8 +157,11 @@ export function createMarkdownProcessor(
 
     // lru-cache's `sizeCalculation` rejects zero, so skip caching the empty
     // render (e.g. content that's only a link-reference definition).
-    if (result.length > 0 && result.length <= MAX_CACHE_ENTRY_CHARS) {
-      cache.set(key, result);
+    if (
+      result.length > 0 &&
+      result.length + content.length <= MAX_CACHE_ENTRY_CHARS
+    ) {
+      cache.set(content, result);
     }
 
     return result;

@@ -1,5 +1,6 @@
+import { randomUUID } from 'node:crypto';
+
 import { Effect, FileSystem } from 'effect';
-import { nanoid } from 'nanoid';
 
 import {
   buildDiffHunks,
@@ -76,7 +77,7 @@ export function createDesktopDiffHost(
     original: DiffSource,
     proposed: DiffSource,
     { title, displayPath }: DiffLabel,
-    previewId: string = nanoid(),
+    previewId: string = randomUUID(),
   ): Effect.Effect<void, Error> {
     return withProcessServices(
       options.runtime,

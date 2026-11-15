@@ -360,7 +360,7 @@ export function createDesktopWorkspaceIpc(
   const writeFile = (path: string, contents: string, base: string | null) =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const absolutePath = yield* path.startsWith('texra-agent:')
+      const absolutePath = yield* isAgentDocumentTarget(path)
         ? resolveAgentDocument(path, true)
         : resolveWorkspaceWritePath(options.getWorkspacePath(), path);
       return yield* Effect.gen(function* () {

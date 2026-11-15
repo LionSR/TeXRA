@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 
 import { build } from 'esbuild';
 
-const packageRoot = fileURLToPath(new URL('..', import.meta.url));
+const packageRoot = join(import.meta.dirname, '..');
 
 /** Run one Node entry point in the package root; a failed step ends the build. */
 const runNode = (args) => {

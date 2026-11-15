@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **`texra version` follows the configured output format.** It reads
+  `--output-format`, `TEXRA_OUTPUT_FORMAT` and the `outputFormat` setting
+  like every other command, and warns about an invalid value. SDK: new
+  `APPROVAL_POLICY_ENV` in `@texra-ai/harness/node`.
+
 - **SDK: a store an earlier build wrote is refused, never moved aside.**
   Opening a session store stamped with another build's schema fails and
   changes nothing in the file; the error says to move it away. Only a

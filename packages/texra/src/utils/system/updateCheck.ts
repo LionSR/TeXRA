@@ -1,6 +1,9 @@
-import { Clock, Duration, Effect, Predicate, Result, Schema } from 'effect';
-import { HttpClient, HttpClientResponse } from 'effect/http';
-import { gt as semverGt, valid as semverValid } from 'semver';
+import { Clock, Duration, Effect, Result, Schema, SemVer } from 'effect';
+import {
+  HttpClient,
+  HttpClientResponse,
+  HttpIncomingMessage,
+} from 'effect/http';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { GlobalValues, type ValueFamily } from '@texra-ai/harness/host';
@@ -24,18 +27,21 @@ type UpdateCheckRecord = typeof UpdateCheckRecordSchema.Type;
  * precedence (a plain release outranks any prerelease of the same `x.y.z`, and
  * prereleases compare numerically — so `1.2.0-rc.10` correctly beats
  * `1.2.0-rc.2`). Unparseable inputs yield `false` so a malformed
- * registry/release response can never push a bogus update prompt. The
- * leading `v` some tags carry is tolerated by `semver`.
+ * registry/release response can never push a bogus update prompt. Parsing is
+ * strict: the desktop strips a release tag's leading `v` before it gets here.
  *
  * Shared by the CLI (`updateChecker.ts`) and desktop (`desktopUpdateChecker.ts`)
  * update checks, which otherwise poll different sources on the same daily
  * cadence and notify through the same env-var kill switch.
  */
 function isNewerSemverVersion(latest: string, current: string): boolean {
-  const a = semverValid(latest.trim(), { loose: true });
-  const b = semverValid(current.trim(), { loose: true });
-  if (!a || !b) return false;
-  return semverGt(a, b);
+  const a = SemVer.parse(latest.trim());
+  const b = SemVer.parse(current.trim());
+  return (
+    Result.isSuccess(a) &&
+    Result.isSuccess(b) &&
+    SemVer.isGreaterThan(a.success, b.success)
+  );
 }
 
 /** Poll for updates at most once per day. */
@@ -138,9 +144,10 @@ interface FetchJsonStringFieldOptions {
 }
 
 /**
- * Fetch one string field from a JSON response. Update checks are best-effort:
- * non-success responses, malformed payloads, timeouts, and network failures
- * all yield `undefined`, logged at debug (a warning would print on every
+ * Fetch one non-empty string field from a JSON response. Update checks are
+ * best-effort: non-success responses, malformed payloads (the field missing
+ * included), timeouts, and network failures all yield `undefined`, logged at
+ * debug (a warning would print on every
  * offline CLI start).
  */
 export const fetchJsonStringField = ({
@@ -155,14 +162,22 @@ export const fetchJsonStringField = ({
 > =>
   HttpClient.get(url, { headers }).pipe(
     Effect.flatMap(HttpClientResponse.filterStatusOk),
-    Effect.flatMap((response) => response.json),
-    Effect.map((body) => {
-      const value = Predicate.isObject(body) ? body[field] : undefined;
-      return typeof value === 'string' && value !== '' ? value : undefined;
-    }),
+    Effect.flatMap(
+      HttpIncomingMessage.schemaBodyJson(
+        Schema.Struct({
+          [field]: Schema.String.check(Schema.isMinLength(1)),
+        }),
+      ),
+    ),
+    Effect.map((body): string | undefined => body[field]),
     Effect.timeout(Duration.millis(timeoutMs)),
     Effect.catch(
-      (error: HttpClientError.HttpClientError | Cause.TimeoutError) =>
+      (
+        error:
+          | HttpClientError.HttpClientError
+          | Schema.SchemaError
+          | Cause.TimeoutError,
+      ) =>
         Effect.logDebug(`Update check of ${url} failed: ${error.message}`).pipe(
           withLogChannel('updateCheck'),
           Effect.as(undefined),

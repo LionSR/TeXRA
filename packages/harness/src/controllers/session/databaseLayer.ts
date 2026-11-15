@@ -117,9 +117,14 @@ RETURNING "commit" AS "commit"
 /** A blob is stored once per store, whichever run wrote it first. */
 const INSERT_BLOB = `INSERT INTO blob (digest, value) VALUES (?, ?)
   ON CONFLICT(digest) DO NOTHING`;
-const INSERT_REF = `INSERT INTO event_blob ("commit", digest, inline)
-  VALUES (?, ?, ?)`;
-const UPSERT_KIND = `INSERT INTO stored_kind (type, version) VALUES (?, ?)
+/** Link a row to its blobs, bound as one `json_each(?)` array of
+ *  `[digest, inline]` pairs. */
+const INSERT_REFS = `INSERT INTO event_blob ("commit", digest, inline)
+  SELECT ?, value ->> 0, value ->> 1 FROM json_each(?)`;
+/** Record the kinds written, bound as one `json_each(?)` array of
+ *  `[type, version]` pairs; a kind keeps the highest version written. */
+const UPSERT_KINDS = `INSERT INTO stored_kind (type, version)
+  SELECT value ->> 0, value ->> 1 FROM json_each(?) WHERE true
   ON CONFLICT(type) DO UPDATE
   SET version = max(stored_kind.version, excluded.version)`;
 
@@ -128,14 +133,14 @@ const UPSERT_KIND = `INSERT INTO stored_kind (type, version) VALUES (?, ?)
 const AGGREGATE_LIST = `SELECT s.id FROM json_each(?) l
   CROSS JOIN event_sequence s
     ON s.kind = l.value ->> 0 AND s.logical_id = l.value ->> 1`;
-/** Aggregates' existence, the list bound as `AGGREGATE_LIST` binds. */
-const READ_STATE = `
+/** Aggregates' existence, for the ids a `WHERE` on `s.id` selects. */
+const STATE_COLUMNS = `
 SELECT s.kind, s.logical_id AS logicalId, s.uid,
   s.closed_by IS NOT NULL AS closed, p.kind AS parentKind,
   p.logical_id AS parentLogicalId, s.start_commit AS startCommit
-FROM event_sequence s LEFT JOIN event_sequence p ON p.id = s.parent_id
-WHERE s.id IN (${AGGREGATE_LIST})
-`;
+FROM event_sequence s LEFT JOIN event_sequence p ON p.id = s.parent_id`;
+/** Aggregates' existence, the list bound as `AGGREGATE_LIST` binds. */
+const READ_STATE = `${STATE_COLUMNS} WHERE s.id IN (${AGGREGATE_LIST})`;
 
 /** The stored rows one display page covers. */
 const DISPLAY_PAGE_ROWS = 2000;
@@ -302,9 +307,8 @@ export const databaseLayer = (
         SELECT child.id FROM event_sequence child
         JOIN dependents parent ON child.parent_id = parent.id
       )`;
-      const dependentKeys = `${dependents}
-        SELECT kind, logical_id AS logicalId FROM event_sequence
-        WHERE id IN (SELECT id FROM dependents) ORDER BY kind, logical_id`;
+      const dependentStates = `${dependents} ${STATE_COLUMNS}
+        WHERE s.id IN (SELECT id FROM dependents)`;
       const deletionRuns = `${dependents}
         SELECT logical_id AS runId FROM event_sequence
         WHERE id IN (SELECT id FROM dependents) AND kind = 'run'
@@ -314,12 +318,6 @@ export const databaseLayer = (
         UPDATE event_sequence SET closed_by = ?
         WHERE id IN (SELECT id FROM dependents)
       `;
-      const dependentBlobs = `${dependents} SELECT DISTINCT r.digest FROM event_blob r
-        JOIN event e ON e."commit" = r."commit" WHERE e.aggregate IN (SELECT id FROM dependents)`;
-      /** Blob collection is by reachability: a digest no row references. */
-      const collectBlobs = `DELETE FROM blob
-        WHERE digest IN (SELECT value FROM json_each(?))
-          AND NOT EXISTS (SELECT 1 FROM event_blob r WHERE r.digest = blob.digest)`;
       // The display types in a commit range, with the priced rows' usage.
       const display = displayUnion(
         '"commit" > ? AND "commit" <= ?',
@@ -415,13 +413,14 @@ export const databaseLayer = (
       const reparent = `UPDATE event_sequence SET parent_id = ${AGGREGATE}
         WHERE id = ? AND closed_by IS NULL`;
       // A closed aggregate's sequence row, collected with its dependents
-      // and rows by the foreign keys' cascade.
+      // and rows by the foreign keys' cascade, and the blobs no other row
+      // links by the schema's `event_blob_collect`.
       const closedBy = `SELECT id FROM event_sequence
         WHERE kind = ? AND logical_id = ? AND closed_by = ?`;
       const collectClosed = `DELETE FROM event_sequence
         WHERE kind = ? AND logical_id = ? AND closed_by = ?`;
-      const readState = (ids: readonly AggregateId[]) =>
-        Effect.map(exec(READ_STATE, [aggregateList(ids)]), (rows) =>
+      const states = (statement: string, params: readonly unknown[]) =>
+        Effect.map(exec(statement, params), (rows) =>
           rows.map((row) =>
             Schema.decodeUnknownSync(AggregateStateSchema)({
               ...row,
@@ -433,15 +432,8 @@ export const databaseLayer = (
             }),
           ),
         );
-      const readDependents = Effect.fn('readDependents')(function* (
-        id: AggregateId,
-      ) {
-        return yield* readState(
-          (yield* exec(dependentKeys, aggregateColumns(id))).map((row) =>
-            aggregateOf(row.kind, row.logicalId),
-          ),
-        );
-      });
+      const readState = (ids: readonly AggregateId[]) =>
+        states(READ_STATE, [aggregateList(ids)]);
       /** A row whose aggregate is closed rejects this writer; one whose
        *  aggregate was never created is the caller's defect. */
       const refuseWriter = Effect.fn('refuseWriter')(function* (
@@ -471,8 +463,7 @@ export const databaseLayer = (
               : []),
           ]),
         );
-        for (const [type, version] of kinds)
-          yield* exec(UPSERT_KIND, [type, version]);
+        yield* exec(UPSERT_KINDS, [JSON.stringify([...kinds])]);
         yield* upkeep.follow(committed);
         return committed;
       });
@@ -576,13 +567,19 @@ export const databaseLayer = (
           return yield* invariant(
             `No commit assigned for aggregate ${draft.aggregateId}`,
           );
-        for (const { digest, value, inline } of encoded.blobs) {
+        for (const { digest, value } of encoded.blobs)
           yield* exec(INSERT_BLOB, [digest, value]);
-          yield* exec(INSERT_REF, [commit, digest, inline ? 1 : 0]);
-        }
-        // Linked, not written: the foreign key refuses a blob that is gone.
-        for (const digest of encoded.references)
-          yield* exec(INSERT_REF, [commit, digest, 0]);
+        // References are linked, not written: the foreign key refuses a
+        // blob that is gone.
+        const links = [
+          ...encoded.blobs.map(({ digest, inline }) => [
+            digest,
+            inline ? 1 : 0,
+          ]),
+          ...encoded.references.map((digest) => [digest, 0]),
+        ];
+        if (links.length > 0)
+          yield* exec(INSERT_REFS, [commit, JSON.stringify(links)]);
         if (seq === 1) {
           yield* exec(
             'UPDATE event_sequence SET start_commit = ? WHERE id = ?',
@@ -681,7 +678,9 @@ export const databaseLayer = (
           afterCommit: sql.afterCommit,
           written: valuesWritten,
           valueWritten: Effect.asVoid(
-            exec(UPSERT_KIND, [CURRENT_VALUE_KIND, CURRENT_VALUE_VERSION]),
+            exec(UPSERT_KINDS, [
+              JSON.stringify([[CURRENT_VALUE_KIND, CURRENT_VALUE_VERSION]]),
+            ]),
           ),
         }),
         readAggregate: (id, fromSeq, types, toSeq = Number.MAX_SAFE_INTEGER) =>
@@ -721,7 +720,10 @@ export const databaseLayer = (
         runRemoval: (id, expectedStartCommit) =>
           transaction(
             Effect.gen(function* () {
-              const observed = yield* readDependents(id);
+              const observed = yield* states(
+                dependentStates,
+                aggregateColumns(id),
+              );
               const target = observed.find((row) => row.aggregateId === id);
               if (target === undefined || observed.some((row) => row.closed))
                 return yield* new DatabaseAggregateClosed({ aggregateId: id });
@@ -753,14 +755,7 @@ export const databaseLayer = (
             // Filesystem promises cannot be undone by fiber interruption.
             yield* cleanup(tombstone.runIds).pipe(Effect.uninterruptible);
             yield* transact(
-              Effect.gen(function* () {
-                const digests = (yield* exec(dependentBlobs, columns)).map(
-                  (row) => row.digest,
-                );
-                yield* exec(collectClosed, [...columns, tombstone.commit]);
-                if (digests.length > 0)
-                  yield* exec(collectBlobs, [JSON.stringify(digests)]);
-              }),
+              exec(collectClosed, [...columns, tombstone.commit]),
             );
             yield* reclaimFreePages(sql, path);
           }),

@@ -23,6 +23,7 @@ import { Settings } from '@texra-ai/harness/plugins';
 import { modelConfig } from '@texra-ai/llm';
 import {
   absentReason,
+  APPROVAL_POLICY_ENV,
   canonicalizeWorkspaceRoot,
   pathExists,
 } from '@texra-ai/harness/node';
@@ -148,9 +149,7 @@ interface CliAmbientState {
   readonly stdoutIsTty: boolean;
   readonly stderrIsTty: boolean;
   readonly termIsDumb?: boolean;
-  /** Color is allowed on stdout. */
   readonly stdoutColorEnabled: boolean;
-  /** Color is allowed on stderr. */
   readonly stderrColorEnabled: boolean;
 }
 
@@ -478,7 +477,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       (noInput
         ? APPROVAL_POLICY_NO_INPUT_DEFAULT
         : yield* pickEnv(
-            'TEXRA_APPROVAL_POLICY',
+            APPROVAL_POLICY_ENV,
             parseApprovalPolicy,
             configWarnings,
           ));
