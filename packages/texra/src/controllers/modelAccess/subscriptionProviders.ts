@@ -127,7 +127,7 @@ export interface SubscriptionProvider {
    * The sign-out program, the mirror of `signIn`: the account signed out,
    * then the provider's subscription preference turned off, so its models
    * stop routing to an account that is gone, and `modelAccessChanged`
-   * announced whichever way the preference write went. A host runs it at its own
+   * announced however the sign-out ends. A host runs it at its own
    * edge; a failure is the provider's own auth error or the secret store's
    * rejection. A preference write that fails after the sign-out succeeded
    * is reported in the result, since the account is already signed out.
@@ -316,8 +316,9 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
             }),
           ),
         ),
-        // The account is gone whether or not the preference followed it.
-        Effect.tap(() => emitAppSignal('modelAccessChanged', undefined)),
+        // The local session is deleted even when ending it at the provider
+        // fails, so the change is announced however the sign-out ends.
+        Effect.ensuring(emitAppSignal('modelAccessChanged', undefined)),
       ),
     getStatus: () =>
       Effect.flatMap(account, (coordinator) =>
