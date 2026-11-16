@@ -6,7 +6,7 @@
 // Third-party imports
 import { formatResultCount, getBasename } from '@texra-ai/harness/schemas';
 import { html, nothing, type TemplateResult } from 'lit';
-import { classMap } from 'lit/directives/class-map.js';
+import { classMap, type ClassInfo } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { diffWordsWithSpace } from 'diff';
@@ -144,14 +144,9 @@ interface DetailsSummaryOptions {
   extraContent?: TemplateResult;
 }
 
-/**
- * Build a `<wa-details>` summary-slot header with icon, label, and optional
- * extras. The caller must render it inside a `<wa-details>` and rely on its
- * built-in toggle icon.
- */
-export function buildDetailsSummary(
-  options: DetailsSummaryOptions,
-): TemplateResult {
+/** The summary-slot header of {@link buildDetailsCard}: icon, label, and
+ *  optional extras. */
+function buildDetailsSummary(options: DetailsSummaryOptions): TemplateResult {
   const {
     iconName,
     running = false,
@@ -175,6 +170,22 @@ export function buildDetailsSummary(
   const extraTemplate = extraContent ?? nothing;
   // prettier-ignore
   return html`<div slot="summary" class="details-summary">${iconTemplate} <span class=${labelClass} dir="auto">${label}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</div>`;
+}
+
+/**
+ * A collapsible transcript card: a plain `<wa-details>` with its toggle
+ * icon at the start, the summary header, and `body` below it. Every
+ * card of the transcript draws its disclosure through this one shell.
+ */
+export function buildDetailsCard(opts: {
+  summary: DetailsSummaryOptions;
+  body: TemplateResult;
+  open?: boolean;
+  classes?: ClassInfo;
+}): TemplateResult {
+  const classes = { 'banner-details': true, ...opts.classes };
+  // prettier-ignore
+  return html`<wa-details appearance="plain" icon-placement="start" class=${classMap(classes)} ?open=${opts.open ?? false}>${buildDetailsSummary(opts.summary)}${opts.body}</wa-details>`;
 }
 
 /**
