@@ -44,9 +44,7 @@ import {
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 
 import { loadCliStartupConfig } from './cliConfig';
-import { loginShellEnvironment } from './loginShellEnv';
 import { interactiveTerminalFailure } from '../terminal/terminalRequirements';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { CLI_OUTPUT_FORMAT_SETTING } from '@texra/shared/settings/texraSettings';
 
 type CliMode = 'headless' | 'interactive';
@@ -574,28 +572,4 @@ export function launchApprovalNotice(
   return requested === 'yolo'
     ? `Auto-approve can't override Block: tasks run under the project's Block policy. ${change}`
     : `Tasks run under the project's approval policy, ${approvalPolicyLabel(configured)}, not ${approvalPolicyLabel(requested)}: a launch can only narrow it, or auto-approve its own task. ${change}`;
-}
-
-/**
- * Add the login shell's variables to this process's environment, keeping
- * every variable the process already has (the home directory and the
- * `TEXRA_*` settings its starter passed). Children this process spawns
- * inherit the result. Says once which PATH it runs with.
- */
-export function adoptLoginShellEnvironment(): Effect.Effect<
-  void,
-  Error,
-  ChildProcessSpawner
-> {
-  return loginShellEnvironment().pipe(
-    Effect.flatMap((login) =>
-      Effect.suspend(() => {
-        for (const [name, value] of Object.entries(login))
-          if (process.env[name] === undefined) process.env[name] = value;
-        return Effect.logInfo(
-          `Using the login shell's environment (PATH=${process.env.PATH ?? ''})`,
-        );
-      }),
-    ),
-  );
 }
