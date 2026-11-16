@@ -65,11 +65,8 @@ import {
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { createVscodeLeanLanguageServices } from '@frontend/lean/VscodeIntegration';
-import { followInlineCriticism } from '@frontend/latex/inlineCriticism';
-import {
-  inlineCommentProvider,
-  registerInlineComments,
-} from '@frontend/comments/inlineComments';
+import { makeInlineCriticism } from '@frontend/latex/inlineCriticism';
+import { makeInlineComments } from '@frontend/comments/inlineComments';
 import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { openTexraGlobalConfigStore } from '@texra/platform/defaults/nodeStores';
@@ -145,15 +142,16 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     typeof context.extension.packageJSON?.version === 'string'
       ? context.extension.packageJSON.version
       : undefined;
+  // The Comments UI behind the `inline_comment` tool, for a folder's window:
+  // agents run only there.
+  const inlineComments =
+    workspaceRoot === undefined ? undefined : yield* makeInlineComments;
   const managed = withForkFailureReporting(
     ManagedRuntime.make(
       texraProcessLayer({
         name: 'vscode',
         inquiryPanel: true,
-        // The Comments UI behind the `inline_comment` tool. The provider reads
-        // the controller this host registers at activation, so it is a value
-        // from module load; nothing about it waits on that registration.
-        inlineComments: inlineCommentProvider,
+        inlineComments,
         // Lean through the Lean 4 extension, not a direct `lake` pool.
         lean: Layer.effect(
           LeanLanguageServices,
@@ -471,11 +469,15 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   // The settings view is built with the commands, after the progress view
   // that opens it, so the progress view waits for it.
   const settingsView = yield* Deferred.make<SettingsViewProvider>();
+  // The criticism diagnostics this window's follower shows and its editor
+  // tools add to.
+  const criticism = makeInlineCriticism();
   const progressViewProvider = yield* ProgressViewProvider.make(
     context,
     runtime,
     roots,
     windowSession,
+    criticism.add,
     {
       openSettings: (target) =>
         Effect.flatMap(Deferred.await(settingsView), (view) =>
@@ -580,8 +582,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     ),
     { startImmediately: true },
   );
-  yield* Effect.forkScoped(followInlineCriticism(session, roots));
-  registerInlineComments(context);
+  yield* Effect.forkScoped(criticism.follow(session, roots));
 
   yield* taskStatusBar(context, session, roots.config);
 

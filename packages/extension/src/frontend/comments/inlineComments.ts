@@ -7,13 +7,14 @@
  *
  * Unlike inline criticism (lint-style squiggles parsed from `\criticize{}` or
  * pushed via the diagnostics tool), threads here only ever appear when the
- * agent calls the tool, so there is no global enable gate: the controller is
- * registered at activation and the capability is opt-in via the agent's tool
- * list. The agent reads the user's replies back with the tool's "list" command.
+ * agent calls the tool, so there is no global enable gate: a folder's window
+ * builds the controller at activation and the capability is opt-in via the
+ * agent's tool list. The agent reads the user's replies back with the tool's "list" command.
  */
 
 import * as path from 'node:path';
 
+import { Effect, type Scope } from 'effect';
 import * as vscode from 'vscode';
 
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
@@ -29,13 +30,6 @@ const AGENT_AUTHOR = 'TeXRA';
 const USER_AUTHOR = 'You';
 const THREAD_CONTEXT_OPEN = 'texraInlineCommentOpen';
 const THREAD_CONTEXT_RESOLVED = 'texraInlineCommentResolved';
-
-let controller: vscode.CommentController | undefined;
-// Threads intentionally share the controller's lifetime. VS Code exposes no
-// event for a thread being closed or deleted, and resolved threads remain
-// user-visible, reopenable, and readable by the agent. `disable` owns cleanup.
-const threads = new Map<string, vscode.CommentThread>();
-let sequence = 0;
 
 function makeComment(author: string, body: string): vscode.Comment {
   return {
@@ -92,70 +86,6 @@ function toView(
   };
 }
 
-/** The provider injected into the `inline_comment` tool. */
-export const inlineCommentProvider: InlineCommentProvider = {
-  add: ({ absolutePath, line, endLine, body }) => {
-    if (!controller) return null;
-    const uri = vscode.Uri.file(absolutePath);
-    const range = lineToRange(line, endLine);
-    const thread = controller.createCommentThread(uri, range, [
-      makeComment(AGENT_AUTHOR, body),
-    ]);
-    sequence += 1;
-    const threadId = `c${sequence}`;
-    thread.label = threadId;
-    thread.canReply = true;
-    thread.collapsibleState = vscode.CommentThreadCollapsibleState.Expanded;
-    setThreadResolved(thread, false);
-    threads.set(threadId, thread);
-    return { threadId, resolvedPath: absolutePath };
-  },
-
-  reply: ({ threadId, body }) => {
-    const thread = threads.get(threadId);
-    if (!thread) return false;
-    appendComment(thread, AGENT_AUTHOR, body);
-    return true;
-  },
-
-  setResolved: ({ threadId, resolved }) => {
-    const thread = threads.get(threadId);
-    if (!thread) return false;
-    setThreadResolved(thread, resolved);
-    return true;
-  },
-
-  list: ({ absolutePath }) => {
-    const comparablePath =
-      absolutePath == null ? undefined : comparableFsPath(absolutePath);
-    return [...threads.entries()]
-      .filter(
-        ([, thread]) =>
-          !comparablePath ||
-          comparableFsPath(thread.uri.fsPath) === comparablePath,
-      )
-      .map(([threadId, thread]) => toView(threadId, thread));
-  },
-};
-
-/** Register the comment controller and reply/resolve commands at activation. */
-export function registerInlineComments(context: vscode.ExtensionContext): void {
-  if (controller) return;
-  controller = vscode.comments.createCommentController(
-    CONTROLLER_ID,
-    CONTROLLER_LABEL,
-  );
-  // No commentingRangeProvider: the user replies to and resolves agent-created
-  // threads, but does not start their own from the gutter.
-  context.subscriptions.push(
-    controller,
-    ...Object.entries(COMMENT_COMMANDS).map(([id, run]) =>
-      vscode.commands.registerCommand(id, run),
-    ),
-    { dispose: disable },
-  );
-}
-
 /** The comment threads' own commands. VS Code calls them with the thread or
  *  reply they were invoked on, so they are registered here rather than with
  *  the commands that take decodable arguments. */
@@ -171,12 +101,90 @@ const COMMENT_COMMANDS = {
   },
 } satisfies Partial<Record<ExtensionCommandId, (arg: never) => void>>;
 
-/** The commands {@link registerInlineComments} registers. */
+/** The commands {@link makeInlineComments} registers. */
 export type CommentCommandId = keyof typeof COMMENT_COMMANDS;
 
-function disable(): void {
-  for (const thread of threads.values()) thread.dispose();
-  threads.clear();
-  controller?.dispose();
-  controller = undefined;
-}
+/**
+ * The Comments UI behind the `inline_comment` tool, for the scope that builds
+ * it: the controller and the threads' commands are registered here, and the
+ * scope's close disposes the threads, the commands and the controller.
+ */
+export const makeInlineComments: Effect.Effect<
+  InlineCommentProvider,
+  never,
+  Scope.Scope
+> = Effect.gen(function* () {
+  const controller = yield* Effect.acquireRelease(
+    Effect.sync(() =>
+      vscode.comments.createCommentController(CONTROLLER_ID, CONTROLLER_LABEL),
+    ),
+    (created) => Effect.sync(() => created.dispose()),
+  );
+  // No commentingRangeProvider: the user replies to and resolves
+  // agent-created threads, but does not start their own from the gutter.
+  yield* Effect.acquireRelease(
+    Effect.sync(() =>
+      Object.entries(COMMENT_COMMANDS).map(([id, run]) =>
+        vscode.commands.registerCommand(id, run),
+      ),
+    ),
+    (registered) =>
+      Effect.sync(() => {
+        for (const command of registered) command.dispose();
+      }),
+  );
+  // Threads share the controller's lifetime. VS Code exposes no event for a
+  // thread being closed or deleted, and resolved threads remain
+  // user-visible, reopenable, and readable by the agent.
+  const threads = new Map<string, vscode.CommentThread>();
+  let sequence = 0;
+  yield* Effect.addFinalizer(() =>
+    Effect.sync(() => {
+      for (const thread of threads.values()) thread.dispose();
+      threads.clear();
+    }),
+  );
+  return {
+    add: ({ absolutePath, line, endLine, body }) => {
+      const uri = vscode.Uri.file(absolutePath);
+      const range = lineToRange(line, endLine);
+      const thread = controller.createCommentThread(uri, range, [
+        makeComment(AGENT_AUTHOR, body),
+      ]);
+      sequence += 1;
+      const threadId = `c${sequence}`;
+      thread.label = threadId;
+      thread.canReply = true;
+      thread.collapsibleState = vscode.CommentThreadCollapsibleState.Expanded;
+      setThreadResolved(thread, false);
+      threads.set(threadId, thread);
+      return { threadId, resolvedPath: absolutePath };
+    },
+
+    reply: ({ threadId, body }) => {
+      const thread = threads.get(threadId);
+      if (!thread) return false;
+      appendComment(thread, AGENT_AUTHOR, body);
+      return true;
+    },
+
+    setResolved: ({ threadId, resolved }) => {
+      const thread = threads.get(threadId);
+      if (!thread) return false;
+      setThreadResolved(thread, resolved);
+      return true;
+    },
+
+    list: ({ absolutePath }) => {
+      const comparablePath =
+        absolutePath == null ? undefined : comparableFsPath(absolutePath);
+      return [...threads.entries()]
+        .filter(
+          ([, thread]) =>
+            !comparablePath ||
+            comparableFsPath(thread.uri.fsPath) === comparablePath,
+        )
+        .map(([threadId, thread]) => toView(threadId, thread));
+    },
+  };
+});

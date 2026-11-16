@@ -21,7 +21,6 @@ import {
   createAgentPresentationHost,
   warnOnFailure,
 } from '@frontend/events/agentEventListeners';
-import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { openBuilt, type ShowBuilt } from '@frontend/latex/openBuild';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
@@ -39,6 +38,7 @@ import {
 import {
   PdfOpenFailed,
   type EditorCapabilities,
+  type ManualCriticismEntry,
 } from '@texra/tools/editorHost';
 import { projectDisplayOf } from '@texra/shared/session/hostSnapshot';
 import type { DownWire } from '@texra/shared/session/sessionFrames';
@@ -153,6 +153,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       /** Where this window's runs run: the service's session, or this
        *  process's own with the handle that owns it. */
       windowSession: GuiSession,
+      /** Add an agent's entry to the editor's criticism diagnostics;
+       *  false while they are off. */
+      addCriticism: (entry: ManualCriticismEntry) => boolean,
       /** The settings view's verbs this view's cards and links run. The
        *  settings view is built after this one, so each waits for it. */
       settings: Pick<
@@ -181,8 +184,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // PDF viewer, which the editor tools read through the registry.
       const editor: EditorCapabilities = {
         readDiagnostics: getLinterMessages,
-        addCriticism: (payload) =>
-          Effect.sync(() => pushManualCriticism(payload)),
+        addCriticism: (payload) => Effect.sync(() => addCriticism(payload)),
         openPdf: ({
           location,
           preserveFocus,

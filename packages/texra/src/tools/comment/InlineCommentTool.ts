@@ -54,7 +54,7 @@ export interface InlineCommentProvider {
     line: number;
     endLine: number;
     body: string;
-  }): { threadId: string; resolvedPath: string } | null;
+  }): { threadId: string; resolvedPath: string };
   /** Returns false when no thread matches `threadId`. */
   reply(input: { threadId: string; body: string }): boolean;
   /** Returns false when no thread matches `threadId`. */
@@ -236,11 +236,6 @@ const addThread = Effect.fn('InlineCommentTool.addThread')(function* (
       }),
     catch: ensureError,
   }).pipe(Effect.catch(addCommentFailure));
-  if (!result) {
-    return yield* Effect.fail(
-      new ToolError('Failed to create the comment thread.'),
-    );
-  }
   const where = result.resolvedPath || resolved.absolute;
   const summary = `Opened comment thread ${result.threadId} at ${where}:${line}`;
   return executed(
