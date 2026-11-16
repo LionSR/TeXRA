@@ -2,6 +2,7 @@ import { Effect, Schema } from 'effect';
 import type { SettingChoiceCopy } from '@texra-ai/harness/schemas';
 import {
   DEFAULT_EFFORT,
+  isUnservedModel,
   MODEL_CONFIGS,
   type ModelConfig,
   ModelProvider,
@@ -23,13 +24,13 @@ import {
 
 /** A model the Claude Code CLI can run: any Anthropic model still served. */
 export const isClaudeCodeModel = (config: ModelConfig): boolean =>
-  config.provider === ModelProvider.ANTHROPIC && config.retired !== true;
+  config.provider === ModelProvider.ANTHROPIC && !isUnservedModel(config);
 
 /** A model the Codex CLI can run: an OpenAI model the Codex backend serves. */
 export const isCodexModel = (config: ModelConfig): boolean =>
   config.provider === ModelProvider.OPENAI &&
   config.codexSubscription !== undefined &&
-  config.retired !== true;
+  !isUnservedModel(config);
 
 /** The picker's models: the eligible ones that are not deprecated, in registry order. */
 function pickerModels(eligible: (config: ModelConfig) => boolean) {

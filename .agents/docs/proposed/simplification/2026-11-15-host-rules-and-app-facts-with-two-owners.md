@@ -210,3 +210,8 @@ In order of size. Each needs the decision named.
   the same banner as VS Code, and its "Install guide" opens Settings'
   Plugins page as before. The LaTeX status's seven `*Path` fields stay
   open.
+- **App fact 6** (agent CLI models): `isClaudeCodeModel` and `isCodexModel`
+  ask llm's `isUnservedModel`, so an OpenRouter-only model leaves the Claude
+  Code and Codex pickers. No listed model changes today: the registry's
+  OpenRouter-only OpenAI models have no Codex entry and no Anthropic model
+  is OpenRouter-only.
