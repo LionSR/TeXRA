@@ -215,3 +215,17 @@ In order of size. Each needs the decision named.
   Code and Codex pickers. No listed model changes today: the registry's
   OpenRouter-only OpenAI models have no Codex entry and no Anthropic model
   is OpenRouter-only.
+- **Host rule 1, "decided a second time"**: not a finding. In
+  `openProjectSession` the second test is the first one's other branch,
+  restated so TypeScript narrows `reached`; the service-or-local choice has
+  one owner there.
+- **App fact 7** (key pages): left open. The three toggle links are chosen
+  per toggle with their own labels (Moonshot's and MiniMax's point at the
+  international platform, GLM's at the China one, against Moonshot's and
+  GLM's China default), so they are not "the key page the toggle picks".
+  `settingSurfaces.ts` cannot read `KEY_PAGES`: `texraSettings.ts` imports
+  it and `providerPresentation.ts` imports `texraSettings.ts`, a cycle that
+  breaks at module load when `providerPresentation.ts` is evaluated first.
+  Either `KEY_PAGES` moves below both (a leaf module, or llm beside
+  `providerDisplayName`), or the link follows the toggle, which changes its
+  copy.
