@@ -5,8 +5,9 @@
  * (`HostWindows`) attach what a session's project's windows offer, routed to
  * the one focused last, while a window of it is attached. The same registry
  * serves the harness's
- * `HostCapabilities`, so the `diagnostics` tool is offered exactly while an
- * implementation is attached: one owner for the capability and its code.
+ * `HostCapabilities`, one capability per attached member, so a tool that
+ * declares a member is offered exactly while an implementation is attached:
+ * one owner for the capability and its code.
  */
 import { Context, Effect, Schema, type Scope } from 'effect';
 
@@ -74,9 +75,10 @@ export interface EditorCapabilities {
   }) => Effect.Effect<void, PdfOpenFailed>;
 }
 
-/** The host capabilities an editor serves (`HostCapabilities`), named
- *  here so a tool's `hostCapability` that names none fails to compile. */
-export type EditorCapability = 'diagnostics';
+/** The host capabilities an editor serves (`HostCapabilities`): its
+ *  attached members, so a tool's `hostCapability` that names none fails to
+ *  compile. */
+export type EditorCapability = keyof EditorCapabilities;
 
 /** The registry's interface: attach for a scope, read by storage root. */
 export interface EditorHostShape {
@@ -101,7 +103,7 @@ export type EditorRegistry = ReturnType<typeof makeEditorHost>;
  *  and attaches its hosts to. Also the harness's `HostCapabilities` over the
  *  same attachments. */
 export function makeEditorHost(): EditorHostShape & {
-  readonly of: (storage: string) => ReadonlySet<EditorCapability>;
+  readonly of: (storage: string) => ReadonlySet<string>;
 } {
   const attached = new Map<string, EditorCapabilities>();
   const at = (storage: string): EditorCapabilities =>
@@ -118,8 +120,10 @@ export function makeEditorHost(): EditorHostShape & {
       ).pipe(Effect.asVoid),
     at,
     of: (storage) =>
-      new Set<EditorCapability>(
-        at(storage).readDiagnostics ? ['diagnostics'] : [],
+      new Set(
+        Object.entries(at(storage)).flatMap(([member, value]) =>
+          value === undefined ? [] : [member],
+        ),
       ),
   };
 }
