@@ -373,7 +373,7 @@ export const DocumentCompileTool = defineTool({
       ),
     ];
     const check = yield* runCompileCheck(
-      { roots, fileService, logger, runId: docs.run.runId, inputDirs },
+      { roots, fileService, logger, inputDirs },
       revision,
       recorded?.outputs ?? [],
     ).pipe(

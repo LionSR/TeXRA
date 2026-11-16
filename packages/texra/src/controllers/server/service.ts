@@ -35,6 +35,7 @@ import { appSignalStream } from '@texra-ai/harness/host';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 
 import {
+  BUILD_VERSION,
   PROTOCOL,
   ProjectStateFailed,
   RUN_RECORDS,
@@ -82,26 +83,22 @@ export class ServiceProjects extends Context.Service<
 >()('@texra-ai/texra/server/ServiceProjects') {}
 
 /** The service's own state, kept by the transport that serves it. */
-export class ServiceControl extends Context.Service<
-  ServiceControl,
-  {
-    readonly version: string;
-    readonly socket: string;
-    readonly startedAt: number;
-    /** Clients connected now. */
-    readonly clients: Effect.Effect<number>;
-    /** The service is leaving (a drain or a stop): no new task starts. */
-    readonly draining: Effect.Effect<boolean>;
-    /** Hold a task's admission for the caller's scope, which a drain
-     *  waits for; false, and nothing held, once the service is leaving. */
-    readonly admission: Effect.Effect<boolean, never, Scope.Scope>;
-    /** The watch streams open now: the service's socket closes once they
-     *  have ended, so each carries its tasks' last rows. */
-    readonly watching: SubscriptionRef.SubscriptionRef<number>;
-    /** Stop now, or drain first; returns once the stop is asked. */
-    readonly stop: (drain: boolean) => Effect.Effect<void>;
-  }
->()('@texra-ai/texra/server/ServiceControl') {}
+export interface ServiceControl {
+  readonly socket: string;
+  readonly startedAt: number;
+  /** Clients connected now. */
+  readonly clients: Effect.Effect<number>;
+  /** The service is leaving (a drain or a stop): no new task starts. */
+  readonly draining: Effect.Effect<boolean>;
+  /** Hold a task's admission for the caller's scope, which a drain
+   *  waits for; false, and nothing held, once the service is leaving. */
+  readonly admission: Effect.Effect<boolean, never, Scope.Scope>;
+  /** The watch streams open now: the service's socket closes once they
+   *  have ended, so each carries its tasks' last rows. */
+  readonly watching: SubscriptionRef.SubscriptionRef<number>;
+  /** Stop now, or drain first; returns once the stop is asked. */
+  readonly stop: (drain: boolean) => Effect.Effect<void>;
+}
 
 /** The runs of `session` at work: those its registry holds live that are
  *  not waiting for their next message. A started run is held before the
@@ -188,222 +185,230 @@ function startDetached<A, E extends { readonly message: string }>(
   );
 }
 
-/** The handlers of {@link TexraRpcs}, over the two ports above. */
-export const serviceHandlers = TexraRpcs.toLayer(
-  Effect.gen(function* () {
-    const projects = yield* ServiceProjects;
-    const control = yield* ServiceControl;
-    // A task's start and resume are its session's, as every host's are.
-    const runs = yield* FiberSet.make();
-    // The admission is held until the handler's scope ends, by when the
-    // run is the registry's: a drain waits for a start already under way.
-    const refuseWhileDraining = Effect.gen(function* () {
-      if (!(yield* control.admission))
-        return yield* new TaskFailed({
-          message: 'The service is shutting down; start the task again.',
-        });
-    });
-    const hosts = yield* HostWindows;
-    yield* Effect.forkScoped(
-      // The files this process's sessions announce their tasks wrote.
-      Stream.runForEach(
-        appSignalStream('workspaceFilesWritten'),
-        ({ absolutePaths }) => hosts.filesWritten(absolutePaths),
-      ),
-    );
-    const open = (workspace: string) =>
-      projects
-        .open(workspace)
-        .pipe(
-          Effect.mapError(
-            (error) => new TaskFailed({ message: error.message }),
-          ),
-        );
-    /** A handler over the project's session: `read` answers it, and a
-     *  failure is `failed`'s to word. */
-    const over =
-      <E>(failed: (message: string) => E) =>
-      <A>(
-        workspace: string,
-        read: (session: LocalSession) => Effect.Effect<A, Error>,
-      ): Effect.Effect<A, E> =>
-        Effect.scoped(
-          projects.open(workspace).pipe(
-            Effect.flatMap(({ session }) => read(session)),
-            Effect.mapError((error) => failed(error.message)),
-          ),
-        );
-    const session = over((message) => new TaskFailed({ message }));
-    // cast: each member's handler answers that member of the project's
-    // `Session.records(runId)`, which `RUN_RECORDS` types its procedure by.
-    const records = Object.fromEntries(
-      Struct.keys(RUN_RECORDS).map((member) => [
-        `records.${member}`,
-        ({ workspace, runId }: { workspace: string; runId: RunId }) =>
-          over((message) => new TaskRecordsFailed({ runId, message }))(
-            workspace,
-            (held): Effect.Effect<unknown, Error> =>
-              held.records(runId)[member],
-          ),
-      ]),
-    ) as unknown as RpcGroup.HandlersFrom<RecordRpc>;
-    return {
-      'service.hello': Effect.fn('handlers.service.hello')(function* () {
-        return {
-          protocol: PROTOCOL.digest,
-          version: control.version,
-          pid: process.pid,
-          socket: control.socket,
-          startedAt: control.startedAt,
-          clients: yield* control.clients,
-          running: yield* runningTasks(projects),
-          draining: yield* control.draining,
-        } satisfies ServiceInfo;
-      }),
-      'service.stop': ({ drain }) => control.stop(drain),
-      'tasks.list': Effect.fn('tasks.list')(function* ({ all }) {
-        return yield* listTasks(all);
-      }, Effect.orDie),
-      'task.watch': ({ workspace, subscribe }) =>
-        Stream.unwrap(
-          Effect.gen(function* () {
-            // Counted while it runs: the service's socket closes once every
-            // watch has carried its tasks' last rows (`serve.ts`).
-            yield* Effect.acquireRelease(
-              SubscriptionRef.update(control.watching, (n) => n + 1),
-              () => SubscriptionRef.update(control.watching, (n) => n - 1),
-            );
-            const { session } = yield* open(workspace);
-            // The frames name the session as the service keys it.
-            const key = session.roots.storage;
-            return frameSubscription(
-              { key, view: session.view },
-              { kind: 'subscribe', generation: 0, ...subscribe, session: key },
-            );
-          }),
+/** The handlers of {@link TexraRpcs}, over the projects and the transport's
+ *  `control`. */
+export const serviceHandlers = (control: ServiceControl) =>
+  TexraRpcs.toLayer(
+    Effect.gen(function* () {
+      const projects = yield* ServiceProjects;
+      // A task's start and resume are its session's, as every host's are.
+      const runs = yield* FiberSet.make();
+      // The admission is held until the handler's scope ends, by when the
+      // run is the registry's: a drain waits for a start already under way.
+      const refuseWhileDraining = Effect.gen(function* () {
+        if (!(yield* control.admission))
+          return yield* new TaskFailed({
+            message: 'The service is shutting down; start the task again.',
+          });
+      });
+      const hosts = yield* HostWindows;
+      yield* Effect.forkScoped(
+        // The files this process's sessions announce their tasks wrote.
+        Stream.runForEach(
+          appSignalStream('workspaceFilesWritten'),
+          ({ absolutePaths }) => hosts.filesWritten(absolutePaths),
         ),
-      'task.result': ({ workspace, runId, activation }) =>
-        Effect.scoped(
-          Effect.gen(function* () {
-            const { session } = yield* open(workspace);
-            const end = yield* session
-              .run(runId, activation)
-              .result.pipe(
-                Effect.mapError(
-                  (error) => new TaskFailed({ message: error.message }),
+      );
+      const open = (workspace: string) =>
+        projects
+          .open(workspace)
+          .pipe(
+            Effect.mapError(
+              (error) => new TaskFailed({ message: error.message }),
+            ),
+          );
+      /** A handler over the project's session: `read` answers it, and a
+       *  failure is `failed`'s to word. */
+      const over =
+        <E>(failed: (message: string) => E) =>
+        <A>(
+          workspace: string,
+          read: (session: LocalSession) => Effect.Effect<A, Error>,
+        ): Effect.Effect<A, E> =>
+          Effect.scoped(
+            projects.open(workspace).pipe(
+              Effect.flatMap(({ session }) => read(session)),
+              Effect.mapError((error) => failed(error.message)),
+            ),
+          );
+      const session = over((message) => new TaskFailed({ message }));
+      // cast: each member's handler answers that member of the project's
+      // `Session.records(runId)`, which `RUN_RECORDS` types its procedure by.
+      const records = Object.fromEntries(
+        Struct.keys(RUN_RECORDS).map((member) => [
+          `records.${member}`,
+          ({ workspace, runId }: { workspace: string; runId: RunId }) =>
+            over((message) => new TaskRecordsFailed({ runId, message }))(
+              workspace,
+              (held): Effect.Effect<unknown, Error> =>
+                held.records(runId)[member],
+            ),
+        ]),
+      ) as unknown as RpcGroup.HandlersFrom<RecordRpc>;
+      return {
+        'service.hello': Effect.fn('handlers.service.hello')(function* () {
+          return {
+            protocol: PROTOCOL.digest,
+            version: BUILD_VERSION,
+            pid: process.pid,
+            socket: control.socket,
+            startedAt: control.startedAt,
+            clients: yield* control.clients,
+            running: yield* runningTasks(projects),
+            draining: yield* control.draining,
+          } satisfies ServiceInfo;
+        }),
+        'service.stop': ({ drain }) => control.stop(drain),
+        'tasks.list': Effect.fn('tasks.list')(function* ({ all }) {
+          return yield* listTasks(all);
+        }, Effect.orDie),
+        'task.watch': ({ workspace, subscribe }) =>
+          Stream.unwrap(
+            Effect.gen(function* () {
+              // Counted while it runs: the service's socket closes once every
+              // watch has carried its tasks' last rows (`serve.ts`).
+              yield* Effect.acquireRelease(
+                SubscriptionRef.update(control.watching, (n) => n + 1),
+                () => SubscriptionRef.update(control.watching, (n) => n - 1),
+              );
+              const { session } = yield* open(workspace);
+              // The frames name the session as the service keys it.
+              const key = session.roots.storage;
+              return frameSubscription(
+                { key, view: session.view },
+                {
+                  kind: 'subscribe',
+                  generation: 0,
+                  ...subscribe,
+                  session: key,
+                },
+              );
+            }),
+          ),
+        'task.result': ({ workspace, runId, activation }) =>
+          Effect.scoped(
+            Effect.gen(function* () {
+              const { session } = yield* open(workspace);
+              const end = yield* session
+                .run(runId, activation)
+                .result.pipe(
+                  Effect.mapError(
+                    (error) => new TaskFailed({ message: error.message }),
+                  ),
+                );
+              // The result arrives once the session's view shows the end.
+              return { ...end, at: session.view.head() };
+            }),
+          ),
+        'session.view': ({ workspace, runIds }) =>
+          session(workspace, (held) => held.view.read(runIds)),
+        'session.listRuns': ({ workspace }) =>
+          session(workspace, (held) => held.listRuns),
+        'session.deleteRuns': ({ workspace, target }) =>
+          session(workspace, (held) => held.deleteRuns(target)),
+        ...records,
+        'task.request': ({ workspace, request }) =>
+          Effect.scoped(
+            projects.open(workspace).pipe(
+              Effect.mapError(
+                (error) => new Rejected({ reason: error.message }),
+              ),
+              Effect.flatMap(({ session }) => session.request(request)),
+              Effect.catchDefect((defect) =>
+                internal(Cause.die(defect)).pipe(Effect.flatMap(Effect.fail)),
+              ),
+            ),
+          ),
+        'task.start': ({ workspace, start }) =>
+          Effect.scoped(
+            Effect.gen(function* () {
+              yield* refuseWhileDraining;
+              const { session } = yield* open(workspace);
+              const run = yield* startDetached(
+                runs,
+                // A service task stays open for its windows' follow-ups.
+                session.start({ ...start, interactive: true }),
+              );
+              return { runId: run.runId, activation: run.activation };
+            }),
+          ),
+        'host.attach': ({ workspace, capabilities }) =>
+          // The window's stream leases its project's session while it runs.
+          Stream.unwrap(
+            Effect.map(open(workspace), ({ session }) =>
+              hosts.attach(session, capabilities),
+            ),
+          ),
+        // The project's state store, the service's own: a window opens none.
+        'state.get': ({ workspace, keys }) =>
+          Effect.scoped(
+            Effect.flatMap(projects.open(workspace), ({ session }) =>
+              Effect.forEach(keys, (key) =>
+                session.roots.workspaceState.get(key).pipe(
+                  // The store answers what it holds, which is JSON.
+                  Effect.flatMap((value) =>
+                    value === undefined
+                      ? Effect.succeed([key, {}] as const)
+                      : Effect.map(
+                          Schema.decodeUnknownEffect(Schema.Json)(value),
+                          (json) => [key, { value: json }] as const,
+                        ),
+                  ),
+                ),
+              ),
+            ).pipe(
+              Effect.map((entries) => Object.fromEntries(entries)),
+              Effect.mapError(
+                (error) => new ProjectStateFailed({ message: error.message }),
+              ),
+            ),
+          ),
+        'state.set': ({ workspace, next, ifCurrent }) =>
+          Effect.scoped(
+            Effect.flatMap(projects.open(workspace), ({ session }) => {
+              const keys = Object.keys(next);
+              // With `ifCurrent`, written only while the stored values are the
+              // ones the window read: its read-modify-write, as one step here.
+              return session.roots.workspaceState.modify(keys, (current) =>
+                Result.succeed(
+                  ifCurrent === null ||
+                    keys.every(
+                      (key) =>
+                        JSON.stringify(current[key]) ===
+                        JSON.stringify(ifCurrent[key]?.value),
+                    )
+                    ? ([
+                        true,
+                        Object.fromEntries(
+                          keys.map((key) => [key, next[key]?.value]),
+                        ),
+                      ] as const)
+                    : ([false] as const),
                 ),
               );
-            // The result arrives once the session's view shows the end.
-            return { ...end, at: session.view.head() };
-          }),
-        ),
-      'session.view': ({ workspace, runIds }) =>
-        session(workspace, (held) => held.view.read(runIds)),
-      'session.listRuns': ({ workspace }) =>
-        session(workspace, (held) => held.listRuns),
-      'session.deleteRuns': ({ workspace, target }) =>
-        session(workspace, (held) => held.deleteRuns(target)),
-      ...records,
-      'task.request': ({ workspace, request }) =>
-        Effect.scoped(
-          projects.open(workspace).pipe(
-            Effect.mapError((error) => new Rejected({ reason: error.message })),
-            Effect.flatMap(({ session }) => session.request(request)),
-            Effect.catchDefect((defect) =>
-              internal(Cause.die(defect)).pipe(Effect.flatMap(Effect.fail)),
-            ),
-          ),
-        ),
-      'task.start': ({ workspace, start }) =>
-        Effect.scoped(
-          Effect.gen(function* () {
-            yield* refuseWhileDraining;
-            const { session } = yield* open(workspace);
-            const run = yield* startDetached(
-              runs,
-              // A service task stays open for its windows' follow-ups.
-              session.start({ ...start, interactive: true }),
-            );
-            return { runId: run.runId, activation: run.activation };
-          }),
-        ),
-      'host.attach': ({ workspace, capabilities }) =>
-        // The window's stream leases its project's session while it runs.
-        Stream.unwrap(
-          Effect.map(open(workspace), ({ session }) =>
-            hosts.attach(session, capabilities),
-          ),
-        ),
-      // The project's state store, the service's own: a window opens none.
-      'state.get': ({ workspace, keys }) =>
-        Effect.scoped(
-          Effect.flatMap(projects.open(workspace), ({ session }) =>
-            Effect.forEach(keys, (key) =>
-              session.roots.workspaceState.get(key).pipe(
-                // The store answers what it holds, which is JSON.
-                Effect.flatMap((value) =>
-                  value === undefined
-                    ? Effect.succeed([key, {}] as const)
-                    : Effect.map(
-                        Schema.decodeUnknownEffect(Schema.Json)(value),
-                        (json) => [key, { value: json }] as const,
-                      ),
-                ),
+            }).pipe(
+              Effect.mapError(
+                (error) => new ProjectStateFailed({ message: error.message }),
               ),
             ),
-          ).pipe(
-            Effect.map((entries) => Object.fromEntries(entries)),
-            Effect.mapError(
-              (error) => new ProjectStateFailed({ message: error.message }),
-            ),
           ),
-        ),
-      'state.set': ({ workspace, next, ifCurrent }) =>
-        Effect.scoped(
-          Effect.flatMap(projects.open(workspace), ({ session }) => {
-            const keys = Object.keys(next);
-            // With `ifCurrent`, written only while the stored values are the
-            // ones the window read: its read-modify-write, as one step here.
-            return session.roots.workspaceState.modify(keys, (current) =>
-              Result.succeed(
-                ifCurrent === null ||
-                  keys.every(
-                    (key) =>
-                      JSON.stringify(current[key]) ===
-                      JSON.stringify(ifCurrent[key]?.value),
-                  )
-                  ? ([
-                      true,
-                      Object.fromEntries(
-                        keys.map((key) => [key, next[key]?.value]),
-                      ),
-                    ] as const)
-                  : ([false] as const),
-              ),
-            );
-          }).pipe(
-            Effect.mapError(
-              (error) => new ProjectStateFailed({ message: error.message }),
-            ),
+        'host.focus': ({ attachment }) => hosts.focus(attachment),
+        'host.answer': ({ id, answer }) => hosts.answer(id, answer),
+        'task.resume': ({ workspace, runId, apiKeys }) =>
+          Effect.scoped(
+            Effect.gen(function* () {
+              yield* refuseWhileDraining;
+              const { session } = yield* open(workspace);
+              // A run this service is running is answered as it runs: the
+              // client takes up the conversation it belongs to (a chat left
+              // it waiting here), which the session names.
+              const run = yield* startDetached(
+                runs,
+                session.resume(runId, { interactive: true, apiKeys }),
+              );
+              return { runId: run.runId, activation: run.activation };
+            }),
           ),
-        ),
-      'host.focus': ({ attachment }) => hosts.focus(attachment),
-      'host.answer': ({ id, answer }) => hosts.answer(id, answer),
-      'task.resume': ({ workspace, runId, apiKeys }) =>
-        Effect.scoped(
-          Effect.gen(function* () {
-            yield* refuseWhileDraining;
-            const { session } = yield* open(workspace);
-            // A run this service is running is answered as it runs: the
-            // client takes up the conversation it belongs to (a chat left
-            // it waiting here), which the session names.
-            const run = yield* startDetached(
-              runs,
-              session.resume(runId, { interactive: true, apiKeys }),
-            );
-            return { runId: run.runId, activation: run.activation };
-          }),
-        ),
-    };
-  }),
-);
+      };
+    }),
+  );

@@ -488,7 +488,7 @@ export const IMAGE_TOOL_LABEL = 'gm/magick';
 const IMAGE_TOOL_NAMES: ReadonlySet<string> = new Set(IMAGE_LATEX_TOOLS);
 
 /** A probed tool that is missing. */
-export interface MissingLatexTool<T extends string> {
+interface MissingLatexTool<T extends string> {
   readonly name: T;
   /** One of the image tools, any one of which would do. */
   readonly interchangeable: boolean;
@@ -626,7 +626,7 @@ const MANAGER_INSTALL: Record<SystemPackageManager, string> = {
  * A concrete install command for a dependency on a given platform, which the
  * LaTeX tab copies or runs once its package manager is detected.
  */
-export interface InstallCommand {
+interface InstallCommand {
   /** The full shell command (e.g. "brew install ghostscript"). */
   readonly command: string;
   readonly packageManager: SystemPackageManager;
