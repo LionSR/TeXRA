@@ -138,28 +138,38 @@ const PROTOCOL_OF: Readonly<Partial<Record<string, HttpProtocol>>> =
  * What `spec` binds: the config its route runs, its options with their
  * defaults, and the configuration they make on the provider's protocol.
  */
-export function configurationFor(spec: BindSpec): {
-  readonly config: ModelConfig;
-  readonly options: Options;
-  readonly configuration: ModelConfiguration;
-} {
+export function configurationFor(spec: BindSpec): Result.Result<
+  {
+    readonly config: ModelConfig;
+    readonly options: Options;
+    readonly configuration: ModelConfiguration;
+  },
+  ModelError
+> {
   const { route } = spec;
   const config = routeConfig(spec.model, route);
   const protocol = PROTOCOL_OF[config.provider];
-  if (protocol === undefined) {
-    throw new ModelError({
-      kind: 'invalid-request',
-      message: `No protocol serves ${config.provider} models.`,
-    });
-  }
+  if (protocol === undefined)
+    return Result.fail(
+      new ModelError({
+        kind: 'invalid-request',
+        message: `No protocol serves ${config.provider} models.`,
+      }),
+    );
   // The model's default reasoning on the route, unless the spec names one;
   // a default the route cannot carry is the spec's invalid request.
-  const reasoning =
-    spec.options?.reasoning ??
-    Result.getOrThrowWith(
-      chooseReasoning(config, {}, { route }),
-      ({ message }) => new ModelError({ kind: 'invalid-request', message }),
-    );
+  let reasoning = spec.options?.reasoning;
+  if (reasoning === undefined) {
+    const chosen = chooseReasoning(config, {}, { route });
+    if (Result.isFailure(chosen))
+      return Result.fail(
+        new ModelError({
+          kind: 'invalid-request',
+          message: chosen.failure.message,
+        }),
+      );
+    reasoning = chosen.success;
+  }
   const options: Options = {
     maxOutputTokens: config.maxOutputTokens,
     reasoning,
@@ -207,7 +217,7 @@ export function configurationFor(spec: BindSpec): {
   const takesDocuments =
     configuration.protocol !== 'openai-responses' ||
     configuration.supportsDocumentInput;
-  return {
+  return Result.succeed({
     config: takesDocuments
       ? config
       : {
@@ -216,7 +226,7 @@ export function configurationFor(spec: BindSpec): {
         },
     options,
     configuration,
-  };
+  });
 }
 
 /** Whether the configuration takes a tool choice naming one function. */

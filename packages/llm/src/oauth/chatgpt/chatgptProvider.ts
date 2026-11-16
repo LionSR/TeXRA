@@ -37,8 +37,7 @@ import {
   SubscriptionSessionBaseSchema,
   SubscriptionTokenResponseSchema,
 } from '../subscriptionSessionSchema.js';
-import { toErrorMessage } from '../support.js';
-import { isRetryableStatus } from '../../errors.js';
+import { isRetryableStatus, toErrorMessage } from '../../errors.js';
 import { OPENAI_DEFAULT_ENDPOINT } from '../../providers/providerPlugins.js';
 import type {
   CredentialStore,

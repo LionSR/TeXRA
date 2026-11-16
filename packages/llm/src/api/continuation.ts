@@ -13,25 +13,34 @@ import { Order, Predicate } from 'effect';
 import { sameModelOrigin, type ModelOrigin } from '../protocol.js';
 import type { ResolvedTurn } from '../turn.js';
 
-/** Versioned provider prefixes use sorted entries followed by ECMAScript JSON enumeration. */
+/**
+ * JSON with every object's keys in sorted order, so one value serialized in
+ * two key orders gives one text. A stored anchor's fingerprint is this
+ * text's hash: its bytes must not change.
+ */
+export const sortedJson = (value: unknown): string =>
+  JSON.stringify(value, (_key, field: unknown) =>
+    Predicate.isObject(field)
+      ? Object.fromEntries(
+          Object.entries(field).toSorted(([left], [right]) =>
+            Order.String(left, right),
+          ),
+        )
+      : field,
+  ) ?? 'null';
+
+/** A versioned provider prefix: its sorted JSON, hashed. */
 function prefixFingerprint(
   domain: string,
   origin: ModelOrigin,
   system: string | undefined,
   messages: ResolvedTurn['messages'],
 ): string {
-  const encoded = JSON.stringify(
-    [domain, origin, system ?? null, messages],
-    (_key, value: unknown) => {
-      if (!Predicate.isObject(value)) return value;
-      return Object.fromEntries(
-        Object.entries(value).toSorted(([left], [right]) =>
-          Order.String(left, right),
-        ),
-      );
-    },
+  return hash(
+    'sha256',
+    sortedJson([domain, origin, system ?? null, messages]),
+    'hex',
   );
-  return hash('sha256', encoded, 'hex');
 }
 
 /** The turn's history and system input. */

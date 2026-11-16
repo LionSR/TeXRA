@@ -199,19 +199,18 @@ export const fillModelError = (
     ),
   });
 
+/** The message of a thrown value. */
+export const toErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
 /**
- * Every provider's failure mapping treats HTTP 401/403 (or the equivalent
- * error code carried in a rejection body) as `authentication` and anything
- * else the provider rejected as `provider-rejection`. Pass every status-like
- * value a given failure carries; only the numbers `401`/`403` match, so a
- * status carried as a string never does.
+ * Every provider's failure mapping treats HTTP 401/403 as `authentication`
+ * and anything else the provider rejected as `provider-rejection`.
  */
 export const authOrRejectionKind = (
-  ...statuses: ReadonlyArray<number | string | undefined>
+  status: number | undefined,
 ): 'authentication' | 'provider-rejection' =>
-  statuses.some((status) => status === 401 || status === 403)
-    ? 'authentication'
-    : 'provider-rejection';
+  status === 401 || status === 403 ? 'authentication' : 'provider-rejection';
 
 /**
  * The delay one response asks the caller to wait, in milliseconds:

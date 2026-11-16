@@ -198,20 +198,22 @@ function bind(spec: LiveProtocol, apiKey: string): Model {
     ...spec.route,
   });
   assert(route.kind === 'api-key', `${spec.model} takes no API key.`);
-  const { configuration } = configurationFor({
-    model: selected.config,
-    route: { ...route, endpoint: spec.endpoint },
-    bearer: apiKey,
-    options: {
-      maxOutputTokens: 2048,
-      temperature: 0,
-      // Chosen on the route, as a run's binding chooses it.
-      reasoning: Result.getOrThrow(
-        chooseReasoning(selected.config, selected.request, { route }),
-      ),
-      serverState: true,
-    },
-  });
+  const { configuration } = Result.getOrThrow(
+    configurationFor({
+      model: selected.config,
+      route: { ...route, endpoint: spec.endpoint },
+      bearer: apiKey,
+      options: {
+        maxOutputTokens: 2048,
+        temperature: 0,
+        // Chosen on the route, as a run's binding chooses it.
+        reasoning: Result.getOrThrow(
+          chooseReasoning(selected.config, selected.request, { route }),
+        ),
+        serverState: true,
+      },
+    }),
+  );
   switch (configuration.protocol) {
     case 'anthropic-messages':
       return Effect.runSync(
@@ -221,7 +223,7 @@ function bind(spec: LiveProtocol, apiKey: string): Model {
         ),
       );
     case 'google-interactions':
-      return googleInteractionsModel(configuration, { apiKey });
+      return Effect.runSync(googleInteractionsModel(configuration, { apiKey }));
     case 'openai-responses':
       return Effect.runSync(
         Scope.provide(

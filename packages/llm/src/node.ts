@@ -20,7 +20,6 @@
  */
 import { Effect, type Scope } from 'effect';
 import { ModelError, type BillingRoute } from './errors.js';
-import { toErrorMessage } from './oauth/support.js';
 import { originOf, type ModelOrigin } from './protocol.js';
 import type { ModelConfig } from 'llm-zoo';
 
@@ -97,20 +96,6 @@ export interface Binding {
   readonly forcedToolChoice: boolean;
 }
 
-/** A synchronous factory's refusal, kept as the `ModelError` it is. */
-const constructed = <A>(make: () => A) =>
-  Effect.try({
-    try: make,
-    catch: (cause) =>
-      cause instanceof ModelError
-        ? cause
-        : new ModelError({
-            kind: 'invalid-request',
-            message: toErrorMessage(cause),
-            cause,
-          }),
-  });
-
 /** The key of a non-Responses protocol: only a fixed API key serves one. */
 const fixedKey = (bearer: string | SessionToken, protocol: string) =>
   typeof bearer === 'string'
@@ -142,9 +127,7 @@ const construct = Effect.fn('llm.construct')(function* (
       const { googleInteractionsModel } = yield* Effect.promise(
         () => import('./api/googleInteractions.js'),
       );
-      return yield* constructed(() =>
-        googleInteractionsModel(configuration, { apiKey, fetch }),
-      );
+      return yield* googleInteractionsModel(configuration, { apiKey, fetch });
     }
     case 'openai-responses': {
       if (webSocket) {
@@ -173,7 +156,7 @@ export const bindModel = Effect.fn('llm.bindModel')(function* (
   const [wire, { judgedModel }] = yield* Effect.promise(() =>
     Promise.all([import('./api/configuration.js'), import('./api/verdict.js')]),
   );
-  const { config, options, configuration } = yield* constructed(() =>
+  const { config, options, configuration } = yield* Effect.fromResult(
     wire.configurationFor(spec),
   );
   const model = yield* construct(

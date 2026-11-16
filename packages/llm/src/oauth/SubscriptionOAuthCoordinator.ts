@@ -17,7 +17,7 @@
 import { Clock, Effect, Exit, Result, Schema, Semaphore } from 'effect';
 
 // Local imports
-import { toErrorMessage } from './support.js';
+import { toErrorMessage } from '../errors.js';
 
 import {
   exchangeAuthorizationCode,
@@ -178,11 +178,6 @@ export class SubscriptionOAuthCoordinator<
     return now + REFRESH_BUFFER_MS >= session.expiresAtMs;
   }
 
-  /** The stored session, refreshed when expiring soon. */
-  getFreshSession(): Effect.Effect<S, Error, HttpClient.HttpClient> {
-    return this.freshSession();
-  }
-
   /**
    * The provider rejected `token` early (revoked, or expired server-side):
    * refresh while the stored session still holds it, so calls that sent one
@@ -191,7 +186,7 @@ export class SubscriptionOAuthCoordinator<
   refreshRejected(
     token: string,
   ): Effect.Effect<void, Error, HttpClient.HttpClient> {
-    return Effect.asVoid(this.freshSession(token));
+    return Effect.asVoid(this.getFreshSession(token));
   }
 
   private store(session: S): Effect.Effect<void, SecretsFailed> {
@@ -325,7 +320,7 @@ export class SubscriptionOAuthCoordinator<
    * refresh token on the exchange must see the new one stored, whoever stops
    * waiting; the token request carries its own deadline.
    */
-  private readonly freshSession = Effect.fn(
+  readonly getFreshSession = Effect.fn(
     'SubscriptionOAuthCoordinator.getFreshSession',
   )(function* (this: SubscriptionOAuthCoordinator<S>, rejected?: string) {
     return yield* this.lock.withPermit(

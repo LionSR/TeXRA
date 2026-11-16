@@ -548,13 +548,15 @@ const googleContinuation = Effect.fn('llm.google.continuation')(function* (
 });
 
 /** Direct Gemini Interactions protocol; it owns neither history nor local tools. */
-export function googleInteractionsModel(
+export const googleInteractionsModel = Effect.fn('llm.google.model')(function* (
   config: GoogleInteractionsConfiguration,
   transport: { readonly apiKey: string; readonly fetch?: typeof fetch },
-): Model {
-  if (!transport.apiKey) {
-    throw new TypeError('Google Interactions requires an explicit API key.');
-  }
+): Effect.fn.Return<Model, ModelError> {
+  if (!transport.apiKey)
+    return yield* new ModelError({
+      kind: 'invalid-request',
+      message: 'Google Interactions requires an explicit API key.',
+    });
   const origin = originOf(config);
   const client = new GoogleGenAI({
     enterprise: false,
@@ -769,4 +771,4 @@ export function googleInteractionsModel(
     streamTurn,
     ...(background === undefined ? {} : { background }),
   });
-}
+});

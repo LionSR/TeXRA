@@ -14,6 +14,8 @@ import http from 'node:http';
 import { Deferred, Duration, Effect, Result, Schema } from 'effect';
 import type { HttpClient } from 'effect/http';
 
+import { toErrorMessage } from '../errors.js';
+
 import type {
   SubscriptionAuthorizeRequest,
   SubscriptionCallback,
@@ -187,10 +189,9 @@ function decideCallback(
       };
     },
     catch: (cause) =>
-      new Error(
-        `Unreadable OAuth callback URL: ${cause instanceof Error ? cause.message : String(cause)}`,
-        { cause },
-      ),
+      new Error(`Unreadable OAuth callback URL: ${toErrorMessage(cause)}`, {
+        cause,
+      }),
   });
 }
 
