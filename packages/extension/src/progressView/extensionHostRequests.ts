@@ -72,7 +72,7 @@ import {
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import type {
   GuiWindowHost,
-  OwnHostArms,
+  OwnHostHandlers,
   SharedHostCommandBindings,
 } from '@texra/controllers/session/openGuiWindow';
 import type { SessionBridge } from '@texra/controllers/session/SessionBridge';
@@ -383,7 +383,7 @@ export const createExtensionHostRequests = Effect.fn(
    * commands run as the programs behind them, so no arm re-enters the
    * runtime between here and the bridge that runs this program.
    */
-  const own: OwnHostArms = {
+  const own: OwnHostHandlers = {
     popOut: () => Effect.as(options.popOutToEditor(), done),
     popBack: () => Effect.as(options.showInSidebar(), done),
     useCurrentFile: (request) => useCurrentFile(request),

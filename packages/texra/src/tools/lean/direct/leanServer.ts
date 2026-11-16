@@ -158,7 +158,7 @@ export class LeanServer extends Context.Service<
      * position-scoped LSP request. Position requests like `$/lean/plainGoal`
      * return stale data if the elaborator hasn't finished.
      */
-    readonly requestSettled: (
+    readonly requestElaborated: (
       filePath: string,
       line: number,
       column: number,
@@ -559,7 +559,7 @@ const make = ({
       );
     };
 
-    const openAndSettle = Effect.fn('LeanServer.openAndSettle')(function* (
+    const openElaborated = Effect.fn('LeanServer.openElaborated')(function* (
       filePath: string,
     ) {
       const absolute = path.resolve(filePath);
@@ -571,24 +571,26 @@ const make = ({
     const diagnostics = Effect.fn('LeanServer.diagnostics')(function* (
       filePath: string,
     ) {
-      const { file, complete } = yield* openAndSettle(filePath);
+      const { file, complete } = yield* openElaborated(filePath);
       const state = yield* SubscriptionRef.get(file);
       return { diagnostics: state.diagnostics ?? [], complete };
     });
 
-    const requestSettled = Effect.fn('LeanServer.requestSettled')(function* (
-      filePath: string,
-      line: number,
-      column: number,
-      method: string,
-    ) {
-      const { absolute } = yield* openAndSettle(filePath);
-      const live = yield* requireRpc;
-      return yield* live.request(method, {
-        textDocument: { uri: pathToUri(absolute) },
-        position: { line, character: column },
-      });
-    });
+    const requestElaborated = Effect.fn('LeanServer.requestElaborated')(
+      function* (
+        filePath: string,
+        line: number,
+        column: number,
+        method: string,
+      ) {
+        const { absolute } = yield* openElaborated(filePath);
+        const live = yield* requireRpc;
+        return yield* live.request(method, {
+          textDocument: { uri: pathToUri(absolute) },
+          position: { line, character: column },
+        });
+      },
+    );
 
     const restartFile = Effect.fn('LeanServer.restartFile')(function* (
       filePath: string,
@@ -630,7 +632,7 @@ const make = ({
       info,
       shutdown,
       diagnostics,
-      requestSettled,
+      requestElaborated,
       restartFile,
     });
   }).pipe(Effect.withSpan('LeanServer.make'));

@@ -312,7 +312,7 @@ export function spawnService(
       try: () => openSync(paths.log, 'a', 0o600),
       catch: ensureError,
     });
-    // Settle on the child's own report: an `error` event (no such binary,
+    // Finish on the child's own report: an `error` event (no such binary,
     // EACCES, no processes left) fails the start with its cause.
     yield* Effect.callback<void, Error>((resume) => {
       const child = spawn(command, [...args], {

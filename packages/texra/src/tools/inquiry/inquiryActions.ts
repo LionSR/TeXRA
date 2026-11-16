@@ -192,7 +192,7 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
           : undefined,
       stillOpen,
     });
-    // Keyed on the turn: the queue admits one continuation per inquiry turn,
+    // Keyed on the turn: the queue accepts one continuation per inquiry turn,
     // so re-delivering after a failure the queue never saw reaches the run
     // and re-delivering after one it did is a no-op.
     return {

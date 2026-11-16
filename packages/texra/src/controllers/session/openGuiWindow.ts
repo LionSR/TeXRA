@@ -148,9 +148,9 @@ type SharedHostCommand = Exclude<HostCommand, OwnHostCommand>;
 const isOwnHostCommand = (request: HostCommand): request is OwnHostCommand =>
   Object.hasOwn(OWN_REQUEST_LABEL, request.kind);
 
-/** The arms a host answers its own way, by kind. A kind a host leaves
+/** The handlers a host answers its own way, by kind. A kind a host leaves
  *  out is refused by the shared router, worded once for both hosts. */
-export type OwnHostArms = {
+export type OwnHostHandlers = {
   readonly [K in OwnHostCommand['kind']]?: (
     request: Extract<OwnHostCommand, { kind: K }>,
     port: string,
@@ -166,7 +166,7 @@ type HostVerb<A> = Effect.Effect<
 >;
 
 /**
- * The verbs behind the shared arms. Every member is a capability the host
+ * The verbs behind the shared handlers. Every member is a capability the host
  * performs; nothing here decides anything, which is the point: the decision
  * -- the order, the guard, the refusal wording -- is in the one body below.
  */
@@ -214,7 +214,7 @@ export interface GuiWindowHost {
   /** The window's notices. */
   readonly notify: Dialogs['notify'];
   readonly bindings: SharedHostCommandBindings;
-  readonly own: OwnHostArms;
+  readonly own: OwnHostHandlers;
   /** The runtime's notices this host presents its own way. A missing agent
    *  is the window's own banner, so the window's opening answers that one. */
   readonly notices: PresentationEventHandlers<
@@ -258,7 +258,7 @@ const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
  * Open a window of `ports.runs` for the caller's scope. The bridge has a
  * scope of its own, closed off the window's release: it waits for the
  * requests in flight when it closes, up to the session's close deadline, and
- * a launch answers at admission, so a window that closes neither waits for a
+ * a launch answers once it starts, so a window that closes neither waits for a
  * run to end nor stops it. The
  * tool-edit previews close with the window, awaited, so their files are gone
  * before the window's release returns.
@@ -459,7 +459,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       session,
     });
   /**
-   * One program per shared request, as a host's own arms are: it runs on the
+   * One program per shared request, as a host's own handlers are: it runs on the
    * fiber the window's dispatch already owns and finishes nothing, so its
    * failure reaches the bridge's view as the value the port carried.
    */
@@ -699,14 +699,14 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       }
     });
   }
-  /** An own kind the host binds runs its arm; one it leaves out is
+  /** An own kind the host binds runs its handler; one it leaves out is
    *  refused, worded here for both hosts. */
   const own = (
     request: OwnHostCommand,
     port: string,
   ): HostVerb<HostOutcome> => {
-    const arm = host.own[request.kind];
-    if (arm === undefined)
+    const handler = host.own[request.kind];
+    if (handler === undefined)
       return Effect.fail(
         new Rejected({
           reason: `${OWN_REQUEST_LABEL[request.kind]} is not available in this app.`,
@@ -714,7 +714,10 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       );
     // cast: the handler bound under `request.kind` takes a request of that kind.
     return (
-      arm as (request: OwnHostCommand, port: string) => HostVerb<HostOutcome>
+      handler as (
+        request: OwnHostCommand,
+        port: string,
+      ) => HostVerb<HostOutcome>
     )(request, port);
   };
   function handle(

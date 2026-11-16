@@ -15,7 +15,7 @@ import {
   type SettingsPresentation,
 } from './settingsHostBindings';
 
-/** The Memory page: its arms and its page. */
+/** The Memory page: its handlers and its page. */
 export function settingsMemoryCommands(ports: {
   readonly bindings: Pick<
     SettingsHostBindings,

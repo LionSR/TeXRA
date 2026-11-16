@@ -25,7 +25,7 @@ import {
   type SettingsPresentation,
 } from './settingsHostBindings';
 
-/** The Git page: its arms and its pages. */
+/** The Git page: its handlers and its pages. */
 export function settingsGitCommands(ports: {
   readonly bindings: SettingsHostBindings;
   readonly present: SettingsPresentation;

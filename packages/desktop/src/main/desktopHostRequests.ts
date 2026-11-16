@@ -15,7 +15,7 @@ import {
 } from '@texra/controllers/session/hostCallFailure';
 import type {
   GuiWindowHost,
-  OwnHostArms,
+  OwnHostHandlers,
   SharedHostCommandBindings,
 } from '@texra/controllers/session/openGuiWindow';
 import { instructionActions } from '@ui/copy/instructionActions';
@@ -132,7 +132,7 @@ export const createDesktopHostRequests = (
     /** The arms this window performs its own way. A capability's failure is
      *  named through `hostFailure`, so the failure channel is the value the
      *  arm failed with. */
-    const own: OwnHostArms = {
+    const own: OwnHostHandlers = {
       workspaceFile: (request) => options.workspaceFile(request.action),
     };
 

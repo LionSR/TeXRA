@@ -81,7 +81,7 @@ const SetTabMessageSchema = Schema.Struct({
  * `snapshot`.
  *
  * A snapshot absent from this list is one whose payload is not a plain list of
- * catalog rows (`profile`, `models`); those arms still declare their own shape
+ * catalog rows (`profile`, `models`); those cases still declare their own shape
  * below or in their own module.
  */
 export const DERIVED_SETTINGS_SNAPSHOTS = Object.freeze([
@@ -176,7 +176,7 @@ const AgentSelectionPageSchema = Schema.Struct({
  * The model sources the Models tab groups its rows under, in display order:
  * llm's API-key providers, every provider a user can hold a key for (the Kimi
  * Code subscription included). A model whose source is outside this list
- * never renders as a row, so the controller admits only these.
+ * never renders as a row, so the controller accepts only these.
  */
 export const MODEL_SOURCE_ORDER: readonly string[] = API_KEY_PROVIDER_IDS;
 

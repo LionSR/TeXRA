@@ -111,7 +111,7 @@ function keptDifferingNotice(files: readonly string[]): string {
     : `Kept your existing ${files.join(', ')}; they differ from the built-in ones.`;
 }
 
-/** The Agents page: its arms, its pages, and what an agent change runs. */
+/** The Agents page: its handlers, its pages, and what an agent change runs. */
 export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
   const { bindings, present } = ports;
   const { globalState } = ports.roots;
@@ -191,7 +191,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     agentsChanged(),
   );
 
-  // The file tools admit the new directory before the change reports done,
+  // The file tools accept the new directory before the change reports done,
   // so a `creator` run launched right after can write there.
   const afterCustomDirChange = Effect.andThen(
     registerCustomAgentRoot,

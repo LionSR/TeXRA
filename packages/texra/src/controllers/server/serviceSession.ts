@@ -377,7 +377,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     );
   /** The run's stored end from the service's answer, whatever its outcome,
    *  held until this window's fold shows it too: the answer and the fold's
-   *  `task.watch` stream arrive apart, so an end that settled on the answer
+   *  `task.watch` stream arrive apart, so an end that went by the answer
    *  alone could find the window still showing the run live, or a resumed
    *  run with the outcome its previous activation left. Held until this
    *  window's fold is at or past `at`, the log's commit when the service
@@ -460,7 +460,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         );
       }),
     );
-  /** The run the service admitted, as this window holds it: the `Run` of
+  /** The run the service started, as this window holds it: the `Run` of
    *  the activation the service named, over this window's view and the
    *  service's rows. Its end is the service's answer (asked once, at once),
    *  held until this window's view shows it too; its view this window's,
@@ -503,7 +503,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         ),
       ),
       // The service's rows, through the watch; the service's log is the
-      // store, settled once it answered.
+      // store, final once it answered.
       events: replayTrace(
         {
           view: {

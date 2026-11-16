@@ -90,9 +90,9 @@ export interface ServiceControl {
   readonly clients: Effect.Effect<number>;
   /** The service is leaving (a drain or a stop): no new task starts. */
   readonly draining: Effect.Effect<boolean>;
-  /** Hold a task's admission for the caller's scope, which a drain
+  /** Hold a task's start for the caller's scope, which a drain
    *  waits for; false, and nothing held, once the service is leaving. */
-  readonly admission: Effect.Effect<boolean, never, Scope.Scope>;
+  readonly holdStart: Effect.Effect<boolean, never, Scope.Scope>;
   /** The watch streams open now: the service's socket closes once they
    *  have ended, so each carries its tasks' last rows. */
   readonly watching: SubscriptionRef.SubscriptionRef<number>;
@@ -193,10 +193,10 @@ export const serviceHandlers = (control: ServiceControl) =>
       const projects = yield* ServiceProjects;
       // A task's start and resume are its session's, as every host's are.
       const runs = yield* FiberSet.make();
-      // The admission is held until the handler's scope ends, by when the
+      // The start is held until the handler's scope ends, by when the
       // run is the registry's: a drain waits for a start already under way.
       const refuseWhileDraining = Effect.gen(function* () {
-        if (!(yield* control.admission))
+        if (!(yield* control.holdStart))
           return yield* new TaskFailed({
             message: 'The service is shutting down; start the task again.',
           });

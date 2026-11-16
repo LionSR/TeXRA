@@ -88,7 +88,7 @@ export interface HostRunActionPorts {
    *  background service's. Run state is read from its view, a run's saved
    *  setup from its records. */
   readonly session: Session;
-  /** The window's follow-up for a run it started, once admitted: show the
+  /** The window's follow-up for a run it started, once started: show the
    *  run once its surfaces hold it, and retire the missing-agent banner its
    *  agent resolved. */
   launched(run: Run): Effect.Effect<void>;
@@ -98,13 +98,13 @@ export interface HostRunActionPorts {
   notify: Dialogs['notify'];
 }
 
-/** What a host's request arms do once {@link createHostRunActions} has bound
+/** What a host's request handlers do once {@link createHostRunActions} has bound
  *  that host's launcher, catalogs, key prompt, and notifications. */
 export interface HostRunActions {
   /**
    * The window's launcher: start a fresh run of an already decoded
    * configuration (`decodeLaunchConfig`) on its session, answering once it
-   * is admitted; it decodes nothing itself. A failure before the run opens is
+   * is started; it decodes nothing itself. A failure before the run opens is
    * logged and presented here, once, and fails with the launch's own error,
    * which the caller does not present again (a request answers `Cancelled`);
    * the launched run is the window's to show (`launched`), and its final
@@ -115,7 +115,7 @@ export interface HostRunActions {
     options?: RunValidatedOptions,
   ): Effect.Effect<Run, LaunchError | RunFailure, ProcessServices>;
   /** Merge `editedFile` into `baseFile`: the merge agent's document task on
-   *  the helper model, answering once its run is admitted. */
+   *  the helper model, answering once its run is started. */
   merge(
     baseFile: string,
     editedFile: string,
@@ -144,7 +144,7 @@ export interface HostRunActions {
     operation: 'pack' | 'clean',
   ): Effect.Effect<void, RequestError | Unavailable>;
   /** A new task holding the run's conversation up to `at` (its latest
-   *  settled point when null), continued here so it takes a message: the
+   *  finished point when null), continued here so it takes a message: the
    *  fork's id. */
   fork(
     runId: RunId,
@@ -297,7 +297,7 @@ export const createHostRunActions = Effect.fn(
   };
 
   /** The saved config of a document task's run. `files` holds on every
-   *  settled run, so a request on a run that saved no config, or that is
+   *  finished run, so a request on a run that saved no config, or that is
    *  not a document task's, is refused here, which the surface presents. */
   const savedTaskConfig = Effect.fn('HostRunActions.savedTaskConfig')(
     function* (runId: RunId) {
@@ -372,7 +372,7 @@ export const createHostRunActions = Effect.fn(
       return Effect.forkDetach(deliver).pipe(Effect.asVoid);
     },
     /**
-     * Resume a settled run, of either category, on the session that holds
+     * Resume a finished run, of either category, on the session that holds
      * it: it continues the run's own rows (a child's, with the parent
      * that owns it). A run that does not take it refuses the request with
      * its reason, a missing agent or plugin included; one whose launch

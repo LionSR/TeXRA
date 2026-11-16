@@ -29,7 +29,7 @@ import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 // Local imports - shared schemas
 import {
-  approvalDecisionArm,
+  approvalDecisionDelivery,
   APPROVE_SESSION_ACTION,
   declineDecision,
   REQUEST_ACTIONS,
@@ -207,7 +207,7 @@ export abstract class BaseRequestPanel<
 
   protected emitAction(decision: SurfaceDecision): void {
     if (this.readOnly) return;
-    const arm = approvalDecisionArm(
+    const arm = approvalDecisionDelivery(
       { payload: this.permission, answeredBy: this.answeredBy },
       decision,
     );

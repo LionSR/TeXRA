@@ -23,7 +23,7 @@ import type { HostCommand } from './hostRequest';
 /**
  * Surface-only approval action emitted by the run-grant item and `a` key on
  * the command, edit and agent-proposal prompts. It never becomes a durable
- * decision: {@link approvalDecisionArm} sends it as a plain approve that
+ * decision: {@link approvalDecisionDelivery} sends it as a plain approve that
  * turns on, for the run, the grant that answers the request.
  */
 export const APPROVE_SESSION_ACTION = 'approveSession';
@@ -59,7 +59,7 @@ const APPROVE = Object.freeze({ action: 'approve' });
  * surface's; what a key sends is this table's. The `a` run grant of a kind
  * with a bypass is {@link APPROVE_SESSION_ACTION}, and a key the request
  * itself must allow (a retry's move onto the user's own key) is checked by
- * the surface and again by {@link approvalDecisionArm}.
+ * the surface and again by {@link approvalDecisionDelivery}.
  */
 export const REQUEST_ACTIONS = Object.freeze({
   bash: Object.freeze({ y: APPROVE, n: 'reject' }),
@@ -110,7 +110,7 @@ export function declineDecision(
  * preview the host staged and a retry's own-key switch stores a credential,
  * so those two kinds are the only ones that name a host case.
  */
-type ApprovalArm =
+type ApprovalDelivery =
   | { readonly runtime: RuntimeCommand }
   | { readonly host: HostCommand };
 
@@ -122,16 +122,16 @@ type ApprovalArm =
  * then decides the retry itself. Everything else is a plain
  * `request.decide`.
  */
-export function approvalDecisionArm(
+export function approvalDecisionDelivery(
   request: Pick<PendingRequest, 'payload' | 'answeredBy'>,
   decision: SurfaceDecision,
-): ApprovalArm {
+): ApprovalDelivery {
   const permission = request.payload;
   const { runId, requestId } = permission.data;
   const decide = (
     d: RequestDecision,
     grant?: ApprovalBypassKind,
-  ): ApprovalArm => ({
+  ): ApprovalDelivery => ({
     runtime: { kind: 'request.decide', runId, requestId, decision: d, grant },
   });
   switch (decision.action) {

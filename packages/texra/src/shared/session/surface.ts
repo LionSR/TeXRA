@@ -238,7 +238,7 @@ export interface Surface {
   readonly runs: ReadonlyMap<RunId, RunSurface>;
   /** Foreground polish operations, keyed by stream id or `launch`. Never persisted. */
   readonly polishing: ReadonlySet<string>;
-  /** Streams awaiting follow-up admission, and `launch` while the
+  /** Streams awaiting a follow-up's acceptance, and `launch` while the
    *  launcher's task awaits its own. Never persisted. */
   readonly sending: ReadonlySet<RunId | 'launch'>;
   readonly launch: LaunchSurface;
@@ -486,7 +486,7 @@ export function canSendFollowUp(run: RunView, draft: Draft): boolean {
 /**
  * Every change a component may ask of the surface. The root applies it;
  * a component never mutates the record. `selectNew` and `select` are also
- * host-initiated arms of `surface.action`, and `selectOnArrival` is the
+ * host-initiated cases of `surface.action`, and `selectOnArrival` is the
  * host's alone.
  */
 export type SurfaceAction =

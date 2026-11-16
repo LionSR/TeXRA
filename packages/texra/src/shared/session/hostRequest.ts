@@ -5,7 +5,7 @@
  * `host-request` event (`uiEvents.ts`); the root forwards it over the
  * bridge under a `session` and a `requestId`, answered by 8.4.
  *
- * Only the arms the shell components dispatch are declared; each new
+ * Only the cases the shell components dispatch are declared; each new
  * component adds its case here with its first dispatch.
  */
 import { Schema } from 'effect';

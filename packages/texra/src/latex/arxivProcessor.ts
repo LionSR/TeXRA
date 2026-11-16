@@ -351,7 +351,7 @@ function downloadFileOnce(
 
 /**
  * Extract `tarPath` into `destDir`. tar has no abort option, so
- * interruption (the deadline's included) stops admitting entries, and tar's
+ * interruption (the deadline's included) stops accepting entries, and tar's
  * own promise is joined outside the timeout race so a distinct late
  * rejection stays observable. The join is unbounded; a rejection need not
  * mean every write closed.

@@ -110,7 +110,7 @@ const runServe = Effect.fn('runServe')(function* (
     return yield* serve({
       idleAfter: `${idleSeconds} seconds`,
       shutdown,
-      settle: Effect.asVoid(sessions.closeAll),
+      finishTasks: Effect.asVoid(sessions.closeAll),
     }).pipe(Effect.provideService(ServiceProjects, projects));
   }).pipe(Effect.scoped);
   return yield* served.pipe(

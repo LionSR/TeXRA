@@ -39,7 +39,7 @@ export const resumeRun = (
     }),
   );
 
-/** A new task holding `runId`'s conversation up to `at` (its latest settled
+/** A new task holding `runId`'s conversation up to `at` (its latest finished
  *  point when null): the fork's id, or the refusal that says why not. */
 export const forkRun = (
   session: Session,

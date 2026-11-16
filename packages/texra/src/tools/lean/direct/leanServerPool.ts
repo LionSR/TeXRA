@@ -373,7 +373,7 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
     reply: Schema.Codec<T, unknown>,
   ) =>
     withServer(filePath, (server) =>
-      server.requestSettled(filePath, line, column, method),
+      server.requestElaborated(filePath, line, column, method),
     ).pipe(
       Effect.flatMap(Schema.decodeUnknownEffect(Schema.NullOr(reply))),
       Effect.map((data): LspResult<T> =>
