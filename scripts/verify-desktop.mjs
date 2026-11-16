@@ -45,6 +45,7 @@ import {
   vscodeRuntimeImportPattern,
 } from './extension-package-utils.mjs';
 import { esmCjsGlobalsBanner } from './esm-cjs-globals-banner.mjs';
+import { stopServices } from './texra-services.mjs';
 import { walkFiles } from './walkFiles.mjs';
 
 // Local imports - smoke process helpers
@@ -1383,7 +1384,7 @@ async function smokePackagedLaunch(args) {
   const label = 'Desktop package launch smoke';
   const desktopRequire = createRequire(join(desktopRoot, 'package.json'));
   const { _electron: electron } = desktopRequire('@playwright/test');
-  const { buildDesktopSmokeEnvironment, rememberOpenProject, stopServices } =
+  const { buildDesktopSmokeEnvironment, rememberOpenProject } =
     await import('./desktop-package-smoke-environment.mjs');
 
   let executablePath;
@@ -1458,7 +1459,9 @@ async function smokePackagedLaunch(args) {
     if (temporaryRoot) {
       try {
         // The app's detached service outlives it; it goes before its home.
-        await stopServices(join(temporaryRoot, 'profile', '.texra'));
+        stopServices(join(temporaryRoot, 'profile', '.texra'), {
+          timeoutMs: 30_000,
+        });
         await rm(temporaryRoot, {
           force: true,
           maxRetries: 3,

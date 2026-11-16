@@ -17,11 +17,16 @@ import {
 import { spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
-import { setTimeout as sleep } from 'node:timers/promises';
 import { parseArgs } from 'node:util';
 import { runTests } from '@vscode/test-electron';
 
 import { testLaunchEnv } from './isolated-home.mjs';
+import {
+  serviceAnnouncements,
+  serviceLogPath,
+  serviceRunning,
+  stopServices,
+} from './texra-services.mjs';
 import { walkFiles } from './walkFiles.mjs';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
@@ -53,6 +58,7 @@ mkdirSync(workspace);
 // kernel suite swaps is swapped here too, and the suite checks nothing of
 // the real home reaches the extension host.
 const home = path.join(root, 'h');
+const dataRoot = path.join(home, '.texra');
 mkdirSync(home);
 writeFileSync(
   path.join(workspace, 'main.tex'),
@@ -130,14 +136,11 @@ try {
   });
   // The service the window started outlives it: its tasks keep running.
   if (process.platform !== 'win32') {
-    const pid = servicePid();
+    const pid = serviceAnnouncements(serviceLogPath(dataRoot)).at(-1)?.pid;
     if (pid === undefined)
       throw new Error('the window started no service (its log names none)');
-    try {
-      process.kill(pid, 0);
-    } catch {
+    if (!serviceRunning(pid))
       throw new Error(`the service (pid ${pid}) did not outlive the window`);
-    }
   }
   console.log(`VS Code host e2e passed on ${version}`);
 } catch (error) {
@@ -145,59 +148,15 @@ try {
   throw error;
 } finally {
   clearTimeout(watchdog);
-  await stopService();
+  // The service closes its sessions and stores as it exits, so its files
+  // are removed only once it has.
+  stopServices(dataRoot, { timeoutMs: 15_000 });
   rmSync(root, { recursive: true, force: true });
-}
-
-/** The pid of the service a run started, as its log names it once it
- *  holds the record (the newest such line), or undefined. */
-function servicePid() {
-  try {
-    const log = readFileSync(
-      path.join(home, '.texra', 'run', 'serve.log'),
-      'utf8',
-    );
-    const last = [...log.matchAll(/listening on \S*serve-(\d+)\.sock/g)].at(-1);
-    return last && Number(last[1]);
-  } catch {
-    // No service was started: it wrote no log.
-    return undefined;
-  }
-}
-
-/** Stop the service a run started, when one started. */
-/** Stop the service the window started and wait until its process is
- *  gone: it closes its sessions and stores as it exits, so its files are
- *  removed only once it has. */
-async function stopService() {
-  const pid = servicePid();
-  if (pid === undefined) return;
-  try {
-    process.kill(pid, 'SIGTERM');
-  } catch {
-    // It is gone already.
-    return;
-  }
-  const deadline = Date.now() + 15_000;
-  for (;;) {
-    try {
-      process.kill(pid, 0);
-    } catch {
-      return;
-    }
-    if (Date.now() > deadline) {
-      console.warn(
-        `the service (pid ${pid}) is still exiting; removing its files anyway`,
-      );
-      return;
-    }
-    await sleep(100);
-  }
 }
 
 /** Every log the window and the service wrote, for a run that failed. */
 function printLogs() {
-  const files = [path.join(root, 'u', 'logs'), path.join(home, '.texra', 'run')]
+  const files = [path.join(root, 'u', 'logs'), path.join(dataRoot, 'run')]
     .filter((dir) => existsSync(dir))
     .flatMap((dir) =>
       walkFiles(dir, { include: (file) => file.endsWith('.log') }).map(

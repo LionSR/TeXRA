@@ -16,6 +16,3 @@ export function rememberOpenProject(
   dataRoot: string,
   workspaceRoot: string,
 ): Promise<void>;
-export function alive(pid: number): boolean;
-export function servicePids(dataRoot: string): Promise<number[]>;
-export function stopServices(dataRoot: string): Promise<void>;
