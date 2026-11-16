@@ -331,7 +331,7 @@ export interface ScriptedRunInit {
   readonly model: Model;
   readonly bound?: TestBinding;
   /** A child run: its parent owns continuation across its turns. */
-  readonly parentRunId?: RunId | null;
+  readonly parentId?: RunId | null;
   /** Headless: the run stops after one turn instead of waiting for input. */
   readonly stopAfterCycle?: boolean;
   /** The terminal structured-output tool, when the run has one. */
@@ -366,7 +366,7 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
           toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
           ...testRunTools(tools),
           finalToolName: init.finalToolName ?? null,
-          entry: { ...testEntry(), parent: init.parentRunId ?? null },
+          entry: { ...testEntry(), parent: init.parentId ?? null },
         },
       );
     }),
@@ -374,15 +374,14 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
 }
 
 /** A run id whose start is already on the session's log; with
- *  `parentRunId`, a child of that run, whose start goes first. */
+ *  `parentId`, a child of that run, whose start goes first. */
 export const startedRun = (
   session: Context.Context<SessionServices>,
-  parentRunId?: RunId,
+  parentId?: RunId,
 ): Effect.Effect<RunId> =>
   Effect.gen(function* () {
-    if (parentRunId !== undefined)
-      yield* publishTestRunStart(session, parentRunId);
+    if (parentId !== undefined) yield* publishTestRunStart(session, parentId);
     return yield* publishTestRunStart(session, generateRunId(), {
-      parent: parentRunId ?? null,
+      parent: parentId ?? null,
     });
   });

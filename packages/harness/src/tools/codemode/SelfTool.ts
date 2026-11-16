@@ -109,7 +109,7 @@ const runSelf = Effect.fn('self.call')(function* (
   script: ScriptScope,
 ) {
   const { run } = call;
-  const { runId: parentRunId } = run;
+  const { runId: parentId } = run;
   const { config, source, before, boundAt } = yield* selfOf(call);
   if (input.fork && source === null)
     return yield* Effect.fail(
@@ -144,7 +144,7 @@ const runSelf = Effect.fn('self.call')(function* (
         : null;
       return yield* executeSubagentInBand({
         runId,
-        parentRunId,
+        parentId,
         configPayload: Schema.decodeUnknownSync(AgentConfigSchema)({
           ...(forked?.record ?? {
             ...launch,

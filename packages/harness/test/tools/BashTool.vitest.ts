@@ -54,8 +54,8 @@ const scripted = scriptedSpawnerLayer(() => answer);
 /** Close the parent's input so the background run's delivery ends. */
 const detachBackgroundRun = (
   session: Context.Context<SessionServices>,
-  parentRunId: RunId,
-) => Context.get(session, Inbox).closeInput(parentRunId);
+  parentId: RunId,
+) => Context.get(session, Inbox).closeInput(parentId);
 
 /**
  * Park a run WAITING the way its loop does: the `waiting` flow step is the
@@ -99,7 +99,7 @@ function launchedRunId(result: ToolResult): RunId | undefined {
 
 function launchBackgroundBash(
   session: Context.Context<SessionServices>,
-  parentRunId: RunId,
+  parentId: RunId,
 ) {
   // No settle before the launch. `registerRun` opens the parent check with an
   // empty batch on the session's publisher, so a child's admission read runs
@@ -112,7 +112,7 @@ function launchBackgroundBash(
   }).pipe(
     Effect.provide(
       nativeToolTestLayer({
-        run: { session, runId: parentRunId, toolPolicy: {} },
+        run: { session, runId: parentId, toolPolicy: {} },
       }),
     ),
   );
@@ -154,7 +154,7 @@ layer(
           answer = { stdout: 'done\n' };
 
           const session = yield* sessionHandle;
-          const parentRunId = yield* publishTestRunStart(session);
+          const parentId = yield* publishTestRunStart(session);
           let skippedAtResumeTime: boolean | undefined;
           // cast: '' names no run until the launch reports its id.
           let runId = '' as RunId;
@@ -163,7 +163,7 @@ layer(
           const resume = resumeRunModule.resumeRun;
           vi.spyOn(resumeRunModule, 'resumeRun').mockImplementation(
             (woken, options) => {
-              if (woken === parentRunId) {
+              if (woken === parentId) {
                 // A wait is over once no launch of the run is held here.
                 skippedAtResumeTime ??=
                   Context.get(session, Runs).get(runId) === undefined;
@@ -172,13 +172,13 @@ layer(
               return resume(woken, options);
             },
           );
-          yield* Effect.promise(() => parkRunWaiting(session, parentRunId));
+          yield* Effect.promise(() => parkRunWaiting(session, parentId));
 
           yield* Effect.addFinalizer(() =>
-            detachBackgroundRun(session, parentRunId),
+            detachBackgroundRun(session, parentId),
           );
           const launched = launchedRunId(
-            yield* launchBackgroundBash(session, parentRunId),
+            yield* launchBackgroundBash(session, parentId),
           );
           assert.ok(launched, 'Launch output should report a run id');
           runId = launched;
@@ -227,10 +227,10 @@ layer(
         Effect.gen(function* () {
           answer = 'hang';
           const session = yield* sessionHandle;
-          const parentRunId = yield* publishTestRunStart(session);
+          const parentId = yield* publishTestRunStart(session);
 
           const runId = launchedRunId(
-            yield* launchBackgroundBash(session, parentRunId),
+            yield* launchBackgroundBash(session, parentId),
           );
           assert.ok(runId, 'Launch output should report a run id');
 
@@ -253,7 +253,7 @@ layer(
               Effect.provide(session),
             );
           assert.equal(scripted.killed.length, 1, 'The stop ends the process');
-          yield* detachBackgroundRun(session, parentRunId);
+          yield* detachBackgroundRun(session, parentId);
         }),
     );
   });

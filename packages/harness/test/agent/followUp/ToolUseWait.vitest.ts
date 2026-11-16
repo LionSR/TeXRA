@@ -120,14 +120,14 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         () =>
           Effect.gen(function* () {
             const session = yield* quietSession();
-            const parentRunId = generateRunId();
-            const runId = yield* startedRun(session, parentRunId);
+            const parentId = generateRunId();
+            const runId = yield* startedRun(session, parentId);
             const asked = 'state where finiteness is used';
 
             const first = yield* forkLoop({
               runId,
               session,
-              parentRunId,
+              parentId,
               script: [textTurn('first cycle')],
             });
             yield* first.park(0);
@@ -146,7 +146,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             const resumed = yield* forkLoop({
               runId,
               session,
-              parentRunId,
+              parentId,
               resume: true,
               script: [textTurn('second cycle'), textTurn('never reached')],
             });
@@ -167,7 +167,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             const again = yield* forkLoop({
               runId,
               session,
-              parentRunId,
+              parentId,
               resume: true,
               script: [textTurn('never reached')],
             });
@@ -187,12 +187,12 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         () =>
           Effect.gen(function* () {
             const session = yield* quietSession();
-            const parentRunId = generateRunId();
-            const runId = yield* startedRun(session, parentRunId);
+            const parentId = generateRunId();
+            const runId = yield* startedRun(session, parentId);
             const first = yield* forkLoop({
               runId,
               session,
-              parentRunId,
+              parentId,
               stopAfterCycle: true,
               script: [textTurn('first cycle')],
             });
@@ -208,7 +208,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 followUpId: 'follow-up-2',
                 content: {
                   text: asked,
-                  from: { kind: 'run' as const, runId: parentRunId },
+                  from: { kind: 'run' as const, runId: parentId },
                 },
               },
             ]);
@@ -217,7 +217,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             const resumed = yield* forkLoop({
               runId,
               session,
-              parentRunId,
+              parentId,
               stopAfterCycle: true,
               resume: true,
               script: [textTurn('second cycle')],

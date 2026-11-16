@@ -231,7 +231,7 @@ const assertInputFilesExist = Effect.fn('assertInputFilesExist')(function* (
  */
 export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
   function* (
-    parentRunId: RunId,
+    parentId: RunId,
     label: string,
     files: readonly string[],
   ): Effect.fn.Return<
@@ -303,7 +303,7 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
         Effect.fnUntraced(function* ({ file, absolutePath, runStoragePath }) {
           if (runStoragePath !== undefined) {
             const output = yield* resolveChildRunOutput(
-              parentRunId,
+              parentId,
               runStoragePath,
             );
             if (!output)

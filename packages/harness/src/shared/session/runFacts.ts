@@ -209,7 +209,7 @@ export const boundsLifecycle = (
 /** What a run is registered with: the facts its `run.start` carries. */
 export interface RegisterRunOptions {
   /** The launching run: the whole parent edge, stamped on `run.start`. */
-  readonly parentRunId?: RunId;
+  readonly parentId?: RunId;
   /** The parent's call that launched it, which owns this run until it
    *  detaches, and that call's tool card. */
   readonly parentCall?: NonNullable<RunParent['call']>;
@@ -278,9 +278,9 @@ export function registrationDrafts(
     takesFollowUps: options.takesFollowUps ?? false,
     worktree: worktree ? { workingDirectory: worktree } : undefined,
     parent:
-      options.parentRunId === undefined
+      options.parentId === undefined
         ? null
-        : { id: options.parentRunId, call: options.parentCall ?? null },
+        : { id: options.parentId, call: options.parentCall ?? null },
     provenance: options.provenance ?? null,
     approvalPolicy: options.grants ?? NO_APPROVAL_GRANTS,
   };

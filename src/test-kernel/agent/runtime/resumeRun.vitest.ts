@@ -118,7 +118,7 @@ describe(
               yield* send(session, runId, 'Keep this input.');
               const faults = yield* sessionStoreFaults(storage);
               // The resume reads the run's queued input and then its lineage
-              // (`persistedParentRunId`): that read fails.
+              // (`persistedParentId`): that read fails.
               const input = yield* faults.holdNext('readAggregate');
               const resumed = yield* Effect.forkChild(
                 Effect.flip(resume(runId, { session })),

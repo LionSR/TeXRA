@@ -80,7 +80,7 @@ export const agentChildRunId = (
   attempt = call.attempt,
 ): RunId =>
   callChildRunId({
-    parentRunId: call.run.runId,
+    parentId: call.run.runId,
     responseId: call.responseId,
     callId: call.callId,
     attempt,
@@ -153,7 +153,7 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
     ) => Effect.Effect<A, Error, R>;
   },
 ): Effect.fn.Return<Recovered, Error, AgentRunServices | RunCall> {
-  const { runId: parentRunId } = call.run;
+  const { runId: parentId } = call.run;
   const earlier = yield* earlierChild(call);
   if (earlier === null) return { kind: 'launch' };
   const standing = yield* standingOf(earlier);
@@ -166,7 +166,7 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
       const { result } = yield* recovery.running(
         resumeSubagentInBand({
           runId: earlier,
-          parentRunId,
+          parentId,
           notify: recovery.notify,
         }),
       );

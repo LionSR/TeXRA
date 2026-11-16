@@ -16,7 +16,7 @@ import { checkpointRefusal } from '@agent/storage/resumability';
 import {
   getRunRecords,
   owningCall,
-  persistedParentRunId,
+  persistedParentId,
 } from '@agent/storage/runOwnership';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -165,7 +165,7 @@ const joinOpening = (
             const held = runs.get(runId);
             if (held === undefined) return REFUSED;
             const owner = yield* owningCall(runId);
-            if (owner !== null) return { ownedBy: owner.parentRunId };
+            if (owner !== null) return { ownedBy: owner.parentId };
             const facts = yield* (yield* SessionLog).facts(runId);
             if (facts?.activation == null) return REFUSED;
             if (facts.end === null)
@@ -215,13 +215,13 @@ export const openResume = Effect.fn('resumeRun.open')(function* (
   if ((yield* inbox.read(runId)).inputClosed) return yield* refuse(REFUSED);
   // Whether an open call owns it: that call's parent resumes instead.
   const owning = yield* owningCall(runId);
-  if (owning !== null && owning.parentRunId !== owner)
-    return yield* refuse({ ownedBy: owning.parentRunId });
+  if (owning !== null && owning.parentId !== owner)
+    return yield* refuse({ ownedBy: owning.parentId });
   // Nothing to continue from, or rows this build cannot use.
   const rejected = yield* checkpointRefusal(runId);
   if (rejected !== null) return yield* refuse({ failed: rejected });
   // Its parent, read once: the run's edge for this activation.
-  const parentRunId = yield* persistedParentRunId(runId);
+  const parentId = yield* persistedParentId(runId);
   // A stop asked while those reads ran: the registry ends the run on its
   // rows as this opening fails; there is nothing to activate.
   if (runs.stopAsked(runId) !== null) return yield* refuse(REFUSED);
@@ -237,6 +237,6 @@ export const openResume = Effect.fn('resumeRun.open')(function* (
     stopAfterCycle: options.stopAfterCycle,
     tools: options.tools,
     onProgress: options.onProgress,
-    parentRunId,
+    parentId,
   });
 });

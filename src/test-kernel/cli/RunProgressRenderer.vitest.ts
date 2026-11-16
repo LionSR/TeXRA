@@ -187,7 +187,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         'writes projected subagent progress records to stdout in ndjson mode',
         () =>
           Effect.gen(function* () {
-            const parentRunId = decodeRunId('a1a1a1');
+            const parentId = decodeRunId('a1a1a1');
             const childRunId = decodeRunId('b1b1b1');
             const output = yield* captureStreamWrites(process.stdout, () =>
               Effect.gen(function* () {
@@ -202,7 +202,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 yield* publishTestRows(handle, [
                   {
                     type: 'run.start',
-                    aggregateId: parentRunId,
+                    aggregateId: parentId,
                     identity: { kind: 'agent', agent: 'chat' },
                     takesFollowUps: true,
                     parent: null,
@@ -213,7 +213,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                     aggregateId: childRunId,
                     identity: { kind: 'agent', agent: 'review' },
                     takesFollowUps: false,
-                    parent: { id: parentRunId, call: null },
+                    parent: { id: parentId, call: null },
                     provenance: null,
                   },
                 ]);
@@ -235,7 +235,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 // their own names; `ready` is the fold's phase before the
                 // activation lands.
                 payload: {
-                  runId: parentRunId,
+                  runId: parentId,
                   children: [
                     {
                       childRunId,

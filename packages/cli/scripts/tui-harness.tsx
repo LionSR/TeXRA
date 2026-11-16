@@ -556,7 +556,7 @@ function seedRun(
     readonly identity?: NonNullable<
       Extract<SessionRowDraft, { type: 'run.start' }>['identity']
     >;
-    readonly parentRunId?: RunId;
+    readonly parentId?: RunId;
     /** The agent name for a default (agent) identity; a run id names nothing. */
     readonly agent?: string;
     readonly takesFollowUps?: Extract<
@@ -578,9 +578,9 @@ function seedRun(
     identity,
     takesFollowUps: options.takesFollowUps ?? true,
     parent:
-      options.parentRunId === undefined
+      options.parentId === undefined
         ? null
-        : { id: options.parentRunId, call: null },
+        : { id: options.parentId, call: null },
     provenance: null,
   });
   if (identity.kind === 'agent') {
@@ -1381,7 +1381,7 @@ function seedRunningScript(): void {
   const scriptRunId = harnessRunId('aaaa0002f10e');
   seedRun(scriptRunId, {
     identity: { kind: 'script', title: 'live-script-validation' },
-    parentRunId: HARNESS_RUN_ID,
+    parentId: HARNESS_RUN_ID,
     takesFollowUps: false,
   });
   seedStanding(scriptRunId, 'running');
@@ -1391,7 +1391,7 @@ function seedRunningScript(): void {
   ]) {
     seedRun(agentRunId, {
       identity: { kind: 'agent', agent: 'correct' },
-      parentRunId: scriptRunId,
+      parentId: scriptRunId,
       takesFollowUps: false,
     });
     seedStanding(agentRunId, 'running');
@@ -1402,7 +1402,7 @@ function seedRunningProcessChild(): void {
   const childRunId = harnessRunId('aaaa0003f10e');
   seedRun(childRunId, {
     identity: { kind: 'process', tool: 'bash' },
-    parentRunId: HARNESS_RUN_ID,
+    parentId: HARNESS_RUN_ID,
     takesFollowUps: false,
   });
   seedDescription(childRunId, 'sleep 30');
@@ -1448,7 +1448,7 @@ if (SHOW_CHILDREN) {
     const runId = child.runId;
     seedRun(runId, {
       identity: child.identity,
-      parentRunId: HARNESS_RUN_ID,
+      parentId: HARNESS_RUN_ID,
     });
     seedDescription(runId, `${child.agentName} sub-workflow`);
     seedRows(runId, makeChildEntries(child.agentName, child.runId));
@@ -1467,7 +1467,7 @@ if (SHOW_CHILDREN) {
     const nestedRunId = nestedStrategyChild.runId;
     seedRun(nestedRunId, {
       identity: nestedStrategyChild.identity,
-      parentRunId: harnessRunId('aaaa0005f10e'),
+      parentId: harnessRunId('aaaa0005f10e'),
     });
     seedDescription(nestedRunId, 'localChecker nested proof check');
     seedRows(

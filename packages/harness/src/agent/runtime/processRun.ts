@@ -188,7 +188,7 @@ export const launchProcessChild = Effect.fn('launchProcessChild')(function* (
     yield* registerRun(runId, launch.config, {
       identity: launch.identity,
       takesFollowUps: false,
-      parentRunId: parent.runId,
+      parentId: parent.runId,
       parentCall: { callId, card: parent.logId, awaited: false },
       description: launch.description,
     });
