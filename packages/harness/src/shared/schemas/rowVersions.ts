@@ -216,7 +216,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v18.
   // v13: a retry's credential switch has no `automatic`: a person takes
   // every switch (an earlier build's flag would be silently dropped).
-  'request.opened': { version: 13, listing: 'request' },
+  // v14: an external inquiry holds its open turn once (`turn`) beside the
+  // turns before it (`earlierTurns`); an earlier build's would not render.
+  'request.opened': { version: 14, listing: 'request' },
   // v2: no `setup` arm; a proposal's approve may carry edited files,
   // instruction and options.
   'request.decided': { version: 2, listing: 'request' },
