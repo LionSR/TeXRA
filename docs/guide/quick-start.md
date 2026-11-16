@@ -1,5 +1,4 @@
 <script setup>
-import TaskRecipeCards from '../.vitepress/components/TaskRecipeCards.vue';
 import OutputArtifactsTree from '../.vitepress/components/OutputArtifactsTree.vue';
 import CliRunHero from '../.vitepress/components/CliRunHero.vue';
 </script>
@@ -10,16 +9,16 @@ On a fresh install, the **setup assistant** walks you through connecting a model
 
 <QuickStartHero />
 
-<p class="hero-caption">The New task view: point it at your file, pick an agent and a model, write one sentence, and select Start task.</p>
+<p class="hero-caption">The New task view: pick an agent and a model, write one sentence that names your file, and select Start task.</p>
 
 ## Overview
 
-A typical document task takes five steps:
+Editing a document typically takes five steps:
 
-1. Select your file
-2. Pick an agent and model
-3. Write a short instruction
-4. Select **Start task**
+1. Pick an agent and model
+2. Write a short instruction that names your file
+3. Select **Start task**
+4. Approve the program run the agent proposes
 5. Review the diff
 
 > 💡 **Tip:** Inside VS Code you can open the **Get started with TeXRA** walkthrough from the Get Started page
@@ -29,8 +28,8 @@ A typical document task takes five steps:
 ::: tip Prefer the terminal?
 This guide walks through the VS Code extension. If you installed the
 [CLI](./texra-cli.md), the same agents run from the command line: start an
-interactive session with `texra chat`, or run a single agent with
-`texra run polish --input draft.tex`. Run `texra agents list` to see what's
+interactive session with `texra chat`, or run a single program with
+`texra run edit --input draft.tex`. Run `texra agents list` to see the agents
 available.
 :::
 
@@ -51,7 +50,7 @@ TeXRA panel offers the two main access choices; other subscriptions connect from
 The full per-provider key reference (the API Configuration table, Set / Get / Remove actions, and per-provider toggles) lives in [Models → Setting API keys](./models.md#setting-api-keys).
 
 ::: tip No TeXRA account
-There is no TeXRA sign-in. Every agent, including the research-writing agents such as `generic` and `devise`, ships
+There is no TeXRA sign-in. Every agent and program ships
 bundled and runs on the credential you configured above.
 :::
 
@@ -73,15 +72,37 @@ environment, agents, and first task. Read the
 Open the TeXRA panel from the TeXRA icon in the Secondary Side Bar, or run **TeXRA: New Task**
 (`Ctrl+Alt+M`, `Cmd+Option+M` on macOS).
 
-### Select files
+### Choose agent, model, and instruction
 
-The **Input** and **Context** sections appear once you pick a document task
-such as `polish` or `correct`, because only a document task reads them. A
-chat (with the orchestrator, the assistant, or any other agent) gets your
-instruction and any attachments, so the New task view shows only **Media**
-for it.
+The dropdown menus at the bottom of the instruction box pick the agent and the
+model (e.g. `anthropic/claude-sonnet-5-5`). The agent menu lists each agent
+once, then your teams. Every agent chats; the default, `orchestrator`, is the
+one to ask for a document edit.
 
-1. In the **Input** section, select <wa-icon library="texra" name="add"></wa-icon> **Add files** and pick your document from the file picker. You can also drag it from the OS file manager. If you have several `.tex` files open and want them all, use <wa-icon library="texra" name="folder-opened"></wa-icon> **Add opened files**; it appends every editor tab whose extension matches.
+Then say what you want, and on which file, in the text area:
+
+```
+Polish main.tex: improve the clarity and flow, and make the technical
+explanations more accessible. Fix grammatical issues and awkward phrasing.
+Keep the terminology consistent and do not change the equations.
+```
+
+::: tip Effective Instructions
+Be specific about your objectives: state both what the agent should improve and what constraints (notation, theorem numbering, environment structures) it must preserve.
+:::
+
+To send figures or other media along, use **Attach** in the instruction box.
+
+### Approve the program run
+
+The New task view does not list programs and has no file section of its own.
+For a document edit, the agent proposes a run of one of the
+[programs](./built-in-agents.md#programs) (`edit` for a polish), and the
+proposal card shows the program, the instruction and the files. Approve it,
+or select **Edit** to change it first: the launch form opens on the proposal
+with a **Documents and attachments** section.
+
+1. In the **Input** group, use <wa-icon library="texra" name="add"></wa-icon> **Add input files** to pick the documents the program revises. If you have several `.tex` files open and want them all, use <wa-icon library="texra" name="folder-opened"></wa-icon> **Add opened files as input**.
 2. (Optional) Use the same buttons in **Context** to add read-only references or preamble, and **Media** to add figure files.
 
 ::: info Multiple Files
@@ -90,45 +111,7 @@ Each category holds an ordered list. Add as many files as the task needs and dra
 
 <FileSelectHero />
 
-<p class="hero-caption">The file selector: Input holds the document you're editing, Context holds references and preamble, and Media holds figures.</p>
-
-### Choose agent, model, and instruction
-
-The dropdown menus at the bottom of the instruction box pick the agent
-(e.g. `polish` for improving writing) and the model (e.g. `anthropic/claude-sonnet-5-5`). The
-agent menu lists each agent once, then your teams. The agent you pick
-decides what kind of run starts: one marked with a file icon runs its
-document task on your files, and any other agent or a team chats. There is
-no separate mode to set.
-Then write a specific instruction in the text area:
-
-```
-Improve the clarity and flow of this document. Focus on making the technical
-explanations more accessible. Fix any grammatical issues or awkward phrasing.
-Ensure consistent terminology throughout.
-```
-
-::: tip Effective Instructions
-Be specific about your objectives: state both what the agent should improve and what constraints (notation, theorem numbering, environment structures) it must preserve.
-:::
-
-### Configure tools
-
-Two icon buttons sit in the file-group header rows of the file selector: one next to the **Input** label, one next to the **Media** label. They light up when a helper is active, and they appear only for a document task, the only kind of run that uses them.
-
-1. Select the <wa-icon library="texra" name="tools"></wa-icon> **Tool configuration options** button to:
-   - **Attach TeX Count**: include document word-count statistics so the agent knows the document's size and structure
-   - **Critic review**: have the bundled `critic` agent review each revision but the last; the next revision reads its critique
-2. Select the <wa-icon library="texra" name="wand"></wa-icon> **Auto-extract options** button to enable, for this run:
-   - **Figures**: pull figures out of the document automatically
-   - **TikZ Figures**: extract TikZ figures
-   - **Compile Input PDF**: compile the input to PDF first
-
-The selected agent controls how many revisions run; most writing agents already include a follow-up critique pass.
-
-<ToolConfigHero />
-
-<p class="hero-caption">The two helper menus in the Input and Media file-group headers. Active helpers tint their buttons; here Attach TeX Count and Figures are on.</p>
+<p class="hero-caption">The file selector of a proposal you are editing: Input holds the document the program revises, Context holds references and preamble, and Media holds figures.</p>
 
 ::: tip Save Prompts for Later
 For advanced debugging, enable the `texra.debug.saveModelIO` setting in `.texra/config.json` to store the generated prompt alongside other debug artifacts.
@@ -144,7 +127,7 @@ Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>). The
 
 ### Review results
 
-1. When the run completes, VS Code opens the generated output file from the run folder (e.g., `r0/draft.tex`, keeping your input filename).
+1. When the program's run completes, VS Code opens the generated output file from the run folder (e.g., `r0/draft.tex`, keeping your input filename).
 2. Inspect the proposed edits; the scientific judgment stays yours. Compare the original and modified versions with either tool:
    - **ProgressBoard Diff**: Under **Generated files**, select a file's <wa-icon library="texra" name="code-compare"></wa-icon> **Compare with base** button to compare the original file against the generated run-storage output.
 
@@ -176,7 +159,7 @@ For details on how LaTeX diff works, read the [LaTeX diff guide](./latex-diff.md
 
 ## From the CLI
 
-The same agents run from the terminal. After
+The same agents and programs run from the terminal. After
 `npm install -g @texra-ai/cli` (Node.js 22.22.2 or later in 22.x, or Node.js 24.15 or later) or
 `brew install texra-ai/tap/texra`:
 
@@ -188,7 +171,7 @@ texra auth chatgpt login
 texra setup
 
 # One-shot run (prints the revised file's path; --output copies it to a file you name):
-texra run polish --input draft.tex \
+texra run edit --input draft.tex \
   --instruction "Improve clarity; preserve math and citations."
 
 # Or open an interactive chat:
@@ -204,10 +187,10 @@ you own.
 ::::
 
 <CliRunHero
-  command='texra run polish --input draft.tex --instruction "Improve clarity; preserve math and citations."'
+  command='texra run edit --input draft.tex --instruction "Improve clarity; preserve math and citations."'
   :rounds="[
     { label: 'r0: draft revision', state: 'done' },
-    { label: 'r1: critique and revise', state: 'done' },
+    { label: 'r1: review and correct', state: 'done' },
   ]"
   :outputs="['executions/9f3a6c81d24e/r1/draft.tex']"
 />
@@ -305,11 +288,14 @@ sign-in, workspace defaults, and headless output formats.
 
 ## Common quick tasks
 
-Some common tasks to try with TeXRA. Each is an agent, a model, and a one-line instruction in the New task footer:
+Some common tasks to try with TeXRA. Ask the agent in the New task view, or run the program from the terminal:
 
-<TaskRecipeCards />
-
-<p class="hero-caption">Three starter recipes: pick the agent and model, then paste the instruction. The first model listed is a good default; the others are interchangeable alternatives.</p>
+| Task                        | Ask the agent                                                         | From the terminal                                                                  |
+| :-------------------------- | :-------------------------------------------------------------------- | :--------------------------------------------------------------------------------- |
+| Proofread a draft           | "Proofread draft.tex: fix typos, grammar and LaTeX formatting only."  | `texra run edit --input draft.tex`                                                 |
+| Polish writing style        | "Polish draft.tex for clarity and flow; keep the math and citations." | `texra run edit --input draft.tex --instruction "Polish for clarity and flow"`     |
+| Review as a first reader    | "Annotate draft.tex as a first-time reader would."                    | `texra run annotate --input draft.tex --instruction "Read as a first-time reader"` |
+| Build slides from the paper | "Turn paper.tex into a slide deck."                                   | `texra run slides --input paper.tex --output slides.tex`                           |
 
 ## Understanding the output
 

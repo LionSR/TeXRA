@@ -15,6 +15,7 @@
 import { Predicate } from 'effect';
 import {
   agentName,
+  PROGRAM_TOOL_NAME,
   TOOL_CALL_STATUS,
   type RequestPayload,
   type RunId,
@@ -36,15 +37,22 @@ import { childAnswer } from './toolRowSections';
 import type { ToolRow as AppliedToolRow, TranscriptRow } from './transcriptRow';
 import { transcriptTimeline } from './transcriptTimeline';
 
-/** An `agent` call's agent as the card shows it: a recipe names its
- *  agents by `source:name` key, and the card shows the name. */
-const nameOf = (value: unknown): string | undefined => {
-  const key = stringOf(value);
+/** A child call's agent or program as the card shows it: an agent may be
+ *  named by its `source:name` key, and the card shows the name. */
+const nameOf = (
+  input: Readonly<Record<string, unknown>>,
+): string | undefined => {
+  const key = stringOf(input.agentName ?? input.name);
   return key === undefined ? undefined : agentName(key);
 };
 
-/** The calls that run a child: `agent()`, and `self()`, this agent again. */
-const CHILD_TOOLS: ReadonlySet<string> = new Set(['agent', 'self']);
+/** The calls that run a child: `agent()`, `program()`, and `self()`, this
+ *  agent again. */
+const CHILD_TOOLS: ReadonlySet<string> = new Set([
+  'agent',
+  PROGRAM_TOOL_NAME,
+  'self',
+]);
 
 export type ScriptCallStatus =
   | 'queued'
@@ -190,7 +198,7 @@ function callView(
       ? child
       : undefined;
   const facts = [
-    agent ? nameOf(input.agentName) : undefined,
+    agent ? nameOf(input) : undefined,
     agent ? (child?.modelLabel ?? stringOf(input.model)) : undefined,
     row.attempt !== undefined && row.attempt > 1 ? 'retried' : undefined,
     agent
@@ -208,7 +216,7 @@ function callView(
       : undefined,
   ].filter(Predicate.isNotUndefined);
   const label = agent
-    ? (stringOf(input.label) ?? nameOf(input.agentName) ?? row.toolUse.toolName)
+    ? (stringOf(input.label) ?? nameOf(input) ?? row.toolUse.toolName)
     : [row.model.headerLabel, row.model.headerPreview]
         .filter((part) => part.length > 0)
         .join(' ');

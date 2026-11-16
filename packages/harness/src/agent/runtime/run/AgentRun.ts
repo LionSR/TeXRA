@@ -50,7 +50,9 @@ import type {
 import { RunHistory } from '@shared/session/runHistory';
 import type { Alongside } from '@shared/session/sessionEvents';
 import { buildTerminalTool } from '@tools/structuredOutput';
+import type { ToolRegistry } from '@tools/toolTable';
 import { ProjectTools, type OpenStep } from '../loop/step';
+import { scriptCallOf } from '../programRun';
 import type { ModelConfig } from '@texra-ai/llm';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import type { HttpClient } from 'effect/http';
@@ -128,7 +130,7 @@ export interface AgentRunShape extends RunLaunch {
   /** What each step resolves its tools from (`loop/step.ts`). */
   readonly toolInputs: Omit<
     StepToolInputs,
-    'approvalPromptsUnavailable' | 'hostCapabilities'
+    'approvalPromptsUnavailable' | 'hostCapabilities' | 'directToolCalls'
   >;
   /**
    * The run's current step: the tools it offers and the pin that holds its
@@ -196,6 +198,7 @@ export const agentRunLayer = (
   Error,
   | RunHistory
   | ProjectTools
+  | ToolRegistry
   | SessionRoots
   | HttpClient.HttpClient
   | Secrets
@@ -222,9 +225,9 @@ export const agentRunLayer = (
         ? buildTerminalTool(outputSchema)
         : undefined;
       const finalToolName = terminalTool?.definition.name ?? null;
-      // A script's run offers its script and exactly the tools its launch
-      // names (a background script's parent's, a task's recipe's).
-      const script = config.script ?? null;
+      // A script's run offers its script and exactly the tools its call
+      // names (a background script's parent's, a program's registered ones).
+      const script = yield* scriptCallOf(config);
       // A plugin agent that names no tools inherits them, as a Claude Code
       // subagent does: the standard file, shell and web tools and the
       // installed plugins' tools, whoever launched it.

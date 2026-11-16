@@ -4,13 +4,12 @@ import { resolve } from 'node:path';
 
 // Third-party imports
 import { layer } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { Effect } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
 import { scanDirectory } from '@agent/index/agentYamlScanner';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { storePluginsLayer } from '@test/support/texraApp';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { FakeHost } from '@test/support/testKernel';
 
@@ -31,12 +30,8 @@ layer(FakeHost.layer(), { excludeTestServices: true })(
             'settings:',
             '  agentCategory: toolUse',
           ],
-          'tools-and-task.yaml': [
-            'name: tools-and-task',
-            'tools: [read_file]',
-            'task:',
-            '  requests: [Revise.]',
-          ],
+          // A key the definition does not declare is refused.
+          'task.yaml': ['name: task', 'task:', '  requests: [Revise.]'],
           'valid.yaml': ['name: valid', 'prompt: hi'],
         };
         const dir = yield* Effect.promise(async () => {
@@ -51,14 +46,14 @@ layer(FakeHost.layer(), { excludeTestServices: true })(
         });
 
         const { entries, issues } = yield* scanDirectory([dir], 'custom').pipe(
-          Effect.provide(Layer.merge(nodePlatformLayer, storePluginsLayer)),
+          Effect.provide(nodePlatformLayer),
         );
 
         expect(entries.map((entry) => entry.name)).toEqual(['valid']);
         expect(issues.map((issue) => issue.path)).toEqual([
           'broken.yaml',
           'nested.yaml',
-          'tools-and-task.yaml',
+          'task.yaml',
         ]);
       }),
     );

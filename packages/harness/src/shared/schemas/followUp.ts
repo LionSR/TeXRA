@@ -79,7 +79,7 @@ const ChildRunDeliverySchema = Schema.Struct({
   /** A background script's summary: its calls, what they wrote and cost. */
   summary: Schema.optional(ScriptDeliverySummarySchema),
   /** Body lines its driver rendered, carried as given: facts only the
-   *  model reads (a command's output, a recipe's documents). */
+   *  model reads (a command's output, a program's documents). */
   lines: Schema.optional(Schema.Array(Schema.String)),
   /** A native run's output: its reply, as a block (none when empty), and the
    *  files its calls touched. */

@@ -16,7 +16,6 @@ import {
   type WorkspaceAgentsController,
 } from '@texra-ai/harness/host';
 import { type AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
-import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra/shared/constants/agents';
 import {
   CUSTOM_TEAMS_KEY,
@@ -27,8 +26,6 @@ import {
 interface SettingsAgentCatalogEntry extends Pick<AgentEntry, 'persona'> {
   name: string;
   source: AgentSource;
-  /** The plugins' blocks its file holds (the documents plugin's `task`). */
-  blocks: Readonly<Record<string, unknown>>;
   description?: string;
   path?: string;
   basedOn?: string;
@@ -151,7 +148,6 @@ export class SettingsAgentCatalogController {
     return {
       name: entry.name,
       source: entry.source,
-      hasTask: documentTaskOf(entry) !== null,
       description: entry.description,
       filePath: entry.path || undefined,
       tools: [...agentToolNames(entry)],

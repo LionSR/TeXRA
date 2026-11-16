@@ -55,7 +55,6 @@ import {
 import { getFirstRunDone } from '@texra/controllers/onboarding/onboardingFunnel';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { launchTeamId } from '@texra/agent/teams/teamLaunch';
-import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 
@@ -208,10 +207,9 @@ export async function runChat(
         modelOverride: initialResume?.config.model ?? init.modelOverride,
         envAgent: context.envAgent,
         envModel: context.envModel,
-        // The implicit chat default is a persona with no document task.
-        visibleToolUseAgents: (yield* (yield* AgentCatalog)
+        visibleToolUseAgents: yield* (yield* AgentCatalog)
           .workspaceAgents(services)
-          .visible()).filter((agent) => documentTaskOf(agent) === null),
+          .visible(),
       });
       const agentEntry = yield* resolveChatToolUseAgent(
         services,

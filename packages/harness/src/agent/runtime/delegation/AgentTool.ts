@@ -1,8 +1,8 @@
 /**
  * The `agent` tool: run a named agent as a child of the calling run, with
  * its prompt and its own tools. `launchChildAgent` is the launch it shares
- * with a plugin's task tools (`launchesTasks`), which open the same child on
- * the plugin's recipe. A script's `agent` calls share one approval request
+ * with the `program` tool (`./ProgramTool`), which opens the same child on
+ * a registered program. A script's `agent` calls share one approval request
  * showing its source; a direct call proposes itself. A completed awaited
  * call is reused by a later call with the same key in the same run or a
  * background script run of it, and a call cut short finds the child its
@@ -14,7 +14,7 @@
 import { Effect, Result, Schema, ScopedRef } from 'effect';
 
 // Local imports
-import { readRecipeResult } from '@agent/runtime/recipeResult';
+import { programLaunch, readProgramResult } from '@agent/runtime/programRun';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { inRunSession, noLaterTurn } from '@agent/runtime/RunCall';
 import { decisionOf } from '@agent/runtime/requests';
@@ -29,8 +29,7 @@ import {
   type RunEnd,
   type RunId,
   type ToolResult,
-  type AgentConfig,
-  isTaskConfig,
+  programOf,
   AGENT_TOOL_NAME,
 } from '@shared/schemas';
 import { attemptRequests, callRequestId } from '@shared/session/inFlight';
@@ -41,7 +40,6 @@ import {
 } from '@shared/session/runHistory';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { defineTool, type DefinedTool } from '@tools/core/definition';
-import { nullishWithDefault, timeoutMsField } from '@tools/core/inputSchema';
 import { errorResult, executed } from '@tools/core/result';
 import { sha256 } from '@utils/core/idHash';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -60,12 +58,12 @@ import {
 import { selectAvailableDelegationModel } from './delegationAvailability';
 import { executeSubagentInBand } from './childLaunch';
 import {
-  memoriesField,
+  CALL_FIELDS,
+  fileList,
   personaField,
   rejectUnusableWorkingDirectory,
   resolveInvocationFileList,
   withToolUseSubagentHandoffInstruction,
-  workingDirectoryField,
 } from './inputFields';
 import { AgentRequest, decideDelegation, requireAgent } from './proposalFlow';
 import {
@@ -80,12 +78,6 @@ class AgentTimedOut extends Schema.TaggedError<AgentTimedOut>()(
   'AgentTimedOut',
   { timeoutMs: Schema.Number },
 ) {}
-
-/** A list of file paths, empty when the call names none. */
-export const fileList = (
-  description: string,
-): ReturnType<typeof nullishWithDefault<Schema.$Array<Schema.String>>> =>
-  nullishWithDefault(Schema.Array(Schema.String), [], description);
 
 /** The fields that name what an `agent` call runs and with which model. */
 const LAUNCH_FIELDS = {
@@ -112,43 +104,18 @@ const LAUNCH_FIELDS = {
   ),
 };
 
-/** The fields every child launch takes beside its own: memories, the call's
- *  reuse id and card label, its time limit, and whether a script waits. */
-export const CALL_FIELDS = Object.freeze({
-  memories: memoriesField,
-  working_directory: workingDirectoryField,
-  id: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description:
-      'Tells apart two otherwise identical calls: a completed call is reused by a later one with the same prompt, options and files.',
-  }),
-  label: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-    description: 'A short title for the call’s card.',
-  }),
-  timeoutMs: timeoutMsField.annotate({
-    description: 'Stops the agent after this many milliseconds: `TimedOut`.',
-  }),
-  background: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
-    description:
-      'In a script: return `{ runId }` at once; the result arrives as a follow-up. A direct call always runs in the background, except in a one-shot run.',
-  }),
-});
 const AgentInputSchema = Schema.Struct({ ...LAUNCH_FIELDS, ...CALL_FIELDS });
 type AgentInput = typeof AgentInputSchema.Type;
 
 /**
- * One child launch as the shared core runs it: the agent and its prompt,
- * and what the child is. A chat (`task: null`) may ask for a value of
- * `schema` and attaches `mediaFiles` to its prompt. A task opens on what
- * the launching plugin builds for the approved agent (`configFor`: its
- * recipe and outputs, null for an agent with no task block) and works over
- * `files` with `options`, as its proposal says. `tool` names the launching
- * tool in its reuse key and its copy.
+ * One child launch as the shared core runs it: its prompt and what the
+ * child is. A chat (`program: null`) runs the agent `agentName`, may ask
+ * for a value of `schema` and attaches `mediaFiles` to its prompt. A
+ * program's child is a run named for the registered program `name`, works
+ * over `files` and is called with `args`, which its proposal shows as its
+ * options.
  */
-export type ChildLaunch = {
-  readonly tool: string;
-  readonly agentName: string;
-  /** An agent the call defines, named `agentName`: no catalog entry. */
-  readonly persona?: AgentProposal['persona'];
+type ChildLaunch = {
   readonly prompt: string;
   readonly model: string | null | undefined;
   readonly memories: readonly string[];
@@ -158,16 +125,17 @@ export type ChildLaunch = {
   readonly background: boolean | null | undefined;
 } & (
   | {
-      readonly task: null;
+      readonly program: null;
+      readonly agentName: string;
+      /** An agent the call defines, named `agentName`: no catalog entry. */
+      readonly persona?: AgentProposal['persona'];
       readonly schema: Record<string, unknown> | null | undefined;
       readonly mediaFiles: readonly string[];
     }
   | {
-      readonly task: {
-        readonly configFor: (
-          chosen: AgentProposal,
-        ) => Pick<AgentConfig, 'script' | 'outputFiles'> | null;
-        readonly options: NonNullable<AgentProposal['options']>;
+      readonly program: {
+        readonly name: string;
+        readonly args: Readonly<Record<string, Schema.Json>>;
       };
       readonly files: {
         readonly inputFiles: readonly string[];
@@ -230,8 +198,8 @@ const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
 });
 
 /** What an ended child becomes for its call: the report its end stored,
- *  the envelope its parent's model reads (a recipe's read through its
- *  block), or the error a script's `await` throws for it. */
+ *  the envelope its parent's model reads (a program's read through its
+ *  registered result), or the error a script's `await` throws for it. */
 export const childResult = Effect.fn('AgentTool.childResult')(function* (
   call: RunToolCall,
   agentName: string,
@@ -261,12 +229,12 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
     );
   const config = yield* records.readConfig();
   const view = yield* (yield* SessionViewAccess).read([]);
-  const recipe = yield* readRecipeResult(config, runId, call.env.roots);
+  const program = yield* readProgramResult(config, runId, call.env.roots);
   return {
     ...executed(report, `Completed '${agentName}'`),
     value: toJsonValue({
       ...result.output,
-      ...(recipe !== undefined && { changes: recipe.changes }),
+      ...(program !== undefined && { changes: program.changes }),
       runId,
       outcome: result.outcome,
       cost: treeCostOf(view, runId),
@@ -302,10 +270,18 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const { run } = call;
   const script = call.script ?? undefined;
   const { runId: parentId } = run;
-  const { task, persona } = launch;
-  // A chat's files are the media on its prompt; a task names its four lists.
+  const { program } = launch;
+  // A name no plugin registers fails before anyone is asked to approve it.
+  if (program !== null) {
+    const known = yield* Effect.result(
+      programLaunch(program.name, program.args, launch.files),
+    );
+    if (Result.isFailure(known)) return errorResult(known.failure.message);
+  }
+  // A chat's files are the media on its prompt; a program names its four
+  // lists.
   const files =
-    launch.task === null
+    launch.program === null
       ? {
           inputFiles: [],
           contextFiles: [],
@@ -313,21 +289,26 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
           outputFiles: [],
         }
       : launch.files;
+  // A program's child is the program's own run, named for it.
+  const persona =
+    launch.program === null ? launch.persona : { name: launch.program.name };
   const agent =
-    persona == null
-      ? yield* requireAgent(call.env.roots, launch.agentName, run)
-      : { name: launch.agentName, source: AGENT_SOURCE.INLINE };
+    launch.program !== null
+      ? { name: launch.program.name, source: AGENT_SOURCE.INLINE }
+      : launch.persona == null
+        ? yield* requireAgent(call.env.roots, launch.agentName, run)
+        : { name: launch.agentName, source: AGENT_SOURCE.INLINE };
   const unusable = yield* rejectUnusableWorkingDirectory(
     call.env.roots,
     launch.workingDirectory ?? undefined,
   );
   if (unusable) return unusable;
   const outputSchema = yield* childOutputSchema(
-    launch.task === null ? launch.schema : null,
+    launch.program === null ? launch.schema : null,
   );
   // The call's files: a run-storage file must be this run's own or a declared
-  // output of a completed child of it; a task's recipe's files pass as named.
-  const trusted = isTaskConfig(run.config);
+  // output of a completed child of it; a program's files pass as named.
+  const trusted = programOf(run.config) !== null;
   const resolved = yield* Effect.result(
     Effect.all(
       (
@@ -354,16 +335,16 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const oneShot = noLaterTurn(run);
   const awaited =
     oneShot || (script !== undefined && launch.background !== true);
-  // A task launch, a structured call and a call from a task's recipe reach the child
-  // verbatim; any other is handed off with the parent's instruction.
-  const handsOff = task === null && outputSchema === undefined && !trusted;
+  // A program's launch, a structured call and a call from a program reach
+  // the child verbatim; any other is handed off with the parent's
+  // instruction.
+  const handsOff = program === null && outputSchema === undefined && !trusted;
   // A completed call with the same prompt, options and file bytes is reused.
   // The requested model, not the one availability resolves to, so a reuse
   // does not depend on which credentials are configured now.
   const key =
     awaited && script !== undefined
       ? sha256({
-          tool: launch.tool,
           prompt: launch.prompt,
           ...(handsOff && { handoff: call.instruction ?? null }),
           agent: agent.name,
@@ -371,7 +352,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
           model: launch.model ?? null,
           schema: outputSchema ?? null,
           ...files,
-          options: task?.options ?? null,
+          program,
           memories: launch.memories,
           workingDirectory: launch.workingDirectory ?? null,
           id: launch.id ?? null,
@@ -446,7 +427,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       model: selected.success.model,
       memories: launch.memories,
       ...(workingDirectory !== undefined && { workingDirectory }),
-      task: task !== null,
+      task: program !== null,
       instruction: handsOff
         ? withToolUseSubagentHandoffInstruction(launch.prompt, call.instruction)
         : launch.prompt,
@@ -454,9 +435,9 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       contextFiles,
       mediaFiles: media.map(({ file }) => file),
       outputFiles: files.outputFiles,
-      // A task's options reach the child through its plugin's recipe.
-      ...(task !== null && { options: task.options }),
-      ...(task === null && { rootUserInstruction: call.instruction }),
+      // The arguments, shown as the proposal's options.
+      ...(program !== null && { options: program.args }),
+      ...(program === null && { rootUserInstruction: call.instruction }),
     },
   );
 
@@ -473,12 +454,18 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     if (limited !== null) return limited;
   }
 
-  // The asking script's `script`; the child's (with `options`) is set below.
+  // The asking script's `script`; the child's (with its arguments) is set
+  // below; the options are the program's arguments, shown for approval.
   const { task: _t, script: _s, options: _o, ...approved } = decided.proposal;
-  // An approval may pick another agent: a task's recipe is that agent's.
-  const taskConfig = task?.configFor(decided.proposal);
-  if (taskConfig === null)
-    return errorResult(`'${approved.agent}' has no task block.`);
+  // A program's run is the program's own, whatever agent an approval named.
+  // The plugin table is constant for the process and the check above found
+  // the program, so this launch cannot fail.
+  const programConfig =
+    program === null
+      ? null
+      : yield* programLaunch(program.name, program.args, approved).pipe(
+          Effect.orDie,
+        );
   const childApproval = decided.approvalMeta.childApproval ?? 'inherit';
   const grants = delegatedChildGrants(childApproval);
   const configPayload = {
@@ -488,7 +475,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       approved.agentSource === AGENT_SOURCE.INLINE ? approved.persona : null,
     ...(outputSchema !== undefined && { outputSchema }),
     delegationAgentScope: run.config.delegationAgentScope,
-    ...taskConfig,
+    ...programConfig,
   };
   if (!awaited) {
     const runId = agentChildRunId(call);
@@ -540,7 +527,6 @@ Its result is the agent's final reply, or a \`schema\` value. Pick the agent who
     schema: AgentInputSchema,
     execute: (input: AgentInput) =>
       launchChildAgent({
-        tool: AGENT_TOOL_NAME,
         agentName: input.agentName,
         persona: input.persona && {
           name: input.agentName,
@@ -556,6 +542,6 @@ Its result is the agent's final reply, or a \`schema\` value. Pick the agent who
         timeoutMs: input.timeoutMs,
         background: input.background,
         mediaFiles: input.mediaFiles,
-        task: null,
+        program: null,
       }),
   });

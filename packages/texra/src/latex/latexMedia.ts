@@ -10,7 +10,6 @@ import { Effect, FileSystem, Predicate } from 'effect';
 
 // Local imports
 import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
-import type { DocumentTaskOptions } from '@texra/shared/plugins/documents';
 import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
 
 // Local file imports
@@ -403,6 +402,16 @@ const compileTikzFigures = Effect.fn('latexMedia.compileTikzFigures')(
   },
 );
 
+/** Which media of its input files a revision attaches. */
+export interface InputMediaOptions {
+  /** The figures the LaTeX includes. */
+  readonly autoExtractFigure: boolean;
+  /** Its TikZ pictures, compiled. */
+  readonly autoExtractTikzFigure: boolean;
+  /** Each input, compiled to a PDF. */
+  readonly autoCompileInputPdf: boolean;
+}
+
 /**
  * The media of the input files the task's options ask for: their existing
  * figures, compiled TikZ pictures and compiled PDFs, in that order. Their
@@ -413,7 +422,7 @@ export const processInputFiles = Effect.fn('latexMedia.processInputFiles')(
   function* (
     run: MediaRun,
     inputFiles: readonly FileLocation[],
-    cfg: DocumentTaskOptions,
+    cfg: InputMediaOptions,
   ): Effect.fn.Return<FileLocation[], Error, MediaServices> {
     const fs = yield* FileSystem.FileSystem;
     const probed = yield* Effect.forEach(

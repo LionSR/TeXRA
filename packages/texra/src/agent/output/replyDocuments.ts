@@ -257,10 +257,10 @@ export const extractReplyDocuments = Effect.fn('replyDocuments.extract')(
       // scratchpad that drafts inside a ```latex fence would otherwise be
       // written to the user's file as if it were the answer.
       const fencedBlocks = latexFences(logger, rawOutputContent);
-      // A task that writes one new document from many inputs (ocr,
-      // paper2slide) gets one fence per input, so all of them belong to the
-      // output. A task rewriting its one input gets the revised document
-      // first, and any later fence is explanatory prose.
+      // A program that writes one new document from many inputs
+      // (`transcribe`, `slides`) gets one fence per input, so all of them
+      // belong to the output. A program rewriting its one input gets the
+      // revised document first, and any later fence is explanatory prose.
       const blocks = expected.rewritesInputs
         ? fencedBlocks.slice(0, 1)
         : fencedBlocks;

@@ -24,11 +24,8 @@ import {
   sessionHandleOf,
   TestSession,
 } from '@test/support/testKernel';
-import {
-  DOCUMENT_TASK_BLOCK,
-  documentsOutputFact,
-} from '@texra/shared/plugins/documents';
-import { DOCUMENT_TASK_RESULT } from '@texra/tools/documents/documentResult';
+import { documentsOutputFact } from '@texra/shared/plugins/documents';
+import { THEORY_MODULES, THEORY_PROGRAMS } from '@texra/tools/theory/programs';
 import {
   RoundOutputSchema,
   type RoundOutput,
@@ -71,15 +68,16 @@ function workflowRounds(absolutePath: string): RoundOutput[] {
   ];
 }
 
-/** The filesystem, and the documents plugin's block, whose result names a
+/** The filesystem, and the theory plugin's program, whose result names a
  *  completed task's files. */
 const resolveLayer = Layer.merge(
   nodePlatformLayer,
   Layer.succeed(ToolRegistry)(
     toolTable([
       {
-        id: 'documents',
-        agentBlock: { ...DOCUMENT_TASK_BLOCK, result: DOCUMENT_TASK_RESULT },
+        id: 'theory',
+        scriptModules: THEORY_MODULES,
+        programs: THEORY_PROGRAMS,
       },
     ]),
   ),
@@ -108,14 +106,7 @@ const persistCompletedChild = (
         config: Schema.decodeUnknownSync(AgentConfigSchema)({
           agent: 'draft',
           model: 'openai/gpt-6.1-sol',
-          script: {
-            code: 'return 1;',
-            title: 'draft',
-            tools: [],
-            kind: 'recipe',
-            block: 'task',
-            options: {},
-          },
+          script: { kind: 'program', name: 'edit', args: {} },
         }),
       },
     ]);
@@ -126,7 +117,10 @@ const persistCompletedChild = (
         type: 'plugin.fact',
         aggregateId: childRunId,
         parent: null,
-        ...documentsOutputFact(workflowRounds(absolutePath)),
+        ...documentsOutputFact(
+          { intro: '', requests: ['Revise.'], templates: [], creates: false },
+          workflowRounds(absolutePath),
+        ),
       },
       {
         type: 'run.end',

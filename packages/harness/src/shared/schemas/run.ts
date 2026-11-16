@@ -58,7 +58,7 @@ const RUN_ACTIONS = [
   'stop',
   /** Grant the run an approval bypass while it works (a live agent's run). */
   'grant',
-  /** Compact a live conversation (not a task's recipe). */
+  /** Compact a live conversation (not a program). */
   'compact',
   /** Continue the run where it stopped. */
   'resume',

@@ -1,6 +1,5 @@
 <script setup>
 import ToolStatusPanel from '../.vitepress/components/ToolStatusPanel.vue';
-import ToolConfigHero from '../.vitepress/components/ToolConfigHero.vue';
 import TikzDepsHero from '../.vitepress/components/TikzDepsHero.vue';
 import DoctorSliceHero from '../.vitepress/components/DoctorSliceHero.vue';
 </script>
@@ -56,15 +55,15 @@ Formatting does not run on its own after agent execution. The selected formatter
 
 ## <wa-icon library="texra" name="diff-single"></wa-icon> Version comparison with `latexdiff`
 
-`latexdiff` produces a compiled PDF comparing two versions of a `.tex` document, with additions underlined in blue and deletions struck through in red. TeXRA runs it automatically after document tasks, or on demand against another file or a Git commit (`latexdiff-vc` via the <wa-icon library="texra" name="git-commit"></wa-icon> **Commit** dropdown). Read the [LaTeX Diff guide](./latex-diff.md) for the full workflow.
+`latexdiff` produces a compiled PDF comparing two versions of a `.tex` document, with additions underlined in blue and deletions struck through in red. TeXRA runs it automatically after a program's run, or on demand against another file or a Git commit (`latexdiff-vc` via the <wa-icon library="texra" name="git-commit"></wa-icon> **Commit** dropdown). Read the [LaTeX Diff guide](./latex-diff.md) for the full workflow.
 
 ## <wa-icon library="texra" name="symbol-numeric"></wa-icon> Document statistics with `texcount`
 
 `texcount` reports word counts, heading counts, and math element counts so the model can reason about document scale and structure.
 
-To attach these statistics to the prompt, toggle <wa-icon library="texra" name="symbol-numeric"></wa-icon> **Attach TeX Count** in the Tool Configuration dropdown. Read the [agent execution settings](./configuration.md#agent-execution-settings-webview-interface). Agents with `bash` can also run `texcount` themselves through the shell, for example `texcount -inc main.tex`.
+A program adds these statistics to its prompt when an agent starts it with `args: { attachTeXCount: true }`. Agents with `bash` can also run `texcount` themselves through the shell, for example `texcount -inc main.tex`.
 
-**Attach TeX Count** counts each input file on its own. In the VS Code extension, **TeXRA: Count Words in Current TeX File** counts the active file and asks how:
+`attachTeXCount` counts each input file on its own. In the VS Code extension, **TeXRA: Count Words in Current TeX File** counts the active file and asks how:
 
 - **Count main file only**: count the file on its own
 - **Follow \input/\include and combine**: follow `\input{}` / `\include{}` directives from the main file and combine the counts
@@ -81,7 +80,7 @@ TeXRA extracts figures from your LaTeX so vision-capable models can see them.
 
 The `extract_figures` tool finds `\includegraphics` references and returns the images as attachments.
 
-**Auto-extraction:** toggle <wa-icon library="texra" name="wand"></wa-icon> **Auto Extract → Figures** in the main UI to include figures in every prompt automatically. Read the [figures guide](./working-with-figures.md).
+**Auto-extraction:** a program attaches the figures of its input files when an agent starts it with `args: { autoExtractFigure: true }`. Read the [figures guide](./working-with-figures.md).
 
 ### TikZ figures
 
@@ -108,14 +107,6 @@ Useful whenever an agent needs exact citation records to edit, format, or valida
 Agents run Wolfram Language code through `wolframscript` in the shell (`wolframscript -code '...'` or `wolframscript -file`) to verify calculations or perform symbolic algebra. It is not LaTeX-specific, but it is useful for validating mathematical content in papers and derivations.
 
 The Wolfram row sits under **Settings → Plugins** (<wa-icon library="texra" name="cube"></wa-icon>). Requires a local [Wolfram Engine](https://www.wolfram.com/engine/) install.
-
-## <wa-icon library="texra" name="settings-gear"></wa-icon> Per-run tool toggles
-
-Both per-run helper menus sit in the file-group headers of the New task view:
-
-<ToolConfigHero />
-
-<p class="hero-caption">The <strong>Tool Config</strong> menu (<wa-icon library="texra" name="tools"></wa-icon> on the Input header) toggles <strong>Attach TeX Count</strong>; the <strong>Auto Extract</strong> menu (<wa-icon library="texra" name="wand"></wa-icon> on the Media header) toggles <strong>Figures</strong>, <strong>TikZ Figures</strong>, and <strong>Compile Input PDF</strong>. Active helpers tint their buttons.</p>
 
 For formatter paths, TikZ templates, and compile settings, read the [configuration guide](./configuration.md).
 

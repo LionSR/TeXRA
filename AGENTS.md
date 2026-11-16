@@ -228,10 +228,10 @@ points, and the event and card channels: `packages/harness/AGENTS.md`.
 
 Agents are flat persona YAML (`name`, `description`, `prompt`, `tools`,
 `temperature`) in `packages/extension/resources/agents/`, created with the
-built-in `creator` agent or the settings view's Agents tab. A plugin may own
-one block of an agent file (`Plugin.agentBlock`); the documents plugin's
-`task:` block (`packages/texra/src/tools/documents/documentTask.ts`) makes an
-agent a document task, run by `packages/texra/src/agent/output/documentRecipe.ts`.
+built-in `creator` agent or the settings view's Agents tab. A plugin registers
+programs (`Plugin.programs`): script modules started by name, each a run
+opened on `script.kind: 'program'`. The `theory` plugin's programs are in
+`packages/texra/src/tools/theory/programs.ts`.
 
 **Prompts** (bundled agents, plugin agents, templates, skills,
 `.github/prompts/`) use general behavioral rubrics: never an identifiable

@@ -12,7 +12,7 @@ import type { RunView } from '@texra-ai/harness/schemas';
  * agent's planned pass count, when the catalog knows it.
  */
 export function progressBadgeLabel(
-  run: Pick<RunView, 'recipe' | 'facts'>,
+  run: Pick<RunView, 'program' | 'facts'>,
   plannedPasses: number | undefined,
 ): string | undefined {
   if (!isDocumentTaskRun(run)) return undefined;

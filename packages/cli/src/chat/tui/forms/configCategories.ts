@@ -16,7 +16,7 @@ const CONFIG_CATEGORY_LABELS: Readonly<Record<SettingCategory, string>> = {
   // hold what a task's agents may do and the external coding agents' options.
   agents: 'Tasks and agents',
   'ai-agents': 'Codex and Claude Code',
-  documents: 'Document tasks',
+  documents: 'Documents',
   model: 'Models and providers',
   latex: 'LaTeX',
   latexdiff: 'Latexdiff',

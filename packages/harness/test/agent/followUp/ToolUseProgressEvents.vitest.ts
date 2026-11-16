@@ -69,7 +69,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
   'tool-use progress events',
   (it) => {
     describe('the tool-use turn', () => {
-      // Failure mode: a script run (a task's recipe) launched with media on
+      // Failure mode: a script run (a background script) launched with media on
       // a vision model opened with no user message, since its launch left
       // the echo to a loop branch the script path never reached.
       it.effect(
@@ -98,9 +98,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                         code: 'return 1;',
                         title: 'draft',
                         tools: [],
-                        kind: 'recipe',
-                        block: 'task',
-                        options: {},
+                        kind: 'background',
                       },
                     }),
                   ),

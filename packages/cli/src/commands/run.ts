@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import { Effect, FileSystem, Record as Rec, Result } from 'effect';
+import { Effect, FileSystem, Result } from 'effect';
 import { hasMagic } from 'glob';
 
 import {
@@ -8,13 +8,7 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import type { CliDocumentTaskResult } from '@cli/schemas/cliOutput';
-import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
-import {
-  DOCUMENT_TASK_OPTIONS,
-  documentsOf,
-  type DocumentTaskOptions,
-} from '@texra/shared/plugins/documents';
-import { documentTaskOf } from '@texra/tools/documents/documentTask';
+import { documentsOf } from '@texra/shared/plugins/documents';
 
 import {
   failUsage,
@@ -36,7 +30,8 @@ import {
   selectCliRunModel,
 } from '../runtime/models/runModel';
 import {
-  LAUNCHABLE_AGENT_NAME_DESCRIPTION,
+  RUN_TARGET_NAME_DESCRIPTION,
+  missingRunTargetMessage,
   resolveCliRunAgent,
 } from '../runtime/agents';
 import {
@@ -81,11 +76,12 @@ import {
   resumeDocumentTaskOutputFile,
 } from '../runtime/headless/documentTaskOutput';
 import type { Sessions } from '@texra-ai/harness';
-import type { ProcessServices } from '@texra-ai/harness/host';
+import { programLaunch, type ProcessServices } from '@texra-ai/harness/host';
+import { ToolRegistry } from '@texra-ai/harness/plugins';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
 
 const MULTI_INPUT_OUTPUT_MESSAGE =
-  'Use --output-dir for multi-input document tasks; --output is only for a single final artifact.';
+  'Use --output-dir for a program over several inputs; --output is only for a single final artifact.';
 
 interface HeadlessRunInit {
   readonly agent: string;
@@ -96,17 +92,15 @@ interface HeadlessRunInit {
   readonly model?: string;
   readonly instruction: string;
   readonly instructionFile?: string;
-  /** The document task's switches, each a flag of the same name. */
-  readonly options: DocumentTaskOptions;
 }
 
 /**
- * `texra run <agent>`: the one headless run command. The agent is resolved
- * once: one with a document task runs it over `--input` files (taking
- * `--output`/`--output-dir` and producing document artifacts); any other
- * takes a required instruction (`--instruction`, `--instruction-file`, or
- * both) and runs one model/tool cycle. Flags that belong to the other shape
- * are usage errors.
+ * `texra run <program | agent>`: the one headless run command. A name a
+ * plugin registers as a program runs that program over `--input` files
+ * (taking `--output`/`--output-dir` and producing document artifacts); any
+ * other name is an agent's, which takes a required instruction
+ * (`--instruction`, `--instruction-file`, or both) and runs one model/tool
+ * cycle. Flags that belong to the other shape are usage errors.
  */
 export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   context: CliContext,
@@ -120,32 +114,36 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
     return yield* failUsage('Use either --output or --output-dir, not both.');
   }
   const instruction = yield* resolveFileBackedInstruction(init, context.cwd);
-  // Nothing can run this: a document task needs at least one input file, a
-  // chat needs an instruction. Rejecting it before the
+  // Nothing can run this: a program needs at least one input file, a chat
+  // needs an instruction. Rejecting it before the
   // platform init keeps a plain usage error cheap.
   if (!instruction && init.inputFiles.length === 0) {
     return yield* failUsage(
-      'Provide --instruction or --instruction-file for an agent, or --input for a document task.',
+      'Provide --instruction or --instruction-file for an agent, or --input for a program.',
     );
   }
 
   const services = yield* cliPlatform;
-  // Resolve once, before stdin is read or the runtime host starts; the run
-  // pins the resolved source.
-  const agent = yield* resolveCliRunAgent(services, init.agent);
-  const { source } = agent;
-  const task = documentTaskOf(agent);
-  if (task === null) {
+  const { programs } = yield* ToolRegistry;
+  const program = programs.get(init.agent);
+  if (program === undefined) {
+    // Resolve once, before stdin is read or the runtime host starts; the
+    // run pins the resolved source.
+    const { source } = yield* resolveCliRunAgent(
+      services,
+      init.agent,
+      missingRunTargetMessage(init.agent, [...programs.keys()]),
+    );
     return yield* runToolUseAgent(context, init, source, instruction, services);
   }
 
-  // A document task with no `--input` cannot run, and the output probes below
+  // A program with no `--input` cannot run, and the output probes below
   // `mkdir -p` their destination before `withExpandedRunInputs` would report
   // it. Refuse first so an invalid command leaves nothing on disk.
   if (init.inputFiles.length === 0) {
     return yield* failUsage(DOCUMENT_TASK_INPUT_REQUIRED_MESSAGE);
   }
-  if (init.output && task.outputs.filter(Boolean).length > 1) {
+  if (init.output && (program.outputs ?? []).length > 1) {
     return yield* failUsage(MULTI_INPUT_OUTPUT_MESSAGE);
   }
   // Fast-fail an `--output-dir` or `--output` path the final copy would reject
@@ -195,9 +193,9 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         services,
       );
       const runContext = buildHeadlessRunContext(context);
-      // Only the input-derived names: the task's declared outputs are
-      // stamped on the config below, from the entry resolved above, and
-      // read back from the recorded config at finalization.
+      // Only the input-derived names: the program's own outputs are stamped
+      // on the config below, and read back from the recorded config at
+      // finalization.
       const expectedOutputFiles = init.outputDir
         ? inputDerivedOutputFiles(inputFiles, stdinInputPath)
         : undefined;
@@ -210,8 +208,6 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         ? path.resolve(runContext.cwd, init.outputDir)
         : undefined;
       const launch = {
-        agent: init.agent,
-        agentSource: source,
         model,
         inputFiles,
         mediaFiles,
@@ -235,10 +231,9 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         instruction,
         workingDirectory: runContext.cwd,
       };
-      // The entry resolved above has a task, so the patch is never null.
       const config: AgentConfigPayload = {
         ...launch,
-        ...documentTaskPatch(launch, agent, init.options),
+        ...(yield* programLaunch(init.agent, {}, launch)),
       };
 
       return yield* executeCliRun(config, runContext, {
@@ -262,16 +257,11 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
 ): Effect.fn.Return<number, Error, ProcessServices | CliInvocation> {
   // `--output` and `--output-dir` are rejected as a pair before this point, so
   // at most one of them is set here.
-  const option = Rec.keys(DOCUMENT_TASK_OPTIONS).find(
-    (key) => init.options[key],
-  );
-  const documentTaskOnlyFlag =
-    (init.output && '--output') ||
-    (init.outputDir && '--output-dir') ||
-    (option && `--${option}`);
-  if (documentTaskOnlyFlag) {
+  const programOnlyFlag =
+    (init.output && '--output') || (init.outputDir && '--output-dir');
+  if (programOnlyFlag) {
     return yield* failUsage(
-      `${documentTaskOnlyFlag} is only available for document tasks; "${init.agent}" has no task.`,
+      `${programOnlyFlag} is only available for programs; "${init.agent}" is an agent.`,
     );
   }
   if (!instruction) {
@@ -377,8 +367,8 @@ export const executeCliRun = Effect.fn('executeCliRun')(function* (
     afterRun: Effect.fn('workflow.afterRun')(function* (ended) {
       // The defaults the run executed, as its recorded configuration
       // states them (the launch resolves an empty output list to the
-      // agent's declared ones); the input-derived
-      // `cli.expectedOutputFiles` stand in when the agent declares none.
+      // program's own, `Program.outputs`); the input-derived
+      // `cli.expectedOutputFiles` stand in when the program declares none.
       // A configuration that does not read leaves the copy undone: that
       // fails the command when a completed run's copy was asked for, and
       // only warns otherwise.
@@ -443,7 +433,7 @@ export const executeCliRun = Effect.fn('executeCliRun')(function* (
   }
   if (!documentTaskResult) {
     return yield* Effect.die(
-      new Error('Document task output was not finalized before the run ended.'),
+      new Error('Program output was not finalized before the run ended.'),
     );
   }
 
@@ -457,20 +447,20 @@ export const executeCliRun = Effect.fn('executeCliRun')(function* (
 });
 
 export const headlessRunCommand = defineCliCommand({
-  meta: { name: 'run', description: 'Run an agent headlessly' },
+  meta: { name: 'run', description: 'Run a program or an agent headlessly' },
   args: {
     ...SKILL_SOURCE_ARGS,
     agent: {
       type: 'positional',
       required: true,
-      description: LAUNCHABLE_AGENT_NAME_DESCRIPTION,
+      description: RUN_TARGET_NAME_DESCRIPTION,
     },
     input: {
       type: 'string',
       alias: 'i',
       valueHint: 'file',
       description:
-        'Text or supported media file passed to the agent (repeatable; use `-` for text stdin; required for document tasks)',
+        'Text or supported media file passed to the agent (repeatable; use `-` for text stdin; required for programs)',
     },
     context: {
       type: 'string',
@@ -483,13 +473,13 @@ export const headlessRunCommand = defineCliCommand({
       type: 'string',
       valueHint: 'file',
       description:
-        'Document tasks only: output file for a single-input run (use --output-dir for multi-input)',
+        'Programs only: output file for a single-input run (use --output-dir for multi-input)',
     },
     'output-dir': {
       type: 'string',
       valueHint: 'directory',
       description:
-        'Document tasks only: directory to copy outputs into for multi-input runs',
+        'Programs only: directory to copy outputs into for multi-input runs',
     },
     model: {
       type: 'string',
@@ -499,7 +489,7 @@ export const headlessRunCommand = defineCliCommand({
     instruction: {
       type: 'string',
       description:
-        'Instruction passed to the agent (a run that is no document task needs this or --instruction-file)',
+        'Instruction passed to the agent or program (an agent needs this or --instruction-file)',
     },
     'instruction-file': {
       type: 'string',
@@ -507,10 +497,6 @@ export const headlessRunCommand = defineCliCommand({
       description:
         'File whose contents are passed before --instruction when both are set',
     },
-    ...Rec.map(DOCUMENT_TASK_OPTIONS, ({ description }) => ({
-      type: 'boolean' as const,
-      description: `Document tasks only: ${description}`,
-    })),
   },
   run: (context, ctx) =>
     runHeadlessAgent(context, {
@@ -519,9 +505,5 @@ export const headlessRunCommand = defineCliCommand({
       output: optionalStringFlagValue(ctx.rawArgs, 'output'),
       outputDir: optionalStringFlagValue(ctx.rawArgs, 'output-dir'),
       model: optString(ctx.args.model),
-      options: Rec.map(
-        DOCUMENT_TASK_OPTIONS,
-        (_, key) => ctx.args[key] === true,
-      ),
     }),
 });

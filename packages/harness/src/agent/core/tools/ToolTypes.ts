@@ -78,9 +78,6 @@ export interface ITool<E = Error, R = never> {
    *  `HostCapabilities`) the session's host must serve for this tool to be
    *  offered, read live each step: a window that attaches mid-run brings it. */
   readonly hostCapability?: string;
-  /** Launches agents' tasks (a plugin's block): its step lists the agents
-   *  with one. */
-  readonly launchesTasks?: true;
   /**
    * Where its calls run beside their siblings (omitted: `'barrier'`).
    * Declared on the tool, not the YAML-overridable definition, so an agent
@@ -133,8 +130,9 @@ export interface ITool<E = Error, R = never> {
   /** The loop-side guard this tool declares; see {@link ToolGuard}. */
   readonly guard?: ToolGuard<never>;
   /**
-   * A description rendered from the other tools the run declares and the
-   * modules its scripts may import, in place of `definition.description`:
+   * A description rendered from the other tools the run declares, the
+   * modules its scripts may import and the programs they may start, in
+   * place of `definition.description`:
    * rendered at the step that freezes the run's system text and kept as
    * that step recorded it until a compaction opens the freeze again, so a
    * catalog change mid-run leaves its text, and the cached
@@ -147,6 +145,12 @@ export interface ITool<E = Error, R = never> {
     declared: readonly Pick<ITool, 'definition' | 'scriptGlobal'>[],
     /** The specifiers of the modules the step's scripts may import. */
     modules: readonly string[],
+    /** The programs of the step's plugins, each with its one-line
+     *  description. */
+    programs: readonly {
+      readonly name: string;
+      readonly description: string;
+    }[],
   ) => string;
   call(rawInput: unknown): Effect.Effect<ToolResult, E, R>;
 }

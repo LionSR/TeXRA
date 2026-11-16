@@ -35,8 +35,8 @@ import {
 
 export const RequestDecisionSchema = Schema.Union([
   /** A plain approval. A proposal's approve may carry what the person
-   *  changed in the launch form (its agent, model, instruction, files and
-   *  plugin options); a tool edit's approve carries the proposed file as the
+   *  changed in the launch form (its agent, model, instruction and files);
+   *  a tool edit's approve carries the proposed file as the
    *  user left it in the host's diff view. */
   Schema.Struct({
     action: Schema.Literal('approve'),
@@ -46,9 +46,6 @@ export const RequestDecisionSchema = Schema.Union([
     inputFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
     contextFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
     mediaFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
-    options: Schema.optional(
-      Schema.NullOr(Schema.Record(Schema.String, Schema.Json)),
-    ),
     content: Schema.optional(Schema.NullOr(Schema.String)),
   }),
   Schema.Struct({

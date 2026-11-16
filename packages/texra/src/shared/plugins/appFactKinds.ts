@@ -7,6 +7,6 @@ import { DOCUMENTS_ACCEPTED_KIND, DOCUMENTS_OUTPUT_KIND } from './documents';
 import { EXTERNAL_INQUIRY_THREAD_KIND } from './externalInquiry';
 
 export const APP_FACT_KINDS = {
-  documents: [DOCUMENTS_OUTPUT_KIND, DOCUMENTS_ACCEPTED_KIND],
+  theory: [DOCUMENTS_OUTPUT_KIND, DOCUMENTS_ACCEPTED_KIND],
   'external-inquiry': [EXTERNAL_INQUIRY_THREAD_KIND],
 } as const;

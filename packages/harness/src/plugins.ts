@@ -11,7 +11,8 @@
  * - **Built-in plugins**: [`harnessBuiltins`](#harnessbuiltins) bundles
  *   [`codemode`](#codemode), [`fileOps`](#fileops), [`goal`](#goal),
  *   [`memoryWorkflow`](#memoryworkflow), [`multiAgent`](#multiagent)
- *   ([`AGENT_TOOL_NAME`](#agent_tool_name)), and [`web`](#web) for
+ *   (the `agent` tool, [`AGENT_TOOL_NAME`](#agent_tool_name), and the
+ *   `program` tool), and [`web`](#web) for
  *   `Sessions.layer({ platform, plugins })`.
  * - **Plugin & tool authoring**: [`defineTool`](#definetool),
  *   [`definePlugin`](#defineplugin) and the
@@ -31,8 +32,8 @@
  *   [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
  *   [`RequestDecisionHook`](#requestdecisionhook) (what commits with the
  *   decision: [`RequestDecisionRecord`](#requestdecisionrecord)),
- *   [`FactKind`](#factkind), and [`AgentBlock`](#agentblock)
- *   ([`agentBlockOf`](#agentblockof)).
+ *   [`FactKind`](#factkind), and [`Program`](#program) (how its run
+ *   reads: [`ProgramResult`](#programresult)).
  */
 export {
   codemode,
@@ -56,16 +57,14 @@ export {
 } from '@tools/plugins';
 export type { WriteFilter } from '@tools/WriteTool';
 export {
-  agentBlockOf,
-  boundFile,
   PluginHold,
   ToolRegistry,
-  type AgentBlock,
-  type AgentBlockResult,
+  type Program,
+  type ProgramResult,
   type PluginLayerServices,
   type ProcessPluginLayer,
   type PromptSection,
-  type RecipeChange,
+  type ProgramChange,
   type RequestDecisionHook,
   type RequestDecisionRecord,
   type SessionPluginLayer,
@@ -167,15 +166,8 @@ export { Secrets, type PlatformSecrets } from '@platform/secrets';
 export { AppSignals, emitAppSignal } from '@platform/appSignals';
 export { withLogChannel } from '@logger/effectLog';
 export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionEventsLayer';
-// What `ChildRuns` launches: an agent's child, or an external process's
-// with the one turn it runs. A tool that launches children takes the
-// call fields every child launch takes (`CALL_FIELDS`) and its file lists
-// as `fileList` fields.
-export {
-  CALL_FIELDS,
-  fileList,
-  type ChildLaunch,
-} from '@agent/runtime/delegation/AgentTool';
+// What `ChildRuns` launches: an external process's child, with the one
+// turn it runs.
 export type {
   ProcessChildLaunch,
   ProcessReport,
@@ -198,11 +190,10 @@ export type { ToolRun } from '@agent/core/tools/ToolTypes';
 export type { ToolPolicy } from '@agent/runtime/run/AgentRun';
 // Renders a prompt template (Nunjucks) with its variables.
 export { renderPrompt } from '@agent/prompt/promptRender';
-export {
-  TEMPLATE_INPUT_NAMES,
-  type TemplateInputs,
-  type TemplateOpening,
-  type TemplateVars,
+export type {
+  TemplateInputs,
+  TemplateOpening,
+  TemplateVars,
 } from '@agent/prompt/templateInputs';
 export type {
   AgentTrace,

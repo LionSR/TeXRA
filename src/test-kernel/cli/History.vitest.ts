@@ -36,7 +36,6 @@ import {
 
 const config = Schema.decodeUnknownSync(AgentConfigSchema)(
   asDocumentTask({
-    agent: 'correct',
     model: 'deepseek/deepseek-v4-flash',
     instruction: 'Polish the introduction.',
     inputFiles: ['chapters/intro.tex'],

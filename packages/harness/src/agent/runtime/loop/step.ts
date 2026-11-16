@@ -47,13 +47,15 @@ import stableStringify from 'safe-stable-stringify';
 
 import { stepInstructions } from '@agent/prompt/PromptBuilder';
 import { readDelegationTargets } from '@agent/runtime/delegation/delegationAvailability';
+import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import type { PluginContext } from '@platform/processRuntime';
 import { SessionRoots } from '@platform/rootedFs';
 import { Settings } from '@shared/config/settings';
 import {
-  isTaskConfig,
+  PROGRAM_TOOL_NAME,
+  programOf,
   SKILL_CATALOG_MAX_SKILLS,
   type OfferedTool,
   SCRIPT_TOOL_NAME,
@@ -76,6 +78,7 @@ import {
   resolveStepTools,
   type ResolvedTools,
 } from '../agentToolResolution';
+import { keepsDirectToolCalls } from '../modelAccess/ModelAccess';
 import { hostCapabilitiesOf, liveToolGates } from '../requests';
 import { blobRows, systemTextAt, stored } from '../run/recordedRequest';
 import { appendRow } from './rows';
@@ -133,8 +136,9 @@ const sameSet = (
 
 /**
  * The offered tools with each that renders its description from the run's
- * declared tools and the modules its scripts may import (`ITool.describe`,
- * the `script` tool's declarations) described: at the step that freezes the
+ * declared tools, the modules its scripts may import and the programs they
+ * may start (`ITool.describe`, the `script` tool's declarations) described:
+ * at the step that freezes the
  * system text, from the tools the run declares (an MCP server's and the
  * injected ones are left to discovery); at any later step, as the run's last
  * offered set recorded it, so the text holds until a compaction opens the
@@ -145,6 +149,7 @@ function describedAtFreeze<T extends ResolvedTools>(
   state: RunState,
   declaration: AgentRunShape['toolInputs']['tools'],
   modules: readonly string[],
+  programs: Parameters<NonNullable<ITool['describe']>>[2],
 ): T {
   const describes = (name: string) =>
     tools.registry.get(name)?.describe !== undefined;
@@ -176,7 +181,8 @@ function describedAtFreeze<T extends ResolvedTools>(
       ? definition
       : {
           ...definition,
-          description: recorded(definition.name) ?? describe(declared, modules),
+          description:
+            recorded(definition.name) ?? describe(declared, modules, programs),
         };
   });
   const shown = new Map(
@@ -216,8 +222,8 @@ const openStep = Effect.fn('Step.open')(function* (
   const roots = yield* SessionRoots;
   const scope = yield* Scope.fork(run.scope);
   const step = yield* Effect.gen(function* () {
-    // A task's recipe's tools are fixed; else read the switches live.
-    const trusted = isTaskConfig(run.config);
+    // A program's tools are fixed; else read the switches live.
+    const trusted = programOf(run.config) !== null;
     const off = trusted
       ? Effect.succeed(new Set<string>())
       : readDisabledTools(roots.globalState);
@@ -229,6 +235,7 @@ const openStep = Effect.fn('Step.open')(function* (
       ...run.toolInputs,
       ...gates,
       hostCapabilities: yield* hostCapabilitiesOf(pinned, scope),
+      directToolCalls: keepsDirectToolCalls(yield* ScopedRef.get(run.model)),
       ...(trusted && { approvalPromptsUnavailable: false }),
     });
     const held = recorded === null ? null : heldToRecord(resolved, recorded);
@@ -245,6 +252,15 @@ const openStep = Effect.fn('Step.open')(function* (
       state,
       run.toolInputs.tools,
       Object.keys(imported),
+      // Only a run offered `program` can start one.
+      resolved.registry.has(PROGRAM_TOOL_NAME)
+        ? pinned.plugins.flatMap(({ programs = {} }) =>
+            Object.entries(programs).map(([name, { description }]) => ({
+              name,
+              description,
+            })),
+          )
+        : [],
     );
     // The plugins whose sections the step's system text renders.
     const contributing = pinned.plugins.filter(

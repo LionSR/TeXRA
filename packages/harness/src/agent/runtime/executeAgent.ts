@@ -31,7 +31,7 @@ import { SessionRoots } from '@platform/rootedFs';
 import type { AgentEvent } from '@shared/session/agentEvent';
 import {
   type CommitOrdinal,
-  isTaskConfig,
+  programOf,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
@@ -187,10 +187,10 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
     entry,
   } = yield* enterRun(definition, runId, options);
 
-  // A task's tools render their templates from this opening at every
-  // call, so it is built on resume too; a conversation's rows hold its own.
+  // A program's tools read this opening's inputs at every call, so it is
+  // built on resume too; a conversation's rows hold its own.
   const opening =
-    resumed && !isTaskConfig(config)
+    resumed && programOf(config) === null
       ? null
       : yield* buildTemplateInputs(
           config,

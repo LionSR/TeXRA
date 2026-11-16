@@ -5,7 +5,7 @@
 
 | Module        | Concern                          | Contents                                                                                                                                                                                                                       |
 | ------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `definition/` | What an agent **is** (configure) | `RunRecord`. The launch configuration (`AgentConfig`) is a schema in `@shared/schemas` (`agentConfig.ts`), as is the definition format (`AgentDefinition`, `Persona`, `agent.ts`); a plugin's block is its own (`AgentBlock`)  |
+| `definition/` | What an agent **is** (configure) | `RunRecord`. The launch configuration (`AgentConfig`) is a schema in `@shared/schemas` (`agentConfig.ts`), as is the definition format (`AgentDefinition`, `Persona`, `agent.ts`)                                              |
 | `tools/`      | Tool contracts and tool calls    | `ToolTypes` (`ITool`, `ToolContext`), `toolAttachmentExtraction`, `toolCallParsing` (duplicate-call partitioning and tool-call error normalization for the run loop), `toolSchema` (a tool's JSON Schema as the model sees it) |
 
 `definition/` and `tools/` do not depend on each other; keep it that way.

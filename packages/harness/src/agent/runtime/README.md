@@ -96,7 +96,7 @@ file, so `npm run gate:docs` fails when one moves.
   `executeAgent` under a parent edge, which runs one cycle);
   [`childRunBudget`](childRunBudget.ts) (per-session concurrency);
   [`scriptRun`](scriptRun.ts) (a background script's report);
-  [`recipeResult`](recipeResult.ts) (what a recipe run reports);
+  [`programRun`](programRun.ts) (what a program run reports);
   [`childDelivery`](childDelivery.ts) (what a child's end delivers, typed)
   and [`deliveryEnvelope`](deliveryEnvelope.ts) (the one renderer of a
   delivery's XML envelope).

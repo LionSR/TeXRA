@@ -24,13 +24,13 @@ const STDIN_INPUT_TOKEN = '-';
 const STDIN_TEMP_PREFIX = 'texra-stdin-';
 export const STDIN_DOCUMENT_TASK_INPUT_BASENAME = 'stdin.tex';
 /**
- * One wording for "a document task run has no input", said both by the expansion
+ * One wording for "a program's run has no input", said both by the expansion
  * below (a spec that resolves to nothing) and by `texra run`'s pre-flight guard
  * (no `--input` at all), which has to refuse before it probes an output
  * destination into existence.
  */
 export const DOCUMENT_TASK_INPUT_REQUIRED_MESSAGE =
-  'At least one input file is required for a document task.';
+  'At least one input file is required for a program.';
 
 function normalizeCliInputPath(candidate: string, cwd: string): string {
   const absolutePath = path.resolve(cwd, candidate);

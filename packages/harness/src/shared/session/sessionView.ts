@@ -181,9 +181,9 @@ const RunViewSchema = Schema.Struct({
    *  any other run's newest user instruction or finished model reply. */
   latestLine: Schema.NullOr(Schema.String),
   transcript: TranscriptViewSchema,
-  /** A task's run: the key of the plugin block whose recipe it opened on
-   *  (`script.block`); null otherwise. A task takes no messages. */
-  recipe: Schema.NullOr(Schema.String),
+  /** The name of the registered program the run opened on
+   *  (`script.name`); null otherwise. A program's run takes no messages. */
+  program: Schema.NullOr(Schema.String),
 });
 /** One stream of the {@link SessionView}. */
 export type RunView = ReadonlyDeep<typeof RunViewSchema.Type>;
@@ -262,7 +262,7 @@ export function acceptsFollowUp(run: RunView): boolean {
   if (run.holder === 'here' && run.position !== 'ready') return true;
   return (
     run.identity.kind === 'agent' &&
-    !run.recipe &&
+    !run.program &&
     (run.turn !== null || run.forkPoint !== null)
   );
 }

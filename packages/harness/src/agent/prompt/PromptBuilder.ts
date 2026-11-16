@@ -121,8 +121,8 @@ export function contextUpdate(
 /**
  * The system text a conversation opens with: its persona's prompt rendered,
  * then the project's `AGENTS.md` and the attached memories, and the suffix of
- * tool-use instructions and workspace facts, which a text-only persona (a
- * task's writer) goes without. What each step's plugins add is
+ * tool-use instructions and workspace facts, which a text-only persona (one
+ * a program defines with no tools) goes without. What each step's plugins add is
  * appended per request (`stepInstructions`).
  */
 export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(

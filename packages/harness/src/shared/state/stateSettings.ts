@@ -451,7 +451,10 @@ export const MEMORY_ENABLED_SETTING = {
  * no other tool; the rest are callable from scripts alone. The codemode
  * plugin's `injectedWhen` reads the row to inject `script`; the step reads it
  * to send the model `script` and the run's own tools alone, recorded per tool
- * on its `tools.offered` row.
+ * on its `tools.offered` row. Both read it as off for a model that keeps
+ * direct tool calls (`keepsDirectToolCalls`). Off here, so an embedder's
+ * agent is sent the tools it declares; an app turns it on with
+ * `settingsCatalog`'s `defaults`.
  */
 export const SCRIPT_ONLY_SETTING = {
   key: 'codeMode.scriptOnly',
@@ -459,7 +462,7 @@ export const SCRIPT_ONLY_SETTING = {
   schema: booleanWithDefault(false),
   title: 'Script-only tools',
   description:
-    'Send chat agents the script tool and their own tools alone: every other tool is called from inside a script. Off by default while the comparison against direct tool calls runs.',
+    'Send chat agents the script tool and their own tools alone: every other tool is called from inside a script. Turn off to send every tool directly.',
 } as const satisfies SettingRow<boolean>;
 
 /** The OpenAI WebSocket transport (experimental). */

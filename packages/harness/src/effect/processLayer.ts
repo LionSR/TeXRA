@@ -191,8 +191,8 @@ export class Sessions extends Context.Service<
  * A plugin list the harness cannot compose (the defects `toolTable`
  * refuses: an id that is not lowercase letters, digits and dashes, an id or
  * tool name listed twice, a switch on a plugin with no availability probe,
- * a `requires` naming a plugin not listed, an agent-file block owned twice or keyed by a persona key,
- * two script modules of one name) fails the build with {@link PluginsRefused} before
+ * a `requires` naming a plugin not listed, two script modules of one name,
+ * a program that is not one of its plugin's script modules) fails the build with {@link PluginsRefused} before
  * anything is built, so the refusal names the plugin rather than failing
  * the first session open. A global store the process builds itself is
  * seeded with the first-install tool switches; a store handed in is left as

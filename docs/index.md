@@ -78,7 +78,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
       </div>
       <div class="phase-name">Write</div>
-      <div class="phase-agents">polish &middot; correct &middot; research</div>
+      <div class="phase-agents">edit &middot; annotate &middot; research</div>
       <div class="phase-desc">LaTeX, figures, diffs</div>
     </div>
     <div class="lifecycle-arrow">
@@ -89,7 +89,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><path d="M8 21h8M12 17v4"/></svg>
       </div>
       <div class="phase-name">Present</div>
-      <div class="phase-agents">paper2slide &middot; paper2poster</div>
+      <div class="phase-agents">slides &middot; poster</div>
       <div class="phase-desc">Beamer, poster</div>
     </div>
   </div>
@@ -169,7 +169,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
     <div class="case-card">
       <span class="case-label">Write</span>
       <h3>Finalizing a 40-page paper on spectral graph theory</h3>
-      <p>The <code>correct</code> agent unifies notation (<code>\lambda_2</code> vs <code>\mu</code> for the same eigenvalue across sections), fixes label conflicts, and outputs a diff you review line by line.</p>
+      <p>The <code>edit</code> program unifies notation (<code>\lambda_2</code> vs <code>\mu</code> for the same eigenvalue across sections), fixes label conflicts, and outputs a diff you review line by line.</p>
     </div>
     <div class="case-card">
       <span class="case-label">Verify</span>

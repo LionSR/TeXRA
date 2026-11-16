@@ -140,11 +140,8 @@ export const PersonaSchema = Schema.Struct({
 /** A persona with its defaults applied: what a run is offered and told. */
 export type Persona = typeof PersonaSchema.Type;
 
-/**
- * An agent file as written: a flat persona. A plugin may own one more
- * top-level block (`AgentBlock`), which the catalog scan adds to this
- * schema; an agent carrying one is a task.
- */
+/** An agent file as written: a flat persona. The catalog scan refuses a
+ *  file holding any other key. */
 export const AgentDefinitionSchema = Schema.Struct({
   name: AgentNameSchema,
   description: Schema.optional(Schema.String),
@@ -164,8 +161,7 @@ export type AgentDefinition = typeof AgentDefinitionSchema.Type;
 /**
  * A persona an embedder passes inline (`StartInput.agent`) instead of a
  * file: the same definition with nothing a file alone can mean. It has no
- * bundled original and no plugin's block (a task is its plugin's recipe);
- * each is refused as an unrecognized key.
+ * bundled original, so `basedOn` is refused as an unrecognized key.
  */
 export const InlinePersonaSchema = AgentDefinitionSchema.mapFields(
   Struct.omit(['basedOn']),
