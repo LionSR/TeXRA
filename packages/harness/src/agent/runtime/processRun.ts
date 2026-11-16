@@ -20,7 +20,6 @@ import { ToolContext } from '@agent/core/tools/ToolTypes';
 import type { PlatformServices } from '@platform/processRuntime';
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import { commitEnd, endVerdict } from '@agent/runtime/AgentRunLifecycle';
-import { childRunDescription } from '@agent/runtime/delegation/childRun';
 import { RunRegistry, type AgentRunServices } from '@agent/runtime/runRegistry';
 import { registerRun } from '@agent/storage/runLifecycle';
 import type { AgentTrace } from '@agent/trace/AgentTrace';
@@ -192,7 +191,7 @@ export const launchProcessChild = Effect.fn('launchProcessChild')(function* (
       takesFollowUps: false,
       parentRunId: parent.runId,
       parentCall: { callId, card: parent.logId, awaited: false },
-      description: childRunDescription(launch.description),
+      description: launch.description,
     });
     const logger = new TraceEmitter((event) => log.publish(runId, event));
     const turn = launch.turn({ logger, runId });

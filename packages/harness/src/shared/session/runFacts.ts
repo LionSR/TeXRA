@@ -12,6 +12,7 @@
  * built here, beside the readers of their facts;
  * `agent/storage/runLifecycle.ts` commits them.
  */
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import {
   NO_APPROVAL_GRANTS,
   type ApprovalGrants,
@@ -248,7 +249,8 @@ export interface Registration {
   readonly config: RunConfigRow;
 }
 
-/** The row that titles `runId`: the model's summary, or the user's rename. */
+/** The row that titles `runId`: the model's summary, a child's label, or
+ *  the user's rename, each cut to the length a run list shows. */
 export const descriptionRow = (
   runId: RunId,
   description: string,
@@ -256,7 +258,7 @@ export const descriptionRow = (
 ): Extract<SessionRowDraft, { type: 'run.description' }> => ({
   type: 'run.description',
   aggregateId: qualifyAggregateId('run', runId),
-  description,
+  description: truncateWithEllipsis(description, 80),
   by,
 });
 
