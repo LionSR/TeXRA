@@ -1,17 +1,16 @@
 /**
  * Helpers for the Codex tool.
  *
- * 1. `importCodexClass()` — import the Codex constructor from @openai/codex-sdk.
- *    The SDK is bundled into CJS by esbuild at build time, so no runtime
- *    ESM/CJS workarounds are needed.
+ * 1. `importCodexClass()` — import the Codex constructor from @openai/codex-sdk,
+ *    which esbuild bundles into TeXRA.
  *
  * 2. `findCodexBinaryPath()` — locate the native Codex CLI binary. The SDK
  *    bundles its own `findCodexPath()` but it resolves `@openai/codex`
  *    relative to the SDK itself (inside the VSIX). Since we don't ship the
  *    130 MB platform binaries in the VSIX, we probe Electron's unpacked app
  *    resources, local node_modules, the global npm prefix, and PATH (in that
- *    priority order), then return the path for `codexPathOverride`. Results
- *    are cached for the session.
+ *    priority order), then return the path for `codexPathOverride`. A found
+ *    path is kept for the process lifetime.
  *
  * 3. `openCodexClient()` — a client over that binary, with the environment
  *    the CLI may see.
@@ -127,8 +126,8 @@ const codexBinaryInPlatformPackage = Effect.fn(
 });
 
 /**
- * Locate the native Codex CLI binary. Results are cached for the session
- * (misses are always retried so mid-session installs are picked up).
+ * Locate the native Codex CLI binary. A found path is kept for the process
+ * lifetime; a miss is retried, so an install made meanwhile is picked up.
  *
  * The caller should pass the result as `codexPathOverride` to the Codex
  * constructor.

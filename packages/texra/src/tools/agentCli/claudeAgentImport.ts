@@ -12,7 +12,7 @@
  *    package resolution. We probe Electron's `app.asar.unpacked` resources,
  *    the local `node_modules`, the global npm prefix, and PATH (in that
  *    priority order) and pass the result as `pathToClaudeCodeExecutable` to
- *    `query()`. Results are cached for the session.
+ *    `query()`. A found path is kept for the process lifetime.
  */
 
 import * as path from 'node:path';
@@ -80,8 +80,9 @@ const CLAUDE_BINARY_NAME =
   process.platform === 'win32' ? 'claude.exe' : 'claude';
 
 /**
- * Locate the native Claude Code CLI binary. Results are cached for the session
- * (misses are always retried so mid-session installs are picked up).
+ * Locate the native Claude Code CLI binary. A found path is kept for the
+ * process lifetime; a miss is retried, so an install made meanwhile is
+ * picked up.
  *
  * The caller should pass the result as `pathToClaudeCodeExecutable` to the
  * SDK's `query()` options. Returning `undefined` lets the SDK fall back to
