@@ -609,18 +609,6 @@ interface AppStateStore extends StateStore {
 }
 ```
 
-## AssembleTraceResult
-
-```ts
-type AssembleTraceResult =
-  | {
-      readonly status: 'ok';
-      readonly trace: TraceDocument;
-      readonly record: RunRecord;
-    }
-  | { readonly status: 'config_missing' | 'streamLogs_missing' };
-```
-
 ## AvailabilityResults
 
 Each workspace root's last results (`undefined` = no folder open); a root

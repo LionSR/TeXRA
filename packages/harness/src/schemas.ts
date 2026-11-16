@@ -192,8 +192,11 @@ export {
 } from '@utils/errors/errorMessage';
 // An exported run, as a static viewer parses it back.
 export {
+  AssembleTraceResultSchema,
   readTraceFacts,
   TraceDocumentSchema,
+  TraceMissingSchema,
+  type AssembleTraceResult,
   type TraceDocument,
   type TraceFactKind,
 } from '@transcript/traceDocumentSchema';

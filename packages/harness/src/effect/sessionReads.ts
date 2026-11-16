@@ -33,10 +33,8 @@ import {
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import type { RequestError } from '@shared/session/runtimeRequest';
 import { readCompletedRunConversation } from '@transcript/completedRunArchive';
-import {
-  assembleTrace,
-  type AssembleTraceResult,
-} from '@transcript/traceAssembler';
+import { assembleTrace } from '@transcript/traceAssembler';
+import type { AssembleTraceResult } from '@transcript/traceDocumentSchema';
 
 import type { LocalSession } from './sessions.js';
 
