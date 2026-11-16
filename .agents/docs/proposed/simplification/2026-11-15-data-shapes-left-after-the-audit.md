@@ -102,6 +102,7 @@ the readers that needed the stated texts read them from the log
 
 - `RunRows.parent` repeats `start.parent`
   (`packages/harness/src/shared/session/runRowsShape.ts`); eleven readers.
+  Landed 2026-11-16: readers read `start.parent`.
 - The route-failure fields are declared in `RouteUnavailable`
   (`packages/harness/src/common/errors/agentErrors.ts`) and again in the
   `ModelFailure` route branch

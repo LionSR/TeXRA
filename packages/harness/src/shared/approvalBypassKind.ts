@@ -221,7 +221,9 @@ export function grantSource(
   rows: ReadonlyMap<
     RunId,
     {
-      readonly parent: { readonly id: RunId } | null;
+      readonly start: {
+        readonly parent: { readonly id: RunId } | null;
+      } | null;
       readonly grants: ApprovalGrants | null;
     }
   >,
@@ -232,7 +234,7 @@ export function grantSource(
   >();
   for (const [id, own] of rows)
     runs.set(id, {
-      parentId: own.parent?.id ?? null,
+      parentId: own.start?.parent?.id ?? null,
       grants: own.grants ?? NO_APPROVAL_GRANTS,
     });
   return { runs };
