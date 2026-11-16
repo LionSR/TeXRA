@@ -76,17 +76,18 @@ const effortOnly = (
  */
 function firstPartyResponses(facts: Facts): ResponsesConfiguration {
   const { base, config, controls, spec, effort } = facts;
-  const { credential, options } = spec;
+  const { route, options } = spec;
   const reasoning =
     config.reasoning === undefined
       ? null
       : { effort, mode: options.reasoning.mode, summary: 'auto' as const };
-  if (credential.kind === 'chatgpt') {
+  if (route.plan === 'chatgpt-subscription') {
     // OpenAI's token sharing: the public Responses API under a ChatGPT plan's
     // rules. A request is stateless and streamed (`store: false`, no
     // `previous_response_id`), takes no temperature or output limit, has no
-    // background mode, and takes function tools only inside a namespace; the
-    // plan's token reaches no Files API either.
+    // background mode and no WebSocket (OpenAI documents its requests as HTTP
+    // streams), and takes function tools only inside a namespace; the plan's
+    // token reaches no Files API either.
     return {
       ...base,
       requestedModel: codexBackendModelId(config),
