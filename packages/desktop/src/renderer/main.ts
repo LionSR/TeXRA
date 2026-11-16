@@ -41,10 +41,10 @@ import { formatDesktopAccelerator } from '../shared/accelerators';
 import type { OsPlatform } from '@texra/shared/osPlatform';
 import { type Shell } from './shell';
 
-import { type DesktopLayoutPanel } from '../shared/desktopShellMessages';
 import {
   DESKTOP_LOCAL_COMMANDS,
-  getDesktopCommandMenuEntries,
+  dispatchDesktopCommand,
+  paletteEntries,
   type DesktopCommandActions,
   type DesktopCommandId,
 } from '../shared/desktopCommandSurface';
@@ -59,6 +59,7 @@ import { shellSidebarTemplate, type RailProject } from './desktopShell';
 import {
   initialDesktopShellState,
   openWorkbenchTab,
+  workbenchTabId,
   renameWorkbenchTab,
   setSidebarWidth,
   toggleSidebar,
@@ -244,15 +245,15 @@ const rendererPlatform = ((): OsPlatform => {
   return 'linux';
 })();
 document.body.dataset.desktopPlatform = rendererPlatform;
-const desktopMenuEntries = getDesktopCommandMenuEntries(rendererPlatform);
+const desktopPaletteEntries = paletteEntries(rendererPlatform);
 const shortcutAcceleratorsById = new Map<string, string | undefined>(
-  desktopMenuEntries.map((entry) => [entry.id, entry.accelerator]),
+  desktopPaletteEntries.map((entry) => [entry.id, entry.accelerator]),
 );
 // One name per action: chrome labels and tooltips quote the command catalog
 // verbatim (the same source the palette reads) instead of paraphrasing it in
 // sentence case.
 const commandLabelsById = new Map<string, string>(
-  desktopMenuEntries.map((entry) => [entry.id, entry.label]),
+  desktopPaletteEntries.map((entry) => [entry.id, entry.label]),
 );
 const commandPaletteShortcut = desktopCommandPaletteShortcut(rendererPlatform);
 shortcutAcceleratorsById.set(
@@ -681,8 +682,8 @@ const desktopRendererCommandActions: DesktopCommandActions = {
   saveFile: () => {
     currentWorkbench().saveActiveEditor();
   },
-  toggleBottomBar: showTerminalView,
-  toggleSidePanel: showFilesView,
+  showTerminal: showTerminalView,
+  showFiles: showFilesView,
 };
 const shortcuts = createDesktopShortcutRegistry({
   document,
@@ -703,14 +704,13 @@ function returnToLauncher(): void {
   projectSessions.act(shell.active, { kind: 'selectNew' });
 }
 
-const LAYOUT_PANEL_TOGGLES: Record<DesktopLayoutPanel, () => void> = {
-  bottomBar: showTerminalView,
-  sidePanel: showFilesView,
-};
-
 const routeMessage = createMessageRoutes({
-  'desktop:saveFile': () => {
-    projectWorkbenches.get(shell.active)?.saveActiveEditor();
+  // A native menu click. Every command acts on the shown project's
+  // workbench, so none runs before the project list arrives.
+  'desktop:runCommand': (message) => {
+    if (projectWorkbenches.has(shell.active)) {
+      dispatchDesktopCommand(message.id, desktopRendererCommandActions);
+    }
   },
   // `refresh()` re-lists from the root and drops the expansion state, which is
   // the same reset the Files rail already performs each time it is opened —
@@ -725,14 +725,7 @@ const routeMessage = createMessageRoutes({
     if (message.session === shell.active) settingsDialog.close();
     project.openDocument(message.target);
   },
-  'desktop:openWorkbench': (message) =>
-    projectWorkbenches.get(shell.active)?.workbench.openKind(message.kind),
   'desktop:openSettings': (message) => settingsDialog.open(message.tab),
-  'desktop:toggleLayout': (message) => {
-    if (projectWorkbenches.has(shell.active)) {
-      LAYOUT_PANEL_TOGGLES[message.panel]();
-    }
-  },
   'desktop:setLog': (message) => logsController.applySnapshot(message),
   'desktop:showDiff': (message) => {
     const project = projectWorkbenches.get(message.session);
@@ -741,11 +734,11 @@ const routeMessage = createMessageRoutes({
   },
   'desktop:closeDiff': (message) => {
     // A close takes its own diff off the pane and nothing else; the Review
-    // tab goes only once that leaves the pane empty, so a request settling
+    // tab goes only once that leaves the pane empty, so a request answered
     // never dismisses another request's preview or an unrelated review.
     const project = projectWorkbenches.get(message.session);
     if (project?.reviewPane.close(message.previewId)) {
-      project.workbench.disposeWorkbenchTab('workbench:review');
+      project.workbench.disposeWorkbenchTab(workbenchTabId('review'));
     }
   },
   'desktop:showPdf': (message) => {
@@ -864,7 +857,7 @@ window.addEventListener('resize', () => {
 // Shell events: the identity translation of host-bridge messages
 // =============================================================================
 //
-// Every component dispatches the arm it wants as a bubbling, composed event
+// Every component dispatches the action it wants as a bubbling, composed event
 // (`uiEvents.ts`); the root forwards it to the project it came from. The project
 // is the nearest `data-session` on the event's path: the conversation column
 // (the shell and its dock) carries the shown project's key, and each project's

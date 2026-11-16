@@ -1,12 +1,13 @@
 // The desktop's half of a project's window (`openGuiWindow`): every
 // capability a surface asks its host for, mapped onto the window's dialogs,
 // the preview host, the file pickers, and the project's launch path, plus
-// the arms the desktop answers its own way. Each arm answers exactly once
-// with an outcome or a request error; an arm the desktop does not perform is
-// `Rejected` with its reason, never dropped.
+// the requests the desktop answers its own way. Each request is answered
+// exactly once with an outcome or a request error; one the desktop does not
+// perform is `Rejected` with its reason, never dropped.
 
 import { Effect } from 'effect';
 import type { ProcessServices } from '@texra-ai/harness/host';
+import { Rejected } from '@texra-ai/harness/schemas';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 
@@ -26,7 +27,9 @@ import {
   DESKTOP_DOCS_URL,
   postDesktopSettingsView,
 } from '../shared/desktopCommandSurface.js';
+import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
 import type { WindowOnboarding } from './desktopWindowOnboarding.js';
+import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
 import type { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
@@ -37,8 +40,11 @@ interface DesktopHostRequestsOptions {
   workspaceFile: ReturnType<typeof createDesktopWorkspaceIpc>['file'];
   /** Packaged app resources root (`…/resources`), for export templates. */
   resourcesPath: string;
-  postToRenderer(message: unknown): void;
+  postToRenderer(message: DesktopPush): void;
   onboarding: WindowOnboarding;
+  /** The window's settings surface, absent while the window switches
+   *  projects; the onboarding card's sign-in goes through it. */
+  settings(): DesktopSettingsIpc | undefined;
   openExternalUrl(url: string): Effect.Effect<void, HostFailed>;
   /** Re-probe the LaTeX toolchain. */
   recheckTools(): Effect.Effect<void, never, ProcessServices>;
@@ -51,9 +57,9 @@ export const createDesktopHostRequests = (
   Effect.sync(() => {
     const { host } = options;
     /**
-     * Each arm answers with the program that presents its notice; the
-     * session forks it, so nothing here settles a dialog on a fiber of its
-     * own. Where the failure is reported depends on the arm: the two dialog
+     * Each notice answers with the program that presents it; the session
+     * forks it, so nothing here waits on a dialog on a fiber of its own.
+     * Where the failure is reported depends on the notice: the two dialog
      * members report their own (a dialog rejects when its window is torn
      * down beneath it, and the host binds them through `awaitOrReport`), so
      * the programs they hand back cannot fail; `openPath` fails in its own
@@ -119,9 +125,22 @@ export const createDesktopHostRequests = (
         postDesktopSettingsView(options.postToRenderer, 'plugins'),
       ),
       onboarding: {
-        signInChatGpt: Effect.suspend(() =>
-          options.onboarding.signInWithChatGpt(),
-        ),
+        signInChatGpt: Effect.suspend(() => {
+          const settings = options.settings();
+          return settings
+            ? settings
+                .signInSubscription('chatgpt')
+                .pipe(
+                  Effect.mapError((cause) =>
+                    hostFailure('settings.signInSubscription', cause),
+                  ),
+                )
+            : Effect.fail(
+                new Rejected({
+                  reason: 'No project shows its settings yet; try again.',
+                }),
+              );
+        }),
         runSetup: (launch) =>
           Effect.suspend(() => options.onboarding.runSetup(launch)),
         // The desktop has no walkthrough of its own: the card's "Open
@@ -132,9 +151,9 @@ export const createDesktopHostRequests = (
       },
     };
 
-    /** The arms this window performs its own way. A capability's failure is
-     *  named through `hostFailure`, so the failure channel is the value the
-     *  arm failed with. */
+    /** The requests this window performs its own way. A capability's failure
+     *  is named through `hostFailure`, so the failure channel is the value
+     *  the request failed with. */
     const own: OwnHostArms = {
       workspaceFile: (request) => options.workspaceFile(request.action),
     };

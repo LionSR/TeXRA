@@ -1,8 +1,6 @@
 // The Electron shell window of the desktop: its chrome, its first-paint
 // presentation and its content. Nothing here knows a project or a session.
 
-import { join } from 'node:path';
-
 import { Effect } from 'effect';
 import { app, BrowserWindow, nativeTheme } from 'electron';
 import { DESKTOP_HEADLESS } from './desktopPresentation.js';
@@ -12,7 +10,8 @@ import { DESKTOP_HEADLESS } from './desktopPresentation.js';
  *  process shutting down) takes it with it. */
 export const openDesktopBrowserWindow = (options: {
   readonly title: string;
-  readonly mainDir: string;
+  /** The built preload script. */
+  readonly preload: string;
 }) =>
   Effect.acquireRelease(
     Effect.sync(() => {
@@ -55,7 +54,7 @@ export const openDesktopBrowserWindow = (options: {
         webPreferences: {
           offscreen: DESKTOP_HEADLESS,
           backgroundThrottling: !DESKTOP_HEADLESS,
-          preload: join(options.mainDir, '../preload/index.cjs'),
+          preload: options.preload,
           contextIsolation: true,
           nodeIntegration: false,
           sandbox: true,
@@ -78,7 +77,8 @@ export const openDesktopBrowserWindow = (options: {
  *  once every surface that answers it is wired. */
 export function loadDesktopWindow(
   window: BrowserWindow,
-  mainDir: string,
+  /** The built renderer page, loaded when no dev server serves one. */
+  rendererPage: string,
 ): void {
   let presented = false;
   const present = (): void => {
@@ -98,6 +98,6 @@ export function loadDesktopWindow(
   if (process.env.ELECTRON_RENDERER_URL) {
     void window.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
-    void window.loadFile(join(mainDir, '../renderer/index.html'));
+    void window.loadFile(rendererPage);
   }
 }

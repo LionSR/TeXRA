@@ -9,11 +9,8 @@ import {
   type DesktopLogSnapshot,
 } from '../shared/desktopLogMessages.js';
 import type { SaveDialogOptions, SaveDialogReturnValue } from 'electron';
-import {
-  parsedRoute,
-  type DesktopCommandRoutes,
-  type DesktopRenderer,
-} from './desktopIpcTypes.js';
+import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
+import { parsedRoute, type DesktopCommandRoutes } from './desktopIpcTypes.js';
 
 /** How long the log file must stay quiet before a follow pushes it: a burst
  *  of entries is one repaint. */
@@ -24,7 +21,6 @@ const LOG_FOLLOW_QUIET_MS = 300;
 class DesktopLogActionFailed extends Schema.TaggedError<DesktopLogActionFailed>()(
   'DesktopLogActionFailed',
   {
-    action: Schema.Literals(['copy', 'export']),
     message: Schema.String,
     cause: Schema.Defect(),
   },
@@ -42,12 +38,12 @@ interface DesktopLogIpcOptions {
 }
 
 export function createDesktopLogIpc(
-  renderer: DesktopRenderer,
+  post: (message: DesktopPush) => void,
   options: DesktopLogIpcOptions,
 ): DesktopCommandRoutes {
   function postSnapshot(): DesktopLogSnapshot {
     const log = options.readLog();
-    renderer.postToRenderer({
+    post({
       command: DESKTOP_LOG_COMMANDS.SET_LOG,
       log,
     });
@@ -81,8 +77,7 @@ export function createDesktopLogIpc(
       try: () => options.copyLog(text),
       catch: (cause) =>
         new DesktopLogActionFailed({
-          action: 'copy',
-          message: toErrorMessage(cause),
+          message: `The log could not be copied: ${toErrorMessage(cause)}`,
           cause,
         }),
     });
@@ -98,7 +93,6 @@ export function createDesktopLogIpc(
         }),
       catch: (cause) =>
         new DesktopLogActionFailed({
-          action: 'export',
           message: `The save dialog could not be shown: ${toErrorMessage(cause)}`,
           cause,
         }),
@@ -112,7 +106,6 @@ export function createDesktopLogIpc(
               Effect.mapError(
                 (error) =>
                   new DesktopLogActionFailed({
-                    action: 'export',
                     message: `The log could not be written to ${filePath}: ${toErrorMessage(error.reason.cause ?? error)}`,
                     cause: error,
                   }),

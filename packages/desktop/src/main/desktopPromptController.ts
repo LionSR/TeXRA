@@ -4,14 +4,10 @@ import { Effect } from 'effect';
 
 import {
   DESKTOP_PROMPT_COMMANDS,
-  DesktopSettlePromptMessageSchema,
-  type DesktopShowPromptMessage,
+  DesktopAnswerPromptMessageSchema,
 } from '../shared/desktopPromptMessages.js';
-import {
-  parsedRoute,
-  type DesktopCommandRoutes,
-  type DesktopRenderer,
-} from './desktopIpcTypes.js';
+import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
+import { parsedRoute, type DesktopCommandRoutes } from './desktopIpcTypes.js';
 
 interface DesktopPromptInput {
   title: string;
@@ -21,29 +17,29 @@ interface DesktopPromptInput {
 
 type PromptResolver = (value: string | undefined) => void;
 
-/** Owns correlated desktop prompt requests and their exact settlement. */
+/** Owns correlated desktop prompt requests and answers each exactly once. */
 export class DesktopPromptController {
   private readonly pending = new Map<string, PromptResolver>();
 
-  /** A settlement for no pending request (a duplicate, or one whose asker
-   *  was interrupted) settles nothing. */
+  /** An answer for no pending request (a duplicate, or one whose asker
+   *  was interrupted) does nothing. */
   readonly routes: DesktopCommandRoutes = {
-    [DESKTOP_PROMPT_COMMANDS.SETTLE]: parsedRoute(
-      DesktopSettlePromptMessageSchema,
+    [DESKTOP_PROMPT_COMMANDS.ANSWER]: parsedRoute(
+      DesktopAnswerPromptMessageSchema,
       ({ requestId, value }) =>
         Effect.sync(() => {
-          this.settle(requestId, value ?? undefined);
+          this.answer(requestId, value ?? undefined);
         }),
     ),
   };
 
-  private readonly renderer: DesktopRenderer;
-  constructor(renderer: DesktopRenderer) {
-    this.renderer = renderer;
+  private readonly post: (message: DesktopPush) => void;
+  constructor(post: (message: DesktopPush) => void) {
+    this.post = post;
   }
 
   /**
-   * Ask the renderer, and settle with what it answers. The request is
+   * Ask the renderer, and finish with what it answers. The request is
    * registered when the program runs, and its entry leaves `pending` when the
    * answer arrives or when the asking fiber is interrupted, so an abandoned
    * prompt no longer waits for `dispose()` to clear it. A window that closes
@@ -53,13 +49,13 @@ export class DesktopPromptController {
     return Effect.callback<string | undefined>((resume) => {
       const requestId = randomUUID();
       this.pending.set(requestId, (value) => resume(Effect.succeed(value)));
-      this.renderer.postToRenderer({
+      this.post({
         command: DESKTOP_PROMPT_COMMANDS.SHOW,
         requestId,
         title: input.title,
         prompt: input.prompt,
         password: input.password ?? false,
-      } satisfies DesktopShowPromptMessage);
+      });
       return Effect.sync(() => {
         this.pending.delete(requestId);
       });
@@ -68,11 +64,11 @@ export class DesktopPromptController {
 
   dispose(): void {
     for (const requestId of this.pending.keys()) {
-      this.settle(requestId, undefined);
+      this.answer(requestId, undefined);
     }
   }
 
-  private settle(requestId: string, value: string | undefined): void {
+  private answer(requestId: string, value: string | undefined): void {
     const pending = this.pending.get(requestId);
     if (!pending) return;
     this.pending.delete(requestId);

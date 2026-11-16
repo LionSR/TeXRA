@@ -28,6 +28,7 @@ import type {
   DesktopProjectRegistry,
 } from './desktopProjects.js';
 import type { DesktopWindowHost } from './desktopWindowHost.js';
+import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
 
 export interface ProjectSurface {
   /** The settings surface of the project the window is bound to. */
@@ -37,12 +38,12 @@ export interface ProjectSurface {
   /**
    * Bind the window to the project it shows. The old settings IPC is detached
    * first, so an attach that fails partway leaves settings messages
-   * unhandled, not routed to a closed project's IPC. `documentChanged` binds
-   * again for the same project: a navigation destroyed its correlations.
+   * unhandled, not routed to a closed project's IPC.
    */
-  attach(
-    documentChanged?: boolean,
-  ): Effect.Effect<void, never, ProcessServices>;
+  attach(): Effect.Effect<void, never, ProcessServices>;
+  /** Bind again to the same project: a navigation destroyed its
+   *  correlations. */
+  reattach(): Effect.Effect<void, never, ProcessServices>;
 }
 
 export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
@@ -72,7 +73,7 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
     ): DesktopSettingsIpcOptions['bindings'] => {
       const documentBinding = bindings.get(project.key);
       const { dialogs, previewHost } = host;
-      const postForActiveProject = (message: unknown): void => {
+      const postForActiveProject = (message: DesktopPush): void => {
         if (surfaceScope === owner) host.post(message);
       };
       /** Open the agent definition at `filePath` as a document, or, when
@@ -100,7 +101,7 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
             }),
           ),
         // The window's dialogs behind the host-neutral port. The renderer
-        // overlay settles a prompt it could not deliver as "no answer", so
+        // overlay answers a prompt it could not deliver with "no answer", so
         // `input` has no failure of its own; the native confirmation fails
         // once the window it anchors to is gone.
         dialogs: {
@@ -175,11 +176,9 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
       };
     };
 
-    const attach = Effect.fn('desktop.attachProject')(function* (
-      documentChanged = false,
-    ) {
+    const attach = Effect.fn('desktop.attachProject')(function* () {
       const project = projects.active();
-      if (project === attached && !documentChanged) return;
+      if (project === attached) return;
       const previous = surfaceScope;
       attached = project;
       const owner = yield* Scope.fork(windowScope);
@@ -200,17 +199,20 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
         resourcesPath: options.resourcesPath,
         spawn: desktopSpawner(runtime, owner, project.root),
       }).pipe(
-        Effect.tap(() =>
-          installDesktopWindowTitle(
-            host.window,
-            project.session,
-            project.root && project.display.name,
-          ),
-        ),
+        Effect.tap(() => installDesktopWindowTitle(host.window, project)),
         Scope.provide(owner),
       );
     });
 
-    return { settings: () => settings, attached: () => attached, attach };
+    return {
+      settings: () => settings,
+      attached: () => attached,
+      attach,
+      reattach: () =>
+        Effect.suspend(() => {
+          attached = undefined;
+          return attach();
+        }),
+    };
   },
 );

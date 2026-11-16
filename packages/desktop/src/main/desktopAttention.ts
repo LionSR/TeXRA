@@ -5,17 +5,20 @@
 // its run.
 
 import { app, Notification, type BrowserWindow } from 'electron';
-import { Context, Effect, Queue, Stream, SubscriptionRef } from 'effect';
+import { Effect, Queue, Stream, SubscriptionRef } from 'effect';
 
 import { attentionOf } from '@texra-ai/harness/schemas';
 import { runStatus, runStatusLabel } from '@ui/copy/runStatus';
 
-import { DesktopProjects, type DesktopProject } from './desktopProjects.js';
+import type {
+  DesktopProject,
+  DesktopProjectRegistry,
+} from './desktopProjects.js';
 import { DESKTOP_HEADLESS } from './desktopPresentation.js';
 import type { SessionView, RunId } from '@texra-ai/harness/schemas';
 
-/** The host's attention surfaces, served by the Electron composition root. */
-interface DesktopAttentionPortShape {
+/** The host's attention surfaces. */
+interface DesktopAttentionPort {
   /** The window is on screen and focused: what it shows, the user sees. */
   windowFocused(): boolean;
   /** The count on the app icon; 0 clears it. */
@@ -34,11 +37,6 @@ interface DesktopAttentionPortShape {
   readonly focused: Stream.Stream<void>;
 }
 
-export class DesktopAttentionPort extends Context.Service<
-  DesktopAttentionPort,
-  DesktopAttentionPortShape
->()('@texra/desktop/DesktopAttentionPort') {}
-
 // Each project's one live notification, held so its click can still be
 // delivered (one the collector reclaims cannot deliver it). A newer one for
 // the project replaces it, and looking at the project dismisses it: the OS
@@ -50,7 +48,7 @@ const liveNotifications = new Map<string, Notification>();
 export function electronAttentionPort(options: {
   window(): BrowserWindow | null;
   reveal(key: string, runId: RunId): void;
-}): DesktopAttentionPortShape {
+}): DesktopAttentionPort {
   return {
     windowFocused: () => {
       const window = options.window();
@@ -103,9 +101,10 @@ export function electronAttentionPort(options: {
  * of a project only records it, so reopening projects at launch or a project
  * opening later notifies nothing.
  */
-export const followDesktopAttention = Effect.gen(function* () {
-  const projects = yield* DesktopProjects;
-  const port = yield* DesktopAttentionPort;
+export const followDesktopAttention = Effect.fnUntraced(function* (
+  projects: DesktopProjectRegistry,
+  port: DesktopAttentionPort,
+) {
   const latest = new Map<string, SessionView>();
   let badge = 0;
   const observe = (project: DesktopProject, view: SessionView) =>

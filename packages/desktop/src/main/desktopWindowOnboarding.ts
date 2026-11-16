@@ -15,13 +15,6 @@ import {
   launchSetup,
   type WindowSetupLaunch,
 } from '@texra/controllers/onboarding/setupLaunch';
-import {
-  hostFailure,
-  type RequestRefusal,
-} from '@texra/controllers/session/hostCallFailure';
-import type { HostFailed } from '@texra/hosts/uiHosts';
-import type { StateReadFailed, StateWriteFailed } from '@texra-ai/harness/host';
-import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 
 /**
  * Launch the setup conversation from the setup card through the launch path
@@ -52,21 +45,12 @@ export interface WindowOnboarding {
   /** The setup card's Run Setup: launches the setup conversation through
    *  the launch path of the project window that asked. */
   runSetup(launch: WindowSetupLaunch): Effect.Effect<void>;
-  signInWithChatGpt(): Effect.Effect<
-    void,
-    StateWriteFailed | StateReadFailed | HostFailed | RequestRefusal,
-    ProcessServices
-  >;
 }
 
 export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
-  function* (options: {
-    readonly runtime: ProcessRuntime;
-    /** The settings surface, read when a card asks, since it is built after
-     *  this surface. */
-    readonly settings: () => DesktopSettingsIpc | undefined;
-  }): Effect.fn.Return<WindowOnboarding, never, Scope.Scope> {
-    const { runtime } = options;
+  function* (
+    runtime: ProcessRuntime,
+  ): Effect.fn.Return<WindowOnboarding, never, Scope.Scope> {
     // One setup launch at a time: a double-click of "Run Setup" while the
     // first still resolves its model, before its run shows in the session
     // view the shared launch checks, is a no-op. The launch runs the setup
@@ -80,20 +64,6 @@ export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
             setupLaunch,
             withProcessServices(runtime, kickoffSetup(launch)),
             { onlyIfMissing: true },
-          ),
-        ),
-      // Suspended so the "settings IPC not attached" guard raises when the
-      // card's program runs, not when it is built.
-      signInWithChatGpt: () =>
-        Effect.suspend(() => {
-          const settings = options.settings();
-          if (!settings) {
-            throw new Error('Desktop settings IPC is not attached.');
-          }
-          return settings.signInSubscription('chatgpt');
-        }).pipe(
-          Effect.mapError((cause) =>
-            hostFailure('onboarding.signInWithChatGpt', cause),
           ),
         ),
     };

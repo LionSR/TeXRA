@@ -58,15 +58,3 @@ export const DesktopCloseDiffMessageSchema = Schema.Struct({
    */
   previewId: Schema.NonEmptyString,
 });
-
-export type DesktopCloseDiffMessage =
-  (typeof DesktopCloseDiffMessageSchema)['Type'];
-
-// `desktop:closeDiff` is consumed by the renderer's window-message
-// handler. The main process posts it from `desktopDiffHost.closeDiff`,
-// the counterpart of the `desktop:showDiff` that opened the Review tab;
-// the Playwright trajectory test constructs the literal
-// `{ command: 'desktop:closeDiff', previewId }` inline via `window.postMessage`,
-// since that test runs in the browser context where importing this
-// module isn't worth the bundle hit. The schema remains the source of
-// truth; a builder for the message would have no caller, so there is none.

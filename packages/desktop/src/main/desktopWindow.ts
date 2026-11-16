@@ -55,10 +55,8 @@ import {
 } from './desktopProjectSurface.js';
 import { DesktopPromptController } from './desktopPromptController.js';
 import { SETTINGS_VIEW_INBOUND_COMMANDS } from './desktopSettingsIpc.js';
-import {
-  createDesktopShellActions,
-  createDesktopShellIpc,
-} from './desktopShellIpc.js';
+import { createDesktopShellCommands } from './desktopShellIpc.js';
+import type { DesktopLayout } from './platform/paths.js';
 import { checkForDesktopUpdate } from './desktopUpdateChecker.js';
 import { openWindowOnboarding } from './desktopWindowOnboarding.js';
 import { createDesktopWindowHost } from './desktopWindowHost.js';
@@ -83,10 +81,10 @@ interface DesktopWindowOptions {
   readonly draftRequests: HostDraftRequests;
   /** See ElectronPlatformInitResult.resourcesPath. */
   readonly resourcesPath: string;
-  /** See ElectronPlatformInitResult.mainDir. */
-  readonly mainDir: string;
+  /** Where this build's preload script and renderer page are. */
+  readonly layout: Pick<DesktopLayout, 'preload' | 'rendererPage'>;
   /** The process runtime the composition root built. Every Effect this window
-   *  runs settles on it. */
+   *  runs runs on it. */
   readonly runtime: ProcessRuntime;
 }
 
@@ -105,11 +103,8 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   const logFollowing = yield* FiberHandle.make<void>();
   const initialProject = projects.active();
   const window = yield* openDesktopBrowserWindow({
-    title: getDesktopWindowTitle(
-      initialProject.session,
-      initialProject.root && initialProject.display.name,
-    ),
-    mainDir: options.mainDir,
+    title: getDesktopWindowTitle(initialProject),
+    preload: options.layout.preload,
   });
   // The renderer's channels exist before anything can post to them; the
   // routes and bindings they hand messages to are read as a message arrives,
@@ -160,9 +155,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   const host = createDesktopWindowHost({ window, runtime, spawn, bridge });
   const { previewHost } = host;
   const promptController = yield* Effect.acquireRelease(
-    Effect.sync(
-      () => new DesktopPromptController({ postToRenderer: host.post }),
-    ),
+    Effect.sync(() => new DesktopPromptController(host.post)),
     (controller) => Effect.sync(() => controller.dispose()),
   );
   attachRendererConsoleLog(window.webContents);
@@ -187,29 +180,15 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     ),
   );
 
-  // `surface` is declared below and read only inside a lazy callback; the
-  // order cannot flip, since the bindings take the onboarding this call
-  // returns.
-  const onboarding = yield* openWindowOnboarding({
-    runtime,
-    settings: () => surface.settings(),
-  });
+  const onboarding = yield* openWindowOnboarding(runtime);
 
-  const shellActions = createDesktopShellActions(
-    { postToRenderer: host.post },
-    {
-      openExternalUrl: previewHost.openExternal,
-      openLogFolder: () => previewHost.openPath(getDesktopLogDirectory()),
-      openWorkspaceFolder: () => navigation.openFolder(),
-      showLauncher: () => {
-        const attached = surface.attached();
-        if (!attached) return;
-        bindings.get(attached.key)?.bridge.surfaceAction({ kind: 'selectNew' });
-      },
-      onAsyncError: host.reportAsyncError,
-      spawn,
-    },
-  );
+  const shellCommands = createDesktopShellCommands(host.post, {
+    openExternalUrl: previewHost.openExternal,
+    openLogFolder: () => previewHost.openPath(getDesktopLogDirectory()),
+    openWorkspaceFolder: () => navigation.openFolder(),
+    onAsyncError: host.reportAsyncError,
+    spawn,
+  });
 
   const bindings: ProjectBindings = yield* openProjectBindings({
     host,
@@ -218,6 +197,8 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     resourcesPath: options.resourcesPath,
     draftRequests: options.draftRequests,
     onboarding,
+    // `surface` is declared below and read only when a card asks.
+    settings: () => surface.settings(),
   });
   const surface: ProjectSurface = yield* openProjectSurface({
     host,
@@ -253,7 +234,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     menuRecent = recent;
     Menu.setApplicationMenu(
       Menu.buildFromTemplate(
-        buildDesktopMenuTemplate(shellActions, {
+        buildDesktopMenuTemplate(shellCommands.run, {
           roots: recent,
           open: (root) => spawn(host.reported(navigation.open(root))),
           clear: () => spawn(host.reported(projects.clearRecent())),
@@ -288,7 +269,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
       promptController.dispose();
       yield* bindings.releaseAll;
       yield* bindings.sync;
-      yield* surface.attach(true);
+      yield* surface.reattach();
     }),
   );
 
@@ -304,10 +285,8 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   // (quit, document reload, window close) asks here and nowhere else.
   bootstrapDesktopWindowLifecycle({
     webContents: window.webContents,
-    workspaceIpc: {
-      disposeRendererResources: () =>
-        spawn(routing(resetForNewDocument), { startImmediately: true }),
-    },
+    onDocumentReloaded: () =>
+      spawn(routing(resetForNewDocument), { startImmediately: true }),
     showDiscardDialog: host.showDiscardDialog,
     isFatalShutdownRequested: isFatalDesktopShutdownRequested,
     clearContinueQuitAfterWindowClose: hooks.cancelPendingQuit,
@@ -358,19 +337,16 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
               ),
       ),
     },
-    createDesktopLogIpc(
-      { postToRenderer: host.post },
-      {
-        readLog: () =>
-          readDesktopLogSnapshot({ workspaceRoot: projects.active().root }),
-        logFile: getDesktopLogFilePath,
-        following: logFollowing,
-        copyLog: (text) => clipboard.writeText(text),
-        showSaveDialog: (dialogOptions) =>
-          dialog.showSaveDialog(window, dialogOptions),
-      },
-    ),
-    createDesktopShellIpc(shellActions),
+    createDesktopLogIpc(host.post, {
+      readLog: () =>
+        readDesktopLogSnapshot({ workspaceRoot: projects.active().root }),
+      logFile: getDesktopLogFilePath,
+      following: logFollowing,
+      copyLog: (text) => clipboard.writeText(text),
+      showSaveDialog: (dialogOptions) =>
+        dialog.showSaveDialog(window, dialogOptions),
+    }),
+    shellCommands.routes,
   ]) {
     for (const [command, route] of Object.entries(routes)) {
       if (commandRoutes.has(command)) {
@@ -392,7 +368,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   );
   installMenu(SubscriptionRef.getUnsafe(projects.state).recent);
 
-  loadDesktopWindow(window, options.mainDir);
+  loadDesktopWindow(window, options.layout.rendererPage);
 
   return { window, reveal: navigation.reveal };
 });

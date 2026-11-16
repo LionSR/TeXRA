@@ -4,11 +4,10 @@ import { Result, Schema } from 'effect';
 /**
  * Handler for a registry-dispatched command.
  *
- * A handler's result is whatever its host finishes at the native entry:
- * `TResult` defaults to `boolean | Promise<boolean>` (the desktop registry's
- * sync handlers), and a host whose actions are Effect programs instantiates
- * it with the program type and runs it once at its registration boundary.
- * Either way the dispatcher returns the handler's result untouched, so the
+ * A handler's result is whatever its host finishes at the native entry: a
+ * host whose actions are Effect programs instantiates `TResult` with the
+ * program type and runs it once at its registration boundary. The
+ * dispatcher returns the handler's result untouched, so the
  * work stays observable to callers and rejections propagate (a
  * fire-and-forget `void actions.X(); return true;` swallowed them, #3782).
  *

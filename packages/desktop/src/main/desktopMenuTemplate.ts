@@ -1,19 +1,16 @@
 /**
  * Native application menu construction (main process only).
  *
- * The menu template is the one Electron-typed surface of the desktop command
- * registry. It lives here — and only here — so the renderer's import graph
- * never nominally carries Electron's `MenuItemConstructorOptions`; the shared
- * `desktopCommandSurface.ts` stays a pure command registry both processes
- * import for dispatch and palette rendering.
+ * The menu template is the one Electron-typed surface of the desktop
+ * commands. It lives here, so the renderer's import graph never carries
+ * Electron's `MenuItemConstructorOptions`. Its items carry no accelerator:
+ * the renderer's shortcut registry handles the keys, so an editor or a
+ * terminal sees them first.
  */
 
 import {
-  DESKTOP_HELP_COMMANDS,
   DESKTOP_LOCAL_COMMANDS,
-  dispatchDesktopCommand,
-  getDesktopCommandMenuEntries,
-  type DesktopCommandActions,
+  paletteEntries,
   type DesktopCommandId,
 } from '../shared/desktopCommandSurface.js';
 import { osPlatformOf } from '@texra/shared/osPlatform';
@@ -60,21 +57,18 @@ function openRecentMenu(
 }
 
 export function buildDesktopMenuTemplate(
-  actions: DesktopCommandActions,
+  run: (id: DesktopCommandId) => void,
   recent: DesktopRecentProjects,
 ): DesktopMenuTemplateItem[] {
   const entriesById = new Map(
-    getDesktopCommandMenuEntries(HOST_PLATFORM).map((entry) => [
-      entry.id,
-      entry,
-    ]),
+    paletteEntries(HOST_PLATFORM).map((entry) => [entry.id, entry]),
   );
   const commandItem = (id: DesktopCommandId): DesktopMenuTemplateItem => {
     const entry = entriesById.get(id);
     if (!entry) throw new Error(`Missing desktop menu entry: ${id}`);
     return {
       label: entry.label,
-      click: () => dispatchDesktopCommand(id, actions),
+      click: () => run(id),
     };
   };
   const settingsItem = {
@@ -142,7 +136,7 @@ export function buildDesktopMenuTemplate(
       label: 'Help',
       role: 'help',
       submenu: [
-        ...DESKTOP_HELP_COMMANDS.map(commandItem),
+        commandItem(DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS),
         { type: 'separator' },
         commandItem(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
       ],
