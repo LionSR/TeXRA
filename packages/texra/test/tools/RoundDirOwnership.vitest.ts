@@ -5,13 +5,13 @@ import { Effect, FileSystem, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { RunIdSchema } from '@texra-ai/harness/schemas';
-import { RunFileService } from '@texra-ai/harness/plugins';
+import { runDirUnder } from '@texra-ai/harness/plugins';
 import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
 import { createWorkspaceLocation } from '@texra-ai/harness/host';
-import { runDirUnder } from '@common/storage/storageLayout';
+import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { createFakeHost } from '@test/support/setupPlatform';
@@ -19,7 +19,7 @@ import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const tempDirs = useTempDirs();
 
-/** One of the file service's programs on the node `FileSystem` the process
+/** One of the run workspace's programs on the node `FileSystem` the process
  *  runtime serves it with in production. */
 const onNodeFs = <A, E>(
   program: Effect.Effect<A, E, FileSystem.FileSystem>,
@@ -34,7 +34,7 @@ describe('round-dir ownership', () => {
     const workspaceDir = path.join(tempDir, 'workspace');
     const storageRoot = path.join(tempDir, 'storage');
     await mkdir(workspaceDir, { recursive: true });
-    // The file service takes the roots it works under as a value.
+    // The run workspace takes the roots it works under as a value.
     const { roots } = createFakeHost(
       {
         workspaceRoot: workspaceDir,
@@ -54,7 +54,7 @@ describe('round-dir ownership', () => {
     await mkdir(path.dirname(runFile), { recursive: true });
     await writeFile(runFile, 'the run wrote this\n');
 
-    const fileService = new RunFileService(runId, roots);
+    const fileService = new RunWorkspace(runId, roots);
     await onNodeFs(
       fileService.mirrorWorkspaceFile(
         createWorkspaceLocation(stylePath, 'macros.sty'),

@@ -91,6 +91,17 @@ interface ConfigStore {
 }
 ```
 
+## createSymlink
+
+Link `destination` to `sourceAbsolute`, parent directories included. An
+existing link there is replaced; any other entry fails `AlreadyExists` and
+stays. A host that cannot make links (`EPERM`, `EACCES`, `EINVAL`,
+`ENOTSUP`) gets a copy of the source instead.
+
+```ts
+const createSymlink: (sourceAbsolute: string, destination: string) => Effect<void, PlatformError, FileSystem>
+```
+
 ## effectDiagnosticsLayer
 
 Local diagnostics for a process runtime, at the emission threshold the

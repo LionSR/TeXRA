@@ -1607,6 +1607,24 @@ interface RoutePolicy {
 }
 ```
 
+## runDirUnder
+
+A run's directory under `storageRoot`.
+
+```ts
+function runDirUnder(storageRoot: string, id: RunId): string
+```
+
+## runEntryUnder
+
+Inspect one run-relative entry of run `runId`'s storage under
+`storageRoot` without following a workspace-mirror symlink, the entry's
+own or an ancestor directory's.
+
+```ts
+const runEntryUnder: (storageRoot: string, runId: string & Brand<"RunId">, relativePath: string) => Effect<{ readonly kind: "file"; readonly location: { readonly kind: "runStorage"; readonly absolutePath: string; readonly relativePath: string; readonly runId: string & Brand<"RunId">; }; } | { readonly kind: "symlink" | "directory" | "unsupported"; readonly absolutePath: string; } | { readonly kind: "missing"; } | { kind: "invalid"; reason: string; }, PlatformError, FileSystem>
+```
+
 ## RunFileService
 
 ```ts
@@ -1804,6 +1822,19 @@ interface SettingsStores {
   readonly repoState: StateStore;
   readonly globalState: StateStore;
 }
+```
+
+## sourceLocationUnder
+
+Where a path a run reads from lives, under the roots its caller holds: a
+file in run storage keeps its run's provenance, anything else is its
+workspace or external location.
+
+```ts
+function sourceLocationUnder(
+  roots: { readonly storage: string; readonly workspace: string | undefined },
+  inputPath: string,
+): FileLocation
 ```
 
 ## StepRoot
@@ -2247,6 +2278,9 @@ interface ToolTable {
   readonly get: (name: string) => ITool<Error, PluginToolServices> | undefined;
   /** The agent-file blocks the plugins own, by key (`Plugin.agentBlock`). */
   readonly blocks: ReadonlyMap<string, AgentBlock>;
+  /** The row kinds the plugins own, by `plugin/kind` (`Plugin.factKinds`):
+   *  what a store opened in this process reads. */
+  readonly factKinds: FactKinds;
 }
 ```
 

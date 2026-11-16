@@ -86,6 +86,7 @@ export { makeMachineGitEnv } from '@utils/system/gitEnv';
 // and drops one it cannot type, an entry's own (lstat) type, and the
 // failures a probe reads as absent (`NotFound`, or a parent that is a file).
 export {
+  createSymlink,
   readDirectoryTypedTolerant,
   readNormalizedFile,
   writeFileAtomic,

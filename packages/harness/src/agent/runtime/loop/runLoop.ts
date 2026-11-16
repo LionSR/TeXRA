@@ -27,6 +27,7 @@ import { Effect, Exit, type Scope, ScopedRef } from 'effect';
 
 import { buildOpeningSystemPrompt } from '@agent/prompt/PromptBuilder';
 import { logUserMessage } from '@agent/trace/traceLogs';
+import { sourceLocationUnder } from '@common/storage/storageLayout';
 import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
 import { Inbox } from '@agent/followUp/Inbox';
 import { SessionRoots } from '@platform/rootedFs';
@@ -211,7 +212,7 @@ export const openToolUse = Effect.fn('toolUse.open')(function* (
       const media = yield* Effect.exit(
         run.config.mediaFiles.length
           ? mediaInputParts(
-              run.config.mediaFiles.map((p) => run.fileService.locateSource(p)),
+              run.config.mediaFiles.map((p) => sourceLocationUnder(roots, p)),
               bound.config.capabilities,
               roots.config,
             )

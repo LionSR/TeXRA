@@ -103,7 +103,7 @@ const toWorkspaceOrigin = Effect.fn('documents.toWorkspaceOrigin')(function* (
 // ============================================================================
 
 /** The diff stats and lineage of a round's outputs, against the
- *  snapshot-resolved `baseFiles` (the list `RunFileService.prepareRunWorkspace`
+ *  snapshot-resolved `baseFiles` (the list `RunWorkspace.prepareRunWorkspace`
  *  returns): the live workspace path would collapse in-place diffs to 0/0. A
  *  task that writes new documents (it declares outputs) gets no lineage, and
  *  neither does an output no base pairs with. */
