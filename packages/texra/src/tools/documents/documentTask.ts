@@ -21,6 +21,7 @@ import {
 import {
   hasExtension,
   AgentCatalog,
+  agentToolNames,
   type AgentEntry,
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness/host';
@@ -74,7 +75,7 @@ export const agentOptionsData = (stores: WorkspaceAgentsStores) =>
           const option: AgentOptionData = {
             value: agentKeyOf(entry),
             label: entry.name,
-            isOrchestrator: entry.tools?.includes(AGENT_TOOL_NAME) === true,
+            isOrchestrator: agentToolNames(entry).includes(AGENT_TOOL_NAME),
             source: entry.source,
           };
           const task = documentTaskOf(entry);

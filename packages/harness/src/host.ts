@@ -62,7 +62,7 @@ export {
   type WorkspaceAgents,
   type WorkspaceAgentsStores,
 } from '@agent/index/agentCatalog';
-export type { AgentEntry } from '@agent/index/agentEntry';
+export { agentToolNames, type AgentEntry } from '@agent/index/agentEntry';
 export {
   InvalidAgentTeamError,
   type WorkspaceAgentsController,

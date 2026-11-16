@@ -30,7 +30,6 @@ export interface AgentEntry {
   source: AgentSource;
   path: string; // absolute path to the definition file
   description?: string;
-  tools?: string[]; // tool names, for display
   /** Digest of the definition file and the files its blocks bind; absent
    *  on a plugin agent. */
   digest?: string;
@@ -42,3 +41,8 @@ export interface AgentEntry {
    *  them (`agentBlockOf` reads one); empty for a chat agent. */
   blocks: Readonly<Record<string, unknown>>;
 }
+
+/** The names of the tools `entry`'s persona is offered. */
+export const agentToolNames = (
+  entry: Pick<AgentEntry, 'persona'>,
+): readonly string[] => entry.persona.tools.map((tool) => tool.name);

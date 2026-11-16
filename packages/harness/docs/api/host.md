@@ -314,7 +314,6 @@ interface AgentEntry {
   source: AgentSource;
   path: string; // absolute path to the definition file
   description?: string;
-  tools?: string[]; // tool names, for display
   /** Digest of the definition file and the files its blocks bind; absent
    *  on a plugin agent. */
   digest?: string;
@@ -373,6 +372,14 @@ interface AgentRuntimeEmitOptions {
    */
   readonly fallbackMessage?: string;
 }
+```
+
+## agentToolNames
+
+The names of the tools `entry`'s persona is offered.
+
+```ts
+const agentToolNames: (entry: Pick<AgentEntry, "persona">) => readonly string[]
 ```
 
 ## AggregateId

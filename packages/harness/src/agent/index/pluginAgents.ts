@@ -100,7 +100,6 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
     source: 'plugin',
     path: file,
     description: parsed.success.description,
-    tools: tools === undefined ? undefined : [...tools],
     // None named: `AgentRun` gives it what it inherits. The task arrives as
     // the user message, as a Claude Code subagent's does.
     persona: Schema.decodeUnknownSync(PersonaSchema)({
