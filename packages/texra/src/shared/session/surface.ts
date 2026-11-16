@@ -17,7 +17,7 @@ import { modelRefOf } from '@texra-ai/llm';
 import { DEFAULT_AGENT_MODEL } from '@texra/model/curatedModels';
 
 import {
-  NullableFileFieldsSchema,
+  FileFieldsSchema,
   RunIdSchema,
   isModelOptionAvailable,
   type RunId,
@@ -37,7 +37,7 @@ import type { HostSnapshot } from './hostSnapshot';
 const LaunchTargetSchema = Schema.Literals(['agent', 'team']);
 
 /** The launcher's file lists; an absent or null `editedFile` reads ''. */
-const UIFileFieldsSchema = NullableFileFieldsSchema.mapFields(
+const UIFileFieldsSchema = FileFieldsSchema.mapFields(
   Struct.assign({
     editedFile: Schema.optional(Schema.NullOr(Schema.String)).pipe(
       Schema.decodeTo(Schema.String, {

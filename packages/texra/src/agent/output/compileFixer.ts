@@ -143,7 +143,6 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
       script: null,
       inputFiles: targets.map((target) => target.path),
       outputFiles: [],
-      editedFile: null,
     };
   },
 );

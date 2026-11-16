@@ -3,10 +3,10 @@ import { Effect, Schema, Struct } from 'effect';
 
 import { AgentSourceSchema, InlinePersonaSchema } from './agent';
 import { AgentDelegationScopeSchema } from './workspaceAgents';
-import { NullableFileFieldsSchema } from './fileFields';
+import { FileFieldsSchema } from './fileFields';
 
 /** A run's launch configuration, as its `run.config` row records it. */
-const AgentConfigObjectSchema = NullableFileFieldsSchema.mapFields(
+const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
   Struct.assign({
     agent: Schema.String,
     /**

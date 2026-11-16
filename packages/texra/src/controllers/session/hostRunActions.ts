@@ -382,7 +382,7 @@ export const createHostRunActions = Effect.fn(
       const inputFiles = [baseFile];
       const launch = yield* programLaunch(
         'merge',
-        {},
+        { editedFile },
         { inputFiles, outputFiles: [] },
       ).pipe(
         // No merge program is registered: said beside the merge docs, and
@@ -405,7 +405,6 @@ export const createHostRunActions = Effect.fn(
           ...launch,
           model: (yield* getHelperModelName(roots)) ?? DEFAULT_AGENT_MODEL,
           inputFiles,
-          editedFile,
         });
     }),
     documentTaskFileOperation: Effect.fn(

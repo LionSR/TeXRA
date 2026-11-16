@@ -187,6 +187,9 @@ export const openDocuments = Effect.fn('documents.open')(function* (
 export interface RevisionRequest extends InputMediaOptions {
   /** Whether the prompt carries the documents' TeXCount statistics. */
   readonly attachTeXCount: boolean;
+  /** A partial edit of the input the revision merges back into it; null
+   *  for a program that merges nothing. */
+  readonly editedFile: string | null;
 }
 
 /** Where the plugin's template files ship, under the host's packaged
@@ -263,7 +266,7 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
       readFilesAsPromptXml(workspace, config.inputFiles),
       readFilesAsPromptXml(
         workspace,
-        config.editedFile === null ? [] : [config.editedFile],
+        asked.editedFile === null ? [] : [asked.editedFile],
       ),
     ],
     { concurrency: 'unbounded' },

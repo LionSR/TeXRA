@@ -351,7 +351,7 @@ export {
   ModelAvailabilityKindSchema,
   DeclinableUsageRouteSchema,
   type NormalizedUsage,
-  NullableFileFieldsSchema,
+  FileFieldsSchema,
   type Plan,
   type PlanApprovalRequest,
   planOf,

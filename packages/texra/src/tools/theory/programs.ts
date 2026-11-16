@@ -329,7 +329,7 @@ export const THEORY_PROGRAMS = Object.freeze({
     'Implement the fixes that inline annotations from an earlier review ask for.',
   ),
   merge: program(
-    'Merge a partial edit back into the full original document. Started by the Merge action, which supplies the edited file.',
+    'Merge a partial edit (`args.editedFile`) back into the full original document, its one input. Started by the Merge action, which supplies the edited file.',
   ),
   transcribe: program(
     'Turn `mediaFiles` (handwriting or scans, or audio) into a LaTeX document.',
