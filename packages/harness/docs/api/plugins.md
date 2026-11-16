@@ -119,7 +119,7 @@ interface AgentBlockResult<R = unknown> {
 
 Agent-general SDK surface. Every method ultimately reduces to `emit()` so
 the trace channel is a single source of truth. App-specific helpers are
-plain functions over this interface (see `traceLogs.ts`).
+plain functions over this interface.
 
 ```ts
 interface AgentTrace {
@@ -595,8 +595,8 @@ type DefineToolOptions<T, R = never> = Required<
     schema: Schema.Codec<T, unknown>;
     /**
      * What the run loop checks before this tool's body runs: the paths the
-     * call writes and the command it must get approved. Declared here,
-     * applied once in `agent/runtime/loop/toolGuard.ts`.
+     * call writes and the command it must get approved. Declared here; the
+     * loop applies it once, so the body never re-checks it.
      *
      * `NoInfer<R>`: the guard is checked against the requirement channel the
      * tool already has, it never sets it.
@@ -1521,8 +1521,8 @@ interface RequestDecisionRecord {
 
 ## requestToolEditApproval
 
-Ask the person for an edit when `sessionPermission` (`loop/toolGuard.ts`),
-given what the call's hooks said, asks: a `request.opened` on the run
+Ask the person for an edit when the session's policy, given what the
+call's hooks said, asks: a `request.opened` on the run
 that names the proposal's content (the original and proposed text with
 their diff) by its address in the session's blob store, stored with the
 row, so every process the request reaches shows the same diff
@@ -2063,8 +2063,8 @@ type ToolFileAttachment = typeof ToolFileAttachmentSchema.Type;
 
 The guard the run loop applies before a tool's body runs, declared on the
 tool instead of called inside it: the paths the call writes and the command
-it must get approved. `agent/runtime/loop/toolGuard.ts` is the one place
-either is checked, so no tool body re-checks its own roots or asks for the
+it must get approved. The run loop is the one place either is checked,
+so no tool body re-checks its own roots or asks for the
 command's approval; a tool whose body asks its own question declares
 `requiresApproval: 'inBody'` (below).
 

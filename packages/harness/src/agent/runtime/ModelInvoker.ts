@@ -1,23 +1,8 @@
 /**
- * The one service that touches the llm `Model` for a run. One `invoke` is
- * one turn with its billed attempts: the `TurnRequest` assembled from the
- * folded `RunState`, `prepareTurn`, the `attempt` row committed before the
- * request leaves the process, the stream bridged into the trace, and the
- * `response` row with its dispatch facts and priced usage committed before
- * any tool runs.
- * `call` is a compaction summary on the same binding, gate and pricing, off
- * the rows (`run/modelCall.ts`): its usage rides the edit its caller lands.
- *
- * A turn's retry loop is `invoke` over the invocation's rows: `nextAttempt`
- * reads the next step off them, so the loop keeps no count and no permit of
- * its own. Each failed attempt commits a `failed` row with the step after
- * it, an automatic resend under the process's `ModelRetryGate` while the
- * budget of recorded failures lasts, then a person's answer to a
- * `request.opened` the same batch opens. The answer is the
- * `request.decided` row, and the attempt after it consumes it. A resume
- * restarts from the last recorded outcome: an attempt no row saw end is
- * sent again, and so is one whose retry request an earlier lifecycle left
- * unanswered, since resuming the run is the person's word to go on.
+ * The one service that touches the llm `Model` for a run: `invoke`, a turn
+ * on the run's rows, and `call`, a compaction summary on the same binding,
+ * gate and pricing that writes no row (its usage rides the edit its caller
+ * lands).
  */
 import { randomUUID } from 'node:crypto';
 
@@ -172,6 +157,20 @@ const nextRef = (invocation: Invocation | null): InvocationRef =>
 export class ModelInvoker extends Context.Service<
   ModelInvoker,
   {
+    /**
+     * One turn. It answers with the turn's `response`, already committed
+     * with its dispatch facts and priced usage before any tool runs, or
+     * with `failed` or `cancelled` and the run's state once no attempt
+     * follows. Every billed attempt's `attempt` row commits before its
+     * request leaves the process; every failed attempt commits a `failed`
+     * row naming what follows: an automatic resend under the process's
+     * `ModelRetryGate` while the budget of recorded failures lasts, then a
+     * retry request whose `request.decided` the next attempt consumes. The
+     * turn reads its next step off the invocation's rows, so a resume
+     * continues it: an attempt no row saw end is sent again, and so is one
+     * whose retry request an earlier lifecycle left unanswered, since
+     * resuming the run is the person's word to go on.
+     */
     readonly invoke: (
       cell: RunCell,
       request: InvokeRequest,

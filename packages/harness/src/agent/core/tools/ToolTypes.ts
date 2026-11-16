@@ -26,8 +26,8 @@ import type { StepRoot } from '@utils/files/externalRoots';
 /**
  * The guard the run loop applies before a tool's body runs, declared on the
  * tool instead of called inside it: the paths the call writes and the command
- * it must get approved. `agent/runtime/loop/toolGuard.ts` is the one place
- * either is checked, so no tool body re-checks its own roots or asks for the
+ * it must get approved. The run loop is the one place either is checked,
+ * so no tool body re-checks its own roots or asks for the
  * command's approval; a tool whose body asks its own question declares
  * `requiresApproval: 'inBody'` (below).
  */
