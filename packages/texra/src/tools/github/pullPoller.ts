@@ -97,12 +97,11 @@ export interface PullState {
 /** Per-head-SHA state; reset wholesale whenever the head SHA changes. */
 interface HeadState {
   readonly sha: string;
-  /** Whether the one-shot "CI triggered" event has been emitted for `sha`. */
-  readonly ciStarted: boolean;
-  /** Whether the one-shot "CI complete" event has been emitted for `sha`. */
-  readonly ciComplete: boolean;
-  /** Whether the one-shot "CI passed" event has been emitted for `sha`. */
-  readonly ciPassed: boolean;
+  /**
+   * The furthest one-shot CI event reported for `sha`: "CI triggered", then
+   * "CI complete", then "CI passed". Each comes at most once, in that order.
+   */
+  readonly ci: 'none' | 'started' | 'complete' | 'passed';
   readonly checkRunsCache: CheckRunsCache | undefined;
   /**
    * Annotated runs awaiting an annotations-endpoint fetch, drained on every
@@ -151,9 +150,7 @@ export const pollPull = Effect.fn('github.pollPull')(function* (
     if (head?.sha !== prData.head.sha) {
       head = {
         sha: prData.head.sha,
-        ciStarted: false,
-        ciComplete: false,
-        ciPassed: false,
+        ci: 'none',
         checkRunsCache: undefined,
         pendingAnnotationRuns: [],
       };
@@ -271,13 +268,17 @@ export const pollPull = Effect.fn('github.pollPull')(function* (
       );
       head = {
         ...head,
-        ciStarted: runs.length > 0,
-        ciComplete: complete,
-        ciPassed: complete && passed,
+        ci: passed
+          ? 'passed'
+          : complete
+            ? 'complete'
+            : runs.length > 0
+              ? 'started'
+              : 'none',
       };
     } else {
-      if (runs.length > 0 && !head.ciStarted) {
-        head = { ...head, ciStarted: true };
+      if (runs.length > 0 && head.ci === 'none') {
+        head = { ...head, ci: 'started' };
         events.push(formatCIStarted(pr, head.sha, runs, totalCount));
       }
       const { newFailures, currentFailureKeys } = computeNewCheckFailures(
@@ -292,13 +293,14 @@ export const pollPull = Effect.fn('github.pollPull')(function* (
       }
       // "CI complete" fires on the first terminal state (any conclusion),
       // "CI passed" the first time every check passes, which may come with a
-      // later rerun after "CI complete" already fired.
-      if (complete && !head.ciComplete) {
-        head = { ...head, ciComplete: true };
+      // later rerun after "CI complete" already fired. A complete CI has
+      // runs, so it has started by here.
+      if (complete && head.ci === 'started') {
+        head = { ...head, ci: 'complete' };
         events.push(formatCIComplete(pr, head.sha, runs));
       }
-      if (complete && passed && !head.ciPassed) {
-        head = { ...head, ciPassed: true };
+      if (passed && head.ci !== 'passed') {
+        head = { ...head, ci: 'passed' };
         events.push(formatCIPassed(pr, head.sha, runs));
       }
       // Annotations also surface on passing checks (lint suggestions, custom

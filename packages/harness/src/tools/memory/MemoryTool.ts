@@ -527,7 +527,7 @@ const buildDirectoryListing = Effect.fn('MemoryTool.buildDirectoryListing')(
           entry.storagePath,
           entry.size,
           entry.mtime,
-          entry.isDir ? null : entry.meta,
+          entry.meta,
         ),
       ),
     ];
