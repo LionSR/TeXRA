@@ -239,12 +239,3 @@ export const HostCommandSchema = Schema.Union([
   }),
 ]);
 export type HostCommand = typeof HostCommandSchema.Type;
-
-/** What a `pack` or `clean` did, as the host presents it. */
-export type FileOpResult =
-  | {
-      readonly status: 'success';
-      /** The packed copy's folder. */
-      readonly outputFolder?: string;
-    }
-  | { readonly status: 'noFiles' };

@@ -39,7 +39,6 @@ import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import { forkRun, resumeRun } from '@texra/controllers/session/runActionPolicy';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { packDestination } from '@texra/tools/documents/runOutputs';
-import type { FileOpResult } from '@texra/shared/session/hostRequest';
 import {
   DOCUMENT_TASK_BLOCK,
   documentRoundsOf,
@@ -59,13 +58,6 @@ import {
 } from '@texra/controllers/session/hostCallFailure';
 
 const CHANNEL = 'HostRunActions';
-
-/** What the document task toolbar's pack or clean of a run's files did, and the
- *  input file its message names. */
-interface DocumentTaskFileOperationResult {
-  readonly result: FileOpResult;
-  readonly inputFile: string;
-}
 
 /** The launch facts an action adds to a validated request, as the
  *  session's `start` takes them: the run's id when the host minted it, and
@@ -138,14 +130,14 @@ export interface HostRunActions {
     | RunFailure,
     ProcessServices
   >;
-  /** Pack or clean a document task run's files, from its saved config: the
-   *  action check, then the session's `run.files`, which the process that
+  /** Pack or clean a document task run's files, from its saved config, and
+   *  say what it did: the session's `run.files`, which the process that
    *  holds the run does with it held. A run that is not a document task's,
    *  or saved no config, is `Rejected`. */
   documentTaskFileOperation(
     runId: RunId,
     operation: 'pack' | 'clean',
-  ): Effect.Effect<DocumentTaskFileOperationResult, RequestError | Unavailable>;
+  ): Effect.Effect<void, RequestError | Unavailable>;
   /** A new task holding the run's conversation up to `at` (its latest
    *  settled point when null), continued here so it takes a message: the
    *  fork's id. */
@@ -460,17 +452,26 @@ export const createHostRunActions = Effect.fn(
           ),
         );
       const { result } = outcome;
-      if (result.status === 'error')
-        return yield* new Rejected({
-          reason: `Error during ${operation === 'pack' ? 'packing' : 'cleaning'}: ${result.error}`,
-        });
-      return {
-        inputFile,
-        result:
-          result.status === 'done'
-            ? { status: 'success', outputFolder: result.to }
-            : result,
-      };
+      switch (result.status) {
+        case 'error':
+          return yield* new Rejected({
+            reason: `Error during ${operation === 'pack' ? 'packing' : 'cleaning'}: ${result.error}`,
+          });
+        case 'noFiles':
+          return yield* ports.notify(
+            'info',
+            `No files found to ${operation} for ${inputFile}`,
+          );
+        case 'done':
+          return yield* ports.notify(
+            'info',
+            operation === 'clean'
+              ? `Cleanup complete for ${inputFile}`
+              : result.to
+                ? `Files packed into ${result.to}`
+                : 'Files packed.',
+          );
+      }
     }),
     runCompileFixer: Effect.fn(function* (runId) {
       if (!view().runs.has(runId)) {

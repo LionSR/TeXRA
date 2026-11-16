@@ -46,10 +46,7 @@ import {
 } from '@texra-ai/harness/plugins';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
-import type {
-  FileOpResult,
-  HostCommand,
-} from '@texra/shared/session/hostRequest';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
@@ -261,21 +258,6 @@ interface GuiWindowPorts {
 }
 
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
-
-/** What the window tells the user after a pack or clean (the latexdiff
- *  pack's counterpart is `latexdiffPackMessage`). */
-function fileOpResultMessage(
-  operation: 'pack' | 'clean',
-  result: FileOpResult,
-  inputFile: string,
-): string {
-  if (result.status === 'noFiles')
-    return `No files found to ${operation} for ${inputFile}`;
-  if (operation === 'clean') return `Cleanup complete for ${inputFile}`;
-  return result.outputFolder
-    ? `Files packed into ${result.outputFolder}`
-    : 'Files packed.';
-}
 
 /**
  * Open a window of `ports.runs` for the caller's scope. The bridge has a
@@ -640,17 +622,12 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           yield* latexdiff.run(request.runId);
           return done;
         case 'pack':
-        case 'clean': {
-          const files = yield* runActions.documentTaskFileOperation(
+        case 'clean':
+          yield* runActions.documentTaskFileOperation(
             request.runId,
             request.kind,
           );
-          yield* host.notify(
-            'info',
-            fileOpResultMessage(request.kind, files.result, files.inputFile),
-          );
           return done;
-        }
         case 'latexdiffCommit':
           yield* latexdiff.againstCommit(
             request.action,
