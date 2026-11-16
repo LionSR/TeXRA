@@ -21,14 +21,10 @@
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 
-import { Context, Effect, FileSystem, Predicate } from 'effect';
+import { Context, Effect, FileSystem, Predicate, Semaphore } from 'effect';
 import which from 'which';
 
-import {
-  isModuleNotFoundError,
-  withPerKeyLane,
-  type PerKeyLane,
-} from '@texra-ai/harness/host';
+import { isModuleNotFoundError } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { executeCommand, withExtendedPath } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
@@ -240,15 +236,19 @@ const resolveBinary = Effect.fn('vendorPackages.resolveBinary')(function* (
  *  is found by the next lookup. */
 const FoundCliBinaries = Context.Reference(
   '@texra-ai/texra/tools/agentCli/FoundCliBinaries',
-  { defaultValue: () => new Map<string, string>() },
+  {
+    defaultValue: () => ({
+      found: new Map<string, string>(),
+      probing: Semaphore.makeUnsafe(1),
+    }),
+  },
 );
-const cliBinaryLanes = new Map<string, PerKeyLane>();
 
 /**
  * The binary {@link resolveBinary} finds for `config`, kept for the process
- * once found. One probe per command at a time: callers racing on a miss
- * queue behind the first probe and read the path it kept instead of each
- * spawning `npm prefix -g`.
+ * once found. One probe at a time: callers racing on a miss queue behind
+ * the first probe and read the path it kept instead of each spawning
+ * `npm prefix -g`.
  */
 export const findCliBinary = Effect.fn('vendorPackages.findCliBinary')(
   function* (
@@ -258,7 +258,7 @@ export const findCliBinary = Effect.fn('vendorPackages.findCliBinary')(
     Error,
     ChildProcessSpawner | FileSystem.FileSystem
   > {
-    const found = yield* FoundCliBinaries;
+    const { found, probing } = yield* FoundCliBinaries;
     return yield* Effect.gen(function* () {
       const kept = found.get(config.pathCommand);
       if (kept !== undefined) return kept;
@@ -270,7 +270,7 @@ export const findCliBinary = Effect.fn('vendorPackages.findCliBinary')(
       // the PATH extension, `which.sync`); one that throws is a failed
       // lookup the caller reports, not a crash of the calling fiber.
       Effect.catchDefect((defect) => Effect.fail(ensureError(defect))),
-      withPerKeyLane(cliBinaryLanes, config.pathCommand),
+      probing.withPermit,
     );
   },
 );
