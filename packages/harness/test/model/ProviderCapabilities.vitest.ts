@@ -74,4 +74,26 @@ describe('provider capabilities', () => {
         });
       }),
   );
+
+  it('prices every plan route at zero, the GLM coding plan included', () => {
+    const glm: ModelConfig = {
+      ...gpt55Config,
+      ref: 'glm/glm-5',
+      id: 'glm-5',
+      provider: ModelProvider.GLM,
+      inputPrice: 1,
+      outputPrice: 3,
+      codexSubscription: undefined,
+    };
+    const route = decideModelRoute(glm, {
+      endpoints: { [ModelProvider.GLM]: 'https://glm.example/v1' },
+      plans: ['glm-coding-plan-subscription'],
+      chatgptContextWindow: undefined,
+    });
+    expect(route).toMatchObject({ plan: 'glm-coding-plan-subscription' });
+    expect(routeConfig(glm, route)).toMatchObject({
+      inputPrice: 0,
+      outputPrice: 0,
+    });
+  });
 });

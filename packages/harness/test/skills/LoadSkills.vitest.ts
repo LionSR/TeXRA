@@ -50,7 +50,7 @@ describe('discoverSkillSources over one root', () => {
     expect(result.errors).toContainEqual(
       expect.objectContaining({
         severity: 'error',
-        code: 'invalid_frontmatter',
+        path: path.join(invalidDir, 'SKILL.md'),
       }),
     );
   });
@@ -85,7 +85,7 @@ describe('discoverSkillSources', () => {
     expect(result.errors).toContainEqual(
       expect.objectContaining({
         severity: 'warning',
-        code: 'duplicate_name',
+        message: 'Skipping duplicate skill name "shared-skill"',
         name: 'shared-skill',
       }),
     );

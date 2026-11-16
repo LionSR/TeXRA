@@ -1,8 +1,7 @@
 /**
  * The experimental "Sign in with Grok" (xAI SuperGrok) provider: its
- * constants, token and session schemas, JWT claims, OAuth policy (its
- * account is `SubscriptionAccounts`'s), and the loopback sign-in. The RFC 8628 device
- * protocol lives in `xaiOAuthClient.ts` and `xaiDeviceLogin.ts`.
+ * constants, token and session schemas, JWT claims, the RFC 8628 device-code
+ * grant, and the OAuth policy its account (`SubscriptionAccounts`'s) runs.
  *
  * Rides a public Grok-CLI OAuth client registration. xAI can change or revoke
  * that registration without notice — never present this as an xAI-sanctioned
@@ -16,8 +15,20 @@
  */
 
 import { Effect, Option, Schema, SchemaGetter, Struct } from 'effect';
+import {
+  DeviceAuthorizationPending,
+  DeviceAuthorizationTransient,
+  pollDeviceAuthorization,
+  type SubscriptionDeviceCodePrompt,
+} from '../deviceAuthorization.js';
 import { NonEmptyJwtClaim, decodeJwtClaimsWithSchema } from '../jwtDecode.js';
-import { defineLoopbackLogin } from '../loopbackLogin.js';
+import {
+  OAuthHttpError,
+  oauthHttpError,
+  oauthTokenErrorKind,
+  parseOAuthJson,
+  postOAuthForm,
+} from '../oauthRequest.js';
 import {
   SubscriptionSessionBaseSchema,
   SubscriptionTokenResponseSchema,
@@ -25,7 +36,7 @@ import {
 import type { SubscriptionOAuthPolicy } from '../subscriptionCoordinator.js';
 
 /** Borrowed OAuth client id (Grok CLI desktop registration). */
-export const XAI_CLIENT_ID = 'b1a00492-073a-47ea-816f-4c329264a828';
+const XAI_CLIENT_ID = 'b1a00492-073a-47ea-816f-4c329264a828';
 
 /** xAI auth issuer base. */
 const XAI_ISSUER = 'https://auth.x.ai';
@@ -34,10 +45,10 @@ const XAI_ISSUER = 'https://auth.x.ai';
 const XAI_AUTHORIZE_URL = `${XAI_ISSUER}/oauth2/authorize`;
 
 /** OAuth token endpoint (code exchange + refresh + device poll). */
-export const XAI_TOKEN_URL = `${XAI_ISSUER}/oauth2/token`;
+const XAI_TOKEN_URL = `${XAI_ISSUER}/oauth2/token`;
 
 /** RFC 8628 device authorization endpoint. */
-export const XAI_DEVICE_AUTHORIZATION_URL = `${XAI_ISSUER}/oauth2/device/code`;
+const XAI_DEVICE_AUTHORIZATION_URL = `${XAI_ISSUER}/oauth2/device/code`;
 
 /**
  * Loopback redirect — the Grok-CLI client registration pins host:port:path.
@@ -53,7 +64,7 @@ function xaiRedirectUri(): string {
 }
 
 /** OAuth scopes requested at authorize / device time. */
-export const XAI_SCOPE =
+const XAI_SCOPE =
   'openid profile email offline_access grok-cli:access api:access';
 
 /**
@@ -69,7 +80,7 @@ const XAI_REFERRER = 'texra';
 const XAI_PLAN = 'generic';
 
 /** RFC 8628 device-code grant type. */
-export const XAI_DEVICE_CODE_GRANT_TYPE =
+const XAI_DEVICE_CODE_GRANT_TYPE =
   'urn:ietf:params:oauth:grant-type:device_code';
 
 /**
@@ -82,16 +93,16 @@ const XAI_SESSION_SECRET_KEY = 'auth.xai-grok';
 const XAI_DEFAULT_EXPIRES_IN_SEC = 3600;
 
 /** Default device-code poll interval when the endpoint omits `interval`. */
-export const XAI_DEVICE_DEFAULT_INTERVAL_SEC = 5;
+const XAI_DEVICE_DEFAULT_INTERVAL_SEC = 5;
 
 /** Default device-code lifetime when the endpoint omits `expires_in`. */
-export const XAI_DEVICE_DEFAULT_EXPIRES_SEC = 5 * 60;
+const XAI_DEVICE_DEFAULT_EXPIRES_SEC = 5 * 60;
 
 /** RFC 8628 slow_down increment (seconds). */
-export const XAI_DEVICE_SLOW_DOWN_INCREMENT_SEC = 5;
+const XAI_DEVICE_SLOW_DOWN_INCREMENT_SEC = 5;
 
 /** Raw response from the OAuth token endpoint (code exchange + refresh). */
-export const XaiTokenResponseSchema = SubscriptionTokenResponseSchema.mapFields(
+const XaiTokenResponseSchema = SubscriptionTokenResponseSchema.mapFields(
   Struct.assign({
     // Provider-boundary guard: absent or non-positive expires_in is not a
     // security decision — fall back to a short default and let JWT exp / 401
@@ -121,7 +132,7 @@ const XaiSessionSchema = SubscriptionSessionBaseSchema.mapFields(
 export type XaiSession = typeof XaiSessionSchema.Type;
 
 /** RFC 8628 device-code authorization response. */
-export const XaiDeviceCodeSchema = Schema.Struct({
+const XaiDeviceCodeSchema = Schema.Struct({
   device_code: Schema.NonEmptyString,
   user_code: Schema.NonEmptyString,
   verification_uri: Schema.NonEmptyString,
@@ -184,6 +195,144 @@ function decodeXaiJwtClaims(token: string): XaiJwtClaims {
   return decodeJwtClaimsWithSchema(token, XaiJwtPayloadSchema, EMPTY_CLAIMS);
 }
 
+/** The user refused the device authorization (terminal, re-auth required). */
+class DeviceAuthorizationDenied extends Schema.TaggedError<DeviceAuthorizationDenied>()(
+  'DeviceAuthorizationDenied',
+  { message: Schema.String, status: Schema.Number },
+) {}
+
+/** The server expired the device code before the user approved. */
+class DeviceCodeExpired extends Schema.TaggedError<DeviceCodeExpired>()(
+  'DeviceCodeExpired',
+  { message: Schema.String, status: Schema.Number },
+) {}
+
+/** Begin the RFC 8628 device-code flow. */
+const requestDeviceCode = Effect.fn('xai.requestDeviceCode')(function* () {
+  const response = yield* postOAuthForm(
+    XAI_DEVICE_AUTHORIZATION_URL,
+    new URLSearchParams({
+      client_id: XAI_CLIENT_ID,
+      scope: XAI_SCOPE,
+    }),
+  );
+  if (!response.ok) {
+    return yield* oauthHttpError(response, 'Device code request');
+  }
+  return yield* parseOAuthJson(
+    response,
+    XaiDeviceCodeSchema,
+    'Device code request returned an unexpected response',
+  );
+});
+
+/** An RFC 6749 error body; a field of another shape reads as absent. */
+const DeviceErrorBodySchema = Schema.Struct({
+  error: Schema.optional(Schema.String).pipe(
+    Schema.catchDecoding(() => Effect.succeed(Option.some(undefined))),
+  ),
+  error_description: Schema.optional(Schema.String).pipe(
+    Schema.catchDecoding(() => Effect.succeed(Option.some(undefined))),
+  ),
+});
+
+/**
+ * Poll once for the device authorization result. Succeeds with tokens, or
+ * fails with {@link DeviceAuthorizationPending} while the user has not yet
+ * approved. A network blip mid-poll is {@link DeviceAuthorizationTransient},
+ * which the shared poll retries a few times before failing with it.
+ * Terminal device errors are {@link DeviceAuthorizationDenied} and
+ * {@link DeviceCodeExpired}.
+ */
+const pollDeviceToken = Effect.fn('xai.pollDeviceToken')(function* (
+  deviceCode: string,
+) {
+  const response = yield* postOAuthForm(
+    XAI_TOKEN_URL,
+    new URLSearchParams({
+      grant_type: XAI_DEVICE_CODE_GRANT_TYPE,
+      client_id: XAI_CLIENT_ID,
+      device_code: deviceCode,
+    }),
+  ).pipe(
+    Effect.catchTag('OAuthNetworkError', (error) =>
+      Effect.fail(new DeviceAuthorizationTransient({ error })),
+    ),
+  );
+
+  if (response.ok) {
+    return yield* parseOAuthJson(
+      response,
+      XaiTokenResponseSchema,
+      'Device authorization returned an unexpected token response',
+    );
+  }
+
+  // Best effort: a body that is not an error object carries no code.
+  const { error: oauthError, error_description: errorDescription } =
+    yield* parseOAuthJson(response, DeviceErrorBodySchema, '').pipe(
+      Effect.orElseSucceed(() => ({
+        error: undefined,
+        error_description: undefined,
+      })),
+    );
+  if (oauthError === 'authorization_pending' || oauthError === 'slow_down') {
+    return yield* new DeviceAuthorizationPending({
+      slowDown: oauthError === 'slow_down',
+    });
+  }
+  if (oauthError === 'access_denied' || oauthError === 'authorization_denied') {
+    return yield* new DeviceAuthorizationDenied({
+      message: 'Grok device authorization was denied',
+      status: response.status,
+    });
+  }
+  if (oauthError === 'expired_token') {
+    return yield* new DeviceCodeExpired({
+      message: 'Grok device code expired — please sign in again',
+      status: response.status,
+    });
+  }
+  const detail = errorDescription ?? oauthError ?? '';
+  return yield* new OAuthHttpError({
+    message: `Device token exchange failed (HTTP ${response.status})${
+      detail ? `: ${detail}` : ''
+    }`,
+    status: response.status,
+    kind: oauthTokenErrorKind(response.status),
+  });
+});
+
+/**
+ * The RFC 8628 device-code grant, for headless, SSH and non-TTY hosts: the
+ * user opens a URL and types a one-time code while this polls the token
+ * endpoint until they approve. The requests, the spaced poll with
+ * `slow_down` growth and the code's expiry run on one fiber, so the host's
+ * interruption reaches the requests and the wait. Fails with a tagged error
+ * whose `message` is the user-facing text.
+ */
+const xaiDeviceGrant = Effect.fn('xai.deviceGrant')(function* (
+  onPrompt: (prompt: SubscriptionDeviceCodePrompt) => Effect.Effect<void>,
+) {
+  const device = yield* requestDeviceCode();
+  // Floor to 1s so a misbehaving endpoint cannot busy-loop us.
+  const intervalMs = Math.max(
+    (device.interval ?? XAI_DEVICE_DEFAULT_INTERVAL_SEC) * 1000,
+    1000,
+  );
+  yield* onPrompt({
+    userCode: device.user_code,
+    verificationUrl: device.verification_uri,
+    verificationUrlComplete: device.verification_uri_complete ?? undefined,
+  });
+  return yield* pollDeviceAuthorization({
+    poll: pollDeviceToken(device.device_code),
+    intervalMs,
+    expiresInMs: (device.expires_in ?? XAI_DEVICE_DEFAULT_EXPIRES_SEC) * 1000,
+    slowDownIncrementMs: XAI_DEVICE_SLOW_DOWN_INCREMENT_SEC * 1000,
+  });
+});
+
 /**
  * The Grok sign-in policy for the shared `SubscriptionOAuthCoordinator`: only
  * the authorize URL, claims, and JWT-exp refresh differ from ChatGPT,
@@ -198,6 +347,12 @@ export const XAI_POLICY = Object.freeze<SubscriptionOAuthPolicy<XaiSession>>({
     tokenResponseSchema: XaiTokenResponseSchema,
   }),
   notSignedInMessage: 'Not signed in with Grok. Run sign-in first.',
+  loopback: Object.freeze({
+    ports: [XAI_CALLBACK_PORT],
+    callbackPath: XAI_CALLBACK_PATH,
+    displayName: 'Grok',
+  }),
+  deviceGrant: xaiDeviceGrant,
   // xAI pins one redirect port, so the bind's port is ignored.
   authorize: Object.freeze({
     url: XAI_AUTHORIZE_URL,
@@ -223,11 +378,4 @@ export const XAI_POLICY = Object.freeze<SubscriptionOAuthPolicy<XaiSession>>({
       email: idClaims.email ?? accessClaims.email ?? previous?.email,
     };
   },
-});
-
-/** The browser sign-in, bound to the registered Grok callback. */
-export const xaiLoginWithLoopback = defineLoopbackLogin<XaiSession>({
-  ports: [XAI_CALLBACK_PORT],
-  callbackPath: XAI_CALLBACK_PATH,
-  displayName: 'Grok',
 });

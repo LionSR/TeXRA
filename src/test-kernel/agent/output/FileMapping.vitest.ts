@@ -58,4 +58,47 @@ describe('replaceInputCommands', () => {
         );
       }),
   );
+
+  it.effect(
+    'rewrites what LaTeX reads as an input: \\include and a spaced \\input, not a comment',
+    () =>
+      Effect.gen(function* () {
+        const bases = ['paper.tex', 'intro.tex'].map((file) =>
+          createWorkspaceLocation(`/w/${file}`, file),
+        );
+        const outputs = ['paper.tex', 'intro_revised.tex'].map((source) => ({
+          source,
+          location: externalLocation(`/r/r1/${source}`),
+        }));
+        const files = new Map<string, string>([
+          [
+            '/r/r1/paper.tex',
+            String.raw`\include{intro}
+\input {intro}
+% \input{intro}`,
+          ],
+        ]);
+
+        yield* replaceInputCommands(bases, outputs, noopTrace).pipe(
+          Effect.provide(
+            FileSystem.layerNoop({
+              readFile: (target: string) =>
+                Effect.succeed(
+                  new TextEncoder().encode(files.get(target) ?? ''),
+                ),
+              writeFileString: (target: string, content: string) =>
+                Effect.sync(() => {
+                  files.set(target, content);
+                }),
+            }),
+          ),
+        );
+
+        expect(files.get('/r/r1/paper.tex')).toBe(
+          String.raw`\include{intro_revised}
+\input{intro_revised}
+% \input{intro}`,
+        );
+      }),
+  );
 });

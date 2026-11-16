@@ -129,7 +129,7 @@ const discoverRuntimeSkills = Effect.fn('discoverRuntimeSkills')(function* (
     skills: result.skills,
     errors: [
       ...plugins.withheld.map(({ reason }) =>
-        issue('warning', 'invalid_source', reason),
+        issue('warning', reason, { code: 'source_error' }),
       ),
       ...result.errors,
     ],

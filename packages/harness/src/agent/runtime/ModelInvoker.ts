@@ -22,7 +22,6 @@
 import { randomUUID } from 'node:crypto';
 
 import {
-  Cause,
   Clock,
   Context,
   Effect,
@@ -80,9 +79,8 @@ import {
   type RetryCredentials,
 } from '@shared/session/inFlight';
 import { turnText } from '@shared/session/runFacts';
+import { readCause } from '@shared/session/causeReading';
 import {
-  findStorageRefusal,
-  runRefusal,
   SessionLog,
   type CellError,
   type RunCell,
@@ -292,20 +290,23 @@ export const modelInvokerLayer = (): Layer.Layer<
         if (Exit.isFailure(streamed)) {
           trace.thinking.finalize(undefined);
           trace.output.finalize();
-          if (Cause.hasInterrupts(streamed.cause))
-            return yield* Effect.interrupt;
-          const refused = findStorageRefusal(streamed.cause);
-          if (refused) return yield* runRefusal(runId, refused);
-          const found = Cause.findError(streamed.cause);
-          if (Result.isFailure(found))
-            return yield* Effect.die(Cause.squash(streamed.cause));
-          return yield* found.success instanceof ModelError
-            ? Effect.fail(
-                fillModelError(found.success, {
-                  partialText: completed.streamedText,
-                }),
-              )
-            : Effect.fail(found.success);
+          const failed = readCause(runId, streamed.cause);
+          switch (failed.kind) {
+            case 'interrupted':
+              return yield* Effect.interrupt;
+            case 'refused':
+              return yield* failed.refusal;
+            case 'defect':
+              return yield* Effect.die(failed.defect);
+            case 'error':
+              return yield* Effect.fail(
+                failed.error instanceof ModelError
+                  ? fillModelError(failed.error, {
+                      partialText: completed.streamedText,
+                    })
+                  : failed.error,
+              );
+          }
         }
         const responseTimeMs = (yield* monotonicMillis) - started;
         const turn = completed.value;
@@ -713,17 +714,22 @@ export const modelInvokerLayer = (): Layer.Layer<
             > => {
               if (Exit.isSuccess(exit))
                 return Effect.succeed({ ok: exit.value });
-              if (Cause.hasInterrupts(exit.cause)) return Effect.interrupt;
-              const found = Cause.findError(exit.cause);
-              if (Result.isFailure(found))
-                return Effect.die(Cause.squash(exit.cause));
-              const error = found.success;
-              return isCallFailure(error)
-                ? Effect.succeed({
-                    error: routeFailureOf(error),
-                    unsent: false,
-                  })
-                : Effect.fail(error);
+              const failed = readCause(runId, exit.cause);
+              switch (failed.kind) {
+                case 'interrupted':
+                  return Effect.interrupt;
+                case 'refused':
+                  return Effect.fail(failed.refusal);
+                case 'defect':
+                  return Effect.die(failed.defect);
+                case 'error':
+                  return isCallFailure(failed.error)
+                    ? Effect.succeed({
+                        error: routeFailureOf(failed.error),
+                        unsent: false,
+                      })
+                    : Effect.fail(failed.error);
+              }
             },
           ),
         );

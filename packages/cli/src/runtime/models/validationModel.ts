@@ -536,11 +536,9 @@ export const validationModel =
         ? Math.ceil(JSON.stringify(turn.messages).length / 4)
         : 1;
       return {
-        kind: 'http',
         providerResponseId: `validation-response-${responses}`,
         requestedOrigin: origin,
         returnedModel: config.id,
-        modelFingerprint: null,
         content,
         finishReason: calls ? 'tool-calls' : 'stop',
         usage: {
@@ -561,7 +559,6 @@ export const validationModel =
         system: request.system,
         messages: request.messages,
         tools: request.tools ?? [],
-        transport: { kind: 'http' },
         controls: {
           temperature: 0,
           maxOutputTokens: request.maxOutputTokens ?? config.maxOutputTokens,

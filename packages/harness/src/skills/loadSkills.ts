@@ -70,12 +70,10 @@ export interface DiscoverSkillSourcesResult {
 }
 
 function dupNameIssue(name: string, path: string): SkillLoadIssue {
-  return issue(
-    'warning',
-    'duplicate_name',
-    `Skipping duplicate skill name "${name}"`,
-    { path, name },
-  );
+  return issue('warning', `Skipping duplicate skill name "${name}"`, {
+    path,
+    name,
+  });
 }
 
 function dupRealpathIssue(
@@ -85,7 +83,6 @@ function dupRealpathIssue(
 ): SkillLoadIssue {
   return issue(
     'warning',
-    'duplicate_realpath',
     `Skipping duplicate skill path ${realPath}`,
     { path, name },
   );
@@ -112,7 +109,7 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
       Effect.sync(() => {
         if (!absentReason(error)) {
           errors.push(
-            issue('error', 'read_error', error.message, { path: root }),
+            issue('error', error.message, { path: root, code: 'read_error' }),
           );
         }
         return undefined;
@@ -148,7 +145,7 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
             loaded: undefined,
             issue: absentReason(error)
               ? undefined
-              : issue('warning', 'read_error', error.message, {
+              : issue('warning', error.message, {
                   path: skillPath,
                 }),
           }),
@@ -204,21 +201,24 @@ function validateRequiredSource(
     Effect.map((info) =>
       info.type === (source.command ? 'File' : 'Directory')
         ? undefined
-        : issue('error', 'invalid_source', 'Skill source is not a directory', {
+        : issue('error', 'Skill source is not a directory', {
             path: source.path,
+            code: 'source_error',
           }),
     ),
     Effect.catch((error) => {
       if (absentReason(error)) {
         return Effect.succeed(
-          issue('error', 'missing_source', 'Skill source does not exist', {
+          issue('error', 'Skill source does not exist', {
             path: source.path,
+            code: 'source_error',
           }),
         );
       }
       return Effect.succeed(
-        issue('error', 'source_read_error', error.message, {
+        issue('error', error.message, {
           path: source.path,
+          code: 'source_error',
         }),
       );
     }),
@@ -314,7 +314,7 @@ export const discoverSkillSources = Effect.fn('skills.discoverSkillSources')(
             error.severity === 'error' &&
             error.code === 'read_error' &&
             error.path === source.path
-              ? { ...error, code: 'source_read_error' as const }
+              ? { ...error, code: 'source_error' as const }
               : error,
           ),
         );

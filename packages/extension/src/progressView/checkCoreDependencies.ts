@@ -10,9 +10,7 @@ import {
   LATEX_TOOL_ENTRIES,
   missingLatexTools,
 } from '@texra/shared/constants/latexToolchain';
-
-// Local file imports
-import { probeTool } from '@texra/utils/system/toolChecks';
+import { probeLatexTools } from '@latex/latexToolchain';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 function missingTool(
@@ -34,13 +32,11 @@ function missingTool(
 export const checkCoreDependencies = Effect.fn(
   'toolUtils.checkCoreDependencies',
 )(function* (): Effect.fn.Return<MissingTool[], never, ChildProcessSpawner> {
-  const probed = yield* Effect.all(
-    [...CORE_DEPENDENCY_TOOLS, ...IMAGE_LATEX_TOOLS].map((id) =>
-      Effect.map(probeTool(id), (installed) => [id, installed] as const),
-    ),
-    { concurrency: 'unbounded' },
-  );
-  return missingLatexTools(probed).map(({ name, interchangeable }) =>
+  const { tools } = yield* probeLatexTools([
+    ...CORE_DEPENDENCY_TOOLS,
+    ...IMAGE_LATEX_TOOLS,
+  ]);
+  return missingLatexTools(tools).map(({ name, interchangeable }) =>
     missingTool(name, interchangeable),
   );
 });

@@ -70,12 +70,8 @@ import {
   scriptCallId,
 } from '@shared/schemas';
 import type { DraftBlob } from '@shared/session/historyTurns';
-import {
-  findStorageRefusal,
-  runRefusal,
-  SessionLog,
-  type RunCell,
-} from '@shared/session/runHistory';
+import { readCause } from '@shared/session/causeReading';
+import { SessionLog, type RunCell } from '@shared/session/runHistory';
 import { consumedRow } from '@shared/session/runFacts';
 import { type RunHistoryDraft, type RunState } from '@shared/session/runState';
 import {
@@ -495,23 +491,24 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     accepting = false;
     if (Exit.isSuccess(invoked)) {
       result = invoked.value;
-    } else if (Cause.hasInterrupts(invoked.cause)) {
-      // Keep a finalizer failure from the cancelled write beside the interrupt.
-      return yield* Effect.failCause(
-        Cause.fromReasons<never>(
-          invoked.cause.reasons.map((reason) =>
-            Cause.isFailReason(reason)
-              ? Cause.makeDieReason(reason.error)
-              : reason,
-          ),
-        ),
-      );
     } else {
-      const refused = findStorageRefusal(invoked.cause);
-      if (refused) return yield* runRefusal(runId, refused);
+      const failed = readCause(runId, invoked.cause);
+      if (failed.kind === 'interrupted')
+        // Keep a finalizer failure from the cancelled write beside the
+        // interrupt.
+        return yield* Effect.failCause(
+          Cause.fromReasons<never>(
+            invoked.cause.reasons.map((reason) =>
+              Cause.isFailReason(reason)
+                ? Cause.makeDieReason(reason.error)
+                : reason,
+            ),
+          ),
+        );
+      if (failed.kind === 'refused') return yield* failed.refusal;
       const message = normalizeToolCallError(
         fact.toolName,
-        Cause.squash(invoked.cause),
+        failed.kind === 'error' ? failed.error : failed.defect,
       );
       result = { status: 'error', error: message.trim() || 'Tool run failed.' };
     }
