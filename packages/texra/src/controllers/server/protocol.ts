@@ -44,7 +44,6 @@ import {
   AssembleTraceResultSchema,
   AgentRunListingEntrySchema,
   JsonValueSchema,
-  ResumeRefusalSchema,
   RunEndSchema,
   RunIdSchema,
   RunResultSchema,
@@ -187,7 +186,6 @@ export const RUN_RECORDS = Object.freeze({
   readWorkspaceFiles: Schema.Array(RunWorkspaceFileSchema),
   readSkills: Schema.Array(Schema.String),
   readResumable: Schema.Boolean,
-  readRejection: Schema.NullOr(ResumeRefusalSchema),
   /** The run's conversation as every conversation view renders it. */
   readConversation: Schema.Array(ExportNodeSchema),
   /** What the HTML transcript export reads: the run's display rows and its

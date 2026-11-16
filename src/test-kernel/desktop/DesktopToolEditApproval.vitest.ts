@@ -66,7 +66,9 @@ const review = Effect.gen(function* () {
       FileSystem.FileSystem | Path.Path | ChildProcessSpawner
     >,
   ) => Effect.promise(() => runtime.runPromise(program));
-  const localSession = yield* TestSession.open(undefined, { host: {} });
+  const localSession = yield* TestSession.open(undefined, {
+    answeredFromView: true,
+  });
   const session = yield* sessionHandleOf(localSession);
   const roots = createFakeWorkspaceRoots({ workspaceRoot: '/workspace' });
   /** One desktop window following the session's tool edits. */

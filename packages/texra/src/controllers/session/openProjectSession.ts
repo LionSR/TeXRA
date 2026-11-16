@@ -72,7 +72,7 @@ export const openLocalSession = (
   roots: WorkspaceRoots,
 ): Effect.Effect<LocalSession, SessionOpenError, Scope.Scope> =>
   Effect.acquireRelease(
-    sessions.open(roots, { persistent: true, host: {} }),
+    sessions.open(roots, { persistent: true, answeredFromView: true }),
     // The one close every session takes: its runs stopped under the
     // shutdown deadline, the ones still live past it ended, its
     // artifacts flushed, its entry released.

@@ -69,8 +69,8 @@ export type ApprovalHandler = (
 
 /** How a root's session is opened. A later open of the same root gets the
  *  session already there, and must ask for the same store: one that
- *  differs fails with `SessionOptionsConflict`. What `host` says is read
- *  only by the open that builds the session. */
+ *  differs fails with `SessionOptionsConflict`. What `answeredFromView`
+ *  says is read only by the open that builds the session. */
 export interface OpenOptions {
   /** Keep the session's history in the root's SQLite store (under
    *  `roots.storage`, the store every host keeps), so a later process
@@ -78,14 +78,14 @@ export interface OpenOptions {
    *  ends with the session. */
   readonly persistent?: boolean;
   /**
-   * Set when a person is present to answer the runs' requests from the
-   * view (`request.decide`), as in an editor window. Absent, nobody can
-   * answer until a host with an `approve` handler attaches
+   * True when a person is present to answer the runs' requests from the
+   * view (`request.decide`), as in an editor window. Absent or false,
+   * nobody can answer until a host with an `approve` handler attaches
    * ({@link Session.attach}), so every request is denied. A session
    * resumes nothing at open either way: a run a closed or crashed process
    * left unfinished is listed as interrupted and continues on a resume.
    */
-  readonly host?: Record<string, never>;
+  readonly answeredFromView?: boolean;
 }
 
 /**

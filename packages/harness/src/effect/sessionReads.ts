@@ -13,16 +13,12 @@ import { SessionRequests } from '@agent/runtime/requests';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { LiveRun } from '@agent/runtime/runs';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import {
-  checkpointRefusal,
-  deriveResumability,
-} from '@agent/storage/resumability';
+import { deriveResumability } from '@agent/storage/resumability';
 import { listRuns } from '@agent/storage/runListing';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { listRunWorkspaceFiles } from '@agent/storage/runWorkspaceFiles';
 import { SessionRoots } from '@platform/rootedFs';
 import {
-  type ResumeRefusal,
   type RunEnd,
   type RunId,
   type RunResult,
@@ -69,11 +65,6 @@ export interface RunRecords {
   /** Its rows hold a point it continues from, ownership aside; rows that
    *  cannot be read (logged) hold none. */
   readonly readResumable: Effect.Effect<boolean, Error>;
-  /** Why a resume of it here is refused before its agent is checked
-   *  (`finished`, `earlierBuild`, `unusableCheckpoint` or
-   *  `pluginUnavailable`), or null when it may go ahead; a fact that could
-   *  not be read right now fails. */
-  readonly readRejection: Effect.Effect<ResumeRefusal | null, Error>;
   /** Its conversation as every conversation view renders it. */
   readonly readConversation: Effect.Effect<readonly ExportNode[], Error>;
   /** Its exported trace: its display rows and its record. */
@@ -224,7 +215,6 @@ export function sessionReads(
           read(deriveResumability(runId)),
           (decision) => decision.kind === 'checkpoint',
         ),
-        readRejection: read(checkpointRefusal(runId)),
         readConversation: read(
           readCompletedRunConversation(
             runId,

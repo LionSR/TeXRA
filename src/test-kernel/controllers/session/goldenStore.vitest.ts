@@ -707,7 +707,7 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
       if (rewrite !== undefined) raw(storage, (db) => db.exec(rewrite));
       const session = yield* (yield* Sessions).open(
         { ...(yield* FakeHost).roots, storage },
-        { persistent: true, host: {} },
+        { persistent: true, answeredFromView: true },
       );
       return { storage, session };
     });

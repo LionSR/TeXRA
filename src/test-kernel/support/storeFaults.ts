@@ -477,7 +477,7 @@ export const persistentTestSession = (
   Sessions | SessionOwner | FakeHost | Scope.Scope
 > =>
   Effect.flatMap(
-    TestSession.open(roots, { persistent: true, host: {} }),
+    TestSession.open(roots, { persistent: true, answeredFromView: true }),
     sessionHandleOf,
   );
 

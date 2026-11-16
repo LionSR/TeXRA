@@ -394,7 +394,7 @@ let isolatedSessions = 0;
  * fake host's roots with a storage root of its own (one root
  * holds one session, so a test opens as many as it needs), with
  * `interactions` attached as its presentation host when given. It is
- * opened as by a host whose person answers from the view (`host: {}`), so
+ * opened as by a host whose person answers from the view (`answeredFromView`), so
  * a request its runs open waits for its decision rather than being denied.
  * Returns the internal handle a suite seeds rows on and hands run-scoped
  * code; the session closes with the scope.
@@ -411,7 +411,7 @@ export const isolatedTestSession = (
     const { roots } = yield* FakeHost;
     const session = yield* TestSession.open(
       { ...roots, storage: `${roots.storage}/isolated/${isolatedSessions}` },
-      { host: {} },
+      { answeredFromView: true },
     );
     const handle = yield* sessionHandleOf(session);
     if (interactions !== undefined)

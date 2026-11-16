@@ -47,7 +47,9 @@ const setupTool = Effect.gen(function* () {
     ),
   );
   const session = yield* Effect.flatMap(
-    TestSession.open(Context.get(host, FakeHost).roots, { host: {} }),
+    TestSession.open(Context.get(host, FakeHost).roots, {
+      answeredFromView: true,
+    }),
     sessionHandleOf,
   );
   const runId = yield* publishTestRunStart(session);
