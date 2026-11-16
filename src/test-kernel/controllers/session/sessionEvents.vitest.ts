@@ -120,7 +120,7 @@ import { Effect, Layer } from 'effect';
 import { databaseLayer } from '@controllers/session/databaseLayer';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-import { nodePlatformServices } from '@platform/defaults/nodePlatform';
+import { nodePlatformServices } from '@platform/defaults/nodeServices';
 import { qualifyAggregateId } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 

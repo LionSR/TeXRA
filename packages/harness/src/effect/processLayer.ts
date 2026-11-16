@@ -30,7 +30,7 @@ import {
   type ProcessServicesOptions,
 } from '@controllers/session/sessionLayer';
 import { installProcessHttpDispatcher } from '@platform/defaults/longRunningModelTransport';
-import { nodePlatformServices } from '@platform/defaults/nodePlatform';
+import { nodePlatformServices } from '@platform/defaults/nodeServices';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalValues } from '@platform/processRuntime';
@@ -43,10 +43,7 @@ import {
   type SessionOpenError,
 } from '@shared/session/database';
 import { HostSkillSources } from '@skills/runtimeSkills';
-import {
-  hostSkillContributions,
-  type HostSkillOptions,
-} from '@skills/skillSources';
+import type { HostSkillOptions } from '@skills/skillSources';
 import type { ToolCatalog } from '@tools/liveTools';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { ToolRegistry, toolTable, type ToolTable } from '@tools/toolTable';
@@ -283,11 +280,9 @@ function sessionsLayer(
           ? Layer.empty
           : Layer.succeed(HostSkillSources)({
               resourcesPath: options.skills.resourcesPath,
+              projectDataDirName: options.skills.projectDataDirName,
+              pluginIds: options.plugins.map(({ id }) => id),
               options: options.skills.skillSourceOptions ?? {},
-              contributions: hostSkillContributions(
-                options.plugins.map(({ id }) => id),
-                options.skills.projectDataDirName,
-              ),
             }),
       ),
     );

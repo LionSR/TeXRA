@@ -1388,7 +1388,7 @@ caller holds as data: `undefined` with no folder open, which resolves every
 path as external.
 
 NOT run-storage aware — it can only create workspace or external locations.
-For run-storage awareness, use RunFileService.createLocation() instead.
+For run-storage awareness, use `sourceLocationUnder` (`storageLayout.ts`).
 
 Path normalization is handled internally - you can pass paths with either
 forward slashes or backslashes. It's safe to pass already-normalized paths
@@ -2249,7 +2249,7 @@ installed plugins' as they load now, and the bundled ones the host
 installed. Every read answers with the discovery issues beside the skills.
 
 ```ts
-const Skills: Readonly<{ readonly display: (roots: SkillRoots) => Effect<{ skills: { readonly name: string; readonly description: string; readonly scope: "custom" | "user" | "bundled" | "project" | "interop"; readonly label: string; readonly path: string; readonly sourcePath: string; readonly enabled: boolean; }[]; issues: { readonly message: string; readonly path?: string | undefined; }[]; }, Error, FileSystem>; readonly enabled: (roots: SkillRoots, options?: SkillSourceOptions | undefined) => Effect<{ skills: EnabledSkill[]; issues: SkillLoadIssue[]; }, Error, FileSystem>; }>
+const Skills: Readonly<{ readonly display: (roots: SkillRoots) => Effect<{ skills: { readonly name: string; readonly description: string; readonly scope: "custom" | "user" | "bundled" | "project" | "interop"; readonly label: string; readonly path: string; readonly sourcePath: string; readonly enabled: boolean; }[]; issues: { readonly message: string; readonly path?: string | undefined; }[]; }, StateReadFailed, FileSystem>; readonly enabled: (roots: SkillRoots, options?: SkillSourceOptions | undefined) => Effect<{ skills: EnabledSkill[]; issues: SkillLoadIssue[]; }, StateReadFailed, FileSystem>; }>
 ```
 
 ## SkillSourceOptions

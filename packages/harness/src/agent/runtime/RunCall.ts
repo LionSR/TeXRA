@@ -26,7 +26,6 @@ import {
 } from '@agent/core/tools/ToolTypes';
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import type { AgentTrace } from '@agent/trace/AgentTrace';
-import type { RunFileService } from '@common/storage/runStorage';
 import {
   type PluginRequest,
   type RunId,
@@ -167,7 +166,6 @@ declare module '../core/tools/ToolTypes.js' {
     readonly scope: Scope.Scope;
     readonly opening: TemplateOpening | null;
     readonly logger: AgentTrace;
-    readonly fileService: RunFileService;
   }
   interface CallRequests {
     /**

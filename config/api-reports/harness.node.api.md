@@ -2,13 +2,14 @@
 
 Generated from `packages/harness/src/node.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 49
+Exports: 50
 
 - `absentReason` — `const absentReason: (error: unknown) => boolean`
 - `APPROVAL_POLICY_ENV` — `const APPROVAL_POLICY_ENV: "TEXRA_APPROVAL_POLICY"`
 - `canonicalizeWorkspaceRoot` — `function canonicalizeWorkspaceRoot: (workspaceRoot: string) => string`
 - `CommandDirs` — `const CommandDirs: Reference<() => readonly string[]>`
 - `ConfigStore` — `interface ConfigStore { get(key: string): unknown; set(key: string, value: unknown): Effect.Effect<void, Error>; }`
+- `createSymlink` — `const createSymlink: (sourceAbsolute: string, destination: string) => Effect<void, PlatformError, FileSystem>`
 - `effectDiagnosticsLayer` — `const effectDiagnosticsLayer: (minimumLogLevel: LogLevel) => Layer<never, never, never>`
 - `entryChannel` — `function entryChannel: (entry: LogEntry) => string | undefined`
 - `entryMessage` — `function entryMessage: (entry: LogEntry) => string`
@@ -27,7 +28,7 @@ Exports: 49
 - `isNotADirectoryError` — `function isNotADirectoryError: (err: unknown) => boolean`
 - `JsonConfigProvider` — `class JsonConfigProvider { constructor: new ({ workspace, global, local, catalog, }: JsonConfigProviderOptions) => JsonConfigProvider; static: ; instance: catalog: SettingsCatalog; get: <T>(key: string) => T; inspect: <T = unknown>(key: string) => Partial<Record<"globalValue" | "workspaceValue", T>>; update: <T>(key: string, value: T, target?: ConfigTarget) => Effect<void, ConfigWriteFailed, never> }`
 - `JsonConfigProviderOptions` — `interface JsonConfigProviderOptions { workspace: ConfigStore; global: ConfigStore; local: ConfigStore; catalog: SettingsCatalog; }`
-- `JsonStore` — `class JsonStore { constructor: new (filePath: string, data: JsonRecord, version: string | undefined) => JsonStore; static: open: (filePath: string) => Effect<JsonStore, Error, FileSystem | Path>; unreadable: (filePath: string) => Effect<JsonStore, never, Path>; instance: filePath: string; get: (key: string) => unknown; keys: () => string[]; set: (key: string, value: unknown) => Effect<void, Error, never>; snapshot: () => Record<string, unknown> }`
+- `JsonStore` — `class JsonStore { constructor: new (filePath: string, data: JsonRecord, version: string | undefined) => JsonStore; static: open: (filePath: string) => Effect<JsonStore, Error, Path>; unreadable: (filePath: string) => Effect<JsonStore, never, Path>; instance: filePath: string; get: (key: string) => unknown; keys: () => string[]; set: (key: string, value: unknown) => Effect<void, Error, never>; snapshot: () => Record<string, unknown> }`
 - `LOG_CHANNEL` — `const LOG_CHANNEL: "channel"`
 - `LogEntry` — `type LogEntry = Omit<ReturnType<typeof Logger.formatStructured.log>, 'level'> & { readonly level: Uppercase<LogLevel.Severity>; }; ≡ LogEntry`
 - `LogSink` — `interface LogSink { write(entry: LogEntry): void; dispose?(): void; }`

@@ -240,19 +240,81 @@ function stripDollarSchema(schema: JSONSchemaObject): JSONSchemaObject {
   return rest;
 }
 
-/** Keywords whose value is data, never a schema to walk. */
-const DATA_KEYWORDS: ReadonlySet<string> = new Set([
-  'enum',
-  'const',
-  'default',
-  'examples',
-]);
+/**
+ * The JSON Schema keywords whose values hold subschemas, by the value's
+ * shape: one subschema (`items` also in its legacy list form), a list of
+ * them, or a map of named ones. Every other keyword's value is data
+ * (`enum`, `const`, `default`, `examples`, …).
+ */
+const SUBSCHEMA_KEYWORDS = {
+  one: new Set([
+    'items',
+    'additionalItems',
+    'additionalProperties',
+    'unevaluatedItems',
+    'unevaluatedProperties',
+    'contains',
+    'contentSchema',
+    'propertyNames',
+    'not',
+    'if',
+    'then',
+    'else',
+  ]),
+  list: new Set(['prefixItems', 'anyOf', 'oneOf', 'allOf']),
+  map: new Set([
+    'properties',
+    'patternProperties',
+    '$defs',
+    'definitions',
+    'dependentSchemas',
+    'dependencies',
+  ]),
+} as const;
+
+/**
+ * `node` with each of its subschemas replaced by `f(subschema, keyword,
+ * name)`, `name` being the entry's key under a map keyword (a property's
+ * name, a definition's); every other value is kept as it is. A walker
+ * recurses by calling it again from `f`, so a key under `properties` is
+ * always a name and never read as a keyword.
+ */
+export function mapSubschemas(
+  node: Readonly<Record<string, unknown>>,
+  f: (schema: unknown, keyword: string, name?: string) => unknown,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(node).map(([keyword, value]) => {
+      if (SUBSCHEMA_KEYWORDS.map.has(keyword))
+        return [
+          keyword,
+          Predicate.isObject(value)
+            ? Object.fromEntries(
+                Object.entries(value).map(([name, schema]) => [
+                  name,
+                  f(schema, keyword, name),
+                ]),
+              )
+            : value,
+        ];
+      if (
+        Array.isArray(value) &&
+        (SUBSCHEMA_KEYWORDS.list.has(keyword) ||
+          SUBSCHEMA_KEYWORDS.one.has(keyword))
+      )
+        return [keyword, value.map((schema) => f(schema, keyword))];
+      if (SUBSCHEMA_KEYWORDS.one.has(keyword))
+        return [keyword, f(value, keyword)];
+      return [keyword, value];
+    }),
+  );
+}
 
 /**
  * OpenAI rejects an array schema without an `items` schema, strict mode or
  * not (HTTP 400: `array schema missing items`), and takes neither
  * `prefixItems` nor the legacy array form of `items`. Effect Schema emits a
- * tuple (`view_range`) as `prefixItems` with `minItems`/`maxItems`, and
+ * tuple (a line range's array form) as `prefixItems` with `minItems`/`maxItems`, and
  * `Schema.Array(Schema.Unknown)` as a bare `{ type: 'array' }`. Every array
  * therefore names one `items` schema: a tuple's element schemas (one, or
  * `anyOf` the distinct ones) with its length as the bounds it does not
@@ -269,21 +331,13 @@ const DATA_KEYWORDS: ReadonlySet<string> = new Set([
 function withArrayItems(node: JSONSchemaObject): JSONSchemaObject;
 function withArrayItems(node: unknown): unknown;
 function withArrayItems(node: unknown): unknown {
-  if (Array.isArray(node)) return node.map(withArrayItems);
   if (!Predicate.isObject(node)) return node;
-  const walkedValue = (key: string, value: unknown): unknown => {
-    if (DATA_KEYWORDS.has(key)) return value;
-    if (key === 'anyOf' && Array.isArray(value))
-      return distinct(value.map(withArrayItems));
-    return withArrayItems(value);
-  };
-  const walked = Object.fromEntries(
-    Object.entries(node)
-      .filter(
-        ([key, value]) => key !== 'additionalProperties' || value !== true,
-      )
-      .map(([key, value]) => [key, walkedValue(key, value)]),
+  const { additionalProperties, ...kept } = node;
+  const walked = mapSubschemas(
+    additionalProperties === true ? kept : node,
+    withArrayItems,
   );
+  if (Array.isArray(walked.anyOf)) walked.anyOf = distinct(walked.anyOf);
   const { type, prefixItems, items, ...rest } = walked;
   if (![type].flat().includes('array')) return walked;
   // The legacy tuple form is `items: [...]`.

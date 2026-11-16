@@ -42,6 +42,7 @@ import {
 } from '@test/support/scriptedRunLayers';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';
+import { toolDefinitionsFor } from '@tools/catalogEntries';
 import { ToolCatalogOwner, toolCatalogLayer } from '@tools/liveTools';
 import { mcpPluginLoader } from '@tools/mcp/mcpConfig';
 import { toolTable } from '@tools/toolTable';
@@ -54,7 +55,8 @@ import {
 /** The per-install key env values are digested under, fixed. */
 const TEST_REVISION_KEY = Effect.succeed('00'.repeat(32));
 
-/** A stdio MCP server listing one tool, `echo`, that answers one call. With
+/** A stdio MCP server listing one tool, `echo`, that answers one call; its
+ *  input has an array property named `default` that names no `items`. With
  *  `FIXTURE_MODE=hang` it never answers a call: it records the call's id
  *  beside its pid file, and the last cancellation it receives. */
 const FIXTURE_SERVER = `
@@ -80,7 +82,7 @@ require('node:readline')
       send({ jsonrpc: '2.0', id, result: { tools: [{
         name: 'echo',
         description: 'Echo the text.',
-        inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
+        inputSchema: { type: 'object', properties: { text: { type: 'string' }, default: { type: 'array' } }, required: ['text'] },
       }] } });
     else if (method === 'tools/call' && process.env.FIXTURE_MODE === 'hang')
       record('.called', String(id));
@@ -131,7 +133,6 @@ const openFixtureStep = (session: Context.Context<SessionServices>) =>
     const run = testAgentRun(
       {
         runId: Schema.decodeSync(RunIdSchema)(crypto.randomUUID()),
-        session,
         logger: { ...noopTrace, warn: (message) => warnings.push(message) },
         model: yield* ScopedRef.make(() =>
           testBinding(scriptedModel([textTurn('')]).model),
@@ -226,6 +227,13 @@ describe('MCP server plugins', () => {
                 parameters: expect.objectContaining({ required: ['text'] }),
               }),
             ]);
+            // A property is not a keyword: on the wire the array property
+            // named `default` names its `items`, as OpenAI requires.
+            expect(
+              toolDefinitionsFor(resolved.tools.definitions)[0]?.parameters,
+            ).toMatchObject({
+              properties: { default: { type: 'array', items: {} } },
+            });
             const pid = Number(readFileSync(pidFile, 'utf8'));
             expect(isAlive(pid)).toBe(true);
 

@@ -12,7 +12,6 @@ import {
   enablePlugin,
   readInstalledPluginLoad,
 } from '@common/plugins/pluginTrust';
-import { hostSkillContributions } from '@skills/skillSources';
 import {
   HostSkillSources,
   loadRuntimeSkillCatalog,
@@ -108,8 +107,9 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
             }).pipe(
               Effect.provideService(HostSkillSources, {
                 resourcesPath: resources,
+                projectDataDirName: undefined,
+                pluginIds: [],
                 options: {},
-                contributions: hostSkillContributions([]),
               }),
             ),
           );
@@ -229,8 +229,9 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         }).pipe(
           Effect.provideService(HostSkillSources, {
             resourcesPath: resources,
+            projectDataDirName: undefined,
+            pluginIds: [],
             options: {},
-            contributions: hostSkillContributions([]),
           }),
         );
         expect(catalog.map(({ name }) => name)).toEqual(['load-paper']);

@@ -60,7 +60,7 @@ import {
 } from '@shared/session/runHistory';
 import type { SessionEvents } from '@shared/session/sessionEvents';
 import { ToolCatalogOwner } from '@tools/liveTools';
-import { announceWrites, factKindsOf } from '@tools/plugins';
+import { announceWrites } from '@tools/plugins';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
 import { deletionCollector } from './deletionCleanup';
@@ -284,7 +284,7 @@ export const sessionOwnersLayer = (
       // workspace files is announced, and a run's end is presented to the
       // host, each once the view holds the row. `log.settled` waits for
       // this reader.
-      const announce = announceWrites(factKindsOf(plugins.entries.values()));
+      const announce = announceWrites(plugins.factKinds);
       yield* Stream.runForEach(
         store.applied,
         Effect.fnUntraced(function* (event) {

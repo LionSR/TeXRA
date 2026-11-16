@@ -11,7 +11,7 @@ import {
   type MessageType,
   type TraceRowFields,
 } from '@shared/schemas';
-import { outputGapNotice } from '@shared/toolUse';
+import { elidedNote } from '@shared/toolUse';
 import type { StreamingTextRow } from '@shared/transcript/transcriptRow';
 
 import { open, write, type Draft } from './transcriptState';
@@ -47,7 +47,7 @@ export function recordProcessOutputRow(
     text:
       event.elided === undefined
         ? event.text
-        : `${outputGapNotice(event.elided)}\n${event.text}`,
+        : `${elidedNote(event.elided)}\n${event.text}`,
     payload: { messageType: MESSAGE_TYPES.DEFAULT, data: undefined },
   });
 }

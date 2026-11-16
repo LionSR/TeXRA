@@ -3,10 +3,7 @@ import { Clock, Effect, Schema, type Scope } from 'effect';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace/AgentTrace';
-import {
-  TOOL_RESULT_TRUNCATION_HEAD_CHARS,
-  TOOL_RESULT_TRUNCATION_TAIL_CHARS,
-} from '@agent/runtime/run/toolResultText';
+import { TOOL_RESULT_TRUNCATION } from '@agent/runtime/run/toolResultText';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
   noLaterTurn,
@@ -14,8 +11,7 @@ import {
   type RunToolCall,
 } from '@agent/runtime/RunCall';
 import {
-  BACKGROUND_OUTPUT_HEAD_CHARS,
-  BACKGROUND_OUTPUT_TAIL_CHARS,
+  BACKGROUND_OUTPUT,
   bashErrorDelivery,
   bashResultDelivery,
   type BackgroundBashCall,
@@ -28,6 +24,7 @@ import { SessionRoots } from '@platform/rootedFs';
 import {
   BASH_BACKGROUND_LOG_CAP_CHARS,
   BASH_TOOL_DEFAULT_TIMEOUT_MS,
+  elidedNote,
 } from '@shared/toolUse';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import {
@@ -45,7 +42,7 @@ import type { SessionLogShape } from '@shared/session/sessionLog';
 import { executed } from '@tools/core/result';
 import { previewLabel, stripControlCharacters } from '@utils/text/stringUtils';
 import { executeCommand } from '@utils/system/execUtils';
-import { appendHead, appendTail } from '@utils/text/appendTail';
+import { headTail } from '@utils/text/appendTail';
 
 // Local file imports
 import { defineTool } from './core/definition';
@@ -64,60 +61,34 @@ const SHELL_BACKGROUNDING_MESSAGE =
  * the whole stream when the two windows cover it, else both ends around a
  * note of how much was left out; `null` when nothing but whitespace arrived.
  * Whitespace at either end of the stream takes no room in either window:
- * leading whitespace is dropped, and trailing whitespace waits until
- * something else follows it.
+ * leading whitespace is dropped, and trailing whitespace waits, in a window
+ * of its own, until something else follows it.
  */
 function boundedOutput(streamName: 'stdout' | 'stderr') {
-  let head = '';
-  let tail = '';
-  let totalChars = 0;
-  // The whitespace after the last other character, as each window would
-  // take it, and its length.
-  let pendingHead = '';
-  let pendingTail = '';
-  let pendingChars = 0;
-  const add = (headText: string, tailText: string, chars: number): void => {
-    // The head grows only while it holds everything seen: a cut can stop
-    // it one short of its budget (before a split surrogate pair), and a
-    // later chunk appended after that cut would not follow it.
-    if (head.length === totalChars)
-      head = appendHead(head, headText, TOOL_RESULT_TRUNCATION_HEAD_CHARS);
-    totalChars += chars;
-    tail = appendTail(tail, tailText, TOOL_RESULT_TRUNCATION_TAIL_CHARS);
-  };
+  const window = headTail(TOOL_RESULT_TRUNCATION);
+  let pending = headTail(TOOL_RESULT_TRUNCATION);
+  let started = false;
   return {
     append(chunk: string): void {
-      const text = totalChars === 0 ? chunk.trimStart() : chunk;
+      const text = started ? chunk : chunk.trimStart();
       const content = text.trimEnd();
       if (content) {
-        if (pendingChars > 0) add(pendingHead, pendingTail, pendingChars);
-        add(content, content, content.length);
-        pendingHead = '';
-        pendingTail = '';
-        pendingChars = 0;
+        const held = pending.read();
+        window.append(held.head);
+        if (held.elided > 0) window.skip(held.elided);
+        window.append(held.tail);
+        window.append(content);
+        pending = headTail(TOOL_RESULT_TRUNCATION);
+        started = true;
       }
-      const trailing = text.slice(content.length);
-      pendingChars += trailing.length;
-      pendingHead = appendHead(
-        pendingHead,
-        trailing,
-        TOOL_RESULT_TRUNCATION_HEAD_CHARS,
-      );
-      pendingTail = appendTail(
-        pendingTail,
-        trailing,
-        TOOL_RESULT_TRUNCATION_TAIL_CHARS,
-      );
+      pending.append(text.slice(content.length));
     },
     text(): string | null {
-      if (totalChars === 0) return null;
-      const elidedChars = totalChars - head.length - tail.length;
-      if (elidedChars > 0)
-        return `${head}\n\n[... ${elidedChars.toLocaleString()} characters elided from ${streamName} ...]\n\n${tail}`;
-      // The windows overlap: the head, then the part of the tail after it.
-      if (totalChars > tail.length)
-        return head + appendTail('', tail, totalChars - head.length);
-      return tail;
+      if (!started) return null;
+      const { head, tail, elided } = window.read();
+      return elided > 0
+        ? `${head}\n\n${elidedNote(elided, streamName)}\n\n${tail}`
+        : head + tail;
     },
   };
 }
@@ -193,10 +164,10 @@ function backgroundBashTurn(params: {
   // `elided` characters are what the tail let go), and the tails become the
   // log's last rows when the command ends, however it ends, each marking
   // the gap before it.
-  const streams = {
-    stdout: { recorded: 0, elided: 0, tail: '' },
-    stderr: { recorded: 0, elided: 0, tail: '' },
-  };
+  const streams: Record<
+    'stdout' | 'stderr',
+    { recorded: number; window?: ReturnType<typeof headTail> }
+  > = { stdout: { recorded: 0 }, stderr: { recorded: 0 } };
   let capReached = false;
   const record = (stream: 'stdout' | 'stderr', chunk: string): void => {
     const held = streams[stream];
@@ -212,32 +183,27 @@ function backgroundBashTurn(params: {
     if (!capReached) {
       capReached = true;
       logger.warn(
-        `[Stream log truncated at ${(BASH_BACKGROUND_LOG_CAP_CHARS / 1000).toFixed(0)}k chars: each stream's first ${BACKGROUND_OUTPUT_HEAD_CHARS.toLocaleString()} characters are still recorded, and its last ${BACKGROUND_OUTPUT_TAIL_CHARS.toLocaleString()} when the command ends]`,
+        `[Stream log truncated at ${(BASH_BACKGROUND_LOG_CAP_CHARS / 1000).toFixed(0)}k chars: each stream's first ${BACKGROUND_OUTPUT.head.toLocaleString()} characters are still recorded, and its last ${BACKGROUND_OUTPUT.tail.toLocaleString()} when the command ends]`,
       );
     }
-    // A stream that has begun its tail records nothing more, so its rows
-    // stay its first characters, then its tail.
-    const head =
-      held.tail === ''
-        ? appendHead(
-            '',
-            chunk,
-            Math.max(0, BACKGROUND_OUTPUT_HEAD_CHARS - held.recorded),
-          )
-        : '';
-    if (head) {
-      held.recorded += head.length;
-      logger.output(stream, head);
-    }
-    const rest = chunk.slice(head.length);
-    if (!rest) return;
-    const tail = appendTail(held.tail, rest, BACKGROUND_OUTPUT_TAIL_CHARS);
-    held.elided += held.tail.length + rest.length - tail.length;
-    held.tail = tail;
+    // The head the delivery shows, past what was recorded before the cap,
+    // is recorded as it arrives; a stream that has begun its tail records
+    // nothing more, so its rows stay its first characters, then its tail.
+    held.window ??= headTail({
+      head: Math.max(0, BACKGROUND_OUTPUT.head - held.recorded),
+      tail: BACKGROUND_OUTPUT.tail,
+    });
+    const before = held.window.read().head.length;
+    held.window.append(chunk);
+    const head = held.window.read().head.slice(before);
+    if (head) logger.output(stream, head);
   };
   const recordTails = (): void => {
     for (const stream of ['stdout', 'stderr'] as const) {
-      const { tail, elided } = streams[stream];
+      const { tail, elided } = streams[stream].window?.read() ?? {
+        tail: '',
+        elided: 0,
+      };
       if (tail)
         logger.emit({
           type: 'process.output',

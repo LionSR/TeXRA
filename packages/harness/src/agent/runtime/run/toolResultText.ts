@@ -6,7 +6,8 @@
  * mutation vocabulary.
  */
 import type { ToolResult } from '@shared/schemas';
-import { appendHead, appendTail } from '@utils/text/appendTail';
+import { elidedNote } from '@shared/toolUse';
+import { appendHead, headTail } from '@utils/text/appendTail';
 
 /** Max character length for tool result text (200KB ~ 50-66k tokens). */
 const MAX_TOOL_RESULT_TEXT_LENGTH = 200_000;
@@ -16,8 +17,7 @@ const MAX_TOOL_RESULT_TEXT_LENGTH = 200_000;
  * it wholesale. Head is small (just enough to name the invoked engine/file);
  * tail is large because build errors cluster at the end of long logs.
  */
-export const TOOL_RESULT_TRUNCATION_HEAD_CHARS = 4_000;
-export const TOOL_RESULT_TRUNCATION_TAIL_CHARS = 50_000;
+export const TOOL_RESULT_TRUNCATION = { head: 4_000, tail: 50_000 } as const;
 
 /**
  * The summary of an attachment set the model must read back itself: the list
@@ -53,15 +53,15 @@ export function capToolResultText(text: string): string {
     return text;
   }
 
-  const head = appendHead('', text, TOOL_RESULT_TRUNCATION_HEAD_CHARS);
-  const tail = appendTail('', text, TOOL_RESULT_TRUNCATION_TAIL_CHARS);
-  const elidedChars = text.length - head.length - tail.length;
+  const window = headTail(TOOL_RESULT_TRUNCATION);
+  window.append(text);
+  const { head, tail, elided } = window.read();
 
   const message =
     `Tool result too large: ${text.length.toLocaleString()} characters ` +
     `(limit: ${MAX_TOOL_RESULT_TEXT_LENGTH.toLocaleString()}). Showing the first ${head.length.toLocaleString()} ` +
     `and last ${tail.length.toLocaleString()} characters.\n\n` +
-    `${head}\n\n[... ${elidedChars.toLocaleString()} characters elided ...]\n\n${tail}`;
+    `${head}\n\n${elidedNote(elided)}\n\n${tail}`;
 
   return message.length > MAX_TOOL_RESULT_TEXT_LENGTH
     ? appendHead('', message, MAX_TOOL_RESULT_TEXT_LENGTH)

@@ -98,7 +98,7 @@ import {
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
 import { texraPlugins } from '@texra/tools/registry';
-import { factKindsOf } from '@tools/plugins';
+import { toolTable } from '@tools/toolTable';
 import type { Model } from '@texra-ai/llm';
 
 const GOLDEN = readFileSync(
@@ -230,7 +230,7 @@ describe('the golden 1.0 store', () => {
           );
         const events = yield* rowReader(
           storage,
-          factKindsOf(texraPlugins({ name: 'vscode' })),
+          toolTable(texraPlugins({ name: 'vscode' })).factKinds,
           exec,
         ).read(rows, true);
         expect(events).toHaveLength(rows.length);

@@ -38,7 +38,7 @@ import { AgentDirectories, AppState } from '@platform/interfaces';
 import { globalStorageFsLayer, SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
-import { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
+import { workspaceEnvironmentLayer } from '@platform/defaults/nodeServices';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import type { SessionCloseReport } from '@shared/schemas';
 import {

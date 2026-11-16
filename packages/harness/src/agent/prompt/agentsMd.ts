@@ -6,8 +6,8 @@ import { Effect, FileSystem } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { readNormalizedFile } from './fsDurability';
-import { absentReason, entryExists } from './fsEntryExists';
+import { readNormalizedFile } from '@utils/files/fsDurability';
+import { absentReason, entryExists } from '@utils/files/fsEntryExists';
 
 const CHANNEL = 'agentsMd';
 

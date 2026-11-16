@@ -7,7 +7,7 @@
  * needs.
  */
 import { Predicate } from 'effect';
-import { inputSchema } from '@agent/core/tools/toolSchema';
+import { inputSchema, mapSubschemas } from '@agent/core/tools/toolSchema';
 import { type ScriptDoor } from '@agent/runtime/RunCall';
 
 import { declarationOf, firstSentence } from './declarations';
@@ -37,19 +37,17 @@ const tokenize = (text: string): string[] =>
     .filter((term) => term !== '' && !STOP_WORDS.has(term))
     .map(singular);
 
-/** Property names and descriptions, through nested objects and unions. */
+/** Property names and descriptions, at every subschema. */
 const schemaText = (schema: unknown): string[] => {
   if (!Predicate.isObject(schema)) return [];
-  return [
-    ...(typeof schema.description === 'string' ? [schema.description] : []),
-    ...Object.entries(
-      Predicate.isObject(schema.properties) ? schema.properties : {},
-    ).flatMap(([name, property]) => [name, ...schemaText(property)]),
-    ...schemaText(schema.items),
-    ...[schema.anyOf, schema.oneOf, schema.allOf].flatMap((variants) =>
-      Array.isArray(variants) ? variants.flatMap(schemaText) : [],
-    ),
-  ];
+  const text =
+    typeof schema.description === 'string' ? [schema.description] : [];
+  mapSubschemas(schema, (child, keyword, name) => {
+    if (keyword === 'properties' && name !== undefined) text.push(name);
+    text.push(...schemaText(child));
+    return child;
+  });
+  return text;
 };
 
 /** The tools of `catalog` that match `query`, best first; ties keep catalog

@@ -49,6 +49,7 @@ export { AGENT_TOOL_NAME } from '@shared/schemas';
 export {
   definePlugin,
   type FactKind,
+  type FactKinds,
   type Plugin,
   type PluginDefinition,
   type PluginRow,
@@ -198,7 +199,7 @@ export type { StepRoot } from '@utils/files/externalRoots';
 export type { ToolRun } from '@agent/core/tools/ToolTypes';
 export type { ToolPolicy } from '@agent/runtime/run/AgentRun';
 // Renders a prompt template (Nunjucks) with its variables.
-export { renderPrompt } from '@utils/prompt';
+export { renderPrompt } from '@agent/prompt/promptRender';
 export {
   TEMPLATE_INPUT_NAMES,
   type TemplateInputs,
@@ -216,12 +217,15 @@ export type {
   ModelRetryGate,
   RoutePolicy,
 } from '@agent/runtime/ModelRetryGate';
-// A run's files under its session storage: its directory, the pre-run
-// snapshots and workspace mirrors it prepares, and output locations.
+// A run's directory under a storage root, one entry of it read without
+// following a link, and where a path a run reads from lives (run storage
+// keeps its run's provenance).
 export {
-  RunFileService,
+  runDirUnder,
+  runEntryUnder,
   type RunStorageEntry,
-} from '@common/storage/runStorage';
+  sourceLocationUnder,
+} from '@common/storage/storageLayout';
 export { HostCapabilities } from '@agent/runtime/agentToolResolution';
 // The harness's retry policy: which HTTP statuses are worth retrying, the
 // randomized exponential backoff `Schedule` its fetches retry on, and the

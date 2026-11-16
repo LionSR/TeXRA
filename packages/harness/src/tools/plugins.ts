@@ -17,14 +17,13 @@
  */
 
 // Third-party imports
-import { Cause, Effect, type Layer, Result, Schema } from 'effect';
+import { Cause, Effect, type Layer, Schema } from 'effect';
 
 // Local imports
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { withLogChannel } from '@logger/effectLog';
 import { type AppSignals, emitAppSignal } from '@platform/appSignals';
-import { StateReadFailed, type StateStore } from '@shared/config/settings';
 import {
   aggregateTarget,
   qualifyAggregateId,
@@ -38,10 +37,6 @@ import {
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import type { Alongside } from '@shared/session/sessionEvents';
-import {
-  decodeDisabledTools,
-  DISABLED_TOOLS_KEY,
-} from '@shared/state/disabledTools';
 import type { SessionLogShape } from '@shared/session/sessionLog';
 import type { SettingRow } from '@shared/state/stateSettings';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
@@ -181,25 +176,6 @@ export const definePlugin = <ROut = never>(
   // cast: `ROut` is checked by the parameter type and erased here.
   plugin as unknown as Plugin;
 
-/** {@link decodeDisabledTools}, failing as the state read it is. */
-export function storedDisabledTools(
-  stored: unknown,
-): Result.Result<ReadonlySet<string> | undefined, StateReadFailed> {
-  return Result.mapError(
-    decodeDisabledTools(stored),
-    (failure) => new StateReadFailed(failure),
-  );
-}
-
-/** The plugin ids the user switched off in `store`'s record; none while it
- *  is absent. */
-export function readDisabledTools(store: StateStore) {
-  return store.get(DISABLED_TOOLS_KEY.key).pipe(
-    Effect.flatMap((stored) => Effect.fromResult(storedDisabledTools(stored))),
-    Effect.map((ids): ReadonlySet<string> => ids ?? new Set()),
-  );
-}
-
 /**
  * Announce the workspace files a committed row says its run wrote past the
  * editor's own write path (a fact kind's `writes`): a run records such a change
@@ -256,24 +232,6 @@ export const announceWrites = (
 
 /** The plugin fact kinds a store reads, by `plugin/kind`. */
 export type FactKinds = Readonly<Record<FactName, FactKind>>;
-
-/**
- * The fact kinds `plugins` contribute, by `plugin/kind`. A fact kind of another
- * plugin's id, or a kind contributed twice, is a defect of the plugin list.
- */
-export function factKindsOf(plugins: Iterable<Plugin>): FactKinds {
-  const factKinds = new Map<FactName, FactKind>();
-  for (const { id, factKinds: own = [] } of plugins)
-    for (const factKind of own) {
-      const name = factName(factKind);
-      if (factKind.plugin !== id || factKinds.has(name))
-        throw new Error(
-          `The plugin list is not valid: plugin ${id} contributes the row kind ${name}, which is not its own or is contributed twice.`,
-        );
-      factKinds.set(name, factKind);
-    }
-  return Object.fromEntries(factKinds);
-}
 
 /**
  * Throw unless every fact a call of `plugin`'s tool states is a row of one of

@@ -31,7 +31,7 @@ import {
 
 import { stopRun } from '@agent/storage/runLifecycle';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
+import { workspaceEnvironmentLayer } from '@platform/defaults/nodeServices';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import type { RunId, RunStopReason } from '@shared/schemas';
 import type { SessionLog } from '@shared/session/runHistory';

@@ -64,7 +64,6 @@ import {
   DatabaseWriteFailed,
   RunChanged,
 } from '@shared/session/database';
-import { factKindsOf } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { currentValues, READ_RETRY } from './currentValues';
 import { LISTED_TYPES, projectionUpkeep, usageRows } from './projections';
@@ -287,7 +286,7 @@ export const databaseLayer = (
        *  writer is this process, so what it holds cannot change under it;
        *  the global store's other processes can be newer builds, so there
        *  the gate runs again in every value write (`transact`). */
-      const factKinds = factKindsOf((yield* ToolRegistry).entries.values());
+      const { factKinds } = yield* ToolRegistry;
       const gate = storeGate(exec, factKinds);
       const reader = rowReader(path, factKinds, exec);
       const decodedRows = (

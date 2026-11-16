@@ -22,6 +22,7 @@ import {
   type ToolRun,
   ToolError,
   renderPrompt,
+  sourceLocationUnder,
 } from '@texra-ai/harness/plugins';
 import {
   toErrorMessage,
@@ -60,13 +61,14 @@ import {
   documentTaskOf,
   taskFileVars,
 } from '@texra/tools/documents/documentTask';
+import { runWorkspaceOf } from '@texra/tools/documents/runWorkspace';
 import type { CallRequests, ToolEnv } from '@texra-ai/harness/plugins';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 /** What the documents read of the run their tool call serves. */
 type DocumentRun = Pick<
   ToolRun,
-  'config' | 'logger' | 'fileService' | 'runId' | 'opening' | 'model'
+  'config' | 'logger' | 'scope' | 'runId' | 'opening' | 'model'
 >;
 
 /** The tool call the documents are opened for: its roots and run, and
@@ -137,7 +139,8 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
   env: { roots, run },
   requests,
 }: DocumentCall) {
-  const { config, logger, fileService, runId } = run;
+  const { config, logger, runId } = run;
+  const fileService = runWorkspaceOf(run, roots);
   // The block as the catalog holds it now: the run's exact entry, which its
   // launch stamped.
   const entry = (yield* AgentCatalog).get(documentTaskKey(config));
@@ -150,7 +153,9 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
     );
   const output = yield* (yield* ChildRuns).fact(runId, DOCUMENTS_OUTPUT_KIND);
   const expected = expectedDocuments(config);
-  const sources = expected.names.map((file) => fileService.locateSource(file));
+  const sources = expected.names.map((file) =>
+    sourceLocationUnder(roots, file),
+  );
   const deps: OutputDependencies = {
     config,
     expected,

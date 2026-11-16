@@ -18,7 +18,6 @@ import {
   Stream,
 } from 'effect';
 
-import { RunFileService } from '@texra-ai/harness/plugins';
 import { UsageLog } from '@texra-ai/harness/host';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
@@ -36,7 +35,6 @@ import {
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { SessionRoots } from '@platform/rootedFs';
 import { AgentConfigSchema, PersonaSchema, type RunId } from '@shared/schemas';
 import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@texra-ai/harness/schemas';
 import { generateRunId } from '@shared/schemas';
@@ -302,22 +300,19 @@ export function testLaunch(
 }
 
 /**
- * The run service a fixture stands on: {@link testLaunch} with the session a
- * real run carries, no step opened and no callbacks. `over` names what the
+ * The run service a fixture stands on: {@link testLaunch} with no step
+ * opened and no callbacks. `over` names what the
  * case under test reads.
  */
 export function testAgentRun(
-  base: Pick<AgentRunShape, 'runId' | 'logger' | 'model' | 'scope'> & {
-    readonly session: Context.Context<SessionServices>;
-  },
+  base: Pick<AgentRunShape, 'runId' | 'logger' | 'model' | 'scope'>,
   over: Partial<AgentRunShape> = {},
 ): AgentRunShape {
-  const { session, runId, logger, model, scope } = base;
+  const { runId, logger, model, scope } = base;
   return {
     ...testLaunch(runId, { logger }),
     model,
     scope,
-    fileService: new RunFileService(runId, Context.get(session, SessionRoots)),
     ...testRunTools(),
     finalToolName: null,
     callbacks: {},
@@ -358,7 +353,7 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
       const scope: Scope.Scope = yield* Effect.scope;
       const tools = init.tools ?? {};
       return testAgentRun(
-        { runId: init.runId, session: init.session, logger, model, scope },
+        { runId: init.runId, logger, model, scope },
         {
           config: Schema.decodeUnknownSync(AgentConfigSchema)({
             ...testConfig(),

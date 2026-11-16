@@ -31,6 +31,8 @@ import type { GlobalValues } from '@platform/processRuntime';
 import type { ConfigProvider } from '@shared/config/settings';
 import {
   AgentDefinitionSchema,
+  factName,
+  type FactName,
   type PluginRequest,
   type RequestDecision,
   type RunId,
@@ -38,7 +40,7 @@ import {
 } from '@shared/schemas';
 import type { ToolCatalog } from '@tools/liveTools';
 import { readNormalizedFile } from '@utils/files/fsDurability';
-import type { Plugin } from '@tools/plugins';
+import type { FactKind, FactKinds, Plugin } from '@tools/plugins';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
@@ -254,6 +256,9 @@ export interface ToolTable {
   readonly get: (name: string) => ITool<Error, PluginToolServices> | undefined;
   /** The agent-file blocks the plugins own, by key (`Plugin.agentBlock`). */
   readonly blocks: ReadonlyMap<string, AgentBlock>;
+  /** The row kinds the plugins own, by `plugin/kind` (`Plugin.factKinds`):
+   *  what a store opened in this process reads. */
+  readonly factKinds: FactKinds;
 }
 
 /** The probe of a switched plugin that names none: it needs nothing. */
@@ -265,7 +270,8 @@ const NEEDS_NOTHING: NonNullable<Plugin['availability']> = {
  * The table over `plugins`, which the app lists in order. A list that
  * spells an id other than lowercase letters, digits and dashes, repeats a
  * plugin id, a tool name or a script module's name, claims an agent-file
- * block another plugin or the persona owns, or lacks a plugin another
+ * block another plugin or the persona owns, contributes a row kind of
+ * another plugin's id or one already contributed, or lacks a plugin another
  * `requires` is a defect of the list, rejected when it is built. A plugin
  * with a switch and no availability probe is probed as needing nothing.
  */
@@ -314,7 +320,22 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
   );
   if (new Set(modules).size !== modules.length)
     refuse('two plugins ship a script module of one name.');
-  return { entries, get: (name) => byName.get(name), blocks };
+  const factKinds = new Map<FactName, FactKind>();
+  for (const { id, factKinds: own = [] } of plugins)
+    for (const factKind of own) {
+      const name = factName(factKind);
+      if (factKind.plugin !== id || factKinds.has(name))
+        refuse(
+          `plugin ${id} contributes the row kind ${name}, which is not its own or is contributed twice.`,
+        );
+      factKinds.set(name, factKind);
+    }
+  return {
+    entries,
+    get: (name) => byName.get(name),
+    blocks,
+    factKinds: Object.fromEntries(factKinds),
+  };
 }
 
 /** The process's plugin table, which every run's offered tools come from. */
