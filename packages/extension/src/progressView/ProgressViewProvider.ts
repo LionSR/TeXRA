@@ -8,20 +8,27 @@ import { Deferred, Effect, Exit, FileSystem, Scope, Stream } from 'effect';
 import { scopedFork } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
+  attentionOf,
   ensureError,
+  formatResultCount,
+  type AgentConfig,
   type FileLocation,
   type RunId,
+  type SessionView,
 } from '@texra-ai/harness/schemas';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import {
   createAgentPresentationHost,
-  revealProgressView,
+  warnOnFailure,
 } from '@frontend/events/agentEventListeners';
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { openBuilt, type ShowBuilt } from '@frontend/latex/openBuild';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { eventStream } from '@frontend/vscode/vscodeEvents';
+import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
+import { sectionCountLabel } from '@ui/copy/runStatus';
 import { hostFailed } from '@texra/controllers/session/hostCallFailure';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import { setOnboardingDeclined } from '@texra/controllers/onboarding/onboardingFunnel';
@@ -54,7 +61,6 @@ import {
   createExtensionHostRequests,
   type ExtensionHostRequestsOptions,
 } from './extensionHostRequests';
-import { RequestAttention } from './requestAttention';
 import type { Session, WorkspaceRoots } from '@texra-ai/harness';
 import type {
   ProcessRuntime,
@@ -66,6 +72,23 @@ import type {
 const CHANNEL = 'ProgressViewProvider';
 
 type ProgressRunRevealResult = 'revealed' | 'missing';
+
+/** The toast that names a run when its progress view cannot be revealed:
+ *  the run's agent, model and files. */
+function launchNotice(config: AgentConfig): string {
+  const primaryInput = config.inputFiles[0];
+  const inputName = primaryInput
+    ? path.basename(primaryInput)
+    : 'selected input';
+  const { outputFiles } = config;
+  let outputPart = '';
+  if (outputFiles.length > 1) {
+    outputPart = ` (to ${outputFiles.length} files)`;
+  } else if (outputFiles[0]) {
+    outputPart = ` (to ${path.basename(outputFiles[0])})`;
+  }
+  return `"${config.agent}" is processing ${inputName} with ${config.model}${outputPart}.`;
+}
 
 /** Focus the sidebar view. */
 const showInSidebar: Effect.Effect<void, HostFailed> = executeVscodeCommand(
@@ -243,7 +266,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             showConnectModel: () => onView((view) => view.showConnectModel()),
             showProgressView: () => onView((view) => view.showProgressView()),
             revealProgress: (config) =>
-              onView((view) => revealProgressView(config, view)),
+              onView((view) => view.revealProgress(config)),
             popOutToEditor: () => onView((view) => view.popOutToEditor()),
             showInSidebar: () => showInSidebar,
           }),
@@ -260,7 +283,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         fork,
       });
       yield* Deferred.succeed(built, view);
-      yield* Effect.forkScoped(view.attention.follow(runSession));
+      yield* Effect.forkScoped(view.followAttention());
       yield* view.followWorkspace();
       yield* gui.snapshot.refresh;
       yield* Effect.logDebug('ProgressViewProvider initialized').pipe(
@@ -292,15 +315,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   /** Where this window's runs run: the service's session, or this one. */
   private readonly runSession: Session;
 
-  private readonly attention = new RequestAttention({
-    sidebar: () => this.surfaces.sidebar?.view,
-    panel: () => this.surfaces.editor?.view,
-    isViewVisible: () => this.isViewVisible(),
-    showInSidebar: () => showInSidebar,
-    showSessions: (runId) =>
-      this.bridge.surfaceAction({ kind: 'showSessions', runId }),
-    chime: () => this.chime(),
-  });
+  /** The sidebar's badge: the requests this window can answer. */
+  private badge: vscode.ViewBadge | undefined;
 
   private readonly globalState: StateStore;
   private readonly runtime: ProcessRuntime;
@@ -387,7 +403,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       enableCommandUris: true,
       localResourceRoots: this.contentProvider.localResourceRoots,
     };
-    this.attention.paint(webviewView);
+    webviewView.badge = this.badge;
     // The slot is VS Code's own synchronous entry: it hands back a resolved
     // view, so the attachment settles here.
     this.runtime.runSync(this.attach('sidebar', webviewView));
@@ -529,19 +545,124 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         port.surfaceAction({ kind: 'submit' });
         return;
       }
-      yield* this.showInSidebar();
+      yield* showInSidebar;
       this.surfaces.sidebar?.attached.surfaceAction({ kind: 'submit' });
     },
   );
 
-  public isViewVisible(): boolean {
-    const { sidebar, editor } = this.surfaces;
-    return sidebar?.view.visible === true || editor?.view.visible === true;
-  }
-
-  public showInSidebar(): Effect.Effect<void, HostFailed> {
+  /**
+   * Bring a surface forward: the tab while it is attached, else a resolved
+   * sidebar, else the focus command, the only way to open a sidebar VS Code
+   * never resolved. A reveal the user asked for takes focus; one the window
+   * makes on its own (`preserveFocus`) leaves it where the user is typing,
+   * so a focused card's single-key answers do not catch keystrokes meant
+   * for the editor.
+   */
+  private reveal(preserveFocus: boolean): Effect.Effect<void, HostFailed> {
+    const { editor, sidebar } = this.surfaces;
+    const host = (member: string, call: () => void) =>
+      Effect.try({
+        try: call,
+        catch: (cause) => hostFailed(member, cause),
+      });
+    if (editor)
+      return host('reveal', () => editor.view.reveal(undefined, preserveFocus));
+    if (sidebar) return host('reveal', () => sidebar.view.show(preserveFocus));
     return showInSidebar;
   }
+
+  /** Follow the session for the view's lifetime: the sidebar's badge counts
+   *  the requests this window can answer, a new one brings its run on
+   *  screen without taking focus, and a document task that completes, here
+   *  or in the service, plays the chime. The card stays the one place to
+   *  answer; nothing here decides a request. */
+  private followAttention(): Effect.Effect<void> {
+    // Unseeded: the first view is what was already pending when the window
+    // subscribed, which the badge shows and nothing reveals.
+    let previous: SessionView | undefined;
+    return Stream.runForEach(this.runSession.view.changes, (view) => {
+      const { requests, arrived, finished } = attentionOf(view, previous);
+      previous = view;
+      this.setBadge(requests.length);
+      // A failed or stopped task is no chime.
+      if (
+        finished.some(
+          (run) => isDocumentTaskRun(run) && run.outcome === 'completed',
+        )
+      )
+        this.chime();
+      const [first] = arrived;
+      return first ? this.bringForward(first.runId) : Effect.void;
+    });
+  }
+
+  private setBadge(count: number): void {
+    if (count === (this.badge?.value ?? 0)) return;
+    this.badge =
+      count === 0
+        ? undefined
+        : {
+            value: count,
+            tooltip: sectionCountLabel(
+              'waiting',
+              formatResultCount(count, 'request'),
+            ),
+          };
+    const sidebar = this.surfaces.sidebar?.view;
+    if (sidebar) sidebar.badge = this.badge;
+  }
+
+  /** Bring a waiting request's run on screen without taking focus. A
+   *  failure is warn-logged, so the attention follower survives to keep the
+   *  badge current. */
+  private bringForward(runId: RunId): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      if (this.visibleSurface() === undefined) yield* this.reveal(true);
+      // A surface on the New-task state opens this run, visible or just
+      // revealed; one showing a session keeps it, and its run tabs mark the
+      // one waiting.
+      this.bridge.surfaceAction({ kind: 'showSessions', runId });
+    }).pipe(
+      Effect.catch((failure) =>
+        Effect.logWarning(
+          `A waiting request could not be revealed: ${failure.message}`,
+        ).pipe(withLogChannel(CHANNEL)),
+      ),
+    );
+  }
+
+  /**
+   * Bring the progress view into view for a run this window just started
+   * (the run actions' `revealProgress`), or name the run in a toast when it
+   * cannot be made visible.
+   */
+  public readonly revealProgress = Effect.fn(
+    'ProgressViewProvider.revealProgress',
+  )({ self: this }, function* (config: AgentConfig) {
+    if (this.visibleSurface() !== undefined) return;
+    // A failed reveal is a diagnostic, not non-delivery: fall through to the
+    // visibility re-check and the toast (#10554).
+    yield* warnOnFailure(
+      this.showProgressView(),
+      'Failed to reveal the progress view',
+    );
+    // Delivery is the reveal actually becoming visible, not the reveal
+    // command resolving.
+    if (this.visibleSurface() !== undefined) return;
+    // The toast is the delivered surface when the view cannot be made
+    // visible, even if the user dismisses it without retrying the reveal.
+    const selection = yield* vscodeUi.ask('info', launchNotice(config), {
+      modal: false,
+      detail:
+        'TeXRA agents run in the background; track them under Tasks in the TeXRA panel.',
+      items: ['Show Tasks'],
+    });
+    if (!selection) return;
+    yield* warnOnFailure(
+      this.showProgressView(),
+      'Failed to retry the progress-view reveal',
+    );
+  });
 
   /**
    * "Connect a model" from outside the panel (the setup command, the status
@@ -560,7 +681,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public readonly showLauncher = Effect.fn('ProgressViewProvider.showLauncher')(
     { self: this },
     function* () {
-      yield* this.showInSidebar();
+      yield* showInSidebar;
       this.bridge.surfaceAction({ kind: 'selectNew' });
     },
   );
@@ -568,11 +689,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public readonly showProgressView = Effect.fn(
     'ProgressViewProvider.showProgressView',
   )({ self: this }, function* () {
-    if (this.surfaces.editor) {
-      this.surfaces.editor.view.reveal(vscode.ViewColumn.One);
-      return;
-    }
-    yield* this.showInSidebar();
+    const hadTab = this.surfaces.editor !== undefined;
+    yield* this.reveal(false);
+    if (hadTab) return;
     // Each surface decides from its own selection: one on the New-task
     // state opens the newest session, one showing a session keeps it.
     const newest = this.runSession.view.current().order.at(0);

@@ -9,8 +9,6 @@
  * presentation plane forks it and reports its failure, so nothing here runs
  * a fiber of its own.
  */
-import { basename } from 'node:path';
-
 import { Effect } from 'effect';
 
 import {
@@ -20,7 +18,6 @@ import {
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   toErrorMessage,
-  type AgentConfig,
   type RequestShowErrorPayload,
   type RequestShowInstructionPayload,
 } from '@texra-ai/harness/schemas';
@@ -29,7 +26,6 @@ import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import type { ShowBuilt } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { GuiWindowHost } from '@texra/controllers/session/openGuiWindow';
 import {
   INSTRUCTION_ACTION,
@@ -45,7 +41,7 @@ const CHANNEL = 'agentEventListeners';
 
 /** Warn-log a step whose failure is a diagnostic rather than non-delivery,
  *  and carry on with the step after it. */
-function warnOnFailure<E>(
+export function warnOnFailure<E>(
   program: Effect.Effect<void, E>,
   what: string,
 ): Effect.Effect<void> {
@@ -138,65 +134,6 @@ function handleRequestShowInstruction(
     ),
   );
 }
-
-/** The toast that names a run when its progress view cannot be revealed:
- *  the run's agent, model and files. */
-function launchNotice(config: AgentConfig): string {
-  const primaryInput = config.inputFiles[0];
-  const inputName = primaryInput ? basename(primaryInput) : 'selected input';
-  const { outputFiles } = config;
-  let outputPart = '';
-  if (outputFiles.length > 1) {
-    outputPart = ` (to ${outputFiles.length} files)`;
-  } else if (outputFiles[0]) {
-    outputPart = ` (to ${basename(outputFiles[0])})`;
-  }
-  return `"${config.agent}" is processing ${inputName} with ${config.model}${outputPart}.`;
-}
-
-/**
- * Bring the progress view into view for a run this window just started
- * (`HostRunActionPorts.revealProgress`), or name the run in a toast when it
- * cannot be made visible.
- */
-export const revealProgressView = Effect.fn('revealProgressView')(function* (
-  config: AgentConfig,
-  progressViewProvider: Pick<
-    ProgressViewProvider,
-    'isViewVisible' | 'showProgressView'
-  >,
-): Effect.fn.Return<void, Error> {
-  if (progressViewProvider.isViewVisible()) return;
-
-  // A failed reveal is a diagnostic, not non-delivery: fall through to the
-  // visibility re-check and, when provided, the toast handoff below (#10554).
-  yield* warnOnFailure(
-    progressViewProvider.showProgressView(),
-    'Failed to reveal the progress view',
-  );
-
-  // Delivery is the reveal actually becoming visible, not the reveal command
-  // resolving. Re-check after the command before treating the event as
-  // presented.
-  if (progressViewProvider.isViewVisible()) return;
-
-  // The toast is the delivered surface when the view cannot be made
-  // visible: a successful handoff means the run was presented even if the
-  // user dismisses it without retrying the reveal.
-  const selection = yield* vscodeUi.ask('info', launchNotice(config), {
-    modal: false,
-    detail:
-      'TeXRA agents run in the background; track them under Tasks in the TeXRA panel.',
-    items: ['Show Tasks'],
-  });
-  if (!selection) return;
-  // The toast handoff already established delivery; a failed retry is
-  // a diagnostic, not non-delivery, so it must not downgrade the event.
-  yield* warnOnFailure(
-    progressViewProvider.showProgressView(),
-    'Failed to retry the progress-view reveal',
-  );
-});
 
 /**
  * The runtime's notices this extension presents its own way; the window's
