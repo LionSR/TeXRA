@@ -30,9 +30,9 @@ import type {
   ToolEditPreview,
   ToolEditPreviewRequest,
 } from '@texra/controllers/approval/ToolEditApprovalController';
-import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
-import type { ApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
-import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
+import type { BuildDisplayFn } from '@texra/controllers/approval/latexPreview';
+import type { ApprovalTempFiles } from '@texra/controllers/approval/tempFileManager';
+import { writeApprovalTempFiles } from '@texra/controllers/approval/tempFileManager';
 import { UNAPPLIED_TOOL_EDIT } from '@ui/copy/toolEditPreview';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
