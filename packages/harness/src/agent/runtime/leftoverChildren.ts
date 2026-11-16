@@ -9,13 +9,12 @@
  */
 import { Effect } from 'effect';
 
-import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { checkpointRefusal } from '@agent/storage/resumability';
 import { endRunRows } from '@agent/storage/runLifecycle';
 import { owningCall } from '@agent/storage/runOwnership';
 import { logFailure } from '@logger/effectLog';
 import { DELIVERY_FAMILY } from '@shared/deliveryTags';
-import { RUN_OUTCOME } from '@shared/schemas';
+import { describeRefusal, RUN_OUTCOME } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
 import { SessionViewAccess, SessionLog } from '@shared/session/runHistory';
 
@@ -88,7 +87,7 @@ const closeLeftoverRun = Effect.fn('closeLeftoverRun')(function* (
     Effect.matchEffect(resumeRun(run.id, {}), {
       onSuccess: (answer) =>
         'failed' in answer && answer.failed.kind !== 'blocked'
-          ? report(describeFollowUpFailure(answer.failed.kind))
+          ? report(describeRefusal(answer.failed))
           : Effect.void,
       onFailure: told('was not resumed'),
     }).pipe(Effect.catch(told('was not reported interrupted'))),

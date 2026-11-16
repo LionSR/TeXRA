@@ -25,7 +25,6 @@ import {
 } from '@agent/index/agentCatalog';
 import type { ProjectView } from '@controllers/session/readSessionView';
 import { LaunchKeys } from '@agent/runtime/executeAgent';
-import { describeResumeRefusal } from '@agent/runtime/resumeRun';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { SessionRequests } from '@agent/runtime/requests';
@@ -45,6 +44,7 @@ import { SessionRoots } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentConfigSchema,
+  describeRefusal,
   InlinePersonaSchema,
   type RunId,
   generateRunId,
@@ -241,7 +241,7 @@ function resume(
       return yield* new ResumeRefused({
         runId,
         reason: resumed.failed,
-        message: describeResumeRefusal(resumed.failed),
+        message: describeRefusal(resumed.failed),
       });
     return runView(session, runId, resumed.activation, redirectedFrom);
   });

@@ -227,3 +227,37 @@ export const ResumeRefusalSchema = Schema.Union([
 ]);
 /** One reason a resume is refused ({@link ResumeRefusalSchema}). */
 export type ResumeRefusal = typeof ResumeRefusalSchema.Type;
+
+/**
+ * The one wording of a refused resume or message, shared by every host and
+ * tool output: a resume's refusal ({@link ResumeRefusal}), or `readFailed`,
+ * a message whose run's rows could not be read just now (a failing store),
+ * which says nothing about the run itself.
+ */
+export function describeRefusal(
+  reason: ResumeRefusal | { readonly kind: 'readFailed' },
+): string {
+  switch (reason.kind) {
+    case 'finished':
+      return 'This run has finished. Start a new agent task to continue.';
+    case 'unusableCheckpoint':
+      return "This run's saved state could not be loaded, so it cannot be continued. Delete it from history and start a new agent task.";
+    case 'earlierBuild':
+      return 'This run was written by an earlier build, and this build cannot continue it.';
+    case 'pluginUnavailable':
+      return `This run needs the ${reason.plugin} plugin, which is not loaded here (${reason.cause}). It can continue once the plugin loads.`;
+    case 'readFailed':
+      return "This run couldn't be read right now. Try again in a moment.";
+    case 'notResumable':
+      return 'This run cannot accept messages right now. Resume it, or start a new agent task.';
+    case 'blocked':
+      switch (reason.blocker) {
+        case 'agentMissing':
+          return `This task's agent, ${reason.name}, is not installed. It can continue once the agent is back.`;
+        case 'pluginOff':
+          return `This task's agent comes from the ${reason.name} plugin, which is off. It can continue once the plugin is on.`;
+        case 'pluginUntrusted':
+          return `This task's agent comes from the ${reason.name} plugin, which is not trusted as it is now. It can continue once the plugin is reviewed.`;
+      }
+  }
+}

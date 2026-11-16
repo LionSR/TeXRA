@@ -1687,22 +1687,10 @@ interface RunInbox {
   /** Deliver `item` to the run. */
   readonly send: (
     item: InboxItem,
-    options?: RunInboxSendOptions,
   ) => Effect.Effect<SubmitFollowUpResult, Error>;
   /** Hear the run take no more input, or its session's inbox close;
    *  returns the detach. */
   readonly onClosed: (listener: () => void) => () => void;
-}
-```
-
-## RunInboxSendOptions
-
-How one input is delivered to a run.
-
-```ts
-interface RunInboxSendOptions {
-  /** Only from the run's parent, by its rows (`SendOptions.fromParent`). */
-  readonly fromParent?: boolean;
 }
 ```
 

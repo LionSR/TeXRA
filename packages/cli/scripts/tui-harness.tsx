@@ -41,7 +41,6 @@ import {
   SessionRequests,
 } from '@agent/runtime/requests';
 import { queuedRow } from '@agent/followUp/followUpMessages';
-import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
@@ -87,6 +86,7 @@ import {
   type SessionRowDraft,
   type UserQuestionRequest,
   aggregateTarget,
+  describeRefusal,
   type ToolEditContent,
 } from '@shared/schemas';
 import type { DraftBlob } from '@shared/session/historyTurns';
@@ -1719,7 +1719,7 @@ function handleHarnessSubmit(line: string): void {
     // The session refuses a message to an agent that takes none.
     if (!acceptsFollowUp(focused)) {
       appendHarnessAssistantTranscript(
-        describeFollowUpFailure('notResumable'),
+        describeRefusal({ kind: 'notResumable' }),
         focused.id,
       );
       return;
