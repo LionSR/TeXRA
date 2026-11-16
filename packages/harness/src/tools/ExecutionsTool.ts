@@ -102,7 +102,9 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
         })
         .join(',');
     const sent = (view: SessionView): readonly string[] =>
-      (view.queuedFollowUps.get(context.runId) ?? []).map((f) => f.followUpId);
+      (view.runs.get(context.runId)?.queuedFollowUps ?? []).map(
+        (f) => f.followUpId,
+      );
     const started = phases(initial);
     const held = new Set(sent(initial));
     const { changes, ref } = yield* SessionViewAccess;

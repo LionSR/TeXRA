@@ -35,7 +35,9 @@ export const ancestorIds = Effect.fnUntraced(function* <E>(
  * for one that is not there; a parent that is not there ends its line.
  */
 export const ancestryRows = Effect.fnUntraced(function* <
-  Rows extends { readonly parent: { readonly id: RunId } | null },
+  Rows extends {
+    readonly start: { readonly parent: { readonly id: RunId } | null } | null;
+  },
   E,
 >(
   read: (runId: RunId) => Effect.Effect<Rows | null, E>,
@@ -47,7 +49,7 @@ export const ancestryRows = Effect.fnUntraced(function* <
       const own = yield* read(id);
       if (own === null) break;
       rows.set(id, own);
-      id = own.parent?.id ?? null;
+      id = own.start?.parent?.id ?? null;
     }
   }
   return rows;

@@ -150,7 +150,8 @@ const runGoal = (session: LocalSession, opening: string) =>
         conversation.view,
         (current) =>
           ended(current) !== undefined &&
-          (current.queuedFollowUps.get(conversation.runId)?.length ?? 0) > 0,
+          (current.runs.get(conversation.runId)?.queuedFollowUps.length ?? 0) >
+            0,
       ),
     );
     const goal = ended(session.view.current());

@@ -17,7 +17,7 @@ import type {
   FollowUpContent,
   ScriptDeliverySummary,
 } from '@shared/schemas';
-import { formatScriptTally } from '@shared/transcript/scriptCall';
+import { formatScriptTally, tallyTotal } from '@shared/transcript/scriptCall';
 import {
   formatCompactDuration,
   formatCostUsd,
@@ -123,7 +123,7 @@ function truncatedResultResponsePreview(response: string): string {
  *  with a failed, stopped, or unreached call says so in its marker too. */
 function formatScriptDeliverySummary(summary: ScriptDeliverySummary): string {
   const { tally } = summary;
-  const clean = tally.ok === tally.total;
+  const clean = tally.ok === tallyTotal(tally);
   let marker = '✗';
   if (summary.outcome === 'completed') marker = clean ? '✓' : '!';
   const facts = [

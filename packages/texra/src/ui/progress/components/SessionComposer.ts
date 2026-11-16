@@ -535,9 +535,9 @@ export class SessionComposer extends LitElement {
     if (run && !run.takesFollowUps) return nothing;
     const compact = this.compact;
     const readOnly = run != null && isUnreadable(run);
-    const queued = (
-      run ? (this.view?.queuedFollowUps.get(run.id) ?? []) : []
-    ).map((followUp) => followUp.text);
+    const queued = (run?.queuedFollowUps ?? []).map(
+      (followUp) => followUp.text,
+    );
     const text = this.text;
     const hasText = text.trim() !== '';
     // Send and Cmd+Alt+E share `canSendFollowUp`; the launcher needs text.

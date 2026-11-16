@@ -98,7 +98,7 @@ export function ConversationRegion({
   const queuedFollowUpMessages = (
     activeRunId === undefined
       ? []
-      : (view.queuedFollowUps.get(activeRunId) ?? [])
+      : (view.runs.get(activeRunId)?.queuedFollowUps ?? [])
   ).map((followUp) => followUp.text);
   const queuedFollowUpPanelWanted =
     !foregroundOpen && queuedFollowUpMessages.length > 0;

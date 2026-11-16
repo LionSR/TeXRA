@@ -6,8 +6,7 @@ describe('normalizeToolUse (packages/harness/src/shared/toolUse.ts)', () => {
   // Regression: a previous inline refactor of `formatOutputText` dropped
   // the explicit `null` short-circuit that `stringifyWithLanguage` had,
   // so `output: null` fell through to `yaml.stringify(null)` and surfaced
-  // the literal text "null" in the rendered output section. Verify both
-  // the top-level and nested cases stay empty.
+  // the literal text "null" in the rendered output section.
   it('renders null output as empty text, not the string "null"', () => {
     const topLevel = normalizeToolUse({
       toolName: 'Bash',
@@ -16,13 +15,5 @@ describe('normalizeToolUse (packages/harness/src/shared/toolUse.ts)', () => {
       status: 'completed',
     });
     expect(topLevel?.outputText).toBe('');
-
-    const nested = normalizeToolUse({
-      toolName: 'Bash',
-      input: { command: 'true' },
-      output: { output: null, summary: 'ran ok' },
-      status: 'completed',
-    });
-    expect(nested?.outputText).toBe('');
   });
 });

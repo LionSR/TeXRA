@@ -7,7 +7,7 @@
  * reads and writes around them are this module's.
  */
 import * as path from 'node:path';
-import { entryTypeIn } from '@texra-ai/harness/node';
+import { entryTypeIn, readNormalizedFile } from '@texra-ai/harness/node';
 import type { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 
 import { Effect, FileSystem } from 'effect';
@@ -125,8 +125,7 @@ const documentsBySimilarity = Effect.fn('replyDocuments.bySimilarity')(
     const files = yield* Effect.forEach(
       baseFiles.slice(0, expected.names.length),
       (loc, idx) =>
-        fs.readFileString(loc.absolutePath).pipe(
-          Effect.map((text: string) => text.replaceAll('\r\n', '\n')),
+        readNormalizedFile(fs, loc.absolutePath).pipe(
           // An unreadable base file becomes '': it will score near-zero
           // similarity against any real fenced block rather than aborting
           // the whole recovery pass. The cause is named, so an empty
@@ -192,9 +191,10 @@ export const extractReplyDocuments = Effect.fn('replyDocuments.extract')(
     const { expected } = ctx;
     const { logger } = ctx.run;
     const fs = yield* FileSystem.FileSystem;
-    const rawOutputContent = (yield* fs.readFileString(
+    const rawOutputContent = yield* readNormalizedFile(
+      fs,
       outputLocation.absolutePath,
-    )).replaceAll('\r\n', '\n');
+    );
     const missing: string[] = [];
     // The scratchpad is reasoning, not output: a tag it mentions must be
     // neither counted nor extracted as a document.
@@ -382,9 +382,10 @@ export const normalizeReplyXml = Effect.fn('replyDocuments.normalizeReplyXml')(
     logger.debug(
       `Ensuring correct XML structure: ${fileLocation.absolutePath}`,
     );
-    const originalContent = (yield* fs.readFileString(
+    const originalContent = yield* readNormalizedFile(
+      fs,
       fileLocation.absolutePath,
-    )).replaceAll('\r\n', '\n');
+    );
     const replaced = replacementEngine.applyToXmlContent(
       originalContent,
       config,

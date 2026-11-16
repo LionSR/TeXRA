@@ -18,8 +18,8 @@ import {
   type RunOutcome,
   type ToolResultPayload,
   type ScriptDeliverySummary,
-  type ScriptTally,
 } from '@shared/schemas';
+import { tallyTotal } from '@shared/transcript/scriptCall';
 
 /** What became of one call a script issued, as its rows say. */
 type ScriptCallOutcome =
@@ -207,12 +207,11 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
         call.status satisfies never;
     }
   }
-  const tally: ScriptTally = { total: calls.length, ...counts };
   return {
     name,
     outcome,
     sectionCount: new Set(calls.flatMap(({ section }) => section ?? [])).size,
-    tally,
+    tally: counts,
     costUsd: view.runs.get(runId)?.treeUsage.cost ?? 0,
     durationMs: Math.max(0, Math.round(now - startedAt)),
     files: deliveredFiles(calls),
@@ -286,6 +285,6 @@ export const scriptStopNotice = Effect.fn('scriptRun.stopNotice')(function* (
   return {
     ...scriptDelivery(runId, title),
     summary,
-    message: `The script '${title}' was stopped after ${summary.tally.ok} of ${summary.tally.total} calls. ${resumeHint(runId)}`,
+    message: `The script '${title}' was stopped after ${summary.tally.ok} of ${tallyTotal(summary.tally)} calls. ${resumeHint(runId)}`,
   };
 });

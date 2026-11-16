@@ -43,7 +43,7 @@ layer(
         const facts = yield* Context.get(session, SessionLog).facts(
           Schema.decodeUnknownSync(RunIdSchema)('aaa010'),
         );
-        expect(facts?.parent?.id).toBe('aaa0ff');
+        expect(facts?.start?.parent?.id).toBe('aaa0ff');
         const view = yield* Context.get(session, SessionViewAccess).read([]);
         expect(
           view.runs.get(Schema.decodeUnknownSync(RunIdSchema)('aaa010'))

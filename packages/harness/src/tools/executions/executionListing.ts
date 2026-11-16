@@ -60,7 +60,7 @@ export const listExecutions = Effect.fn('listExecutions')(function* (
   }
 
   // Unread input is the live fold's: the listing tier carries no follow-ups.
-  const { queuedFollowUps } = SubscriptionRef.getUnsafe(access.ref);
+  const live = SubscriptionRef.getUnsafe(access.ref).runs;
   const asking = caller === undefined ? undefined : view.runs.get(caller);
   const relationTo = (run: RunView): string | undefined => {
     if (run.id === caller) return '(you)';
@@ -68,7 +68,7 @@ export const listExecutions = Effect.fn('listExecutions')(function* (
     return noun === undefined ? undefined : `(your ${noun})`;
   };
   const marks = (run: RunView): string => {
-    const unread = queuedFollowUps.get(run.id)?.length ?? 0;
+    const unread = live.get(run.id)?.queuedFollowUps.length ?? 0;
     return [relationTo(run), unread > 0 ? `unread=${unread}` : undefined]
       .filter(Predicate.isNotUndefined)
       .join('  ');

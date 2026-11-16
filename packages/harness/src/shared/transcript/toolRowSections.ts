@@ -515,9 +515,10 @@ const SECTION_BUILDERS: readonly {
   readonly build: (ctx: SectionContext) => ToolSection[];
   /**
    * Set when this builder's file link is what makes the generic output block
-   * redundant. `outputSuppression` reads it rather than re-deriving the tool
-   * kind, because these matchers also require a file path: a `read` call whose
-   * input carries no path builds no link, and its output must still be shown.
+   * redundant. `rowOutput` (`toolRowModel.ts`) reads it rather than
+   * re-deriving the tool kind, because these matchers also require a file
+   * path: a `read` call whose input carries no path builds no link, and its
+   * output must still be shown.
    */
   readonly fileLinkKind?: 'read' | 'write';
 }[] = [

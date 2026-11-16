@@ -287,7 +287,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // title), not its `phase` (an earlier build's title would be silently
   // dropped).
   'tool.start': { version: 4, listing: 'none' },
-  'tool.end': { ...V1, listing: 'none' },
+  // v2: an agent-CLI card states what its tool last said as a typed `log`,
+  // not as an untyped `result` (an earlier build's card would close with no
+  // output, summary or error).
+  'tool.end': { version: 2, listing: 'none' },
   // v2: the counts carry `TurnUsage`'s names (`cachedInputTokens`,
   // `cacheWriteTokens`, `toolUsePromptTokens`), and `elapsedTime` is gone (an
   // earlier build's cache counts would read as absent).

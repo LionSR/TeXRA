@@ -124,9 +124,14 @@ function surface(view: SessionView, ...actions: SurfaceAction[]): Surface {
 
 /** The view with two run grants on the child: the header's read-only chips. */
 function withChildGrants(view: SessionView): SessionView {
-  const policy = new Map(view.policy);
-  policy.set(CHILD, { own: { toolEdit: 'on', bash: 'on' }, goal: [] });
-  return { ...view, policy };
+  const runs = new Map(view.runs);
+  const child = runs.get(CHILD);
+  if (child !== undefined)
+    runs.set(CHILD, {
+      ...child,
+      grants: { own: { toolEdit: 'on', bash: 'on' }, goal: [] },
+    });
+  return { ...view, runs };
 }
 
 function sidebar(

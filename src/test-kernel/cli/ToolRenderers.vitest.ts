@@ -32,7 +32,6 @@ function toolUse(
     seqNo: 1,
     timestamp: 0,
     level: 'info',
-    toolUse: normalized,
     model: toolRowModel(normalized),
     log: {
       toolName: normalized.toolName,

@@ -1729,7 +1729,7 @@ function appendHarnessStatus(): void {
       activeChildSessions: runningChildCount(view, run),
       // The harness never commits a `skills.snapshot` row.
       activeSkills: [],
-      queuedFollowUpMessages: (view.queuedFollowUps.get(runId) ?? []).map(
+      queuedFollowUpMessages: (view.runs.get(runId)?.queuedFollowUps ?? []).map(
         (followUp) => followUp.text,
       ),
       cost: taskCostStatus(view, run),

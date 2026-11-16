@@ -115,15 +115,13 @@ const approvalsUnder = Effect.fn('approvalsUnder')(function* (
   // The grants as they will be once `next` is recorded, over each reached
   // run's committed grants, not the view's, which can lag a grant a run
   // turned off a moment ago.
-  const policy = new Map(view.policy);
+  const runs = new Map(view.runs);
   for (const id of reached) {
-    const grants = (yield* log.facts(id))?.grants;
-    if (grants != null) policy.set(id, grants);
+    const grants = id === runId ? next : (yield* log.facts(id))?.grants;
+    const run = runs.get(id);
+    if (grants != null && run !== undefined) runs.set(id, { ...run, grants });
   }
-  const after: ApprovalGrantSource = {
-    runs: view.runs,
-    policy: policy.set(runId, next),
-  };
+  const after: ApprovalGrantSource = { runs };
   const rows: SessionRowDraft[] = [];
   for (const id of reached) {
     const covering = turnedOn.filter(
@@ -195,14 +193,14 @@ export const sessionApprovals: Effect.Effect<
       const next = afterActivation(
         source,
         runId,
-        source.policy.get(runId) ?? NO_APPROVAL_GRANTS,
+        source.runs.get(runId)?.grants ?? NO_APPROVAL_GRANTS,
       );
       return next === null ? [] : [policyRow(runId, next)];
     }),
     change: (runId, edit) => {
       // The view has applied every change by the time it returns, so a
       // change the view already shows writes nothing.
-      const shown = view().policy.get(runId);
+      const shown = view().runs.get(runId)?.grants;
       if (shown !== undefined && sameGrants(shown, edit(shown)))
         return Effect.void;
       return log.transact((tx) =>

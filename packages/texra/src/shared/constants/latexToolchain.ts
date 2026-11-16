@@ -181,7 +181,7 @@ interface LatexToolEntry {
    * as "a compiler is available".
    */
   readonly drivesCompile?: true;
-  /** Probed by the dependency banner (`checkCoreDependencies`). */
+  /** Probed by the dependency banner (`missingDependencyTools`). */
   readonly core?: true;
 }
 
@@ -193,8 +193,7 @@ interface LatexToolEntry {
  * surfaces that report from that probe, none restating a name: the doctor,
  * the setup assistant (`probe_environment`), the settings view's LaTeX
  * status (`@texra/controllers/settingsView/LatexToolingController`), and the
- * dependency banner (`checkCoreDependencies` in
- * `packages/extension/src/progressView/checkCoreDependencies.ts`).
+ * dependency banner (`missingDependencyTools`, beside the probe).
  *
  * The order is the doctor's row order, which is user-visible CLI output.
  *

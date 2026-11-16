@@ -34,12 +34,14 @@ that carries user feedback (`tool.error` is returned before the decode).
 
 Landed: `toolName` is required (every producer already wrote it).
 
-Left: give the card the result as a typed field. `tool.end` would carry
-`result: SettledToolResult` for a call with a run history and the flat fields
-only for an agent-CLI card; the export and the script stage read `result`
-without decoding `output`, and `normalizeToolUse` loses `firstTrimmed` and
-`extractOutputContent`. `tool.end` is stored for agent-CLI children, so the
-change bumps its row version.
+Landed 2026-11-16: the card carries the result as a typed field. `tool.end`
+carries `result` (the stored `FinishedToolResult`) for a call with a run
+history and `log` (`ToolCardEndSchema`, what the tool last stated) for an
+agent-CLI card, with no `files` beside them (they were `result.edits`
+restated). The transcript holds the card as a `ToolCallLog`; the export and
+the script stage read `result` without decoding, `normalizeToolUse` has no
+nested fallback, and `decodeToolUseLog` is gone (the row schema decodes the
+card). `tool.end` is version 2.
 
 ## 2. `ExecutedToolResult`: commit instructions on the result
 
