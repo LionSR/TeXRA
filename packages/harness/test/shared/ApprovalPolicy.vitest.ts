@@ -1,50 +1,65 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  decideHumanInputRequest,
-  decideRetryApproval,
-  decideApproval,
-} from '@shared/approvalPolicy';
+import { decideApproval } from '@shared/approvalPolicy';
+
+const POLICY_DENIED = 'Denied by the approval policy.';
+const UNPRESENTABLE =
+  'Interactive approval requires a prompt; this run cannot present one.';
 
 describe('TeXRA approval policy', () => {
   it.each([
-    ['never', true, true, { deny: 'Denied by the approval policy.' }],
-    ['ask', false, false, { deny: expect.stringContaining('a prompt') }],
+    ['never', true, true, { action: 'deny', reason: POLICY_DENIED }],
+    ['ask', false, false, { action: 'deny', reason: UNPRESENTABLE }],
     ['ask', true, false, 'allow'],
   ] as const)(
-    'decides %s with bypass=%s, canPresent=%s as %j',
-    (policy, scopedBypass, canPresent, expected) => {
-      expect(decideApproval({ policy, scopedBypass, canPresent })).toEqual(
-        expected,
-      );
+    'decides an operation under %s with granted=%s, canPresent=%s as %j',
+    (policy, granted, canPresent, expected) => {
+      expect(
+        decideApproval({
+          policy,
+          canPresent,
+          ask: { kind: 'operation', granted, hook: undefined },
+        }),
+      ).toEqual(expected);
     },
   );
 
   it.each([
     [
-      { policy: 'yolo', canPresent: true, isCredentialFailure: false },
-      'automatic attempts',
+      { policy: 'yolo', canPresent: true, credentialFailure: false },
+      'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
     ],
     [
-      { policy: 'yolo', canPresent: true, isCredentialFailure: true },
-      'credential',
+      { policy: 'yolo', canPresent: true, credentialFailure: true },
+      'Retry skipped: credential exhausted or unauthorized.',
     ],
     [
-      { policy: 'ask', canPresent: false, isCredentialFailure: false },
-      'a prompt',
+      { policy: 'ask', canPresent: false, credentialFailure: false },
+      UNPRESENTABLE,
     ],
-  ] as const)('decideRetryApproval(%j) denies: %s', (input, message) => {
-    expect(decideRetryApproval(input)).toEqual({
-      deny: expect.stringContaining(message),
-    });
-  });
+  ] as const)(
+    'denies a retry (%j) with %j',
+    ({ policy, canPresent, credentialFailure }, reason) => {
+      expect(
+        decideApproval({
+          policy,
+          canPresent,
+          ask: { kind: 'retry', credentialFailure },
+        }),
+      ).toEqual({ action: 'deny', reason });
+    },
+  );
 
   it.each([
-    [{ policy: 'yolo', canPresent: true }, 'yolo mode'],
-    [{ policy: 'ask', canPresent: false }, 'a prompt'],
-  ] as const)('decideHumanInputRequest(%j) denies: %s', (input, message) => {
-    expect(decideHumanInputRequest(input)).toEqual({
-      deny: expect.stringContaining(message),
+    [
+      { policy: 'yolo', canPresent: true },
+      'User question requires human input; yolo mode cannot synthesize an answer.',
+    ],
+    [{ policy: 'ask', canPresent: false }, UNPRESENTABLE],
+  ] as const)('denies a question (%j) with %j', (input, reason) => {
+    expect(decideApproval({ ...input, ask: { kind: 'question' } })).toEqual({
+      action: 'deny',
+      reason,
     });
   });
 });

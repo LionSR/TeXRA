@@ -49,11 +49,9 @@ import {
   type ApprovalBypassKind,
 } from '@shared/approvalBypassKind';
 import {
-  decideHumanInputRequest,
-  decideRetryApproval,
   decideApproval,
-  UNPRESENTABLE,
-  type ApprovalAnswer,
+  type ApprovalAsk,
+  type ApprovalDecision,
   type ApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
@@ -93,27 +91,44 @@ const policyOwners = Effect.all({
 });
 type PolicyOwners = Effect.Success<typeof policyOwners>;
 
-/** What the session's host can answer, read live: a host attached after a
- *  run started still answers for it. */
-const canPresent = ({ interactions }: PolicyOwners): boolean =>
-  !interactions.approvalPromptsUnavailable;
+/** The policy's answer for `ask` on `runId`, under what the session's host
+ *  can answer, read live: a host attached after a run started still
+ *  answers for it. */
+const policyAnswer = (
+  owners: {
+    readonly approvals: Pick<SessionApprovals, 'policy'>;
+    readonly interactions: Pick<
+      Interactions['Service'],
+      'approvalPromptsUnavailable'
+    >;
+  },
+  runId: RunId,
+  ask: ApprovalAsk,
+  policy = owners.approvals.policy(runId),
+): ApprovalDecision =>
+  decideApproval({
+    policy,
+    canPresent: !owners.interactions.approvalPromptsUnavailable,
+    ask,
+  });
 
-/** The policy's answer for a run's approval-gated tools under what the
- *  host can answer: whether a step withholds them, and whether the run's
- *  work runs unasked ({@link workAutoApproved}). */
+/** The policy's answer for a run's approval-gated tools: whether a step
+ *  withholds them, and whether the run's work runs unasked
+ *  ({@link workAutoApproved}). A run whose delegated work is bypassed (an
+ *  Auto-approve launch) is asked nothing: every approval it would open is
+ *  granted. */
 const decideExecutable = (
   owners: PolicyOwners,
   runId: RunId,
   policy = owners.approvals.policy(runId),
-  // A run whose delegated work is bypassed (an Auto-approve launch) is
-  // asked nothing: every approval it would open is granted.
-  scopedBypass = owners.approvals.bypass(runId, 'superYolo') !== null,
-): ApprovalAnswer =>
-  decideApproval({
+  granted = owners.approvals.bypass(runId, 'superYolo') !== null,
+): ApprovalDecision =>
+  policyAnswer(
+    owners,
+    runId,
+    { kind: 'operation', granted, hook: undefined },
     policy,
-    scopedBypass,
-    canPresent: canPresent(owners),
-  });
+  );
 
 /** Whether `runId`'s work runs unasked under the session's own policy
  *  ({@link decideExecutable} allows): what a plugin hook's `permission_mode`
@@ -153,41 +168,22 @@ const answererOf = (
 ): AnsweredBy =>
   operation === undefined || hook === 'ask' ? 'person' : OPERATIONS[operation];
 
-/**
- * The one reading of the policy for a request `answeredBy` names, with what
- * the call's `PreToolUse` hooks said: `never`, or an ask nobody can answer,
- * denies whatever a hook said; else a hook's `ask` asks and its `allow`
- * answers what the policy would ask; a grant that answers it approves it.
- */
-const permissionOf = (
-  owners: {
-    readonly approvals: Pick<SessionApprovals, 'policy' | 'bypass'>;
-    readonly interactions: Pick<
-      Interactions['Service'],
-      'approvalPromptsUnavailable'
-    >;
-  },
+/** What a request about an operation asks the policy: whether a grant
+ *  answers the request `answeredBy` names, and what the call's
+ *  `PreToolUse` hooks said. */
+const operationAsk = (
+  approvals: Pick<SessionApprovals, 'bypass'>,
   runId: RunId,
   answeredBy: AnsweredBy,
   hook: HookAnswer,
-): ReturnType<ApprovalsWithPermission['permission']> => {
-  const { approvals, interactions } = owners;
-  const canPresent = !interactions.approvalPromptsUnavailable;
-  const decision = decideApproval({
-    policy: approvals.policy(runId),
-    scopedBypass: grantAnswering(
-      (kind) => approvals.bypass(runId, kind) !== null,
-      answeredBy,
-    ),
-    canPresent,
-  });
-  const denied =
-    typeof decision === 'object'
-      ? decision
-      : hook === 'ask' && !canPresent && UNPRESENTABLE;
-  if (denied) return { action: 'deny', reason: denied.deny };
-  return hook ?? (decision === 'allow' ? 'allow' : 'ask');
-};
+): ApprovalAsk => ({
+  kind: 'operation',
+  granted: grantAnswering(
+    (kind) => approvals.bypass(runId, kind) !== null,
+    answeredBy,
+  ),
+  hook,
+});
 
 /** The session's one reading of the policy for an operation of a run
  *  before a request about it opens (`Approvals.permission`): what such a
@@ -197,19 +193,19 @@ export const sessionPermission =
     approvals: Pick<SessionApprovals, 'policy' | 'bypass'>,
     interactions: Interactions['Service'],
   ): ApprovalsWithPermission['permission'] =>
-  (runId, operation, hook) =>
-    permissionOf(
+  (runId, operation, hook) => {
+    const answer = policyAnswer(
       { approvals, interactions },
       runId,
-      answererOf(operation, hook),
-      hook,
+      operationAsk(approvals, runId, answererOf(operation, hook), hook),
     );
+    return answer === 'present' ? 'ask' : answer;
+  };
 
 /** The policy's answer for one request, or undefined when a person
- *  answers: a plan, a command, an edit or a proposal follows the one
- *  reading ({@link permissionOf}), so a grant that answers it approves it;
- *  a question or a retry is denied under `yolo` rather than answered on a
- *  person's behalf. */
+ *  answers: a plan, a command, an edit or a proposal is an operation a
+ *  grant may answer; a question or a retry is denied under `yolo` rather
+ *  than answered on a person's behalf; a plugin's request is a person's. */
 function answerFor(
   owners: PolicyOwners,
   runId: RunId,
@@ -217,36 +213,28 @@ function answerFor(
   answeredBy: AnsweredBy,
   hook: HookAnswer,
 ): RequestDecision | undefined {
-  const policy = owners.approvals.policy(runId);
-  switch (payload.kind) {
-    case 'planApproval':
-    case 'proposal':
-    case 'toolEdit':
-    case 'bash': {
-      const answer = permissionOf(owners, runId, answeredBy, hook);
-      if (answer === 'ask') return undefined;
-      return answer === 'allow' ? { action: 'approve' } : answer;
+  const ask = ((): ApprovalAsk | undefined => {
+    switch (payload.kind) {
+      case 'planApproval':
+      case 'proposal':
+      case 'toolEdit':
+      case 'bash':
+        return operationAsk(owners.approvals, runId, answeredBy, hook);
+      case 'userQuestion':
+        return { kind: 'question' };
+      case 'retry':
+        return {
+          kind: 'retry',
+          credentialFailure: payload.data.credentialSwitch != null,
+        };
+      case 'plugin':
+        return undefined;
     }
-    case 'userQuestion': {
-      const decision = decideHumanInputRequest({
-        policy,
-        canPresent: canPresent(owners),
-      });
-      if (decision === 'present') return undefined;
-      return { action: 'deny', reason: decision.deny };
-    }
-    case 'retry': {
-      const decision = decideRetryApproval({
-        policy,
-        canPresent: canPresent(owners),
-        isCredentialFailure: payload.data.credentialSwitch != null,
-      });
-      if (decision === 'present') return undefined;
-      return { action: 'deny', reason: decision.deny };
-    }
-    case 'plugin':
-      return undefined;
-  }
+  })();
+  if (ask === undefined) return undefined;
+  const answer = policyAnswer(owners, runId, ask);
+  if (answer === 'present') return undefined;
+  return answer === 'allow' ? { action: 'approve' } : answer;
 }
 
 /** Whether a step's approval-gated tools are withheld, read live from its

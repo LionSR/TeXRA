@@ -131,9 +131,9 @@ Exports: 163
 - `SessionCloseReport` — `type SessionCloseReport = typeof SessionCloseReportSchema.Type; ≡ { readonly abandoned: readonly string[]; readonly settled: boolean; }`
 - `sessionFsLayer` — `function sessionFsLayer: (roots: Pick<WorkspaceRoots, "storage" | "workspace">) => Layer<StorageFs | WorkspaceFs, never, FileSystem | Path>`
 - `setModelEnabled` — `function setModelEnabled: (input: { readonly enabled: boolean; readonly model: string; readonly stores: Pick<SettingsStores, "config" | "globalState">; }) => Effect<readonly string[], StateWriteFailed, never>`
-- `SkillIssueCode` — `type SkillIssueCode = 'duplicate_name' | 'duplicate_realpath' | 'invalid_frontmatter' | 'invalid_name' | 'invalid_source' | 'missing_source' | 'missing_description' | 'name_mismatch' | 'read_error' | 'source_read_error'; ≡ SkillIssueCode`
+- `SkillIssueCode` — `type SkillIssueCode = 'source_error' | 'read_error'; ≡ SkillIssueCode`
 - `SkillIssueSeverity` — `type SkillIssueSeverity = 'error' | 'warning'; ≡ SkillIssueSeverity`
-- `SkillLoadIssue` — `interface SkillLoadIssue { severity: SkillIssueSeverity; code: SkillIssueCode; message: string; path?: string; name?: string; }`
+- `SkillLoadIssue` — `interface SkillLoadIssue { severity: SkillIssueSeverity; code?: SkillIssueCode; message: string; path?: string; name?: string; }`
 - `SkillRoots` — `type SkillRoots = SettingsStores & { readonly workspace: string | undefined; readonly storageRoot: string; }; ≡ SkillRoots`
 - `Skills` — `const Skills: Readonly<{ readonly display: (roots: SkillRoots) => Effect<{ issues: { readonly message: string; readonly path?: string | undefined; }[]; skills: { readonly description: string; readonly enabled: boolean; readonly label: string; readonly name: string; readonly path: string; readonly scope: "bundled" | "custom" | "interop" | "project" | "user"; readonly sourcePath: string; }[]; }, Error, FileSystem>; readonly enabled: (roots: SkillRoots, options?: SkillSourceOptions | undefined) => Effect<{ issues: SkillLoadIssue[]; skills: EnabledSkill[]; }, Error, FileSystem>; }>`
 - `SkillSourceOptions` — `interface SkillSourceOptions { readonly additionalPaths?: readonly string[]; }`

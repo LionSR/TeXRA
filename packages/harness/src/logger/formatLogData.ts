@@ -77,8 +77,9 @@ function isPlainObject(value: object): value is Record<string, unknown> {
 }
 
 /** A failed Effect's `Cause` as the error it raised, so a producer attaches
- * the cause it caught and this module decides how a failure reads. */
-const raisedBy = (value: unknown): unknown =>
+ * the cause it caught and this module decides how a failure reads. A run's
+ * trace stores its log payloads through the same reading. */
+export const raisedBy = (value: unknown): unknown =>
   Cause.isCause(value) ? Cause.squash(value) : value;
 
 /**

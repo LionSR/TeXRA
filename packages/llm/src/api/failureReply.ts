@@ -7,6 +7,7 @@
 import { Option, Predicate, Schema } from 'effect';
 
 // Local imports
+import { sortedJson } from './continuation.js';
 import type { ModelError } from '../errors.js';
 
 /** A loosely typed object off an SDK error or a reply body. */
@@ -92,16 +93,6 @@ const statusFromBody = (body: unknown): number | undefined =>
     .map((value) => STATUS_BY_ERROR_TYPE.get(value))
     .find(Predicate.isNotUndefined);
 
-/** Sorted-key JSON, so a body re-serialized in another key order still matches. */
-function canonical(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-  if (!isFields(value)) return JSON.stringify(value) ?? 'null';
-  const entries = Object.keys(value)
-    .toSorted()
-    .map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`);
-  return `{${entries.join(',')}}`;
-}
-
 /** Whether `text` is the body serialized, whole or as its embedded JSON. */
 function serializes(text: string, body: unknown): boolean {
   if (typeof body === 'string')
@@ -116,7 +107,7 @@ function serializes(text: string, body: unknown): boolean {
     return (
       start >= 0 &&
       end > start &&
-      canonical(parsedJson(text.slice(start, end + 1))) === canonical(body)
+      sortedJson(parsedJson(text.slice(start, end + 1))) === sortedJson(body)
     );
   } catch {
     // A cyclic body is not one an SDK serialized into its message.

@@ -105,6 +105,16 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
 });
 
 /**
+ * Open the user-level config store under `storageRoot`, which every project
+ * of the process reads beneath its own stores. Like the others it follows
+ * its file, so a value another window or terminal saves is read.
+ */
+export const openTexraGlobalConfigStore = (storageRoot: string) =>
+  JsonStore.open(
+    path.join(resolveGlobalStoragePath(storageRoot), TEXRA_CONFIG_FILE_NAME),
+  );
+
+/**
  * Open both stores backing a host's {@link JsonConfigProvider} for the
  * workspace `workspaceRoot` under `storageRoot`. Neither store creates
  * anything on open, so a caller that must not create a directory under the
@@ -122,12 +132,7 @@ export const openTexraConfigStores = Effect.fn(
   const [{ workspace, local, warnings }, global] = yield* Effect.all(
     [
       openTexraWorkspaceConfigStores(catalog, storageRoot, workspaceRoot),
-      JsonStore.open(
-        path.join(
-          resolveGlobalStoragePath(storageRoot),
-          TEXRA_CONFIG_FILE_NAME,
-        ),
-      ),
+      openTexraGlobalConfigStore(storageRoot),
     ],
     { concurrency: 'unbounded' },
   );

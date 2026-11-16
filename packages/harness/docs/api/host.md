@@ -2187,18 +2187,14 @@ function setModelEnabled(input: {
 
 ## SkillIssueCode
 
+What a reader branches on, where it does: `source_error` is a skill source
+that is missing, not the expected kind, or unreadable (the CLI's usage
+exit); `read_error` is a directory or file that could not be read, which
+becomes a `source_error` when it is a required source's own path. Every
+other issue says what it is in its message.
+
 ```ts
-type SkillIssueCode =
-  | 'duplicate_name'
-  | 'duplicate_realpath'
-  | 'invalid_frontmatter'
-  | 'invalid_name'
-  | 'invalid_source'
-  | 'missing_source'
-  | 'missing_description'
-  | 'name_mismatch'
-  | 'read_error'
-  | 'source_read_error';
+type SkillIssueCode = 'source_error' | 'read_error';
 ```
 
 ## SkillIssueSeverity
@@ -2212,7 +2208,7 @@ type SkillIssueSeverity = 'error' | 'warning';
 ```ts
 interface SkillLoadIssue {
   severity: SkillIssueSeverity;
-  code: SkillIssueCode;
+  code?: SkillIssueCode;
   message: string;
   path?: string;
   name?: string;

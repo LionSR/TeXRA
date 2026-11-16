@@ -347,7 +347,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v19: a failed attempt has no `next: decline`: a used-up plan opens the
   // retry request, whose answer declines the route (an earlier build's
   // row would fail as damaged).
-  'model.message': { version: 19, listing: 'none' },
+  // v20: a completed turn has no `kind` or `modelFingerprint`, and a
+  // Responses anchor no `kind` (an earlier build reads this build's turn as
+  // damaged without them).
+  'model.message': { version: 20, listing: 'none' },
   // v2: the causes are `compaction` and `fork` alone (an earlier build's edit
   // of another cause would fail its run as damaged rather than read as that
   // build's).
