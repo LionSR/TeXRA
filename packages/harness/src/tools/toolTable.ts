@@ -96,8 +96,6 @@ export class PluginHold extends Context.Service<
 export type PromptSection = (ctx: {
   readonly offered: readonly string[];
   readonly isChild: boolean;
-  /** The step's bound model is an Anthropic model. */
-  readonly isAnthropic: boolean;
   /** The run's workspace configuration, for a section that follows a
    *  setting of its plugin's. */
   readonly config: ConfigProvider;

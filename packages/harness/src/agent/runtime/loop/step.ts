@@ -449,12 +449,16 @@ export const stepFor = Effect.fn('Step.for')(function* (
     run.config.delegationAgentScope ?? undefined,
   );
   const context = {
-    ...stepInstructions(step.contributing, step.listed, {
-      offered: tools.definitions.map(({ name }) => name),
-      isChild: run.entry.parent !== null,
-      isAnthropic: model.config.provider === ModelProvider.ANTHROPIC,
-      config: roots.config,
-    }),
+    ...stepInstructions(
+      step.contributing,
+      step.listed,
+      {
+        offered: tools.definitions.map(({ name }) => name),
+        isChild: run.entry.parent !== null,
+        config: roots.config,
+      },
+      model.config.provider === ModelProvider.ANTHROPIC,
+    ),
     ...(delegation && { delegation }),
   };
   const base =

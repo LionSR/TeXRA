@@ -76,7 +76,7 @@ Exports: 131
 - `ProcessPluginLayer` — `interface ProcessPluginLayer<ROut = never> { readonly layer: Layer.Layer<ROut, never, PluginLayerServices>; readonly drain?: Effect.Effect<void, never, ROut>; }`
 - `ProcessReport` — `interface ProcessReport { readonly report: ChildRunDelivery; readonly exit?: ProcessExit; readonly failure?: string; }`
 - `ProcessTurn` — `interface ProcessTurn { readonly run: Effect.Effect<ProcessReport, Error, PlatformServices>; readonly reportError: (error: Error) => ChildRunDelivery; }`
-- `PromptSection` — `type PromptSection = (ctx: { readonly offered: readonly string[]; readonly isChild: boolean; readonly isAnthropic: boolean; readonly config: ConfigProvider; }) => string; ≡ PromptSection`
+- `PromptSection` — `type PromptSection = (ctx: { readonly offered: readonly string[]; readonly isChild: boolean; readonly config: ConfigProvider; }) => string; ≡ PromptSection`
 - `randomizedExponentialBackoff` — `function randomizedExponentialBackoff: (base: Input) => Schedule<Duration, unknown, never, never>`
 - `RecipeChange` — `interface RecipeChange { readonly path: string; readonly absolutePath: string; readonly base: string | null; readonly added: number | null; readonly removed: number | null; }`
 - `RefusalDecision` — `type RefusalDecision = Extract<RequestDecision, { action: 'reject' | 'deny' | 'cancel'; }>; ≡ RefusalDecision`

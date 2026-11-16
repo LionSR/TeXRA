@@ -11,7 +11,6 @@ describe('PromptBuilder', () => {
     const instructionSuffix = memoryPromptSection({
       offered: ['memory'],
       isChild: false,
-      isAnthropic: false,
       config: new MemoryConfigProvider(TEXRA_SETTINGS.catalog),
     });
 
