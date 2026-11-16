@@ -692,7 +692,7 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
         },
       })),
     ).pipe(Layer.provide(validationModelLayer));
-    return { sent, process: SessionGraph.with([], model) };
+    return { sent, process: SessionGraph.with({ model }) };
   };
   /** The commit of the chat's last model response, read from the store: a
    *  literal would name another row after the next regeneration. */

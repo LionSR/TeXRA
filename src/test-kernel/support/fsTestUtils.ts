@@ -1,6 +1,6 @@
 /**
- * Shared filesystem assertions and error factories for suites exercising
- * real-filesystem behavior.
+ * Shared filesystem assertions, error factories and platform layers for
+ * suites exercising real-filesystem behavior.
  */
 
 // Node imports
@@ -9,7 +9,7 @@ import { stat } from 'node:fs/promises';
 // Third-party imports
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import * as NodePath from '@effect/platform-node/NodePath';
-import { type FileSystem, Layer, type Path } from 'effect';
+import { Effect, type FileSystem, Layer, type Path } from 'effect';
 
 // Local imports
 import {
@@ -19,6 +19,8 @@ import {
   type StorageFs,
   type WorkspaceFs,
 } from '@platform/rootedFs';
+import { GlobalValues } from '@platform/processRuntime';
+import { GlobalDatabase } from '@shared/session/database';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 import { nodeSpawnerLayer } from './childProcessTestLayer';
@@ -97,3 +99,16 @@ export function errnoError(
 ): NodeJS.ErrnoException {
   return Object.assign(new Error(message), { code });
 }
+
+/** The process's `GlobalValues` over a global database layer, as
+ *  `processLayer` serves them, for a suite that opens a real global root. */
+export const globalValuesOver = <E, R>(
+  database: Layer.Layer<GlobalDatabase, E, R>,
+): Layer.Layer<GlobalValues | GlobalDatabase, E, R> =>
+  Layer.provideMerge(
+    Layer.effect(
+      GlobalValues,
+      Effect.map(GlobalDatabase, (opened) => opened.values),
+    ),
+    database,
+  );

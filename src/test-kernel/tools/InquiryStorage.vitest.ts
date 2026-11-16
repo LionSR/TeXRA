@@ -8,8 +8,7 @@ import { afterEach, beforeEach, describe, expect } from 'vitest';
 import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { ToolError } from '@texra-ai/harness/plugins';
 import { globalDatabaseLayer } from '@controllers/session/databaseLayer';
-import { globalValuesOver } from '@test/support/setupPlatform';
-import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { globalValuesOver, nodePlatformLayer } from '@test/support/fsTestUtils';
 import { InquiryRecords } from '@texra/shared/plugins/externalInquiry';
 import { inquiryRecordsLayer } from '@texra/tools/inquiry/inquiryRecords';
 

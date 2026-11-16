@@ -48,7 +48,7 @@ const kernelTimeoutMs = process.platform === 'win32' ? 20_000 : 10_000;
 // (`NEEDS_OWN_REGISTRY`): add a `vi.mock` and it moves there on its own,
 // remove it and the suite moves back. Otherwise a suite under one of these directories is
 // `pure` unless it reaches a host (its imports, followed through `@test/*`
-// and relative paths, reach the kernel's host, `support/setupPlatform.ts`),
+// and relative paths, reach the kernel's host, `support/fakeHost.ts`),
 // and every other suite is `kernel`. A directory earns a place in this list
 // by holding suites of host-free modules; the scan decides file by file.
 const PURE_DIRS = [
@@ -74,7 +74,7 @@ const PURE_DIRS = [
   'transcript',
   'utils',
 ];
-const HOST = resolve(rootDir, 'src/test-kernel/support/setupPlatform.ts');
+const HOST = resolve(rootDir, 'src/test-kernel/support/fakeHost.ts');
 const TEST_ROOT = resolve(rootDir, 'src/test-kernel');
 const SPECIFIER = /(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g;
 /** Whether `file` or a module its imports reach through `@test/*` and

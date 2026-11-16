@@ -7,7 +7,7 @@ import { beforeEach, describe, expect } from 'vitest';
 
 import { withExpandedRunInputs } from '@cli/runtime/headless/documentTaskInputs';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { createFakeHost } from '@test/support/setupPlatform';
+import { createFakeHost } from '@test/support/fakeHost';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { FakeHost } from '@test/support/testKernel';
 
@@ -23,8 +23,7 @@ describe('CLI workflow input lifecycle', () => {
   it.layer(
     FakeHost.layer(() =>
       createFakeHost({
-        globalStoragePath: path.join(root, 'global-storage'),
-        storagePath: path.join(root, 'workspace-storage'),
+        storageRoot: path.join(root, 'storage'),
         workspaceRoot: root,
       }),
     ),
