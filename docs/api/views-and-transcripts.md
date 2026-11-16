@@ -45,7 +45,7 @@ const runId = generateRunId();
 yield * session.view.subscribe([{ id: runId, fromSeq: 0 }]);
 const run = yield * session.start({ runId, agent: persona, instruction });
 yield * run.result;
-yield * session.settled;
+yield * session.drained;
 
 const view = session.view.current();
 const runView = view.runs.get(run.runId)!;
