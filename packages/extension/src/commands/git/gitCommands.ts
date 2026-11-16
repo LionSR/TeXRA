@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 // Local imports - utilities
 import { type RootedFileSystem } from '@texra-ai/harness/host';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
+import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { inputBox } from '@frontend/ui/dialogs';
 import type { HostFailed } from '@texra/hosts/uiHosts';
@@ -41,7 +41,7 @@ const CHANNEL = 'gitCommands';
 /** Hand a URL to the browser; a refusal is logged, not raised, because the
  *  dialogs that offer it have nothing further to do about one. */
 const openUrl = (url: string) =>
-  new VscodeExternalOpener()
+  vscodeOpener
     .openExternal(url)
     .pipe(
       Effect.catch((failure) =>

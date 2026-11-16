@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Queue, Stream } from 'effect';
+import { Effect, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -13,9 +13,10 @@ import {
   withLogChannel,
   type SettingsStores,
 } from '@texra-ai/harness/plugins';
-import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
+import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
+import { eventStream } from '@frontend/vscode/vscodeEvents';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
@@ -62,20 +63,12 @@ function promptForApiKey(
   ib.buttons = [getKeyButton];
   // The portal opens beside the prompt, for as long as it is open; a
   // browser that will not open is logged, and the prompt stays.
-  const openKeyPortal = Stream.callback<void>((queue) =>
-    Effect.acquireRelease(
-      Effect.sync(() =>
-        ib.onDidTriggerButton((button) => {
-          if (button === getKeyButton) Queue.offerUnsafe(queue, undefined);
-        }),
-      ),
-      (listener) => Effect.sync(() => listener.dispose()),
-    ),
-  ).pipe(
+  const openKeyPortal = eventStream(ib.onDidTriggerButton).pipe(
+    Stream.filter((button) => button === getKeyButton),
     Stream.runForEach(() =>
       keyUrl === undefined
         ? Effect.void
-        : new VscodeExternalOpener()
+        : vscodeOpener
             .openExternal(keyUrl)
             .pipe(
               Effect.catch((error) =>

@@ -35,7 +35,7 @@ import { createSampleProject } from '@commands/system/sampleProjectCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import {
   openGuidePage,
-  VscodeExternalOpener,
+  vscodeOpener,
 } from '@frontend/hosts/VscodeExternalOpener';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { openBuilt } from '@frontend/latex/openBuild';
@@ -168,7 +168,7 @@ const openExportPath = (
   const uri = vscode.Uri.file(filePath);
   if (kind === 'external') {
     // The opener also fails when VS Code declines the file.
-    return new VscodeExternalOpener().openExternal(uri.toString());
+    return vscodeOpener.openExternal(uri.toString());
   }
   if (kind === 'pdf') {
     return executeVscodeCommand('vscode.open', uri).pipe(
@@ -342,7 +342,7 @@ export const createExtensionHostRequests = Effect.fn(
     // A link VS Code declines or cannot open is answered as a rejection, so
     // the view shows which URL did not open.
     openExternal: (url) =>
-      new VscodeExternalOpener()
+      vscodeOpener
         .openExternal(url)
         .pipe(
           Effect.mapError((failed) => new Rejected({ reason: failed.message })),

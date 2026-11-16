@@ -32,7 +32,6 @@ export function handleFixCompilation(
   return runGuardedLatexCommand(
     roots,
     {
-      channel: CHANNEL,
       action: 'fix compilation',
       saveDocument: true,
       errorMessage: 'Error launching LaTeX compilation fixer',
@@ -40,7 +39,7 @@ export function handleFixCompilation(
     Effect.fnUntraced(function* ({ editor, relativePath }) {
       yield* Effect.logInfo(
         `Launching agent to fix compilation for: ${relativePath}`,
-      ).pipe(withLogChannel(CHANNEL));
+      );
 
       const instruction = yield* buildLatexdiffAwareFixInstruction(
         `Fix the LaTeX compilation errors in ${relativePath}.`,
@@ -59,7 +58,7 @@ export function handleFixCompilation(
       const run = yield* Effect.option(launch(config, { helperModel: true }));
       if (Option.isSome(run)) yield* run.value.result;
     }),
-  );
+  ).pipe(withLogChannel(CHANNEL));
 }
 
 export function handleIndentCurrentTeX(
@@ -68,15 +67,12 @@ export function handleIndentCurrentTeX(
   return runGuardedLatexCommand(
     roots,
     {
-      channel: CHANNEL,
       action: 'indent LaTeX document',
       saveDocument: true,
       errorMessage: 'Error formatting the LaTeX file',
     },
     Effect.fnUntraced(function* ({ relativePath }) {
-      yield* Effect.logDebug(`Indenting LaTeX file: ${relativePath}`).pipe(
-        withLogChannel(CHANNEL),
-      );
+      yield* Effect.logDebug(`Indenting LaTeX file: ${relativePath}`);
 
       // An explicit user action: a disabled formatter notifies instead of
       // succeeding quietly.
@@ -100,7 +96,7 @@ export function handleIndentCurrentTeX(
         yield* showLoggedMessage('Failed to indent LaTeX file');
       }
     }),
-  );
+  ).pipe(withLogChannel(CHANNEL));
 }
 
 export function handleGetTeXCount(
@@ -109,14 +105,11 @@ export function handleGetTeXCount(
   return runGuardedLatexCommand(
     roots,
     {
-      channel: CHANNEL,
       action: 'get TeX count',
       errorMessage: 'Error getting tex count',
     },
     Effect.fnUntraced(function* ({ relativePath }) {
-      yield* Effect.logDebug(`Getting tex count for: ${relativePath}`).pipe(
-        withLogChannel(CHANNEL),
-      );
+      yield* Effect.logDebug(`Getting tex count for: ${relativePath}`);
 
       const countingMode = yield* quickPick<
         vscode.QuickPickItem & { value: TexcountMode }
@@ -172,5 +165,5 @@ export function handleGetTeXCount(
         }),
       );
     }),
-  );
+  ).pipe(withLogChannel(CHANNEL));
 }

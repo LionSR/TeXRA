@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { Cancelled, ensureError } from '@texra-ai/harness/schemas';
-import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
+import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
   showLoggedErrorMessage,
@@ -24,8 +24,6 @@ import type { HttpClient } from 'effect/http';
 
 const OPEN_DEFAULT_BROWSER = 'Open in Default Browser';
 const COPY_SIGN_IN_LINK = 'Copy Sign-in Link';
-
-const externalOpener = new VscodeExternalOpener();
 
 /** How VS Code shows a subscription sign-in prompt. */
 function vscodePresenter(
@@ -53,7 +51,7 @@ function vscodePresenter(
           { items: [openLabel] },
         );
         if (choice === openLabel) {
-          yield* externalOpener.openExternal(
+          yield* vscodeOpener.openExternal(
             prompt.verificationUrlComplete ?? prompt.verificationUrl,
           );
         }
@@ -94,7 +92,7 @@ function vscodePresenter(
         if (choice !== OPEN_DEFAULT_BROWSER) {
           return yield* new Cancelled();
         }
-        yield* externalOpener.openExternal(url);
+        yield* vscodeOpener.openExternal(url);
       },
     ),
   };

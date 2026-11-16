@@ -32,7 +32,7 @@ import {
   type TerminalRunResult,
 } from '@texra/hosts/uiHosts';
 
-import { firstEventOrTimeout } from './vscode/vscodeEventWait';
+import { firstEventOrTimeout } from './vscode/vscodeEvents';
 
 const SHELL_INTEGRATION_WAIT_MS = 2_000;
 const READER_DRAIN_MS = 250;

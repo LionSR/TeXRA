@@ -1,7 +1,21 @@
-/** Effect-shaped waits on a one-shot VS Code event. */
+/** VS Code events as Effect values: a stream of every report, or a wait on
+ *  the first one. */
 
-import { Deferred, Effect, Option } from 'effect';
+import { Deferred, Effect, Option, Queue, Stream } from 'effect';
 import * as vscode from 'vscode';
+
+/**
+ * Every report of `event`, as a stream. VS Code subscribes on the stream's
+ * start and the listener is disposed when the stream ends, on every exit.
+ */
+export function eventStream<T>(event: vscode.Event<T>): Stream.Stream<T> {
+  return Stream.callback<T>((queue) =>
+    Effect.acquireRelease(
+      Effect.sync(() => event((value) => Queue.offerUnsafe(queue, value))),
+      (listener) => Effect.sync(() => listener.dispose()),
+    ),
+  );
+}
 
 /**
  * Wait for `subscribe` to report a value, or for `timeoutMs` to elapse —

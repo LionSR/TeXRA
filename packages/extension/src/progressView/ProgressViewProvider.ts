@@ -3,15 +3,7 @@
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
-import {
-  Deferred,
-  Effect,
-  Exit,
-  FileSystem,
-  Queue,
-  Scope,
-  Stream,
-} from 'effect';
+import { Deferred, Effect, Exit, FileSystem, Scope, Stream } from 'effect';
 
 import { scopedFork } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
@@ -28,6 +20,7 @@ import {
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
+import { eventStream } from '@frontend/vscode/vscodeEvents';
 import { hostFailed } from '@texra/controllers/session/hostCallFailure';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import { setOnboardingDeclined } from '@texra/controllers/onboarding/onboardingFunnel';
@@ -192,15 +185,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             ),
           ),
       };
-      const focusChanged = Stream.callback<void>((queue) =>
-        Effect.acquireRelease(
-          Effect.sync(() =>
-            vscode.window.onDidChangeWindowState((state) => {
-              if (state.focused) Queue.offerUnsafe(queue, undefined);
-            }),
-          ),
-          (listener) => Effect.sync(() => listener.dispose()),
-        ),
+      const focusChanged = eventStream(
+        vscode.window.onDidChangeWindowState,
+      ).pipe(
+        Stream.filter((state) => state.focused),
+        Stream.as(undefined),
       );
       const gui = yield* openGuiWindow({
         runs: windowSession,
@@ -344,31 +333,26 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       extensions.size === 0 ? '**/*' : `**/*.{${[...extensions].join(',')}}`;
     // One listing per burst of creates and deletes: a checkout that adds
     // a thousand files lists the workspace once, not a thousand times.
-    const filesChanged = Stream.callback<void>((queue) =>
+    const filesChanged = Stream.unwrap(
       Effect.acquireRelease(
-        Effect.sync(() => {
-          const fileWatcher =
-            vscode.workspace.createFileSystemWatcher(filePattern);
-          const changed = () => Queue.offerUnsafe(queue, undefined);
-          fileWatcher.onDidCreate(changed);
-          fileWatcher.onDidDelete(changed);
-          return fileWatcher;
-        }),
+        Effect.sync(() =>
+          vscode.workspace.createFileSystemWatcher(filePattern),
+        ),
         (fileWatcher) => Effect.sync(() => fileWatcher.dispose()),
+      ).pipe(
+        Effect.map((fileWatcher) =>
+          Stream.merge(
+            eventStream(fileWatcher.onDidCreate),
+            eventStream(fileWatcher.onDidDelete),
+          ),
+        ),
       ),
     );
     // Only a non-first workspace folder can be added or removed here: VS
     // Code restarts the extension host for a first-folder change, so the
     // storage root never moves under a live window (#11432).
-    const foldersChanged = Stream.callback<void>((queue) =>
-      Effect.acquireRelease(
-        Effect.sync(() =>
-          vscode.workspace.onDidChangeWorkspaceFolders(() =>
-            Queue.offerUnsafe(queue, undefined),
-          ),
-        ),
-        (listener) => Effect.sync(() => listener.dispose()),
-      ),
+    const foldersChanged = eventStream(
+      vscode.workspace.onDidChangeWorkspaceFolders,
     );
     yield* Effect.forkScoped(
       Stream.runForEach(foldersChanged, () =>

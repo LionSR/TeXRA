@@ -1,8 +1,9 @@
-import { Effect, Queue, Stream } from 'effect';
+import { Effect, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
+import { eventStream } from '@frontend/vscode/vscodeEvents';
 
 const CHANNEL = 'DiffView';
 
@@ -22,17 +23,7 @@ export function refreshDiffOnLayoutChange(
   right: vscode.Uri,
   title: string,
 ): Effect.Effect<void> {
-  const viewColumnChanges = Stream.callback<void>((queue) =>
-    Effect.acquireRelease(
-      Effect.sync(() =>
-        vscode.window.onDidChangeTextEditorViewColumn(() =>
-          Queue.offerUnsafe(queue, undefined),
-        ),
-      ),
-      (listener) => Effect.sync(() => listener.dispose()),
-    ),
-  );
-  return viewColumnChanges.pipe(
+  return eventStream(vscode.window.onDidChangeTextEditorViewColumn).pipe(
     // Trailing-edge: a column move fires several events within a few
     // milliseconds, and a leading throttle that dropped the later ones
     // left the diff where the first event found it. The last event
