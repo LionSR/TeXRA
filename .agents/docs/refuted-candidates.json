@@ -777,6 +777,19 @@
           "signature": "export function walkFiles(startDir, { include } = {}) {…}"
         }
       ]
+    },
+    {
+      "id": "LLM-verdict-not-retryable-is-the-default",
+      "candidate": "judgeFailure's notRetryable rule deleted as a restatement of the ModelError constructor's retryableByDefault, keeping only the overflow half (LM-8 b of the 2026-11-15 design red-flag audit)",
+      "why": "The status the rule reads is the reply's, not the error's. readReply (packages/llm/src/api/failureReply.ts) takes the error's HTTP status when it is 400 or above and otherwise the status the body's error type or code stands for (statusFromBody: invalid_request_error is 400), and judgeFailure keeps the producer's kind. A failure sdkModelError (packages/llm/src/errors.ts) classified as `transport` because its SDK error carried no HTTP facts (Google's sdkFailure when the error has no numeric status, or the Responses WebSocket's failure over a plain error object) can still carry such a body. The `transport` default is retryable, so without the status half that 400 would be repeated. The two rules agree only where the error's own status is the reply's.",
+      "ruling": ".agents/docs/evidence/2026-11-15-design-red-flags/LM-llm.md#lm-8-small-instances-batched-a-binder-that-throws-and-catches-its-own-errors-a-verdict-rule-that-restates-the-errors-default-and-three-hand-written-helpers",
+      "symbols": [
+        {
+          "file": "packages/llm/src/api/verdict.ts",
+          "symbol": "notRetryable",
+          "signature": "function notRetryable(reply: Reply, overflow: boolean): false | undefined {…}"
+        }
+      ]
     }
   ]
 }
