@@ -38,12 +38,13 @@ import { usageRouteBadge } from '@ui/copy/modelAccess';
 import { runStatus } from '@ui/copy/runStatus';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { AGENT_LIST, NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
-import { APPROVAL_BYPASS_BADGE } from '@ui/copy/approvalBypass';
+import { RUN_GRANT_COPY, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 
 import { formatResumeCommand } from '../state/resumeHint';
 import { type TransientNotice } from '../state/cliState';
 import { runViewOf } from '../state/sessionView';
 import type {
+  ApprovalBypassKind,
   ApprovalPolicy,
   RunView,
   SessionView,
@@ -576,28 +577,10 @@ export function statusBarRunTarget({
   };
 }
 
-// Bypass badges, in emission order. One row per BypassState flag.
-const BYPASS_BADGES: ReadonlyArray<{
-  readonly field: keyof BypassState;
-  readonly text: string;
-  readonly badgeColor: typeof COLOR_ERROR | typeof COLOR_WARNING;
-}> = [
-  {
-    field: 'superYolo',
-    text: APPROVAL_BYPASS_BADGE.superYolo,
-    badgeColor: COLOR_ERROR,
-  },
-  {
-    field: 'bash',
-    text: APPROVAL_BYPASS_BADGE.bash,
-    badgeColor: COLOR_WARNING,
-  },
-  {
-    field: 'toolEdit',
-    text: APPROVAL_BYPASS_BADGE.toolEdit,
-    badgeColor: COLOR_WARNING,
-  },
-];
+// A grant's badge colour: agent work approves everything below it.
+const BYPASS_BADGE_COLOR: Readonly<
+  Record<ApprovalBypassKind, typeof COLOR_ERROR | typeof COLOR_WARNING>
+> = { toolEdit: COLOR_WARNING, bash: COLOR_WARNING, superYolo: COLOR_ERROR };
 
 // Which text occupies the bindings row is a priority order, not a single
 // condition: a resumable exit confirmation always wins, then an actual
@@ -804,11 +787,11 @@ export function buildStatusBarDisplay(
     ).filter(Predicate.isNotNullish),
   );
   const bypasses = run === undefined ? undefined : runBypasses(view, run.id);
-  for (const badge of BYPASS_BADGES) {
-    if (bypasses?.[badge.field] === true) {
+  for (const kind of RUN_GRANT_ORDER) {
+    if (bypasses?.[kind] === true) {
       left.push({
-        text: badge.text,
-        badgeColor: badge.badgeColor,
+        text: RUN_GRANT_COPY.label(kind),
+        badgeColor: BYPASS_BADGE_COLOR[kind],
         priority: STATUS_BAR_PRIORITY.bypassBadge,
         policy: 'keep',
       });

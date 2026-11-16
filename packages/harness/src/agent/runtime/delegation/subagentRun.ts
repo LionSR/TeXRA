@@ -84,8 +84,8 @@ export type DelegatedChildApproval =
 /**
  * The grants a delegated child is registered with, stamped on its
  * `run.start`. Beyond them it inherits its parent's live grants through the
- * parent edge, kind by kind, so the CLI's distinct AUTO-BASH and
- * AUTO-APPROVE grants reach it exactly as set, and a toggle on the parent
+ * parent edge, kind by kind, so the parent's command and edit grants
+ * reach it exactly as set, and a toggle on the parent
  * after the child started reaches it too. A child a goal's grant approved
  * gets a goal grant of its own, never a human value, so a resume leaves it
  * off until a human re-arms the goal.
