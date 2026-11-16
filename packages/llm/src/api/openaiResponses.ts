@@ -34,6 +34,7 @@ import { backgroundLifecycle } from './background.js';
 import {
   decodeWireOrFail,
   ownedAbortSafeRequest,
+  refuseAmbientHeaders,
   wireFail,
 } from './transport.js';
 import { filesApiUploads } from './uploadCache.js';
@@ -57,7 +58,6 @@ import {
   openaiAbortMatch,
   openaiClient,
   prepareResponsesTurn,
-  refuseAmbientHeaders,
   responseParameters,
 } from './openaiResponsesRequest.js';
 import type { SessionToken } from '../node.js';
@@ -72,7 +72,10 @@ export const openaiResponsesModel = Effect.fn('llm.responses.model')(function* (
   },
 ): Effect.fn.Return<Model, ModelError, Scope.Scope> {
   const origin = originOf(config);
-  yield* refuseAmbientHeaders;
+  yield* refuseAmbientHeaders(
+    'OPENAI_CUSTOM_HEADERS',
+    'Ambient OpenAI headers cannot override the selected deployment.',
+  );
   const { bearer } = transport;
   const client = openaiClient(
     config.deployment.endpoint,

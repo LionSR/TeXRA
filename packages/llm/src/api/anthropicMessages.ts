@@ -33,6 +33,7 @@ import { ModelError, fillModelError, sdkModelError } from '../errors.js';
 import {
   decodeWireOrFail,
   parseOutboundToolArguments,
+  refuseAmbientHeaders,
   sdkStream,
   wireFail as fail,
 } from './transport.js';
@@ -548,13 +549,10 @@ export const anthropicMessagesModel = Effect.fn('llm.anthropicMessages.model')(
       });
     }
     // The SDK otherwise lets these ambient headers override selected credentials and protocol.
-    if (process.env.ANTHROPIC_CUSTOM_HEADERS) {
-      return yield* new ModelError({
-        kind: 'invalid-request',
-        message:
-          'Anthropic Messages does not support ANTHROPIC_CUSTOM_HEADERS; the selected binding must determine its request headers.',
-      });
-    }
+    yield* refuseAmbientHeaders(
+      'ANTHROPIC_CUSTOM_HEADERS',
+      'Anthropic Messages does not support ANTHROPIC_CUSTOM_HEADERS; the selected binding must determine its request headers.',
+    );
     const origin = originOf(config);
     const client = new Anthropic({
       apiKey: transport.apiKey,
