@@ -70,12 +70,12 @@ export const monacoStyles = css`
   .quick-input-widget {
     border: var(--border-thin) solid var(--wa-color-surface-border);
     box-shadow: 0 8px 24px var(--wa-color-surface-shadow);
-    max-width: calc(100vw - 24px);
+    max-width: calc(100vw - var(--wa-space-l));
     overflow: auto;
   }
 
   .monaco-hover {
-    max-width: min(400px, calc(100vw - 24px));
+    max-width: min(400px, calc(100vw - var(--wa-space-l)));
     overflow-wrap: anywhere;
   }
 

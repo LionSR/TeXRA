@@ -24,7 +24,7 @@ export class ToolTimer extends LitElement {
     .timer {
       font-size: var(--font-size-sm);
       opacity: var(--opacity-normal);
-      margin-inline-start: var(--wa-space-xs, 8px);
+      margin-inline-start: var(--wa-space-xs);
       font-variant-numeric: tabular-nums;
     }
     .timer-limit {

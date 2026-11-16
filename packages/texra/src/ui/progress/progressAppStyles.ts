@@ -86,13 +86,13 @@ export const progressAppStyles = css`
     --hero-heading-size: 28px;
     --hero-padding-inline: 0;
     box-sizing: border-box;
-    padding: 32px 28px 80px;
+    padding: var(--wa-space-xl) var(--wa-space-l) var(--wa-space-5xl);
   }
   :host([placement='embedded']) .hero-wrap {
-    padding-block: 0 24px;
+    padding-block: 0 var(--wa-space-l);
   }
   :host([placement='embedded']) .header-main {
-    padding-inline: 24px;
+    padding-inline: var(--wa-space-l);
   }
   :host([placement='embedded']) .launch-banners {
     margin-top: 0;
