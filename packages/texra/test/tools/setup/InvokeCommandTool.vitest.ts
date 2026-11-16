@@ -82,10 +82,8 @@ layer(SessionGraph.hosted)('InvokeCommandTool allowlist', (it) => {
       ]) {
         const result = yield* invoke({ command });
         assert.equal(result.status, 'error');
-        assert.match(
-          String(result.error),
-          new RegExp(`^Command "${command}" is not in the setup allowlist\\.`),
-        );
+        // The input's enum refuses it before the host is reached.
+        assert.match(String(result.error), /at \["command"\]/);
       }
       assert.equal(invocations.length, 0);
     }),

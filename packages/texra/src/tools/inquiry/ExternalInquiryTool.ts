@@ -43,6 +43,7 @@ import {
   type InquiryThreadSummary,
 } from '@texra/shared/plugins/externalInquiry';
 import { inquiryRecordsLayer } from '@texra/tools/inquiry/inquiryRecords';
+import { ANSWER_TRUNCATION, QUESTION_TRUNCATION } from './inquiryActions';
 
 const CHANNEL = 'InquiryTool';
 
@@ -122,26 +123,6 @@ const InquiryInputSchema = Schema.Union([
 
 type InquiryInput = typeof InquiryInputSchema.Type;
 
-/**
- * Collect distinct external session links (most-recent-first) across all
- * turns of a thread. Used by the inquiry panel to render "known external
- * session links" so the user can continue the same outside conversation.
- */
-function collectKnownSessionLinks(
-  manifest: InquiryThreadRecord,
-): string[] | undefined {
-  const known = [
-    ...new Set(
-      manifest.turns
-        .toReversed()
-        .filter((turn) => turn.kind !== 'open')
-        .flatMap((turn) => turn.sessionLinks ?? []),
-    ),
-  ];
-
-  return known.length ? known : undefined;
-}
-
 // ============================================================================
 // Read / list subcommand outputs
 // ============================================================================
@@ -218,7 +199,7 @@ Dispatch is non-blocking: 'ask' returns immediately with {status: "dispatched", 
 Follow-up semantics:
   Omit thread_id to start a new thread. Pass an answered thread_id to ask a follow-up turn; prior Q/A is preserved and rendered as a conversation in the user's panel. You cannot re-dispatch on an open or dropped thread: read or list to recover state instead.
 
-When the [inquiry] continuation arrives, its Q is truncated to 400 chars and its A to 2000 chars. If you need the full content, call inquiry { command: 'read', thread_id }.
+When the [inquiry] continuation arrives, its Q is truncated to ${QUESTION_TRUNCATION} chars and its A to ${ANSWER_TRUNCATION} chars. If you need the full content, call inquiry { command: 'read', thread_id }.
 
 Do not treat paper-specific claims from the external model as automatically verified: verify with arxiv_search / download_arxiv_source before building on them.`;
 
@@ -247,9 +228,6 @@ const executeAsk = Effect.fn('executeAsk')(function* (
     requests,
   } = yield* ToolContext;
   const runs = yield* ChildRuns;
-  const questionContext = input.context ?? undefined;
-  const suggestSearch = input.suggestSearch ?? undefined;
-  const attachFiles = input.attachFiles ?? undefined;
 
   yield* Effect.logInfo(`Inquiry dispatch [${input.thread_id ?? 'new'}]`).pipe(
     Effect.annotateLogs({ data: input.question.slice(0, 100) }),
@@ -260,29 +238,32 @@ const executeAsk = Effect.fn('executeAsk')(function* (
     threadId: input.thread_id ?? undefined,
     parentRunId: runId,
     question: input.question,
-    context: questionContext,
-    suggestSearch,
-    attachFiles,
+    context: input.context ?? undefined,
+    suggestSearch: input.suggestSearch ?? undefined,
+    attachFiles: input.attachFiles ?? undefined,
   });
-  // Use the record committed by recordOpenQuestion.
-  // A re-read would only reintroduce the write/read race the continuation
-  // injectors already avoid via writer snapshots.
-
+  // Use the record committed by recordOpenQuestion: its last turn is the
+  // one just opened. A re-read would only reintroduce the write/read race
+  // the continuation injectors already avoid via writer snapshots.
+  const turn = manifest.turns.at(-1);
+  if (turn?.kind !== 'open') {
+    return yield* Effect.die(
+      new Error(`Inquiry ${manifest.threadId} has no open turn after asking`),
+    );
+  }
   // The first turn's request is the thread itself; a follow-up turn is
   // its own request, `<thread>:<turn>`, whose payload names the thread.
-  const turnIndex = manifest.turns.at(-1)?.turnIndex ?? 1;
+  const { turnIndex } = turn;
   const requestId =
     turnIndex === 1 ? manifest.threadId : `${manifest.threadId}:${turnIndex}`;
   const inquiry: InquiryRequest = {
     requestId,
-    question: input.question,
-    threadId: manifest.threadId,
-    context: questionContext,
-    suggestSearch,
-    attachFiles,
     runId,
-    sessionLinks: collectKnownSessionLinks(manifest),
-    transcript: manifest.turns,
+    threadId: manifest.threadId,
+    turn,
+    // A thread takes a follow-up only once answered, so every earlier
+    // turn is an answered one.
+    earlierTurns: manifest.turns.filter((t) => t.kind === 'answered'),
   };
   // A request the call does not wait on: the decision hook answers it.
   yield* requests.post({ ...INQUIRY_REQUEST, data: inquiry }).pipe(

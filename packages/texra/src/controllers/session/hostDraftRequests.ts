@@ -24,7 +24,7 @@ import {
   startRecording,
   validateRecordingFile,
   transcribeRecording,
-} from '@texra/tools/media/audio';
+} from '@texra/controllers/session/audio';
 import {
   savePastedImageBuffer,
   sweepStaleFiles,

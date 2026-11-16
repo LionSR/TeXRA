@@ -36,8 +36,10 @@ import {
 
 const CHANNEL = 'InquiryTool';
 
-const QUESTION_TRUNCATION = 400;
-const ANSWER_TRUNCATION = 2000;
+/** How much of the question and the answer an `[inquiry]` follow-up
+ *  quotes; the tool's description states both. */
+export const QUESTION_TRUNCATION = 400;
+export const ANSWER_TRUNCATION = 2000;
 
 function formatStillOpen(threads: InquiryThreadSummary[]): string[] {
   if (!threads.length) return [];
@@ -122,7 +124,7 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
   ): Effect.fn.Return<RequestDecisionRecord, Error, InquiryRecords> {
     const records = yield* InquiryRecords;
     const { threadId } = permission;
-    const turnIndex = permission.transcript?.at(-1)?.turnIndex ?? 1;
+    const { turnIndex } = permission.turn;
     let outcome: InquiryTurnOutcome;
     let event: 'answered' | 'dropped';
     if (decision.action === 'answer') {

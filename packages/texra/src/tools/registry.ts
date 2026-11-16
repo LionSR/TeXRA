@@ -165,10 +165,12 @@ const texWriteFilter: WriteFilter = (path, content, config) => {
   );
 };
 
-/** The host capabilities (`ITool.hostCapability`) a plugin serves, read
- *  each time a step asks. */
-const serves = (capabilities: () => readonly string[]) =>
-  Layer.succeed(HostCapabilities)({ of: () => new Set(capabilities()) });
+/** The host capabilities (`ITool.hostCapability`) a plugin serves to a
+ *  session's storage root, read each time a step asks. */
+const serves = (capabilities: (storage: string) => Iterable<string>) =>
+  Layer.succeed(HostCapabilities)({
+    of: (storage) => new Set(capabilities(storage)),
+  });
 
 const latexExtract: TexraPlugin = {
   id: 'latex-extract',
@@ -214,9 +216,10 @@ const latexDiagnostics = (editors: EditorRegistry): TexraPlugin => ({
 const TEX_INSTRUCTIONS = `Find the project's TeX sources with relative paths (e.g., \`find . -name "*.tex"\`).\nFor math in responses, use $...$ or \\(...\\) for inline and $$...$$ or \\[...\\] for display math. Wrap LaTeX environments like align or gather inside $$...$$ (e.g., $$\\begin{align}...\\end{align}$$) so they render correctly.`;
 
 /**
- * Tools every host offers without setup that no dashboard card lists:
- * review annotations, the PDF viewer, the user-question dialog, and Loogle
- * search (network only, so not gated on the Lean 4 plugin's probe). Its
+ * Tools that need no setup and that no dashboard card lists: review
+ * annotations and the PDF viewer (each offered where the host serves it),
+ * the user-question dialog, and Loogle search (network only, so not gated
+ * on the Lean 4 plugin's probe). Its
  * prompt section, at every step that offers a tool, finds the TeX sources, says how
  * replies write math, and names the configured default bibliography.
  */
@@ -242,19 +245,21 @@ const core = (
         ? `${TEX_INSTRUCTIONS}\nThe default bibliography file is ${bibPath}. You can grep or read this file to search for citations and references.`
         : TEX_INSTRUCTIONS;
     },
-    // The editor's PDF viewer; the host's Comments UI, for the one host
-    // that has one, where `inline_comment` is offered.
+    // The editor's PDF viewer, where `open_pdf` is offered while one is
+    // attached; the host's Comments UI, for the one host that has one,
+    // where `inline_comment` is offered.
     processLayer: {
       layer: Layer.mergeAll(
         Layer.succeed(EditorHost)(editors),
         ...(provider === undefined
           ? []
-          : [
-              Layer.succeed(InlineComments)(provider),
-              serves(() => [
-                'inline-comments' satisfies InlineCommentCapability,
-              ]),
-            ]),
+          : [Layer.succeed(InlineComments)(provider)]),
+        serves((storage) => [
+          ...editors.of(storage),
+          ...(provider === undefined
+            ? []
+            : ['inline-comments' satisfies InlineCommentCapability]),
+        ]),
       ),
     },
   }),

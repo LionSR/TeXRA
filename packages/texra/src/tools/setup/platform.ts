@@ -14,11 +14,7 @@ import { Context, Effect, Schema } from 'effect';
 // Local imports
 import { SubscriptionAccounts } from '@texra-ai/llm/node';
 import { readModelOptions } from '@texra-ai/harness/host';
-import {
-  ToolError,
-  Secrets,
-  type SettingsStores,
-} from '@texra-ai/harness/plugins';
+import { Secrets, type SettingsStores } from '@texra-ai/harness/plugins';
 import type {
   TerminalRunFailed,
   TerminalRunRequest,
@@ -94,34 +90,13 @@ export class SetupHost extends Context.Service<
 >()('@texra-ai/texra/tools/SetupHost') {}
 
 /**
- * Fail with a uniform, sorted-allowlist error when `id` is not a member of
- * `allowed`. Shared by the setup tools so a disallowed extension ID and a
- * disallowed command ID reject with the same wording, not two hand-rolled
- * copies of it.
- */
-export function assertInSetupAllowlist(
-  kind: string,
-  id: string,
-  allowed: ReadonlySet<string>,
-): Effect.Effect<void, ToolError> {
-  if (allowed.has(id)) return Effect.void;
-  return Effect.fail(
-    new ToolError(
-      `${kind} "${id}" is not in the setup allowlist. Allowed: ${[...allowed].toSorted().join(', ')}.`,
-    ),
-  );
-}
-
-/**
  * The ChatGPT subscription routing probe could not answer. It reads the
  * routing built from the stored OAuth session; it never reports "no
- * subscription" this way, which is a value. It stays `Promise`-shaped with
- * the rest of the account group.
+ * subscription" this way, which is a value.
  */
 class SubscriptionProbeFailed extends Schema.TaggedError<SubscriptionProbeFailed>()(
   'SubscriptionProbeFailed',
   {
-    member: Schema.Literals(['getStatus', 'readModelOptions']),
     message: Schema.String,
     cause: Schema.Defect(),
   },
@@ -142,7 +117,6 @@ export const getChatGptSubscriptionStatus = Effect.fn(
     Effect.mapError(
       (cause) =>
         new SubscriptionProbeFailed({
-          member: 'getStatus',
           message: 'The ChatGPT subscription session could not be read.',
           cause,
         }),
@@ -154,7 +128,6 @@ export const getChatGptSubscriptionStatus = Effect.fn(
     Effect.mapError(
       (cause) =>
         new SubscriptionProbeFailed({
-          member: 'readModelOptions',
           message: 'ChatGPT subscription routing could not be resolved.',
           cause,
         }),

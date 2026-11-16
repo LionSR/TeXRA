@@ -26,7 +26,6 @@ import {
   type AnsweredInquiryTurn,
   type InquiryDraft,
   type InquiryRequest,
-  type InquiryThreadRecord,
 } from '@texra/shared/plugins/externalInquiry';
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import type { Surface } from '@texra/shared/session/surface';
@@ -44,10 +43,18 @@ const EMPTY_DRAFT: InquiryDraft = Object.freeze({
   sessionLinks: '',
 });
 
-/** `Surface.inquiryDrafts` is keyed by inquiry turn, never by stream
- * : the thread and the number of turns already answered. */
-function draftKey({ threadId, transcript }: InquiryRequest): string {
-  return `${threadId}#${transcript?.length ?? 0}`;
+/** `Surface.inquiryDrafts` is keyed by inquiry turn, never by stream:
+ * the thread and the turn the request opens. */
+function draftKey({ threadId, turn }: InquiryRequest): string {
+  return `${threadId}#${turn.turnIndex}`;
+}
+
+/** The distinct session links the earlier answers cite, most recent first,
+ *  so the person can continue the same outside conversation. */
+function knownSessionLinks(turns: readonly AnsweredInquiryTurn[]): string[] {
+  return [
+    ...new Set(turns.toReversed().flatMap((turn) => turn.sessionLinks ?? [])),
+  ];
 }
 
 interface ValidatableTextarea extends HTMLElement {
@@ -150,46 +157,43 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
   }
 
   protected override renderAsk(): string {
-    return (this.inquiry.transcript?.length ?? 0) > 1
+    return this.inquiry.turn.turnIndex > 1
       ? 'Ask an outside model a follow-up'
       : 'Ask an outside model';
   }
 
   override render(): TemplateResult {
-    const data = this.inquiry;
+    const { turn } = this.inquiry;
     return this.renderCard(html`
-      ${this.renderQuestion(data.question)}
-      ${data.suggestSearch ? this.renderSearchHint() : nothing}
+      ${this.renderQuestion(turn.question)}
+      ${turn.suggestSearch ? this.renderSearchHint() : nothing}
       ${
-        data.attachFiles?.length
-          ? this.renderAttachFiles(data.attachFiles)
+        turn.attachFiles?.length
+          ? this.renderAttachFiles(turn.attachFiles)
           : nothing
       }
-      ${this.renderAnswerArea()} ${this.renderMore(data)}
+      ${this.renderAnswerArea()} ${this.renderMore(this.inquiry)}
     `);
   }
 
   /** Everything the answer does not need: context, earlier turns, links. */
-  private renderMore(data: InquiryRequest): TemplateResult {
+  private renderMore({ turn, earlierTurns }: InquiryRequest): TemplateResult {
     return html`
       <wa-details class="external-inquiry-request__more" summary="More">
         ${
-          data.context
-            ? html`<div class="request-card__context">${data.context}</div>`
+          turn.context
+            ? html`<div class="request-card__context">${turn.context}</div>`
             : nothing
         }
-        ${this.renderTranscript(data.transcript ?? [])}
-        ${this.renderSessionLinks(data.sessionLinks ?? [])}
+        ${this.renderTranscript(earlierTurns)}
+        ${this.renderSessionLinks(knownSessionLinks(earlierTurns))}
       </wa-details>
     `;
   }
 
   private renderTranscript(
-    transcript: InquiryThreadRecord['turns'],
+    answeredTurns: readonly AnsweredInquiryTurn[],
   ): TemplateResult | typeof nothing {
-    const answeredTurns = transcript.filter(
-      (turn): turn is AnsweredInquiryTurn => turn.kind === 'answered',
-    );
     if (answeredTurns.length === 0) return nothing;
 
     return html`

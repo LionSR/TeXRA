@@ -29,6 +29,7 @@ import { Headers, HttpClient } from 'effect/http';
 import { StatusCodes } from 'http-status-codes';
 import * as tar from 'tar';
 
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import { hasExtension } from '@texra-ai/harness/host';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
@@ -37,7 +38,7 @@ import {
   indentLatexFilesInDirectory,
   type IndentLatexResult,
 } from './formatter/indentDirectory';
-import type { LatexFormatter } from './formatter/texFormatter';
+import { resolveLatexFormatter } from './formatter/texFormatter';
 
 // Cover the entire request, including body streaming, while allowing large
 // tarballs to complete on a slow link.
@@ -102,11 +103,17 @@ const permanentFs = <T, R>(
 
 export type ArxivDownloadDestination = 'root' | 'references';
 
+/** Whether a download into `destination` is indented: never the workspace
+ *  root, whose existing files the indenter would reformat. */
+export const indentsDestination = (
+  destination: ArxivDownloadDestination,
+): boolean => destination !== 'root';
+
 interface DownloadSourceOptions {
-  workspaceRoot: string;
-  formatter: LatexFormatter | null;
-  autoIndent?: boolean;
-  destination?: ArxivDownloadDestination;
+  readonly roots: WorkspaceRoots;
+  readonly destination: ArxivDownloadDestination;
+  /** The caller's wish; a root download is not indented either way. */
+  readonly indent: boolean;
 }
 
 const INVALID_ARXIV_INPUT_ERROR =
@@ -415,12 +422,8 @@ const extractTarFile = Effect.fn('arxivProcessor.extractTarFile')(function* (
 
 export const downloadArxivSource = Effect.fn('arxivProcessor.downloadSource')(
   function* (input: string, options: DownloadSourceOptions) {
-    const {
-      workspaceRoot,
-      formatter,
-      autoIndent = true,
-      destination = 'references',
-    } = options;
+    const { roots, destination, indent } = options;
+    const workspaceRoot = roots.workspace;
     const progress = yield* LatexProgress;
     // Normalize input (URL or ID) to plain arXiv ID
     const id = normaliseArxivIdentifier(input);
@@ -451,12 +454,15 @@ export const downloadArxivSource = Effect.fn('arxivProcessor.downloadSource')(
       yield* claimDirAndPlaceSource(id, paperDirFull, isRoot);
     }
 
-    // Skip auto-indent for root destination to avoid reformatting existing workspace files
-    if (autoIndent && !isRoot) {
+    if (indent && indentsDestination(destination)) {
       progress('Formatting LaTeX files...', 85);
 
       const indentResult = yield* permanentFs(
-        indentLatexFilesInDirectory(workspaceRoot, formatter, paperDirFull),
+        indentLatexFilesInDirectory(
+          workspaceRoot,
+          yield* resolveLatexFormatter(roots),
+          paperDirFull,
+        ),
       );
 
       // Formatting is post-processing on a source that has landed, so its
@@ -471,7 +477,11 @@ export const downloadArxivSource = Effect.fn('arxivProcessor.downloadSource')(
 
     yield* Effect.logInfo(`arXiv source downloaded to: ${paperDirFull}`);
 
-    return { path: paperDirFull, alreadyExisted: !needsDownload };
+    return {
+      path: paperDirFull,
+      workspaceRoot,
+      alreadyExisted: !needsDownload,
+    };
   },
   withLogChannel(ARXIV_CHANNEL),
 );

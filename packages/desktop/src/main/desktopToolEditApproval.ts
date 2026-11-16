@@ -20,8 +20,8 @@ import type {
   ToolEditPreviewRequest,
 } from '@texra/controllers/approval/ToolEditApprovalController';
 import { hostFailure } from '@texra/controllers/session/hostCallFailure';
-import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
-import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
+import type { BuildDisplayFn } from '@texra/controllers/approval/latexPreview';
+import { writeApprovalTempFiles } from '@texra/controllers/approval/tempFileManager';
 import { UNAPPLIED_TOOL_EDIT } from '@ui/copy/toolEditPreview';
 
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';

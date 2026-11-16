@@ -19,7 +19,7 @@ import { absentReason } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { HostFailed } from '@texra/hosts/uiHosts';
-import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
+import type { BuildDisplayFn } from '@texra/controllers/approval/latexPreview';
 
 import {
   DESKTOP_PDF_COMMANDS,
