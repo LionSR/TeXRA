@@ -163,8 +163,8 @@ Where things go:
 - `AppSignals` (`packages/harness/src/platform/appSignals.ts`) carries only
   app-lifecycle signals (auth, subscriptions, credentials, workspace-file
   writes), not run or session progress.
-- Webview base classes are in `packages/extension/src/common/webview/`, not in
-  the harness.
+- The extension's webview HTML provider is in
+  `packages/extension/src/common/webview/`, not in the harness.
 - The transcript row model is `packages/harness/src/shared/transcript/`
   (`@shared/transcript`); `packages/harness/src/transcript/` (`@transcript`) is
   run-transcript persistence.

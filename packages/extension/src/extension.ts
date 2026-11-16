@@ -539,12 +539,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     vscode.extensions.onDidChange(() => {
       fork(refreshToolAvailabilityLogged('extension change'));
     }),
-    // Workspace folders opened/closed can flip `isGitRepository`, which
-    // gates the GitHub PR subscription tool group. ProgressViewProvider owns
-    // the ordered workspace-storage and native-config replacement.
-    vscode.workspace.onDidChangeWorkspaceFolders(() => {
-      fork(refreshToolAvailabilityLogged('workspace folder change'));
-    }),
   );
   // Activation-lifetime listeners run in the activation scope, which ends
   // them when the extension deactivates.
