@@ -1,5 +1,5 @@
 // Third-party imports
-import { Cause, Context, Effect, Exit, Layer, Scope } from 'effect';
+import { Cause, Context, Effect, Exit, Layer, Record as Rec, Scope } from 'effect';
 
 // Local imports
 import {
@@ -32,7 +32,7 @@ import {
   writeTextStderr,
   writeTextStderrAndWait,
 } from './logSinks';
-import { CliExitCode } from './exitCodes';
+import { SIGNAL_EXIT_CODE } from './exitCodes';
 import { holdSignals, type SignalPolicy } from './processSignals';
 import { isLinked, linkCliService, type CliServiceLink } from './cliService';
 import type { CliContext } from './cliContext';
@@ -105,11 +105,9 @@ export function runCliExit<A, E>(exit: Effect.Effect<A, E>): Promise<A> {
 
 /** A process already leaving: a further signal ends it at once with that
  *  signal's code. The terminal's own `exit` hook restores the tty. */
-export const leaveAtOnce: Readonly<SignalPolicy> = Object.freeze({
-  SIGINT: () => process.exit(CliExitCode.Interrupted),
-  SIGTERM: () => process.exit(CliExitCode.Terminated),
-  SIGHUP: () => process.exit(129),
-});
+export const leaveAtOnce: Readonly<SignalPolicy> = Object.freeze(
+  Rec.map(SIGNAL_EXIT_CODE, (code) => () => process.exit(code)),
+);
 
 /**
  * A command's CLI platform, as its runtime serves it: the program that
@@ -229,8 +227,8 @@ const openCliPlatform = Effect.fn('openCliPlatform')(function* (
       ),
       context.quietLogs,
     ).pipe(Effect.andThen(Effect.sync(() => process.exit(code))));
-  // The platform's own answer to SIGINT and SIGTERM while it is up: leave
-  // with the signal's code. Onboarding and model resolution run before Ink
+  // The platform's own answer to SIGINT, SIGTERM and SIGHUP while it is
+  // up: leave with the signal's code, closing the platform first. Onboarding and model resolution run before Ink
   // mounts and need a graceful exit as much as a headless command does.
   // It holds them for as long as it is up; the chat TUI holds its own policy
   // above it once Ink mounts, so the newest holder answers.
@@ -239,12 +237,7 @@ const openCliPlatform = Effect.fn('openCliPlatform')(function* (
     void runCliExit(leave(code));
   };
   yield* Effect.acquireRelease(
-    Effect.sync(() =>
-      holdSignals({
-        SIGINT: onSignal(CliExitCode.Interrupted),
-        SIGTERM: onSignal(CliExitCode.Terminated),
-      }),
-    ),
+    Effect.sync(() => holdSignals(Rec.map(SIGNAL_EXIT_CODE, onSignal))),
     (release) => Effect.sync(release),
   ).pipe(Scope.provide(scope));
 
