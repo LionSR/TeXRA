@@ -355,7 +355,7 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
       const model = yield* ScopedRef.make(() =>
         testBinding(init.model, init.bound),
       );
-      const logger = init.logger ?? new TraceEmitter();
+      const logger = init.logger ?? new TraceEmitter(() => {});
       const scope: Scope.Scope = yield* Effect.scope;
       const tools = init.tools ?? {};
       return testAgentRun(

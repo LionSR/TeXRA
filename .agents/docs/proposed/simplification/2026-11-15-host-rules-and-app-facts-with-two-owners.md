@@ -1,7 +1,8 @@
 # Rules decided per host and app facts with two owners
 
 Date: 2026-11-15
-Status: proposed (four findings landed with this note; the rest are open)
+Status: proposed (four findings landed with this note, and seven more in
+the follow-up sweep listed at the end; the rest are open)
 Origin: the 2026-11-15 scheduled responsibility audit on `main` at `1dd278b`.
 Two read-only surveys (the three hosts against the shared controllers; the
 app package and `packages/llm`) and a check of each finding against the code.
@@ -146,3 +147,45 @@ In order of size. Each needs the decision named.
 7. **Key pages, a third time.** `warningUrl` in
    `packages/texra/src/shared/settings/settingSurfaces.ts` restates three
    pages of `KEY_PAGES` (`packages/texra/src/model/providerPresentation.ts`).
+
+## Landed in the follow-up sweep
+
+- **Host rule 1** (roots): `openProjectRoots` in
+  `packages/texra/src/controllers/session/openProjectSession.ts` opens the
+  config stores and the roots, with the service's project state when the
+  host reached it, for the extension, the desktop's registry and the
+  service; each shows the returned warnings its own way. Still open: the
+  CLI's process roots (`packages/cli/src/runtime/platform/initPlatform.ts`)
+  are built over the config provider its pre-runtime startup read opened,
+  before `StateStores` exists, so they keep their own
+  `openNodeWorkspaceRoots` call and service-state rule; and
+  `openProjectSession` still decides service or local from `reached` a
+  second time.
+- **Host rule 2** (compile for display): `compileForDisplay` in
+  `packages/texra/src/tools/latex/latexPreview.ts`. The extension now shows
+  a failed internal compile. The "file must exist, non-LaTeX opens plainly"
+  steps stay per host: the extension builds workspace files through LaTeX
+  Workshop, so the order of its checks differs.
+- **Host rule 6** (bundled service): `reachBundledService` in
+  `packages/texra/src/controllers/server/client.ts`; both host files are
+  deleted.
+- **App fact 2** (aux files): the preview cleanup reads
+  `collectFilesFromPatterns`, which also fixed previews leaving their build
+  files in `build/`.
+- **App fact 3** (`.bib` files): not a finding. `collectBibliographyPaths`
+  is already the one reader; the base directory differs by caller on purpose
+  (a workspace path versus a run-storage mirror), and latexdiff's pattern
+  restores the edited document's `\bibliography` directive text over a
+  flattened `thebibliography` block, which biblatex's `\addbibresource` never
+  produces.
+- **App fact 4** (`\input`): `texInputPaths` and `rewriteTexInputs` in
+  `packages/texra/src/latex/latexParsingUtils.ts`.
+- **App fact 5** (tool names): `probeLatexTools` in
+  `packages/texra/src/latex/latexToolchain.ts` is the one toolchain probe
+  for the doctor, the setup assistant, the LaTeX tab and the dependency
+  banner, so no tool is located twice. Still open: the LaTeX status still
+  carries seven `*Path` fields rather than one record keyed by tool (a
+  change to the settings view's message schema and its tab), and the
+  banner's check (`packages/extension/src/progressView/checkCoreDependencies.ts`)
+  is VS Code-free code living in the extension, which belongs in the app
+  once its one importer, the progress view provider, can be edited.
