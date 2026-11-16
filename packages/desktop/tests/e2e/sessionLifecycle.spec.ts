@@ -312,7 +312,10 @@ test('the rail deletes a finished conversation at once, and it stays deleted', a
     'Renamed from the sidebar',
   );
   await rowMenu.click();
-  await row.locator('.tab-remove').click();
+  await row
+    .locator('wa-dropdown-item')
+    .filter({ hasText: /Delete (task|agent)/ })
+    .click();
   await expect(row).toHaveCount(0);
   await expect(railRow(currentLaunch, ORPHAN_RUN)).toHaveCount(1);
 
