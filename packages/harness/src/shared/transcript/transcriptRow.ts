@@ -20,7 +20,7 @@ import {
   type MessageType,
   type NormalizedToolUse,
   type ResponseCut,
-  type ToolUseLog,
+  type ToolCallLog,
   type ScriptDeliverySummary,
   type StoredMedia,
 } from '@shared/schemas';
@@ -150,7 +150,7 @@ export interface ToolRow extends TranscriptRowBase {
   readonly model: ToolRowModel;
   /** The decoded durable payload the row was built from, without live
    *  output: what a conversation export formats. */
-  readonly log: ToolUseLog;
+  readonly log: ToolCallLog;
   /** A script's call's section, as its card's `tool.start` names it. */
   readonly section?: string;
   /** The call's attempt, from the second on (its card's `tool.start`). */

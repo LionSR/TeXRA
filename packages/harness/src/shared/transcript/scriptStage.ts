@@ -155,12 +155,15 @@ function statusOf(
   child: RunView | undefined,
   interrupted: boolean,
 ): ScriptCallStatus {
-  const output = Predicate.isObject(row.log.output) ? row.log.output : {};
+  const { result } = row.log;
   switch (row.toolUse.status) {
     case TOOL_CALL_STATUS.COMPLETED:
-      return stringOf(output.reusedFrom) === undefined ? 'finished' : 'reused';
+      return result?.status === 'executed' && result.reusedFrom !== undefined
+        ? 'reused'
+        : 'finished';
     case TOOL_CALL_STATUS.FAILED:
-      if (output.name === 'Skipped') return 'skipped';
+      if (result?.status === 'error' && result.name === 'Skipped')
+        return 'skipped';
       if (row.cutByRunEnd === true)
         return agent && child === undefined ? 'not run' : 'cancelled';
       return 'failed';
@@ -227,7 +230,7 @@ function callView(
     detail = { kind: 'error', text: row.toolUse.errorText };
   else if (status === 'not run') detail = { kind: 'notRun' };
   else if (status === 'interrupted') detail = { kind: 'interrupted' };
-  const answer = childAnswer(row.log.output);
+  const answer = childAnswer(row.log.result);
   const said =
     agent && (status === 'finished' || status === 'reused')
       ? (answer ?? child?.latestLine)

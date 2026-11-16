@@ -11,7 +11,7 @@
  * Every event reaches the one sink the trace was built with, until it
  * closes; a sink that throws is logged and does not break the run.
  */
-import { Effect, Exit, Stream } from 'effect';
+import { Effect, Exit, Schema, Stream } from 'effect';
 
 import { raisedBy } from '@logger/formatLogData';
 import { writeLogLine } from '@logger/logSink';
@@ -19,8 +19,10 @@ import {
   MESSAGE_TYPES,
   outcomeFromCause,
   RUN_OUTCOME,
+  ToolCardEndSchema,
   toJsonValue,
   type RunId,
+  type ToolCardEnd,
   type LogLevel,
   type MessageType,
   type ToolUseLog,
@@ -173,11 +175,17 @@ export class TraceEmitter implements AgentTrace {
       type: 'tool.end',
       logId,
       status: log.status,
-      result: toJsonValue(log),
+      log: cardEnd(log),
     });
     return new ToolCardHandleImpl(this, logId, log, false);
   }
 }
+
+/** What a card's tool stated, as its `tool.end` stores it: parsed once
+ *  here, where a plugin's log enters the trace, with its input and output
+ *  as JSON and no status (the row states it). */
+const cardEnd = ({ status: _status, ...log }: ToolUseLog): ToolCardEnd =>
+  Schema.decodeUnknownSync(ToolCardEndSchema)(toJsonValue(log));
 
 class ToolCardHandleImpl implements ToolCardHandle {
   private readonly trace: TraceEmitter;
@@ -198,14 +206,14 @@ class ToolCardHandleImpl implements ToolCardHandle {
   }
 
   update(log: ToolUseLog): void {
-    const { status = 'completed', ...result } = log;
+    const status = log.status ?? 'completed';
     this.log = log;
     this.open = status === 'in_progress';
     this.trace.emit({
       type: 'tool.end',
       logId: this.logId,
       status,
-      result: toJsonValue(result),
+      log: cardEnd(log),
     });
   }
 

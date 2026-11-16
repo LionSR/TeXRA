@@ -17,9 +17,9 @@ import {
   reasonPhrase,
   type FileListEntry,
   type LogPayload,
-  type ToolUseLog,
+  type ToolCallLog,
 } from '@shared/schemas';
-import { normalizeToolUse } from '@shared/toolUse';
+import { normalizeToolUse, resultFields } from '@shared/toolUse';
 import { hasIncompleteEmbeddedSubagentFollowup } from '@shared/subagentFollowup';
 import { formatCompactTokenCount } from '@utils/text/stringUtils';
 
@@ -192,12 +192,13 @@ export type ToolCallFacts = Pick<
  *  what its slot holds beyond the payload, which every repaint carries. */
 export function toolRow(
   base: TranscriptRowBase,
-  log: ToolUseLog,
+  log: ToolCallLog,
   output: string | undefined,
   runLabels: ToolRowModelContext['runLabels'],
   call: ToolCallFacts,
 ): ToolRow {
-  const shown = output === undefined ? log : { ...log, output };
+  const { result: _result, ...stated } = log;
+  const shown: ToolCallLog = output === undefined ? log : { ...stated, output };
   const toolUse = normalizeToolUse(shown);
   return {
     ...base,
@@ -206,7 +207,8 @@ export function toolRow(
     toolUse,
     model: toolRowModel(toolUse, {
       ...(runLabels ? { runLabels } : {}),
-      parsedOutput: shown.output,
+      parsedOutput:
+        shown.result === undefined ? shown.output : resultFields(shown.result),
     }),
     log,
   };

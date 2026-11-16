@@ -1,31 +1,22 @@
-// Host-neutral normalization for tool-use log payloads.
+// Host-neutral normalization for tool cards.
 //
-// Both the VS Code progress view and the CLI TUI read the same
-// `ToolUseLog` payload off a transcript entry's `data` and need a flat,
-// renderer-friendly view: tool name, derived output text, error/summary
-// strings, and the runtime tool status. This module is the
-// single entry point for that derivation so hosts don't drift.
+// Both the VS Code progress view and the CLI TUI read the same tool card
+// (`ToolCallLog`) off a transcript row and need a flat, renderer-friendly
+// view: tool name, derived output text, error/summary strings, and the
+// runtime tool status. This module is the single entry point for that
+// derivation so hosts don't drift.
 
-import { Number as Num, Predicate, Result, Schema } from 'effect';
+import { Number as Num, Predicate } from 'effect';
 
-import {
-  TOOL_CALL_STATUS,
-  ToolUseLogSchema,
-  formatIssuesForDiagnostics,
-  type NormalizedToolUse,
-  type ToolUseLog,
+import type {
+  FinishedToolResult,
+  NormalizedToolUse,
+  ToolCallLog,
 } from '@shared/schemas';
 import { stringifyPayload } from '@shared/transcript/transcriptText';
-import { truncateSummary } from '@utils/text/stringUtils';
 
-function trimmedOrNull(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return trimmed || null;
-}
-
-function firstTrimmed(primary: unknown, fallback: unknown): string {
-  return trimmedOrNull(primary) ?? trimmedOrNull(fallback) ?? '';
+function trimmed(value: string | undefined): string {
+  return value?.trim() ?? '';
 }
 
 /** Fields of a tool result that are its metadata, not its output: each is
@@ -38,13 +29,26 @@ export const TOOL_RESULT_METADATA_FIELDS: ReadonlySet<string> = new Set([
   'userInstruction',
 ]);
 
-function extractOutputContent(candidate: unknown): unknown {
-  if (!Predicate.isObject(candidate)) return candidate;
-  if (candidate.output !== undefined) return candidate.output;
+/** A stored result's fields as its card reads them: without the `status`
+ *  the card states, and without a key left `undefined`. */
+export function resultFields(
+  result: FinishedToolResult,
+): Record<string, unknown> {
   return Object.fromEntries(
-    Object.entries(candidate).filter(
-      ([field]) =>
-        field !== 'output' && !TOOL_RESULT_METADATA_FIELDS.has(field),
+    Object.entries(result).filter(
+      ([field, value]) => field !== 'status' && value !== undefined,
+    ),
+  );
+}
+
+/** What a stored result shows as its output: its `output`, else its fields
+ *  but the ones shown on their own. */
+function storedOutput(result: FinishedToolResult): unknown {
+  if (result.status === 'executed' && result.output !== undefined)
+    return result.output;
+  return Object.fromEntries(
+    Object.entries(resultFields(result)).filter(
+      ([field]) => !TOOL_RESULT_METADATA_FIELDS.has(field),
     ),
   );
 }
@@ -56,88 +60,44 @@ function formatOutputText(content: unknown): string {
   return stringifyPayload(content).text.full;
 }
 
-/** The flat, renderer-friendly view of a decoded tool-use payload. */
-export function normalizeToolUse(log: ToolUseLog): NormalizedToolUse {
-  const nested = Predicate.isObject(log.output) ? log.output : {};
-
-  const summaryText = firstTrimmed(log.summary, nested.summary);
-  const errorText = firstTrimmed(log.error, nested.error);
-  const userInstructionText = firstTrimmed(
-    log.userInstruction,
-    nested.userInstruction,
+/** The texts a call states beside its output, trimmed: from its stored
+ *  result when it has one, else from what its tool stated. A call the user
+ *  rejected or redirected leads with no error: the error is their own. */
+export function toolCallTexts(
+  log: ToolCallLog,
+): Pick<
+  NormalizedToolUse,
+  'errorText' | 'userInstructionText' | 'isUserFeedback' | 'headerSummary'
+> {
+  const { result } = log;
+  const summaryText = trimmed(result ? result.summary : log.summary);
+  const errorText = trimmed(
+    result ? (result.status === 'error' ? result.error : undefined) : log.error,
   );
-
-  const outputContent = extractOutputContent(log.output);
-  const outputText = formatOutputText(outputContent);
-
+  const userInstructionText = trimmed(
+    result ? result.userInstruction : log.userInstruction,
+  );
   const isUserFeedback = userInstructionText.length > 0;
-
-  const headerSummary = summaryText || (isUserFeedback ? '' : errorText);
-
   return {
-    toolName: log.toolName.trim(),
     errorText,
-    outputText,
-    ...(log.exitCode !== undefined ? { exitCode: log.exitCode } : {}),
     userInstructionText,
-    input: log.input,
     isUserFeedback,
-    headerSummary,
-    status: log.status,
-    ...(log.card ? { card: log.card } : {}),
+    headerSummary: summaryText || (isUserFeedback ? '' : errorText),
   };
 }
 
-/**
- * Visible failure text both hosts render when a `toolUse` payload cannot be
- * parsed. Kept beside {@link decodeToolUseLog} so the CLI and progress view
- * can't drift on the wording of the shared malformed-payload policy.
- */
-const MALFORMED_TOOL_USE_TEXT = 'Malformed tool payload';
-
-/**
- * Bounded, value-safe reason for a failed `toolUse` parse. Object payloads
- * report only the invalid field *paths*, never field values, so a partially
- * valid `read`/`bash` row cannot leak its full output into the diagnostic.
- */
-function malformedToolUseDiagnostic(error: Schema.SchemaError): string {
-  const fields = [
-    ...new Set(
-      formatIssuesForDiagnostics(error)
-        .map((row) => row.path)
-        .filter((path) => path.length > 0),
-    ),
-  ];
-  const reason =
-    fields.length > 0 ? `invalid ${fields.join(', ')}` : 'unparseable payload';
-  return truncateSummary(`${MALFORMED_TOOL_USE_TEXT} (${reason})`, 160);
-}
-
-/**
- * Decode a tool card's payload once, at the transcript fold. Fields outside
- * {@link ToolUseLogSchema} (e.g. `toolUseDispatch.ts`'s `files`) are kept. A
- * payload the schema rejects becomes a visible failed card rather than being
- * dropped: it keeps only the independently usable fields (`toolName`, empty
- * unless a string, and `input`) and carries the bounded diagnostic as its error. It stays
- * live only while the source itself says the call is in progress, so a later
- * corrected payload can still replace it; anything else reads as failed
- * rather than as a quiet success.
- */
-export function decodeToolUseLog(data: Record<string, unknown>): ToolUseLog {
-  const parsed = Schema.decodeUnknownResult(
-    Schema.StructWithRest(ToolUseLogSchema, [
-      Schema.Record(Schema.String, Schema.Unknown),
-    ]),
-  )(data);
-  if (Result.isSuccess(parsed)) return parsed.success;
+/** The flat, renderer-friendly view of a tool card. */
+export function normalizeToolUse(log: ToolCallLog): NormalizedToolUse {
   return {
-    toolName: typeof data.toolName === 'string' ? data.toolName : '',
-    ...('input' in data ? { input: data.input } : {}),
-    error: malformedToolUseDiagnostic(parsed.failure),
-    status:
-      data.status === TOOL_CALL_STATUS.IN_PROGRESS
-        ? TOOL_CALL_STATUS.IN_PROGRESS
-        : TOOL_CALL_STATUS.FAILED,
+    toolName: log.toolName.trim(),
+    ...toolCallTexts(log),
+    outputText: formatOutputText(
+      log.result === undefined ? log.output : storedOutput(log.result),
+    ),
+    ...(log.exitCode !== undefined ? { exitCode: log.exitCode } : {}),
+    input: log.input,
+    status: log.status,
+    ...(log.card ? { card: log.card } : {}),
   };
 }
 
