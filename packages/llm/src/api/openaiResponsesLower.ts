@@ -256,7 +256,6 @@ export const withResponsesContinuation = Effect.fn(
     origin,
     ...covered,
     anchor: {
-      kind: 'stored',
       responseId: result.providerResponseId,
       // Counted, not lowered: the covered prefix is never materialized
       // again, and the same count validates the continuation later.

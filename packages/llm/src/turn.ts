@@ -308,11 +308,9 @@ export const AnthropicRefusalCategorySchema = Schema.Literals([
 
 /** A completed provider turn, not a completed agent execution. */
 export const TurnResultSchema = Schema.Struct({
-  kind: Schema.Literal('http'),
   ...IdentitySchema.fields,
   /** Null for a stateless Google response with no retrievable ID. */
   providerResponseId: Schema.NullOr(IdentitySchema.fields.providerResponseId),
-  modelFingerprint: Schema.NullOr(Schema.String),
   content: ContentSchema,
   finishReason: Schema.Literals([
     'stop',

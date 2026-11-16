@@ -426,13 +426,7 @@ export const ResponsesContinuationSchema = PrefixSchema.mapFields(
         protocol: Schema.Literal('openai-responses'),
       }),
     ),
-    // Only a stored anchor is durable: a connection-scoped one dies with its
-    // socket, so a persisted value must not be able to carry one.
-    anchor: ResponsesAnchorSchema.mapFields(
-      Struct.assign({
-        kind: Schema.Literal('stored'),
-      }),
-    ),
+    anchor: ResponsesAnchorSchema,
   }),
 );
 /** Provider acceleration of an exact prefix, never the conversation authority. */

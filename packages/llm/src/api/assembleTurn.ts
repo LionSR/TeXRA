@@ -273,11 +273,9 @@ const complete = Effect.fn('llm.completeTurn')(function* (turn: Assembly) {
   )
     return yield* fail(turn, 'returned inconsistent tool calls and finish');
   const result = Schema.decodeUnknownResult(TurnResultSchema)({
-    kind: 'http',
     providerResponseId: turn.id,
     requestedOrigin: turn.options.origin,
     returnedModel: turn.model ?? null,
-    modelFingerprint: null,
     content,
     ...turn.finish.finish,
     finishReason: reason,
