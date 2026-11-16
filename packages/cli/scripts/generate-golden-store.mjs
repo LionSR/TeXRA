@@ -106,10 +106,8 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { createRequire } from 'node:module';
-import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { zstdDecompressSync } from 'node:zlib';
-import { build as bundle } from 'esbuild';
 import stableStringify from 'safe-stable-stringify';
 
 import { ensureNodePtySpawnHelperExecutable } from './nodePtySpawnHelper.mjs';
@@ -119,6 +117,7 @@ import {
   VALIDATION_SCENARIOS,
   VALIDATION_SWITCH,
 } from '../src/runtime/models/validationSwitch.ts';
+import { bundleFixture } from '../../../scripts/bundle-fixture.mjs';
 import { isolateProcessHome } from '../../../scripts/isolated-home.mjs';
 
 // Beside each scenario's own home: nothing this script starts, the build
@@ -1027,28 +1026,9 @@ async function generate(root) {
 // Normalization
 // ---------------------------------------------------------------------------
 
-/** The store's row codec (`rowCodec.ts`), bundled from source: the golden
- *  rows are read and written by the code that reads and writes every store. */
-async function loadRowCodec(root) {
-  const outfile = path.join(root, 'row-codec.mjs');
-  await bundle({
-    stdin: {
-      contents: `
-        export { decodeRow, encodeDraft, EVENT_COLUMNS, EVENT_FROM } from '@controllers/session/rowCodec';
-        export { sha256Hex } from '@utils/core/idHash';
-      `,
-      loader: 'ts',
-      resolveDir: repoRoot,
-    },
-    outfile,
-    bundle: true,
-    platform: 'node',
-    format: 'esm',
-    target: 'node22.16',
-    tsconfig: path.join(repoRoot, 'tsconfig.json'),
-    logLevel: 'warning',
-  });
-  return import(pathToFileURL(outfile).href);
+/** The store's row codec (`scripts/fixtures/rowCodec.ts`). */
+function loadRowCodec(root) {
+  return bundleFixture('rowCodec', path.join(root, 'row-codec.mjs'));
 }
 
 /** The fields of a stored event its row's columns hold, not its data. */

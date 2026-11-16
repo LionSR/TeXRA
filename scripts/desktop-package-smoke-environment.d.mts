@@ -1,3 +1,5 @@
+import type * as SessionDatabase from './fixtures/sessionDatabase.ts';
+
 export interface DesktopSmokePaths {
   profile: string;
 }
@@ -7,38 +9,7 @@ export function buildDesktopSmokeEnvironment(
   paths: DesktopSmokePaths,
 ): NodeJS.ProcessEnv;
 
-export type DatabaseFixture = Pick<
-  typeof import('@controllers/session/databaseLayer'),
-  'databaseLayer' | 'globalDatabaseLayer'
-> &
-  Pick<typeof import('@controllers/session/WorkspaceRoots'), 'WorkspaceRoots'> &
-  Pick<
-    typeof import('@shared/session/database'),
-    'Database' | 'GlobalDatabase'
-  > &
-  Pick<typeof import('@shared/session/sessionEvents'), 'ProcessIdentity'> &
-  Pick<
-    typeof import('@shared/schemas'),
-    'qualifyAggregateId' | 'SessionRowSchema'
-  > &
-  Pick<
-    typeof import('@platform/defaults/workspaceStorage'),
-    'resolveGlobalStoragePath' | 'resolveWorkspaceStoragePath'
-  > &
-  Pick<
-    typeof import('@desktop/main/desktopProjectRecords'),
-    'openDesktopProjectRecords'
-  > &
-  Pick<
-    typeof import('@platform/defaults/nodeProcesses'),
-    'processOwnerId' | 'processStartIdentity'
-  > &
-  Pick<
-    typeof import('@platform/defaults/nodePlatform'),
-    'nodePlatformServices'
-  > &
-  Pick<typeof import('@tools/toolTable'), 'ToolRegistry' | 'toolTable'> &
-  Pick<typeof import('@texra/controllers/server/discovery'), 'servicePaths'>;
+export type DatabaseFixture = typeof SessionDatabase;
 
 export function loadDatabaseFixture(): Promise<DatabaseFixture>;
 export function rememberOpenProject(

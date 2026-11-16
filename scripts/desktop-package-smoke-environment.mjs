@@ -3,9 +3,9 @@ import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { build } from 'esbuild';
 import { Effect, Layer } from 'effect';
+
+import { bundleFixture } from './bundle-fixture.mjs';
 
 const PASSTHROUGH_ENV_NAMES = new Set([
   'COLORTERM',
@@ -88,8 +88,8 @@ export function loadDatabaseFixture() {
   return fixture;
 }
 
-async function bundleDatabaseFixture() {
-  const root = join(import.meta.dirname, '..');
+function bundleDatabaseFixture() {
+  // Playwright's config externalises the bundle by this file name.
   const bundle = join(
     mkdtempSync(join(tmpdir(), 'texra-fixture-')),
     'session-database-fixture.mjs',
@@ -97,36 +97,7 @@ async function bundleDatabaseFixture() {
   process.once('exit', () =>
     rmSync(dirname(bundle), { recursive: true, force: true }),
   );
-  await build({
-    stdin: {
-      contents: `
-        export { databaseLayer, globalDatabaseLayer } from '@controllers/session/databaseLayer';
-        export { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-        export { Database, GlobalDatabase } from '@shared/session/database';
-        export { qualifyAggregateId, SessionRowSchema } from '@shared/schemas';
-        export { resolveGlobalStoragePath, resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
-        export { openDesktopProjectRecords } from '@desktop/main/desktopProjectRecords';
-        export { nodePlatformServices } from '@platform/defaults/nodePlatform';
-        export { ToolRegistry, toolTable } from '@tools/toolTable';
-        export { servicePaths } from '@texra/controllers/server/discovery';
-      `,
-      loader: 'ts',
-      resolveDir: root,
-    },
-    outfile: bundle,
-    bundle: true,
-    platform: 'node',
-    format: 'esm',
-    target: 'node22.16',
-    tsconfig: join(root, 'tsconfig.json'),
-    // macOS's native file watcher, an optional dependency of a watcher the
-    // bundle reaches; a `.node` binary cannot be bundled.
-    external: ['fsevents'],
-    banner: {
-      js: "import { createRequire as __texraCreateRequire } from 'node:module'; const require = __texraCreateRequire(import.meta.url);",
-    },
-  });
-  return import(pathToFileURL(bundle).href);
+  return bundleFixture('sessionDatabase', bundle);
 }
 
 /**
