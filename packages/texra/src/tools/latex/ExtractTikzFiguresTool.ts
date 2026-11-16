@@ -8,6 +8,7 @@ import {
   formatToolOutput,
   type ToolFileAttachment,
   defineTool,
+  nullishWithDefault,
   type ToolResult,
   type WorkspaceFs,
 } from '@texra-ai/harness/plugins';
@@ -23,12 +24,10 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const ExtractTikzInputSchema = Schema.Struct({
   texPath: texPathField('Path to the LaTeX file containing TikZ figures.'),
-  compile: Schema.optional(
-    Schema.NullOr(
-      Schema.Boolean.annotate({
-        description: 'Compile extracted TikZ pictures into standalone PDFs.',
-      }),
-    ),
+  compile: nullishWithDefault(
+    Schema.Boolean,
+    true,
+    'Compile extracted TikZ pictures into standalone PDFs. Defaults to true.',
   ),
 });
 
@@ -39,7 +38,7 @@ const DEFAULT_TIKZ_MAX_FILES = 12;
 const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
   function* ({
     texPath,
-    compile = true,
+    compile,
   }: ExtractTikzInput): Effect.fn.Return<
     ToolResult,
     Error,

@@ -159,6 +159,12 @@ identifier itself when it names no source ("paper:review", or a URL).
 function agentName(key: string): string
 ```
 
+## AgentNameSchema
+
+```ts
+const AgentNameSchema: Trim
+```
+
 ## AgentNotFoundPayload
 
 The agent a launch named is not in the catalog.

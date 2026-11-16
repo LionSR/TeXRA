@@ -1,7 +1,7 @@
 import type { Dialogs, DiffViewHost } from '@texra/hosts/uiHosts';
 import type { TranscriptExportFormat } from '@texra/controllers/progressView/exportTranscript';
 import type { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
-import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
+import type { BuildDisplayFn } from '@texra/controllers/approval/latexPreview';
 import type { InstructionAction } from '@ui/copy/instructionActions';
 import type { Effect } from 'effect';
 

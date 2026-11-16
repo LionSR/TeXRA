@@ -17,7 +17,7 @@ export const wolfram: TexraPlugin = {
         available,
       })),
   },
-  card: {
+  dashboard: {
     name: 'Wolfram Language',
     description:
       'Wolfram Language through wolframscript, which agents run from the shell for symbolic math, computation, and data analysis.',

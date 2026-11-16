@@ -1,9 +1,7 @@
-import * as path from 'node:path';
-
 import * as vscode from 'vscode';
 import { Effect, Latch, Result, Schema } from 'effect';
 
-import { Skills, hasExtension } from '@texra-ai/harness/host';
+import { hasExtension } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
@@ -25,7 +23,6 @@ import {
   type SettingsViewOutboundMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import { makeSettingsViewBody } from '@texra/controllers/settingsView/settingsViewBody';
-import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type {
@@ -100,9 +97,6 @@ export class SettingsViewProvider {
     this.body = runtime.runSync(
       makeSettingsViewBody({
         roots,
-        resourcesPath: path.join(context.extensionPath, 'resources'),
-        skillDisplay: Skills.display(roots),
-        accountCopy: ACCOUNT_OUTCOME,
         bindings: {
           // A panel closed or replaced while the message builds has no
           // receiver, and no caller waits on a repaint, so the post is

@@ -47,7 +47,7 @@ type ToolTerminalAction =
  *  table holds as listed; none for a plugin another list adds. */
 const cardOf = (plugin: Plugin | undefined): PluginCard | undefined =>
   // cast: the registry holds TeXRA's plugin list as listed, each a `TexraPlugin`.
-  (plugin as TexraPlugin | undefined)?.card;
+  (plugin as TexraPlugin | undefined)?.dashboard;
 
 /**
  * Plan the terminal command for a tool-dashboard install/auth action.

@@ -10,11 +10,16 @@ interface InlineRenameField {
   /** Placement class beside the shared `.inline-rename` skin. */
   readonly className: string;
   readonly maxLength?: number;
-  /** The typed text on Enter or when the field loses focus; `null` on Esc.
-   *  Both can fire for one edit (Enter, then the blur of the removed field),
-   *  so the caller ignores a finish once it has closed the field. */
-  readonly onFinish: (value: string | null) => void;
+  /** The trimmed new text, when Enter or leaving the field saves a
+   *  non-empty value other than `value`. */
+  readonly onRename: (value: string) => void;
+  /** The edit is over (saved, unchanged or cancelled): close the field. */
+  readonly onClose: () => void;
 }
+
+/** Fields whose edit has finished: Enter closes the field, and removing it
+ *  then blurs it, which must not finish the edit a second time. */
+const finished = new WeakSet<EventTarget>();
 
 // Lit sets the ref while the new template is still detached, so focusing
 // waits until the field is in the document.
@@ -26,9 +31,15 @@ function focusAndSelect(element: Element | undefined): void {
   });
 }
 
-function inputValue(event: Event): string | null {
+/** Finish the field's edit once: save a changed value (`null` cancels),
+ *  then close. */
+function finish(field: InlineRenameField, event: Event, save: boolean): void {
   const input = event.currentTarget;
-  return input instanceof HTMLInputElement ? input.value : null;
+  if (!(input instanceof HTMLInputElement) || finished.has(input)) return;
+  finished.add(input);
+  const value = input.value.trim();
+  if (save && value && value !== field.value) field.onRename(value);
+  field.onClose();
 }
 
 /**
@@ -46,9 +57,9 @@ export function inlineRenameField(field: InlineRenameField): TemplateResult {
     ${ref(focusAndSelect)}
     @keydown=${(event: KeyboardEvent) => {
       event.stopPropagation();
-      if (event.key === 'Enter') field.onFinish(inputValue(event));
-      else if (event.key === 'Escape') field.onFinish(null);
+      if (event.key === 'Enter') finish(field, event, true);
+      else if (event.key === 'Escape') finish(field, event, false);
     }}
-    @blur=${(event: FocusEvent) => field.onFinish(inputValue(event))}
+    @blur=${(event: FocusEvent) => finish(field, event, true)}
   />`;
 }

@@ -28,7 +28,7 @@ import {
 // Local imports
 
 // Local file imports
-import { EditorHost } from './editorHost';
+import { EditorHost, type EditorCapability } from './editorHost';
 
 const OpenPdfInputSchema = Schema.Struct({
   path: Schema.String.annotate({
@@ -45,6 +45,9 @@ type OpenPdfInput = typeof OpenPdfInputSchema.Type;
 
 export const OpenPdfTool = defineTool({
   name: 'open_pdf',
+  // Offered while an editor attached for the session opens PDFs; the
+  // check below covers a window that detaches mid-step.
+  hostCapability: 'openPdf' satisfies EditorCapability,
   description:
     'Open a PDF file in the host PDF viewer. The tool accepts workspace-relative paths, working-directory-relative paths, and absolute run-storage paths.',
   schema: OpenPdfInputSchema,

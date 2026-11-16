@@ -16,12 +16,7 @@ import {
   defineTool,
   WorkspaceFs,
 } from '@texra-ai/harness/plugins';
-import {
-  downloadArxivSource,
-  validateArxivId,
-  type ArxivSourceError,
-} from '@latex/arxivProcessor';
-import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
+import { downloadArxivSource, validateArxivId } from '@latex/arxivProcessor';
 
 const NO_ENTRIES_MESSAGE = '(no entries)';
 const DEFAULT_HIDDEN_NAMES = new Set(['.git', '.gitignore']);
@@ -68,7 +63,7 @@ const ArxivDownloadInputSchema = Schema.Struct({
   autoIndent: nullishWithDefault(
     Schema.Boolean,
     true,
-    'Auto-indent extracted TeX files after downloading source.',
+    'Auto-indent extracted TeX files after downloading source. A root download is never indented.',
   ),
   destination: nullishWithDefault(
     Schema.Literals(['root', 'references']),
@@ -83,7 +78,6 @@ const download = Effect.fn('ArxivDownloadTool.execute')(function* (
   input: ArxivDownloadInput,
 ) {
   const call = yield* ToolContext;
-  const workspaceRoot = (yield* WorkspaceFs).root ?? '';
   const arxivId = input.id.trim();
   const validationError = validateArxivId(arxivId);
   if (validationError) {
@@ -91,21 +85,19 @@ const download = Effect.fn('ArxivDownloadTool.execute')(function* (
   }
 
   const downloadResult = yield* downloadArxivSource(arxivId, {
-    workspaceRoot,
-    formatter: input.autoIndent
-      ? yield* resolveLatexFormatter(call.env.roots)
-      : null,
-    autoIndent: input.autoIndent,
+    roots: call.env.roots,
     destination: input.destination,
+    indent: input.autoIndent,
   }).pipe(
     Effect.mapError(
-      (error: ArxivSourceError) =>
+      (error) =>
         new ToolError(`Failed to download arXiv source: ${error.message}`, {
           cause: error,
         }),
     ),
   );
 
+  const { workspaceRoot } = downloadResult;
   const relativePath = path.relative(workspaceRoot, downloadResult.path) || '.';
   const displayPath = toPosixPath(relativePath);
 

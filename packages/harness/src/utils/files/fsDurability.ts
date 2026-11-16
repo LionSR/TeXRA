@@ -227,7 +227,7 @@ export const readDirectoryTyped = Effect.fn('fsDurability.readDirectoryTyped')(
  * entry brings its own type and needs no second syscall. That is also what
  * keeps a directory that is readable but not searchable (`r--` on Unix)
  * listed: a probe would fail `EACCES` on every entry, and the tree would
- * render empty where the pre-migration listing showed it. Only an entry whose
+ * render empty though its names are readable. Only an entry whose
  * dirent type the platform left `Unknown` is probed, and only that probe's
  * failure costs a row. The strict form stays with the containment and
  * deletion walkers, where a refused answer is the safe one.

@@ -89,8 +89,8 @@ const toWorkspaceOrigin = Effect.fn('documents.toWorkspaceOrigin')(function* (
   const fs = yield* FileSystem.FileSystem;
   if (!loc || loc.kind !== 'runStorage') return loc;
   const resolved = pathToLocationIn(workspace, loc.relativePath);
-  // `stat` follows a link, as the `isFile` this replaces did, so a symlink to
-  // a file counts and a dangling one (or a directory) does not.
+  // `stat` follows a link, so a symlink to a file counts and a dangling one
+  // (or a directory) does not.
   const isFile = yield* fs.stat(resolved.absolutePath).pipe(
     Effect.map((info) => info.type === 'File'),
     Effect.catchIf(meansAbsent, () => Effect.succeed(false)),
@@ -118,6 +118,12 @@ export const computeOutputDiffStats = Effect.fn(
   lineage: boolean,
 ) {
   const mapping = pairOutputsWithBases(baseFiles, roundOutputs);
+  // An agent that extracts several documents from one input (`chapter1`,
+  // `methods`) revises it under names it does not share, so with a single
+  // input an unpaired output is diffed against it. The `\input` rewrite
+  // pairs without this fallback: it must not point a reference at an output
+  // only because the run had one input.
+  const onlyBase = baseFiles.length === 1 ? baseFiles[0] : undefined;
 
   return yield* Effect.forEach(
     roundOutputs,
@@ -132,25 +138,13 @@ export const computeOutputDiffStats = Effect.fn(
         const entry = mapping.get(locationPath);
         const originalLocation = entry?.origin ?? null;
         // `pairOutputsWithBases` coalesces `base: origin ?? …`, so an entry with
-        // an origin always carries a base: there is no "origin but no base"
-        // case left to fall back on, and `!diffBaseLocation` implies no
-        // origin.
-        let diffBaseLocation = entry?.base ?? null;
-
-        // Fallback for single-input multi-output: when an agent extracts N
-        // documents from one base file, the extracted doc names (e.g.
-        // "chapter1", "methods") don't match the base filename via basename
-        // strategies. If no diff base was found but there is exactly one base
-        // file, use it so the diff stats reflect real changes against the
-        // original.
-        if (!diffBaseLocation && baseFiles.length === 1) {
-          const candidate = baseFiles[0];
-          if (fileLocationDisplayPath(candidate) !== locationPath) {
-            diffBaseLocation = candidate;
-          }
-        }
-
-        const base = lineage ? diffBaseLocation : null;
+        // an origin always carries a base, and no base implies no origin.
+        const paired =
+          entry?.base ??
+          (onlyBase && fileLocationDisplayPath(onlyBase) !== locationPath
+            ? onlyBase
+            : null);
+        const base = lineage ? paired : null;
         // An output of a task that rewrites its inputs revises one of them;
         // one no input pairs with is recorded as a new document, which the
         // record cannot tell apart from one, so it is said here.

@@ -97,9 +97,8 @@ export const indentLatexFilesInDirectory = Effect.fn(
   let indentedCount = 0;
   const failed: string[] = [];
 
-  // The tolerant listing is the facade's `readDir`: its provider typed each
-  // entry from the `readdir` dirent, so one entry whose type could not be read
-  // never cost the whole directory.
+  // One entry whose type cannot be read must not cost the whole directory;
+  // the tolerant listing drops that entry instead.
   const walkDirectory = Effect.fn('latex.indentWalkDirectory')(function* (
     dirPath: string,
   ): Effect.fn.Return<

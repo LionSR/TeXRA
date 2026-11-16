@@ -20,7 +20,7 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 // Local imports - formatter helpers
 import { formatDisplayTimestamp } from '../timestampUtils';
 import { renderMarkdownHtml } from '../markdownRenderer';
-import { buildCopyButton, buildDetailsSummary } from '../htmlBuilders';
+import { buildCopyButton, buildDetailsCard } from '../htmlBuilders';
 import type { StreamingTextRow } from '@texra-ai/harness/transcript';
 import type { FormatResult } from '../baseLogFormatter';
 
@@ -93,8 +93,8 @@ export function formatBannerContentTemplate(
   // (raw text has no <p>/<br> tags to do it for us, unlike markdown HTML).
   // prettier-ignore
   const contentTemplate = isRunning
-    ? html`<div class="banner-content banner-content--streaming log-entry-content ${contentClass}">${trimmedContent}</div>`
-    : html`<div class="banner-content markdown-content log-entry-content ${contentClass}">${unsafeHTML(renderMarkdownHtml(trimmedContent))}</div>`;
+    ? html`<div class="banner-content banner-content--streaming log-entry-content ${contentClass}" aria-busy="true" data-log-id=${ifDefined(id)}>${trimmedContent}</div>`
+    : html`<div class="banner-content markdown-content log-entry-content ${contentClass}" data-log-id=${ifDefined(id)}>${unsafeHTML(renderMarkdownHtml(trimmedContent))}</div>`;
 
   if (kind === 'assistant') {
     const time = formatDisplayTimestamp(new Date(timestamp), 'minute');
@@ -108,20 +108,23 @@ export function formatBannerContentTemplate(
     // The transcript has one header grid for people, assistant output and errors.
     // Keep the disclosure at the trailing edge, beside the copy action.
     // prettier-ignore
-    return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--assistant message-disclosure" open aria-busy=${isRunning ? 'true' : 'false'} data-log-id=${ifDefined(id)}><div slot="summary" class="details-summary message-header"><span class="message-label">${waIcon('wand-magic-sparkles')}<span>Assistant</span></span><time class="message-timestamp" datetime=${new Date(timestamp).toISOString()} title=${time.tooltipTimestamp}>${time.timeDisplay}</time>${buildCopyButton(config.copyTitle, trimmedContent)}</div>${contentTemplate}${cutNote}</wa-details>`;
+    return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--assistant message-disclosure" open><div slot="summary" class="details-summary message-header"><span class="message-label">${waIcon('wand-magic-sparkles')}<span>Assistant</span></span><time class="message-timestamp" datetime=${new Date(timestamp).toISOString()} title=${time.tooltipTimestamp}>${time.timeDisplay}</time>${buildCopyButton(config.copyTitle, trimmedContent)}</div>${contentTemplate}${cutNote}</wa-details>`;
   }
 
-  // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="start" class="banner-details" ?open=${shouldOpen} aria-busy=${isRunning ? 'true' : 'false'} data-log-id=${ifDefined(id)}>${buildDetailsSummary({
-    iconName: config.iconName,
-    label: config.labelText,
-    timestamp: timestampInfo && {
-      display: `[${timestampInfo.timeDisplay}]`,
-      tooltip: timestampInfo.tooltipTimestamp,
+  return buildDetailsCard({
+    summary: {
+      iconName: config.iconName,
+      label: config.labelText,
+      timestamp: timestampInfo && {
+        display: `[${timestampInfo.timeDisplay}]`,
+        tooltip: timestampInfo.tooltipTimestamp,
+      },
+      copyButton: {
+        title: config.copyTitle,
+        content: trimmedContent,
+      },
     },
-    copyButton: {
-      title: config.copyTitle,
-      content: trimmedContent,
-    },
-  })}${contentTemplate}</wa-details>`;
+    body: contentTemplate,
+    open: shouldOpen,
+  });
 }

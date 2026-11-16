@@ -1,11 +1,11 @@
 // Third-party imports
 import { Effect } from 'effect';
-import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
 import { type RootedFileSystem } from '@texra-ai/harness/host';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { CommandDirs } from '@texra-ai/harness/node';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { type HostPromptFailed, inputBox } from '@frontend/ui/dialogs';
@@ -14,6 +14,7 @@ import { withVSCodeProgress } from '@frontend/ui/progress';
 import {
   cloneOverleafProject as runOverleafClone,
   gitClone,
+  type OverleafCloneOutcome,
   type OverleafCloneWorkflowPorts,
 } from '@latex/overleafClone';
 import {
@@ -79,7 +80,8 @@ const promptGitMissing = Effect.fnUntraced(function* () {
   // The command is worth offering only where its package manager is
   // installed.
   const command =
-    advice.command && hasPackageManager(advice.command.packageManager)
+    advice.command &&
+    hasPackageManager(advice.command.packageManager, (yield* CommandDirs)())
       ? advice.command.command
       : null;
   const message = `Git not found in PATH.\n\n${advice.guide}`;
@@ -114,15 +116,14 @@ const promptGitMissing = Effect.fnUntraced(function* () {
   }
 });
 
-/** Wire the shared Overleaf/ShareLaTeX clone workflow to the secret store
- *  and VS Code's input prompts and terminal/progress UI. All decision logic
- *  (token validation, precondition checks, auth-failure retry) lives in
- *  `@latex/overleafClone`; this only renders it. */
+/** Wire the shared Overleaf/ShareLaTeX clone workflow to the secret store,
+ *  the session's workspace view and VS Code's input prompts and progress UI.
+ *  All decision logic (token validation, precondition checks, auth-failure
+ *  handling) lives in `@latex/overleafClone`. */
 function buildOverleafClonePorts(
   secrets: PlatformSecrets,
-  remote: OverleafRemote,
+  label: string,
   workspaceFs: RootedFileSystem,
-  spawner: ChildProcessSpawner['Service'],
 ): OverleafCloneWorkflowPorts {
   return {
     // A credential store this host cannot reach fails the clone with its
@@ -134,72 +135,86 @@ function buildOverleafClonePorts(
         spec.tokenHint ?? 'Enter your Git authentication token.',
         true,
       ),
-    showInvalidToken: (spec, message) =>
-      Effect.logError(message).pipe(
-        withLogChannel(CHANNEL),
-        Effect.andThen(
-          announce(
-            vscodeUi.ask('error', message, {
-              items: spec.tokenHint ? ['How to get a token'] : [],
-            }),
-            undefined,
-          ).pipe(
-            Effect.flatMap((action) =>
-              action === 'How to get a token'
-                ? openUrl(OVERLEAF_TOKEN_DOCS_URL)
-                : Effect.void,
-            ),
-          ),
-        ),
-      ),
-
-    showGitMissing: () =>
-      Effect.provideService(promptGitMissing(), ChildProcessSpawner, spawner),
     listWorkspaceEntries: (workspaceRoot) =>
       workspaceFs.readDirectory(workspaceRoot),
-    showWorkspaceUnreadable: (e) =>
-      Effect.logError(`readDir failed: ${toErrorMessage(e)}`).pipe(
-        withLogChannel(CHANNEL),
-        Effect.andThen(
-          vscodeUi.notify('error', 'Cannot read workspace folder.'),
-        ),
-      ),
-    showWorkspaceNotEmpty: () =>
-      showLoggedMessage('Workspace folder must be empty.').pipe(Effect.asVoid),
-
     runClone: (clone, workspaceRoot) =>
       withVSCodeProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: `Cloning ${remote.isOverleaf ? 'Overleaf' : 'ShareLaTeX'}…`,
+          title: `Cloning ${label}…`,
         },
         () => gitClone(clone, workspaceRoot),
-      ),
-    showCloneSucceeded: (label) =>
-      vscodeUi.notify('info', `${label} project cloned.`),
-    showAuthFailure: Effect.fn('gitCommands.showAuthFailure')(function* (r) {
-      const detail = r.isOverleaf
-        ? 'Your git token may be invalid or expired.'
-        : 'Check your credentials.';
-      const selected = yield* announce(
-        vscodeUi.ask('error', `Clone failed: authentication error. ${detail}`, {
-          items: r.isOverleaf
-            ? ['Get New Token', 'How to get a token']
-            : ['Retry'],
-        }),
-        undefined,
-      );
-      if (selected === 'Get New Token') {
-        yield* openUrl(OVERLEAF_GIT_TOKEN_URL);
-      } else if (selected === 'How to get a token') {
-        yield* openUrl(OVERLEAF_TOKEN_DOCS_URL);
-      }
-    }),
-    showCloneFailed: (message) => vscodeUi.notify('error', message),
-    logCloneError: (message) =>
-      Effect.logError(`Clone failed: ${message}`).pipe(withLogChannel(CHANNEL)),
+      ).pipe(Effect.as(workspaceRoot)),
   };
 }
+
+/** Show the clone's outcome. A cancelled prompt has already said so. */
+const presentCloneOutcome = Effect.fn('gitCommands.presentCloneOutcome')(
+  function* (
+    remote: OverleafRemote,
+    label: string,
+    outcome: OverleafCloneOutcome,
+  ) {
+    switch (outcome._tag) {
+      case 'Cloned':
+        return yield* vscodeUi.notify('info', `${label} project cloned.`);
+      case 'Cancelled':
+        return;
+      case 'InvalidToken': {
+        yield* Effect.logError(outcome.message);
+        const action = yield* announce(
+          vscodeUi.ask('error', outcome.message, {
+            items: outcome.spec.tokenHint ? ['How to get a token'] : [],
+          }),
+          undefined,
+        );
+        if (action === 'How to get a token') {
+          yield* openUrl(OVERLEAF_TOKEN_DOCS_URL);
+        }
+        return;
+      }
+      case 'GitMissing':
+        return yield* promptGitMissing();
+      case 'WorkspaceUnreadable':
+        yield* Effect.logError(`readDir failed: ${outcome.error.message}`);
+        return yield* vscodeUi.notify('error', 'Cannot read workspace folder.');
+      case 'WorkspaceNotEmpty':
+        yield* showLoggedMessage('Workspace folder must be empty.');
+        return;
+      case 'AuthFailure': {
+        yield* Effect.logError(`Clone failed: ${outcome.error}`);
+        const detail = remote.isOverleaf
+          ? 'Your git token may be invalid or expired.'
+          : 'Check your credentials.';
+        const selected = yield* announce(
+          vscodeUi.ask(
+            'error',
+            `Clone failed: authentication error. ${detail}`,
+            {
+              items: remote.isOverleaf
+                ? ['Get New Token', 'How to get a token']
+                : ['Retry'],
+            },
+          ),
+          undefined,
+        );
+        if (selected === 'Get New Token') {
+          yield* openUrl(OVERLEAF_GIT_TOKEN_URL);
+        } else if (selected === 'How to get a token') {
+          yield* openUrl(OVERLEAF_TOKEN_DOCS_URL);
+        }
+        return;
+      }
+      case 'CloneFailed':
+        yield* Effect.logError(`Clone failed: ${outcome.error}`);
+        return yield* vscodeUi.notify(
+          'error',
+          'Clone failed. Check credentials and connection.',
+        );
+    }
+  },
+  withLogChannel(CHANNEL),
+);
 
 export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
   function* () {
@@ -224,16 +239,13 @@ export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
       yield* showLoggedMessage('Open a workspace folder first.');
       return;
     }
-    yield* runOverleafClone(
+    const label = remote.isOverleaf ? 'Overleaf' : 'ShareLaTeX';
+    const outcome = yield* runOverleafClone(
       remote,
       workspaceRoot,
-      buildOverleafClonePorts(
-        yield* Secrets,
-        remote,
-        workspaceFs,
-        yield* ChildProcessSpawner,
-      ),
+      buildOverleafClonePorts(yield* Secrets, label, workspaceFs),
     );
+    yield* presentCloneOutcome(remote, label, outcome);
   },
   withLogChannel(CHANNEL),
 );

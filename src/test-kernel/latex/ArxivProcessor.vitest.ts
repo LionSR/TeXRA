@@ -12,6 +12,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 // Local imports
 import { setLogSink } from '@texra-ai/harness/node';
 import { downloadArxivSource } from '@latex/arxivProcessor';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
@@ -51,9 +52,8 @@ describe('arXiv source download filenames', () => {
           return fs.readFile(tarPath);
         });
         const download = downloadArxivSource('2404.12175', {
-          workspaceRoot,
-          formatter: null,
-          autoIndent: false,
+          roots: createFakeWorkspaceRoots({ workspaceRoot }),
+          indent: false,
           destination: 'root',
         }).pipe(
           onFetch(

@@ -228,9 +228,9 @@ test('the rail deletes a finished conversation at once, and it stays deleted', a
     exact: true,
   });
   await taskActions.click();
-  const rename = currentLaunch.page.locator(
-    'run-header wa-dropdown-item[value="renameTask"]',
-  );
+  const rename = currentLaunch.page
+    .locator('run-header wa-dropdown-item')
+    .filter({ hasText: 'Rename…' });
   await expect(rename).toBeVisible();
   const menuGeometry = await currentLaunch.page
     .locator('run-header wa-dropdown-item')
@@ -301,14 +301,17 @@ test('the rail deletes a finished conversation at once, and it stays deleted', a
     animations: 'disabled',
   });
   await rowMenu.click();
-  await row.locator('wa-dropdown-item[value="rename"]').click();
+  await row.locator('wa-dropdown-item').filter({ hasText: 'Rename…' }).click();
   await row.locator('.tab-rename').fill('Renamed from the sidebar');
   await row.locator('.tab-rename').press('Enter');
   await expect(row.locator('.tab-title')).toHaveText(
     'Renamed from the sidebar',
   );
   await rowMenu.click();
-  await row.locator('.tab-remove').click();
+  await row
+    .locator('wa-dropdown-item')
+    .filter({ hasText: /Delete (task|agent)/ })
+    .click();
   await expect(row).toHaveCount(0);
   await expect(railRow(currentLaunch, ORPHAN_RUN)).toHaveCount(1);
 
@@ -317,7 +320,8 @@ test('the rail deletes a finished conversation at once, and it stays deleted', a
     .first()
     .click();
   await currentLaunch.page
-    .locator('.shell-project-menu wa-dropdown-item[value="rename"]')
+    .locator('.shell-project-menu wa-dropdown-item')
+    .filter({ hasText: 'Rename project…' })
     .click();
   const projectName = currentLaunch.page.getByRole('textbox', {
     name: 'Project display name',

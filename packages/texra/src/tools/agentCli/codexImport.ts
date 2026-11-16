@@ -1,17 +1,16 @@
 /**
  * Helpers for the Codex tool.
  *
- * 1. `importCodexClass()` — import the Codex constructor from @openai/codex-sdk.
- *    The SDK is bundled into CJS by esbuild at build time, so no runtime
- *    ESM/CJS workarounds are needed.
+ * 1. `importCodexClass()` — import the Codex constructor from @openai/codex-sdk,
+ *    which esbuild bundles into TeXRA.
  *
  * 2. `findCodexBinaryPath()` — locate the native Codex CLI binary. The SDK
  *    bundles its own `findCodexPath()` but it resolves `@openai/codex`
  *    relative to the SDK itself (inside the VSIX). Since we don't ship the
  *    130 MB platform binaries in the VSIX, we probe Electron's unpacked app
  *    resources, local node_modules, the global npm prefix, and PATH (in that
- *    priority order), then return the path for `codexPathOverride`. Results
- *    are cached for the session.
+ *    priority order), then return the path for `codexPathOverride`. A found
+ *    path is kept for the process lifetime.
  *
  * 3. `openCodexClient()` — a client over that binary, with the environment
  *    the CLI may see.
@@ -24,7 +23,7 @@ import { Effect, type FileSystem } from 'effect';
 import { inheritedEnv } from '@texra-ai/harness/node';
 import {
   binaryIfPresent,
-  createCachedBinaryResolver,
+  findCliBinary,
   importForeignSdk,
   resolvePackageDir,
 } from './vendorPackages';
@@ -48,8 +47,7 @@ type PlatformInfo = { pkg: string; triple: string };
 export function importCodexClass() {
   return importForeignSdk({
     load: () => import('@openai/codex-sdk'),
-    notFoundMessage:
-      '@openai/codex-sdk package not found. Install with: npm install -g @openai/codex',
+    notFoundMessage: '@openai/codex-sdk package not found. Reinstall TeXRA.',
     exportName: 'Codex',
     specifier: '@openai/codex-sdk',
     errorLabel: 'Codex class',
@@ -127,17 +125,17 @@ const codexBinaryInPlatformPackage = Effect.fn(
 });
 
 /**
- * Locate the native Codex CLI binary. Results are cached for the session
- * (misses are always retried so mid-session installs are picked up).
+ * Locate the native Codex CLI binary. A found path is kept for the process
+ * lifetime; a miss is retried, so an install made meanwhile is picked up.
  *
  * The caller should pass the result as `codexPathOverride` to the Codex
  * constructor.
  */
-export const findCodexBinaryPath = createCachedBinaryResolver(() => {
+export function findCodexBinaryPath() {
   const info = PLATFORM_INFO[`${process.platform}-${process.arch}`];
-  if (!info) return undefined;
+  if (!info) return Effect.succeed(undefined);
 
-  return {
+  return findCliBinary({
     platformPackages: [info.pkg, '@openai/codex'],
     binaryInPlatformPackage: (dir) => codexBinaryInPlatformPackage(dir, info),
     // The npm global prefix hosts the `@openai/codex` meta-package; the
@@ -147,8 +145,8 @@ export const findCodexBinaryPath = createCachedBinaryResolver(() => {
       path.join(prefix, 'node_modules', '@openai', 'codex'),
     ],
     pathCommand: 'codex',
-  };
-});
+  });
+}
 
 /**
  * A Codex client over the native binary, and the binary's path. The CLI gets

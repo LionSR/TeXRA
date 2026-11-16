@@ -9,7 +9,7 @@ import { describe, expect } from 'vitest';
 // Local imports
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { previewProposedLatex } from '@texra/tools/latex/latexPreview';
+import { previewProposedLatex } from '@texra/controllers/approval/latexPreview';
 
 // Failure mode: a preview's build writes its auxiliary files where the
 // host's build puts them (LaTeX Workshop's recommended `outDir` is

@@ -28,10 +28,7 @@ import {
   type StoredMediaSchema,
 } from '@texra-ai/harness/schemas';
 import type { BridgeError } from './bridgeErrors';
-import {
-  InquiryDraftSchema,
-  type InquiryDraft,
-} from '@texra/shared/plugins/externalInquiry';
+import { InquiryDraftSchema } from '@texra/shared/plugins/externalInquiry';
 import { markShownRunSeen } from './unseenRuns';
 import type { CommitOrdinal } from '@texra-ai/harness/transcript';
 import type { HostSnapshot } from './hostSnapshot';
@@ -234,12 +231,15 @@ export interface Surface {
   readonly runs: ReadonlyMap<RunId, RunSurface>;
   /** Foreground polish operations, keyed by stream id or `launch`. Never persisted. */
   readonly polishing: ReadonlySet<string>;
-  /** Streams awaiting follow-up admission, and `launch` while the
+  /** Streams awaiting a follow-up's acceptance, and `launch` while the
    *  launcher's task awaits its own. Never persisted. */
   readonly sending: ReadonlySet<RunId | 'launch'>;
+  /** Runs whose delete is in flight. Never persisted. */
+  readonly deleting: ReadonlySet<RunId>;
   readonly launch: LaunchSurface;
-  /** Keyed by `${InquiryThreadId}#${turn}`, never by stream. */
-  readonly inquiryDrafts: ReadonlyMap<string, InquiryDraft>;
+  /** Each request card's unsent answer, under the key the card names (its
+   *  request id; an inquiry's turn). */
+  readonly requestDrafts: ReadonlyMap<string, RequestDraft>;
   readonly drawerOpen: boolean;
   readonly toolsSheetOpen: boolean;
   /** The output list's "where files are stored" hint, dismissed once. */
@@ -254,6 +254,29 @@ function entries<K extends Schema.Top, V extends Schema.Top>(key: K, value: V) {
     Schema.withDecodingDefault(Effect.succeed([])),
   );
 }
+
+/**
+ * What a person has entered on a request card and not sent: the decline
+ * note (open while present), the model picked on a proposal, each
+ * question's picks and typed answer, an inquiry's answer. It outlives the
+ * card element, so switching runs and back keeps it; sending the card's
+ * decision clears it.
+ */
+const RequestDraftSchema = Schema.Struct({
+  note: Schema.optionalKey(Schema.String),
+  model: Schema.optionalKey(Schema.String),
+  answers: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        selected: Schema.Array(Schema.String),
+        text: Schema.String,
+      }),
+    ),
+  ),
+  inquiry: Schema.optionalKey(InquiryDraftSchema),
+});
+/** A request card's unsent answer. */
+export type RequestDraft = typeof RequestDraftSchema.Type;
 
 /**
  * The persisted form: interaction state only, per view and session. A
@@ -279,7 +302,7 @@ export const PersistedSurfaceSchema = Schema.Struct({
       seen: Schema.optionalKey(Schema.Number),
     }),
   ),
-  inquiryDrafts: entries(Schema.String, InquiryDraftSchema),
+  requestDrafts: entries(Schema.String, RequestDraftSchema),
   drawerOpen: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
@@ -323,8 +346,9 @@ export function loadSurface(
     ),
     polishing: new Set(),
     sending: new Set(),
+    deleting: new Set(),
     launch: persisted.launch,
-    inquiryDrafts: new Map(persisted.inquiryDrafts),
+    requestDrafts: new Map(persisted.requestDrafts),
     drawerOpen: persisted.drawerOpen,
     toolsSheetOpen: false,
     storageHintDismissed: persisted.storageHintDismissed,
@@ -348,7 +372,7 @@ export function persistSurface(surface: Surface): PersistedSurface {
         ...(run.seen !== undefined && { seen: run.seen }),
       },
     ]),
-    inquiryDrafts: [...surface.inquiryDrafts],
+    requestDrafts: [...surface.requestDrafts],
     drawerOpen: surface.drawerOpen,
     storageHintDismissed: surface.storageHintDismissed,
     workbench: surface.workbench,
@@ -482,7 +506,7 @@ export function canSendFollowUp(run: RunView, draft: Draft): boolean {
 /**
  * Every change a component may ask of the surface. The root applies it;
  * a component never mutates the record. `selectNew` and `select` are also
- * host-initiated arms of `surface.action`, and `selectOnArrival` is the
+ * host-initiated cases of `surface.action`, and `selectOnArrival` is the
  * host's alone.
  */
 export type SurfaceAction =
@@ -516,9 +540,9 @@ export type SurfaceAction =
       readonly patch: LaunchPatch;
     }
   | {
-      readonly kind: 'inquiryDraft';
+      readonly kind: 'requestDraft';
       readonly key: string;
-      readonly draft: InquiryDraft | null;
+      readonly draft: RequestDraft | null;
     }
   | {
       readonly kind: 'expand';
@@ -622,11 +646,11 @@ export function applySurfaceAction(
             : { ...launch, launchTarget: 'agent' },
       };
     }
-    case 'inquiryDraft':
+    case 'requestDraft':
       return {
         ...surface,
-        inquiryDrafts: withEntry(
-          surface.inquiryDrafts,
+        requestDrafts: withEntry(
+          surface.requestDrafts,
           action.key,
           action.draft,
         ),

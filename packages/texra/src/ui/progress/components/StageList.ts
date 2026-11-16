@@ -134,6 +134,9 @@ export class StageList extends LitElement {
    */
   @property({ type: Boolean, reflect: true }) terminal = false;
 
+  /** This is the run on screen; the others are cached hidden. */
+  @property({ type: Boolean }) shown = false;
+
   /** The transcript laid out for render (`transcriptTimeline`), rebuilt
    *  when the transcript changes. */
   private timeline: Entry[] = [];
@@ -167,12 +170,11 @@ export class StageList extends LitElement {
     this.isSticky = this.isNearBottom(StageList.STICKY_THRESHOLD);
   };
 
-  /** Public method to scroll to bottom - called by parent LogList */
-  scrollToBottom(): void {
+  private scrollToBottom(): void {
     if (this.terminal) {
-      // xterm owns the viewport for terminal runs. LogList calls this on a
-      // tab switch, which is also the first moment this tree is unhidden and
-      // can measure itself — every fit attempted while hidden was skipped.
+      // xterm owns the viewport for terminal runs. Being shown is also the
+      // first moment this tree is unhidden and can measure itself — every
+      // fit attempted while hidden was skipped.
       this.terminalOutput?.refitIfVisible();
       this.terminalOutput?.scrollToBottom();
       return;
@@ -182,22 +184,26 @@ export class StageList extends LitElement {
     }
   }
 
-  /** Scroll to bottom only when sticky (user hasn't scrolled away). */
-  scrollToBottomIfSticky(): void {
-    // Terminal runs: the terminal keeps its own viewport pinned unless the
-    // user scrolled away inside it, and the outer container never overflows,
-    // so there is nothing here to follow.
-    if (this.terminal) return;
-    if (!this.isSticky) return;
-    this.scrollToBottom();
-  }
-
-  /** Force sticky state — called by parent on tab switch */
-  setSticky(value: boolean): void {
-    this.isSticky = value;
+  /**
+   * Follow the tail: a list that has just been shown sticks and scrolls to
+   * its end once laid out (it measures after the frame); a shown list
+   * scrolls only while the user has not scrolled away. A terminal run keeps
+   * its own viewport pinned, and its outer container never overflows.
+   */
+  protected override updated(changedProperties: PropertyValues<this>): void {
+    if (!this.shown) return;
+    if (changedProperties.has('shown')) {
+      requestAnimationFrame(() => {
+        this.isSticky = true;
+        this.scrollToBottom();
+      });
+    } else if (!this.terminal && this.isSticky) {
+      this.scrollToBottom();
+    }
   }
 
   override willUpdate(changedProperties: PropertyValues<this>): void {
+    if (changedProperties.has('shown')) this.hidden = !this.shown;
     if (changedProperties.has('run') || changedProperties.has('view')) {
       this.scripts =
         this.run && this.view

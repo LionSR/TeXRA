@@ -1,10 +1,15 @@
 /** Displays compaction / clearing / max_tokens reduction events as collapsible details. */
 
 // Third-party imports
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
-import { styleMap } from 'lit/directives/style-map.js';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/details/details.js';
@@ -17,7 +22,7 @@ import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - progress view helpers
-import { buildDetailsSummary } from '../formatters/htmlBuilders';
+import { buildDetailsCard } from '../formatters/htmlBuilders';
 
 // Local imports - styles
 import { bannerDetailsWaDetailsStyles } from '../styles/logEntryStyles';
@@ -56,23 +61,28 @@ export class ContextManagement extends LitElement {
   /** Statistics items to display */
   @property({ attribute: false }) items: StatItem[] = [];
 
+  // The event colour tints the summary icon (`--accent-color` in the
+  // component's styles), set on the host so the card's markup is the shared
+  // shell's.
+  protected override willUpdate(changed: PropertyValues<this>): void {
+    if (changed.has('config')) {
+      this.style.setProperty('--accent-color', this.config.color);
+    }
+  }
+
   override render(): TemplateResult | typeof nothing {
     if (this.items.length === 0) {
       return nothing;
     }
 
     return html`
-      <wa-details
-        class="banner-details"
-        appearance="plain"
-        style=${styleMap({ '--accent-color': this.config.color })}
-      >
-        ${buildDetailsSummary({
+      ${buildDetailsCard({
+        summary: {
           iconName: this.config.icon,
           label: this.config.label,
           labelClass: 'context-title',
-        })}
-        <div class="context-content" data-log-id=${this.logId}>
+        },
+        body: html`<div class="context-content" data-log-id=${this.logId}>
           ${repeat(
             this.items,
             (item) => item.label,
@@ -85,8 +95,8 @@ export class ContextManagement extends LitElement {
               <wa-tooltip for="context-stat-${index}">${item.label}</wa-tooltip>
             `,
           )}
-        </div>
-      </wa-details>
+        </div>`,
+      })}
     `;
   }
 }

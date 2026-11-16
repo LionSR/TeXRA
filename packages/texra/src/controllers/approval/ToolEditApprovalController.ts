@@ -58,7 +58,7 @@ import {
   runLatexdiff,
   type BuildDisplayFn,
   type LatexPreviewEntry,
-} from '@texra/tools/latex/latexPreview';
+} from '@texra/controllers/approval/latexPreview';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
 

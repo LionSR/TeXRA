@@ -6,7 +6,7 @@ import { executed, ToolError, defineTool } from '@texra-ai/harness/plugins';
 import type { CommandId } from '@texra/shared/commands/catalog';
 
 // Local file imports
-import { assertInSetupAllowlist, SetupPlatform } from './platform';
+import { SetupPlatform } from './platform';
 
 /** The Lean 4 extension's toolchain installers, each its own prompted flow. */
 const LEAN4_SETUP_COMMANDS = [
@@ -14,7 +14,7 @@ const LEAN4_SETUP_COMMANDS = [
   'lean4.setup.installDeps',
   'lean4.setup.updateElan',
   'lean4.setup.selectDefaultToolchain',
-];
+] as const;
 
 /**
  * The TeXRA commands the setup agent may invoke: each opens an existing,
@@ -37,17 +37,13 @@ const SETUP_INVOKABLE_COMMANDS = [
   'texra.showDashboard',
 ] as const satisfies readonly CommandId[];
 
-/** The commands the setup agent may invoke: TeXRA's own and the Lean 4
- *  extension's installers. */
-const ALLOWED_COMMANDS: ReadonlySet<string> = new Set([
-  ...SETUP_INVOKABLE_COMMANDS,
-  ...LEAN4_SETUP_COMMANDS,
-]);
-
 const InvokeCommandInputSchema = Schema.Struct({
-  command: Schema.NonEmptyString.annotate({
-    description: 'VS Code command ID (must be in the setup allowlist).',
-  }),
+  // The commands the setup agent may invoke, TeXRA's own and the Lean 4
+  // extension's installers, as the enum the model chooses from.
+  command: Schema.Literals([
+    ...SETUP_INVOKABLE_COMMANDS,
+    ...LEAN4_SETUP_COMMANDS,
+  ]).annotate({ description: 'VS Code command ID.' }),
   // Declared so a value is refused: a struct drops an undeclared key before
   // any check sees it, and no credential may reach the host through command
   // arguments. `null` passes, as OpenAI-compatible providers send it for
@@ -63,10 +59,7 @@ const invokeCommand = Effect.fn('InvokeCommandTool.execute')(function* (
   input: InvokeCommandInput,
 ) {
   const platform = yield* SetupPlatform;
-  const commandId = input.command.trim();
-
-  yield* assertInSetupAllowlist('Command', commandId, ALLOWED_COMMANDS);
-
+  const commandId = input.command;
   const commands = platform.commands;
   if (!commands) {
     return yield* Effect.fail(
@@ -96,7 +89,7 @@ export const InvokeCommandTool = defineTool({
   // Offered where the host passes its commands (VS Code).
   hostCapability: 'commands' satisfies keyof SetupPlatform['Service'],
   requiresApproval: true,
-  description: `Invoke an allowlisted VS Code command. Use this to hand off to TeXRA's existing UX: the API-key quick-pick (texra.setApiKey), the settings-dashboard tab openers (texra.showDashboard / texra.showModels / texra.showAgents / texra.showMemory / texra.showTeamSettings / texra.showTools / texra.showGitSettings), the sample-project creator (texra.createSampleProject), the Overleaf clone wizard (texra.cloneOverleafProject), the arXiv source downloader (texra.downloadArXivSource), and the Lean 4 extension's toolchain installers (lean4.setup.installElan / lean4.setup.installDeps / lean4.setup.updateElan / lean4.setup.selectDefaultToolchain). Non-allowlisted commands are rejected. To install a VS Code extension (LaTeX Workshop, Lean 4), use \`install_vscode_extension\` instead: it enforces a stricter per-extension allowlist.`,
+  description: `Invoke an allowlisted VS Code command; \`command\` lists them. Use this to hand off to TeXRA's existing UX: the API-key quick-picks, the main view, the getting-started page and the settings-dashboard tab openers, the sample-project creator, the Overleaf clone wizard, the arXiv source downloader, and the Lean 4 extension's toolchain installers. To install a VS Code extension (LaTeX Workshop, Lean 4), use \`install_vscode_extension\` instead: it enforces a stricter per-extension allowlist.`,
   schema: InvokeCommandInputSchema,
   execute: invokeCommand,
 });

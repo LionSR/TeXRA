@@ -48,7 +48,7 @@ export const findLabelInWorkspace = Effect.fn(
 });
 
 /** The single-slot catalogs: base candidates are the input list; edited
- *  candidates are every file the edited rules admit, and the sheet narrows
+ *  candidates are every file the edited rules allow, and the sheet narrows
  *  them to the chosen base. */
 export const workspaceFileOptions = Effect.fn(
   'workspaceFileOptions.workspaceFileOptions',

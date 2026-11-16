@@ -58,34 +58,27 @@ export const progressAppStyles = css`
   .shell-header {
     display: flex;
     flex: 0 0 auto;
-    min-height: var(--height-header, 38px);
+    min-height: var(--height-header);
     border-bottom: var(--border-thin) solid var(--color-border);
   }
 
-  /* Workspace controls live in the desktop's separate title bar. This
-     header belongs to the task and aligns with the file-tab strip. */
-  :host([placement='desktop']) .shell-header {
+  /* Workspace controls live in the host's own title bar. This header
+     belongs to the task and aligns with the host's file-tab strip. */
+  :host([placement='embedded']) .shell-header {
     --wa-height-header: 44px;
     min-height: 44px;
     border-bottom: 0;
   }
-  /* The desktop rail lists each project's tasks, so the sessions button
-     and drawer would be a second list there. */
-  :host([placement='desktop']) .sessions-button,
-  :host([placement='desktop']) session-drawer {
-    display: none;
-  }
-  /* One readable column, as the wide editor tab has: the desktop window
+  /* One readable column, as the wide editor tab has: the host's window
      is wide and a launcher stretched edge to edge reads as packed. */
-  :host([placement='desktop']) .reading > .empty {
+  :host([placement='embedded']) .reading > .empty {
     width: min(740px, 100%);
     margin: 0 auto;
   }
-  /* The desktop's new task is one centred group: hero, attachments and
+  /* The embedded new task is one centred group: hero, attachments and
      composer together, not the hero at the top and the composer across an
-     empty page at the bottom. Its rail already lists the running tasks, so
-     the Active now strip would be a second copy there. */
-  :host([placement='desktop']) .empty {
+     empty page at the bottom. */
+  :host([placement='embedded']) .empty {
     /* \`safe\`: a group taller than the pane starts at the top, not clipped. */
     justify-content: safe center;
     --hero-align: start;
@@ -95,17 +88,14 @@ export const progressAppStyles = css`
     box-sizing: border-box;
     padding: 32px 28px 80px;
   }
-  :host([placement='desktop']) .hero-wrap {
+  :host([placement='embedded']) .hero-wrap {
     padding-block: 0 24px;
   }
-  :host([placement='desktop']) .header-main {
+  :host([placement='embedded']) .header-main {
     padding-inline: 24px;
   }
-  :host([placement='desktop']) .launch-banners {
+  :host([placement='embedded']) .launch-banners {
     margin-top: 0;
-  }
-  :host([placement='desktop']) .active-now {
-    display: none;
   }
 
   /* The dock cell of the header exists only docked wide (see the container

@@ -17,7 +17,7 @@ import { meansAbsent } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { HostFailed } from '@texra/hosts/uiHosts';
-import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
+import type { BuildDisplayFn } from '@texra/controllers/approval/latexPreview';
 
 import { DESKTOP_PDF_COMMANDS } from '../shared/desktopPdfMessages.js';
 import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
@@ -138,7 +138,7 @@ export function createDesktopPreviewHost(
 
     // Loaded on the first preview, not with the window.
     const { compileForDisplay } = yield* Effect.promise(
-      () => import('@texra/tools/latex/latexPreview'),
+      () => import('@texra/controllers/approval/latexPreview'),
     );
     // The PDF lands beside its source; a failure's sentence is presented in
     // a native dialog (desktopWindowHost.ts's `presented`).

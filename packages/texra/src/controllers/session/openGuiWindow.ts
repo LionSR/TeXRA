@@ -46,10 +46,7 @@ import {
 } from '@texra-ai/harness/plugins';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
-import type {
-  FileOpResult,
-  HostCommand,
-} from '@texra/shared/session/hostRequest';
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
@@ -151,9 +148,9 @@ type SharedHostCommand = Exclude<HostCommand, OwnHostCommand>;
 const isOwnHostCommand = (request: HostCommand): request is OwnHostCommand =>
   Object.hasOwn(OWN_REQUEST_LABEL, request.kind);
 
-/** The arms a host answers its own way, by kind. A kind a host leaves
+/** The handlers a host answers its own way, by kind. A kind a host leaves
  *  out is refused by the shared router, worded once for both hosts. */
-export type OwnHostArms = {
+export type OwnHostHandlers = {
   readonly [K in OwnHostCommand['kind']]?: (
     request: Extract<OwnHostCommand, { kind: K }>,
     port: string,
@@ -168,10 +165,8 @@ type HostVerb<A> = Effect.Effect<
   ProcessServices | StorageFs | WorkspaceFs
 >;
 
-type LatexdiffsRequest = Extract<HostCommand, { kind: 'latexdiffs' }>;
-
 /**
- * The verbs behind the shared arms. Every member is a capability the host
+ * The verbs behind the shared handlers. Every member is a capability the host
  * performs; nothing here decides anything, which is the point: the decision
  * -- the order, the guard, the refusal wording -- is in the one body below.
  */
@@ -219,7 +214,7 @@ export interface GuiWindowHost {
   /** The window's notices. */
   readonly notify: Dialogs['notify'];
   readonly bindings: SharedHostCommandBindings;
-  readonly own: OwnHostArms;
+  readonly own: OwnHostHandlers;
   /** The runtime's notices this host presents its own way. A missing agent
    *  is the window's own banner, so the window's opening answers that one. */
   readonly notices: PresentationEventHandlers<
@@ -232,13 +227,8 @@ export interface GuiWindowHost {
   readonly window: Omit<WindowHost, 'filesWritten' | 'emit'>;
   readonly runs: Pick<HostRunActionPorts, 'openFinalOutput' | 'revealProgress'>;
   readonly files: Omit<ProgressDocumentTaskFileActionsHost, 'showInfo'>;
-  /** The transcript export's format picker and opener, the LaTeX export's
-   *  preamble, and the host's resources directory, which holds the
-   *  standalone trace viewer's template. */
-  readonly export: TranscriptExportHost & {
-    readonly latexPreamble: string;
-    readonly resourcesPath: string;
-  };
+  /** The transcript export's format picker and opener. */
+  readonly export: TranscriptExportHost;
 }
 
 interface GuiWindowPorts {
@@ -264,26 +254,11 @@ interface GuiWindowPorts {
 
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
 
-/** What the window tells the user after a pack or clean (the latexdiff
- *  pack's counterpart is `latexdiffPackMessage`). */
-function fileOpResultMessage(
-  operation: 'pack' | 'clean',
-  result: FileOpResult,
-  inputFile: string,
-): string {
-  if (result.status === 'noFiles')
-    return `No files found to ${operation} for ${inputFile}`;
-  if (operation === 'clean') return `Cleanup complete for ${inputFile}`;
-  return result.outputFolder
-    ? `Files packed into ${result.outputFolder}`
-    : 'Files packed.';
-}
-
 /**
  * Open a window of `ports.runs` for the caller's scope. The bridge has a
  * scope of its own, closed off the window's release: it waits for the
  * requests in flight when it closes, up to the session's close deadline, and
- * a launch answers at admission, so a window that closes neither waits for a
+ * a launch answers once it starts, so a window that closes neither waits for a
  * run to end nor stops it. The
  * tool-edit previews close with the window, awaited, so their files are gone
  * before the window's release returns.
@@ -434,6 +409,13 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     session,
     notify: host.notify,
   });
+  const { bindings } = host;
+  const latexdiff = latexdiffVerbs({
+    host: bindings.latexdiff,
+    roots,
+    session,
+    notify: host.notify,
+  });
   const documentTaskFileActions = new ProgressDocumentTaskFileActionsController(
     {
       rounds: (runId) => {
@@ -447,10 +429,10 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         showInfo: (message) => host.notify('info', message),
       },
       runs: runActions,
+      latexdiff: latexdiff.file,
     },
   );
 
-  const { bindings } = host;
   const apiKeyRetry = new ProgressApiKeyRetryController({
     // The set-key verb either runs or faults, so its failure is the one
     // failure, as `ApiKeyPromptFailed`.
@@ -468,12 +450,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       ),
     session,
   });
-  const latexdiff = latexdiffVerbs({
-    host: bindings.latexdiff,
-    roots,
-    session,
-    notify: host.notify,
-  });
   const exportTranscript = (runId: RunId) =>
     exportRunTranscript(runId, {
       pickFormat: host.export.pickFormat,
@@ -481,11 +457,9 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       notify: host.notify,
       roots,
       session,
-      latexPreamble: host.export.latexPreamble,
-      resourcesPath: host.export.resourcesPath,
     });
   /**
-   * One program per shared request, as a host's own arms are: it runs on the
+   * One program per shared request, as a host's own handlers are: it runs on the
    * fiber the window's dispatch already owns and finishes nothing, so its
    * failure reaches the bridge's view as the value the port carried.
    */
@@ -493,46 +467,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     request: SharedHostCommand,
     port: string,
   ): HostVerb<HostOutcome> {
-    /** The Tools sheet's verbs over the launcher's base and edited files. */
-    const latexdiffs = Effect.fn('latexdiffs')(function* (
-      sheet: LatexdiffsRequest,
-    ) {
-      const { action } = sheet;
-      const baseFile = sheet.baseFile ?? '';
-      const editedFile = sheet.editedFile ?? '';
-      if (
-        action === 'latexdiffvc' ||
-        action === 'packLatexdiffvc' ||
-        action === 'cleanLatexdiffvc'
-      ) {
-        yield* latexdiff.againstCommit(
-          action,
-          baseFile,
-          sheet.commit ?? 'HEAD',
-        );
-        return;
-      }
-      if (!baseFile || !editedFile) {
-        return yield* new Rejected({
-          reason: 'Choose a base file and an edited file first.',
-        });
-      }
-      switch (action) {
-        case 'compare':
-          yield* documentTaskFileActions.compareOriginal(editedFile, baseFile);
-          return;
-        case 'accept':
-          yield* documentTaskFileActions.acceptFile(editedFile, baseFile);
-          return;
-        case 'merge':
-          yield* documentTaskFileActions.mergeFile(editedFile, baseFile);
-          return;
-        case 'latexdiff':
-          yield* latexdiff.file(baseFile, editedFile);
-          return;
-      }
-    });
-
     return Effect.gen(function* () {
       switch (request.kind) {
         case 'pickFiles': {
@@ -667,12 +601,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           yield* toolEditApprovals.handleAction(request);
           return done;
         case 'fileAction':
-          yield* request.action === 'latexdiff'
-            ? latexdiff.file(request.base, request.file)
-            : documentTaskFileActions.handle({
-                ...request,
-                action: request.action,
-              });
+          yield* documentTaskFileActions.handle(request);
           return done;
         case 'exportTranscript':
           if (!session.view.current().runs.has(request.runId))
@@ -683,23 +612,21 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           yield* exportTranscript(request.runId);
           return done;
         case 'latexdiff':
-          yield* runActions.documentTaskDiffRequest(request.runId);
           yield* latexdiff.run(request.runId);
           return done;
         case 'pack':
-        case 'clean': {
-          const files = yield* runActions.documentTaskFileOperation(
+        case 'clean':
+          yield* runActions.documentTaskFileOperation(
             request.runId,
             request.kind,
           );
-          yield* host.notify(
-            'info',
-            fileOpResultMessage(request.kind, files.result, files.inputFile),
-          );
           return done;
-        }
-        case 'latexdiffs':
-          yield* latexdiffs(request);
+        case 'latexdiffCommit':
+          yield* latexdiff.againstCommit(
+            request.action,
+            request.baseFile ?? '',
+            request.commit ?? 'HEAD',
+          );
           return done;
         case 'openSettings':
           yield* bindings.openSettings(request.target ?? undefined);
@@ -772,14 +699,14 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       }
     });
   }
-  /** An own kind the host binds runs its arm; one it leaves out is
+  /** An own kind the host binds runs its handler; one it leaves out is
    *  refused, worded here for both hosts. */
   const own = (
     request: OwnHostCommand,
     port: string,
   ): HostVerb<HostOutcome> => {
-    const arm = host.own[request.kind];
-    if (arm === undefined)
+    const handler = host.own[request.kind];
+    if (handler === undefined)
       return Effect.fail(
         new Rejected({
           reason: `${OWN_REQUEST_LABEL[request.kind]} is not available in this app.`,
@@ -787,7 +714,10 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       );
     // cast: the handler bound under `request.kind` takes a request of that kind.
     return (
-      arm as (request: OwnHostCommand, port: string) => HostVerb<HostOutcome>
+      handler as (
+        request: OwnHostCommand,
+        port: string,
+      ) => HostVerb<HostOutcome>
     )(request, port);
   };
   function handle(

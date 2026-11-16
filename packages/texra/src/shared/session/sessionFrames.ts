@@ -36,7 +36,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import {
   CommitOrdinalSchema,
-  EventInputSchema,
   SessionViewInputSchema,
   TranscriptSubscriptionSchema,
   type SessionViewInput,
@@ -50,8 +49,6 @@ import { LaunchPatchSchema } from './surface';
 const SessionKeySchema = Schema.NonEmptyString;
 const GenerationSchema = NonNegativeIntSchema;
 const RequestIdSchema = Schema.NonEmptyString;
-
-export type EventInput = typeof EventInputSchema.Type;
 
 /** A surface's request for one session's frames, up the wire. */
 export const SubscribeSchema = Schema.Struct({
@@ -81,7 +78,7 @@ export const EventsFrameSchema = Schema.Struct({
 export type EventsFrame = typeof EventsFrameSchema.Type;
 
 /** What the host renders but does not own, as its producers write it. */
-export const HostFrameSchema = Schema.Struct({
+const HostFrameSchema = Schema.Struct({
   kind: Schema.Literal('host'),
   session: SessionKeySchema,
   host: HostSnapshotSchema,

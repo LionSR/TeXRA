@@ -1,7 +1,7 @@
 /**
  * The session view's shape. The session layer builds it
  * (`makeSessionViewAccess`); its tag is `SessionViewAccess`
- * (`sessionInputs.ts`).
+ * (`runHistory.ts`).
  */
 
 import type { RunId, TranscriptSubscription } from '@shared/schemas';

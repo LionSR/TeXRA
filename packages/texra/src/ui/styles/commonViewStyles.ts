@@ -29,11 +29,9 @@ export const visuallyHiddenDeclarations: CSSResult = css`
 `;
 
 /**
- * Available to the accessibility tree, absent from the layout. The canonical
- * copy across every view surface (InstructionPanel and WorktreeChip both
- * used to carry their own). Exported on its own — interpolated into
- * `commonViewStyles` below — for roots that compose a narrower sheet and so
- * do not take the full common one.
+ * Available to the accessibility tree, absent from the layout. Exported on
+ * its own (and interpolated into `commonViewStyles` below) for roots that
+ * compose a narrower sheet and so do not take the full common one.
  */
 export const visuallyHiddenStyles: CSSResult = css`
   .visually-hidden {
@@ -113,7 +111,7 @@ const busyIconButtonStyles: CSSResult = css`
     position: absolute;
     inset: 0;
     margin: auto;
-    font-size: var(--font-size-icon, 1em);
+    font-size: var(--font-size-icon);
     pointer-events: none;
   }
 `;

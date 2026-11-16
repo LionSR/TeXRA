@@ -14,7 +14,7 @@ import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postMessage } from '@texra/shared/hostBridge';
+import { postToHost } from '@settingsView/frontend/messageDispatcher';
 import type {
   ProviderKeyStatus,
   ProviderSetting,
@@ -81,7 +81,8 @@ export class ProviderKeyList extends LitElement {
             label: `Remove ${displayName} API key`,
             tooltip: 'Remove key',
             onClick: () =>
-              postMessage(SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY, {
+              postToHost({
+                command: SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
                 provider,
               }),
           })
@@ -95,7 +96,10 @@ export class ProviderKeyList extends LitElement {
           label: `Set ${displayName} API key`,
           tooltip: 'Set API key',
           onClick: () =>
-            postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY, { provider }),
+            postToHost({
+              command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
+              provider,
+            }),
         })}
         ${renderIconActionButton({
           id: `provider-key-get-${provider}`,
@@ -103,7 +107,8 @@ export class ProviderKeyList extends LitElement {
           label: `Open ${displayName} API key page`,
           tooltip: 'Get API key from provider',
           onClick: () =>
-            postMessage(SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL, {
+            postToHost({
+              command: SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL,
               provider,
             }),
         })}
@@ -167,7 +172,8 @@ export class ProviderKeyList extends LitElement {
             appearance="plain"
             size="s"
             @click=${() =>
-              postMessage(SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL, {
+              postToHost({
+                command: SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL,
                 url: warningUrl,
               })}
           >
@@ -270,7 +276,8 @@ function renderPlanCreditsHint(credits: PlanCredits): TemplateResult {
       appearance="plain"
       size="s"
       @click=${() =>
-        postMessage(SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL, {
+        postToHost({
+          command: SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL,
           url: credits.docUrl,
         })}
     >

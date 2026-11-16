@@ -27,16 +27,8 @@ function createPorts(
       set: vi.fn(() => Effect.void),
     },
     promptToken: vi.fn(() => Effect.succeed<string | null>(null)),
-    showInvalidToken: vi.fn(() => Effect.void),
-    showGitMissing: vi.fn(() => Effect.void),
     listWorkspaceEntries: vi.fn(() => Effect.succeed<Iterable<string>>([])),
-    showWorkspaceUnreadable: vi.fn(() => Effect.void),
-    showWorkspaceNotEmpty: vi.fn(() => Effect.void),
-    runClone: vi.fn(() => Effect.void),
-    showCloneSucceeded: vi.fn(() => Effect.void),
-    showAuthFailure: vi.fn(() => Effect.void),
-    showCloneFailed: vi.fn(() => Effect.void),
-    logCloneError: vi.fn(() => Effect.void),
+    runClone: vi.fn(() => Effect.succeed('/workspace')),
     ...overrides,
   };
 }
@@ -51,7 +43,7 @@ function clone(ports: OverleafCloneWorkflowPorts) {
 }
 
 describe('cloneOverleafProject', () => {
-  it.effect('clears failed credentials and logs the failure', () =>
+  it.effect('clears failed credentials and reports the failure', () =>
     Effect.gen(function* () {
       const ports = createPorts({
         runClone: vi.fn(() =>
@@ -65,12 +57,11 @@ describe('cloneOverleafProject', () => {
         ),
       });
 
-      expect(yield* clone(ports)).toEqual({ status: 'authFailure' });
-
+      expect(yield* clone(ports)).toEqual({
+        _tag: 'AuthFailure',
+        error: expect.stringContaining('Authentication failed'),
+      });
       expect(ports.secrets.delete).toHaveBeenCalledWith('overleaf.gitToken');
-      expect(ports.logCloneError).toHaveBeenCalledWith(
-        expect.stringContaining('Authentication failed'),
-      );
 
       // A network failure on a project id containing 403 keeps the token.
       const offlinePorts = createPorts({
@@ -84,7 +75,7 @@ describe('cloneOverleafProject', () => {
           ),
         ),
       });
-      expect(yield* clone(offlinePorts)).toEqual({ status: 'cloneFailed' });
+      expect(yield* clone(offlinePorts)).toMatchObject({ _tag: 'CloneFailed' });
       expect(offlinePorts.secrets.delete).not.toHaveBeenCalled();
 
       // A failure before git ran (the destination's mkdir) is never an auth
@@ -98,7 +89,7 @@ describe('cloneOverleafProject', () => {
           ),
         ),
       });
-      expect(yield* clone(mkdirPorts)).toEqual({ status: 'cloneFailed' });
+      expect(yield* clone(mkdirPorts)).toMatchObject({ _tag: 'CloneFailed' });
       expect(mkdirPorts.secrets.delete).not.toHaveBeenCalled();
     }),
   );

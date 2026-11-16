@@ -95,7 +95,7 @@ export const lean4 = (host: {
     lean_project: 'folder-tree',
     lean_inspect: 'magnifying-glass-chart',
   },
-  card: {
+  dashboard: {
     name: 'Lean 4 Proof Assistant',
     description:
       'Interact with Lean 4 projects: check diagnostics, inspect terms, and manage files. Active language servers are listed below. (lean_loogle needs only network access and is always available.)',

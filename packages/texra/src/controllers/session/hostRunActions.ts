@@ -1,5 +1,7 @@
 /** Host-neutral relaunch and retry actions shared by extension and desktop. */
 
+import * as path from 'node:path';
+
 import {
   type LaunchError,
   type Run,
@@ -23,6 +25,7 @@ import { Secrets, withLogChannel } from '@texra-ai/harness/plugins';
 import { Effect, FileSystem, Scope } from 'effect';
 
 import {
+  agentFileName,
   toErrorMessage,
   programOf,
   runActionRefusal,
@@ -36,8 +39,9 @@ import {
 import { DEFAULT_AGENT_MODEL } from '@texra/model/curatedModels';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import { forkRun, resumeRun } from '@texra/controllers/session/runActionPolicy';
-import { packDestination } from '@texra/tools/documents/runOutputs';
-import type { FileOpResult } from '@texra/shared/session/hostRequest';
+import { HISTORY_DIR } from '@housekeeping/constants';
+import { fileNameTimestamp } from '@housekeeping/artifactFiles';
+import { modelFileName } from '@texra/utils/files/outputFileUtils';
 import { documentRoundsOf } from '@texra/shared/plugins/documents';
 import type { Dialogs, HostFailed } from '@texra/hosts/uiHosts';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
@@ -54,13 +58,6 @@ import {
 } from '@texra/controllers/session/hostCallFailure';
 
 const CHANNEL = 'HostRunActions';
-
-/** What the document task toolbar's pack or clean of a run's files did, and the
- *  input file its message names. */
-interface DocumentTaskFileOperationResult {
-  readonly result: FileOpResult;
-  readonly inputFile: string;
-}
 
 /** The launch facts an action adds to a validated request, as the
  *  session's `start` takes them: the run's id when the host minted it, and
@@ -86,7 +83,7 @@ export interface HostRunActionPorts {
    *  background service's. Run state is read from its view, a run's saved
    *  setup from its records. */
   readonly session: Session;
-  /** The window's follow-up for a run it started, once admitted: show the
+  /** The window's follow-up for a run it started, once started: show the
    *  run once its surfaces hold it, and retire the missing-agent banner its
    *  agent resolved. */
   launched(run: Run): Effect.Effect<void>;
@@ -96,13 +93,13 @@ export interface HostRunActionPorts {
   notify: Dialogs['notify'];
 }
 
-/** What a host's request arms do once {@link createHostRunActions} has bound
+/** What a host's request handlers do once {@link createHostRunActions} has bound
  *  that host's launcher, catalogs, key prompt, and notifications. */
 export interface HostRunActions {
   /**
    * The window's launcher: start a fresh run of an already decoded
    * configuration (`decodeLaunchConfig`) on its session, answering once it
-   * is admitted; it decodes nothing itself. A failure before the run opens is
+   * is started; it decodes nothing itself. A failure before the run opens is
    * logged and presented here, once, and fails with the launch's own error,
    * which the caller does not present again (a request answers `Cancelled`);
    * the launched run is the window's to show (`launched`), and its final
@@ -113,7 +110,7 @@ export interface HostRunActions {
     options?: RunValidatedOptions,
   ): Effect.Effect<Run, LaunchError | RunFailure, ProcessServices>;
   /** Merge `editedFile` into `baseFile`: the `merge` program on the helper
-   *  model, answering once its run is admitted. */
+   *  model, answering once its run is started. */
   merge(
     baseFile: string,
     editedFile: string,
@@ -133,22 +130,16 @@ export interface HostRunActions {
     | RunFailure,
     ProcessServices
   >;
-  /** The toolbar's latexdiff may run: the run still offers `files` and is
-   *  a document task's with a saved config; else `Rejected`, which the
-   *  surface presents. */
-  documentTaskDiffRequest(
-    runId: RunId,
-  ): Effect.Effect<void, Rejected | Unavailable>;
-  /** Pack or clean a document task run's files, from its saved config: the
-   *  action check, then the session's `run.files`, which the process that
+  /** Pack or clean a document task run's files, from its saved config, and
+   *  say what it did: the session's `run.files`, which the process that
    *  holds the run does with it held. A run that is not a document task's,
    *  or saved no config, is `Rejected`. */
   documentTaskFileOperation(
     runId: RunId,
     operation: 'pack' | 'clean',
-  ): Effect.Effect<DocumentTaskFileOperationResult, RequestError | Unavailable>;
+  ): Effect.Effect<void, RequestError | Unavailable>;
   /** A new task holding the run's conversation up to `at` (its latest
-   *  settled point when null), continued here so it takes a message: the
+   *  finished point when null), continued here so it takes a message: the
    *  fork's id. */
   fork(
     runId: RunId,
@@ -296,7 +287,7 @@ export const createHostRunActions = Effect.fn(
   };
 
   /** The saved config of a document task's run. `files` holds on every
-   *  settled run, so a request on a run that saved no config, or that is
+   *  finished run, so a request on a run that saved no config, or that is
    *  not a document task's, is refused here, which the surface presents. */
   const savedTaskConfig = Effect.fn('HostRunActions.savedTaskConfig')(
     function* (runId: RunId) {
@@ -371,7 +362,7 @@ export const createHostRunActions = Effect.fn(
       return Effect.forkDetach(deliver).pipe(Effect.asVoid);
     },
     /**
-     * Resume a settled run, of either category, on the session that holds
+     * Resume a finished run, of either category, on the session that holds
      * it: it continues the run's own rows (a child's, with the parent
      * that owns it). A run that does not take it refuses the request with
      * its reason, a missing agent or plugin included; one whose launch
@@ -417,12 +408,6 @@ export const createHostRunActions = Effect.fn(
           editedFile,
         });
     }),
-    documentTaskDiffRequest: Effect.fn(
-      'HostRunActions.documentTaskDiffRequest',
-    )(function* (runId) {
-      yield* requireAction(runId, 'files');
-      yield* savedTaskConfig(runId);
-    }),
     documentTaskFileOperation: Effect.fn(
       'HostRunActions.documentTaskFileOperation',
     )(function* (runId, operation) {
@@ -442,12 +427,14 @@ export const createHostRunActions = Effect.fn(
             operation === 'pack'
               ? {
                   op: 'copy',
-                  to: yield* packDestination({
-                    runId,
-                    inputFile,
-                    agent: config.agent,
-                    model: config.model,
-                  }),
+                  // A folder under `History/` named for the input, agent
+                  // and model, with a run id fragment so two runs packed
+                  // within the same second (the timestamp's granularity)
+                  // don't collide.
+                  to: path.posix.join(
+                    HISTORY_DIR,
+                    `${yield* fileNameTimestamp}_${path.parse(inputFile).name}_${agentFileName(config.agent)}_${modelFileName(config.model)}_${runId.replaceAll('-', '').slice(0, 8)}`,
+                  ),
                 }
               : { op: 'remove' },
         })
@@ -461,17 +448,26 @@ export const createHostRunActions = Effect.fn(
           ),
         );
       const { result } = outcome;
-      if (result.status === 'error')
-        return yield* new Rejected({
-          reason: `Error during ${operation === 'pack' ? 'packing' : 'cleaning'}: ${result.error}`,
-        });
-      return {
-        inputFile,
-        result:
-          result.status === 'done'
-            ? { status: 'success', outputFolder: result.to }
-            : result,
-      };
+      switch (result.status) {
+        case 'error':
+          return yield* new Rejected({
+            reason: `Error during ${operation === 'pack' ? 'packing' : 'cleaning'}: ${result.error}`,
+          });
+        case 'noFiles':
+          return yield* ports.notify(
+            'info',
+            `No files found to ${operation} for ${inputFile}`,
+          );
+        case 'done':
+          return yield* ports.notify(
+            'info',
+            operation === 'clean'
+              ? `Cleanup complete for ${inputFile}`
+              : result.to
+                ? `Files packed into ${result.to}`
+                : 'Files packed.',
+          );
+      }
     }),
     runCompileFixer: Effect.fn(function* (runId) {
       if (!view().runs.has(runId)) {

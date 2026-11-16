@@ -30,7 +30,7 @@ export abstract class BaseRunContent extends LitElement {
   @property({ attribute: false }) view: SessionView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
   /** The app renders a conversation only once the first snapshot is in
-   *  (`ProgressApp.render`), so there is no null arm here. */
+   *  (`ProgressApp.render`), so there is no null case here. */
   @property({ attribute: false }) host!: HostSnapshot;
 
   /** The pending requests this run has open, in the session view's request order:

@@ -14,7 +14,7 @@ import {
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { settingSignal } from '@settingsView/frontend/settingsState';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postMessage } from '@texra/shared/hostBridge';
+import { postToHost } from '@settingsView/frontend/messageDispatcher';
 import {
   MODEL_SOURCE_ORDER,
   type ModelSelectionItem,
@@ -130,9 +130,15 @@ export class ModelSelectionList extends SignalWatcher(LitElement) {
 
   private handleReasoningLevelChange(modelName: string, e: Event): void {
     const value = readSelectValue(e);
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL, {
+    // The options are the levels listed below and "" for the default, which
+    // clears the saved level.
+    const level =
+      REASONING_LEVEL_OPTIONS.find((option) => option.value === value)?.value ??
+      null;
+    postToHost({
+      command: SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL,
       modelName,
-      level: value === '' ? null : value,
+      level,
     });
   }
 
@@ -214,7 +220,8 @@ export class ModelSelectionList extends SignalWatcher(LitElement) {
           @change=${(e: Event) => {
             if (!(e.target instanceof WaSwitch)) return;
             const { checked } = e.target;
-            postMessage(SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED, {
+            postToHost({
+              command: SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED,
               modelName: model.name,
               enabled: checked,
             });

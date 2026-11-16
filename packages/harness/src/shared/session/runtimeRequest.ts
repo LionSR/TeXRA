@@ -100,12 +100,12 @@ export const RuntimeCommandSchema = Schema.Union([
      *  at the turn's next model request. Absent: at the next request. */
     holdUntil: Schema.optional(Schema.NullOr(Schema.Literal('turn'))),
     /** The provider API-key variables of the sender's environment, as a
-     *  start carries them (`StartOptions.apiKeys`): what the run resumes
+     *  start carries them (`StartInput.apiKeys`): what the run resumes
      *  with if this message wakes it. Never stored. */
     apiKeys: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   }),
   /**
-   * The one answer to a `request.opened` (one run model, section 3.7): the
+   * The one answer to a `request.opened`, naming the request it answers: the
    * decision lands as that run's `request.decided` row, which is what the
    * waiting run, the recovery bindings, and every surface read. A decision
    * for a request its run is not blocked on is delivered as a follow-up.

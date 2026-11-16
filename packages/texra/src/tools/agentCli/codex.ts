@@ -15,22 +15,13 @@
  */
 
 // Third-party imports
-import {
-  Effect,
-  type FileSystem,
-  Result,
-  Schema,
-  type Scope,
-  Stream,
-} from 'effect';
+import { Effect, Schema, Stream } from 'effect';
 
 // Local imports
 import { type WorkspaceRoots } from '@texra-ai/harness';
 import { ChildRuns, ToolContext } from '@texra-ai/harness/plugins';
 import {
   ensureError,
-  toErrorMessage,
-  type RunId,
   type TokenUsageStats,
   type ToolUseLog,
   type ToolCallStatus,
@@ -48,10 +39,9 @@ import { openCodexClient } from './codexImport';
 import { codexRun } from './codexConfig';
 import { CodexThreads } from './agentCliSessionStores';
 import {
-  buildAgentCliTurn,
-  dispatchAgentCliTool,
-  launchAgentCliSession,
+  agentCliTool,
   StreamedToolCards,
+  type AgentCliTurn,
 } from './agentCliShared';
 import {
   CODEX_AGENT_NAME,
@@ -62,14 +52,7 @@ import {
   buildCodexTurnToolLog,
   codexCallCard,
 } from './codexShared';
-import {
-  type PluginToolServices,
-  type ProcessTurn,
-  defineTool,
-  type ToolResult,
-  withLogChannel,
-} from '@texra-ai/harness/plugins';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+import { defineTool, withLogChannel } from '@texra-ai/harness/plugins';
 
 // Third-party type imports (import/order places these after local imports)
 import type {
@@ -80,11 +63,6 @@ import type {
   ThreadItem,
   ThreadOptions,
 } from '@openai/codex-sdk';
-
-// The sandbox-mode schema is imported eagerly from `@shared` (a light,
-// dependency-free leaf) since it is used at module level by the input schema.
-// Setting reads are schema-typed and land in SDK-typed fields, so a value the
-// Codex union rejects fails to compile.
 
 // ============================================================================
 // Schema
@@ -195,7 +173,7 @@ function publishCodexItemProgress(params: {
 }
 
 /** A Codex turn's spend in the one usage shape. The SDK reports no cost. */
-function codexTurnUsage({ usage }: RunResult): TokenUsageStats | null {
+function codexTurnUsage(usage: RunResult['usage']): TokenUsageStats | null {
   if (!usage) return null;
   const cached = usage.cached_input_tokens;
   return {
@@ -213,156 +191,116 @@ function runStreamedTurn(
   thread: Thread,
   prompt: string,
   logger: AgentTrace,
-): Effect.Effect<RunResult, Error> {
-  return Effect.clockWith((clock) => {
-    logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
-    const responseParts: string[] = [];
-    let usage: RunResult['usage'] = null;
-    const itemCards = new StreamedToolCards(logger);
-    const unknownItemTypes = new Set<string>();
+): Effect.Effect<AgentCliTurn, Error> {
+  return Effect.clockWith((clock) =>
+    Effect.flatMap(StreamedToolCards.make(logger), (itemCards) => {
+      logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
+      const responseParts: string[] = [];
+      let usage: RunResult['usage'] = null;
+      const unknownItemTypes = new Set<string>();
 
-    // The live "Codex Turn" card is opened on turn.started and closed on
-    // turn.completed / turn.failed with the measured wall time. The
-    // `Effect.ensuring` below closes it and every open item card on any other
-    // exit (stream error, abort, early end), so no dead turn keeps a Running
-    // card. finalizeTurnCard is a no-op once the card is closed.
-    let turnCard: ToolCardHandle | null = null;
-    let turnStartedMs = clock.currentTimeMillisUnsafe();
-    const finalizeTurnCard = (
-      state: 'completed' | 'failed',
-      error?: string,
-    ) => {
-      if (!turnCard) return;
-      turnCard.update(
-        buildCodexTurnToolLog({
-          state,
-          wallTimeMs: clock.currentTimeMillisUnsafe() - turnStartedMs,
-          ...(error != null && { error }),
-        }),
-      );
-      turnCard = null;
-    };
+      // The live "Codex Turn" card is opened on turn.started and closed on
+      // turn.completed / turn.failed with the measured wall time. The
+      // `Effect.ensuring` below closes it on any other exit (stream error,
+      // abort, early end), so no dead turn keeps a Running card, as the item
+      // cards' scope does for them. finalizeTurnCard is a no-op once the card
+      // is closed.
+      let turnCard: ToolCardHandle | null = null;
+      let turnStartedMs = clock.currentTimeMillisUnsafe();
+      const finalizeTurnCard = (
+        state: 'completed' | 'failed',
+        error?: string,
+      ) => {
+        if (!turnCard) return;
+        turnCard.update(
+          buildCodexTurnToolLog({
+            state,
+            wallTimeMs: clock.currentTimeMillisUnsafe() - turnStartedMs,
+            ...(error != null && { error }),
+          }),
+        );
+        turnCard = null;
+      };
 
-    // A failed turn or stream error ends the run as a ToolError.
-    const onEvent = (event: ThreadEvent): Effect.Effect<void, ToolError> => {
-      switch (event.type) {
-        case 'thread.started':
-          logger.openToolCard(buildCodexThreadToolLog(event));
-          break;
-        case 'turn.started':
-          turnStartedMs = clock.currentTimeMillisUnsafe();
-          turnCard = logger.openToolCard(
-            buildCodexTurnToolLog({ state: 'in_progress' }),
-          );
-          break;
-        case 'item.started':
-        case 'item.updated':
-        case 'item.completed': {
-          const item: { readonly type: string } = event.item;
-          const completed = event.type === 'item.completed';
-          if (!isKnownCodexItem(item)) {
-            // A newer codex binary's item: said once, then shown as data.
-            if (!unknownItemTypes.has(item.type)) {
-              unknownItemTypes.add(item.type);
-              logger.warn(
-                `Codex sent an item of a type this TeXRA build does not know (${item.type}); it is shown as raw data.`,
-              );
+      // A failed turn or stream error ends the run as a ToolError.
+      const onEvent = (event: ThreadEvent): Effect.Effect<void, ToolError> => {
+        switch (event.type) {
+          case 'thread.started':
+            logger.openToolCard(buildCodexThreadToolLog(event));
+            break;
+          case 'turn.started':
+            turnStartedMs = clock.currentTimeMillisUnsafe();
+            turnCard = logger.openToolCard(
+              buildCodexTurnToolLog({ state: 'in_progress' }),
+            );
+            break;
+          case 'item.started':
+          case 'item.updated':
+          case 'item.completed': {
+            const item: { readonly type: string } = event.item;
+            const completed = event.type === 'item.completed';
+            if (!isKnownCodexItem(item)) {
+              // A newer codex binary's item: said once, then shown as data.
+              if (!unknownItemTypes.has(item.type)) {
+                unknownItemTypes.add(item.type);
+                logger.warn(
+                  `Codex sent an item of a type this TeXRA build does not know (${item.type}); it is shown as raw data.`,
+                );
+              }
+              if (completed) logger.info(`Codex ${item.type}`, { data: item });
+              break;
             }
-            if (completed) logger.info(`Codex ${item.type}`, { data: item });
+            const wasRenderedAsProgress = publishCodexItemProgress({
+              item,
+              status: completed ? 'completed' : 'in_progress',
+              cards: itemCards,
+            });
+            if (!completed) break;
+            if (!wasRenderedAsProgress) logCodexItem(item, logger);
+            if (item.type === 'agent_message') responseParts.push(item.text);
             break;
           }
-          const wasRenderedAsProgress = publishCodexItemProgress({
-            item,
-            status: completed ? 'completed' : 'in_progress',
-            cards: itemCards,
-          });
-          if (!completed) break;
-          if (!wasRenderedAsProgress) logCodexItem(item, logger);
-          if (item.type === 'agent_message') responseParts.push(item.text);
-          break;
+          case 'turn.completed':
+            usage = event.usage ?? null;
+            finalizeTurnCard('completed');
+            break;
+          case 'turn.failed':
+            finalizeTurnCard('failed', event.error.message);
+            return Effect.fail(
+              new ToolError(event.error.message ?? 'Codex turn failed'),
+            );
+          case 'error':
+            finalizeTurnCard('failed', event.message);
+            return Effect.fail(
+              new ToolError(event.message ?? 'Codex stream error'),
+            );
         }
-        case 'turn.completed':
-          usage = event.usage ?? null;
-          finalizeTurnCard('completed');
-          break;
-        case 'turn.failed':
-          finalizeTurnCard('failed', event.error.message);
-          return Effect.fail(
-            new ToolError(event.error.message ?? 'Codex turn failed'),
-          );
-        case 'error':
-          finalizeTurnCard('failed', event.message);
-          return Effect.fail(
-            new ToolError(event.message ?? 'Codex stream error'),
-          );
-      }
-      return Effect.void;
-    };
+        return Effect.void;
+      };
 
-    // The SDK's process lives as long as its signal: a stop interrupts this
-    // turn, and the scope's close aborts it.
-    return Effect.flatMap(Effect.abortSignal, (signal) =>
-      Effect.tryPromise({
-        try: () => thread.runStreamed(prompt, { signal }),
-        catch: ensureError,
-      }),
-    ).pipe(
-      Effect.flatMap(({ events }) =>
-        Stream.runForEach(Stream.fromAsyncIterable(events, ensureError), (e) =>
-          Effect.suspend(() => onEvent(e)),
-        ),
-      ),
-      Effect.map((): RunResult => {
-        const finalResponse = responseParts.join('\n\n');
-        return { items: [], finalResponse, usage };
-      }),
-      Effect.ensuring(
-        Effect.sync(() => {
-          itemCards.failOpen();
-          finalizeTurnCard('failed');
+      // The SDK's process lives as long as its signal: a stop interrupts this
+      // turn, and the scope's close aborts it.
+      return Effect.flatMap(Effect.abortSignal, (signal) =>
+        Effect.tryPromise({
+          try: () => thread.runStreamed(prompt, { signal }),
+          catch: ensureError,
         }),
-      ),
-      Effect.scoped,
-    );
-  });
-}
-
-// ============================================================================
-// The child's turn: one Codex turn, delivered to the parent by its end
-// ============================================================================
-
-/** The Codex child's one turn: the Codex-specific turn run and result
- *  formatting over the shared agent-CLI turn. */
-function buildCodexTurn(params: {
-  thread: Thread;
-  logger: AgentTrace;
-  runId: RunId;
-  prompt: string;
-  /** The claim on the thread this turn continues, closed as it ends. */
-  claim: Scope.Closeable | undefined;
-}): ProcessTurn {
-  const { thread, logger, runId, prompt } = params;
-  return buildAgentCliTurn({
-    logger,
-    claim: params.claim,
-    runProviderTurn: runStreamedTurn(thread, prompt, logger),
-    getUsage: codexTurnUsage,
-    delivery: (turn, wallTime) => ({
-      family: 'codex',
-      runId,
-      prompt,
-      attributes: [{ name: 'thread-id', value: thread.id || null }],
-      wallTime,
-      response: turn.finalResponse,
-      usage: codexTurnUsage(turn),
+      ).pipe(
+        Effect.flatMap(({ events }) =>
+          Stream.runForEach(
+            Stream.fromAsyncIterable(events, ensureError),
+            (e) => Effect.suspend(() => onEvent(e)),
+          ),
+        ),
+        Effect.map((): AgentCliTurn => ({
+          response: responseParts.join('\n\n'),
+          usage: codexTurnUsage(usage),
+          attributes: [{ name: 'thread-id', value: thread.id || null }],
+        })),
+        Effect.ensuring(Effect.sync(() => finalizeTurnCard('failed'))),
+      );
     }),
-    errorDelivery: (_turn, err) => ({
-      family: 'codex',
-      runId,
-      prompt,
-      message: toErrorMessage(err),
-    }),
-  });
+  ).pipe(Effect.scoped);
 }
 
 // ============================================================================
@@ -409,67 +347,16 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
 // Tool
 // ============================================================================
 
-const runCodex = Effect.fn('CodexTool.run')(function* (
+/** Prepare a launch: the sandbox the run's approval policy grants, and the
+ *  thread the turn runs on. */
+const prepareLaunch = Effect.fn('codex.prepareLaunch')(function* (
   input: CodexInput,
-): Effect.fn.Return<
-  ToolResult,
-  ToolError,
-  | PluginToolServices
-  | CodexThreads
-  | ChildProcessSpawner
-  | FileSystem.FileSystem
-> {
+) {
   // The workspace when a person approved the launch; everything when the
   // run's work is auto-approved.
   const sandboxMode: SandboxMode = (yield* (yield* ChildRuns).autoApproved)
     ? 'danger-full-access'
     : 'workspace-write';
-
-  return yield* dispatchAgentCliTool({
-    agentName: CODEX_AGENT_NAME,
-    store: CodexThreads,
-    resumeId: input.thread_id ?? undefined,
-    threadLabel: 'Codex thread',
-    launch: (claim) => launchCodexSession(input, sandboxMode, claim),
-  });
-});
-
-export const CodexTool = defineTool({
-  name: 'codex',
-  description:
-    'Spin off an OpenAI Codex agent to perform code analysis, generation, or research in a sandboxed environment. ' +
-    "The agent runs the Codex CLI locally and can read files, run commands, and make edits within its sandbox, which follows this run's approval policy: workspace-write when the launch was approved, full access under Auto-approve or an all-agent-work grant. " +
-    'Requires the Codex CLI to be installed (`npm install -g @openai/codex`). ' +
-    'Auth is handled by the CLI itself: use `codex login` (OAuth, recommended) or set OPENAI_API_KEY env var. ' +
-    'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the thread_id). ' +
-    'Pass thread_id on a later call to continue that thread with a follow-up instruction, one turn per call. ' +
-    'Choose codex for coding tasks that benefit from a separate OpenAI agent. It runs in its own sandbox with independent tool use, async and multi-turn like `agent`. ' +
-    'It runs in the working directory of the calling agent and takes no directory argument, so give parallel codex agents disjoint files to edit. ' +
-    'codex and claude_code are both independent sandboxed coders distinct from the in-process `agent` specialists. Prefer whichever vendor fits the task.',
-  schema: CodexInputSchema,
-  card: (raw) => {
-    const input = Schema.decodeUnknownResult(CodexInputSchema)(raw);
-    return Result.isSuccess(input) ? codexCallCard(input.success) : undefined;
-  },
-  guard: {
-    command: {
-      text: (input: CodexInput) => `[${CODEX_AGENT_NAME}] ${input.prompt}`,
-      // A resumed thread keeps its stored workspace: name none, not the wrong one.
-      cwd: 'unknown',
-    },
-  },
-  execute: runCodex,
-});
-
-const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
-  input: CodexInput,
-  sandboxMode: SandboxMode,
-  claim: Scope.Closeable | undefined,
-): Effect.fn.Return<
-  ToolResult,
-  ToolError,
-  PluginToolServices | ChildProcessSpawner | FileSystem.FileSystem
-> {
   const { roots, workingDirectory } = (yield* ToolContext).env;
   const { thread, run } = yield* createCodexThread(
     input,
@@ -481,21 +368,41 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
       error instanceof ToolError ? Effect.fail(error) : Effect.die(error),
     ),
   );
-  return yield* launchAgentCliSession({
-    agentName: 'codex',
-    prompt: input.prompt,
+  return {
     modelRef: run.ref,
-    registerFailedMessage: 'Failed to register Codex run.',
-    turn: ({ logger, runId }) =>
-      buildCodexTurn({
-        thread,
-        logger,
-        runId,
-        prompt: input.prompt,
-        claim,
-      }),
-    summaryLabel: 'Codex',
     launchedLine: `Codex agent launched (model: ${run.ref}, effort: ${run.effort ?? 'none'}, sandbox: ${sandboxMode}).${run.note ? ` ${run.note}` : ''}`,
-    followUpLine: `Result will be delivered as a follow-up message when the turn completes. The delivery includes the thread_id. Pass it to codex on a later call to continue the thread.`,
-  });
+    turn: (logger: AgentTrace) => runStreamedTurn(thread, input.prompt, logger),
+  };
+});
+
+export const CodexTool = defineTool({
+  name: CODEX_AGENT_NAME,
+  description:
+    'Spin off an OpenAI Codex agent to perform code analysis, generation, or research in a sandboxed environment. ' +
+    "The agent runs the Codex CLI locally and can read files, run commands, and make edits within its sandbox, which follows this run's approval policy: workspace-write when the launch was approved, full access under Auto-approve or an all-agent-work grant. " +
+    'Auth is handled by the CLI itself: use `codex login` (OAuth, recommended) or set OPENAI_API_KEY env var. ' +
+    'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the thread_id). ' +
+    'Pass thread_id on a later call to continue that thread with a follow-up instruction, one turn per call. ' +
+    'Choose codex for coding tasks that benefit from a separate OpenAI agent. It runs in its own sandbox with independent tool use, async and multi-turn like `agent`. ' +
+    'It runs in the working directory of the calling agent and takes no directory argument, so give parallel codex agents disjoint files to edit. ' +
+    'codex and claude_code are both independent sandboxed coders distinct from the in-process `agent` specialists. Prefer whichever vendor fits the task.',
+  schema: CodexInputSchema,
+  card: codexCallCard,
+  guard: {
+    command: {
+      text: (input: CodexInput) => `[${CODEX_AGENT_NAME}] ${input.prompt}`,
+      // A resumed thread keeps its stored workspace: name none, not the wrong one.
+      cwd: 'unknown',
+    },
+  },
+  execute: agentCliTool({
+    name: CODEX_AGENT_NAME,
+    family: 'codex',
+    label: 'Codex',
+    threadLabel: 'Codex thread',
+    idField: 'thread_id',
+    store: CodexThreads,
+    resumeId: (input: CodexInput) => input.thread_id ?? undefined,
+    prepare: prepareLaunch,
+  }),
 });

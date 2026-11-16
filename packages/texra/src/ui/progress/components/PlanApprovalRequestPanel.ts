@@ -5,7 +5,6 @@ import { css, html, type CSSResult, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 // Local imports - shared styles
-import { sp } from '@ui/styles';
 
 // Local imports - shared utilities
 import { REQUEST_ACTIONS } from '@texra/shared/session/surfaceDecision';
@@ -17,7 +16,7 @@ import { BaseRequestPanel, type RunGrant } from './BaseRequestPanel';
 
 const planApprovalRequestPanelStyles: CSSResult = css`
   .plan-request__objective {
-    margin: ${sp.small} 0;
+    margin: var(--wa-space-2xs) 0;
     color: var(--wa-color-text-normal);
     line-height: var(--line-height-normal);
     white-space: pre-wrap;

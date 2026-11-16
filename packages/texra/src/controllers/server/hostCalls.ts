@@ -17,28 +17,8 @@ import {
   RunIdSchema,
   type OpenFilePayload,
 } from '@texra-ai/harness/schemas';
-import type { ManualCriticismEntry } from '@texra/tools/editorHost';
-import type { GenericDiagnostic } from '@texra/utils/diagnostics/diagnosticFormatting';
-
-const position = Schema.Struct({ line: Schema.Int, character: Schema.Int });
-const GenericDiagnosticSchema = Schema.Struct({
-  severity: Schema.Union([
-    Schema.Literal(0),
-    Schema.Literal(1),
-    Schema.Literal(2),
-    Schema.Literal(3),
-  ]),
-  message: Schema.String,
-  range: Schema.Struct({ start: position, end: position }),
-}) satisfies Schema.Codec<GenericDiagnostic, unknown>;
-
-const ManualCriticismEntrySchema = Schema.Struct({
-  absolutePath: Schema.String,
-  line: Schema.Int,
-  message: Schema.String,
-  severity: Schema.Int,
-  confidence: Schema.Int,
-}) satisfies Schema.Codec<ManualCriticismEntry, unknown>;
+import { ManualCriticismEntrySchema } from '@texra/tools/editorHost';
+import { GenericDiagnosticSchema } from '@texra/utils/diagnostics/diagnosticFormatting';
 
 /** The runtime's notices, by event, as a window presents them: the two a
  *  refused launch carries among them. */

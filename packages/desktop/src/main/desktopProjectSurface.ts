@@ -53,7 +53,6 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
     readonly projects: DesktopProjectRegistry;
     readonly bindings: ProjectBindings;
     readonly promptController: DesktopPromptController;
-    readonly resourcesPath: string;
   }): Effect.fn.Return<ProjectSurface, never, Scope.Scope> {
     const { host, runtime, projects, bindings } = options;
     const windowScope = yield* Scope.Scope;
@@ -196,7 +195,6 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
           ),
         },
         roots: project.roots,
-        resourcesPath: options.resourcesPath,
         spawn: desktopSpawner(runtime, owner, project.root),
       }).pipe(
         Effect.tap(() => installDesktopWindowTitle(host.window, project)),

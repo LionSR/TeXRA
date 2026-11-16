@@ -271,13 +271,16 @@ type CliHistoryExportInputResult =
 export const readCliHistoryExportInput = Effect.fn(
   'cli.readCliHistoryExportInput',
 )(function* (session: Session, id: RunId) {
-  const [exists, { config, exportInput }] = yield* Effect.all(
+  const [exists, loaded] = yield* Effect.all(
     [session.records(id).exists, loadChatExportInput(id, session)],
     { concurrency: 2 },
   );
-  if (exportInput)
-    return { status: 'ok', exportInput } satisfies CliHistoryExportInputResult;
-  if (!exists && !config) {
+  if (loaded._tag === 'ready')
+    return {
+      status: 'ok',
+      exportInput: loaded.input,
+    } satisfies CliHistoryExportInputResult;
+  if (!exists && loaded._tag === 'noConfig') {
     return { status: 'not_found' } satisfies CliHistoryExportInputResult;
   }
   return { status: 'incomplete' } satisfies CliHistoryExportInputResult;

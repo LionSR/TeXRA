@@ -6,7 +6,7 @@
  */
 import * as path from 'node:path';
 
-import { Effect, FileSystem, absurd } from 'effect';
+import { Effect, FileSystem, Result, Schema, absurd } from 'effect';
 
 import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
@@ -20,6 +20,7 @@ import { entryTypeIn, readNormalizedFile } from '@texra-ai/harness/node';
 import { emitAppSignal } from '@texra-ai/harness/plugins';
 import {
   AGENT_FILE_EXTENSION,
+  AgentNameSchema,
   agentKey,
   isPackagedAgentSource,
   toErrorMessage,
@@ -44,35 +45,32 @@ import {
 
 type HostEffect = Effect.Effect<void, Error, ProcessServices>;
 
-/** Rejection reason for a proposed custom-agent file name, or null. */
-function validateTemplateAgentName(value: string): string | null {
-  if (!value) return 'Name cannot be empty';
-  if (value.includes('/') || value.includes('\\')) {
-    return 'Name cannot contain path separators';
-  }
-  if (value.includes(' ')) return 'Use underscores instead of spaces';
-  if (/[:#[\]{}|>&*!%@`]/.test(value)) {
-    return 'Name cannot contain YAML-special characters';
-  }
-  return null;
+/** The typed name with a `.yaml` or `.yml` suffix dropped, when the agent
+ *  definition schema accepts it as an agent's `name`; the catalog scan
+ *  decodes every agent file with that schema, so a name it refuses would
+ *  write a file that never loads. */
+function newAgentName(typed: string): string | undefined {
+  const decoded = Schema.decodeUnknownResult(AgentNameSchema)(
+    typed.trim().replace(/\.ya?ml$/u, ''),
+  );
+  return Result.isSuccess(decoded) ? decoded.success : undefined;
 }
 
 /**
  * Write the chat agent template into a new agent file, refusing to overwrite
- * an existing file. `resourcesRoot` is the packaged `…/resources` directory
- * that holds `templates/`.
+ * an existing file. The template is in the packaged resources' `templates/`.
  */
 const writeTemplateAgentFile = Effect.fn('settings.writeTemplateAgentFile')(
-  function* (
-    input: { name: string; customDir: string },
-    resourcesRoot: string,
-  ) {
-    const baseName = input.name.endsWith(AGENT_FILE_EXTENSION)
-      ? input.name.slice(0, -AGENT_FILE_EXTENSION.length)
-      : input.name;
-    const fileName = `${baseName}${AGENT_FILE_EXTENSION}`;
+  function* (input: { name: string; customDir: string }) {
+    const { resourcesRoot } = yield* AgentDirectories;
+    if (resourcesRoot === undefined) {
+      return yield* Effect.fail(
+        new Error('This host ships no agent templates.'),
+      );
+    }
+    const fileName = `${input.name}${AGENT_FILE_EXTENSION}`;
     const filePath = path.join(input.customDir, fileName);
-    const description = `${baseName} — chat agent`;
+    const description = `${input.name} — chat agent`;
     const fs = yield* FileSystem.FileSystem;
     if ((yield* entryTypeIn(fs, filePath)) !== undefined) {
       return {
@@ -86,7 +84,7 @@ const writeTemplateAgentFile = Effect.fn('settings.writeTemplateAgentFile')(
     );
     yield* fs.writeFileString(
       filePath,
-      agentFileFromTemplate(raw, { name: baseName, description }),
+      agentFileFromTemplate(raw, { name: input.name, description }),
     );
     return { ok: true, filePath } as const;
   },
@@ -94,13 +92,11 @@ const writeTemplateAgentFile = Effect.fn('settings.writeTemplateAgentFile')(
 
 interface SettingsAgentCommandsPorts {
   readonly roots: Pick<WorkspaceRoots, 'repoState' | 'globalState'>;
-  /** The packaged resources root; the agent templates live under it. */
-  readonly resourcesPath: string;
   readonly bindings: SettingsHostBindings;
   readonly present: SettingsPresentation;
 }
 
-/** The Agents page: its arms, its pages, and what an agent change runs. */
+/** The Agents page: its handlers, its pages, and what an agent change runs. */
 export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
   const { bindings, present } = ports;
   const { globalState } = ports.roots;
@@ -180,7 +176,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     agentsChanged(),
   );
 
-  // The file tools admit the new directory before the change reports done,
+  // The file tools accept the new directory before the change reports done,
   // so a `creator` run launched right after can write there.
   const afterCustomDirChange = Effect.andThen(
     registerCustomAgentRoot,
@@ -368,24 +364,25 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       present.reported(
         'Failed to create agent',
         Effect.gen(function* () {
-          const name = yield* bindings.dialogs.input({
+          const typed = yield* bindings.dialogs.input({
             prompt:
               'Enter a name for the new chat agent (without .yaml extension)',
             placeholder: 'my_agent',
           });
-          if (!name) return;
-          const invalid = validateTemplateAgentName(name);
-          if (invalid) return yield* present.alert(invalid);
+          if (!typed) return;
+          const name = newAgentName(typed);
+          if (name === undefined) {
+            return yield* present.alert(
+              `"${typed}" cannot name an agent: start with a letter or digit, and use only letters, digits, "_" and "-".`,
+            );
+          }
           // The custom agent directory is the user's choice, outside every root,
           // so it is created through the process filesystem.
           const customDir = yield* customDirectory;
           yield* FileSystem.FileSystem.use((fs) =>
             fs.makeDirectory(customDir, { recursive: true }),
           );
-          const written = yield* writeTemplateAgentFile(
-            { name, customDir },
-            ports.resourcesPath,
-          );
+          const written = yield* writeTemplateAgentFile({ name, customDir });
           if (!written.ok) return yield* present.alert(written.message);
           yield* agentFilesChanged;
           yield* bindings.openPath(written.filePath);

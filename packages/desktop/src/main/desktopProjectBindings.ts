@@ -84,7 +84,6 @@ interface ProjectBindingsOptions {
   readonly host: DesktopWindowHost;
   readonly runtime: ProcessRuntime;
   readonly projects: DesktopProjectRegistry;
-  readonly resourcesPath: string;
   /** Recording has one process owner, shared by every project and window. */
   readonly draftRequests: HostDraftRequests;
   readonly onboarding: WindowOnboarding;
@@ -275,7 +274,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
             host: hosts.run,
             files,
             workspaceFile: workspace.file,
-            resourcesPath: options.resourcesPath,
             postToRenderer: host.post,
             onboarding: options.onboarding,
             settings: options.settings,

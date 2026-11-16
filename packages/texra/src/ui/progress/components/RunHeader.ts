@@ -18,14 +18,12 @@ import {
 } from '@texra-ai/harness/schemas';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { CopyButtonController } from '@ui/litControllers/CopyButtonController';
-import type { IconName } from '@ui/wa/iconNames';
 import { runNoticeText, runStatus } from '@ui/copy/runStatus';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
-import { formatTaskDiagnostics } from '@ui/copy/taskDiagnostics';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { statusIndicatorStyles } from '@ui/styles/statusIndicatorStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
-import { afterDropdownHides, selectedItemValue } from '@ui/wa/selectTemplates';
+import { actionMenu, type ActionMenuItem } from '@ui/wa/actionMenu';
 import { inlineRenameField } from '@ui/wa/inlineRename';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import '@ui/progress/components/ToolTimer';
@@ -42,7 +40,7 @@ import {
   ELEMENT_IDS,
   NEUTRAL_RUN_ACTIONS,
   runMenuActions,
-  type RunMenuAction,
+  type RunMenuTarget,
 } from '../constants';
 import { progressBadgeLabel } from '../formatters/progressBadgeFormatter';
 import { renderRunGrantChips, runGrantStyles } from './runGrantChips';
@@ -52,24 +50,6 @@ import type {
   ApprovalBypassKind,
   RunId,
 } from '@texra-ai/harness/schemas';
-import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
-
-/** A window-level item the shell appends to the run's menu: pop out,
- *  LaTeXDiffs, figures. */
-export interface HeaderMenuItem {
-  readonly value: string;
-  readonly icon: IconName;
-  readonly label: string;
-  readonly activate: () => void;
-}
-
-/** The menu value of the delete item. */
-const DELETE_SESSION = 'deleteSession';
-/** The menu value of the rename item, which turns the title into a field. */
-const RENAME_TASK = 'renameTask';
-/** The menu value of Fork, and the prefix of a fork's link. */
-const FORK_TASK = 'forkTask';
-const OPEN_FORK = 'openFork:';
 
 /**
  * `<run-header>`: the one header row of a selected run. The
@@ -242,8 +222,9 @@ export class RunHeader extends LitElement {
   @property({ attribute: false }) run: RunView | null = null;
   /** For the per-run policy snapshot behind the grant chips. */
   @property({ attribute: false }) view: SessionView | null = null;
-  /** The shell's window items, after the run's actions in its menu. */
-  @property({ attribute: false }) menuItems: readonly HeaderMenuItem[] = [];
+  /** The shell's window items (pop out, LaTeXDiffs), after the run's
+   *  actions in its menu. */
+  @property({ attribute: false }) menuItems: readonly ActionMenuItem[] = [];
   /** A document task's planned pass count, from the agent catalog. */
   @property({ attribute: false }) plannedPasses: number | undefined;
 
@@ -252,19 +233,11 @@ export class RunHeader extends LitElement {
 
   private readonly copyDiagnostics = new CopyButtonController(this);
 
-  /** Send what a run action names (see `RunMenuAction.arm`). */
-  private dispatchAction(action: RunMenuAction, run: RunView): void {
-    const runId = run.id;
-    if (action.arm === 'copyDiagnostics') {
-      void this.copyDiagnostics.copy(formatTaskDiagnostics(run));
-    } else if (action.arm === 'run.compact') {
-      this.dispatchEvent(
-        SessionUiEvents.runtime({ kind: 'run.compact', runId }),
-      );
-    } else {
-      this.dispatchEvent(SessionUiEvents.host({ kind: action.arm, runId }));
-    }
-  }
+  /** What a run action reaches: this header's events and clipboard. */
+  private readonly menuTarget: RunMenuTarget = {
+    dispatchEvent: (event) => this.dispatchEvent(event),
+    copy: (text) => void this.copyDiagnostics.copy(text),
+  };
 
   /** The rename field belongs to the run it was opened on: showing another
    *  run closes it. */
@@ -278,24 +251,21 @@ export class RunHeader extends LitElement {
     this.renaming = true;
   }
 
-  /** Enter or leaving the field saves a changed title; Esc keeps the old. */
-  private finishRename(run: RunView, value: string | null) {
-    if (!this.renaming) return;
-    this.renaming = false;
-    const title = value?.trim();
-    if (!title || title === run.title) return;
-    this.dispatchEvent(
-      SessionUiEvents.runtime({ kind: 'run.rename', runId: run.id, title }),
-    );
-  }
-
   private renderTitle(run: RunView): TemplateResult {
     if (this.renaming)
       return inlineRenameField({
         value: run.title,
         label: 'Task title',
         className: 'rename-input',
-        onFinish: (value) => this.finishRename(run, value),
+        onRename: (title) =>
+          this.dispatchEvent(
+            SessionUiEvents.runtime({
+              kind: 'run.rename',
+              runId: run.id,
+              title,
+            }),
+          ),
+        onClose: () => (this.renaming = false),
       });
     return html`<h1 id=${ELEMENT_IDS.ACTIVE_RUN_NAME} data-run=${run.id}>
         ${run.title}
@@ -421,46 +391,64 @@ export class RunHeader extends LitElement {
       run.identity.kind === 'agent' ? runMenuActions(run) : NEUTRAL_RUN_ACTIONS
     ).filter((action) => run.actions.includes(action.action));
     const { copied } = this.copyDiagnostics;
-    const canDelete = run.actions.includes('delete');
-    const canRename = run.actions.includes('rename');
-    const canFork = run.actions.includes('fork');
     const forks = [...(this.view?.runs.values() ?? [])].filter(
       (candidate) => candidate.forkedFrom?.id === run.id,
     );
+    const items: ActionMenuItem[] = [
+      ...(run.actions.includes('rename')
+        ? [
+            {
+              icon: 'pencil',
+              label: TASK_ACTIONS.rename,
+              focusesOwn: true,
+              activate: () => this.startRename(),
+            } as const,
+          ]
+        : []),
+      ...(run.actions.includes('fork')
+        ? [
+            {
+              icon: 'code-branch',
+              label: TASK_ACTIONS.fork,
+              activate: () =>
+                this.dispatchEvent(
+                  SessionUiEvents.host({ kind: 'fork', runId: run.id }),
+                ),
+            } as const,
+          ]
+        : []),
+      ...forks.map((fork) => ({
+        icon: 'code-branch' as const,
+        label: TASK_ACTIONS.openFork(fork.title),
+        activate: () => this.navigateTo(fork.id),
+      })),
+      ...actions.map((action) => ({
+        icon: action.action === 'copy' && copied ? 'check' : action.icon,
+        label: action.label,
+        activate: () => action.activate(run, this.menuTarget),
+      })),
+      ...this.menuItems,
+      ...(run.actions.includes('delete')
+        ? [
+            {
+              icon: 'trash',
+              label: TASK_ACTIONS.delete(run),
+              variant: 'danger',
+              dividerBefore: true,
+              activate: () =>
+                this.dispatchEvent(
+                  SessionUiEvents.runtime({
+                    kind: 'run.delete',
+                    runId: run.id,
+                  }),
+                ),
+            } as const,
+          ]
+        : []),
+    ];
+    const menu = actionMenu(items);
     return html`
-      <wa-dropdown
-        placement="bottom-end"
-        @wa-select=${(event: WaSelectEvent) => {
-          const value = selectedItemValue(event);
-          if (value === RENAME_TASK) {
-            afterDropdownHides(event, () => this.startRename());
-            return;
-          }
-          if (value === FORK_TASK) {
-            this.dispatchEvent(
-              SessionUiEvents.host({ kind: 'fork', runId: run.id }),
-            );
-            return;
-          }
-          const fork = forks.find(
-            (candidate) => `${OPEN_FORK}${candidate.id}` === value,
-          );
-          if (fork) {
-            this.navigateTo(fork.id);
-            return;
-          }
-          if (value === DELETE_SESSION) {
-            this.dispatchEvent(
-              SessionUiEvents.runtime({ kind: 'run.delete', runId: run.id }),
-            );
-            return;
-          }
-          const action = actions.find((candidate) => candidate.id === value);
-          if (action) this.dispatchAction(action, run);
-          else
-            this.menuItems.find((entry) => entry.value === value)?.activate();
-        }}
-      >
+      <wa-dropdown placement="bottom-end" @wa-select=${menu.onSelect}>
         <wa-button
           slot="trigger"
           id=${ELEMENT_IDS.HEADER_MORE_BTN}
@@ -475,65 +463,15 @@ export class RunHeader extends LitElement {
           ></wa-button
         >
         <div class="menu-status">${joinFacts([statusLabel, passLabel])}</div>
-        ${
-          canRename
-            ? html`<wa-dropdown-item value=${RENAME_TASK}
-                >${waIcon('pencil', { slot: 'icon' })}${TASK_ACTIONS.rename}</wa-dropdown-item
-              >`
-            : nothing
-        }
-        ${
-          canFork
-            ? html`<wa-dropdown-item value=${FORK_TASK}
-                >${waIcon('code-branch', { slot: 'icon' })}${TASK_ACTIONS.fork}</wa-dropdown-item
-              >`
-            : nothing
-        }
-        ${repeat(
-          forks,
-          (fork) => fork.id,
-          (fork) =>
-            html`<wa-dropdown-item value=${`${OPEN_FORK}${fork.id}`}
-              >${waIcon('code-branch', { slot: 'icon' })}${TASK_ACTIONS.openFork(
-                fork.title,
-              )}</wa-dropdown-item
-            >`,
-        )}
-        ${repeat(
-          actions,
-          (action) => action.id,
-          (action) => {
-            const isCopy = action.arm === 'copyDiagnostics';
-            return html`<wa-dropdown-item value=${action.id}
-              >${waIcon(isCopy && copied ? 'check' : action.icon, {
-                slot: 'icon',
-              })}${action.label}</wa-dropdown-item
-            >`;
-          },
-        )}
-        ${repeat(
-          this.menuItems,
-          (item) => item.value,
-          (item) =>
-            html`<wa-dropdown-item value=${item.value}
-              >${waIcon(item.icon, { slot: 'icon' })}${item.label}</wa-dropdown-item
-            >`,
-        )}
-        ${
-          canDelete
-            ? html`<wa-divider></wa-divider
-                ><wa-dropdown-item value=${DELETE_SESSION} variant="danger"
-                  >${waIcon('trash', { slot: 'icon' })}${TASK_ACTIONS.delete(run)}</wa-dropdown-item
-                >`
-            : nothing
-        }
+        ${menu.items}
       </wa-dropdown>
       <wa-tooltip for=${ELEMENT_IDS.HEADER_MORE_BTN}>Task actions</wa-tooltip>
     `;
   }
 
   private renderRunElapsed(run: RunView): TemplateResult | typeof nothing {
-    // The fold keeps a start only while the run works: no clock otherwise.
+    // The session view keeps a start only while the run works: no clock
+    // otherwise.
     if (run.runStartedAt === null) return nothing;
     return html`<tool-timer .startTime=${run.runStartedAt}></tool-timer>`;
   }

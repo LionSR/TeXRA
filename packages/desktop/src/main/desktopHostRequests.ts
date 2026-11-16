@@ -8,7 +8,6 @@
 import { Effect } from 'effect';
 import type { ProcessServices } from '@texra-ai/harness/host';
 import { Rejected } from '@texra-ai/harness/schemas';
-import latexPreamble from '@resources/templates/chatExport.tex';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 
 import {
@@ -17,7 +16,7 @@ import {
 } from '@texra/controllers/session/hostCallFailure';
 import type {
   GuiWindowHost,
-  OwnHostArms,
+  OwnHostHandlers,
   SharedHostCommandBindings,
 } from '@texra/controllers/session/openGuiWindow';
 import { instructionActions } from '@ui/copy/instructionActions';
@@ -38,8 +37,6 @@ interface DesktopHostRequestsOptions {
   host: DesktopAgentRunHost;
   files: DesktopFileSelection;
   workspaceFile: ReturnType<typeof createDesktopWorkspaceIpc>['file'];
-  /** Packaged app resources root (`…/resources`), for export templates. */
-  resourcesPath: string;
   postToRenderer(message: DesktopPush): void;
   onboarding: WindowOnboarding;
   /** The window's settings surface, absent while the window switches
@@ -154,7 +151,7 @@ export const createDesktopHostRequests = (
     /** The requests this window performs its own way. A capability's failure
      *  is named through `hostFailure`, so the failure channel is the value
      *  the request failed with. */
-    const own: OwnHostArms = {
+    const own: OwnHostHandlers = {
       workspaceFile: (request) => options.workspaceFile(request.action),
     };
 
@@ -196,8 +193,6 @@ export const createDesktopHostRequests = (
           host
             .openPath(filePath)
             .pipe(Effect.mapError((cause) => hostFailed('openPath', cause))),
-        latexPreamble,
-        resourcesPath: options.resourcesPath,
       },
     };
   });

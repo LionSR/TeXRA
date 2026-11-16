@@ -9,7 +9,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postMessage } from '@texra/shared/hostBridge';
+import { postToHost } from '@settingsView/frontend/messageDispatcher';
 
 // Local imports - shared styles
 
@@ -91,7 +91,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
   override connectedCallback(): void {
     super.connectedCallback();
     window.addEventListener('message', this.messageListener);
-    postMessage(SETTINGS_VIEW_COMMANDS.WEBVIEW_READY);
+    postToHost({ command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY });
   }
 
   override disconnectedCallback(): void {

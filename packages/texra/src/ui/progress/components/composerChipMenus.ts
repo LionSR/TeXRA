@@ -10,12 +10,12 @@ import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 import {
-  agentName,
   getModelLabel,
   isModelOptionAvailable,
 } from '@texra-ai/harness/schemas';
 import { modelRefOf } from '@texra-ai/llm';
 import type { AgentOptionData } from '@texra/shared/pickerOptions';
+import { isAgentOption } from '@texra/shared/pickerOptions';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
@@ -50,11 +50,8 @@ function launchAgentOption(
   launch: Launch,
   host: HostSnapshot,
 ): AgentOptionData | undefined {
-  const name = agentName(launch.agent);
-  return host.agentOptions.find(
-    (option) =>
-      option.value === launch.agent ||
-      (name === launch.agent && agentName(option.value) === name),
+  return host.agentOptions.find((option) =>
+    isAgentOption(option.value, launch.agent),
   );
 }
 

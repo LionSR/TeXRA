@@ -19,13 +19,3 @@ if (!installed) {
 
 /** Host bridge API instance for the active TeXRA webview host. */
 export const hostBridge: HostBridgeApi = installed;
-
-/**
- * Post a command payload to the active webview host.
- */
-export function postMessage(
-  command: string,
-  payload: Record<string, unknown> = {},
-): void {
-  hostBridge.postMessage({ command, ...payload });
-}

@@ -24,7 +24,7 @@ import { toneStyles } from '@ui/styles/toneStyles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - progress view helpers
-import { buildDetailsSummary } from '../formatters/htmlBuilders';
+import { buildDetailsCard } from '../formatters/htmlBuilders';
 
 // Local imports - styles
 import { bannerDetailsWaDetailsStyles } from '../styles/logEntryStyles';
@@ -159,20 +159,18 @@ export class LatexdiffResults extends LitElement {
         : `Latexdiff results (${this.entries.length})`;
 
     return html`
-      <wa-details class="banner-details" appearance="plain" open>
-        ${buildDetailsSummary({
-          iconName: 'code-compare',
-          label: summaryText,
-        })}
-        <ul class="latexdiff-content">
+      ${buildDetailsCard({
+        summary: { iconName: 'code-compare', label: summaryText },
+        body: html`<ul class="latexdiff-content">
           ${repeat(
             this.entries,
             (entry, index) =>
               `${entry.base.absolutePath}-${entry.revised.absolutePath}-${entry.baseRound ?? 'base'}-${index}`,
             (entry, index) => this.renderEntry(entry, index),
           )}
-        </ul>
-      </wa-details>
+        </ul>`,
+        open: true,
+      })}
     `;
   }
 }

@@ -37,7 +37,7 @@ export function localCallsOf(
 /**
  * Parse a call's argument bytes on demand. Empty bytes are the empty
  * object; bytes that are not JSON stay a string the tool's own schema will
- * refuse with a diagnostic, exactly as the handler path did.
+ * refuse with a diagnostic the model can act on.
  */
 export function parseCallArguments(
   call: LocalCall,

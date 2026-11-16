@@ -183,7 +183,6 @@ export const startDesktop = (mainDir: string): void => {
                 {
                   projects: registry,
                   draftRequests,
-                  resourcesPath: platformInit.resourcesPath,
                   layout: platformInit.layout,
                   runtime,
                 },
