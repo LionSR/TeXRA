@@ -8,10 +8,10 @@
 // frame snippet when expected UI text disappears — the regression we keep
 // hitting as the live-region / scrollback layout evolves.
 //
-// This is intentionally small: a handful of scenarios that exercise the
-// transcript, queued follow-ups, a slash command, an approval modal, the
-// child list, and the Ctrl-C exit path. It is NOT a general
-// terminal-automation framework.
+// Its scenarios cover the transcript, queued follow-ups, the slash commands
+// and their forms, approval modals, the child list, resizes and the exit
+// paths; PR CI runs the ones tagged `smoke: true` (`--smoke`). It is NOT a
+// general terminal-automation framework.
 //
 // Run:  node scripts/validate-tui.mjs        (from packages/cli)
 //   or: pnpm --filter @texra-ai/cli validate:tui
@@ -82,11 +82,11 @@ const LONG_BASH_APPROVAL_COMMAND = [
 ].join('\n');
 const FULL_WIDTH_AGENT_PROPOSAL_BORDER_80 = `╔${'═'.repeat(78)}╗`;
 const ASYNC_FORM_SETTLE_MS = 12000;
-// `/plugins`: the one plugin list, which replaced `/config` → Tools.
-const PLUGINS_FORM_KEYS = [
-  '/plugins',
-  { input: '\r', delayMs: ASYNC_FORM_SETTLE_MS },
-];
+// How long a key's `until` text may take to show.
+const KEY_UNTIL_TIMEOUT_MS = 15000;
+// `/plugins`: the one plugin list, which replaced `/config` → Tools. The
+// list loads asynchronously; its key hint shows once it has.
+const PLUGINS_FORM_KEYS = ['/plugins', { input: '\r', until: 'switch on/off' }];
 const WRAPPED_EDIT_APPROVAL_ENV = Object.freeze({
   HARNESS_ENTRIES: '4',
   HARNESS_EDIT_APPROVAL: '1',
@@ -3602,21 +3602,33 @@ async function runScenario(scenario, index) {
 
   const checkpointFailures = [];
 
-  for (const key of scenario.keys ?? []) {
+  // A key that names the frame text it waits `until` ends its wait when the
+  // UI shows it; any other waits its fixed delay.
+  const press = async (key) => {
     const input = typeof key === 'string' ? key : key.input;
     child.write(input);
-    await sleep(Number(key.delayMs ?? scenario.keyDelayMs ?? 500));
-  }
+    if (key.until === undefined) {
+      await sleep(Number(key.delayMs ?? scenario.keyDelayMs ?? 500));
+      return;
+    }
+    const deadline = Date.now() + KEY_UNTIL_TIMEOUT_MS;
+    while (!(await frameSnapshot()).includes(key.until)) {
+      if (exited || Date.now() > deadline) {
+        checkpointFailures.push(
+          `after key ${JSON.stringify(input)}, the frame never showed ${JSON.stringify(key.until)}`,
+        );
+        return;
+      }
+      await sleep(100);
+    }
+  };
+  for (const key of scenario.keys ?? []) await press(key);
   for (const resize of scenario.resizes ?? []) {
     child.resize(Number(resize.cols ?? cols), Number(resize.rows ?? rows));
     term.resize(Number(resize.cols ?? cols), Number(resize.rows ?? rows));
     await sleep(Number(resize.delayMs ?? 500));
   }
-  for (const key of scenario.keysAfterResize ?? []) {
-    const input = typeof key === 'string' ? key : key.input;
-    child.write(input);
-    await sleep(Number(key.delayMs ?? scenario.keyDelayMs ?? 500));
-  }
+  for (const key of scenario.keysAfterResize ?? []) await press(key);
 
   // Settle after keystrokes. A quiet PTY is not quite enough: under a full
   // suite, Ink/xterm can occasionally pause between chunks of the final frame,
