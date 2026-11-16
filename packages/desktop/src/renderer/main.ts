@@ -805,9 +805,10 @@ const routeMessage = createMessageRoutes({
       for (const key of sessions) {
         if (projectWorkbenches.has(key)) continue;
         const conversationView = new ProgressApp();
-        // The attribute sets the property, and the desktop styles select it,
-        // as the extension's page markup does.
-        conversationView.setAttribute('placement', 'desktop');
+        // The attribute sets the property, and the embedded styles select
+        // it, as the extension's page markup does. The desktop's rail and
+        // title bar are the chrome an embedded shell leaves to its host.
+        conversationView.setAttribute('placement', 'embedded');
         conversationView.setAttribute('data-desktop-view', 'progress');
         const project = createProjectWorkbench({
           session: key,
