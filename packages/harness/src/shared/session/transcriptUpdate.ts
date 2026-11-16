@@ -43,7 +43,7 @@ import {
   upsertCompactionRows,
   writableArray,
   write,
-  type Draft,
+  type TranscriptUpdate,
   type RowState,
   type TranscriptContext,
   type TranscriptWork,
@@ -54,7 +54,7 @@ import type { TranscriptView } from './sessionView';
 /** A plugin's section: its start opens the stage whole; its end closes the
  *  stage its start opened and writes nothing for one no start opened. */
 function applyStage(
-  d: Draft,
+  d: TranscriptUpdate,
   event: Extract<TraceRowFields, { type: 'stage.start' | 'stage.end' }>,
 ): void {
   const at = d.ix.stageIndex.get(event.id);
@@ -88,7 +88,7 @@ function applyStage(
  * resume starts a call again; the script card's own close closes it on its
  * result.
  */
-function openCardStage(d: Draft, card: string): void {
+function openCardStage(d: TranscriptUpdate, card: string): void {
   const heading = d.ix.slots.get(card);
   if (heading?.kind !== 'tool') return;
   const at = d.ix.stageIndex.get(card);
@@ -117,7 +117,11 @@ function openCardStage(d: Draft, card: string): void {
   d.touched = true;
 }
 
-function closeCardStage(d: Draft, card: string, status: ToolCallStatus): void {
+function closeCardStage(
+  d: TranscriptUpdate,
+  card: string,
+  status: ToolCallStatus,
+): void {
   const at = d.ix.stageIndex.get(card);
   if (at === undefined) return;
   const stages = writableArray(d, d.next, 'stages');
@@ -143,7 +147,7 @@ function closeCardStage(d: Draft, card: string, status: ToolCallStatus): void {
 const isOpenCard = (slot: Extract<RowState, { kind: 'tool' }>): boolean =>
   slot.log.status === TOOL_CALL_STATUS.IN_PROGRESS;
 
-function record(d: Draft, event: TraceRowFields): void {
+function record(d: TranscriptUpdate, event: TraceRowFields): void {
   const { ix } = d;
   switch (event.type) {
     case 'log':
@@ -304,7 +308,7 @@ function record(d: Draft, event: TraceRowFields): void {
 
 /** Close a text row, now printable, with its final text when one is given. */
 function closeText(
-  d: Draft,
+  d: TranscriptUpdate,
   slot: Extract<RowState, { kind: 'text' }>,
   finalText: string | undefined,
 ): void {
@@ -320,7 +324,10 @@ function closeText(
  *  and finishes every open compaction as interrupted; an ended one also
  *  closes every open stage on its outcome, as the drain that ends a
  *  run no driver holds does. */
-function applyStandingToTranscript(d: Draft, standing: RunStanding): void {
+function applyStandingToTranscript(
+  d: TranscriptUpdate,
+  standing: RunStanding,
+): void {
   const { ix } = d;
   if (standing.position === 'running') {
     ix.closed = false;
@@ -362,7 +369,7 @@ export function applyTranscriptEvent(
   event: SessionRow,
   ctx: TranscriptContext,
 ): TranscriptView {
-  const d: Draft = {
+  const d: TranscriptUpdate = {
     ...work,
     next: { ...transcript },
     ctx,
