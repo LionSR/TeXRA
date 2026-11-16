@@ -291,7 +291,7 @@ export const buttonStyles: CSSResult = css`
     border: var(--border-thin) solid transparent;
     border-radius: var(--row-radius);
     background: transparent;
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     transition:
       background-color var(--transition-fast),
       border-color var(--transition-fast),
@@ -377,7 +377,7 @@ export const buttonStyles: CSSResult = css`
       .action-icon-button
     )[disabled]::part(base):is(:hover, :active) {
     background: transparent;
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
   }
 
   .btn-ghost.is-link::part(base),
@@ -387,7 +387,7 @@ export const buttonStyles: CSSResult = css`
     padding: 0;
     background: transparent;
     color: var(--color-text-link);
-    font-weight: var(--wa-font-weight-normal);
+    font-weight: var(--font-weight-normal);
     /* Used inline in prose sentences, so underline at rest like a real link
        (hue alone is not a reliable 3:1 cue across host themes). */
     text-decoration: underline;
@@ -440,7 +440,7 @@ export const buttonStyles: CSSResult = css`
   }
 
   .action-icon-button.composer-primary-action::part(base):hover {
-    background: var(--wa-color-button-hover, var(--wa-color-brand-fill-loud));
+    background: var(--wa-color-button-hover);
     color: var(--wa-color-brand-on-loud);
   }
 
@@ -472,7 +472,7 @@ export const iconSurfaceStyles: CSSResult = css`
     border: var(--border-thin) solid var(--border-hairline);
     border-radius: var(--row-radius);
     background: var(--control-fill);
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
   }
 
   .icon-surface wa-icon {
@@ -563,7 +563,7 @@ export const formControlStyles: CSSResult = css`
     min-height: var(--row-height);
     padding: var(--wa-space-2xs) var(--wa-space-xs);
     border-radius: var(--row-radius);
-    font-family: var(--wa-font-family-body);
+    font-family: var(--font-family);
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
   }
@@ -675,7 +675,7 @@ export const settingsRowStyles: CSSResult = css`
 
   .settings-row-help {
     font-size: var(--font-size-sm);
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     line-height: var(--line-height-relaxed);
   }
 

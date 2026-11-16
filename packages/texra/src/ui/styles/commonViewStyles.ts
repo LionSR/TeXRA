@@ -126,7 +126,7 @@ const busyIconButtonStyles: CSSResult = css`
 export const dropCueStyles: CSSResult = css`
   position: absolute;
   inset: var(--wa-space-3xs);
-  z-index: 2;
+  z-index: var(--layer-pinned);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -243,7 +243,7 @@ export const commonViewStyles: CSSResult = css`
   .settings-disclosure-content {
     padding: var(--wa-space-xs);
     border-top: var(--border-thin) solid var(--color-border);
-    background: var(--wa-color-surface-lowered);
+    background: var(--color-bg-secondary);
   }
 
   .list-item-header {
@@ -263,7 +263,7 @@ export const commonViewStyles: CSSResult = css`
 
   .panel-collapsible::part(header) {
     padding: var(--wa-space-2xs) var(--wa-space-xs);
-    background-color: var(--wa-color-surface-lowered, transparent);
+    background-color: var(--color-bg-secondary);
     color: var(--wa-color-text-normal);
   }
 
@@ -300,8 +300,8 @@ export const commonViewStyles: CSSResult = css`
     padding: var(--wa-space-3xs) var(--wa-space-2xs);
     min-height: 20px;
     font-size: var(--font-size-sm);
-    font-weight: var(--font-weight);
-    color: var(--wa-color-text-quiet);
+    font-weight: var(--font-weight-normal);
+    color: var(--color-text-secondary);
   }
 
   .collapsible-quiet[open]::part(header) {
@@ -455,7 +455,7 @@ export const commonViewStyles: CSSResult = css`
     height: 1em;
     flex: 0 0 auto;
     place-items: center;
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     font-size: var(--font-size);
   }
 
@@ -470,7 +470,7 @@ export const commonViewStyles: CSSResult = css`
   .settings-section-heading-description {
     max-width: 72ch;
     margin: 0;
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
     line-height: var(--line-height-relaxed);
   }

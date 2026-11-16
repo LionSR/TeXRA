@@ -47,7 +47,7 @@ export const conversationContentStyles: CSSResult = css`
     overscroll-behavior-block: contain;
     scrollbar-width: thin;
     position: relative;
-    z-index: 2;
+    z-index: var(--layer-pinned);
     background: var(--wa-color-surface-default);
   }
 
@@ -94,7 +94,8 @@ export const conversationContentStyles: CSSResult = css`
 
   .conversation-composer-dock {
     position: relative;
-    z-index: 3;
+    /* Pinned like the approval dock, and above it. */
+    z-index: calc(var(--layer-pinned) + 1);
     flex: 0 0 auto;
     padding: var(--wa-space-xs) 0 var(--wa-space-m);
     background: var(--wa-color-surface-default);
@@ -112,9 +113,9 @@ export const conversationContentStyles: CSSResult = css`
     gap: var(--wa-space-s);
     min-height: var(--height-button);
     padding: var(--wa-space-s) 0 0;
-    border-top: 1px solid var(--wa-color-surface-border);
+    border-top: var(--border-thin) solid var(--color-border);
     color: var(--color-text-muted);
-    font-size: var(--wa-font-size-s);
+    font-size: var(--font-size-sm);
   }
 
   /* A fork's first line, where its own transcript begins. */
@@ -124,7 +125,7 @@ export const conversationContentStyles: CSSResult = css`
     gap: var(--wa-space-2xs);
     margin: var(--wa-space-xs) 0;
     color: var(--color-text-secondary);
-    font-size: var(--wa-font-size-s);
+    font-size: var(--font-size-sm);
   }
 
   .conversation-ended > span {

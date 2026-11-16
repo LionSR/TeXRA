@@ -181,7 +181,7 @@ export class UsagePanel extends LitElement {
       .context-gauge__bar {
         width: 100%;
         --track-height: var(--gauge-height);
-        --track-color: var(--wa-color-surface-border);
+        --track-color: var(--color-border);
         --indicator-color: var(--tone-color);
       }
 

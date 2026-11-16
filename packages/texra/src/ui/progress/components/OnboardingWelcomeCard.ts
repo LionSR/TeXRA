@@ -74,7 +74,7 @@ export class OnboardingWelcomeCard extends LitElement {
         display: block;
         font-weight: var(--font-weight-semibold);
         font-size: var(--font-size-h1);
-        letter-spacing: -0.025em;
+        letter-spacing: var(--letter-spacing-tight);
         line-height: var(--line-height-heading);
         margin: 0 0 var(--wa-space-xs);
         text-wrap: balance;
@@ -88,7 +88,7 @@ export class OnboardingWelcomeCard extends LitElement {
 
       .card-copy {
         margin: 0;
-        color: var(--wa-color-text-quiet);
+        color: var(--color-text-secondary);
         line-height: var(--line-height-normal);
         overflow-wrap: anywhere;
         text-wrap: pretty;
@@ -106,8 +106,8 @@ export class OnboardingWelcomeCard extends LitElement {
         gap: var(--wa-space-s);
         min-width: 0;
         padding: var(--wa-space-m);
-        border: var(--border-thin) solid var(--wa-color-surface-border);
-        border-radius: var(--wa-border-radius-l);
+        border: var(--border-thin) solid var(--color-border);
+        border-radius: var(--border-radius-large);
         background: var(--wa-form-control-background-color);
       }
 
@@ -138,7 +138,7 @@ export class OnboardingWelcomeCard extends LitElement {
         text-align: start;
         font-size: var(--font-size-sm);
         line-height: var(--line-height-normal);
-        color: var(--wa-color-text-quiet);
+        color: var(--color-text-secondary);
         overflow-wrap: anywhere;
       }
 

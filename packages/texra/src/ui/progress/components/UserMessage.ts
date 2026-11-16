@@ -107,13 +107,10 @@ export class UserMessage extends LitElement {
         max-height: min(45vh, 520px);
         overflow: auto;
         padding: var(--wa-space-xs);
-        background: var(
-          --wa-color-surface-lowered,
-          var(--wa-color-surface-default)
-        );
-        border-radius: var(--wa-border-radius-m, var(--border-radius-small));
+        background: var(--color-bg-secondary);
+        border-radius: var(--border-radius-medium);
         font-size: var(--font-size-sm);
-        line-height: 1.5;
+        line-height: var(--line-height-normal);
         white-space: normal;
       }
 
@@ -122,10 +119,7 @@ export class UserMessage extends LitElement {
       :host-context(.vscode-high-contrast) .user-message::part(base),
       :host-context(.vscode-high-contrast-light) .user-message::part(base) {
         background-color: var(--wa-color-surface-default);
-        border-color: var(
-          --vscode-contrastBorder,
-          var(--wa-color-surface-border)
-        );
+        border-color: var(--vscode-contrastBorder, var(--color-border));
       }
     `,
   ];

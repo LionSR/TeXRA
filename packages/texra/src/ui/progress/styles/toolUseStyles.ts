@@ -93,7 +93,7 @@ export const toolUseStyles = css`
     margin: 0;
     padding: 0;
     background: transparent;
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-sm);
     line-height: var(--line-height-relaxed);

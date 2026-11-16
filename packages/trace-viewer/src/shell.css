@@ -30,7 +30,7 @@ body .trace-viewer-error {
 
 body .trace-viewer-error h1 {
   margin-block: 0 var(--wa-space-m);
-  font-size: 1.25em;
+  font-size: var(--wa-type-heading);
 }
 
 /* The scrubber over the run's run.position rows (main.ts): a footer under the

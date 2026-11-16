@@ -34,7 +34,7 @@ export const settingsCatalogStyles: CSSResult = css`
   .catalog-group {
     position: sticky;
     top: 0;
-    z-index: 1;
+    z-index: var(--layer-sticky);
     display: grid;
     grid-template-columns: minmax(0, 1fr) 3.5rem;
     align-items: center;

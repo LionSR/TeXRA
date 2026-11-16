@@ -59,19 +59,19 @@ const scriptStageStyles = css`
 
   .section {
     padding: var(--wa-space-xs) var(--wa-space-s) var(--wa-space-3xs);
-    font-weight: var(--wa-font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
   }
 
   .summary {
     padding: var(--wa-space-2xs) var(--wa-space-s);
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     font-variant-numeric: tabular-nums;
   }
 
   .log {
     display: flex;
     padding: var(--wa-space-2xs) var(--wa-space-s);
-    border-top: var(--border-thin) solid var(--wa-color-surface-border);
+    border-top: var(--border-thin) solid var(--color-border);
   }
 
   .row {
@@ -81,7 +81,7 @@ const scriptStageStyles = css`
     min-height: 32px;
     min-width: 0;
     padding: var(--wa-space-3xs) var(--wa-space-s);
-    border-top: var(--border-thin) solid var(--wa-color-surface-border);
+    border-top: var(--border-thin) solid var(--color-border);
   }
 
   .row.is-linked {
@@ -89,20 +89,20 @@ const scriptStageStyles = css`
   }
 
   .row.is-linked:hover {
-    background: var(--wa-color-surface-lowered);
+    background: var(--color-bg-secondary);
   }
 
   .row-icon {
     display: inline-flex;
     flex: 0 0 auto;
-    font-size: 12px;
+    font-size: var(--font-size-xs);
     color: var(--tone-color);
   }
 
   .row-label {
     flex: 0 0 auto;
     max-width: 40%;
-    font-weight: var(--wa-font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -115,7 +115,7 @@ const scriptStageStyles = css`
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
   }
 
   /* The last line takes what the facts leave: a zero basis keeps a long
@@ -125,7 +125,7 @@ const scriptStageStyles = css`
   }
 
   .row-last.is-error {
-    color: var(--wa-color-danger-on-quiet);
+    color: var(--color-error);
   }
 
   .row-meta {
@@ -147,14 +147,14 @@ const scriptStageStyles = css`
       flex: 1 0 100%;
       max-width: none;
       box-sizing: border-box;
-      padding-left: calc(12px + var(--wa-space-xs));
+      padding-left: calc(var(--font-size-xs) + var(--wa-space-xs));
     }
   }
 
   .row-rejected {
     flex: 0 1 auto;
     font-size: var(--font-size-xs);
-    color: var(--wa-color-warning-on-quiet);
+    color: var(--color-warning);
   }
 
   .row-actions {

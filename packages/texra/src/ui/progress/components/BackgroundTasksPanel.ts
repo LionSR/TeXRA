@@ -71,7 +71,7 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       wa-details.dispatch::part(base) {
-        border-radius: var(--wa-border-radius-l);
+        border-radius: var(--border-radius-large);
       }
       wa-details.dispatch::part(header) {
         padding: var(--wa-space-xs) var(--wa-space-s);
@@ -92,9 +92,9 @@ export class BackgroundTasksPanel extends LitElement {
         color: var(--wa-color-brand-on-quiet);
       }
       .dispatch-summary wa-badge::part(base) {
-        font-size: 10px;
-        line-height: 1;
-        padding: 2px 6px;
+        font-size: var(--font-size-xs);
+        line-height: var(--line-height-tight);
+        padding: var(--wa-space-3xs) var(--wa-space-2xs);
       }
       .dispatch-since {
         font-weight: var(--font-weight-normal);
