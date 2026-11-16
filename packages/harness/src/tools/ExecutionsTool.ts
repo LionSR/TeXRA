@@ -12,7 +12,6 @@
 import { Duration, Effect, FileSystem, Stream, SubscriptionRef } from 'effect';
 
 // Local imports
-import { isDeliveryOf } from '@agent/storage/runLifecycle';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import {
   listRunWorkspaceFiles,
@@ -203,9 +202,13 @@ const EXECUTION_ROUTES: ReadonlyArray<{
           context.runId,
           'input',
         );
-        const answered = followUps
-          .map(({ followUpId }) => followUpId)
-          .filter((followUpId) => isDeliveryOf(runId, followUpId));
+        const answered = followUps.flatMap(({ followUpId, content }) =>
+          'delivery' in content &&
+          content.from.kind === 'run' &&
+          content.from.runId === runId
+            ? [followUpId]
+            : [],
+        );
         const summary = yield* showSummary(context, runId);
         return { ...summary, consumedFollowUps: answered };
       }),

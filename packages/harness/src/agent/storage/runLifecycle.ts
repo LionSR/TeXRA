@@ -193,11 +193,6 @@ const endOf = (end: Omit<RunEnd, 'usage'>): Omit<RunEnd, 'usage'> => ({
 export const deliveryId = (runId: RunId, facts: RunRows): string =>
   `${runId}:${facts.activation?.commit ?? 0}`;
 
-/** Whether `followUpId` is one of `runId`'s deliveries ({@link deliveryId}),
- *  of any lifecycle, as opposed to a message the run sent. */
-export const isDeliveryOf = (runId: RunId, followUpId: string): boolean =>
-  followUpId.startsWith(`${runId}:`);
-
 /**
  * A run's report queued on the input of each run it works for, decided in
  * the job committing its end, under the lifecycle's {@link deliveryId}:
