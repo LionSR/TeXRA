@@ -4,31 +4,25 @@
  * nodes are the harness's format-agnostic `ExportNode`, projected from
  * transcript rows by `readCompletedRunConversation`; the HTML export path
  * uses `assembleTrace` instead.
- *
- * The conversation's nodes cross the service's RPC edge
- * (`records.readConversation`), so the shapes are schemas and the types derive
- * from them.
  */
 
-import { Schema } from 'effect';
+import type { ExportNode } from '@texra-ai/harness/host';
+import type {
+  AgentConfig,
+  MediaAttachmentKind,
+} from '@texra-ai/harness/schemas';
 
-import { ExportNodeSchema } from '@texra-ai/harness/host';
-import type { MediaAttachmentKind } from '@texra-ai/harness/schemas';
-
-// ============================================================
-// Export configuration (caller-supplied)
-// ============================================================
-
-const ExportConfigSchema = Schema.Struct({
-  agent: Schema.optional(Schema.String),
-  model: Schema.optional(Schema.String),
-  instruction: Schema.optional(Schema.String),
-  inputFiles: Schema.optional(Schema.Array(Schema.String)),
-  mediaFiles: Schema.optional(Schema.Array(Schema.String)),
-  contextFiles: Schema.optional(Schema.Array(Schema.String)),
-  outputFiles: Schema.optional(Schema.Array(Schema.String)),
-});
-export type ExportConfig = typeof ExportConfigSchema.Type;
+/** The fields of the run's config an export's header shows. */
+export type ExportConfig = Pick<
+  AgentConfig,
+  | 'agent'
+  | 'model'
+  | 'instruction'
+  | 'inputFiles'
+  | 'mediaFiles'
+  | 'contextFiles'
+  | 'outputFiles'
+>;
 
 /**
  * Attachment kinds a renderer must be able to label: the canonical media
@@ -39,13 +33,12 @@ export type ExportConfig = typeof ExportConfigSchema.Type;
 export type ExportAttachmentType = MediaAttachmentKind;
 
 /** A run's export input: its setup and its conversation's nodes. */
-export const ChatExportInputSchema = Schema.Struct({
-  timestamp: Schema.String,
-  description: Schema.optional(Schema.String),
-  config: ExportConfigSchema,
-  nodes: Schema.Array(ExportNodeSchema),
-});
-export type ChatExportInput = typeof ChatExportInputSchema.Type;
+export interface ChatExportInput {
+  readonly timestamp: string;
+  readonly description?: string;
+  readonly config: ExportConfig;
+  readonly nodes: readonly ExportNode[];
+}
 
 // ============================================================
 // Document metadata

@@ -116,18 +116,16 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
     return { ...(yield* writeExport(runId, filename, html)), format };
   }
 
-  const { config, exportInput } = yield* loadChatExportInput(
-    runId,
-    options.session,
-  );
-  if (!config)
+  const loaded = yield* loadChatExportInput(runId, options.session);
+  if (loaded._tag === 'noConfig')
     return yield* new Rejected({
       reason: 'This run has no saved data to export.',
     });
-  if (!exportInput)
+  if (loaded._tag === 'noConversation')
     return yield* new Rejected({
       reason: 'No conversation was saved for this run.',
     });
+  const exportInput = loaded.input;
 
   const result = yield* writeExport(
     runId,
