@@ -13,7 +13,6 @@ import {
   Effect,
   Result,
   Schema,
-  SchemaGetter,
   type Scope,
   Stream,
 } from 'effect';
@@ -39,7 +38,7 @@ import {
 } from './transport.js';
 import {
   filesApiUploads,
-  UploadedSchema,
+  uploadedFileSchema,
   type UploadCache,
 } from './uploadCache.js';
 import {
@@ -62,27 +61,6 @@ import type {
   ToolResultBlockParam,
 } from '@anthropic-ai/sdk/resources/messages';
 
-/**
- * What a Files API upload must return before its id is cached. The SDK's
- * type is not a check on the JSON, so a missing or empty id, or an expiry
- * that is not an RFC 3339 time (null means the file does not expire), is a
- * malformed response: the upload counts as failed and the bytes are sent.
- */
-const UploadedFileSchema = Schema.Struct({
-  id: Schema.NonEmptyString,
-  expires_at: Schema.optional(Schema.NullOr(Schema.DateTimeUtcFromString)),
-}).pipe(
-  Schema.decodeTo(UploadedSchema, {
-    decode: SchemaGetter.transform((file) => ({
-      fileId: file.id,
-      expiresAtMs:
-        file.expires_at == null
-          ? null
-          : DateTime.toEpochMillis(file.expires_at),
-    })),
-    encode: SchemaGetter.forbidden(() => 'decode-only'),
-  }),
-);
 function sdkFailure(cause: unknown): ModelError {
   return sdkModelError(
     cause,
@@ -596,8 +574,9 @@ export const anthropicMessagesModel = Effect.fn('llm.anthropicMessages.model')(
           catch: (cause) =>
             fillModelError(sdkFailure(cause), { model: origin.requestedModel }),
         }),
-      parseUploaded: (raw) =>
-        Schema.decodeUnknownResult(UploadedFileSchema)(raw),
+      parseUploaded: Schema.decodeUnknownResult(
+        uploadedFileSchema(Schema.DateTimeUtcFromString, DateTime.toEpochMillis),
+      ),
       create: async (upload, signal) =>
         client.files.upload(
           {

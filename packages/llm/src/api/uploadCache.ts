@@ -2,7 +2,7 @@
 import { hash } from 'node:crypto';
 
 // Third-party imports
-import { Effect, Result, Schema, type Scope } from 'effect';
+import { Effect, Result, Schema, SchemaGetter, type Scope } from 'effect';
 
 // Local imports - canonical model contract
 import { FileUploadSchema, type FileUpload } from '../turn.js';
@@ -31,6 +31,32 @@ export const UploadedSchema = Schema.Struct({
   expiresAtMs: Schema.NullOr(Schema.Number),
 });
 type Uploaded = typeof UploadedSchema.Type;
+
+/**
+ * Reads a Files API create response into {@link UploadedSchema}. The SDK's
+ * type is not a check on the JSON, so a missing or empty id, or an expiry
+ * that is not the shape `expiresAt` accepts (absent or `null` means the file
+ * does not expire), is a malformed response: the upload counts as failed and
+ * the bytes are sent. Each provider states its expiry differently (RFC 3339
+ * against whole Unix seconds), so it passes its own field schema and the
+ * conversion to epoch milliseconds; the decode is one-way.
+ */
+export const uploadedFileSchema = <S extends Schema.Top>(
+  expiresAt: S,
+  toMs: (value: S['Type']) => number,
+) =>
+  Schema.Struct({
+    id: Schema.NonEmptyString,
+    expires_at: Schema.optional(Schema.NullOr(expiresAt)),
+  }).pipe(
+    Schema.decodeTo(UploadedSchema, {
+      decode: SchemaGetter.transform((file) => ({
+        fileId: file.id,
+        expiresAtMs: file.expires_at == null ? null : toMs(file.expires_at),
+      })),
+      encode: SchemaGetter.forbidden(() => 'decode-only'),
+    }),
+  );
 
 /**
  * One binding's uploads, held in memory and nowhere else. The key is a
