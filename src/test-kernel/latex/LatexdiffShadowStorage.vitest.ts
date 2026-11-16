@@ -70,8 +70,7 @@ describe('latexdiff shadow output', () => {
           stdout: '',
           stderr:
             'OPENAI_API_KEY=sk-abcdefghijklmnop1234 Authorization: Bearer tok.en-123',
-          timedOut: false,
-          exitCode: 1,
+          end: { _tag: 'Exited', code: 1 },
         }),
       );
 

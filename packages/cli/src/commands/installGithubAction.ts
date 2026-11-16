@@ -284,13 +284,14 @@ const runInstallGithubAction = Effect.fn('runInstallGithubAction')(function* (
     '--',
     WORKFLOW_RELATIVE_PATH,
   );
-  if (diff.exitCode !== 0 && diff.exitCode !== 1) {
+  // `git diff --quiet` exits 1 when there are changes, 0 when there are none.
+  if (diff.end._tag !== 'Exited' || diff.end.code > 1) {
     return yield* abort(
       `Failed to inspect staged workflow changes: ${diff.stderr}`,
     );
   }
 
-  const hasWorkflowChanges = diff.exitCode === 1;
+  const hasWorkflowChanges = diff.end.code === 1;
   if (hasWorkflowChanges) {
     const commit = yield* git(
       root,

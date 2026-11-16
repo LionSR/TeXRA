@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/node.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 58
+Exports: 59
 
 - `APPROVAL_POLICY_ENV` — `const APPROVAL_POLICY_ENV: "TEXRA_APPROVAL_POLICY"`
 - `canonicalizeWorkspaceRoot` — `function canonicalizeWorkspaceRoot: (workspaceRoot: string) => string`
@@ -16,8 +16,9 @@ Exports: 58
 - `entryTypeIn` — `const entryTypeIn: (fs: FileSystem, target: string) => Effect<Type | undefined, PlatformError, never>`
 - `envFlag` — `const envFlag: (name: string, env?: Readonly<Record<string, string | undefined>> | undefined) => Effect<boolean, never, never>`
 - `envVar` — `const envVar: (name: string) => Effect<string | undefined, never, never>`
-- `ExecResult` — `type ExecResult = typeof ExecResultSchema.Type; ≡ { readonly exitCode: number; readonly noExitCode?: boolean | undefined; readonly outputLimitExceeded?: boolean | undefined; readonly stderr: string; readonly stdout: string; readonly success: boolean; readonly timedOut: boolean; }`
-- `executeCommand` — `const executeCommand: (command: string | string[], options: ExecuteCommandBaseOptions) => Effect<{ readonly exitCode: number; readonly noExitCode?: boolean | undefined; readonly outputLimitExceeded?: boolean | undefined; readonly stderr: string; readonly stdout: string; readonly success: boolean; readonly timedOut: boolean; }, never, ChildProcessSpawner>`
+- `ExecEnd` — `type ExecEnd = { readonly _tag: 'Exited'; readonly code: number; } | { readonly _tag: 'TimedOut'; } | { readonly _tag: 'LimitExceeded'; readonly stream: 'stdout' | 'stderr'; } | { readonly _tag: 'NoExit'; readonly why: 'spawn' | 'signal' | 'read'; }; ≡ ExecEnd`
+- `ExecResult` — `interface ExecResult { readonly success: boolean; readonly stdout: string; readonly stderr: string; readonly end: ExecEnd; }`
+- `executeCommand` — `const executeCommand: (command: string | string[], options: ExecuteCommandBaseOptions) => Effect<ExecResult, never, ChildProcessSpawner>`
 - `ExecuteCommandBaseOptions` — `interface ExecuteCommandBaseOptions { readonly env?: Record<string, string>; readonly timeout?: number; readonly cwd: string | undefined; readonly onStdout?: (chunk: string) => void; readonly onStderr?: (chunk: string) => void; readonly buffer?: boolean; readonly maxBuffer?: number; readonly quiet?: boolean; readonly killProcessTree?: boolean; }`
 - `existsAtAbsolute` — `function existsAtAbsolute: (target: string) => boolean`
 - `FileSecrets` — `class FileSecrets { constructor: new (directory: string, onChanged: (key: string) => void) => FileSecrets; static: watch: <R>(directory: string, announce: (key: string) => Effect<void, never, R>) => Effect<void, never, FileSystem | R>; instance: delete: (key: string) => Effect<void, SecretsFailed, never>; get: (key: string) => Effect<string | undefined, SecretsFailed, never>; listStoredKeys: () => Effect<readonly string[], SecretsFailed, never>; set: (key: string, value: string) => Effect<void, SecretsFailed, never> }`

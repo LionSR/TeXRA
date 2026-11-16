@@ -35,7 +35,7 @@ const answers = (command: readonly string[]) =>
       quiet: true,
     }),
     (result) =>
-      result.exitCode === 0 || /\d+\.\d+/.test(result.stdout + result.stderr),
+      result.success || /\d+\.\d+/.test(result.stdout + result.stderr),
   );
 
 /** The image processor found, kept for the process: every image resize and

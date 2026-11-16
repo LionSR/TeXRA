@@ -6,7 +6,11 @@
 
 import { DELIVERY_FAMILY } from '@shared/deliveryTags';
 
-import type { ChildRunDelivery, DisplayRow, ExecResult } from '@shared/schemas';
+import type {
+  ChildRunDelivery,
+  DisplayRow,
+  ProcessExit,
+} from '@shared/schemas';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { appendHead, appendTail } from '@utils/text/appendTail';
@@ -57,7 +61,7 @@ export function bashResultDelivery(
   runId: string,
   call: BackgroundBashCall,
   wallTimeMs: number,
-  result: ExecResult,
+  exit: ProcessExit,
   rows: readonly DisplayRow[],
 ): ChildRunDelivery {
   const lines: string[] = [];
@@ -108,10 +112,11 @@ export function bashResultDelivery(
     family: DELIVERY_FAMILY.background,
     runId,
     attributes: callAttributes(call),
+    // A command without a code of its own reads with the conventional 1.
     exit: {
-      code: result.exitCode,
-      timedOut: result.timedOut,
-      noExitCode: result.noExitCode === true,
+      code: exit.code ?? 1,
+      timedOut: exit.timedOut,
+      noExitCode: exit.code === null && !exit.timedOut,
     },
     wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
     lines,

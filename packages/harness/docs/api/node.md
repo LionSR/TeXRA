@@ -175,10 +175,34 @@ One variable; unset and `''` both read as undefined.
 const envVar: (name: string) => Effect<string | undefined, never, never>
 ```
 
-## ExecResult
+## ExecEnd
+
+How a command ended.
 
 ```ts
-type ExecResult = typeof ExecResultSchema.Type;
+type ExecEnd =
+  | { readonly _tag: 'Exited'; readonly code: number }
+  | { readonly _tag: 'TimedOut' }
+  | { readonly _tag: 'LimitExceeded'; readonly stream: 'stdout' | 'stderr' }
+  /** It has no exit code of its own: it could not start, died by a signal,
+   *  or its output could not be read. */
+  | { readonly _tag: 'NoExit'; readonly why: 'spawn' | 'signal' | 'read' };
+```
+
+## ExecResult
+
+What `executeCommand` answers.
+
+```ts
+interface ExecResult {
+  /** It exited with code 0. */
+  readonly success: boolean;
+  /** Empty or whitespace-only output is normalized to the empty string. */
+  readonly stdout: string;
+  /** Normalized as `stdout` is. */
+  readonly stderr: string;
+  readonly end: ExecEnd;
+}
 ```
 
 ## executeCommand
@@ -186,9 +210,9 @@ type ExecResult = typeof ExecResultSchema.Type;
 Execute an external command in `cwd` with the workspace env, over the
 process's `ChildProcessSpawner`. Its lines take the caller's log channel.
 
-Never fails: a spawn failure or missing cwd (127), a non-zero exit, a
-timeout (`timedOut`) and a max-buffer trip (2,
-`outputLimitExceeded`) are all reported in the {@link ExecResult}.
+Never fails: how the command ended (an exit code, a timeout, a max-buffer
+trip, or no exit of its own: a spawn failure or missing cwd, a signal, an
+unreadable stream) is the {@link ExecResult}'s `end`.
 
 The process lives exactly as long as this call's scope. A deadline, an
 output-limit trip or an interrupted fiber closes that scope, and
@@ -201,7 +225,7 @@ in its own group, on a lifeline that ends the group if this process dies
 without running the release.
 
 ```ts
-const executeCommand: (command: string | string[], options: ExecuteCommandBaseOptions) => Effect<{ readonly success: boolean; readonly timedOut: boolean; readonly stdout: string; readonly stderr: string; readonly exitCode: number; readonly noExitCode?: boolean | undefined; readonly outputLimitExceeded?: boolean | undefined; }, never, ChildProcessSpawner>
+const executeCommand: (command: string | string[], options: ExecuteCommandBaseOptions) => Effect<ExecResult, never, ChildProcessSpawner>
 ```
 
 ## ExecuteCommandBaseOptions

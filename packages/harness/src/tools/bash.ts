@@ -29,7 +29,12 @@ import {
   BASH_BACKGROUND_LOG_CAP_CHARS,
   BASH_TOOL_DEFAULT_TIMEOUT_MS,
 } from '@shared/toolUse';
-import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
+import {
+  processExit,
+  ToolError,
+  type RunId,
+  type ToolResult,
+} from '@shared/schemas';
 import {
   Settings,
   type SettingsStores,
@@ -264,15 +269,13 @@ function backgroundBashTurn(params: {
     // The output rows were committed as the chunks arrived, so the run's
     // rows hold the whole log.
     const rows = yield* log.display(runId);
-    // `executeCommand` never fails on a non-zero exit: it answers with the
-    // exit code, which the run's end reads as its failure, its output still
-    // delivered. A timeout, a signal and a spawn failure answer no 0.
+    // `executeCommand` never fails on a non-zero exit: it answers how the
+    // command ended, which the run's end reads as its failure, its output
+    // still delivered. Only an exit has a code.
+    const exit = processExit(result.end);
     return {
-      report: bashResultDelivery(runId, call, wallTimeMs, result, rows),
-      exit: {
-        code: result.noExitCode === true ? null : result.exitCode,
-        timedOut: result.timedOut,
-      },
+      report: bashResultDelivery(runId, call, wallTimeMs, exit, rows),
+      exit,
     };
   });
 
@@ -344,7 +347,7 @@ const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
   const retainedStdout = stdout.text() ?? result.stdout;
   const retainedStderr = stderr.text() ?? result.stderr;
 
-  if (result.timedOut) {
+  if (result.end._tag === 'TimedOut') {
     const parts: string[] = [
       `Foreground command timed out after ${timeoutMs / 1000}s.`,
     ];

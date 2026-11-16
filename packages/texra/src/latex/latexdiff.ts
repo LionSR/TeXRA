@@ -158,7 +158,7 @@ const runWithFlattenFallback = Effect.fn('latexdiff.runWithFlattenFallback')(
         return yield* new LatexdiffFailed({
           commandType: tool,
           flatten,
-          timedOut: result.timedOut,
+          timedOut: result.end._tag === 'TimedOut',
           timeoutMs,
           stderr: redactSecrets(
             result.success ? 'it produced no output' : result.stderr,

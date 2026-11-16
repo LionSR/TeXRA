@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => ({
       stdout:
         '\\documentclass{article}\n\\begin{document}\nchanged\n\\end{document}\n',
       stderr: '',
+      end: { _tag: 'Exited', code: 0 },
     }),
   ),
 }));

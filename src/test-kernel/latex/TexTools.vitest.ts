@@ -39,8 +39,7 @@ const engineExits = (buildDir: string, pdf?: string) =>
       success: true,
       stdout: '',
       stderr: '',
-      timedOut: false,
-      exitCode: 0,
+      end: { _tag: 'Exited', code: 0 },
     };
   });
 

@@ -88,19 +88,19 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
         configDir,
         defaultConfigDir,
       )) {
-        const { exitCode } = yield* executeCommand(['security', ...probe], {
+        const { end, success } = yield* executeCommand(['security', ...probe], {
           cwd: process.cwd(),
           timeout: 1000,
           quiet: true,
         });
         // `quiet` also silences the spawn-failure log, and `security` is part
         // of macOS, so its absence is worth a line before reading not-found.
-        if (exitCode === 127) {
+        if (end._tag === 'NoExit' && end.why === 'spawn') {
           yield* Effect.logWarning(
             'The macOS `security` tool could not start; the keychain credential probe reads as not found.',
           ).pipe(withLogChannel(CHANNEL));
         }
-        if (exitCode === 0) return true;
+        if (success) return true;
       }
     }
 

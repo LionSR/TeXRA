@@ -59,7 +59,7 @@ export {
   executeCommand,
   type ExecuteCommandBaseOptions,
 } from '@utils/system/execUtils';
-export type { ExecResult } from '@shared/schemas';
+export type { ExecEnd, ExecResult } from '@shared/schemas';
 export {
   CommandDirs,
   existsAtAbsolute,
