@@ -8,9 +8,9 @@
 import { Effect, Option, Schema } from 'effect';
 
 /** Non-empty string claim; any other shape degrades to undefined. */
-export const NonEmptyJwtClaim = Schema.optional(
-  Schema.String.check(Schema.isMinLength(1)),
-).pipe(Schema.catchDecoding(() => Effect.succeed(Option.some(undefined))));
+export const NonEmptyJwtClaim = Schema.optional(Schema.NonEmptyString).pipe(
+  Schema.catchDecoding(() => Effect.succeed(Option.some(undefined))),
+);
 
 /**
  * Decode a JWT's middle base64url segment as JSON and parse it with `schema`.

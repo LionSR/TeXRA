@@ -274,7 +274,7 @@ const ToolInfoSchema = Schema.Struct({
 const ToolInstallActionSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('guide'),
-    text: Schema.String.check(Schema.isMinLength(1)),
+    text: Schema.NonEmptyString,
   }),
   Schema.Struct({
     kind: Schema.Literal('url'),
@@ -282,15 +282,15 @@ const ToolInstallActionSchema = Schema.Union([
   }),
   Schema.Struct({
     kind: Schema.Literal('extension'),
-    extensionId: Schema.String.check(Schema.isMinLength(1)),
+    extensionId: Schema.NonEmptyString,
   }),
   Schema.Struct({
     kind: Schema.Literal('command'),
-    command: Schema.String.check(Schema.isMinLength(1)),
+    command: Schema.NonEmptyString,
   }),
   Schema.Struct({
     kind: Schema.Literal('auth'),
-    command: Schema.String.check(Schema.isMinLength(1)),
+    command: Schema.NonEmptyString,
   }),
 ]);
 export type ToolInstallAction = typeof ToolInstallActionSchema.Type;
@@ -336,8 +336,8 @@ const PluginRowSchema = Schema.Union([
   }),
   Schema.Struct({
     kind: Schema.Literal('mcp'),
-    name: Schema.String.check(Schema.isMinLength(1)),
-    command: Schema.String.check(Schema.isMinLength(1)),
+    name: Schema.NonEmptyString,
+    command: Schema.NonEmptyString,
     usedBy: Schema.Array(Schema.String),
   }),
 ]);
@@ -378,7 +378,7 @@ const PRSubscriptionOwnerSchema = Schema.Struct({
 });
 
 const PRSubscriptionEntrySchema = Schema.Struct({
-  key: Schema.String.check(Schema.isMinLength(1)),
+  key: Schema.NonEmptyString,
   owners: Schema.Array(PRSubscriptionOwnerSchema),
 });
 export type PRSubscriptionEntry = typeof PRSubscriptionEntrySchema.Type;
@@ -501,7 +501,7 @@ export type SettingsViewOutboundMessage =
 function providerCommand<T extends string>(command: T) {
   return Schema.Struct({
     command: Schema.Literal(command),
-    provider: Schema.String.check(Schema.isMinLength(1)),
+    provider: Schema.NonEmptyString,
   });
 }
 
@@ -509,7 +509,7 @@ function providerCommand<T extends string>(command: T) {
 function modelCommand<T extends string>(command: T) {
   return Schema.Struct({
     command: Schema.Literal(command),
-    modelName: Schema.String.check(Schema.isMinLength(1)),
+    modelName: Schema.NonEmptyString,
   });
 }
 
@@ -517,7 +517,7 @@ function modelCommand<T extends string>(command: T) {
 function agentCommand<T extends string>(command: T) {
   return Schema.Struct({
     command: Schema.Literal(command),
-    agentName: Schema.String.check(Schema.isMinLength(1)),
+    agentName: Schema.NonEmptyString,
     agentSource: AgentSourceSchema,
   });
 }
@@ -577,11 +577,11 @@ const CustomizeAgentMessageSchema = agentCommand(
 );
 const DeleteCustomAgentMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT),
-  agentName: Schema.String.check(Schema.isMinLength(1)),
+  agentName: Schema.NonEmptyString,
 });
 const KeepCustomAgentMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.KEEP_CUSTOM_AGENT),
-  agentName: Schema.String.check(Schema.isMinLength(1)),
+  agentName: Schema.NonEmptyString,
 });
 const RevealAgentFileMessageSchema = agentCommand(
   SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE,
@@ -598,32 +598,32 @@ const ResetCustomAgentDirMessageSchema = commandOnly(
 // Agent team inbound messages
 const ApplyAgentModePresetMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET),
-  presetId: Schema.String.check(Schema.isMinLength(1)),
+  presetId: Schema.NonEmptyString,
 });
 const SaveAgentModePresetMessageSchema = commandOnly(
   SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET,
 );
 const DeleteAgentModePresetMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET),
-  presetId: Schema.String.check(Schema.isMinLength(1)),
+  presetId: Schema.NonEmptyString,
 });
 
 // Tool dashboard inbound messages
 const InstallExtensionMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.INSTALL_EXTENSION),
-  extensionId: Schema.String.check(Schema.isMinLength(1)),
+  extensionId: Schema.NonEmptyString,
 });
 const RecheckToolStatusMessageSchema = commandOnly(
   SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
 );
 const ToggleToolMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL),
-  toolId: Schema.String.check(Schema.isMinLength(1)),
+  toolId: Schema.NonEmptyString,
   enabled: Schema.Boolean,
 });
 const RunToolCommandMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND),
-  toolId: Schema.String.check(Schema.isMinLength(1)),
+  toolId: Schema.NonEmptyString,
   kind: Schema.Literals(['install', 'auth']),
 });
 export type ToolCommandKind =
@@ -658,7 +658,7 @@ const GetSubscriptionUsageMessageSchema = Schema.Struct({
 });
 const UnsubscribePRMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR),
-  key: Schema.String.check(Schema.isMinLength(1)),
+  key: Schema.NonEmptyString,
 });
 const OpenPRSubscriptionStreamMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.OPEN_PR_SUBSCRIPTION_STREAM),
@@ -675,7 +675,7 @@ const ApplyLatexSettingsMessageSchema = Schema.Struct({
 });
 const RunInstallCommandMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND),
-  installCommand: Schema.String.check(Schema.isMinLength(1)),
+  installCommand: Schema.NonEmptyString,
 });
 
 // Generic catalog-driven setting write. This boundary accepts exactly the
@@ -693,7 +693,7 @@ export type StateSettingValue = typeof StateSettingValueSchema.Type;
 
 const UpdateStateSettingMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING),
-  key: Schema.String.check(Schema.isMinLength(1)),
+  key: Schema.NonEmptyString,
   value: Schema.optional(StateSettingValueSchema),
 });
 
@@ -706,7 +706,7 @@ const SetSkillEnabledMessageSchema = Schema.Struct({
     DISABLED_SKILLS_SETTING.key,
     DISABLED_SKILL_SOURCES_SETTING.key,
   ]),
-  item: Schema.String.check(Schema.isMinLength(1)),
+  item: Schema.NonEmptyString,
   enabled: Schema.Boolean,
 });
 

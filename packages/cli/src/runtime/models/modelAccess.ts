@@ -10,7 +10,7 @@ import {
   type RunModelCandidate,
 } from '@texra-ai/harness/host';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
-import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
+import { isModelOptionAvailable, joinFacts } from '@texra-ai/harness/schemas';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
@@ -150,9 +150,10 @@ export function modelSelectItemsForCli(
         ? yield* getModelSwitchDisabledReason(model.model.value)
         : undefined;
       const access = formatModelStatusForCli(model);
-      const status = model.model.reasoning
-        ? `${access} · reasoning setting: ${model.model.reasoning}`
-        : access;
+      const status = joinFacts([
+        access,
+        model.model.reasoning && `reasoning setting: ${model.model.reasoning}`,
+      ]);
       return {
         value: model.model.value,
         label: model.model.label || model.model.value,

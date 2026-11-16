@@ -18,9 +18,7 @@ type UpdateCheckHost = 'cli' | 'desktop';
 /** Persisted update notification state, isolated by host and configured storage root. */
 const UpdateCheckRecordSchema = Schema.Struct({
   lastCheckedAt: Schema.NullOr(NonNegativeIntSchema),
-  lastNotifiedVersion: Schema.NullOr(
-    Schema.String.check(Schema.isMinLength(1)),
-  ),
+  lastNotifiedVersion: Schema.NullOr(Schema.NonEmptyString),
 });
 type UpdateCheckRecord = typeof UpdateCheckRecordSchema.Type;
 

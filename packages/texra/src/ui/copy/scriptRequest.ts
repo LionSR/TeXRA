@@ -2,6 +2,7 @@ import {
   countLines,
   truncateSummary,
   type AgentProposalRequest,
+  joinFacts,
 } from '@texra-ai/harness/schemas';
 
 /** How much of the first agent's instruction the request quotes: the full
@@ -46,9 +47,8 @@ export function scriptRequestFirstAgentLine(
       .find((line) => line.length > 0) ?? '',
     FIRST_AGENT_PREVIEW_CHARS,
   );
-  return first.length > 0
-    ? `First agent: ${agent} · ${modelLabel} — "${first}"`
-    : `First agent: ${agent} · ${modelLabel}`;
+  const who = joinFacts([`First agent: ${agent}`, modelLabel]);
+  return first.length > 0 ? `${who} — "${first}"` : who;
 }
 
 /** `read_file notes.tex`: one call the script issued before it asked. */

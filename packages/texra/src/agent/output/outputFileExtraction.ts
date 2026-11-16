@@ -18,6 +18,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import { Effect, FileSystem } from 'effect';
 
+import { readNormalizedFile } from '@texra-ai/harness/node';
 import { revisionLayout } from '@texra/shared/constants/revisionLayout';
 import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
 import {
@@ -110,8 +111,10 @@ const warnNoOutputs = Effect.fn('documents.warnNoOutputs')(function* (
   // An unreadable raw response reads as empty here: the round still records
   // no outputs beside its kept `reply`, which hosts show as a round that
   // wrote no documents, so it is never a quiet success.
-  const rawText = yield* fs.readFileString(outputLocation.absolutePath).pipe(
-    Effect.map((text: string) => text.replaceAll('\r\n', '\n')),
+  const rawText = yield* readNormalizedFile(
+    fs,
+    outputLocation.absolutePath,
+  ).pipe(
     recoverLogged(
       (error) =>
         deps.logger.warn(

@@ -1,12 +1,13 @@
 // Shared scaffolding for y/n approval modals — bordered frame, colored
 // title, padded body slot, key handling, and KeyHints footer.
 
+import { FACT_SEPARATOR } from '@texra-ai/harness/schemas';
 import { createContext, useState } from 'react';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints, keyHintSpans, type KeyHint } from '@cli/tui/ui/KeyHints';
-import { POINTER, SEPARATOR } from '@cli/tui/ui/glyphs';
+import { POINTER } from '@cli/tui/ui/glyphs';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import { useLiveNowMs } from '@cli/tui/useLiveNowMs';
 import {
@@ -138,7 +139,7 @@ export function ConfirmCard({
           ) : (
             <Text bold color={color} wrap="truncate-end">
               {pulsedTitle}
-              <Text dimColor>{SEPARATOR}</Text>
+              <Text dimColor>{FACT_SEPARATOR}</Text>
               <Text dimColor>{keyHintSpans(hints)}</Text>
             </Text>
           )}

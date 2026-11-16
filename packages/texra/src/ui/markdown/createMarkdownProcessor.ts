@@ -23,6 +23,8 @@ import {
   DISPLAY_MATH_SPAN_PATTERNS,
   LATEX_MACRO,
   protectByPatterns,
+  holdPlaceholder,
+  placeholderRestorer,
   selectPlaceholderTag,
 } from './latexPlaceholders';
 
@@ -69,49 +71,27 @@ interface MarkdownProcessorConfig {
 
 export type MarkdownProcessor = (content: string) => string;
 
-interface ProtectedRef {
-  readonly refType: string;
-  readonly label: string;
-}
-
 function defaultFormatLatexReference(refType: string, label: string): string {
   const safeAttrLabel = escapeAttr(label);
   const safeTextLabel = escapeText(label);
   return `<span class="latex-ref clickable-link" data-label="${safeAttrLabel}" role="button" tabindex="0">\\${refType}{${safeTextLabel}}</span>`;
 }
 
-function protectLatexReferences(content: string): {
-  content: string;
-  refs: ProtectedRef[];
-  placeholder: RegExp;
-} {
-  const refs: ProtectedRef[] = [];
-  const tag = selectPlaceholderTag(content, 'LATEX-REF');
-  const protectedContent = content.replaceAll(
-    /\\(ref|cref|eqref)\{([^}]+)\}/g,
-    (_match, refType: string, label: string) => {
-      const index = refs.push({ refType, label }) - 1;
-      return `@@${tag}-${index}@@`;
-    },
-  );
-  return {
-    content: protectedContent,
-    refs,
-    placeholder: new RegExp(`@@${tag}-(\\d+)@@`, 'g'),
-  };
-}
-
-function restoreLatexReferences(
+/** Sets each `\ref`-like command aside as the markup `format` gives it. */
+function protectLatexReferences(
   content: string,
-  placeholder: RegExp,
-  refs: ProtectedRef[],
   format: LatexReferenceFormatter,
-): string {
-  return content.replaceAll(placeholder, (match, rawIndex) => {
-    const index = Number(rawIndex);
-    const ref = refs[index];
-    return ref ? format(ref.refType, ref.label) : match;
-  });
+): { content: string; restore: (value: string) => string } {
+  const formatted: string[] = [];
+  const tag = selectPlaceholderTag(content, 'LATEX-REF');
+  return {
+    content: content.replaceAll(
+      /\\(ref|cref|eqref)\{([^}]+)\}/g,
+      (_match, refType: string, label: string) =>
+        holdPlaceholder(formatted, tag, format(refType, label)),
+    ),
+    restore: placeholderRestorer(tag, formatted),
+  };
 }
 
 export function createMarkdownProcessor(
@@ -141,11 +121,8 @@ export function createMarkdownProcessor(
     // Protect in widening order (refs → math spans → stray macros); restore in
     // reverse so a ref placeholder revealed inside a restored span is still
     // formatted. After span protection, only out-of-span macros remain to net.
-    const {
-      content: refProtected,
-      refs,
-      placeholder: refPlaceholder,
-    } = protectLatexReferences(source);
+    const { content: refProtected, restore: restoreReferences } =
+      protectLatexReferences(source, format);
     const mathProtection = config.protectLatexMath
       ? protectLatexMathSpansWithEnvironment(
           refProtected,
@@ -168,12 +145,7 @@ export function createMarkdownProcessor(
     // Each protection carries its own restore — identity when that shield is
     // off — so `protectLatexMath` is not re-read here.
     const restoreProtectedLatex = (value: string): string =>
-      restoreLatexReferences(
-        mathProtection.restore(macroProtection.restore(value)),
-        refPlaceholder,
-        refs,
-        format,
-      );
+      restoreReferences(mathProtection.restore(macroProtection.restore(value)));
 
     // markdown-it v15's `render(src, env)` forwards `env` to renderer rules,
     // so the env object — carrying `restoreProtectedLatex` — reaches them

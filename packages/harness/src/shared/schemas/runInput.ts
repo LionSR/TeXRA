@@ -97,7 +97,7 @@ export type RunInput = typeof RunInputSchema.Type;
  * {@link ModelBackend}, so the stored names only grow with this list.
  */
 export const RunBindingSchema = Schema.Struct({
-  backend: Schema.String.check(Schema.isMinLength(1)),
+  backend: Schema.NonEmptyString,
   declinedRoutes: Schema.Array(DeclinableUsageRouteSchema),
 });
 /** What a run is bound to beyond its model id ({@link RunBindingSchema}). */

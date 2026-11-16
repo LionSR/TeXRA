@@ -40,9 +40,6 @@ export const HOLLOW_DOT = '○';
 /** A script call whose result was reused from an earlier run. */
 export const REUSED = '↺';
 
-/** Inline separator between facts on one line and between key hints. */
-export const SEPARATOR = ' · ';
-
 /** Unordered list item marker, also a neutral static-row bullet. */
 export const LIST_BULLET = '•';
 

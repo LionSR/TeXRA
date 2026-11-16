@@ -42,10 +42,30 @@ export function selectPlaceholderTag(
   return tag;
 }
 
-export function restorePlaceholders(
+/** Sets `item` aside in `items` and returns the `@@<tag>-N@@` token that
+ *  stands for it. `tag` must already be collision-free. */
+export function holdPlaceholder(
+  items: string[],
+  tag: string,
+  item: string,
+): string {
+  return `@@${tag}-${items.push(item) - 1}@@`;
+}
+
+/** The function that puts back every item {@link holdPlaceholder} set aside
+ *  under `tag`. */
+export function placeholderRestorer(
+  tag: string,
+  items: readonly string[],
+): (content: string) => string {
+  const placeholder = new RegExp(`@@${tag}-(\\d+)@@`, 'g');
+  return (content) => restorePlaceholders(content, placeholder, items);
+}
+
+function restorePlaceholders(
   content: string,
   placeholder: RegExp,
-  items: string[],
+  items: readonly string[],
 ): string {
   // An item can itself carry a placeholder when spans nest across patterns
   // (a `\begin{…}…\end{…}` placeholder inside a later `$$…$$` / `\[…\]`
@@ -128,15 +148,16 @@ export function protectPatternsInto(
                 lineIndex === 0 ? '' : (remainingPrefixes[lineIndex - 1] ?? '');
               const contentPrefix =
                 lineIndex === 0 ? '' : (availablePrefixes[lineIndex - 1] ?? '');
-              const index = items.push(line.slice(contentPrefix.length)) - 1;
-              return `${retainedPrefix}@@${tag}-${index}@@`;
+              return (
+                retainedPrefix +
+                holdPlaceholder(items, tag, line.slice(contentPrefix.length))
+              );
             })
             .join('\n');
         }
         // An unquoted span falls through to the whole-match placeholder below.
       }
-      const index = items.push(match) - 1;
-      return `@@${tag}-${index}@@`;
+      return holdPlaceholder(items, tag, match);
     });
   }
   return out;
@@ -157,9 +178,8 @@ export function protectByPatterns(
     items,
     preserveBlockquotePrefixes,
   );
-  const placeholder = new RegExp(`@@${selectedTag}-(\\d+)@@`, 'g');
   return {
     content: protectedContent,
-    restore: (value) => restorePlaceholders(value, placeholder, items),
+    restore: placeholderRestorer(selectedTag, items),
   };
 }

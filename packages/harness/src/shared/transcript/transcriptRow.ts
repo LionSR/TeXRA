@@ -29,7 +29,7 @@ import {
   type CompactionActivityBlock,
 } from '@shared/runs/compactionActivityProjection';
 import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
-import { formatCompactTokenCount } from '@utils/text/stringUtils';
+import { formatCompactTokenCount, joinFacts } from '@utils/text/stringUtils';
 
 import type { ToolRowModel } from './toolRowModel';
 import type { TranscriptText } from './transcriptText';
@@ -354,9 +354,11 @@ export function compactionActivityRow(
     block,
     // `Context compacted · freed 41k tokens (78% → 22%)`: the one row
     // carries the figures its stats entry used to repeat as a second row.
-    label:
-      block.freed && block.freed.tokens > 0
-        ? `${COMPACTION_ACTIVITY_LABEL[block.status]} · freed ${formatCompactTokenCount(block.freed.tokens)} tokens (${block.freed.utilizationBefore.toFixed(0)}% → ${block.freed.utilizationAfter.toFixed(0)}%)`
-        : COMPACTION_ACTIVITY_LABEL[block.status],
+    label: joinFacts([
+      COMPACTION_ACTIVITY_LABEL[block.status],
+      block.freed &&
+        block.freed.tokens > 0 &&
+        `freed ${formatCompactTokenCount(block.freed.tokens)} tokens (${block.freed.utilizationBefore.toFixed(0)}% → ${block.freed.utilizationAfter.toFixed(0)}%)`,
+    ]),
   };
 }

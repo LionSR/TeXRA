@@ -31,7 +31,7 @@ const ALLOWED_EXTENSIONS: ReadonlySet<string> = new Set([
 const REGISTRATION_TIMEOUT = '3 seconds';
 
 const InstallVscodeExtensionInputSchema = Schema.Struct({
-  extensionId: Schema.String.check(Schema.isMinLength(1)).annotate({
+  extensionId: Schema.NonEmptyString.annotate({
     description:
       'VS Code extension ID in "<publisher>.<name>" form (e.g. "James-Yu.latex-workshop").',
   }),

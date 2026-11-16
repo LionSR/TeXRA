@@ -14,7 +14,7 @@ export const RemoteOperationSchema = Schema.Struct({
       protocol: Schema.Literals(['openai-responses', 'google-interactions']),
     }),
   ),
-  providerResponseId: Schema.String.check(Schema.isMinLength(1)),
+  providerResponseId: Schema.NonEmptyString,
 });
 /** {@link RemoteOperationSchema}'s value. */
 export type RemoteOperation = typeof RemoteOperationSchema.Type;

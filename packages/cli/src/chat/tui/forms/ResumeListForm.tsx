@@ -20,7 +20,11 @@ import { rootRunId } from '../state/cliState';
 import { AsyncListForm } from './_shared/ListForm';
 import type { Session } from '@texra-ai/harness';
 import type { ProcessRuntime } from '@texra-ai/harness/host';
-import { collapseWhitespace, type RunId } from '@texra-ai/harness/schemas';
+import {
+  collapseWhitespace,
+  type RunId,
+  joinFacts,
+} from '@texra-ai/harness/schemas';
 
 interface ResumeListFormProps {
   /**
@@ -46,10 +50,14 @@ function resumeEntryLabel(entry: CliHistoryEntry): string {
 
 function resumeEntryDescription(entry: CliHistoryEntry): string {
   const when = formatShortDateTime(entry.timestamp) ?? entry.timestamp;
-  const standing = `${when} · ${historyStanding(entry)} · ${formatCliHistoryAgentLabel(entry)}`;
-  return entry.resumable || entry.resumeBlocked === undefined
-    ? standing
-    : `${standing} · cannot resume: ${entry.resumeBlocked}`;
+  return joinFacts([
+    when,
+    historyStanding(entry),
+    formatCliHistoryAgentLabel(entry),
+    !entry.resumable &&
+      entry.resumeBlocked !== undefined &&
+      `cannot resume: ${entry.resumeBlocked}`,
+  ]);
 }
 
 export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {

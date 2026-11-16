@@ -7,7 +7,7 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - Web Awesome
 import type { IconName } from '@ui/wa/iconNames';
-import { stopSpinnerMotion } from './spinner';
+import { waSpinner } from './spinner';
 import { waIcon } from './webAwesomeIcons';
 
 type ActionButtonAppearance = 'accent' | 'filled' | 'outlined' | 'plain';
@@ -195,16 +195,7 @@ function renderActionButtonBase(
   if (busy === undefined) return html`${button}${tooltip}`;
   return html`
     <span class="action-icon-busy">
-      ${button}
-      ${
-        busy
-          ? html`<wa-spinner
-              class="action-busy-spinner"
-              aria-hidden="true"
-              ${stopSpinnerMotion()}
-            ></wa-spinner>`
-          : nothing
-      }
+      ${button} ${busy ? waSpinner('action-busy-spinner') : nothing}
     </span>
     ${tooltip}
   `;

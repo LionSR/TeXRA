@@ -64,7 +64,7 @@ const StepAfterFailureSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('unchain') }),
   Schema.Struct({
     kind: Schema.Literal('ask'),
-    requestId: Schema.String.check(Schema.isMinLength(1)),
+    requestId: Schema.NonEmptyString,
   }),
   Schema.Struct({ kind: Schema.Literal('stop') }),
 ]);
@@ -73,7 +73,7 @@ export type StepAfterFailure = typeof StepAfterFailureSchema.Type;
 
 /** The canonical call key: `providerCallId`, never null, so a completed
  *  turn cannot carry a call without an identity. */
-const CallIdSchema = Schema.String.check(Schema.isMinLength(1));
+const CallIdSchema = Schema.NonEmptyString;
 
 /* ---------------------------------------------------------- run.position */
 
@@ -109,7 +109,7 @@ export const RunPositionPayloadSchema = Schema.Struct({
  *  part of the response, in content order. */
 const DispatchFactsSchema = Schema.Struct({
   callId: CallIdSchema,
-  toolName: Schema.String.check(Schema.isMinLength(1)),
+  toolName: Schema.NonEmptyString,
   lane: Schema.Literals(['parallel', 'barrier', 'own']),
   /** The tool's replay declaration when the call was committed: a resume
    *  re-runs an unfinished call unasked only when this and the tool's
@@ -121,7 +121,7 @@ const DispatchFactsSchema = Schema.Struct({
   /** The call's card id, minted with the response: the card opens under it
    *  when the call's body starts, and its result closes that card, a
    *  resumed call's too. */
-  logId: Schema.String.check(Schema.isMinLength(1)),
+  logId: Schema.NonEmptyString,
 });
 export type DispatchFacts = typeof DispatchFactsSchema.Type;
 
@@ -333,11 +333,11 @@ export const ScriptCallPayloadSchema = Schema.Struct({
   seq: NonNegativeIntSchema,
   /** `<scriptCallId>/<seq>`. */
   callId: CallIdSchema,
-  toolName: Schema.String.check(Schema.isMinLength(1)),
+  toolName: Schema.NonEmptyString,
   input: JsonValueSchema,
   /** As a response's dispatch fact records it (`DispatchFacts.replay`). */
   replay: Schema.Literals(['safe', 'unsafe']),
-  logId: Schema.String.check(Schema.isMinLength(1)),
+  logId: Schema.NonEmptyString,
   /** The guest's latest `section()` title when it issued the call. */
   section: Schema.NullOr(Schema.String),
 }).check(
@@ -372,8 +372,8 @@ export const ToolIntentPayloadSchema = Schema.Struct({
   attempt: Schema.Int.check(Schema.isGreaterThan(0)),
   /** The call's card id and tool, as its dispatch fact or `script.call`
    *  names them: the row shows its card with no other row read. */
-  logId: Schema.String.check(Schema.isMinLength(1)),
-  toolName: Schema.String.check(Schema.isMinLength(1)),
+  logId: Schema.NonEmptyString,
+  toolName: Schema.NonEmptyString,
   /** What the body runs on: the issued input as the call's PreToolUse hooks
    *  left it. */
   input: JsonValueSchema,
@@ -401,7 +401,7 @@ export const ToolResultPayloadSchema = Schema.Struct({
    *  duplicate, a script's host function, and a call no body ever started
    *  that is reported, not run (left untouched in a recovered response,
    *  after the turn's end, or when its script ended). */
-  logId: Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+  logId: Schema.NullOr(Schema.NonEmptyString),
   /** How the call ended, read as a fact, never matched from the English
    *  prose of an error message. */
   disposition: Schema.Literals(['executed', 'failed', 'skipped', 'duplicate']),

@@ -40,9 +40,7 @@ import {
 import type { RunRows } from '@shared/session/runRowsShape';
 import {
   cancelRequestRows,
-  type RunHistoryDraft,
   type RunInputDraft,
-  type RunState,
 } from '@shared/session/runState';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import type { SessionTransaction } from '@shared/session/sessionLog';
@@ -184,20 +182,6 @@ const endOf = (end: Omit<RunEnd, 'usage'>): Omit<RunEnd, 'usage'> => ({
   output: end.output,
 });
 
-/** The cancellation of every request `state` leaves open: a run that ends
- *  answers them, so no surface keeps offering one nobody waits on. */
-const cancelledRequests = (
-  runId: RunId,
-  state: RunState,
-): readonly RunHistoryDraft[] =>
-  cancelRequestRows(
-    runId,
-    Object.entries(state.requests).flatMap(([requestId, { decision }]) =>
-      decision === null ? [requestId] : [],
-    ),
-    'The run ended.',
-  );
-
 /**
  * The id a child's delivery to its parent is queued under, one per
  * lifecycle (`${runId}:${activation}`): a replay of the delivery writes
@@ -307,7 +291,11 @@ const endIn = Effect.fn('endIn')(function* (
     (yield* RunHistory).open(runId, { within: append }),
   );
   if (Result.isSuccess(cell)) {
-    const cancels = cancelledRequests(runId, yield* cell.success.current);
+    const cancels = cancelRequestRows(
+      runId,
+      yield* cell.success.current,
+      'The run ended.',
+    );
     yield* cell.success.append(cancels, Effect.succeed(beside));
   } else {
     if (runReadRefusal(cell.failure) === undefined) return yield* cell.failure;

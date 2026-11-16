@@ -80,6 +80,19 @@ export function formatResultCount(
   return `${count} ${pluralize(count, singular, plural)}`;
 }
 
+/** What stands between two facts printed on one line, in every host. */
+export const FACT_SEPARATOR = ' · ';
+
+/**
+ * Facts on one line (`3 agents · 1 needs you`), leaving out the absent and
+ * empty ones, so a caller lists each fact with its condition and no filter.
+ */
+export function joinFacts(
+  facts: readonly (string | false | null | undefined)[],
+): string {
+  return facts.filter(Boolean).join(FACT_SEPARATOR);
+}
+
 /**
  * The first `max` items of a list, then how many it leaves out
  * (`a, b, c +2 more`), so every clipped list reads the same.

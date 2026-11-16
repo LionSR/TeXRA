@@ -10,7 +10,7 @@ import {
   type ProcessRuntime,
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness/host';
-import { agentName } from '@texra-ai/harness/schemas';
+import { agentName, joinFacts } from '@texra-ai/harness/schemas';
 import { Select } from '@cli/tui/ui/Select';
 import {
   computeSelectWindowSize,
@@ -61,9 +61,7 @@ interface AgentGroups {
 function teamRowDescription(team: TeamOptionData): string {
   if (team.disabledReason != null) return team.disabledReason;
   const missing = team.unavailableMembers.length;
-  return missing > 0
-    ? `${missing} unavailable · ${team.description}`
-    : team.description;
+  return joinFacts([missing > 0 && `${missing} unavailable`, team.description]);
 }
 
 function agentPickerItems(
@@ -73,16 +71,16 @@ function agentPickerItems(
     ...groups.agents.map(({ description, ...agent }) => {
       return {
         value: { kind: 'agent' as const, agent: agent.value },
-        label:
-          agent.rounds === undefined
-            ? agent.label
-            : `${agent.label} · document task`,
+        label: joinFacts([
+          agent.label,
+          agent.rounds !== undefined && 'document task',
+        ]),
         ...(description ? { description } : {}),
       };
     }),
     ...groups.teams.map((team) => ({
       value: { kind: 'team' as const, teamId: team.value },
-      label: `Team · ${team.label}`,
+      label: joinFacts(['Team', team.label]),
       description: teamRowDescription(team),
       ...(team.disabledReason != null ? { disabled: true } : {}),
     })),

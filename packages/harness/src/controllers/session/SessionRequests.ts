@@ -142,15 +142,14 @@ const rename = (
   deps: SessionRequestsInit,
   req: Extract<RuntimeCommand, { kind: 'run.rename' }>,
 ): Effect.Effect<Outcome, RequestError> =>
-  deps.sessionLog.transact([descriptionRow(req.runId, req.title, 'user')]).pipe(
-    Effect.mapError(
-      writeRejection({
-        runId: req.runId,
-        reason: 'The title could not be saved.',
-      }),
-    ),
-    Effect.as(done),
-  );
+  deps.sessionLog
+    .transact([descriptionRow(req.runId, req.title, 'user')])
+    .pipe(
+      Effect.mapError(
+        writeRejection(req.runId, 'The title could not be saved'),
+      ),
+      Effect.as(done),
+    );
 
 /**
  * The pending request `requestId` of run `runId`, read from the log. Not the
@@ -238,10 +237,7 @@ const decideSurfaceRequest = (
     ).pipe(
       Effect.provideService(SessionLog, log),
       Effect.mapError(
-        writeRejection({
-          runId: req.runId,
-          reason: 'The decision could not be recorded.',
-        }),
+        writeRejection(req.runId, 'The decision could not be recorded'),
       ),
     );
     if (!landed) return yield* settled(req.runId);

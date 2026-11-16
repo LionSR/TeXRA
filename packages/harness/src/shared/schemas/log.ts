@@ -38,12 +38,12 @@ const LoadedMediaMetadataSchema = Schema.Union([
      * not merely an `image/*` filesystem MIME type.
      */
     kind: Schema.Literal('image'),
-    mimeType: Schema.String.check(Schema.isMinLength(1)),
+    mimeType: Schema.NonEmptyString,
     sizeBytes: NonNegativeIntSchema,
   }),
   Schema.Struct({
     kind: Schema.Literal('audio'),
-    mimeType: Schema.String.check(Schema.isMinLength(1)),
+    mimeType: Schema.NonEmptyString,
     sizeBytes: NonNegativeIntSchema,
   }),
 ]);

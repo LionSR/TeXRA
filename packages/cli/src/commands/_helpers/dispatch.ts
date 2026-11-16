@@ -3,8 +3,9 @@
  * walking, flag reordering, unknown-command/-flag suggestions, and usage
  * rendering.
  */
+import { stripVTControlCharacters } from 'node:util';
+
 import { type ArgDef, renderUsage } from 'citty';
-import stripAnsi from 'strip-ansi';
 import { writeRawStdout } from '@cli/runtime/platform/logSinks';
 import { readCliAmbientState } from '@cli/runtime/platform/cliContext';
 import {
@@ -566,7 +567,7 @@ export function formatCliArgumentError(
 ): string {
   const text =
     usageColorEnabled('stderr', rawArgs) === false
-      ? stripAnsi(message)
+      ? stripVTControlCharacters(message)
       : message;
   return `${text}\nRun \`${resolved.commandPath.join(' ')} --help\` for usage.`;
 }
@@ -588,7 +589,7 @@ export async function showUsage(
     : usage;
   const text =
     usageColorEnabled('stdout', rawArgs) === false
-      ? stripAnsi(usageWithSections)
+      ? stripVTControlCharacters(usageWithSections)
       : usageWithSections;
   writeRawStdout(`${text}\n\n`);
 }

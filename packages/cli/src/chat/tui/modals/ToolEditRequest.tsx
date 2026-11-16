@@ -23,6 +23,7 @@ import {
   type ApprovalBypassKind,
   type ToolEditContent,
   formatResultCount,
+  joinFacts,
 } from '@texra-ai/harness/schemas';
 import type { ToolEditTuiRequest } from '../state/approvalQueue';
 import { formatLineChanges } from '@ui/copy/format';
@@ -92,8 +93,10 @@ export function ToolEditRequest(
       ) : (
         <>
           <Text dimColor>
-            {formatLineChanges(data.addedLines, data.removedLines)} · source:{' '}
-            {data.sourceTool}
+            {joinFacts([
+              formatLineChanges(data.addedLines, data.removedLines),
+              `source: ${data.sourceTool}`,
+            ])}
           </Text>
           <Text color={COLOR_WARNING}>
             Preview unavailable: {props.payload.tui.reason}
@@ -170,8 +173,11 @@ function ToolEditDiff({
   return (
     <>
       <Text dimColor>
-        {formatLineChanges(data.addedLines, data.removedLines)} ·{' '}
-        {formatResultCount(hunks.length, 'hunk')} · source: {data.sourceTool}
+        {joinFacts([
+          formatLineChanges(data.addedLines, data.removedLines),
+          formatResultCount(hunks.length, 'hunk'),
+          `source: ${data.sourceTool}`,
+        ])}
       </Text>
       <Box marginY={compactDiffLayout ? 0 : 1} flexDirection="column">
         <DiffView

@@ -26,10 +26,8 @@ import {
   AgentProposalSchema,
   type AgentProposal,
   toJsonValue,
-  ToolError,
   type RunEnd,
   type RunId,
-  type SubagentProgressUpdate,
   type ToolResult,
   type AgentConfig,
   isTaskConfig,
@@ -45,7 +43,6 @@ import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { defineTool, type DefinedTool } from '@tools/core/definition';
 import { nullishWithDefault, timeoutMsField } from '@tools/core/inputSchema';
 import { errorResult, executed } from '@tools/core/result';
-import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { sha256 } from '@utils/core/idHash';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -73,7 +70,8 @@ import {
 import { AgentRequest, decideDelegation, requireAgent } from './proposalFlow';
 import {
   delegatedChildGrants,
-  describeSubagentProgress,
+  childOutputSchema,
+  printSubagentProgress,
   launchDetachedSubagent,
 } from './subagentRun';
 
@@ -91,11 +89,11 @@ export const fileList = (
 
 /** The fields that name what an `agent` call runs and with which model. */
 const LAUNCH_FIELDS = {
-  prompt: Schema.String.check(Schema.isMinLength(1)).annotate({
+  prompt: Schema.NonEmptyString.annotate({
     description:
       'The task, in plain prose. Name the files it concerns and copy every constraint the agent must follow: it does not see your conversation.',
   }),
-  agentName: Schema.String.check(Schema.isMinLength(1)).annotate({
+  agentName: Schema.NonEmptyString.annotate({
     description: 'The agent to run. It works with its own tools.',
   }),
   persona: personaField,
@@ -324,17 +322,9 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     launch.workingDirectory ?? undefined,
   );
   if (unusable) return unusable;
-  const schema = launch.task === null ? launch.schema : null;
-  const outputSchema =
-    schema == null
-      ? undefined
-      : yield* Effect.try({
-          try: () => normalizeStructuredOutputSchema(schema).jsonSchema,
-          catch: (error) =>
-            new ToolError(
-              `\`schema\` is not a supported object-root JSON Schema: ${toErrorMessage(error)}`,
-            ),
-        });
+  const outputSchema = yield* childOutputSchema(
+    launch.task === null ? launch.schema : null,
+  );
   // The call's files: a run-storage file must be this run's own or a declared
   // output of a completed child of it; a task's recipe's files pass as named.
   const trusted = isTaskConfig(run.config);
@@ -397,13 +387,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     if (reused !== null) return reused;
   }
 
-  // An awaited child's progress is what this call prints while it runs:
-  // transient text on its card, never a row of the run. The child's own run
-  // (and, in a script, its stage row) is where its progress is kept.
-  const notify = (update: SubagentProgressUpdate): void => {
-    const line = describeSubagentProgress(agent.name, update);
-    if (line) call.emit(`${line}\n`);
-  };
+  const notify = printSubagentProgress(agent.name, call.emit);
   const timeoutMs = launch.timeoutMs ?? undefined;
   const running = <A, R>(
     work: Effect.Effect<A, Error, R>,

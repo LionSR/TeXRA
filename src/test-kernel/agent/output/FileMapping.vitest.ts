@@ -41,8 +41,10 @@ describe('replaceInputCommands', () => {
         yield* replaceInputCommands(bases, outputs, noopTrace).pipe(
           Effect.provide(
             FileSystem.layerNoop({
-              readFileString: (target: string) =>
-                Effect.succeed(files.get(target) ?? ''),
+              readFile: (target: string) =>
+                Effect.succeed(
+                  new TextEncoder().encode(files.get(target) ?? ''),
+                ),
               writeFileString: (target: string, content: string) =>
                 Effect.sync(() => {
                   files.set(target, content);

@@ -46,7 +46,7 @@ import type { SessionServices } from '@agent/runtime/rootLaunch';
 import type { SessionHandleInit } from '@agent/runtime/SessionHandle';
 import type { RunServices } from '@agent/runtime/ToolServices';
 import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionEventsLayer';
-import { logFailure, withLogChannel } from '@logger/effectLog';
+import { logFailure } from '@logger/effectLog';
 import { SessionRoots, sessionFsLayer } from '@platform/rootedFs';
 import type { RunId, SessionCloseReport } from '@shared/schemas';
 import { Database, type DatabaseReadFailed } from '@shared/session/database';
@@ -260,12 +260,10 @@ export const sessionOwnersLayer = (
                 const parent = yield* Effect.exit(runs.attachedParent(id));
                 yield* wakeIfOwed(id);
                 if (Exit.isFailure(parent))
-                  return yield* Effect.logWarning(
+                  return yield* logFailure(
+                    CHANNEL,
                     `Run ${id}: its parent edge could not be read, so no parent is woken for its last delivery`,
-                  ).pipe(
-                    Effect.annotateLogs({ data: Cause.squash(parent.cause) }),
-                    withLogChannel(CHANNEL),
-                  );
+                  )(Cause.squash(parent.cause));
                 if (parent.value !== null) yield* wakeIfOwed(parent.value);
               }),
             ),

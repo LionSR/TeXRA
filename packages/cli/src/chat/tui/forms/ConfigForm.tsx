@@ -7,6 +7,7 @@
 // Reads/writes go through the host-aware `Settings` accessor so the same
 // catalog drives the extension settings view and this panel without drift.
 
+import { joinFacts } from '@texra-ai/harness/schemas';
 import { Result, Schema, SchemaAST } from 'effect';
 import { Text, useInput } from 'ink';
 import { useState } from 'react';
@@ -123,11 +124,14 @@ function buildConfigListItems(
     const kind = settingEditKind(entry);
     const valueText =
       kind === 'form' ? 'open' : formatSettingValue(readValue(entry));
-    const suffix = kind === 'readonly' ? ' · read-only' : '';
     return {
       value: entry.key,
       label: entry.title,
-      description: `${valueText} · ${entry.slot}${suffix}`,
+      description: joinFacts([
+        valueText,
+        entry.slot,
+        kind === 'readonly' && 'read-only',
+      ]),
       disabled: kind === 'readonly',
     };
   });

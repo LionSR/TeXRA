@@ -38,9 +38,7 @@ const WebFetchInputSchema = Schema.Struct({
       { message: 'URL must use HTTP or HTTPS protocol' },
     ),
   ).annotate({ description: 'Public HTTP or HTTPS URL to fetch.' }),
-  prompt: Schema.optional(
-    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
-  ).annotate({
+  prompt: Schema.optional(Schema.NullOr(Schema.NonEmptyString)).annotate({
     description:
       'Optional note on what you need from the page, echoed above the fetched text as a reminder; nothing extracts for you.',
   }),

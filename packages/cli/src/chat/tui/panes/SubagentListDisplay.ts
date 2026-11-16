@@ -1,11 +1,12 @@
 // Local imports - shared formatting
-import { STATUS_DOT, TOKENS_GENERATED, SEPARATOR } from '@cli/tui/ui/glyphs';
+import { STATUS_DOT, TOKENS_GENERATED } from '@cli/tui/ui/glyphs';
 
 // Local imports - TUI state
 import type { PendingRequestKind } from '../state/approvalQueue';
 import {
   formatCompactTokenCount,
   formatResultCount,
+  joinFacts,
 } from '@texra-ai/harness/schemas';
 
 /** A steady marker, so list updates never animate the whole live region. */
@@ -47,8 +48,7 @@ export function childRowMetadataText({
     outputTokens !== undefined && outputTokens > 0
       ? `${TOKENS_GENERATED}${formatCompactTokenCount(outputTokens)}`
       : undefined;
-  const parts = [elapsed, toolCalls, tokens].filter(Boolean);
-  return parts.length > 0 ? parts.join(SEPARATOR) : undefined;
+  return joinFacts([elapsed, toolCalls, tokens]) || undefined;
 }
 
 /** Compact "waiting on what" display for a row. The first kind and overflow

@@ -5,7 +5,10 @@ import {
   apiKeyOrigins,
   providerDisplayName,
 } from '@texra-ai/llm';
-import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
+import {
+  SUBSCRIPTION_AUTH_PROVIDERS,
+  joinFacts,
+} from '@texra-ai/harness/schemas';
 import { Secrets, type SettingsStores } from '@texra-ai/harness/plugins';
 import type { SubscriptionUsageSnapshot } from '@texra/shared/model/subscriptionUsage';
 import { formatSubscriptionUsageSummary } from '@ui/copy/subscriptionUsage';
@@ -81,7 +84,10 @@ function formatModelPreferenceLine(
 ): string | undefined {
   if (!preferred && !configReady) return undefined;
   const status = preferred && !configReady ? missingMessage : configStatus;
-  return `${label}: ${preferred ? 'preferred' : 'not preferred'} · ${status}`;
+  return joinFacts([
+    `${label}: ${preferred ? 'preferred' : 'not preferred'}`,
+    status,
+  ]);
 }
 
 /** Render each detailed account/access fact on its owning route. */
@@ -122,7 +128,7 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
   ): string => {
     if (!snapshot) return line;
     const summary = formatSubscriptionUsageSummary(snapshot, now);
-    return summary ? `${line} · ${summary}` : line;
+    return joinFacts([line, summary]);
   };
 
   for (const provider of SUBSCRIPTION_AUTH_PROVIDERS) {
