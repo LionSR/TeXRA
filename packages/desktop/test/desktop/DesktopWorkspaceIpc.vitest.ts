@@ -12,7 +12,7 @@ import { Effect, Exit } from 'effect';
 import { beforeEach, expect } from 'vitest';
 
 import { createDesktopWorkspaceIpc } from '@desktop/main/desktopWorkspaceIpc';
-import { createFakeHost } from '@test/support/setupPlatform';
+import { createFakeHost } from '@test/support/fakeHost';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 

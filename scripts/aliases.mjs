@@ -4,19 +4,45 @@
  * Extension esbuild reads its package tsconfig, which extends the root.
  */
 
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-
-import { loadAliases } from './aliasUtils.mjs';
+import ts from 'typescript';
 
 const rootDir = resolve(import.meta.dirname, '..');
 
 /**
- * Convert tsconfig paths to build tool aliases.
+ * The root tsconfig's paths as build tool aliases. Every package tsconfig
+ * extends the root and inherits its `paths`.
  *
  * tsconfig format: { "@alias/*": ["src/path/*"] }
  * output format:   { "@alias": "/absolute/path/to/src/path" }
  */
-export const aliases = Object.freeze(loadAliases(rootDir));
+function loadAliases() {
+  const tsconfigPath = resolve(rootDir, 'tsconfig.json');
+  const { config: tsconfig, error } = ts.parseConfigFileTextToJson(
+    tsconfigPath,
+    readFileSync(tsconfigPath, 'utf8'),
+  );
+  if (error) {
+    throw new Error(ts.flattenDiagnosticMessageText(error.messageText, '\n'));
+  }
+
+  return Object.fromEntries(
+    Object.entries(tsconfig.compilerOptions.paths).map(([key, values]) => {
+      const aliasKey = key.replace('/*', '');
+      // Prefer the bare '*' variant (ends with just '/*') — it strips
+      // cleanly to a directory path for build tools.  Fall back to the
+      // first value when there is no bare variant (e.g. non-wildcard
+      // aliases like "@texra-ai/harness" which map to a single file).
+      const best = values.find((v) => v.endsWith('/*')) ?? values[0];
+      const pathValue = best.replace('/*', '');
+
+      return [aliasKey, resolve(rootDir, pathValue)];
+    }),
+  );
+}
+
+export const aliases = Object.freeze(loadAliases());
 
 /**
  * Packages a Vite build resolves from the project root, so the sources it

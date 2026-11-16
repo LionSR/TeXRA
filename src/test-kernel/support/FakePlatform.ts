@@ -1,5 +1,5 @@
 // Node imports
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -10,7 +10,10 @@ import { Effect, Scope, Stream } from 'effect';
 import type { AgentDirectoriesPort, AppStateStore } from '@platform/interfaces';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
+import {
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@platform/defaults/workspaceStorage';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -18,7 +21,6 @@ import {
   type SettingsCatalog,
 } from '@shared/state/stateSettings';
 import type { Plugin } from '@tools/plugins';
-import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
 import type { SecretsFailed } from '@texra-ai/llm';
 
@@ -93,37 +95,6 @@ function fakeGlobalStorage(): string {
 }
 
 /**
- * The real file a seed key names inside `root`. A key is a path inside the
- * root: `'/workspace/a.tex'` and `host.path('workspace/a.tex')` name the same
- * file, the first the spelling a suite writes by hand, the second one a path
- * helper built on the host produces. A key that resolves outside the root
- * throws.
- */
-function seedTarget(root: string, key: string): string {
-  const target = key.startsWith(root)
-    ? path.resolve(key)
-    : path.resolve(root, `.${path.sep}${key}`);
-  if (target !== root && !target.startsWith(root + path.sep)) {
-    throw new Error(
-      `Seed key ${key} resolves outside the fake root; seed keys must stay inside it.`,
-    );
-  }
-  return target;
-}
-
-/** Writes the seeded files into `root`. */
-function seedRoot(
-  root: string,
-  files: Record<string, string | Uint8Array>,
-): void {
-  for (const [key, content] of Object.entries(files)) {
-    const file = seedTarget(root, key);
-    mkdirSync(path.dirname(file), { recursive: true });
-    writeFileSync(file, content);
-  }
-}
-
-/**
  * What an app adds to a fake host: the settings catalog its config reads,
  * the plugins its process runs, and how it reads a team's members. A suite
  * of the harness alone runs over {@link HARNESS_APP}; a suite of TeXRA's
@@ -131,8 +102,8 @@ function seedRoot(
  */
 export interface TestApp {
   readonly settings: SettingsCatalog;
-  /** Its plugins, over the host's setup platform. */
-  readonly plugins: (setup: SetupPlatformShape) => readonly Plugin[];
+  /** The plugins its process runs, made when the process builds. */
+  readonly plugins: () => readonly Plugin[];
   readonly teamMembers?: AgentDirectoriesPort['teamMembers'];
 }
 
@@ -223,10 +194,16 @@ export interface FakePlatformOptions {
    * directory it owns (its own temp dir, or `process.cwd()`).
    */
   workspaceRoot?: string | undefined;
-  /** The storage root, as a real path. Defaults under the workspace root. */
+  /**
+   * The storage root (`~/.texra` on a real host), as a real path; the
+   * workspace's storage and the global storage lie under it as production
+   * places them. Unnamed, the root is the worker's, which every fake host
+   * shares, and the workspace's storage is under the host's own root.
+   */
+  storageRoot?: string;
+  /** The workspace's storage alone, as a real path, for a suite that puts it
+   *  outside any storage root. */
   storagePath?: string;
-  /** The global-storage root, as a real path. Worker-shared by default. */
-  globalStoragePath?: string;
 }
 
 /** A fake host's shutdown scope and the port it serves as
@@ -239,17 +216,15 @@ export interface FakeProcessPorts {
 }
 
 /**
- * Overrides for one fake host: the process ports above, the two
+ * Overrides for one fake host: the process ports above, the
  * workspace-root ports a suite substitutes (a config it holds a handle to, a
- * hand-built state store), the process ports a root hands
- * `processLayer`, and the setup platform a setup-tool suite
- * provides. The workspace and storage paths come from `FakePlatformOptions`.
+ * hand-built state store), and the secrets a root hands `processLayer`. The
+ * workspace and storage paths come from `FakePlatformOptions`.
  */
 export type FakeHostOverrides = Partial<FakeProcessPorts> &
   Partial<Pick<WorkspaceRoots, 'config' | 'workspaceState' | 'globalState'>> & {
     /** The store the host's `Secrets` service reads, as a root's own local. */
     readonly secrets?: PlatformSecrets;
-    readonly setup?: SetupPlatformShape;
   };
 
 /** The workspace roots a fake host holds beside its platform, its default
@@ -264,13 +239,22 @@ export function createFakeWorkspaceRoots(
   > = {},
   root: string = makeHostRoot(),
 ): WorkspaceRoots {
+  const workspace = Object.hasOwn(options, 'workspaceRoot')
+    ? options.workspaceRoot
+    : path.join(root, 'workspace');
+  const { storageRoot } = options;
   return {
-    workspace: Object.hasOwn(options, 'workspaceRoot')
-      ? options.workspaceRoot
-      : path.join(root, 'workspace'),
-    storageRoot: fakeStorageRoot(),
-    storage: options.storagePath ?? path.join(root, 'workspace/.texra/storage'),
-    globalStorage: options.globalStoragePath ?? fakeGlobalStorage(),
+    workspace,
+    storageRoot: storageRoot ?? fakeStorageRoot(),
+    storage:
+      options.storagePath ??
+      (storageRoot === undefined
+        ? path.join(root, 'workspace/.texra/storage')
+        : resolveWorkspaceStoragePath(storageRoot, workspace)),
+    globalStorage:
+      storageRoot === undefined
+        ? fakeGlobalStorage()
+        : resolveGlobalStoragePath(storageRoot),
     config:
       overrides.config ??
       fakeConfig(options.config, (options.app ?? HARNESS_APP).settings),
@@ -279,29 +263,5 @@ export function createFakeWorkspaceRoots(
     repoState: overrides.repoState ?? new FakeStateStore(),
     globalState:
       overrides.globalState ?? new FakeStateStore(options.globalState),
-  };
-}
-
-const fakeAgentDirectories = (
-  root: string,
-  { teamMembers }: TestApp,
-): AgentDirectoriesPort => ({
-  custom: () => Effect.succeed(path.join(root, 'workspace/.texra/agents')),
-  customConfigured: () => Effect.succeed(false),
-  builtIn: () => Effect.succeed(path.join(root, 'workspace/resources/agents')),
-  ...(teamMembers ? { teamMembers } : {}),
-});
-
-/** A host's process ports over `root`, with `options.files` seeded into it. */
-export function createFakePlatform(
-  root: string,
-  options: FakePlatformOptions = {},
-  overrides: Partial<FakeProcessPorts> = {},
-): FakeProcessPorts {
-  seedRoot(root, options.files ?? {});
-  return {
-    shutdownScope: Scope.makeUnsafe(),
-    agentDirectories: fakeAgentDirectories(root, options.app ?? HARNESS_APP),
-    ...overrides,
   };
 }

@@ -26,7 +26,6 @@ import {
   RunIdSchema,
 } from '@texra-ai/harness/schemas';
 import * as resumeRunModule from '@agent/runtime/resumeRun';
-import { validationModelLayer } from '@cli/runtime/models/validationModel';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { getRunRecords } from '@agent/storage/runOwnership';
@@ -125,11 +124,9 @@ const sessionHandle = Effect.flatMap(TestSession, sessionHandleOf);
 
 // Live clock: the background runs settle on real turns.
 layer(
-  SessionGraph.with(
-    [],
-    validationModelLayer,
-    Layer.provideMerge(scripted.layer, nodeFileServices),
-  ).pipe(Layer.provideMerge(FakeHost.layer())),
+  SessionGraph.with({
+    platform: Layer.provideMerge(scripted.layer, nodeFileServices),
+  }).pipe(Layer.provideMerge(FakeHost.layer())),
   { excludeTestServices: true },
 )('BashTool', (it) => {
   afterEach(() => {

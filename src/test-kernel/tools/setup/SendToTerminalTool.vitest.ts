@@ -33,19 +33,13 @@ interface RunRecord {
  *  tool call made over that host. */
 const setupTool = Effect.gen(function* () {
   const runs: RunRecord[] = [];
-  const host = yield* Layer.build(
-    FakeHost.layer(
-      {},
-      {
-        setup: createFakeSetupPlatform({
-          terminal: (args) => {
-            runs.push(args);
-            return Effect.succeed({ exitCode: 0, output: '', timedOut: false });
-          },
-        }),
-      },
-    ),
-  );
+  const setup = createFakeSetupPlatform({
+    terminal: (args) => {
+      runs.push(args);
+      return Effect.succeed({ exitCode: 0, output: '', timedOut: false });
+    },
+  });
+  const host = yield* Layer.build(FakeHost.layer());
   const session = yield* Effect.flatMap(
     TestSession.open(Context.get(host, FakeHost).roots, { host: {} }),
     sessionHandleOf,
@@ -59,6 +53,7 @@ const setupTool = Effect.gen(function* () {
           nativeToolTestLayer({
             run: { runId, session, toolPolicy: {} },
           }),
+          setup,
         ),
       ),
       Effect.provide(host),

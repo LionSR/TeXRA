@@ -25,6 +25,7 @@ import {
   Option,
   Path,
   Ref,
+  SubscriptionRef,
   type Scope,
 } from 'effect';
 import { HttpClient } from 'effect/http';
@@ -73,20 +74,36 @@ import {
   ProjectDatabases,
   type SessionOpenError,
 } from '@shared/session/database';
-import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import type { Plugin } from '@tools/plugins';
+import type { ExternalToolCheckResult } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
 
-import {
-  createFakeHost,
-  type FakeHost as InstalledHost,
-} from './setupPlatform';
-import { unprobedToolAvailability } from './toolAvailabilityTestLayer';
+import { createFakeHost, type HostRecord } from './fakeHost';
 import type { FakeHostOverrides, FakePlatformOptions } from './FakePlatform';
+
+/**
+ * The tool availability every test runtime serves: no dependency probe runs
+ * (a real one spawns the CLIs it looks for on every session open, so its
+ * answer would be the developer's machine's), and the tool gate withholds
+ * nothing. A suite of availability itself builds the real layer.
+ */
+const unprobedToolAvailability = Layer.effect(
+  ToolAvailability,
+  Effect.map(
+    SubscriptionRef.make<
+      ReadonlyMap<string | undefined, readonly ExternalToolCheckResult[]>
+    >(new Map()),
+    (results) => ({
+      results,
+      refresh: () => Effect.succeed([]),
+      hold: () => Effect.void,
+    }),
+  ),
+);
 
 /** A host computed when the layer builds, so a per-test temp directory
  *  made in `beforeEach` is already there. */
-type HostBuilder = () => InstalledHost | Promise<InstalledHost>;
+type HostBuilder = () => HostRecord | Promise<HostRecord>;
 
 /**
  * The host a block's process follows: the block's `FakeHost.layer` makes it,
@@ -94,17 +111,16 @@ type HostBuilder = () => InstalledHost | Promise<InstalledHost>;
  * host while that layer lives. A process is built once per block while hosts
  * change per test, so its ports read this on every call.
  */
-class CurrentHost extends Context.Service<
-  CurrentHost,
-  Ref.Ref<InstalledHost>
->()('@test/support/CurrentHost') {}
+class CurrentHost extends Context.Service<CurrentHost, Ref.Ref<HostRecord>>()(
+  '@test/support/CurrentHost',
+) {}
 
 /**
  * The fake host a block or a test runs over, for the layer's lifetime; the
  * release removes its root. Inside a block that already has one, it also points the block's process
  * at this host until its release, which points it back.
  */
-export class FakeHost extends Context.Service<FakeHost, InstalledHost>()(
+export class FakeHost extends Context.Service<FakeHost, HostRecord>()(
   '@test/support/FakeHost',
 ) {
   /** A host from `options` and `overrides`, or from a builder when it must
@@ -142,7 +158,7 @@ export class FakeHost extends Context.Service<FakeHost, InstalledHost>()(
 
 /** A block process's host ports: each member reads the host the block
  *  points at when it is called. */
-const followedPorts = (current: Ref.Ref<InstalledHost>) => {
+const followedPorts = (current: Ref.Ref<HostRecord>) => {
   const host = () => Ref.getUnsafe(current);
   const secrets: PlatformSecrets = {
     get: (key) => host().secrets.get(key),
@@ -163,17 +179,7 @@ const followedPorts = (current: Ref.Ref<InstalledHost>) => {
     teamMembers: (repoState, teamId) =>
       host().app.teamMembers?.(repoState, teamId) ?? Effect.succeed(undefined),
   };
-  // A host without a setup platform has none of its members, as a host that
-  // passes none.
-  const setup: SetupPlatformShape = {
-    get commands() {
-      return host().setup?.commands;
-    },
-    get terminal() {
-      return host().setup?.terminal;
-    },
-  };
-  return { secrets, appState, agentDirectories, setup };
+  return { secrets, appState, agentDirectories };
 };
 
 /**
@@ -225,17 +231,25 @@ type KernelProcess =
   | SessionOwner
   | ProjectDatabases;
 
-/** The process over the host's app (its settings and plugins) and `extra`, its validation route
- *  served by `model` and its files and child processes by `platform` (the
- *  Node ones unless a block scripts the spawner), built over the block's
- *  host. */
-const composedProcess = (
-  extra: readonly Plugin[],
-  model: Layer.Layer<ValidationModel>,
-  platform: Layer.Layer<
+/**
+ * The process over the host's app (its settings and plugins) and `plugins`,
+ * its validation route served by `model` and its files and child processes
+ * by `platform`, built over the block's host. The model is the CLI
+ * validation bundle's, whose gate a suite opens by setting its switch
+ * (`validationHost`, the golden store); the platform is Node's unless a
+ * block scripts the spawner.
+ */
+const composedProcess = ({
+  plugins: extra = [],
+  model = validationModelLayer,
+  platform = nodePlatformServices,
+}: {
+  readonly plugins?: readonly Plugin[];
+  readonly model?: Layer.Layer<ValidationModel>;
+  readonly platform?: Layer.Layer<
     FileSystem.FileSystem | Path.Path | ChildProcessSpawner
-  > = nodePlatformServices,
-) =>
+  >;
+} = {}) =>
   // `processLayer` serves the internal `SessionOwner` beside `Sessions`
   // (provideMerge); the suites' root launches and `sessionHandleOf` ask it.
   // It serves the project stores and the process identity the same way;
@@ -250,7 +264,7 @@ const composedProcess = (
         // and its mcp.json rather than the developer's `~/.texra/mcp.json`.
         storageRoot: host.roots.storageRoot,
         settings: host.app.settings,
-        plugins: [...host.app.plugins(ports.setup), ...extra],
+        plugins: [...host.app.plugins(), ...extra],
         secrets: Secrets.layer(ports.secrets),
         appState: AppState.layer(ports.appState),
         agentDirectories: Layer.succeed(AgentDirectories)(
@@ -277,7 +291,7 @@ const composedProcess = (
  * validation model stands in for a real one, as the suites open runs the
  * way validation does.
  */
-const graph = composedProcess([], validationModelLayer);
+const graph = composedProcess();
 
 export const SessionGraph = {
   layer: graph,
@@ -292,10 +306,10 @@ export const SessionGraph = {
   hosted: Layer.provideMerge(graph, FakeHost.layer()),
 
   /**
-   * The same process with `plugins` beside the app's and `model` answering
-   * every model call: for a case that composes two processes in turn, as a
-   * restart with a changed plugin does. A third argument replaces the Node
-   * filesystem, path and spawner, for a block whose runs start scripted
+   * The same process with `plugins` beside the app's, `model` answering
+   * every model call, or `platform` in place of the Node filesystem, path
+   * and spawner: for a case that composes two processes in turn (a restart
+   * with a changed plugin), counts its model's turns, or starts scripted
    * processes.
    */
   with: composedProcess,

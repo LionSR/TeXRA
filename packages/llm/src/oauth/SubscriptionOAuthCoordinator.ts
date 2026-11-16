@@ -112,16 +112,17 @@ export class SubscriptionOAuthCoordinator<
         );
   }
 
-  signInWithBrowser(
+  // Bound, like the device sign-in: a caller hands a sign-in around apart
+  // from its account.
+  readonly signInWithBrowser = (
     openBrowser: (url: string) => Effect.Effect<void, Error>,
-  ): Effect.Effect<S, Error, HttpClient.HttpClient> {
-    return loginWithLoopback({
+  ): Effect.Effect<S, Error, HttpClient.HttpClient> =>
+    loginWithLoopback({
       loopback: this.policy.loopback,
       authorize: (port) => this.buildAuthorizeRequest(port),
       exchange: (request, callback) => this.loginWithCode(request, callback),
       openBrowser,
     });
-  }
 
   /**
    * The stored session, or null when none is stored. A stored session that
