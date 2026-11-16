@@ -3,7 +3,7 @@ import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import { Effect, Hash, type LogLevel, Result, Schema } from 'effect';
 import { truncateSummary } from '@texra-ai/harness/schemas';
-import { postMessage } from '@texra/shared/hostBridge';
+import { postToMain } from './messageRoutes';
 import type { IconName } from '@ui/wa/iconNames';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderEmptyState } from '@ui/wa/emptyState';
@@ -189,7 +189,7 @@ export function createLogsPane(): LogsPaneController {
   let active = false;
 
   function requestSnapshot(): void {
-    postMessage(DESKTOP_LOG_COMMANDS.REQUEST_LOG);
+    postToMain({ command: DESKTOP_LOG_COMMANDS.REQUEST_LOG });
   }
 
   function entryTemplate(entry: DesktopLogEntry): TemplateResult {
@@ -258,13 +258,13 @@ export function createLogsPane(): LogsPaneController {
           <div class="desktop-log-viewer-actions">
             ${action('rotate-right', 'Refresh', requestSnapshot)}
             ${action('copy', 'Copy', () =>
-              postMessage(DESKTOP_LOG_COMMANDS.COPY_LOG),
+              postToMain({ command: DESKTOP_LOG_COMMANDS.COPY_LOG }),
             )}
             ${action('download', 'Export', () =>
-              postMessage(DESKTOP_LOG_COMMANDS.EXPORT_LOG),
+              postToMain({ command: DESKTOP_LOG_COMMANDS.EXPORT_LOG }),
             )}
             ${action('folder-open', 'Open Folder', () =>
-              postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER),
+              postToMain({ command: DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER }),
             )}
           </div>
         </header>
@@ -292,7 +292,7 @@ export function createLogsPane(): LogsPaneController {
   function setActive(nextActive: boolean): void {
     if (active === nextActive) return;
     active = nextActive;
-    postMessage(DESKTOP_LOG_COMMANDS.FOLLOW_LOG, { following: active });
+    postToMain({ command: DESKTOP_LOG_COMMANDS.FOLLOW_LOG, following: active });
   }
 
   function applySnapshot(message: DesktopSetLogMessage): void {

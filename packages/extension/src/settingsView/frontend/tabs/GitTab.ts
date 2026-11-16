@@ -17,7 +17,7 @@ import type { CredentialOrigin } from '@texra-ai/llm';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
-import { postMessage } from '@texra/shared/hostBridge';
+import { postToHost } from '@settingsView/frontend/messageDispatcher';
 import { type PRSubscriptionEntry } from '@texra/shared/settingsView/settingsViewMessages';
 import { credentialOriginLabel, TOKEN_ACTION_COPY } from '@ui/copy/credentials';
 import { renderSetStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
@@ -196,23 +196,24 @@ export class GitTab extends SignalWatcher(LitElement) {
   }
 
   private handleSetGitHubToken(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_GITHUB_TOKEN);
+    postToHost({ command: SETTINGS_VIEW_COMMANDS.SET_GITHUB_TOKEN });
   }
 
   private handleRemoveGitHubToken(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.REMOVE_GITHUB_TOKEN);
+    postToHost({ command: SETTINGS_VIEW_COMMANDS.REMOVE_GITHUB_TOKEN });
   }
 
   private handleOpenGitHubTokenUrl(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL);
+    postToHost({ command: SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL });
   }
 
   private handleUnsubscribePR(key: string): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR, { key });
+    postToHost({ command: SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR, key });
   }
 
   private handleOpenPRSubscriptionStream(runId: string): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_PR_SUBSCRIPTION_STREAM, {
+    postToHost({
+      command: SETTINGS_VIEW_COMMANDS.OPEN_PR_SUBSCRIPTION_STREAM,
       runId,
     });
   }
