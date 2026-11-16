@@ -73,9 +73,6 @@ type CommandProgram = Effect.Effect<
  */
 type RegisteredCommandId = Exclude<ExtensionCommandId, CommentCommandId>;
 
-/**
- * Register every catalog command a folder's window runs, and its views.
- */
 /** `texra.setApiKey`, optionally naming the provider to start on: one row
  *  for the folder's window and the window without one. */
 export const setApiKeyHandler = (roots: WorkspaceRoots) =>
@@ -135,6 +132,9 @@ export function registerHandlers(
   }
 }
 
+/**
+ * Register every catalog command a folder's window runs, and its views.
+ */
 export function registerCommands(
   context: vscode.ExtensionContext,
   progressViewProvider: ProgressViewProvider,

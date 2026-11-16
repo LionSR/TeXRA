@@ -7,8 +7,8 @@
  * Two ingest paths:
  *   1. A document task's documents rows parse each output `.tex` file.
  *      Universal — any agent that writes the macro participates.
- *   2. The `diagnostics` tool's `add` command routes through
- *      ``add` of {@link makeInlineCriticism} here for agents that want to flag issues
+ *   2. The `diagnostics` tool's `add` command routes through the `add` of
+ *      {@link makeInlineCriticism} here, for agents that want to flag issues
  *      without inserting the macro.
  *
  * Gated on the `texra.inlineCriticism.enabled` catalog row (global state,
