@@ -39,14 +39,27 @@ export interface SkillSource {
   /** What a listing shows the source as. */
   readonly label: string;
   readonly required?: boolean;
-  /** The plugin that ships these skills: a tool plugin, whose switch gates
-   *  them, or an installed plugin (`plugin:<name>`). */
-  readonly plugin?: string;
-  /** The installed plugin whose skills these are, named `<namespace>:<name>`. */
-  readonly namespace?: string;
-  /** `path` is one plugin command file, read as the skill its name names. */
-  readonly command?: boolean;
+  /** The plugin that ships these skills, absent for a core source. */
+  readonly plugin?: SkillSourcePlugin;
 }
+
+/**
+ * A tool plugin, whose switch (by `id`) gates its skills, or an installed
+ * plugin, whose skills are named `<name>:<skill>` and whose switch is
+ * `plugin:<name>`. An installed plugin's source may be one command file
+ * (`command`), read as the skill its name names.
+ */
+export type SkillSourcePlugin =
+  | { readonly kind: 'tool'; readonly id: string }
+  | {
+      readonly kind: 'installed';
+      readonly name: string;
+      readonly command: boolean;
+    };
+
+/** Whether `source.path` is one plugin command file, not a skill root. */
+const isCommandFile = ({ plugin }: SkillSource): boolean =>
+  plugin?.kind === 'installed' && plugin.command;
 
 /**
  * One precedence tier of sources. A tier takes its roots' skills in root
@@ -198,7 +211,7 @@ function validateRequiredSource(
 ): Effect.Effect<SkillLoadIssue | undefined, never, FileSystem.FileSystem> {
   return FileSystem.FileSystem.use((fs) => fs.stat(source.path)).pipe(
     Effect.map((info) =>
-      info.type === (source.command ? 'File' : 'Directory')
+      info.type === (isCommandFile(source) ? 'File' : 'Directory')
         ? undefined
         : issue('error', 'Skill source is not a directory', {
             path: source.path,
@@ -276,7 +289,7 @@ export const discoverSkillSources = Effect.fn('skills.discoverSkillSources')(
               if (sourceError)
                 return { source, sourceError, scanned: undefined };
             }
-            const scanned = source.command
+            const scanned = isCommandFile(source)
               ? yield* scanCommandFile(source.path)
               : yield* scanSkillRoot(source.path);
             return { source, sourceError: undefined, scanned };
@@ -294,8 +307,9 @@ export const discoverSkillSources = Effect.fn('skills.discoverSkillSources')(
           errors.push(sourceError);
           continue;
         }
+        const { plugin } = source;
         const result =
-          source.namespace === undefined
+          plugin?.kind !== 'installed'
             ? scanned
             : {
                 ...scanned,
@@ -303,7 +317,7 @@ export const discoverSkillSources = Effect.fn('skills.discoverSkillSources')(
                   ...entry,
                   skill: {
                     ...entry.skill,
-                    name: `${source.namespace}:${entry.skill.name}`,
+                    name: `${plugin.name}:${entry.skill.name}`,
                   },
                 })),
               };

@@ -59,17 +59,19 @@ interface MemoryWalkOptions {
   includeDirs?: boolean;
 }
 
-/** One filesystem entry discovered while walking the memory tree. */
-interface MemoryWalkEntry {
+/** One filesystem entry discovered while walking the memory tree: a
+ *  directory, or a file with its frontmatter metadata (null when it has
+ *  none). */
+type MemoryWalkEntry = {
   /** Path relative to the walk root. */
-  relativePath: string;
-  storagePath: string;
-  size: number;
-  mtime: number;
-  isDir: boolean;
-  /** Frontmatter metadata for files; always null for directories. */
-  meta: MemoryFileMeta | null;
-}
+  readonly relativePath: string;
+  readonly storagePath: string;
+  readonly size: number;
+  readonly mtime: number;
+} & (
+  | { readonly isDir: true; readonly meta: null }
+  | { readonly isDir: false; readonly meta: MemoryFileMeta | null }
+);
 
 /**
  * Does a memory path exist? The one existence probe every caller shares.

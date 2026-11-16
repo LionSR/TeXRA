@@ -1,6 +1,7 @@
 import { Context, Effect, Result, Schema } from 'effect';
 
 import {
+  installedPluginId,
   readInstalledPluginLoad,
   type InstalledPluginLoad,
 } from '@common/plugins/pluginTrust';
@@ -136,9 +137,20 @@ const discoverRuntimeSkills = Effect.fn('discoverRuntimeSkills')(function* (
   } satisfies DiscoverSkillSourcesResult;
 });
 
-/** Whether the source is a tool plugin's that is switched off. */
-const pluginOff = (source: SkillSource, disabled: DisabledSkills): boolean =>
-  source.plugin !== undefined && disabled.plugins.includes(source.plugin);
+/** The switch of the plugin that ships the source's skills, none for a
+ *  core source. */
+const pluginIdOf = ({ plugin }: SkillSource): string | undefined =>
+  plugin === undefined
+    ? undefined
+    : plugin.kind === 'tool'
+      ? plugin.id
+      : installedPluginId(plugin.name);
+
+/** Whether the source is a plugin's that is switched off. */
+const pluginOff = (source: SkillSource, disabled: DisabledSkills): boolean => {
+  const plugin = pluginIdOf(source);
+  return plugin !== undefined && disabled.plugins.includes(plugin);
+};
 
 function isSkillDisabled(
   { skill, source }: SourcedSkill,
@@ -304,7 +316,7 @@ const catalogEntry = (
       ),
     ),
     Effect.map((directory) => ({
-      plugin: source.plugin ?? null,
+      plugin: pluginIdOf(source) ?? null,
       name: skill.name,
       text: `- ${skill.name}: ${skill.description}\n  Source: ${source.label}\n  Path: ${skill.path}`,
       directory,
@@ -386,8 +398,9 @@ export const loadRuntimeSkillCatalog = Effect.fn('skills.runtimeCatalog')(
     // of each plugin, and each step bounds what it lists (`openStep`).
     const kept = new Map<string | undefined, number>();
     const catalog = result.skills.filter(({ source }) => {
-      const count = kept.get(source.plugin) ?? 0;
-      kept.set(source.plugin, count + 1);
+      const plugin = pluginIdOf(source);
+      const count = kept.get(plugin) ?? 0;
+      kept.set(plugin, count + 1);
       return count < SKILL_CATALOG_MAX_SKILLS;
     });
     const named = new Set(run.named);

@@ -1,80 +1,36 @@
 import { Predicate } from 'effect';
-import {
-  APPROVAL_POLICIES,
-  type ApprovalPolicy,
-} from '@texra-ai/harness/schemas';
+import { APPROVAL_POLICIES } from '@texra-ai/harness/schemas';
 import {
   CliUsageError,
   type CliGlobalArgs,
 } from '@cli/runtime/platform/cliContext';
 import { documentsNegatedBooleanForm } from '@cli/runtime/completion/completionCommandTree';
-import {
-  CLI_OUTPUT_FORMATS,
-  type CliOutputFormat,
-} from '@texra/shared/cliOutputFormat';
-import type { ParsedArgs } from 'citty';
-
-/**
- * Single source of truth for the global flags accepted by every TeXRA
- * subcommand. `as const` + spread would lose literal-type narrowing (citty's
- * `ArgsDef` rejects `readonly string[]`), so each enum's `options` is
- * explicitly typed as a mutable literal tuple — assignable to `string[]` and
- * narrow enough for `defineCommand<const T>` to expose the per-option literal
- * on `ctx.args[...]`. Adding a new global flag is a one-line change here.
- */
-type CliGlobalArgsDef = {
-  print: { type: 'boolean'; alias: 'p'; description: string };
-  quiet: { type: 'boolean'; alias: 'q'; description: string };
-  verbose: { type: 'boolean'; description: string };
-  cwd: { type: 'string'; valueHint: string; description: string };
-  'output-format': {
-    type: 'enum';
-    options: CliOutputFormat[];
-    description: string;
-  };
-  'approval-policy': {
-    type: 'enum';
-    options: ApprovalPolicy[];
-    description: string;
-  };
-  // Positively-named boolean defaulting to `true`: citty parses `--no-color`
-  // into `color: false` and renders the negative variant in usage from
-  // `negativeDescription` (see citty's `parseRawArgs`).
-  color: {
-    type: 'boolean';
-    default: true;
-    negativeDescription: string;
-    description: string;
-  };
-  'no-input': {
-    type: 'boolean';
-    description: string;
-  };
-};
-
-type CliSkillSourceArgsDef = {
-  source: {
-    type: 'string';
-    alias: 's';
-    valueHint: string;
-    description: string;
-  };
-};
+import { CLI_OUTPUT_FORMATS } from '@texra/shared/cliOutputFormat';
+import type { ArgsDef, ParsedArgs } from 'citty';
 
 function formatCommaList(items: readonly string[]): string {
   return new Intl.ListFormat('en', { type: 'conjunction' }).format(items);
 }
 
-export const GLOBAL_ARGS: CliGlobalArgsDef = {
+/**
+ * Single source of truth for the global flags accepted by every TeXRA
+ * subcommand. `satisfies` keeps each entry's literal types for
+ * `defineCommand<const T>` to expose on `ctx.args[...]`, except an `alias`,
+ * which citty types as `string` and so needs its own `as const` to be parsed
+ * under its letter. A whole-object `as const` would make each enum's
+ * `options` readonly, which citty's `ArgsDef` rejects. Adding a new global
+ * flag is a one-line change here.
+ */
+export const GLOBAL_ARGS = {
   print: {
     type: 'boolean',
-    alias: 'p',
+    alias: 'p' as const,
     description:
       'For headless commands, run non-interactively and print the result to stdout',
   },
   quiet: {
     type: 'boolean',
-    alias: 'q',
+    alias: 'q' as const,
     description: 'Suppress progress output and informational logs',
   },
   verbose: {
@@ -98,6 +54,9 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
     description:
       'Privileged tool actions: never (deny all), ask (prompt; default), or yolo (auto-approve)',
   },
+  // Positively-named boolean defaulting to `true`: citty parses `--no-color`
+  // into `color: false` and renders the negative variant in usage from
+  // `negativeDescription` (see citty's `parseRawArgs`).
   color: {
     type: 'boolean',
     default: true,
@@ -109,17 +68,17 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
     description:
       'For headless commands, disable prompts and default approvals to never',
   },
-};
+} satisfies ArgsDef;
 
-export const SKILL_SOURCE_ARGS: CliSkillSourceArgsDef = {
+export const SKILL_SOURCE_ARGS = {
   source: {
     type: 'string',
-    alias: 's',
+    alias: 's' as const,
     valueHint: 'directory',
     description:
       'Additional skill root; may be repeated and is resolved relative to --cwd',
   },
-};
+} satisfies ArgsDef;
 
 export const AGENT_RUN_GLOBAL_ARGS = {
   ...GLOBAL_ARGS,
@@ -174,7 +133,7 @@ type HeadlessOnlyGlobalArgName =
  * output.
  */
 export const INTERACTIVE_GLOBAL_ARGS: Omit<
-  CliGlobalArgsDef,
+  typeof GLOBAL_ARGS,
   HeadlessOnlyGlobalArgName
 > = {
   quiet: GLOBAL_ARGS.quiet,

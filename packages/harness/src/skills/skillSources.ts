@@ -1,9 +1,6 @@
 import * as path from 'node:path';
 
-import {
-  installedPluginId,
-  type LoadablePlugin,
-} from '@common/plugins/pluginTrust';
+import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { bundledPluginDir } from '@common/storage/storageLayout';
 
 import type { SkillSource, SkillSourceTier } from './loadSkills';
@@ -136,23 +133,16 @@ export function skillTiers(call: SkillSourceCall): SkillSourceTier[] {
       // Each skill root and command file the plugin declares, read when it
       // loaded; a root that has gone missing since is reported, not skipped.
       sources: call.plugins.flatMap(({ record, plugin }) => {
-        const root = {
+        const source = (entry: string, command: boolean): SkillSource => ({
           scope: 'user',
+          path: path.join(record.path, entry),
           label: `plugin ${record.name}`,
           required: true,
-          plugin: installedPluginId(record.name),
-          namespace: record.name,
-        } as const;
+          plugin: { kind: 'installed', name: record.name, command },
+        });
         return [
-          ...plugin.skills.map((skills) => ({
-            ...root,
-            path: path.join(record.path, skills),
-          })),
-          ...plugin.commands.map((command) => ({
-            ...root,
-            path: path.join(record.path, command),
-            command: true,
-          })),
+          ...plugin.skills.map((skills) => source(skills, false)),
+          ...plugin.commands.map((command) => source(command, true)),
         ];
       }),
     },
@@ -169,7 +159,7 @@ export function skillTiers(call: SkillSourceCall): SkillSourceTier[] {
           scope: 'bundled',
           path: bundledPluginDir(resourcesPath, pluginId, 'skills'),
           label: 'bundled',
-          plugin: pluginId,
+          plugin: { kind: 'tool', id: pluginId },
         })),
       ],
     },
