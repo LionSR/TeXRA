@@ -239,10 +239,16 @@ export abstract class BaseRequestPanel<
   // Decisions
   // ---------------------------------------------------------------------------
 
-  /** Send a decision; it answers the request, so the card's draft goes. */
+  /** Send a decision. One that answers the request takes the card's draft
+   *  with it; a tool-edit preview leaves the request open, and the draft. */
   protected emitAction(decision: SurfaceDecision): void {
     if (this.readOnly) return;
-    if (this.surface?.requestDrafts.has(this.draftKey)) {
+    const delivery = approvalDecisionDelivery(
+      { payload: this.permission, answeredBy: this.answeredBy },
+      decision,
+    );
+    const answers = !('host' in delivery) || delivery.host.kind !== 'toolEdit';
+    if (answers && this.surface?.requestDrafts.has(this.draftKey)) {
       this.dispatchEvent(
         SessionUiEvents.surface({
           kind: 'requestDraft',
@@ -251,13 +257,9 @@ export abstract class BaseRequestPanel<
         }),
       );
     }
-    const request = approvalDecisionDelivery(
-      { payload: this.permission, answeredBy: this.answeredBy },
-      decision,
-    );
-    if ('host' in request)
-      this.dispatchEvent(SessionUiEvents.host(request.host));
-    else this.sendRuntimeDecision(request.runtime);
+    if ('host' in delivery)
+      this.dispatchEvent(SessionUiEvents.host(delivery.host));
+    else this.sendRuntimeDecision(delivery.runtime);
   }
 
   /**
