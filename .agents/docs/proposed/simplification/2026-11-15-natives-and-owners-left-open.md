@@ -51,6 +51,11 @@ another open PR to merge first.
    `scripts/verify-desktop.mjs` and drops `nanoid` for `node:crypto`, so this
    run left both to it.
 
+## Landed in the 2026-11-16 sweep
+
+- Item 3: `deletionCleanup.ts`'s two inline pipes are `logFailure`.
+  `AgentRunLifecycle.ts` no longer has `logLifecycleWarning`.
+
 ## Checked and declined
 
 - **A shared positive-integer schema.** `Schema.Int.check(Schema.isGreaterThan(0))`
