@@ -71,7 +71,7 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       wa-details.dispatch::part(base) {
-        border-radius: var(--wa-border-radius-l);
+        border-radius: var(--border-radius-large);
       }
       wa-details.dispatch::part(header) {
         padding: var(--wa-space-xs) var(--wa-space-s);

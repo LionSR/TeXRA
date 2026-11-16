@@ -236,7 +236,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 .shell-project-runs {
   --run-tab-padding-inline-start: var(--wa-space-xs);
   --run-tab-row-gap: var(--wa-space-3xs);
-  --run-tab-radius: 6px;
+  --run-tab-radius: var(--border-radius-medium);
   --run-tab-meta-display: none;
   --run-tab-detail-display: none;
   --run-tab-status-width: var(--height-control-compact);

@@ -9,7 +9,7 @@ export const codeBlockStyles = css`
   .code-block {
     position: relative;
     border: var(--border-thin) solid var(--wa-color-surface-border);
-    border-radius: var(--wa-border-radius-m, var(--border-radius-small));
+    border-radius: var(--border-radius-medium);
     overflow: hidden;
     max-width: 100%;
     min-width: 0;

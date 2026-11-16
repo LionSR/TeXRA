@@ -224,7 +224,7 @@ export const progressAppStyles = css`
   ${heroStyles}
 
   .context::part(base) {
-    border-radius: var(--wa-border-radius-m);
+    border-radius: var(--border-radius-medium);
   }
 
   .context-summary {

@@ -29,7 +29,7 @@ export const runTabStyles = css`
     max-width: 100%;
     gap: var(--wa-space-2xs);
     min-height: var(--row-height);
-    border-radius: var(--run-tab-radius, var(--wa-border-radius-s));
+    border-radius: var(--run-tab-radius, var(--border-radius));
     padding-inline-end: var(--wa-space-2xs);
     box-sizing: border-box;
     overflow: hidden;

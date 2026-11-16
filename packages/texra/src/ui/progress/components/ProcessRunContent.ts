@@ -29,7 +29,7 @@ export class ProcessRunContent extends BaseRunContent {
         color: var(--wa-color-terminal-foreground, var(--wa-color-text-normal));
         border: var(--border-thin) solid
           var(--wa-color-surface-border, transparent);
-        border-radius: var(--wa-border-radius-l, var(--border-radius-large));
+        border-radius: var(--border-radius-large);
         font-family: var(
           --wa-font-family-mono,
           ui-monospace,

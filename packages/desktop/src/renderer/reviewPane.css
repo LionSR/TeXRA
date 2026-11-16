@@ -89,7 +89,7 @@
   min-height: var(--height-control-compact);
   padding: 0;
   padding-inline-start: calc(var(--tree-depth, 0) * var(--wa-space-s));
-  border-radius: var(--wa-border-radius-s);
+  border-radius: var(--border-radius);
 }
 
 /* The built-in indicator carries the disclosure affordance: a start-placed
@@ -133,7 +133,7 @@
   width: 100%;
   min-height: var(--height-control-compact);
   justify-content: flex-start;
-  border-radius: var(--wa-border-radius-s);
+  border-radius: var(--border-radius);
 }
 
 .desktop-review-file::part(label) {

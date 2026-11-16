@@ -21,7 +21,7 @@ export const monacoStyles = css`
        its geometry tokens those surfaces keep square corners around our menu. */
     --vscode-cornerRadius-small: var(--border-radius-small);
     --vscode-cornerRadius-medium: var(--field-radius);
-    --vscode-cornerRadius-large: var(--wa-border-radius-m);
+    --vscode-cornerRadius-large: var(--border-radius-medium);
     --vscode-strokeThickness: var(--border-thin);
     --vscode-shadow-lg: var(--wa-shadow-m);
   }
@@ -30,7 +30,7 @@ export const monacoStyles = css`
     background: var(--wa-color-menu-background);
     color: var(--wa-color-text-normal);
     border: var(--border-thin) solid var(--wa-color-surface-border);
-    border-radius: var(--wa-border-radius-m);
+    border-radius: var(--border-radius-medium);
     box-shadow: var(--wa-shadow-m);
     overflow: hidden;
   }
@@ -64,7 +64,7 @@ export const monacoStyles = css`
   .monaco-menu-container {
     font-family: var(--wa-font-family-body);
     font-size: var(--font-size-sm);
-    border-radius: var(--wa-border-radius-m);
+    border-radius: var(--border-radius-medium);
   }
 
   .quick-input-widget {

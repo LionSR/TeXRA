@@ -28,7 +28,7 @@ export class LaunchAttachments extends LitElement {
         display: block;
       }
       .drop {
-        border-radius: var(--wa-border-radius-l);
+        border-radius: var(--border-radius-large);
       }
       .drop.is-drag-active {
         outline: 2px dashed var(--wa-color-focus);

@@ -115,7 +115,7 @@ export class UserMessage extends LitElement {
           --wa-color-surface-lowered,
           var(--wa-color-surface-default)
         );
-        border-radius: var(--wa-border-radius-m, var(--border-radius-small));
+        border-radius: var(--border-radius-medium);
         font-size: var(--font-size-sm);
         line-height: var(--line-height-normal);
         white-space: normal;

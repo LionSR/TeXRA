@@ -278,7 +278,7 @@ export const logEntryStyles = css`
 
   .banner-content--thinking {
     padding: var(--wa-space-xs) var(--wa-space-s);
-    border-radius: var(--wa-border-radius-m, var(--border-radius));
+    border-radius: var(--border-radius-medium);
     background: color-mix(
       in srgb,
       var(--wa-color-neutral-fill-quiet) 72%,

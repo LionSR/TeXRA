@@ -202,7 +202,7 @@ wa-dialog.desktop-command-palette::part(dialog) {
   margin-block-start: 10vh;
   overflow: hidden;
   border: var(--border-thin) solid var(--wa-color-menu-border);
-  border-radius: var(--wa-border-radius-l);
+  border-radius: var(--border-radius-large);
   background: var(--wa-color-menu-background);
   box-shadow: var(--desktop-shadow-lg), var(--desktop-edge-highlight);
 }
@@ -265,7 +265,7 @@ wa-input.desktop-command-palette-input::part(input) {
 .desktop-command-palette-meta,
 .desktop-command-palette-help kbd {
   border: var(--border-thin) solid var(--border-hairline-strong);
-  border-radius: var(--wa-border-radius-s);
+  border-radius: var(--border-radius);
   background: var(--wa-color-surface-raised);
   box-shadow: inset 0 -1px 0 var(--border-hairline);
   color: var(--wa-color-text-quiet);
@@ -591,7 +591,7 @@ wa-input.desktop-command-palette-input::part(input) {
   padding: var(--wa-space-2xs);
   overflow: auto;
   border: var(--border-thin) solid var(--wa-color-surface-border);
-  border-radius: var(--wa-border-radius-l);
+  border-radius: var(--border-radius-large);
   background: var(--wa-form-control-background-color);
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
@@ -642,7 +642,7 @@ wa-input.desktop-command-palette-input::part(input) {
   place-items: center;
   width: var(--control-size-s);
   height: var(--control-size-s);
-  border-radius: var(--wa-border-radius-s);
+  border-radius: var(--border-radius);
   background: var(--control-fill);
   color: var(--wa-color-text-quiet);
 }
@@ -700,7 +700,7 @@ wa-input.desktop-command-palette-input::part(input) {
   margin: 0;
   padding: var(--wa-space-s);
   overflow: auto;
-  border-radius: var(--wa-border-radius-m);
+  border-radius: var(--border-radius-medium);
   background: var(--wa-color-surface-lowered);
   color: var(--wa-color-text-quiet);
   font-family: var(--wa-font-family-mono);

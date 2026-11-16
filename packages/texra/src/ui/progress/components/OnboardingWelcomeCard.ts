@@ -106,7 +106,7 @@ export class OnboardingWelcomeCard extends LitElement {
         min-width: 0;
         padding: var(--wa-space-m);
         border: var(--border-thin) solid var(--wa-color-surface-border);
-        border-radius: var(--wa-border-radius-l);
+        border-radius: var(--border-radius-large);
         background: var(--wa-form-control-background-color);
       }
 
