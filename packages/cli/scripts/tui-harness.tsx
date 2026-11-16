@@ -169,10 +169,6 @@ import { cliPlatform } from '../src/runtime/platform/initPlatform';
 import { CliExitCode } from '../src/runtime/platform/exitCodes';
 import { holdSignals } from '../src/runtime/platform/processSignals';
 import { resolveCliResourcesPath } from '../src/runtime/platform/cliContext';
-import {
-  createCliRuntimeHost,
-  type CliRuntimeHost,
-} from '../src/runtime/headless/cliPresentationHost';
 import { setCliToolEnabled } from '../src/runtime/tools';
 import type { CliContext } from '../src/runtime/platform/cliContext';
 
@@ -512,30 +508,24 @@ HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, harnessRunSession.view));
 }
 // Approvals go through the session's interaction port with the TUI host
 // attached, exactly as `chatSessionController` wires a live chat.
-const harnessRuntimeHost: CliRuntimeHost =
-  createCliRuntimeHost(HARNESS_CLI_CONTEXT);
 const harnessHostScope = Effect.runSync(Scope.make());
 HARNESS_DISPOSERS.push(() =>
   Effect.runSync(Scope.close(harnessHostScope, Exit.void)),
 );
-const harnessInteractions = createTuiHostInteractions(
-  harnessRuntimeHost,
-  HARNESS_CLI_CONTEXT,
-  {
-    requests: {
-      request: (req) =>
-        session()
-          .requests.request(req)
-          .pipe(Effect.provide(harnessRuntimeSession)),
-      view: {
-        current: () => SubscriptionRef.getUnsafe(session().view.ref),
-        changes: session().view.changes,
-      },
+const harnessInteractions = createTuiHostInteractions({
+  requests: {
+    request: (req) =>
+      session()
+        .requests.request(req)
+        .pipe(Effect.provide(harnessRuntimeSession)),
+    view: {
+      current: () => SubscriptionRef.getUnsafe(session().view.ref),
+      changes: session().view.changes,
     },
-    settings: HARNESS_PLATFORM_SERVICES,
-    runtime: harnessRuntime,
   },
-);
+  settings: HARNESS_PLATFORM_SERVICES,
+  runtime: harnessRuntime,
+});
 Effect.runSync(
   attachInteractions(session().interactions, harnessInteractions).pipe(
     Scope.provide(harnessHostScope),
@@ -2075,7 +2065,6 @@ async function exitHarness(exitCode: number): Promise<void> {
   }
   ink.unmount();
   try {
-    await Effect.runPromise(harnessRuntimeHost.close());
     await harnessRuntime.dispose();
   } finally {
     process.exit(exitCode);

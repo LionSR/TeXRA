@@ -495,7 +495,7 @@ export async function runChat(
     session,
     runSession,
     served: runsElsewhere,
-    sessionContext: { ...context, quietLogs: true },
+    commandName: context.commandName,
     chatScope,
     shutdownScope: services.shutdownScope,
     cwd: context.cwd,

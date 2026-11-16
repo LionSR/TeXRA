@@ -23,7 +23,6 @@ import {
   type Notices,
   type ProcessRuntime,
   type ProcessServices,
-  type RuntimePresentationEventPayloads,
 } from '@texra-ai/harness/host';
 import {
   type RuntimeCommand,
@@ -38,22 +37,17 @@ import {
   acceptsFollowUp,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { createCliRuntimeHost } from '@cli/runtime/headless/cliPresentationHost';
 import {
   formatCliNoAvailableModelsRecovery,
   selectCliRunnableModel,
 } from '@cli/runtime/models/modelAccess';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
-import {
-  launchApproval,
-  type CliContext,
-} from '@cli/runtime/platform/cliContext';
+import { launchApproval } from '@cli/runtime/platform/cliContext';
 import { resumeRun } from '@texra/controllers/session/runActionPolicy';
 import { createHostRunActions } from '@texra/controllers/session/hostRunActions';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { RequestRefusal } from '@texra/controllers/session/hostCallFailure';
-import { shownFailureText } from '@ui/copy/modelAccess';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
 import {
@@ -73,7 +67,10 @@ import { oneShotResumeNotice } from './tui/state/resumeHint';
 import { currentView, runViewOf, sessionView } from './tui/state/sessionView';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { launchTeamId } from '@texra/agent/teams/teamLaunch';
-import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
+import {
+  createTuiHostInteractions,
+  presentInTranscript,
+} from './tui/state/subscribeApprovals';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import {
   appendLocalErrorTranscript,
@@ -182,16 +179,16 @@ interface ChatSessionControllerInit {
    *  other terminals' conversations. */
   readonly served: boolean;
 
-  /** The chat session's {@link CliContext}: the controller attaches one
-   *  interaction host for the session's lifetime. */
-  readonly sessionContext: CliContext;
+  /** How the user invoked this CLI, for the resume command a notice names. */
+  readonly commandName: string;
 
   /** The chat's scope: the host attachment and the resumed-root watch
    *  close with it, which the exit drain awaits. */
   readonly chatScope: Scope.Scope;
 
-  /** The process's shutdown scope: the interaction host closes there, so
-   *  every exit path, signal or graceful, awaits its close. */
+  /** The process's shutdown scope: the work that outlives a turn (run
+   *  actions, sends, resumed roots) runs there, so every exit path, signal
+   *  or graceful, awaits it. */
   readonly shutdownScope: Scope.Scope;
 
   readonly cwd: string;
@@ -255,7 +252,6 @@ export function createChatSessionController(
     session,
     runSession,
     served,
-    sessionContext,
     chatScope,
     shutdownScope,
     cwd,
@@ -306,23 +302,13 @@ export function createChatSessionController(
   // Internal helpers
   // -----------------------------------------------------------------------
 
-  // The chat's notices, where the hosts' run actions present a failure: an
-  // error is a transcript line, where the person is reading; any other
-  // notice (a refused launch's instruction, an unknown agent) goes where the
-  // chat's runtime notices show. Nothing is shown once the chat is leaving.
+  // The chat's notices, where the hosts' run actions present a failure: a
+  // transcript row, as the attached host presents the session's. Nothing is
+  // shown once the chat is leaving.
   const notices: Notices = {
     emit: (event, payload) =>
       Effect.sync(() => {
-        if (session.exited) return;
-        if (event === 'requestShowError')
-          appendLocalErrorTranscript(
-            shownFailureText(
-              // cast: `emit` is generic over the event, and this branch is
-              // the error's.
-              payload as RuntimePresentationEventPayloads['requestShowError'],
-            ),
-          );
-        else presentationHost.emit(event, payload);
+        if (!session.exited) presentInTranscript[event](payload);
       }),
   };
   const showFailure = (error: unknown) => presentRunFailure(notices, error);
@@ -345,22 +331,11 @@ export function createChatSessionController(
   // and desktop attach theirs. The session routes every request to its last
   // attachment, so a background child of an earlier turn keeps an answerable
   // approval path after its root finalizes, with no per-turn generation.
-  const presentationHost = createCliRuntimeHost(sessionContext);
-  runtime.runSync(
-    Scope.addFinalizer(
-      shutdownScope,
-      Effect.suspend(() => presentationHost.close()),
-    ),
-  );
-  const interactions = createTuiHostInteractions(
-    presentationHost,
-    sessionContext,
-    {
-      requests: runSession,
-      settings: stores,
-      runtime,
-    },
-  );
+  const interactions = createTuiHostInteractions({
+    requests: runSession,
+    settings: stores,
+    runtime,
+  });
   // Attached to the chat's session for its lifetime: here, its requests'
   // host; in the service, one of its project's windows, whose notices its
   // tasks raise here.
@@ -571,7 +546,7 @@ export function createChatSessionController(
           const stored = (yield* runSession.view.read([id])).runs.get(id);
           if (stored?.takesFollowUps === false && stored.outcome !== null) {
             appendLocalErrorTranscript(
-              oneShotResumeNotice(init.sessionContext.commandName, id),
+              oneShotResumeNotice(init.commandName, id),
             );
             yield* endWithout(CliExitCode.Usage);
             return;

@@ -9,19 +9,20 @@
 // and desktop.
 //
 // The attached host answers nothing on its own: it stages each listed tool
-// edit's preview for the modal, and presents events.
+// edit's preview for the modal, and presents events as transcript rows.
 
 import { Cause, Effect, Exit, FiberSet, Scope } from 'effect';
 
-import {
-  type HostInteractions,
-  type ProcessRuntime,
+import type {
+  HostInteractions,
+  PresentationEventHandlers,
+  ProcessRuntime,
+  RuntimePresentationEventPayloads,
 } from '@texra-ai/harness/host';
 import { withLogChannel, type SettingsStores } from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
-import type { CliContext } from '@cli/runtime/platform/cliContext';
-import type { CliRuntimeHost } from '@cli/runtime/headless/cliPresentationHost';
+import { missingAgentMessage } from '@cli/runtime/agents';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import { followToolEditPreviews } from '@texra/controllers/approval/ToolEditApprovalController';
 import {
@@ -30,6 +31,11 @@ import {
 } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { requestErrorText } from '@ui/copy/requestErrors';
+import {
+  formatInstructionActionHint,
+  instructionActions,
+} from '@ui/copy/instructionActions';
+import { shownFailureText } from '@ui/copy/modelAccess';
 
 import { notify } from '../notifications/terminalNotifier';
 import {
@@ -76,10 +82,26 @@ export interface TuiHostInteractions extends HostInteractions {
   readonly performHost: (command: HostCommand) => void;
 }
 
+/**
+ * Where the chat shows a notice: as a transcript row, where the person is
+ * reading. Ink owns the terminal while the chat runs, so nothing here writes
+ * stdout or stderr. A file the session asks to open has no terminal view.
+ */
+export const presentInTranscript: PresentationEventHandlers<RuntimePresentationEventPayloads> =
+  {
+    requestShowError: (payload) =>
+      appendLocalErrorTranscript(shownFailureText(payload)),
+    requestShowInstruction: ({ key, message }) =>
+      appendLocalNotice(
+        `${message}${formatInstructionActionHint(instructionActions(key))}`,
+      ),
+    openFile: () => undefined,
+    agentNotFound: ({ agentName }) =>
+      appendLocalErrorTranscript(missingAgentMessage(agentName)),
+  };
+
 /** Create the TUI's presentation host. */
 export function createTuiHostInteractions(
-  host: CliRuntimeHost,
-  context: CliContext,
   stores: TuiApprovalStores,
 ): TuiHostInteractions {
   const apiKeyRetry = new ProgressApiKeyRetryController({
@@ -184,10 +206,10 @@ export function createTuiHostInteractions(
   );
   return {
     performHost,
-    // The CLI host renders the notice itself and says whether it rendered a
-    // user-visible record; there is no program for the session to fork.
+    // Rendered here, synchronously: there is no program for the session
+    // to fork.
     emit: (event, payload) => {
-      host.emit(event, payload);
+      presentInTranscript[event](payload);
     },
     dispose() {
       stores.runtime.runFork(Scope.close(attached, Exit.void));

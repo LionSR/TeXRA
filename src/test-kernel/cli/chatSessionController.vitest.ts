@@ -51,7 +51,6 @@ import {
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { notices } from '@cli/chat/tui/state/transcript';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import {
   answerOf,
   parkedRoot,
@@ -169,12 +168,7 @@ const openChat = (
       session: tui,
       runSession: session,
       served: options.served ?? false,
-      sessionContext: createTestCliContext({
-        mode: 'interactive',
-        approvalPolicy: 'ask',
-        quietLogs: true,
-        commandName: 'chat',
-      }),
+      commandName: 'chat',
       chatScope: yield* scope(),
       shutdownScope: yield* scope(),
       cwd: roots.workspace ?? roots.storage,
