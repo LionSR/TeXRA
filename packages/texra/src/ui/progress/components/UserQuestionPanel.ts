@@ -28,9 +28,6 @@ import type {
 export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
   static override styles = [BaseRequestPanel.styles, userQuestionPanelStyles];
 
-  // Indexed by question position (not `question.question`): two questions
-  // with identical wording would otherwise collide on a text key, both in
-  // Lit's `repeat` reconciliation and in these state maps.
   @state() private selections: string[][] = [];
   @state() private freeText: string[] = [];
 
@@ -226,11 +223,6 @@ export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
         ?.focus();
       return;
     }
-    // Submission itself still collapses onto `UserQuestionAnswersSchema`'s
-    // question-text keys (the AskUserQuestion wire vocabulary has no other
-    // id): two identically-worded questions answered independently above
-    // will silently collapse into one entry here. Pre-existing limitation,
-    // not introduced by the position-indexed state above.
     const answers: Record<string, UserQuestionAnswers[string]> = {};
 
     for (const [index, question] of data.questions.entries()) {
