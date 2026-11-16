@@ -1,12 +1,33 @@
 /**
- * A run's line of launchers as its committed rows record it, for a job
- * that writes: the session view states the same lines on each run
- * (`parentId`, `ancestors`, `childIds`), and every reader that only shows
- * them reads the view.
+ * A run's line of launchers as the store records it, for code that must
+ * not trail the log (a job that writes, a stop's cascade): its ids
+ * ({@link ancestorIds}) or its rows ({@link ancestryRows}). The session
+ * view states the same lines on each run (`parentId`, `ancestors`,
+ * `childIds`), and every reader that only shows them reads the view.
  */
 import { Effect } from 'effect';
 
 import type { RunId } from '@shared/schemas';
+
+/**
+ * The runs above `runId`, nearest first, as `parentOf` answers each edge.
+ * A run an edge names is on the line whatever else is known of it (one
+ * since removed still is). Parentage is a tree; a run already on the line
+ * only ends a corrupt cycle.
+ */
+export const ancestorIds = Effect.fnUntraced(function* <E>(
+  parentOf: (runId: RunId) => Effect.Effect<RunId | null, E>,
+  runId: RunId,
+): Effect.fn.Return<RunId[], E> {
+  const line: RunId[] = [];
+  for (
+    let id = yield* parentOf(runId);
+    id !== null && !line.includes(id);
+    id = yield* parentOf(id)
+  )
+    line.push(id);
+  return line;
+});
 
 /**
  * The rows of each run from the `starts` up to their roots, by run: what a

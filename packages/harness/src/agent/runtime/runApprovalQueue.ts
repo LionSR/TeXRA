@@ -36,6 +36,7 @@ import type { SessionApprovals } from '@shared/session/sessionApprovals';
 import type { SessionRowDraft } from '@shared/schemas';
 import { Settings } from '@shared/config/settings';
 import { ancestryRows } from '@shared/session/runRelation';
+import { descendantRuns, type SessionView } from '@shared/session/sessionView';
 import {
   Approvals,
   runStateAppend,
@@ -99,7 +100,7 @@ const grantsOn = (grants: ApprovalGrants, kind: ApprovalBypassKind): boolean =>
  */
 const approvalsUnder = Effect.fn('approvalsUnder')(function* (
   log: Pick<SessionLogShape, 'runRows' | 'facts'>,
-  view: ApprovalGrantSource<RunId>,
+  view: SessionView,
   runId: RunId,
   recorded: ApprovalGrants,
   next: ApprovalGrants,
@@ -111,15 +112,10 @@ const approvalsUnder = Effect.fn('approvalsUnder')(function* (
   );
   if (turnedOn.length === 0) return [];
   // The run and its descendants, by their standing parent edges.
-  const reached = new Set([runId]);
-  for (let grew = true; grew;) {
-    grew = false;
-    for (const [id, { parentId }] of view.runs)
-      if (parentId !== null && reached.has(parentId) && !reached.has(id)) {
-        reached.add(id);
-        grew = true;
-      }
-  }
+  const reached = new Set([
+    runId,
+    ...descendantRuns(view, runId, { includeRoot: false }),
+  ]);
   // The grants as they will be once `next` is recorded, over each reached
   // run's committed grants, not the view's, which can lag a grant a run
   // turned off a moment ago.
@@ -161,7 +157,7 @@ const approvalsUnder = Effect.fn('approvalsUnder')(function* (
  *  answers ({@link approvalsUnder}). Read under the transaction's lock. */
 const grantRows = Effect.fn('grantRows')(function* (
   log: Pick<SessionLogShape, 'runRows' | 'facts'>,
-  view: ApprovalGrantSource<RunId>,
+  view: SessionView,
   runId: RunId,
   edit: (grants: ApprovalGrants) => ApprovalGrants,
   except?: string,

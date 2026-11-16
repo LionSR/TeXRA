@@ -35,6 +35,7 @@ import { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import type { RunId, RunStopReason } from '@shared/schemas';
 import type { SessionLog } from '@shared/session/runHistory';
+import { ancestorIds } from '@shared/session/runRelation';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import type { LiveRun, RunControls, RunsShape } from './runs';
@@ -288,27 +289,15 @@ export class SessionRunRegistry implements RunsShape {
     );
   }
 
-  /** The run's attached ancestors, nearest first. */
-  private ancestorsOf = Effect.fnUntraced(
-    { self: this },
-    function* (runId: RunId) {
-      const line: RunId[] = [];
-      for (
-        let id = yield* this.attachedParent(runId);
-        id !== null && !line.includes(id);
-        id = yield* this.attachedParent(id)
-      )
-        line.push(id);
-      return line;
-    },
-  );
-
   /** The runs held here under `runId`, at any depth, by the stored parent
    *  edges: an ended run between them hides none. What a stop covers, and
    *  what keeps a run's input open and its rows in place. */
   private heldUnder(runId: RunId): Effect.Effect<readonly RunId[]> {
     return this.heldWhere((id) =>
-      Effect.map(this.ancestorsOf(id), (line) => line.includes(runId)),
+      Effect.map(
+        ancestorIds((up) => this.attachedParent(up), id),
+        (line) => line.includes(runId),
+      ),
     );
   }
 

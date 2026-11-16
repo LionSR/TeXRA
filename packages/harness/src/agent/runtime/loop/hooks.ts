@@ -10,7 +10,7 @@
  * recorded effect is used instead.
  */
 import { callKey } from '@shared/session/runFacts';
-import { ancestryRows } from '@shared/session/runRelation';
+import { ancestorIds } from '@shared/session/runRelation';
 import * as path from 'node:path';
 
 import {
@@ -218,9 +218,19 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
 const inputBase = Effect.fn('inputBase')(function* (run: AgentRunShape) {
   const { parent } = run.entry;
   const log = yield* SessionLog;
-  const from = parent ?? run.runId;
-  const line = yield* Effect.orDie(ancestryRows((id) => log.facts(id), from));
-  const root = [...line.keys()].at(-1) ?? from;
+  // The top of the line its rows record: a removed run at the top still
+  // names the session.
+  const above =
+    parent === null
+      ? []
+      : yield* ancestorIds(
+          (id) =>
+            Effect.orDie(
+              Effect.map(log.facts(id), (facts) => facts?.parent?.id ?? null),
+            ),
+          parent,
+        );
+  const root = above.at(-1) ?? parent ?? run.runId;
   return {
     session_id: root,
     cwd: run.workingDirectory ?? (yield* SessionRoots).workspace ?? '',
