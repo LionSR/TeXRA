@@ -54,10 +54,10 @@ import type {
   HostCommand,
 } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
-import {
+import type {
+  ConfirmQuestion,
   HostFailed,
-  type ConfirmQuestion,
-  type NoticeLevel,
+  NoticeLevel,
 } from '@texra/hosts/uiHosts';
 
 import { normalizeMainViewFileExtension } from '@texra/controllers/mainView/MainViewDroppedFilesController';
@@ -66,7 +66,10 @@ import {
   type TranscriptExportOpenKind,
 } from '@texra/controllers/progressView/exportTranscript';
 import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
-import { hostFailure } from '@texra/controllers/session/hostCallFailure';
+import {
+  hostFailed,
+  hostFailure,
+} from '@texra/controllers/session/hostCallFailure';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import type {
   GuiWindowHost,
@@ -161,12 +164,7 @@ const openExportPath = (
   filePath: string,
   kind: TranscriptExportOpenKind,
 ): Effect.Effect<void, HostFailed> => {
-  const failed = (cause: unknown) =>
-    new HostFailed({
-      member: 'openPath',
-      message: toErrorMessage(cause),
-      cause,
-    });
+  const failed = (cause: unknown) => hostFailed('openPath', cause);
   const uri = vscode.Uri.file(filePath);
   if (kind === 'external') {
     // The opener also fails when VS Code declines the file.

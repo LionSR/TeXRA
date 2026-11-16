@@ -48,7 +48,7 @@ export type InquiryThreadId = typeof InquiryThreadIdSchema.Type;
 /** One turn of a thread, as its full record keeps it. */
 const InquiryTurnBaseShape = {
   turnIndex: Schema.Int.check(Schema.isGreaterThan(0)),
-  timestamp: Schema.String.check(Schema.isMinLength(1)),
+  timestamp: Schema.NonEmptyString,
   question: Schema.String,
   context: Schema.optional(Schema.NullOr(Schema.String)),
   suggestSearch: Schema.optional(Schema.NullOr(Schema.Boolean)),
@@ -67,7 +67,7 @@ const AnsweredInquiryTurnSchema = Schema.Struct({
   ...InquiryTurnBaseShape,
   kind: Schema.Literal('answered'),
   answer: Schema.String,
-  answeredAt: Schema.String.check(Schema.isMinLength(1)),
+  answeredAt: Schema.NonEmptyString,
   sessionLinks: Schema.optional(Schema.NullOr(InquirySessionLinksSchema)),
 });
 export type AnsweredInquiryTurn = typeof AnsweredInquiryTurnSchema.Type;
@@ -138,8 +138,8 @@ const InquiryThreadRecordSchema = Schema.Struct({
    *  spans projects, and listing a run's threads reads it here. */
   parentRunId: Schema.NullOr(RunIdSchema),
   status: InquiryThreadSummarySchema.fields.status,
-  createdAt: Schema.String.check(Schema.isMinLength(1)),
-  updatedAt: Schema.String.check(Schema.isMinLength(1)),
+  createdAt: Schema.NonEmptyString,
+  updatedAt: Schema.NonEmptyString,
   turns: Schema.Array(InquiryTurnRecordSchema),
 });
 /** A thread's full record, as the global database stores it. */

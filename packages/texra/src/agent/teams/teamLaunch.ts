@@ -148,7 +148,6 @@ function buildTeamOptions(plans: readonly TeamRunPlan[]): TeamOptionData[] {
         source: plan.preset.source,
         description: plan.preset.description,
         unavailableMembers: [...plan.missingAgents],
-        disabled: blockReason ? true : undefined,
         disabledReason: blockReason
           ? formatTeamOptionDisabledReason(blockReason)
           : undefined,

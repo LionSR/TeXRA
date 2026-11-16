@@ -1,4 +1,5 @@
 // Third-party imports
+import { FACT_SEPARATOR } from '@texra-ai/harness/schemas';
 import { css, html, nothing, type CSSResult, type TemplateResult } from 'lit';
 
 type MetaPart = string | TemplateResult;
@@ -6,7 +7,7 @@ type MetaPart = string | TemplateResult;
 /** Render a compact one-line metadata strip with parts joined by " · ". */
 export function renderDotMeta(parts: readonly MetaPart[]): TemplateResult {
   return html`${parts.map(
-    (part, i) => html`${i > 0 ? html` · ` : nothing}${part}`,
+    (part, i) => html`${i > 0 ? FACT_SEPARATOR : nothing}${part}`,
   )}`;
 }
 

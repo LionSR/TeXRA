@@ -7,11 +7,13 @@
 
 import { Effect } from 'effect';
 import type { ProcessServices } from '@texra-ai/harness/host';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
 import latexPreamble from '@resources/templates/chatExport.tex';
-import { HostFailed } from '@texra/hosts/uiHosts';
+import type { HostFailed } from '@texra/hosts/uiHosts';
 
-import { hostFailure } from '@texra/controllers/session/hostCallFailure';
+import {
+  hostFailed,
+  hostFailure,
+} from '@texra/controllers/session/hostCallFailure';
 import type {
   GuiWindowHost,
   OwnHostArms,
@@ -162,16 +164,7 @@ export const createDesktopHostRequests = (
                 displayPath: `${editedFile} <-> ${baseFile}`,
               },
             )
-            .pipe(
-              Effect.mapError(
-                (cause) =>
-                  new HostFailed({
-                    member: 'openDiff',
-                    message: toErrorMessage(cause),
-                    cause,
-                  }),
-              ),
-            ),
+            .pipe(Effect.mapError((cause) => hostFailed('openDiff', cause))),
         confirm: host.confirm,
         openDirectory: (directory: string) => host.openPath(directory),
       },
@@ -181,16 +174,9 @@ export const createDesktopHostRequests = (
         // `openPath` is `presented`); the port's tag carries its wording out
         // unchanged.
         openPath: (filePath: string) =>
-          host.openPath(filePath).pipe(
-            Effect.mapError(
-              (cause) =>
-                new HostFailed({
-                  member: 'openPath',
-                  message: toErrorMessage(cause),
-                  cause,
-                }),
-            ),
-          ),
+          host
+            .openPath(filePath)
+            .pipe(Effect.mapError((cause) => hostFailed('openPath', cause))),
         latexPreamble,
         resourcesPath: options.resourcesPath,
       },

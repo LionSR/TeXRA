@@ -13,6 +13,7 @@ import {
   offeredGrant,
   type RunId,
   toErrorMessage,
+  joinFacts,
 } from '@texra-ai/harness/schemas';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import {
@@ -85,7 +86,10 @@ export function TasksForm(props: TasksFormProps): React.JSX.Element {
         tasks.map((entry) => ({
           value: entry.runId,
           label: `${entry.live ? '* ' : ''}${entry.label}`,
-          description: `${runStatusLabel(entry.statusKey)} · ${entry.workspace}`,
+          description: joinFacts([
+            runStatusLabel(entry.statusKey),
+            entry.workspace,
+          ]),
         }))
       }
       availableRows={props.availableRows}
@@ -293,7 +297,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     <Box flexDirection="column">
       <BorderedPanel
         color={level.ended ? COLOR_ERROR : COLOR_HINT}
-        title={`${task.label} · ${status}`}
+        title={joinFacts([task.label, status])}
         footer={
           <KeyHints
             // While a request is on screen its card owns Esc (reject or

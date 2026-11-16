@@ -19,7 +19,7 @@
 
 // Local imports
 import type { RunIdentity, RunView } from '@texra-ai/harness/schemas';
-import { formatResultCount } from '@texra-ai/harness/schemas';
+import { formatResultCount, joinFacts } from '@texra-ai/harness/schemas';
 
 /** What a task started, by the kind of its run: the noun a count of them
  *  takes, in the order a summary lists them. */
@@ -49,7 +49,7 @@ export const NESTED_AGENT = {
 /** A collapsed parent's descendants in words: "2 agents · 1 running". */
 export function nestedRollupLabel(rollup: RunView['rollup']): string {
   const agents = formatResultCount(rollup.total, NESTED_AGENT.countNoun);
-  return rollup.running > 0 ? `${agents} · ${rollup.running} running` : agents;
+  return joinFacts([agents, rollup.running > 0 && `${rollup.running} running`]);
 }
 
 /** The dispatch card's heading over the counts of what it lists ("3 agents,

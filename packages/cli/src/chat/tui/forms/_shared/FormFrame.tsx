@@ -6,6 +6,7 @@ import { Text, useWindowSize } from 'ink';
 
 import {
   CLOSE_HINTS,
+  ENTER_OR_ESC_CLOSE_HINTS,
   KeyHints,
   type KeyHint,
   NAVIGATE_HINT,
@@ -136,8 +137,7 @@ export function PickerKeyHints(props: {
     <KeyHints
       hints={[
         ...(props.hasItems ? [NAVIGATE_HINT] : []),
-        { key: 'Enter', action: 'close' },
-        { key: 'Esc', action: 'close' },
+        ...ENTER_OR_ESC_CLOSE_HINTS,
       ]}
       confirmCancel={false}
     />

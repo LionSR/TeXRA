@@ -8,7 +8,6 @@
 import { Effect, Predicate, Result, SynchronizedRef, absurd } from 'effect';
 
 import {
-  blocksCaller,
   qualifyAggregateId,
   type RunId,
   type SessionRow,
@@ -354,10 +353,7 @@ export function makeRunHistory(
           );
           const cancels = cancelRequestRows(
             run,
-            Object.entries(before?.requests ?? {}).flatMap(
-              ([requestId, { decision, payload }]) =>
-                decision === null && blocksCaller(payload) ? [requestId] : [],
-            ),
+            before,
             'The process that asked exited.',
           );
           const rows: readonly SessionRowDraft[] = [

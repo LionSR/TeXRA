@@ -3,7 +3,11 @@
 // interrupted row says so; its one Resume is on the task's ended line, which
 // the row opens. `run-tabs` lays the rows out.
 import { String as Str } from 'effect';
-import { getBasename, formatResultCount } from '@texra-ai/harness/schemas';
+import {
+  getBasename,
+  formatResultCount,
+  joinFacts,
+} from '@texra-ai/harness/schemas';
 import {
   LitElement,
   html,
@@ -54,15 +58,13 @@ function buildTooltip(run: RunView, nowMs: number): string {
   const worktreeDisplay = worktree
     ? `Worktree: ${getBasename(worktree.workingDirectory)}`
     : undefined;
-  const mainLine = [
+  const mainLine = joinFacts([
     run.label,
     `Status: ${run.approval === 'none' ? runStatus(run).word : 'Needs approval'}`,
     run.rollup.total > 0 && nestedRollupLabel(run.rollup),
     modelDisplay && `Model: ${modelDisplay}`,
     worktreeDisplay,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  ]);
   const lastSeen = formatRelativeTime(run.lastTimestamp, nowMs);
   // No raw id: two parallel agents differ by title, model and time, and
   // the id is for bug reports ("Copy diagnostics").

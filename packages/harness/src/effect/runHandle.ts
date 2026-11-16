@@ -112,30 +112,47 @@ export function runView(
     new RunFailure({ cause, message });
   // The activation is over once its end or the next activation commits, or
   // once nothing here holds the run any more: an end that did not save, a
-  // session closing.
+  // session closing. The run's fiber, when it is what ended the wait, says
+  // what it failed on.
   const over = Effect.raceFirst(
     log.tail(activation).pipe(
       Stream.filter((row) => boundsLifecycle(row, runId)),
       Stream.runHead,
+      Effect.as(undefined),
     ),
     Effect.suspend(
-      () => Context.get(session, Runs).get(runId)?.drained ?? Effect.void,
+      () =>
+        Context.get(session, Runs).get(runId)?.drained ??
+        Effect.succeed(undefined),
     ),
   );
   // Read once the view applied it, so a view read afterwards includes it.
+  // A run with no end failed on what its fiber did (an end the store
+  // refused): the result says so, not only that the end is missing.
   const result = over.pipe(
-    Effect.andThen(log.settled),
-    Effect.andThen(() =>
-      getRunRecords(runId).readRunEnd(activation).pipe(Effect.provide(session)),
+    Effect.tap(() => log.settled),
+    Effect.flatMap((unsaved) =>
+      Effect.map(
+        getRunRecords(runId)
+          .readRunEnd(activation)
+          .pipe(Effect.provide(session)),
+        (end) => ({ end, unsaved }),
+      ),
     ),
     Effect.mapError((error) =>
       failure(`Run ${runId}'s end could not be read: ${error.message}`, error),
     ),
-    Effect.flatMap((end) =>
-      end === null
-        ? Effect.fail(failure(`Run ${runId} ended without a stored end.`))
-        : Effect.succeed(end),
-    ),
+    Effect.flatMap(({ end, unsaved }) => {
+      if (end !== null) return Effect.succeed(end);
+      return Effect.fail(
+        unsaved === undefined
+          ? failure(`Run ${runId} ended without a stored end.`)
+          : failure(
+              `Run ${runId} ended without a stored end: ${unsaved.message}`,
+              unsaved,
+            ),
+      );
+    }),
   );
   return {
     runId,

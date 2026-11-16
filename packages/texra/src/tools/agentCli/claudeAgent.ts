@@ -95,9 +95,7 @@ const ClaudeAgentInputSchema = Schema.Struct({
     description:
       "Reasoning effort; overrides the model's @effort suffix. Defaults to the user-configured effort (medium unless changed). A level the model lacks becomes the nearest one it has.",
   }),
-  session_id: Schema.optional(
-    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
-  ).annotate({
+  session_id: Schema.optional(Schema.NullOr(Schema.NonEmptyString)).annotate({
     description:
       'Continue an existing Claude Code session with a follow-up instruction, as its next turn. A session whose turn is still running refuses another until that turn is delivered.',
   }),

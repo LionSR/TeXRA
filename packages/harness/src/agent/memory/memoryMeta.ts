@@ -22,7 +22,7 @@ import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
  */
 const MemoryFileMetaSchema = Schema.Struct({
   /** Agent name that last modified this file. */
-  modifiedBy: Schema.String.check(Schema.isMinLength(1)),
+  modifiedBy: Schema.NonEmptyString,
   /** Run ID of the run that last modified this file. */
   runId: Schema.optional(Schema.String),
   /** ISO 8601 timestamp of last modification. */

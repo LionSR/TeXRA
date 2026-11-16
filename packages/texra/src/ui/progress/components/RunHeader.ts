@@ -11,7 +11,11 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import { acceptsFollowUp, resolveBypass } from '@texra-ai/harness/schemas';
+import {
+  acceptsFollowUp,
+  resolveBypass,
+  joinFacts,
+} from '@texra-ai/harness/schemas';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { CopyButtonController } from '@ui/litControllers/CopyButtonController';
 import type { IconName } from '@ui/wa/iconNames';
@@ -470,9 +474,7 @@ export class RunHeader extends LitElement {
             >Task actions</span
           ></wa-button
         >
-        <div class="menu-status">
-          ${statusLabel}${passLabel ? ` · ${passLabel}` : ''}
-        </div>
+        <div class="menu-status">${joinFacts([statusLabel, passLabel])}</div>
         ${
           canRename
             ? html`<wa-dropdown-item value=${RENAME_TASK}

@@ -386,7 +386,7 @@ export const GIT_MARK_COMMITS_SETTING = {
 export const GIT_AUTHOR_NAME_SETTING = {
   key: 'git.authorName',
   slot: 'repoState',
-  schema: Schema.UndefinedOr(Schema.String.check(Schema.isMinLength(1))),
+  schema: Schema.UndefinedOr(Schema.NonEmptyString),
   title: 'Agent commit author',
   description:
     'Author and committer name used for agent-authored commits when commit marking is enabled.',
@@ -396,7 +396,7 @@ export const GIT_AUTHOR_NAME_SETTING = {
 export const GIT_AUTHOR_EMAIL_SETTING = {
   key: 'git.authorEmail',
   slot: 'repoState',
-  schema: Schema.UndefinedOr(Schema.String.check(Schema.isMinLength(1))),
+  schema: Schema.UndefinedOr(Schema.NonEmptyString),
   title: 'Agent commit email',
   description:
     'Author and committer email used for agent-authored commits when commit marking is enabled.',
@@ -471,7 +471,7 @@ export const WEBSOCKET_OPENAI_SETTING = {
 export const HELPER_MODEL_SETTING = {
   key: 'helperModel',
   slot: 'globalState',
-  schema: Schema.UndefinedOr(Schema.String.check(Schema.isMinLength(1))),
+  schema: Schema.UndefinedOr(Schema.NonEmptyString),
   title: 'Helper model',
   description:
     "Model used for auxiliary tasks: instruction polishing, merges, and session descriptions. When unset, a run's helper calls use the run's own model.",

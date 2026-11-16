@@ -14,7 +14,7 @@ import {
   reportDiffTimeout,
 } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { absentReason } from '@texra-ai/harness/node';
+import { absentReason, readNormalizedFile } from '@texra-ai/harness/node';
 import {
   toErrorMessage,
   countLines,
@@ -43,10 +43,7 @@ const computeDiffStats = Effect.fn('documents.computeDiffStats')(
     FileSystem.FileSystem
   > {
     const fs = yield* FileSystem.FileSystem;
-    const read = (absolutePath: string) =>
-      fs
-        .readFileString(absolutePath)
-        .pipe(Effect.map((text: string) => text.replaceAll('\r\n', '\n')));
+    const read = (absolutePath: string) => readNormalizedFile(fs, absolutePath);
     if (!baseLocation) {
       const outContent = yield* read(outputLocation.absolutePath);
       return { added: countLines(outContent) };

@@ -16,7 +16,11 @@ import {
   withLogChannel,
   type AppSignals,
 } from '@texra-ai/harness/plugins';
-import { absentReason, entryTypeIn } from '@texra-ai/harness/node';
+import {
+  absentReason,
+  entryTypeIn,
+  readNormalizedFile,
+} from '@texra-ai/harness/node';
 import {
   toErrorMessage,
   type RunId,
@@ -229,8 +233,6 @@ export class ProgressDocumentTaskFileActionsController {
  */
 function readOutputFile(file: string) {
   return Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
-    Effect.map(fs.readFileString(file), (text) =>
-      text.replaceAll('\r\n', '\n'),
-    ),
+    readNormalizedFile(fs, file),
   );
 }

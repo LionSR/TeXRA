@@ -45,7 +45,7 @@ const ALLOWED_COMMANDS: ReadonlySet<string> = new Set([
 ]);
 
 const InvokeCommandInputSchema = Schema.Struct({
-  command: Schema.String.check(Schema.isMinLength(1)).annotate({
+  command: Schema.NonEmptyString.annotate({
     description: 'VS Code command ID (must be in the setup allowlist).',
   }),
   // Declared so a value is refused: a struct drops an undeclared key before

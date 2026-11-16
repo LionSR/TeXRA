@@ -5,7 +5,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { COMPACTION_ACTIVITY_TONE, statusGlyph } from '@ui/copy/runStatus';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { toneStyles } from '@ui/styles/toneStyles';
-import { stopSpinnerMotion } from '@ui/wa/spinner';
+import { waSpinner } from '@ui/wa/spinner';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type { CompactionActivityStatus } from '@texra-ai/harness/transcript';
 
@@ -63,11 +63,7 @@ export class CompactionActivity extends LitElement {
     >
       ${
         this.status === 'running'
-          ? html`<wa-spinner
-              class="icon"
-              aria-hidden="true"
-              ${stopSpinnerMotion()}
-            ></wa-spinner>`
+          ? waSpinner('icon')
           : waIcon(statusGlyph({ tone }), { className: 'icon' })
       }
       <span class="label">${this.label}</span>

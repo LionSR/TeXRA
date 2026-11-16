@@ -47,9 +47,9 @@ import { HostSnapshotSchema, type HostSnapshot } from './hostSnapshot';
 import { LaunchPatchSchema } from './surface';
 
 /** The workspace root that keys the layer maps, on every message. */
-const SessionKeySchema = Schema.String.check(Schema.isMinLength(1));
+const SessionKeySchema = Schema.NonEmptyString;
 const GenerationSchema = NonNegativeIntSchema;
-const RequestIdSchema = Schema.String.check(Schema.isMinLength(1));
+const RequestIdSchema = Schema.NonEmptyString;
 
 export type EventInput = typeof EventInputSchema.Type;
 

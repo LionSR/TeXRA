@@ -35,6 +35,7 @@ import { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import type { RunId, RunStopReason } from '@shared/schemas';
 import type { SessionLog } from '@shared/session/runHistory';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import type { LiveRun, RunControls, RunsShape } from './runs';
 import type { RunServices } from './ToolServices';
@@ -238,14 +239,18 @@ export class SessionRunRegistry implements RunsShape {
       return {
         runId,
         controls: entry.controls,
-        drained: Effect.asVoid(Fiber.await(entry.fiber)),
+        drained: Effect.map(Fiber.await(entry.fiber), (exit) =>
+          Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)
+            ? ensureError(exit.cause)
+            : undefined,
+        ),
       };
     if (entry?.kind !== 'opening') return undefined;
     // It drains once its launch answered and the fiber that launch forked,
     // if any, exited.
     const drained = Effect.flatMap(
       Deferred.await(entry.settled),
-      () => this.liveRun(runId)?.drained ?? Effect.void,
+      () => this.liveRun(runId)?.drained ?? Effect.succeed(undefined),
     );
     return { runId, controls: undefined, drained };
   }

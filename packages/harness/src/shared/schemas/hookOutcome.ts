@@ -37,12 +37,12 @@ export const HookOutcomePayloadSchema = Schema.Struct({
   /** The site the hook ran at (`PreToolUse:<call id>`, `Stop:<turn>`, …):
    *  every hook of one point commits in one batch, and a recorded point is
    *  never run again. */
-  point: Schema.String.check(Schema.isMinLength(1)),
+  point: Schema.NonEmptyString,
   event: HookEventSchema,
   /** The contributing installed plugin's id (`plugin:<name>`). */
-  plugin: Schema.String.check(Schema.isMinLength(1)),
+  plugin: Schema.NonEmptyString,
   /** The handler's position in the plugin's hook configuration. */
-  hook: Schema.String.check(Schema.isMinLength(1)),
+  hook: Schema.NonEmptyString,
   durationMs: NonNegativeIntSchema,
   status: HookStatusSchema,
   exitCode: Schema.NullOr(Schema.Int),

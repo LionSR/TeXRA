@@ -33,7 +33,7 @@ const AggregateKindSchema = Schema.Literals(['run', 'plugin']);
 export type AggregateKind = typeof AggregateKindSchema.Type;
 const AggregateKeySchema = Schema.Tuple([
   AggregateKindSchema,
-  Schema.String.check(Schema.isMinLength(1)),
+  Schema.NonEmptyString,
 ]).check(
   Schema.makeFilter(([kind, id]) => kind !== 'run' || isRunId(id), {
     message: 'A run aggregate is keyed by a run id',

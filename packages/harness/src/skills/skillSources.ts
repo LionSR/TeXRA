@@ -92,18 +92,8 @@ interface SkillSourceCall {
   readonly plugins: readonly LoadablePlugin[];
 }
 
-interface SkillRoot {
-  readonly path: string;
-  readonly label: string;
-  readonly required?: true;
-  /** The plugin that ships these skills: a tool plugin's id, or an
-   *  installed plugin's (`plugin:<name>`). */
-  readonly plugin?: string;
-  /** The installed plugin whose name prefixes the skills' names. */
-  readonly namespace?: string;
-  /** `path` is one command file (`commands/<name>.md`), not a skill root. */
-  readonly command?: true;
-}
+/** A source before its tier gives it a scope. */
+type SkillRoot = Omit<SkillSource, 'scope'>;
 
 /**
  * One producer of skill roots: a stable id, the tier it lands in, and its
@@ -277,17 +267,7 @@ export function foldSkillSources(
         }
         seen.set(key, {
           tier: index,
-          source: {
-            scope: tier.scope,
-            path: key,
-            label: root.label,
-            ...(root.required === true ? { required: true } : {}),
-            ...(root.plugin === undefined ? {} : { plugin: root.plugin }),
-            ...(root.namespace === undefined
-              ? {}
-              : { namespace: root.namespace }),
-            ...(root.command === undefined ? {} : { command: root.command }),
-          },
+          source: { ...root, scope: tier.scope, path: key },
         });
       }
     }

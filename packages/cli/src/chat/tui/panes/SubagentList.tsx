@@ -31,7 +31,7 @@ import {
 } from '../state/approvalQueue';
 import { useSignal } from '../state/useSignal';
 import type { RunId, RunView } from '@texra-ai/harness/schemas';
-import { formatResultCount } from '@texra-ai/harness/schemas';
+import { formatResultCount, FACT_SEPARATOR } from '@texra-ai/harness/schemas';
 
 const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
 
@@ -71,7 +71,10 @@ function ApprovalSegments({
   return (
     <>
       <Box flexShrink={0}>
-        <Text bold={bold} color={color}>{` · ${approval.label}`}</Text>
+        <Text
+          bold={bold}
+          color={color}
+        >{`${FACT_SEPARATOR}${approval.label}`}</Text>
       </Box>
       {approval.overflow ? (
         <RowSegment bold={bold} color={color} flexShrink={3}>
@@ -141,9 +144,9 @@ function SessionRow({
       <RowSegment bold={active} color={color} flexShrink={1}>
         {run.label}
         {statusLabel ? ` ${statusLabel}` : ''}
-        {positionLabel ? ` · ${positionLabel}` : ''}
-        {modelLabel ? ` · ${modelLabel}` : ''}
-        {!metadataColumn && elapsed ? ` · ${elapsed}` : ''}
+        {positionLabel ? `${FACT_SEPARATOR}${positionLabel}` : ''}
+        {modelLabel ? `${FACT_SEPARATOR}${modelLabel}` : ''}
+        {!metadataColumn && elapsed ? `${FACT_SEPARATOR}${elapsed}` : ''}
       </RowSegment>
       {rollup ? (
         <RowSegment color={color} flexShrink={metadataColumn ? 0 : 1}>
@@ -152,13 +155,13 @@ function SessionRow({
       ) : null}
       {summary ? (
         <RowSegment dimColor flexShrink={2}>
-          {` · ${truncateSummaryToWidth(summary, SUBAGENT_SUMMARY_MAX_COLUMNS)}`}
+          {`${FACT_SEPARATOR}${truncateSummaryToWidth(summary, SUBAGENT_SUMMARY_MAX_COLUMNS)}`}
         </RowSegment>
       ) : null}
       <ApprovalSegments approval={approval} />
       {focused && hiddenRowSummary ? (
         <RowSegment dimColor flexShrink={4}>
-          {` · ${hiddenRowSummary}`}
+          {`${FACT_SEPARATOR}${hiddenRowSummary}`}
         </RowSegment>
       ) : null}
       {metadataText ? (

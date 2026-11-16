@@ -94,12 +94,11 @@ layer(SessionGraph.hosted)(
                 remove: () => Effect.void,
                 // The model's copy the revision kept, and the file the user
                 // changed before accepting.
-                readFileString: (path) =>
+                readFile: () =>
                   Effect.succeed(
-                    /[/\\]model[/\\]r0[/\\]/.test(path)
-                      ? 'original model output\n'
-                      : 'user edited output\n',
+                    new TextEncoder().encode('original model output\n'),
                   ),
+                readFileString: () => Effect.succeed('user edited output\n'),
               }),
               AppSignals.layer,
             ),

@@ -239,7 +239,8 @@ Ousterhout's flags and their status. At main `ca1431e` (after #14796,
 - 93 landed;
 - 123 assigned;
 - 6 refused;
-- 3 open, all held by the owner with #14773.
+- 3 open, all held by the owner with #14773 (superseded by #14940 on
+  2026-11-14, whose note says where each goes).
 
 The flags that cluster in one package point to one cause each:
 

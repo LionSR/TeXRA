@@ -231,7 +231,7 @@ export const updateCliModelAccess = Effect.fn(
   options: CliSubscriptionLoginOptions = { writeProgress: () => undefined },
 ) {
   const codingPlan = codingPlanSubscriptionRuntimes.find(
-    (runtime) => runtime.descriptor.cliProvider === selection.provider,
+    (runtime) => runtime.descriptor.id === selection.provider,
   );
   if (codingPlan) {
     return yield* updateKeyedCliModelAccess(stores, selection, codingPlan);

@@ -51,8 +51,8 @@ const [KIMI_CODE_PLAN, GLM_CODING_PLAN] = CODING_PLAN_SUBSCRIPTIONS;
 
 /** Each subscription's catalog plan, by the provider that reports its usage. */
 const PLAN_BY_PROVIDER = {
-  [KIMI_CODE_PLAN.usageProvider]: KIMI_CODE_PLAN,
-  [GLM_CODING_PLAN.usageProvider]: GLM_CODING_PLAN,
+  [KIMI_CODE_PLAN.id]: KIMI_CODE_PLAN,
+  [GLM_CODING_PLAN.id]: GLM_CODING_PLAN,
 } satisfies Record<SubscriptionUsageProvider, CodingPlanSubscription>;
 
 /** The setting slots this service reads; credentials come from the process

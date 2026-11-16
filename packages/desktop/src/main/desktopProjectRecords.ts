@@ -26,8 +26,8 @@ const EMPTY: ProjectLists = { remembered: [], recent: [] };
 export const DESKTOP_PROJECTS: ValueFamily<ProjectLists> = {
   name: 'desktop-projects',
   schema: Schema.Struct({
-    remembered: Schema.Array(Schema.String.check(Schema.isMinLength(1))),
-    recent: Schema.Array(Schema.String.check(Schema.isMinLength(1))),
+    remembered: Schema.Array(Schema.NonEmptyString),
+    recent: Schema.Array(Schema.NonEmptyString),
   }),
 };
 

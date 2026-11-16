@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { hostFailed } from '@texra/controllers/session/hostCallFailure';
 import {
   HostFailed,
   type ConfirmQuestion,
@@ -167,12 +167,7 @@ class VscodeUiHost implements Dialogs {
           { detail: options.detail, modal: options.modal },
           ...items,
         ),
-      catch: (cause) =>
-        new HostFailed({
-          member: `window.show ${level} message`,
-          message: toErrorMessage(cause),
-          cause,
-        }),
+      catch: (cause) => hostFailed(`window.show ${level} message`, cause),
     }).pipe(
       Effect.map(
         (selected) =>

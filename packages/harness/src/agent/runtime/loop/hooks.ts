@@ -16,6 +16,7 @@ import {
   Clock,
   Effect,
   FileSystem,
+  Order,
   Result,
   Schema,
   ScopedRef,
@@ -253,7 +254,7 @@ export function stepHooks(
   held: readonly string[] | null,
 ) {
   const current = [...installed]
-    .toSorted(([a], [b]) => Number(a > b) - Number(a < b))
+    .toSorted(([a], [b]) => Order.String(a, b))
     .flatMap(([plugin, { record, plugin: resolved, trust }]) =>
       resolved.hooks.hooks.map((hook): StepHook => ({
         plugin,

@@ -161,7 +161,7 @@ export const FollowUpRequestSchema = Schema.Struct({
       Schema.Struct({ kind: Schema.Literal('compact') }),
       Schema.Struct({
         kind: Schema.Literal('model'),
-        model: Schema.String.check(Schema.isMinLength(1)),
+        model: Schema.NonEmptyString,
       }),
     ]),
   ),
@@ -197,7 +197,7 @@ const ResumeBlockedSchema = Schema.Struct({
   kind: Schema.Literal('blocked'),
   blocker: Schema.Literals(['agentMissing', 'pluginOff', 'pluginUntrusted']),
   /** The agent or plugin it names. */
-  name: Schema.String.check(Schema.isMinLength(1)),
+  name: Schema.NonEmptyString,
 });
 /** What a blocked resume waits for ({@link ResumeBlockedSchema}). */
 export type ResumeBlocked = typeof ResumeBlockedSchema.Type;
