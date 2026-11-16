@@ -109,6 +109,11 @@ layer(SessionGraph.hosted)(
             Layer.merge(
               FileSystem.layerNoop({
                 exists: () => Effect.succeed(true),
+                realPath: (absolutePath) => Effect.succeed(absolutePath),
+                // cast: the accept reads only the target's mode.
+                stat: () =>
+                  Effect.succeed({ mode: 0o644 } as FileSystem.File.Info),
+                chmod: () => Effect.void,
                 writeFileString: () => Effect.void,
                 rename: () => Effect.void,
                 remove: () => Effect.void,

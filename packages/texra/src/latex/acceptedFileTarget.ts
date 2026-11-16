@@ -1,4 +1,5 @@
 // Node imports
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import {
   normalizeFilePath,
@@ -16,7 +17,6 @@ import {
   createWorkspaceLocation,
   withFileWriteLane,
 } from '@texra-ai/harness/host';
-import { writeFileAtomic } from '@texra-ai/harness/node';
 import {
   withLogChannel,
   WorkspaceFs,
@@ -173,13 +173,34 @@ const commitAcceptedFile = Effect.fn('commitAcceptedFile')(function* <E>(
   // meanwhile (the user's editor, a run) is not replaced on that answer.
   // The check and the write hold the file's write lane, shared with every
   // other writer that reads, decides and writes it (an approved edit, the
-  // desktop editor's save). The replace is atomic, so a write that fails
-  // partway leaves the user's file as it was; it lands where a symlinked
-  // target points and keeps the file's mode.
+  // desktop editor's save). The new content is staged beside the file and
+  // renamed over it, so a write that fails partway leaves the user's file as
+  // it was. An existing target is replaced where a symlink points, with the
+  // mode it had.
   const written = yield* Effect.gen(function* () {
-    if ((yield* contentOrMissing(fs, targetPath)) !== confirmedAgainst)
-      return false;
-    yield* writeFileAtomic(targetPath, new TextEncoder().encode(editedContent));
+    const current = yield* contentOrMissing(fs, targetPath);
+    if (current !== confirmedAgainst) return false;
+    const real =
+      current === undefined ? targetPath : yield* fs.realPath(targetPath);
+    const mode =
+      current === undefined ? undefined : (yield* fs.stat(real)).mode & 0o7777;
+    const staged = path.join(
+      path.dirname(real),
+      `.${path.basename(real)}.${randomUUID()}.tmp`,
+    );
+    yield* fs.writeFileString(staged, editedContent).pipe(
+      Effect.andThen(mode === undefined ? Effect.void : fs.chmod(staged, mode)),
+      Effect.andThen(fs.rename(staged, real)),
+      Effect.onError(() =>
+        fs.remove(staged, { force: true }).pipe(
+          Effect.ignore({
+            log: 'Warn',
+            message: `A staged accept file stays behind: ${staged}`,
+          }),
+        ),
+      ),
+      Effect.uninterruptible,
+    );
     return true;
   }).pipe(withFileWriteLane(targetPath));
   if (!written) {
