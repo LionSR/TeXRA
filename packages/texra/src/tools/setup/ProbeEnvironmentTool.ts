@@ -24,6 +24,7 @@ import {
   Secrets,
   withLogChannel,
 } from '@texra-ai/harness/plugins';
+import { probeLatexTools } from '@latex/latexToolchain';
 import { EditorIntegration } from '@texra/hosts/editorIntegration';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import {
@@ -137,9 +138,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
     // full report names a missing image tool; the agent naturally reuses
     // that token.
     if (name === IMAGE_TOOL_LABEL) {
-      const images = yield* Effect.all(IMAGE_LATEX_TOOLS.map(locateTool), {
-        concurrency: 'unbounded',
-      });
+      const { tools: images } = yield* probeLatexTools(IMAGE_LATEX_TOOLS);
       const found = images.find((tool) => tool.installed);
       return executed(
         found
@@ -191,9 +190,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
     storedKeys,
   ] = yield* Effect.all(
     [
-      Effect.all(PROBED_LATEX_TOOLS.map(locateTool), {
-        concurrency: 'unbounded',
-      }),
+      Effect.map(probeLatexTools(PROBED_LATEX_TOOLS), ({ tools }) => tools),
       Effect.all(
         OPTIONAL_TOOLS.map((name) => locateTool(name)),
         { concurrency: 'unbounded' },
@@ -251,9 +248,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
     { concurrency: 'unbounded' },
   );
 
-  const missing = missingLatexTools(
-    coreTools.map((tool) => [tool.name, tool.installed] as const),
-  );
+  const missing = missingLatexTools(coreTools);
   // One entry for the image capability: either tool satisfies it.
   const missingCore = [
     ...missing.filter((tool) => !tool.interchangeable).map((tool) => tool.name),

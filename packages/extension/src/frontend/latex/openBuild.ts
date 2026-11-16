@@ -19,12 +19,11 @@ import {
   type Scope,
 } from 'effect';
 
-import { withSessionFs, pathToLocationIn } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
-import { compileLatex2Pdf } from '@latex/texTools';
+import { compileForDisplay } from '@texra/controllers/approval/latexPreview';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 
 // Local imports - utilities
@@ -123,7 +122,8 @@ export const invokeLatexWorkshopBuild = (
  *
  * Workspace TeX files are built through LaTeX Workshop rather than the
  * internal compiler. A `latex-workshop.build` failure is only warn-logged:
- * LaTeX Workshop shows its own build-failure UI in the editor.
+ * LaTeX Workshop shows its own build-failure UI in the editor. A failed
+ * internal compile is shown as an error notification.
  */
 export const openBuilt = Effect.fn('openBuild.openBuilt')(function* (
   roots: WorkspaceRoots,
@@ -232,9 +232,9 @@ const prepareFileForDisplay = Effect.fn('openBuild.prepareFileForDisplay')(
  * Files inside the workspace are compiled via LaTeX Workshop so the user
  * gets the full editor integration (synctex, diagnostics, etc.).
  *
- * Files outside the workspace (e.g. in run-storage) are compiled with the
- * internal `compileLatex2Pdf` helper which sets TEXINPUTS to include the
- * workspace root, ensuring project-local .sty / .cls / .bib files are found.
+ * Files outside the workspace (e.g. in run-storage) are compiled by the
+ * app's `compileForDisplay`, which sets TEXINPUTS to include the workspace
+ * root, ensuring project-local .sty / .cls / .bib files are found.
  */
 const prepareLatexBuild = Effect.fn('openBuild.prepareLatexBuild')(function* (
   roots: WorkspaceRoots,
@@ -250,30 +250,16 @@ const prepareLatexBuild = Effect.fn('openBuild.prepareLatexBuild')(function* (
   }
 
   // Outside workspace — LaTeX Workshop cannot resolve project-local
-  // packages, so compile internally with TEXINPUTS set.
-  // Resolve the same outDir that LaTeX Workshop uses so the viewer finds the PDF.
+  // packages, so compile internally with TEXINPUTS set, into the outDir
+  // LaTeX Workshop uses so the viewer finds the PDF. A failure is shown, and
+  // the files after this one are still shown.
   const outDir = resolveLatexWorkshopOutDir(uri.fsPath, roots.workspace);
-  const compiled = yield* withSessionFs(
-    roots,
-    compileLatex2Pdf(pathToLocationIn(roots.workspace, uri.fsPath), roots, {
-      outputDirectory: outDir,
-    }),
+  return yield* compileForDisplay(roots, fileLocation, outDir).pipe(
+    Effect.as(true),
+    Effect.catchTag('DisplayCompileFailed', (failed) =>
+      showLoggedMessage(failed.message).pipe(Effect.as(false)),
+    ),
   );
-  if (!compiled.ok) {
-    // Include the tail in the visible message itself, not just structured
-    // data, because this failure must be visible at the default log level.
-    yield* Effect.logWarning(
-      `Internal LaTeX compilation failed for ${uri.fsPath}:\n${compiled.logTail}`,
-    ).pipe(
-      Effect.annotateLogs({
-        data: { sourceFile: uri.fsPath, logTail: compiled.logTail },
-      }),
-      withLogChannel(CHANNEL),
-    );
-    return false;
-  }
-
-  return true;
 });
 
 /**

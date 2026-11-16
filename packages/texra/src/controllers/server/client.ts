@@ -10,7 +10,7 @@
  * protocol is left running and refused, and the caller stays in process.
  */
 import { spawn } from 'node:child_process';
-import { closeSync, openSync } from 'node:fs';
+import { closeSync, existsSync, openSync } from 'node:fs';
 import { join } from 'node:path';
 
 import * as NodeSocket from '@effect/platform-node/NodeSocket';
@@ -44,6 +44,7 @@ import { nodeFileServices } from '@texra-ai/harness/node';
 import {
   prepareServiceDirectories,
   readServiceRecord,
+  SERVICE_SUBCOMMAND,
   serviceRecordChanges,
   servicePaths,
 } from './discovery';
@@ -344,6 +345,36 @@ export function spawnService(
   }).pipe(Effect.mapError(ensureError), Effect.provide(nodeFileServices));
   return { storageRoot, start };
 }
+
+/**
+ * Hold the service of `storageRoot` for the caller's scope, as
+ * {@link linkService} does, starting it when none answers from the headless
+ * bundle a GUI host ships under `resourcesRoot` (`serve/texra-serve.mjs`),
+ * run with the host's own Electron as Node. A build without the bundle fails,
+ * naming where it looked.
+ */
+export const reachBundledService = (
+  storageRoot: string,
+  resourcesRoot: string,
+): Effect.Effect<ServiceLink, Error, Scope.Scope | GlobalValues> =>
+  Effect.suspend(() => {
+    const bundle = join(resourcesRoot, 'serve', 'texra-serve.mjs');
+    if (!existsSync(bundle))
+      return Effect.fail(
+        new Error(`this build has no service bundle at ${bundle}`),
+      );
+    return linkService(
+      spawnService(
+        storageRoot,
+        process.execPath,
+        [bundle, SERVICE_SUBCOMMAND],
+        {
+          ELECTRON_RUN_AS_NODE: '1',
+        },
+      ),
+      Effect.logWarning,
+    );
+  });
 
 /**
  * Ask the service on `socket` to stop (now, or once its running tasks end

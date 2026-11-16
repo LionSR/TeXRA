@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+
 import { Cause, Effect, Exit, Scope } from 'effect';
 import { app, BrowserWindow, dialog, session } from 'electron';
 
@@ -8,6 +10,7 @@ import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { HostFailed } from '@texra/hosts/uiHosts';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
+import { reachBundledService } from '@texra/controllers/server/client';
 import {
   DesktopProjectRecords,
   openDesktopProjectRecords,
@@ -23,7 +26,6 @@ import {
   readRememberedDesktopProjects,
   type DesktopProjectRegistry,
 } from './desktopProjects.js';
-import { reachDesktopService } from './desktopService.js';
 import { openDesktopWindow } from './desktopWindow.js';
 import { installDesktopBeforeQuitWiring } from './desktopWindowLifecycle.js';
 import { createDesktopWindows } from './desktopWindows.js';
@@ -139,10 +141,14 @@ void Effect.runPromise(
         // The app is a client of the one background service, so a
         // folder's tasks keep running when it quits and other windows and
         // terminals see them. An app that cannot reach it runs them here,
-        // and each folder's window says so (`openProjectSession`).
-        const service = yield* reachDesktopService(
+        // and each folder's window says so (`openProjectSession`). The
+        // service bundle is the packaged app's (`Resources/serve/`, beside
+        // its `resources/`), or the extension build's in a development run.
+        const service = yield* reachBundledService(
           platformInit.dataRoot,
-          platformInit.mainDir,
+          app.isPackaged
+            ? process.resourcesPath
+            : path.join(platformInit.mainDir, '../../../extension'),
         ).pipe(Scope.provide(processScope), Effect.result);
         const registry = yield* openDesktopProjectRegistry({
           service,

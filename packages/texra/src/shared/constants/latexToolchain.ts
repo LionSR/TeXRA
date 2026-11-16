@@ -188,9 +188,10 @@ interface LatexToolEntry {
 /**
  * The one catalog of external LaTeX and image dependencies TeXRA runs, how
  * each is probed and installed, and what each one means to each consumer that
- * probes it. The runner (`@texra/utils/system/toolChecks`) and four surfaces
- * read it and none restates a name: the doctor probe (`@latex/latexToolchain`), the
- * setup assistant's (`@texra/tools/setup/toolProbing`), the settings view's LaTeX
+ * probes it. The runner (`@texra/utils/system/toolChecks`) and the one probe
+ * (`probeLatexTools` in `@latex/latexToolchain`) read it, and so do the four
+ * surfaces that report from that probe, none restating a name: the doctor,
+ * the setup assistant (`probe_environment`), the settings view's LaTeX
  * status (`@texra/controllers/settingsView/LatexToolingController`), and the
  * dependency banner (`checkCoreDependencies` in
  * `packages/extension/src/progressView/checkCoreDependencies.ts`).
@@ -494,20 +495,21 @@ interface MissingLatexTool<T extends string> {
 }
 
 /**
- * The missing tools among `probed` (each tool with whether it is installed).
- * Either image tool satisfies the image capability, so the image tools are
- * missing only when none of them is installed, and then all are reported,
- * marked interchangeable.
+ * The missing tools among `probed`. Either image tool satisfies the image
+ * capability, so the image tools are missing only when none of them is
+ * installed, and then all are reported, marked interchangeable.
  */
 export function missingLatexTools<T extends string>(
-  probed: readonly (readonly [T, boolean])[],
+  probed: readonly { readonly name: T; readonly installed: boolean }[],
 ): MissingLatexTool<T>[] {
   const missing = probed
-    .filter(([name, installed]) => !installed && !IMAGE_TOOL_NAMES.has(name))
-    .map(([name]) => ({ name, interchangeable: false }));
-  const images = probed.filter(([name]) => IMAGE_TOOL_NAMES.has(name));
-  if (images.length > 0 && !images.some(([, installed]) => installed)) {
-    missing.push(...images.map(([name]) => ({ name, interchangeable: true })));
+    .filter(({ name, installed }) => !installed && !IMAGE_TOOL_NAMES.has(name))
+    .map(({ name }) => ({ name, interchangeable: false }));
+  const images = probed.filter(({ name }) => IMAGE_TOOL_NAMES.has(name));
+  if (images.length > 0 && !images.some(({ installed }) => installed)) {
+    missing.push(
+      ...images.map(({ name }) => ({ name, interchangeable: true })),
+    );
   }
   return missing;
 }

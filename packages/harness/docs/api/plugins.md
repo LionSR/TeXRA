@@ -119,7 +119,7 @@ interface AgentBlockResult<R = unknown> {
 
 Agent-general SDK surface. Every method ultimately reduces to `emit()` so
 the trace channel is a single source of truth. App-specific helpers are
-plain functions over this interface (see `helpers.ts`).
+plain functions over this interface (see `traceLogs.ts`).
 
 ```ts
 interface AgentTrace {
@@ -1050,6 +1050,8 @@ Sugar passed to debug/info/warn/error.
 
 ```ts
 interface LogOptions {
+  /** The payload the log row stores as JSON; a `Cause` stores as the error
+   *  it raised. */
   readonly data?: unknown;
   /** The row's category; subscribers pick a render style from it. */
   readonly messageType?: MessageType;

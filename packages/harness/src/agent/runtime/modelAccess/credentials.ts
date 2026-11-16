@@ -33,7 +33,7 @@ type SessionRoute = Extract<CredentialRoute, { kind: 'session' }>['plan'];
  * or a session's token, which llm reads per request and renews once when
  * the provider rejects it.
  */
-export type RouteCredential = {
+type RouteCredential = {
   readonly provider: ApiKeyProviderId;
 } & (
   | { readonly route: 'api-key'; readonly bearer: string }

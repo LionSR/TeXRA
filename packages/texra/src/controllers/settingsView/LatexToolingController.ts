@@ -4,7 +4,7 @@ import { Cause, Effect } from 'effect';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { CommandDirs } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { findCommand } from '@texra/utils/system/binaryResolver';
+import { probeLatexTools } from '@latex/latexToolchain';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   type LatexSettingsStatus,
@@ -19,10 +19,7 @@ import {
   SCOOP_INSTALL_COMMAND,
   type LatexDependency,
 } from '@texra/shared/constants/latexToolchain';
-import {
-  detectPackageManager,
-  probeTool,
-} from '@texra/utils/system/toolChecks';
+import { detectPackageManager } from '@texra/utils/system/toolChecks';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { OsPlatformSchema, osPlatformOf } from '@texra/shared/osPlatform';
 
@@ -58,31 +55,11 @@ export function detectLatexSettingsStatus(
       latexWorkshopInstalled: host.installed(LATEX_WORKSHOP_EXT_ID),
       recommended: host.recommendedSettings(),
     };
-    const probes = yield* Effect.all(
-      PROBED_LATEX_TOOLS.map((tool) =>
-        Effect.map(probeTool(tool), (isInstalled) => ({ tool, isInstalled })),
-      ),
-      { concurrency: 'unbounded' },
-    );
-    const installedTools = new Set(
-      probes.flatMap(({ tool, isInstalled }) => (isInstalled ? [tool] : [])),
-    );
+    const { tools, installed: installedTools } =
+      yield* probeLatexTools(PROBED_LATEX_TOOLS);
     // Perl backs latexindent but is never shown with a path of its own.
-    const commandPath = (name: string) =>
-      Effect.map(findCommand(name), (found) => found?.resolvedPath ?? null);
-    const { gm, magick, ...toolPaths } = yield* Effect.all(
-      {
-        pdflatexPath: commandPath('pdflatex'),
-        latexmkPath: commandPath('latexmk'),
-        latexdiffPath: commandPath('latexdiff'),
-        latexindentPath: commandPath('latexindent'),
-        texcountPath: commandPath('texcount'),
-        ghostscriptPath: commandPath('gs'),
-        gm: commandPath('gm'),
-        magick: commandPath('magick'),
-      },
-      { concurrency: 'unbounded' },
-    );
+    const pathOf = (name: (typeof PROBED_LATEX_TOOLS)[number]) =>
+      tools.find((tool) => tool.name === name)?.path ?? null;
     // cast: the entries are keyed by every dependency, one each.
     const installed = Object.fromEntries(
       Object.entries(LATEX_DEPENDENCIES).map(([id, { needs }]) => [
@@ -94,8 +71,13 @@ export function detectLatexSettingsStatus(
       editor: editor ?? null,
       installed,
       platform,
-      ...toolPaths,
-      graphicsmagickPath: gm ?? magick,
+      pdflatexPath: pathOf('pdflatex'),
+      latexmkPath: pathOf('latexmk'),
+      latexdiffPath: pathOf('latexdiff'),
+      latexindentPath: pathOf('latexindent'),
+      texcountPath: pathOf('texcount'),
+      ghostscriptPath: pathOf('gs'),
+      graphicsmagickPath: pathOf('gm') ?? pathOf('magick'),
       packageManager: detectPackageManager((yield* CommandDirs)()),
     } satisfies LatexSettingsStatus;
   }).pipe(
