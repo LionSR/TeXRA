@@ -9,8 +9,8 @@
  *   validate its export across the ESM/CJS interop shapes esbuild can produce.
  * - `resolveBinary()` — the 4-strategy native-binary probe, plus the identical
  *   Electron-detection and path-existence helpers it needs.
- * - `createCachedBinaryResolver()` — a process-lifetime cache around
- *   `resolveBinary`.
+ * - `findCliBinary()` — `resolveBinary` with a found path kept for the
+ *   process.
  *
  * NOTE: the `await import('<specifier>')` that loads each SDK stays inline in
  * the tool files on purpose — esbuild only rewrites dynamic `import()` to
@@ -21,10 +21,14 @@
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 
-import { Duration, Effect, Exit, FileSystem, Predicate } from 'effect';
+import { Context, Effect, FileSystem, Predicate } from 'effect';
 import which from 'which';
 
-import { isModuleNotFoundError } from '@texra-ai/harness/host';
+import {
+  isModuleNotFoundError,
+  withPerKeyLane,
+  type PerKeyLane,
+} from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { executeCommand, withExtendedPath } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
@@ -132,8 +136,7 @@ export function importForeignSdk<M, K extends keyof M & string>(opts: {
 interface ResolveBinaryConfig {
   /**
    * npm platform package names to probe for the current platform/arch (e.g.
-   * `['@anthropic-ai/claude-agent-sdk-linux-x64']`). Empty/undefined means the
-   * platform is unsupported and resolution returns `undefined`.
+   * `['@anthropic-ai/claude-agent-sdk-linux-x64']`).
    */
   readonly platformPackages: readonly string[];
   /**
@@ -159,7 +162,7 @@ interface ResolveBinaryConfig {
 /**
  * Resolve a native CLI binary via the shared 4-stage probe. Returns the
  * resolved path, or `undefined` to let the caller fall back to its own
- * resolution. Caching is handled by {@link createCachedBinaryResolver}.
+ * resolution. {@link findCliBinary} keeps a found path.
  */
 const resolveBinary = Effect.fn('vendorPackages.resolveBinary')(function* (
   config: ResolveBinaryConfig,
@@ -168,8 +171,6 @@ const resolveBinary = Effect.fn('vendorPackages.resolveBinary')(function* (
   never,
   ChildProcessSpawner | FileSystem.FileSystem
 > {
-  if (config.platformPackages.length === 0) return undefined;
-
   // Strategy 1: packaged Electron app.asar.unpacked resources
   // Highest priority when present — packaged apps cannot execute binaries
   // from inside app.asar.
@@ -234,50 +235,45 @@ const resolveBinary = Effect.fn('vendorPackages.resolveBinary')(function* (
   );
 });
 
+/** Found binary paths by PATH command name, kept for the process: a probe
+ *  spawns `npm prefix -g`. A miss is not kept, so a CLI installed meanwhile
+ *  is found by the next lookup. */
+const FoundCliBinaries = Context.Reference(
+  '@texra-ai/texra/tools/agentCli/FoundCliBinaries',
+  { defaultValue: () => new Map<string, string>() },
+);
+const cliBinaryLanes = new Map<string, PerKeyLane>();
+
 /**
- * Wrap a process-lifetime cache around {@link resolveBinary}. The returned program
- * caches a resolved path for the process lifetime but keeps a miss or a
- * failure for no time (so a mid-session `npm install -g` is picked up).
- * Callers racing on a probe share it instead of each spawning
- * `npm prefix -g`.
- *
- * `buildConfig` returns the {@link ResolveBinaryConfig} for the current
- * platform, or `undefined` when the platform is unsupported — in which case the
- * resolver short-circuits to `undefined` without probing.
+ * The binary {@link resolveBinary} finds for `config`, kept for the process
+ * once found. One probe per command at a time: callers racing on a miss
+ * queue behind the first probe and read the path it kept instead of each
+ * spawning `npm prefix -g`.
  */
-export function createCachedBinaryResolver(
-  buildConfig: () => ResolveBinaryConfig | undefined,
-): () => Effect.Effect<
-  string | undefined,
-  Error,
-  ChildProcessSpawner | FileSystem.FileSystem
-> {
-  const lookup = Effect.suspend(() => {
-    const config = buildConfig();
-    return config ? resolveBinary(config) : Effect.succeed(undefined);
-  }).pipe(
-    // The probe steps are plain synchronous calls (Node module resolution,
-    // the PATH extension, `which.sync`); one that throws is a
-    // failed lookup the caller reports, not a crash of the calling fiber.
-    Effect.catchDefect((defect) => Effect.fail(ensureError(defect))),
-  );
-  // Made by the first call: the shared computation has no synchronous
-  // constructor, and the resolvers are module constants.
-  let shared: typeof lookup | undefined;
-  return () =>
-    Effect.suspend(
-      () =>
-        shared ??
-        Effect.map(
-          Effect.cachedWithTTL(lookup, (exit) =>
-            Exit.isSuccess(exit) && exit.value !== undefined
-              ? Duration.infinity
-              : Duration.zero,
-          ),
-          (made) => (shared ??= made),
-        ).pipe(Effect.flatten),
+export const findCliBinary = Effect.fn('vendorPackages.findCliBinary')(
+  function* (
+    config: ResolveBinaryConfig,
+  ): Effect.fn.Return<
+    string | undefined,
+    Error,
+    ChildProcessSpawner | FileSystem.FileSystem
+  > {
+    const found = yield* FoundCliBinaries;
+    return yield* Effect.gen(function* () {
+      const kept = found.get(config.pathCommand);
+      if (kept !== undefined) return kept;
+      const binary = yield* resolveBinary(config);
+      if (binary !== undefined) found.set(config.pathCommand, binary);
+      return binary;
+    }).pipe(
+      // The probe steps are plain synchronous calls (Node module resolution,
+      // the PATH extension, `which.sync`); one that throws is a failed
+      // lookup the caller reports, not a crash of the calling fiber.
+      Effect.catchDefect((defect) => Effect.fail(ensureError(defect))),
+      withPerKeyLane(cliBinaryLanes, config.pathCommand),
     );
-}
+  },
+);
 
 /**
  * Directory of `pkg` as Node module resolution finds it from `baseDir`, or

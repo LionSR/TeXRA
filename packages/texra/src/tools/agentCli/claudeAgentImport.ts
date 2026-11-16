@@ -17,9 +17,11 @@
 
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
+
 import {
   binaryIfPresent,
-  createCachedBinaryResolver,
+  findCliBinary,
   importForeignSdk,
 } from './vendorPackages';
 
@@ -88,12 +90,12 @@ const CLAUDE_BINARY_NAME =
  * SDK's `query()` options. Returning `undefined` lets the SDK fall back to
  * its own resolution.
  */
-export const findClaudeBinaryPath = createCachedBinaryResolver(() => {
+export function findClaudeBinaryPath() {
   const platformPackages =
     PLATFORM_PACKAGES[`${process.platform}-${process.arch}`];
-  if (!platformPackages) return undefined;
+  if (!platformPackages) return Effect.succeed(undefined);
 
-  return {
+  return findCliBinary({
     platformPackages,
     // The platform binary sits directly in the platform-package directory.
     binaryInPlatformPackage: (platformPkgDir) =>
@@ -111,5 +113,5 @@ export const findClaudeBinaryPath = createCachedBinaryResolver(() => {
       path.join(prefix, 'node_modules', '@anthropic-ai', 'claude-agent-sdk'),
     ],
     pathCommand: 'claude',
-  };
-});
+  });
+}

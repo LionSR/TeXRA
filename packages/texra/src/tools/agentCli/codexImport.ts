@@ -23,7 +23,7 @@ import { Effect, type FileSystem } from 'effect';
 import { inheritedEnv } from '@texra-ai/harness/node';
 import {
   binaryIfPresent,
-  createCachedBinaryResolver,
+  findCliBinary,
   importForeignSdk,
   resolvePackageDir,
 } from './vendorPackages';
@@ -132,11 +132,11 @@ const codexBinaryInPlatformPackage = Effect.fn(
  * The caller should pass the result as `codexPathOverride` to the Codex
  * constructor.
  */
-export const findCodexBinaryPath = createCachedBinaryResolver(() => {
+export function findCodexBinaryPath() {
   const info = PLATFORM_INFO[`${process.platform}-${process.arch}`];
-  if (!info) return undefined;
+  if (!info) return Effect.succeed(undefined);
 
-  return {
+  return findCliBinary({
     platformPackages: [info.pkg, '@openai/codex'],
     binaryInPlatformPackage: (dir) => codexBinaryInPlatformPackage(dir, info),
     // The npm global prefix hosts the `@openai/codex` meta-package; the
@@ -146,8 +146,8 @@ export const findCodexBinaryPath = createCachedBinaryResolver(() => {
       path.join(prefix, 'node_modules', '@openai', 'codex'),
     ],
     pathCommand: 'codex',
-  };
-});
+  });
+}
 
 /**
  * A Codex client over the native binary, and the binary's path. The CLI gets
