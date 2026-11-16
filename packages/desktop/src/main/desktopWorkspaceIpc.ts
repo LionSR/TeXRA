@@ -347,11 +347,13 @@ export function createDesktopWorkspaceIpc(
 
   // The disk is the one owner of what the file holds: a save carries what
   // the editor last read (`base`) and lands only while the file still holds
-  // it. The check and the write hold the file's write lane, which an agent's
-  // approved edit of the same file holds too, so neither lands between the
-  // other's check and write. A run that rewrote the file meanwhile is
-  // answered `changedOnDisk` instead of overwritten; the editor asks
-  // whether to overwrite or reload. A file gone since the read is
+  // it. A run that rewrote the file meanwhile is answered `changedOnDisk`
+  // instead of overwritten; the editor asks whether to overwrite or reload.
+  // The check and the write hold the file's write lane, which an approved
+  // edit run in this process holds too, so neither lands between the
+  // other's check and write. The lane is per process: a run in the
+  // background service takes its own, and an edit it lands between this
+  // check and write is replaced unseen. A file gone since the read is
   // recreated, as a deleted file always was. Saves of one file arrive one
   // at a time: the editor pane waits for each answer before the next.
   const writeFile = (path: string, contents: string, base: string | null) =>
