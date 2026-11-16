@@ -6,6 +6,7 @@
 import { Effect, Schema, Struct } from 'effect';
 
 import {
+  agentName,
   AgentSourceSchema,
   DeclinableUsageRouteSchema,
   ModelAvailabilityKindSchema,
@@ -58,6 +59,19 @@ export const AgentOptionDataSchema = PickerOptionBaseSchema.mapFields(
   }),
 );
 export type AgentOptionData = typeof AgentOptionDataSchema.Type;
+
+/**
+ * Whether an agent option's `value` (a source-qualified key) is the agent
+ * `keyOrName` names. A key names one agent exactly, so a same-named agent of
+ * another source is not it; a bare name (an older launch, a proposal with no
+ * source) names the agent of that name from any source.
+ */
+export function isAgentOption(value: string, keyOrName: string): boolean {
+  return (
+    value === keyOrName ||
+    (agentName(keyOrName) === keyOrName && agentName(value) === keyOrName)
+  );
+}
 
 /**
  * Team picker option row for the main-view "Run with: Team" target. `value`

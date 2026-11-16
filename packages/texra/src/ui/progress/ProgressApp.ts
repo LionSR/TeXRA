@@ -17,7 +17,8 @@
  */
 
 // Third-party imports
-import { getBasename, agentName } from '@texra-ai/harness/schemas';
+import { getBasename } from '@texra-ai/harness/schemas';
+import { isAgentOption } from '@texra/shared/pickerOptions';
 import { html, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -64,10 +65,8 @@ function plannedPassesOf(run: RunView, host: HostSnapshot): number | undefined {
     return undefined;
   }
   const id = run.identity.agent;
-  return host.agentOptions.find(
-    (option) =>
-      option.value === id || (agentName(id) === id && option.label === id),
-  )?.rounds;
+  return host.agentOptions.find((option) => isAgentOption(option.value, id))
+    ?.rounds;
 }
 
 // Local imports - progress view frontend
