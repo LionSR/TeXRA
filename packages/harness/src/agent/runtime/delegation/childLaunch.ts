@@ -103,7 +103,7 @@ const resumeOwnedChild = Effect.fn('resumeOwnedChild')(function* (
       { stopAfterCycle: true, ...options },
       parentRunId,
     ).pipe(
-      Effect.catchTag('ResumeRefused', ({ answer }) =>
+      Effect.catchTag('ResumeNotOpened', ({ answer }) =>
         Effect.fail(
           new Error(
             'failed' in answer
