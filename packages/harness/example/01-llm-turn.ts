@@ -89,7 +89,7 @@ const program = Effect.gen(function* () {
   const okBinding = yield* bindModel({
     model: selected.config,
     route,
-    credential: { kind: 'api-key', apiKey: 'test-key' },
+    bearer: 'test-key',
     options: { fetch: mockSseFetch },
   });
   console.log('[01] bound:', okBinding.origin.protocol);
@@ -126,7 +126,7 @@ const program = Effect.gen(function* () {
   const badBinding = yield* bindModel({
     model: selected.config,
     route,
-    credential: { kind: 'api-key', apiKey: 'not-a-real-key' },
+    bearer: 'not-a-real-key',
     options: { fetch: unauthorizedFetch },
   });
   const badTurn = yield* badBinding.model.prepareTurn({

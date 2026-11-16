@@ -1,9 +1,9 @@
 /**
- * The subscription coordinator's public contract: the session it stores,
- * the token grant and authorize request its sign-in flows pass it, the
+ * The subscription coordinator's contract: the session it stores, the
  * {@link SubscriptionCoordinator} a caller holds, and the
- * {@link SubscriptionOAuthPolicy} a provider writes. The implementation is
- * `SubscriptionOAuthCoordinator.ts`.
+ * {@link SubscriptionOAuthPolicy} a provider writes, with the token grant and
+ * authorize request its sign-in steps pass between them. The implementation
+ * is `SubscriptionOAuthCoordinator.ts`.
  */
 import type {
   CredentialStore,
@@ -15,6 +15,7 @@ import type {
   SubscriptionTokenResponseSchema,
 } from './subscriptionSessionSchema.js';
 import type { OAuthFormEndpoint } from './formTokenClient.js';
+import type { SubscriptionDeviceCodePrompt } from './deviceAuthorization.js';
 import type { Effect, Schema } from 'effect';
 import type { HttpClient } from 'effect/http';
 
@@ -64,17 +65,13 @@ export interface SubscriptionSessionStatus {
 
 /**
  * One provider's subscription session over the caller's secret store:
- * reading it, keeping it fresh, signing in and out. The mutating and
- * refreshing programs fail with {@link SubscriptionOAuthError}, or with the
- * secret store's own {@link SecretsFailed} when it rejects.
+ * reading it, keeping it fresh, signing in and out. The account runs the
+ * provider's sign-in protocol itself; the caller supplies only the
+ * presentation. The mutating and refreshing programs fail with
+ * {@link SubscriptionOAuthError}, or with the secret store's own
+ * {@link SecretsFailed} when it rejects.
  */
 export interface SubscriptionCoordinator<S extends SubscriptionSession> {
-  /** The stored session, or null when none is stored; a stored one that
-   *  does not parse fails `fatal`. */
-  loadSession(): Effect.Effect<
-    S | null,
-    SecretsFailed | SubscriptionOAuthError
-  >;
   /** Signed-in status of the stored session. */
   getStatus(): Effect.Effect<
     SubscriptionSessionStatus,
@@ -94,21 +91,24 @@ export interface SubscriptionCoordinator<S extends SubscriptionSession> {
     SecretsFailed | SubscriptionOAuthError,
     HttpClient.HttpClient
   >;
-  /** The PKCE authorize URL for a loopback callback on `port`. */
-  buildAuthorizeRequest(
-    port: number,
-  ): Effect.Effect<
-    SubscriptionAuthorizeRequest,
-    SecretsFailed | SubscriptionOAuthError
-  >;
-  /** Exchange the code `request`'s callback delivered and store the
-   *  session it grants. */
-  loginWithCode(
-    request: SubscriptionAuthorizeRequest,
-    callback: SubscriptionCallback,
+  /**
+   * Sign in through a browser: bind the provider's loopback callback, show
+   * the consent URL with `openBrowser`, and store the session the callback's
+   * code grants. A callback that cannot be bound, or a browser that cannot
+   * be reached, fails with `LoopbackTransportUnavailableError` before
+   * anything is asked of the user.
+   */
+  signInWithBrowser(
+    openBrowser: (url: string) => Effect.Effect<void, Error>,
   ): Effect.Effect<S, Error, HttpClient.HttpClient>;
-  /** Store the session a completed token grant returned. */
-  storeTokens(tokens: SubscriptionTokenResponse): Effect.Effect<S, Error>;
+  /**
+   * Sign in with a one-time device code (RFC 8628): `onPrompt` shows the
+   * code, and the session is stored once the user approves. Absent where
+   * the provider has no device-code sign-in.
+   */
+  readonly signInWithDeviceCode?: (
+    onPrompt: (prompt: SubscriptionDeviceCodePrompt) => Effect.Effect<void>,
+  ) => Effect.Effect<S, Error, HttpClient.HttpClient>;
 }
 
 /** Provider-specific policy: every magic URL/claim out of the machine. */
@@ -120,6 +120,23 @@ export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
   /** Form token endpoint the token grants go to. */
   readonly tokenEndpoint: OAuthFormEndpoint;
   readonly notSignedInMessage: string;
+  /** The registered loopback callback a browser sign-in binds. */
+  readonly loopback: {
+    /** Callback ports, tried in order; 0 takes any free port. */
+    readonly ports: readonly number[];
+    /** Path of the registered redirect URI (e.g. `/auth/callback`). */
+    readonly callbackPath: string;
+    /** The provider's name in the callback page and errors (e.g. `Grok`). */
+    readonly displayName: string;
+  };
+  /**
+   * The provider's device-code grant: show the code with `onPrompt`, poll
+   * until the user approves, and answer the tokens. Absent: no device-code
+   * sign-in.
+   */
+  readonly deviceGrant?: (
+    onPrompt: (prompt: SubscriptionDeviceCodePrompt) => Effect.Effect<void>,
+  ) => Effect.Effect<SubscriptionTokenResponse, Error, HttpClient.HttpClient>;
   /** The provider's authorize endpoint, for the PKCE code flow (`./pkce.ts`). */
   readonly authorize: {
     readonly url: string;
