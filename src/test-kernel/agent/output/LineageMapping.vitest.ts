@@ -51,4 +51,24 @@ describe('document task output lineage mapping', () => {
     expect(chapter2Entry?.origin).toBe(chapter2);
     expect(chapter2Entry?.base).toBe(chapter2);
   });
+
+  it('pairs no base when a bare name fits two same-named inputs', () => {
+    const bases = [
+      runStorageFile('inputs/a/main.tex'),
+      runStorageFile('inputs/b/main.tex'),
+    ];
+    const outputs = ['r0/a/main.tex', 'r0/b/main.tex'].map((output) => ({
+      source: 'main.tex',
+      location: runStorageFile(output),
+    }));
+
+    const mapping = pairOutputsWithBases(bases, outputs);
+
+    for (const { location } of outputs) {
+      expect(mapping.get(fileLocationDisplayPath(location))).toEqual({
+        base: undefined,
+        origin: undefined,
+      });
+    }
+  });
 });

@@ -10,8 +10,6 @@
  */
 
 import {
-  normalizeFilePath,
-  fileLocationDisplayPath,
   toErrorMessage,
   type AgentConfig,
   type FileLocation,
@@ -27,6 +25,7 @@ import {
 } from '@texra/shared/plugins/documentOutputs';
 
 import { replaceInputCommands } from './fileMapping';
+import { baseOf } from './lineageMapping';
 import { extractReplyDocuments } from './replyDocuments';
 import type { ExpectedDocuments } from './extraction/filenameHeaders';
 import type { AgentTrace, RunFileService } from '@texra-ai/harness/plugins';
@@ -67,30 +66,12 @@ function similarityBaseFiles(
   previousOutputs: readonly OutputFileInfo[],
 ): FileLocation[] {
   if (previousOutputs.length === 0) return baseFiles;
-
-  // An output's source is the workspace-relative document name; a base
-  // file is workspace-relative too, except external locations, which only
-  // carry an absolute path — hence the suffix comparison. A suffix match
-  // only counts when it is unambiguous: a basename-only source (e.g. from
-  // a `% main.tex` header) must not map onto several same-named base
-  // files in different directories.
-  const pathOf = (location: FileLocation): string =>
-    normalizeFilePath(fileLocationDisplayPath(location));
-  const basesMatching = (source: string): number =>
-    baseFiles.filter((base) => {
-      const path = pathOf(base);
-      return path === source || path.endsWith(`/${source}`);
-    }).length;
-
-  return baseFiles.map((location) => {
-    const path = pathOf(location);
-    const previous = previousOutputs.find((output) => {
-      const source = normalizeFilePath(output.source);
-      if (source === path) return true;
-      return path.endsWith(`/${source}`) && basesMatching(source) === 1;
-    });
-    return previous?.location ?? location;
-  });
+  return baseFiles.map(
+    (location) =>
+      previousOutputs.find(
+        (output) => baseOf(baseFiles, output.source) === location,
+      )?.location ?? location,
+  );
 }
 
 /**

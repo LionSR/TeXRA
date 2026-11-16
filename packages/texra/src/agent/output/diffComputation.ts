@@ -132,25 +132,8 @@ export const computeOutputDiffStats = Effect.fn(
         const entry = mapping.get(locationPath);
         const originalLocation = entry?.origin ?? null;
         // `pairOutputsWithBases` coalesces `base: origin ?? …`, so an entry with
-        // an origin always carries a base: there is no "origin but no base"
-        // case left to fall back on, and `!diffBaseLocation` implies no
-        // origin.
-        let diffBaseLocation = entry?.base ?? null;
-
-        // Fallback for single-input multi-output: when an agent extracts N
-        // documents from one base file, the extracted doc names (e.g.
-        // "chapter1", "methods") don't match the base filename via basename
-        // strategies. If no diff base was found but there is exactly one base
-        // file, use it so the diff stats reflect real changes against the
-        // original.
-        if (!diffBaseLocation && baseFiles.length === 1) {
-          const candidate = baseFiles[0];
-          if (fileLocationDisplayPath(candidate) !== locationPath) {
-            diffBaseLocation = candidate;
-          }
-        }
-
-        const base = lineage ? diffBaseLocation : null;
+        // an origin always carries a base, and no base implies no origin.
+        const base = lineage ? (entry?.base ?? null) : null;
         // An output of a task that rewrites its inputs revises one of them;
         // one no input pairs with is recorded as a new document, which the
         // record cannot tell apart from one, so it is said here.
