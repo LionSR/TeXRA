@@ -16,7 +16,6 @@ import { Effect, FileSystem, Schema } from 'effect';
 import {
   ChildRuns,
   ToolContext,
-  ToolRegistry,
   executed,
   ToolError,
   defineTool,
@@ -32,7 +31,6 @@ import {
   toErrorMessage,
   type FileLocation,
   NonNegativeIntSchema,
-  programOf,
 } from '@texra-ai/harness/schemas';
 import replacementEngine, {
   logReplacementDiagnostics,
@@ -236,7 +234,7 @@ const optionalFlag = (description: string) =>
 export const DocumentContextTool = defineTool({
   name: 'document_context',
   description:
-    "A document program's revision prompt: `intro`, the launch's documents and the `templates`, the partial edit a merge launch names, the instruction, every earlier request of `requests` with the reply it got, and this revision's request with the compile failures that rejected the last one and the `critique` of it, if any. The call for revision 0 records `intro`, `requests` and `templates` as the run's task, with whether its program writes new documents (the program declares its outputs); a later call's are not read. Resolves to `{ prompt, mediaFiles, memories }`, for the revision's `agent()` call; `memories` are the launch's.",
+    "A document program's revision prompt: `intro`, the launch's documents and the `templates`, the partial edit a merge launch names, the instruction, every earlier request of `requests` with the reply it got, and this revision's request with the compile failures that rejected the last one and the `critique` of it, if any. The call for revision 0 records `intro`, `requests`, `templates` and `creates` as the run's task; a later call's are not read. Resolves to `{ prompt, mediaFiles, memories }`, for the revision's `agent()` call; `memories` are the launch's.",
   scriptReturns: '{ prompt: string; mediaFiles: string[]; memories: string[] }',
   replay: 'safe',
   schema: Schema.Struct({
@@ -259,6 +257,9 @@ export const DocumentContextTool = defineTool({
       description:
         "TeXRA's template files the revisions read as documents, by file name.",
     }),
+    creates: optionalFlag(
+      'The program writes new documents (a deck, a transcript), not rewrites of its inputs.',
+    ),
     attachTeXCount: optionalFlag(
       "Add each document's texcount statistics to the prompt.",
     ),
@@ -274,17 +275,11 @@ export const DocumentContextTool = defineTool({
   }),
   execute: Effect.fn('document_context')(function* (input) {
     const { revision, requests } = input;
-    // Whether the program writes new documents is its registration's: it
-    // declares the outputs it writes (`Program.outputs`).
-    const program = programOf((yield* ToolContext).env.run.config);
-    const creates =
-      program !== null &&
-      (yield* ToolRegistry).programs.get(program)?.outputs !== undefined;
     const docs = yield* documentsOfCall({
       intro: input.intro ?? '',
       requests,
       templates: [...(input.templates ?? [])],
-      creates,
+      creates: input.creates ?? false,
     });
     const revisions = docs.task.requests.length;
     if (revision >= revisions)

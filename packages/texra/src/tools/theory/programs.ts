@@ -7,8 +7,7 @@
  * tools (`../documents/documentTools`), and ends by proposing the last
  * revision. What differs between programs is here: the child's system text,
  * the requests, a check of each revision, the templates a revision reads
- * and, in its registration, the outputs of a program that writes new
- * documents.
+ * and whether the program writes new documents.
  *
  * A step records the module sources it ran, so a resumed run replays the
  * program it started with. `String.raw` keeps each module's own escapes as
@@ -247,6 +246,7 @@ export default (args) =>
   revise({
     ...args,
     name: 'transcribe',
+    creates: true,
     system: 'You turn attached media into LaTeX. Images of handwriting or scans are pages of one text, in the order given: you write their content in the notation and style of the context documents. Recordings are one session, in the order given: you transcribe the spoken words with speakers and timestamps, a short opening summary and logical sections, and write spoken mathematics as LaTeX equations.',
     intro: 'Transcribe the attached media into one LaTeX document that compiles on its own. Any documents below are context for its notation and style.',
     requests: [
@@ -261,6 +261,7 @@ export default (args) =>
   revise({
     ...args,
     name: 'slides',
+    creates: true,
     templates: ['template_slide.tex'],
     system: 'You turn research papers into LaTeX Beamer presentations for a scientific audience. Each slide makes one point; every bullet states a specific fact, method or result in plain words.',
     intro: 'Create a LaTeX Beamer presentation from the research paper below. Use the template among the documents as its skeleton.',
@@ -276,6 +277,7 @@ export default (args) =>
   revise({
     ...args,
     name: 'poster',
+    creates: true,
     templates: ['template_poster.tex', 'beamercolorthemempi.sty', 'beamerthemeconfposter.sty'],
     system: 'You turn research papers into mathematically detailed LaTeX Beamer posters for a scientific audience, written plainly and concretely.',
     intro: 'Create a LaTeX Beamer poster from the research paper below. Use the poster template among the documents as its skeleton, with the template\'s theme and color scheme.',

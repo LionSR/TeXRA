@@ -40,8 +40,7 @@ const DocumentTaskSpecSchema = Schema.Struct({
   /** The plugin's template files its revisions read, by name. */
   templates: Schema.Array(Schema.String),
   /** It writes new documents (a deck, a transcript) and not rewrites of
-   *  its inputs: its outputs descend from no input. Its program's
-   *  registration says so by declaring its outputs (`Program.outputs`). */
+   *  its inputs: its outputs descend from no input. */
   creates: Schema.Boolean,
 });
 /** A document program's own facts, as its first step recorded them. */
