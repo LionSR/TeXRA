@@ -617,10 +617,10 @@ export async function runChat(
     leaveProcess: services.leave,
     submitted: chatController.submitted,
     getApprovalPolicy,
-    // What the session's publisher still holds, drained before shutdown
-    // within the close budget; one that does not drain is said on stderr.
     // What the session's publisher still holds, when the session is this
-    // process's; the service's publisher is its own.
+    // process's (the service's publisher is its own), drained before
+    // shutdown within the close budget; one that does not drain is said on
+    // stderr.
     flushArtifacts: (runsElsewhere
       ? Effect.void
       : Effect.flatMap(services.session, (local) => local.settled)

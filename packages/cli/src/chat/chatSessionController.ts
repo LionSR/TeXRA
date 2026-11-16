@@ -133,8 +133,8 @@ export interface ChatSessionController {
    *  caller's to word. */
   resumeTask(id: RunId): Effect.Effect<void, RequestRefusal, ProcessServices>;
 
-  /** Request stop of the root run using the configured child policy, for
-   *  `reason`: a `user` stop also cancels its remote background work. */
+  /** Stop the root run as the user: its remote background work is
+   *  cancelled with it. */
   stop(): void;
 
   /**
