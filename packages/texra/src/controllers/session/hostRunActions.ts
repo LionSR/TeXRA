@@ -138,12 +138,6 @@ export interface HostRunActions {
     | RunFailure,
     ProcessServices
   >;
-  /** The toolbar's latexdiff may run: the run still offers `files` and is
-   *  a document task's with a saved config; else `Rejected`, which the
-   *  surface presents. */
-  documentTaskDiffRequest(
-    runId: RunId,
-  ): Effect.Effect<void, Rejected | Unavailable>;
   /** Pack or clean a document task run's files, from its saved config: the
    *  action check, then the session's `run.files`, which the process that
    *  holds the run does with it held. A run that is not a document task's,
@@ -427,12 +421,6 @@ export const createHostRunActions = Effect.fn(
         }),
       );
       if (config !== null) yield* startAgentRequest(config);
-    }),
-    documentTaskDiffRequest: Effect.fn(
-      'HostRunActions.documentTaskDiffRequest',
-    )(function* (runId) {
-      yield* requireAction(runId, 'files');
-      yield* savedTaskConfig(runId);
     }),
     documentTaskFileOperation: Effect.fn(
       'HostRunActions.documentTaskFileOperation',

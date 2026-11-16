@@ -15,6 +15,8 @@ import {
   RunFileService,
   withLogChannel,
   type AppSignals,
+  type StorageFs,
+  type WorkspaceFs,
 } from '@texra-ai/harness/plugins';
 import {
   absentReason,
@@ -31,7 +33,11 @@ import type { HostCommand } from '@texra/shared/session/hostRequest';
 import { revisionLayout } from '@texra/shared/constants/revisionLayout';
 import type { ProcessServices } from '@texra-ai/harness/host';
 import type { HostRunActions } from '../session/hostRunActions';
-import type { RoundOutput } from '@texra/shared/plugins/documentOutputs';
+import {
+  compareTarget,
+  type RoundOutput,
+} from '@texra/shared/plugins/documentOutputs';
+import type { latexdiffVerbs } from '@texra/latex/latexdiff/latexdiffVerbs';
 import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
 
 const CHANNEL = 'ProgressDocumentTaskFileActions';
@@ -41,14 +47,15 @@ const CHANNEL = 'ProgressDocumentTaskFileActions';
  * host answers a request with a tag ({@link HostCommandFailure}), so a
  * refusal a host already worded — the desktop error notice is one — travels
  * as itself and no case re-enters a runtime to finish this. It runs on the
- * process `FileSystem` its run-storage reads take, and an accept announces
- * its write on the process's signal hub; both hosts' request dispatchers
- * already carry them, so it is `yield*`ed there, not finished here.
+ * process `FileSystem` its run-storage reads take, an accept announces its
+ * write on the process's signal hub, and a latexdiff runs over the session's
+ * rooted filesystems; both hosts' request dispatchers already carry them, so
+ * it is `yield*`ed there, not finished here.
  */
 type FileAction<A> = Effect.Effect<
   A,
   HostCommandFailure,
-  FileSystem.FileSystem | AppSignals | ProcessServices
+  FileSystem.FileSystem | AppSignals | ProcessServices | StorageFs | WorkspaceFs
 >;
 
 type FileActionRequest = Extract<HostCommand, { kind: 'fileAction' }>;
@@ -79,6 +86,8 @@ interface ProgressDocumentTaskFileActionsControllerDeps {
   workspace: string | undefined;
   /** The window's run actions this controller starts or follows up. */
   runs: Pick<HostRunActions, 'merge' | 'followUpLauncher'>;
+  /** The window's latexdiff of two files. */
+  latexdiff: ReturnType<typeof latexdiffVerbs>['file'];
 }
 
 export class ProgressDocumentTaskFileActionsController {
@@ -87,21 +96,54 @@ export class ProgressDocumentTaskFileActionsController {
     this.deps = deps;
   }
 
-  /** Apply an output-file request from either GUI host; its latexdiff is
-   *  the window's latexdiff verb (`latexdiffVerbs`). */
-  handle(
-    request: FileActionRequest & {
-      action: Exclude<FileActionRequest['action'], 'latexdiff'>;
-    },
-  ): FileAction<void> {
-    switch (request.action) {
-      case 'compareOriginal':
-        return this.compareOriginal(request.file, request.base);
-      case 'accept':
-        return this.acceptFile(request.file, request.base, request.runId);
-      case 'merge':
-        return this.mergeFile(request.file, request.base);
+  /** A file verb from either GUI host, over the base it names or, for a
+   *  run's output, the one {@link baseOf} picks. */
+  readonly handle: (request: FileActionRequest) => FileAction<void> = Effect.fn(
+    'ProgressDocumentTaskFileActionsController.handle',
+  )({ self: this }, function* (request: FileActionRequest) {
+    const { action, file } = request;
+    const base = this.baseOf(request);
+    if (!file || !base) {
+      return yield* new Rejected({
+        reason:
+          request.base.kind === 'file'
+            ? 'Choose a base file and an edited file first.'
+            : 'The run records no file this output revises.',
+      });
     }
+    switch (action) {
+      case 'compare':
+        return yield* this.deps.host.openDiff(
+          base,
+          file,
+          `Compare: ${path.basename(file)} ↔ ${path.basename(base)}`,
+        );
+      case 'accept':
+        return yield* this.acceptFile(
+          file,
+          base,
+          request.base.kind === 'runOutput' ? request.base.runId : undefined,
+        );
+      case 'merge':
+        return yield* this.deps.runs.merge(base, file);
+      case 'latexdiff':
+        return yield* this.deps.latexdiff(base, file);
+    }
+  });
+
+  /**
+   * The base a verb over a run's output takes: Compare and Accept the file
+   * the output is compared with and accepted into ({@link compareTarget}),
+   * latexdiff and Merge the run's snapshot of what it revises, the text the
+   * model edited.
+   */
+  private baseOf({ action, file, base }: FileActionRequest) {
+    if (base.kind === 'file') return base.path;
+    const output = this.latestOutput(base.runId, file);
+    if (output === undefined) return undefined;
+    return action === 'compare' || action === 'accept'
+      ? compareTarget(output)
+      : output.lineage?.base.absolutePath;
   }
 
   readonly openRunStorage: (runId: RunId) => FileAction<void> = Effect.fn(
@@ -133,16 +175,7 @@ export class ProgressDocumentTaskFileActionsController {
     ),
   );
 
-  /** The diff of `file` against `base`, titled the same on every host. */
-  compareOriginal(file: string, base: string): FileAction<void> {
-    return this.deps.host.openDiff(
-      base,
-      file,
-      `Compare: ${path.basename(file)} ↔ ${path.basename(base)}`,
-    );
-  }
-
-  readonly acceptFile: (
+  private readonly acceptFile: (
     file: string,
     base: string,
     activeRun?: RunId,
@@ -165,10 +198,6 @@ export class ProgressDocumentTaskFileActionsController {
     if (edit !== undefined)
       yield* this.deps.runs.followUpLauncher(activeRun, edit);
   });
-
-  mergeFile(file: string, base: string): FileAction<void> {
-    return this.deps.runs.merge(base, file);
-  }
 
   /**
    * The note telling a task's launcher what the user changed of the model's

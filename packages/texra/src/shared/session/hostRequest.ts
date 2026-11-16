@@ -33,9 +33,10 @@ export type GettingStartedAction = typeof GettingStartedActionSchema.Type;
 
 const runScoped = { runId: RunIdSchema };
 
-/** The verbs an output file offers on a document task run's file list. */
+/** The verbs over an edited file and the base it revises: the file list's
+ *  on a run's output, the Tools sheet's on the launcher's two files. */
 export const FileActionSchema = Schema.Literals([
-  'compareOriginal',
+  'compare',
   'latexdiff',
   'accept',
   'merge',
@@ -86,21 +87,16 @@ export const HostCommandSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('latexdiff'), ...runScoped }),
   Schema.Struct({ kind: Schema.Literal('pack'), ...runScoped }),
   Schema.Struct({ kind: Schema.Literal('clean'), ...runScoped }),
-  /** The Tools sheet's LaTeXDiffs verbs over the launcher's base and
-   *  edited files and its commit, as the sheet's surface holds them. */
+  /** The Tools sheet's latexdiff-vc verbs over the launcher's base file
+   *  and its commit, as the sheet's surface holds them. */
   Schema.Struct({
-    kind: Schema.Literal('latexdiffs'),
+    kind: Schema.Literal('latexdiffCommit'),
     baseFile: Schema.optional(Schema.NullOr(Schema.String)),
-    editedFile: Schema.optional(Schema.NullOr(Schema.String)),
     commit: Schema.optional(Schema.NullOr(Schema.String)),
     action: Schema.Literals([
-      'latexdiff',
       'latexdiffvc',
       'packLatexdiffvc',
       'cleanLatexdiffvc',
-      'merge',
-      'compare',
-      'accept',
     ]),
   }),
   Schema.Struct({
@@ -195,14 +191,19 @@ export const HostCommandSchema = Schema.Union([
       Schema.NullOr(Schema.Literals(APPROVAL_BYPASS_KINDS)),
     ),
   }),
-  /** An output file's verbs on a document task run's file list. */
+  /** A file verb over `file` and its base. An empty path is refused by the
+   *  host, which says which file to choose. */
   Schema.Struct({
     kind: Schema.Literal('fileAction'),
-    ...runScoped,
     action: FileActionSchema,
-    file: Schema.NonEmptyString,
-    /** The workspace file the output is compared with or written into. */
-    base: Schema.NonEmptyString,
+    file: Schema.String,
+    base: Schema.Union([
+      /** `file` is an output of this run: the host takes its base from
+       *  the run's record of what the output revises. */
+      Schema.Struct({ kind: Schema.Literal('runOutput'), ...runScoped }),
+      /** The base file the Tools sheet names. */
+      Schema.Struct({ kind: Schema.Literal('file'), path: Schema.String }),
+    ]),
   }),
   // The New-task state's banners and onboarding cards (host-owned state,
   // HostSnapshot.banners and .onboarding).
