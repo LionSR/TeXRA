@@ -51,13 +51,18 @@ describe('application state on SQLite', () => {
       // Concurrent read-modify-writes of one key both land: each changes
       // the value the other committed, never a stale read of its own.
       const add = (store: typeof one, id: string) =>
-        store.modify('disabledTools', (stored) =>
+        store.modify(['disabledTools'], ({ disabledTools }) =>
           Result.succeed([
-            ...(Schema.decodeUnknownSync(
-              Schema.UndefinedOr(Schema.Array(Schema.String)),
-            )(stored) ?? []),
-            id,
-          ]),
+            undefined,
+            {
+              disabledTools: [
+                ...(Schema.decodeUnknownSync(
+                  Schema.UndefinedOr(Schema.Array(Schema.String)),
+                )(disabledTools) ?? []),
+                id,
+              ],
+            },
+          ] as const),
         );
       yield* Effect.all([add(one, 'a'), add(two, 'b')], {
         concurrency: 'unbounded',

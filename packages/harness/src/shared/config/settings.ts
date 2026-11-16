@@ -127,23 +127,28 @@ export class StateWriteFailed extends Schema.TaggedError<StateWriteFailed>()(
  * Application state read from its authority when the Effect executes. A read
  * answers the stored JSON as `unknown`: the caller decodes it with its key's
  * schema (`readState`), which also owns the default of an absent key. Updates
- * finish after commit. A change
- * that depends on the current value goes through `modify`, never a `get`
- * then an `update`: the settings surfaces do not serialize their messages,
- * and hosts in separate processes share one store.
+ * finish after commit. A change that depends on current values goes through
+ * `modify`, never a `get` then an `update`: the settings surfaces do not
+ * serialize their messages, and hosts in separate processes share one store.
  */
 export interface StateStore {
   get(key: string): Effect.Effect<unknown, StateReadFailed>;
   update(key: string, value: unknown): Effect.Effect<void, StateWriteFailed>;
   /**
-   * Read-modify-write of one key as one step at the store's authority:
-   * `change` sees the stored value (`undefined` when absent) and returns the
-   * next one, or refuses with its own error and nothing is written.
+   * Read-modify-write of `keys` as one step at the store's authority:
+   * `change` sees their stored values and answers its result with the next
+   * value of every key (`undefined` deletes it), with its result alone to
+   * write nothing, or refuses with its own error and nothing is written.
    */
-  modify<T, E = never>(
-    key: string,
-    change: (current: unknown) => Result.Result<T, E>,
-  ): Effect.Effect<T, E | StateWriteFailed>;
+  modify<K extends string, A, E = never>(
+    keys: readonly K[],
+    change: (
+      current: Readonly<Record<K, unknown>>,
+    ) => Result.Result<
+      readonly [A] | readonly [A, Readonly<Record<K, unknown>>],
+      E
+    >,
+  ): Effect.Effect<A, E | StateWriteFailed>;
 }
 
 /** The setting slots a caller holds: a `WorkspaceRoots` is one. */

@@ -94,12 +94,13 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
     const defaults = plugins
       .filter((plugin) => plugin.toggle === 'off')
       .map((plugin) => plugin.id);
-    let seeded = false;
-    yield* state.modify(DISABLED_TOOLS_KEY.key, (stored) =>
-      Result.map(storedDisabledTools(stored), (recorded) => {
-        seeded = recorded === undefined;
-        return seeded ? defaults : stored;
-      }),
+    const { key } = DISABLED_TOOLS_KEY;
+    const seeded = yield* state.modify([key], (stored) =>
+      Result.map(storedDisabledTools(stored[key]), (recorded) =>
+        recorded === undefined
+          ? ([true, { [key]: defaults }] as const)
+          : ([false] as const),
+      ),
     );
     if (!seeded) return;
     // Debug: the seed runs while a host's runtime builds, before the CLI's

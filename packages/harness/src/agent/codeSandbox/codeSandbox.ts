@@ -11,6 +11,7 @@ import {
   Context,
   Duration,
   Effect,
+  Exit,
   FiberSet,
   Layer,
   Queue,
@@ -198,12 +199,15 @@ const make = Effect.gen(function* () {
   const platform = yield* Worker.WorkerPlatform;
   // Compiled on the first script and shared: a compiled module crosses to
   // each worker without a copy, so a worker never compiles QuickJS itself.
-  // A session that runs no script never compiles it.
-  const compiled = yield* Effect.cached(
-    Effect.tryPromise({
-      try: () => WebAssembly.compile(Uint8Array.from(quickJsWasm)),
-      catch: (cause) => new SandboxUnavailable({ cause: ensureError(cause) }),
-    }),
+  // A session that runs no script never compiles it. A failed compile is
+  // kept for no time, so the next script tries again.
+  const compiled = yield* Effect.tryPromise({
+    try: () => WebAssembly.compile(Uint8Array.from(quickJsWasm)),
+    catch: (cause) => new SandboxUnavailable({ cause: ensureError(cause) }),
+  }).pipe(
+    Effect.cachedWithTTL((exit) =>
+      Exit.isSuccess(exit) ? Duration.infinity : Duration.zero,
+    ),
   );
 
   const run = <E, R>(

@@ -4,7 +4,7 @@
 // so two hosts changing it at once lose nothing and no lock is taken.
 
 // Third-party imports
-import { Effect, Option, Result, Schema } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 
 // Local imports - shared contracts
 import { InstalledPluginSchema, type InstalledPlugin } from '@shared/schemas';
@@ -69,14 +69,14 @@ export function modifyInstalled<A>(
     PluginError | PluginRequestError
   >,
 ) {
-  let answer: Option.Option<A> = Option.none();
+  const { key } = INSTALLED_PLUGINS_KEY;
   return stores.globalState
-    .modify(INSTALLED_PLUGINS_KEY.key, (stored) =>
-      Result.flatMap(storedRecord(stored), (current) =>
-        Result.map(change(current), ([next, value]) => {
-          answer = Option.some(value);
-          return next;
-        }),
+    .modify([key], (stored) =>
+      Result.flatMap(storedRecord(stored[key]), (current) =>
+        Result.map(
+          change(current),
+          ([next, value]) => [value, { [key]: next }] as const,
+        ),
       ),
     )
     .pipe(
@@ -84,14 +84,6 @@ export function modifyInstalled<A>(
         error._tag === 'StateWriteFailed'
           ? new PluginError({ message: error.message })
           : error,
-      ),
-      // `modify` succeeds only once `change` has, which sets the answer.
-      Effect.flatMap(() =>
-        Option.match(answer, {
-          onNone: () =>
-            Effect.die(new Error('modifyInstalled: the change never ran')),
-          onSome: Effect.succeed,
-        }),
       ),
     );
 }

@@ -153,8 +153,8 @@ const followedPorts = (current: Ref.Ref<InstalledHost>) => {
   const appState: StateStore = {
     get: (key) => Effect.suspend(() => host().roots.globalState.get(key)),
     update: (key, value) => host().roots.globalState.update(key, value),
-    modify: (key, change) =>
-      Effect.suspend(() => host().roots.globalState.modify(key, change)),
+    modify: (keys, change) =>
+      Effect.suspend(() => host().roots.globalState.modify(keys, change)),
   };
   const agentDirectories: AgentDirectoriesPort = {
     custom: () => host().platform.agentDirectories.custom(),

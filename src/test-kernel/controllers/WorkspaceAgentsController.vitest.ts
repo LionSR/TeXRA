@@ -61,7 +61,7 @@ describe('WorkspaceAgentsController', () => {
       }),
   );
 
-  it.effect('serializes concurrent toggles through one workspace owner', () =>
+  it.effect('keeps both of two concurrent toggles', () =>
     Effect.gen(function* () {
       const workspaceState = new FakeStateStore();
       const first = controller(workspaceState);

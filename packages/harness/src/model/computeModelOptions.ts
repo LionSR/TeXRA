@@ -393,9 +393,10 @@ export function setModelEnabled(input: {
   // explicit enable is recorded in `enabledExtras` even for a default, so it
   // survives the model later leaving the curated defaults. A helper model
   // disabled here is not rewritten: `getHelperModelName` checks it at read.
+  const { key } = MODEL_SELECTION_KEY;
   return input.stores.globalState
-    .modify(MODEL_SELECTION_KEY.key, (stored) => {
-      const read = selectionOf(stored);
+    .modify([key], (stored) => {
+      const read = selectionOf(stored[key]);
       invalid = read.invalid;
       const others = enabledOrDefaults(curated, read.selection).filter(
         (model) => model !== input.model,
@@ -412,18 +413,16 @@ export function setModelEnabled(input: {
         ],
         disabledDefaults: curated.filter((model) => !toggled.includes(model)),
       };
-      return enabledModelsOf(curated, next).length > 0
-        ? Result.succeed(next)
+      const enabled = enabledModelsOf(curated, next);
+      return enabled.length > 0
+        ? Result.succeed([enabled, { [key]: next }] as const)
         : Result.fail(
             refuse(
               'At least one model must stay enabled. Enable another model before disabling this one.',
             ),
           );
     })
-    .pipe(
-      Effect.map((next) => enabledModelsOf(curated, next)),
-      Effect.ensuring(Effect.suspend(() => reportInvalid(invalid))),
-    );
+    .pipe(Effect.ensuring(Effect.suspend(() => reportInvalid(invalid))));
 }
 
 /**

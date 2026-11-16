@@ -36,20 +36,22 @@ function inquiryOperations(
       readonly written: A;
       readonly before: InquiryThreadRecord | null;
     };
-    return yield* values.modify(INQUIRY_THREADS, id, (current) =>
-      Result.flatMap(
+    return yield* values.modify(INQUIRY_THREADS, [id], (stored) => {
+      const current = stored[id] ?? null;
+      return Result.flatMap(
         // A transition rejects a request by throwing its ToolError.
         Result.try({
-          try: () => change(current ?? null, timestamp),
+          try: () => change(current, timestamp),
           catch: ensureError,
         }),
         (
           next,
         ): Result.Result<
-          readonly [Change] | readonly [Change, InquiryThreadRecord],
+          | readonly [Change]
+          | readonly [Change, Record<string, InquiryThreadRecord>],
           Error
         > => {
-          const change: Change = { written: next, before: current ?? null };
+          const change: Change = { written: next, before: current };
           if (next === null) return Result.succeed([change] as const);
           if (next.threadId !== id)
             return Result.fail(
@@ -57,10 +59,10 @@ function inquiryOperations(
                 'An inquiry transition cannot change its thread identity.',
               ),
             );
-          return Result.succeed([change, next] as const);
+          return Result.succeed([change, { [id]: next }] as const);
         },
-      ),
-    );
+      );
+    });
   });
 
   /** A turn change as its caller reads it. */

@@ -252,14 +252,27 @@ Done, on the branch after PR 14927:
 - Row 1: a run's open step is a `Ref`.
 - Row 8: `withPerKeyLane` is a `Semaphore` per key in a counted map; the
   `Deferred` chain is gone. The agent catalog's one-key lane is a
-  `Semaphore(1)`. An approved edit and the desktop editor's save share one
-  lane per file (`withFileWriteLane`).
+  `Semaphore(1)`. An approved edit, the desktop editor's save, a
+  `JsonStore` write and run storage's snapshot and link share one lane per
+  file (`withFileWriteLane`); the JSON store's and run storage's own maps
+  are gone.
+- Row 10, the leftovers: the agent CLIs' binary resolver and the sandbox's
+  QuickJS compile are `Effect.cachedWithTTL`, a success kept for the
+  process and a miss or failure for no time; the resolver's
+  `SynchronizedRef` is gone.
 - Row 11: the settings surface holds its workspace's availability results
   while it follows them. Over the same desktop E2E spec the app's log fell
   from about 400 lines to 76, Zotero probes from 168 to 10 and
   `npm prefix -g` spawns from 85 to 6.
 - Row 22, the credential file: a refused refresh adopts a session another
   process stored and deletes only one that is still the stored one.
+- Row 22, agent selection: `StateStore.modify` (and `CurrentValues.modify`
+  under it) changes a record of keys in one transaction. The selection,
+  the hidden list and a removed team's saved list are written in one step;
+  a change decided from a team's resolution, read outside the step, is
+  decided again when another writer stored a selection in between. The
+  in-process lane is gone. The service's `state.get` and `state.set` carry
+  the record, so a window's compare-and-set covers every key it changes.
 - Slice 8: the log viewer test writes its entry through the app's log.
 - Scope ownership: one session's close runs no plugin drain; the shutdown
   (`closeAll`) alone does. Closing one project had ended the GitHub pollers
@@ -331,9 +344,8 @@ Left, with the reason:
   `hostWindows.ts` (rows 16 and 9) and the frontend's `sessionTransport.ts`.
 
 Open: fiber-first opening (row 6), the frames on `rpc` (row 16), the model
-socket (row 18), the inbound queues (row 12), agent selection as one store
-write (row 22), the remaining buffers (row 20, above), and slice 7. What
-the passes learned:
+socket (row 18), the inbound queues (row 12), the remaining buffers
+(row 20, above), and slice 7. What the passes learned:
 
 - Row 6 keeps a `Map`, for the reason in its "Stays" cell. Fiber-first
   opening (the run's fiber acquires its own resources) removes the
@@ -356,6 +368,12 @@ the passes learned:
   nothing shipped does that, so the session and desktop project lanes
   stay. The Codex probe keeps its lane and its map: it caches only what a
   probe said, which `Cache` would need a failure channel to express.
+- Row 22's agent selection decides from a team's members and the default
+  team, which the app reads (`AgentDirectoriesPort.teamMembers`) and the
+  global store holds; neither can be read inside the repository store's
+  step, so a change from a team selection is a compare-and-set that
+  decides again. A team's members as a pure function of the saved teams'
+  value would make every change one pure step.
 
 ## Needs the owner
 
