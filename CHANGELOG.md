@@ -22,6 +22,12 @@ All notable changes to this project will be documented in this file.
   still continues only on your own message. SDK: a run sender of a
   follow-up is `{ kind: 'run', runId }` with no `relation`, and
   `FollowUpSenderInput` is gone (`InboxItem.from` is a `FollowUpSender`).
+- **An agent reports to whoever gave it the work.** When an agent finishes,
+  its report goes to every agent whose message it took up since it last
+  finished, and the first time also to the agent that launched it. It used
+  to go only to the launcher, so an agent that asked another's subagent
+  for something never heard back. Continuing an agent yourself changes
+  nothing about where it reports.
 
 - **SDK: a store an earlier build wrote is refused, never moved aside.**
   Opening a session store stamped with another build's schema fails and

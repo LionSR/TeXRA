@@ -12,6 +12,7 @@
  */
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
+  type RunId,
   type RunOutcome,
   type RunPosition,
   type SessionRow,
@@ -61,9 +62,53 @@ function sharedRowsFrom(rows: readonly SharedRunRow[]): SharedRunRows {
   return shared;
 }
 
+/** The runs a run works for, as its input rows say. */
+interface AskedBy {
+  /** The runs whose messages it took as work since its last end. */
+  readonly since: readonly RunId[];
+  /** The run whose message it last took as work, ever. */
+  readonly last: RunId | null;
+  /** Whether it has ended before. */
+  readonly ended: boolean;
+}
+
+/**
+ * Which runs gave a run work: the senders of the messages it took as a
+ * turn's message, or as a prompt its report answered. A run's report at
+ * its end and a host's notice ask nothing of it, and a person reads the
+ * run itself, so none of them is counted.
+ */
+function askedBy(
+  rows: readonly RowOf<'followup.queued' | 'followup.consumed' | 'run.end'>[],
+): AskedBy {
+  const senders = new Map<string, RunId>();
+  let since: RunId[] = [];
+  let last: RunId | null = null;
+  let ended = false;
+  for (const row of rows) {
+    if (row.type === 'run.end') {
+      ended = true;
+      since = [];
+    } else if (row.type === 'followup.queued') {
+      const { content } = row;
+      if (!('delivery' in content) && content.from.kind === 'run')
+        senders.set(row.followUpId, content.from.runId);
+    } else if (
+      row.disposition.kind === 'turn' ||
+      row.disposition.kind === 'answered'
+    ) {
+      const sender = senders.get(row.followUpId);
+      if (sender === undefined) continue;
+      last = sender;
+      if (!since.includes(sender)) since.push(sender);
+    }
+  }
+  return { since, last, ended };
+}
+
 /**
  * The reads of a run's rows, by what each answers: its input (`Inbox.read`)
- * with the parent edge and lifecycle that bound it, its requests, its
+ * with the parent edge and lifecycle that bound it and who it works for, its requests, its
  * lifecycle rows, the plugin facts of an aggregate (a run's, or a plugin's
  * own), its calls' results, a script's calls with their results, and its
  * positions. A store reads one through its type index and folds it
@@ -87,7 +132,15 @@ export const RUN_ROW_READS = {
         recordAfter,
         NO_RUN_ROWS,
       );
-      return { parent, end, stop, inputClosed, followUps, taken };
+      const asked = askedBy(
+        rows.filter(
+          (row) =>
+            row.type === 'followup.queued' ||
+            row.type === 'followup.consumed' ||
+            row.type === 'run.end',
+        ),
+      );
+      return { parent, end, stop, inputClosed, followUps, taken, asked };
     },
   ),
   requests: rowRead(['request.opened', 'request.decided'], (rows) => ({

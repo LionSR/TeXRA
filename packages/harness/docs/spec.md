@@ -512,8 +512,10 @@ with a warning (`agent/storage/runLifecycle.ts#endIn`). Every child is a
 run that ends: a native child runs one cycle and ends with its report; a
 process child (a background command, an agent CLI's turn) is one turn of
 its process, ended with its exit (`agent/runtime/processRun.ts`). A child's
-end queues its report on its parent's input in the same transaction, under
-`${runId}:${activation}` (`agent/storage/runLifecycle.ts#parentDelivery`),
+end queues its report in the same transaction, under
+`${runId}:${activation}`, on the input of each run it works for
+(`agent/storage/runLifecycle.ts#replyDelivery`): the runs whose messages it
+took as work since its last end, and until its first end its parent,
 unless the parent's call awaits it.
 
 **W6.** Every failed attempt of a turn that reaches failure recording MUST
@@ -872,9 +874,9 @@ unless the item names another test:
   again without a person's retry; no child is left without a terminal row. Also
   asserted by
   `src/test-kernel/support/crashConformance.ts#'reads every child result settled before the crash, exactly once'`.
-- **I6**: A child's result is delivered to its parent at most once; a result
-  whose parent cannot take it stays in the child's run report with a warning
-  (`agent/storage/runLifecycle.ts#parentDelivery`). Asserted by
+- **I6**: A child's result is delivered to each run it works for at most
+  once; a result a recipient cannot take stays in the child's run report
+  with a warning (`agent/storage/runLifecycle.ts#replyDelivery`). Asserted by
   `src/test-kernel/support/crashConformance.ts#'reads every child result settled before the crash, exactly once'`.
 - **I7**: A fork keeps the history it was registered with; compaction keeps
   the context it committed.

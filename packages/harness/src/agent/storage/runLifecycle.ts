@@ -183,7 +183,7 @@ const endOf = (end: Omit<RunEnd, 'usage'>): Omit<RunEnd, 'usage'> => ({
 });
 
 /**
- * The id a child's delivery to its parent is queued under, one per
+ * The id a run's report is queued under on each recipient's input, one per
  * lifecycle (`${runId}:${activation}`): a replay of the delivery writes
  * nothing, and a second delivery of one lifecycle is a duplicate. A
  * lifecycle delivers once, by its end's report or, for one a dead process
@@ -198,49 +198,67 @@ export const isDeliveryOf = (runId: RunId, followUpId: string): boolean =>
   followUpId.startsWith(`${runId}:`);
 
 /**
- * A child's report queued on its parent's input, decided in the job
- * committing the child's end, under the lifecycle's {@link deliveryId}.
- * A closed, deleted or unreadable parent refuses it, with a warning once
- * the job commits; the child's own rows still commit.
+ * A run's report queued on the input of each run it works for, decided in
+ * the job committing its end, under the lifecycle's {@link deliveryId}:
+ * the runs whose messages it took as work since its last end, and, until
+ * its first end, the run that launched it, unless that launch's call
+ * awaits it and reads the report itself. A run nobody asked since (a
+ * person continued it, or a report woke it) reports to the run that asked
+ * last, else to its launcher. A closed, deleted or unreadable recipient
+ * refuses it, with a warning once the job commits; the run's own rows
+ * still commit.
  */
-const parentDelivery = Effect.fn('parentDelivery')(function* (
+const replyDelivery = Effect.fn('replyDelivery')(function* (
   runId: RunId,
   facts: RunRows,
   delivery: ChildRunDelivery,
 ): Effect.fn.Return<readonly RunInputDraft[], never, Inbox> {
-  const parent = facts.parent;
-  if (parent === null || parent.call?.awaited === true) return [];
+  const inbox = yield* Inbox;
+  const undelivered = (why: string, error?: Error) =>
+    Effect.as(
+      Effect.logWarning(
+        `Run ${runId}: its report was not delivered; ${why}. The report stays on the run.`,
+      ).pipe(Effect.annotateLogs({ data: error })),
+      [],
+    );
+  const input = yield* Effect.result(inbox.read(runId));
+  if (Result.isFailure(input))
+    return yield* undelivered('its own input cannot be read', input.failure);
+  const { since, last, ended } = input.success.asked;
+  const { parent } = facts;
+  const launcher =
+    parent === null || parent.call?.awaited === true ? [] : [parent.id];
+  const asking = new Set([...(ended ? [] : launcher), ...since]);
+  const recipients =
+    asking.size > 0 ? [...asking] : last === null ? launcher : [last];
   const item = {
     delivery,
     from: { kind: 'run', runId } as const,
     deliveryId: deliveryId(runId, facts),
   };
-  const admitted = yield* Inbox.use((inbox) =>
-    inbox.admission(parent.id, item, {}),
-  ).pipe(
-    Effect.catchTags({
-      DatabaseReadFailed: (error) =>
-        Effect.as(
-          Effect.logWarning(
-            `Run ${runId}: its report was not delivered; parent run ${parent.id} is closed or cannot be read.`,
-          ).pipe(Effect.annotateLogs({ data: error })),
-          { rows: [], sent: { kind: 'refused', reason: 'notResumable' } },
-        ),
-    }),
-  );
-  if (admitted.sent.kind === 'refused')
-    yield* Effect.logWarning(
-      `Run ${runId}: its report was not delivered; parent run ${parent.id} is unavailable (${admitted.sent.reason}). The report stays on the run.`,
-    );
-  return admitted.rows;
+  const rows: RunInputDraft[] = [];
+  for (const recipient of recipients) {
+    const admitted = yield* Effect.result(inbox.admission(recipient, item, {}));
+    if (Result.isFailure(admitted))
+      yield* undelivered(
+        `run ${recipient} is closed or cannot be read`,
+        admitted.failure,
+      );
+    else if (admitted.success.sent.kind === 'refused')
+      yield* undelivered(
+        `run ${recipient} is unavailable (${admitted.success.sent.reason})`,
+      );
+    else rows.push(...admitted.success.rows);
+  }
+  return rows;
 });
 
 /**
  * A run's end in `tx`'s job, decided from what it reads under the lock:
  * the requests it leaves open cancelled, a root's unread input dropped (a
  * child's stays: a message to a child that ended is its resume's), its
- * closure, its `run.end`, a child's report with its parent's delivery
- * ({@link parentDelivery}), and `leading` rows ahead of them (a stop's
+ * closure, its `run.end`, its report with the delivery to the run it
+ * works for ({@link replyDelivery}), and `leading` rows ahead of them (a stop's
  * `run.stop`, a process run's exit). A run never created has nothing to
  * end; one that ended in its current lifecycle keeps that end. A run whose
  * rows this build cannot load ends unloaded, with a warning, requests
@@ -278,7 +296,7 @@ const endIn = Effect.fn('endIn')(function* (
             aggregateId: target,
             report: formatDelivery(input.report),
           },
-          ...(yield* parentDelivery(runId, facts, input.report)),
+          ...(yield* replyDelivery(runId, facts, input.report)),
         ];
   const beside = [
     ...ahead,
