@@ -56,6 +56,7 @@ import {
 import { DesktopPromptController } from './desktopPromptController.js';
 import { SETTINGS_VIEW_INBOUND_COMMANDS } from './desktopSettingsIpc.js';
 import { createDesktopShellCommands } from './desktopShellIpc.js';
+import type { DesktopLayout } from './platform/paths.js';
 import { checkForDesktopUpdate } from './desktopUpdateChecker.js';
 import { openWindowOnboarding } from './desktopWindowOnboarding.js';
 import { createDesktopWindowHost } from './desktopWindowHost.js';
@@ -80,8 +81,8 @@ interface DesktopWindowOptions {
   readonly draftRequests: HostDraftRequests;
   /** See ElectronPlatformInitResult.resourcesPath. */
   readonly resourcesPath: string;
-  /** See ElectronPlatformInitResult.mainDir. */
-  readonly mainDir: string;
+  /** Where this build's preload script and renderer page are. */
+  readonly layout: Pick<DesktopLayout, 'preload' | 'rendererPage'>;
   /** The process runtime the composition root built. Every Effect this window
    *  runs settles on it. */
   readonly runtime: ProcessRuntime;
@@ -106,7 +107,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
       initialProject.session,
       initialProject.root && initialProject.display.name,
     ),
-    mainDir: options.mainDir,
+    preload: options.layout.preload,
   });
   // The renderer's channels exist before anything can post to them; the
   // routes and bindings they hand messages to are read as a message arrives,
@@ -372,7 +373,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   );
   installMenu(SubscriptionRef.getUnsafe(projects.state).recent);
 
-  loadDesktopWindow(window, options.mainDir);
+  loadDesktopWindow(window, options.layout.rendererPage);
 
   return { window, reveal: navigation.reveal };
 });

@@ -19,7 +19,11 @@ import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
 
 // Local file imports
 import { repairLaunchPath } from './pathFix.js';
-import { resolveDesktopMainDir, resolveResourcesPath } from './paths.js';
+import {
+  checkResourcesPath,
+  desktopLayout,
+  type DesktopLayout,
+} from './paths.js';
 import type { ConfigStore } from '@texra-ai/harness/node';
 interface ElectronPlatformInitResult {
   /**
@@ -46,34 +50,29 @@ interface ElectronPlatformInitResult {
    * each re-resolve it.
    */
   resourcesPath: string;
-  /** The directory of the built main bundle, beside its preload and renderer. */
-  mainDir: string;
+  /** Where this build's files are. */
+  layout: DesktopLayout;
 }
 
 export const initializeElectronPlatform = Effect.fn(
   'initializeElectronPlatform',
-)(function* (moduleDirname: string) {
+)(function* (mainDir: string) {
   // Desktop's memory/history/executions data root: shared with the CLI's
   // `~/.texra` so a workspace worked on from both hosts shows one history.
   const dataRoot = defaultNodeStorageRoot();
   // The process identity and application state are acquired by the
   // runtime's own layers, over the spawner and database it serves.
-  const { mainDir, resourcesPath, configStores } = yield* Effect.gen(
-    function* () {
-      const mainDir = yield* resolveDesktopMainDir(moduleDirname);
-      const resourcesPath = yield* resolveResourcesPath(
-        mainDir,
-        app.isPackaged,
-      );
-      const { stores: configStores, warnings } = yield* openTexraConfigStores(
-        TEXRA_SETTINGS.catalog,
-        dataRoot,
-        undefined,
-      );
-      for (const message of warnings) console.warn(`[desktop] ${message}`);
-      return { mainDir, resourcesPath, configStores };
-    },
-  ).pipe(Effect.provide(nodeFileServices));
+  const layout = desktopLayout(mainDir, app.isPackaged);
+  const { resourcesPath, configStores } = yield* Effect.gen(function* () {
+    const resourcesPath = yield* checkResourcesPath(layout.resourcesPath);
+    const { stores: configStores, warnings } = yield* openTexraConfigStores(
+      TEXRA_SETTINGS.catalog,
+      dataRoot,
+      undefined,
+    );
+    for (const message of warnings) console.warn(`[desktop] ${message}`);
+    return { resourcesPath, configStores };
+  }).pipe(Effect.provide(nodeFileServices));
   // The one Effect runtime of this process, over the stores it
   // serves: every project's session graph and Promise-facing fiber runs on
   // it, and the entry disposes it last (`disposeEffect`), after run
@@ -122,7 +121,7 @@ export const initializeElectronPlatform = Effect.fn(
       globalConfigStore: configStores.global,
       dataRoot,
       resourcesPath,
-      mainDir,
+      layout,
     };
   });
   return { runtime, processScope, initialize };

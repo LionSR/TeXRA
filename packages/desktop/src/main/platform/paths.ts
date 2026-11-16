@@ -1,9 +1,9 @@
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 
 import { Effect, FileSystem, Schema } from 'effect';
 
 import { BUNDLED_AGENTS_DIRECTORY } from '@texra-ai/harness/host';
-import { absentReason, pathExists } from '@texra-ai/harness/node';
+import { absentReason } from '@texra-ai/harness/node';
 
 /** The app's resources directory holds no bundled agents. */
 class DesktopResourcesNotFound extends Schema.TaggedError<DesktopResourcesNotFound>()(
@@ -13,55 +13,46 @@ class DesktopResourcesNotFound extends Schema.TaggedError<DesktopResourcesNotFou
   },
 ) {}
 
-/**
- * The directory holding the built main bundle: the nearest of `startDir` and
- * its two ancestors that sits beside the built preload script and renderer
- * page, or `startDir` itself when none does.
- */
-export const resolveDesktopMainDir = Effect.fn('resolveDesktopMainDir')(
-  function* (startDir: string) {
-    const fs = yield* FileSystem.FileSystem;
-    let currentDir = startDir;
-    for (let depth = 0; depth < 3; depth += 1) {
-      if (
-        (yield* pathExists(fs, join(currentDir, '../preload/index.cjs'))) &&
-        (yield* pathExists(fs, join(currentDir, '../renderer/index.html')))
-      ) {
-        return currentDir;
-      }
-      const parentDir = dirname(currentDir);
-      if (parentDir === currentDir) break;
-      currentDir = parentDir;
-    }
-    return startDir;
-  },
-);
+/** Where this build's files are. */
+export type DesktopLayout = ReturnType<typeof desktopLayout>;
 
 /**
- * The bundled `packages/extension/resources` tree: beside the packaged app's
- * `Resources/` (`extraResources` in `electron-builder.yml`), or the extension
- * package's own copy in a development run from `packages/desktop/dist/main`.
- * Which one is Electron's `app.isPackaged`, so nothing is searched; the one
- * place fails by its path when it holds no bundled agents.
+ * Where this build's files are, from the directory of the entry module
+ * (`dist/main/index.js`, `main` in package.json), which sits beside the
+ * built preload script and renderer page. The bundled extension tree is the
+ * packaged app's `Resources/` (`extraResources` in `electron-builder.yml`),
+ * or in a development run the extension package beside this one.
  */
-export const resolveResourcesPath = Effect.fn('resolveResourcesPath')(
-  function* (mainDirname: string, isPackaged: boolean) {
-    const fs = yield* FileSystem.FileSystem;
-    const resources = isPackaged
-      ? join(process.resourcesPath, 'resources')
-      : join(mainDirname, '../../../extension/resources');
-    if (
-      !(yield* isExistingDirectory(
-        fs,
-        join(resources, BUNDLED_AGENTS_DIRECTORY),
-      ))
-    )
-      return yield* new DesktopResourcesNotFound({
-        message: `Unable to locate TeXRA resources: ${resources} holds no ${BUNDLED_AGENTS_DIRECTORY}/ directory`,
-      });
-    return resources;
-  },
-);
+export function desktopLayout(mainDir: string, isPackaged: boolean) {
+  const extension = isPackaged
+    ? process.resourcesPath
+    : join(mainDir, '../../../extension');
+  return {
+    preload: join(mainDir, '../preload/index.cjs'),
+    rendererPage: join(mainDir, '../renderer/index.html'),
+    /** The `packages/extension/resources` tree. */
+    resourcesPath: join(extension, 'resources'),
+    /** The directory the background service's bundle (`serve/`) is in. */
+    serviceRoot: extension,
+  };
+}
+
+/** `resourcesPath`, failing by its path when it holds no bundled agents. */
+export const checkResourcesPath = Effect.fn('checkResourcesPath')(function* (
+  resourcesPath: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  if (
+    !(yield* isExistingDirectory(
+      fs,
+      join(resourcesPath, BUNDLED_AGENTS_DIRECTORY),
+    ))
+  )
+    return yield* new DesktopResourcesNotFound({
+      message: `Unable to locate TeXRA resources: ${resourcesPath} holds no ${BUNDLED_AGENTS_DIRECTORY}/ directory`,
+    });
+  return resourcesPath;
+});
 
 const isExistingDirectory = (fs: FileSystem.FileSystem, path: string) =>
   fs.stat(path).pipe(
