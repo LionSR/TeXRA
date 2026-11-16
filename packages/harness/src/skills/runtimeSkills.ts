@@ -31,8 +31,8 @@ import {
 } from './loadSkills';
 
 import {
-  foldSkillSources,
-  type SkillSourceContribution,
+  skillTiers,
+  type SkillSourceCall,
   type SkillSourceOptions,
 } from './skillSources';
 import {
@@ -53,20 +53,20 @@ export interface SkillCatalogEntry {
 }
 
 /**
- * The skill contributions this process discovers, served by `processLayer`
- * from its `HostSkillOptions` and its plugins. Only data is fixed here:
- * project and interop sources live under the workspace folder, so they are
- * resolved per call from the calling session's workspace, and a desktop with
- * several projects open discovers each run's project skills in that run's own
- * folder. The default is no contributions.
+ * The skill sources this process discovers, served by `processLayer` from
+ * its `HostSkillOptions` and its plugins. Only data is fixed here: project
+ * and interop sources live under the workspace folder, so they are resolved
+ * per call from the calling session's workspace, and a desktop with several
+ * projects open discovers each run's project skills in that run's own
+ * folder. The default, a process given no skill options, discovers none.
  */
-export const HostSkillSources = Context.Reference<{
-  readonly resourcesPath: string;
-  readonly options: SkillSourceOptions;
-  readonly contributions: readonly SkillSourceContribution[];
-}>('@texra-ai/harness/HostSkillSources', {
-  defaultValue: () => ({ resourcesPath: '', options: {}, contributions: [] }),
-});
+export const HostSkillSources = Context.Reference<
+  | Pick<
+      SkillSourceCall,
+      'resourcesPath' | 'projectDataDirName' | 'pluginIds' | 'options'
+    >
+  | undefined
+>('@texra-ai/harness/HostSkillSources', { defaultValue: () => undefined });
 
 interface DisabledSkills {
   readonly names: readonly string[];
@@ -87,7 +87,7 @@ export type SkillRoots = SettingsStores & {
 };
 
 /**
- * Discover the host's contributions folded for one workspace, with the
+ * Discover the host's skill sources for one workspace, with the
  * installed plugins that load (`plugins`, as the caller read them): the
  * enabled ones the user trusts as they are. Why each other enabled plugin
  * loads nothing is a discovery issue, so every listing names it. `options`
@@ -104,14 +104,17 @@ const discoverRuntimeSkills = Effect.fn('discoverRuntimeSkills')(function* (
   // An unresolvable home directory is logged by `homeDirectory`; the
   // `/nonexistent` root then holds no user skills to discover.
   const home = (yield* homeDirectory) ?? '/nonexistent';
-  const tiers = foldSkillSources(host.contributions, {
-    cwd: roots.workspace,
-    home,
-    storageRoot: roots.storageRoot,
-    resourcesPath: host.resourcesPath,
-    options: options ?? host.options,
-    plugins: plugins.loadable,
-  });
+  const tiers =
+    host === undefined
+      ? []
+      : skillTiers({
+          ...host,
+          options: options ?? host.options,
+          cwd: roots.workspace,
+          home,
+          storageRoot: roots.storageRoot,
+          plugins: plugins.loadable,
+        });
   // A switched-off source is read after every source that is on, so a skill
   // it holds never takes the name of one a person can use.
   const off = (source: SkillSource) =>
@@ -132,10 +135,6 @@ const discoverRuntimeSkills = Effect.fn('discoverRuntimeSkills')(function* (
     ],
   } satisfies DiscoverSkillSourcesResult;
 });
-
-function sourceLabel(source: SkillSource): string {
-  return source.label ?? source.scope;
-}
 
 /** Whether the source is a tool plugin's that is switched off. */
 const pluginOff = (source: SkillSource, disabled: DisabledSkills): boolean =>
@@ -187,7 +186,7 @@ function skillDisplayItem(
     name: skill.name,
     description: skill.description,
     scope: source.scope,
-    label: sourceLabel(source),
+    label: source.label,
     path: skill.path,
     sourcePath: source.path,
     enabled: !isSkillDisabled(entry, disabled),
@@ -307,7 +306,7 @@ const catalogEntry = (
     Effect.map((directory) => ({
       plugin: source.plugin ?? null,
       name: skill.name,
-      text: `- ${skill.name}: ${skill.description}\n  Source: ${sourceLabel(source)}\n  Path: ${skill.path}`,
+      text: `- ${skill.name}: ${skill.description}\n  Source: ${source.label}\n  Path: ${skill.path}`,
       directory,
     })),
   );
@@ -349,7 +348,7 @@ function formatRuntimeSkillActivation({ skill, source }: SourcedSkill): string {
     '<skill_activation>',
     `The user selected the ${escapeText(skill.name)} skill. Use these instructions for the next substantive user request. Resolve relative file references against the skill_directory.`,
     `<skill name="${escapeAttr(skill.name)}">`,
-    `<source>${escapeText(sourceLabel(source))}</source>`,
+    `<source>${escapeText(source.label)}</source>`,
     `<path>${escapeText(skill.path)}</path>`,
     `<skill_directory>${escapeText(skill.baseDir)}</skill_directory>`,
     '<instructions>',

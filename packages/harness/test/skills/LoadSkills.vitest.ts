@@ -17,7 +17,7 @@ const tempRoots = useTempDirs();
 /** One source-ordered tier: each root scanned in turn. */
 const discoverSkillSources = (sources: readonly SkillSource[]) =>
   Effect.runPromise(
-    discoverSkillSourcesEffect([{ order: 'source', sources }]).pipe(
+    discoverSkillSourcesEffect([{ sources }]).pipe(
       Effect.provide(nodePlatformLayer),
     ),
   );
@@ -41,7 +41,7 @@ describe('discoverSkillSources over one root', () => {
     );
 
     const result = await discoverSkillSources([
-      { scope: 'project', path: root },
+      { scope: 'project', path: root, label: 'project' },
     ]);
 
     expect(result.skills.map(({ skill }) => skill.name)).toEqual([
@@ -74,8 +74,8 @@ describe('discoverSkillSources', () => {
     });
 
     const result = await discoverSkillSources([
-      { scope: 'bundled', path: bundled },
-      { scope: 'project', path: project },
+      { scope: 'bundled', path: bundled, label: 'bundled' },
+      { scope: 'project', path: project, label: 'project' },
     ]);
 
     expect(result.skills.map(({ skill }) => skill.description)).toEqual([
