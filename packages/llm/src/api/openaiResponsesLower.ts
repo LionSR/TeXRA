@@ -235,7 +235,7 @@ export const withResponsesContinuation = Effect.fn(
     return yield* new ModelError({
       kind: 'invalid-request',
       message:
-        'Continuation requires the original admitted input and matching completed output.',
+        'Continuation requires the input the request sent and matching completed output.',
     });
   // HTTP stored-response chaining is separate from temporary background retrieval.
   // https://developers.openai.com/api/docs/guides/conversation-state
@@ -289,7 +289,7 @@ export const responseInput = Effect.fn('llm.responses.input')(function* (
   )
     return yield* new ModelError({
       kind: 'invalid-request',
-      message: 'Continuation does not cover the exact admitted prefix.',
+      message: 'Continuation does not cover the exact prefix the request sent.',
     });
   // The stored response already holds the covered prefix, so only the
   // uncovered suffix is lowered: a covered document's bytes are never

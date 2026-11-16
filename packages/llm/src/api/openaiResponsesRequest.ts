@@ -18,7 +18,7 @@ import type { UploadCache } from './uploadCache.js';
 import type { SessionToken } from '../node.js';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
 
-/** Resolves controls before admission; a route with no output limit
+/** Resolves controls before the request is built; a route with no output limit
  *  ignores the request's, and the lowering refuses a continuation on a
  *  route that does not store. No transport request is made here. */
 export const prepareResponsesTurn = (
@@ -51,7 +51,7 @@ export const prepareResponsesTurn = (
     (turn) => responseParameters(config, origin, turn, turn.mode, uploads),
   );
 
-/** Validates the admitted binding and lowers one request without transport flags. */
+/** Validates the prepared turn against its binding and lowers one request without transport flags. */
 export const responseParameters = Effect.fn('llm.responses.parameters')(
   function* (
     config: OpenAIResponsesConfiguration,

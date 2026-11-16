@@ -50,7 +50,8 @@ interface Assembly {
   readonly slots: Map<number, Slot>;
 }
 type Of<K extends PartEvent['kind']> = Extract<PartEvent, { kind: K }>;
-type Folded = Effect.Effect<readonly TurnEvent[], ModelError>;
+/** The events one part event emits. */
+type StepEvents = Effect.Effect<readonly TurnEvent[], ModelError>;
 
 const fail = (turn: Assembly, what: string) =>
   Effect.fail(
@@ -59,14 +60,14 @@ const fail = (turn: Assembly, what: string) =>
       message: `${turn.options.provider} ${what}.`,
     }),
   );
-const none: Folded = Effect.succeed([]);
+const none: StepEvents = Effect.succeed([]);
 
 /**
  * The id and model each fill once and never change. An empty
  * id or model is observed, so it cannot follow a real one, but identifies
  * nothing; only `null` means the event did not report the field.
  */
-function identify(turn: Assembly, event: Of<'identity'>): Folded {
+function identify(turn: Assembly, event: Of<'identity'>): StepEvents {
   const pairs = [
     [turn.id, event.id],
     [turn.model, event.model],
@@ -93,7 +94,7 @@ function identify(turn: Assembly, event: Of<'identity'>): Folded {
 }
 
 /** Content needs an identity, and only a close follows the finish. */
-function admit(
+function checkOrder(
   turn: Assembly,
   closing = false,
 ): Effect.Effect<void, ModelError> {
@@ -104,7 +105,7 @@ function admit(
   return Effect.void;
 }
 
-function open(turn: Assembly, { index, part }: Of<'open'>): Folded {
+function open(turn: Assembly, { index, part }: Of<'open'>): StepEvents {
   const slot = turn.slots.get(index);
   if (slot === undefined) {
     turn.slots.set(index, { part, closed: false, streamedArguments: false });
@@ -123,7 +124,7 @@ function open(turn: Assembly, { index, part }: Of<'open'>): Folded {
   return none;
 }
 
-function append(turn: Assembly, event: Of<'append'>): Folded {
+function append(turn: Assembly, event: Of<'append'>): StepEvents {
   const { channel, text, item } = event;
   const delta: readonly TurnEvent[] =
     channel === 'arguments'
@@ -145,7 +146,7 @@ function append(turn: Assembly, event: Of<'append'>): Folded {
   return Effect.succeed(delta);
 }
 
-function evidence(turn: Assembly, event: Of<'evidence'>): Folded {
+function evidence(turn: Assembly, event: Of<'evidence'>): StepEvents {
   const slot = turn.slots.get(event.index);
   const part = slot?.part;
   if (
@@ -159,7 +160,7 @@ function evidence(turn: Assembly, event: Of<'evidence'>): Folded {
 }
 
 /** A completed item names itself, so its close may open its position. */
-function close(turn: Assembly, { index, content }: Of<'close'>): Folded {
+function close(turn: Assembly, { index, content }: Of<'close'>): StepEvents {
   const slot =
     turn.slots.get(index) ??
     (content
@@ -185,7 +186,7 @@ function close(turn: Assembly, { index, content }: Of<'close'>): Folded {
   );
 }
 
-function finish(turn: Assembly, event: Of<'finish'>): Folded {
+function finish(turn: Assembly, event: Of<'finish'>): StepEvents {
   if (
     turn.finish !== undefined &&
     !isDeepStrictEqual(turn.finish.finish, event.finish)
@@ -196,18 +197,18 @@ function finish(turn: Assembly, event: Of<'finish'>): Folded {
 }
 
 /** One part applied to the assembly, with the turn events it emits. */
-function step(turn: Assembly, event: PartEvent): Folded {
+function step(turn: Assembly, event: PartEvent): StepEvents {
   switch (event.kind) {
     case 'identity':
       return identify(turn, event);
     case 'open':
-      return Effect.andThen(admit(turn), () => open(turn, event));
+      return Effect.andThen(checkOrder(turn), () => open(turn, event));
     case 'append':
-      return Effect.andThen(admit(turn), () => append(turn, event));
+      return Effect.andThen(checkOrder(turn), () => append(turn, event));
     case 'evidence':
-      return Effect.andThen(admit(turn), () => evidence(turn, event));
+      return Effect.andThen(checkOrder(turn), () => evidence(turn, event));
     case 'close':
-      return Effect.andThen(admit(turn, true), () => close(turn, event));
+      return Effect.andThen(checkOrder(turn, true), () => close(turn, event));
     case 'usage':
       turn.usage = event.usage;
       return none;
@@ -224,7 +225,7 @@ function step(turn: Assembly, event: PartEvent): Folded {
  * resumed observation), and then supplies the items the stream did not
  * close, each streamed item standing in for the snapshot entry it names.
  */
-const settle = Effect.fn('llm.settleTurn')(function* (
+const finishedContent = Effect.fn('llm.finishedContent')(function* (
   turn: Assembly,
   snapshot: readonly Part[] | undefined,
 ) {
@@ -262,7 +263,7 @@ const settle = Effect.fn('llm.settleTurn')(function* (
 const complete = Effect.fn('llm.completeTurn')(function* (turn: Assembly) {
   if (turn.id === undefined || turn.finish === undefined)
     return yield* fail(turn, 'ended without an identified terminal result');
-  const content = yield* settle(turn, turn.finish.snapshot);
+  const content = yield* finishedContent(turn, turn.finish.snapshot);
   const calls = content.some((part) => part.kind === 'local-call');
   const reason =
     turn.finish.finish.finishReason ?? (calls ? 'tool-calls' : 'stop');
@@ -297,7 +298,7 @@ const complete = Effect.fn('llm.completeTurn')(function* (turn: Assembly) {
  * enriched with the identity.
  */
 export function turnAssembly(options: AssemblyOptions): {
-  readonly step: (event: PartEvent) => Folded;
+  readonly step: (event: PartEvent) => StepEvents;
   readonly complete: Effect.Effect<TurnResult, ModelError>;
   readonly enrich: (error: ModelError) => ModelError;
 } {

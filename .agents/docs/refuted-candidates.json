@@ -292,7 +292,7 @@
         {
           "file": "packages/llm/src/turn.ts",
           "symbol": "completedTurn",
-          "signature": "export const completedTurn = Effect.fn('llm.generateTurn')(function* ( events: Stream.Stream<TurnEvent, ModelError>, ) {…});"
+          "signature": "export const completedTurn = Effect.fn('llm.completedTurn')(function* ( events: Stream.Stream<TurnEvent, ModelError>, ) {…});"
         }
       ]
     },

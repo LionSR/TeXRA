@@ -1,9 +1,9 @@
 /**
  * Host-neutral coordinator for a subscription OAuth session (ChatGPT, Grok, …).
  *
- * Pure state machine over injected secret storage. Provider
- * differences (authorize URL, claim extraction) live in the
- * {@link SubscriptionOAuthPolicy}; this class owns one lock around every
+ * The one lock around a provider's stored session, over the caller's secret
+ * store. Provider differences (endpoints, claims, the device grant) live in
+ * the {@link SubscriptionOAuthPolicy}; this class owns one lock around every
  * read-then-write of the stored session: a refresh, a sign-in's store and a
  * sign-out's delete take turns, so concurrent callers that find a session
  * expiring share the refresh the first of them made, and a sign-in or a
@@ -46,8 +46,9 @@ import type { HttpClient } from 'effect/http';
 /** Refresh this long before expiry (the Codex CLI's and Zed's buffer). */
 const REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
-/** A token-grant failure as the machine's error: the same message, kind
- *  and status the grant's Promise API always threw. */
+/** A token-grant failure as the coordinator's one error type, so a caller
+ *  reads the grant's message, kind and status as it reads every other
+ *  sign-in failure. */
 function grantFailure(error: OAuthRequestError): SubscriptionOAuthError {
   switch (error._tag) {
     case 'OAuthHttpError':

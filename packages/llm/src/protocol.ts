@@ -3,7 +3,7 @@ import { Schema, Struct } from 'effect';
 
 /**
  * Scheme, host and path only. The origin is written into durable rows that
- * are never scrubbed, and a URL check alone admits `user:key@host`,
+ * are never scrubbed, and a URL check alone accepts `user:key@host`,
  * `?api-key=` and `#api-key=` alike.
  */
 const EndpointSchema = Schema.String.check(

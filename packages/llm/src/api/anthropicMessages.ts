@@ -160,7 +160,7 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
   const history = yield* replayableHistory(turn.messages, origin);
   for (const [index, message] of history.entries()) {
     if (message.role === 'system') {
-      // Native where the model takes it and the API admits it: after a user
+      // Native where the model takes it and the API accepts it: after a user
       // turn, and last or before an assistant turn.
       const next = history[index + 1];
       messages.push(
@@ -417,7 +417,7 @@ function anthropicWire() {
     if (event.type === 'message_delta') {
       if (event.delta.container != null)
         return yield* fail(
-          'Anthropic returned unsettled content.',
+          'Anthropic returned container state, which this request does not use.',
           'invalid-request',
         );
       stop = event.delta;
