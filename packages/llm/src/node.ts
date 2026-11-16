@@ -9,15 +9,14 @@
  * ### Key exports by role
  *
  * - **Protocol binding**: [`bindModel`](#bindmodel), [`BindSpec`](#bindspec),
- *   [`Binding`](#binding) dynamically load only the requested protocol (`anthropic-messages`, `openai-responses`,
- *   `google-interactions`), manage scoped connections and file uploads in the
- *   caller's `Scope`, and classify provider failures into `ModelError`.
+ *   [`Binding`](#binding) dynamically load only the requested protocol
+ *   (`anthropic-messages`, `openai-responses`, `google-interactions`), manage
+ *   scoped connections and file uploads in the caller's `Scope`, and classify
+ *   provider failures into `ModelError`.
  * - **Subscription sign-in (`chatgpt`, `xai`)**: each subscription's
  *   account, keyed by its route
- *   ([`SubscriptionAccounts`](#subscriptionaccounts)), and the ChatGPT
- *   ([`chatgptLoginWithLoopback`](#chatgptloginwithloopback)) and Grok
- *   ([`xaiLoginWithLoopback`](#xailoginwithloopback),
- *   [`xaiLoginWithDeviceCode`](#xailoginwithdevicecode)) OAuth flows.
+ *   ([`SubscriptionAccounts`](#subscriptionaccounts)), which runs its own
+ *   browser and (Grok's) device-code sign-in.
  */
 import { Effect, type Scope } from 'effect';
 import { ModelError, type BillingRoute } from './errors.js';
@@ -201,27 +200,12 @@ export const bindModel = Effect.fn('llm.bindModel')(function* (
 });
 
 export { SubscriptionOAuthError } from './oauth/subscriptionOAuthError.js';
-export type {
-  DeviceLoginOptions,
-  SubscriptionDeviceCodePrompt,
-} from './oauth/deviceAuthorization.js';
+export type { SubscriptionDeviceCodePrompt } from './oauth/deviceAuthorization.js';
 export { LoopbackTransportUnavailableError } from './oauth/loopbackLogin.js';
-export type { LoopbackLoginOptions } from './oauth/loopbackLogin.js';
 export type {
-  SubscriptionAuthorizeRequest,
-  SubscriptionCallback,
   SubscriptionCoordinator,
-  SubscriptionSession,
   SubscriptionSessionStatus,
-  SubscriptionTokenResponse,
 } from './oauth/subscriptionCoordinator.js';
-export {
-  chatgptLoginWithLoopback,
-  type ChatgptSession,
-} from './oauth/chatgpt/chatgptProvider.js';
-export {
-  xaiLoginWithLoopback,
-  type XaiSession,
-} from './oauth/xai/xaiProvider.js';
+export type { ChatgptSession } from './oauth/chatgpt/chatgptProvider.js';
+export type { XaiSession } from './oauth/xai/xaiProvider.js';
 export { SubscriptionAccounts } from './oauth/subscriptionAccounts.js';
-export { xaiLoginWithDeviceCode } from './oauth/xai/xaiDeviceLogin.js';

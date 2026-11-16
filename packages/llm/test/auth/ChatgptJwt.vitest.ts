@@ -1,35 +1,28 @@
-import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { SubscriptionAccounts } from '@texra-ai/llm/node';
-import type { CredentialStore } from '@texra-ai/llm';
+import { CHATGPT_POLICY } from '../../src/oauth/chatgpt/chatgptProvider.js';
 
 /** An access token the claim decoder reads as carrying no claims. */
 const OPAQUE_ACCESS_TOKEN = 'opaque-access-token';
 
 /**
  * The claims a ChatGPT sign-in stores from its token grant, read through the
- * coordinator's `storeTokens`: the id_token's, falling back field by field to
- * the access_token's. An absent access token is one that carries no claims.
+ * policy's `buildSession`: the id_token's, falling back field by field to the
+ * access_token's. An absent access token is one that carries no claims.
  */
 function storedClaims(
   idToken: string | undefined,
   accessToken: string | undefined,
 ) {
-  const signedOut: CredentialStore = {
-    get: () => Effect.succeed(undefined),
-    set: () => Effect.void,
-    delete: () => Effect.void,
-  };
-  const { accountId, email, planType } = Effect.runSync(
-    Effect.flatMap(SubscriptionAccounts.make(signedOut), (accounts) =>
-      accounts['chatgpt-subscription'].storeTokens({
-        access_token: accessToken ?? OPAQUE_ACCESS_TOKEN,
-        id_token: idToken,
-        refresh_token: 'refresh-token',
-        expires_in: 3600,
-      }),
-    ),
+  const { accountId, email, planType } = CHATGPT_POLICY.buildSession(
+    {
+      access_token: accessToken ?? OPAQUE_ACCESS_TOKEN,
+      id_token: idToken,
+      refresh_token: 'refresh-token',
+      expires_in: 3600,
+    },
+    'refresh-token',
+    0,
   );
   return { accountId, email, planType };
 }

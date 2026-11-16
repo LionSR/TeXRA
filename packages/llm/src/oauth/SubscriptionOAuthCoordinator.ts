@@ -23,6 +23,7 @@ import {
   exchangeAuthorizationCode,
   refreshOAuthTokens,
 } from './formTokenClient.js';
+import { loginWithLoopback } from './loopbackLogin.js';
 import { authorizeRequest } from './pkce.js';
 import { SubscriptionOAuthError } from './subscriptionOAuthError.js';
 import type { OAuthRequestError } from './oauthRequest.js';
@@ -39,6 +40,7 @@ import type {
   SubscriptionSessionStatus,
   SubscriptionTokenResponse,
 } from './subscriptionCoordinator.js';
+import type { SubscriptionDeviceCodePrompt } from './deviceAuthorization.js';
 import type { HttpClient } from 'effect/http';
 
 /** Refresh this long before expiry (the Codex CLI's and Zed's buffer). */
@@ -87,6 +89,9 @@ export class SubscriptionOAuthCoordinator<
   private readonly policy: SubscriptionOAuthPolicy<S>;
   /** Held across every read-then-write of the stored session. */
   private readonly lock: Semaphore.Semaphore;
+  readonly signInWithDeviceCode?: (
+    onPrompt: (prompt: SubscriptionDeviceCodePrompt) => Effect.Effect<void>,
+  ) => Effect.Effect<S, Error, HttpClient.HttpClient>;
 
   private constructor(
     secrets: CredentialStore,
@@ -96,6 +101,25 @@ export class SubscriptionOAuthCoordinator<
     this.secrets = secrets;
     this.policy = policy;
     this.lock = lock;
+    const { deviceGrant } = policy;
+    // The store is uninterruptible once it starts, so an approved grant is
+    // kept whoever stops waiting.
+    if (deviceGrant !== undefined)
+      this.signInWithDeviceCode = (onPrompt) =>
+        Effect.flatMap(deviceGrant(onPrompt), (tokens) =>
+          this.storeTokens(tokens),
+        );
+  }
+
+  signInWithBrowser(
+    openBrowser: (url: string) => Effect.Effect<void, Error>,
+  ): Effect.Effect<S, Error, HttpClient.HttpClient> {
+    return loginWithLoopback({
+      loopback: this.policy.loopback,
+      authorize: (port) => this.buildAuthorizeRequest(port),
+      exchange: (request, callback) => this.loginWithCode(request, callback),
+      openBrowser,
+    });
   }
 
   /**
@@ -103,22 +127,22 @@ export class SubscriptionOAuthCoordinator<
    * does not parse is not "never signed in": it fails `fatal`, so the
    * caller asks for a fresh sign-in, which overwrites it.
    */
-  readonly loadSession = Effect.fn('SubscriptionOAuthCoordinator.loadSession')(
-    function* (
-      this: SubscriptionOAuthCoordinator<S>,
-    ): Effect.fn.Return<S | null, SecretsFailed | SubscriptionOAuthError> {
-      const raw = yield* this.secrets.get(this.policy.secretKey);
-      if (!raw) return null;
-      const parsed = Schema.decodeUnknownResult(
-        Schema.fromJsonString(this.policy.sessionSchema),
-      )(raw);
-      if (Result.isSuccess(parsed)) return parsed.success;
-      return yield* new SubscriptionOAuthError({
-        message: `The stored subscription session is unreadable; sign in again: ${toErrorMessage(parsed.failure)}`,
-        kind: 'fatal',
-      });
-    },
-  );
+  private readonly loadSession = Effect.fn(
+    'SubscriptionOAuthCoordinator.loadSession',
+  )(function* (
+    this: SubscriptionOAuthCoordinator<S>,
+  ): Effect.fn.Return<S | null, SecretsFailed | SubscriptionOAuthError> {
+    const raw = yield* this.secrets.get(this.policy.secretKey);
+    if (!raw) return null;
+    const parsed = Schema.decodeUnknownResult(
+      Schema.fromJsonString(this.policy.sessionSchema),
+    )(raw);
+    if (Result.isSuccess(parsed)) return parsed.success;
+    return yield* new SubscriptionOAuthError({
+      message: `The stored subscription session is unreadable; sign in again: ${toErrorMessage(parsed.failure)}`,
+      kind: 'fatal',
+    });
+  });
 
   /** Signed-in status of the stored session. */
   getStatus(): Effect.Effect<
@@ -136,7 +160,8 @@ export class SubscriptionOAuthCoordinator<
     );
   }
 
-  readonly buildAuthorizeRequest = Effect.fn(
+  /** The PKCE authorize request for a loopback callback on `port`. */
+  private readonly buildAuthorizeRequest = Effect.fn(
     'SubscriptionOAuthCoordinator.buildAuthorizeRequest',
   )(function* (this: SubscriptionOAuthCoordinator<S>, port: number) {
     const { registration } = this.policy;
@@ -236,28 +261,27 @@ export class SubscriptionOAuthCoordinator<
   );
 
   /**
-   * Persist tokens from a successful device-code (or other) grant: the
-   * session built from them becomes the stored one, after any refresh in
-   * flight.
+   * Persist tokens from a completed grant: the session built from them
+   * becomes the stored one, after any refresh in flight.
    */
-  readonly storeTokens = Effect.fn('SubscriptionOAuthCoordinator.storeTokens')(
-    function* (
-      this: SubscriptionOAuthCoordinator<S>,
-      tokens: SubscriptionTokenResponse,
-      clientId?: string,
-    ) {
-      const session = yield* this.buildSession(tokens, undefined, clientId);
-      yield* this.lock.withPermit(Effect.uninterruptible(this.store(session)));
-      return session;
-    },
-  );
+  private readonly storeTokens = Effect.fn(
+    'SubscriptionOAuthCoordinator.storeTokens',
+  )(function* (
+    this: SubscriptionOAuthCoordinator<S>,
+    tokens: SubscriptionTokenResponse,
+    clientId?: string,
+  ) {
+    const session = yield* this.buildSession(tokens, undefined, clientId);
+    yield* this.lock.withPermit(Effect.uninterruptible(this.store(session)));
+    return session;
+  });
 
   /**
    * The code exchange, yielded by the loopback login so its interruption
    * reaches the exchange and the store. A registering attempt takes the
    * client the callback names; a returning one rejects any other.
    */
-  readonly loginWithCode = Effect.fn(
+  private readonly loginWithCode = Effect.fn(
     'SubscriptionOAuthCoordinator.loginWithCode',
   )(function* (
     this: SubscriptionOAuthCoordinator<S>,

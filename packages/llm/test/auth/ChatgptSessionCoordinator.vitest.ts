@@ -5,12 +5,13 @@ import { FetchHttpClient } from 'effect/http';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import {
-  type ChatgptSession,
-  SubscriptionAccounts,
-  type SubscriptionCoordinator,
-  type SubscriptionTokenResponse,
+import type {
+  ChatgptSession,
+  SubscriptionCoordinator,
 } from '@texra-ai/llm/node';
+import { CHATGPT_POLICY } from '../../src/oauth/chatgpt/chatgptProvider.js';
+import { SubscriptionOAuthCoordinator } from '../../src/oauth/SubscriptionOAuthCoordinator.js';
+import type { SubscriptionTokenResponse } from '../../src/oauth/subscriptionCoordinator.js';
 import { jsonResponse } from '@test/support/fetchTestUtils';
 import type { CredentialStore } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
@@ -137,17 +138,19 @@ const joinFailure = <A>(fiber: Fiber.Fiber<A, unknown>) =>
 
 /**
  * The ChatGPT coordinator over `storage`, with the token endpoint answering
- * the given grants (an unlisted grant fails the request).
+ * the given grants (an unlisted grant fails the request). Its device-code
+ * sign-in, which ChatGPT itself lacks, is granted `signInTokens` at once.
  */
 function makeCoordinator(
   storage: CredentialStore,
   endpointGrants: typeof grants = {},
+  signInTokens: SubscriptionTokenResponse = tokenResponse(),
 ): Effect.Effect<SubscriptionCoordinator<ChatgptSession>> {
   grants = endpointGrants;
-  return Effect.map(
-    SubscriptionAccounts.make(storage),
-    (accounts) => accounts['chatgpt-subscription'],
-  );
+  return SubscriptionOAuthCoordinator.make(storage, {
+    ...CHATGPT_POLICY,
+    deviceGrant: () => Effect.succeed(signInTokens),
+  });
 }
 
 const freshToken = (coordinator: SubscriptionCoordinator<ChatgptSession>) =>
@@ -219,20 +222,23 @@ describe('ChatGPT session coordinator', () => {
       Effect.gen(function* () {
         const storage = memoryStorage(expiredSession());
         const { pending, refreshTokens, refreshStarted } = parkedRefresh();
-        const coordinator = yield* makeCoordinator(storage, { refreshTokens });
+        const coordinator = yield* makeCoordinator(
+          storage,
+          { refreshTokens },
+          tokenResponse({
+            access_token: 'access-new',
+            refresh_token: 'refresh-new',
+          }),
+        );
 
         const token = yield* forkNow(freshToken(coordinator));
         yield* refreshStarted;
 
-        // A sign-in that finished stores its grant the same way, after the
-        // exchange in flight.
+        // A sign-in whose grant completed stores it after the exchange in
+        // flight.
         const signedIn = yield* forkNow(
-          coordinator.storeTokens(
-            tokenResponse({
-              access_token: 'access-new',
-              refresh_token: 'refresh-new',
-            }),
-          ),
+          coordinator.signInWithDeviceCode?.(() => Effect.void) ??
+            Effect.die('The coordinator has no device-code sign-in.'),
         );
         pending.resolve(revoked());
 
