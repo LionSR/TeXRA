@@ -1,10 +1,10 @@
 <script setup>
 // Frameless figure for the Quick Reference "Type" column: the two execution
 // SHAPES a built-in agent runs in. A chat = a loop (instruction → read ·
-// edit · run tool → repeat → done); a document task = a linear pipeline (input
+// edit · run tool → repeat → done); a program = a linear pipeline (input
 // file → edit → versioned diff). The agent-picker dropdown above already shows the
 // LIST; this shows WHY the two behave differently — why `chat`/
-// `research` feel conversational while `polish`/`correct` hand back a diff.
+// `research` feel conversational while `edit` hands back a diff.
 //
 // Frameless and .mockup-scoped, so it inherits --mk-* and flips with the docs
 // theme. Composes StatusPill for the type badge + step/tool chips — no bespoke
@@ -55,7 +55,7 @@ const loopSteps = ['read', 'edit', 'run tool'];
       </p>
     </section>
 
-    <!-- Document task: a linear pipeline -->
+    <!-- Program: a linear pipeline -->
     <section class="ams-col">
       <header class="ams-head">
         <wa-icon
@@ -63,7 +63,7 @@ const loopSteps = ['read', 'edit', 'run tool'];
           library="texra"
           name="diagram-project"
         ></wa-icon>
-        <span class="ams-title">Document task</span>
+        <span class="ams-title">Program</span>
         <StatusPill variant="accent" shape="chip">pipeline</StatusPill>
       </header>
 

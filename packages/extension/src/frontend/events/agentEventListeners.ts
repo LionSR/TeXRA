@@ -31,6 +31,7 @@ import {
   INSTRUCTION_ACTION,
   INSTRUCTION_ACTION_BUTTON_LABELS,
   instructionActions,
+  instructionSuppressible,
   READ_GUIDE_BUTTON_LABEL,
   type InstructionAction,
 } from '@ui/copy/instructionActions';
@@ -119,7 +120,7 @@ function handleRequestShowInstruction(
     payload.key,
     payload.message,
     actions,
-    payload.showSuppress,
+    instructionSuppressible(payload.key),
     { deferDismissal: true },
   ).pipe(
     Effect.catchCause((cause) =>

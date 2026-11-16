@@ -64,9 +64,7 @@ function priorWithQueuedRun(run: GhCheckRun): PullState {
     lastAnnotationKeys: new Set(),
     head: {
       sha: 'abcdef1234567890',
-      ciStarted: true,
-      ciComplete: true,
-      ciPassed: true,
+      ci: 'passed',
       checkRunsCache: undefined,
       pendingAnnotationRuns: [run],
     },

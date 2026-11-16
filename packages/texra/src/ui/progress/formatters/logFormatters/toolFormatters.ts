@@ -4,9 +4,8 @@
  * Everything this card says about a call — its header label and preview, the
  * structured sections, whether the output block is shown at all, the error
  * text and the user instruction — comes from `ToolRow.model`
- * (`toolRowModel` in `@texra-ai/harness/transcript`), except the error note of
- * a call the run's end cut short (`ToolRow.cutByRunEnd`), which is the app's
- * copy. This file paints that model with Lit and applies the webview's own
+ * (`toolRowModel` in `@texra-ai/harness/transcript`), and the error note of
+ * a call the run's end cut short is `CUT_BY_RUN_END_NOTE` beside it. This file paints that model with Lit and applies the webview's own
  * widths, icons, and live controls.
  */
 
@@ -16,12 +15,12 @@ import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared utilities
 import {
+  CUT_BY_RUN_END_NOTE,
   toolDisplayKind,
   normalizeToolName,
 } from '@texra-ai/harness/transcript';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { runStatusLabel, statusGlyph, TOOL_STATUS } from '@ui/copy/runStatus';
-import { TOOL_CUT_BY_RUN_END_NOTE } from '@ui/copy/scriptStage';
 import { ICON_NAMES, type IconName } from '@ui/wa/iconNames';
 
 // Local imports - formatter helpers
@@ -113,9 +112,7 @@ export function formatToolUseTemplate(
 
   // A call the run's end cut short shows the note in place of an error.
   const errorText =
-    row.cutByRunEnd === true
-      ? TOOL_CUT_BY_RUN_END_NOTE
-      : model.errorPreview?.full;
+    row.cutByRunEnd === true ? CUT_BY_RUN_END_NOTE : model.errorPreview?.full;
   if (errorText !== undefined) {
     sections.push(
       buildToolUseSection('Error:', wrapInPre(errorText, 'tool-error-content')),

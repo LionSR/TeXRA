@@ -94,7 +94,6 @@ import { decideRequest, SessionRequests } from '@agent/runtime/requests';
 import { Runs } from '@agent/runtime/runRegistry';
 import {
   AgentConfigSchema,
-  qualifyAggregateId,
   aggregateTarget,
   SessionRowSchema,
   type RunId,
@@ -1198,7 +1197,7 @@ export function crashConformanceSuite(
                 const { roots } = yield* FakeHost;
                 const session = yield* persistentTestSession(roots);
                 const runId = generateRunId();
-                const run = qualifyAggregateId('run', runId);
+                const run = runId;
                 const titled = (description: string) => [
                   {
                     type: 'run.description' as const,

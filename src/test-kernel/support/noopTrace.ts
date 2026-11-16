@@ -30,7 +30,7 @@ export const noopTrace: AgentTrace = {
   stage(_label, use) {
     return use(this);
   },
-  openRun() {
+  openStream() {
     return new NoopStreamHandle(crypto.randomUUID());
   },
   // Through `emit`, so a suite that spreads this trace and replaces `emit`

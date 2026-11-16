@@ -1,21 +1,17 @@
 /**
- * The `document_review` tool: the evidence a document task's critic reviews
- * between revisions when the task reflects (its `reflect` option; the
- * recipe in `@texra/agent/output/documentRecipe` calls it). The bundled `critic`
- * persona holds the instructions; this tool only gathers what it reads.
+ * The `document_review` tool: the evidence about a revision that a document
+ * program checks, or hands a critic, between revisions (`revise` in
+ * `@texra/tools/theory/programs` calls it). The program holds the critic's
+ * instructions and its own checks; this tool only gathers what they read.
  */
 import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
 import { Effect, FileSystem, Schema } from 'effect';
 
-import { absentReason } from '@texra-ai/harness/node';
-import { executed, renderPrompt, defineTool } from '@texra-ai/harness/plugins';
+import { meansAbsent } from '@texra-ai/harness/node';
+import { executed, defineTool } from '@texra-ai/harness/plugins';
 import { fileLocationDisplayPath } from '@texra-ai/harness/schemas';
 import { failureContextFromLogs } from '@texra/agent/output/compileFailureRoundContext';
-import {
-  roundOf,
-  taskInputs,
-  type Documents,
-} from '@texra/tools/documents/documentState';
+import { roundOf, type Documents } from '@texra/tools/documents/documentState';
 import {
   documentsOfCall,
   RevisionSchema,
@@ -66,31 +62,30 @@ const compileEvidence = Effect.fn('document_review.compile')(function* (
 });
 
 /**
- * `document_review`: the critic's prompt for a revision — the user's
- * instruction and the requests it answered, the unified diff of each output
- * against its base, and its compile result.
+ * `document_review`: the evidence about a revision: the user's instruction
+ * and the requests it answered, the unified diff of each output against
+ * its base, and its compile result.
  */
 export const DocumentReviewTool = defineTool({
   name: 'document_review',
   description:
-    "The evidence a critic reviews for a revision: the user's instruction, the task's requests so far, the diff of each output against the document it started from, and the compile result. Resolves to `{ prompt }`, to pass to the `critic` agent.",
-  scriptReturns: '{ prompt: string }',
+    "The evidence about a revision: the user's instruction, the task's requests so far, the diff of each output against the document it started from, and the compile result. Resolves to `{ prompt, diffs }`: `prompt` holds it all for a critic's `agent()` call, and `diffs` lists each output's unified diff as `{ path, text, cut }` (`text` null for an unchanged output, `cut` when it was too long to show whole) for a check in code.",
+  scriptReturns:
+    '{ prompt: string; diffs: { path: string; text: string | null; cut: boolean }[] }',
   replay: 'safe',
   schema: Schema.Struct({ revision: RevisionSchema }),
   execute: Effect.fn('document_review')(function* ({ revision }) {
     const docs = yield* documentsOfCall();
+    const { requests } = docs.task;
     const round = roundOf(docs.rounds, revision);
     const fs = yield* FileSystem.FileSystem;
-    const { inputs } = yield* taskInputs(docs);
     const instruction = docs.run.config.instruction.trim();
     const parts = instruction
       ? [`<instruction>\n${instruction}\n</instruction>`]
       : [];
-    for (const [index, request] of docs.task.requests
-      .slice(0, revision + 1)
-      .entries())
+    for (const [index, request] of requests.slice(0, revision + 1).entries())
       parts.push(
-        `<request revision="${index + 1}">\n${(yield* renderPrompt(request, inputs)).trim()}\n</request>`,
+        `<request revision="${index + 1}">\n${request.trim()}\n</request>`,
       );
     const missing = missingEvidence(round, revision);
     if (missing) parts.push(missing);
@@ -107,7 +102,7 @@ export const DocumentReviewTool = defineTool({
             ? ''
             : yield* fs
                 .readFileString(base.absolutePath)
-                .pipe(Effect.catchIf(absentReason, () => Effect.succeed('')));
+                .pipe(Effect.catchIf(meansAbsent, () => Effect.succeed('')));
         const after = yield* fs.readFileString(output.location.absolutePath);
         return {
           path: fileLocationDisplayPath(output.location),
@@ -117,18 +112,23 @@ export const DocumentReviewTool = defineTool({
       { concurrency: 8 },
     );
     let left = MAX_DIFF_CHARS;
-    for (const { path, text } of diffs) {
+    const shownDiffs = diffs.map(({ path, text }) => {
       const shown = text === undefined ? '(unchanged)' : bounded(text, left);
       left -= shown.length;
       parts.push(`<diff path="${path}">\n${shown}\n</diff>`);
-    }
+      return {
+        path,
+        text: text === undefined ? null : shown,
+        cut: text !== undefined && shown !== text,
+      };
+    });
     parts.push(
       `<compile>\n${yield* compileEvidence(round, docs.run.logger)}\n</compile>`,
     );
     const prompt = parts.join('\n\n');
     return {
       ...executed(prompt, `${formatRoundLabel(revision)} review`),
-      value: { prompt },
+      value: { prompt, diffs: shownDiffs },
     };
   }),
 });

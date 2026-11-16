@@ -72,7 +72,7 @@ export function parseWorkingDirectory(
  * The call fields a tool path resolves against: the session's roots (its
  * workspace folder and the setting slots containment policy is read from),
  * the run's working directory, and the read-only roots the call's step
- * admits (the skills it lists or its user activated; none outside a run).
+ * accepts (the skills it lists or its user activated; none outside a run).
  * A tool's `ToolContext.env` satisfies it structurally.
  * `workingDirectory` is already absolute or absent: the run decides it once
  * where it is launched (`buildAgentLaunchContext`).
@@ -100,7 +100,7 @@ export const assertNoParentTraversal = (
  * Resolve a tool path, relative or absolute, against the call's working
  * directory when the run has one and its workspace folder otherwise.
  *
- * A path that escapes that root is admitted only inside a registered external
+ * A path that escapes that root is accepted only inside a registered external
  * root or with path protection switched off; otherwise it fails with a
  * `ToolError` the tool runner reports to the model. With no folder open and
  * no working directory, only an absolute path can resolve (the agent
@@ -123,7 +123,7 @@ export const resolveToolPath = Effect.fn('resolveToolPath')(function* (
       const input = !trimmed || trimmed === '.' ? '' : trimmed;
 
       if (!root) {
-        // No workspace: only the allowlist admits a path, so agent-dir
+        // No workspace: only the allowlist accepts a path, so agent-dir
         // calls still work.
         if (input && path.isAbsolute(input)) {
           return {

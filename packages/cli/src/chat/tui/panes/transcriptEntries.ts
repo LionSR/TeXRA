@@ -146,10 +146,10 @@ export function isRenderableTranscriptEntry(row: TranscriptRow): boolean {
 }
 
 /** Whether the row at `index` is inside the session view's settled prefix
- *  (`transcript.settledRows`), the one rule for what append-only
+ *  (`transcript.finalRows`), the one rule for what append-only
  *  scrollback may print. */
-function isFinalizedTranscriptRow(index: number, settledRows: number): boolean {
-  return index < settledRows;
+function isFinalizedTranscriptRow(index: number, finalRows: number): boolean {
+  return index < finalRows;
 }
 
 /** Callers gate on {@link isRenderableTranscriptEntry} before asking. */
@@ -174,20 +174,20 @@ function userPromptAwaitsLiveContinuation(
 
 /**
  * The settled rows from `from` on that scrollback prints, in the session
- * view's own order (its `settledRows` prefix is print order), and how far the
+ * view's own order (its `finalRows` prefix is print order), and how far the
  * walk got: past every row printed or passed over, stopping at the end of the
  * settled prefix or at a user prompt still waiting for its live continuation,
  * which the next walk starts from.
  */
-export function printableSettledRows(
+export function printableFinalRows(
   rows: readonly TranscriptRow[],
   from: number,
-  settledRows: number,
+  finalRows: number,
   working: boolean,
 ): { readonly rows: readonly TranscriptRow[]; readonly through: number } {
   const printable: TranscriptRow[] = [];
   let through = from;
-  for (; through < Math.min(settledRows, rows.length); through += 1) {
+  for (; through < Math.min(finalRows, rows.length); through += 1) {
     const row = rows[through];
     if (!isRenderableTranscriptEntry(row)) continue;
     if (userPromptAwaitsLiveContinuation(rows, through, working)) break;
@@ -204,11 +204,11 @@ export function printableSettledRows(
  * finalization until the stream itself finalizes — promoting them earlier
  * would let a fast tool jump ahead of still-streaming assistant text in
  * `<Static>` scrollback, where insertion order is fixed. The complement (the
- * settled prefix) is {@link printableSettledRows}.
+ * settled prefix) is {@link printableFinalRows}.
  */
 export function pendingTranscriptEntries(
   entries: readonly TranscriptRow[],
-  settledRows: number,
+  finalRows: number,
   working: boolean,
 ): TranscriptRow[] {
   const showLiveAssistant = working;
@@ -222,7 +222,7 @@ export function pendingTranscriptEntries(
     // The settled prefix is scrollback's; everything past it is live, and a
     // row behind an unsettled one stays visible here rather than vanishing
     // between the two panes.
-    if (isFinalizedTranscriptRow(index, settledRows)) continue;
+    if (isFinalizedTranscriptRow(index, finalRows)) continue;
     if (
       (entry.kind === 'assistant' || entry.kind === 'log') &&
       !showLiveAssistant

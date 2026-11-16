@@ -1,19 +1,18 @@
 /**
- * The documents plugin's state of one document task run, rebuilt from the
- * run's rows on every call: the task (its agent's `task:` block, read from
- * the catalog), its launch inputs, and the revisions
- * its latest `documents/output` row records. Each document tool
+ * The theory plugin's state of one document task run, rebuilt from the
+ * run's rows on every call: the task as its program described it to its
+ * first step (`DocumentTaskSpec`), its launch inputs, and the revisions its
+ * latest `theory/output` row records. Each document tool
  * (`./documentTools`) opens it, does its one step over one revision, and
  * commits the revisions with that one's next record. Nothing is held
- * between calls, except the task's file variables, read once per opening,
- * so a resumed recipe sees what the rows say.
+ * between calls, so a resumed program sees what the rows say.
  *
- * A revision is one call of the task's persona. Its prompt is the whole
- * conversation so far as one message: the task's prefix (the documents),
- * then each earlier request with the persona's reply to it, then this
- * revision's request with the compile failures that rejected the last one.
+ * A revision is one call of a child agent. Its prompt is the whole
+ * conversation so far as one message: the documents, then each earlier
+ * request with the child's reply to it, then this revision's request with
+ * the compile failures that rejected the last one.
  */
-import { dirname } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, ScopedRef } from 'effect';
 
@@ -21,19 +20,16 @@ import {
   ChildRuns,
   type ToolRun,
   ToolError,
-  renderPrompt,
+  sourceLocationUnder,
 } from '@texra-ai/harness/plugins';
 import {
   toErrorMessage,
   fileLocationDisplayPath,
+  type FileListEntry,
   type FileLocation,
 } from '@texra-ai/harness/schemas';
-import {
-  AgentCatalog,
-  pathToLocationIn,
-  type AgentEntry,
-} from '@texra-ai/harness/host';
-import { processInputFiles } from '@latex/latexMedia';
+import { AgentDirectories, pathToLocationIn } from '@texra-ai/harness/host';
+import { processInputFiles, type InputMediaOptions } from '@latex/latexMedia';
 import { getTeXCountStats } from '@latex/texcount';
 import {
   DOCUMENT_OUTPUT_BASENAME,
@@ -41,32 +37,27 @@ import {
 } from '@texra/shared/constants/revisionLayout';
 import {
   DOCUMENTS_OUTPUT_KIND,
-  documentTaskOptions,
-  type DocumentTask,
+  type DocumentTaskSpec,
 } from '@texra/shared/plugins/documents';
 import {
   OUTPUT_DOCUMENT_TAG,
   OUTPUT_DOCUMENTS_TAG,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
-import { documentTaskKey } from '@texra/agent/output/documentRecipe';
 import type { OutputDependencies } from '@texra/agent/output/outputFileExtraction';
 import { expectedDocuments } from '@texra/agent/output/extraction/filenameHeaders';
 import {
   appendCompileFailureRoundContext,
   failureContextFromLogs,
 } from '@texra/agent/output/compileFailureRoundContext';
-import {
-  documentTaskOf,
-  taskFileVars,
-} from '@texra/tools/documents/documentTask';
+import { runWorkspaceOf } from '@texra/tools/documents/runWorkspace';
 import type { CallRequests, ToolEnv } from '@texra-ai/harness/plugins';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 /** What the documents read of the run their tool call serves. */
 type DocumentRun = Pick<
   ToolRun,
-  'config' | 'logger' | 'fileService' | 'runId' | 'opening' | 'model'
+  'config' | 'logger' | 'scope' | 'runId' | 'opening' | 'model'
 >;
 
 /** The tool call the documents are opened for: its roots and run, and
@@ -81,16 +72,14 @@ export interface Documents {
   readonly run: DocumentRun;
   /** Where the call shows the person what the step wrote. */
   readonly requests: DocumentCall['requests'];
-  readonly task: DocumentTask;
-  /** The catalog entry whose `task:` block it is: its file's directory holds
-   *  the task's `files`. */
-  readonly entry: AgentEntry;
+  /** The task as its program described it to its first step. */
+  readonly task: DocumentTaskSpec;
   readonly deps: OutputDependencies;
   /** The revisions so far, by `round`, as the run's latest documents fact
    *  records them. A step commits the next list
    *  (`documentsOutputFact(withRound(...))`) in its result's facts; a call
    *  running beside it would commit a list without the other's revision, so
-   *  one run's document tools run one at a time (the recipe's order). */
+   *  one run's document tools run one at a time (the program's order). */
   readonly rounds: readonly RoundOutput[];
   /** Where each base file's pre-run content lives: every revision diffs
    *  against these, never the live file an in-place revision overwrote. */
@@ -131,26 +120,28 @@ const replyLocation = (docs: Documents, revision: number) =>
 
 /**
  * Open the documents of `run`, the document task the calling tool serves.
- * Fails for a run that is no document task's.
+ * `described` is the task as the call itself describes it (the program's
+ * `document_context` calls); any other step reads what the run's first
+ * step recorded, and fails for a run that recorded none.
  */
-export const openDocuments = Effect.fn('documents.open')(function* ({
-  env: { roots, run },
-  requests,
-}: DocumentCall) {
-  const { config, logger, fileService, runId } = run;
-  // The block as the catalog holds it now: the run's exact entry, which its
-  // launch stamped.
-  const entry = (yield* AgentCatalog).get(documentTaskKey(config));
-  const task = entry && documentTaskOf(entry);
-  if (!entry || !task)
+export const openDocuments = Effect.fn('documents.open')(function* (
+  { env: { roots, run }, requests }: DocumentCall,
+  described?: DocumentTaskSpec,
+) {
+  const { config, logger, runId } = run;
+  const fileService = runWorkspaceOf(run, roots);
+  const output = yield* (yield* ChildRuns).fact(runId, DOCUMENTS_OUTPUT_KIND);
+  const task = output?.task ?? described;
+  if (task === undefined)
     return yield* Effect.fail(
       new ToolError(
-        `Run ${runId} is not a document task: its agent '${config.agent}' has no task.`,
+        `Run ${runId} has no documents yet: a document program's first step is \`document_context\` for revision 0.`,
       ),
     );
-  const output = yield* (yield* ChildRuns).fact(runId, DOCUMENTS_OUTPUT_KIND);
   const expected = expectedDocuments(config);
-  const sources = expected.names.map((file) => fileService.locateSource(file));
+  const sources = expected.names.map((file) =>
+    sourceLocationUnder(roots, file),
+  );
   const deps: OutputDependencies = {
     config,
     expected,
@@ -181,11 +172,69 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
     run,
     requests,
     task,
-    entry,
     deps,
     rounds: output?.rounds ?? [],
     baseFiles,
   } satisfies Documents;
+});
+
+/** What a `document_context` call asks of one revision's prompt, beside
+ *  the task itself. */
+export interface RevisionRequest extends InputMediaOptions {
+  /** Whether the prompt carries the documents' TeXCount statistics. */
+  readonly attachTeXCount: boolean;
+}
+
+/** Where the plugin's template files ship, under the host's packaged
+ *  resources; undefined for a host that ships none. */
+export const templateDirectory = Effect.map(
+  AgentDirectories,
+  ({ resourcesRoot }) =>
+    resourcesRoot === undefined
+      ? undefined
+      : join(resourcesRoot, 'plugins', 'theory', 'templates'),
+);
+
+/** The task's template files, read: each is a document of the prompt, under
+ *  its file name. A template that does not read fails the step. */
+const readTemplates = Effect.fn('documents.readTemplates')(function* (
+  task: DocumentTaskSpec,
+) {
+  if (task.templates.length === 0) return [];
+  const directory = yield* templateDirectory;
+  const fs = yield* FileSystem.FileSystem;
+  return yield* Effect.forEach(task.templates, (name) =>
+    Effect.gen(function* () {
+      if (directory === undefined)
+        return yield* Effect.fail(
+          new ToolError(
+            `This host ships no document templates, so '${name}' cannot be read.`,
+          ),
+        );
+      // A template is a file of the bundled directory, named by a program's
+      // arguments, which a model may write: a name that leaves the directory
+      // would read any file into the prompt unasked.
+      if (basename(name) !== name)
+        return yield* Effect.fail(
+          new ToolError(
+            `'${name}' is not a bundled template: name one by its file name.`,
+          ),
+        );
+      const path = join(directory, name);
+      const content = yield* fs
+        .readFileString(path)
+        .pipe(
+          Effect.mapError(
+            (error) =>
+              new ToolError(
+                `The template '${name}' could not be read: ${toErrorMessage(error)}`,
+                { cause: error },
+              ),
+          ),
+        );
+      return { name, path, content };
+    }),
+  );
 });
 
 /**
@@ -196,34 +245,55 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
 export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
   docs: Documents,
   revision: number,
+  asked: RevisionRequest,
   critique?: string | null,
 ) {
   const { task, run, deps } = docs;
-  const { inputs, entries } = yield* taskInputs(docs);
+  const inputs = run.opening?.inputs ?? {};
+  const templates = yield* readTemplates(task);
   const fs = yield* FileSystem.FileSystem;
   const parts: string[] = [];
   const files = revisionFiles(docs, revision);
-  if (documentTaskOptions(run.config).attachTeXCount && files.length > 0) {
+  if (asked.attachTeXCount && files.length > 0) {
     const counted = yield* texCount(docs, files);
     if (counted) parts.push(counted);
   }
-  const prefix = (yield* renderPrompt(task.prefix, inputs)).trim();
-  if (prefix) parts.push(prefix);
+  // The documents: the context, the task's templates, then the inputs.
+  const documents = [
+    inputs.ALL_CONTEXTS,
+    ...templates.map(
+      ({ name, content }) =>
+        `<document name="${name}">\n${content}\n</document>`,
+    ),
+    inputs.ALL_INPUTS,
+  ].filter(Boolean);
+  parts.push(
+    task.intro.trim(),
+    ...(documents.length > 0
+      ? [`<documents>\n${documents.join('\n')}\n</documents>`]
+      : []),
+    // A partial edit of the input, which a merge puts back into it.
+    ...(inputs.EDITED_CONTENT
+      ? [
+          `The edited version, ${inputs.EDITED_FILE ?? 'as given'}:\n<edited_document>\n${inputs.EDITED_CONTENT}\n</edited_document>`,
+        ]
+      : []),
+    ...(inputs.INSTRUCTION?.trim()
+      ? [
+          `Follow this instruction closely. Where it names a part of the documents, leave the rest as it is:\n<instruction>\n${inputs.INSTRUCTION.trim()}\n</instruction>`,
+        ]
+      : []),
+  );
   const replies = yield* Effect.forEach(
     Array.from({ length: revision }, (_, earlier) => earlier),
     (earlier) => fs.readFileString(replyLocation(docs, earlier).absolutePath),
     { concurrency: 8 },
   );
-  for (const [earlier, reply] of replies.entries()) {
-    const request = (yield* renderPrompt(
-      task.requests[earlier] ?? '',
-      inputs,
-    )).trim();
+  for (const [earlier, reply] of replies.entries())
     parts.push(
-      request,
+      (task.requests[earlier] ?? '').trim(),
       `<your_reply revision="${earlier + 1}">\n${reply.trim()}\n</your_reply>`,
     );
-  }
   // The compile failures that rejected the last revision, from the logs its
   // check wrote.
   const compiled = roundOf(docs.rounds, revision - 1)?.compile;
@@ -233,11 +303,8 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
     if (read.kind === 'unreadable') deps.logger.warn(read.warning);
     else feedback = read.text;
   }
-  const request = (yield* renderPrompt(
-    task.requests[revision] ?? '',
-    inputs,
-  )).trim();
-  // The reply format the recipe parses, written here so no task restates
+  const request = (task.requests[revision] ?? '').trim();
+  // The reply format the program parses, written here so no task restates
   // it: one document per name the revision writes (its outputs, or the
   // inputs it rewrites), in order.
   const names =
@@ -252,9 +319,9 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
     ),
     `</${OUTPUT_DOCUMENTS_TAG}>`,
   ].join('\n');
-  // The critic's review of the last revision goes with this revision's
-  // request; the reply format stays last, where the recipe's parser needs
-  // the model to have read it most recently.
+  // What a check or a critic said of the last revision goes with this
+  // revision's request; the reply format stays last, where the program's
+  // parser needs the model to have read it most recently.
   const review = critique?.trim();
   parts.push(
     appendCompileFailureRoundContext(request, feedback).trim(),
@@ -267,35 +334,13 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
   );
   return {
     prompt: parts.filter(Boolean).join('\n\n'),
-    media: yield* revisionMedia(docs, revision, files),
-    /** The task's template files the prompt read, for their card. */
-    loaded: entries,
-  };
-});
-
-/** The task's `files` variables as each run opening first read them. */
-const taskFileSnapshots = new WeakMap<
-  NonNullable<ToolRun['opening']>,
-  Effect.Success<ReturnType<typeof taskFileVars>>
->();
-
-/**
- * What a task's templates render from: the run's opening, with the task's
- * `files` variables beside it, and the card entries of the files those
- * variables read. The files are read once per opening (one per launch or
- * resume, held in memory, as the opening itself is), so editing a template
- * file mid-run leaves the run's later revisions as they began.
- */
-export const taskInputs = Effect.fn('documents.taskInputs')(function* (
-  docs: Documents,
-) {
-  const { opening } = docs.run;
-  const snapshot = opening ? taskFileSnapshots.get(opening) : undefined;
-  const read = snapshot ?? (yield* taskFileVars(docs.task, docs.entry.path));
-  if (opening && snapshot === undefined) taskFileSnapshots.set(opening, read);
-  return {
-    inputs: { ...opening?.inputs, ...read.vars },
-    entries: read.entries,
+    media: yield* revisionMedia(docs, revision, files, asked),
+    /** The template files the prompt read, for their card. */
+    loaded: templates.map(({ path }): FileListEntry => ({
+      path,
+      ok: true,
+      source: 'templates',
+    })),
   };
 });
 
@@ -328,6 +373,7 @@ const revisionMedia = Effect.fn('documents.revisionMedia')(function* (
   docs: Documents,
   revision: number,
   files: readonly FileLocation[],
+  options: InputMediaOptions,
 ) {
   const { run, deps } = docs;
   const bound = yield* ScopedRef.get(run.model);
@@ -346,11 +392,7 @@ const revisionMedia = Effect.fn('documents.revisionMedia')(function* (
           revisionLayout(revision).dir,
           { protectedStem: DOCUMENT_OUTPUT_BASENAME },
         );
-      return yield* processInputFiles(
-        deps,
-        files,
-        documentTaskOptions(run.config),
-      );
+      return yield* processInputFiles(deps, files, options);
     }),
   );
   if (Exit.isFailure(extracted)) {

@@ -21,26 +21,25 @@ const AGENTS: SettingsAgentCatalogEntry[] = [
   {
     source: 'plugin',
     name: 'writer',
-    blocks: {},
+    persona: { prompt: '', temperature: 1, tools: [] },
     description: 'Plugin writer',
   },
   {
     source: 'builtIn',
     name: 'correct',
-    blocks: {},
+    persona: { prompt: '', temperature: 1, tools: [] },
     path: '/agents/correct.yaml',
   },
   {
     source: 'builtIn',
     name: 'review',
-    blocks: {},
+    persona: { prompt: '', temperature: 1, tools: [{ name: 'grep' }] },
     path: '/tools/review.yaml',
-    tools: ['grep'],
   },
   {
     source: 'custom',
     name: 'customTool',
-    blocks: {},
+    persona: { prompt: '', temperature: 1, tools: [] },
     path: '/custom/customTool.yaml',
   },
 ];

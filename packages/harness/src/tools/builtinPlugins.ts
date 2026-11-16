@@ -7,6 +7,7 @@
 
 // Local imports
 import { agentTool } from '@agent/runtime/delegation/AgentTool';
+import { programTool } from '@agent/runtime/delegation/ProgramTool';
 import { GOAL_PLAN_KIND } from '@shared/schemas';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import { BashTool } from '@tools/bash';
@@ -98,11 +99,11 @@ export const goal: Plugin = definePlugin({
   toggle: 'on',
 });
 
-/** Child agents: the `agent` tool. */
+/** Child runs: the `agent` tool, and `program` for a registered program. */
 export const multiAgent: Plugin = definePlugin({
   id: 'multi-agent',
-  tools: [agentTool()],
-  // The one delegation tool: the built-in orchestrators need it.
+  tools: [agentTool(), programTool()],
+  // The delegation tools: the built-in orchestrators need them.
   toggle: 'on',
 });
 

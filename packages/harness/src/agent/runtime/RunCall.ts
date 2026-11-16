@@ -26,7 +26,6 @@ import {
 } from '@agent/core/tools/ToolTypes';
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import type { AgentTrace } from '@agent/trace/AgentTrace';
-import type { RunFileService } from '@common/storage/runStorage';
 import {
   type PluginRequest,
   type RunId,
@@ -73,7 +72,7 @@ export interface ScriptSource {
  * How a `script` call's guest reaches the run's tools: through the run
  * loop's per-call program, which commits each call's rows (`script.call`,
  * `tool.intent`, its card, `tool.result`) and on a resume hands back what
- * the rows already settled instead of running it again.
+ * the rows already finished instead of running it again.
  */
 export interface ScriptDoor {
   /** The tools the guest may call, as the step that offered the script
@@ -91,7 +90,7 @@ export interface ScriptDoor {
   /** The modules the guest may import, source by specifier, as the step
    *  that offered the script pinned them. */
   readonly modules: Readonly<Record<string, string>>;
-  /** Settles one issued call, at its `tool.result` commit: its result and
+  /** Finishes one issued call, at its `tool.result` commit: its result and
    *  the attachment bytes that commit captured. */
   readonly call: (
     op: ScriptOp,
@@ -101,7 +100,7 @@ export interface ScriptDoor {
     ScriptDiverged | InvokeError
   >;
   /**
-   * Settles one call of the script's own host functions (`searchTools`,
+   * Finishes one call of the script's own host functions (`searchTools`,
    * `describeTool`) with `answer`, which reads nothing but {@link catalog}.
    * It is recorded as a call with no card or tool, so a resume hands the
    * recorded answer back as it hands back a tool's.
@@ -111,7 +110,7 @@ export interface ScriptDoor {
     source: ScriptSource,
     answer: () => ToolResultPayload['result'],
   ) => Effect.Effect<ToolResultPayload['result'], ScriptDiverged | InvokeError>;
-  /** The sandbox delivered `seq`'s settlement to the guest. */
+  /** The sandbox delivered `seq`'s result to the guest. */
   readonly delivered: (seq: number) => Effect.Effect<void>;
 }
 
@@ -167,7 +166,6 @@ declare module '../core/tools/ToolTypes.js' {
     readonly scope: Scope.Scope;
     readonly opening: TemplateOpening | null;
     readonly logger: AgentTrace;
-    readonly fileService: RunFileService;
   }
   interface CallRequests {
     /**
@@ -210,20 +208,20 @@ export interface RunCallShape {
   /** The user instruction that response answers. */
   readonly instruction: string | undefined;
   /** The intent attempt this execution of the call runs under: 1, then
-   *  one more for each re-run a resume admitted. */
+   *  one more for each re-run a resume accepted. */
   readonly attempt: number;
   /** The card this call's rows open under: what a run the call launches
    *  names as its `parent.call.card`. */
   readonly logId: string;
   /** The run's facts as its rows stand when read (`RunFacts`): what it has
-   *  read and edited so far, a sibling call's settled result included,
+   *  read and edited so far, a sibling call's finished result included,
    *  from the loop's cell, so a resumed run answers as the live one did. */
   readonly facts: Effect.Effect<RunFacts>;
   /** The script that issued this call; null for a call a response issued. */
   readonly script: ScriptScope | null;
   /** For a `script` call, the door its guest calls the run's tools through,
    *  built in the scope that yields it, which owns the calls the guest
-   *  issues: an end of it other than an interrupt settles each still without
+   *  issues: an end of it other than an interrupt finishes each still without
    *  a result as skipped, before the script's own result commits; an
    *  interrupt leaves the rows for the resume. Null for any other call. */
   readonly scriptCalls: Effect.Effect<
@@ -281,7 +279,7 @@ export type RunToolCall = ToolContextShape & RunCallShape;
 
 /** The refusal an edit of an existing file gets when the run never read it,
  *  or null. `path` is the file as the results spell it (`reads`,
- *  `edits[].path`): the run has read it once a settled call's result names
+ *  `edits[].path`): the run has read it once a finished call's result names
  *  it, in this process or in the one that ran the read (`RunCallShape.facts`). */
 export const requireFileReadForEdit = Effect.fn('RunCall.requireReadForEdit')(
   function* (

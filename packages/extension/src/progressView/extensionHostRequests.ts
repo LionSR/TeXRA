@@ -21,7 +21,7 @@ import {
   pathToLocationIn,
 } from '@texra-ai/harness/host';
 import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
-import { workspaceRelativePath } from '@texra-ai/harness/node';
+import { commitExists, workspaceRelativePath } from '@texra-ai/harness/node';
 import {
   toErrorMessage,
   type AgentConfig,
@@ -85,7 +85,6 @@ import {
 // Local file imports
 import { handleCompare } from './compareFiles';
 import { createFileSelectionPickers, getCurrentFile } from './fileSelection';
-import { findCommitInHistory } from './findCommit';
 import { openFile } from './openFile';
 
 const CHANNEL = 'ExtensionHostRequests';
@@ -246,11 +245,10 @@ export const createExtensionHostRequests = Effect.fn(
     if (request.fileType === 'base') {
       const parsed = parseVersionControlDiffFilename(currentOpenFile);
       if (parsed) {
-        const commitLabel = yield* runHandler(
-          'findCommitInHistory',
-          findCommitInHistory(roots, parsed.commitHash),
-        );
-        if (commitLabel) {
+        const found =
+          roots.workspace !== undefined &&
+          (yield* commitExists(roots.workspace, parsed.commitHash));
+        if (found) {
           options.bridge.surfaceAction({
             kind: 'launch',
             patch: { commit: parsed.commitHash },

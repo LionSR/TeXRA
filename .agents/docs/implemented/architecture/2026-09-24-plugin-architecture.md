@@ -202,9 +202,10 @@ unregister) covers:
   (`packages/cli/src/chat/tui/commands/slashRegistry.ts`) installs the
   contributions built in `registerBuiltins.tsx` and throws on a duplicate
   plugin id, name or alias.
-- **Skill sources.** `packages/harness/src/skills/skillSources.ts` folds
-  `SkillSourceContribution`s by tier; a tool plugin's bundled skills are at
-  `resources/plugins/<id>/skills` and its switch gates them.
+- **Skill sources.** `skillTiers` (`packages/harness/src/skills/skillSources.ts`)
+  lists the tiers in precedence order from the host's data; a tool plugin's
+  bundled skills are at `resources/plugins/<id>/skills` and its switch gates
+  them.
 - **Bundled agent directories.** A tool plugin's bundled agents are at
   `resources/plugins/<id>/agents`, read from the process's `ToolRegistry`
   by `enabledBuiltInRoots`

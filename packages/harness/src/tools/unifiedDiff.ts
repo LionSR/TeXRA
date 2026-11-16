@@ -200,7 +200,7 @@ export type Hunk = Readonly<Omit<StructuredPatchHunk, 'lines'>> & {
   readonly lines: readonly string[];
 };
 
-/** Added/removed line counts folded over hunks a caller already holds. */
+/** Added/removed line counts applied over hunks a caller already holds. */
 export function countLineChanges(hunks: readonly Hunk[]): {
   added: number;
   removed: number;

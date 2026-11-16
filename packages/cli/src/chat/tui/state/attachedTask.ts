@@ -7,7 +7,6 @@ import { Effect, type Scope, Stream } from 'effect';
 
 import {
   type RuntimeCommand,
-  qualifyAggregateId,
   attentionOf,
   type RunView,
   type SessionView,
@@ -80,7 +79,7 @@ export function followAttachedTask(
           ),
         ),
     });
-    const aggregate = qualifyAggregateId('run', task.runId);
+    const aggregate = task.runId;
     let seen = false;
     yield* Stream.runForEach(watchTask(client, task), (view) =>
       Effect.suspend(() => {

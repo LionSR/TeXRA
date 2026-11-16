@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import { RouteUnavailable } from '@texra-ai/harness/host';
 import { modelFailureOf } from '@common/errors/sdkError/providerErrorFormat';
-import { openaiFailure } from '../../../llm/src/api/openaiError.js';
+import { openaiFailure } from '../../../llm/src/api/openaiResponsesCodec.js';
 import { judgeFailure } from '../../../llm/src/api/verdict.js';
 import { ModelError } from '../../../llm/src/errors.js';
 

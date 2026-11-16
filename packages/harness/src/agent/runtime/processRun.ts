@@ -20,7 +20,6 @@ import { ToolContext } from '@agent/core/tools/ToolTypes';
 import type { PlatformServices } from '@platform/processRuntime';
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import { commitEnd, endVerdict } from '@agent/runtime/AgentRunLifecycle';
-import { childRunDescription } from '@agent/runtime/delegation/childRun';
 import { RunRegistry, type AgentRunServices } from '@agent/runtime/runRegistry';
 import { registerRun } from '@agent/storage/runLifecycle';
 import type { AgentTrace } from '@agent/trace/AgentTrace';
@@ -28,7 +27,6 @@ import { TraceEmitter } from '@agent/trace/TraceEmitter';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import {
   generateRunId,
-  qualifyAggregateId,
   runEndErrorMessage,
   RUN_OUTCOME,
   type ChildRunDelivery,
@@ -125,9 +123,9 @@ const runProcessChild = (
 /** A returned turn's failure: its exit's, or the one it reported. */
 const failureOf = ({ exit, failure }: ProcessReport): string | undefined => {
   if (exit === undefined || exit.code === 0) return failure;
-  if (exit.code === null)
-    return `The command ended with no exit code${exit.timedOut ? ' (timed out)' : ''}.`;
-  return `The command failed with exit code ${exit.code}${exit.timedOut ? ' (timed out)' : ''}.`;
+  if (exit.timedOut) return 'The command timed out.';
+  if (exit.code === null) return 'The command ended with no exit code.';
+  return `The command failed with exit code ${exit.code}.`;
 };
 
 /** What the turn's exit puts on the run's end: a returned turn's report,
@@ -157,7 +155,7 @@ const endingOf = (
           : [
               {
                 type: 'process.exit',
-                aggregateId: qualifyAggregateId('run', runId),
+                aggregateId: runId,
                 ...processExit,
               },
             ],
@@ -190,9 +188,9 @@ export const launchProcessChild = Effect.fn('launchProcessChild')(function* (
     yield* registerRun(runId, launch.config, {
       identity: launch.identity,
       takesFollowUps: false,
-      parentRunId: parent.runId,
+      parentId: parent.runId,
       parentCall: { callId, card: parent.logId, awaited: false },
-      description: childRunDescription(launch.description),
+      description: launch.description,
     });
     const logger = new TraceEmitter((event) => log.publish(runId, event));
     const turn = launch.turn({ logger, runId });

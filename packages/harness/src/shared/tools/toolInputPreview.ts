@@ -25,6 +25,7 @@ function executionsInputPreview(input: Record<string, unknown>): string {
 const TOOL_PREVIEW_INPUT_KEY: Readonly<Record<string, string>> = {
   bash: 'command',
   agent: 'agentName',
+  program: 'name',
 };
 
 /** Input keys that name what a call is acting on, for tools with no entry of

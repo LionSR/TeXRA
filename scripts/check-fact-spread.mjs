@@ -67,14 +67,19 @@ const PREDICATES = [
 /** Members a pair of literal sets must share to count as one vocabulary. */
 const SHARED_MEMBERS = 3;
 
-/** Each predicate's pattern: an identifier matches whole, a dotted one as written. */
+/** A second spelling of a predicate: a file that reads the fact under it
+ *  decides the fact too. */
+const ALIASES = { parentId: ['parentRunId'] };
+
+/** Each predicate's pattern: an identifier matches whole, under any of its
+ *  spellings; a dotted one as written. */
 const MATCHERS = new Map(
   PREDICATES.map((predicate) => [
     predicate,
     new RegExp(
       predicate.includes('.')
         ? predicate.replaceAll('.', '\\.')
-        : `\\b${predicate}\\b`,
+        : `\\b(?:${[predicate, ...(ALIASES[predicate] ?? [])].join('|')})\\b`,
     ),
   ]),
 );

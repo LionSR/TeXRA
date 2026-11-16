@@ -27,7 +27,7 @@ import {
   withFileWriteLane,
 } from '@texra-ai/harness/host';
 import {
-  absentReason,
+  meansAbsent,
   entryTypeIn,
   readDirectoryTypedTolerant,
 } from '@texra-ai/harness/node';
@@ -200,7 +200,7 @@ const resolveWorkspaceWritePath = Effect.fn(
   const existing = yield* resolveWorkspacePath(workspaceRoot, inputPath).pipe(
     // Absent, and nothing else: a permission or I/O failure on the same call
     // is a real fault and must not read as "the file does not exist yet".
-    Effect.catchIf(absentReason, () => Effect.succeed(undefined)),
+    Effect.catchIf(meansAbsent, () => Effect.succeed(undefined)),
   );
   if (existing !== undefined) return existing;
 
@@ -228,7 +228,7 @@ const resolveWorkspaceWritePath = Effect.fn(
     [fs.realPath(root), fs.realPath(parent)],
     { concurrency: 2 },
   ).pipe(
-    Effect.catchIf(absentReason, () =>
+    Effect.catchIf(meansAbsent, () =>
       Effect.fail(
         new WorkspaceRequestRefused({
           message:
@@ -366,7 +366,7 @@ export function createDesktopWorkspaceIpc(
       return yield* Effect.gen(function* () {
         if (base !== null) {
           const onDisk = yield* editorText(fs, absolutePath).pipe(
-            Effect.catchIf(absentReason, () => Effect.succeed(null)),
+            Effect.catchIf(meansAbsent, () => Effect.succeed(null)),
           );
           if (onDisk !== null && onDisk !== base)
             return { kind: 'changedOnDisk' } satisfies HostOutcome;

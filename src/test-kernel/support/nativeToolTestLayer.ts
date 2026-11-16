@@ -9,7 +9,6 @@ import {
   Ref,
 } from 'effect';
 
-import { RunFileService } from '@texra-ai/harness/plugins';
 import { callRequests } from '@agent/runtime/loop/toolGuard';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import {
@@ -107,7 +106,6 @@ export function nativeToolTestLayer(
         steps: noStep(),
         scope: yield* Effect.scope,
         opening: null,
-        fileService: new RunFileService(run.runId, roots),
         callbacks: {},
         awaitedCalls: Semaphore.makeUnsafe(Number.MAX_SAFE_INTEGER),
         // A root unless the fixture names its parent edge.

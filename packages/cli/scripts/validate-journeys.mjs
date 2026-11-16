@@ -2,7 +2,7 @@
 
 /**
  * Live journey checks: the fitness function for the theorist bundle. Four
- * compile-graded journeys (polish, latexFixer, latexdiff, citations) run end to
+ * compile-graded journeys (edit, latexFixer, latexdiff, citations) run end to
  * end through the real `texra run ... --output-format ndjson` against each cheap
  * model in `MODEL_KEYS`, over the fixtures in `src/test-kernel/cli/fixtures/journeys/`. A
  * journey passes on simple invariants over the files it leaves behind and on a
@@ -11,12 +11,13 @@
  * Run by hand only: it spends money and needs a TeX Live. `validate-run.mjs` is the hermetic sibling
  * that runs on every PR against the canned validation model.
  *
- *   node scripts/validate-journeys.mjs [--model <ref>]... [--journey polish]...
- *     [--no-build] [--out dir] [--script-only] [--repeat n]
+ *   node scripts/validate-journeys.mjs [--model <ref>]... [--journey edit]...
+ *     [--no-build] [--out dir] [--direct] [--repeat n]
  *
- * `--script-only` runs every journey with the `texra.codeMode.scriptOnly`
- * setting on in the run's home (the model is sent `script` and the run's own
- * tools alone), the "only" arm of the code mode comparison; `--repeat` runs
+ * A journey runs as a fresh install does, with `texra.codeMode.scriptOnly` on
+ * (the model is sent `script` and the run's own tools alone): the "only" arm
+ * of the code mode comparison. `--direct` turns the setting off in the run's
+ * home, so the model is sent every tool: the "direct" arm. `--repeat` runs
  * each journey that many times. Every run appends one JSON line to `<out>/results.jsonl`.
  *
  * With no `--model` it runs every model in `MODEL_KEYS`, so this map is the one
@@ -115,9 +116,10 @@ const POLISH_PROMPT =
   'Replace the ASCII ellipsis with \\ldots and the straight double quotes with LaTeX quotes. Change nothing else.';
 
 const JOURNEYS = {
-  polish: {
-    args: ['polish', '--input', 'paper.tex', '--output', 'paper.polished.tex'],
-    // The document task's result, kept with its diff against the input.
+  edit: {
+    fixture: 'polish',
+    args: ['edit', '--input', 'paper.tex', '--output', 'paper.polished.tex'],
+    // The program's result, kept with its diff against the input.
     keep: { from: 'paper.tex', to: 'paper.polished.tex' },
     instruction: POLISH_PROMPT,
     approval: 'never',
@@ -128,18 +130,18 @@ const JOURNEYS = {
       compile(dir, 'paper.polished.tex');
     },
   },
-  // A script imports the document tasks and chains two: `correct` must read
-  // polish's last round, and the result keeps polish's edits.
+  // A script chains two `edit` programs: the second must read the first's
+  // last round, and the result keeps the first's edits.
   imports: {
     fixture: 'polish',
     args: ['assistant'],
     instruction: [
       'Make exactly one `script` call with this code, unchanged, and then report what it returned:',
       '```js',
-      "const { revise, from } = await import('builtIn:documents');",
-      `const polished = await revise('polish', { prompt: ${JSON.stringify(POLISH_PROMPT)}, inputFiles: ['paper.tex'] });`,
-      "const corrected = await revise('correct', from(polished, { prompt: 'Fix only outright typos. Change nothing else.' }));",
-      'return { polished: polished.documents.outputs.map((o) => o.absolutePath), corrected: corrected.documents.outputs.map((o) => o.absolutePath) };',
+      `const polished = await program('edit', { prompt: ${JSON.stringify(POLISH_PROMPT)}, inputFiles: ['paper.tex'] });`,
+      'const latest = new Map(polished.changes.map((change) => [change.path, change.absolutePath]));',
+      "const corrected = await program('edit', { prompt: 'Fix only outright typos. Change nothing else.', inputFiles: [...latest.values()] });",
+      'return { polished: [...latest.values()], corrected: [...new Map(corrected.changes.map((change) => [change.path, change.absolutePath])).values()] };',
       '```',
     ].join('\n'),
     approval: 'yolo',
@@ -154,19 +156,20 @@ const JOURNEYS = {
       const tail = (file) => file.split('/executions/')[1];
       const inputs = records
         .filter(
-          (r) =>
-            r.event === 'run.config' && r.payload.config.agent === 'correct',
+          (r) => r.event === 'run.config' && r.payload.config.agent === 'edit',
         )
         .map((r) => r.payload.config.inputFiles.map(tail))
-        // The task's own revision runs name no input files.
-        .filter((files) => files.length > 0);
+        // The second program is the one whose input is in run storage: the
+        // first reads the workspace's paper.tex, and a program's own
+        // revision runs name no input files.
+        .filter((files) => files.length > 0 && files.every(Boolean));
       assert(
         inputs.length > 0 &&
           inputs.every(
             (files) =>
               files.length === 1 && files[0] === tail(value.polished.at(-1)),
           ),
-        `correct read ${JSON.stringify(inputs)}, not polish's last round`,
+        `the second edit read ${JSON.stringify(inputs)}, not the first's last round`,
       );
       assertPolished(readFileSync(value.corrected.at(-1), 'utf8'));
       unchanged(dir, 'polish', 'paper.tex');
@@ -233,7 +236,7 @@ const JOURNEYS = {
 };
 
 /** Run one journey through the real CLI; returns its usage or throws. */
-function runJourney(name, model, outDir, { scriptOnly, attempt }) {
+function runJourney(name, model, outDir, { arm, attempt }) {
   const journey = JOURNEYS[name];
   const dir = mkdtempSync(path.join(tmpdir(), `texra-journey-${name}-`));
   const home = mkdtempSync(path.join(tmpdir(), `texra-journey-${name}-home-`));
@@ -261,14 +264,14 @@ function runJourney(name, model, outDir, { scriptOnly, attempt }) {
     // enabled ones only.
     const enable = texra(['models', 'enable', model], 60_000);
     assert(enable.status === 0, `texra models enable ${model} failed`);
-    if (scriptOnly) {
-      // The global state the `enable` above created: the "only" arm's one
+    if (arm === 'direct') {
+      // The global state the `enable` above created: the "direct" arm's one
       // setting, written as the app-state store writes it.
       const db = new DatabaseSync(
         path.join(home, '.texra', 'v1', 'global-storage', 'texra.db'),
       );
       db.prepare(
-        "INSERT OR REPLACE INTO current_value (family, key, value, at) VALUES ('app-state', 'texra.codeMode.scriptOnly', 'true', ?)",
+        "INSERT OR REPLACE INTO current_value (family, key, value, at) VALUES ('app-state', 'texra.codeMode.scriptOnly', 'false', ?)",
       ).run(Date.now());
       db.close();
     }
@@ -291,7 +294,7 @@ function runJourney(name, model, outDir, { scriptOnly, attempt }) {
     const wallMs = Date.now() - startedAt;
     const stem = path.join(
       outDir,
-      `${name}.${model.replaceAll(/[^\w.-]/g, '-')}.${scriptOnly ? 'only' : 'direct'}.${attempt}`,
+      `${name}.${model.replaceAll(/[^\w.-]/g, '-')}.${arm}.${attempt}`,
     );
     writeFileSync(`${stem}.ndjson`, result.stdout ?? '');
     writeFileSync(`${stem}.stderr`, result.stderr ?? '');
@@ -360,7 +363,7 @@ const { values } = parseArgs({
     model: { type: 'string', multiple: true },
     journey: { type: 'string', multiple: true },
     'no-build': { type: 'boolean', default: false },
-    'script-only': { type: 'boolean', default: false },
+    direct: { type: 'boolean', default: false },
     repeat: { type: 'string', default: '1' },
     out: { type: 'string', default: path.join(cliRoot, 'dist/journeys') },
   },
@@ -398,8 +401,7 @@ if (!values['no-build']) {
 }
 mkdirSync(values.out, { recursive: true });
 
-const scriptOnly = values['script-only'];
-const arm = scriptOnly ? 'only' : 'direct';
+const arm = values.direct ? 'direct' : 'only';
 const repeat = Number(values.repeat);
 if (!Number.isInteger(repeat) || repeat < 1) {
   console.error(`--repeat must be a positive integer, got ${values.repeat}`);
@@ -430,7 +432,7 @@ for (const model of funded) {
       try {
         return {
           name,
-          ...runJourney(name, model, values.out, { scriptOnly, attempt }),
+          ...runJourney(name, model, values.out, { arm, attempt }),
         };
       } catch (error) {
         return {

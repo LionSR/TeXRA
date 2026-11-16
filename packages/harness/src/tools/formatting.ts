@@ -1,16 +1,48 @@
 // Third-party imports
-import { Schema } from 'effect';
+import { Schema, SchemaGetter } from 'effect';
 import type { ToolFileAttachment } from '@shared/schemas';
 
-/** Canonical 1-based inclusive line range for tool view_range fields. */
-export const ViewRangeSchema = Schema.Tuple([
-  Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
-  Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
-]).check(
-  Schema.makeFilter(([start, end]) => end >= start, {
-    error: 'view_range[1] must be greater than or equal to view_range[0]',
+const LineNumberSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1));
+
+const LineRangeObjectSchema = Schema.Struct({
+  start: LineNumberSchema.annotate({
+    description: 'First line, 1-indexed.',
   }),
+  end: Schema.optional(Schema.NullOr(LineNumberSchema)).annotate({
+    description:
+      'Last line, inclusive and 1-indexed; the end of the file when omitted.',
+  }),
+}).check(
+  Schema.makeFilter(
+    (value) =>
+      value.end == null ||
+      value.end >= value.start || {
+        path: ['end'],
+        issue: 'the range end must be greater than or equal to its start',
+      },
+  ),
 );
+
+/**
+ * The line range a file-viewing tool takes (`read_file`'s `range`, the memory
+ * and executions tools' `view_range`): `{start, end}`, or the `[start, end]`
+ * array models also send, decoded to the same object.
+ */
+export const LineRangeSchema = Schema.Union([
+  LineRangeObjectSchema,
+  Schema.Tuple([
+    LineNumberSchema,
+    Schema.optionalKey(Schema.NullOr(LineNumberSchema)),
+  ]).pipe(
+    Schema.decodeTo(LineRangeObjectSchema, {
+      decode: SchemaGetter.transform(([start, end]) => ({ start, end })),
+      encode: SchemaGetter.transform(({ start, end }) => [start, end]),
+    }),
+  ),
+]);
+
+/** A decoded {@link LineRangeSchema}: 1-based, `end` inclusive. */
+export type LineRange = typeof LineRangeSchema.Type;
 
 /** Maximum lines returned in a single file view before truncation. */
 const READ_FILE_MAX_LINES = 2000;
@@ -41,11 +73,10 @@ interface FileViewOptions {
   /** All lines of the file. */
   lines: string[];
   /**
-   * Optional 1-based `[start, end]` (both inclusive) line range.
-   * When omitted or nullish, the full file is shown.
-   * Values are clamped to the file bounds automatically.
+   * The requested lines; the full file when omitted. An end past the file
+   * is clamped to it, and the summary says so.
    */
-  viewRange?: readonly [number, number] | null;
+  range?: LineRange | null;
   /** Max visible lines before truncation. Defaults to READ_FILE_MAX_LINES (2000). */
   maxLines?: number;
   /** Optional suffix appended to the summary (e.g., memory metadata). */
@@ -68,14 +99,14 @@ interface FileViewResult {
 export function formatFileView({
   path: filePath,
   lines,
-  viewRange,
+  range,
   maxLines = READ_FILE_MAX_LINES,
   summarySuffix = '',
 }: FileViewOptions): FileViewResult {
   const totalLines = lines.length;
-  const rangeProvided = viewRange != null;
-  const startLine = Math.max(viewRange?.[0] ?? 1, 1);
-  const endLine = Math.min(viewRange?.[1] ?? totalLines, totalLines);
+  const rangeProvided = range != null;
+  const startLine = range?.start ?? 1;
+  const endLine = Math.min(range?.end ?? totalLines, totalLines);
   // Lines in the requested range, clamped to the file bounds and floored at
   // zero so an empty (start > end) range never reports negative lines.
   const rangeSize = Math.max(endLine - startLine + 1, 0);
@@ -119,9 +150,9 @@ export function formatFileView({
     }
   }
 
-  if (summarySuffix) {
-    summary += summarySuffix;
-  }
+  if (range?.end != null && range.end > totalLines)
+    summary += ` (requested end ${range.end} exceeds file length ${totalLines})`;
+  summary += summarySuffix;
 
   return { status: 'executed', output: segments.join('\n'), summary };
 }

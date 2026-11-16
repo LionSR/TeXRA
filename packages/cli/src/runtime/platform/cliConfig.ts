@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Predicate, Result, Schema } from 'effect';
+import { Effect, Predicate, Result, Schema, type Types } from 'effect';
 
 // Local imports - platform
 import { modelConfig, MODELS } from '@texra-ai/llm';
@@ -49,11 +49,11 @@ const COMMAND_SECTIONS = {
 } as const;
 type CliCommandRole = keyof typeof COMMAND_SECTIONS;
 
-/** Agent and model for one command, after the section/top-level fallthrough. */
-interface CliCommandDefaults {
-  readonly agent?: string;
-  readonly model?: string;
-}
+/**
+ * Agent and model for one command, after the section/top-level fallthrough:
+ * the members of the widest section, `texra.chat`.
+ */
+type CliCommandDefaults = NonNullable<typeof CLI_CHAT_SETTING.schema.Type>;
 
 function normalizeCliModelLookupKey(value: string): string {
   return value
@@ -129,9 +129,8 @@ export function cliCommandDefaults(
   stores: SettingsStores,
   role: CliCommandRole,
 ): CliCommandDefaults {
-  const sectionRow: SettingRow<
-    { readonly agent?: string; readonly model?: string } | undefined
-  > = COMMAND_SECTIONS[role];
+  const sectionRow: SettingRow<CliCommandDefaults | undefined> =
+    COMMAND_SECTIONS[role];
   const section = Settings.getConfig(stores.config, sectionRow) ?? {};
   return {
     agent:
@@ -164,7 +163,7 @@ export const setWorkspaceCliChatAgent = Effect.fn(
   const stored = stores.config.inspect<unknown>(
     CLI_CHAT_SETTING.key,
   ).workspaceValue;
-  const next: { agent?: string; model?: string } = Predicate.isObject(stored)
+  const next: Types.Mutable<CliCommandDefaults> = Predicate.isObject(stored)
     ? { ...stored }
     : {};
   if (trimmed) next.agent = trimmed;
@@ -177,13 +176,15 @@ export const setWorkspaceCliChatAgent = Effect.fn(
 });
 
 /**
- * The members each command section accepts. `texra run` takes its agent as a
- * required argument, so its section sets only the model.
+ * The members each command section's row accepts, by its key. `texra run`
+ * takes its agent as a required argument, so its section sets only the model.
  */
-const COMMAND_SECTION_KEYS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
-  ['chat', new Set(['agent', 'model'])],
-  ['run', new Set(['model'])],
-]);
+const COMMAND_SECTION_KEYS: ReadonlyMap<string, ReadonlySet<string>> = new Map(
+  [CLI_CHAT_SETTING, CLI_RUN_SETTING].map((row) => [
+    row.key,
+    new Set(Object.keys(Schema.required(row.schema).fields)),
+  ]),
+);
 
 /**
  * Names the config-file entries that cannot apply. An unknown project key (a

@@ -9,7 +9,10 @@ import { Effect } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
-import { ALLOW_ORCHESTRATOR_KILL_SETTING } from '@shared/state/stateSettings';
+import {
+  ALLOW_ORCHESTRATOR_KILL_SETTING,
+  settingName,
+} from '@shared/state/stateSettings';
 
 const CHANNEL = 'ExecutionsTool';
 
@@ -31,14 +34,14 @@ export const orchestratorKillDenial = Effect.fn('orchestratorKillDenial')(
     );
     if (policy.kind === 'invalid') {
       const denial =
-        `Killing subagents is denied: the stored "Let a task stop its agents" ` +
-        `setting (${ALLOW_ORCHESTRATOR_KILL_SETTING.key}) is invalid ` +
-        `(${policy.cause}). Set it again in Settings > Agents > Advanced.`;
+        `Killing subagents is denied: the stored ` +
+        `${settingName(ALLOW_ORCHESTRATOR_KILL_SETTING)} setting is invalid ` +
+        `(${policy.cause}). Set it again.`;
       yield* Effect.logWarning(denial).pipe(withLogChannel(CHANNEL));
       return denial;
     }
     return policy.value
       ? undefined
-      : 'Killing subagents is disabled. Enable it in Settings > Agents > Advanced.';
+      : `Killing subagents is disabled. Turn on the ${settingName(ALLOW_ORCHESTRATOR_KILL_SETTING)} setting to allow it.`;
   },
 );

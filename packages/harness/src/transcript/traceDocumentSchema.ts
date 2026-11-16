@@ -5,6 +5,7 @@ import {
   GOAL_PLAN_KIND,
   RETIRED_PLUGIN_FACTS,
   RunIdSchema,
+  RunRecordFieldsSchema,
   unavailableFactReason,
   factName,
   type FactName,
@@ -12,13 +13,13 @@ import {
 
 /**
  * One finished run as a static viewer replays it: the run aggregate's own
- * display events in commit order, the same rows the live plane delivers to a
+ * display events in commit order, the same rows the live feed delivers to a
  * subscriber. Nothing is projected on the way out and nothing is
  * reconstructed on the way in.
  *
- * An exported document authors four facts rather than copying them:
- * no owner, no parent, no checkpoint and no follow-ups taken, because an
- * exported file has no producer, no siblings and no writable host.
+ * The exporter changes two things on the way out: the creation row carries
+ * no parent and takes no follow-ups, because an exported file has no siblings
+ * and no writable host, and a decision keeps its action but not its content.
  */
 export const TraceDocumentSchema = Schema.Struct({
   runId: RunIdSchema,
@@ -26,6 +27,23 @@ export const TraceDocumentSchema = Schema.Struct({
 });
 
 export type TraceDocument = Readonly<typeof TraceDocumentSchema.Type>;
+
+/** Why a run has no trace to export: the store holds no record for it
+ *  (`no_record`), or its history holds no display row (`no_rows`). */
+export const TraceMissingSchema = Schema.Literals(['no_record', 'no_rows']);
+
+/** What a run's trace export answers: the run's document and its record, or
+ *  why it has none. */
+export const AssembleTraceResultSchema = Schema.Union([
+  Schema.Struct({
+    status: Schema.Literal('ok'),
+    trace: TraceDocumentSchema,
+    record: RunRecordFieldsSchema,
+  }),
+  Schema.Struct({ status: TraceMissingSchema }),
+]);
+
+export type AssembleTraceResult = typeof AssembleTraceResultSchema.Type;
 
 /** A plugin row kind as an imported trace reads it: a `Plugin` fact kind. */
 export interface TraceFactKind {

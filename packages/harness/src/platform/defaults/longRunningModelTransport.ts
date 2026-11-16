@@ -117,7 +117,7 @@ export const undiciFetchThrough = (
  * "[object Request]". Its URL, method, headers, body, signal and redirect
  * mode are carried over as an init instead; an explicit `init` still wins.
  * A `Request` body is a stream or null, and only a stream takes `duplex`.
- * The request is held until the fetch settles: a cloned `Request`'s signal
+ * The request is held until the fetch finishes: a cloned `Request`'s signal
  * follows its parent only while the clone is alive.
  */
 const fetchThrough =

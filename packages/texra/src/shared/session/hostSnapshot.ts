@@ -13,11 +13,10 @@ import {
   APPROVAL_POLICY_DEFAULT,
 } from '@texra-ai/harness/schemas';
 import {
+  AgentOptionDataSchema,
   ModelOptionDataSchema,
   TeamOptionDataSchema,
 } from '@texra/shared/pickerOptions';
-
-import { DocumentAgentOptionSchema } from '@texra/shared/plugins/documents';
 
 /** Open workspace folder offered as a run working directory. */
 const WorkspaceRootOptionDataSchema = Schema.Struct({
@@ -82,8 +81,8 @@ export type OnboardingFunnelState = typeof OnboardingFunnelStateSchema.Type;
 
 export const HostSnapshotSchema = Schema.Struct({
   project: ProjectDisplaySchema,
-  /** Every agent; one that is also a document task carries its `rounds`. */
-  agentOptions: Schema.Array(DocumentAgentOptionSchema),
+  /** Every agent the workspace's agent selector lists. */
+  agentOptions: Schema.Array(AgentOptionDataSchema),
   modelOptions: Schema.Array(ModelOptionDataSchema),
   teamOptions: Schema.Array(TeamOptionDataSchema),
   /** How a tool call is painted, from what the process's plugins declare

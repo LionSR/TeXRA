@@ -20,7 +20,6 @@ import {
   acceptsFollowUp,
   attentionOf,
   generateRunId,
-  qualifyAggregateId,
   sessionActivity,
 } from '@texra-ai/harness/schemas';
 import { elideText, rowHeadline } from '@texra-ai/harness/transcript';
@@ -61,9 +60,7 @@ const program = Effect.gen(function* () {
   const session = yield* sessions.open(platform.roots);
 
   const runId = generateRunId();
-  yield* session.view.subscribe([
-    { id: qualifyAggregateId('run', runId), fromSeq: 0 },
-  ]);
+  yield* session.view.subscribe([{ id: runId, fromSeq: 0 }]);
 
   const run = yield* session.start({
     runId,
@@ -78,7 +75,7 @@ const program = Effect.gen(function* () {
   });
 
   yield* run.result;
-  yield* session.settled;
+  yield* session.drained;
 
   const view = session.view.current();
   const runView = view.runs.get(run.runId);

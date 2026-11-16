@@ -5,7 +5,7 @@ import { Context, Effect, Layer } from 'effect';
 import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
 
-import { RunFileService } from '@texra-ai/harness/plugins';
+import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import {
   createWorkspaceLocation,
   sessionFsLayer,
@@ -17,17 +17,14 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { FakeHost } from '@test/support/testKernel';
-import type { DocumentTaskOptions } from '@texra/shared/plugins/documents';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 const logger = spiedTrace();
 
-const extractFiguresConfig: DocumentTaskOptions = {
+const extractFiguresConfig = {
   autoExtractFigure: true,
   autoExtractTikzFigure: false,
-  attachTeXCount: false,
   autoCompileInputPdf: false,
-  reflect: false,
 };
 
 const tempDirs = useTempDirs();
@@ -96,7 +93,7 @@ describe('latexMedia figure extraction', () => {
         FakeHost,
       );
       const media = yield* processInputFiles(
-        { logger, roots, fileService: new RunFileService(runId, roots) },
+        { logger, roots, fileService: new RunWorkspace(runId, roots) },
         [createWorkspaceLocation(texPath, 'main.tex')],
         extractFiguresConfig,
       ).pipe(Effect.provide(sessionFsLayer(roots)));

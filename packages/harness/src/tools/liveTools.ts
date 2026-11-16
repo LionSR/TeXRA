@@ -22,7 +22,6 @@ import {
   Option,
   Path,
   RcMap,
-  Result,
   type Scope,
   Stream,
   SubscriptionRef,
@@ -38,11 +37,7 @@ import type {
   StateWriteFailed,
 } from '@shared/config/settings';
 import { entriesOf } from '@tools/catalogEntries';
-import {
-  readDisabledTools,
-  storedDisabledTools,
-  type Plugin,
-} from '@tools/plugins';
+import type { Plugin } from '@tools/plugins';
 import {
   buildPluginLayer,
   follow,
@@ -57,7 +52,7 @@ import {
   type ToolTable,
 } from '@tools/toolTable';
 import type { InstalledToolReader, PluginLoader } from '@tools/mcp/mcpConfig';
-import { DISABLED_TOOLS_KEY } from '@shared/state/disabledTools';
+import { readDisabledTools, setToolEnabled } from '@shared/state/disabledTools';
 
 /** The process's tool catalog's identifier: what a program that reads the
  *  catalog requires. */
@@ -200,20 +195,7 @@ export const toolCatalogLayer = (
         setEnabled: (id, enabled) =>
           (table.entries.get(id)?.toggle === undefined
             ? Effect.logWarning(`Plugin ${id} has no switch; nothing written.`)
-            : state.modify([DISABLED_TOOLS_KEY.key], (stored) =>
-                Result.map(
-                  storedDisabledTools(stored[DISABLED_TOOLS_KEY.key]),
-                  (current) => {
-                    const disabled = new Set(current);
-                    if (enabled) disabled.delete(id);
-                    else disabled.add(id);
-                    return [
-                      undefined,
-                      { [DISABLED_TOOLS_KEY.key]: [...disabled] },
-                    ] as const;
-                  },
-                ),
-              )
+            : setToolEnabled(state, id, enabled)
           ).pipe(withLogChannel('toolAvailability')),
         drain: Effect.forEach(
           drains,

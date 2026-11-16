@@ -28,20 +28,6 @@ Node.js platform implementation and host building blocks for
   name where the log entries go, and
   [`effectDiagnosticsLayer`](#effectdiagnosticslayer) at which level.
 
-## absentReason
-
-Whether a failure means nothing is at the path: it is not there
-(`ENOENT`), or a parent component is a file rather than a directory
-(`ENOTDIR`), the two cases Node's own `statSync(path, { throwIfNoEntry:
-false })` reads as no entry. It answers for the standard library's
-`PlatformError`, which reports `ENOTDIR` as `BadResource`, and for a bare
-Node error. Every other failure (`EACCES`, `ELOOP`, `EISDIR`, ...) is not
-absence and propagates from a caller that recovers only this.
-
-```ts
-const absentReason: (error: unknown) => boolean
-```
-
 ## APPROVAL_POLICY_ENV
 
 The variable a person's own invocation requests an approval policy
@@ -73,6 +59,17 @@ Absent, none.
 const CommandDirs: Reference<() => readonly string[]>
 ```
 
+## commitExists
+
+Whether `hash` names a commit in the history of the repository at `cwd`.
+
+```ts
+function commitExists(
+  cwd: string,
+  hash: string,
+): Effect.Effect<boolean, never, ChildProcessSpawner>
+```
+
 ## ConfigStore
 
 The store surface one config target needs. `JsonStore` satisfies it; so does
@@ -89,6 +86,27 @@ interface ConfigStore {
   get(key: string): unknown;
   set(key: string, value: unknown): Effect.Effect<void, Error>;
 }
+```
+
+## createSymlink
+
+Link `destination` to `sourceAbsolute`, parent directories included. An
+existing link there is replaced; any other entry fails `AlreadyExists` and
+stays. A host that cannot make links (`EPERM`, `EACCES`, `EINVAL`,
+`ENOTSUP`) gets a copy of the source instead.
+
+```ts
+const createSymlink: (sourceAbsolute: string, destination: string) => Effect<void, PlatformError, FileSystem>
+```
+
+## currentBranch
+
+The checked-out branch, or null when HEAD is detached or unreadable.
+
+```ts
+function currentBranch(
+  cwd: string,
+): Effect.Effect<string | null, never, ChildProcessSpawner>
 ```
 
 ## effectDiagnosticsLayer
@@ -138,7 +156,7 @@ lstat semantics: a link reports as itself rather than as what it points at,
 and a dangling one still names an entry.
 
 One `lstat`, so a dangling or circular link is still an entry. Only
-absence ({@link absentReason}, `ENOTDIR` included) is recovered; every other
+absence ({@link meansAbsent}, `ENOTDIR` included) is recovered; every other
 failure propagates, so an unreadable entry is never read as a missing one.
 
 The caller passes the filesystem it probes with, so a rooted view answers
@@ -168,10 +186,34 @@ One variable; unset and `''` both read as undefined.
 const envVar: (name: string) => Effect<string | undefined, never, never>
 ```
 
-## ExecResult
+## ExecEnd
+
+How a command ended.
 
 ```ts
-type ExecResult = typeof ExecResultSchema.Type;
+type ExecEnd =
+  | { readonly _tag: 'Exited'; readonly code: number }
+  | { readonly _tag: 'TimedOut' }
+  | { readonly _tag: 'LimitExceeded'; readonly stream: 'stdout' | 'stderr' }
+  /** It has no exit code of its own: it could not start, died by a signal,
+   *  or its output could not be read. */
+  | { readonly _tag: 'NoExit'; readonly why: 'spawn' | 'signal' | 'read' };
+```
+
+## ExecResult
+
+What `executeCommand` answers.
+
+```ts
+interface ExecResult {
+  /** It exited with code 0. */
+  readonly success: boolean;
+  /** Empty or whitespace-only output is normalized to the empty string. */
+  readonly stdout: string;
+  /** Normalized as `stdout` is. */
+  readonly stderr: string;
+  readonly end: ExecEnd;
+}
 ```
 
 ## executeCommand
@@ -179,9 +221,9 @@ type ExecResult = typeof ExecResultSchema.Type;
 Execute an external command in `cwd` with the workspace env, over the
 process's `ChildProcessSpawner`. Its lines take the caller's log channel.
 
-Never fails: a spawn failure or missing cwd (127), a non-zero exit, a
-timeout (`timedOut`) and a max-buffer trip (2,
-`outputLimitExceeded`) are all reported in the {@link ExecResult}.
+Never fails: how the command ended (an exit code, a timeout, a max-buffer
+trip, or no exit of its own: a spawn failure or missing cwd, a signal, an
+unreadable stream) is the {@link ExecResult}'s `end`.
 
 The process lives exactly as long as this call's scope. A deadline, an
 output-limit trip or an interrupted fiber closes that scope, and
@@ -194,7 +236,7 @@ in its own group, on a lifeline that ends the group if this process dies
 without running the release.
 
 ```ts
-const executeCommand: (command: string | string[], options: ExecuteCommandBaseOptions) => Effect<{ readonly success: boolean; readonly timedOut: boolean; readonly stdout: string; readonly stderr: string; readonly exitCode: number; readonly noExitCode?: boolean | undefined; readonly outputLimitExceeded?: boolean | undefined; }, never, ChildProcessSpawner>
+const executeCommand: (command: string | string[], options: ExecuteCommandBaseOptions) => Effect<ExecResult, never, ChildProcessSpawner>
 ```
 
 ## ExecuteCommandBaseOptions
@@ -321,6 +363,18 @@ const inheritedEnv: (keep?: "xai" | "anthropic" | "openai" | "google" | "deepsee
 const INPUT_HISTORY_LIMIT: 1000
 ```
 
+## isGitRepository
+
+Whether `cwd` is inside a git work tree. A bare repository and the inside
+of `.git` are not: nothing there can be checked out or written to.
+`undefined` means "no folder", which is not a repository.
+
+```ts
+function isGitRepository(
+  cwd: string | undefined,
+): Effect.Effect<boolean, never, ChildProcessSpawner>
+```
+
 ## isNotADirectoryError
 
 Check if an error represents "a parent path component is a file, not a directory".
@@ -389,6 +443,17 @@ this store serves deliberate configuration files.
 class JsonStore
 ```
 
+## localBranchExists
+
+Whether the local branch `branch` exists.
+
+```ts
+function localBranchExists(
+  cwd: string,
+  branch: string,
+): Effect.Effect<boolean, never, ChildProcessSpawner>
+```
+
 ## LOG_CHANNEL
 
 Annotation naming the logical channel an entry belongs to.
@@ -421,23 +486,42 @@ interface LogSink {
 }
 ```
 
-## makeMachineGitEnv
+## machineGit
 
-Build an environment for a non-interactive git subprocess: the current
-environment with the helper-invoking keys in {@link GIT_UNSAFE_ENV_KEYS}
-removed, `GIT_TERMINAL_PROMPT=0` so git never blocks on a tty prompt, and
-`PATH` extended via {@link withCommandDirs} so GUI-launched hosts (whose
-minimal PATH may omit Homebrew / /usr/local/bin, or Windows' Git\cmd when
-git was installed for Git Bash only) can still resolve the `git` binary.
-
-This omits the unsafe keys rather than setting them to `undefined`, so it
-only strips anything when it fully replaces the child environment. On a
-ChildProcess command the env replaces the child environment unless
-`extendEnv` is true; pass `extendEnv: false` explicitly so a later
-`extendEnv: true` cannot merge the stripped keys back in.
+Run one `git` command that may change something (a clone, a fetch, a
+checkout) under the machine git environment, with `env` added over it and
+`input` on stdin. It drains both streams to the exit and fails only when
+the process could not run; a non-zero exit is the caller's to word.
 
 ```ts
-const makeMachineGitEnv: Effect.Effect<NodeJS.ProcessEnv>
+const machineGit: (args: readonly string[], options?: { readonly cwd?: string | undefined; readonly env?: Readonly<Record<string, string>> | undefined; readonly input?: string | undefined; } | undefined) => Effect<{ stdout: string; stderr: string; code: ExitCode; }, PlatformError, ChildProcessSpawner>
+```
+
+## MachineGitResult
+
+How a {@link machineGit} command ended.
+
+```ts
+interface MachineGitResult {
+  readonly stdout: string;
+  /** Trimmed. */
+  readonly stderr: string;
+  readonly code: number;
+}
+```
+
+## meansAbsent
+
+Whether a failure means nothing is at the path: it is not there
+(`ENOENT`), or a parent component is a file rather than a directory
+(`ENOTDIR`), the two cases Node's own `statSync(path, { throwIfNoEntry:
+false })` reads as no entry. It answers for the standard library's
+`PlatformError`, which reports `ENOTDIR` as `BadResource`, and for a bare
+Node error. Every other failure (`EACCES`, `ELOOP`, `EISDIR`, ...) is not
+absence and propagates from a caller that recovers only this.
+
+```ts
+const meansAbsent: (error: unknown) => boolean
 ```
 
 ## nodeFileServices
@@ -533,11 +617,32 @@ const openNodeWorkspaceRoots: (
 ) => Effect.Effect<WorkspaceRoots, DatabaseOpenFailed, Scope.Scope>
 ```
 
+## originDefaultBranch
+
+The default branch `origin/HEAD` points at (`main` for `origin/main`), or
+null when the clone has no such ref.
+
+```ts
+function originDefaultBranch(
+  cwd: string,
+): Effect.Effect<string | null, never, ChildProcessSpawner>
+```
+
+## originUrl
+
+The URL of the `origin` remote, or null when there is none.
+
+```ts
+function originUrl(
+  cwd: string,
+): Effect.Effect<string | null, never, ChildProcessSpawner>
+```
+
 ## pathExists
 
 `FileSystem.exists` with a path whose parent is not a directory (`ENOTDIR`)
 counted as absent alongside `ENOENT`; the standard library reports that
-case as `BadResource`. {@link absentReason} names ENOTDIR specifically, so
+case as `BadResource`. {@link meansAbsent} names ENOTDIR specifically, so
 an operational failure (`ELOOP`, `EACCES`) still propagates instead of
 reading as "absent".
 
@@ -609,6 +714,17 @@ the paths inside its root and the process filesystem answers for the rest.
 const readNormalizedFile: (fs: FileSystem, target: string) => Effect<string, PlatformError, never>
 ```
 
+## recentCommitLabels
+
+Up to `limit` recent commits, each labelled `<shortHash>: <subject>
+(<relativeDate>)`, or null when `cwd` is not a work tree. A repository
+with no commit has none; a `git log` that fails on one that has commits
+(unreadable objects, a timeout) is logged at warn and reads as none.
+
+```ts
+const recentCommitLabels: (cwd: string, limit: number) => Effect<readonly string[] | null, never, ChildProcessSpawner>
+```
+
 ## relativeToRoot
 
 The path of `filePath` relative to `root`, following symlinks on either
@@ -620,6 +736,16 @@ function relativeToRoot(
   root: string,
   filePath: string,
 ): string | undefined
+```
+
+## repositoryRoot
+
+The top-level directory of the work tree holding `cwd`, or null.
+
+```ts
+function repositoryRoot(
+  cwd: string,
+): Effect.Effect<string | null, never, ChildProcessSpawner>
 ```
 
 ## resolveGlobalStoragePath

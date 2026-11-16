@@ -4,20 +4,6 @@ import { Effect, Schema, Struct } from 'effect';
 import { AgentSourceSchema, InlinePersonaSchema } from './agent';
 import { AgentDelegationScopeSchema } from './workspaceAgents';
 import { NullableFileFieldsSchema } from './fileFields';
-import { JsonValueSchema } from './jsonValue';
-
-/** What every script a run opens on records: its source, title, the tools
- *  it is offered, and its wall-clock limit. */
-const ScriptFieldsSchema = Schema.Struct({
-  code: Schema.NonEmptyString,
-  title: Schema.NonEmptyString,
-  /** The tools the run offers the script, by name. */
-  tools: Schema.Array(Schema.NonEmptyString),
-  /** The script's wall-clock limit, when it set one. */
-  timeoutMs: Schema.optional(
-    Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
-  ),
-});
 
 /** A run's launch configuration, as its `run.config` row records it. */
 const AgentConfigObjectSchema = NullableFileFieldsSchema.mapFields(
@@ -63,7 +49,7 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.mapFields(
      * owner decodes its own keys.
      */
     launch: Schema.optional(
-      Schema.NullOr(Schema.Record(Schema.String, JsonValueSchema)),
+      Schema.NullOr(Schema.Record(Schema.String, Schema.Json)),
     ),
     /** Run-scoped delegation agent list used by team runs and their children. */
     delegationAgentScope: Schema.optional(
@@ -79,31 +65,36 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.mapFields(
       Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown)),
     ),
     /**
-     * The `script` call this run makes instead of asking its model: it opens
-     * with that call as its one response, offers exactly `tools`, and ends when
-     * the call settles. A script a parent sent to the background, or a
-     * task's recipe. Absent for every other run.
+     * What a run does instead of asking its model: it opens with one
+     * `script` call as its one response and ends when that call does. A
+     * script a parent sent to the background, or a plugin's program. Absent
+     * for every other run.
      */
     script: Schema.optional(
       Schema.NullOr(
         Schema.Union([
           /** The parent's model wrote it and sent it to the background; the run
            *  is that script, and its `agent` calls propose themselves. */
-          ScriptFieldsSchema.mapFields(
-            Struct.assign({ kind: Schema.Literal('background') }),
-          ),
-          /** A plugin wrote it: a task's recipe. The run is its agent's, and its
-           *  `agent` calls were approved with its launch. */
-          ScriptFieldsSchema.mapFields(
-            Struct.assign({
-              kind: Schema.Literal('recipe'),
-              /** The agent-file block (`AgentBlock.key`) whose task it runs. */
-              block: Schema.NonEmptyString,
-              /** The launch's options for that task, as its plugin reads them
-               *  (the switches that plugin defines). */
-              options: Schema.Record(Schema.String, JsonValueSchema),
-            }),
-          ),
+          Schema.Struct({
+            kind: Schema.Literal('background'),
+            code: Schema.NonEmptyString,
+            title: Schema.NonEmptyString,
+            /** The tools the run offers the script, by name. */
+            tools: Schema.Array(Schema.NonEmptyString),
+            /** The script's wall-clock limit, when it set one. */
+            timeoutMs: Schema.optional(
+              Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
+            ),
+          }),
+          /** A plugin's program, by the name its plugin registers it under
+           *  (`Plugin.programs`): the run's script imports that module and
+           *  calls its default export with `args`. The registration lists
+           *  its tools, and its `agent` calls were approved with its launch. */
+          Schema.Struct({
+            kind: Schema.Literal('program'),
+            name: Schema.NonEmptyString,
+            args: Schema.Record(Schema.String, Schema.Json),
+          }),
         ]),
       ),
     ),

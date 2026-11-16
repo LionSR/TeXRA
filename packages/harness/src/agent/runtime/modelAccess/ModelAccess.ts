@@ -25,7 +25,7 @@ import type { DeclinableUsageRoute, ModelBackend } from '@shared/schemas';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 
 import { bindRoute } from './binding';
-import { admitSwitch, type SwitchRefusal } from './routeDecision';
+import { acceptSwitch, type SwitchRefusal } from './routeDecision';
 import type { Binding } from '@texra-ai/llm/node';
 import type { CallFailure } from './failureInfo';
 
@@ -60,6 +60,15 @@ export interface BoundModel extends Binding {
   readonly routes: readonly [RoutePolicy, RoutePolicy];
 }
 
+/**
+ * Whether the model is sent every tool it may call, whatever the script-only
+ * setting says: a model listed here reads `codeMode.scriptOnly` as off. The
+ * validation model is the one member, because its canned conversations call
+ * tools directly; no real model is listed.
+ */
+export const keepsDirectToolCalls = (bound: Pick<BoundModel, 'route'>) =>
+  bound.route.kind === 'validation';
+
 /** What a run asks to bind. */
 export interface BindRequest {
   /** The run's model string; it also carries the effort, thinking and mode. */
@@ -84,7 +93,7 @@ export class ModelAccess extends Context.Service<
       request: BindRequest,
     ) => Effect.Effect<BoundModel, CallFailure, Scope.Scope>;
     /** Why `modelId` cannot replace `current`'s model; null when it can. */
-    readonly admit: (
+    readonly switchRejection: (
       modelId: string,
       current: BoundModel,
       declinedRoutes: readonly DeclinableUsageRoute[],
@@ -129,7 +138,7 @@ export const modelAccessLayer = (
         );
       return {
         bind: (request) => inProject(bindRoute(request, settingsOf(stores))),
-        admit: (modelId, current, declined) => {
+        switchRejection: (modelId, current, declined) => {
           if (current.modelId === modelId) return Effect.succeed(null);
           const selected = selectModel(modelId);
           if (!selected) {
@@ -138,7 +147,7 @@ export const modelAccessLayer = (
           }
           return inProject(
             Effect.flatMap(settingsOf(stores), (settings) =>
-              admitSwitch(selected, current.backend, settings, declined),
+              acceptSwitch(selected, current.backend, settings, declined),
             ),
           );
         },

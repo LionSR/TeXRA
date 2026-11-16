@@ -23,9 +23,8 @@
 import { Equal, type Types } from 'effect';
 import {
   aggregateTarget,
-  qualifyAggregateId,
   MESSAGE_TYPES,
-  recipeBlockOf,
+  programOf,
   listingKeyOf,
   isTranscriptEvent,
   blocksCaller,
@@ -47,7 +46,7 @@ import { getModelLabel } from '@shared/model/modelLabel';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
 import { followUpDisplay } from '@shared/subagentFollowup';
-import { isSettledRow, rowHeadline } from '../transcript/transcriptRow';
+import { isFinalRow, rowHeadline } from '../transcript/transcriptRow';
 import {
   applyRunRow,
   freshSharedRunRows,
@@ -160,7 +159,7 @@ function applyInput(
       // retention while this view was away, and no later read delivers that
       // deletion.
       for (const id of [...u.view.runs.keys()]) {
-        if (!u.state.listed.has(qualifyAggregateId('run', id))) {
+        if (!u.state.listed.has(id)) {
           removeRun(u, id);
         }
       }
@@ -377,7 +376,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     latestLine: null,
     transcript: emptyTranscript(),
   };
-  return { ...common, recipe: null };
+  return { ...common, program: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -436,7 +435,7 @@ function refreshAncestors(u: Update, runId: RunId): void {
 /**
  * Whether a run's current turn is over: it waits between turns, has ended,
  * or nobody holds it any more. Its transcript rows are then final:
- * `settledRows` covers them and nothing reads as thinking or compacting.
+ * `finalRows` covers them and nothing reads as thinking or compacting.
  */
 const turnIsOver = (run: RunView): boolean =>
   run.holder === 'none' || run.position === 'waiting';
@@ -543,7 +542,7 @@ function nonEmpty(text: string | undefined): string | undefined {
 }
 
 /** A run's newest operational summary, for one with no reply to show (a
- *  script's run, a task's recipe): what its tool, card, error, or
+ *  script's run, a program): what its tool, card, error, or
  *  plain log row last said. */
 function operationalLatestLine(
   rows: TranscriptView['rows'],
@@ -568,10 +567,10 @@ function operationalLatestLine(
   return undefined;
 }
 
-/** Any other run's newest user instruction or settled model reply. */
+/** Any other run's newest user instruction or finished model reply. */
 function latestConversationLine(
   rows: TranscriptView['rows'],
-  settledRows: number,
+  finalRows: number,
 ): string | undefined {
   for (let index = rows.length - 1; index >= 0; index -= 1) {
     const row = rows[index];
@@ -583,7 +582,7 @@ function latestConversationLine(
       row.messageType === MESSAGE_TYPES.MODEL_RESPONSE;
     if (
       response &&
-      (index < settledRows || isSettledRow(row, index < rows.length - 1))
+      (index < finalRows || isFinalRow(row, index < rows.length - 1))
     ) {
       return headline;
     }
@@ -592,13 +591,13 @@ function latestConversationLine(
 }
 
 /**
- * Advance `settledRows`, the contiguous leading prefix of settled rows: an
- * append-only scrollback prints rows in order, so a row is settled for
+ * Advance `finalRows`, the contiguous leading prefix of finished rows: an
+ * append-only scrollback prints rows in order, so a row is finished for
  * printing only once every row before it is. Only the tail past the previous
- * frontier is walked. A run whose turn is over settles every open row
+ * frontier is walked. A run whose turn is over finishes every open row
  * except a compaction block, which cleanup can still replace.
  */
-function advanceSettledRows(
+function advanceFinalRows(
   rows: TranscriptView['rows'],
   start: number,
   turnOver: boolean,
@@ -606,9 +605,9 @@ function advanceSettledRows(
   let index = Math.min(start, rows.length);
   while (index < rows.length) {
     const row = rows[index];
-    if (!isSettledRow(row, index < rows.length - 1)) {
+    if (!isFinalRow(row, index < rows.length - 1)) {
       // Bridge cleanup can still replace a planned/running compaction after
-      // a cancellation, so it settles only on its own typed terminal state,
+      // a cancellation, so it finishes only on its own typed terminal state,
       // never on the final stream status.
       if (row.kind === 'compactionActivity' || !turnOver) break;
     }
@@ -618,21 +617,21 @@ function advanceSettledRows(
 }
 
 /** The transcript-derived fields of a run, after its rows moved or its turn
- *  started or ended: `settledRows`, `thinkingActive`, `compactingActive`,
+ *  started or ended: `finalRows`, `thinkingActive`, `compactingActive`,
  *  and `latestLine`. Once the turn is over nothing streams or compacts. */
 function withTranscriptFacts(u: Update, run: RunView): RunView {
   const { transcript } = run;
   const { turnOver } = runWork(u, run.id);
-  const settledRows = advanceSettledRows(
+  const finalRows = advanceFinalRows(
     transcript.rows,
-    transcript.settledRows,
+    transcript.finalRows,
     turnOver,
   );
   const activity = transcriptActivity(transcript, transcriptWork(u, run.id).ix);
   const thinkingActive = !turnOver && activity.thinkingActive;
   const compactingActive = !turnOver && activity.compactingActive;
   const latestLine =
-    latestConversationLine(transcript.rows, settledRows) ??
+    latestConversationLine(transcript.rows, finalRows) ??
     operationalLatestLine(transcript.rows) ??
     run.latestLine;
   const next = withDerived(run, {
@@ -640,9 +639,9 @@ function withTranscriptFacts(u: Update, run: RunView): RunView {
     compactingActive,
     latestLine,
   });
-  return settledRows === transcript.settledRows
+  return finalRows === transcript.finalRows
     ? next
-    : { ...next, transcript: { ...transcript, settledRows } };
+    : { ...next, transcript: { ...transcript, finalRows } };
 }
 
 /** Apply one live chunk to its run's transcript; a chunk for a run the view
@@ -720,7 +719,7 @@ function applyRunEvent(
         inputFiles: 'inputFiles' in config ? config.inputFiles : [],
         agentScope: { delegationAgentScope: null, ...config }
           .delegationAgentScope,
-        recipe: recipeBlockOf(config),
+        program: programOf(config),
       };
     }
     case 'context.state':
@@ -1018,7 +1017,7 @@ function removeRun(u: Update, runId: RunId): boolean {
   view.policy = without(u, view.policy, run.id);
   view.queuedFollowUps = without(u, view.queuedFollowUps, run.id);
   state.runs.delete(run.id);
-  const aggregateId = qualifyAggregateId('run', run.id);
+  const aggregateId = run.id;
   view.transcriptSeq = without(u, view.transcriptSeq, aggregateId);
   if (view.requests.some((r) => r.runId === run.id)) {
     view.requests = view.requests.filter((r) => r.runId !== run.id);

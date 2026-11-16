@@ -8,7 +8,6 @@ import { expect } from 'vitest';
 import {
   RunIdSchema,
   AgentConfigSchema,
-  qualifyAggregateId,
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { ToolRegistry } from '@texra-ai/harness/plugins';
@@ -25,11 +24,8 @@ import {
   sessionHandleOf,
   TestSession,
 } from '@test/support/testKernel';
-import {
-  DOCUMENT_TASK_BLOCK,
-  documentsOutputFact,
-} from '@texra/shared/plugins/documents';
-import { DOCUMENT_TASK_RESULT } from '@texra/tools/documents/documentResult';
+import { documentsOutputFact } from '@texra/shared/plugins/documents';
+import { THEORY_MODULES, THEORY_PROGRAMS } from '@texra/tools/theory/programs';
 import {
   RoundOutputSchema,
   type RoundOutput,
@@ -72,15 +68,16 @@ function workflowRounds(absolutePath: string): RoundOutput[] {
   ];
 }
 
-/** The filesystem, and the documents plugin's block, whose result names a
+/** The filesystem, and the theory plugin's program, whose result names a
  *  completed task's files. */
 const resolveLayer = Layer.merge(
   nodePlatformLayer,
   Layer.succeed(ToolRegistry)(
     toolTable([
       {
-        id: 'documents',
-        agentBlock: { ...DOCUMENT_TASK_BLOCK, result: DOCUMENT_TASK_RESULT },
+        id: 'theory',
+        scriptModules: THEORY_MODULES,
+        programs: THEORY_PROGRAMS,
       },
     ]),
   ),
@@ -97,7 +94,7 @@ const persistCompletedChild = (
       `executions/${childRunId}/${relativePath}`,
     );
     yield* publishTestRunStart(session, parentId);
-    yield* Context.get(session, SessionLog).settled;
+    yield* Context.get(session, SessionLog).drained;
     yield* seedRows(Context.get(session, SessionLog))([
       runStart(childRunId, {
         identity: { kind: 'agent', agent: 'draft' },
@@ -105,18 +102,11 @@ const persistCompletedChild = (
       }),
       {
         type: 'run.config',
-        aggregateId: qualifyAggregateId('run', childRunId),
+        aggregateId: childRunId,
         config: Schema.decodeUnknownSync(AgentConfigSchema)({
           agent: 'draft',
           model: 'openai/gpt-6.1-sol',
-          script: {
-            code: 'return 1;',
-            title: 'draft',
-            tools: [],
-            kind: 'recipe',
-            block: 'task',
-            options: {},
-          },
+          script: { kind: 'program', name: 'edit', args: {} },
         }),
       },
     ]);
@@ -125,13 +115,16 @@ const persistCompletedChild = (
     yield* Context.get(session, SessionLog).transact([
       {
         type: 'plugin.fact',
-        aggregateId: qualifyAggregateId('run', childRunId),
+        aggregateId: childRunId,
         parent: null,
-        ...documentsOutputFact(workflowRounds(absolutePath)),
+        ...documentsOutputFact(
+          { intro: '', requests: ['Revise.'], templates: [], creates: false },
+          workflowRounds(absolutePath),
+        ),
       },
       {
         type: 'run.end',
-        aggregateId: qualifyAggregateId('run', childRunId),
+        aggregateId: childRunId,
         outcome: 'completed',
         output: { response: '', files: [] },
       },

@@ -13,6 +13,7 @@
 import type { Effect } from 'effect';
 
 import type { MessageType, ToolUseLog } from '@shared/schemas';
+import type { LogOptions } from '@shared/schemas/logPayload';
 
 import type { AgentEvent } from '@shared/session/agentEvent';
 
@@ -20,7 +21,7 @@ import type { AgentEvent } from '@shared/session/agentEvent';
  *  the trace until the trace closes. */
 export type AgentTraceSink = (event: AgentEvent) => void;
 
-/** Handle returned by `openRun` — append chunks then finalize. */
+/** Handle returned by `openStream` — append chunks then finalize. */
 export interface StreamHandle {
   readonly id: string;
   /** Append a chunk of text; emits `stream.chunk`. */
@@ -52,19 +53,10 @@ export interface ToolCardHandle {
   failIfOpen(): void;
 }
 
-/** Sugar passed to debug/info/warn/error. */
-export interface LogOptions {
-  /** The payload the log row stores as JSON; a `Cause` stores as the error
-   *  it raised. */
-  readonly data?: unknown;
-  /** The row's category; subscribers pick a render style from it. */
-  readonly messageType?: MessageType;
-}
-
 /**
  * Agent-general SDK surface. Every method ultimately reduces to `emit()` so
  * the trace channel is a single source of truth. App-specific helpers are
- * plain functions over this interface (see `traceLogs.ts`).
+ * plain functions over this interface.
  */
 export interface AgentTrace {
   // ─── SSoT primitives ────────────────────────────────────────────────
@@ -97,7 +89,7 @@ export interface AgentTrace {
    * no phase that never happens. A stream that ends without content emits
    * nothing at all.
    */
-  openRun(kind: MessageType): StreamHandle;
+  openStream(kind: MessageType): StreamHandle;
   /**
    * Open a tool call's card with its first log (`tool.start`). A log whose
    * status is already terminal opens and closes the card at once; one without

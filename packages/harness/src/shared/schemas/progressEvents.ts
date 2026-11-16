@@ -13,12 +13,12 @@ import type { FileLocation } from './output';
  * {@link RequestShowInstructionPayload.key}. A key names the notice for the
  * host's "never remind again" state; an embedder decides what each of these
  * offers beside the message (TeXRA: the buttons that set a key or open a
- * guide). An embedder's own notices use keys of their own.
+ * guide, and whether it can be silenced). An embedder's own notices use keys
+ * of their own.
  */
 export const HARNESS_INSTRUCTION_KEY = {
   MISSING_API_KEY: 'missingApiKey',
   MODEL_NOT_RECOGNIZED: 'modelNotRecognized',
-  RESUME_REFUSED: 'resumeRefused',
 } as const;
 
 export type HarnessInstructionKey =
@@ -31,13 +31,12 @@ export interface OpenFilePayload {
   preserveFocus: boolean;
 }
 
-/** Show a suppressible instruction message. */
+/** Show an instruction message. */
 export interface RequestShowInstructionPayload {
   /** Names the notice: the host's suppression state, and what an embedder
    *  offers beside it ({@link HARNESS_INSTRUCTION_KEY} for the harness's). */
   key: string;
   message: string;
-  showSuppress?: boolean;
 }
 
 /** The agent a launch named is not in the catalog. */
@@ -58,7 +57,6 @@ export const LaunchNoticeSchema = Schema.Union([
     payload: Schema.Struct({
       key: Schema.String,
       message: Schema.String,
-      showSuppress: Schema.optional(Schema.Boolean),
     }) satisfies Schema.Codec<RequestShowInstructionPayload, unknown>,
   }),
   Schema.Struct({

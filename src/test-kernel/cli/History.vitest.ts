@@ -5,7 +5,6 @@ import { layer } from '@effect/vitest';
 import { expect } from 'vitest';
 import {
   AgentConfigSchema,
-  qualifyAggregateId,
   RUN_OUTCOME,
   RunIdSchema,
   type RunId,
@@ -37,7 +36,6 @@ import {
 
 const config = Schema.decodeUnknownSync(AgentConfigSchema)(
   asDocumentTask({
-    agent: 'correct',
     model: 'deepseek/deepseek-v4-flash',
     instruction: 'Polish the introduction.',
     inputFiles: ['chapters/intro.tex'],
@@ -74,20 +72,20 @@ const publishRunFacts = (
 ) =>
   Effect.gen(function* () {
     yield* publishTestRunStart(session, runId);
-    yield* Context.get(session, SessionLog).settled;
+    yield* Context.get(session, SessionLog).drained;
     yield* seedRunRecord(session, runId, facts.record);
     if (facts.edited) yield* seedEditedFiles(session, runId, facts.edited);
     if (facts.outcome) {
       yield* publishTestRows(session, [
         {
           type: 'run.end',
-          aggregateId: qualifyAggregateId('run', runId),
+          aggregateId: runId,
           outcome: facts.outcome,
           output: emptyRunEndOutput(),
         },
       ]);
     }
-    yield* Context.get(session, SessionLog).settled;
+    yield* Context.get(session, SessionLog).drained;
   });
 
 // Live clock: the history readers run as the command runs them.

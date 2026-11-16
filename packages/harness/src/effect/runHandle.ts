@@ -14,14 +14,13 @@ import { getRunRecords } from '@agent/storage/runOwnership';
 import { replayTrace } from '@controllers/session/runTrace';
 import {
   type CommitOrdinal,
-  qualifyAggregateId,
   type RunId,
   type TranscriptSubscription,
 } from '@shared/schemas';
 import { boundsLifecycle } from '@shared/session/runFacts';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { descendantRuns } from '@shared/session/sessionView';
-import type { SessionView } from '@shared/session/readonlyViews';
+import type { SessionView } from '@shared/session/sessionView';
 import type { TranscriptInterest } from '@shared/session/sessionViewAccess';
 
 import { RunFailure } from './errors.js';
@@ -62,7 +61,7 @@ export function activationView(
         ...descendantRuns(level, runId, { includeRoot: false }),
       ];
       const setOf = (ids: readonly RunId[]) =>
-        ids.map((id) => ({ id: qualifyAggregateId('run', id), fromSeq: 0 }));
+        ids.map((id) => ({ id: id, fromSeq: 0 }));
       let subscribed = idsOf(source.current());
       const held = yield* source.subscribe(setOf(subscribed));
       // A level that names the same runs changes nothing, so the union is
@@ -73,7 +72,7 @@ export function activationView(
         subscribed = ids;
         return held.set(setOf(ids));
       };
-      const replayed = qualifyAggregateId('run', runId);
+      const replayed = runId;
       return source.changes.pipe(
         // The level replays on subscribe, and the fold lands the
         // activation's row and the subscription's replay asynchronously,
@@ -130,7 +129,7 @@ export function runView(
   // A run with no end failed on what its fiber did (an end the store
   // refused): the result says so, not only that the end is missing.
   const result = over.pipe(
-    Effect.tap(() => log.settled),
+    Effect.tap(() => log.drained),
     Effect.flatMap((unsaved) =>
       Effect.map(
         getRunRecords(runId)

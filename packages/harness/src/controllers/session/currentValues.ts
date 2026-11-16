@@ -19,7 +19,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 import type { SqlClient } from 'effect/sql/SqlClient';
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure } from '@logger/effectLog';
 import {
   InputHistoryRecordSchema,
   INPUT_HISTORY_LIMIT,
@@ -213,12 +213,10 @@ export function currentValues(store: {
         Stream.mapEffect(() =>
           execOne(SNAPSHOT, [family.name, JSON.stringify(keys)]).pipe(
             Effect.map((row) => row?.snapshot),
-            Effect.tapError((error) =>
-              Effect.logWarning(
+            Effect.tapError(
+              logFailure(
+                'sessionDatabase',
                 `Could not read whether ${keys.join(', ')} changed; retrying.`,
-              ).pipe(
-                Effect.annotateLogs({ data: error }),
-                withLogChannel('sessionDatabase'),
               ),
             ),
             Effect.retry(READ_RETRY),

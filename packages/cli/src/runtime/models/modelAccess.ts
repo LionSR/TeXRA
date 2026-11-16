@@ -5,7 +5,7 @@ import { Effect, Result, absurd } from 'effect';
 import {
   decideRunModel,
   readModelOptions,
-  type ModelOption,
+  type ModelVerdict,
   type ProcessRuntime,
   type RunModelCandidate,
 } from '@texra-ai/harness/host';
@@ -165,7 +165,9 @@ export function modelSelectItemsForCli(
 }
 
 /** Each option's picker row, with the plan its route pays through. */
-function cliModelAccessFrom(options: readonly ModelOption[]): CliModelAccess[] {
+function cliModelAccessFrom(
+  options: readonly ModelVerdict[],
+): CliModelAccess[] {
   return modelOptionsFrom(options).map((model) => ({
     model,
     available: isModelOptionAvailable(model),

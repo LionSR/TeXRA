@@ -2,7 +2,7 @@
  * The process's model retry gate. A failure llm scoped to a route cools that
  * route for every call on it, across every run of every project: the calls
  * wait out one shared backoff, one of them goes through as the recovery
- * probe, and the route's answer to it opens the route to the rest. A healthy route admits
+ * probe, and the route's answer to it opens the route to the rest. A healthy route accepts
  * every call at once. How many times a call is resent is its loop's
  * business, not the gate's.
  */
@@ -47,22 +47,22 @@ export const RouteAnswered = Context.Reference<Effect.Effect<void>>(
 );
 
 interface Route {
-  /** Whether the route admits every call at once. Only the holder of
+  /** Whether the route accepts every call at once. Only the holder of
    *  `probe` changes it while the route cools. */
   healthy: boolean;
   /** The one recovery probe a cooling route lets through at a time; a
    *  cooling route's calls queue on it. */
   readonly probe: Semaphore.Semaphore;
-  /** How many times the route has cooled: a call admitted healthy proves
-   *  nothing about a cooling that came after its admission. */
+  /** How many times the route has cooled: a call accepted healthy proves
+   *  nothing about a cooling that came after its acceptance. */
   cooled: number;
-  /** Failures since the last success admitted while healthy. */
+  /** Failures since the last success accepted while healthy. */
   failures: number;
   /** When the cooling route's next probe may go. */
   retryAt: number;
 }
 
-/** How a call went through one route: with the healthy cohort, admitted
+/** How a call went through one route: with the healthy cohort, accepted
  *  after the route's `cooled`-th cooling, or as the probe that holds the
  *  route's permit. */
 type Pass = { readonly healthy: number } | 'probe';
@@ -75,12 +75,12 @@ type Through<A, E> = Exit.Exit<A, E> | typeof COOLED;
 
 /**
  * Record what a call's exit proved about one route it went through. A call
- * admitted healthy before the route last cooled says nothing about it. A
+ * accepted healthy before the route last cooled says nothing about it. A
  * failure scoped to the route cools it; any other end of the probe opens
- * it; a success, or a failure of the request alone, of a call admitted
+ * it; a success, or a failure of the request alone, of a call accepted
  * healthy since the last cooling ends the failure streak.
  */
-const settle = (
+const recordExit = (
   route: Route,
   { scope }: RoutePolicy,
   pass: Pass,
@@ -107,7 +107,7 @@ const settle = (
       route.healthy = false;
       return;
     }
-    // A success admitted while healthy proves a clean round trip, so the
+    // A success accepted while healthy proves a clean round trip, so the
     // streak ends here, not on the probe's success: the cohort it releases
     // may fail again at once (a rate window that fits one probe rarely fits
     // the herd), and resetting there would hold the backoff at its base.
@@ -117,7 +117,7 @@ const settle = (
 
 /**
  * Run `attempt` through `routes` from `index` on, narrowest first, `passed`
- * the routes it went through healthy so far. A healthy route admits at once.
+ * the routes it went through healthy so far. A healthy route accepts at once.
  * A cooling route's call takes its probe permit: if the route opened while it
  * queued it goes with the cohort, else it waits out the backoff and goes as
  * the probe, holding the permit until the route answers it
@@ -145,7 +145,7 @@ const through = <A, E, R>(
         (result): Effect.Effect<Through<A, E>> =>
           result === COOLED
             ? Effect.succeed(result)
-            : Effect.as(settle(route, policy, pass, result), result),
+            : Effect.as(recordExit(route, policy, pass, result), result),
       );
     });
     if (route.healthy) return healthy;
@@ -193,7 +193,7 @@ const through = <A, E, R>(
               Effect.andThen(answered, outer),
             ),
           );
-          if (result !== COOLED) yield* settle(route, policy, pass, result);
+          if (result !== COOLED) yield* recordExit(route, policy, pass, result);
           return result;
         }),
       () => release,

@@ -91,7 +91,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             const session = yield* isolatedTestSession();
             const runId = generateRunId();
             yield* publishTestRunStart(session, runId);
-            yield* Context.get(session, SessionLog).settled;
+            yield* Context.get(session, SessionLog).drained;
             const requests = yield* watchBashRequests(session);
 
             const request = (command: string) =>
@@ -138,7 +138,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             const session = yield* isolatedTestSession();
             const runId = generateRunId();
             yield* publishTestRunStart(session, runId);
-            yield* Context.get(session, SessionLog).settled;
+            yield* Context.get(session, SessionLog).drained;
             const requests = yield* watchBashRequests(session);
 
             const call = yield* Effect.forkScoped(

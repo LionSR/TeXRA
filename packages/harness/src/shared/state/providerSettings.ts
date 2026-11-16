@@ -4,15 +4,14 @@
  * the China-region toggle of each provider with two platforms. The catalog
  * (`@texra-ai/llm`) owns the provider data; these rows are the host's, read
  * into `RouteFacts.endpoints` by `readModelSettings` and listed in the
- * settings catalog (`stateSettings.ts`).
- *
- * No import of the llm catalog: the settings catalog is reachable from stored
- * shapes, which the llm package may not own. The rows cover the catalog
- * exactly, which `modelSettings.ts` checks at compile time.
+ * settings catalog (`stateSettings.ts`). A row's title names the provider
+ * as the catalog does. The rows cover the catalog exactly, which
+ * `modelSettings.ts` checks at compile time.
  */
 
 // Third-party imports
 import { Effect, Schema } from 'effect';
+import { providerDisplayName } from '@texra-ai/llm';
 
 // Local imports
 import type { SettingRow } from '@shared/state/stateSettings';
@@ -22,32 +21,32 @@ export const booleanWithDefault = (value: boolean) =>
   Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(value)));
 
 /** A provider's custom-endpoint row, stored as `<namespace>.endpoint.<id>`. */
-const endpointRow = <const Id extends string>(id: Id, displayName: string) =>
+const endpointRow = <const Id extends string>(id: Id) =>
   ({
     id,
     key: `endpoint.${id}` as const,
     schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
-    title: `${displayName} endpoint`,
-    description: `Custom base URL for ${displayName} API requests. Leave empty to use the default endpoint.`,
+    title: `${providerDisplayName(id)} endpoint`,
+    description: `Custom base URL for ${providerDisplayName(id)} API requests. Leave empty to use the default endpoint.`,
     slot: 'globalState',
   }) as const satisfies SettingRow<string> & { readonly id: Id };
 
 /** GLM's custom-endpoint row, which also decides whether the Coding Plan
  *  route applies (`readModelSettings`). */
-export const GLM_ENDPOINT_SETTING = endpointRow('glm', 'GLM');
+export const GLM_ENDPOINT_SETTING = endpointRow('glm');
 
 /** The providers' custom-endpoint rows, in catalog order. */
 export const PROVIDER_ENDPOINT_SETTINGS = [
-  endpointRow('openai', 'OpenAI'),
-  endpointRow('anthropic', 'Anthropic'),
-  endpointRow('google', 'Google'),
-  endpointRow('xai', 'xAI'),
-  endpointRow('deepseek', 'DeepSeek'),
-  endpointRow('moonshot', 'Moonshot'),
-  endpointRow('dashscope', 'Qwen'),
-  endpointRow('minimax', 'MiniMax'),
+  endpointRow('openai'),
+  endpointRow('anthropic'),
+  endpointRow('google'),
+  endpointRow('xai'),
+  endpointRow('deepseek'),
+  endpointRow('moonshot'),
+  endpointRow('dashscope'),
+  endpointRow('minimax'),
   GLM_ENDPOINT_SETTING,
-  endpointRow('meta', 'Meta'),
+  endpointRow('meta'),
 ] as const;
 
 /** A China-region toggle: "set" is the China region. */

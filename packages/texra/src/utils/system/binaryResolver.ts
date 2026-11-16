@@ -95,7 +95,7 @@ const findToolUncached = Effect.fnUntraced(function* (tool: string) {
         quiet: true,
       },
     );
-    if (result.exitCode === 0 && result.stdout) return result.stdout;
+    if (result.success && result.stdout) return result.stdout;
   }
   for (const name of candidates) {
     const found = whichOnExtendedPath(name, commandDirs());

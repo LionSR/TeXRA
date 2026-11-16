@@ -26,8 +26,8 @@ import type { StepRoot } from '@utils/files/externalRoots';
 /**
  * The guard the run loop applies before a tool's body runs, declared on the
  * tool instead of called inside it: the paths the call writes and the command
- * it must get approved. `agent/runtime/loop/toolGuard.ts` is the one place
- * either is checked, so no tool body re-checks its own roots or asks for the
+ * it must get approved. The run loop is the one place either is checked,
+ * so no tool body re-checks its own roots or asks for the
  * command's approval; a tool whose body asks its own question declares
  * `requiresApproval: 'inBody'` (below).
  */
@@ -78,9 +78,6 @@ export interface ITool<E = Error, R = never> {
    *  `HostCapabilities`) the session's host must serve for this tool to be
    *  offered, read live each step: a window that attaches mid-run brings it. */
   readonly hostCapability?: string;
-  /** Launches agents' tasks (a plugin's block): its step lists the agents
-   *  with one. */
-  readonly launchesTasks?: true;
   /**
    * Where its calls run beside their siblings (omitted: `'barrier'`).
    * Declared on the tool, not the YAML-overridable definition, so an agent
@@ -92,7 +89,7 @@ export interface ITool<E = Error, R = never> {
    *   read-only tool that prompts for approval is not parallel: it needs an
    *   approval round-trip first, so it stays a barrier.
    * - `'barrier'`: waits for every call issued before it and holds back
-   *   every call after it until it settles.
+   *   every call after it until it finishes.
    * - `'own'`: in a script, its calls neither wait for the calls issued
    *   before them nor block the ones after, and take no place in the
    *   parallel window: the tool bounds how many of its own calls run at
@@ -133,8 +130,9 @@ export interface ITool<E = Error, R = never> {
   /** The loop-side guard this tool declares; see {@link ToolGuard}. */
   readonly guard?: ToolGuard<never>;
   /**
-   * A description rendered from the other tools the run declares and the
-   * modules its scripts may import, in place of `definition.description`:
+   * A description rendered from the other tools the run declares, the
+   * modules its scripts may import and the programs they may start, in
+   * place of `definition.description`:
    * rendered at the step that freezes the run's system text and kept as
    * that step recorded it until a compaction opens the freeze again, so a
    * catalog change mid-run leaves its text, and the cached
@@ -147,6 +145,12 @@ export interface ITool<E = Error, R = never> {
     declared: readonly Pick<ITool, 'definition' | 'scriptGlobal'>[],
     /** The specifiers of the modules the step's scripts may import. */
     modules: readonly string[],
+    /** The programs of the step's plugins, each with its one-line
+     *  description. */
+    programs: readonly {
+      readonly name: string;
+      readonly description: string;
+    }[],
   ) => string;
   call(rawInput: unknown): Effect.Effect<ToolResult, E, R>;
 }
@@ -187,7 +191,7 @@ export interface CallRequests {
 /**
  * Where a call works: the session's roots (its workspace folder, the
  * setting slots and its storage), the run's working directory, and the
- * read-only roots the call's step admits (the skills it lists or its user
+ * read-only roots the call's step accepts (the skills it lists or its user
  * activated). A tool's paths resolve against it.
  * `workingDirectory` is already absolute or absent: the run decides it once
  * where it is launched (`buildAgentLaunchContext`).

@@ -160,7 +160,7 @@ describe('executeCommand', () => {
           entry,
           [
             "import { Effect } from 'effect';",
-            "import { nodePlatformServices } from '@platform/defaults/nodePlatform';",
+            "import { nodePlatformServices } from '@platform/defaults/nodeServices';",
             "import { executeCommand } from '@utils/system/execUtils';",
             'Effect.runFork(',
             '  executeCommand(process.env.COMMAND!, {',

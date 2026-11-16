@@ -9,13 +9,12 @@ import { Context, Effect, Result, type Scope } from 'effect';
 
 import { logFailure } from '@logger/effectLog';
 import {
-  qualifyAggregateId,
   type ChildRunDelivery,
+  type FollowUpSender,
   type RunId,
   type StoredMedia,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
-import { ancestryRows, runRelation } from '@shared/session/runRelation';
 import type { DraftBlob } from '@shared/session/historyTurns';
 import type { RunInputDraft } from '@shared/session/runState';
 import { consumedRow } from '@shared/session/runFacts';
@@ -29,20 +28,17 @@ import type {
 import type { PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError } from '@utils/errors/errorMessage';
 import { FollowUpReader, needsWake } from './FollowUpReader';
-import { queuedRow, type FollowUpSenderInput } from './followUpMessages';
+import { queuedRow } from './followUpMessages';
 
 const CHANNEL = 'Inbox';
 
-const CLOSED = Object.freeze({
-  kind: 'refused',
-  reason: 'notResumable',
-} as const);
+const CLOSED = Object.freeze({ kind: 'refused' } as const);
 /** The session doors the inbox works through (the session layer wires them). */
 interface InboxPort {
   /** The session's log: a send is one transaction. */
   readonly log: Pick<
     SessionLogShape,
-    'transact' | 'runRows' | 'history' | 'settled'
+    'transact' | 'runRows' | 'history' | 'drained'
   >;
   /** Enqueue a job on the session's publisher and return. */
   readonly detach: SessionEventsShape['detach'];
@@ -61,7 +57,7 @@ export type InboxItem = (
     }
   | { readonly delivery: ChildRunDelivery }
 ) & {
-  readonly from: FollowUpSenderInput;
+  readonly from: FollowUpSender;
   /** Identity of a delivery its producer may repeat (a child's result):
    *  the row's `followUpId`, so a replay writes nothing. */
   readonly deliveryId?: string;
@@ -70,25 +66,22 @@ export type InboxItem = (
 };
 
 /** How a send landed: queued for the run (a reader here takes it, or its
- *  resume does), a replay of a row already queued, or refused. */
+ *  resume does), a replay of a row already queued, or refused, writing
+ *  nothing: the run's input is closed. */
 export type Sent =
   | { readonly kind: 'duplicate' }
   | { readonly kind: 'queued' }
-  | { readonly kind: 'refused'; readonly reason: Refusal };
-/** Why a send wrote nothing: a closed input, a non-parent. */
-type Refusal = 'notResumable' | 'notParent';
+  | { readonly kind: 'refused' };
 
 /** What a send asks of the row and of the run. */
 interface SendOptions {
   /** When the row may be read (`readableMessages`). Absent: at once, or at
    *  the turn's end for a host's notification (`queuedRow`). */
   readonly hold?: QueuedFollowUp['holdUntil'];
-  /** Only from the run's parent: its rows' edge, read in this job. */
-  readonly fromParent?: boolean;
 }
 
 /** A send decided inside a job: its rows, and how it landed. */
-type Admission = { rows: readonly RunInputDraft[]; sent: Sent };
+type Acceptance = { rows: readonly RunInputDraft[]; sent: Sent };
 
 /** What observers hear: a run takes no more input, or the inbox closed. */
 type InboxClosed =
@@ -98,7 +91,7 @@ type InboxClosed =
 /** The session's follow-up inbox; see the module comment. */
 export class SessionInbox {
   private readonly readers = new Map<RunId, FollowUpReader>();
-  /** Each run's sends, admitted one at a time in call order. */
+  /** Each run's sends, accepted one at a time in call order. */
   readonly sendLanes = new Map<RunId, PerKeyLane>();
   private readonly observers = new Set<(closed: InboxClosed) => void>();
   private disposed = false;
@@ -120,12 +113,12 @@ export class SessionInbox {
   ): Effect.Effect<Sent, LogWriteError | DatabaseReadFailed> {
     if (this.disposed) return Effect.succeed(CLOSED);
     return this.port.log.transact((tx) =>
-      this.admit(runId, item, options, tx.append),
+      this.accept(runId, item, options, tx.append),
     );
   }
 
   /** Open the run's reader for the generation running it (the caller's
-   *  scope); the registry admits one at a time, so a second is a defect. */
+   *  scope); the registry accepts one at a time, so a second is a defect. */
   open(runId: RunId): Effect.Effect<FollowUpReader, never, Scope.Scope> {
     return Effect.acquireRelease(
       Effect.suspend(() => {
@@ -147,7 +140,7 @@ export class SessionInbox {
 
   /** End the run's reader `input`; `terminal`: the observers hear the run
    *  takes no more input here, on the publisher after the sends already
-   *  admitted, and only if none left a row queued. Idempotent. */
+   *  accepted, and only if none left a row queued. Idempotent. */
   release(runId: RunId, input: FollowUpReader, terminal: boolean): void {
     if (this.readers.get(runId) !== input) return;
     this.readers.delete(runId);
@@ -163,11 +156,11 @@ export class SessionInbox {
 
   /** Whether the run is owed a resume: its input obliges one
    *  (`needsWake`) and no reader here takes it, read once the publisher
-   *  settled. Undefined only if the input could not be read (`wakeRun`'s
+   *  finished. Undefined only if the input could not be read (`wakeRun`'s
    *  caller resumes it). */
   owesResume(runId: RunId): Effect.Effect<boolean | undefined> {
     return Effect.gen({ self: this }, function* () {
-      yield* this.port.log.settled;
+      yield* this.port.log.drained;
       if (this.disposed || this.readers.has(runId)) return false;
       const input = yield* this.read(runId);
       return !input.inputClosed && needsWake(input);
@@ -188,7 +181,7 @@ export class SessionInbox {
    *  read in the same transaction; a failure is logged. */
   closeInput(runId: RunId): Effect.Effect<void> {
     if (this.disposed) return Effect.void;
-    const run = qualifyAggregateId('run', runId);
+    const run = runId;
     return this.port.log
       .transact((tx) =>
         Effect.gen({ self: this }, function* () {
@@ -243,13 +236,13 @@ export class SessionInbox {
     this.observers.clear();
   }
 
-  private readonly admit: (
+  private readonly accept: (
     runId: RunId,
     item: InboxItem,
     options: SendOptions,
     append: Append,
   ) => Effect.Effect<Sent, LogWriteError | DatabaseReadFailed> = Effect.fn(
-    'SessionInbox.admit',
+    'SessionInbox.accept',
   )(
     { self: this },
     function* (
@@ -258,7 +251,7 @@ export class SessionInbox {
       options: SendOptions,
       append: Append,
     ) {
-      const { rows, sent } = yield* this.admission(runId, item, options);
+      const { rows, sent } = yield* this.acceptance(runId, item, options);
       if (rows.length > 0) yield* append(rows);
       return sent;
     },
@@ -266,14 +259,14 @@ export class SessionInbox {
 
   /** One send decided in the caller's job: the row the job appends with
    *  its own, and how it landed (see {@link send}). */
-  admission(
+  acceptance(
     runId: RunId,
     item: InboxItem,
     options: SendOptions,
-  ): Effect.Effect<Admission, DatabaseReadFailed> {
+  ): Effect.Effect<Acceptance, DatabaseReadFailed> {
     const closed = (input: RunRowsRead<'input'>) =>
       this.disposed || (!this.readers.has(runId) && input.inputClosed);
-    const only = (sent: Sent): Admission => ({ rows: [], sent });
+    const only = (sent: Sent): Acceptance => ({ rows: [], sent });
     // The reader hears the row: it reads committed rows, so a wake ahead
     // of the commit costs it one empty read.
     const landed = (replay: boolean) =>
@@ -285,19 +278,12 @@ export class SessionInbox {
     return Effect.gen({ self: this }, function* () {
       const input = yield* this.read(runId);
       if (closed(input)) return only(CLOSED);
-      const sender = item.from.kind === 'run' ? item.from.runId : null;
-      if (options.fromParent === true && input.parent?.id !== sender)
-        return only({ kind: 'refused', reason: 'notParent' });
-      // Stamped inside the job, from the parent edges the rows record.
-      const line = yield* ancestryRows(this.read, runId, sender);
-      const row = queuedRow(item, options.hold, (from) =>
-        runRelation(from, runId, (id) => line.get(id)?.parent?.id),
-      );
+      const row = queuedRow(item, options.hold);
       const queuedStill = input.followUps.some(
         (f) => f.followUpId === row.followUpId,
       );
       if (!queuedStill && !input.taken.has(row.followUpId)) {
-        const aggregate = qualifyAggregateId('run', runId);
+        const aggregate = runId;
         const queued = { type: 'followup.queued', ...row } as const;
         return {
           rows: [{ ...queued, aggregateId: aggregate }],
@@ -315,9 +301,7 @@ export class SessionInbox {
   readonly read = (
     runId: RunId,
   ): Effect.Effect<RunRowsRead<'input'>, DatabaseReadFailed> =>
-    Effect.suspend(() =>
-      this.port.log.runRows(qualifyAggregateId('run', runId), 'input'),
-    );
+    Effect.suspend(() => this.port.log.runRows(runId, 'input'));
 
   private notify(closed: InboxClosed): void {
     for (const observer of this.observers) {
@@ -338,7 +322,7 @@ const queued = (input: RunRowsRead<'input'>): boolean =>
   input.followUps.some(isMessage);
 
 /** The session's follow-up inbox ({@link SessionInbox}): every run's input,
- *  one reader each, which every message to a run is admitted through.
+ *  one reader each, which every message to a run is accepted through.
  *  Built by the session layer and disposed with the session. */
 export class Inbox extends Context.Service<Inbox, SessionInbox>()(
   '@texra-ai/harness/session/Inbox',

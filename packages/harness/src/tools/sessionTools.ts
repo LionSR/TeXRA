@@ -50,7 +50,8 @@ export interface ToolStep {
    *  the step reads their continuation and prompt section. */
   readonly plugins: readonly Plugin[];
   /** The modules its scripts may import, source by specifier: each of the
-   *  on built-in plugins' `scriptModules` as `builtIn:<name>`. */
+   *  on built-in plugins' `scriptModules` as `builtIn:<name>`. The
+   *  programs its scripts may start are those plugins' `programs`. */
   readonly modules: { readonly [specifier: string]: string };
   /** The installed plugins the step loaded, by id, as read (those that ship
    *  only skills included): its installed skills' source. */

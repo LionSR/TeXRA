@@ -2,56 +2,22 @@
 
 ## How TeXRA runs agents
 
-TeXRA validates the agent YAML and runs it in one of two ways:
+TeXRA validates the agent YAML and runs it as a chat (or an `agent` call),
+given a prompt: a multi-step loop invoking its declared tools. It may WAIT
+for interim follow-ups, spawn subagents via the `agent` tool (directly or
+from a `script`), and resume. Whole-document revisions are not custom
+agents: they are programs a plugin ships, started with the `program` tool.
 
-- **A chat** (or an `agent` call): any agent, given a prompt. Multi-step
-  loop invoking its declared tools. May WAIT for interim follow-ups, spawn
-  subagents via the `agent` tool (directly or from a `script`), and resume.
-- **A document task** (or a `document_task` call): only an agent with a
-  `task` block, over `inputFiles` (or the active editor selection). One
-  revision per `task.requests` entry, in order; each revision calls the
-  agent once and extracts LaTeX output files from the unified `<documents>`
-  container / `task.outputs`. The last revision's documents are proposed
-  for the user to accept.
-
-The `creator` agent tests new agents by delegating through the `agent` and
-`document_task` tools, which exercise the same validation, approval, and
-follow-up flow as a user launch.
+The `creator` agent tests new agents by delegating through the `agent`
+tool, which exercises the same validation, approval, and follow-up flow as
+a user launch.
 
 ## Testing a new agent
-
-Use the `agent` and `document_task` tools in the `tools:` list of
-`creator.yaml`: `document_task` with `inputFiles` for an agent with a `task`
-block, `agent` with a prompt for one without.
-
-### Testing a document task
-
-1. Make a small test input in the workspace. Example:
-   ```
-   bash: mkdir -p test_inputs
-   write_file test_inputs/sample.tex with a 5–10 line LaTeX snippet
-   ```
-2. Call `document_task`:
-   ```
-   document_task(
-     agentName: "my_new_polish",
-     model: "<a configured model>",
-     prompt: "Tighten the abstract",
-     inputFiles: ["./test_inputs/sample.tex"]
-   )
-   ```
-3. When the follow-up arrives:
-   - Inspect the output file(s) the subagent produced.
-   - Confirm the agent wrapped output correctly and produced non-empty LaTeX
-     content.
-   - Report pass/fail to the user.
-
-### Testing an agent without a task
 
 1. Call `agent`:
    ```
    agent(
-     agentName: "my_new_tool_agent",
+     agentName: "my_new_agent",
      model: "<a configured model>",
      prompt: "Do X (small end-to-end smoke test)"
    )
@@ -72,5 +38,5 @@ plainly in the hand-off message that the agent has not been exercised.
 ## Iterating
 
 If a test fails — invalid YAML, missing tool, unclear prompt, wrong output
-structure — use `edit_file` on the custom YAML and re-run the `agent` or
-`document_task` call. It picks up the updated file on the next invocation.
+structure — use `edit_file` on the custom YAML and re-run the `agent`
+call. It picks up the updated file on the next invocation.

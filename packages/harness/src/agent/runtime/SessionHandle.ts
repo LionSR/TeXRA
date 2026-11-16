@@ -22,8 +22,8 @@ import type { SessionServices } from './rootLaunch';
 
 /**
  * What opening a session supplies (`SessionOwner.open`): persistence mode and
- * the host's presentation. The event plane is the session's own, built per
- * workspace root, so a separately injected plane could not silently drop a
+ * the host's presentation. The event layer is the session's own, built per
+ * workspace root, so a separately injected event layer could not silently drop a
  * session's facts onto one nobody reads.
  */
 export interface SessionHandleInit {
@@ -42,7 +42,7 @@ export interface SessionHandleInit {
  * surface issues. A run's own questions to a person are rows of the run,
  * opened and decided through `agent/runtime/requests.ts`.
  * Built by the session layer over that session's log (`SessionRequests.ts`);
- * one value per session, so two sessions admit, serialize and answer
+ * one value per session, so two sessions accept, serialize and answer
  * requests independently. A surface's request reads the session's runs and
  * owners from its caller's context: the session's own, which the SDK and
  * the session's fibers provide.

@@ -1,6 +1,5 @@
 import { Schema, SchemaGetter, SchemaIssue, Struct } from 'effect';
 
-import { JsonValueSchema } from './jsonValue';
 import { LineChangesSchema } from './lineChanges';
 import { Sha256Schema } from './identifiers';
 
@@ -34,7 +33,7 @@ const ToolFileAttachmentFieldsSchema = FileReferenceFieldsSchema.mapFields(
     /** Raw bytes for providers that require binary uploads */
     bytes: Schema.optional(Schema.instanceOf(Uint8Array)),
     /** Bytes the session store already holds under this address: a file a
-     *  script relays from one of its calls' settled attachments. */
+     *  script relays from one of its calls' finished attachments. */
     digest: Schema.optional(Sha256Schema),
   }),
 );
@@ -109,7 +108,7 @@ const ToolFactSchema = Schema.Struct({
   kind: Schema.NonEmptyString,
   /** The fact kind's version `value` is written at. */
   version: Schema.Int.check(Schema.isGreaterThan(0)),
-  value: JsonValueSchema,
+  value: Schema.Json,
   /** The plugin's own aggregate the fact is about (`<plugin>:<key>`), hung
    *  under the calling run; absent, the fact is about the run itself. */
   aggregate: Schema.optional(Schema.NonEmptyString),
@@ -135,7 +134,7 @@ const ExecutedResultFieldsSchema = Schema.Struct({
   reads: Schema.optional(Schema.Array(Schema.NonEmptyString)),
   /** What a script's `await` gets for this call in place of
    *  `{ output, summary }`: a tool whose answer is data, not prose. */
-  value: Schema.optional(JsonValueSchema),
+  value: Schema.optional(Schema.Json),
   /** The key a later call of the same tool in this run may take this result
    *  under instead of running again; only an executed result carries one. */
   reuseKey: Schema.optional(Schema.NonEmptyString),
@@ -151,7 +150,7 @@ const ExecutedToolResultSchema = ExecutedResultFieldsSchema.mapFields(
     /** File attachments (may contain binary data) */
     files: Schema.optional(Schema.Array(ToolFileAttachmentSchema)),
     /** Follow-ups queued on the calling run that this result answers (a
-     *  child's report a wait returned): consumed in the call's settlement
+     *  child's report a wait returned): consumed in the call's result
      *  batch, so they leave the run's input only with the result. Not stored
      *  on the result. */
     consumedFollowUps: Schema.optional(Schema.Array(Schema.NonEmptyString)),
@@ -174,11 +173,15 @@ const ErrorToolResultSchema = Schema.Struct({
 });
 
 /** The synthetic tool a run with an output schema submits its structured
- *  output through: its settled result's `value` is the run's output. */
+ *  output through: its finished result's `value` is the run's output. */
 export const STRUCTURED_OUTPUT_TOOL_NAME = 'submit_output';
 
 /** The tool that runs a named agent as a child of the calling run. */
 export const AGENT_TOOL_NAME = 'agent' as const;
+
+/** The tool that starts a registered program (`Plugin.programs`) as a child
+ *  of the calling run. */
+export const PROGRAM_TOOL_NAME = 'program';
 
 /** The tool that runs a script. A script's own run makes its one call to it,
  *  whatever launched the run. */
@@ -209,7 +212,7 @@ export class ToolError extends Error {
  *  inline, so the history a window or a resume reads carries no attachment
  *  bytes; a capture failure records the omission and its reason rather than
  *  a claim that bytes were included. */
-export const SettledAttachmentSchema = Schema.Struct({
+export const FinishedAttachmentSchema = Schema.Struct({
   path: Schema.NonEmptyString,
   mimeType: Schema.NonEmptyString,
   description: Schema.optional(Schema.String),
@@ -226,42 +229,37 @@ export const SettledAttachmentSchema = Schema.Struct({
  * The follow-up builder's input. Derived from the exported members, never
  * re-declared: `files` loses its binary payload.
  *
- * A settled file is the attachment a tool produced, decoded as such, with
+ * A finished file is the attachment a tool produced, decoded as such, with
  * `base64Data` and `bytes` dropped: real attachments carry them plus whatever
  * extra keys a tool attached, and those extra keys stay. What the drop leaves
  * is then validated as JSON, because an arbitrary value in a durable payload
  * is a `JSON.stringify` throw waiting for a cycle or a BigInt: a third byte
  * buffer or a cyclic object among the extra keys is that throw, on a row
- * that is already committed. Encoding is the identity: a settled file is an
+ * that is already committed. Encoding is the identity: a finished file is an
  * attachment without its bytes.
  */
-const SettledFileMetadataSchema = Schema.StructWithRest(
+const FinishedFileMetadataSchema = Schema.StructWithRest(
   ToolFileAttachmentFieldsSchema.mapFields(
     Struct.omit(['base64Data', 'bytes']),
   ),
-  // `undefined` admitted beside JSON: the optional fields read
+  // `undefined` accepted beside JSON: the optional fields read
   // `string | undefined`, which an index signature must cover in the
   // published declarations, and `JSON.stringify` drops such a key.
-  [
-    Schema.Record(
-      Schema.String,
-      Schema.Union([JsonValueSchema, Schema.Undefined]),
-    ),
-  ],
+  [Schema.Record(Schema.String, Schema.Union([Schema.Json, Schema.Undefined]))],
 );
-const SettledFileSchema = ToolFileAttachmentSchema.pipe(
+const FinishedFileSchema = ToolFileAttachmentSchema.pipe(
   Schema.decodeTo(Schema.Unknown, {
     decode: SchemaGetter.transform(
       ({ base64Data: _base64Data, bytes: _bytes, ...file }) => file,
     ),
     encode: SchemaGetter.passthrough({ strict: false }),
   }),
-  Schema.decodeTo(SettledFileMetadataSchema),
+  Schema.decodeTo(FinishedFileMetadataSchema),
 );
-export const SettledToolResultSchema = Schema.Union([
+export const FinishedToolResultSchema = Schema.Union([
   ExecutedResultFieldsSchema.mapFields(
     Struct.assign({
-      files: Schema.optional(Schema.Array(SettledFileSchema)),
+      files: Schema.optional(Schema.Array(FinishedFileSchema)),
     }),
   ),
   ErrorToolResultSchema,

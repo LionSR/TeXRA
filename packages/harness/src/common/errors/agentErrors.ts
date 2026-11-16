@@ -3,7 +3,9 @@ import { Predicate, Schema } from 'effect';
 import {
   LaunchNoticeSchema,
   ModelFailureSchema,
-  SubscriptionSessionFailureSchema,
+  ResumeBlockedSchema,
+  RouteFailureFieldsSchema,
+  type SubscriptionSessionFailureSchema,
 } from '@shared/schemas';
 
 /**
@@ -39,6 +41,18 @@ export class LaunchRefused extends Schema.TaggedError<LaunchRefused>()(
 ) {}
 
 /**
+ * An agent this process cannot run now: missing from the catalog, or from
+ * a plugin that is off or not trusted as it is now (`blocked`, which names
+ * the agent or the plugin), with the launch's reason as its message. A
+ * launch reports it as its refusal; a resume refuses with `blocked`, and
+ * the run stays interrupted until a later resume finds it back.
+ */
+export class AgentUnavailable extends Schema.TaggedError<AgentUnavailable>()(
+  'AgentUnavailable',
+  { blocked: ResumeBlockedSchema, message: Schema.String },
+) {}
+
+/**
  * No route can carry a model call now: its credential is missing or cannot
  * be read, the subscription session needs a sign-in, or the model is unknown
  * or unavailable. A failure of the
@@ -51,12 +65,7 @@ export class LaunchRefused extends Schema.TaggedError<LaunchRefused>()(
 export class RouteUnavailable extends Schema.TaggedError<RouteUnavailable>()(
   'RouteUnavailable',
   {
-    /** The route's credential is not set anywhere the run reads. */
-    missingApiKey: Schema.optional(Schema.Literal(true)),
-    message: Schema.String,
-    /** A signed-in subscription that could not bill the call: its route,
-     *  and whether only a fresh sign-in can help (else it may recover). */
-    session: Schema.optional(SubscriptionSessionFailureSchema),
+    ...RouteFailureFieldsSchema.fields,
     cause: Schema.optional(Schema.Defect()),
   },
 ) {

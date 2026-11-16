@@ -30,7 +30,7 @@ import {
   type ProcessServicesOptions,
 } from '@controllers/session/sessionLayer';
 import { installProcessHttpDispatcher } from '@platform/defaults/longRunningModelTransport';
-import { nodePlatformServices } from '@platform/defaults/nodePlatform';
+import { nodePlatformServices } from '@platform/defaults/nodeServices';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalValues } from '@platform/processRuntime';
@@ -43,10 +43,7 @@ import {
   type SessionOpenError,
 } from '@shared/session/database';
 import { HostSkillSources } from '@skills/runtimeSkills';
-import {
-  hostSkillContributions,
-  type HostSkillOptions,
-} from '@skills/skillSources';
+import type { HostSkillOptions } from '@skills/skillSources';
 import type { ToolCatalog } from '@tools/liveTools';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { ToolRegistry, toolTable, type ToolTable } from '@tools/toolTable';
@@ -126,7 +123,7 @@ export class Sessions extends Context.Service<
       roots: WorkspaceRoots,
     ) => Effect.Effect<SessionCloseReport>;
     /** A process shutdown's close: drain what the plugins' pollers
-     *  admitted, then close every open session at once, under one
+     *  accepted, then close every open session at once, under one
      *  deadline. */
     readonly closeAll: Effect.Effect<readonly SessionCloseReport[]>;
     readonly list: Effect.Effect<readonly LocalSession[]>;
@@ -194,8 +191,8 @@ export class Sessions extends Context.Service<
  * A plugin list the harness cannot compose (the defects `toolTable`
  * refuses: an id that is not lowercase letters, digits and dashes, an id or
  * tool name listed twice, a switch on a plugin with no availability probe,
- * a `requires` naming a plugin not listed, an agent-file block owned twice or keyed by a persona key,
- * two script modules of one name) fails the build with {@link PluginsRefused} before
+ * a `requires` naming a plugin not listed, two script modules of one name,
+ * a program that is not one of its plugin's script modules) fails the build with {@link PluginsRefused} before
  * anything is built, so the refusal names the plugin rather than failing
  * the first session open. A global store the process builds itself is
  * seeded with the first-install tool switches; a store handed in is left as
@@ -283,11 +280,9 @@ function sessionsLayer(
           ? Layer.empty
           : Layer.succeed(HostSkillSources)({
               resourcesPath: options.skills.resourcesPath,
+              projectDataDirName: options.skills.projectDataDirName,
+              pluginIds: options.plugins.map(({ id }) => id),
               options: options.skills.skillSourceOptions ?? {},
-              contributions: hostSkillContributions(
-                options.plugins.map(({ id }) => id),
-                options.skills.projectDataDirName,
-              ),
             }),
       ),
     );

@@ -15,7 +15,6 @@ import { afterEach, expect, vi } from 'vitest';
 import {
   generateRunId,
   RunIdSchema,
-  qualifyAggregateId,
   RUN_OUTCOME,
   AgentConfigSchema,
   type RunId,
@@ -40,12 +39,9 @@ import { testLaunch } from '@test/support/scriptedRunLayers';
  *  what the run's one terminal writer (`endRun`) said. */
 const runEnds = (session: Context.Context<SessionServices>, runId: RunId) =>
   Effect.andThen(
-    Context.get(session, SessionLog).settled,
+    Context.get(session, SessionLog).drained,
     Effect.map(
-      Context.get(session, SessionLog).runRows(
-        qualifyAggregateId('run', runId),
-        'lifecycle',
-      ),
+      Context.get(session, SessionLog).runRows(runId, 'lifecycle'),
       (rows) => rows.lifecycles.filter((row) => row.type === 'run.end'),
     ),
   );

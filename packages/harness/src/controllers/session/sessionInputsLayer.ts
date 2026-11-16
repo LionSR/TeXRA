@@ -20,9 +20,8 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure } from '@logger/effectLog';
 import {
-  qualifyAggregateId,
   referencedAggregates,
   replayInputs,
   type AggregateId,
@@ -65,11 +64,8 @@ const requiredRead = <A>(
   read: Effect.Effect<A, DatabaseReadFailed>,
 ): Effect.Effect<A> =>
   read.pipe(
-    Effect.tapError((error) =>
-      Effect.logWarning('Session view read failed; retrying').pipe(
-        Effect.annotateLogs({ data: error }),
-        withLogChannel('sessionInputs'),
-      ),
+    Effect.tapError(
+      logFailure('sessionInputs', 'Session view read failed; retrying'),
     ),
     Effect.retry({
       schedule: Schedule.exponential('50 millis'),
@@ -222,7 +218,7 @@ export const sessionInputsLayer = Layer.effect(
                   // the marker names.
                   const closed = rows.flatMap((row) =>
                     row.type === 'run.removed'
-                      ? row.runIds.map((id) => qualifyAggregateId('run', id))
+                      ? row.runIds.map((id) => id)
                       : [],
                   );
                   const existence: ExistenceReconciliation = {

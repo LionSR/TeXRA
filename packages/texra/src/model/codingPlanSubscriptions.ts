@@ -4,11 +4,7 @@ import {
   type AppSignals,
   type SettingsStores,
 } from '@texra-ai/harness/plugins';
-import {
-  providerRegionSetting,
-  GLM_CODING_PLAN_SETTING,
-  KIMI_CODE_PREFER_SETTING,
-} from '@texra-ai/harness/schemas';
+import { providerRegionSetting } from '@texra-ai/harness/schemas';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
@@ -40,22 +36,6 @@ export interface CodingPlanSubscriptionRuntime {
 const announced = <E>(write: Effect.Effect<void, E>) =>
   Effect.andThen(write, emitAppSignal('modelAccessChanged', undefined));
 
-const RUNTIME_BY_ID = {
-  glmCodingPlan: {
-    getEnabled: (stores) => Settings.get(stores, GLM_CODING_PLAN_SETTING),
-    setEnabled: (stores, enabled) =>
-      announced(Settings.set(stores, GLM_CODING_PLAN_SETTING, enabled)),
-  },
-  kimiCode: {
-    getEnabled: (stores) => Settings.get(stores, KIMI_CODE_PREFER_SETTING),
-    setEnabled: (stores, enabled) =>
-      announced(Settings.set(stores, KIMI_CODE_PREFER_SETTING, enabled)),
-  },
-} as const satisfies Record<
-  CodingPlanSubscription['id'],
-  Omit<CodingPlanSubscriptionRuntime, 'descriptor'>
->;
-
 /**
  * Runtime catalog consumed by retry policy and host route presentation. Which
  * plan serves a model's next request is not answered here: the picker decides
@@ -64,7 +44,13 @@ const RUNTIME_BY_ID = {
 export const codingPlanSubscriptionRuntimes: readonly CodingPlanSubscriptionRuntime[] =
   Object.freeze(
     CODING_PLAN_SUBSCRIPTIONS.map((descriptor) =>
-      Object.freeze({ descriptor, ...RUNTIME_BY_ID[descriptor.id] }),
+      Object.freeze({
+        descriptor,
+        getEnabled: (stores: SettingsStores) =>
+          Settings.get(stores, descriptor.preference),
+        setEnabled: (stores: SettingsStores, enabled: boolean) =>
+          announced(Settings.set(stores, descriptor.preference, enabled)),
+      }),
     ),
   );
 
