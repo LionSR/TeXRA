@@ -12,7 +12,11 @@ import { readModelOptions } from '@texra-ai/harness/host';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
 import { CHATGPT_SETUP_MODEL } from '@texra/model/setupModelDefaults';
 import { ToolContext } from '@texra-ai/harness/plugins';
-import { homeDirectory, withExtendedPath } from '@texra-ai/harness/node';
+import {
+  CommandDirs,
+  homeDirectory,
+  withExtendedPath,
+} from '@texra-ai/harness/node';
 import {
   executed,
   ToolError,
@@ -20,7 +24,6 @@ import {
   Secrets,
   withLogChannel,
 } from '@texra-ai/harness/plugins';
-import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import { EditorIntegration } from '@texra/hosts/editorIntegration';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import {
@@ -173,9 +176,10 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
   // Where no home directory resolves (logged by `homeDirectory`), the
   // report names it unresolved, so the probe still answers.
   const homedir = (yield* homeDirectory) ?? '<unresolved>';
+  const appDirs = (yield* CommandDirs)();
   const extendedPath =
-    withExtendedPath({ PATH: process.env.PATH }, commandDirs()).PATH ?? '';
-  const pm = detectPackageManager();
+    withExtendedPath({ PATH: process.env.PATH }, appDirs).PATH ?? '';
+  const pm = detectPackageManager(appDirs);
   const hostInfo = yield* readHostInfo;
   const [
     coreTools,

@@ -17,7 +17,6 @@ import {
   whichOnExtendedPath,
   type ExecResult,
 } from '@texra-ai/harness/node';
-import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import { findCommand } from '@texra/utils/system/binaryResolver';
 import {
   installAdvice,
@@ -165,14 +164,16 @@ const PREFERRED_PACKAGE_MANAGER: Readonly<
  * Returns 'brew', 'apt', 'scoop', or null if none found. Each answer is a
  * {@link hasPackageManager} PATH lookup, made on each call.
  */
-export function detectPackageManager(): SystemPackageManager | null {
+export function detectPackageManager(
+  appDirs: readonly string[],
+): SystemPackageManager | null {
   const first = PREFERRED_PACKAGE_MANAGER[process.platform];
   const managers = first
     ? [first, ...SYSTEM_PACKAGE_MANAGERS.filter((name) => name !== first)]
     : SYSTEM_PACKAGE_MANAGERS;
 
   for (const name of managers) {
-    if (hasPackageManager(name)) return name;
+    if (hasPackageManager(name, appDirs)) return name;
   }
   return null;
 }
@@ -186,12 +187,16 @@ export function detectPackageManager(): SystemPackageManager | null {
  * `apt` and a brew-only command map would never match. The answer is a PATH
  * lookup (about 0.1 ms), not a spawn, made on each ask: its callers are a
  * person's actions (an install click, the git advice, the setup probe), and a
- * manager installed mid-session is seen. It stays synchronous for the
- * install-command getters; a present
- * but broken binary counts as installed, and the install command it picks
+ * manager installed mid-session is seen. `appDirs` is the app's
+ * `CommandDirs`. It stays synchronous for the install-command getters, which
+ * hold no runtime and compute the directories themselves; a present but
+ * broken binary counts as installed, and the install command it picks
  * then fails visibly. Each caller surfaces the boolean (or
  * `detectPackageManager`'s null) itself.
  */
-export function hasPackageManager(name: SystemPackageManager): boolean {
-  return whichOnExtendedPath(name, commandDirs()) !== null;
+export function hasPackageManager(
+  name: SystemPackageManager,
+  appDirs: readonly string[],
+): boolean {
+  return whichOnExtendedPath(name, appDirs) !== null;
 }

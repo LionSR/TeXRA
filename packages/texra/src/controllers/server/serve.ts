@@ -53,7 +53,7 @@ import {
   servicePaths,
 } from './discovery';
 import {
-  ServiceControl,
+  type ServiceControl,
   serviceHandlers,
   ServiceProjects,
   runningTasks,
@@ -189,8 +189,7 @@ export const serve = Effect.fn('server.serve')(function* (
     .pipe(
       Effect.mapError((cause) => new ServiceListenFailed({ socket, cause })),
     );
-  const control: Context.Service.Shape<typeof ServiceControl> = {
-    version: BUILD_VERSION,
+  const control: ServiceControl = {
     socket,
     startedAt,
     clients: Effect.map(protocol.clientIds, (ids) => ids.size),
@@ -217,11 +216,7 @@ export const serve = Effect.fn('server.serve')(function* (
   };
   yield* Effect.forkScoped(
     RpcServer.make(TexraRpcs).pipe(
-      Effect.provide(
-        serviceHandlers.pipe(
-          Layer.provide(Layer.succeed(ServiceControl)(control)),
-        ),
-      ),
+      Effect.provide(serviceHandlers(control)),
       Effect.provideService(RpcServer.Protocol, protocol),
     ),
   );

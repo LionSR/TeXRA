@@ -688,6 +688,14 @@ function whichOnExtendedPath(
 ): string | null
 ```
 
+## withCommandDirs
+
+`env` on the PATH extended with the app's {@link CommandDirs}.
+
+```ts
+const withCommandDirs: <T extends NodeJS.ProcessEnv>(env: T) => Effect<T, never, never>
+```
+
 ## withExtendedPath
 
 Return a copy of `env` whose PATH is {@link extendEnvPath}'s, written under

@@ -26,9 +26,8 @@ import which from 'which';
 
 import { isModuleNotFoundError } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { executeCommand, withExtendedPath } from '@texra-ai/harness/node';
+import { executeCommand, withCommandDirs } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
-import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'VendorPackages';
@@ -222,10 +221,11 @@ const resolveBinary = Effect.fn('vendorPackages.resolveBinary')(function* (
   // need a shell. Restricting PATHEXT to `.EXE` rejects all three, so the
   // tool reports "not found" with its install guide instead of resolving to
   // a path that fails at spawn time.
+  const { PATH } = yield* withCommandDirs({ PATH: process.env.PATH });
   return (
     which.sync(config.pathCommand, {
       nothrow: true,
-      path: withExtendedPath({ PATH: process.env.PATH }, commandDirs()).PATH,
+      path: PATH,
       ...(process.platform === 'win32' ? { pathExt: '.EXE' } : {}),
     }) ?? undefined
   );

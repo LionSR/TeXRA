@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 
 // Local imports - utilities
 import { type RootedFileSystem } from '@texra-ai/harness/host';
+import { CommandDirs } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
@@ -79,7 +80,8 @@ const promptGitMissing = Effect.fnUntraced(function* () {
   // The command is worth offering only where its package manager is
   // installed.
   const command =
-    advice.command && hasPackageManager(advice.command.packageManager)
+    advice.command &&
+    hasPackageManager(advice.command.packageManager, (yield* CommandDirs)())
       ? advice.command.command
       : null;
   const message = `Git not found in PATH.\n\n${advice.guide}`;

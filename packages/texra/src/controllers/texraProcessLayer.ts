@@ -120,7 +120,12 @@ export const texraProcessLayer = ({
     Layer.orDie,
     // Beneath every session the process builds, so each command it runs
     // resolves on the app's directories too.
-    Layer.provideMerge(Layer.succeed(CommandDirs)(commandDirs)),
+    Layer.provideMerge(
+      Layer.sync(CommandDirs)(() => {
+        const dirs = commandDirs();
+        return () => dirs;
+      }),
+    ),
     // The Node filesystem, path and supervised spawner, once per process.
     Layer.provide(nodePlatformServices),
   );

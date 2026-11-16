@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/node.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 49
+Exports: 50
 
 - `absentReason` — `const absentReason: (error: unknown) => boolean`
 - `APPROVAL_POLICY_ENV` — `const APPROVAL_POLICY_ENV: "TEXRA_APPROVAL_POLICY"`
@@ -49,6 +49,7 @@ Exports: 49
 - `secretsDirectory` — `function secretsDirectory: (storageRoot: string) => string`
 - `setLogSink` — `function setLogSink: (next: LogSink | null, options?: { readonly trusted?: boolean | undefined; }) => void`
 - `whichOnExtendedPath` — `function whichOnExtendedPath: (name: string, appDirs: readonly string[]) => null | string`
+- `withCommandDirs` — `const withCommandDirs: <T extends NodeJS.ProcessEnv>(env: T) => Effect<T, never, never>`
 - `withExtendedPath` — `function withExtendedPath: <T extends NodeJS.ProcessEnv>(env: T, appDirs: readonly string[]) => T`
 - `workspaceRelativePath` — `function workspaceRelativePath: (root: string | undefined, filePath: string) => string`
 - `writeFileAtomic` — `const writeFileAtomic: (target: string, data: Uint8Array<ArrayBufferLike>) => Effect<void, PlatformError, never>`

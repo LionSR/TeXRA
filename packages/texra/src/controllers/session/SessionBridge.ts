@@ -98,8 +98,7 @@ interface SessionBridgeOptions {
    *  `Internal`. The channel is {@link HostCommandFailure}: each host lifts
    *  a Promise-faced capability once, under the member's name, so every case
    *  fails with a tag and a bare rejection value can no longer reach this
-   *  channel. The last case that widened it to `Error` was the transcript
-   *  export; its steps carry tags now. */
+   *  channel. */
   readonly handleHostCommand: (
     request: HostCommand,
     port: string,

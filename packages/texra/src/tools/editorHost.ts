@@ -46,17 +46,18 @@ export class PdfOpenFailed extends Schema.TaggedError<PdfOpenFailed>()(
 ) {}
 
 /** One critique the diagnostics tool adds as an editor diagnostic. */
-export interface ManualCriticismEntry {
+export const ManualCriticismEntrySchema = Schema.Struct({
   /** Absolute path resolved by the diagnostics tool. */
-  readonly absolutePath: string;
+  absolutePath: Schema.String,
   /** 1-based line number. */
-  readonly line: number;
-  readonly message: string;
+  line: Schema.Int,
+  message: Schema.String,
   /** 0-5; mapped to DiagnosticSeverity by the host. */
-  readonly severity: number;
+  severity: Schema.Int,
   /** 1-5; appended to the message as `(S/C)`. */
-  readonly confidence: number;
-}
+  confidence: Schema.Int,
+});
+export type ManualCriticismEntry = typeof ManualCriticismEntrySchema.Type;
 
 /** What a host's editor offers one session; a member left out is not offered. */
 export interface EditorCapabilities {
