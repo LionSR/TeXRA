@@ -187,6 +187,7 @@ export type { SubscriptionDeviceCodePrompt } from './oauth/deviceAuthorization.j
 export { LoopbackTransportUnavailableError } from './oauth/loopbackLogin.js';
 export type {
   SubscriptionCoordinator,
+  SubscriptionSession,
   SubscriptionSessionStatus,
 } from './oauth/subscriptionCoordinator.js';
 export type { ChatgptSession } from './oauth/chatgpt/chatgptProvider.js';

@@ -234,6 +234,20 @@ class SubscriptionOAuthError extends Schema.TaggedError<SubscriptionOAuthError>(
 )
 ```
 
+## SubscriptionSession
+
+Canonical stored session: the persisted base schema's shape (its single
+source of truth) plus the two optional identity fields the status read
+reports. Providers may add fields via intersection types.
+
+```ts
+type SubscriptionSession =
+  (typeof SubscriptionSessionBaseSchema)['Type'] & {
+    email?: string;
+    accountId?: string;
+  };
+```
+
 ## SubscriptionSessionStatus
 
 Whether a session is stored, and the account it names.
