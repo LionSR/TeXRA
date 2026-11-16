@@ -165,7 +165,7 @@ interface StaticTranscriptItemMetrics {
  *  render; the other roles sum plain layout lines without those wrappers, so
  *  the byte figure is an estimate rather than an upper bound. The header's
  *  fixed `+64` is a floor for its chrome, not a bound. Entry metrics come from
- *  the same `scrollback-budget` layout the row budget uses, so the ring never
+ *  the same `measured` layout the row budget uses, so the ring never
  *  pays for a second full layout pass. */
 function staticTranscriptItemMetrics(
   item: StaticTranscriptItem,
@@ -188,7 +188,7 @@ function staticTranscriptItemMetrics(
   }
 
   const layout = transcriptEntryLayout(item.entry, {
-    mode: 'scrollback-budget',
+    mode: 'measured',
     previousEntry: undefined,
     width,
   });
