@@ -15,6 +15,7 @@ import {
 import { latexdiff } from '@latex/latexdiff';
 import {
   latexdiffPairs,
+  pairDiffSuffix,
   type LatexdiffPair,
 } from '@latex/latexdiff/diffOperations';
 import { REVISION_DIFF_PDF_SUFFIX } from '@latex/latexdiff/diffFileNameManager';
@@ -236,10 +237,11 @@ export const revisionLatexdiffs = Effect.fn('documents.revisionLatexdiffs')(
  */
 const diffPair = (
   docs: DiffRun,
-  { revised, document, base, baseRound, suffix }: LatexdiffPair,
+  latexdiffPair: LatexdiffPair,
   roundDiffDirectory: string,
   mathMarkup: LatexdiffMathMarkupValue,
 ): Effect.Effect<SingleDiffOutcome, never, DiffServices> => {
+  const { revised, document, base, baseRound } = latexdiffPair;
   const { logger, fileService } = docs.run;
   const { roots } = docs;
   const relativePath = path.join(roundDiffDirectory, path.dirname(document));
@@ -283,7 +285,7 @@ const diffPair = (
     const diffPath = yield* latexdiff(base, revised.location, {
       roots,
       cwd,
-      suffix,
+      suffix: pairDiffSuffix(latexdiffPair),
       outputDirectory: diffDirectory.absolutePath,
       mathMarkup,
     }).pipe(withLogChannel(fileService.runId));
