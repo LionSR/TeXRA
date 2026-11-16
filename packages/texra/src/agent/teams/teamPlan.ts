@@ -2,7 +2,7 @@
  * Team planning: finding a team in the workspace's catalog, which members
  * resolve against the agent catalog and which of them leads, and applying a
  * team to a workspace. The harness stores only the team reference a workspace
- * runs (`WorkspaceAgentsController.setTeam`) and reads its members back
+ * runs (`WorkspaceAgentsController.setDefaultTeam`) and reads its members back
  * through `AgentDirectoriesPort.teamMembers`; what a team is, is TeXRA's.
  */
 

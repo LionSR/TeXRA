@@ -52,10 +52,10 @@ const EXTRACT_TIMEOUT_MS = 30_000;
 
 /**
  * A source-download failure that ends the retry loop immediately — a PDF-only
- * submission, a 404, or another non-transient HTTP status, the failures the
- * old p-retry `AbortError` marked permanent. `downloadSource` also fails with
- * it for the non-download errors (invalid input, no open workspace,
- * extraction or placement failure), which never had a retry loop to abort.
+ * submission, a 404, or another non-transient HTTP status: retrying cannot
+ * change the answer. `downloadArxivSource` also fails with it for the
+ * non-download errors (invalid input, no open workspace, extraction or
+ * placement failure), which no retry can fix either.
  */
 class ArxivSourcePermanentError extends Schema.TaggedError<ArxivSourcePermanentError>()(
   'ArxivSourcePermanentError',
@@ -509,12 +509,8 @@ const hasExistingSource: (
   if ((yield* permanentFs(entryTypeIn(fs, paperDirFull))) === undefined) {
     return false;
   }
-  // The tolerant listing is the facade's `readDir`: the provider typed
-  // ordinary entries from the `readdir` dirent, but a *symlink* dirent
-  // still ran one `stat` (`fileTypeFor` → `resolveSymlinkType`). The
-  // strict form fails the whole listing on one unreadable entry, which
-  // would abort the download -- turning "the source is already here"
-  // into a failure.
+  // One unreadable entry must not turn "the source is already here" into a
+  // failed download; the tolerant listing drops that entry instead.
   const entries = yield* permanentFs(readDirectoryTypedTolerant(paperDirFull));
   const hasTexFiles = entries.some(([name]) => hasExtension(name, '.tex'));
   if (hasTexFiles) {

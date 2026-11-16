@@ -65,7 +65,7 @@ export type ServiceClient = RpcClient.FromGroup<
 
 /**
  * The provider API keys this process's environment holds, as a start, a
- * resume or a message sends them to the service (`StartOptions.apiKeys`): a
+ * resume or a message sends them to the service (`StartInput.apiKeys`): a
  * key a terminal or a window was given reaches the task it asks for,
  * wherever the task runs.
  */

@@ -276,7 +276,7 @@ export const TexraRpcs = RpcGroup.make(
     error: TaskStartFailed,
   }),
   Rpc.make('task.resume', {
-    /** `apiKeys`: as a start carries them (`StartOptions.apiKeys`). */
+    /** `apiKeys`: as a start carries them (`StartInput.apiKeys`). */
     payload: {
       workspace,
       runId: RunIdSchema,

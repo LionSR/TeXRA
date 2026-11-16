@@ -69,7 +69,7 @@ export interface SetupPlatformShape {
 
 /**
  * The host's setup capabilities as an Effect service
- * (`@texra/setup/SetupPlatform`), served by the setup plugin's process layer
+ * (`'@texra-ai/texra/tools/SetupPlatform'`), served by the setup plugin's process layer
  * over what the host passes `texraPlugins`; a setup tool reads it with
  * `yield* SetupPlatform`.
  */
