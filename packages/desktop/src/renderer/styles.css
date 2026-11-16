@@ -291,7 +291,7 @@ wa-input.desktop-command-palette-input::part(input) {
 
 .desktop-command-palette-group-label {
   position: sticky;
-  z-index: 1;
+  z-index: var(--layer-sticky);
   top: calc(var(--wa-space-2xs) * -1);
   margin: 0;
   padding: var(--wa-space-xs) var(--wa-space-2xs) var(--wa-space-3xs);

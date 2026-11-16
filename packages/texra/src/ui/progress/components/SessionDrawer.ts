@@ -35,7 +35,7 @@ export class SessionDrawer extends LitElement {
     overlaySurfaceStyles,
     css`
       :host {
-        z-index: 4;
+        z-index: var(--layer-drawer);
       }
 
       .scrim {

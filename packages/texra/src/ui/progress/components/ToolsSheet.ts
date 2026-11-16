@@ -30,7 +30,7 @@ export class ToolsSheet extends LitElement {
     overlaySurfaceStyles,
     css`
       :host {
-        z-index: 3;
+        z-index: var(--layer-sheet);
       }
 
       .scrim {

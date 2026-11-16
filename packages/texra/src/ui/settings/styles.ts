@@ -20,7 +20,7 @@ export const settingsViewStyles: CSSResult[] = [
     }
 
     .settings-navigation {
-      z-index: 2;
+      z-index: var(--layer-pinned);
       flex: 0 0 auto;
       border-bottom: var(--border-thin) solid var(--border-hairline);
       background: color-mix(

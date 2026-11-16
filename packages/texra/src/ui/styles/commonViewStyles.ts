@@ -126,7 +126,7 @@ const busyIconButtonStyles: CSSResult = css`
 export const dropCueStyles: CSSResult = css`
   position: absolute;
   inset: var(--wa-space-3xs);
-  z-index: 2;
+  z-index: var(--layer-pinned);
   display: flex;
   align-items: center;
   justify-content: center;

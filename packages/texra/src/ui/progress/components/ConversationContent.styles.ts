@@ -47,7 +47,7 @@ export const conversationContentStyles: CSSResult = css`
     overscroll-behavior-block: contain;
     scrollbar-width: thin;
     position: relative;
-    z-index: 2;
+    z-index: var(--layer-pinned);
     background: var(--wa-color-surface-default);
   }
 
@@ -94,7 +94,8 @@ export const conversationContentStyles: CSSResult = css`
 
   .conversation-composer-dock {
     position: relative;
-    z-index: 3;
+    /* Pinned like the approval dock, and above it. */
+    z-index: calc(var(--layer-pinned) + 1);
     flex: 0 0 auto;
     padding: var(--wa-space-xs) 0 var(--wa-space-m);
     background: var(--wa-color-surface-default);

@@ -93,7 +93,7 @@ export const requestPanelSharedStyles: CSSResult = css`
     flex: 0 0 auto;
     position: sticky;
     inset-block-end: 0;
-    z-index: 1;
+    z-index: var(--layer-sticky);
     margin-block-start: auto;
     padding-block-start: var(--wa-space-2xs);
     background: var(--wa-color-surface-lowered);
