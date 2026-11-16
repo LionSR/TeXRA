@@ -75,14 +75,16 @@ export type Sent =
   | { readonly kind: 'duplicate' }
   | { readonly kind: 'queued' }
   | { readonly kind: 'refused'; readonly reason: Refusal };
-/** Why a send wrote nothing: a closed input. */
-type Refusal = 'notResumable';
+/** Why a send wrote nothing: a closed input, a non-parent. */
+type Refusal = 'notResumable' | 'notParent';
 
 /** What a send asks of the row and of the run. */
 interface SendOptions {
   /** When the row may be read (`readableMessages`). Absent: at once, or at
    *  the turn's end for a host's notification (`queuedRow`). */
   readonly hold?: QueuedFollowUp['holdUntil'];
+  /** Only from the run's parent: its rows' edge, read in this job. */
+  readonly fromParent?: boolean;
 }
 
 /** A send decided inside a job: its rows, and how it landed. */
@@ -284,6 +286,8 @@ export class SessionInbox {
       const input = yield* this.read(runId);
       if (closed(input)) return only(CLOSED);
       const sender = item.from.kind === 'run' ? item.from.runId : null;
+      if (options.fromParent === true && input.parent?.id !== sender)
+        return only({ kind: 'refused', reason: 'notParent' });
       // Stamped inside the job, from the parent edges the rows record.
       const line = yield* ancestryRows(this.read, runId, sender);
       const row = queuedRow(item, options.hold, (from) =>

@@ -38,7 +38,12 @@ export type SubmitFollowUpResult =
   | { status: 'failed'; message: string };
 
 /** How one input is delivered to a run. */
-interface SubmitFollowUpOptions {
+export interface RunInboxSendOptions {
+  /** Only from the run's parent, by its rows (`SendOptions.fromParent`). */
+  readonly fromParent?: boolean;
+}
+
+interface SubmitFollowUpOptions extends RunInboxSendOptions {
   /** A user's message the run reads when its current turn ends, not at the
    *  turn's next model request. */
   readonly hold?: 'turn';
@@ -147,7 +152,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   item: InboxItem,
   options: SubmitFollowUpOptions,
 ): Effect.fn.Return<SubmitFollowUpResult, Error, FollowUpServices> {
-  const { hold, attach, apiKeys } = options;
+  const { hold, fromParent, attach, apiKeys } = options;
   const inbox = yield* Inbox;
   const runs = yield* Runs;
   const log = yield* SessionLog;
@@ -198,17 +203,24 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       if (facts?.stop !== null && facts?.end === null) yield* live.drained;
     }
     const media = attach === undefined ? {} : yield* attach;
-    const landed = yield* inbox.send(runId, { ...item, ...media }, { hold });
+    const landed = yield* inbox.send(
+      runId,
+      { ...item, ...media },
+      { hold, fromParent },
+    );
     return { status: 'landed', landed, live: live !== undefined } as const;
   }).pipe(withPerKeyLane(inbox.sendLanes, runId));
   if (sent.status !== 'landed') return sent;
   const { landed, live } = sent;
-  // Its input is closed (deleted, or torn down with nothing queued), or
-  // the session is disposed.
+  // The sender is not its parent, its input is closed (deleted, or torn
+  // down with nothing queued), or the session is disposed.
   if (landed.kind === 'refused')
     return {
       status: 'failed',
-      message: describeRefusal({ kind: landed.reason }),
+      message:
+        landed.reason === 'notParent'
+          ? 'This run is not a child of the sender: it was launched by another run.'
+          : describeRefusal({ kind: landed.reason }),
     };
   if (landed.kind === 'duplicate') return { status: 'sent' };
   // Whether the row wakes the run is the inbox's one reading
@@ -229,6 +241,7 @@ export interface RunInbox {
   /** Deliver `item` to the run. */
   readonly send: (
     item: InboxItem,
+    options?: RunInboxSendOptions,
   ) => Effect.Effect<SubmitFollowUpResult, Error>;
   /** Hear the run take no more input, or its session's inbox close;
    *  returns the detach. */
@@ -241,7 +254,8 @@ export const runInbox = (
   runId: RunId,
   session: Context.Context<FollowUpServices>,
 ): RunInbox => ({
-  send: (item) => submitFollowUp(runId, item, {}).pipe(Effect.provide(session)),
+  send: (item, options) =>
+    submitFollowUp(runId, item, options ?? {}).pipe(Effect.provide(session)),
   onClosed: (listener) =>
     Context.get(session, Inbox).onClosed((closed) => {
       if (closed.kind === 'session' || closed.runId === runId) listener();

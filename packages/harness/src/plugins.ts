@@ -185,6 +185,7 @@ export type { ChildRunDelivery } from '@shared/schemas';
 // A run's input as a plugin sends it, and how the send landed.
 export type {
   RunInbox,
+  RunInboxSendOptions,
   SubmitFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
 export type { InboxItem } from '@agent/followUp/Inbox';
