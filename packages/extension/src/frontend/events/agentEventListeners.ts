@@ -11,7 +11,7 @@
  */
 import { basename } from 'node:path';
 
-import { Effect, Scope } from 'effect';
+import { Effect } from 'effect';
 
 import {
   withProcessServices,
@@ -27,7 +27,7 @@ import {
 import { setApiKey } from '@commands/api/apiKeyCommands';
 import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { openBuilt } from '@frontend/latex/openBuild';
+import type { ShowBuilt } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { GuiWindowHost } from '@texra/controllers/session/openGuiWindow';
@@ -40,7 +40,6 @@ import {
 } from '@ui/copy/instructionActions';
 import { shownFailureText } from '@ui/copy/modelAccess';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { StateStore } from '@texra-ai/harness/host';
 
 const CHANNEL = 'agentEventListeners';
 
@@ -100,7 +99,6 @@ function handleRequestShowError(
 }
 
 function handleRequestShowInstruction(
-  globalState: StateStore,
   roots: WorkspaceRoots,
   runtime: ProcessRuntime,
   payload: RequestShowInstructionPayload,
@@ -121,7 +119,7 @@ function handleRequestShowInstruction(
   // dismisses it. The "never remind again" path returns without rendering:
   // the user opted out of this notice.
   return showInstructionWithSuppress(
-    globalState,
+    roots.globalState,
     payload.key,
     payload.message,
     actions,
@@ -206,25 +204,22 @@ export const revealProgressView = Effect.fn('revealProgressView')(function* (
  * runtime) owns replaying an event emitted before this host attaches.
  */
 export function createAgentPresentationHost(
-  globalState: StateStore,
-  runtime: ProcessRuntime,
   roots: WorkspaceRoots,
-  /** The view's scope, which a scheduled PDF viewer open runs in. */
-  scope: Scope.Scope,
+  runtime: ProcessRuntime,
+  showBuilt: ShowBuilt,
 ): GuiWindowHost['notices'] {
   return {
     // The open-and-build program takes this window's file services from the
-    // runtime's context, which the session that forks it does not carry, and
-    // schedules the PDF viewer in the view's scope.
+    // runtime's context, which the session that forks it does not carry.
     openFile: (payload) =>
       withProcessServices(
         runtime,
-        openBuilt(roots, [payload.location], {
+        showBuilt([payload.location], {
           preserveFocus: payload.preserveFocus,
-        }).pipe(Effect.provideService(Scope.Scope, scope)),
+        }),
       ),
     requestShowInstruction: (payload) =>
-      handleRequestShowInstruction(globalState, roots, runtime, payload),
+      handleRequestShowInstruction(roots, runtime, payload),
     requestShowError: handleRequestShowError,
   };
 }

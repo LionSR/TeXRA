@@ -11,7 +11,7 @@
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
-import { Effect, FiberHandle, Scope } from 'effect';
+import { Effect, FiberHandle } from 'effect';
 
 import { type Session, type WorkspaceRoots } from '@texra-ai/harness';
 import {
@@ -38,7 +38,7 @@ import {
   vscodeOpener,
 } from '@frontend/hosts/VscodeExternalOpener';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
-import { openBuilt } from '@frontend/latex/openBuild';
+import type { ShowBuilt } from '@frontend/latex/openBuild';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
@@ -94,6 +94,10 @@ export interface ExtensionHostRequestsOptions {
   /** Where this window's runs run: the session here, or the service's. */
   readonly runSession: Session;
   readonly roots: WorkspaceRoots;
+  /** "Show a built file", bound to this window's roots and the view's
+   *  scope, so a close of the view cancels a PDF viewer open still
+   *  waiting. */
+  readonly showBuilt: ShowBuilt;
   /** The window's bridge and snapshot. */
   readonly bridge: SessionBridge;
   readonly snapshot: HostSnapshotSource;
@@ -193,11 +197,6 @@ export const createExtensionHostRequests = Effect.fn(
   // The window's one comparison refresh: a newer comparison replaces it,
   // and the view's scope ends it.
   const diffRefresh = yield* FiberHandle.make();
-  /** A file action that schedules a PDF viewer opens it in the view's
-   *  scope, so a close of the view cancels a delayed open. */
-  const scope = yield* Scope.Scope;
-  const inViewScope = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-    Effect.provideService(effect, Scope.Scope, scope);
   const at = (file: string) => pathToLocationIn(roots.workspace, file);
   // A file-action port's handler; the process services come from the runtime.
   const runFileAction = <A, E>(
@@ -310,18 +309,14 @@ export const createExtensionHostRequests = Effect.fn(
     // `null`, as it does for a cancel.
     pickFiles: (fileType) => multipleFilePickers[fileType](),
     latexdiff: {
-      // The diffs' PDF viewer opens in the view's scope, so a close of the
-      // view cancels an open still waiting.
       openDiffs: ([first, ...rest]) =>
         first === undefined
           ? Effect.void
           : runHandler(
               'openLatexdiffs',
-              inViewScope(
-                openBuilt(roots, [at(first), ...rest.map(at)], {
-                  preserveFocus: true,
-                }),
-              ),
+              options.showBuilt([at(first), ...rest.map(at)], {
+                preserveFocus: true,
+              }),
             ),
       withProgress: (title, task) =>
         withVSCodeProgress(

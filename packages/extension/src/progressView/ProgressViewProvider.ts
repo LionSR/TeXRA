@@ -18,6 +18,7 @@ import {
   revealProgressView,
 } from '@frontend/events/agentEventListeners';
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
+import { openBuilt, type ShowBuilt } from '@frontend/latex/openBuild';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { eventStream } from '@frontend/vscode/vscodeEvents';
@@ -122,7 +123,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   static readonly make = Effect.fn('ProgressViewProvider.make')(
     function* (
       context: vscode.ExtensionContext,
-      globalState: StateStore,
       /** Process runtime shared with every extension surface. */
       runtime: ProcessRuntime,
       /** The window's roots: its workspace, storage and settings stores. */
@@ -185,6 +185,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             ),
           ),
       };
+      // "Show a built file" for every caller in this window: a scheduled PDF
+      // viewer opens in the view's scope, so a close of the view cancels an
+      // open still waiting.
+      const showBuilt: ShowBuilt = (locations, options) =>
+        openBuilt(roots, locations, options).pipe(
+          Effect.provideService(Scope.Scope, scope),
+        );
       const focusChanged = eventStream(
         vscode.window.onDidChangeWindowState,
       ).pipe(
@@ -213,8 +220,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         toolEdits: new VscodeToolEditApprovalHost(
           path.join(storageRoot.fsPath, 'tool-edit-previews'),
           fork,
-          roots,
-          scope,
+          showBuilt,
         ),
         focused: Stream.suspend(() =>
           vscode.window.state.focused
@@ -227,12 +233,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             ...parts,
             runSession,
             roots,
-            notices: createAgentPresentationHost(
-              globalState,
-              runtime,
-              roots,
-              scope,
-            ),
+            showBuilt,
+            notices: createAgentPresentationHost(roots, runtime, showBuilt),
             window: editor,
             runtime,
             extensionPath: context.extensionPath,
@@ -253,7 +255,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         runSession,
         scope,
         contentProvider,
-        globalState,
+        globalState: roots.globalState,
         runtime,
         fork,
       });

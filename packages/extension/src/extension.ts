@@ -473,7 +473,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   const settingsView = yield* Deferred.make<SettingsViewProvider>();
   const progressViewProvider = yield* ProgressViewProvider.make(
     context,
-    globalState,
     runtime,
     roots,
     windowSession,
