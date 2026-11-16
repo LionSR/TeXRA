@@ -913,7 +913,7 @@ API credit, keyed by the route that bills through each. `provider` is the
 account the plan bills; a route names its plan as `plan`, so it bills
 `plan ?? 'api-key'`. A `session` plan is the `plan` of a `session` route:
 it signs in with an OAuth session and renews its token once on a 401; a
-used-up quota asks before moving onto an API key, because the move starts
+used-up quota asks before switching to an API key, because the switch starts
 spending API credit. A `key` plan is the `plan` of an `api-key` route on a
 provider console key (`null` for a key paid per token); a used-up quota
 falls back to the model's own key without asking. Hosts store these
