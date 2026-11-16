@@ -36,8 +36,10 @@ import {
 
 const CHANNEL = 'InquiryTool';
 
-const QUESTION_TRUNCATION = 400;
-const ANSWER_TRUNCATION = 2000;
+/** How much of the question and the answer an `[inquiry]` follow-up
+ *  quotes; the tool's description states both. */
+export const QUESTION_TRUNCATION = 400;
+export const ANSWER_TRUNCATION = 2000;
 
 function formatStillOpen(threads: InquiryThreadSummary[]): string[] {
   if (!threads.length) return [];

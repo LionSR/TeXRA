@@ -37,11 +37,9 @@ function describeTeams(): string {
 }
 
 const ApplyTeamInputSchema = Schema.Struct({
-  teamId: Schema.String.check(
-    Schema.makeFilter((value) => TEAM_IDS.includes(value), {
-      message: `Expected one of: ${TEAM_IDS.join(', ')}`,
-    }),
-  ).annotate({ description: `Team to apply. One of:\n${describeTeams()}` }),
+  teamId: Schema.Literals(TEAM_IDS).annotate({
+    description: `Team to apply. One of:\n${describeTeams()}`,
+  }),
 });
 
 type ApplyTeamInput = typeof ApplyTeamInputSchema.Type;

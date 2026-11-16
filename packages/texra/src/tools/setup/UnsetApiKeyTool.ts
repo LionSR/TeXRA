@@ -7,19 +7,13 @@ import {
   apiKeyEnvName,
   apiKeySecretName,
   hasUsableApiKey,
-  isApiProvider,
 } from '@texra-ai/llm';
-import {
-  executed,
-  ToolError,
-  defineTool,
-  Secrets,
-} from '@texra-ai/harness/plugins';
+import { executed, defineTool, Secrets } from '@texra-ai/harness/plugins';
 
 // Local file imports
 
 const UnsetApiKeyInputSchema = Schema.Struct({
-  provider: Schema.NonEmptyString.annotate({
+  provider: Schema.Literals(API_KEY_PROVIDER_IDS).annotate({
     description: 'Provider name to remove the stored key for.',
   }),
 });
@@ -30,14 +24,7 @@ const unsetApiKey = Effect.fn('UnsetApiKeyTool.execute')(function* (
   input: UnsetApiKeyInput,
 ) {
   const secrets = yield* Secrets;
-  const provider = input.provider.trim();
-  if (!isApiProvider(provider)) {
-    return yield* Effect.fail(
-      new ToolError(
-        `Unknown provider "${provider}". Supported: ${API_KEY_PROVIDER_IDS.join(', ')}.`,
-      ),
-    );
-  }
+  const { provider } = input;
   const envVar = apiKeyEnvName(provider);
 
   // Only a persisted entry counts here: an environment-backed key is

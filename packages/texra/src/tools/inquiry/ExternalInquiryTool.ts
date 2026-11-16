@@ -43,6 +43,7 @@ import {
   type InquiryThreadSummary,
 } from '@texra/shared/plugins/externalInquiry';
 import { inquiryRecordsLayer } from '@texra/tools/inquiry/inquiryRecords';
+import { ANSWER_TRUNCATION, QUESTION_TRUNCATION } from './inquiryActions';
 
 const CHANNEL = 'InquiryTool';
 
@@ -198,7 +199,7 @@ Dispatch is non-blocking: 'ask' returns immediately with {status: "dispatched", 
 Follow-up semantics:
   Omit thread_id to start a new thread. Pass an answered thread_id to ask a follow-up turn; prior Q/A is preserved and rendered as a conversation in the user's panel. You cannot re-dispatch on an open or dropped thread: read or list to recover state instead.
 
-When the [inquiry] continuation arrives, its Q is truncated to 400 chars and its A to 2000 chars. If you need the full content, call inquiry { command: 'read', thread_id }.
+When the [inquiry] continuation arrives, its Q is truncated to ${QUESTION_TRUNCATION} chars and its A to ${ANSWER_TRUNCATION} chars. If you need the full content, call inquiry { command: 'read', thread_id }.
 
 Do not treat paper-specific claims from the external model as automatically verified: verify with arxiv_search / download_arxiv_source before building on them.`;
 
