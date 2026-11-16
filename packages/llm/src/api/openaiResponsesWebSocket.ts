@@ -24,12 +24,16 @@ import {
   WebSocketErrorSchema,
 } from './openaiResponsesWire.js';
 import { originOf } from '../protocol.js';
-import { decodeWireOrFail, rejoin, wireFail } from './transport.js';
+import {
+  decodeWireOrFail,
+  refuseAmbientHeaders,
+  rejoin,
+  wireFail,
+} from './transport.js';
 import {
   authorized,
   bearerHeaders,
   prepareResponsesTurn,
-  refuseAmbientHeaders,
   responseParameters,
 } from './openaiResponsesRequest.js';
 import type { SessionToken } from '../node.js';
@@ -328,7 +332,10 @@ export const openaiResponsesWebSocketModel = Effect.fn(
   bearer: string | SessionToken,
 ): Effect.fn.Return<Model, ModelError, Scope.Scope> {
   const origin = originOf(config);
-  yield* refuseAmbientHeaders;
+  yield* refuseAmbientHeaders(
+    'OPENAI_CUSTOM_HEADERS',
+    'Ambient OpenAI headers cannot override the selected deployment.',
+  );
   const endpoint = new URL(config.deployment.endpoint);
   if (endpoint.username || endpoint.password)
     return yield* new ModelError({

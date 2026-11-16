@@ -6,7 +6,7 @@ import { Cause, Schema } from 'effect';
  * production writers use these values for terminal run, stage-end, and run
  * state.
  *
- * `cancelled` is a sibling of `failed`, never folded into it — a user stop is
+ * `cancelled` is a sibling of `failed`, never applied into it — a user stop is
  * not an error. This is the triad `ResultEvent.outcome` carries.
  */
 export const RUN_OUTCOME = {
@@ -58,7 +58,7 @@ const RUN_ACTIONS = [
   'stop',
   /** Grant the run an approval bypass while it works (a live agent's run). */
   'grant',
-  /** Compact a live conversation (not a task's recipe). */
+  /** Compact a live conversation (not a program). */
   'compact',
   /** Continue the run where it stopped. */
   'resume',
@@ -66,7 +66,7 @@ const RUN_ACTIONS = [
   'runAgain',
   /** A new task holding this conversation (`run.fork`). */
   'fork',
-  /** A settled run's files: read, copied, or removed (`run.files`). */
+  /** A finished run's files: read, copied, or removed (`run.files`). */
   'files',
   /** Remove the run and its folder from history. */
   'delete',

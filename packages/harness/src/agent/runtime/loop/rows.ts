@@ -1,11 +1,11 @@
 /**
  * The loops' row constructors: every run history draft a loop appends, built
- * from the folded `RunState` and nothing else. A `run.position` is the one
+ * from the applied `RunState` and nothing else. A `run.position` is the one
  * record of where the loop stands; a `run.config` is what the run runs on
  * (its model and binding); an `append` carries what its messages change
  * about the run's input. Every fact a row already carries (the pending
  * response, its intents, the invocation's attempts
- * and failures) is folded from that row and never restated here.
+ * and failures) is applied from that row and never restated here.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -14,7 +14,6 @@ import { Effect, Ref } from 'effect';
 
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import {
-  qualifyAggregateId,
   type FollowUpDisposition,
   type PositionAt,
   type RunBinding,
@@ -44,7 +43,7 @@ export const finalizedRows = (
   return [
     {
       type: 'response.finalized',
-      aggregateId: qualifyAggregateId('run', runId),
+      aggregateId: runId,
       text,
       ...((finish === 'length' || finish === 'content-filter') && {
         cut: finish,
@@ -74,7 +73,7 @@ export function positionRow(
 ): RunHistoryDraft {
   return {
     type: 'run.position',
-    aggregateId: qualifyAggregateId('run', runId),
+    aggregateId: runId,
     payload: {
       at,
       turn: state.turn,
@@ -100,7 +99,7 @@ export function appendRow(
   const addressed = addressedMessages(messages);
   return {
     type: 'model.message',
-    aggregateId: qualifyAggregateId('run', runId),
+    aggregateId: runId,
     payload: {
       kind: 'append',
       messages: addressed.messages,
@@ -126,7 +125,7 @@ export function configRow(
 ): RunHistoryDraft {
   return {
     type: 'run.config',
-    aggregateId: qualifyAggregateId('run', runId),
+    aggregateId: runId,
     config: { ...config, model },
     binding,
   };
@@ -140,7 +139,11 @@ export function configRow(
  */
 export const handedDown = Effect.fn('rows.handedDown')(function* (
   run: Pick<AgentRunShape, 'steps' | 'logger' | 'runId'>,
-  call: NonNullable<AgentRunShape['config']['script']>,
+  call: {
+    readonly code: string;
+    readonly title: string;
+    readonly timeoutMs?: number | null;
+  },
 ) {
   const { runId } = run;
   const argumentsText = JSON.stringify({
@@ -157,7 +160,7 @@ export const handedDown = Effect.fn('rows.handedDown')(function* (
     return yield* Effect.die(new Error('One call in, one dispatch fact out.'));
   return {
     type: 'model.message',
-    aggregateId: qualifyAggregateId('run', runId),
+    aggregateId: runId,
     payload: {
       kind: 'handed-down',
       responseId: randomUUID(),

@@ -11,7 +11,7 @@ Overleaf's Git integration lets you clone an Overleaf project locally, run TeXRA
 ::: tip Works from the CLI too
 The clone → edit → push loop below works in the terminal as well. After
 cloning, run agents with the [`texra` CLI](./texra-cli.md) (e.g.
-`texra run polish --input main.tex`) instead of the VS Code panel, then commit
+`texra run edit --input main.tex`) instead of the VS Code panel, then commit
 and push as usual.
 :::
 
@@ -77,7 +77,7 @@ accepted by the same command.
 
 ### 2. Edit locally with TeXRA in VS Code
 
-Open `your-local-folder` in VS Code and run your agents (`polish`, `correct`, `research`, `merge`, `latexDiff`, etc.) as usual. Optionally use LaTeX Workshop for local PDF previews ([LaTeX compilation setup](./latex-compilation.md)).
+Open `your-local-folder` in VS Code and run your agents and programs (`research`, `latexDiff`, `edit`, `merge`, etc.) as usual. Optionally use LaTeX Workshop for local PDF previews ([LaTeX compilation setup](./latex-compilation.md)).
 
 <OverleafEditActions />
 

@@ -21,7 +21,7 @@ import { withLogChannel, Settings } from '@texra-ai/harness/plugins';
 import {
   inheritedEnv,
   withCommandDirs,
-  absentReason,
+  meansAbsent,
   pathExists,
 } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
@@ -216,7 +216,7 @@ export const validateRecordingFile = Effect.fn('validateRecordingFile')(
     const fs = yield* FileSystem.FileSystem;
     const size = yield* fs.stat(recordingPath).pipe(
       Effect.map((info) => Number(info.size)),
-      Effect.catchIf(absentReason, () => Effect.succeed(null)),
+      Effect.catchIf(meansAbsent, () => Effect.succeed(null)),
       recorderFailure('validateRecordingFile'),
     );
     if (size === null) {

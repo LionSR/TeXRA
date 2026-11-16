@@ -167,7 +167,7 @@ await Effect.runPromise(
     });
     const resumed = yield* session.resume(runId);
     const end = yield* resumed.result.pipe(Effect.timeout('10 seconds'));
-    yield* session.settled;
+    yield* session.drained;
     const { notes: after } = yield* notesOf(withPlugin.platform, runId);
     if (
       end.outcome !== 'completed' ||

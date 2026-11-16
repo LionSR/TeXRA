@@ -26,11 +26,7 @@ import {
   WorkspaceFs,
   withSessionFs,
 } from '@platform/rootedFs';
-import {
-  qualifyAggregateId,
-  type RunId,
-  type SessionRow,
-} from '@shared/schemas';
+import { type RunId, type SessionRow } from '@shared/schemas';
 import {
   DatabaseAggregateClosed,
   RunChanged,
@@ -50,19 +46,19 @@ import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import type { SessionViewAccess } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { copyDereferenced } from '@utils/files/fsDurability';
-import { absentReason } from '@utils/files/fsEntryExists';
+import { meansAbsent } from '@utils/files/fsEntryExists';
 import { isPathWithin } from '@utils/core/pathCore';
 
 const CHANNEL = 'DeletionCleanup';
 
 /**
  * Remove each run's run directory under the storage root it was
- * admitted against.
+ * accepted against.
  *
  * Both the storage root and its runs directory are resolved with `realPath`,
  * and the runs directory must resolve to itself: a root that was replaced by
  * a link to somewhere else is refused rather than followed, so a swapped
- * storage directory can never redirect deletion outside admitted storage.
+ * storage directory can never redirect deletion outside accepted storage.
  * Each target is then checked to fall inside the resolved runs directory.
  *
  * A refusal fails, which leaves the deletion record closed and pending
@@ -104,7 +100,7 @@ const removeRunDirectories: (
         const target = path.join(runs, runId);
         if (!isPathWithin(runs, target)) {
           return Effect.logWarning(
-            `Refusing to remove ${target}: outside the admitted storage root`,
+            `Refusing to remove ${target}: outside the accepted storage root`,
           ).pipe(withLogChannel(CHANNEL));
         }
         return fs.remove(target, { recursive: true, force: true });
@@ -113,7 +109,7 @@ const removeRunDirectories: (
     );
   },
   Effect.uninterruptible,
-  Effect.catchIf(absentReason, () => Effect.void),
+  Effect.catchIf(meansAbsent, () => Effect.void),
 );
 
 /** A run's deletion marker. */
@@ -243,23 +239,23 @@ const removeRunDir = Effect.fn('runStorage.removeRunDir')(function* (
  *  arriving meanwhile waits for the step. */
 type InactiveRunStep = Pick<RunRegistry['Service'], 'withInactiveRun'>;
 
-/** A `run.delete`, the one way a run is deleted: the admitted lifetime's rows
+/** A `run.delete`, the one way a run is deleted: the accepted lifetime's rows
  *  removed from the log as the registry's step on the inactive run, which
  *  refuses one anything still runs, its descendants included (the removal
  *  takes their rows and files with it). The removal's transaction refuses
- *  a run whose start is no longer the admitted one. */
-export const deleteAdmittedRun = (
+ *  a run whose start is no longer the accepted one. */
+export const deleteAcceptedRun = (
   deps: {
     readonly log: Pick<SessionEventsShape, 'removeRun'>;
     readonly view: SessionViewAccess['Service'];
   },
   runId: RunId,
-  admitted: AggregateState,
+  accepted: AggregateState,
   runs: InactiveRunStep,
 ): Effect.Effect<OutcomeOf<'run.delete'>, RequestError> => {
-  const aggregateId = qualifyAggregateId('run', runId);
+  const aggregateId = runId;
   return Effect.gen(function* () {
-    if (admitted.startCommit === null) {
+    if (accepted.startCommit === null) {
       return yield* new Unavailable({
         runId,
         reason: `The ${runNoun(deps.view, runId)} has no recorded start.`,
@@ -268,7 +264,7 @@ export const deleteAdmittedRun = (
     yield* runs
       .withInactiveRun(
         runId,
-        deps.log.removeRun(aggregateId, admitted.startCommit),
+        deps.log.removeRun(aggregateId, accepted.startCommit),
       )
       .pipe(
         Effect.mapError((error): RequestError => {

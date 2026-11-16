@@ -11,7 +11,7 @@ import { Effect, Schema, SchemaGetter, Struct } from 'effect';
 
 import { CountSchema } from '../protocol.js';
 import { ResponsesUsageSchema } from './openaiResponsesUsage.js';
-import { UploadedSchema } from './uploadCache.js';
+import { uploadedFileSchema } from './uploadCache.js';
 import {
   ResponsesIncompleteReasonSchema,
   ResponsesStatusSchema,
@@ -183,25 +183,8 @@ export const WebSocketErrorSchema = Schema.Union([
   ),
 ]);
 
-/**
- * What a Files API upload must return before its id is cached. The SDK's
- * type is not a check on the JSON, so a missing or empty id, or an expiry
- * that is not whole non-negative Unix seconds (absent means the file does
- * not expire), is a malformed response: the upload counts as failed and the
- * bytes are sent.
- */
-const UploadedFileSchema = Schema.Struct({
-  id: Schema.NonEmptyString,
-  expires_at: Schema.optional(Schema.NullOr(CountSchema)),
-}).pipe(
-  Schema.decodeTo(UploadedSchema, {
-    decode: SchemaGetter.transform((file) => ({
-      fileId: file.id,
-      expiresAtMs: file.expires_at == null ? null : file.expires_at * 1000,
-    })),
-    encode: SchemaGetter.forbidden(() => 'decode-only'),
-  }),
+/** Reads a Files API create response into the upload cache's canonical form;
+ *  OpenAI states the expiry as whole non-negative Unix seconds. */
+export const decodeUploadedFile = Schema.decodeUnknownResult(
+  uploadedFileSchema(CountSchema, (seconds) => seconds * 1000),
 );
-/** Reads a Files API create response into the upload cache's canonical form. */
-export const decodeUploadedFile =
-  Schema.decodeUnknownResult(UploadedFileSchema);

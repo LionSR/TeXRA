@@ -30,7 +30,7 @@ import { launchableTeams, workspaceTeams } from '@texra/shared/agentTeams';
 import { formatUnknownTeamMessage } from '@texra/agent/teams/teamLaunch';
 import { applyTeam } from '@texra/agent/teams/teamPlan';
 import {
-  AGENT_TEMPLATE_FILES,
+  AGENT_TEMPLATE_FILE,
   agentFileFromTemplate,
 } from '@texra/agent/templates/agentTemplates';
 import { SettingsAgentCatalogController } from '@texra/controllers/settingsView/SettingsAgentCatalogController';
@@ -57,11 +57,11 @@ function newAgentName(typed: string): string | undefined {
 }
 
 /**
- * Write a template agent into its file, refusing to overwrite an existing
- * file. The templates are the packaged resources' `templates/<kind>.yaml`.
+ * Write the chat agent template into a new agent file, refusing to overwrite
+ * an existing file. The template is in the packaged resources' `templates/`.
  */
 const writeTemplateAgentFile = Effect.fn('settings.writeTemplateAgentFile')(
-  function* (input: { task: boolean; name: string; customDir: string }) {
+  function* (input: { name: string; customDir: string }) {
     const { resourcesRoot } = yield* AgentDirectories;
     if (resourcesRoot === undefined) {
       return yield* Effect.fail(
@@ -70,9 +70,7 @@ const writeTemplateAgentFile = Effect.fn('settings.writeTemplateAgentFile')(
     }
     const fileName = `${input.name}${AGENT_FILE_EXTENSION}`;
     const filePath = path.join(input.customDir, fileName);
-    const description = input.task
-      ? `${input.name} — document task`
-      : `${input.name} — chat agent`;
+    const description = `${input.name} — chat agent`;
     const fs = yield* FileSystem.FileSystem;
     if ((yield* entryTypeIn(fs, filePath)) !== undefined) {
       return {
@@ -82,11 +80,7 @@ const writeTemplateAgentFile = Effect.fn('settings.writeTemplateAgentFile')(
     }
     const raw = yield* readNormalizedFile(
       fs,
-      path.join(
-        resourcesRoot,
-        'templates',
-        AGENT_TEMPLATE_FILES[input.task ? 'documentTask' : 'chat'],
-      ),
+      path.join(resourcesRoot, 'templates', AGENT_TEMPLATE_FILE),
     );
     yield* fs.writeFileString(
       filePath,
@@ -100,15 +94,6 @@ interface SettingsAgentCommandsPorts {
   readonly roots: Pick<WorkspaceRoots, 'repoState' | 'globalState'>;
   readonly bindings: SettingsHostBindings;
   readonly present: SettingsPresentation;
-}
-
-/** What the person is told when customizing kept their own copies of files
- *  the agent binds: the copy now reads as current, so nothing else says the
- *  bundled ones differ. */
-function keptDifferingNotice(files: readonly string[]): string {
-  return files.length === 1
-    ? `Kept your existing ${files[0]}; it differs from the built-in one.`
-    : `Kept your existing ${files.join(', ')}; they differ from the built-in ones.`;
 }
 
 /** The Agents page: its handlers, its pages, and what an agent change runs. */
@@ -293,8 +278,6 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
           yield* present.notice(
             `Created custom copy: ${path.basename(copy.path)}`,
           );
-          if (copy.keptDiffering.length > 0)
-            yield* present.notice(keptDifferingNotice(copy.keptDiffering));
         }),
       ),
     deleteCustomAgent: (message) =>
@@ -377,12 +360,13 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
         'Failed to open agent folder',
         Effect.flatMap(customDirectory, bindings.revealPath),
       ),
-    createAgent: (message) =>
+    createAgent: () =>
       present.reported(
         'Failed to create agent',
         Effect.gen(function* () {
           const typed = yield* bindings.dialogs.input({
-            prompt: `Enter a name for the new ${message.task ? 'document task' : 'chat'} agent (without .yaml extension)`,
+            prompt:
+              'Enter a name for the new chat agent (without .yaml extension)',
             placeholder: 'my_agent',
           });
           if (!typed) return;
@@ -398,11 +382,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
           yield* FileSystem.FileSystem.use((fs) =>
             fs.makeDirectory(customDir, { recursive: true }),
           );
-          const written = yield* writeTemplateAgentFile({
-            task: message.task,
-            name,
-            customDir,
-          });
+          const written = yield* writeTemplateAgentFile({ name, customDir });
           if (!written.ok) return yield* present.alert(written.message);
           yield* agentFilesChanged;
           yield* bindings.openPath(written.filePath);

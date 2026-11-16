@@ -35,11 +35,14 @@ import type { Signal } from '@lit-labs/signals';
 
 // ---------------------------------------------------------------------------
 // Reset registry — populated by `trackedSignal` as each signal below is
-// declared.
+// declared. Module-level state is shared across remounts in the same JS
+// context (tests, hot reload), so a fresh mount calls `resetSettingsState`,
+// which replays every registered default.
 // ---------------------------------------------------------------------------
 
-const { trackedSignal, resetAll: resetTrackedSignals } =
-  createTrackedSignalRegistry();
+const registry = createTrackedSignalRegistry();
+const { trackedSignal } = registry;
+export const resetSettingsState = registry.resetAll;
 
 // ---------------------------------------------------------------------------
 // Catalog-backed signals
@@ -151,11 +154,3 @@ export type PluginsPageData = SettingsHostState['plugins'];
 export const settingsSnapshotRevisions = trackedSignal<
   Readonly<Partial<Record<string, number>>>
 >(() => ({}));
-
-// ---------------------------------------------------------------------------
-// Reset — module-level state is shared across remounts in the same JS context
-// (tests, hot reload), so a fresh mount replays every registered default.
-// ---------------------------------------------------------------------------
-export function resetSettingsState(): void {
-  resetTrackedSignals();
-}

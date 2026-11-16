@@ -30,7 +30,7 @@ import replacementEngine, {
 import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import type { PluginSettingRow } from '@texra/shared/settingsView/settingRows';
-import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
+import { THEORY_MODULES, THEORY_PROGRAMS } from './theory/programs';
 import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
 import { isTexFile } from '@texra/shared/latexFileTypes';
 
@@ -55,9 +55,6 @@ import {
   DocumentProposeTool,
 } from './documents/documentTools';
 import { DocumentReviewTool } from './documents/DocumentReviewTool';
-import { DocumentTaskTool } from './documents/DocumentTaskTool';
-import { DOCUMENT_TASK_RESULT } from './documents/documentResult';
-import { DOCUMENTS_MODULE } from './documents/documentsModule';
 import { ExtractBibliographyTool } from './latex/ExtractBibliographyTool';
 import { ExtractLatexFiguresTool } from './latex/ExtractFiguresTool';
 import { ExtractTikzFiguresTool } from './latex/ExtractTikzFiguresTool';
@@ -301,35 +298,42 @@ const setup = (
     ],
   });
 
-/** Document tasks: the `task:` block of an agent file, the tools their
- *  recipe calls, launching one as a child (`document_task`), and accepting
- *  the documents a run produced into the workspace. */
-const documents: TexraPlugin = {
-  id: 'documents',
+/** The theorist's programs: the document programs a person or a model
+ *  starts by name, the tools they call, and accepting the documents a run
+ *  produced into the workspace. */
+const theory: TexraPlugin = {
+  id: 'theory',
   icons: { accept_run_files: 'check' },
-  // The `task:` block, and how its runs read (`DOCUMENT_TASK_RESULT`).
-  agentBlock: Object.freeze({
-    ...DOCUMENT_TASK_BLOCK,
-    result: DOCUMENT_TASK_RESULT,
-  }),
-  // The delegation targets mark a task's agent `(task)`.
   prompt: ({ offered }) =>
-    offered.includes('document_task')
+    offered.includes('program')
       ? [
-          'An agent marked (task) in the available agents runs a document task over files with `document_task`.',
-          'Its delivery lists each proposed file with a `diff` attribute, the diff against the document the task started from, readable among the run\'s files (`/executions/{id}/files/<diff>`), and `large-change="true"` when the file changed extensively; a diff may be truncated.',
-          "The host compiles each .tex the task writes: a file that failed to build leaves its log at `compile/r{n}_<name>.log` among the run's files, which the delivery's `<compile-failures>` names (read it at `/executions/{id}/files/<log>`), and no log means every build passed or no LaTeX toolchain is installed.",
+          '`program` starts a document program over files (`inputFiles`, with `contextFiles` it may read and not change).',
+          // The script tool's description lists the programs; a run without
+          // it reads them here.
+          ...(offered.includes('script')
+            ? []
+            : [
+                `The programs: ${Object.entries(THEORY_PROGRAMS)
+                  .map(
+                    ([name, { description }]) => `\`${name}\` (${description})`,
+                  )
+                  .join('; ')}.`,
+              ]),
+          'Each rewrites whole documents in fixed revisions, with compile checks and diffs, and proposes the result for the user to accept; it reads only the files you pass. What to change, how far and from which point of view is the `prompt`: one program covers a proofread and a restructuring, a referee and a first reader.',
+          "Its `args` may switch on `reflect` (a critic reviews each revision but the last), `attachTeXCount` (word counts in the prompt), and `autoExtractFigure`, `autoExtractTikzFigure` or `autoCompileInputPdf` (the inputs' figures, compiled TikZ pictures or PDF as media, for a model that reads images).",
+          'Its delivery lists each proposed file with a `diff` attribute, the diff against the document the program started from, readable among the run\'s files (`/executions/{id}/files/<diff>`), and `large-change="true"` when the file changed extensively; a diff may be truncated.',
+          "The host compiles each .tex the program writes: a file that failed to build leaves its log at `compile/r{n}_<name>.log` among the run's files, which the delivery's `<compile-failures>` names (read it at `/executions/{id}/files/<log>`), and no log means every build passed or no LaTeX toolchain is installed.",
           ...(offered.includes('script')
             ? [
-                "In a script, `const { revise, from } = await import('builtIn:documents')`: `revise(agentName, args)` runs a task (`args` as `document_task`'s) and resolves to its result; `from(result, args)` is `args` with that result's revised files as the input files, to chain tasks.",
+                "In a script, `program(name, { prompt, inputFiles })` resolves to the program's result, whose `changes` list each revision's files in order: pass the last `absolutePath` of each `path` as the `inputFiles` of the next program to chain them. `describeTool(name)` shows a program's source, and `builtIn:revise` exports what the programs are built from.",
               ]
             : []),
         ].join(' ')
       : '',
-  scriptModules: { documents: DOCUMENTS_MODULE },
+  scriptModules: THEORY_MODULES,
+  programs: THEORY_PROGRAMS,
   tools: [
     AcceptRunFilesTool,
-    DocumentTaskTool,
     DocumentContextTool,
     DocumentExtractTool,
     DocumentCompileTool,
@@ -337,7 +341,7 @@ const documents: TexraPlugin = {
     DocumentReviewTool,
     DocumentProposeTool,
   ],
-  factKinds: APP_FACT_KINDS.documents,
+  factKinds: APP_FACT_KINDS.theory,
 };
 
 /** TeXRA's plugins, in dashboard order. */
@@ -444,6 +448,6 @@ export const texraPlugins = (host: {
     core(editors, host.inlineComments),
     { ...codemode, icons: { script: 'code' } },
     setup(host.setup ?? {}, host.name, host.editor),
-    documents,
+    theory,
   ];
 };

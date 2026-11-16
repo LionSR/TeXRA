@@ -78,7 +78,7 @@ function launchRequest(
 
 layer(FakeHost.layer())('main-view run launch controller', (it) => {
   it.effect(
-    'fills Run again… with the agent key, model and files a form launch saved',
+    'fills Run again… with the agent key and model a form launch saved',
     () =>
       Effect.gen(function* () {
         // Failure modes: a saved key is qualified twice (`builtIn:builtIn:`),
@@ -86,8 +86,6 @@ layer(FakeHost.layer())('main-view run launch controller', (it) => {
         const selections = {
           agent: 'builtIn:correct',
           model: 'openai/gpt-5.6-terra@high',
-          inputFiles: ['/papers/first/main.tex'],
-          contextFiles: ['/papers/first/refs.bib'],
         };
         const config = yield* onGlobalStorage(
           prepareSurfaceLaunch(launchRequest(selections), ROOTS),

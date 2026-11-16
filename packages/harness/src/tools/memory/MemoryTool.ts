@@ -50,6 +50,7 @@ import {
   formatFileView,
   formatLinesWithNumbers,
   formatPaginationHint,
+  type LineRange,
   paginateToolListing,
 } from '../formatting';
 
@@ -221,7 +222,7 @@ const requireEditableFile = Effect.fn('MemoryTool.requireEditableFile')(
 
 const view = Effect.fn('MemoryTool.view')(function* (
   loc: MemoryLocation,
-  viewRange: readonly [number, number] | undefined,
+  range: LineRange | undefined,
   offset: number,
   limit: number,
 ) {
@@ -279,7 +280,7 @@ const view = Effect.fn('MemoryTool.view')(function* (
     metaParts.length > 0 ? ` (${metaParts.join(', ')})` : '';
 
   return {
-    ...formatFileView({ path: inputPath, lines, viewRange, summarySuffix }),
+    ...formatFileView({ path: inputPath, lines, range, summarySuffix }),
     reads: [inputPath],
   };
 });
@@ -526,7 +527,7 @@ const buildDirectoryListing = Effect.fn('MemoryTool.buildDirectoryListing')(
           entry.storagePath,
           entry.size,
           entry.mtime,
-          entry.isDir ? null : entry.meta,
+          entry.meta,
         ),
       ),
     ];

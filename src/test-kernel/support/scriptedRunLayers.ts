@@ -18,7 +18,6 @@ import {
   Stream,
 } from 'effect';
 
-import { RunFileService } from '@texra-ai/harness/plugins';
 import { UsageLog } from '@texra-ai/harness/host';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
@@ -36,7 +35,6 @@ import {
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { SessionRoots } from '@platform/rootedFs';
 import { AgentConfigSchema, PersonaSchema, type RunId } from '@shared/schemas';
 import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@texra-ai/harness/schemas';
 import { generateRunId } from '@shared/schemas';
@@ -246,7 +244,7 @@ export const scriptedInvokerLayer = modelInvokerLayer().pipe(
           return {
             bind: () =>
               Effect.map(ScopedRef.get(run.model), (bound) => ({ ...bound })),
-            admit: () =>
+            switchRejection: () =>
               Effect.die(new Error('A scripted run switches no model.')),
           };
         }),
@@ -270,7 +268,6 @@ const testEntry = (): RunLaunch['entry'] => ({
   awaited: false,
   registration: null,
   enter: (commit) => Effect.uninterruptible(commit(Effect.succeed([]))),
-  initialUserMessage: TEST_INSTRUCTION,
 });
 
 /**
@@ -303,22 +300,19 @@ export function testLaunch(
 }
 
 /**
- * The run service a fixture stands on: {@link testLaunch} with the session a
- * real run carries, no step opened and no callbacks. `over` names what the
+ * The run service a fixture stands on: {@link testLaunch} with no step
+ * opened and no callbacks. `over` names what the
  * case under test reads.
  */
 export function testAgentRun(
-  base: Pick<AgentRunShape, 'runId' | 'logger' | 'model' | 'scope'> & {
-    readonly session: Context.Context<SessionServices>;
-  },
+  base: Pick<AgentRunShape, 'runId' | 'logger' | 'model' | 'scope'>,
   over: Partial<AgentRunShape> = {},
 ): AgentRunShape {
-  const { session, runId, logger, model, scope } = base;
+  const { runId, logger, model, scope } = base;
   return {
     ...testLaunch(runId, { logger }),
     model,
     scope,
-    fileService: new RunFileService(runId, Context.get(session, SessionRoots)),
     ...testRunTools(),
     finalToolName: null,
     callbacks: {},
@@ -337,14 +331,14 @@ export interface ScriptedRunInit {
   readonly model: Model;
   readonly bound?: TestBinding;
   /** A child run: its parent owns continuation across its turns. */
-  readonly parentRunId?: RunId | null;
+  readonly parentId?: RunId | null;
   /** Headless: the run stops after one turn instead of waiting for input. */
   readonly stopAfterCycle?: boolean;
   /** The terminal structured-output tool, when the run has one. */
   readonly finalToolName?: string | null;
   readonly mediaFiles?: readonly string[];
-  /** Absent means the launch had no transcript row to write. */
-  readonly initialUserMessage?: string | undefined;
+  /** A script run: what it runs is its call, not a prompt. */
+  readonly scriptCall?: (typeof AgentConfigSchema.Encoded)['script'];
 }
 
 export function agentRunTestLayer(init: ScriptedRunInit) {
@@ -359,11 +353,12 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
       const scope: Scope.Scope = yield* Effect.scope;
       const tools = init.tools ?? {};
       return testAgentRun(
-        { runId: init.runId, session: init.session, logger, model, scope },
+        { runId: init.runId, logger, model, scope },
         {
           config: Schema.decodeUnknownSync(AgentConfigSchema)({
             ...testConfig(),
             ...(init.mediaFiles ? { mediaFiles: init.mediaFiles } : {}),
+            ...(init.scriptCall ? { script: init.scriptCall } : {}),
           }),
           persona: Schema.decodeUnknownSync(PersonaSchema)({
             tools: Object.keys(tools).map((name) => ({ name })),
@@ -371,14 +366,7 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
           toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
           ...testRunTools(tools),
           finalToolName: init.finalToolName ?? null,
-          entry: {
-            ...testEntry(),
-            parent: init.parentRunId ?? null,
-            initialUserMessage:
-              'initialUserMessage' in init
-                ? init.initialUserMessage
-                : TEST_INSTRUCTION,
-          },
+          entry: { ...testEntry(), parent: init.parentId ?? null },
         },
       );
     }),
@@ -386,15 +374,14 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
 }
 
 /** A run id whose start is already on the session's log; with
- *  `parentRunId`, a child of that run, whose start goes first. */
+ *  `parentId`, a child of that run, whose start goes first. */
 export const startedRun = (
   session: Context.Context<SessionServices>,
-  parentRunId?: RunId,
+  parentId?: RunId,
 ): Effect.Effect<RunId> =>
   Effect.gen(function* () {
-    if (parentRunId !== undefined)
-      yield* publishTestRunStart(session, parentRunId);
+    if (parentId !== undefined) yield* publishTestRunStart(session, parentId);
     return yield* publishTestRunStart(session, generateRunId(), {
-      parent: parentRunId ?? null,
+      parent: parentId ?? null,
     });
   });

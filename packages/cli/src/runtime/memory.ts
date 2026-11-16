@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { absentReason } from '@texra-ai/harness/node';
+import { meansAbsent } from '@texra-ai/harness/node';
 import { MemoryStore } from '@texra-ai/harness/plugins';
 import {
   formatResultCount,
@@ -51,7 +51,7 @@ export const loadCliMemoryDetail = Effect.fn('cli.loadCliMemoryDetail')(
     // A typed argument: its surrounding whitespace is not part of the name.
     const storagePath = yield* MemoryStore.storagePath(inputPath.trim());
     const preview = yield* MemoryStore.preview(storagePath).pipe(
-      Effect.catchIf(absentReason, () =>
+      Effect.catchIf(meansAbsent, () =>
         Effect.fail(
           new Error(
             `No stored memory at ${MemoryStore.displayPath(storagePath)}; \`memory list\` shows the stored ones.`,

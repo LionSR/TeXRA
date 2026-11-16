@@ -14,7 +14,8 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
 - **Built-in plugins**: [`harnessBuiltins`](#harnessbuiltins) bundles
   [`codemode`](#codemode), [`fileOps`](#fileops), [`goal`](#goal),
   [`memoryWorkflow`](#memoryworkflow), [`multiAgent`](#multiagent)
-  ([`AGENT_TOOL_NAME`](#agent_tool_name)), and [`web`](#web) for
+  (the `agent` tool, [`AGENT_TOOL_NAME`](#agent_tool_name), and the
+  `program` tool), and [`web`](#web) for
   `Sessions.layer({ platform, plugins })`.
 - **Plugin & tool authoring**: [`defineTool`](#definetool),
   [`definePlugin`](#defineplugin) and the
@@ -34,8 +35,8 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
   [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
   [`RequestDecisionHook`](#requestdecisionhook) (what commits with the
   decision: [`RequestDecisionRecord`](#requestdecisionrecord)),
-  [`FactKind`](#factkind), and [`AgentBlock`](#agentblock)
-  ([`agentBlockOf`](#agentblockof)).
+  [`FactKind`](#factkind), and [`Program`](#program) (how its run
+  reads: [`ProgramResult`](#programresult)).
 
 ## AGENT_TOOL_NAME
 
@@ -45,81 +46,11 @@ The tool that runs a named agent as a child of the calling run.
 const AGENT_TOOL_NAME: "agent"
 ```
 
-## AgentBlock
-
-A top-level block a plugin owns in an agent file (such as `task:`). The
-catalog scan checks a file's block against `schema`
-and keeps the parsed value on the entry (`AgentEntry.blocks`); a file
-whose block fails it, or that holds a key no listed plugin owns, is
-refused like any other invalid definition. An agent with a block is a
-task: it declares no tools, delegation marks it for the tools that
-`launchesTasks`, and it runs as one only through a launch its plugin
-builds (a `script` of kind `recipe`). The harness reads nothing inside it.
-
-```ts
-interface AgentBlock<A = unknown, R = unknown> {
-  /** The key in an agent file: unique across the plugin list, and never a
-   *  key of the persona itself. */
-  readonly key: string;
-  /** The block as written, to its value with defaults applied. */
-  readonly schema: Schema.Codec<A, unknown>;
-  /** How a run of this block's recipe reads to whoever launched it. */
-  readonly result?: AgentBlockResult<R>;
-  /** The files the block binds, relative to its agent file: part of the
-   *  agent, so a customized copy carries them and the file's digest covers
-   *  them. */
-  files?(block: A): readonly string[];
-}
-```
-
-## agentBlockOf
-
-The value of `block` on `entry`, as the catalog scan parsed it with the
-block's schema; undefined when the agent has none.
-
-```ts
-function agentBlockOf<A>(
-  entry: Pick<AgentEntry, 'blocks'>,
-  block: AgentBlock<A>,
-): A | undefined
-```
-
-## AgentBlockResult
-
-How a completed recipe run reads: to the launching model, and to a
-script's summary of the files its calls wrote. What it reports is the
-run's latest row of the plugin's own `fact` kind (`Plugin.factKinds`),
-the one record of it; the recipe's return value is not read. The harness
-reads the row only through these.
-
-```ts
-interface AgentBlockResult<R = unknown> {
-  /** The plugin's row kind that records what the run did, and the schema
-   *  its value decodes with. A completed run with no such row, or one that
-   *  fails the schema, is delivered as an invalid result naming the issue,
-   *  never shaped. */
-  readonly fact: {
-    readonly plugin: string;
-    readonly kind: string;
-    readonly schema: Schema.Codec<R, unknown>;
-  };
-  /** The delivery body inside the harness's own result envelope. */
-  delivery(value: R, runId: RunId): readonly string[];
-  /** The files the recipe wrote, in the order it wrote them (a document
-   *  revised twice appears twice, the later entry its latest): the files a
-   *  parent may read of its child's storage, and a script's summary. */
-  changes(
-    value: R,
-    roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>,
-  ): readonly RecipeChange[];
-}
-```
-
 ## AgentTrace
 
 Agent-general SDK surface. Every method ultimately reduces to `emit()` so
 the trace channel is a single source of truth. App-specific helpers are
-plain functions over this interface (see `traceLogs.ts`).
+plain functions over this interface.
 
 ```ts
 interface AgentTrace {
@@ -153,7 +84,7 @@ interface AgentTrace {
    * no phase that never happens. A stream that ends without content emits
    * nothing at all.
    */
-  openRun(kind: MessageType): StreamHandle;
+  openStream(kind: MessageType): StreamHandle;
   /**
    * Open a tool call's card with its first log (`tool.start`). A log whose
    * status is already terminal opens and closes the card at once; one without
@@ -230,28 +161,6 @@ Fail when a raw tool path contains a parent-directory segment.
 const assertNoParentTraversal: (targetPath: string) => Effect<void, ToolError, never>
 ```
 
-## boundFile
-
-The file an agent file at `agentPath` binds as `file`: where it is
-(beside the agent file, or an absolute path as written) and how to read
-it. A file that cannot be read fails the read; every reader of a bound
-file goes through this, so none mistakes a missing file for an empty or
-a changed one.
-
-```ts
-function boundFile(
-  agentPath: string,
-  file: string,
-): {
-  readonly path: string;
-  readonly read: Effect.Effect<
-    string,
-    PlatformError.PlatformError,
-    FileSystem.FileSystem
-  >;
-}
-```
-
 ## BoundModel
 
 One bound model: llm's `Binding` (or the validation model's) and the facts
@@ -323,15 +232,6 @@ interface BuildFileAttachmentOptions {
 }
 ```
 
-## CALL_FIELDS
-
-The fields every child launch takes beside its own: memories, the call's
-reuse id and card label, its time limit, and whether a script waits.
-
-```ts
-const CALL_FIELDS: Readonly<{ memories: decodeTo<toType<$Array<String>>, optional<NullOr<$Array<String>>>, never, never>; working_directory: decodeTo<optional<String>, optional<NullOr<String>>, never, never>; id: optional<NullOr<String>>; label: optional<NullOr<String>>; timeoutMs: optional<NullOr<Int>>; background: optional<NullOr<Boolean>>; }>
-```
-
 ## CallRequests
 
 The requests one tool call raises, opened through its run's loop. Each
@@ -379,52 +279,6 @@ type CellError =
   | DatabaseReadFailed;
 ```
 
-## ChildLaunch
-
-One child launch as the shared core runs it: the agent and its prompt,
-and what the child is. A chat (`task: null`) may ask for a value of
-`schema` and attaches `mediaFiles` to its prompt. A task opens on what
-the launching plugin builds for the approved agent (`configFor`: its
-recipe and outputs, null for an agent with no task block) and works over
-`files` with `options`, as its proposal says. `tool` names the launching
-tool in its reuse key and its copy.
-
-```ts
-type ChildLaunch = {
-  readonly tool: string;
-  readonly agentName: string;
-  /** An agent the call defines, named `agentName`: no catalog entry. */
-  readonly persona?: AgentProposal['persona'];
-  readonly prompt: string;
-  readonly model: string | null | undefined;
-  readonly memories: readonly string[];
-  readonly workingDirectory: string | null | undefined;
-  readonly id: string | null | undefined;
-  readonly timeoutMs: number | null | undefined;
-  readonly background: boolean | null | undefined;
-} & (
-  | {
-      readonly task: null;
-      readonly schema: Record<string, unknown> | null | undefined;
-      readonly mediaFiles: readonly string[];
-    }
-  | {
-      readonly task: {
-        readonly configFor: (
-          chosen: AgentProposal,
-        ) => Pick<AgentConfig, 'script' | 'outputFiles'> | null;
-        readonly options: NonNullable<AgentProposal['options']>;
-      };
-      readonly files: {
-        readonly inputFiles: readonly string[];
-        readonly contextFiles: readonly string[];
-        readonly mediaFiles: readonly string[];
-        readonly outputFiles: readonly string[];
-      };
-    }
-);
-```
-
 ## ChildRunDelivery
 
 A child run's report to its parent ({@link ChildRunDeliverySchema}).
@@ -445,39 +299,31 @@ class ChildRuns extends Context.Service<ChildRuns, ChildRunsShape>()(
 
 ## ChildRunsShape
 
-A plugin tool's one door to the session's runs. It launches children of
-its call's run: an agent's (`launch`: the child's result, or its receipt
-for a background launch) or an external process's (`launchProcess`: its
-run id, outside the child-run budget); a plugin's tool reaches no other
-launch. And it reaches a
-run of the session by id: its input, live parent edge, records, whether
+A plugin tool's one door to the session's runs. It launches an external
+process as a child of its call's run (`launchProcess`: its run id,
+outside the child-run budget); a plugin's tool reaches no other launch.
+And it reaches a run of the session by id: its input, records, whether
 it holds a request, and the plugin's own facts on it, each over the
 call's run.
 
 ```ts
 interface ChildRunsShape {
-  readonly launch: (
-    launch: ChildLaunch,
-  ) => Effect.Effect<ToolResult, Error, PluginToolServices>;
   readonly launchProcess: (
     launch: ProcessChildLaunch,
   ) => Effect.Effect<RunId, Error, ToolContext | RunServices>;
   /** The run's input: what a tool sends it, and when it takes no more. */
   readonly inbox: (runId: RunId) => Effect.Effect<RunInbox, Error>;
-  /** Its parent as the rows record it (`run.start`): null for a root, or
-   *  a run that is not there. */
-  readonly parent: (runId: RunId) => Effect.Effect<RunId | null, Error>;
   /** Its records: whether the store still lists it, and its terminal
    *  result (null before it ends). */
   readonly records: (runId: RunId) => {
     readonly exists: Effect.Effect<boolean, Error>;
     readonly end: Effect.Effect<RunEnd | null, Error>;
   };
-  /** The latest value of `arm`'s kind among the run's own facts, decoded
-   *  by the arm's schema; undefined while the run recorded none. */
+  /** The latest value of `factKind` among the run's own facts, decoded
+   *  by its schema; undefined while the run recorded none. */
   readonly fact: <A>(
     runId: RunId,
-    arm: {
+    factKind: {
       readonly plugin: string;
       readonly kind: string;
       readonly schema: Schema.Codec<A, unknown>;
@@ -513,7 +359,7 @@ const codemode: Plugin
 
 The decisions a request of kind `K` takes: its own actions and the three
 refusals. A plugin's request declares its actions on its row, so its
-type admits any decision.
+type accepts any decision.
 
 ```ts
 type DecisionOf<K extends RequestPayload['kind']> =
@@ -584,7 +430,6 @@ type DefineToolOptions<T, R = never> = Required<
   Pick<
     ITool,
     | 'hostCapability'
-    | 'launchesTasks'
     | 'lane'
     | 'scriptGlobal'
     | 'replay'
@@ -595,8 +440,8 @@ type DefineToolOptions<T, R = never> = Required<
     schema: Schema.Codec<T, unknown>;
     /**
      * What the run loop checks before this tool's body runs: the paths the
-     * call writes and the command it must get approved. Declared here,
-     * applied once in `agent/runtime/loop/toolGuard.ts`.
+     * call writes and the command it must get approved. Declared here; the
+     * loop applies it once, so the body never re-checks it.
      *
      * `NoInfer<R>`: the guard is checked against the requirement channel the
      * tool already has, it never sets it.
@@ -681,27 +526,27 @@ interface FactKind {
    *  of the kind (none before the first): the rejection's reason, or null
    *  to accept. */
   readonly accepts?: (
-    previous: PluginRow | undefined,
-    next: PluginRow,
+    previous: PluginFactRow | undefined,
+    next: PluginFactRow,
   ) => string | null;
   /** Whether the aggregate's `latest` row already says more than `next`
    *  (a call's fact that lagged behind a later writer): the call's batch
    *  then leaves `next` out instead of failing on `accepts`. */
-  readonly supersedes?: (latest: PluginRow, next: PluginRow) => boolean;
+  readonly supersedes?: (latest: PluginFactRow, next: PluginFactRow) => boolean;
   /** The workspace files a row of the kind says its run wrote past the
    *  editor's own write path: every process that folds the run announces
    *  them (`workspaceFilesWritten`), a window hearing a service task's
    *  write as it hears its own. */
-  readonly writes?: (value: JsonValue) => readonly string[];
+  readonly writes?: (value: Schema.Json) => readonly string[];
 }
 ```
 
-## fileList
+## FactKinds
 
-A list of file paths, empty when the call names none.
+The plugin fact kinds a store reads, by `plugin/kind`.
 
 ```ts
-const fileList: (description: string) => decodeTo<toType<$Array<String>>, optional<NullOr<$Array<String>>>, never, never>
+type FactKinds = Readonly<Record<FactName, FactKind>>;
 ```
 
 ## fileOps
@@ -711,19 +556,6 @@ Files and the shell: every agent needs them. An app passes the filter
 
 ```ts
 const fileOps: (options?: { readonly writeFilter?: WriteFilter | undefined; }) => Plugin
-```
-
-## FollowUpSenderInput
-
-Who a producer says a follow-up is from. Runs talk as a graph: any run may
-message any run in the project, whatever their places in the supervision
-tree. A run names only itself; the recipient's admission
-(`Inbox.send`) stamps how it relates to the recipient.
-
-```ts
-type FollowUpSenderInput =
-  | Exclude<FollowUpSender, { readonly kind: 'run' }>
-  | { readonly kind: 'run'; readonly runId: RunId };
 ```
 
 ## formatToolOutput
@@ -814,7 +646,7 @@ type InboxItem = (
     }
   | { readonly delivery: ChildRunDelivery }
 ) & {
-  readonly from: FollowUpSenderInput;
+  readonly from: FollowUpSender;
   /** Identity of a delivery its producer may repeat (a child's result):
    *  the row's `followUpId`, so a replay writes nothing. */
   readonly deliveryId?: string;
@@ -868,9 +700,6 @@ interface ITool<E = Error, R = never> {
    *  `HostCapabilities`) the session's host must serve for this tool to be
    *  offered, read live each step: a window that attaches mid-run brings it. */
   readonly hostCapability?: string;
-  /** Launches agents' tasks (a plugin's block): its step lists the agents
-   *  with one. */
-  readonly launchesTasks?: true;
   /**
    * Where its calls run beside their siblings (omitted: `'barrier'`).
    * Declared on the tool, not the YAML-overridable definition, so an agent
@@ -882,7 +711,7 @@ interface ITool<E = Error, R = never> {
    *   read-only tool that prompts for approval is not parallel: it needs an
    *   approval round-trip first, so it stays a barrier.
    * - `'barrier'`: waits for every call issued before it and holds back
-   *   every call after it until it settles.
+   *   every call after it until it finishes.
    * - `'own'`: in a script, its calls neither wait for the calls issued
    *   before them nor block the ones after, and take no place in the
    *   parallel window: the tool bounds how many of its own calls run at
@@ -923,8 +752,9 @@ interface ITool<E = Error, R = never> {
   /** The loop-side guard this tool declares; see {@link ToolGuard}. */
   readonly guard?: ToolGuard<never>;
   /**
-   * A description rendered from the other tools the run declares and the
-   * modules its scripts may import, in place of `definition.description`:
+   * A description rendered from the other tools the run declares, the
+   * modules its scripts may import and the programs they may start, in
+   * place of `definition.description`:
    * rendered at the step that freezes the run's system text and kept as
    * that step recorded it until a compaction opens the freeze again, so a
    * catalog change mid-run leaves its text, and the cached
@@ -937,6 +767,12 @@ interface ITool<E = Error, R = never> {
     declared: readonly Pick<ITool, 'definition' | 'scriptGlobal'>[],
     /** The specifiers of the modules the step's scripts may import. */
     modules: readonly string[],
+    /** The programs of the step's plugins, each with its one-line
+     *  description. */
+    programs: readonly {
+      readonly name: string;
+      readonly description: string;
+    }[],
   ) => string;
   call(rawInput: unknown): Effect.Effect<ToolResult, E, R>;
 }
@@ -1046,16 +882,29 @@ class JsonRpcRequestError extends Schema.TaggedError<JsonRpcRequestError>()(
 
 ## LogOptions
 
-Sugar passed to debug/info/warn/error.
+What a trace's log methods take: a row's category (subscribers pick a
+render style from it) with the payload the transcript decodes for it,
+so a pairing is checked where it is written; or no category, a default
+row with any data. The row stores the payload as JSON; a `Cause` stores
+as the error it raised.
 
 ```ts
-interface LogOptions {
-  /** The payload the log row stores as JSON; a `Cause` stores as the error
-   *  it raised. */
-  readonly data?: unknown;
-  /** The row's category; subscribers pick a render style from it. */
-  readonly messageType?: MessageType;
-}
+type LogOptions =
+  | { readonly messageType?: undefined; readonly data?: unknown }
+  | {
+      // A payload is required unless the type's schema accepts none.
+      [
+        K in MessageType
+      ]: undefined extends (typeof LOG_PAYLOAD_SCHEMAS)[K]['Encoded']
+        ? {
+            readonly messageType: K;
+            readonly data?: (typeof LOG_PAYLOAD_SCHEMAS)[K]['Encoded'];
+          }
+        : {
+            readonly messageType: K;
+            readonly data: (typeof LOG_PAYLOAD_SCHEMAS)[K]['Encoded'];
+          };
+    }[MessageType];
 ```
 
 ## makeJsonRpcConnection
@@ -1122,7 +971,7 @@ interface ModelRetryGate {
 
 ## multiAgent
 
-Child agents: the `agent` tool.
+Child runs: the `agent` tool, and `program` for a registered program.
 
 ```ts
 const multiAgent: Plugin
@@ -1238,7 +1087,7 @@ interface Plugin {
    *  while the plugin is on and a boolean catalog setting is on: tool name to
    *  setting row, or `true` for no setting but the plugin's own switch. An
    *  injected tool still passes the host and approval gates; a script's
-   *  run (a task's recipe) and a text-only persona get none. */
+   *  run (a program) and a text-only persona get none. */
   readonly injectedWhen?: Readonly<Record<string, SettingRow<boolean> | true>>;
   /** Its section of each request's system text, pinned while it is on. */
   readonly prompt?: PromptSection;
@@ -1253,10 +1102,11 @@ interface Plugin {
   readonly decision?: RequestDecisionHook;
   /** The row kinds it owns (`plugin.fact`), on or off: rows outlive it. */
   readonly factKinds?: readonly FactKind[];
-  /** The agent-file block it owns (`AgentBlock`), on or off. */
-  readonly agentBlock?: AgentBlock;
   /** Script module sources by name, imported as `builtIn:<name>`. */
   readonly scriptModules?: Readonly<Record<string, string>>;
+  /** Those of its `scriptModules` a person or a model starts by name
+   *  (`Program`), each under its module's name. */
+  readonly programs?: Readonly<Record<string, Program>>;
   /** The plugins it runs on, by id; a list lacking one is rejected. */
   readonly requires?: readonly string[];
 }
@@ -1283,6 +1133,18 @@ interface PluginDefinition<ROut> extends Omit<
    *  require only the process's probe services. Its own process services
    *  are offered while its layer is up, read with `Effect.serviceOption`. */
   readonly availability?: ToolAvailabilityChecks;
+}
+```
+
+## PluginFactRow
+
+One stored row of a plugin's kind, as its fact kind's transition rule reads
+it: the row's decoded value and the run it is parented to, if any.
+
+```ts
+interface PluginFactRow {
+  readonly value: Schema.Json;
+  readonly parent: RunId | null;
 }
 ```
 
@@ -1315,18 +1177,6 @@ type PluginLayerServices =
   | ChildProcessSpawner
   | AppState
   | AppSignals;
-```
-
-## PluginRow
-
-One stored row of a plugin's kind, as its fact kind's transition rule reads
-it: the row's decoded value and the run it is parented to, if any.
-
-```ts
-interface PluginRow {
-  readonly value: JsonValue;
-  readonly parent: RunId | null;
-}
 ```
 
 ## PluginToolServices
@@ -1419,6 +1269,83 @@ interface ProcessTurn {
 }
 ```
 
+## Program
+
+One of a plugin's script modules that a person or a model starts by name
+(`Plugin.programs`): the module's default export is
+`async (args) => result`, and a run opened on it
+(`AgentConfig.script` of kind `program`) is a script run that imports the
+module and calls that export with the launch's `args`. The plugin wrote
+it, not a model, so the launch that chose it granted it: its tools are
+the listed ones past any switch, its `agent` calls run under the launch's
+approval, and its prompts and files pass as written.
+
+```ts
+interface Program<R = unknown> {
+  /** One line: what the program does and the `args` it reads. The script
+   *  tool's description lists it. */
+  readonly description: string;
+  /** The tools its run is offered, by name. */
+  readonly tools: readonly string[];
+  /** How a completed run of it reads to whoever launched it. Without one,
+   *  the run delivers its reply alone. */
+  readonly result?: ProgramResult<R>;
+  /** The files its run writes when its launch names none, for a program
+   *  that creates documents (a deck, a transcript) and does not rewrite
+   *  its inputs. */
+  readonly outputs?: readonly string[];
+}
+```
+
+## ProgramChange
+
+One file a program wrote, as a script summary counts it.
+
+```ts
+interface ProgramChange {
+  /** The workspace path the file replaces. */
+  readonly path: string;
+  /** The file the program wrote. */
+  readonly absolutePath: string;
+  /** The file it was diffed against, when it continues one: an earlier
+   *  call's `absolutePath` continues that call's row. */
+  readonly base: string | null;
+  readonly added: number | null;
+  readonly removed: number | null;
+}
+```
+
+## ProgramResult
+
+How a completed program run reads: to the launching model, and to a
+script's summary of the files its calls wrote. What it reports is the
+run's latest row of the plugin's own `fact` kind (`Plugin.factKinds`),
+the one record of it; the program's return value is not read. The harness
+reads the row only through these.
+
+```ts
+interface ProgramResult<R = unknown> {
+  /** The plugin's row kind that records what the run did, and the schema
+   *  its value decodes with. A completed run with no such row, or one that
+   *  fails the schema, is delivered as an invalid result naming the issue,
+   *  never shaped. */
+  readonly fact: {
+    readonly plugin: string;
+    readonly kind: string;
+    readonly schema: Schema.Codec<R, unknown>;
+  };
+  /** The delivery body inside the harness's own result envelope. */
+  delivery(value: R, runId: RunId): readonly string[];
+  /** The files the program wrote, in the order it wrote them (a document
+   *  revised twice appears twice, the later entry its latest): the files a
+   *  parent may read of its child's storage, and a script's summary. */
+  changes(
+    value: R,
+    roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>,
+  ): readonly ProgramChange[];
+}
+```
+
 ## PromptSection
 
 A plugin's section of each request's system text, rendered from the tool
@@ -1429,8 +1356,6 @@ workspace configuration ('' for none).
 type PromptSection = (ctx: {
   readonly offered: readonly string[];
   readonly isChild: boolean;
-  /** The step's bound model is an Anthropic model. */
-  readonly isAnthropic: boolean;
   /** The run's workspace configuration, for a section that follows a
    *  setting of its plugin's. */
   readonly config: ConfigProvider;
@@ -1441,24 +1366,6 @@ type PromptSection = (ctx: {
 
 ```ts
 function randomizedExponentialBackoff(base: Duration.Input)
-```
-
-## RecipeChange
-
-One file a recipe wrote, as a script summary counts it.
-
-```ts
-interface RecipeChange {
-  /** The workspace path the file replaces. */
-  readonly path: string;
-  /** The file the recipe wrote. */
-  readonly absolutePath: string;
-  /** The file it was diffed against, when it continues one: an earlier
-   *  call's `absolutePath` continues that call's row. */
-  readonly base: string | null;
-  readonly added: number | null;
-  readonly removed: number | null;
-}
 ```
 
 ## RefusalDecision
@@ -1515,7 +1422,7 @@ interface RequestDecisionRecord {
    *  and checked in the transaction: one its kind refuses is logged and
    *  left out. */
   readonly facts: readonly (ToolFact & { readonly aggregate: string })[];
-  /** The input the plugin sends a run of the session, admitted in the
+  /** The input the plugin sends a run of the session, accepted in the
    *  transaction (one the run's closed input refuses is logged), the run
    *  woken for it once that commits. */
   readonly followUp?: { readonly runId: RunId; readonly item: InboxItem };
@@ -1524,8 +1431,8 @@ interface RequestDecisionRecord {
 
 ## requestToolEditApproval
 
-Ask the person for an edit when `sessionPermission` (`loop/toolGuard.ts`),
-given what the call's hooks said, asks: a `request.opened` on the run
+Ask the person for an edit when the session's policy, given what the
+call's hooks said, asks: a `request.opened` on the run
 that names the proposal's content (the original and proposed text with
 their diff) by its address in the session's blob store, stored with the
 row, so every process the request reaches shows the same diff
@@ -1542,7 +1449,7 @@ const requestToolEditApproval: (request: ToolEditProposal) => Effect<ToolEditApp
 Resolve a tool path, relative or absolute, against the call's working
 directory when the run has one and its workspace folder otherwise.
 
-A path that escapes that root is admitted only inside a registered external
+A path that escapes that root is accepted only inside a registered external
 root or with path protection switched off; otherwise it fails with a
 `ToolError` the tool runner reports to the model. With no folder open and
 no working directory, only an absolute path can resolve (the agent
@@ -1610,10 +1517,22 @@ interface RoutePolicy {
 }
 ```
 
-## RunFileService
+## runDirUnder
+
+A run's directory under `storageRoot`.
 
 ```ts
-class RunFileService
+function runDirUnder(storageRoot: string, id: RunId): string
+```
+
+## runEntryUnder
+
+Inspect one run-relative entry of run `runId`'s storage under
+`storageRoot` without following a workspace-mirror symlink, the entry's
+own or an ancestor directory's.
+
+```ts
+const runEntryUnder: (storageRoot: string, runId: string & Brand<"RunId">, relativePath: string) => Effect<{ readonly kind: "file"; readonly location: { readonly kind: "runStorage"; readonly absolutePath: string; readonly relativePath: string; readonly runId: string & Brand<"RunId">; }; } | { readonly kind: "symlink" | "directory" | "unsupported"; readonly absolutePath: string; } | { readonly kind: "missing"; } | { kind: "invalid"; reason: string; }, PlatformError, FileSystem>
 ```
 
 ## RunHistoryInconsistent
@@ -1684,7 +1603,7 @@ class RunHistoryRefused extends Schema.TaggedError<RunHistoryRefused>()(
 ## RunInbox
 
 One run's input, as a plugin reaches it: what it sends the run (routed,
-admitted and woken as {@link submitFollowUp} does), and when the run
+accepted and woken as {@link submitFollowUp} does), and when the run
 takes no more.
 
 ```ts
@@ -1692,22 +1611,10 @@ interface RunInbox {
   /** Deliver `item` to the run. */
   readonly send: (
     item: InboxItem,
-    options?: RunInboxSendOptions,
   ) => Effect.Effect<SubmitFollowUpResult, Error>;
   /** Hear the run take no more input, or its session's inbox close;
    *  returns the detach. */
   readonly onClosed: (listener: () => void) => () => void;
-}
-```
-
-## RunInboxSendOptions
-
-How one input is delivered to a run.
-
-```ts
-interface RunInboxSendOptions {
-  /** Only from the run's parent, by its rows (`SendOptions.fromParent`). */
-  readonly fromParent?: boolean;
 }
 ```
 
@@ -1809,9 +1716,22 @@ interface SettingsStores {
 }
 ```
 
+## sourceLocationUnder
+
+Where a path a run reads from lives, under the roots its caller holds: a
+file in run storage keeps its run's provenance, anything else is its
+workspace or external location.
+
+```ts
+function sourceLocationUnder(
+  roots: { readonly storage: string; readonly workspace: string | undefined },
+  inputPath: string,
+): FileLocation
+```
+
 ## StepRoot
 
-A read-only directory one step admits for its own calls, beside the
+A read-only directory one step accepts for its own calls, beside the
 registered roots: a skill it lists or its user activated, canonical as
 its catalog entry records it (`canonicalizePath`).
 
@@ -1834,7 +1754,7 @@ class StorageFs extends Context.Service<StorageFs, RootedFileSystem>()(
 
 ## StreamHandle
 
-Handle returned by `openRun` — append chunks then finalize.
+Handle returned by `openStream` — append chunks then finalize.
 
 ```ts
 interface StreamHandle {
@@ -1853,8 +1773,8 @@ interface StreamHandle {
 
 Three outcomes: the input reached a running loop, it waits in the run's
 queue for its next turn (the resume the send started, or an explicit
-one), or it was not admitted, with the words that say why. A delivery the
-admission boundary had already accepted is `sent`. A resume the input
+one), or it was not accepted, with the words that say why. A delivery the
+acceptance boundary had already accepted is `sent`. A resume the input
 started that the run refused is told by the resume itself.
 
 ```ts
@@ -1862,16 +1782,6 @@ type SubmitFollowUpResult =
   | { status: 'sent' }
   | { status: 'queued' }
   | { status: 'failed'; message: string };
-```
-
-## TEMPLATE_INPUT_NAMES
-
-The names of the fixed template variables, the keys of
-{@link TemplateInputsSchema}. A plugin that adds variables of its own
-checks them against this list, so none shadows a fixed one.
-
-```ts
-const TEMPLATE_INPUT_NAMES: readonly string[]
 ```
 
 ## TemplateInputs
@@ -1902,8 +1812,7 @@ interface TemplateOpening {
 
 The template-variable map a launch opens with: fixed variables may be
 absent (template rendering keeps `throwOnUndefined` off, so templates
-must tolerate absence). A plugin renders its own variables beside these
-by spreading this map into its own (`TEMPLATE_INPUT_NAMES`).
+must tolerate absence). A plugin's tools read it as `opening.inputs`.
 
 ```ts
 type TemplateVars = Partial<TemplateInputs>;
@@ -2035,7 +1944,7 @@ interface ToolEditProposal {
 
 Where a call works: the session's roots (its workspace folder, the
 setting slots and its storage), the run's working directory, and the
-read-only roots the call's step admits (the skills it lists or its user
+read-only roots the call's step accepts (the skills it lists or its user
 activated). A tool's paths resolve against it.
 `workingDirectory` is already absolute or absent: the run decides it once
 where it is launched (`buildAgentLaunchContext`).
@@ -2066,8 +1975,8 @@ type ToolFileAttachment = typeof ToolFileAttachmentSchema.Type;
 
 The guard the run loop applies before a tool's body runs, declared on the
 tool instead of called inside it: the paths the call writes and the command
-it must get approved. `agent/runtime/loop/toolGuard.ts` is the one place
-either is checked, so no tool body re-checks its own roots or asks for the
+it must get approved. The run loop is the one place either is checked,
+so no tool body re-checks its own roots or asks for the
 command's approval; a tool whose body asks its own question declares
 `requiresApproval: 'inBody'` (below).
 
@@ -2112,7 +2021,7 @@ interface ToolGuard<T> {
 The call fields a tool path resolves against: the session's roots (its
 workspace folder and the setting slots containment policy is read from),
 the run's working directory, and the read-only roots the call's step
-admits (the skills it lists or its user activated; none outside a run).
+accepts (the skills it lists or its user activated; none outside a run).
 A tool's `ToolContext.env` satisfies it structurally.
 `workingDirectory` is already absolute or absent: the run decides it once
 where it is launched (`buildAgentLaunchContext`).
@@ -2248,8 +2157,11 @@ interface ToolTable {
   /** The tool registered under `name` in any plugin, typed as plugins
    *  declare their tools (`Plugin.tools`). */
   readonly get: (name: string) => ITool<Error, PluginToolServices> | undefined;
-  /** The agent-file blocks the plugins own, by key (`Plugin.agentBlock`). */
-  readonly blocks: ReadonlyMap<string, AgentBlock>;
+  /** The programs the plugins register, by name (`Plugin.programs`). */
+  readonly programs: ReadonlyMap<string, Program>;
+  /** The row kinds the plugins own, by `plugin/kind` (`Plugin.factKinds`):
+   *  what a store opened in this process reads. */
+  readonly factKinds: FactKinds;
 }
 ```
 

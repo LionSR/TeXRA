@@ -35,11 +35,7 @@ const canonicalRows = (fixture: DatabaseFixture) =>
     return {
       commit: yield* database.currentCommit,
       runs: yield* Effect.forEach([WAITING_RUN, ORPHAN_RUN], (runId) =>
-        database.readAggregate(
-          fixture.qualifyAggregateId('run', runId),
-          0,
-          types,
-        ),
+        database.readAggregate(runId, 0, types),
       ),
     };
   });
@@ -90,7 +86,7 @@ async function writeCanonicalRunFixtures(
         },
       ];
       for (const runFixture of fixtures) {
-        const id = fixture.qualifyAggregateId('run', runFixture.runId);
+        const id = runFixture.runId;
         yield* database.appendAll([
           {
             type: 'run.start',

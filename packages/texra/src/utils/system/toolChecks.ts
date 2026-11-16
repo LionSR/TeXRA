@@ -46,7 +46,7 @@ export class ToolMissing extends Schema.TaggedError<ToolMissing>()(
  *  exit non-zero for their version flag but still print it). */
 function answered(result: ExecResult): boolean {
   return (
-    result.exitCode === 0 ||
+    result.success ||
     /\d+\.\d+/.test(result.stdout) ||
     /\d+\.\d+/.test(result.stderr)
   );
@@ -88,7 +88,7 @@ export const probeCommand = Effect.fn('toolChecks.probeCommand')(function* (
       if (answered(result)) return true;
     }
     yield* Effect.logInfo(
-      `Tool '${tool}' not detected. Last result: exitCode=${result.exitCode}, ` +
+      `Tool '${tool}' not detected. Last result: ${result.end._tag === 'Exited' ? `exitCode=${result.end.code}` : result.end._tag}, ` +
         `stdout=${result.stdout.slice(0, 200) || '(empty)'}, ` +
         `stderr=${result.stderr.slice(0, 200) || '(empty)'}`,
     );
@@ -136,8 +136,8 @@ export const runTool = Effect.fn('toolChecks.runTool')(function* (
 ): Effect.fn.Return<ExecResult, ToolMissing, ChildProcessSpawner> {
   const result = yield* executeCommand([tool, ...args], options);
   if (
-    result.noExitCode === true &&
-    result.exitCode === 127 &&
+    result.end._tag === 'NoExit' &&
+    result.end.why === 'spawn' &&
     !(yield* probeTool(tool))
   ) {
     return yield* new ToolMissing({

@@ -12,7 +12,6 @@ import { defineTool } from '@texra-ai/harness/plugins';
 import {
   type BashRequest,
   type DisplayRow,
-  qualifyAggregateId,
   type RequestDecision,
   type RunId,
 } from '@texra-ai/harness/schemas';
@@ -71,7 +70,7 @@ const readSessionEvents = (
 
 /**
  * Read public events committed since this call. Each read captures its own
- * finite upper bound; `qualifyAggregateId` narrows to one stream's facts.
+ * finite upper bound; the run id narrows to one stream's facts.
  */
 export function recordSessionEvents(
   session: SessionEventReader,
@@ -119,7 +118,7 @@ export const decideRequest = (
   publishTestRows(session, [
     {
       type: 'request.decided',
-      aggregateId: qualifyAggregateId('run', request.runId),
+      aggregateId: request.runId,
       requestId: request.requestId,
       decision,
     },
@@ -173,7 +172,7 @@ async function ensureRunStart(
 ): Promise<void> {
   // A start already queued has yet to reach the view, and a second one is
   // refused by the substrate.
-  await Effect.runPromise(Context.get(session, SessionLog).settled);
+  await Effect.runPromise(Context.get(session, SessionLog).drained);
   if (Context.get(session, SessionViewAccess).run(runId) !== undefined) return;
   await Effect.runPromise(publishTestRunStart(session, runId));
 }
@@ -185,9 +184,7 @@ export async function seedActiveRun(
 ): Promise<void> {
   await ensureRunStart(session, runId);
   await Effect.runPromise(
-    publishTestRows(session, [
-      { type: 'run.activate', aggregateId: qualifyAggregateId('run', runId) },
-    ]),
+    publishTestRows(session, [{ type: 'run.activate', aggregateId: runId }]),
   );
 }
 

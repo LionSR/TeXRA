@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Schema } from 'effect';
-import {
-  qualifyAggregateId,
-  RunIdSchema,
-  type TraceDocument,
-} from '@texra-ai/harness/schemas';
+import { RunIdSchema, type TraceDocument } from '@texra-ai/harness/schemas';
 import { DisplayRowSchema } from '@texra-ai/harness/transcript';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import { traceFrame } from '../../../packages/trace-viewer/src/traceFrames';
@@ -15,7 +11,7 @@ import { traceFrame } from '../../../packages/trace-viewer/src/traceFrames';
 // so a plain relative import is the simplest way to reach it.
 
 const RUN_ID = Schema.decodeSync(RunIdSchema)('abc123');
-const AGGREGATE = qualifyAggregateId('run', RUN_ID);
+const AGGREGATE = RUN_ID;
 
 /** The view the trace's rows build, with the run's transcript
  *  subscribed. */

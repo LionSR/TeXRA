@@ -2,8 +2,8 @@
  * How a parent's call launches a native child, and how it awaits one.
  *
  * Every native child (an `agent` call's subagent, a `script` sent to the
- * background, a goal round through `self()`) is `executeAgent` with
- * `stopAfterCycle`: it ends with its `run.end`, whose transaction delivers
+ * background, a goal round through `self()`) is `executeAgent` under a
+ * parent edge, so it runs one cycle: it ends with its `run.end`, whose transaction delivers
  * its report to the parent's input unless the call awaits it
  * (`RunParent.call.awaited`). The run opens in the caller's fiber and is
  * forked on the session's registry under its id, so a launch that fails
@@ -84,7 +84,7 @@ export const startChildRun = Effect.fn('startChildRun')(function* (
 });
 
 /**
- * Resume the child `runId` of `parentRunId` that its open call owns, through
+ * Resume the child `runId` of `parentId` that its open call owns, through
  * the one resume path (`openResume`, which lets the owner through where it
  * sends any other caller to the owner): the run continues from its rows
  * under its stored configuration, one cycle, on the session's registry.
@@ -92,18 +92,13 @@ export const startChildRun = Effect.fn('startChildRun')(function* (
  */
 const resumeOwnedChild = Effect.fn('resumeOwnedChild')(function* (
   runId: RunId,
-  parentRunId: RunId,
+  parentId: RunId,
   options: Pick<ExecuteAgentOptions, 'onProgress'>,
 ): Effect.fn.Return<CommitOrdinal, Error, AgentRunServices> {
   const runs = yield* RunRegistry;
   const { opened } = yield* runs.start(runId, {
-    open: openResume(
-      runs,
-      runId,
-      { stopAfterCycle: true, ...options },
-      parentRunId,
-    ).pipe(
-      Effect.catchTag('ResumeRefused', ({ answer }) =>
+    open: openResume(runs, runId, options, parentId).pipe(
+      Effect.catchTag('ResumeNotOpened', ({ answer }) =>
         Effect.fail(
           new Error(
             'failed' in answer
@@ -187,7 +182,7 @@ const childRunEnd = Effect.fn('childRunEnd')(function* (
 /** What an awaited child's launch takes. */
 interface AwaitedChildLaunch {
   /** The launching run: the child's parent edge. */
-  readonly parentRunId: RunId;
+  readonly parentId: RunId;
   /** The run this attempt executes under; the caller owns its derivation. */
   readonly runId: RunId;
   readonly configPayload: AgentConfigPayload;
@@ -216,14 +211,13 @@ export const executeSubagentInBand = (
         config: Schema.decodeUnknownSync(AgentConfigSchema)(
           launch.configPayload,
         ),
-        stopAfterCycle: true,
       });
       return yield* startChildRun(
         launch.runId,
         definition,
         {
           identity: { kind: 'agent', agent: definition.config.agent },
-          parentRunId: launch.parentRunId,
+          parentId: launch.parentId,
           ...(launch.parentCall !== undefined && {
             parentCall: { ...launch.parentCall, awaited: true },
           }),
@@ -238,11 +232,11 @@ export const executeSubagentInBand = (
 /** Resume a persisted child under the run id it already has and await it
  *  as {@link executeSubagentInBand} awaits a launch. */
 export const resumeSubagentInBand = (
-  launch: Pick<AwaitedChildLaunch, 'runId' | 'parentRunId' | 'notify'>,
+  launch: Pick<AwaitedChildLaunch, 'runId' | 'parentId' | 'notify'>,
 ): Effect.Effect<ChildRunEnd, Error, AgentRunServices | RunCall> =>
   awaitChildRun(
     launch.runId,
-    resumeOwnedChild(launch.runId, launch.parentRunId, {
+    resumeOwnedChild(launch.runId, launch.parentId, {
       onProgress: launch.notify,
     }),
   );

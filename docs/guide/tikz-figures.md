@@ -47,8 +47,8 @@ Agents with tools (`research` or `presenter`) can create new TikZ figures from a
 4. Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>).
 
 From the CLI, the same draw, compile, and inspect loop shown below runs
-headlessly (`texra run` takes any agent: one without a document task, like
-`research`, runs with your `--instruction`):
+headlessly (`texra run` takes any agent, which runs with your
+`--instruction`):
 
 ```bash
 texra run research --input figures.tex \
@@ -84,24 +84,7 @@ TeXRA can pull TikZ figures out of your LaTeX source for separate processing.
 
 ### Automatic extraction
 
-1. Open the **Auto Extract** dropdown (<wa-icon library="texra" name="wand"></wa-icon>) next to the Media selector.
-2. Enable **TikZ Figures**.
-3. Select your input file(s) (<wa-icon library="texra" name="file-code"></wa-icon>).
-4. Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>).
-
-<DropdownMenu
-  label="Media · Auto-extract"
-  value="Auto Extract"
-  valueIcon="wand"
-  maxWidth="320px"
-  :groups="[{ items: [
-    { name: 'Figures', checkbox: true, checked: false },
-    { name: 'TikZ Figures', checkbox: true, checked: true },
-    { name: 'Compile Input PDF', checkbox: true, checked: false },
-  ] }]"
-/>
-
-<p class="hero-caption">Open the wand <strong>Auto-extract</strong> menu in the Media group and check <strong>TikZ Figures</strong>. Every <code>tikzpicture</code> in your selected files is then pulled out on the next run.</p>
+A program run can attach the compiled TikZ figures of its input files. An agent switches this on with `args: { autoExtractTikzFigure: true }` on its `program` call; ask for it in plain words ("attach the compiled TikZ figures").
 
 When automatic extraction is enabled, each `tikzpicture` in your selected files is extracted into a standalone `.tex` document, compiled to PDF with `pdflatex`, and attached to the prompt alongside the source code:
 

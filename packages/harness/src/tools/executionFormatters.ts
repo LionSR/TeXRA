@@ -17,7 +17,7 @@ import {
 
 /**
  * The display category of a run: an agent run is a conversation (`agent`)
- * or a task (`task`, a run opened on a plugin's recipe); every other run
+ * or a task (`task`, a run opened on a plugin's program); every other run
  * shows what it IS (`process` / `script`).
  */
 export type RunDisplayCategory = 'task' | RunIdentity['kind'];
@@ -31,7 +31,7 @@ export const ALL_KINDS: readonly RunDisplayCategory[] = Object.freeze([
 ]);
 
 export function runDisplayCategory(run: RunView): RunDisplayCategory {
-  return run.identity.kind === 'agent' && run.recipe
+  return run.identity.kind === 'agent' && run.program
     ? 'task'
     : run.identity.kind;
 }

@@ -43,14 +43,14 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             // it, this child is refused as if its parent did not exist. The
             // publication runs to its enqueue, then the child registers, and
             // the join fails the case if the row was refused.
-            const parentRunId = generateRunId();
+            const parentId = generateRunId();
             const published = yield* Effect.forkChild(
-              publishTestRunStart(session, parentRunId),
+              publishTestRunStart(session, parentId),
               { startImmediately: true },
             );
             yield* registerRun(runId, baseConfig, {
               ...options,
-              parentRunId,
+              parentId,
             }).pipe(Effect.provide(session));
             yield* Fiber.join(published);
             expect(
@@ -68,7 +68,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 baseConfig,
                 {
                   ...options,
-                  parentRunId: absentParentId,
+                  parentId: absentParentId,
                 },
               ).pipe(Effect.provide(session)),
             );

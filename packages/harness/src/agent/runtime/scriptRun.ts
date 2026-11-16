@@ -12,7 +12,6 @@ import { Clock, Effect, Result, Schema } from 'effect';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { DELIVERY_FAMILY } from '@shared/deliveryTags';
 import {
-  qualifyAggregateId,
   RUN_OUTCOME,
   type ChildRunDelivery,
   type RunId,
@@ -27,8 +26,8 @@ type ScriptCallOutcome =
   | 'completed'
   | 'failed'
   | 'skipped'
-  /** No settlement yet: running while the run is, cut short after. */
-  | 'unsettled';
+  /** No result yet: running while the run is, cut short after. */
+  | 'unfinished';
 
 export interface ScriptCallCard {
   readonly seq: number;
@@ -43,18 +42,16 @@ export interface ScriptCallCard {
   readonly value: unknown;
 }
 
-const statusOf = (
-  settled: ToolResultPayload | undefined,
-): ScriptCallOutcome => {
-  if (settled === undefined) return 'unsettled';
-  if (settled.result.status === 'executed') return 'completed';
-  if (settled.disposition === 'skipped' || settled.result.name === 'Skipped')
+const statusOf = (result: ToolResultPayload | undefined): ScriptCallOutcome => {
+  if (result === undefined) return 'unfinished';
+  if (result.result.status === 'executed') return 'completed';
+  if (result.disposition === 'skipped' || result.result.name === 'Skipped')
     return 'skipped';
   return 'failed';
 };
 
 /**
- * The run's script call's settlement and the calls its script issued, in
+ * The run's script call's result and the calls its script issued, in
  * issue order, from the run's script calls and its calls' results (the
  * `script` read). The script's own host functions (`searchTools()`,
  * `describeTool()`) answer from the catalog and open no card, so they are
@@ -64,21 +61,21 @@ export const scriptRunCalls = Effect.fn('scriptRun.calls')(function* (
   runId: RunId,
 ) {
   const { scriptCalls, results } = yield* (yield* SessionLog).runRows(
-    qualifyAggregateId('run', runId),
+    runId,
     'script',
   );
-  const settled = new Map<string, ToolResultPayload>();
+  const latest = new Map<string, ToolResultPayload>();
   for (const payload of results) {
-    const known = settled.get(payload.callId);
+    const known = latest.get(payload.callId);
     if (known === undefined || known.attempt <= payload.attempt)
-      settled.set(payload.callId, payload);
+      latest.set(payload.callId, payload);
   }
   const script =
-    [...settled.values()].find(({ callId }) => !callId.includes('/')) ?? null;
+    [...latest.values()].find(({ callId }) => !callId.includes('/')) ?? null;
   const calls = scriptCalls.flatMap((call): ScriptCallCard[] => {
     if (call.toolName.endsWith('()')) return [];
     const { seq, toolName, section, callId } = call;
-    const result = settled.get(callId);
+    const result = latest.get(callId);
     const error =
       result?.result.status === 'error' ? result.result.error : null;
     return [
@@ -102,7 +99,7 @@ export const scriptRunCalls = Effect.fn('scriptRun.calls')(function* (
 });
 
 /** The files a call's child wrote, when its value is a run's envelope: a
- *  recipe's changes (`AgentBlock.result.changes`, in the order it wrote
+ *  program's changes (`Program.result.changes`, in the order it wrote
  *  them), or an agent's edits. */
 const EnvelopeFilesSchema = Schema.Struct({
   files: Schema.Array(Schema.String),
@@ -177,7 +174,7 @@ function deliveredFiles(
 }
 
 /**
- * The summary line of a script run, folded from its rows: the tally of its
+ * The summary line of a script run, applied from its rows: the tally of its
  * calls, what the runs under it spent, how long it has run, the files its
  * agent calls wrote with their diffstat, and the cause when it failed.
  */
@@ -199,7 +196,7 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
       case 'completed':
         counts.ok += 1;
         break;
-      case 'unsettled':
+      case 'unfinished':
         counts.cancelled += 1;
         break;
       case 'failed':

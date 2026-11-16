@@ -7,7 +7,7 @@ import ignore from 'ignore';
 
 // Local imports - utils
 import { toPosixPath } from '@utils/core/pathCore';
-import { absentReason } from '@utils/files/fsEntryExists';
+import { meansAbsent } from '@utils/files/fsEntryExists';
 import { homeDirectory } from '@utils/system/platformPaths';
 
 type GitignoreSource = {
@@ -43,7 +43,7 @@ const readGitignoreFile = Effect.fn('readGitignoreFile')(function* (
     })),
     // An absent policy file is the normal case; any other read failure is the
     // caller's to see.
-    Effect.catchIf(absentReason, () => Effect.succeed(null)),
+    Effect.catchIf(meansAbsent, () => Effect.succeed(null)),
   );
 });
 

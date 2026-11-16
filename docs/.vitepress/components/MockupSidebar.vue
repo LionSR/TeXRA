@@ -44,7 +44,7 @@ const view = defineModel('view', { type: String, default: 'diff' });
           </div>
           <div class="task">
             <wa-icon class="task-ic" library="texra" name="robot"></wa-icon>
-            <span class="task-name">correct</span>
+            <span class="task-name">edit</span>
             <span class="task-desc">(revising spectral-gap.tex)</span>
             <span class="task-elapsed">0:18</span>
             <span class="task-tag">running</span>
@@ -69,7 +69,7 @@ const view = defineModel('view', { type: String, default: 'diff' });
 
         <div class="reason">
           I'll hand the derivation and its checks to a research agent, then have
-          the correct workflow tighten the prose and return a diff.
+          the edit program tighten the prose and return a diff.
         </div>
 
         <button
@@ -107,7 +107,7 @@ const view = defineModel('view', { type: String, default: 'diff' });
           </div>
           <div class="tc-body">
             <div class="tc-row">
-              <span class="tc-k">Agent</span><code class="tc-code">correct</code
+              <span class="tc-k">Agent</span><code class="tc-code">edit</code
               ><span class="tc-model">(google/gemini-4-argon)</span>
             </div>
             <div class="tc-row">

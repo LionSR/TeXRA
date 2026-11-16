@@ -37,8 +37,9 @@ its kind is its `type` column.
 - **Session**: The process's handle on one storage root: its store connection,
   its one publisher, its fold and its live runs.
 - **Aggregate**: A keyed sequence of rows. Kinds are `run` (keyed by run id) and
-  `plugin` (keyed `<plugin>:<key>`)
-  (`shared/schemas/identifiers.ts#AggregateKindSchema`).
+  `plugin` (keyed `<plugin>:<key>`); in memory a run's key is its run id and
+  a plugin's is its key behind `plugin:`
+  (`shared/schemas/identifiers.ts#AggregateIdSchema`).
 - **Run**: One `run` aggregate. It exists while its `run.start` row exists and
   no `run.removed` has closed it
   (`controllers/session/databaseLayer.ts#A run must begin with exactly one run.start`,
@@ -167,8 +168,8 @@ database-only: what must follow its commit runs after the transaction
 returns, and a body that awaited would let another job run inside its
 transaction (`agent/runtime/sessionEventsLayer.ts#commit`). An awaited job
 given after close is a defect; a detached one is logged and dropped
-(`agent/runtime/sessionEventsLayer.ts#'Session publication after the plane closed'`,
-`#'Session publication dropped: the plane has closed'`).
+(`agent/runtime/sessionEventsLayer.ts#'Session publication after the session events closed'`,
+`#'Session publication dropped: the session events have closed'`).
 
 Once a job's transaction commits, the publisher SHALL publish what the job
 wrote, from memory, to the session's subscribers, one batch per job in commit
@@ -195,7 +196,7 @@ its own: a display read shows the call's `tool.intent` and `tool.result` as it
 (`controllers/session/rowReader.ts#callCard`). `SessionLog.settled` returns
 once the terminal-result presenter has run over the view's rows past every
 commit made so far
-(`controllers/session/sessionStore.ts#settled`).
+(`controllers/session/sessionStore.ts#drained`).
 
 ### 2.4 Row versions and the store gate
 
@@ -339,7 +340,7 @@ The `model.message` arms:
 `run.end`), `process.exit` how a process run's command exited, and
 `followup.closed` marks its input closed until the run's next `run.activate`
 reopens it (`shared/schemas/sessionEvent.ts#RunRecordEventDraftSchema`,
-`shared/session/runRowReads.ts#recordAfter`, `agent/followUp/Inbox.ts#admission`).
+`shared/session/runRowReads.ts#recordAfter`, `agent/followUp/Inbox.ts#acceptance`).
 A run's record (`SessionLog.facts`) is stored nowhere: it is the newest row of
 each record kind, which the listing projection already indexes, applied in
 commit order by the one statement of the record's rules
@@ -512,9 +513,12 @@ with a warning (`agent/storage/runLifecycle.ts#endIn`). Every child is a
 run that ends: a native child runs one cycle and ends with its report; a
 process child (a background command, an agent CLI's turn) is one turn of
 its process, ended with its exit (`agent/runtime/processRun.ts`). A child's
-end queues its report on its parent's input in the same transaction, under
-`${runId}:${activation}` (`agent/storage/runLifecycle.ts#parentDelivery`),
-unless the parent's call awaits it.
+end queues its report in the same transaction, under
+`${runId}:${activation}`, on the input of each run it works for
+(`agent/storage/runLifecycle.ts#replyDelivery`): the runs whose messages it
+took as work since its last end; until its first end also its parent,
+unless the parent's call awaits it; and after that its parent when no run
+asked (`shared/session/runRowReads.ts#reportRecipients`).
 
 **W6.** Every failed attempt of a turn that reaches failure recording MUST
 commit a `failed` row whose `next` is the move after it; a call off the rows
@@ -566,7 +570,7 @@ a turn from the two rows no position restates: a `response` puts it at
 `results.ready` (`shared/session/runState.ts#LoopAt`,
 `shared/session/turnRowHandlers.ts#'results.ready'`). Between turns it stands
 at `turn.ready`, `waiting` or `turn.end`, and a run is waiting for input at
-`waiting` or `turn.end` (`agent/runtime/loop/runLoop.ts#parked`).
+`waiting` or `turn.end` (`agent/runtime/loop/runLoop.ts#waiting`).
 
 There is no halted position: a `run.end` is the halt, and a resume continues
 from where the loop stood (`shared/session/runState.ts#RunState`).
@@ -604,9 +608,9 @@ a fresh launch, `executeAgent` without a registration
 (`agent/runtime/resumeRun.ts#resumeRun`).
 
 A resume MUST be refused when the rows hold no opened run
-(`agent/runtime/loop/runProgram.ts#NOT_RESUMABLE_MESSAGE`). A fresh launch MUST
+(`agent/runtime/loop/runLoop.ts#NOT_RESUMABLE_MESSAGE`). A fresh launch MUST
 be refused when the run already holds history state
-(`agent/runtime/loop/runProgram.ts#already has run history state`).
+(`agent/runtime/loop/runLoop.ts#already has run history state`).
 
 ## 6. Retry
 
@@ -678,7 +682,7 @@ from 1,000 ms with each failure the route owns (up to five minutes, and never
 less than the provider's `retryAfterMs`); the probe's end opens the route
 unless it failed the same way, and a success admitted while the route was
 healthy ends the failure count
-(`agent/runtime/ModelRetryGate.ts#through`, `#settle`). Before a `retry` or
+(`agent/runtime/ModelRetryGate.ts#through`, `#recordExit`). Before a `retry` or
 `unchain` that follows a recorded failure the loop pauses as long as the
 provider asked (`retryAfterMs`), else 1,000 ms, and not at all after a failure
 llm scoped to a route, which the gate cools and waits out
@@ -762,7 +766,7 @@ run's next append, with nothing written
 refusal fails the dispatch instead of settling
 (`agent/runtime/loop/toolUseDispatch.ts#readCause`). A request on a
 run a launch here holds that would need the run stopped first is refused as
-`RunActive` (`controllers/session/deletionCleanup.ts#deleteAdmittedRun`).
+`RunActive` (`controllers/session/deletionCleanup.ts#deleteAcceptedRun`).
 
 ## 8. Requests
 
@@ -832,7 +836,7 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   block its caller is not cancelled: it
   stays open until its `request.decided` commits, or until `run.removed`
   closes the run, which retires it with no decision row
-  (`controllers/session/SessionRequests.ts#admit`). Its plugin's decision
+  (`controllers/session/SessionRequests.ts#accept`). Its plugin's decision
   hook records an answer outside the store first, idempotently; the decision,
   the facts the hook returns and the input it sends a run (the external
   inquiry's follow-up) then commit in one checked transaction, after which
@@ -872,9 +876,9 @@ unless the item names another test:
   again without a person's retry; no child is left without a terminal row. Also
   asserted by
   `src/test-kernel/support/crashConformance.ts#'reads every child result settled before the crash, exactly once'`.
-- **I6**: A child's result is delivered to its parent at most once; a result
-  whose parent cannot take it stays in the child's run report with a warning
-  (`agent/storage/runLifecycle.ts#parentDelivery`). Asserted by
+- **I6**: A child's result is delivered to each run it works for at most
+  once; a result a recipient cannot take stays in the child's run report
+  with a warning (`agent/storage/runLifecycle.ts#replyDelivery`). Asserted by
   `src/test-kernel/support/crashConformance.ts#'reads every child result settled before the crash, exactly once'`.
 - **I7**: A fork keeps the history it was registered with; compaction keeps
   the context it committed.
@@ -919,7 +923,7 @@ What survives at each commit point follows from sections 2 to 8:
   `results.ready` (`shared/session/turnRowHandlers.ts#'results.ready'`).
 - `request.opened`: The request stays pending under the same id, or is cancelled
   if unbound (section 7.2).
-- `run.end`: The lifecycle is over. A recipe task stays finished, and a
+- `run.end`: The lifecycle is over. A program's run stays finished, and a
   resume answers `finished`
   (`agent/storage/resumability.ts#deriveResumability`); a loop-driven
   conversation continues on a resume in a new lifecycle

@@ -6,7 +6,6 @@ import { Effect, Ref, Result, Schema, Stream } from 'effect';
 import { anchoredPrefix, coveredPrefix } from './continuation.js';
 import {
   completedTurn,
-  TurnResultSchema,
   type GoogleInteractionsConfiguration,
   type Model,
   type ResolvedTurn,
@@ -29,7 +28,7 @@ import { replayableHistory, systemUpdateText } from '../message.js';
 import { originOf, sameModelOrigin } from '../protocol.js';
 import {
   ModelError,
-  RemoteOperationSchema,
+  remoteOperation,
   sdkModelError,
   fillModelError,
   type RemoteOperation,
@@ -535,16 +534,19 @@ const googleContinuation = Effect.fn('llm.google.continuation')(function* (
     result.content,
   );
   const coveredSteps = yield* lowerMessages(prefix, origin);
-  // With no output step, the next input joins the last user_input step.
-  if (coveredSteps.at(-1)?.type === 'user_input') return undefined;
-  return {
-    origin,
+  // With no step, or no output step, there is nothing to anchor on and the
+  // next input joins the last user_input step; an anchor covers >0 steps.
+  if (coveredSteps.length === 0 || coveredSteps.at(-1)?.type === 'user_input')
+    return undefined;
+  const continuation: TurnResult['continuation'] = {
+    origin: { ...origin, protocol: turn.protocol },
     ...covered,
     anchor: {
       interactionId: result.providerResponseId,
       coveredSteps: coveredSteps.length,
     },
   };
+  return continuation;
 });
 
 /** Direct Gemini Interactions protocol; it owns neither history nor local tools. */
@@ -683,12 +685,7 @@ export const googleInteractionsModel = Effect.fn('llm.google.model')(function* (
   ) =>
     googleContinuation(turn, result, origin).pipe(
       Effect.map((continuation) =>
-        continuation
-          ? Schema.decodeUnknownSync(TurnResultSchema)({
-              ...result,
-              continuation,
-            })
-          : result,
+        continuation ? { ...result, continuation } : result,
       ),
     );
   const lifecycle = backgroundLifecycle({
@@ -713,10 +710,7 @@ export const googleInteractionsModel = Effect.fn('llm.google.model')(function* (
         'Google returned no background interaction identifier.',
         raw,
       );
-      const operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
-        origin,
-        providerResponseId: identity.id,
-      });
+      const operation = remoteOperation(origin, identity.id);
       yield* Ref.set(learned, { operation });
       const interaction = yield* snapshot(raw, operation);
       yield* Ref.set(learned, { operation, model: interaction.model });

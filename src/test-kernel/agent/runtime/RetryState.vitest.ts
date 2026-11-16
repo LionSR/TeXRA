@@ -34,7 +34,7 @@ import {
 } from '@texra-ai/llm';
 
 // Local imports
-import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
+import { type RunId } from '@texra-ai/harness/schemas';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
 import type { InvokeRequest } from '@agent/runtime/run/recordedRequest';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
@@ -112,7 +112,7 @@ const openRun = Effect.fn('openRun')(function* (
 ) {
   const runId = yield* startedRun(session);
   yield* publishTestRows(session, [
-    { type: 'run.activate', aggregateId: qualifyAggregateId('run', runId) },
+    { type: 'run.activate', aggregateId: runId },
   ]);
   const cell = yield* Context.get(session, RunHistory).open(runId, {
     activation: () => Effect.succeed([]),
@@ -167,12 +167,8 @@ const modelMessages = (
   session: Context.Context<SessionServices>,
   runId: RunId,
 ) =>
-  Effect.map(
-    Context.get(session, SessionLog).history(qualifyAggregateId('run', runId)),
-    (rows) =>
-      rows.flatMap((row) =>
-        row.type === 'model.message' ? [row.payload] : [],
-      ),
+  Effect.map(Context.get(session, SessionLog).history(runId), (rows) =>
+    rows.flatMap((row) => (row.type === 'model.message' ? [row.payload] : [])),
   );
 
 // Live clock for the session graph and the sessions it opens, as on the
@@ -414,7 +410,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 yield* seedRows(Context.get(session, SessionLog))([
                   {
                     type: 'run.stop',
-                    aggregateId: qualifyAggregateId('run', kit.runId),
+                    aggregateId: kit.runId,
                     reason: stop,
                   },
                 ]);

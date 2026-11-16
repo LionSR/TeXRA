@@ -65,9 +65,9 @@ export function parseCriticismAnnotations(
     const severity = parseIntegerOrNaN(severityText.trim());
     const confidence = parseIntegerOrNaN(confidenceText.trim());
     // Severity 0 (verified correct) to 5 and confidence 1 to 5: the scale
-    // stated beside the macro in `packages/extension/resources/agents/criticize.tex`,
-    // which the tasks that write these annotations bind. A call outside it
-    // is not decorated.
+    // stated beside the macro in the `CRITICIZE` text of
+    // `packages/texra/src/tools/theory/programs.ts`, which the programs that
+    // write these annotations bind. A call outside it is not decorated.
     if (
       Number.isFinite(severity) &&
       Number.isFinite(confidence) &&

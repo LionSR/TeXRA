@@ -8,7 +8,7 @@
  *
  * It never opens the session database. `query_only` is on except while an
  * append runs, so the model's statement cannot write even through a
- * `WITH … INSERT`; the session side admits only one `SELECT`/`WITH`/`EXPLAIN`
+ * `WITH … INSERT`; the session side accepts only one `SELECT`/`WITH`/`EXPLAIN`
  * statement, which also keeps `PRAGMA` out. Stdin closing (its host exited,
  * by any means) ends the process.
  */

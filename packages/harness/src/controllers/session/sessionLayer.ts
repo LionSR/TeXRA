@@ -2,7 +2,7 @@
  * {@link ownerProcessLayer}: the process services and the `SessionOwner` over
  * a `LayerMap` of sessions, one per storage root, each entry the root-scoped
  * graph and the session's owners over it, each served as its own service.
- * Two opens of a root return one session; an open borrows, `close` settles
+ * Two opens of a root return one session; an open borrows, `close` finishes
  * and releases, and the layer's release closes whatever is still open.
  */
 import {
@@ -38,7 +38,7 @@ import { AgentDirectories, AppState } from '@platform/interfaces';
 import { globalStorageFsLayer, SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
-import { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
+import { workspaceEnvironmentLayer } from '@platform/defaults/nodeServices';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import type { SessionCloseReport } from '@shared/schemas';
 import {
@@ -265,16 +265,16 @@ const closeSession = (root: string) =>
   Effect.gen(function* () {
     const sessions = yield* SessionMap;
     const held = yield* heldSession(root);
-    // A root with nothing open: nothing to settle, nothing abandoned.
+    // A root with nothing open: nothing to finish, nothing abandoned.
     if (held === undefined)
-      return { settled: true, abandoned: [] } satisfies SessionCloseReport;
-    const { settled, abandoned } = yield* stopSessionRuns(held.session);
+      return { abandoned: [] } satisfies SessionCloseReport;
+    const { abandoned } = yield* stopSessionRuns(held.session);
     if (abandoned.length > 0)
       yield* Effect.logWarning(
         `Session ${root} closed with runs still live past its budget; they read as interrupted at the next open: ${abandoned.join(', ')}`,
       ).pipe(withLogChannel(CHANNEL));
     yield* sessions.invalidate(held.key);
-    return { settled, abandoned } satisfies SessionCloseReport;
+    return { abandoned } satisfies SessionCloseReport;
   }).pipe(Effect.uninterruptible, withPerKeyLane(rootLanes, root));
 
 /** What the process services are composed from: the app's plugins and the

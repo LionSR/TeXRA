@@ -250,7 +250,7 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
         ),
       { concurrency: 'unbounded' },
     );
-    const failed = results.filter((r) => r.exitCode !== 0);
+    const failed = results.filter((r) => !r.success);
     if (failed.length > 0) {
       return yield* new LeanProjectCommandError({
         message: `lake ${args.join(' ')} failed in ${failed.length} workspace(s):\n${failed

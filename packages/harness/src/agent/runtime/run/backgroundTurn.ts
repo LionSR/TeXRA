@@ -14,7 +14,7 @@ import {
   type TurnEvent,
 } from '@texra-ai/llm';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
-import { qualifyAggregateId, type InvocationRef } from '@shared/schemas';
+import { type InvocationRef } from '@shared/schemas';
 
 import { type RunCell, SessionLog } from '@shared/session/runHistory';
 import type { InvokeError } from '../ModelInvoker';
@@ -61,7 +61,7 @@ export const observeBackground = (
     .append([
       {
         type: 'model.message',
-        aggregateId: qualifyAggregateId('run', run.runId),
+        aggregateId: run.runId,
         payload: { kind: 'cancelled', invocation },
       },
     ])
@@ -133,7 +133,7 @@ export const submitAndObserve = (
         });
       const deadlineAtMs =
         (yield* Clock.currentTimeMillis) + BACKGROUND_MAX_DURATION_MS;
-      const aggregateId = qualifyAggregateId('run', run.runId);
+      const aggregateId = run.runId;
       const { operation } = submission;
       yield* cell.append([
         {

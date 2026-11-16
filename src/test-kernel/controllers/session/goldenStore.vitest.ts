@@ -49,7 +49,6 @@ import {
 import { afterAll, describe, expect, vi } from 'vitest';
 
 import {
-  qualifyAggregateId,
   type RunId,
   RunIdSchema,
   type SessionView,
@@ -98,7 +97,7 @@ import {
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
 import { texraPlugins } from '@texra/tools/registry';
-import { factKindsOf } from '@tools/plugins';
+import { toolTable } from '@tools/toolTable';
 import type { Model } from '@texra-ai/llm';
 
 const GOLDEN = readFileSync(
@@ -123,11 +122,11 @@ const FORK_SOURCE = Schema.decodeUnknownSync(RunIdSchema)('a0000000000e');
 const FORKED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000f');
 /** Killed after its command's effect, before the command's result. */
 const KILLED = Schema.decodeUnknownSync(RunIdSchema)('a00000000010');
-/** The service's task; the background command it sent, whose input the
- *  service's resume closed, is a finished shell the deletion's open swept
- *  (its rows stay, under its deletion marker, for the next open to collect). */
+/** The service's task, and the background command it sent, a finished
+ *  shell whose input the service's resume closed. */
 const SERVICE_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000012');
-/** The `texra run --output` document task and the revisions its recipe
+const SERVICE_COMMAND = 'a00000000013';
+/** The `texra run --output` document task and the revisions its program
  *  ran, named by the calls that launched them. */
 const DOCUMENT_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000005');
 const REVISIONS = ['5e635e24c44c38717d06c117', 'f67ab3ad610d33f7b85cbf1c'];
@@ -230,7 +229,7 @@ describe('the golden 1.0 store', () => {
           );
         const events = yield* rowReader(
           storage,
-          factKindsOf(texraPlugins({ name: 'vscode' })),
+          toolTable(texraPlugins({ name: 'vscode' })).factKinds,
           exec,
         ).read(rows, true);
         expect(events).toHaveLength(rows.length);
@@ -252,7 +251,7 @@ describe('the golden 1.0 store', () => {
           expect(types, type).toContain(type);
         // The chat's `/model` switch: the configs naming the model before and
         // after it; and its `/compact`, the one edit.
-        const chat = qualifyAggregateId('run', CHAT);
+        const chat = CHAT;
         expect(
           events.flatMap((event) =>
             event.type === 'context.edit' && event.aggregateId === chat
@@ -295,7 +294,7 @@ describe('the golden 1.0 store', () => {
         // source, and its first history row seeds the source's view; an
         // awaited child names the call
         // that owns it; a process child names the call that launched it.
-        const forked = qualifyAggregateId('run', FORKED);
+        const forked = FORKED;
         expect(
           events.flatMap((event) =>
             event.type === 'run.start' && event.aggregateId === forked
@@ -324,7 +323,7 @@ describe('the golden 1.0 store', () => {
           ),
         ).toEqual([
           [PARENT, 'validation-agent-3'],
-          // Each revision is an `agent` call in the recipe's script.
+          // Each revision is an `agent` call in the program's script.
           [DOCUMENT_TASK, 'script/1'],
           [DOCUMENT_TASK, 'script/6'],
           // The goal is the plan call's child; its round, its program's.
@@ -337,10 +336,7 @@ describe('the golden 1.0 store', () => {
         ]);
         // It asked for `executions`, and a child is offered what it declares,
         // whatever its parent was offered.
-        const defined = qualifyAggregateId(
-          'run',
-          Schema.decodeUnknownSync(RunIdSchema)(DEFINED),
-        );
+        const defined = Schema.decodeUnknownSync(RunIdSchema)(DEFINED);
         expect(
           events.flatMap((event) =>
             event.type === 'tools.offered' && event.aggregateId === defined
@@ -351,7 +347,7 @@ describe('the golden 1.0 store', () => {
         // The plan the chat ran as a goal: a run on the default strategy, its
         // agent the chat's, that ends with the goal's result: what its one
         // round verified, and what that round spent.
-        const goal = qualifyAggregateId('run', GOAL);
+        const goal = GOAL;
         expect(
           events.flatMap((event) =>
             event.type === 'run.end' && event.aggregateId === goal
@@ -409,11 +405,11 @@ describe('the golden 1.0 store', () => {
         run(DELEGATED, 'golden_child', { parent: PARENT }),
         run('a00000000003', 'review'),
         run('a00000000004', 'review'),
-        // The document task and the two revisions its recipe ran.
-        run(DOCUMENT_TASK, 'polish', { children: REVISIONS }),
+        // The document task and the two revisions its program ran.
+        run(DOCUMENT_TASK, 'edit', { children: REVISIONS }),
         // Listed in start order, while the parent names them sorted.
         ...REVISIONS.toReversed().map((id) =>
-          run(id, 'polish', { parent: DOCUMENT_TASK }),
+          run(id, 'edit', { parent: DOCUMENT_TASK }),
         ),
         // The user stopped its held turn with Ctrl-C, after its Codex
         // child's turn had ended.
@@ -433,11 +429,12 @@ describe('the golden 1.0 store', () => {
         // Killed while its command's result was uncommitted: it still reads
         // as running, its owner dead.
         run(KILLED, 'golden_effect', { position: 'running', outcome: null }),
-        // Stopped with `texra tasks stop` once its command reported back;
-        // the command itself was swept with the deletion's open.
+        // Stopped with `texra tasks stop` once its command reported back.
         run(SERVICE_TASK, 'golden_script', {
           outcome: 'cancelled',
+          children: [SERVICE_COMMAND],
         }),
+        run(SERVICE_COMMAND, 'bash', { parent: SERVICE_TASK }),
       ]);
       expect(folded.requests).toEqual([]);
       // The message typed behind the stopped turn and the Codex child's
@@ -707,7 +704,7 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
       if (rewrite !== undefined) raw(storage, (db) => db.exec(rewrite));
       const session = yield* (yield* Sessions).open(
         { ...(yield* FakeHost).roots, storage },
-        { persistent: true, host: {} },
+        { persistent: true, answeredFromView: true },
       );
       return { storage, session };
     });

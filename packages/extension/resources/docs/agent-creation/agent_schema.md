@@ -29,14 +29,10 @@ reader for the old nested `settings:` / `prompts:` format.
 
 ## Critical rules
 
-- An agent with a `task` block is also a document task (see
-  `document_task_schema.md`). It works text-only, so it cannot declare
-  `tools`. Write an agent that needs tools without a `task` block.
 - There is no request template: the user's instruction is sent as the user
   message. Do not add a field for it.
-- `prompt` is the system prompt. Do not use the document task variables
-  (`INPUT_FILE`, `INPUT_CONTENT`, `ALL_INPUTS`, `ALL_CONTEXTS`,
-  `INPUT_FILES`, `OUTPUT_FILES`).
+- `prompt` is the system prompt. There are no input-file variables: the
+  agent reads files through its tools.
 - `temperature` is optional, between 0 and 1, and defaults to 1.0. There is
   no `model` field; the model is chosen at launch.
 - `tools` is optional. An agent with no tools works text-only.

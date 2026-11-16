@@ -4,12 +4,9 @@
  * `anthropic/claude-opus-5-5@high`), which names the model by its provider's
  * own API ID and says how to run it.
  */
-import {
-  lookup,
-  parseModelRef,
-  type ModelConfig,
-  type ModelSelection,
-} from 'llm-zoo';
+import { lookup, parseModelRef, type ModelConfig } from 'llm-zoo';
+
+import type { ReasoningRequest } from './reasoningChoice.js';
 
 /** A stored model string resolved against the catalog. */
 export interface SelectedModel {
@@ -17,7 +14,7 @@ export interface SelectedModel {
   readonly id: string;
   readonly config: ModelConfig;
   /** The effort, thinking and mode the string asks for, if any. */
-  readonly request: Omit<ModelSelection, 'ref'>;
+  readonly request: ReasoningRequest;
 }
 
 /** The model and reasoning request a stored model string names, or `undefined` when it names no registered model. */

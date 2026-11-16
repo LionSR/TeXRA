@@ -426,12 +426,12 @@ export function setModelEnabled(input: {
 }
 
 /**
- * One visible model's option: whether it can run now, the route that decided
+ * One visible model's verdict: whether it can run now, the route that decided
  * it, and what that route means for the next request. The registry does not
  * describe an `unknown-model`. Each host words a row from it (the app's
  * `modelOptionsFrom`).
  */
-export type ModelOption =
+export type ModelVerdict =
   | {
       readonly model: string;
       readonly availability: 'unknown-model';
@@ -470,7 +470,7 @@ function optionOf(
   model: string,
   decided: DecidedModel | undefined,
   { reasoningLevels }: ModelRouteContext,
-): ModelOption {
+): ModelVerdict {
   if (!decided) {
     return {
       model,

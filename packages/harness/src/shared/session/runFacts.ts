@@ -12,6 +12,8 @@
  * built here, beside the readers of their facts;
  * `agent/storage/runLifecycle.ts` commits them.
  */
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import type { Schema } from 'effect';
 import {
   NO_APPROVAL_GRANTS,
   type ApprovalGrants,
@@ -22,8 +24,6 @@ import {
   type FollowUpContent,
   type FollowUpDisposition,
   type FollowUpMessage,
-  type JsonValue,
-  qualifyAggregateId,
   type RunEnd,
   type RunEndOutput,
   type RunBinding,
@@ -76,7 +76,7 @@ export type RunFacts = {
   readonly toolCalls: number;
   /** The result value of a `submit_output` call, whether the response or
    *  one of its scripts issued it, or of a script run's handed-down call. */
-  readonly structured: { readonly value: JsonValue } | null;
+  readonly structured: { readonly value: Schema.Json } | null;
   /** The result a script run's handed-down call finished with: no model
    *  answers it, so its turn ends there, and an error fails it. */
   readonly handedDown: ToolResultPayload['result'] | null;
@@ -175,15 +175,13 @@ function outputOf(
   return tool === STRUCTURED_OUTPUT_TOOL_NAME ? 'submitted' : null;
 }
 
-/** Input that asks the run to do something: its user's and its parent's
- *  messages. A child's report, another run's message and a host notice only
- *  inform it. */
+/** Input that asks the run to do something: a message from its user or
+ *  from any run. A run's report at its end and a host notice only inform
+ *  it. */
 export const isInstruction = (
   content: FollowUpContent,
 ): content is FollowUpMessage =>
-  !('delivery' in content) &&
-  (content.from.kind === 'user' ||
-    (content.from.kind === 'run' && content.from.relation === 'parent'));
+  !('delivery' in content) && content.from.kind !== 'notification';
 
 /** The row that consumes one follow-up, committed beside the rows that took
  *  it; its writer states why (`disposition`). */
@@ -193,7 +191,7 @@ export const consumedRow = (
   disposition: FollowUpDisposition,
 ): Extract<RunInputDraft, { readonly type: 'followup.consumed' }> => ({
   type: 'followup.consumed',
-  aggregateId: qualifyAggregateId('run', runId),
+  aggregateId: runId,
   followUpId,
   disposition,
 });
@@ -205,13 +203,13 @@ export const boundsLifecycle = (
   row: Pick<SessionRow, 'aggregateId' | 'type'>,
   runId: RunId,
 ): boolean =>
-  row.aggregateId === qualifyAggregateId('run', runId) &&
+  row.aggregateId === runId &&
   (row.type === 'run.activate' || row.type === 'run.end');
 
 /** What a run is registered with: the facts its `run.start` carries. */
 export interface RegisterRunOptions {
   /** The launching run: the whole parent edge, stamped on `run.start`. */
-  readonly parentRunId?: RunId;
+  readonly parentId?: RunId;
   /** The parent's call that launched it, which owns this run until it
    *  detaches, and that call's tool card. */
   readonly parentCall?: NonNullable<RunParent['call']>;
@@ -248,30 +246,30 @@ export interface Registration {
   readonly config: RunConfigRow;
 }
 
-/** The row that titles `runId`: the model's summary, or the user's rename. */
+/** The row that titles `runId`: the model's summary, a child's label, or
+ *  the user's rename, each cut to the length a run list shows. */
 export const descriptionRow = (
   runId: RunId,
   description: string,
   by: 'model' | 'user',
 ): Extract<SessionRowDraft, { type: 'run.description' }> => ({
   type: 'run.description',
-  aggregateId: qualifyAggregateId('run', runId),
-  description,
+  aggregateId: runId,
+  description: truncateWithEllipsis(description, 80),
   by,
 });
 
-/** The rows that register a run, in commit order: a new run's (`born`)
- *  `run.start`, its `run.activate` (a re-registration's with the grants it
- *  ends, `ended`), and the description it is born with; and its
+/** The rows that register a run, in commit order: a new run's `run.start`,
+ *  its `run.activate` (a re-registration's with the grants it ends, `ended`:
+ *  null for a run being born), and the description it is born with; and its
  *  configuration, for its first batch to record ({@link Registration}). */
 export function registrationDrafts(
   runId: RunId,
   config: RunConfigRow['config'],
   options: RegisterRunOptions,
-  born: boolean,
-  ended: readonly SessionRowDraft[],
+  ended: readonly SessionRowDraft[] | null,
 ): Registration {
-  const target = qualifyAggregateId('run', runId);
+  const target = runId;
   const worktree = config.workingDirectory?.trim();
   const start: NonNullable<Registration['start']> = {
     type: 'run.start',
@@ -280,22 +278,22 @@ export function registrationDrafts(
     takesFollowUps: options.takesFollowUps ?? false,
     worktree: worktree ? { workingDirectory: worktree } : undefined,
     parent:
-      options.parentRunId === undefined
+      options.parentId === undefined
         ? null
-        : { id: options.parentRunId, call: options.parentCall ?? null },
+        : { id: options.parentId, call: options.parentCall ?? null },
     provenance: options.provenance ?? null,
     approvalPolicy: options.grants ?? NO_APPROVAL_GRANTS,
   };
   const rows: SessionRowDraft[] = [
-    ...(born ? [start] : []),
+    ...(ended === null ? [start] : []),
     { type: 'run.activate', aggregateId: target },
-    ...(born ? [] : ended),
+    ...(ended ?? []),
   ];
   if (options.description !== undefined)
     rows.push(descriptionRow(runId, options.description, 'model'));
   return {
     rows,
-    start: born ? start : null,
+    start: ended === null ? start : null,
     config: { type: 'run.config', aggregateId: target, config },
   };
 }
@@ -307,7 +305,7 @@ export function activationDrafts(
   ended: readonly SessionRowDraft[],
   config: RunConfigRow['config'] | null,
 ): SessionRowDraft[] {
-  const target = qualifyAggregateId('run', runId);
+  const target = runId;
   const changed: RunConfigRow[] =
     config === null
       ? []
@@ -328,7 +326,7 @@ export function runEndDraft(
   const { outcome, error } = end;
   return {
     type: 'run.end',
-    aggregateId: qualifyAggregateId('run', runId),
+    aggregateId: runId,
     outcome,
     ...(error && { error }),
     output: end.output ?? emptyRunEndOutput(),

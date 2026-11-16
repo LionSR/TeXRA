@@ -16,7 +16,6 @@ import {
   AnsweredBySchema,
   CommitOrdinalSchema,
   ContextStateDataSchema,
-  JsonValueSchema,
   RequestPayloadSchema,
   PluginFactDraftSchema,
   blocksCaller,
@@ -36,10 +35,7 @@ import {
   NonNegativeIntSchema,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript/transcriptRow';
-import type {
-  RunView as ReadRunView,
-  SessionView as ReadSessionView,
-} from './readonlyViews';
+import type { ReadonlyDeep } from './readonlyDeep';
 
 /** Which session (project) a view is of: the session's storage root. */
 const SessionKeySchema = Schema.NonEmptyString;
@@ -67,9 +63,10 @@ const TranscriptViewSchema = Schema.Struct({
   stages: Schema.Array(StageSchema),
   /** The contiguous leading prefix of rows whose finalizing event has been
    *  applied: what an append-only scrollback may print. */
-  settledRows: Count,
+  finalRows: Count,
 });
-export type TranscriptView = typeof TranscriptViewSchema.Type;
+/** A stream's transcript slice: what hosts paint. */
+export type TranscriptView = ReadonlyDeep<typeof TranscriptViewSchema.Type>;
 
 /** One run as every renderer reads it; `SessionView.runs` holds them. */
 const RunViewSchema = Schema.Struct({
@@ -93,7 +90,7 @@ const RunViewSchema = Schema.Struct({
   agentScope: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
   /** Each plugin row kind's latest value, by `plugin/kind` (`plugin.fact`):
    *  undecoded here, read through its plugin's reader. */
-  facts: Schema.Record(FactNameSchema, JsonValueSchema),
+  facts: Schema.Record(FactNameSchema, Schema.Json),
   worktree: Schema.NullOr(WorktreeInfoSchema),
   /** Where its loop stands (`standingAfter`): `ready` before its first
    *  activation and after an end, `running` inside a turn, `waiting`
@@ -144,7 +141,7 @@ const RunViewSchema = Schema.Struct({
   launch: Schema.NullOr(
     Schema.Struct({ id: RunIdSchema, card: Schema.NullOr(Schema.String) }),
   ),
-  /** The task this one was forked from and the settled point it was cut at
+  /** The task this one was forked from and the finished point it was cut at
    *  (`run.start.provenance`); null for a run its own launch began. */
   forkedFrom: Schema.NullOr(Schema.Struct({ id: RunIdSchema, at: Positive })),
   /** The `seq` of the run's newest wait (a `run.position` at `waiting`):
@@ -181,14 +178,15 @@ const RunViewSchema = Schema.Struct({
   /** A context compaction is in progress. */
   compactingActive: Schema.Boolean,
   /** The run's latest line: a script run's newest operational summary,
-   *  any other run's newest user instruction or settled model reply. */
+   *  any other run's newest user instruction or finished model reply. */
   latestLine: Schema.NullOr(Schema.String),
   transcript: TranscriptViewSchema,
-  /** A task's run: the key of the plugin block whose recipe it opened on
-   *  (`script.block`); null otherwise. A task takes no messages. */
-  recipe: Schema.NullOr(Schema.String),
+  /** The name of the registered program the run opened on
+   *  (`script.name`); null otherwise. A program's run takes no messages. */
+  program: Schema.NullOr(Schema.String),
 });
-export type RunView = typeof RunViewSchema.Type;
+/** One stream of the {@link SessionView}. */
+export type RunView = ReadonlyDeep<typeof RunViewSchema.Type>;
 
 /**
  * What `children` and their descendants count toward a parent's `rollup`:
@@ -199,9 +197,9 @@ export type RunView = typeof RunViewSchema.Type;
  * finished, not running.
  */
 export function rollupOf(
-  children: readonly ReadRunView[],
-  below = (child: ReadRunView) => child.rollup,
-): ReadRunView['rollup'] {
+  children: readonly RunView[],
+  below = (child: RunView) => child.rollup,
+): RunView['rollup'] {
   const rollup = { total: 0, running: 0, finished: 0 };
   for (const child of children) {
     const idle = child.position === 'waiting' && child.approval !== 'own';
@@ -220,15 +218,14 @@ export function rollupOf(
  *  A run left waiting for its next message is not interrupted, whoever
  *  held it: nothing of it was in flight, and that message continues it. */
 export const isInterrupted = (
-  run: Pick<ReadRunView, 'holder' | 'outcome' | 'position'>,
+  run: Pick<RunView, 'holder' | 'outcome' | 'position'>,
 ): boolean =>
   run.holder === 'none' && run.outcome === null && run.position !== 'waiting';
 
 /** Whether the run is working a turn in this process right now (a pending
  *  approval or question is still the turn's). */
-export const isWorking = (
-  run: Pick<ReadRunView, 'holder' | 'position'>,
-): boolean => run.holder === 'here' && run.position === 'running';
+export const isWorking = (run: Pick<RunView, 'holder' | 'position'>): boolean =>
+  run.holder === 'here' && run.position === 'running';
 
 /**
  * Whether the run or a run under it needs the user: a request of its own
@@ -236,8 +233,8 @@ export const isWorking = (
  * surface's collapsed choice.
  */
 export function needsUser(
-  run: ReadRunView,
-  runs: ReadonlyMap<RunId, ReadRunView>,
+  run: RunView,
+  runs: ReadonlyMap<RunId, RunView>,
 ): boolean {
   if (run.approval !== 'none' || isInterrupted(run)) return true;
   return run.childIds.some((id) => {
@@ -247,7 +244,7 @@ export function needsUser(
 }
 
 /** Whether this build cannot read the run's rows (`RunNoticeSchema`). */
-export const isUnreadable = (run: Pick<ReadRunView, 'statusNotice'>): boolean =>
+export const isUnreadable = (run: Pick<RunView, 'statusNotice'>): boolean =>
   run.statusNotice?.kind === 'damaged' ||
   run.statusNotice?.kind === 'earlierBuild';
 
@@ -255,16 +252,17 @@ export const isUnreadable = (run: Pick<ReadRunView, 'statusNotice'>): boolean =>
  * Whether a run takes a follow-up at all, the one rule every host reads (it
  * decides whether the composer shows). A run launched taking none
  * (`takesFollowUps`) and a run whose rows this build cannot read take none;
- * a run still going or waiting takes one, as does a stopped root agent with
- * saved steps, which a resume continues from its history.
+ * a run still going or waiting takes one, as does a stopped agent with
+ * saved steps, which a resume continues from its history, whoever launched
+ * it: a run a run launched reports to its launcher when the resumed cycle
+ * ends.
  */
-export function acceptsFollowUp(run: ReadRunView): boolean {
+export function acceptsFollowUp(run: RunView): boolean {
   if (!run.takesFollowUps || isUnreadable(run)) return false;
   if (run.holder === 'here' && run.position !== 'ready') return true;
   return (
     run.identity.kind === 'agent' &&
-    run.parentId === null &&
-    !run.recipe &&
+    !run.program &&
     (run.turn !== null || run.forkPoint !== null)
   );
 }
@@ -278,7 +276,7 @@ export function acceptsFollowUp(run: ReadRunView): boolean {
  */
 export type RequestAnswerability = 'answerable' | 'resume';
 export function requestAnswerability(
-  run: ReadRunView,
+  run: RunView,
   payload: RequestPayload,
 ): RequestAnswerability {
   if (run.approval === 'own' || !blocksCaller(payload)) return 'answerable';
@@ -330,7 +328,12 @@ export const SessionViewSchema = Schema.Struct({
   pluginFacts: Schema.Array(PluginFactDraftSchema),
   queuedFollowUps: Schema.ReadonlyMap(RunIdSchema, QueuedFollowUpsSchema),
 });
-export type SessionView = typeof SessionViewSchema.Type;
+/** One published level of the session's fold: an immutable value. */
+export type SessionView = ReadonlyDeep<typeof SessionViewSchema.Type>;
+/** A request a run waits on a person for, as `SessionView` lists it:
+ *  which run asks, the request's id, and its payload (`payload.kind` is
+ *  what is asked: a command, an edit, a plan, a retry, a question). */
+export type PendingRequest = SessionView['requests'][number];
 
 /** The run under `id`, which the view holds: an id in `order` or a run's
  *  `childIds` names a run of `runs`, so a miss is a broken view and throws. */
@@ -348,10 +351,10 @@ export function requireRun(
 export interface Attention<Request> {
   readonly requests: readonly Request[];
   readonly arrived: readonly Request[];
-  readonly finished: readonly ReadRunView[];
+  readonly finished: readonly RunView[];
 }
 
-function answerableRequests<View extends ReadSessionView>(
+function answerableRequests<View extends SessionView>(
   view: View,
 ): View['requests'][number][] {
   return view.requests.filter((request) => {
@@ -369,9 +372,9 @@ function answerableRequests<View extends ReadSessionView>(
  * the user when this window can answer it (not one on a run another process
  * holds or waiting for its run's resume), and a run when its outcome lands.
  */
-export function attentionOf<View extends ReadSessionView>(
+export function attentionOf<View extends SessionView>(
   view: View,
-  previous?: ReadSessionView,
+  previous?: SessionView,
 ): Attention<View['requests'][number]> {
   const requests = answerableRequests(view);
   if (previous === undefined) return { requests, arrived: [], finished: [] };
@@ -393,7 +396,7 @@ export type SessionTitleState = 'idle' | 'running' | 'approval';
  * view and nothing else: a request this window can answer outranks a run
  * working right now; a conversation waiting on its user is idle.
  */
-export function sessionActivity(view: ReadSessionView): SessionTitleState {
+export function sessionActivity(view: SessionView): SessionTitleState {
   if (answerableRequests(view).length > 0) return 'approval';
   for (const run of view.runs.values()) if (isWorking(run)) return 'running';
   return 'idle';
@@ -426,7 +429,7 @@ export function emptySessionView(key: string, debug = false): SessionView {
  * so a host walks the view's own facts instead of re-deriving them.
  */
 export function descendantRuns(
-  view: Pick<ReadSessionView, 'runs'>,
+  view: Pick<SessionView, 'runs'>,
   rootRunId: RunId | undefined,
   { includeRoot }: { includeRoot: boolean },
 ): readonly RunId[] {

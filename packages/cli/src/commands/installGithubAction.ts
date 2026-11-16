@@ -1,7 +1,6 @@
 import path from 'node:path';
 
 import { Effect, FileSystem, PlatformError } from 'effect';
-import { pathExists } from '@texra-ai/harness/node';
 
 import {
   parseGitHubSlug,
@@ -10,10 +9,12 @@ import {
 import {
   currentBranch,
   isGitRepository,
+  localBranchExists,
   originDefaultBranch,
   originUrl,
+  pathExists,
   repositoryRoot,
-} from '@texra/utils/git/gitReads';
+} from '@texra-ai/harness/node';
 import { texraGuideUrl } from '@ui/copy/guide';
 
 import { CliExitCode } from '../runtime/platform/exitCodes';
@@ -24,7 +25,7 @@ import {
   writeTextStderr,
   writeTextStdout,
 } from '../runtime/platform/logSinks';
-import { gh, ghAvailable, git, localBranchExists } from '../runtime/gitOps';
+import { gh, ghAvailable, git } from '../runtime/gitOps';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { optString } from './_helpers/globalArgs';
@@ -283,13 +284,14 @@ const runInstallGithubAction = Effect.fn('runInstallGithubAction')(function* (
     '--',
     WORKFLOW_RELATIVE_PATH,
   );
-  if (diff.exitCode !== 0 && diff.exitCode !== 1) {
+  // `git diff --quiet` exits 1 when there are changes, 0 when there are none.
+  if (diff.end._tag !== 'Exited' || diff.end.code > 1) {
     return yield* abort(
       `Failed to inspect staged workflow changes: ${diff.stderr}`,
     );
   }
 
-  const hasWorkflowChanges = diff.exitCode === 1;
+  const hasWorkflowChanges = diff.end.code === 1;
   if (hasWorkflowChanges) {
     const commit = yield* git(
       root,

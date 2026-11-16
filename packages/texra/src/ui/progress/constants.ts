@@ -120,11 +120,11 @@ const CONVERSATION_RUN_ACTIONS: readonly RunMenuAction[] = [
 ];
 
 /** An agent run's menu: a task's, or a conversation's. The output-file
- *  entries are the documents plugin's, for its own tasks only. */
+ *  entries are the theory plugin's, for its own tasks only. */
 export function runMenuActions(
-  run: Pick<RunView, 'recipe'>,
+  run: Pick<RunView, 'program' | 'facts'>,
 ): readonly RunMenuAction[] {
-  if (!run.recipe) return CONVERSATION_RUN_ACTIONS;
+  if (!run.program) return CONVERSATION_RUN_ACTIONS;
   return isDocumentTaskRun(run)
     ? TASK_RUN_ACTIONS
     : TASK_RUN_ACTIONS.filter((entry) => entry.action !== 'files');

@@ -7,7 +7,9 @@ import { describe, expect, vi } from 'vitest';
 // Local imports
 import { CHATGPT_POLICY } from '../../src/oauth/chatgpt/chatgptProvider.js';
 import { loginWithLoopback } from '../../src/oauth/loopbackLogin.js';
+import { SubscriptionAccounts } from '../../src/oauth/subscriptionAccounts.js';
 import type { ChatgptSession } from '../../src/oauth/chatgpt/chatgptProvider.js';
+import type { CredentialStore } from '../../src/providers/credentials.js';
 import type { SubscriptionAuthorizeRequest } from '../../src/oauth/subscriptionCoordinator.js';
 
 /** The callback path ChatGPT's sign-in returns to. */
@@ -91,5 +93,30 @@ describe('ChatGPT loopback login', () => {
           clientId: 'oaiapp_issued',
         });
       }),
+  );
+
+  // An account's sign-in is handed around as a function (the app reads it
+  // off the account), so it must not depend on being called as a method.
+  it.live('runs a sign-in read off its account', () =>
+    Effect.gen(function* () {
+      const secrets = new Map<string, string>();
+      const store: CredentialStore = {
+        get: (key) => Effect.sync(() => secrets.get(key)),
+        set: (key, value) =>
+          Effect.sync(() => {
+            secrets.set(key, value);
+          }),
+        delete: (key) =>
+          Effect.sync(() => {
+            secrets.delete(key);
+          }),
+      };
+      const accounts = yield* SubscriptionAccounts.make(store);
+      const { signInWithBrowser } = accounts['chatgpt-subscription'];
+      const failure = yield* Effect.flip(
+        signInWithBrowser(() => Effect.fail(new Error('No browser here.'))),
+      ).pipe(Effect.provide(FetchHttpClient.layer));
+      expect(failure.message).toBe('No browser here.');
+    }),
   );
 });

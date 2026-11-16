@@ -28,12 +28,12 @@ export const applyCliProviderApiKey = Effect.fn('applyCliProviderApiKey')(
     const codingPlan = CODING_PLAN_BY_API_PROVIDER.get(provider);
     if (!codingPlan) return undefined;
     if (!codingPlan.exclusiveCredential) {
-      return `Tip: ${planFallbackName(codingPlan.usageRoute)} is the default; enable '${codingPlan.preferenceLabel}' in \`/login\` or \`/config\` to use ${codingPlan.displayName}.`;
+      return `Tip: ${planFallbackName(codingPlan.usageRoute)} is the default; enable '${codingPlan.preference.title}' in \`/login\` or \`/config\` to use ${codingPlan.displayName}.`;
     }
     // The coding-only models route through the subscription automatically;
     // dual-backend K3 needs the opt-in switch, which is only discoverable if
     // we name it here — the same name `/config` and `/login` show.
-    return "Tip: the Kimi for Coding models use your subscription automatically; to use it for Kimi K3 too, enable 'Kimi Code subscription' in /config.";
+    return `Tip: the Kimi for Coding models use your subscription automatically; to use it for Kimi K3 too, enable '${codingPlan.preference.title}' in /config.`;
   },
 );
 

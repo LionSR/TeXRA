@@ -19,7 +19,7 @@ TeXRA groups files into three categories:
       title: 'Input',
       tag: 'Read + edit',
       tagVariant: 'success',
-      desc: 'Primary documents the agent reads and rewrites.',
+      desc: 'Primary documents a program reads and rewrites.',
       chips: [
         { text: '.tex', variant: 'accent' },
         { text: '.txt', variant: 'accent' },
@@ -31,7 +31,7 @@ TeXRA groups files into three categories:
       title: 'Context',
       tag: 'Read-only',
       tagVariant: 'info',
-      desc: 'Reference material the agent sees but never modifies.',
+      desc: 'Reference material a program sees but never modifies.',
       chips: [
         { text: '.bib', variant: 'info' },
         { text: '.bbl', variant: 'info' },
@@ -57,6 +57,8 @@ TeXRA groups files into three categories:
 
 <p class="hero-caption">Three categories: Input is read + edited, Context is read-only, Media carries visual and audio content.</p>
 
+Input and Context belong to a [program](./built-in-agents.md#programs) run: the files it revises and the files it only reads. A chat agent reads project files with its own tools, so a chat takes only Media attachments.
+
 Read the [Working with figures](./working-with-figures.md) guide for supported media formats and automatic figure extraction.
 
 ### Pasting images from the clipboard
@@ -65,7 +67,7 @@ Paste an image (`Ctrl/Cmd+V`) into the instruction box to save it to workspace s
 
 ## File selection interface
 
-The TeXRA interface has a section for each file category (Input <wa-icon library="texra" name="file-code"></wa-icon>, Context <wa-icon library="texra" name="book"></wa-icon>, Media <wa-icon library="texra" name="video"></wa-icon>):
+When an agent proposes a program run, the proposal card lists the files it chose. Select **Edit** on the card to change them: the launch form opens with a **Documents and attachments** section for each file category (Input <wa-icon library="texra" name="file-code"></wa-icon>, Context <wa-icon library="texra" name="book"></wa-icon>, Media <wa-icon library="texra" name="video"></wa-icon>):
 
 <FileSelectHero />
 
@@ -84,15 +86,16 @@ You can also **drag and drop files** from the OS file manager (or from VS Code's
 Inside the list:
 
 - Each file row has a small trash icon to remove that file.
-- Drag a row to reorder files. Input files are sent to the agent in this order.
+- Drag a row to reorder files. Input files are sent to the program in this order.
 
 The list is the only mode; there is no separate "single file" view. To work with one file, keep the list at length one.
 
 ### Output files
 
-For document tasks that edit documents, output filenames are the selected input
-filenames in the same order. Agents that create fixed new files declare those
-names in their YAML with `task.outputs`.
+For programs that edit documents, output filenames are the selected input
+filenames in the same order. The programs that create a new document write a
+fixed name: `transcript.tex` for `transcribe`, `slides.tex` for `slides` and
+`poster.tex` for `poster`.
 
 ## File path handling
 
@@ -102,7 +105,7 @@ TeXRA handles file paths as follows:
 
 - **Display**: Files are displayed with paths relative to the workspace root
 - **Processing**: TeXRA resolves paths to their absolute form when needed
-- **Output**: Document task outputs are saved in run storage. Use **Accept** or
+- **Output**: A program's outputs are saved in run storage. Use **Accept** or
   **Pack** when you want to copy reviewed outputs back into the workspace.
 
 ### File discovery rules
@@ -112,7 +115,7 @@ context, edited files, and media. Read the [file discovery section of the config
 
 ## Output file naming
 
-TeXRA stores document task outputs in the run folder under run storage. Within
+TeXRA stores a program's outputs in the run folder under run storage. Within
 that folder, the revised document keeps your input filename in every revision
 (the first revision in `r0/`, the second in `r1/`, and so on):
 
@@ -132,7 +135,7 @@ Every run gets an isolated run folder under TeXRA's workspace storage directory:
 executions/<executionId>/
 ```
 
-Document task outputs are listed in the ProgressBoard under **Generated files** (select a filename to preview it in VS Code, or use <wa-icon library="texra" name="folder-open"></wa-icon> **Open task folder** to inspect generated files, compile logs, and mirrored dependencies). Three actions manage a run's artifacts:
+A program's outputs are listed in the ProgressBoard under **Generated files** (select a filename to preview it in VS Code, or use <wa-icon library="texra" name="folder-open"></wa-icon> **Open task folder** to inspect generated files, compile logs, and mirrored dependencies). Three actions manage a run's artifacts:
 
 - **Accept**: Copies the reviewed output file into your workspace.
 - **Pack / Archive outputs to History** (<wa-icon library="texra" name="box-archive"></wa-icon>): Copies the run folder (its output files, logs, and mirrored dependencies) into a timestamped folder under `History/`.

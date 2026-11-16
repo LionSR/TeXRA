@@ -23,6 +23,7 @@ import {
 
 import { Inbox, SessionInbox } from '@agent/followUp/Inbox';
 import { wakeIfOwed } from '@agent/followUp/ToolUseFollowUp';
+import { lastReportRecipients } from '@agent/storage/runLifecycle';
 import {
   ChildRunBudget,
   resolveChildRunConcurrencyBudget,
@@ -60,7 +61,7 @@ import {
 } from '@shared/session/runHistory';
 import type { SessionEvents } from '@shared/session/sessionEvents';
 import { ToolCatalogOwner } from '@tools/liveTools';
-import { announceWrites, factKindsOf } from '@tools/plugins';
+import { announceWrites } from '@tools/plugins';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
 import { deletionCollector } from './deletionCleanup';
@@ -95,7 +96,7 @@ export const stopSessionRuns = (
         Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
       );
     const abandoned = runs.get().map((run) => run.runId);
-    return { settled: abandoned.length === 0, abandoned };
+    return { abandoned };
   });
 
 /**
@@ -125,7 +126,7 @@ export const sessionOwnersLayer = (
     Effect.gen(function* () {
       const { roots } = open;
       // The readers' scope, closed last so the teardown publishes and
-      // settles while the tails and the view live.
+      // finishes while the tails and the view live.
       const consumers = yield* Effect.acquireRelease(
         Scope.make(),
         (scope, exit) => Scope.close(scope, exit),
@@ -229,7 +230,7 @@ export const sessionOwnersLayer = (
 
       // The runs: their fork captures the context built so far, over every
       // service a run reads, one fiber per run under its id. Disposed
-      // first, so no run is admitted over a session that is unwinding.
+      // first, so no run is accepted over a session that is unwinding.
       // The context the runs' forks capture: the process's services and
       // every service built so far.
       const services: Context.Context<
@@ -258,13 +259,25 @@ export const sessionOwnersLayer = (
                 // The parent its last batch delivered to, as the store holds
                 // the edge: it outlives the run's fiber.
                 const parent = yield* Effect.exit(runs.attachedParent(id));
+                // And every other run its last end reported to.
+                const reported = yield* Effect.exit(lastReportRecipients(id));
                 yield* wakeIfOwed(id);
-                if (Exit.isFailure(parent))
-                  return yield* logFailure(
+                const woken = new Set<RunId>();
+                if (Exit.isSuccess(parent)) {
+                  if (parent.value !== null) woken.add(parent.value);
+                } else
+                  yield* logFailure(
                     CHANNEL,
                     `Run ${id}: its parent edge could not be read, so no parent is woken for its last delivery`,
                   )(Cause.squash(parent.cause));
-                if (parent.value !== null) yield* wakeIfOwed(parent.value);
+                if (Exit.isSuccess(reported))
+                  for (const recipient of reported.value) woken.add(recipient);
+                else
+                  yield* logFailure(
+                    CHANNEL,
+                    `Run ${id}: who its last end reported to could not be read, so only its parent is woken for it`,
+                  )(Cause.squash(reported.cause));
+                for (const recipient of woken) yield* wakeIfOwed(recipient);
               }),
             ),
           ),
@@ -282,9 +295,9 @@ export const sessionOwnersLayer = (
       const plugins = yield* ToolRegistry;
       // The one reader of the rows the view has applied: a fact that wrote
       // workspace files is announced, and a run's end is presented to the
-      // host, each once the view holds the row. `log.settled` waits for
+      // host, each once the view holds the row. `log.drained` waits for
       // this reader.
-      const announce = announceWrites(factKindsOf(plugins.entries.values()));
+      const announce = announceWrites(plugins.factKinds);
       yield* Stream.runForEach(
         store.applied,
         Effect.fnUntraced(function* (event) {

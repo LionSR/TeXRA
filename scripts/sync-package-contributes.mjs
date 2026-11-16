@@ -71,8 +71,9 @@ async function bundledSkillEntries(relativeDir) {
 const pluginSkillDirs = (
   await readdir(path.join(resourcesDir, 'plugins'), { withFileTypes: true })
 )
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => `plugins/${entry.name}/skills`);
+  .map((entry) => `plugins/${entry.name}/skills`)
+  // A plugin's directory may hold other resources and no skills.
+  .filter((dir) => existsSync(path.join(resourcesDir, dir)));
 const chatSkills = (
   await Promise.all(
     ['skills', ...pluginSkillDirs].map((dir) => bundledSkillEntries(dir)),

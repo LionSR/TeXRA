@@ -29,7 +29,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import type { BridgeError } from './bridgeErrors';
 import { InquiryDraftSchema } from '@texra/shared/plugins/externalInquiry';
-import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import { markShownRunSeen } from './unseenRuns';
 import type { CommitOrdinal } from '@texra-ai/harness/transcript';
 import type { HostSnapshot } from './hostSnapshot';
@@ -54,13 +53,10 @@ const UIFileFieldsSchema = NullableFileFieldsSchema.mapFields(
 
 /**
  * The new-task composer's selections, separate from host-derived state.
- * One agent and one instruction: the agent decides the run type. An agent
- * with a document task (its option's `rounds`) runs it over the selected
- * files; any other agent, and a team, chats.
+ * One agent and one instruction, or a team: each chats. The file lists are
+ * what a program's proposal, opened in the form, is edited with.
  */
 export const LaunchSurfaceSchema = UIFileFieldsSchema.mapFields(
-  Struct.assign(DocumentTaskOptionsSchema.fields),
-).mapFields(
   Struct.assign({
     launchTarget: LaunchTargetSchema.pipe(
       Schema.withDecodingDefault(Effect.succeed('agent')),

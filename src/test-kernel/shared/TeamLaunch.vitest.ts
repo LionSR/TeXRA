@@ -9,12 +9,16 @@ const delegateTools = ['agent'];
 
 function agent(
   name: string,
-  options: Partial<TeamCatalogAgent> = {},
+  options: { readonly tools?: readonly string[] } = {},
 ): TeamCatalogAgent {
   return {
     name,
     source: 'builtIn',
-    ...options,
+    persona: {
+      prompt: '',
+      temperature: 1,
+      tools: (options.tools ?? []).map((tool) => ({ name: tool })),
+    },
   };
 }
 

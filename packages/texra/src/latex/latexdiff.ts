@@ -24,7 +24,7 @@ import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
-import { repositoryRoot } from '@texra/utils/git/gitReads';
+import { repositoryRoot } from '@texra-ai/harness/node';
 import { runTool } from '@texra/utils/system/toolChecks';
 
 // Local file imports
@@ -158,7 +158,7 @@ const runWithFlattenFallback = Effect.fn('latexdiff.runWithFlattenFallback')(
         return yield* new LatexdiffFailed({
           commandType: tool,
           flatten,
-          timedOut: result.timedOut,
+          timedOut: result.end._tag === 'TimedOut',
           timeoutMs,
           stderr: redactSecrets(
             result.success ? 'it produced no output' : result.stderr,

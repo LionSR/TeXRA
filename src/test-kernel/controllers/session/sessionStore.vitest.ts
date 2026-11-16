@@ -28,11 +28,7 @@ import {
   defineTool,
   AppSignals,
 } from '@texra-ai/harness/plugins';
-import {
-  AgentConfigSchema,
-  generateRunId,
-  qualifyAggregateId,
-} from '@texra-ai/harness/schemas';
+import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
 import { SessionRequests } from '@agent/runtime/requests';
 import { rootRun } from '@agent/runtime/rootLaunch';
 import { SessionViewAccess } from '@shared/session/runHistory';
@@ -134,7 +130,7 @@ describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
             }).pipe(Effect.provide(session));
             // A reader keeps the running run's transcript in the view.
             yield* Context.get(session, SessionViewAccess).subscribe([
-              { id: qualifyAggregateId('run', runId), fromSeq: 0 },
+              { id: runId, fromSeq: 0 },
             ]);
             yield* untilStored(roots.storage, (rows) =>
               rows.some(
@@ -148,8 +144,8 @@ describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
             for (let read = 0; read < 6; read += 1)
               yield* faults.failNext('readInputBatch');
             yield* Context.get(session, SessionViewAccess).subscribe([
-              { id: qualifyAggregateId('run', runId), fromSeq: 0 },
-              { id: qualifyAggregateId('run', generateRunId()), fromSeq: 0 },
+              { id: runId, fromSeq: 0 },
+              { id: generateRunId(), fromSeq: 0 },
             ]);
             // The view is dead before the rename asks: the request's own
             // read of the log must not take the faults meant for it.

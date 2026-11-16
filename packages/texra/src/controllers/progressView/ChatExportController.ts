@@ -80,8 +80,8 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
             return Effect.fail(
               new Rejected({
                 reason: {
-                  config_missing: 'This run has no saved data to export.',
-                  streamLogs_missing:
+                  no_record: 'This run has no saved data to export.',
+                  no_rows:
                     'No transcript was saved for this run, so there is nothing to export. Try exporting a more recent run.',
                 }[error.status],
               }),

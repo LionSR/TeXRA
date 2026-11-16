@@ -24,8 +24,8 @@ import { ResumeRefusalSchema } from '@shared/schemas';
  * The plugin list cannot be composed, for a defect `toolTable` refuses: an
  * id that is not lowercase letters, digits and dashes, an id or tool name
  * listed twice, a switch on a plugin with no availability probe, a
- * `requires` naming a plugin not listed, an agent-file block owned twice or
- * keyed by a persona key, or two script modules of one name.
+ * `requires` naming a plugin not listed, two script modules of one name, or
+ * a program that is not one of its plugin's script modules.
  */
 export class PluginsRefused extends Schema.TaggedError<PluginsRefused>()(
   'PluginsRefused',
@@ -65,6 +65,6 @@ export class ResumeRefused extends Schema.TaggedError<ResumeRefused>()(
 ) {}
 
 /** What a launch refuses before any model work: the two an embedder
- *  branches on. A run that fails after admission fails with
+ *  branches on. A run that fails after acceptance fails with
  *  {@link RunFailure} instead. */
 export type LaunchError = LaunchRefused | ToolsRefused;

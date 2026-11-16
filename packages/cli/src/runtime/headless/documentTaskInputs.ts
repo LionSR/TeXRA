@@ -10,7 +10,7 @@ import { glob, hasMagic } from 'glob';
 import { Effect, FileSystem, Scope } from 'effect';
 
 import { ensureError } from '@texra-ai/harness/schemas';
-import { absentReason } from '@texra-ai/harness/node';
+import { meansAbsent } from '@texra-ai/harness/node';
 import { CliUsageError } from '@cli/runtime/platform/cliContext';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 
@@ -24,13 +24,13 @@ const STDIN_INPUT_TOKEN = '-';
 const STDIN_TEMP_PREFIX = 'texra-stdin-';
 export const STDIN_DOCUMENT_TASK_INPUT_BASENAME = 'stdin.tex';
 /**
- * One wording for "a document task run has no input", said both by the expansion
+ * One wording for "a program's run has no input", said both by the expansion
  * below (a spec that resolves to nothing) and by `texra run`'s pre-flight guard
  * (no `--input` at all), which has to refuse before it probes an output
  * destination into existence.
  */
 export const DOCUMENT_TASK_INPUT_REQUIRED_MESSAGE =
-  'At least one input file is required for a document task.';
+  'At least one input file is required for a program.';
 
 function normalizeCliInputPath(candidate: string, cwd: string): string {
   const absolutePath = path.resolve(cwd, candidate);
@@ -154,7 +154,7 @@ const expandDocumentTaskInputSpec = Effect.fn('expandDocumentTaskInputSpec')(
     const fs = yield* FileSystem.FileSystem;
     const stats = yield* fs
       .stat(absolutePath)
-      .pipe(Effect.catchIf(absentReason, () => Effect.succeed(null)));
+      .pipe(Effect.catchIf(meansAbsent, () => Effect.succeed(null)));
 
     const globOptions = {
       magicalBraces: true,

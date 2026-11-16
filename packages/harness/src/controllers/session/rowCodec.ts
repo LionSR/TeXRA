@@ -29,9 +29,10 @@ import { constants, zstdCompressSync } from 'node:zlib';
 import stableStringify from 'safe-stable-stringify';
 import { Effect, Predicate, Result, Schema } from 'effect';
 import {
-  AggregateIdSchema,
   aggregateTarget,
   CURRENT_VALUE_VERSION,
+  pluginAggregateId,
+  RunIdSchema,
   RETIRED_PLUGIN_FACTS,
   RETIRED_ROW_KINDS,
   ROW_KINDS,
@@ -39,7 +40,6 @@ import {
   SessionRowSchema,
   unavailableFactReason,
   type AggregateId,
-  type JsonValue,
   type SessionRow,
   type SessionRowDraft,
   factName,
@@ -118,9 +118,10 @@ export const aggregateList = (ids: readonly AggregateId[]): string =>
 
 /** The `AggregateId` two columns name. */
 export function aggregateOf(kind: unknown, logicalId: unknown): AggregateId {
-  return Schema.decodeUnknownSync(AggregateIdSchema)(
-    JSON.stringify([kind, logicalId]),
-  );
+  if (kind === 'run') return Schema.decodeUnknownSync(RunIdSchema)(logicalId);
+  if (kind === 'plugin' && typeof logicalId === 'string')
+    return pluginAggregateId(logicalId);
+  throw new Error(`Unknown aggregate: ${String(kind)} ${String(logicalId)}`);
 }
 
 const hasKind = (type: string): type is SessionRowDraft['type'] =>
@@ -294,7 +295,7 @@ export function decodeRow(
   const refused = rowRefusal(row);
   if (refused === 'retired') return Result.succeed(undefined);
   if (refused !== null) return Result.fail(refused);
-  let data: Record<string, JsonValue>;
+  let data: Record<string, Schema.Json>;
   try {
     data = jsonObject(parseData(row.data, blobs));
     if (row.type === 'context.blob') {

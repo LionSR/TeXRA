@@ -2,7 +2,6 @@ import { Schema, Struct } from 'effect';
 
 import { AgentConfigSchema } from './agentConfig';
 import { NullableFileFieldsSchema } from './fileFields';
-import { JsonValueSchema } from './jsonValue';
 
 export const BaseProposalFieldsSchema = Schema.Struct({
   // The agent's resolved source and inline persona, its memories and its
@@ -35,15 +34,15 @@ export const BaseProposalFieldsSchema = Schema.Struct({
   ),
 });
 
-/** A task's files and the options its launching plugin gives it (as the
- *  plugin reads them; the harness reads nothing inside); a chat delegation
- *  has no files and no options. */
+/** A program's files and its arguments (`options`, as the program reads
+ *  them; the harness reads nothing inside); a chat delegation has no
+ *  arguments. */
 export const TaskProposalFieldsSchema = NullableFileFieldsSchema.mapFields(
   Struct.omit(['editedFile']),
 ).mapFields(
   Struct.assign({
     options: Schema.optional(
-      Schema.NullOr(Schema.Record(Schema.String, JsonValueSchema)),
+      Schema.NullOr(Schema.Record(Schema.String, Schema.Json)),
     ),
   }),
 );

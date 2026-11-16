@@ -11,7 +11,7 @@ import {
 // Dynamic completion sources, gated on TEXRA_COMPLETION_DYNAMIC so scripts can
 // opt out of shelling back into texra.
 function dynamicListSource(source: CompletionSource): string {
-  return `(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra ${source.command} 2>/dev/null | awk "{print \\$${source.column}}")`;
+  return `(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra ${source.command} 2>/dev/null | awk "{print \\$1}")`;
 }
 
 const TOP_LEVEL_RUN_CONDITION =

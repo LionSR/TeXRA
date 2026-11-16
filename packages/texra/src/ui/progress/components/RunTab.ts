@@ -82,7 +82,7 @@ function buildTooltip(run: RunView, nowMs: number): string {
 function runDecorator(run: RunView) {
   const kind = run.identity.kind;
   return kind === 'agent'
-    ? AGENT_DECORATORS.agentRuns[run.recipe ? 'task' : 'chat']
+    ? AGENT_DECORATORS.agentRuns[run.program ? 'task' : 'chat']
     : AGENT_DECORATORS.streamKinds[kind];
 }
 

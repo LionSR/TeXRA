@@ -9,7 +9,6 @@ import {
 } from '@shared/schemas';
 
 import { isInterrupted, type RunView } from './sessionView';
-import type { RunView as ReadonlyRunView } from './readonlyViews';
 
 /** Opening the run's folder, exporting its conversation, copying its
  *  diagnostics: what any run offers, a fresh list per run so no two views
@@ -23,16 +22,16 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * so it offers delete beside inspection, the one way to clear it. A run
  * this process holds (working, waiting, or spawned and not started yet) can
  * be stopped; an agent's run takes approval grants, and a conversation (not
- * a task's recipe) its compaction, unless it is still starting (no loop
- * step and no settled point yet). Nothing that rewrites or
+ * a program) its compaction, unless it is still starting (no loop
+ * step and no finished point yet). Nothing that rewrites or
  * removes a run's files or history is offered while it is live. Any run this
  * process can act on can be renamed, and a conversation whose first turn has
- * ended forked (at its latest settled point, before any turn it is in now). After, a
+ * ended forked (at its latest finished point, before any turn it is in now). After, a
  * run can be deleted and its files worked on (`run.files`); a plain
- * agent's run again. Resume is offered where it is the way to
- * continue: on any loop-driven run that was interrupted, and on a background
- * script that did not complete. A settled task runs again; a
- * settled conversation continues through its composer. Whether a resume can
+ * agent's conversation run again from the launch form. Resume is offered
+ * where it is the way to continue: on any loop-driven run that was
+ * interrupted, and on a background script that did not complete. A finished
+ * conversation continues through its composer. Whether a resume can
  * proceed is `deriveResumability`'s.
  */
 export function runActions(
@@ -43,7 +42,7 @@ export function runActions(
     | 'position'
     | 'turn'
     | 'identity'
-    | 'recipe'
+    | 'program'
     | 'forkPoint'
   >,
   stranded: boolean,
@@ -53,7 +52,7 @@ export function runActions(
     const agent = run.identity.kind === 'agent';
     // Nothing to compact while its first activation has taken no loop step.
     const starting = run.turn === null && run.forkPoint === null;
-    const compact = agent && !run.recipe && !starting;
+    const compact = agent && !run.program && !starting;
     return [
       'stop',
       ...(agent ? (['grant'] as const) : []),
@@ -72,7 +71,9 @@ export function runActions(
   )
     actions.push('resume');
   if (isPlainAgentIdentity(run.identity)) {
-    actions.push('runAgain');
+    // A program is started by an agent or a command, not by the launch
+    // form Run again opens.
+    if (!run.program) actions.push('runAgain');
     if (forkable(run)) actions.push('fork');
   }
   return [...actions, ...inspectActions()];
@@ -80,25 +81,25 @@ export function runActions(
 
 /**
  * Whether a run continues from its own rows: a loop-driven run (born with
- * its opening) does, whatever its outcome, unless it is a task that
- * ended (its recipe's result is settled, so it runs again). The one standing
+ * its opening) does, whatever its outcome, unless it is a program's run
+ * that ended (its result is final, so it runs again). The one standing
  * `deriveResumability` reads from a run's records and `runActions` from its
  * view, so the two never decide apart.
  */
 export const continuesFromRows = (
-  run: Pick<RunView, 'identity' | 'recipe'> & { readonly ended: boolean },
-): boolean => isLoopDriven(run.identity) && !(run.ended && run.recipe);
+  run: Pick<RunView, 'identity' | 'program'> & { readonly ended: boolean },
+): boolean => isLoopDriven(run.identity) && !(run.ended && run.program);
 
-/** A conversation with a settled point to cut at: a plain agent's run, not
- *  a task's recipe, whose first turn has ended. */
+/** A conversation with a finished point to cut at: a plain agent's run, not
+ *  a program, whose first turn has ended. */
 const forkable = (
-  run: Pick<RunView, 'identity' | 'recipe' | 'forkPoint'>,
+  run: Pick<RunView, 'identity' | 'program' | 'forkPoint'>,
 ): boolean =>
-  isPlainAgentIdentity(run.identity) && !run.recipe && run.forkPoint !== null;
+  isPlainAgentIdentity(run.identity) && !run.program && run.forkPoint !== null;
 
 /** Why a run no longer takes `action`: the refusal every handler words. */
 export function runActionRefusal(
-  run: Pick<ReadonlyRunView, 'holder' | 'label'>,
+  run: Pick<RunView, 'holder' | 'label'>,
   action: RunAction,
 ): string {
   const what = ACTION_LABEL[action];

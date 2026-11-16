@@ -3,22 +3,15 @@ import {
   normalizeFilePath,
   formatResultCount,
 } from '@texra-ai/harness/schemas';
-import { Record as Rec, Schema, String as Str } from 'effect';
+import { String as Str } from 'effect';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
-import WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 import type { DocumentFileType } from '@texra/shared/launcher/fileTypes';
-import {
-  DOCUMENT_TASK_OPTIONS,
-  DocumentTaskOptionsSchema,
-  type DocumentTaskOptions,
-} from '@texra/shared/plugins/documents';
 import type { SurfaceAction } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { SortableController } from '@ui/litControllers/SortableController';
@@ -30,7 +23,6 @@ import { placeholderStyles, renderEmptyMessage } from '@ui/wa/emptyState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { FileDropController, postDroppedFiles } from '../fileDropHandler';
 import { fileSelectStyles } from '../fileSelectStyles';
-import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 @customElement('file-select-group')
 export class FileSelectGroup extends LitElement {
@@ -68,10 +60,6 @@ export class FileSelectGroup extends LitElement {
 
   /** The group's selected files, in order (`Surface.launch`). */
   @property({ attribute: false }) files: readonly string[] = [];
-
-  /** The tool and auto-extract toggles (`Surface.launch`). */
-  @property({ attribute: false }) checkboxValues: DocumentTaskOptions =
-    Schema.decodeUnknownSync(DocumentTaskOptionsSchema)({});
 
   @query('.multiple-files-list')
   private fileListElement?: HTMLElement;
@@ -137,64 +125,6 @@ export class FileSelectGroup extends LitElement {
     const [moved] = reordered.splice(index, 1);
     reordered.splice(target, 0, moved);
     this.patchLaunch({ [this.listId]: reordered });
-  }
-
-  /**
-   * Handle wa-select on the checkbox-type dropdown items: keep the menu open
-   * (preventDefault), patch the launcher field the item names, and react to
-   * the auto-toggle wa-dropdown applies before this fires.
-   */
-  private handleMenuSelect = (event: WaSelectEvent): void => {
-    event.preventDefault();
-    const { item } = event.detail;
-    if (!(item instanceof WaDropdownItem) || !item.value) return;
-    this.patchLaunch({ [item.value]: item.checked });
-  };
-
-  /** The group's header menu: the task switches its file group offers
-   *  (`DOCUMENT_TASK_OPTIONS`), none for a group that offers none. The
-   *  group renders only for a document task (ProgressApp's file section),
-   *  the one launch that reads these toggles. */
-  private renderConfigMenu(): TemplateResult | typeof nothing {
-    const { menu } = this.config;
-    if (menu === undefined) return nothing;
-    const values = this.checkboxValues;
-    const rows = Rec.toEntries(DOCUMENT_TASK_OPTIONS).filter(
-      ([, row]) => row.menu === this.config.type,
-    );
-    return html`
-      <wa-dropdown placement="bottom-start" @wa-select=${this.handleMenuSelect}>
-        <wa-button
-          slot="trigger"
-          id=${menu.id}
-          class=${classMap({
-            'action-icon-button': true,
-            'has-options': rows.some(([key]) => values[key]),
-          })}
-          appearance="plain"
-          variant="neutral"
-          size="s"
-          type="button"
-          aria-label=${menu.label}
-        >
-          ${waIcon(menu.icon)}
-        </wa-button>
-        ${repeat(
-          rows,
-          ([key]) => key,
-          ([key, row]) => html`
-            <wa-dropdown-item
-              type="checkbox"
-              value=${key}
-              ?checked=${values[key]}
-            >
-              ${row.label}
-            </wa-dropdown-item>
-          `,
-        )}
-      </wa-dropdown>
-      <wa-tooltip for=${menu.id}>${menu.label}</wa-tooltip>
-    `;
   }
 
   private renderFileList(): TemplateResult {
@@ -309,7 +239,6 @@ export class FileSelectGroup extends LitElement {
                   : formatResultCount(this.files.length, 'file')
               }
             </span>
-            ${this.renderConfigMenu()}
           </div>
           <div class="file-select-actions">
             ${renderIconActionButton({

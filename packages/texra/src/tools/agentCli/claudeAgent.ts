@@ -10,7 +10,7 @@
  *
  * Authentication: the SDK spawns the Claude Code CLI as a subprocess, which
  * picks up whichever auth the user has configured:
- *   - ANTHROPIC_API_KEY env var (or stored in TeXRA Settings → API Keys)
+ *   - ANTHROPIC_API_KEY env var (or the Anthropic key TeXRA stores)
  *   - CLAUDE_CODE_OAUTH_TOKEN env var (long-lived OAuth token from
  *     `claude setup-token`)
  *   - OAuth session from `claude login` (Pro/Max subscription)
@@ -381,7 +381,7 @@ export const ClaudeAgentTool = defineTool({
   description:
     'Spin off a Claude Code agent (via @anthropic-ai/claude-agent-sdk) to perform code analysis, generation, or research. ' +
     "The agent runs the native `claude` binary locally and can read files, run commands, and make edits within the permissions this run's approval policy grants: file edits auto-accepted when the launch was approved, every permission bypassed under Auto-approve or an all-agent-work grant. " +
-    'Auth: ANTHROPIC_API_KEY (via TeXRA Settings → API Keys or env var), CLAUDE_CODE_OAUTH_TOKEN (`claude setup-token`), or `claude login` OAuth session. ' +
+    'Auth: ANTHROPIC_API_KEY (the Anthropic key TeXRA stores, or the env var), CLAUDE_CODE_OAUTH_TOKEN (`claude setup-token`), or `claude login` OAuth session. ' +
     'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the session_id). ' +
     'Pass session_id on a later call to continue that session with a follow-up, one turn per call. ' +
     'Set fork_session to branch from that session while leaving the original unchanged. Choose claude_code for coding tasks that benefit from a separate Anthropic Claude Code agent. It runs in the working directory of the calling agent, with independent file editing, search, and shell access, async and multi-turn like `agent`; it takes no directory argument, so give parallel coders disjoint files to edit. codex and claude_code are both independent sandboxed coders distinct from the in-process `agent` specialists. Prefer whichever vendor fits the task.',

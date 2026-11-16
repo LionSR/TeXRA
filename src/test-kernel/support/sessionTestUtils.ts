@@ -101,7 +101,7 @@ export const queuedFollowUps = (
   runId: RunId,
 ) =>
   Effect.gen(function* () {
-    yield* Context.get(session, SessionLog).settled;
+    yield* Context.get(session, SessionLog).drained;
     const view = yield* Context.get(session, SessionViewAccess).read([runId]);
     return view.queuedFollowUps.get(runId) ?? [];
   });

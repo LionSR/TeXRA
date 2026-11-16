@@ -69,7 +69,7 @@ export type PresentationEventHandlers<
 
 /**
  * A host could not present one runtime notice: its `emit` threw. The
- * presentation plane's one failure, so the fallback notice and the warn logs
+ * presentation layer's one failure, so the fallback notice and the warn logs
  * that consume it report the same cause the raw `catch` they replaced
  * reported. A failure of the program `emit` answers with is not this one:
  * nothing waits on a presentation, so `presentOn` warn-logs it on the

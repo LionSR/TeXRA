@@ -18,7 +18,6 @@ import { render, type Instance as InkInstance } from 'ink';
 import { AgentCatalog } from '@texra-ai/harness/host';
 import {
   type RuntimeCommand,
-  qualifyAggregateId,
   type RunId,
   type AgentConfig,
   type ApprovalPolicy,
@@ -56,7 +55,6 @@ import {
 import { getFirstRunDone } from '@texra/controllers/onboarding/onboardingFunnel';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { launchTeamId } from '@texra/agent/teams/teamLaunch';
-import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 
@@ -209,10 +207,9 @@ export async function runChat(
         modelOverride: initialResume?.config.model ?? init.modelOverride,
         envAgent: context.envAgent,
         envModel: context.envModel,
-        // The implicit chat default is a persona with no document task.
-        visibleToolUseAgents: (yield* (yield* AgentCatalog)
+        visibleToolUseAgents: yield* (yield* AgentCatalog)
           .workspaceAgents(services)
-          .visible()).filter((agent) => documentTaskOf(agent) === null),
+          .visible(),
       });
       const agentEntry = yield* resolveChatToolUseAgent(
         services,
@@ -453,7 +450,7 @@ export async function runChat(
         Stream.runDrain(
           runSession.view.watch(
             ids.map((id) => ({
-              id: qualifyAggregateId('run', id),
+              id: id,
               fromSeq: 0,
             })),
             { cursor: view.cursor, debug: view.debug },
@@ -679,7 +676,7 @@ export async function runChat(
     // process's; the service's publisher is its own.
     flushArtifacts: (runsElsewhere
       ? Effect.void
-      : Effect.flatMap(services.session, (local) => local.settled)
+      : Effect.flatMap(services.session, (local) => local.drained)
     ).pipe(
       Effect.timeout(SESSION_CLOSE_DEADLINE_MS),
       Effect.mapError(

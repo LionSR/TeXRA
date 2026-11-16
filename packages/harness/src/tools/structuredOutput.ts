@@ -12,11 +12,11 @@ import type { ITool, ToolContext } from '@agent/core/tools/ToolTypes';
 import { inRunSession } from '@agent/runtime/RunCall';
 import {
   convertToolSchema,
+  mapSubschemas,
   type JSONSchemaObject,
 } from '@agent/core/tools/toolSchema';
 import {
   ToolError,
-  JsonValueSchema,
   STRUCTURED_OUTPUT_TOOL_NAME,
   type ToolResult,
 } from '@shared/schemas';
@@ -49,30 +49,6 @@ const FORBIDDEN_SCHEMA_PROPERTY_KEYS = [
   'prototype',
 ];
 
-// Schema keywords the walker recurses into, grouped by the shape of their
-// value: a single subschema, an array of subschemas, or a record of them.
-const SUBSCHEMA_KEYS = [
-  'additionalItems',
-  'additionalProperties',
-  'contains',
-  'else',
-  'if',
-  'items',
-  'not',
-  'propertyNames',
-  'then',
-  'unevaluatedItems',
-  'unevaluatedProperties',
-];
-const SUBSCHEMA_LIST_KEYS = ['allOf', 'anyOf', 'oneOf', 'prefixItems'];
-const SUBSCHEMA_RECORD_KEYS = [
-  '$defs',
-  'definitions',
-  'dependentSchemas',
-  'dependencies',
-  'properties',
-];
-
 /**
  * Guard a JSON Schema a model or a sandboxed script authored (untrusted)
  * before it is compiled on the host. Walking the schema it rejects:
@@ -89,7 +65,7 @@ function assertSafeSandboxSchema(schema: unknown): void {
   }
   let nodeCount = 0;
   const walk = (node: unknown, depth: number): void => {
-    if (!Predicate.isObjectOrArray(node)) return;
+    if (!Predicate.isObject(node)) return;
     if (depth > MAX_SANDBOX_SCHEMA_DEPTH) {
       throw new Error(
         `Structured output JSON Schema is nested deeper than the ${MAX_SANDBOX_SCHEMA_DEPTH}-level limit.`,
@@ -100,10 +76,6 @@ function assertSafeSandboxSchema(schema: unknown): void {
       throw new Error(
         `Structured output JSON Schema exceeds the ${MAX_SANDBOX_SCHEMA_NODES}-node limit.`,
       );
-    }
-    if (!Predicate.isObject(node)) {
-      for (const child of node) walk(child, depth + 1);
-      return;
     }
     const record = node;
     if ('pattern' in record || 'patternProperties' in record) {
@@ -120,28 +92,14 @@ function assertSafeSandboxSchema(schema: unknown): void {
       );
     }
 
-    for (const key of SUBSCHEMA_KEYS) {
-      walk(record[key], depth + 1);
-    }
-    for (const key of SUBSCHEMA_LIST_KEYS) {
-      const branches = record[key];
-      if (Array.isArray(branches)) {
-        for (const branch of branches) walk(branch, depth + 1);
-      }
-    }
-    for (const key of SUBSCHEMA_RECORD_KEYS) {
-      const schemas = record[key];
-      if (Predicate.isObjectOrArray(schemas)) {
-        for (const name of Object.keys(schemas)) {
-          if (FORBIDDEN_SCHEMA_PROPERTY_KEYS.includes(name)) {
-            throw new Error(
-              `Structured output JSON Schema cannot declare a "${name}" property.`,
-            );
-          }
-        }
-        for (const child of Object.values(schemas)) walk(child, depth + 1);
-      }
-    }
+    mapSubschemas(record, (child, _keyword, name) => {
+      if (name !== undefined && FORBIDDEN_SCHEMA_PROPERTY_KEYS.includes(name))
+        throw new Error(
+          `Structured output JSON Schema cannot declare a "${name}" property.`,
+        );
+      walk(child, depth + 1);
+      return child;
+    });
   };
   walk(schema, 0);
 }
@@ -189,7 +147,7 @@ export function normalizeStructuredOutputSchema(
  * The guarantee is the tool layer's own guarantee: `defineTool` validates
  * the model's call before `execute` runs, and an invalid call surfaces a
  * `SchemaError` the model self-corrects. `execute` then enforces the persisted
- * JSON-value contract and returns it as the result's `value`: the settled
+ * JSON-value contract and returns it as the result's `value`: the finished
  * result is the run's structured output (`RunState.structured`).
  */
 export function buildTerminalTool(
@@ -213,7 +171,7 @@ export function buildTerminalTool(
           new ToolError('submit_output can only be accepted once per run.'),
         );
       }
-      const value = yield* Schema.decodeUnknownEffect(JsonValueSchema)(input);
+      const value = yield* Schema.decodeUnknownEffect(Schema.Json)(input);
       return {
         status: 'executed',
         endTurn: true,

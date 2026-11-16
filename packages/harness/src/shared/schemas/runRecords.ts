@@ -5,7 +5,7 @@ import { normalizeFilePath } from '@utils/core/pathBasics';
 
 import { AgentConfigSchema } from './agentConfig';
 import { RunIdSchema } from './identifiers';
-import { JsonValueSchema } from './jsonValue';
+import type { ExecEnd } from './opResults';
 import { ModelFailureSchema, modelFailureMessage } from './errors';
 import { RunOutcomeSchema } from './run';
 import { RunIdentitySchema } from './runIdentity';
@@ -24,24 +24,18 @@ export const RunRecordFieldsSchema = Schema.Union([
   AgentConfigSchema,
 ]);
 
-/** Whether the run is a task (an agent carrying a plugin's block, run on
- *  its recipe): its value and its children's spend are its output, its end
- *  its record; it resumes from its checkpoint, its opening rebuilt. The app
- *  wrote its recipe, not a model, so the launch that chose the task granted
- *  it: tools fixed past any switch, the catalog's agents under the launch's
- *  approval, its prompts and files passed as written, and no skill
- *  activated by its instruction. */
-export const isTaskConfig = (
-  config: typeof RunRecordFieldsSchema.Encoded,
-): boolean => recipeBlockOf(config) !== null;
-
-/** The block key of the plugin whose recipe the run opened on
- *  (`script.block`), or null for a run that is no task. */
-export const recipeBlockOf = (
+/** The name of the registered program the run opened on (`script.name`),
+ *  or null for any other run. A program's run is a script that ends: its
+ *  value and its children's spend are its output, its end its record, and
+ *  it takes no later message. A plugin wrote the program, not a model, so
+ *  the launch that chose it granted it: tools fixed past any switch, its
+ *  delegations under the launch's approval, its prompts and files passed
+ *  as written, and no skill activated by its instruction. */
+export const programOf = (
   config: typeof RunRecordFieldsSchema.Encoded,
 ): string | null =>
-  'script' in config && config.script?.kind === 'recipe'
-    ? config.script.block
+  'script' in config && config.script?.kind === 'program'
+    ? config.script.name
     : null;
 
 /**
@@ -91,9 +85,8 @@ const RunEndOutputSchema = Schema.Struct({
   /** Workspace-relative paths of files edited by tool calls during the run. */
   files: Schema.Array(Schema.String),
   /** Value captured by the `submit_output` terminal tool, or the value a
-   *  recipe's script returned (its plugin's block reads it:
-   *  `AgentBlock.result`). */
-  structured: Schema.optional(JsonValueSchema),
+   *  program's script returned. */
+  structured: Schema.optional(Schema.Json),
 });
 export type RunEndOutput = typeof RunEndOutputSchema.Type;
 
@@ -125,16 +118,23 @@ export type RunEnd = typeof RunEndSchema.Type;
 export const RunEndRowSchema = RunEndSchema.mapFields(Struct.omit(['usage']));
 
 /**
- * How a process run's command exited (the `process.exit` row): its code
- * (null when it had none: it could not start, or died by a signal) and
- * whether the run's own timeout ended it. A run a stop interrupted has
- * none: the interruption is the fact.
+ * How a process run's command exited (the `process.exit` row, and a
+ * background command's delivery to its parent): its code, null when it had
+ * none (it timed out, could not start, or died by a signal), and whether the
+ * run's own timeout ended it. A run a stop interrupted has none: the
+ * interruption is the fact.
  */
 export const ProcessExitSchema = Schema.Struct({
   code: Schema.NullOr(Schema.Int),
   timedOut: Schema.Boolean,
 });
 export type ProcessExit = typeof ProcessExitSchema.Type;
+
+/** How a command's `end` is recorded: only an exit has a code. */
+export const processExit = (end: ExecEnd): ProcessExit => ({
+  code: end._tag === 'Exited' ? end.code : null,
+  timedOut: end._tag === 'TimedOut',
+});
 
 /**
  * One run's result as `readResult` answers it: its terminal fact, the
@@ -177,7 +177,7 @@ export const AgentRunListingEntrySchema = Schema.Struct({
    *  `run.config`'s. */
   model: Schema.optional(Schema.String),
   /** `deriveResumability` finds a point to continue from. Ownership and
-   *  loadability are settled when the run is opened. */
+   *  loadability are finished when the run is opened. */
   resumable: Schema.Boolean,
   /** Why the run cannot resume in this build although it may have rows to
    *  continue from: they could not be read, an earlier build wrote them, or

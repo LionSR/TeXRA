@@ -578,7 +578,7 @@ export function createSessionSurfaces(options: {
     const edited = editedProposal(surface, view);
     if (edited !== null) {
       const { data } = edited;
-      // A task works over its input or media files, as `document_task` asks.
+      // A task works over its input or media files, as its program asks.
       if (
         data.task &&
         launch.inputFiles.length === 0 &&

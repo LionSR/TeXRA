@@ -51,16 +51,13 @@ export {
   sessionActivity,
   SessionViewSchema,
   type Attention,
+  type PendingRequest,
   type RequestAnswerability,
+  type RunView,
   type SessionTitleState,
+  type SessionView,
+  type TranscriptView,
 } from '@shared/session/sessionView';
-// The views, read-only all the way down, and the request a run waits on.
-export type {
-  PendingRequest,
-  RunView,
-  SessionView,
-  TranscriptView,
-} from '@shared/session/readonlyViews';
 // Why a run no longer takes an action its `actions` once listed.
 export { runActionRefusal } from '@shared/session/runActions';
 // What makes the views read-only all the way down.
@@ -84,7 +81,6 @@ export type {
   AgentConfigInput,
   AgentProposal,
   AgentSource,
-  AggregateKind,
   AttachedMemoryMiss,
   CompactionActivityData,
   CompactionActivityOutcome,
@@ -99,10 +95,8 @@ export type {
   HookEvent,
   InlinePersona,
   HarnessInstructionKey,
-  JsonValue,
   LoadedMediaMetadata,
   LocalRuntimeState,
-  LogicalId,
   LogLevel,
   MediaAttachmentKind,
   MessageType,
@@ -192,8 +186,11 @@ export {
 } from '@utils/errors/errorMessage';
 // An exported run, as a static viewer parses it back.
 export {
+  AssembleTraceResultSchema,
   readTraceFacts,
   TraceDocumentSchema,
+  TraceMissingSchema,
+  type AssembleTraceResult,
   type TraceDocument,
   type TraceFactKind,
 } from '@transcript/traceDocumentSchema';
@@ -242,6 +239,7 @@ export {
   WEBSOCKET_OPENAI_SETTING,
   type HarnessRowKey,
   type SettingChoiceCopy,
+  settingName,
   type SettingRow,
   type SettingsCatalog,
   type SettingStore,
@@ -342,8 +340,7 @@ export {
   isPackagedAgentSource,
   isRunId,
   isPlainAgentIdentity,
-  isTaskConfig,
-  JsonValueSchema,
+  programOf,
   LaunchNoticeSchema,
   NonNegativeIntSchema,
   listingTypeOf,
@@ -363,10 +360,8 @@ export {
   // Who answers a request: a person, or the run grant that answers it.
   type AnsweredBy,
   type ProposalFileFields,
-  qualifyAggregateId,
   factName,
   type FactName,
-  recipeBlockOf,
   referencedAggregates,
   replayInputs,
   type RequestDecision,

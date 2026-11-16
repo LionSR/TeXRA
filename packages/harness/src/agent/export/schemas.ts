@@ -9,7 +9,7 @@
 
 import { Schema } from 'effect';
 
-import { JsonValueSchema, MediaAttachmentKindSchema } from '@shared/schemas';
+import { MediaAttachmentKindSchema } from '@shared/schemas';
 
 // ============================================================
 // Intermediate representation — format-agnostic
@@ -46,7 +46,7 @@ export const ExportNodeSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('tool-result'),
     text: Schema.String,
-    value: Schema.optional(JsonValueSchema),
+    value: Schema.optional(Schema.Json),
   }),
   Schema.Struct({ kind: Schema.Literal('web-search'), query: Schema.String }),
 ]);

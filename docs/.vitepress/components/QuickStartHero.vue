@@ -48,7 +48,7 @@ import MockupFrame from './MockupFrame.vue';
               ><wa-icon library="texra" name="sparkle"></wa-icon
             ></span>
             <div class="select">
-              <span class="s-val">polish</span>
+              <span class="s-val">orchestrator</span>
               <wa-icon
                 class="s-caret"
                 library="texra"
@@ -108,8 +108,8 @@ import MockupFrame from './MockupFrame.vue';
 </template>
 
 <style scoped>
-/* New task chrome (lpanel/prompt/footer/run/…) lives in mockup.css, shared
-   with ToolConfigHero. Only the sidebar width is unique to this hero. */
+/* New task chrome (lpanel/prompt/footer/run/…) lives in mockup.css. Only the
+   sidebar width is unique to this hero. */
 .board {
   width: var(--mk-size-320);
 }

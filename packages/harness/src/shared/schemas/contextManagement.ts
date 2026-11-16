@@ -3,7 +3,6 @@ import { Schema, Struct } from 'effect';
 import { NonNegativeIntSchema } from './nonNegativeInt';
 
 const ContextManagementAction = Schema.Literals([
-  'compaction',
   'clear_tool_uses',
   'clear_thinking',
   'truncation',
@@ -30,7 +29,6 @@ const MaxTokensReducedDataSchema = ContextManagementDataBaseSchema.mapFields(
 const TokensFreedDataSchema = ContextManagementDataBaseSchema.mapFields(
   Struct.assign({
     action: ContextManagementAction.pick([
-      'compaction',
       'clear_tool_uses',
       'clear_thinking',
       'truncation',
@@ -47,22 +45,34 @@ export const ContextManagementDataSchema = Schema.Union([
 
 export type ContextManagementData = typeof ContextManagementDataSchema.Type;
 
-/**
- * Lifecycle event for one context-compaction operation. Completion statistics
- * remain in {@link ContextManagementDataSchema}; this smaller payload lets
- * hosts project one stable activity row from start through its terminal state.
- */
-export const CompactionActivityDataSchema = Schema.Struct({
+const UtilizationSchema = Schema.Number.check(Schema.isGreaterThanOrEqualTo(0));
+
+const CompactionActivityFields = {
   activity: Schema.Literal('context_compaction'),
   operationId: Schema.NonEmptyString,
-  state: Schema.Literals([
-    'started',
-    'completed',
-    'failed',
-    'cancelled',
-    'skipped',
-  ]),
-});
+};
+
+/**
+ * Lifecycle event for one context-compaction operation, so hosts project one
+ * stable activity row from its start through its end. A completed compaction
+ * carries what it freed: the estimated tokens and the window share before
+ * and after.
+ */
+export const CompactionActivityDataSchema = Schema.Union([
+  Schema.Struct({
+    ...CompactionActivityFields,
+    state: Schema.Literals(['started', 'failed', 'cancelled', 'skipped']),
+  }),
+  Schema.Struct({
+    ...CompactionActivityFields,
+    state: Schema.Literal('completed'),
+    freed: Schema.Struct({
+      tokens: Schema.Int,
+      utilizationBefore: UtilizationSchema,
+      utilizationAfter: UtilizationSchema,
+    }),
+  }),
+]);
 
 export type CompactionActivityData =
   (typeof CompactionActivityDataSchema)['Type'];

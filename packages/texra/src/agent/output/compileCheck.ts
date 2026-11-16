@@ -7,7 +7,8 @@ import {
   type RunStorageFileLocation,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { RunFileService } from '@texra-ai/harness/plugins';
+import { runDirUnder } from '@texra-ai/harness/plugins';
+import type { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import {
   hasExtension,
   createRunStorageLocation,
@@ -45,10 +46,10 @@ interface CompileCheckContext {
   /** The run's session roots: its workspace, storage, and setting stores. */
   roots: WorkspaceRoots;
   /** The run's files; its `runId` names the run. */
-  fileService: RunFileService;
+  fileService: RunWorkspace;
   logger: AgentTrace;
   /** Directories the compile searches besides the output's own: where the
-   *  task's bound files live (a poster's theme `.sty` beside its agent). */
+   *  task's templates live (a poster's theme `.sty`). */
   inputDirs: readonly string[];
 }
 
@@ -103,7 +104,7 @@ export function resolveWorkspaceSourceDir(
   const runRelative =
     location.kind === 'runStorage'
       ? path.relative(
-          new RunFileService(location.runId, roots).runDirectory,
+          runDirUnder(roots.storage, location.runId),
           location.absolutePath,
         )
       : undefined;

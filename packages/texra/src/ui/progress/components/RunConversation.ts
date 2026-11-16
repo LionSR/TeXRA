@@ -1,6 +1,6 @@
 /**
  * `<run-conversation>`: the body of the selected run. A switch on the
- * run's `recipe` and `identity.kind` over plain properties; the three
+ * run's `program` and `identity.kind` over plain properties; the three
  * bodies take the same four records and nothing is provided by context.
  */
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
@@ -69,7 +69,7 @@ export class RunConversation extends LitElement {
       ></process-run-content>`;
     }
 
-    return run.recipe
+    return run.program
       ? html`<document-task-run-content
           .run=${run}
           .view=${view}

@@ -9,7 +9,7 @@ import { Cause, Context, Effect, Exit, Schema } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports - harness
-import { qualifyAggregateId, RunIdSchema } from '@shared/schemas';
+import { RunIdSchema } from '@shared/schemas';
 import {
   RunHistory,
   RunHistoryRefused,
@@ -29,7 +29,7 @@ const RUN = Schema.decodeUnknownSync(RunIdSchema)('ab12cd');
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'RunHistory',
   (it) => {
-    const AGGREGATE = qualifyAggregateId('run', RUN);
+    const AGGREGATE = RUN;
     const SECRET = 'sk-abcdefghijklmnopqrstuvwxyz0123';
     const turn = toolUseTurn(RUN);
     const snapshot = (): RunHistoryDraft => ({
@@ -148,7 +148,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           ]);
           const settledA = state.pendingResponse?.records['call-a']?.status;
           const file =
-            settledA?.kind === 'settled' &&
+            settledA?.kind === 'finished' &&
             settledA.result.status === 'executed'
               ? settledA.result.files?.[0]
               : undefined;

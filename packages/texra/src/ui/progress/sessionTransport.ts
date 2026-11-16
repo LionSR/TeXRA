@@ -22,7 +22,6 @@ import {
 
 import {
   Rejected,
-  qualifyAggregateId,
   type OutcomeSchema,
   type RunId,
 } from '@texra-ai/harness/schemas';
@@ -388,6 +387,6 @@ export function transcriptAggregates(
   if (runId === null) return [];
   const run = view.runs.get(runId);
   if (!run) return [];
-  const id = qualifyAggregateId('run', run.id);
+  const id = run.id;
   return [{ id, fromSeq: view.transcriptSeq.get(id) ?? 0 }];
 }

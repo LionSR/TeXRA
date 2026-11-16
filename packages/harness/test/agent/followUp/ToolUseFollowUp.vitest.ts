@@ -7,11 +7,7 @@ import { layer } from '@effect/vitest';
 import { Context, Effect, Exit, Fiber, Scheduler } from 'effect';
 import { expect } from 'vitest';
 
-import {
-  qualifyAggregateId,
-  RunIdSchema,
-  type RunId,
-} from '@texra-ai/harness/schemas';
+import { RunIdSchema, type RunId } from '@texra-ai/harness/schemas';
 import { Inbox } from '@agent/followUp/Inbox';
 import type { FollowUpReader } from '@agent/followUp/FollowUpReader';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
@@ -33,12 +29,8 @@ import {
 const queuedTexts = (session: Context.Context<SessionServices>, runId: RunId) =>
   Effect.gen(function* () {
     const log = Context.get(session, SessionLog);
-    yield* log.settled;
-    const rows = yield* log.history(
-      qualifyAggregateId('run', runId),
-      undefined,
-      ['followup.queued'],
-    );
+    yield* log.drained;
+    const rows = yield* log.history(runId, undefined, ['followup.queued']);
     return rows.flatMap((row) =>
       row.type === 'followup.queued' && 'text' in row.content
         ? [row.content.text]
@@ -158,11 +150,10 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('run input', (it) => {
           const closed = yield* startedRun(session);
           const open = yield* startedRun(session);
           yield* inbox.closeInput(closed);
-          yield* Context.get(session, SessionLog).settled;
+          yield* Context.get(session, SessionLog).drained;
 
           expect(yield* inbox.send(closed, user('still closed'))).toEqual({
             kind: 'refused',
-            reason: 'notResumable',
           });
           expect(yield* queuedTexts(session, closed)).toEqual([]);
           expect(yield* inbox.send(open, user('never closed'))).toMatchObject({

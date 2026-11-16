@@ -275,7 +275,10 @@ without new evidence.
   `ancestryRows` includes the starting run and drops a parent whose facts
   cannot be read; both call sites leave the run out or keep that parent's
   id (a removed ancestor is still the hook `session_id`). An adapter at
-  either site is longer than the loop it replaces.
+  either site is longer than the loop it replaces. Since landed another
+  way (2026-11-16): the two sites share `ancestorIds`
+  (`packages/harness/src/shared/session/runRelation.ts`), a walk of ids
+  with their semantics; `ancestryRows` stays the rows walk.
 - **`selectAvailableDelegationModel` called twice per launch.** Two
   decisions: the launch checks the model the call asked for; the second
   call runs only when a person picked another model at approval, after a

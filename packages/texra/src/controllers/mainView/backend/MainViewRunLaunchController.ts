@@ -1,4 +1,4 @@
-import { absurd, Effect, Result, Schema } from 'effect';
+import { absurd, Effect } from 'effect';
 
 import { type StartInput } from '@texra-ai/harness';
 import {
@@ -13,7 +13,6 @@ import {
   agentKeyOf,
   agentName,
   type AgentConfig,
-  formatIssuesForDiagnostics,
   Rejected,
 } from '@texra-ai/harness/schemas';
 import { launchTeamId, resolveTeamLaunch } from '@texra/agent/teams/teamLaunch';
@@ -21,12 +20,6 @@ import { isPastedImage } from '@texra/shared/utils/pastedImageName';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
-import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
-import { documentTaskOf } from '@texra/tools/documents/documentTask';
-import {
-  DocumentTaskOptionsSchema,
-  documentTaskOptions,
-} from '@texra/shared/plugins/documents';
 import type { LaunchPatchSchema } from '@texra/shared/session/surface';
 import { pastedImageFullPath } from '@texra/utils/files/pastedImageUtils';
 
@@ -47,11 +40,9 @@ const buildLaunchConfig = Effect.fn('buildLaunchConfig')(function* (
     readonly launch: { readonly teamId: string };
   },
 ): Effect.fn.Return<AgentConfig, Rejected | StateReadFailed, AgentCatalog> {
-  // The agent decides the mode: one with a document task runs it over the
-  // files; any other agent, and a team's lead, chats. An agent the catalog
-  // does not know launches as a chat, whose own resolution shows the
-  // agent-config banner. A failed load refuses the launch: the catalog may
-  // still serve the agent, which would then run as a chat without its task.
+  // An agent, and a team's lead, chats. An agent the catalog does not know
+  // launches all the same: its own resolution shows the agent-config
+  // banner. A failed load refuses the launch.
   const workspaceAgents = (yield* AgentCatalog).workspaceAgents(roots);
   const entry = team
     ? null
@@ -66,7 +57,7 @@ const buildLaunchConfig = Effect.fn('buildLaunchConfig')(function* (
   // reads the mode from the one its selection names, so a launch runs only
   // one of them. The catalog also finds an agent hidden since it was chosen
   // (or the hidden agent of a run Run again… opened the form on); the form
-  // shows no agent and no mode for it, so its launch is refused.
+  // shows no agent for it, so its launch is refused.
   if (
     entry !== null &&
     !(yield* workspaceAgents.visible()).some(
@@ -76,56 +67,27 @@ const buildLaunchConfig = Effect.fn('buildLaunchConfig')(function* (
     return yield* new Rejected({
       reason: `Choose an agent first: ${entry.name} is hidden from the agent selector.`,
     });
-  const task = entry !== null && documentTaskOf(entry) !== null ? entry : null;
-  // A task revises its input files, or reads its media alone (a recording
-  // to transcribe, a scan to OCR).
-  if (
-    task &&
-    launch.inputFiles.length === 0 &&
-    launch.mediaFiles.length === 0
-  ) {
-    return yield* new Rejected({
-      reason: 'Choose an input or media file first.',
-      docsPage: 'file-management',
-    });
-  }
-
-  // A task's options are the form's switches; a chat takes none.
-  const optionsResult = task
-    ? Schema.decodeUnknownResult(DocumentTaskOptionsSchema)(launch)
-    : undefined;
-  if (optionsResult !== undefined && !Result.isSuccess(optionsResult)) {
-    const [issue] = formatIssuesForDiagnostics(optionsResult.failure);
-    const path = issue?.path || 'options';
-    return yield* new Rejected({
-      reason: `Invalid task options (${path}): ${issue?.message ?? 'validation failed'}`,
-    });
-  }
-
   const config = {
     agent,
     model: launch.model,
     instruction,
     workingDirectory: launch.workingDirectory.trim() || undefined,
-    inputFiles: launch.inputFiles,
-    contextFiles: launch.contextFiles,
+    // The form starts chats only; it shows its file lists only while open
+    // on a program's proposal, so a launch carries none of them.
+    inputFiles: [],
+    contextFiles: [],
     ...(team
       ? {
           delegationAgentScope: team.delegationAgentScope,
           launch: { teamId: team.launch.teamId },
         }
       : {}),
-    // A task's output paths are implicit in the input list; the task
-    // stamps the generated filenames its definition declares.
     outputFiles: [],
     mediaFiles: launch.mediaFiles.map((file) =>
       isPastedImage(file) ? pastedImageFullPath(roots.storage, file) : file,
     ),
   };
-  // A document task runs its agent's recipe over the files, with the
-  // form's switches checked above.
-  const patch = task ? documentTaskPatch(config, task, launch) : null;
-  return yield* decodeLaunchConfig(patch ? { ...config, ...patch } : config);
+  return yield* decodeLaunchConfig(config);
 });
 
 /**
@@ -204,7 +166,6 @@ export function launchFormOf(
     );
   const teamId = launchTeamId(config);
   return Effect.succeed({
-    ...documentTaskOptions(config),
     ...(teamId
       ? { launchTarget: 'team' as const, selectedTeamId: teamId }
       : {
@@ -219,8 +180,6 @@ export function launchFormOf(
     model: config.model,
     instruction: config.instruction,
     workingDirectory: config.workingDirectory ?? '',
-    inputFiles: [...config.inputFiles],
-    contextFiles: [...config.contextFiles],
     mediaFiles: [...config.mediaFiles],
   });
 }
