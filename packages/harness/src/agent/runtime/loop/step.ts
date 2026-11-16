@@ -66,7 +66,7 @@ import {
   type SkillCatalogEntry,
 } from '@skills/runtimeSkills';
 import { toolDefinitionsFor, toolDigests } from '@tools/catalogEntries';
-import { readDisabledTools } from '@tools/plugins';
+import { readDisabledTools } from '@shared/state/disabledTools';
 import type { SessionTools } from '@tools/sessionTools';
 import { sha256 } from '@utils/core/idHash';
 import type { StepRoot } from '@utils/files/externalRoots';

@@ -17,14 +17,13 @@
  */
 
 // Third-party imports
-import { Cause, Effect, type Layer, Result, Schema } from 'effect';
+import { Cause, Effect, type Layer, Schema } from 'effect';
 
 // Local imports
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { withLogChannel } from '@logger/effectLog';
 import { type AppSignals, emitAppSignal } from '@platform/appSignals';
-import { StateReadFailed, type StateStore } from '@shared/config/settings';
 import {
   aggregateTarget,
   qualifyAggregateId,
@@ -38,10 +37,6 @@ import {
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import type { Alongside } from '@shared/session/sessionEvents';
-import {
-  decodeDisabledTools,
-  DISABLED_TOOLS_KEY,
-} from '@shared/state/disabledTools';
 import type { SessionLogShape } from '@shared/session/sessionLog';
 import type { SettingRow } from '@shared/state/stateSettings';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
@@ -180,25 +175,6 @@ export const definePlugin = <ROut = never>(
   // The step that pins the plugin serves its layers' services to its calls.
   // cast: `ROut` is checked by the parameter type and erased here.
   plugin as unknown as Plugin;
-
-/** {@link decodeDisabledTools}, failing as the state read it is. */
-export function storedDisabledTools(
-  stored: unknown,
-): Result.Result<ReadonlySet<string> | undefined, StateReadFailed> {
-  return Result.mapError(
-    decodeDisabledTools(stored),
-    (failure) => new StateReadFailed(failure),
-  );
-}
-
-/** The plugin ids the user switched off in `store`'s record; none while it
- *  is absent. */
-export function readDisabledTools(store: StateStore) {
-  return store.get(DISABLED_TOOLS_KEY.key).pipe(
-    Effect.flatMap((stored) => Effect.fromResult(storedDisabledTools(stored))),
-    Effect.map((ids): ReadonlySet<string> => ids ?? new Set()),
-  );
-}
 
 /**
  * Announce the workspace files a committed row says its run wrote past the
