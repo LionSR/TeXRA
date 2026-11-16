@@ -230,36 +230,37 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
 
   const signIn = Effect.fn(`subscriptionProviders.${descriptor.id}.signIn`)(
     function* (options: SubscriptionSignInOptions) {
-      const { signInWithBrowser, signInWithDeviceCode } = yield* account;
+      const subscription = yield* account;
+      const { signInWithDeviceCode } = subscription;
       // A provider without a device code signs in through the browser even
       // when the host asked for one: on a remote host whose callback port is
       // forwarded, that still completes.
       const session: Pick<SubscriptionSessionStatus, 'email' | 'accountId'> =
         options.transport === 'device' && signInWithDeviceCode !== undefined
           ? yield* deviceCodeLogin(signInWithDeviceCode, options)
-          : yield* signInWithBrowser((url) =>
-              options.present.presentSignInUrl(url),
-            ).pipe(
-              Effect.catchIf(
-                (error): error is LoopbackTransportUnavailableError =>
-                  error instanceof LoopbackTransportUnavailableError,
-                (error) => {
-                  const causeMessage =
-                    error.cause === undefined
-                      ? ''
-                      : ` Cause: ${toErrorMessage(error.cause)}`;
-                  return Effect.logWarning(
-                    `${descriptor.displayName} browser sign-in is unavailable, falling back to a one-time device code: ${toErrorMessage(error)}${causeMessage}`,
-                  ).pipe(
-                    Effect.annotateLogs({ data: error }),
-                    withLogChannel(CHANNEL),
-                    Effect.andThen(
-                      deviceCodeLogin(signInWithDeviceCode, options),
-                    ),
-                  );
-                },
-              ),
-            );
+          : yield* subscription
+              .signInWithBrowser((url) => options.present.presentSignInUrl(url))
+              .pipe(
+                Effect.catchIf(
+                  (error): error is LoopbackTransportUnavailableError =>
+                    error instanceof LoopbackTransportUnavailableError,
+                  (error) => {
+                    const causeMessage =
+                      error.cause === undefined
+                        ? ''
+                        : ` Cause: ${toErrorMessage(error.cause)}`;
+                    return Effect.logWarning(
+                      `${descriptor.displayName} browser sign-in is unavailable, falling back to a one-time device code: ${toErrorMessage(error)}${causeMessage}`,
+                    ).pipe(
+                      Effect.annotateLogs({ data: error }),
+                      withLogChannel(CHANNEL),
+                      Effect.andThen(
+                        deviceCodeLogin(signInWithDeviceCode, options),
+                      ),
+                    );
+                  },
+                ),
+              );
       // The session is stored by now, so the change is announced whether
       // or not the preference write follows it, as the sign-out's is.
       yield* SubscriptionPreference.set(
