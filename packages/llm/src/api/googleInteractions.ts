@@ -3,7 +3,7 @@ import { GoogleGenAI, type Interactions } from '@google/genai';
 import { Effect, Ref, Result, Schema, Stream } from 'effect';
 
 // Local imports - canonical model contract
-import { prefixFingerprint } from './prefixFingerprint.js';
+import { anchoredPrefix, coveredPrefix } from './continuation.js';
 import {
   completedTurn,
   TurnResultSchema,
@@ -25,11 +25,7 @@ import {
   WireStreamInteractionSchema,
   WireUsageSchema,
 } from './googleInteractionsWire.js';
-import {
-  answeredCalls,
-  callsAnsweredBy,
-  systemUpdateText,
-} from '../message.js';
+import { replayableHistory, systemUpdateText } from '../message.js';
 import { originOf, sameModelOrigin } from '../protocol.js';
 import {
   ModelError,
@@ -100,13 +96,14 @@ const lowerInputPart = Effect.fn('llm.google.lowerInputPart')(function* (
   }
 });
 
+/** The messages from entry `from` on as Interactions steps. */
 const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
   messages: ResolvedTurn['messages'],
   origin: ModelOrigin,
+  from = 0,
 ) {
   const steps: Interactions.Step[] = [];
-  const answered = answeredCalls(messages);
-  for (const message of messages) {
+  for (const message of yield* replayableHistory(messages, origin, from)) {
     if (message.role === 'system' || message.role === 'user') {
       const content =
         message.role === 'system'
@@ -122,10 +119,7 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
       // video a tool attached is accepted in a user turn only, so those parts
       // follow the results in one user_input step, each named by its call.
       const carried: Interactions.Content[] = [];
-      for (const { call, result } of yield* callsAnsweredBy(
-        answered,
-        message,
-      )) {
+      for (const { call, result } of message.answered) {
         const content: Array<
           Interactions.TextContent | Interactions.ImageContent
         > = [];
@@ -166,9 +160,8 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
             break;
           }
           case 'reasoning':
-            // Omit another model's thoughts, as the Anthropic and Chat codecs do.
-            if (!sameModelOrigin(message.origin, origin)) break;
             if (
+              !sameModelOrigin(message.origin, origin) ||
               part.content !== undefined ||
               (part.evidence !== null &&
                 part.evidence.kind !== 'google-interactions-thought-signature')
@@ -256,18 +249,21 @@ const invocationInput = Effect.fn('llm.google.invocationInput')(function* (
   turn: Extract<ResolvedTurn, { protocol: 'google-interactions' }>,
   origin: ModelOrigin,
 ) {
-  const steps = yield* lowerMessages(turn.messages, origin);
-  if (!turn.continuation) return steps;
   const continuation = turn.continuation;
-  const prefix = turn.messages.slice(0, continuation.coveredMessages);
-  const prefixSteps = yield* lowerMessages(prefix, origin);
+  if (!continuation) return yield* lowerMessages(turn.messages, origin);
+  // A stored anchor never ends on a user_input step, so the prefix's steps
+  // and the suffix's concatenate to the whole history's.
+  const prefix = coveredPrefix(
+    GOOGLE_PREFIX_DOMAIN,
+    origin,
+    turn,
+    continuation,
+  );
   if (
+    prefix === undefined ||
     !turn.controls.store ||
-    !sameModelOrigin(continuation.origin, origin) ||
-    continuation.coveredMessages > turn.messages.length ||
-    continuation.prefixFingerprint !==
-      prefixFingerprint(GOOGLE_PREFIX_DOMAIN, origin, turn.system, prefix) ||
-    continuation.anchor.coveredSteps !== prefixSteps.length ||
+    (yield* lowerMessages(prefix, origin)).length !==
+      continuation.anchor.coveredSteps ||
     turn.messages
       .slice(continuation.coveredMessages)
       .some((message) => message.role === 'assistant')
@@ -278,7 +274,11 @@ const invocationInput = Effect.fn('llm.google.invocationInput')(function* (
         'The Google continuation does not cover this exact history and system input.',
     });
   }
-  return steps.slice(continuation.anchor.coveredSteps);
+  return yield* lowerMessages(
+    turn.messages,
+    origin,
+    continuation.coveredMessages,
+  );
 });
 
 function createInput(
@@ -528,22 +528,18 @@ const googleContinuation = Effect.fn('llm.google.continuation')(function* (
 ) {
   if (!turn.controls.store || result.providerResponseId === null)
     return undefined;
-  const prefix: ResolvedTurn['messages'] = [
-    ...turn.messages,
-    { role: 'assistant', origin, content: result.content },
-  ];
+  const { prefix, ...covered } = anchoredPrefix(
+    GOOGLE_PREFIX_DOMAIN,
+    origin,
+    turn,
+    result.content,
+  );
   const coveredSteps = yield* lowerMessages(prefix, origin);
   // With no output step, the next input joins the last user_input step.
   if (coveredSteps.at(-1)?.type === 'user_input') return undefined;
   return {
     origin,
-    coveredMessages: prefix.length,
-    prefixFingerprint: prefixFingerprint(
-      GOOGLE_PREFIX_DOMAIN,
-      origin,
-      turn.system,
-      prefix,
-    ),
+    ...covered,
     anchor: {
       interactionId: result.providerResponseId,
       coveredSteps: coveredSteps.length,

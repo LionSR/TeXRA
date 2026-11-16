@@ -273,7 +273,7 @@ const connect = Effect.fnUntraced(function* (
         ),
       );
       return responseEvents(chunks, origin, (result) =>
-        withResponsesContinuation(config, turn, result),
+        withResponsesContinuation(turn, result),
       ).pipe(
         Stream.mapEffect(
           Effect.fnUntraced(function* (event) {

@@ -28,12 +28,7 @@ import {
 } from '../turn.js';
 import { assembleTurn } from './assembleTurn.js';
 import { boundTurn, resolveTurn } from './turnInput.js';
-import {
-  answeredCalls,
-  callsAnsweredBy,
-  replayableHistory,
-  systemUpdateText,
-} from '../message.js';
+import { replayableHistory, systemUpdateText } from '../message.js';
 import { originOf, sameModelOrigin } from '../protocol.js';
 import { ModelError, fillModelError, sdkModelError } from '../errors.js';
 import {
@@ -162,8 +157,7 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
   const lowerPart = (part: Parameters<typeof inputPart>[0]) =>
     inputPart(part, (base64) => uploads.fileIdFor(base64, nowMs));
   const messages: MessageParam[] = [];
-  const history = replayableHistory(turn.messages, origin);
-  const answered = answeredCalls(history);
+  const history = yield* replayableHistory(turn.messages, origin);
   for (const [index, message] of history.entries()) {
     if (message.role === 'system') {
       // Native where the model takes it and the API admits it: after a user
@@ -186,10 +180,7 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
       });
     } else if (message.role === 'tool') {
       const content: ToolResultBlockParam[] = [];
-      for (const { call, result } of yield* callsAnsweredBy(
-        answered,
-        message,
-      )) {
+      for (const { call, result } of message.answered) {
         content.push({
           type: 'tool_result',
           tool_use_id: call.providerCallId,

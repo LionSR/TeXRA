@@ -160,7 +160,7 @@ export const openaiResponsesModel = Effect.fn('llm.responses.model')(function* (
           fillModelError(error, { requestId });
         const chunks = yield* sdkEvents(opened.data, enrich);
         return responseEvents(chunks, origin, (result) =>
-          withResponsesContinuation(config, turn, result),
+          withResponsesContinuation(turn, result),
         ).pipe(Stream.mapError(enrich));
       }).pipe(
         Effect.mapError((error) =>
@@ -353,7 +353,7 @@ export const openaiResponsesModel = Effect.fn('llm.responses.model')(function* (
     }),
     // The same anchor the foreground completion builds: an observed or
     // submitted turn chains on `previous_response_id` too.
-    finalize: (turn, result) => withResponsesContinuation(config, turn, result),
+    finalize: (turn, result) => withResponsesContinuation(turn, result),
   });
   const background = backgroundCapable(config) ? lifecycle : undefined;
 
