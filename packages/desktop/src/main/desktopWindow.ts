@@ -187,13 +187,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     ),
   );
 
-  // `surface` is declared below and read only inside a lazy callback; the
-  // order cannot flip, since the bindings take the onboarding this call
-  // returns.
-  const onboarding = yield* openWindowOnboarding({
-    runtime,
-    settings: () => surface.settings(),
-  });
+  const onboarding = yield* openWindowOnboarding(runtime);
 
   const shellActions = createDesktopShellActions(
     { postToRenderer: host.post },
@@ -218,6 +212,8 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     resourcesPath: options.resourcesPath,
     draftRequests: options.draftRequests,
     onboarding,
+    // `surface` is declared below and read only when a card asks.
+    settings: () => surface.settings(),
   });
   const surface: ProjectSurface = yield* openProjectSurface({
     host,

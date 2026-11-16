@@ -7,6 +7,7 @@
 
 import { Effect } from 'effect';
 import type { ProcessServices } from '@texra-ai/harness/host';
+import { Rejected } from '@texra-ai/harness/schemas';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 
@@ -27,6 +28,7 @@ import {
   postDesktopSettingsView,
 } from '../shared/desktopCommandSurface.js';
 import type { WindowOnboarding } from './desktopWindowOnboarding.js';
+import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
 import type { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
@@ -39,6 +41,9 @@ interface DesktopHostRequestsOptions {
   resourcesPath: string;
   postToRenderer(message: unknown): void;
   onboarding: WindowOnboarding;
+  /** The window's settings surface, absent while the window switches
+   *  projects; the onboarding card's sign-in goes through it. */
+  settings(): DesktopSettingsIpc | undefined;
   openExternalUrl(url: string): Effect.Effect<void, HostFailed>;
   /** Re-probe the LaTeX toolchain. */
   recheckTools(): Effect.Effect<void, never, ProcessServices>;
@@ -119,9 +124,22 @@ export const createDesktopHostRequests = (
         postDesktopSettingsView(options.postToRenderer, 'plugins'),
       ),
       onboarding: {
-        signInChatGpt: Effect.suspend(() =>
-          options.onboarding.signInWithChatGpt(),
-        ),
+        signInChatGpt: Effect.suspend(() => {
+          const settings = options.settings();
+          return settings
+            ? settings
+                .signInSubscription('chatgpt')
+                .pipe(
+                  Effect.mapError((cause) =>
+                    hostFailure('settings.signInSubscription', cause),
+                  ),
+                )
+            : Effect.fail(
+                new Rejected({
+                  reason: 'No project shows its settings yet; try again.',
+                }),
+              );
+        }),
         runSetup: (launch) =>
           Effect.suspend(() => options.onboarding.runSetup(launch)),
         // The desktop has no walkthrough of its own: the card's "Open
