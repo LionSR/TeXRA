@@ -70,14 +70,8 @@ this.
 
 ## 4. The merge feature's edited file is a harness launch field
 
-`editedFile` on the harness's `AgentConfig`
-(`packages/harness/src/shared/schemas/fileFields.ts`) and the `EDITED_*`
-template variables (`packages/harness/src/agent/prompt/templateInputs.ts`)
-serve one app agent (`packages/extension/resources/agents/merge.yaml`, launched
-from `packages/texra/src/controllers/session/hostRunActions.ts`). A plugin may
-already render its own variables beside the harness's, so the documents
-plugin can own it. `AgentConfig` is stored in run rows, so this is a row
-version change.
+Taken on 2026-11-16: the merge program reads `editedFile` from its `args`,
+`document_context` takes it as input, and `run.config` is at v9 without it.
 
 ## 5. The run list is built twice
 

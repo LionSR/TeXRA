@@ -119,8 +119,8 @@ export interface RunLaunch {
   readonly toolPolicy: ToolPolicy;
   /** Absolute or absent, parsed once at launch. */
   readonly workingDirectory?: string;
-  /** What the run opens from; null for a tool-use run whose rows hold its
-   *  opening, which a resume never renders again. */
+  /** What the run opens from; null on a resume, whose rows hold its
+   *  opening, which it never renders again. */
   readonly opening: TemplateOpening | null;
   /** How the launch enters the run's cell. */
   readonly entry: LaunchEntry;

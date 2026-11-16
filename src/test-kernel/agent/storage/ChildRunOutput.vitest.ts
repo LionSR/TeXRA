@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { layer } from '@effect/vitest';
-import { Effect, Layer, Schema, Context } from 'effect';
+import { Deferred, Effect, Layer, Schema, Context } from 'effect';
 import { expect } from 'vitest';
 
 import {
@@ -31,6 +31,11 @@ import {
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
 import { toolTable } from '@tools/toolTable';
+import { programTool } from '@agent/runtime/delegation/ProgramTool';
+import type { ScriptScope } from '@agent/runtime/RunCall';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { errorOf } from '@test/support/toolResultFields';
+import { autoDecideRequests } from '../progressTestUtils';
 
 const parentRunId = Schema.decodeUnknownSync(RunIdSchema)('aaaaaa111111');
 const childRunId = Schema.decodeUnknownSync(RunIdSchema)('bbbbbb222222');
@@ -157,6 +162,103 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           );
           expect(error.message).toContain('is not a direct child');
         }),
+      );
+
+      // A model names the merge program's edited file in its `args`; that
+      // file is read into the revision prompt, so it takes the rule the
+      // launch's file lists take.
+      it.effect(
+        "rejects a model's merge launch whose edited file is another run tree's output",
+        () =>
+          Effect.gen(function* () {
+            const session = yield* processSession;
+            const forbidden = yield* persistCompletedChild(
+              session,
+              otherParentRunId,
+            );
+            yield* publishTestRunStart(session, parentRunId);
+            // A launch past the check is refused, so the case ends either way.
+            yield* autoDecideRequests(session, () => ({ action: 'reject' }));
+
+            const result = yield* programTool()
+              .call({ name: 'merge', args: { editedFile: forbidden } })
+              .pipe(
+                Effect.provide(
+                  nativeToolTestLayer({
+                    run: { runId: parentRunId, toolPolicy: {}, session },
+                  }),
+                ),
+                Effect.provide(resolveLayer),
+                Effect.provide(session),
+              );
+            expect(errorOf(result)).toContain('is not a direct child');
+          }),
+      );
+
+      // A script's merge launch is reused only for the same file bytes: an
+      // edited file changed in place between two launches is a new launch.
+      it.effect(
+        "does not reuse a script's merge launch whose edited file changed",
+        () =>
+          Effect.gen(function* () {
+            const session = yield* processSession;
+            const host = yield* FakeHost;
+            const base = host.path('workspace/base.tex');
+            const edited = host.path('workspace/edited.tex');
+            yield* Effect.promise(() =>
+              mkdir(path.dirname(base), { recursive: true }),
+            );
+            yield* Effect.promise(() => writeFile(base, 'base'));
+            yield* Effect.promise(() => writeFile(edited, 'first edit'));
+            yield* publishTestRunStart(session, parentRunId);
+            yield* autoDecideRequests(session, () => ({ action: 'reject' }));
+            // The script both launches belong to: what its calls share.
+            let sharedValues = Context.empty();
+            const script: ScriptScope = {
+              source: '',
+              title: null,
+              callId: 'script-call',
+              calls: Effect.succeed([]),
+              shared: <A, E, R>(
+                key: Context.Key<unknown, Deferred.Deferred<A, E>>,
+                make: Effect.Effect<A, E, R>,
+              ): Effect.Effect<A, E, R> =>
+                Effect.suspend(() => {
+                  const existing = Context.getOrUndefined(sharedValues, key);
+                  if (existing !== undefined) return Deferred.await(existing);
+                  const made = Deferred.makeUnsafe<A, E>();
+                  sharedValues = Context.add(sharedValues, key, made);
+                  return make.pipe(
+                    Effect.onExit((exit) => Deferred.done(made, exit)),
+                  );
+                }),
+            };
+            const launch = (callId: string) =>
+              programTool()
+                .call({
+                  name: 'merge',
+                  inputFiles: [base],
+                  args: { editedFile: edited },
+                })
+                .pipe(
+                  Effect.provide(
+                    nativeToolTestLayer({
+                      callId,
+                      run: { runId: parentRunId, toolPolicy: {}, session },
+                      origin: { script },
+                    }),
+                  ),
+                  Effect.provide(resolveLayer),
+                  Effect.provide(session),
+                );
+
+            yield* launch('script-call/1');
+            yield* Effect.promise(() => writeFile(edited, 'second edit'));
+            const second = yield* launch('script-call/2');
+            expect(errorOf(second)).not.toContain(
+              'same prompt, options and files',
+            );
+          }),
       );
 
       it.effect('rejects paths outside run storage', () =>

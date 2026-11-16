@@ -1,7 +1,8 @@
 import { Effect, Schema } from 'effect';
 
-/** The four canonical `*Files` list fields, defaulting to `[]` when absent. */
-const fileListFields = {
+/** The four canonical `*Files` list fields of a run's launch, each
+ *  defaulting to `[]` when absent. */
+export const FileFieldsSchema = Schema.Struct({
   inputFiles: Schema.Array(Schema.String).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
@@ -13,13 +14,5 @@ const fileListFields = {
   ),
   outputFiles: Schema.Array(Schema.String).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
-  ),
-};
-
-/** Used by AgentConfig where `editedFile` may be null. */
-export const NullableFileFieldsSchema = Schema.Struct({
-  ...fileListFields,
-  editedFile: Schema.NullOr(Schema.String).pipe(
-    Schema.withDecodingDefault(Effect.succeed(null)),
   ),
 });

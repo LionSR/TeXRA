@@ -185,16 +185,11 @@ export type { CellError, RunHistoryRefused } from '@shared/session/runHistory';
 export type { RunHistoryInconsistent } from '@shared/session/runState';
 export type { StepRoot } from '@utils/files/externalRoots';
 // The run a plugin's tool reads (`ToolRun`) and the pieces it names: its
-// policy, opening, trace and stages, model binding and run files.
+// policy, trace and stages, model binding and run files.
 export type { ToolRun } from '@agent/core/tools/ToolTypes';
 export type { ToolPolicy } from '@agent/runtime/run/AgentRun';
 // Renders a prompt template (Nunjucks) with its variables.
 export { renderPrompt } from '@agent/prompt/promptRender';
-export type {
-  TemplateInputs,
-  TemplateOpening,
-  TemplateVars,
-} from '@agent/prompt/templateInputs';
 export type {
   AgentTrace,
   StreamHandle,

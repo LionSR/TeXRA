@@ -71,7 +71,10 @@ export function nativeToolTestLayer(
     Partial<Pick<ToolContextShape, 'callId' | 'emit'>> & {
       run?: TestCallRun;
       origin?: Partial<
-        Pick<RunCallShape, 'responseId' | 'instruction' | 'attempt' | 'logId'>
+        Pick<
+          RunCallShape,
+          'responseId' | 'instruction' | 'attempt' | 'logId' | 'script'
+        >
       >;
     } = {},
 ) {
@@ -105,7 +108,6 @@ export function nativeToolTestLayer(
         logger: noopTrace,
         steps: noStep(),
         scope: yield* Effect.scope,
-        opening: null,
         callbacks: {},
         awaitedCalls: Semaphore.makeUnsafe(Number.MAX_SAFE_INTEGER),
         // A root unless the fixture names its parent edge.
@@ -114,8 +116,9 @@ export function nativeToolTestLayer(
         runId: run.runId,
         toolPolicy: run.toolPolicy,
       };
-      // A test call is no script's and issues none; it launches children
-      // through the door over its own place in the run.
+      // A test call is no script's unless its origin names one, and issues
+      // none; it launches children through the door over its own place in
+      // the run.
       const runCall: RunCallShape = {
         run: toolRun,
         responseId: 'test-response',

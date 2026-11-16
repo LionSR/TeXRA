@@ -1294,6 +1294,11 @@ interface Program<R = unknown> {
    *  that creates documents (a deck, a transcript) and does not rewrite
    *  its inputs. */
   readonly outputs?: readonly string[];
+  /** The `args` keys whose string values name a file the program reads. A
+   *  launch a model asks for resolves each as it resolves the launch's
+   *  file lists: a run-storage file must be the caller's own or a declared
+   *  output of a completed child of it. */
+  readonly fileArgs?: readonly string[];
 }
 ```
 
@@ -1782,40 +1787,6 @@ type SubmitFollowUpResult =
   | { status: 'sent' }
   | { status: 'queued' }
   | { status: 'failed'; message: string };
-```
-
-## TemplateInputs
-
-The fixed variables every prompt template may read.
-
-```ts
-type TemplateInputs = typeof TemplateInputsSchema.Type;
-```
-
-## TemplateOpening
-
-What a launch opens from: the template inputs; the names of the skills a
-tool-use run's instruction activated; the attached memories' XML block,
-appended to the system prompt (null when none are attached); and the
-attached memories that could not be read.
-
-```ts
-interface TemplateOpening {
-  readonly inputs: TemplateVars;
-  readonly activated: readonly string[];
-  readonly attachedMemories: string | null;
-  readonly attachedMemoryMisses: AttachedMemoryMiss[];
-}
-```
-
-## TemplateVars
-
-The template-variable map a launch opens with: fixed variables may be
-absent (template rendering keeps `throwOnUndefined` off, so templates
-must tolerate absence). A plugin's tools read it as `opening.inputs`.
-
-```ts
-type TemplateVars = Partial<TemplateInputs>;
 ```
 
 ## ToolAvailabilityChecks

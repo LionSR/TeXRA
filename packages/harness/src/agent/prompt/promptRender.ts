@@ -1,53 +1,7 @@
-import * as path from 'node:path';
-
 import { Effect } from 'effect';
 
 import { ensureError } from '@utils/errors/errorMessage';
-import { locateInWorkspace } from '@utils/files/workspaceFS';
 import type { Environment } from 'nunjucks';
-
-/**
- * File name exposed to prompt XML and document task output instructions.
- *
- * Keep workspace files workspace-relative so sibling documents with the same
- * basename remain distinct. For external absolute paths, expose only the
- * basename: model-produced document names must be portable run-storage names,
- * not host filesystem paths.
- *
- * `workspaceRoot` is the root the caller holds as data. `undefined` is a
- * session with no folder open: every path is then external, so the basename
- * rule applies on its own.
- */
-export function getPromptFileName(
-  workspaceRoot: string | undefined,
-  file: string,
-): string {
-  if (!file) return file;
-
-  const located = locateInWorkspace(workspaceRoot, file);
-  if (located.kind === 'workspace') {
-    return located.relativePath;
-  }
-
-  return path.isAbsolute(file) ? path.basename(file) : file;
-}
-
-/**
- * Convert a list of files to a comma-separated string
- * @param workspaceRoot Root the caller holds as data (see {@link getPromptFileName})
- * @param files List of file paths
- * @returns Comma-separated string of file paths
- */
-export function getListOfFiles(
-  workspaceRoot: string | undefined,
-  files: string[] | null | undefined,
-): string {
-  if (!files) return '';
-  return files
-    .filter((f) => f.trim() !== '')
-    .map((file) => getPromptFileName(workspaceRoot, file))
-    .join(', ');
-}
 
 /**
  * The prompt-rendering environment: an empty loader list, since a prompt is

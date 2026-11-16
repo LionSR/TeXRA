@@ -24,7 +24,6 @@ import {
   type ToolContextShape,
   type ToolRun,
 } from '@agent/core/tools/ToolTypes';
-import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 import {
   type PluginRequest,
@@ -143,7 +142,7 @@ export interface ScriptScope extends ScriptSource {
  * The rest of what a plugin's tool reads of its run (`ToolRun`, whose id
  * the core declares): exactly the fields the app's tools read. Its policy,
  * configuration (which holds its delegation scope), model, scope (a tool that
- * starts something the run should stop registers that stop there), opening,
+ * starts something the run should stop registers that stop there),
  * trace and stage (what a plugin's own stages nest under); and its run
  * files (its storage directory, with the snapshots and mirrors it
  * prepares). Never its
@@ -164,7 +163,6 @@ declare module '../core/tools/ToolTypes.js' {
     readonly config: AgentConfig;
     readonly model: ScopedRef.ScopedRef<BoundModel>;
     readonly scope: Scope.Scope;
-    readonly opening: TemplateOpening | null;
     readonly logger: AgentTrace;
   }
   interface CallRequests {

@@ -1,8 +1,7 @@
 import * as path from 'node:path';
 
-import { Effect, FileSystem, Schema } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
-import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { parseFrontmatter } from '@agent/memory/memoryMeta';
 import { displayToStoragePath } from '@agent/memory/memoryLayout';
 import {
@@ -11,76 +10,46 @@ import {
   type AttachedMemoryMiss,
 } from '@shared/schemas';
 import { activatedSkillNames } from '@skills/runtimeSkills';
-import { getListOfFiles, getPromptFileName } from '@agent/prompt/promptRender';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   listExternalRoots,
   type ExternalRootKind,
 } from '@utils/files/externalRoots';
 import { readNormalizedFile } from '@utils/files/fsDurability';
-import { readFilesAsPromptXml } from '@agent/prompt/promptFilesXml';
 
 /**
- * The fixed template vocabulary {@link buildTemplateInputs} produces to
- * render an agent's prompts at launch: one validator per runtime token, and
- * the single source of truth for the vocabulary. The object is closed on
- * purpose: a misspelled fixed variable is a compile error at the producer
- * and at every typed reader instead of a silently empty substitution.
- * Nothing persists it: a tool-use run records the text it rendered, and
- * what follows the step (the tool-call mechanics, the skills) is rendered
- * per request (`stepInstructions`).
+ * The variables a persona's prompt (and the harness's own tool-use suffix)
+ * may read, rendered once at launch. Nothing persists them: a run records
+ * the text it rendered, and what follows the step (the tool-call mechanics,
+ * the skills) is rendered per request (`stepInstructions`).
  */
-const TemplateInputsSchema = Schema.Struct({
-  /** The launch instruction. */
-  INSTRUCTION: Schema.String,
+interface PromptVariables {
   /** Provider gate for Anthropic-specific agent prompt blocks. */
-  IS_ANTHROPIC_MODEL: Schema.Boolean,
+  IS_ANTHROPIC_MODEL: boolean;
   /** Working directory the run's tools operate in. */
-  CWD: Schema.String,
-  /** Absolute agent-directory paths from the external-roots registry, '' when unregistered. */
-  BUILTIN_AGENTS_DIR: Schema.String,
-  CUSTOM_AGENTS_DIR: Schema.String,
-  AGENT_DOCS_DIR: Schema.String,
-  /** Per-category primary file and its content, null when none is readable. */
-  INPUT_FILE: Schema.NullOr(Schema.String),
-  INPUT_CONTENT: Schema.NullOr(Schema.String),
-  CONTEXT_FILE: Schema.NullOr(Schema.String),
-  CONTEXT_CONTENT: Schema.NullOr(Schema.String),
-  EDITED_FILE: Schema.NullOr(Schema.String),
-  EDITED_CONTENT: Schema.NullOr(Schema.String),
-  /** Per-category readable files as prompt-displayed names. */
-  INPUT_FILES: Schema.Array(Schema.String),
-  CONTEXT_FILES: Schema.Array(Schema.String),
-  EDITED_FILES: Schema.Array(Schema.String),
-  /** Per-category XML bundle of readable files, null when none are readable. */
-  ALL_INPUTS: Schema.NullOr(Schema.String),
-  ALL_CONTEXTS: Schema.NullOr(Schema.String),
-  ALL_EDITEDS: Schema.NullOr(Schema.String),
-  /** Per-category comma-separated readable file list, '' when empty. */
-  LIST_OF_ALL_INPUTS: Schema.String,
-  LIST_OF_ALL_CONTEXTS: Schema.String,
-  LIST_OF_ALL_EDITEDS: Schema.String,
-  /** First attached media file; content is never inlined (display-only). */
-  MEDIA_FILE: Schema.NullOr(Schema.String),
-  /** The run's output file list; absent when it has none. */
-  OUTPUT_FILES: Schema.optional(Schema.Array(Schema.String)),
-});
+  CWD: string;
+  /** Absolute agent-directory paths from the external-roots registry, ''
+   *  when unregistered: the `creator` agent names them. */
+  BUILTIN_AGENTS_DIR: string;
+  CUSTOM_AGENTS_DIR: string;
+  AGENT_DOCS_DIR: string;
+}
 
-/** The fixed variables every prompt template may read. */
-export type TemplateInputs = typeof TemplateInputsSchema.Type;
-
-/**
- * The template-variable map a launch opens with: fixed variables may be
- * absent (template rendering keeps `throwOnUndefined` off, so templates
- * must tolerate absence). A plugin's tools read it as `opening.inputs`.
- */
-export type TemplateVars = Partial<TemplateInputs>;
+/** The variable each external root kind fills, keyed off the stable `kind`
+ *  so renaming a user-visible label cannot break prompt rendering. */
+const AGENT_DIRECTORY_VARIABLES: Record<
+  ExternalRootKind,
+  'BUILTIN_AGENTS_DIR' | 'CUSTOM_AGENTS_DIR' | 'AGENT_DOCS_DIR'
+> = {
+  builtIn: 'BUILTIN_AGENTS_DIR',
+  custom: 'CUSTOM_AGENTS_DIR',
+  agentDocs: 'AGENT_DOCS_DIR',
+};
 
 /**
  * The roots of the session this run belongs to, held as data, so a run never
- * reads whichever roots the calling fiber carries. Prompt files resolve in
- * the workspace, tools use the working directory, and attached memories
- * live in storage.
+ * reads whichever roots the calling fiber carries. Tools use the working
+ * directory (else the workspace), and attached memories live in storage.
  */
 interface BuildTemplateInputsOptions {
   workspaceRoot: string | undefined;
@@ -94,13 +63,13 @@ type AttachedMemoriesResult = {
 };
 
 /**
- * What a launch opens from: the template inputs; the names of the skills a
+ * What a launch opens from: the prompt variables; the names of the skills a
  * tool-use run's instruction activated; the attached memories' XML block,
  * appended to the system prompt (null when none are attached); and the
  * attached memories that could not be read.
  */
 export interface TemplateOpening {
-  readonly inputs: TemplateVars;
+  readonly inputs: Readonly<PromptVariables>;
   readonly activated: readonly string[];
   readonly attachedMemories: string | null;
   readonly attachedMemoryMisses: AttachedMemoryMiss[];
@@ -114,24 +83,23 @@ export interface TemplateOpening {
 export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
   agentConfig: AgentConfig,
   isAnthropicModel: boolean,
-  logger: AgentTrace,
   options: BuildTemplateInputsOptions,
 ): Effect.fn.Return<TemplateOpening, never, FileSystem.FileSystem> {
-  const [attachedMemories, fileVars] = yield* Effect.all(
-    [
-      getAttachedMemories(agentConfig.memories, options.storageRoot),
-      getFileVars(agentConfig, logger, options.workspaceRoot),
-    ],
-    { concurrency: 'unbounded' },
+  const attachedMemories = yield* getAttachedMemories(
+    agentConfig.memories,
+    options.storageRoot,
   );
-  const inputs: TemplateInputs = {
-    ...getBasicVars(agentConfig, isAnthropicModel, options),
-    ...fileVars,
-    // `prepareAgentDefinition` normalized the list.
-    ...(agentConfig.outputFiles.length > 0
-      ? { OUTPUT_FILES: agentConfig.outputFiles }
-      : {}),
+  // An unregistered agent directory renders as '' (e.g. in tests that run
+  // no activation).
+  const inputs: PromptVariables = {
+    IS_ANTHROPIC_MODEL: isAnthropicModel,
+    CWD: options.workingDirectory ?? options.workspaceRoot ?? '.',
+    BUILTIN_AGENTS_DIR: '',
+    CUSTOM_AGENTS_DIR: '',
+    AGENT_DOCS_DIR: '',
   };
+  for (const root of listExternalRoots())
+    inputs[AGENT_DIRECTORY_VARIABLES[root.kind]] = root.absolutePath;
 
   return {
     inputs,
@@ -144,178 +112,6 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
     attachedMemories: attachedMemories.xml,
     attachedMemoryMisses: attachedMemories.misses,
   };
-});
-
-type BasicVars = Pick<
-  TemplateInputs,
-  | 'INSTRUCTION'
-  | 'IS_ANTHROPIC_MODEL'
-  | 'CWD'
-  | 'BUILTIN_AGENTS_DIR'
-  | 'CUSTOM_AGENTS_DIR'
-  | 'AGENT_DOCS_DIR'
->;
-
-function getBasicVars(
-  agentConfig: AgentConfig,
-  isAnthropicModel: boolean,
-  options: BuildTemplateInputsOptions,
-): BasicVars {
-  return {
-    INSTRUCTION: agentConfig.instruction,
-    IS_ANTHROPIC_MODEL: isAnthropicModel,
-    CWD: options.workingDirectory ?? options.workspaceRoot ?? '.',
-    ...getAgentDirectoryVars(),
-  };
-}
-
-/**
- * Inject the absolute paths of registered agent directories as template
- * variables so agents (notably `creator`) can reference the real paths in
- * their system prompts. Reads from the external-roots registry populated at
- * activation — keyed off the stable `kind` field so renaming a user-visible
- * label cannot break prompt rendering. Absent roots render as empty strings
- * (e.g. in tests that don't run activation).
- */
-type AgentDirectoryVars = Pick<
-  TemplateInputs,
-  'BUILTIN_AGENTS_DIR' | 'CUSTOM_AGENTS_DIR' | 'AGENT_DOCS_DIR'
->;
-
-function getAgentDirectoryVars(): AgentDirectoryVars {
-  const KIND_TO_VAR: Record<ExternalRootKind, keyof AgentDirectoryVars> = {
-    builtIn: 'BUILTIN_AGENTS_DIR',
-    custom: 'CUSTOM_AGENTS_DIR',
-    agentDocs: 'AGENT_DOCS_DIR',
-  };
-  const vars: Record<keyof AgentDirectoryVars, string> = {
-    BUILTIN_AGENTS_DIR: '',
-    CUSTOM_AGENTS_DIR: '',
-    AGENT_DOCS_DIR: '',
-  };
-  for (const root of listExternalRoots())
-    vars[KIND_TO_VAR[root.kind]] = root.absolutePath;
-  return vars;
-}
-
-/** A template prefix's files, as the run's config names them: the one
- *  edited file a merge launch sets, or the list a category's field holds. */
-const FILE_CATEGORIES: Record<
-  FileCategoryPrefix | 'MEDIA',
-  (config: AgentConfig) => readonly (string | null)[]
-> = {
-  INPUT: (config) => config.inputFiles,
-  CONTEXT: (config) => config.contextFiles,
-  MEDIA: (config) => config.mediaFiles,
-  EDITED: (config) => [config.editedFile],
-};
-
-/** A category's files, empties dropped and each named once. */
-function getCategoryFiles(
-  config: AgentConfig,
-  category: FileCategoryPrefix | 'MEDIA',
-): string[] {
-  const files = FILE_CATEGORIES[category](config).filter(
-    (file): file is string => typeof file === 'string' && file.trim() !== '',
-  );
-  return [...new Set(files)];
-}
-
-/** Categories used for building file vars (excludes MEDIA which is display-only) */
-type FileCategoryPrefix = 'INPUT' | 'CONTEXT' | 'EDITED';
-const FILE_VAR_CATEGORIES: readonly FileCategoryPrefix[] = [
-  'INPUT',
-  'CONTEXT',
-  'EDITED',
-];
-
-/** Variables contributed by the readable file categories. */
-type FileCategoryVars = {
-  [P in FileCategoryPrefix as `${P}_FILE`]: string | null;
-} & {
-  [P in FileCategoryPrefix as `${P}_CONTENT`]: string | null;
-} & {
-  [P in FileCategoryPrefix as `${P}_FILES`]: string[];
-} & {
-  [P in FileCategoryPrefix as `ALL_${P}S`]: string | null;
-} & {
-  [P in FileCategoryPrefix as `LIST_OF_ALL_${P}S`]: string;
-};
-
-/** File-based variables: readable categories plus the display-only MEDIA slots. */
-type FileVars = FileCategoryVars & {
-  MEDIA_FILE: TemplateInputs['MEDIA_FILE'];
-};
-
-const getFileVars = Effect.fn('userVars.getFileVars')(function* (
-  agentConfig: AgentConfig,
-  logger: AgentTrace,
-  workspaceRoot: string | undefined,
-): Effect.fn.Return<FileVars, never, FileSystem.FileSystem> {
-  // Compiler-checked completeness: every FileVars key starts at its
-  // empty-file default here, so a future FileVars key without a matching
-  // default is a type error at this literal. The loop below only overwrites
-  // the defaults, and an unreadable file leaves the null pair standing.
-  const userVars: FileVars = {
-    INPUT_FILE: null,
-    INPUT_CONTENT: null,
-    CONTEXT_FILE: null,
-    CONTEXT_CONTENT: null,
-    EDITED_FILE: null,
-    EDITED_CONTENT: null,
-    INPUT_FILES: [],
-    CONTEXT_FILES: [],
-    EDITED_FILES: [],
-    ALL_INPUTS: null,
-    ALL_CONTEXTS: null,
-    ALL_EDITEDS: null,
-    LIST_OF_ALL_INPUTS: '',
-    LIST_OF_ALL_CONTEXTS: '',
-    LIST_OF_ALL_EDITEDS: '',
-    MEDIA_FILE: null,
-  };
-
-  // The categories are read at once; their vars and warnings go in order.
-  const reads = yield* Effect.forEach(
-    FILE_VAR_CATEGORIES,
-    (prefix) =>
-      readFilesAsPromptXml(
-        workspaceRoot,
-        getCategoryFiles(agentConfig, prefix),
-      ).pipe(Effect.map((read) => ({ prefix, ...read }))),
-    { concurrency: 'unbounded' },
-  );
-  for (const { prefix, xml, readable, skipped } of reads) {
-    const readableFiles = readable.map(({ file }) => file);
-    // The first readable file fills the `*_FILE`/`*_CONTENT` pair from the
-    // same read that built the list vars.
-    const primary = readable[0];
-    if (primary != null) {
-      userVars[`${prefix}_FILE`] = primary.file;
-      userVars[`${prefix}_CONTENT`] = primary.content;
-    }
-
-    // A dropped file changes what the model sees, so report it on the run's own
-    // channel rather than leaving it on a module logger nobody reads.
-    for (const { file, reason } of skipped) {
-      logger.warn(
-        `Skipping unreadable file in prompt context: ${file} (${reason})`,
-      );
-    }
-
-    userVars[`ALL_${prefix}S`] = xml;
-    userVars[`${prefix}_FILES`] = readableFiles.map((file) =>
-      getPromptFileName(workspaceRoot, file),
-    );
-    userVars[`LIST_OF_ALL_${prefix}S`] = getListOfFiles(
-      workspaceRoot,
-      readableFiles,
-    );
-  }
-
-  userVars.MEDIA_FILE = getCategoryFiles(agentConfig, 'MEDIA')[0] ?? null;
-
-  return userVars;
 });
 
 /**

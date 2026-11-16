@@ -4,7 +4,7 @@
 
 ## Observing `SessionView` and formatting `TranscriptRow`s
 
-Every [`Run`](./harness/#run) exposes `run.view` (`Stream<SessionView>`), which subscribes to the run's transcript through completion. On a [`LocalSession`](./harness/#localsession), call `session.view.subscribe([{ id: qualifyAggregateId('run', runId), fromSeq: 0 }])` for scoped transcript materialization or `session.view.read([runId])` for a cold snapshot (see [`06-views-and-transcript.ts`](https://github.com/LionSR/TeXRA/blob/main/packages/harness/example/06-views-and-transcript.ts)):
+Every [`Run`](./harness/#run) exposes `run.view` (`Stream<SessionView>`), which subscribes to the run's transcript through completion. On a [`LocalSession`](./harness/#localsession), call `session.view.subscribe([{ id: runId, fromSeq: 0 }])` (a run's aggregate id is its `RunId`) for scoped transcript materialization or `session.view.read([runId])` for a cold snapshot (see [`06-views-and-transcript.ts`](https://github.com/LionSR/TeXRA/blob/main/packages/harness/example/06-views-and-transcript.ts)):
 
 ```ts
 import { Effect } from 'effect';
@@ -12,7 +12,6 @@ import {
   acceptsFollowUp,
   attentionOf,
   generateRunId,
-  qualifyAggregateId,
   sessionActivity,
 } from '@texra-ai/harness/schemas';
 import {
@@ -43,13 +42,10 @@ function formatRow(row: TranscriptRow): string {
 
 // Inside an Effect program with `session`:
 const runId = generateRunId();
-yield *
-  session.view.subscribe([
-    { id: qualifyAggregateId('run', runId), fromSeq: 0 },
-  ]);
+yield * session.view.subscribe([{ id: runId, fromSeq: 0 }]);
 const run = yield * session.start({ runId, agent: persona, instruction });
 yield * run.result;
-yield * session.settled;
+yield * session.drained;
 
 const view = session.view.current();
 const runView = view.runs.get(run.runId)!;
@@ -94,7 +90,7 @@ In-process callers read `session.view.current()` and `session.view.changes`. Acr
 
 ## `TranscriptRow` variants and `ToolRowModel`
 
-A subscribed [`TranscriptView`](./harness/schemas#transcriptview) (`RunView.transcript`) holds `rows` (`readonly TranscriptRow[]`), `stages` (`readonly Stage[]`), and `settledRows` (the leading prefix of finalized rows that an append-only terminal scrollback can print permanently).
+A subscribed [`TranscriptView`](./harness/schemas#transcriptview) (`RunView.transcript`) holds `rows` (`readonly TranscriptRow[]`), `stages` (`readonly Stage[]`), and `finalRows` (the count of leading rows that an append-only terminal scrollback can print permanently).
 
 | `TranscriptRow['kind']`      | Interface                                                                                               | Payload fields                                                                                                                         |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |

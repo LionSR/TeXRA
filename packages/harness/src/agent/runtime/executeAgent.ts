@@ -31,7 +31,6 @@ import { SessionRoots } from '@platform/rootedFs';
 import type { AgentEvent } from '@shared/session/agentEvent';
 import {
   type CommitOrdinal,
-  programOf,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
@@ -187,24 +186,21 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
     entry,
   } = yield* enterRun(definition, runId, options);
 
-  // A program's tools read this opening's inputs at every call, so it is
-  // built on resume too; a conversation's rows hold its own.
-  const opening =
-    resumed && programOf(config) === null
-      ? null
-      : yield* buildTemplateInputs(
-          config,
-          modelConfig.provider === ModelProvider.ANTHROPIC,
-          agentLogger,
-          {
-            // The session's own roots, handed to prompt assembly as data,
-            // so file reads resolve in this project, not the calling
-            // fiber's.
-            workspaceRoot: roots.workspace,
-            workingDirectory,
-            storageRoot: roots.storage,
-          },
-        );
+  // A resume renders nothing again: the run's rows hold its opening.
+  const opening = resumed
+    ? null
+    : yield* buildTemplateInputs(
+        config,
+        modelConfig.provider === ModelProvider.ANTHROPIC,
+        {
+          // The session's own roots, handed to prompt assembly as data, so
+          // the working directory and memories resolve in this project, not
+          // the calling fiber's.
+          workspaceRoot: roots.workspace,
+          workingDirectory,
+          storageRoot: roots.storage,
+        },
+      );
 
   const launch: RunLaunch = {
     runId,

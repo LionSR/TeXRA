@@ -289,7 +289,13 @@ export function testLaunch(
     logger,
     toolPolicy: {},
     opening: {
-      inputs: {},
+      inputs: {
+        IS_ANTHROPIC_MODEL: false,
+        CWD: '.',
+        BUILTIN_AGENTS_DIR: '',
+        CUSTOM_AGENTS_DIR: '',
+        AGENT_DOCS_DIR: '',
+      },
       activated: [],
       attachedMemories: null,
       attachedMemoryMisses: [],
