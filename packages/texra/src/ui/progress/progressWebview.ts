@@ -1,8 +1,8 @@
 /**
  * The progress webview's root wiring: the one session of this webview, opened through the shared session
  * surfaces, assigned to the `<progress-app>` element on every change, the
- * window's one message listener, and the three shell events forwarded to
- * the surfaces. The sidebar port also reports which state it shows, so the
+ * window's one message listener, and the shell's events sent to the
+ * surfaces. The sidebar port also reports which state it shows, so the
  * view-title menus can differ between the New-task state and a
  * conversation.
  */
@@ -34,18 +34,7 @@ export function mountProgressWebview(app: ProgressApp): () => void {
   const session = sessions.get(sessionKey);
   if (!session) throw new Error(`Session ${sessionKey} did not open`);
 
-  app.addEventListener('runtime-request', (event) => {
-    sessions.runtimeRequest(sessionKey, event.detail);
-  });
-  app.addEventListener('host-request', (event) => {
-    sessions.hostRequest(sessionKey, event.detail);
-  });
-  app.addEventListener('surface-action', (event) => {
-    sessions.act(sessionKey, event.detail);
-  });
-  app.addEventListener('composer-submit', () => {
-    sessions.submit(sessionKey);
-  });
+  const stopListening = sessions.listen(app, () => sessionKey);
 
   const assign = (): void => {
     app.view = session.view$.get();
@@ -59,6 +48,7 @@ export function mountProgressWebview(app: ProgressApp): () => void {
   const dispose = (): void => {
     window.removeEventListener('pagehide', dispose);
     window.removeEventListener('message', receive);
+    stopListening();
     stopFollowingSeen();
     unsubscribe();
     sessions.dispose();

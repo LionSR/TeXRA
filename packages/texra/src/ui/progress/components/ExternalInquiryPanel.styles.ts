@@ -2,8 +2,6 @@
 
 import { css, type CSSResult } from 'lit';
 
-import { sp } from '@ui/styles';
-
 export const externalInquiryPanelStyles: CSSResult = css`
   /* Question and answer are the card; the dock scrolls rather than this
      body, so the answer box is never scrolled out of its own card. */
@@ -16,13 +14,13 @@ export const externalInquiryPanelStyles: CSSResult = css`
     background: var(--wa-color-surface-lowered);
     border: var(--border-thin) solid var(--wa-color-surface-border);
     border-radius: var(--border-radius);
-    padding: ${sp.medium};
+    padding: var(--wa-space-xs);
     position: relative;
   }
 
   .external-inquiry-request__question-text {
     font-size: var(--font-size);
-    line-height: var(--line-height-relaxed, 1.6);
+    line-height: var(--line-height-relaxed);
     color: var(--wa-color-text-normal);
     white-space: pre-wrap;
     word-break: break-word;
@@ -35,22 +33,22 @@ export const externalInquiryPanelStyles: CSSResult = css`
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: ${sp.medium};
-    margin-top: ${sp.small};
-    padding-top: ${sp.small};
+    gap: var(--wa-space-xs);
+    margin-top: var(--wa-space-2xs);
+    padding-top: var(--wa-space-2xs);
     border-top: var(--border-thin) solid var(--wa-color-surface-border);
   }
 
   .external-inquiry-request__more::part(content) {
     display: flex;
     flex-direction: column;
-    gap: ${sp.medium};
+    gap: var(--wa-space-xs);
   }
 
   .external-inquiry-request__transcript-turns {
     display: flex;
     flex-direction: column;
-    gap: ${sp.medium};
+    gap: var(--wa-space-xs);
   }
 
   .external-inquiry-request__transcript-turn,
@@ -58,12 +56,12 @@ export const externalInquiryPanelStyles: CSSResult = css`
   .external-inquiry-request__answer-area {
     display: flex;
     flex-direction: column;
-    gap: ${sp.small};
+    gap: var(--wa-space-2xs);
   }
 
   .external-inquiry-request__transcript-turn
     + .external-inquiry-request__transcript-turn {
-    padding-top: ${sp.medium};
+    padding-top: var(--wa-space-xs);
     border-top: var(--border-thin) solid var(--wa-color-surface-border);
   }
 
@@ -92,7 +90,7 @@ export const externalInquiryPanelStyles: CSSResult = css`
   .external-inquiry-request__transcript-links {
     display: flex;
     flex-direction: column;
-    gap: ${sp.tiny};
+    gap: var(--wa-space-3xs);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -101,10 +99,10 @@ export const externalInquiryPanelStyles: CSSResult = css`
   .external-inquiry-request__search-hint {
     display: flex;
     align-items: center;
-    gap: ${sp.small};
+    gap: var(--wa-space-2xs);
     font-size: var(--font-size-sm);
     color: var(--wa-color-brand-on-quiet, var(--wa-color-focus));
-    padding: ${sp.small} 0;
+    padding: var(--wa-space-2xs) 0;
   }
 
   .external-inquiry-request__attach-label {
@@ -113,15 +111,15 @@ export const externalInquiryPanelStyles: CSSResult = css`
     color: var(--wa-color-text-quiet);
     display: flex;
     align-items: center;
-    gap: ${sp.small};
+    gap: var(--wa-space-2xs);
   }
 
   .external-inquiry-request__file-list,
   .external-inquiry-request__session-links-list {
     display: flex;
     flex-direction: column;
-    gap: ${sp.tiny};
-    padding: ${sp.small};
+    gap: var(--wa-space-3xs);
+    padding: var(--wa-space-2xs);
     background: var(--wa-color-surface-lowered);
     border-radius: var(--border-radius-small);
     margin: 0;
@@ -131,7 +129,7 @@ export const externalInquiryPanelStyles: CSSResult = css`
   .external-inquiry-request__file-item {
     display: flex;
     align-items: center;
-    gap: ${sp.small};
+    gap: var(--wa-space-2xs);
     font-size: var(--font-size-sm);
     font-family: var(--wa-font-family-mono);
     color: var(--wa-color-text-link);

@@ -5,14 +5,8 @@
  * the common surface frame owns padding, borders, radius and background.
  */
 
-import { css, unsafeCSS, type CSSResult } from 'lit';
+import { css, type CSSResult } from 'lit';
 import { panelFrameStyles } from './surfaceStyles';
-
-export const sp = {
-  tiny: unsafeCSS('var(--wa-space-3xs)'),
-  small: unsafeCSS('var(--wa-space-2xs)'),
-  medium: unsafeCSS('var(--wa-space-xs)'),
-} as const;
 
 export const requestPanelSharedStyles: CSSResult = css`
   :host {
@@ -71,7 +65,7 @@ export const requestPanelSharedStyles: CSSResult = css`
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: ${sp.small};
+    gap: var(--wa-space-2xs);
     margin: 0;
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
@@ -79,7 +73,7 @@ export const requestPanelSharedStyles: CSSResult = css`
 
   /* The quoted context an agent attaches to a question. */
   .request-card__context {
-    padding: ${sp.small} ${sp.medium};
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
     border-radius: var(--border-radius-small);
     background: var(--panel-background);
     color: var(--wa-color-text-quiet);
@@ -101,7 +95,7 @@ export const requestPanelSharedStyles: CSSResult = css`
     inset-block-end: 0;
     z-index: 1;
     margin-block-start: auto;
-    padding-block-start: ${sp.small};
+    padding-block-start: var(--wa-space-2xs);
     background: var(--wa-color-surface-lowered);
   }
 

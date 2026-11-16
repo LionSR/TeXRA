@@ -99,7 +99,7 @@ export class RequestPanels extends LitElement {
   /** The run asking: each card reads whether this window can answer it. */
   @property({ attribute: false }) run: RunView | null = null;
 
-  /** For the inquiry cards' drafts (`Surface.inquiryDrafts`). */
+  /** For every card's unsent answer (`Surface.requestDrafts`). */
   @property({ attribute: false }) surface: Surface | null = null;
 
   /** For the proposal card's agent and model pickers. */

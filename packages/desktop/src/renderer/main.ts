@@ -226,13 +226,9 @@ const activeRailProject = (projects: readonly RailProject[]) =>
   projects.find((project) => project.display.key === shell.active);
 let renamingProjectKey: string | null = null;
 
-function finishProjectRename(key: string, name: string | null): void {
-  if (renamingProjectKey !== key) return;
-  renamingProjectKey = null;
+function renameProject(key: string, name: string): void {
   const project = projectWorkbenches.get(key);
-  if (project && name?.trim())
-    project.updateState({ ...project.getState(), projectName: name.trim() });
-  rerenderShell();
+  project?.updateState({ ...project.getState(), projectName: name });
 }
 // The renderer has no Node types by design, so the platform is read from the
 // navigator, and an inconclusive one takes the non-mac branch.
@@ -572,7 +568,11 @@ function shellTemplate(): TemplateResult {
                 renamingProjectKey = key;
                 rerenderShell();
               },
-              onRenameProject: finishProjectRename,
+              onRenameProject: renameProject,
+              onCloseRename: () => {
+                renamingProjectKey = null;
+                rerenderShell();
+              },
               onOpenSettings: () => settingsDialog.open(),
             },
           )}
@@ -811,9 +811,10 @@ const routeMessage = createMessageRoutes({
       for (const key of sessions) {
         if (projectWorkbenches.has(key)) continue;
         const conversationView = new ProgressApp();
-        // The attribute sets the property, and the desktop styles select it,
-        // as the extension's page markup does.
-        conversationView.setAttribute('placement', 'desktop');
+        // The attribute sets the property, and the embedded styles select
+        // it, as the extension's page markup does. The desktop's rail and
+        // title bar are the chrome an embedded shell leaves to its host.
+        conversationView.setAttribute('placement', 'embedded');
         conversationView.setAttribute('data-desktop-view', 'progress');
         const project = createProjectWorkbench({
           session: key,
@@ -870,8 +871,8 @@ window.addEventListener('resize', () => {
 // Shell events: the identity translation of host-bridge messages
 // =============================================================================
 //
-// Every component dispatches the arm it wants as a bubbling, composed event
-// (`uiEvents.ts`); the root forwards it to the project it came from. The project
+// Every component dispatches the case it wants as a bubbling, composed event
+// (`uiEvents.ts`); the surfaces send it to the project it came from. The project
 // is the nearest `data-session` on the event's path: the conversation column
 // (the shell and its dock) carries the shown project's key, and each project's
 // workbench and rail tree its own.
@@ -885,31 +886,19 @@ function sessionOf(event: Event): string | undefined {
   return undefined;
 }
 
-appRoot.addEventListener('runtime-request', (event) => {
-  const key = sessionOf(event);
-  if (key) projectSessions.runtimeRequest(key, event.detail);
-});
-appRoot.addEventListener('host-request', (event) => {
-  const key = sessionOf(event);
-  if (key) projectSessions.hostRequest(key, event.detail);
-});
+projectSessions.listen(appRoot, sessionOf);
+// Picking a run also opens the project's agent panel; the rail is bound to
+// one active run across every section, so picking a run in another
+// project's tree picks that project too.
 appRoot.addEventListener('surface-action', (event) => {
   const key = sessionOf(event);
   if (!key) return;
   if (event.detail.kind === 'select' || event.detail.kind === 'selectNew') {
-    const project = projectWorkbenches.get(key);
-    project?.workbench.openKind('agent');
+    projectWorkbenches.get(key)?.workbench.openKind('agent');
   }
-  projectSessions.act(key, event.detail);
-  // The rail is bound to one active run across every section: picking
-  // a run in another project's tree picks that project too.
   if (event.detail.kind === 'select' && key !== shell.active) {
     selectProject(key);
   }
-});
-appRoot.addEventListener('composer-submit', (event) => {
-  const key = sessionOf(event);
-  if (key) projectSessions.submit(key);
 });
 
 // The projects list arrives in reply; each project's session subscribes as it

@@ -2,14 +2,13 @@
  * The transcript of one run, on the session view's transcript slice. It keeps one
  * `<stage-list>` per recently shown run so a switch back restores
  * scroll and render windows, and it maps the file and label links
- * inside rows to `host-request` arms. Group expansion is the surface's
+ * inside rows to `host-request` commands. Group expansion is the surface's
  * (`RunSurface.disclosures`): the list reads the run's map and every toggle is
  * dispatched as a `SurfaceAction`, never kept here.
  */
 import { LRUCache } from 'lru-cache';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { createRef, ref, type Ref } from 'lit/directives/ref.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 import './StageList';
@@ -22,12 +21,6 @@ import { designTokens } from '@ui/styles';
 import { delegateKeyActivation, getComposedPathElement } from './composedPath';
 import { logStyles } from '../styles/logStyles';
 import type { RunView, SessionView, RunId } from '@texra-ai/harness/schemas';
-import type { StageList } from './StageList';
-
-interface CachedRun {
-  run: RunView;
-  ref: Ref<StageList>;
-}
 
 @customElement('log-list')
 export class LogList extends LitElement {
@@ -40,11 +33,9 @@ export class LogList extends LitElement {
   @property({ attribute: false }) tools!: HostSnapshot['tools'];
 
   private static readonly MAX_CACHED_RUNS = 5;
-  private readonly runCache = new LRUCache<RunId, CachedRun>({
+  private readonly runCache = new LRUCache<RunId, RunView>({
     max: LogList.MAX_CACHED_RUNS,
   });
-  private activeRunId: RunId | null = null;
-  private shouldScrollToBottom = false;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -60,44 +51,37 @@ export class LogList extends LitElement {
 
   protected override willUpdate(): void {
     const run = this.run;
-    const runId = run?.id ?? null;
-    if (runId !== this.activeRunId) {
-      this.activeRunId = runId;
-      this.shouldScrollToBottom = true;
-    }
     if (!run) {
       if (this.runCache.size > 0) this.runCache.clear();
       return;
     }
-    const entry = this.runCache.get(run.id);
-    if (entry) entry.run = run;
-    else this.runCache.set(run.id, { run, ref: createRef<StageList>() });
+    this.runCache.set(run.id, run);
   }
 
   override render(): TemplateResult | typeof nothing {
     // The run bodies mount the transcript only for a run.
     if (!this.run) return nothing;
     // Each entry is cached under its run's id.
-    const entries = [...this.runCache.rvalues()].filter(
-      (entry) => entry !== undefined,
+    const runs = [...this.runCache.rvalues()].filter(
+      (run) => run !== undefined,
     );
+    const activeRunId = this.run.id;
     return html`${repeat(
-      entries,
-      (data) => data.run.id,
-      (data) => {
-        const run = data.run;
+      runs,
+      (run) => run.id,
+      (run) => {
         const id = run.id;
+        const shown = id === activeRunId;
         const terminal = run.identity.kind === 'process';
         return html`
           <stage-list
-            ${ref(data.ref)}
             role=${terminal ? nothing : 'log'}
             aria-label=${terminal ? nothing : `Activity for ${run.label}`}
             aria-relevant=${terminal ? nothing : 'additions'}
-            ?hidden=${id !== this.activeRunId}
+            .shown=${shown}
             .runId=${id}
             .run=${run}
-            .view=${id === this.activeRunId ? this.view : null}
+            .view=${shown ? this.view : null}
             .surface=${this.surface}
             .tools=${this.tools}
             .transcript=${run.transcript}
@@ -107,23 +91,6 @@ export class LogList extends LitElement {
         `;
       },
     )}`;
-  }
-
-  override updated(): void {
-    const activeEl = this.activeRunId
-      ? this.runCache.get(this.activeRunId)?.ref.value
-      : undefined;
-    if (this.shouldScrollToBottom) {
-      this.shouldScrollToBottom = false;
-      void activeEl?.updateComplete.then(() => {
-        requestAnimationFrame(() => {
-          activeEl.setSticky(true);
-          activeEl.scrollToBottom();
-        });
-      });
-    } else {
-      activeEl?.scrollToBottomIfSticky();
-    }
   }
 
   private handleClickEvent = (event: Event): void => {

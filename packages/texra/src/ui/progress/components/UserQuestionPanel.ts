@@ -2,7 +2,8 @@
 
 // Third-party imports
 import { html, nothing, type TemplateResult } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
+import { customElement } from 'lit/decorators.js';
+import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Side-effect imports - register Web Awesome components
@@ -28,11 +29,32 @@ import type {
 export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
   static override styles = [BaseRequestPanel.styles, userQuestionPanelStyles];
 
-  // Indexed by question position (not `question.question`): two questions
-  // with identical wording would otherwise collide on a text key, both in
-  // Lit's `repeat` reconciliation and in these state maps.
-  @state() private selections: string[][] = [];
-  @state() private freeText: string[] = [];
+  /** Question `index`'s picks and typed answer, from the card's draft
+   *  (by position: Lit's `repeat` keys the questions by it too). */
+  private answerAt(index: number): {
+    selected: readonly string[];
+    text: string;
+  } {
+    return this.draft.answers?.[index] ?? { selected: [], text: '' };
+  }
+
+  /** Change question `index`'s answer in the draft. */
+  private editAnswer(
+    index: number,
+    patch: Partial<{ selected: readonly string[]; text: string }>,
+  ): void {
+    const { questions } = this.permission.data;
+    const answers = questions.map((_question, at) => {
+      const answer = this.answerAt(at);
+      return at === index
+        ? {
+            selected: [...(patch.selected ?? answer.selected)],
+            text: patch.text ?? answer.text,
+          }
+        : { selected: [...answer.selected], text: answer.text };
+    });
+    this.writeDraft({ ...this.draft, answers });
+  }
 
   protected override get primaryLabel(): string {
     return 'Submit';
@@ -78,7 +100,7 @@ export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
     question: UserQuestionPrompt,
     index: number,
   ): TemplateResult {
-    const current = this.selections[index] ?? [];
+    const current = this.answerAt(index).selected;
 
     return html`
       <fieldset class="user-question-request__question">
@@ -106,7 +128,7 @@ export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
                   <wa-radio-group
                     label="Choose one answer"
                     .value=${
-                      this.freeText[index]?.trim() ? '' : (current[0] ?? '')
+                      this.answerAt(index).text.trim() ? '' : (current[0] ?? '')
                     }
                     @change=${(event: Event) =>
                       this.updateSingleSelection(index, event)}
@@ -134,7 +156,7 @@ export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
                 resize="vertical"
                 autocomplete="off"
                 spellcheck
-                .value=${this.freeText[index] ?? ''}
+                .value=${live(this.answerAt(index).text)}
                 @input=${(event: Event) => this.updateFreeText(index, event)}
               ></wa-textarea>`
             : nothing
@@ -159,7 +181,7 @@ export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
   private renderCheckboxOption(
     index: number,
     option: UserQuestionPrompt['options'][number],
-    current: string[],
+    current: readonly string[],
   ): TemplateResult {
     return html`
       <wa-checkbox
@@ -186,13 +208,12 @@ export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
   private updateSelection(index: number, label: string, event: Event): void {
     if (!(event.target instanceof WaCheckbox)) return;
     const { checked } = event.target;
-    const current = this.selections[index] ?? [];
-    const next = checked
-      ? [...current, label]
-      : current.filter((item) => item !== label);
-    const nextSelections = [...this.selections];
-    nextSelections[index] = next;
-    this.selections = nextSelections;
+    const current = this.answerAt(index).selected;
+    this.editAnswer(index, {
+      selected: checked
+        ? [...current, label]
+        : current.filter((item) => item !== label),
+    });
   }
 
   private updateSingleSelection(index: number, event: Event): void {
@@ -200,22 +221,16 @@ export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
     // Each radio's value is its option label, a string.
     const { value } = event.target;
     const label = typeof value === 'string' ? value : '';
-    const nextSelections = [...this.selections];
-    nextSelections[index] = label ? [label] : [];
-    this.selections = nextSelections;
-    if (label && this.freeText[index]) {
-      const nextFreeText = [...this.freeText];
-      nextFreeText[index] = '';
-      this.freeText = nextFreeText;
-    }
+    // Picking an option replaces a typed single answer.
+    this.editAnswer(index, {
+      selected: label ? [label] : [],
+      ...(label && { text: '' }),
+    });
   }
 
   private updateFreeText(index: number, event: Event): void {
     if (!(event.currentTarget instanceof WaTextarea)) return;
-    const value = event.currentTarget.value ?? '';
-    const nextFreeText = [...this.freeText];
-    nextFreeText[index] = value;
-    this.freeText = nextFreeText;
+    this.editAnswer(index, { text: event.currentTarget.value ?? '' });
   }
 
   private submitAnswers(): void {
@@ -226,16 +241,11 @@ export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
         ?.focus();
       return;
     }
-    // Submission itself still collapses onto `UserQuestionAnswersSchema`'s
-    // question-text keys (the AskUserQuestion wire vocabulary has no other
-    // id): two identically-worded questions answered independently above
-    // will silently collapse into one entry here. Pre-existing limitation,
-    // not introduced by the position-indexed state above.
     const answers: Record<string, UserQuestionAnswers[string]> = {};
 
     for (const [index, question] of data.questions.entries()) {
-      const custom = this.freeText[index]?.trim();
-      const selected = this.selections[index] ?? [];
+      const custom = this.answerAt(index).text.trim();
+      const selected = this.answerAt(index).selected;
       if (question.multiSelect) {
         // The box is labelled "Another answer", so on a multi-select
         // question it adds to the checked options instead of replacing them.
@@ -260,8 +270,8 @@ export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
 
   private hasAnyAnswer(data: UserQuestionRequest): boolean {
     return data.questions.some((_question, index) => {
-      if (this.freeText[index]?.trim()) return true;
-      return (this.selections[index] ?? []).length > 0;
+      const answer = this.answerAt(index);
+      return answer.text.trim() !== '' || answer.selected.length > 0;
     });
   }
 }

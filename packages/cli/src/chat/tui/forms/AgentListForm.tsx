@@ -17,7 +17,10 @@ import {
   isCompactFormRows,
 } from '@cli/tui/selectWindow';
 import type { SelectItem } from '@cli/tui/ui/Select';
-import type { TeamOptionData } from '@texra/shared/pickerOptions';
+import {
+  isAgentOption,
+  type TeamOptionData,
+} from '@texra/shared/pickerOptions';
 import { loadTeamOptions } from '@texra/agent/teams/teamLaunch';
 import type { DocumentAgentOption } from '@texra/shared/plugins/documents';
 import { agentOptionsData } from '@texra/tools/documents/documentTask';
@@ -107,11 +110,7 @@ function currentVisibleAgent(
   currentAgent: string,
 ): AgentIdentity | undefined {
   const current = currentAgent.trim();
-  const currentName = agentName(current);
-  return agents.find((agent) => {
-    const valueName = agentName(agent.value);
-    return agent.value === current || valueName === currentName;
-  });
+  return agents.find((agent) => isAgentOption(agent.value, current));
 }
 
 function hiddenCurrentAgentHint(

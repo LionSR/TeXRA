@@ -96,14 +96,18 @@ export interface SessionSurfaces {
   get(key: string): SessionSurface | undefined;
   /** Apply a surface action to one session's surface. */
   act(key: string, action: SurfaceAction): void;
-  runtimeRequest(key: string, request: RuntimeCommand): void;
-  hostRequest(key: string, request: HostCommand): void;
   /** A host request answered to its caller, not presented on the surface. */
   answer: WebviewTransport['hostRequest'];
-  /** The composer's Send for the resolved selection: a follow-up to the
-   *  selected run, else a launch from the launcher's instruction. The
-   *  button and the run accelerator both land here. */
-  submit(key: string): void;
+  /**
+   * Send the shell's events (`uiEvents.ts`) dispatched under `root` to the
+   * session `sessionOf` names: a runtime or host request, a surface
+   * action, or the composer's Send (a follow-up to the selected run, else a
+   * launch from the launcher's instruction). Returns the removal.
+   */
+  listen(
+    root: HTMLElement,
+    sessionOf: (event: Event) => string | undefined,
+  ): () => void;
   /** Fires after any session's view, surface, or host changed. */
   onChange(listener: () => void): () => void;
   /** Record the run the `shown` session shows as seen after every change
@@ -152,7 +156,7 @@ export function createSessionSurfaces(options: {
     return crypto.randomUUID();
   }
 
-  /** The transcript tier follows the resolved selection (C7). */
+  /** The transcript subscription follows the shown run. */
   function transcriptTier(entry: Held): {
     transcript: string;
     aggregates: ReturnType<typeof transcriptAggregates>;
@@ -252,23 +256,23 @@ export function createSessionSurfaces(options: {
     act(entry, { kind: 'launch', patch: { instruction: text } });
   }
 
-  /** A refused request's error; null for success and for a cancellation,
-   *  which needs no notice. */
-  function refusal(result: Answer<unknown>): Surface['requestError'] {
+  /** The error a rejected request shows; null for success and for a
+   *  cancellation, which needs no notice. */
+  function shownError(result: Answer<unknown>): Surface['requestError'] {
     if (Result.isSuccess(result)) return null;
     const error = result.failure;
     return error._tag === 'Cancelled' ? null : error;
   }
 
   function presentResult(entry: Held, result: Answer<unknown>): void {
-    const error = refusal(result);
+    const error = shownError(result);
     if (error !== null) {
       setSurface(entry, { ...entry.surface$.get(), requestError: error });
     }
   }
 
-  /** The response of a `host.request`, applied to the surface. */
-  function settleHost(
+  /** The answer to a `host.request`, applied to the surface. */
+  function applyHostOutcome(
     entry: Held,
     request: HostCommand,
     origin: DraftOrigin,
@@ -349,23 +353,23 @@ export function createSessionSurfaces(options: {
     }
   }
 
-  /** A refusal is the surface's to show, on every host: the wire carries
+  /** A rejection is the surface's to show, on every host: the wire carries
    *  its reason and its guide link. */
-  function settleHostResponse(
+  function applyHostAnswer(
     entry: Held,
     request: HostCommand,
     origin: DraftOrigin,
     result: Answer<HostOutcome>,
   ): void {
     presentResult(entry, result);
-    settleHost(entry, request, origin, result);
+    applyHostOutcome(entry, request, origin, result);
   }
 
   /** Mark `key` busy in the surface's `field` now, so a second click finds
    *  it so, and clear it however `program` ends. */
   function busyWhile(
     entry: Held,
-    field: 'sending' | 'polishing',
+    field: 'sending' | 'polishing' | 'deleting',
     key: string,
     program: Effect.Effect<void>,
   ): Effect.Effect<void> {
@@ -402,14 +406,14 @@ export function createSessionSurfaces(options: {
         ),
       ),
       (result) =>
-        Effect.sync(() => settleHostResponse(entry, request, origin, result)),
+        Effect.sync(() => applyHostAnswer(entry, request, origin, result)),
     );
     if (request.kind === 'polish') {
       if (surface.polishing.has(target)) return;
       transport.run(entry.key, busyWhile(entry, 'polishing', target, exchange));
       return;
     }
-    // A second Send before the host admits the launch would start a
+    // A second Send before the host accepts the launch would start a
     // second run, so the launch claims its stream like a follow-up does.
     if (request.kind === 'launch') {
       if (surface.sending.has('launch')) return;
@@ -423,8 +427,10 @@ export function createSessionSurfaces(options: {
     const { key } = entry;
     const runId = 'runId' in request ? request.runId : null;
     if (
-      request.kind === 'followUp.send' &&
-      entry.surface$.get().sending.has(request.runId)
+      (request.kind === 'followUp.send' &&
+        entry.surface$.get().sending.has(request.runId)) ||
+      (request.kind === 'run.delete' &&
+        entry.surface$.get().deleting.has(request.runId))
     )
       return;
     // A new request on the run retires the answer to the last one.
@@ -440,7 +446,7 @@ export function createSessionSurfaces(options: {
         })),
       );
     }
-    // Keep text and images until admission succeeds. A rejection needs
+    // Keep text and images until the send is accepted. A rejection needs
     // no restoration, and a later edit remains independent of this send.
     const submitted =
       request.kind === 'followUp.send'
@@ -453,7 +459,7 @@ export function createSessionSurfaces(options: {
       isProposalForm(entry.surface$.get(), request.requestId);
     const answered = (result: Answer<Outcome>) =>
       Effect.sync(() =>
-        settleRuntimeResponse(entry, request, result, submitted, fromForm),
+        applyRuntimeAnswer(entry, request, result, submitted, fromForm),
       );
     const exchange = Effect.flatMap(
       Effect.result(
@@ -470,7 +476,9 @@ export function createSessionSurfaces(options: {
       key,
       request.kind === 'followUp.send'
         ? busyWhile(entry, 'sending', request.runId, exchange)
-        : exchange,
+        : request.kind === 'run.delete'
+          ? busyWhile(entry, 'deleting', request.runId, exchange)
+          : exchange,
     );
   }
 
@@ -481,7 +489,7 @@ export function createSessionSurfaces(options: {
     );
   }
 
-  function settleRuntimeResponse(
+  function applyRuntimeAnswer(
     entry: Held,
     request: RuntimeCommand,
     result: Answer<Outcome>,
@@ -490,10 +498,9 @@ export function createSessionSurfaces(options: {
   ): void {
     const runId = 'runId' in request ? request.runId : null;
     presentResult(entry, result);
-    // The runtime's refusal also reaches the run it was made on
-    // (7.6): that run's controls paint it, and nothing here
-    // swallows it.
-    const error = refusal(result);
+    // A rejected runtime request is also shown on the run it was made on:
+    // that run's controls paint it, and nothing here swallows it.
+    const error = shownError(result);
     if (error !== null && runId !== null) {
       setSurface(
         entry,
@@ -579,7 +586,7 @@ export function createSessionSurfaces(options: {
       return;
     }
     // Auto-approve is this launch's alone: the request carries it, and the
-    // request settles only with the run, so the next task must not find it.
+    // request finishes only with the run, so the next task must not find it.
     if (launch.approval !== 'policy')
       act(entry, { kind: 'launch', patch: { approval: 'policy' } });
     hostRequestFor(entry, { kind: 'launch', launch, instruction });
@@ -629,18 +636,38 @@ export function createSessionSurfaces(options: {
       const entry = held.get(key);
       if (entry) act(entry, action);
     },
-    runtimeRequest(key, request) {
-      const entry = held.get(key);
-      if (entry) runtimeRequestFor(entry, request);
-    },
     answer: transport.hostRequest,
-    hostRequest(key, hostRequest) {
-      const entry = held.get(key);
-      if (entry) hostRequestFor(entry, hostRequest);
-    },
-    submit(key) {
-      const entry = held.get(key);
-      if (entry) submit(entry);
+    listen(root, sessionOf) {
+      const entryOf = (event: Event) => {
+        const key = sessionOf(event);
+        return key === undefined ? undefined : held.get(key);
+      };
+      const onRuntime = (event: CustomEvent<RuntimeCommand>) => {
+        const entry = entryOf(event);
+        if (entry) runtimeRequestFor(entry, event.detail);
+      };
+      const onHost = (event: CustomEvent<HostCommand>) => {
+        const entry = entryOf(event);
+        if (entry) hostRequestFor(entry, event.detail);
+      };
+      const onSurface = (event: CustomEvent<SurfaceAction>) => {
+        const entry = entryOf(event);
+        if (entry) act(entry, event.detail);
+      };
+      const onSubmit = (event: Event) => {
+        const entry = entryOf(event);
+        if (entry) submit(entry);
+      };
+      root.addEventListener('runtime-request', onRuntime);
+      root.addEventListener('host-request', onHost);
+      root.addEventListener('surface-action', onSurface);
+      root.addEventListener('composer-submit', onSubmit);
+      return () => {
+        root.removeEventListener('runtime-request', onRuntime);
+        root.removeEventListener('host-request', onHost);
+        root.removeEventListener('surface-action', onSurface);
+        root.removeEventListener('composer-submit', onSubmit);
+      };
     },
     onChange(listener) {
       listeners.add(listener);

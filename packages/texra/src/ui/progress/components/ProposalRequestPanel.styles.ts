@@ -2,8 +2,6 @@
 
 import { css, type CSSResult } from 'lit';
 
-import { sp } from '@ui/styles';
-
 export const proposalRequestPanelStyles: CSSResult = css`
   .request-card__actions {
     border-block-start: var(--border-thin) solid var(--wa-color-surface-border);
@@ -30,17 +28,17 @@ export const proposalRequestPanelStyles: CSSResult = css`
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
-    gap: ${sp.small};
+    gap: var(--wa-space-2xs);
     min-width: 0;
     font-size: var(--font-size-sm);
   }
 
   .workflow-proposal__workflow-details {
-    margin-block-start: ${sp.small};
+    margin-block-start: var(--wa-space-2xs);
   }
 
   .workflow-proposal__plan-note {
-    margin-block: ${sp.small};
+    margin-block: var(--wa-space-2xs);
     color: var(--color-text-secondary);
     font-size: var(--font-size-xs);
   }
@@ -52,7 +50,7 @@ export const proposalRequestPanelStyles: CSSResult = css`
     max-height: 12em;
     overflow-y: auto;
     line-height: var(--line-height-normal);
-    padding: ${sp.small} 0;
+    padding: var(--wa-space-2xs) 0;
     border-bottom: var(--border-thin) solid var(--wa-color-surface-border);
   }
 
@@ -77,16 +75,16 @@ export const proposalRequestPanelStyles: CSSResult = css`
 
   .workflow-proposal__option-badges {
     display: flex;
-    gap: ${sp.small};
+    gap: var(--wa-space-2xs);
     flex-wrap: wrap;
-    margin-block-start: ${sp.small};
+    margin-block-start: var(--wa-space-2xs);
   }
 
   .workflow-proposal__files {
     display: flex;
     flex-direction: column;
-    gap: ${sp.small};
-    margin-block-start: ${sp.small};
+    gap: var(--wa-space-2xs);
+    margin-block-start: var(--wa-space-2xs);
   }
 
   .workflow-proposal__files > div {

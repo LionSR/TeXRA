@@ -4,9 +4,9 @@
  */
 
 import { html, nothing, type TemplateResult } from 'lit';
-import { classMap, type ClassInfo } from 'lit/directives/class-map.js';
+import type { ClassInfo } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
-import { buildDetailsSummary } from '@ui/progress/formatters/htmlBuilders';
+import { buildDetailsCard } from '@ui/progress/formatters/htmlBuilders';
 import type { IconName } from '@ui/wa/iconNames';
 import type { TranscriptRowBase } from '@texra-ai/harness/transcript';
 
@@ -32,7 +32,6 @@ export function buildToolUseDetails(opts: {
   extraContent?: TemplateResult;
 }): TemplateResult {
   const classes: ClassInfo = {
-    'banner-details': true,
     'tool-use-details': true,
     'tool-use-error': opts.isError,
     ...opts.extraClasses,
@@ -44,5 +43,10 @@ export function buildToolUseDetails(opts: {
     : nothing;
   const extraContent = html`${statusText}${opts.extraContent ?? nothing}`;
   // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="start" class=${classMap(classes)} ?open=${opts.defaultOpen ?? false}>${buildDetailsSummary({ iconName: opts.iconName, running: opts.running, label: opts.label, labelClass: 'tool-use-title', extraContent })}<div class="banner-content log-entry-content" data-log-id=${ifDefined(opts.row.id)}>${opts.content}</div></wa-details>`;
+  return buildDetailsCard({
+    summary: { iconName: opts.iconName, running: opts.running, label: opts.label, labelClass: 'tool-use-title', extraContent },
+    body: html`<div class="banner-content log-entry-content" data-log-id=${ifDefined(opts.row.id)}>${opts.content}</div>`,
+    open: opts.defaultOpen,
+    classes,
+  });
 }

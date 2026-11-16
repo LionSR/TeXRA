@@ -14,6 +14,7 @@ import {
   type SessionView,
 } from '@texra-ai/harness/schemas';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
+import { isAgentOption } from '@texra/shared/pickerOptions';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface, SurfaceAction } from '@texra/shared/session/surface';
 
@@ -31,13 +32,9 @@ function proposedAgentKey({ agent, agentSource }: AgentProposalRequest) {
   return agentSource == null ? agent : agentKey(agentSource, agent);
 }
 
-/** Whether an agent option value (a key) is the proposal's agent: the
- *  exact key, or, for a proposal with no source, any key of that name. */
+/** Whether an agent option value (a key) is the proposal's agent. */
 function isProposedAgent(value: string, data: AgentProposalRequest): boolean {
-  return (
-    value === proposedAgentKey(data) ||
-    (data.agentSource == null && agentName(value) === data.agent)
-  );
+  return isAgentOption(value, proposedAgentKey(data));
 }
 
 /** The proposal the surface's form is open on, and the run asking. */

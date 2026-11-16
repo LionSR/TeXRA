@@ -7,7 +7,7 @@
  * service away no task starts, without a key nothing runs, and a missing
  * agent file fails the launch before a tool is ever needed. Tasks running
  * in this window still run, so that notice yields to every other. Each
- * warning dispatches its own `host.request` arm. The onboarding and
+ * warning dispatches its own `host.request` command. The onboarding and
  * "no LaTeX files yet" cards are not warnings: they take the hero's place.
  */
 import { css, html, LitElement, nothing, type TemplateResult } from 'lit';

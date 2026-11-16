@@ -6,18 +6,20 @@
  * expanded composer) or the selected run's conversation, under one header
  * row: the run's own header when a run is selected. The Sessions drawer,
  * the docked list of the wide editor tab, and the Tools sheet hang off the
- * same element. The desktop draws its own shell (rail, header) around this
- * element, so there it renders no Sessions button, New task, or drawer.
+ * same element. Placed `embedded`, a host's own chrome around it lists
+ * the tasks and owns New task, Settings and the window items, so the shell
+ * renders none of them, nor the Sessions drawer or the Active now strip.
  *
  * `view`, `surface`, and `host` are properties: the design harness assigns
  * fixtures to them, and the live host assigns its signals to the same
  * names. Every send leaves as a `runtime-request`, `host-request`, or
- * `surface-action` event with the arm as its detail; the root's owner
- * installs one listener per event.
+ * `surface-action` event with the command as its detail;
+ * `SessionSurfaces.listen` installs one listener per event.
  */
 
 // Third-party imports
-import { getBasename, agentName } from '@texra-ai/harness/schemas';
+import { getBasename } from '@texra-ai/harness/schemas';
+import { isAgentOption } from '@texra/shared/pickerOptions';
 import { html, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -50,7 +52,6 @@ import {
   renderIconActionButton,
   renderIconActionButtonParts,
 } from '@ui/wa/actionButtons';
-import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 import { ONBOARDING_SETUP_HANDOFF } from '@ui/copy/onboarding';
 import { requestErrorText } from '@ui/copy/requestErrors';
@@ -64,10 +65,8 @@ function plannedPassesOf(run: RunView, host: HostSnapshot): number | undefined {
     return undefined;
   }
   const id = run.identity.agent;
-  return host.agentOptions.find(
-    (option) =>
-      option.value === id || (agentName(id) === id && option.label === id),
-  )?.rounds;
+  return host.agentOptions.find((option) => isAgentOption(option.value, id))
+    ?.rounds;
 }
 
 // Local imports - progress view frontend
@@ -86,8 +85,7 @@ import './components/OnboardingWelcomeCard';
 import './components/RunHeader';
 import { launchAgentOption } from './components/composerChipMenus';
 import { editedProposal, formHost } from './proposalEdit';
-import type { HeaderMenuItem } from './components/RunHeader';
-import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
+import { actionMenu, type ActionMenuItem } from '@ui/wa/actionMenu';
 import type { SessionView, RunView } from '@texra-ai/harness/schemas';
 
 registerTeXRAWebAwesomeIcons();
@@ -99,8 +97,10 @@ export class ProgressApp extends LitElement {
   @property({ attribute: false }) view: SessionView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
   @property({ attribute: false }) host: HostSnapshot | null = null;
-  /** Fixed by the document hosting this surface. */
-  @property() placement: 'sidebar' | 'editor' | 'desktop' = 'sidebar';
+  /** Fixed by the document hosting this surface: the VS Code sidebar, its
+   *  editor tab, or `embedded` in a host whose own chrome lists the tasks
+   *  and owns New task, Settings and the window's commands. */
+  @property() placement: 'sidebar' | 'editor' | 'embedded' = 'sidebar';
 
   private selectNew = (): void => {
     this.dispatchEvent(SessionUiEvents.surface({ kind: 'selectNew' }));
@@ -116,30 +116,25 @@ export class ProgressApp extends LitElement {
 
   /** The window's own items: pop the view out or back, the LaTeXDiffs
    *  sheet. The New-task header shows them in its menu; a run's header
-   *  appends them to the run's. The desktop has no editor to pop out into,
-   *  and a LaTeX diff is asked for in the conversation there, so it is given
-   *  none. */
-  private windowItems(): HeaderMenuItem[] {
-    if (this.placement === 'desktop') return [];
+   *  appends them to the run's. An embedded shell's host owns its window. */
+  private windowItems(): ActionMenuItem[] {
+    if (this.placement === 'embedded') return [];
     const inEditor = this.placement === 'editor';
     const host = (kind: 'popOut' | 'popBack') => () =>
       this.dispatchEvent(SessionUiEvents.host({ kind }));
     return [
       inEditor
         ? {
-            value: 'popBack',
             icon: 'backward-step',
             label: 'Back to sidebar',
             activate: host('popBack'),
           }
         : {
-            value: 'popOut',
             icon: 'picture-in-picture',
             label: 'Open tasks in editor',
             activate: host('popOut'),
           },
       {
-        value: 'latexdiffs',
         icon: 'code-compare',
         label: 'LaTeXDiffs…',
         activate: () =>
@@ -179,7 +174,7 @@ export class ProgressApp extends LitElement {
           </main>
         </div>
         ${
-          surface.drawerOpen && this.placement !== 'desktop'
+          surface.drawerOpen && this.placement !== 'embedded'
             ? html`<session-drawer
                 .view=${view}
                 .surface=${surface}
@@ -240,7 +235,7 @@ export class ProgressApp extends LitElement {
     surface: Surface,
     view: SessionView,
   ): TemplateResult | typeof nothing {
-    const onDesktop = this.placement === 'desktop';
+    const embedded = this.placement === 'embedded';
     const sessions = renderIconActionButtonParts({
       id: 'shell-sessions',
       icon: 'list-ul',
@@ -268,9 +263,10 @@ export class ProgressApp extends LitElement {
       onClick: () =>
         this.dispatchEvent(SessionUiEvents.host({ kind: 'openSettings' })),
     });
-    // New task and Settings end the row in every layout (the desktop rail
-    // has both). Docked wide, a 300px + 1fr grid: the dock names the project.
-    const end = onDesktop ? [] : [newTask, settings];
+    // New task and Settings end the row unless the host's chrome has
+    // them. Docked wide, a 300px + 1fr grid: the dock names the project.
+    const start = embedded ? [] : [sessions];
+    const end = embedded ? [] : [newTask, settings];
     return html`
       <header class="shell-header">
         <div class="header-dock">
@@ -286,9 +282,9 @@ export class ProgressApp extends LitElement {
                     .view=${view}
                     .menuItems=${this.windowItems()}
                     .plannedPasses=${plannedPassesOf(run, host)}
-                    >${onDesktop ? nothing : sessions.button}${end.map((b) => b.button)}</run-header
-                  >${onDesktop ? nothing : sessions.tooltip}${end.map((b) => b.tooltip)}`
-              : html`${sessions.button}${sessions.tooltip}
+                    >${start.map((b) => b.button)}${end.map((b) => b.button)}</run-header
+                  >${start.map((b) => b.tooltip)}${end.map((b) => b.tooltip)}`
+              : html`${start.map((b) => [b.button, b.tooltip])}
                   <span class="shell-title header-main-title">New task</span>
                   <span class="spacer"></span>
                   ${end.map((b) => [b.button, b.tooltip])}
@@ -304,14 +300,9 @@ export class ProgressApp extends LitElement {
   private renderOverflow(): TemplateResult | typeof nothing {
     const items = this.windowItems();
     if (items.length === 0) return nothing;
+    const menu = actionMenu(items);
     return html`
-      <wa-dropdown
-        placement="bottom-end"
-        @wa-select=${(event: WaSelectEvent) => {
-          const value = selectedItemValue(event);
-          items.find((item) => item.value === value)?.activate();
-        }}
-      >
+      <wa-dropdown placement="bottom-end" @wa-select=${menu.onSelect}>
         <wa-button
           slot="trigger"
           id="shell-more"
@@ -323,14 +314,7 @@ export class ProgressApp extends LitElement {
           aria-label="More"
           >${waIcon('ellipsis')}</wa-button
         >
-        ${repeat(
-          items,
-          (item) => item.value,
-          (item) =>
-            html`<wa-dropdown-item value=${item.value}
-              >${waIcon(item.icon, { slot: 'icon' })}${item.label}</wa-dropdown-item
-            >`,
-        )}
+        ${menu.items}
       </wa-dropdown>
       <wa-tooltip for="shell-more">More</wa-tooltip>
     `;
@@ -461,7 +445,7 @@ export class ProgressApp extends LitElement {
     // one gets the file section; a chat attaches through the composer alone.
     // The selected option's `rounds` decides, and the host's launch keeps to
     // the same options: a selection naming none of them (an agent hidden
-    // since it was chosen) gets no file section, and its launch is refused.
+    // since it was chosen) gets no file section, and its launch is rejected.
     // Open on a proposal, its own `task` flag decides: the form offers only
     // agents of the proposal's kind, and a team's hidden member's option
     // carries no `rounds` to read.
@@ -475,7 +459,10 @@ export class ProgressApp extends LitElement {
       (config) => launch[LAUNCH_FILE_LISTS[config.type]],
     );
     const { rollup } = view;
-    const activeNow = rollup.running + rollup.waiting + rollup.interrupted > 0;
+    // An embedded shell's host lists the running tasks itself.
+    const activeNow =
+      this.placement !== 'embedded' &&
+      rollup.running + rollup.waiting + rollup.interrupted > 0;
     return html`
       <div class="empty">
         <div class="hero-wrap">

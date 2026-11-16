@@ -110,7 +110,7 @@ export const conversationContentStyles: CSSResult = css`
     flex-wrap: wrap;
     align-items: center;
     gap: var(--wa-space-s);
-    min-height: var(--height-button, 36px);
+    min-height: var(--height-button);
     padding: var(--wa-space-s) 0 0;
     border-top: 1px solid var(--wa-color-surface-border);
     color: var(--color-text-muted);

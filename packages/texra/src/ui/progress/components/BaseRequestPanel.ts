@@ -20,12 +20,13 @@ import {
   type CSSResultGroup,
   type TemplateResult,
 } from 'lit';
-import { property, query, state } from 'lit/decorators.js';
+import { property, query } from 'lit/decorators.js';
+import { live } from 'lit/directives/live.js';
 
 // Side-effect imports - register WA components used by the card
 import '@awesome.me/webawesome/dist/components/button-group/button-group.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
-import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
+import WaTextarea from '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 // Local imports - shared schemas
 import {
@@ -35,6 +36,7 @@ import {
   REQUEST_ACTIONS,
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
+import type { RequestDraft, Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import type { IconName } from '@ui/wa/iconNames';
 import {
@@ -95,6 +97,8 @@ const requestCardHostStyles: CSSResult = css`
   }
 `;
 
+const EMPTY_DRAFT: RequestDraft = Object.freeze({});
+
 export abstract class BaseRequestPanel<
   K extends RequestPayload['kind'] = RequestPayload['kind'],
 > extends LitElement {
@@ -132,8 +136,38 @@ export abstract class BaseRequestPanel<
     return this.answerability !== 'answerable';
   }
 
+  /** The surface whose `requestDrafts` keeps what is entered on this card
+   *  and not yet sent, so a run switch does not lose it. */
+  @property({ attribute: false }) surface: Surface | null = null;
+
+  /** Where this card's draft is kept: the request, unless the card names
+   *  its own key. */
+  protected get draftKey(): string {
+    return this.permission.data.requestId;
+  }
+
+  /** What is entered on this card and not yet sent. */
+  protected get draft(): RequestDraft {
+    return this.surface?.requestDrafts.get(this.draftKey) ?? EMPTY_DRAFT;
+  }
+
+  /** Store the card's draft; an empty one is none. A read-only card owns
+   *  no draft. */
+  protected writeDraft(draft: RequestDraft): void {
+    if (this.readOnly) return;
+    this.dispatchEvent(
+      SessionUiEvents.surface({
+        kind: 'requestDraft',
+        key: this.draftKey,
+        draft: Object.keys(draft).length === 0 ? null : draft,
+      }),
+    );
+  }
+
   /** Whether the optional note for the decline is open. */
-  @state() protected noteOpen = false;
+  private get noteOpen(): boolean {
+    return this.draft.note !== undefined;
+  }
 
   @query('[data-note-input]')
   private noteInput?: HTMLElementTagNameMap['wa-textarea'];
@@ -205,29 +239,38 @@ export abstract class BaseRequestPanel<
   // Decisions
   // ---------------------------------------------------------------------------
 
+  /** Send a decision; it answers the request, so the card's draft goes. */
   protected emitAction(decision: SurfaceDecision): void {
     if (this.readOnly) return;
-    const arm = approvalDecisionDelivery(
+    if (this.surface?.requestDrafts.has(this.draftKey)) {
+      this.dispatchEvent(
+        SessionUiEvents.surface({
+          kind: 'requestDraft',
+          key: this.draftKey,
+          draft: null,
+        }),
+      );
+    }
+    const request = approvalDecisionDelivery(
       { payload: this.permission, answeredBy: this.answeredBy },
       decision,
     );
-    if ('host' in arm) this.dispatchEvent(SessionUiEvents.host(arm.host));
-    else this.emitRuntimeArm(arm.runtime);
+    if ('host' in request)
+      this.dispatchEvent(SessionUiEvents.host(request.host));
+    else this.sendRuntimeDecision(request.runtime);
   }
 
   /**
-   * Send a decision's runtime arm. A panel whose host answers it with a verb
+   * Send a decision's runtime request. A panel whose host answers it with a verb
    * of its own (the tool-edit panel's approve) overrides this instead of
-   * re-implementing `emitAction`'s read-only check and host-arm dispatch.
+   * re-implementing `emitAction`'s read-only check and host dispatch.
    */
-  protected emitRuntimeArm(runtime: RuntimeCommand): void {
+  protected sendRuntimeDecision(runtime: RuntimeCommand): void {
     this.dispatchEvent(SessionUiEvents.runtime(runtime));
   }
 
   private sendDecline(): void {
-    const trimmed = this.noteOpen ? (this.noteInput?.value ?? '').trim() : '';
-    const feedback = trimmed || undefined;
-    this.noteOpen = false;
+    const feedback = this.draft.note?.trim() || undefined;
     this.emitAction(declineDecision(this.permission.kind, feedback));
   }
 
@@ -260,13 +303,26 @@ export abstract class BaseRequestPanel<
   // The note
   // ---------------------------------------------------------------------------
 
+  /** Set when the person opens the note: the field takes focus once the
+   *  surface's draft has opened it here. */
+  private focusNote = false;
+
   private openNote(): void {
-    this.noteOpen = true;
-    void this.updateComplete.then(() => this.noteInput?.focus());
+    this.focusNote = true;
+    this.writeDraft({ ...this.draft, note: '' });
+  }
+
+  protected override updated(): void {
+    const note = this.noteInput;
+    if (this.focusNote && note) {
+      this.focusNote = false;
+      void note.updateComplete.then(() => note.focus());
+    }
   }
 
   private closeNote(): void {
-    this.noteOpen = false;
+    const { note: _closed, ...rest } = this.draft;
+    this.writeDraft(rest);
     void this.updateComplete.then(() =>
       this.renderRoot
         .querySelector<HTMLElement>('wa-button[data-action="decline"]')
@@ -365,13 +421,15 @@ export abstract class BaseRequestPanel<
       triggerId: 'request-grant-trigger',
       triggerAriaLabel: 'More approve options',
       tooltip: `${grant.scope ?? grant.label} (a)`,
-      items: html`<wa-dropdown-item value="grant"
-        >${grant.label}</wa-dropdown-item
-      >`,
-      onSelect: (value) => {
-        if (value === 'grant')
-          this.emitAction(grant.decision ?? { action: APPROVE_SESSION_ACTION });
-      },
+      items: [
+        {
+          label: grant.label,
+          activate: () =>
+            this.emitAction(
+              grant.decision ?? { action: APPROVE_SESSION_ACTION },
+            ),
+        },
+      ],
     });
     return html`
       <wa-button-group
@@ -422,6 +480,13 @@ export abstract class BaseRequestPanel<
         autocomplete="off"
         spellcheck="true"
         data-note-input
+        .value=${live(this.draft.note ?? '')}
+        @input=${(event: Event) => {
+          const field = event.currentTarget;
+          if (field instanceof WaTextarea) {
+            this.writeDraft({ ...this.draft, note: field.value ?? '' });
+          }
+        }}
         @keydown=${this.handleNoteKeydown}
       ></wa-textarea>
     `;

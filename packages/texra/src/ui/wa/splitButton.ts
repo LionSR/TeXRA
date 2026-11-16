@@ -8,9 +8,8 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - Web Awesome
-import { selectedItemValue } from './selectTemplates';
+import { actionMenu, type ActionMenuItem } from './actionMenu';
 import { waIcon } from './webAwesomeIcons';
-import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 interface SplitButtonMenuOptions {
   /** Component-specific prefix for the menu and caret-trigger classes. */
@@ -19,14 +18,8 @@ interface SplitButtonMenuOptions {
   readonly triggerId: string;
   readonly triggerAriaLabel: string;
   readonly tooltip: string;
-  /** The `wa-dropdown-item` entries. */
-  readonly items: TemplateResult;
-  /**
-   * Selection callback. Receives the selected item's `value` ('' when the
-   * event carries none) — `wa-select` fires on Enter/Space rather than as a
-   * DOM click, so callers must not rely on click handlers on the items.
-   */
-  readonly onSelect: (value: string) => void;
+  /** The menu's actions. */
+  readonly items: readonly ActionMenuItem[];
 }
 
 interface SplitButtonMenuParts {
@@ -77,15 +70,14 @@ export function renderSplitButtonMenuParts({
   triggerAriaLabel,
   tooltip,
   items,
-  onSelect,
 }: SplitButtonMenuOptions): SplitButtonMenuParts {
+  const menu = actionMenu(items);
   return {
     menu: html`
       <wa-dropdown
         class="${classPrefix}-menu split-menu"
         placement="bottom-end"
-        @wa-select=${(event: WaSelectEvent) =>
-          onSelect(selectedItemValue(event))}
+        @wa-select=${menu.onSelect}
       >
         <wa-button
           id=${triggerId}
@@ -99,7 +91,7 @@ export function renderSplitButtonMenuParts({
         >
           ${waIcon('chevron-down')}
         </wa-button>
-        ${items}
+        ${menu.items}
       </wa-dropdown>
     `,
     tooltip: html`<wa-tooltip for=${triggerId}>${tooltip}</wa-tooltip>`,

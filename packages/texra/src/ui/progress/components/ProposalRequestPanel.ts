@@ -9,7 +9,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import { Record as Rec, Result, Schema } from 'effect';
 import { html, nothing, type TemplateResult } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
@@ -68,15 +68,9 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   /** The asking run: its `agentScope` bounds the form's agents. */
   @property({ attribute: false }) run: RunView | null = null;
 
-  /** The model picked on the card, for the request it was picked on. */
-  @state() private picked: { requestId: string; model: string } | null = null;
-
   /** The model the run starts on: the one picked here, else the proposal's. */
   private get model(): string {
-    const data = this.permission.data;
-    return this.picked?.requestId === data.requestId
-      ? this.picked.model
-      : data.model;
+    return this.draft.model ?? this.permission.data.model;
   }
 
   /** An approval's `model`: stated only when it is not the proposal's. */
@@ -126,10 +120,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
       @wa-select=${(event: WaSelectEvent) => {
         const value = selectedItemValue(event);
         if (!value.startsWith('model:')) return;
-        this.picked = {
-          requestId: this.permission.data.requestId,
-          model: value.slice(6),
-        };
+        this.writeDraft({ ...this.draft, model: value.slice(6) });
       }}
     >
       <wa-button
