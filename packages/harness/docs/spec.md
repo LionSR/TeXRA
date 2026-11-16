@@ -37,8 +37,9 @@ its kind is its `type` column.
 - **Session**: The process's handle on one storage root: its store connection,
   its one publisher, its fold and its live runs.
 - **Aggregate**: A keyed sequence of rows. Kinds are `run` (keyed by run id) and
-  `plugin` (keyed `<plugin>:<key>`)
-  (`shared/schemas/identifiers.ts#AggregateKindSchema`).
+  `plugin` (keyed `<plugin>:<key>`); in memory a run's key is its run id and
+  a plugin's is its key behind `plugin:`
+  (`shared/schemas/identifiers.ts#AggregateIdSchema`).
 - **Run**: One `run` aggregate. It exists while its `run.start` row exists and
   no `run.removed` has closed it
   (`controllers/session/databaseLayer.ts#A run must begin with exactly one run.start`,
@@ -512,9 +513,12 @@ with a warning (`agent/storage/runLifecycle.ts#endIn`). Every child is a
 run that ends: a native child runs one cycle and ends with its report; a
 process child (a background command, an agent CLI's turn) is one turn of
 its process, ended with its exit (`agent/runtime/processRun.ts`). A child's
-end queues its report on its parent's input in the same transaction, under
-`${runId}:${activation}` (`agent/storage/runLifecycle.ts#parentDelivery`),
-unless the parent's call awaits it.
+end queues its report in the same transaction, under
+`${runId}:${activation}`, on the input of each run it works for
+(`agent/storage/runLifecycle.ts#replyDelivery`): the runs whose messages it
+took as work since its last end; until its first end also its parent,
+unless the parent's call awaits it; and after that its parent when no run
+asked (`shared/session/runRowReads.ts#reportRecipients`).
 
 **W6.** Every failed attempt of a turn that reaches failure recording MUST
 commit a `failed` row whose `next` is the move after it; a call off the rows
@@ -872,9 +876,9 @@ unless the item names another test:
   again without a person's retry; no child is left without a terminal row. Also
   asserted by
   `src/test-kernel/support/crashConformance.ts#'reads every child result settled before the crash, exactly once'`.
-- **I6**: A child's result is delivered to its parent at most once; a result
-  whose parent cannot take it stays in the child's run report with a warning
-  (`agent/storage/runLifecycle.ts#parentDelivery`). Asserted by
+- **I6**: A child's result is delivered to each run it works for at most
+  once; a result a recipient cannot take stays in the child's run report
+  with a warning (`agent/storage/runLifecycle.ts#replyDelivery`). Asserted by
   `src/test-kernel/support/crashConformance.ts#'reads every child result settled before the crash, exactly once'`.
 - **I7**: A fork keeps the history it was registered with; compaction keeps
   the context it committed.

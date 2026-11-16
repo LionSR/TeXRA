@@ -4,7 +4,7 @@ import { Effect, SubscriptionRef, Context, Schema } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
-import { RunIdSchema, qualifyAggregateId } from '@texra-ai/harness/schemas';
+import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import {
   publishTestRunStart,
@@ -28,7 +28,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             yield* publishTestRows(session, [
               {
                 type: 'request.opened',
-                aggregateId: qualifyAggregateId('run', parent),
+                aggregateId: parent,
                 requestId: 'question:removed-parent',
                 payload: {
                   kind: 'userQuestion',
@@ -59,7 +59,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             yield* publishTestRows(session, [
               {
                 type: 'run.removed',
-                aggregateId: qualifyAggregateId('run', parent),
+                aggregateId: parent,
               },
             ]);
             yield* Context.get(session, SessionLog).drained;

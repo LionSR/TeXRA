@@ -23,7 +23,6 @@ import {
   addUsage,
   type CommitOrdinal,
   NO_USAGE,
-  qualifyAggregateId,
   isTaskConfig,
   sumUsageStats,
   RunWorkspaceFilesSchema,
@@ -47,7 +46,7 @@ type RecordRead<A, R = SessionLog> = Effect.Effect<A, DatabaseReadFailed, R>;
 
 /** A run's lifecycle rows and its history, one read each. */
 const rowsOf = (runId: RunId) => {
-  const id = qualifyAggregateId('run', runId);
+  const id = runId;
   return Effect.flatMap(SessionLog, (log) =>
     Effect.map(
       Effect.all([log.runRows(id, 'lifecycle'), log.history(id)]),
@@ -63,26 +62,35 @@ const rowsOf = (runId: RunId) => {
  * from here, never from its caller, who has no parent to name for a run that
  * already started once.
  */
-export const persistedParentRunId = Effect.fn('persistedParentRunId')(
-  function* (runId: RunId) {
-    const parent = (yield* parentEdge(runId))?.id;
-    if (parent === undefined) return undefined;
-    return (yield* getRunRecords(parent).exists()) ? parent : undefined;
-  },
-);
+export const persistedParentId = Effect.fn('persistedParentId')(function* (
+  runId: RunId,
+) {
+  const parent = (yield* parentEdge(runId))?.id;
+  if (parent === undefined) return undefined;
+  return (yield* getRunRecords(parent).exists()) ? parent : undefined;
+});
 
 const parentEdge = Effect.fn('parentEdge')(function* (runId: RunId) {
   return (yield* (yield* SessionLog).facts(runId))?.parent ?? null;
 });
 
 /** The run one attempt of a parent's call launches (an `agent` child, a
- *  background script), named by its response too: call ids repeat. */
-export const callChildRunId = (call: {
-  readonly parentRunId: RunId;
+ *  background script), named by its response too: call ids repeat. The id
+ *  is a hash of these fields under these names, `parentRunId` among them:
+ *  a resumed call finds the run an earlier attempt launched by deriving
+ *  the same id, so the names are part of the stored format. */
+export const callChildRunId = ({
+  parentId,
+  responseId,
+  callId,
+  attempt,
+}: {
+  readonly parentId: RunId;
   readonly responseId: string;
   readonly callId: string;
   readonly attempt: number;
-}): RunId => deriveRunId(call);
+}): RunId =>
+  deriveRunId({ parentRunId: parentId, responseId, callId, attempt });
 
 /** The runs the attempts so far of `runId`'s open calls launched under
  *  their derived ids (they may not exist), by call: a call no attempt of
@@ -99,7 +107,7 @@ const openCallChildren = (
         callId,
         Array.from({ length: attemptOf(status) }, (_, index) =>
           callChildRunId({
-            parentRunId: runId,
+            parentId: runId,
             responseId: pending.responseId,
             callId,
             attempt: index + 1,
@@ -120,9 +128,7 @@ export const owningCall = Effect.fn('owningCall')(function* (runId: RunId) {
   const children = openCallChildren(id, history).get(callId);
   // A later response may reuse the call id: the pending call owns the run
   // only when the run is named by it.
-  return children?.includes(runId) === true
-    ? { parentRunId: id, callId }
-    : null;
+  return children?.includes(runId) === true ? { parentId: id, callId } : null;
 });
 
 /**

@@ -450,9 +450,8 @@ its call's run: an agent's (`launch`: the child's result, or its receipt
 for a background launch) or an external process's (`launchProcess`: its
 run id, outside the child-run budget); a plugin's tool reaches no other
 launch. And it reaches a
-run of the session by id: its input, live parent edge, records, whether
-it holds a request, and the plugin's own facts on it, each over the
-call's run.
+run of the session by id: its input, records, whether it holds a
+request, and the plugin's own facts on it, each over the call's run.
 
 ```ts
 interface ChildRunsShape {
@@ -464,9 +463,6 @@ interface ChildRunsShape {
   ) => Effect.Effect<RunId, Error, ToolContext | RunServices>;
   /** The run's input: what a tool sends it, and when it takes no more. */
   readonly inbox: (runId: RunId) => Effect.Effect<RunInbox, Error>;
-  /** Its parent as the rows record it (`run.start`): null for a root, or
-   *  a run that is not there. */
-  readonly parent: (runId: RunId) => Effect.Effect<RunId | null, Error>;
   /** Its records: whether the store still lists it, and its terminal
    *  result (null before it ends). */
   readonly records: (runId: RunId) => {
@@ -718,19 +714,6 @@ Files and the shell: every agent needs them. An app passes the filter
 const fileOps: (options?: { readonly writeFilter?: WriteFilter | undefined; }) => Plugin
 ```
 
-## FollowUpSenderInput
-
-Who a producer says a follow-up is from. Runs talk as a graph: any run may
-message any run in the project, whatever their places in the supervision
-tree. A run names only itself; the recipient's acceptance
-(`Inbox.send`) stamps how it relates to the recipient.
-
-```ts
-type FollowUpSenderInput =
-  | Exclude<FollowUpSender, { readonly kind: 'run' }>
-  | { readonly kind: 'run'; readonly runId: RunId };
-```
-
 ## formatToolOutput
 
 Format tool output with a header and content.
@@ -819,7 +802,7 @@ type InboxItem = (
     }
   | { readonly delivery: ChildRunDelivery }
 ) & {
-  readonly from: FollowUpSenderInput;
+  readonly from: FollowUpSender;
   /** Identity of a delivery its producer may repeat (a child's result):
    *  the row's `followUpId`, so a replay writes nothing. */
   readonly deliveryId?: string;
@@ -1720,22 +1703,10 @@ interface RunInbox {
   /** Deliver `item` to the run. */
   readonly send: (
     item: InboxItem,
-    options?: RunInboxSendOptions,
   ) => Effect.Effect<SubmitFollowUpResult, Error>;
   /** Hear the run take no more input, or its session's inbox close;
    *  returns the detach. */
   readonly onClosed: (listener: () => void) => () => void;
-}
-```
-
-## RunInboxSendOptions
-
-How one input is delivered to a run.
-
-```ts
-interface RunInboxSendOptions {
-  /** Only from the run's parent, by its rows (`SendOptions.fromParent`). */
-  readonly fromParent?: boolean;
 }
 ```
 

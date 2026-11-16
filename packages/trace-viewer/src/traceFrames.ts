@@ -7,7 +7,6 @@
  * is answered from these rows in full.
  */
 import {
-  qualifyAggregateId,
   listingTypeOf,
   referencedAggregates,
   replayInputs,
@@ -87,7 +86,7 @@ export function traceFrame(
       ? trace.events
       : trace.events.filter((event) => event.commit <= position.commit);
   const named = subscribe.aggregates.some(
-    (aggregate) => aggregate.id === qualifyAggregateId('run', trace.runId),
+    (aggregate) => aggregate.id === trace.runId,
   );
   const listing = events.filter((event) => listingTypeOf(event) !== null);
   const checkedAggregateIds = [

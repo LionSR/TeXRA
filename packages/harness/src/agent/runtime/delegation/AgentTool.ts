@@ -301,7 +301,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
 ) {
   const { run } = call;
   const script = call.script ?? undefined;
-  const { runId: parentRunId } = run;
+  const { runId: parentId } = run;
   const { task, persona } = launch;
   // A chat's files are the media on its prompt; a task names its four lists.
   const files =
@@ -339,7 +339,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       ).map(([label, list]) =>
         trusted
           ? Effect.succeed(list.map((file) => ({ file, absolutePath: file })))
-          : resolveInvocationFileList(parentRunId, label, list),
+          : resolveInvocationFileList(parentId, label, list),
       ),
       { concurrency: 'unbounded' },
     ),
@@ -504,7 +504,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     running(
       executeSubagentInBand({
         runId: agentChildRunId(call),
-        parentRunId,
+        parentId,
         configPayload,
         parentCall: { callId: call.callId, card: call.logId },
         grants,

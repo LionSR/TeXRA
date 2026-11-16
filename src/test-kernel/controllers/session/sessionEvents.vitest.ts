@@ -57,14 +57,13 @@ vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
 }));
 
 import {
-  qualifyAggregateId,
   type RunId,
   RunIdSchema,
   type SessionRow,
   type SessionRowDraft,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import { LocalRuntimeStateSchema } from '@shared/schemas';
+import { LocalRuntimeStateSchema, pluginAggregateId } from '@shared/schemas';
 import { sessionEventsLayer } from '@agent/runtime/sessionEventsLayer';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
@@ -121,12 +120,11 @@ import { databaseLayer } from '@controllers/session/databaseLayer';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { nodePlatformServices } from '@platform/defaults/nodeServices';
-import { qualifyAggregateId } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 
 const [storage, run] = process.argv.slice(2);
 const append = Effect.flatMap(Database, (db) =>
-  db.appendAll([{ type: 'run.start', aggregateId: qualifyAggregateId('run', run),
+  db.appendAll([{ type: 'run.start', aggregateId: run,
     identity: { kind: 'agent', agent: 'chat' }, takesFollowUps: false,
     parent: null, provenance: null }]));
 await Effect.runPromise(append.pipe(Effect.provide(databaseLayer('persistent').pipe(
@@ -193,13 +191,13 @@ const runStartRow = runStart(RUN);
 /** The loop blocked on the request below: the phase the fold reads. */
 const waiting: SessionRowDraft = {
   type: 'run.position',
-  aggregateId: qualifyAggregateId('run', RUN),
+  aggregateId: RUN,
   payload: { at: 'waiting' },
 };
 
 const requested: SessionRowDraft = {
   type: 'request.opened',
-  aggregateId: qualifyAggregateId('run', RUN),
+  aggregateId: RUN,
   requestId: 'req-1',
   payload: {
     kind: 'bash',
@@ -318,7 +316,7 @@ describe('session events and view', () => {
         runStateAppend(append)([
           {
             type: 'request.decided',
-            aggregateId: qualifyAggregateId('run', RUN),
+            aggregateId: RUN,
             requestId: 'req-1',
             decision: { action: 'approve' },
           },
@@ -328,7 +326,7 @@ describe('session events and view', () => {
         runStateAppend(append)([
           {
             type: 'run.position',
-            aggregateId: qualifyAggregateId('run', RUN),
+            aggregateId: RUN,
             payload: { at: 'turn.begin', turn: 1 },
           },
         ]),
@@ -359,7 +357,7 @@ describe('session events and view', () => {
           waiting,
           {
             type: 'run.position',
-            aggregateId: qualifyAggregateId('run', RUN),
+            aggregateId: RUN,
             payload: { at: 'turn.begin', turn: 1 },
           },
         ]),
@@ -396,7 +394,7 @@ describe('session events and view', () => {
           runStartRow,
           {
             type: 'run.description',
-            aggregateId: qualifyAggregateId('run', RUN),
+            aggregateId: RUN,
             description: 'A title',
             by: 'model',
             usage: {
@@ -420,7 +418,7 @@ describe('session events and view', () => {
         runStateAppend(append)([
           {
             type: 'run.position',
-            aggregateId: qualifyAggregateId('run', RUN),
+            aggregateId: RUN,
             payload: { at: 'turn.begin', turn: 1 },
           },
         ]),
@@ -488,7 +486,7 @@ describe('Sessions owner', () => {
           waiting,
           {
             type: 'request.opened',
-            aggregateId: qualifyAggregateId('run', RUN),
+            aggregateId: RUN,
             requestId: 'plugin-answer',
             payload: {
               kind: 'plugin',
@@ -845,10 +843,10 @@ describe('the session event table and its one publisher', () => {
         expect(
           [...first, ...second].map((e) => [e.aggregateId, e.seq, e.commit]),
         ).toEqual([
-          [qualifyAggregateId('run', RUN), 1, 1],
-          [qualifyAggregateId('run', OLDER), 1, 2],
-          [qualifyAggregateId('run', RUN), 2, 3],
-          [qualifyAggregateId('run', RUN), 3, 4],
+          [RUN, 1, 1],
+          [OLDER, 1, 2],
+          [RUN, 2, 3],
+          [RUN, 3, 4],
         ]);
         // `at` is the layer's own clock: no caller passes it.
         expect(first.every((e) => e.at === now)).toBe(true);
@@ -939,7 +937,7 @@ describe('the session event table and its one publisher', () => {
       const solo = `\uD800${'y'.repeat(4096)}`;
       const card = (run: RunId, args: object): SessionRowDraft => ({
         type: 'tool.start',
-        aggregateId: qualifyAggregateId('run', run),
+        aggregateId: run,
         logId: 'call-1',
         toolName: 'script',
         input: { script: shared, args: { ...args, $b: 'mine', $$b: [shared] } },
@@ -963,7 +961,7 @@ describe('the session event table and its one publisher', () => {
           yield* db.appendAll([
             {
               type: 'run.removed',
-              aggregateId: qualifyAggregateId('run', run),
+              aggregateId: run,
             },
           ]);
           yield* (yield* deletionCollector(db, storage)).pending;
@@ -1015,13 +1013,7 @@ describe('the session event table and its one publisher', () => {
         yield* Effect.gen(function* () {
           const fresh = yield* Database;
           expect(
-            yield* Effect.flip(
-              fresh.readAggregate(
-                qualifyAggregateId('run', OLDER),
-                0,
-                ROW_TYPES,
-              ),
-            ),
+            yield* Effect.flip(fresh.readAggregate(OLDER, 0, ROW_TYPES)),
           ).toMatchObject({
             cause: { _tag: 'DatabaseRowCorrupt', type: 'tool.start' },
           });
@@ -1037,10 +1029,7 @@ describe('the session event table and its one publisher', () => {
     return Effect.gen(function* () {
       const first = yield* Database;
       const root = runStartRow.aggregateId;
-      const inquiry = qualifyAggregateId(
-        'plugin',
-        'external-inquiry:ei_012345abcdef',
-      );
+      const inquiry = pluginAggregateId('external-inquiry:ei_012345abcdef');
       const base = {
         threadId: 'ei_012345abcdef',
         parentRunId: RUN,
@@ -1057,7 +1046,7 @@ describe('the session event table and its one publisher', () => {
         const { aggregate, ...fact } = inquiryThreadFact(summary);
         return {
           type: 'plugin.fact',
-          aggregateId: qualifyAggregateId('plugin', aggregate),
+          aggregateId: pluginAggregateId(aggregate),
           ...fact,
           parent: summary.parentRunId,
         };
@@ -1072,7 +1061,7 @@ describe('the session event table and its one publisher', () => {
           first
             .readAggregate(id, 1, RUN_ROW_READS[read].kinds)
             .pipe(Effect.map((rows) => foldRunRows(read, rows))),
-        facts: (runId) => first.readRunRecord(qualifyAggregateId('run', runId)),
+        facts: (runId) => first.readRunRecord(runId),
       };
       // Every aggregate this case writes, the unrelated run's among them.
       const stored = rowsOf(
@@ -1080,7 +1069,7 @@ describe('the session event table and its one publisher', () => {
         root,
         olderStart.aggregateId,
         inquiry,
-        qualifyAggregateId('run', NEWER),
+        NEWER,
       );
       const initial = yield* first.appendAll([
         runStartRow,
@@ -1250,8 +1239,8 @@ describe('the session event table and its one publisher', () => {
     'refuses a store another OS process holds',
     () => {
       const storage = workspace();
-      const own = qualifyAggregateId('run', RUN);
-      const theirs = qualifyAggregateId('run', OLDER);
+      const own = RUN;
+      const theirs = OLDER;
       const writer = (): Effect.Effect<{
         code: number | null;
         stderr: string;

@@ -12,7 +12,6 @@ import { Clock, Effect, Result, Schema } from 'effect';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { DELIVERY_FAMILY } from '@shared/deliveryTags';
 import {
-  qualifyAggregateId,
   RUN_OUTCOME,
   type ChildRunDelivery,
   type RunId,
@@ -62,7 +61,7 @@ export const scriptRunCalls = Effect.fn('scriptRun.calls')(function* (
   runId: RunId,
 ) {
   const { scriptCalls, results } = yield* (yield* SessionLog).runRows(
-    qualifyAggregateId('run', runId),
+    runId,
     'script',
   );
   const latest = new Map<string, ToolResultPayload>();

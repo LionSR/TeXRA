@@ -34,7 +34,6 @@ import type { FactKinds } from '@tools/plugins';
 import { sha256Hex } from '@utils/core/idHash';
 
 import {
-  aggregateOf,
   decodeRow,
   EARLIER_RUNS,
   factKindOf,
@@ -373,7 +372,7 @@ function bareStart(input: SqlRow): SessionRow | null {
   if (row.type !== 'run.start' || row.kind !== 'run') return null;
   return {
     type: 'run.start',
-    aggregateId: aggregateOf(row.kind, row.logicalId),
+    aggregateId: Schema.decodeUnknownSync(RunIdSchema)(row.logicalId),
     seq: row.seq,
     commit: row.commit,
     at: row.at,

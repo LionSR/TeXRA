@@ -1,7 +1,7 @@
 import { layer } from '@effect/vitest';
 import { Effect, Context, Schema } from 'effect';
 import { expect } from 'vitest';
-import { RunIdSchema, qualifyAggregateId } from '@texra-ai/harness/schemas';
+import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { endRunRows } from '@agent/storage/runLifecycle';
 import { Inbox } from '@agent/followUp/Inbox';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
@@ -39,7 +39,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                   {
                     type: 'run.description',
                     by: 'model',
-                    aggregateId: qualifyAggregateId('run', id),
+                    aggregateId: id,
                     description: 'A described session',
                   },
                 ]),

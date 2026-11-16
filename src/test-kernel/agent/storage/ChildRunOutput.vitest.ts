@@ -8,7 +8,6 @@ import { expect } from 'vitest';
 import {
   RunIdSchema,
   AgentConfigSchema,
-  qualifyAggregateId,
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { ToolRegistry } from '@texra-ai/harness/plugins';
@@ -105,7 +104,7 @@ const persistCompletedChild = (
       }),
       {
         type: 'run.config',
-        aggregateId: qualifyAggregateId('run', childRunId),
+        aggregateId: childRunId,
         config: Schema.decodeUnknownSync(AgentConfigSchema)({
           agent: 'draft',
           model: 'openai/gpt-6.1-sol',
@@ -125,13 +124,13 @@ const persistCompletedChild = (
     yield* Context.get(session, SessionLog).transact([
       {
         type: 'plugin.fact',
-        aggregateId: qualifyAggregateId('run', childRunId),
+        aggregateId: childRunId,
         parent: null,
         ...documentsOutputFact(workflowRounds(absolutePath)),
       },
       {
         type: 'run.end',
-        aggregateId: qualifyAggregateId('run', childRunId),
+        aggregateId: childRunId,
         outcome: 'completed',
         output: { response: '', files: [] },
       },

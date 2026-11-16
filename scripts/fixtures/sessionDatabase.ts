@@ -10,7 +10,7 @@ export {
 } from '@controllers/session/databaseLayer';
 export { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 export { Database, GlobalDatabase } from '@shared/session/database';
-export { qualifyAggregateId, SessionRowSchema } from '@shared/schemas';
+export { SessionRowSchema } from '@shared/schemas';
 export {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,

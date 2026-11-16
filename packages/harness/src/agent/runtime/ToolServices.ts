@@ -15,7 +15,6 @@ import {
 import type { PlatformServices } from '@platform/processRuntime';
 import { SessionRoots, StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
-  qualifyAggregateId,
   type RunEnd,
   type RunId,
   type ToolResult,
@@ -75,9 +74,8 @@ export type PluginToolServices =
  * for a background launch) or an external process's (`launchProcess`: its
  * run id, outside the child-run budget); a plugin's tool reaches no other
  * launch. And it reaches a
- * run of the session by id: its input, live parent edge, records, whether
- * it holds a request, and the plugin's own facts on it, each over the
- * call's run.
+ * run of the session by id: its input, records, whether it holds a
+ * request, and the plugin's own facts on it, each over the call's run.
  */
 export interface ChildRunsShape {
   readonly launch: (
@@ -88,9 +86,6 @@ export interface ChildRunsShape {
   ) => Effect.Effect<RunId, Error, ToolContext | RunServices>;
   /** The run's input: what a tool sends it, and when it takes no more. */
   readonly inbox: (runId: RunId) => Effect.Effect<RunInbox, Error>;
-  /** Its parent as the rows record it (`run.start`): null for a root, or
-   *  a run that is not there. */
-  readonly parent: (runId: RunId) => Effect.Effect<RunId | null, Error>;
   /** Its records: whether the store still lists it, and its terminal
    *  result (null before it ends). */
   readonly records: (runId: RunId) => {
@@ -165,11 +160,6 @@ export const childRuns = (
     launchProcess: (launch) =>
       inSession(launchProcessChild({ runId, logId: call.logId }, launch)),
     inbox: (id) => Effect.succeed(runInbox(id, session)),
-    parent: (id) =>
-      Effect.map(
-        log.runRows(qualifyAggregateId('run', id), 'input'),
-        (rows) => rows.parent?.id ?? null,
-      ),
     records: (id) => ({
       exists: inSession(getRunRecords(id).exists()),
       end: inSession(getRunRecords(id).readRunEnd()),
@@ -184,7 +174,7 @@ export const childRuns = (
     autoApproved: inSession(workAutoApproved(runId)),
     requested: (id, requestId) =>
       Effect.map(
-        log.runRows(qualifyAggregateId('run', id), 'requests'),
+        log.runRows(id, 'requests'),
         (rows) => rows.requests[requestId] !== undefined,
       ),
   };

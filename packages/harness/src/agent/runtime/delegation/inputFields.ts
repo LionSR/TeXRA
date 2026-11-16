@@ -96,7 +96,7 @@ export const rejectUnusableWorkingDirectory = Effect.fn(function* (
 });
 const TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION = [
   'The delegated instruction above is your full task contract. This includes any tool, network, file, approval, output-format, or scope constraints it states. If a requested action conflicts with those constraints or needs missing context, report the conflict instead of assuming permission.',
-  'Your final response is delivered verbatim to the parent orchestrator. End with the substantive result (answer, findings, evidence, unresolved caveats), never only a status note such as "done".',
+  'Your final response is delivered verbatim to the agent that gave you this task, and to any agent whose message you take up while you work. End with the substantive result (answer, findings, evidence, unresolved caveats), never only a status note such as "done".',
 ].join(' ');
 export function withToolUseSubagentHandoffInstruction(
   instruction: string,
@@ -108,10 +108,10 @@ export function withToolUseSubagentHandoffInstruction(
   if (trimmedParent) {
     const contextBlock =
       trimmedParent === trimmed
-        ? 'The delegated task above is copied verbatim from the parent user request.'
-        : `Parent user request (constraint context only):\n${trimmedParent}`;
+        ? 'The delegated task above is copied verbatim from the request the agent that launched you is working on.'
+        : `The request the agent that launched you is working on (constraint context only):\n${trimmedParent}`;
     parts.push(
-      `${contextBlock}\n\nConstraints in the parent user request are mandatory and override conflicting delegated-task wording. Do not repeat orchestration actions assigned to the parent.`,
+      `${contextBlock}\n\nConstraints in that request are mandatory and override conflicting delegated-task wording. Do not repeat actions it leaves to the agent that launched you.`,
     );
   }
   parts.push(TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION);
@@ -231,7 +231,7 @@ const assertInputFilesExist = Effect.fn('assertInputFilesExist')(function* (
  */
 export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
   function* (
-    parentRunId: RunId,
+    parentId: RunId,
     label: string,
     files: readonly string[],
   ): Effect.fn.Return<
@@ -303,7 +303,7 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
         Effect.fnUntraced(function* ({ file, absolutePath, runStoragePath }) {
           if (runStoragePath !== undefined) {
             const output = yield* resolveChildRunOutput(
-              parentRunId,
+              parentId,
               runStoragePath,
             );
             if (!output)

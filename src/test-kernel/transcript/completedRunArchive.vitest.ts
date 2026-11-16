@@ -9,7 +9,6 @@ import {
   type AgentConfig,
   AgentConfigSchema,
   MESSAGE_TYPES,
-  qualifyAggregateId,
   RunIdSchema,
 } from '@texra-ai/harness/schemas';
 import { resumeRun } from '@agent/runtime/resumeRun';
@@ -106,14 +105,14 @@ layer(texraHosted, { excludeTestServices: true })(
             yield* publishTestRows(session, [
               {
                 type: 'log',
-                aggregateId: qualifyAggregateId('run', runId),
+                aggregateId: runId,
                 level: 'info',
                 messageType: MESSAGE_TYPES.USER_MESSAGE,
                 message: 'Prove the first lemma.',
               },
               {
                 type: 'response.finalized',
-                aggregateId: qualifyAggregateId('run', runId),
+                aggregateId: runId,
                 text: 'First proof.',
               },
             ]);
@@ -123,7 +122,7 @@ layer(texraHosted, { excludeTestServices: true })(
             yield* seedRows(Context.get(session, SessionLog))([
               {
                 type: 'run.position',
-                aggregateId: qualifyAggregateId('run', runId),
+                aggregateId: runId,
                 payload: { at: 'turn.ready', turn: 0 },
               },
             ]);
@@ -132,14 +131,14 @@ layer(texraHosted, { excludeTestServices: true })(
             yield* publishTestRows(session, [
               {
                 type: 'log',
-                aggregateId: qualifyAggregateId('run', runId),
+                aggregateId: runId,
                 level: 'info',
                 messageType: MESSAGE_TYPES.USER_MESSAGE,
                 message: 'Now prove the second lemma.',
               },
               {
                 type: 'response.finalized',
-                aggregateId: qualifyAggregateId('run', runId),
+                aggregateId: runId,
                 text: 'Second proof.',
               },
             ]);

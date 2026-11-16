@@ -12,7 +12,6 @@
 import { Duration, Effect, FileSystem, Stream, SubscriptionRef } from 'effect';
 
 // Local imports
-import { isDeliveryOf } from '@agent/storage/runLifecycle';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import {
   listRunWorkspaceFiles,
@@ -27,7 +26,6 @@ import { findExistingRunStoragePathUnder } from '@common/storage/storageLayout';
 import { SessionRoots, StorageFs } from '@platform/rootedFs';
 import {
   isRunId,
-  qualifyAggregateId,
   ToolError,
   type RunId,
   type ToolResult,
@@ -201,12 +199,16 @@ const EXECUTION_ROUTES: ReadonlyArray<{
         // The child's report still queued on the caller: this result
         // answers it, and its result consumes it with it.
         const { followUps } = yield* (yield* SessionLog).runRows(
-          qualifyAggregateId('run', context.runId),
+          context.runId,
           'input',
         );
-        const answered = followUps
-          .map(({ followUpId }) => followUpId)
-          .filter((followUpId) => isDeliveryOf(runId, followUpId));
+        const answered = followUps.flatMap(({ followUpId, content }) =>
+          'delivery' in content &&
+          content.from.kind === 'run' &&
+          content.from.runId === runId
+            ? [followUpId]
+            : [],
+        );
         const summary = yield* showSummary(context, runId);
         return { ...summary, consumedFollowUps: answered };
       }),

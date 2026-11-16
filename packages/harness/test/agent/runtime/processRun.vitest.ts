@@ -31,7 +31,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         Effect.gen(function* () {
           const { roots } = yield* FakeHost;
           const session = yield* persistentTestSession();
-          const parentRunId = yield* publishTestRunStart(session);
+          const parentId = yield* publishTestRunStart(session);
           const faults = yield* sessionStoreFaults(roots.storage);
           yield* faults.failNext('appendAll', 'process.output');
           const runId = yield* Effect.flatMap(ChildRuns, (children) =>
@@ -60,7 +60,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           ).pipe(
             Effect.provide(
               nativeToolTestLayer({
-                run: { session, runId: parentRunId, toolPolicy: {} },
+                run: { session, runId: parentId, toolPolicy: {} },
               }),
             ),
           );

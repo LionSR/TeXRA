@@ -26,7 +26,7 @@ import { withLogChannel } from '@logger/effectLog';
 import { type AppSignals, emitAppSignal } from '@platform/appSignals';
 import {
   aggregateTarget,
-  qualifyAggregateId,
+  pluginAggregateId,
   type RunId,
   type SessionRow,
   type SessionRowDraft,
@@ -277,13 +277,13 @@ export const factRow = (
     ? {
         type: 'plugin.fact',
         ...fact,
-        aggregateId: qualifyAggregateId('run', runId),
+        aggregateId: runId,
         parent: null,
       }
     : {
         type: 'plugin.fact',
         ...fact,
-        aggregateId: qualifyAggregateId('plugin', aggregate),
+        aggregateId: pluginAggregateId(aggregate),
         parent: runId,
       };
 

@@ -18,7 +18,7 @@
  */
 import { Stream } from 'effect';
 
-import { qualifyAggregateId, listingTypeOf } from '@texra-ai/harness/schemas';
+import { listingTypeOf } from '@texra-ai/harness/schemas';
 import type {
   EventsFrame,
   Subscribe,
@@ -55,7 +55,7 @@ function framed(
     )
       continue;
     if (input._tag === 'chunk') {
-      if (!named.has(qualifyAggregateId('run', input.runId))) continue;
+      if (!named.has(input.runId)) continue;
       const last = inputs.at(-1);
       if (
         last?._tag === 'chunk' &&

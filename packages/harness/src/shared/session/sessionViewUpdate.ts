@@ -23,7 +23,6 @@
 import { Equal, type Types } from 'effect';
 import {
   aggregateTarget,
-  qualifyAggregateId,
   MESSAGE_TYPES,
   recipeBlockOf,
   listingKeyOf,
@@ -160,7 +159,7 @@ function applyInput(
       // retention while this view was away, and no later read delivers that
       // deletion.
       for (const id of [...u.view.runs.keys()]) {
-        if (!u.state.listed.has(qualifyAggregateId('run', id))) {
+        if (!u.state.listed.has(id)) {
           removeRun(u, id);
         }
       }
@@ -1018,7 +1017,7 @@ function removeRun(u: Update, runId: RunId): boolean {
   view.policy = without(u, view.policy, run.id);
   view.queuedFollowUps = without(u, view.queuedFollowUps, run.id);
   state.runs.delete(run.id);
-  const aggregateId = qualifyAggregateId('run', run.id);
+  const aggregateId = run.id;
   view.transcriptSeq = without(u, view.transcriptSeq, aggregateId);
   if (view.requests.some((r) => r.runId === run.id)) {
     view.requests = view.requests.filter((r) => r.runId !== run.id);

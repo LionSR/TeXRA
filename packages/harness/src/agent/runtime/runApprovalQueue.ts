@@ -22,11 +22,7 @@ import {
   type ApprovalGrantSource,
   grantSource,
 } from '@shared/approvalBypassKind';
-import {
-  grantAnswering,
-  qualifyAggregateId,
-  type RunId,
-} from '@shared/schemas';
+import { grantAnswering, type RunId } from '@shared/schemas';
 import {
   Unavailable,
   type RequestError,
@@ -36,6 +32,7 @@ import type { SessionApprovals } from '@shared/session/sessionApprovals';
 import type { SessionRowDraft } from '@shared/schemas';
 import { Settings } from '@shared/config/settings';
 import { ancestryRows } from '@shared/session/runRelation';
+import { descendantRuns, type SessionView } from '@shared/session/sessionView';
 import {
   Approvals,
   runStateAppend,
@@ -77,7 +74,7 @@ const sameGrants = (a: ApprovalGrants, b: ApprovalGrants): boolean =>
 /** The `approval.policy` row that records `snapshot` as a run's grants. */
 const policyRow = (runId: RunId, snapshot: ApprovalGrants) => ({
   type: 'approval.policy' as const,
-  aggregateId: qualifyAggregateId('run', runId),
+  aggregateId: runId,
   snapshot,
 });
 
@@ -99,7 +96,7 @@ const grantsOn = (grants: ApprovalGrants, kind: ApprovalBypassKind): boolean =>
  */
 const approvalsUnder = Effect.fn('approvalsUnder')(function* (
   log: Pick<SessionLogShape, 'runRows' | 'facts'>,
-  view: ApprovalGrantSource,
+  view: SessionView,
   runId: RunId,
   recorded: ApprovalGrants,
   next: ApprovalGrants,
@@ -111,15 +108,10 @@ const approvalsUnder = Effect.fn('approvalsUnder')(function* (
   );
   if (turnedOn.length === 0) return [];
   // The run and its descendants, by their standing parent edges.
-  const reached = new Set([runId]);
-  for (let grew = true; grew;) {
-    grew = false;
-    for (const [id, { parentId }] of view.runs)
-      if (parentId !== null && reached.has(parentId) && !reached.has(id)) {
-        reached.add(id);
-        grew = true;
-      }
-  }
+  const reached = new Set([
+    runId,
+    ...descendantRuns(view, runId, { includeRoot: false }),
+  ]);
   // The grants as they will be once `next` is recorded, over each reached
   // run's committed grants, not the view's, which can lag a grant a run
   // turned off a moment ago.
@@ -138,7 +130,7 @@ const approvalsUnder = Effect.fn('approvalsUnder')(function* (
       (kind) => id === runId || resolveBypass(after, id, kind) !== null,
     );
     if (covering.length === 0) continue;
-    const aggregateId = qualifyAggregateId('run', id);
+    const aggregateId = id;
     const { requests } = yield* log.runRows(aggregateId, 'requests');
     for (const [requestId, request] of Object.entries(requests))
       if (
@@ -161,7 +153,7 @@ const approvalsUnder = Effect.fn('approvalsUnder')(function* (
  *  answers ({@link approvalsUnder}). Read under the transaction's lock. */
 const grantRows = Effect.fn('grantRows')(function* (
   log: Pick<SessionLogShape, 'runRows' | 'facts'>,
-  view: ApprovalGrantSource,
+  view: SessionView,
   runId: RunId,
   edit: (grants: ApprovalGrants) => ApprovalGrants,
   except?: string,
@@ -223,7 +215,7 @@ export const sessionApprovals: Effect.Effect<
     decideUnder: (runId, requestId, decision, edit) =>
       log.transact((tx) =>
         Effect.gen(function* () {
-          const aggregateId = qualifyAggregateId('run', runId);
+          const aggregateId = runId;
           const { requests } = yield* log.runRows(aggregateId, 'requests');
           const open = requests[requestId]?.decision === null;
           const all: readonly SessionRowDraft[] = [

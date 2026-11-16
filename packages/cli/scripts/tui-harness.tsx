@@ -63,7 +63,6 @@ import {
   type ApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
-  qualifyAggregateId,
   AgentProposalRequestSchema,
   AgentConfigSchema,
   LOG_LEVELS,
@@ -499,9 +498,7 @@ HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, harnessRunSession.view));
     if (key === subscribed) return;
     subscribed = key;
     harnessRuntime.runFork(
-      interest.set(
-        ids.map((id) => ({ id: qualifyAggregateId('run', id), fromSeq: 0 })),
-      ),
+      interest.set(ids.map((id) => ({ id: id, fromSeq: 0 }))),
     );
   };
   HARNESS_DISPOSERS.push(
@@ -559,7 +556,7 @@ function seedRun(
     readonly identity?: NonNullable<
       Extract<SessionRowDraft, { type: 'run.start' }>['identity']
     >;
-    readonly parentRunId?: RunId;
+    readonly parentId?: RunId;
     /** The agent name for a default (agent) identity; a run id names nothing. */
     readonly agent?: string;
     readonly takesFollowUps?: Extract<
@@ -577,19 +574,19 @@ function seedRun(
   };
   publish({
     type: 'run.start',
-    aggregateId: qualifyAggregateId('run', runId),
+    aggregateId: runId,
     identity,
     takesFollowUps: options.takesFollowUps ?? true,
     parent:
-      options.parentRunId === undefined
+      options.parentId === undefined
         ? null
-        : { id: options.parentRunId, call: null },
+        : { id: options.parentId, call: null },
     provenance: null,
   });
   if (identity.kind === 'agent') {
     publish({
       type: 'run.config',
-      aggregateId: qualifyAggregateId('run', runId),
+      aggregateId: runId,
       config: Schema.decodeUnknownSync(AgentConfigSchema)({
         agent: identity.agent,
         model: HARNESS_MODEL,
@@ -661,19 +658,19 @@ function seedStanding(runId: RunId, standing: SeededStanding): void {
   if (run?.position !== 'running') {
     publish({
       type: 'run.activate',
-      aggregateId: qualifyAggregateId('run', runId),
+      aggregateId: runId,
     });
   }
   if (standing === 'waiting') {
     publish({
       type: 'run.position',
-      aggregateId: qualifyAggregateId('run', runId),
+      aggregateId: runId,
       payload: { at: 'waiting' },
     });
   } else {
     publish({
       type: 'run.position',
-      aggregateId: qualifyAggregateId('run', runId),
+      aggregateId: runId,
       payload: { at: 'turn.begin', turn: 1 },
     });
   }
@@ -695,7 +692,7 @@ function seedRunEnd(runId: RunId, outcome: RunOutcome): void {
 function publishRunEnd(runId: RunId, outcome: RunOutcome): void {
   publish({
     type: 'run.end',
-    aggregateId: qualifyAggregateId('run', runId),
+    aggregateId: runId,
     outcome,
     output: { response: '', files: [] },
   });
@@ -705,7 +702,7 @@ function seedDescription(runId: RunId, description: string): void {
   publish({
     type: 'run.description',
     by: 'model',
-    aggregateId: qualifyAggregateId('run', runId),
+    aggregateId: runId,
     description,
   });
 }
@@ -714,7 +711,7 @@ function removeRun(runId: RunId): void {
   releaseRun(runId);
   publish({
     type: 'run.removed',
-    aggregateId: qualifyAggregateId('run', runId),
+    aggregateId: runId,
   });
   harnessRuns.delete(runId);
 }
@@ -737,7 +734,7 @@ function seedRows(runId: RunId, entries: readonly HarnessLogRow[]): void {
   publish(
     ...entries.map((entry) => ({
       type: 'log' as const,
-      aggregateId: qualifyAggregateId('run', runId),
+      aggregateId: runId,
       level: entry.level,
       message: entry.text ?? '',
       messageType: entry.messageType,
@@ -1264,7 +1261,7 @@ function cancelHarnessRequests(cause: string, runId?: RunId): void {
     if (runId !== undefined && request.runId !== runId) continue;
     publish({
       type: 'request.decided',
-      aggregateId: qualifyAggregateId('run', request.runId),
+      aggregateId: request.runId,
       requestId: request.requestId,
       decision: { action: 'cancel', cause },
     });
@@ -1357,9 +1354,9 @@ publish(
     })),
   ].map((item, index) => ({
     type: 'followup.queued' as const,
-    aggregateId: qualifyAggregateId('run', HARNESS_RUN_ID),
+    aggregateId: HARNESS_RUN_ID,
     followUpId: `harness-follow-up-${index + 1}`,
-    content: queuedRow(item, undefined, () => 'child').content,
+    content: queuedRow(item, undefined).content,
   })),
 );
 const HARNESS_INITIAL_RUN_STANDING = harnessInitialRunStatus();
@@ -1384,7 +1381,7 @@ function seedRunningScript(): void {
   const scriptRunId = harnessRunId('aaaa0002f10e');
   seedRun(scriptRunId, {
     identity: { kind: 'script', title: 'live-script-validation' },
-    parentRunId: HARNESS_RUN_ID,
+    parentId: HARNESS_RUN_ID,
     takesFollowUps: false,
   });
   seedStanding(scriptRunId, 'running');
@@ -1394,7 +1391,7 @@ function seedRunningScript(): void {
   ]) {
     seedRun(agentRunId, {
       identity: { kind: 'agent', agent: 'correct' },
-      parentRunId: scriptRunId,
+      parentId: scriptRunId,
       takesFollowUps: false,
     });
     seedStanding(agentRunId, 'running');
@@ -1405,7 +1402,7 @@ function seedRunningProcessChild(): void {
   const childRunId = harnessRunId('aaaa0003f10e');
   seedRun(childRunId, {
     identity: { kind: 'process', tool: 'bash' },
-    parentRunId: HARNESS_RUN_ID,
+    parentId: HARNESS_RUN_ID,
     takesFollowUps: false,
   });
   seedDescription(childRunId, 'sleep 30');
@@ -1451,7 +1448,7 @@ if (SHOW_CHILDREN) {
     const runId = child.runId;
     seedRun(runId, {
       identity: child.identity,
-      parentRunId: HARNESS_RUN_ID,
+      parentId: HARNESS_RUN_ID,
     });
     seedDescription(runId, `${child.agentName} sub-workflow`);
     seedRows(runId, makeChildEntries(child.agentName, child.runId));
@@ -1460,7 +1457,7 @@ if (SHOW_CHILDREN) {
     if (child.agentName === 'reviewer') {
       publish({
         type: 'usage',
-        aggregateId: qualifyAggregateId('run', runId),
+        aggregateId: runId,
         usage: { inputTokens: 52_000, outputTokens: 39_900, cost: 0.12 },
       });
     }
@@ -1470,7 +1467,7 @@ if (SHOW_CHILDREN) {
     const nestedRunId = nestedStrategyChild.runId;
     seedRun(nestedRunId, {
       identity: nestedStrategyChild.identity,
-      parentRunId: harnessRunId('aaaa0005f10e'),
+      parentId: harnessRunId('aaaa0005f10e'),
     });
     seedDescription(nestedRunId, 'localChecker nested proof check');
     seedRows(
@@ -1484,7 +1481,7 @@ if (SHOW_CHILDREN) {
 if (SHOW_PLAN) {
   publish({
     type: 'plugin.fact',
-    aggregateId: qualifyAggregateId('run', HARNESS_RUN_ID),
+    aggregateId: HARNESS_RUN_ID,
     plugin: 'goal',
     kind: 'plan',
     version: 1,

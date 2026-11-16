@@ -20,7 +20,6 @@ import { getRunRecords } from '@agent/storage/runOwnership';
 import { registrationRows } from '@agent/storage/runLifecycle';
 import type { SessionRoots } from '@platform/rootedFs';
 import {
-  qualifyAggregateId,
   blocksCaller,
   type RunId,
   generateRunId,
@@ -98,7 +97,7 @@ const cutOf = Effect.fn('forkRun.cut')(function* (
   if (config === null || config.script != null) {
     return yield* refused('Only a conversation can be forked.');
   }
-  const aggregate = qualifyAggregateId('run', from);
+  const aggregate = from;
   const facts = yield* log.facts(from);
   const start = facts?.start;
   if (start == null) {
@@ -173,7 +172,7 @@ const viewRows = (
   return [
     {
       type: 'context.edit',
-      aggregateId: qualifyAggregateId('run', runId),
+      aggregateId: runId,
       payload: {
         cause: 'fork',
         trigger: null,
@@ -186,7 +185,7 @@ const viewRows = (
     },
     ...named.map((digest): RunHistoryDraft => ({
       type: 'context.blob',
-      aggregateId: qualifyAggregateId('run', runId),
+      aggregateId: runId,
       payload: { digest, value: state.contents[digest] },
     })),
   ];
@@ -207,7 +206,7 @@ const forkedFacts = Effect.fn('forkRun.facts')(function* (
       factKinds.filter(({ fork }) => fork === 'copy').map(factName),
     ),
   );
-  const aggregate = qualifyAggregateId('run', from);
+  const aggregate = from;
   const log = yield* SessionLog;
   const { facts } = yield* log.runRows(aggregate, 'facts', cut);
   const kept = Object.values(facts).flatMap(

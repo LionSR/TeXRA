@@ -23,7 +23,6 @@ import { ApprovalPolicySnapshotSchema } from '@shared/approvalBypassKind';
 import {
   AggregateIdSchema,
   aggregateTarget,
-  qualifyAggregateId,
   type AggregateId,
 } from './identifiers';
 import { listingTypeOf } from './rowVersions';
@@ -84,21 +83,12 @@ const envelope = {
   at: Schema.Int,
 };
 
-/** The aggregate column of a `type` row, checked to be a run aggregate. */
-function aggregateIdOf(type: string) {
-  return AggregateIdSchema.check(
-    Schema.makeFilter((key) => aggregateTarget(key).kind === 'run', {
-      message: `Expected a run aggregate for ${type}`,
-    }),
-  );
-}
-
 function durable<T extends string, const F extends Schema.Struct.Fields>(
   type: T,
   fields: F,
 ) {
   return Schema.Struct({
-    aggregateId: aggregateIdOf(type),
+    aggregateId: RunIdSchema,
     stageId: Schema.optional(Schema.String),
     type: Schema.Literal(type),
     ...fields,
@@ -109,7 +99,7 @@ type TranscriptFields = Schema.Struct.Fields & {
   readonly type: Schema.Literal<string>;
 };
 type RunAggregateField = {
-  readonly aggregateId: ReturnType<typeof aggregateIdOf>;
+  readonly aggregateId: typeof RunIdSchema;
 };
 /** A transcript arm (`traceEvent.ts`) as a durable row on its run's aggregate. */
 interface OnRunAggregate extends Struct.Lambda {
@@ -125,7 +115,7 @@ interface OnRunAggregate extends Struct.Lambda {
 const onRunAggregate = Struct.lambda<OnRunAggregate>((schema) =>
   schema.mapFields(
     Struct.assign({
-      aggregateId: aggregateIdOf(schema.fields.type.literal),
+      aggregateId: RunIdSchema,
     }),
   ),
 );
@@ -384,9 +374,9 @@ export type SessionRowDraft = typeof SessionRowDraftSchema.Type;
 export function referencedAggregates(event: SessionRow): AggregateId[] {
   const ids = [event.aggregateId];
   if (event.type === 'run.start' && event.parent !== null)
-    ids.push(qualifyAggregateId('run', event.parent.id));
+    ids.push(event.parent.id);
   if (event.type === 'plugin.fact' && event.parent !== null)
-    ids.push(qualifyAggregateId('run', event.parent));
+    ids.push(event.parent);
   return ids;
 }
 
@@ -410,14 +400,13 @@ export function edgesOf(draft: SessionRowDraft): AggregateEdges {
   switch (draft.type) {
     case 'run.start':
       return {
-        parent: draft.parent && qualifyAggregateId('run', draft.parent.id),
+        parent: draft.parent && draft.parent.id,
         closes: false,
       };
     case 'plugin.fact': {
       if (aggregateTarget(draft.aggregateId).kind === 'run')
         return { parent: null, closes: false };
-      const reparent =
-        draft.parent === null ? null : qualifyAggregateId('run', draft.parent);
+      const reparent = draft.parent === null ? null : draft.parent;
       return { parent: null, reparent, closes: false };
     }
     case 'run.removed':
