@@ -81,11 +81,10 @@ function dupRealpathIssue(
   path: string,
   name: string,
 ): SkillLoadIssue {
-  return issue(
-    'warning',
-    `Skipping duplicate skill path ${realPath}`,
-    { path, name },
-  );
+  return issue('warning', `Skipping duplicate skill path ${realPath}`, {
+    path,
+    name,
+  });
 }
 
 /**
