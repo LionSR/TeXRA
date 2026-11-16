@@ -43,7 +43,7 @@ import {
 } from '@texra/controllers/session/openProjectSession';
 import type { GuiSession } from '@texra/controllers/session/openGuiWindow';
 import { DesktopProjectRecords } from './desktopProjectRecords.js';
-import { showDesktopWarningDialog } from './platform/warningDialog.js';
+import { noticeIn } from './desktopDialogs.js';
 import type { ConfigStore } from '@texra-ai/harness/node';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -239,23 +239,6 @@ export const readRememberedDesktopProjects = Effect.fn(
   } satisfies RememberedDesktopProjects;
 });
 
-/** Show `message` in a warning dialog without waiting on the user, on a
- *  fiber of `scope`, the process's: a dialog that cannot be shown is logged,
- *  with the message it carried, and once that scope has closed a warning
- *  starts nothing. */
-const warnInDialog =
-  (scope: Scope.Scope) =>
-  (message: string): Effect.Effect<void> =>
-    showDesktopWarningDialog(message).pipe(
-      Effect.catch((error) =>
-        Effect.logWarning(
-          `A warning dialog could not be shown (${toErrorMessage(error)}): ${message}`,
-        ).pipe(withLogChannel('desktop')),
-      ),
-      Effect.forkIn(scope),
-      Effect.asVoid,
-    );
-
 /**
  * Open one session over `roots`. Every fact this project's services answer
  * with comes from `roots` as data — the approval policy below — so a
@@ -301,7 +284,8 @@ export const openDesktopProjectRegistry: (
     const sessions = yield* Sessions;
     const hosts = yield* HostWindows;
     // A project's warnings outlive its open and end with the process.
-    const warn = warnInDialog(options.processScope);
+    const notice = noticeIn(options.processScope);
+    const warn = (message: string) => notice('warning', message);
     const openProject = (
       root: string | undefined,
       roots: WorkspaceRoots,

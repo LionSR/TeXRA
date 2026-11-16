@@ -14,7 +14,7 @@ import {
 } from '@ui/copy/instructionActions';
 import { texraGuideUrl } from '@ui/copy/guide';
 import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
-import { createDesktopDialogs } from './desktopDialogs.js';
+import { choose, createDesktopDialogs } from './desktopDialogs.js';
 import { createDesktopDiffHost } from './desktopDiffHost.js';
 import { createDesktopPreviewHost } from './desktopPreviewHost.js';
 import { DESKTOP_RELEASES_PAGE_URL } from './desktopUpdateChecker.js';
@@ -165,18 +165,13 @@ export function createDesktopWindowHost(options: {
     announceRelease: Effect.fn('announceRelease')(function* (release: {
       version: string;
     }): Effect.fn.Return<void, Error> {
-      const { response } = yield* Effect.tryPromise({
-        try: () =>
-          dialog.showMessageBox(window, {
-            type: 'info',
-            message: `TeXRA ${release.version} is available (you have ${app.getVersion()}).`,
-            buttons: ['Download', 'Later'],
-            defaultId: 0,
-            cancelId: 1,
-          }),
-        catch: ensureError,
+      const download = yield* choose(window, {
+        type: 'info',
+        message: `TeXRA ${release.version} is available (you have ${app.getVersion()}).`,
+        choices: [{ label: 'Download', value: true, default: true }],
+        close: 'Later',
       });
-      if (response === 0)
+      if (download)
         yield* Effect.tryPromise({
           try: () => shell.openExternal(DESKTOP_RELEASES_PAGE_URL),
           catch: ensureError,

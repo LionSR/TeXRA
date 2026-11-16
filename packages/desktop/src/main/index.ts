@@ -1,14 +1,12 @@
 import * as path from 'node:path';
 
 import { Cause, Effect, Exit, Scope } from 'effect';
-import { app, BrowserWindow, dialog, session } from 'electron';
+import { app, BrowserWindow, session } from 'electron';
 
 import { Sessions } from '@texra-ai/harness';
 import { GlobalValues, withProcessServices } from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
-import { HostFailed } from '@texra/hosts/uiHosts';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import { reachBundledService } from '@texra/controllers/server/client';
 import {
@@ -32,7 +30,7 @@ import { createDesktopWindows } from './desktopWindows.js';
 import { reportFatalStartupError } from './fatalStartupError.js';
 import { DESKTOP_HEADLESS } from './desktopPresentation.js';
 import { initializeElectronPlatform } from './platform/index.js';
-import { showDesktopWarningDialog } from './platform/warningDialog.js';
+import { noticeIn } from './desktopDialogs.js';
 
 const moduleDirname = import.meta.dirname;
 if (DESKTOP_HEADLESS && process.platform === 'darwin')
@@ -216,14 +214,9 @@ void Effect.runPromise(
         const notice = yield* telemetryNoticeIfDue(
           platformInit.processRoots.config,
         );
-        if (notice) {
-          // A sheet on the window, not an app-modal box: an app-modal one on
-          // a fresh profile keeps the first window from appearing.
-          const parent = windows.window();
-          void (parent
-            ? dialog.showMessageBox(parent, { type: 'info', message: notice })
-            : dialog.showMessageBox({ type: 'info', message: notice }));
-        }
+        // A sheet on the window, not an app-modal box: an app-modal one on
+        // a fresh profile keeps the first window from appearing.
+        if (notice) yield* noticeIn(processScope)('info', notice);
         app.on('activate', () => {
           if (BrowserWindow.getAllWindows().length === 0) windows.reopen();
         });
@@ -250,28 +243,9 @@ void Effect.runPromise(
         if (unopenedProjects.length > 0) {
           // Forked: startup does not wait on the user dismissing it; the
           // process scope's close ends it with everything else.
-          yield* showDesktopWarningDialog(
+          yield* noticeIn(processScope)(
+            'warning',
             `Some projects could not be reopened:\n${unopenedProjects.join('\n')}`,
-          ).pipe(
-            Effect.mapError(
-              (cause) =>
-                new HostFailed({
-                  member: 'dialog.showMessageBox',
-                  message: 'The unopened-projects warning could not be shown.',
-                  cause,
-                }),
-            ),
-            // Its failure or a defect: forked, nothing else reports it.
-            // The scope's close interrupts it; that is not a failure.
-            Effect.catchCause((cause) =>
-              Cause.hasInterruptsOnly(cause)
-                ? Effect.void
-                : Effect.logError('A desktop background task failed').pipe(
-                    Effect.annotateLogs({ data: cause }),
-                    withLogChannel('desktop'),
-                  ),
-            ),
-            Effect.forkIn(processScope),
           );
         }
       }),
