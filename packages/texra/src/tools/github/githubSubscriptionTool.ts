@@ -56,7 +56,7 @@ import {
   currentBranch,
   originDefaultBranch,
   originUrl,
-} from '@texra/utils/git/gitReads';
+} from '@texra-ai/harness/node';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { GhIssueSchema } from './prTypes';
 

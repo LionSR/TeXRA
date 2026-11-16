@@ -23,7 +23,7 @@ import {
 } from '@shared/session/valueFamily';
 import { normalizeFilePath } from '@utils/core/pathBasics';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { executeCommand } from '@utils/system/execUtils';
+import { gitDirAndTopLevel } from '@utils/system/git';
 
 /**
  * A settings store over one family of a root's current values, captured from
@@ -189,33 +189,12 @@ const openRepoStateStore = Effect.fn('appStateStore.openRepoStateStore')(
         repoRoot: normalizeFilePath(repoRoot),
       });
     if (workspaceRoot === undefined) return store(storage);
-    const result = yield* executeCommand(
-      [
-        'git',
-        'rev-parse',
-        '--path-format=absolute',
-        '--git-dir',
-        '--show-toplevel',
-      ],
-      { cwd: workspaceRoot, timeout: 5_000, quiet: true },
-    );
-    if (!result.success) {
-      if (
-        !/not a git repository|must be run in a work tree/i.test(result.stderr)
-      ) {
-        yield* Effect.logWarning(
-          `Cannot resolve the git repository of ${workspaceRoot}; its repository settings are its own. Cause: ${result.stderr}`,
-        ).pipe(withLogChannel('platform'));
-      }
-      return store(workspaceRoot);
-    }
-    const [gitDirLine = '', topLevelLine = ''] = result.stdout
-      .trim()
-      .split(/\r?\n/);
-    const worktreesDir = path.dirname(path.normalize(gitDirLine.trim()));
+    const dirs = yield* gitDirAndTopLevel(workspaceRoot);
+    if (dirs === null) return store(workspaceRoot);
+    const worktreesDir = path.dirname(path.normalize(dirs.gitDir));
     const worktreesParent = path.dirname(worktreesDir);
     if (path.basename(worktreesDir) !== 'worktrees') {
-      return store(path.normalize(topLevelLine.trim()));
+      return store(path.normalize(dirs.topLevel));
     }
     return store(
       path.basename(worktreesParent) === '.git'

@@ -24,7 +24,7 @@ import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
-import { repositoryRoot } from '@texra/utils/git/gitReads';
+import { repositoryRoot } from '@texra-ai/harness/node';
 import { runTool } from '@texra/utils/system/toolChecks';
 
 // Local file imports

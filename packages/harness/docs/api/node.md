@@ -59,6 +59,17 @@ Absent, none.
 const CommandDirs: Reference<() => readonly string[]>
 ```
 
+## commitExists
+
+Whether `hash` names a commit in the history of the repository at `cwd`.
+
+```ts
+function commitExists(
+  cwd: string,
+  hash: string,
+): Effect.Effect<boolean, never, ChildProcessSpawner>
+```
+
 ## ConfigStore
 
 The store surface one config target needs. `JsonStore` satisfies it; so does
@@ -75,6 +86,16 @@ interface ConfigStore {
   get(key: string): unknown;
   set(key: string, value: unknown): Effect.Effect<void, Error>;
 }
+```
+
+## currentBranch
+
+The checked-out branch, or null when HEAD is detached or unreadable.
+
+```ts
+function currentBranch(
+  cwd: string,
+): Effect.Effect<string | null, never, ChildProcessSpawner>
 ```
 
 ## effectDiagnosticsLayer
@@ -307,6 +328,18 @@ const inheritedEnv: (keep?: "xai" | "anthropic" | "openai" | "google" | "deepsee
 const INPUT_HISTORY_LIMIT: 1000
 ```
 
+## isGitRepository
+
+Whether `cwd` is inside a git work tree. A bare repository and the inside
+of `.git` are not: nothing there can be checked out or written to.
+`undefined` means "no folder", which is not a repository.
+
+```ts
+function isGitRepository(
+  cwd: string | undefined,
+): Effect.Effect<boolean, never, ChildProcessSpawner>
+```
+
 ## isNotADirectoryError
 
 Check if an error represents "a parent path component is a file, not a directory".
@@ -375,6 +408,17 @@ this store serves deliberate configuration files.
 class JsonStore
 ```
 
+## localBranchExists
+
+Whether the local branch `branch` exists.
+
+```ts
+function localBranchExists(
+  cwd: string,
+  branch: string,
+): Effect.Effect<boolean, never, ChildProcessSpawner>
+```
+
 ## LOG_CHANNEL
 
 Annotation naming the logical channel an entry belongs to.
@@ -407,23 +451,28 @@ interface LogSink {
 }
 ```
 
-## makeMachineGitEnv
+## machineGit
 
-Build an environment for a non-interactive git subprocess: the current
-environment with the helper-invoking keys in {@link GIT_UNSAFE_ENV_KEYS}
-removed, `GIT_TERMINAL_PROMPT=0` so git never blocks on a tty prompt, and
-`PATH` extended via {@link withCommandDirs} so GUI-launched hosts (whose
-minimal PATH may omit Homebrew / /usr/local/bin, or Windows' Git\cmd when
-git was installed for Git Bash only) can still resolve the `git` binary.
-
-This omits the unsafe keys rather than setting them to `undefined`, so it
-only strips anything when it fully replaces the child environment. On a
-ChildProcess command the env replaces the child environment unless
-`extendEnv` is true; pass `extendEnv: false` explicitly so a later
-`extendEnv: true` cannot merge the stripped keys back in.
+Run one `git` command that may change something (a clone, a fetch, a
+checkout) under the machine git environment, with `env` added over it and
+`input` on stdin. It drains both streams to the exit and fails only when
+the process could not run; a non-zero exit is the caller's to word.
 
 ```ts
-const makeMachineGitEnv: Effect.Effect<NodeJS.ProcessEnv>
+const machineGit: (args: readonly string[], options?: { readonly cwd?: string | undefined; readonly env?: Readonly<Record<string, string>> | undefined; readonly input?: string | undefined; } | undefined) => Effect<{ stdout: string; stderr: string; code: ExitCode; }, PlatformError, ChildProcessSpawner>
+```
+
+## MachineGitResult
+
+How a {@link machineGit} command ended.
+
+```ts
+interface MachineGitResult {
+  readonly stdout: string;
+  /** Trimmed. */
+  readonly stderr: string;
+  readonly code: number;
+}
 ```
 
 ## meansAbsent
@@ -533,6 +582,27 @@ const openNodeWorkspaceRoots: (
 ) => Effect.Effect<WorkspaceRoots, DatabaseOpenFailed, Scope.Scope>
 ```
 
+## originDefaultBranch
+
+The default branch `origin/HEAD` points at (`main` for `origin/main`), or
+null when the clone has no such ref.
+
+```ts
+function originDefaultBranch(
+  cwd: string,
+): Effect.Effect<string | null, never, ChildProcessSpawner>
+```
+
+## originUrl
+
+The URL of the `origin` remote, or null when there is none.
+
+```ts
+function originUrl(
+  cwd: string,
+): Effect.Effect<string | null, never, ChildProcessSpawner>
+```
+
 ## pathExists
 
 `FileSystem.exists` with a path whose parent is not a directory (`ENOTDIR`)
@@ -609,6 +679,16 @@ the paths inside its root and the process filesystem answers for the rest.
 const readNormalizedFile: (fs: FileSystem, target: string) => Effect<string, PlatformError, never>
 ```
 
+## recentCommitLabels
+
+Up to `limit` recent commits, each labelled `<shortHash>: <subject>
+(<relativeDate>)`, or null when `cwd` is not a work tree. A repository
+with no commit, where `git log` fails, has none.
+
+```ts
+const recentCommitLabels: (cwd: string, limit: number) => Effect<readonly string[] | null, never, ChildProcessSpawner>
+```
+
 ## relativeToRoot
 
 The path of `filePath` relative to `root`, following symlinks on either
@@ -620,6 +700,16 @@ function relativeToRoot(
   root: string,
   filePath: string,
 ): string | undefined
+```
+
+## repositoryRoot
+
+The top-level directory of the work tree holding `cwd`, or null.
+
+```ts
+function repositoryRoot(
+  cwd: string,
+): Effect.Effect<string | null, never, ChildProcessSpawner>
 ```
 
 ## resolveGlobalStoragePath

@@ -1,7 +1,6 @@
 import path from 'node:path';
 
 import { Effect, FileSystem, PlatformError } from 'effect';
-import { pathExists } from '@texra-ai/harness/node';
 
 import {
   parseGitHubSlug,
@@ -10,10 +9,12 @@ import {
 import {
   currentBranch,
   isGitRepository,
+  localBranchExists,
   originDefaultBranch,
   originUrl,
+  pathExists,
   repositoryRoot,
-} from '@texra/utils/git/gitReads';
+} from '@texra-ai/harness/node';
 import { texraGuideUrl } from '@ui/copy/guide';
 
 import { CliExitCode } from '../runtime/platform/exitCodes';
@@ -24,7 +25,7 @@ import {
   writeTextStderr,
   writeTextStdout,
 } from '../runtime/platform/logSinks';
-import { gh, ghAvailable, git, localBranchExists } from '../runtime/gitOps';
+import { gh, ghAvailable, git } from '../runtime/gitOps';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { optString } from './_helpers/globalArgs';
