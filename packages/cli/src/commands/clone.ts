@@ -5,10 +5,11 @@ import { Effect, FileSystem } from 'effect';
 
 // Internal imports
 import { Secrets, type PlatformSecrets } from '@texra-ai/harness/plugins';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { ensureError } from '@texra-ai/harness/schemas';
 import {
   cloneOverleafProject,
   gitClone,
+  type OverleafCloneOutcome,
   type OverleafCloneWorkflowPorts,
 } from '@latex/overleafClone';
 import {
@@ -35,10 +36,8 @@ import { commandResult, writeCliResult } from './_helpers/output';
 function buildOverleafClonePorts(
   context: CliContext,
   remote: OverleafRemote,
-  workspaceRoot: string,
   secrets: PlatformSecrets,
 ): OverleafCloneWorkflowPorts {
-  let canonicalWorkspacePath = workspaceRoot;
   return {
     // A credential store this host cannot reach fails the clone with its
     // `SecretsFailed`, which the workflow's `Error` channel carries.
@@ -58,20 +57,6 @@ function buildOverleafClonePorts(
       });
       return token.trim() || null;
     }),
-    showInvalidToken: (_spec, message) =>
-      Effect.sync(() => {
-        writeTextStderr(message);
-        writeTextStderr(`Token instructions: ${OVERLEAF_TOKEN_DOCS_URL}`);
-      }),
-
-    showGitMissing: () =>
-      Effect.sync(() => {
-        writeTextStderr(
-          `Git is not installed or is not on PATH.\n\n${
-            installAdvice('Git', ['git'], osPlatformOf(process.platform)).guide
-          }`,
-        );
-      }),
     listWorkspaceEntries: (dir) =>
       FileSystem.FileSystem.use((fs) => fs.readDirectory(dir)).pipe(
         // A destination that does not exist yet is an empty destination, not
@@ -84,19 +69,6 @@ function buildOverleafClonePorts(
         ),
         Effect.mapError((error) => ensureError(error.reason.cause ?? error)),
       ),
-    showWorkspaceUnreadable: (error) =>
-      Effect.sync(() => {
-        writeTextStderr(
-          `Cannot read destination directory: ${toErrorMessage(error)}`,
-        );
-      }),
-    showWorkspaceNotEmpty: () =>
-      Effect.sync(() => {
-        writeTextStderr(
-          `The destination directory ${workspaceRoot} is not empty. Create or choose an empty directory, then pass it as the second argument; for example: texra clone 0123456789abcdef01234567 ./project`,
-        );
-      }),
-
     runClone: (clone, cloneInto) =>
       FileSystem.FileSystem.use((fs) =>
         fs
@@ -104,46 +76,76 @@ function buildOverleafClonePorts(
           .pipe(Effect.andThen(fs.realPath(cloneInto))),
       ).pipe(
         Effect.mapError((error) => ensureError(error.reason.cause ?? error)),
-        Effect.flatMap((canonical) => {
-          canonicalWorkspacePath = canonical;
-          return gitClone(clone, canonical);
-        }),
+        Effect.tap((canonical) => gitClone(clone, canonical)),
       ),
-    showCloneSucceeded: (label) =>
-      Effect.sync(() => {
-        const result = {
-          cloned: true,
-          provider: remote.isOverleaf ? 'overleaf' : 'sharelatex',
-          host: remote.host,
-          destination: canonicalWorkspacePath,
-        };
-        writeCliResult(
-          context.outputFormat,
-          commandResult(
-            'clone',
-            result,
-            `${label} project cloned into ${canonicalWorkspacePath}.`,
-          ),
-        );
-      }),
-    showAuthFailure: (failedRemote) =>
-      Effect.sync(() => {
-        const detail = failedRemote.isOverleaf
-          ? `Generate a new token at ${OVERLEAF_GIT_TOKEN_URL}, then rerun the command.`
-          : 'Check the ShareLaTeX credentials for this host, then rerun the command.';
-        writeTextStderr(`Clone failed: authentication error. ${detail}`);
-      }),
-    showCloneFailed: (message) =>
-      Effect.sync(() => {
-        writeTextStderr(message);
-      }),
-    logCloneError: (message) =>
-      Effect.sync(() => {
-        if (!context.quietLogs) {
-          writeTextStderr(`Git clone error: ${message}`);
-        }
-      }),
   };
+}
+
+/** Write the clone's outcome and return its exit code (none on success). */
+function presentCloneOutcome(
+  context: CliContext,
+  remote: OverleafRemote,
+  workspaceRoot: string,
+  outcome: OverleafCloneOutcome,
+): CliExitCode | undefined {
+  const gitError = (error: string) => {
+    if (!context.quietLogs) writeTextStderr(`Git clone error: ${error}`);
+  };
+  switch (outcome._tag) {
+    case 'Cloned': {
+      const label = remote.isOverleaf ? 'Overleaf' : 'ShareLaTeX';
+      writeCliResult(
+        context.outputFormat,
+        commandResult(
+          'clone',
+          {
+            cloned: true,
+            provider: remote.isOverleaf ? 'overleaf' : 'sharelatex',
+            host: remote.host,
+            destination: outcome.destination,
+          },
+          `${label} project cloned into ${outcome.destination}.`,
+        ),
+      );
+      return undefined;
+    }
+    case 'Cancelled':
+      writeTextStderr('Clone cancelled.');
+      return CliExitCode.Cancelled;
+    case 'InvalidToken':
+      writeTextStderr(outcome.message);
+      writeTextStderr(`Token instructions: ${OVERLEAF_TOKEN_DOCS_URL}`);
+      return CliExitCode.Usage;
+    case 'GitMissing':
+      writeTextStderr(
+        `Git is not installed or is not on PATH.\n\n${
+          installAdvice('Git', ['git'], osPlatformOf(process.platform)).guide
+        }`,
+      );
+      return CliExitCode.AgentError;
+    case 'WorkspaceUnreadable':
+      writeTextStderr(
+        `Cannot read destination directory: ${outcome.error.message}`,
+      );
+      return CliExitCode.AgentError;
+    case 'WorkspaceNotEmpty':
+      writeTextStderr(
+        `The destination directory ${workspaceRoot} is not empty. Create or choose an empty directory, then pass it as the second argument; for example: texra clone 0123456789abcdef01234567 ./project`,
+      );
+      return CliExitCode.AgentError;
+    case 'AuthFailure': {
+      const detail = remote.isOverleaf
+        ? `Generate a new token at ${OVERLEAF_GIT_TOKEN_URL}, then rerun the command.`
+        : 'Check the ShareLaTeX credentials for this host, then rerun the command.';
+      writeTextStderr(`Clone failed: authentication error. ${detail}`);
+      gitError(outcome.error);
+      return CliExitCode.AgentError;
+    }
+    case 'CloneFailed':
+      writeTextStderr('Clone failed. Check credentials and connection.');
+      gitError(outcome.error);
+      return CliExitCode.AgentError;
+  }
 }
 
 export const cloneCommand = withUsageSections(
@@ -188,28 +190,9 @@ export const cloneCommand = withUsageSections(
         const outcome = yield* cloneOverleafProject(
           remote,
           workspaceRoot,
-          buildOverleafClonePorts(
-            context,
-            remote,
-            workspaceRoot,
-            yield* Secrets,
-          ),
+          buildOverleafClonePorts(context, remote, yield* Secrets),
         );
-        switch (outcome.status) {
-          case 'success':
-            return;
-          case 'cancelled':
-            writeTextStderr('Clone cancelled.');
-            return CliExitCode.Cancelled;
-          case 'invalidToken':
-            return CliExitCode.Usage;
-          case 'gitMissing':
-          case 'workspaceUnreadable':
-          case 'workspaceNotEmpty':
-          case 'authFailure':
-          case 'cloneFailed':
-            return CliExitCode.AgentError;
-        }
+        return presentCloneOutcome(context, remote, workspaceRoot, outcome);
       });
     },
   }),
