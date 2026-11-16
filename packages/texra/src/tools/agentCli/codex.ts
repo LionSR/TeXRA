@@ -15,7 +15,7 @@
  */
 
 // Third-party imports
-import { Effect, Result, Schema, Stream } from 'effect';
+import { Effect, Schema, Stream } from 'effect';
 
 // Local imports
 import { type WorkspaceRoots } from '@texra-ai/harness';
@@ -387,10 +387,7 @@ export const CodexTool = defineTool({
     'It runs in the working directory of the calling agent and takes no directory argument, so give parallel codex agents disjoint files to edit. ' +
     'codex and claude_code are both independent sandboxed coders distinct from the in-process `agent` specialists. Prefer whichever vendor fits the task.',
   schema: CodexInputSchema,
-  card: (raw) => {
-    const input = Schema.decodeUnknownResult(CodexInputSchema)(raw);
-    return Result.isSuccess(input) ? codexCallCard(input.success) : undefined;
-  },
+  card: codexCallCard,
   guard: {
     command: {
       text: (input: CodexInput) => `[${CODEX_AGENT_NAME}] ${input.prompt}`,
