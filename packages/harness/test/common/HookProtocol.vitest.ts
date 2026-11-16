@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 
 import { interpretHookRun } from '@common/plugins/hookProtocol';
 import { runHook } from '@common/plugins/pluginHooks';
-import { nodePlatformServices } from '@platform/defaults/nodePlatform';
+import { nodePlatformServices } from '@platform/defaults/nodeServices';
 
 const ran = (
   exitCode: number,
