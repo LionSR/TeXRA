@@ -40,12 +40,12 @@ The counts below are updated after each merge wave in a docs PR; the newest
 | --------- | -------: | -----: | ------: | ----: | ------: |
 | harness   |       33 |      0 |       0 |     0 |      33 |
 | texra     |       40 |      0 |       0 |     0 |      40 |
-| llm       |        8 |      0 |       0 |     0 |       8 |
+| llm       |        0 |      8 |       0 |     0 |       8 |
 | cli       |       11 |      0 |       0 |     0 |      11 |
 | desktop   |       11 |      0 |       0 |     0 |      11 |
 | extension |        8 |      0 |       0 |     0 |       8 |
 | root      |       10 |      0 |       0 |     0 |      10 |
-| **all**   |  **121** |  **0** |   **0** | **0** | **121** |
+| **all**   |  **113** |  **8** |   **0** | **0** | **121** |
 
 Not counted above: TC-5, merged into another row (status "merged into" in its owner's table).
 
@@ -206,16 +206,16 @@ Each owner's PR builds every row in its table. `report` is the file in this fold
 
 ### llm (8 rows)
 
-| id   | flags                                                                  | kind     | size | finding                                                                                                                                                     | status   |
-| ---- | ---------------------------------------------------------------------- | -------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| LM-1 | information leakage, conjoined methods, comment restates code          | refactor | S    | "This binding is on the ChatGPT plan" is said by the route and again by the credential's kind, and the files endpoint follows the credential                | assigned |
-| LM-2 | information leakage, repetition, non-obvious code                      | bug      | S    | "A plan route costs nothing" has two owners that disagree on two of the four plans                                                                          | assigned |
-| LM-3 | temporal decomposition, overexposure, pass-through                     | refactor | M    | The subscription account hands its sign-in steps to every caller, and the app passes the account back into llm's own login functions                        | assigned |
-| LM-4 | overexposure, repetition, special-general mixed, comment restates code | refactor | M    | The rules around a codec's lowering (a model switch's replay, a stored continuation) are written per codec, and Google's copy differs                       | assigned |
-| LM-5 | overexposure, comment restates code                                    | refactor | S    | Constant fields on the turn contract, two of them stored on every turn row                                                                                  | assigned |
-| LM-6 | comment restates code, vague name                                      | docs     | S    | Refused words and false comments in the turn assembly, the Responses request and the OAuth coordinator                                                      | assigned |
-| LM-7 | comment restates code                                                  | docs     | S    | The package README and the model-layer guide describe members and options that were deleted                                                                 | assigned |
-| LM-8 | shallow module, overexposure, repetition, non-obvious code             | refactor | S    | Small instances, batched: a binder that throws and catches its own errors, a verdict rule that restates the error's default, and three hand-written helpers | assigned |
+| id   | flags                                                                  | kind     | size | finding                                                                                                                                                     | status                                                                         |
+| ---- | ---------------------------------------------------------------------- | -------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| LM-1 | information leakage, conjoined methods, comment restates code          | refactor | S    | "This binding is on the ChatGPT plan" is said by the route and again by the credential's kind, and the files endpoint follows the credential                | landed (#14967)                                                                |
+| LM-2 | information leakage, repetition, non-obvious code                      | bug      | S    | "A plan route costs nothing" has two owners that disagree on two of the four plans                                                                          | landed (#14967)                                                                |
+| LM-3 | temporal decomposition, overexposure, pass-through                     | refactor | M    | The subscription account hands its sign-in steps to every caller, and the app passes the account back into llm's own login functions                        | landed (#14967)                                                                |
+| LM-4 | overexposure, repetition, special-general mixed, comment restates code | refactor | M    | The rules around a codec's lowering (a model switch's replay, a stored continuation) are written per codec, and Google's copy differs                       | landed (#14967)                                                                |
+| LM-5 | overexposure, comment restates code                                    | refactor | S    | Constant fields on the turn contract, two of them stored on every turn row                                                                                  | landed (#14967)                                                                |
+| LM-6 | comment restates code, vague name                                      | docs     | S    | Refused words and false comments in the turn assembly, the Responses request and the OAuth coordinator                                                      | landed (#14967)                                                                |
+| LM-7 | comment restates code                                                  | docs     | S    | The package README and the model-layer guide describe members and options that were deleted                                                                 | landed (#14967)                                                                |
+| LM-8 | shallow module, overexposure, repetition, non-obvious code             | refactor | S    | Small instances, batched: a binder that throws and catches its own errors, a verdict rule that restates the error's default, and three hand-written helpers | landed (#14967); part (b) refused (`LLM-verdict-not-retryable-is-the-default`) |
 
 ### cli (11 rows)
 
@@ -278,6 +278,24 @@ Each owner's PR builds every row in its table. `report` is the file in this fold
 | RT-10 | information leakage, repetition, non-obvious code                      | bug      | S    | Scripts reach production TypeScript through two hand-built esbuild bundles, and the desktop fixture's hand-written type already declares three exports the bundle does not have                                                             | assigned |
 
 ## Waves
+
+### Status at main `ab4b379` (wave 1: #14967)
+
+The llm owner's PR merged. LM-1 to LM-7 landed whole. LM-8 landed except part
+(b), which the owner refused on re-reading: `notRetryable` reads a status
+taken from the reply body, which the error's own default does not, so
+deleting it would leave every producer to keep a `transport` error and a
+non-retryable body apart (`LLM-verdict-not-retryable-is-the-default`). The
+row counts as landed. The llm share of LC-3 landed too; LC-3 stays assigned
+until every owner's share has.
+
+Four changes in #14967 were marked "Needs your eye" and merged by the repo
+owner: `model.message` row v20 (LM-5), `BindSpec.bearer` and the sign-in
+exports on `./node` (LM-1, LM-3), plan rows in the picker priced at $0 (LM-2),
+and the Google codec refusing another protocol's reasoning (LM-4).
+
+The other six owners were stopped by the usage limit at 01:57 and resumed at
+05:45; none has opened its PR yet.
 
 ### Status at main `5f5488c` (compiled)
 
