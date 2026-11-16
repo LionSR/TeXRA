@@ -46,7 +46,7 @@ export const designTokens: CSSResult = css`
     /* Typography */
     --font-size: var(--wa-font-size-m);
     --font-family: var(--wa-font-family-body);
-    --font-weight: var(--wa-font-weight-normal);
+    --font-weight-normal: var(--wa-font-weight-normal);
     --font-weight-medium: 500;
     --font-weight-semibold: 600;
     --font-weight-bold: 700;

@@ -300,7 +300,7 @@ export const commonViewStyles: CSSResult = css`
     padding: var(--wa-space-3xs) var(--wa-space-2xs);
     min-height: 20px;
     font-size: var(--font-size-sm);
-    font-weight: var(--font-weight);
+    font-weight: var(--font-weight-normal);
     color: var(--wa-color-text-quiet);
   }
 

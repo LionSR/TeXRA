@@ -89,7 +89,7 @@ export const settingsViewStyles: CSSResult[] = [
       background: transparent;
       color: var(--wa-color-text-quiet);
       font-size: var(--font-size-sm);
-      font-weight: var(--font-weight);
+      font-weight: var(--font-weight-normal);
       letter-spacing: var(--letter-spacing-tight);
       box-shadow: inset 0 -2px transparent;
       transition:

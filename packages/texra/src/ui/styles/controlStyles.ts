@@ -354,7 +354,7 @@ export const buttonStyles: CSSResult = css`
     padding: 0;
     background: transparent;
     color: var(--color-text-link);
-    font-weight: var(--font-weight);
+    font-weight: var(--font-weight-normal);
     /* Used inline in prose sentences, so underline at rest like a real link
        (hue alone is not a reliable 3:1 cue across host themes). */
     text-decoration: underline;
