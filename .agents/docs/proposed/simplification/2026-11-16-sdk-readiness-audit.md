@@ -5,7 +5,14 @@ status: proposed
 
 # Agent SDK readiness: agent core, model handler, logger and surface are already well-aligned
 
-Baseline: `main` at `6e7dcb7` (2026-11-16). Paths are from the repository root.
+Baseline: the audit ran against `main` at `6e7dcb7` (2026-11-16); re-checked
+against the PR base `main` at `860a621` (#14981, which retyped
+`SelectedModel.request` as `ReasoningRequest` and dropped
+`ReasoningChoice.requested` in `packages/llm/src/models/`). That change is in
+the audited `modelAccess` territory but does not touch the verdict: `acceptSwitch`
+reads `selected.request.mode`, which `ReasoningRequest` carries, and the
+landed `SwitchRefusal` collapse compiles against it. Paths are from the
+repository root.
 This note records a readiness audit of the harness agent core, the model
 handler, the logger and the public surface — the areas an embedder meets first
 when `@texra-ai/harness` is used as a general package. The question was whether
