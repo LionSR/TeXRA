@@ -234,24 +234,6 @@ export const announceWrites = (
 export type FactKinds = Readonly<Record<FactName, FactKind>>;
 
 /**
- * The fact kinds `plugins` contribute, by `plugin/kind`. A fact kind of another
- * plugin's id, or a kind contributed twice, is a defect of the plugin list.
- */
-export function factKindsOf(plugins: Iterable<Plugin>): FactKinds {
-  const factKinds = new Map<FactName, FactKind>();
-  for (const { id, factKinds: own = [] } of plugins)
-    for (const factKind of own) {
-      const name = factName(factKind);
-      if (factKind.plugin !== id || factKinds.has(name))
-        throw new Error(
-          `The plugin list is not valid: plugin ${id} contributes the row kind ${name}, which is not its own or is contributed twice.`,
-        );
-      factKinds.set(name, factKind);
-    }
-  return Object.fromEntries(factKinds);
-}
-
-/**
  * Throw unless every fact a call of `plugin`'s tool states is a row of one of
  * that plugin's own fact kinds, at the kind's version, with a value its
  * schema accepts: the dispatch turns the throw into the call's error result, so a
