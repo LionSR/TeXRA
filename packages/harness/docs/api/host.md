@@ -1996,12 +1996,7 @@ route and remedy (`session`) on the run's `route` failure.
 class RouteUnavailable extends Schema.TaggedError<RouteUnavailable>()(
   'RouteUnavailable',
   {
-    /** The route's credential is not set anywhere the run reads. */
-    missingApiKey: Schema.optional(Schema.Literal(true)),
-    message: Schema.String,
-    /** A signed-in subscription that could not bill the call: its route,
-     *  and whether only a fresh sign-in can help (else it may recover). */
-    session: Schema.optional(SubscriptionSessionFailureSchema),
+    ...RouteFailureFieldsSchema.fields,
     cause: Schema.optional(Schema.Defect()),
   },
 )
