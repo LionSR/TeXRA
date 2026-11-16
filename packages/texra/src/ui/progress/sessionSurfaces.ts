@@ -369,7 +369,7 @@ export function createSessionSurfaces(options: {
    *  it so, and clear it however `program` ends. */
   function busyWhile(
     entry: Held,
-    field: 'sending' | 'polishing',
+    field: 'sending' | 'polishing' | 'deleting',
     key: string,
     program: Effect.Effect<void>,
   ): Effect.Effect<void> {
@@ -427,8 +427,10 @@ export function createSessionSurfaces(options: {
     const { key } = entry;
     const runId = 'runId' in request ? request.runId : null;
     if (
-      request.kind === 'followUp.send' &&
-      entry.surface$.get().sending.has(request.runId)
+      (request.kind === 'followUp.send' &&
+        entry.surface$.get().sending.has(request.runId)) ||
+      (request.kind === 'run.delete' &&
+        entry.surface$.get().deleting.has(request.runId))
     )
       return;
     // A new request on the run retires the answer to the last one.
@@ -474,7 +476,9 @@ export function createSessionSurfaces(options: {
       key,
       request.kind === 'followUp.send'
         ? busyWhile(entry, 'sending', request.runId, exchange)
-        : exchange,
+        : request.kind === 'run.delete'
+          ? busyWhile(entry, 'deleting', request.runId, exchange)
+          : exchange,
     );
   }
 

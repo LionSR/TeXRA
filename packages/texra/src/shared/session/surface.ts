@@ -241,6 +241,8 @@ export interface Surface {
   /** Streams awaiting follow-up admission, and `launch` while the
    *  launcher's task awaits its own. Never persisted. */
   readonly sending: ReadonlySet<RunId | 'launch'>;
+  /** Runs whose delete is in flight. Never persisted. */
+  readonly deleting: ReadonlySet<RunId>;
   readonly launch: LaunchSurface;
   /** Keyed by `${InquiryThreadId}#${turn}`, never by stream. */
   readonly inquiryDrafts: ReadonlyMap<string, InquiryDraft>;
@@ -327,6 +329,7 @@ export function loadSurface(
     ),
     polishing: new Set(),
     sending: new Set(),
+    deleting: new Set(),
     launch: persisted.launch,
     inquiryDrafts: new Map(persisted.inquiryDrafts),
     drawerOpen: persisted.drawerOpen,

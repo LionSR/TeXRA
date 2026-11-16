@@ -1,12 +1,5 @@
 // Third-party imports
-import {
-  LitElement,
-  css,
-  html,
-  nothing,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
+import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
@@ -87,38 +80,30 @@ export class RunTabs extends LitElement {
   /** Rows offer an immediate Delete: the desktop rail. */
   @property({ type: Boolean }) removable = false;
 
-  /** Deletes sent from a row's ×, still in flight: another click on the
-   *  same row sends nothing. An id leaves once its row is gone from the
-   *  view or the surface records the refusal. */
-  private readonly deleting = new Set<RunId>();
   /** The row to focus once the deleted row, which held focus, is gone. */
   private focusAfterDelete: { runId: RunId; next: RunTab | undefined } | null =
     null;
 
-  protected override willUpdate(changed: PropertyValues): void {
-    if (!changed.has('view') && !changed.has('surface')) return;
-    for (const runId of this.deleting) {
-      if (
-        !this.view?.runs.has(runId) ||
-        this.surface?.runs.get(runId)?.rejected !== undefined
-      ) {
-        this.deleting.delete(runId);
-      }
-    }
-  }
-
+  /** Focus moves on once the deleted row leaves the view; a delete that
+   *  ended with the row still there (the surface shows its rejection)
+   *  keeps focus where it is. */
   protected override updated(): void {
     const pending = this.focusAfterDelete;
-    if (pending === null || this.deleting.has(pending.runId)) return;
-    this.focusAfterDelete = null;
-    if (!this.view?.runs.has(pending.runId) && pending.next?.isConnected) {
-      pending.next.focus();
+    if (pending === null) return;
+    if (this.view?.runs.has(pending.runId)) {
+      const ended =
+        !this.surface?.deleting.has(pending.runId) &&
+        this.surface?.runs.get(pending.runId)?.rejected !== undefined;
+      if (ended) this.focusAfterDelete = null;
+      return;
     }
+    this.focusAfterDelete = null;
+    if (pending.next?.isConnected) pending.next.focus();
   }
 
+  /** The surfaces send nothing while this run's delete is in flight. */
   private deleteRun(tab: RunTab, runId: RunId): void {
-    if (this.deleting.has(runId)) return;
-    this.deleting.add(runId);
+    if (this.surface?.deleting.has(runId)) return;
     if (tab.matches(':focus-within')) {
       const rows = [...this.renderRoot.querySelectorAll<RunTab>('run-tab')];
       const at = rows.indexOf(tab);
