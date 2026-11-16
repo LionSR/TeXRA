@@ -4,7 +4,6 @@ Generated from `packages/harness/src/node.ts` by `npm run docgen`; do not edit. 
 
 Exports: 49
 
-- `absentReason` — `const absentReason: (error: unknown) => boolean`
 - `APPROVAL_POLICY_ENV` — `const APPROVAL_POLICY_ENV: "TEXRA_APPROVAL_POLICY"`
 - `canonicalizeWorkspaceRoot` — `function canonicalizeWorkspaceRoot: (workspaceRoot: string) => string`
 - `CommandDirs` — `const CommandDirs: Reference<() => readonly string[]>`
@@ -32,6 +31,7 @@ Exports: 49
 - `LogEntry` — `type LogEntry = Omit<ReturnType<typeof Logger.formatStructured.log>, 'level'> & { readonly level: Uppercase<LogLevel.Severity>; }; ≡ LogEntry`
 - `LogSink` — `interface LogSink { write(entry: LogEntry): void; dispose?(): void; }`
 - `makeMachineGitEnv` — `const makeMachineGitEnv: Effect<ProcessEnv, never, never>`
+- `meansAbsent` — `const meansAbsent: (error: unknown) => boolean`
 - `nodeFileServices` — `const nodeFileServices: Layer<FileSystem | Path, never, never>`
 - `nodePlatform` — `function nodePlatform: (options: NodePlatformOptions) => AgentPlatform`
 - `NodePlatformOptions` — `interface NodePlatformOptions { readonly agentsDir: string; readonly workspaceDir?: string; readonly storageDir: string; readonly settings?: SettingsCatalog; }`

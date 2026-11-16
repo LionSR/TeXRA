@@ -50,7 +50,7 @@ import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import type { SessionViewAccess } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { copyDereferenced } from '@utils/files/fsDurability';
-import { absentReason } from '@utils/files/fsEntryExists';
+import { meansAbsent } from '@utils/files/fsEntryExists';
 import { isPathWithin } from '@utils/core/pathCore';
 
 const CHANNEL = 'DeletionCleanup';
@@ -113,7 +113,7 @@ const removeRunDirectories: (
     );
   },
   Effect.uninterruptible,
-  Effect.catchIf(absentReason, () => Effect.void),
+  Effect.catchIf(meansAbsent, () => Effect.void),
 );
 
 /** A run's deletion marker. */

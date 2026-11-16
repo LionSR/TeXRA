@@ -17,7 +17,7 @@ import {
   type AppSignals,
 } from '@texra-ai/harness/plugins';
 import {
-  absentReason,
+  meansAbsent,
   entryTypeIn,
   readNormalizedFile,
 } from '@texra-ai/harness/node';
@@ -194,7 +194,7 @@ export class ProgressDocumentTaskFileActionsController {
     const copy = path.join(runDirectory, copyPath);
     return Effect.gen(function* () {
       const kept = yield* readOutputFile(copy).pipe(
-        Effect.catchIf(absentReason, () => Effect.succeed(undefined)),
+        Effect.catchIf(meansAbsent, () => Effect.succeed(undefined)),
       );
       if (kept === undefined) return undefined;
       const diff = unifiedDiffText(kept, accepted);

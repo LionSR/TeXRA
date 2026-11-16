@@ -78,7 +78,7 @@ Exports: 164
 - `mcpConfigPathOf` — `function mcpConfigPathOf: (storageRoot: string) => string`
 - `McpServerConfig` — `interface McpServerConfig { readonly name: string; readonly command: string; readonly args: readonly string[]; readonly env: Readonly<Record<string, string>>; readonly cwd?: string; }`
 - `MODEL_SELECTION_KEY` — `const MODEL_SELECTION_KEY: { readonly key: "modelSelection"; readonly schema: Struct<{ readonly disabledDefaults: $Array<String>; readonly enabledExtras: $Array<String>; }>; readonly slot: "globalState"; }`
-- `ModelOption` — `type ModelOption = { readonly model: string; readonly availability: 'unknown-model'; readonly unavailableReason: string; readonly usageRoute?: undefined; } | { readonly model: string; readonly availability: ModelAvailabilityKind; readonly unavailableReason?: string; readonly usageRoute?: DeclinableUsageRoute; readonly published: ModelConfig; readonly config: ModelConfig; readonly route: ModelRoute; readonly source: string; readonly savedEffort: ReasoningEffort | undefined; readonly reasoning: RouteReasoning | undefined; }; ≡ ModelOption`
+- `ModelVerdict` — `type ModelVerdict = { readonly model: string; readonly availability: 'unknown-model'; readonly unavailableReason: string; readonly usageRoute?: undefined; } | { readonly model: string; readonly availability: ModelAvailabilityKind; readonly unavailableReason?: string; readonly usageRoute?: DeclinableUsageRoute; readonly published: ModelConfig; readonly config: ModelConfig; readonly route: ModelRoute; readonly source: string; readonly savedEffort: ReasoningEffort | undefined; readonly reasoning: RouteReasoning | undefined; }; ≡ ModelVerdict`
 - `normalizeProviderError` — `function normalizeProviderError: (err: unknown) => ProviderError`
 - `Notices` — `interface Notices { emit<K extends RuntimePresentationEvent>(event: K, payload: RuntimePresentationEventPayloads[K], options?: AgentRuntimeEmitOptions): Effect.Effect<void>; }`
 - `OFFICE_EXTENSIONS` — `const OFFICE_EXTENSIONS: readonly string[]`
@@ -108,7 +108,7 @@ Exports: 164
 - `ProviderError` — `interface ProviderError { readonly message: string; readonly failure?: ModelFailure; readonly rawErrorBody?: unknown; }`
 - `readCustomAgentDir` — `const readCustomAgentDir: (state: Pick<StateStore, "get">) => Effect<string, StateReadFailed, never>`
 - `readMcpConfig` — `const readMcpConfig: (file: string) => Effect<null | { servers: McpServerConfig[]; warnings: string[]; }, never, FileSystem>`
-- `readModelOptions` — `const readModelOptions: (stores: SettingsStores, models?: readonly string[] | undefined) => Effect<ModelOption[], RouteUnavailable | SecretsFailed | StateReadFailed, Secrets | SubscriptionAccounts>`
+- `readModelOptions` — `const readModelOptions: (stores: SettingsStores, models?: readonly string[] | undefined) => Effect<ModelVerdict[], RouteUnavailable | SecretsFailed | StateReadFailed, Secrets | SubscriptionAccounts>`
 - `readStorageInventory` — `const readStorageInventory: (storageRoot: string) => Effect<{ asides: { readonly bytes: number; readonly path: string; }[]; orphans: { readonly bytes: number; readonly directory: string; readonly why: string; }[]; skipped: { readonly message: string; readonly path: string; }[]; }, DatabaseReadFailed | PlatformError, FileSystem | GlobalValues>`
 - `REASONING_LEVELS_KEY` — `const REASONING_LEVELS_KEY: { readonly key: "reasoningLevels"; readonly schema: withDecodingDefault<$Record<String, Unknown>, never>; readonly slot: "globalState"; }`
 - `redactSecrets` — `function redactSecrets: (text: string) => string`

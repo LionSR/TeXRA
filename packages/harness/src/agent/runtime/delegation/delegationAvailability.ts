@@ -24,7 +24,10 @@ import {
 } from '@agent/index/agentCatalog';
 import type { StepTools } from '@agent/runtime/loop/step';
 import { withLogChannel } from '@logger/effectLog';
-import { readModelOptions, type ModelOption } from '@model/computeModelOptions';
+import {
+  readModelOptions,
+  type ModelVerdict,
+} from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
 import {
   AGENT_TOOL_NAME,
@@ -42,7 +45,7 @@ import {
 } from '@shared/state/stateSettings';
 
 /** The models that can run now, in picker order. */
-const availableModelNames = (options: readonly ModelOption[]): string[] =>
+const availableModelNames = (options: readonly ModelVerdict[]): string[] =>
   options.flatMap(({ model, availability }) =>
     MODEL_AVAILABILITY_STATUS[availability].available ? [model] : [],
   );

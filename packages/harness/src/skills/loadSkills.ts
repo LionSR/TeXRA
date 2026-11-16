@@ -6,7 +6,7 @@ import { Effect, FileSystem } from 'effect';
 
 // Local imports - common
 import { SKILL_FILE_NAME, type ActiveSkillSourceScope } from '@shared/schemas';
-import { absentReason } from '@utils/files/fsEntryExists';
+import { meansAbsent } from '@utils/files/fsEntryExists';
 
 // Local imports - skill parsing
 import {
@@ -110,7 +110,7 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
   const names: string[] | undefined = yield* fs.readDirectory(root).pipe(
     Effect.catch((error) =>
       Effect.sync(() => {
-        if (!absentReason(error)) {
+        if (!meansAbsent(error)) {
           errors.push(
             issue('error', 'read_error', error.message, { path: root }),
           );
@@ -147,7 +147,7 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
             skillPath,
             realSkillPath: undefined,
             loaded: undefined,
-            issue: absentReason(error)
+            issue: meansAbsent(error)
               ? undefined
               : issue('warning', 'read_error', error.message, {
                   path: skillPath,
@@ -222,7 +222,7 @@ function validateRequiredSource(
           }),
     ),
     Effect.catch((error) => {
-      if (absentReason(error)) {
+      if (meansAbsent(error)) {
         return Effect.succeed(
           issue('error', 'missing_source', 'Skill source does not exist', {
             path: source.path,

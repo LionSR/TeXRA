@@ -678,13 +678,13 @@ interface FactKind {
    *  of the kind (none before the first): the rejection's reason, or null
    *  to accept. */
   readonly accepts?: (
-    previous: PluginRow | undefined,
-    next: PluginRow,
+    previous: PluginFactRow | undefined,
+    next: PluginFactRow,
   ) => string | null;
   /** Whether the aggregate's `latest` row already says more than `next`
    *  (a call's fact that lagged behind a later writer): the call's batch
    *  then leaves `next` out instead of failing on `accepts`. */
-  readonly supersedes?: (latest: PluginRow, next: PluginRow) => boolean;
+  readonly supersedes?: (latest: PluginFactRow, next: PluginFactRow) => boolean;
   /** The workspace files a row of the kind says its run wrote past the
    *  editor's own write path: every process that folds the run announces
    *  them (`workspaceFilesWritten`), a window hearing a service task's
@@ -1281,6 +1281,18 @@ interface PluginDefinition<ROut> extends Omit<
 }
 ```
 
+## PluginFactRow
+
+One stored row of a plugin's kind, as its fact kind's transition rule reads
+it: the row's decoded value and the run it is parented to, if any.
+
+```ts
+interface PluginFactRow {
+  readonly value: Schema.Json;
+  readonly parent: RunId | null;
+}
+```
+
 ## PluginHold
 
 Keep the session layer that provides this service up until `until` ends:
@@ -1310,18 +1322,6 @@ type PluginLayerServices =
   | ChildProcessSpawner
   | AppState
   | AppSignals;
-```
-
-## PluginRow
-
-One stored row of a plugin's kind, as its fact kind's transition rule reads
-it: the row's decoded value and the run it is parented to, if any.
-
-```ts
-interface PluginRow {
-  readonly value: Schema.Json;
-  readonly parent: RunId | null;
-}
 ```
 
 ## PluginToolServices

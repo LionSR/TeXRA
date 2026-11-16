@@ -15,7 +15,7 @@ export function isNotADirectoryError(err: unknown): boolean {
  * Node error. Every other failure (`EACCES`, `ELOOP`, `EISDIR`, ...) is not
  * absence and propagates from a caller that recovers only this.
  */
-export const absentReason = (error: unknown): boolean =>
+export const meansAbsent = (error: unknown): boolean =>
   PlatformError.isPlatformError(error)
     ? error.reason._tag === 'NotFound' ||
       (error.reason._tag === 'BadResource' &&
@@ -42,7 +42,7 @@ export const fileWatchRetrySchedule = Schedule.exponential('1 second').pipe(
  * and a dangling one still names an entry.
  *
  * One `lstat`, so a dangling or circular link is still an entry. Only
- * absence ({@link absentReason}, `ENOTDIR` included) is recovered; every other
+ * absence ({@link meansAbsent}, `ENOTDIR` included) is recovered; every other
  * failure propagates, so an unreadable entry is never read as a missing one.
  *
  * The caller passes the filesystem it probes with, so a rooted view answers
@@ -58,7 +58,7 @@ export const entryTypeIn = Effect.fn('fsEntryExists.entryTypeIn')(function* (
 > {
   return yield* fs.lstat(target).pipe(
     Effect.map((info) => info.type),
-    Effect.catchIf(absentReason, () => Effect.succeed(undefined)),
+    Effect.catchIf(meansAbsent, () => Effect.succeed(undefined)),
   );
 });
 
@@ -76,7 +76,7 @@ export const entryExists = (
 /**
  * `FileSystem.exists` with a path whose parent is not a directory (`ENOTDIR`)
  * counted as absent alongside `ENOENT`; the standard library reports that
- * case as `BadResource`. {@link absentReason} names ENOTDIR specifically, so
+ * case as `BadResource`. {@link meansAbsent} names ENOTDIR specifically, so
  * an operational failure (`ELOOP`, `EACCES`) still propagates instead of
  * reading as "absent".
  *
@@ -97,4 +97,4 @@ export const pathExists = (
 ): Effect.Effect<boolean, PlatformError.PlatformError> =>
   fs
     .exists(target)
-    .pipe(Effect.catchIf(absentReason, () => Effect.succeed(false)));
+    .pipe(Effect.catchIf(meansAbsent, () => Effect.succeed(false)));

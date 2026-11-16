@@ -14,7 +14,7 @@ import {
   reportDiffTimeout,
 } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { absentReason, readNormalizedFile } from '@texra-ai/harness/node';
+import { meansAbsent, readNormalizedFile } from '@texra-ai/harness/node';
 import {
   toErrorMessage,
   countLines,
@@ -63,7 +63,7 @@ const computeDiffStats = Effect.fn('documents.computeDiffStats')(
   // run and logged at debug, anything else at warn.
   Effect.catch((err) => {
     const message = `Failed to compute diff stats: ${toErrorMessage(err)}`;
-    const write = absentReason(err) ? Effect.logDebug : Effect.logWarning;
+    const write = meansAbsent(err) ? Effect.logDebug : Effect.logWarning;
     return write(message).pipe(
       withLogChannel(CHANNEL),
       Effect.as<DiffStats>({}),
@@ -93,7 +93,7 @@ const toWorkspaceOrigin = Effect.fn('documents.toWorkspaceOrigin')(function* (
   // a file counts and a dangling one (or a directory) does not.
   const isFile = yield* fs.stat(resolved.absolutePath).pipe(
     Effect.map((info) => info.type === 'File'),
-    Effect.catchIf(absentReason, () => Effect.succeed(false)),
+    Effect.catchIf(meansAbsent, () => Effect.succeed(false)),
   );
   return resolved.kind === 'workspace' && isFile ? resolved : loc;
 });

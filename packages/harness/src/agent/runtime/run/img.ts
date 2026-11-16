@@ -10,7 +10,7 @@ import { imageSize } from 'image-size';
 import { withLogChannel } from '@logger/effectLog';
 import { Settings, type ConfigProvider } from '@shared/config/settings';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
-import { absentReason } from '@utils/files/fsEntryExists';
+import { meansAbsent } from '@utils/files/fsEntryExists';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 import { MAX_IMAGE_DIMENSION_SETTING } from '@shared/state/stateSettings';
@@ -224,7 +224,7 @@ export const getBase64EncodedMedia = Effect.fn('img.getBase64EncodedMedia')(
         ? resizeImageIfNeeded(mediaPath, config)
         : fs.readFile(mediaPath)
     ).pipe(
-      Effect.catchIf(absentReason, () =>
+      Effect.catchIf(meansAbsent, () =>
         Effect.fail(
           new MediaConversionFailed({
             message: `File not found: ${mediaPath}`,
@@ -289,7 +289,7 @@ const singlePagePdf2Png = Effect.fn('img.singlePagePdf2Png')(function* (
   }
 
   const imageBytes = yield* fs.readFile(outputPath).pipe(
-    Effect.catchIf(absentReason, () =>
+    Effect.catchIf(meansAbsent, () =>
       Effect.fail(
         new MediaConversionFailed({
           message: 'Failed to convert PDF page to PNG: Output file not found',

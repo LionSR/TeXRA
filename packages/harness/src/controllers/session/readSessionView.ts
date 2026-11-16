@@ -24,7 +24,7 @@ import {
 import type { SessionView } from '@shared/session/readonlyViews';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import type { ToolRegistry } from '@tools/toolTable';
-import { absentReason } from '@utils/files/fsEntryExists';
+import { meansAbsent } from '@utils/files/fsEntryExists';
 
 import { databaseLayer } from './databaseLayer';
 import { projectStores } from './projectDatabase';
@@ -42,7 +42,7 @@ const NO_LOCAL_STATE: LocalRuntimeState = { runsHere: [] };
 const absent = (
   error: DatabaseOpenFailed,
 ): Effect.Effect<boolean, never, FileSystem.FileSystem> => {
-  if (absentReason(error.cause)) return Effect.succeed(true);
+  if (meansAbsent(error.cause)) return Effect.succeed(true);
   if (!cannotOpen(Cause.fail(error))) return Effect.succeed(false);
   return FileSystem.FileSystem.pipe(
     Effect.flatMap((fs) => fs.exists(error.path)),

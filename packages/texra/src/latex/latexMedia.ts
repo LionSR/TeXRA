@@ -6,7 +6,7 @@ import {
   type AgentTrace,
   type WorkspaceFs,
 } from '@texra-ai/harness/plugins';
-import { absentReason } from '@texra-ai/harness/node';
+import { meansAbsent } from '@texra-ai/harness/node';
 
 // Third-party imports
 import { Effect, FileSystem, Predicate } from 'effect';
@@ -62,7 +62,7 @@ function logSkipped(
   path: string,
   error: unknown,
 ): void {
-  (absentReason(error) ? logger.debug : logger.warn).call(logger, message, {
+  (meansAbsent(error) ? logger.debug : logger.warn).call(logger, message, {
     data: { path, error },
   });
 }

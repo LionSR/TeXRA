@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { Predicate } from 'effect';
 
 import { isPathWithin } from '@utils/core/pathCore';
-import { absentReason } from '@utils/files/fsEntryExists';
+import { meansAbsent } from '@utils/files/fsEntryExists';
 
 /**
  * Allowlist of external filesystem roots that tools may read or write.
@@ -112,7 +112,7 @@ function canonicalizeFollowingLinks(p: string, linkHops: number): string {
   try {
     return fs.realpathSync(resolved);
   } catch (err) {
-    if (!absentReason(err)) throw err;
+    if (!meansAbsent(err)) throw err;
     // realpath fails the same way on a dangling link and on a missing entry;
     // readlink tells them apart. The hop bound matches the kernel's ELOOP.
     const target = linkHops < 32 ? readLinkOrUndefined(resolved) : undefined;
@@ -141,7 +141,7 @@ function readLinkOrUndefined(entry: string): string | undefined {
     // path that cannot be verified fails closed.
     const notALink =
       Predicate.hasProperty(err, 'code') && err.code === 'EINVAL';
-    if (notALink || absentReason(err)) return undefined;
+    if (notALink || meansAbsent(err)) return undefined;
     throw err;
   }
 }

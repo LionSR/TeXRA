@@ -16,7 +16,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { withFileWriteLane } from '@utils/files/fileWriteLane';
 import { createSymlink } from '@utils/files/fsDurability';
 import {
-  absentReason,
+  meansAbsent,
   entryExists,
   entryTypeIn,
 } from '@utils/files/fsEntryExists';
@@ -178,7 +178,7 @@ export class RunFileService {
         // real snapshot.
         const hasSnapshot = yield* fs.stat(snapshotAbsolute).pipe(
           Effect.as(true),
-          Effect.catchIf(absentReason, () => Effect.succeed(false)),
+          Effect.catchIf(meansAbsent, () => Effect.succeed(false)),
           Effect.mapError(
             (error) =>
               new Error(
@@ -200,7 +200,7 @@ export class RunFileService {
       }).pipe(withFileWriteLane(snapshotAbsolute));
     }).pipe(
       Effect.catch((error) =>
-        absentReason(error)
+        meansAbsent(error)
           ? Effect.succeed(target)
           : Effect.fail(
               new Error(
@@ -460,7 +460,7 @@ export class RunFileService {
           // left unlinked, as the destination guard below does.
           const snapshot = yield* fs.stat(snapshotAbsolute).pipe(
             Effect.as('present' as const),
-            Effect.catchIf(absentReason, () =>
+            Effect.catchIf(meansAbsent, () =>
               Effect.succeed('absent' as const),
             ),
             Effect.catch((error) =>

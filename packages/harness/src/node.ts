@@ -91,7 +91,7 @@ export {
   writeFileAtomic,
 } from '@utils/files/fsDurability';
 export {
-  absentReason,
+  meansAbsent,
   entryTypeIn,
   isNotADirectoryError,
   pathExists,

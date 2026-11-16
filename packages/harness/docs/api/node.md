@@ -28,20 +28,6 @@ Node.js platform implementation and host building blocks for
   name where the log entries go, and
   [`effectDiagnosticsLayer`](#effectdiagnosticslayer) at which level.
 
-## absentReason
-
-Whether a failure means nothing is at the path: it is not there
-(`ENOENT`), or a parent component is a file rather than a directory
-(`ENOTDIR`), the two cases Node's own `statSync(path, { throwIfNoEntry:
-false })` reads as no entry. It answers for the standard library's
-`PlatformError`, which reports `ENOTDIR` as `BadResource`, and for a bare
-Node error. Every other failure (`EACCES`, `ELOOP`, `EISDIR`, ...) is not
-absence and propagates from a caller that recovers only this.
-
-```ts
-const absentReason: (error: unknown) => boolean
-```
-
 ## APPROVAL_POLICY_ENV
 
 The variable a person's own invocation requests an approval policy
@@ -138,7 +124,7 @@ lstat semantics: a link reports as itself rather than as what it points at,
 and a dangling one still names an entry.
 
 One `lstat`, so a dangling or circular link is still an entry. Only
-absence ({@link absentReason}, `ENOTDIR` included) is recovered; every other
+absence ({@link meansAbsent}, `ENOTDIR` included) is recovered; every other
 failure propagates, so an unreadable entry is never read as a missing one.
 
 The caller passes the filesystem it probes with, so a rooted view answers
@@ -440,6 +426,20 @@ ChildProcess command the env replaces the child environment unless
 const makeMachineGitEnv: Effect.Effect<NodeJS.ProcessEnv>
 ```
 
+## meansAbsent
+
+Whether a failure means nothing is at the path: it is not there
+(`ENOENT`), or a parent component is a file rather than a directory
+(`ENOTDIR`), the two cases Node's own `statSync(path, { throwIfNoEntry:
+false })` reads as no entry. It answers for the standard library's
+`PlatformError`, which reports `ENOTDIR` as `BadResource`, and for a bare
+Node error. Every other failure (`EACCES`, `ELOOP`, `EISDIR`, ...) is not
+absence and propagates from a caller that recovers only this.
+
+```ts
+const meansAbsent: (error: unknown) => boolean
+```
+
 ## nodeFileServices
 
 Node's file services: `FileSystem` (with the one-call native `realPath`
@@ -537,7 +537,7 @@ const openNodeWorkspaceRoots: (
 
 `FileSystem.exists` with a path whose parent is not a directory (`ENOTDIR`)
 counted as absent alongside `ENOENT`; the standard library reports that
-case as `BadResource`. {@link absentReason} names ENOTDIR specifically, so
+case as `BadResource`. {@link meansAbsent} names ENOTDIR specifically, so
 an operational failure (`ELOOP`, `EACCES`) still propagates instead of
 reading as "absent".
 

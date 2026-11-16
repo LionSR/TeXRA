@@ -18,7 +18,7 @@ import * as ChildProcess from 'effect/process/ChildProcess';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { sha256Hex } from '@utils/core/idHash';
 import { isPathWithin } from '@utils/core/pathCore';
-import { absentReason } from '@utils/files/fsEntryExists';
+import { meansAbsent } from '@utils/files/fsEntryExists';
 import {
   CommandDirs,
   whichOnExtendedPath,
@@ -215,7 +215,7 @@ export const pinHook = Effect.fn('pluginHooks.pin')(
         return yield* dynamic(`${word} is a path relative to the workspace`);
       const real = yield* fs
         .realPath(word)
-        .pipe(Effect.catchIf(absentReason, () => Effect.void));
+        .pipe(Effect.catchIf(meansAbsent, () => Effect.void));
       if (real !== undefined && isPathWithin(realRoot, real)) continue;
       const info = real === undefined ? undefined : yield* fs.stat(real);
       files.push({

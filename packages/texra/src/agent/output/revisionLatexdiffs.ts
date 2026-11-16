@@ -4,7 +4,7 @@ import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
 import { Effect, FileSystem, Predicate } from 'effect';
 
 import { createRunStorageLocation } from '@texra-ai/harness/host';
-import { absentReason, entryTypeIn } from '@texra-ai/harness/node';
+import { meansAbsent, entryTypeIn } from '@texra-ai/harness/node';
 import {
   toErrorMessage,
   fileLocationDisplayPath,
@@ -270,7 +270,7 @@ const diffPair = (
     const asGiven = revised.location.absolutePath;
     const cwd = path.dirname(
       yield* fs.realPath(asGiven).pipe(
-        Effect.catchIf(absentReason, () => Effect.succeed(asGiven)),
+        Effect.catchIf(meansAbsent, () => Effect.succeed(asGiven)),
         recoverLogged(
           (error) =>
             logger.warn(

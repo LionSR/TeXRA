@@ -19,7 +19,7 @@ import {
   homeDirectory,
   inheritedEnv,
 } from '@texra-ai/harness/node';
-import { absentReason } from '@texra-ai/harness/node';
+import { meansAbsent } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -70,7 +70,7 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
       // traversable. Neither is a usable credential, but only absence is
       // ordinary: a path that cannot be traversed says why a signed-in
       // person's session is not used.
-      Effect.catchIf(absentReason, () => Effect.succeed(false)),
+      Effect.catchIf(meansAbsent, () => Effect.succeed(false)),
       Effect.catch((error) =>
         Effect.as(
           Effect.logWarning(

@@ -33,7 +33,7 @@ import { errorResult } from '@tools/core/result';
 import type { ToolRegistry } from '@tools/toolTable';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
-import { absentReason, entryExists } from '@utils/files/fsEntryExists';
+import { meansAbsent, entryExists } from '@utils/files/fsEntryExists';
 import { ensureError, formatError } from '@utils/errors/errorMessage';
 import { escapesRoot } from '@utils/core/pathCore';
 import {
@@ -252,7 +252,7 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
       // then no referenced file can lie under it.
       const storageRoot = yield* fs
         .realPath(storage)
-        .pipe(Effect.catchIf(absentReason, () => Effect.void));
+        .pipe(Effect.catchIf(meansAbsent, () => Effect.void));
       const references = yield* Effect.forEach(
         files,
         Effect.fnUntraced(function* (file) {

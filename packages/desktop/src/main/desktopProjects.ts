@@ -24,7 +24,7 @@ import {
   StateStores,
 } from '@texra-ai/harness/host';
 import {
-  absentReason,
+  meansAbsent,
   openNodeWorkspaceRoots,
   canonicalizeWorkspaceRoot,
 } from '@texra-ai/harness/node';
@@ -178,7 +178,7 @@ const partitionFolders = Effect.fn('desktopProjects.partitionFolders')(
         } else {
           missing.push(root);
         }
-      } else if (absentReason(stat.failure)) {
+      } else if (meansAbsent(stat.failure)) {
         missing.push(root);
       } else {
         const reason = toErrorMessage(
