@@ -157,10 +157,10 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   const sent = yield* Effect.gen(function* () {
     // A run that takes no input (a process run, a one-shot root) reads
     // none, live or resumed: nothing would read the row.
-    // Still the view's answer, and so unfinished: a run the view has not
-    // loaded skips this check. The store's answer would always refuse an
-    // ended one-shot root, which a later resume does read a message for
-    // (`example/10-external-plugin.ts`); which of the two is meant is open.
+    // The view answers, not the store: a run the view has not loaded skips
+    // this check, because the store's answer would refuse every ended
+    // one-shot root, and a later resume of one does read a message sent to
+    // it (`example/10-external-plugin.ts`).
     const target = view.run(runId);
     if (target?.takesFollowUps === false)
       return {
