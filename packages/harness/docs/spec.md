@@ -604,9 +604,9 @@ a fresh launch, `executeAgent` without a registration
 (`agent/runtime/resumeRun.ts#resumeRun`).
 
 A resume MUST be refused when the rows hold no opened run
-(`agent/runtime/loop/runProgram.ts#NOT_RESUMABLE_MESSAGE`). A fresh launch MUST
+(`agent/runtime/loop/runLoop.ts#NOT_RESUMABLE_MESSAGE`). A fresh launch MUST
 be refused when the run already holds history state
-(`agent/runtime/loop/runProgram.ts#already has run history state`).
+(`agent/runtime/loop/runLoop.ts#already has run history state`).
 
 ## 6. Retry
 

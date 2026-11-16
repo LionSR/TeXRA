@@ -159,10 +159,10 @@ const joinOpening = (
   runId: RunId,
 ): Effect.Effect<ResumeHandOff | null> =>
   Effect.suspend(() =>
+    // Once the opening has finished, whichever way: one that failed left no
+    // run here, which reads below as not resumable, and its launch reports
+    // the failure.
     (runs.openingOf(runId) ?? Effect.void).pipe(
-      // An opening that failed leaves no run here, which reads below as
-      // not resumable; its launch reports the failure.
-      Effect.ignore,
       Effect.andThen(
         runs.inSession(
           Effect.gen(function* () {

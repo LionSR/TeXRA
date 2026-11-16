@@ -23,22 +23,30 @@
  * instead of asked of its model; `RunState.handedDown` ends the turn.
  */
 
-import { Effect, Exit, type Scope, ScopedRef } from 'effect';
+import { Context, Effect, Exit, type Scope, ScopedRef } from 'effect';
 
 import { buildOpeningSystemPrompt } from '@agent/prompt/PromptBuilder';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import { logUserMessage } from '@agent/trace/traceLogs';
-import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
+import {
+  type BoundModel,
+  ModelAccess,
+} from '@agent/runtime/modelAccess/ModelAccess';
 import { Inbox } from '@agent/followUp/Inbox';
+import { activationRows } from '@agent/storage/runLifecycle';
 import { SessionRoots } from '@platform/rootedFs';
 import {
   type CommitOrdinal,
   type MediaAttachmentKind,
+  outcomeFromCause,
   RUN_OUTCOME,
+  type RunId,
   type RunOutcome,
 } from '@shared/schemas';
 import {
+  Approvals,
   RunHistory,
+  RunHistoryRefused,
   SessionLog,
   type RunCell,
 } from '@shared/session/runHistory';
@@ -51,7 +59,7 @@ import { AgentRun } from '../run/AgentRun';
 import { compactAfterOverflow, compactAtBoundary } from '../run/compaction';
 import { mediaInputParts } from '../run/mediaInput';
 import type { InputPart } from '@texra-ai/llm';
-import { claimFollowUps } from '../FollowUps';
+import { claimFollowUps, type FollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
 import { resumeLeftoverChildren } from '../leftoverChildren';
 import {
@@ -62,7 +70,6 @@ import {
   finalizedRows,
   positionRow,
 } from './rows';
-import { openRun, settleRun, type RunExit } from './runProgram';
 import { dispatchPendingResponse } from './toolUseDispatch';
 import { hooksOf } from './hooks';
 import { dispatchTools, stepFor } from './step';
@@ -97,6 +104,144 @@ const nudge = (text: string) => ({
  *  response rows supply its answer, including after a resume. */
 const turnResponse = (at: RunState): string =>
   at.handedDown?.status === 'error' ? at.handedDown.error : at.answer;
+
+/** What a resume's activation rows read of the session. */
+type ActivationServices = SessionLog | SessionRoots | Approvals;
+
+/** Why a run its rows never opened cannot be continued. */
+const NOT_RESUMABLE_MESSAGE =
+  'This run stopped before it recorded any state to resume from. Start a new run instead.';
+
+/**
+ * The refusal of a resume of `runId` from `state`, or null when none is due:
+ * a turn the next request replays (an assistant message, the pending
+ * response's, or the continuation) was recorded on another protocol than
+ * `bound` speaks now, so its provider evidence cannot be sent.
+ */
+const foreignProtocol = (
+  runId: RunId,
+  state: RunState,
+  bound: Pick<BoundModel, 'backend' | 'origin'>,
+): RunHistoryRefused | null => {
+  const { pendingResponse, continuation } = state;
+  const recorded = [
+    ...[
+      ...state.messages,
+      ...(pendingResponse === null ? [] : [pendingResponse.assistant]),
+    ].flatMap((message) =>
+      message.role === 'assistant' && message.origin !== null
+        ? [message.origin.protocol]
+        : [],
+    ),
+    ...(continuation === null ? [] : [continuation.origin.protocol]),
+  ].find((protocol) => protocol !== bound.origin.protocol);
+  if (recorded === undefined) return null;
+  return new RunHistoryRefused({
+    reason: 'foreign-protocol',
+    runId,
+    detail: `its turns were recorded on ${recorded}, and its ${bound.backend} backend now binds ${bound.origin.protocol}`,
+  });
+};
+
+/**
+ * The run's entry: its cell. A fresh run's registration rides the cell's
+ * first append, its opening, so the run exists with its opening or not at
+ * all. A resume commits its activation, in one batch, and is refused when
+ * the rows hold nothing to continue from. A fresh launch onto a run that
+ * already holds history state is refused.
+ * The caller opens a cell whose state has no position.
+ */
+export const openRun = Effect.fn('toolUse.openRun')(function* (
+  runId: RunId,
+  resume: boolean,
+): Effect.fn.Return<
+  RunCell,
+  Error,
+  RunHistory | AgentRun | ActivationServices
+> {
+  const runHistory = yield* RunHistory;
+  const run = yield* AgentRun;
+  // The activation's rows are read in its publisher job, outside this fiber.
+  const owners = Context.pick(
+    SessionLog,
+    SessionRoots,
+    Approvals,
+  )(yield* Effect.context<ActivationServices>());
+  const opened = runHistory.open(
+    runId,
+    resume
+      ? {
+          activation: Effect.fn('activation')(function* (
+            state: RunState | null,
+          ) {
+            if (state?.at == null)
+              return yield* Effect.fail(new Error(NOT_RESUMABLE_MESSAGE));
+            const refused = foreignProtocol(
+              runId,
+              state,
+              yield* ScopedRef.get(run.model),
+            );
+            if (refused !== null) return yield* refused;
+            return yield* activationRows(runId, run.config).pipe(
+              Effect.provide(owners),
+            );
+          }),
+        }
+      : {
+          registration: Effect.succeed(run.entry.registration?.rows ?? []),
+        },
+  );
+  // A resume enters with its activation, with no alongside: its held
+  // trace publishes once the activation commits. A fresh run enters with
+  // its opening batch later (`openToolUse`); a stop lands before or after.
+  const cell = yield* resume
+    ? run.entry.enter(() => opened)
+    : Effect.uninterruptible(opened);
+  if (!resume && (yield* cell.current).at !== null)
+    return yield* Effect.fail(
+      new Error(
+        `Run ${runId} already has run history state; resume it instead.`,
+      ),
+    );
+  return cell;
+});
+
+/** What a run program, and each of its turns, returns. */
+export type RunExit = {
+  readonly state: RunState;
+  readonly outcome: RunOutcome;
+};
+
+/**
+ * The exit protocol, run at every exit of the loop (`Effect.onExit` in
+ * {@link runToolUse}): the run's input lease, where it holds one. The halt is not written here:
+ * it commits with the run's `run.end` (`endRunRows`), so no reader ever
+ * sees a stopped run without its end.
+ */
+export const settleRun =
+  (
+    cell: RunCell,
+    /** The run's own input lease. */
+    lease: FollowUps,
+  ) =>
+  (
+    exit: Exit.Exit<RunExit, Error>,
+  ): Effect.Effect<void, never, RunRegistry> => {
+    // The body's own value when it returned.
+    const outcome = Exit.match(exit, {
+      onSuccess: (value) => value.outcome,
+      onFailure: outcomeFromCause,
+    });
+    return Effect.flatMap(RunRegistry, (runs) =>
+      Effect.map(runs.hasLiveDescendants(cell.runId), (descendants) =>
+        lease.release(
+          outcome === RUN_OUTCOME.COMPLETED && !descendants
+            ? 'terminal'
+            : 'recoverable',
+        ),
+      ),
+    );
+  };
 
 /** What a turn of the loop reads from its run's context. */
 type TurnServices = AgentRun | AgentRunServices | ModelAccess;
@@ -420,7 +565,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // its loop has already delivered the turn offered at the boundary.
         const queued = yield* followUps.reader.hasPending('idle');
         if (isChild() && afterError && !queued)
-          return finish(state, RUN_OUTCOME.FAILED);
+          return { state, outcome: RUN_OUTCOME.FAILED };
         // An activation clears the step the view shows: a park it found
         // idle is written again, unless the queued input starts a turn.
         if (isResuming(state) && !queued)
@@ -434,26 +579,26 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // A one-shot run ends at its park, unless a message queued for it
         // starts its cycle: a child resumed for its parent's message.
         if (run.toolPolicy.stopAfterCycle && !queued) {
-          return finish(
+          return {
             state,
-            afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.COMPLETED,
-          );
+            outcome: afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.COMPLETED,
+          };
         }
         // The host port stays attached: `/model`, `/compact` land here.
         const batch = yield* followUps.reader.next('idle');
         if (batch === null) {
           // The input ended under the waiting loop: a cancellation.
-          return finish(
+          return {
             state,
-            afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.CANCELLED,
-          );
+            outcome: afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.CANCELLED,
+          };
         }
         yield* followUps.consume(cell, batch);
       }
       const turn: RunExit = yield* runTurn(cell);
       state = turn.state;
       if (turn.outcome === 'cancelled') {
-        return finish(state, RUN_OUTCOME.CANCELLED);
+        return { state, outcome: RUN_OUTCOME.CANCELLED };
       }
       // The turn boundary, in one batch: Stop hooks, the steps (`waiting`
       // closes open streams), and a Stop hook's block or input already
@@ -493,13 +638,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       // A one-shot run ends with its completed turn; a handed-down call's
       // run ends at its park, however its turn ended.
       if (run.toolPolicy.stopAfterCycle && turn.outcome === 'completed')
-        return finish(state, turn.outcome);
+        return { state, outcome: turn.outcome };
     }
   });
-
-  /** A run that ends here: its halt commits with its `run.end`. */
-  const finish = (state: RunState, outcome: RunOutcome): RunExit =>
-    ({ state, outcome }) as const;
 
   /** The run's report: what it answered and edited, and its failure. */
   const result = (outcome: RunOutcome, at: RunState): RunReport => ({
