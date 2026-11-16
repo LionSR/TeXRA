@@ -44,7 +44,6 @@ const validateModelExists = Effect.fn('AgentLaunchContext.validateModelExists')(
         payload: {
           key: HARNESS_INSTRUCTION_KEY.MODEL_NOT_RECOGNIZED,
           message,
-          showSuppress: false,
         },
       },
     });

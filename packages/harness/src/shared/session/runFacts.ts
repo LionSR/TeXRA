@@ -13,6 +13,7 @@
  * `agent/storage/runLifecycle.ts` commits them.
  */
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import type { Schema } from 'effect';
 import {
   NO_APPROVAL_GRANTS,
   type ApprovalGrants,
@@ -23,7 +24,6 @@ import {
   type FollowUpContent,
   type FollowUpDisposition,
   type FollowUpMessage,
-  type JsonValue,
   qualifyAggregateId,
   type RunEnd,
   type RunEndOutput,
@@ -77,7 +77,7 @@ export type RunFacts = {
   readonly toolCalls: number;
   /** The result value of a `submit_output` call, whether the response or
    *  one of its scripts issued it, or of a script run's handed-down call. */
-  readonly structured: { readonly value: JsonValue } | null;
+  readonly structured: { readonly value: Schema.Json } | null;
   /** The result a script run's handed-down call finished with: no model
    *  answers it, so its turn ends there, and an error fails it. */
   readonly handedDown: ToolResultPayload['result'] | null;

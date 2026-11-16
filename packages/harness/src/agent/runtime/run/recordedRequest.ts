@@ -30,7 +30,6 @@ import {
 import { contextUpdate } from '@agent/prompt/PromptBuilder';
 import { delegationSection } from '@agent/runtime/delegation/delegationAvailability';
 import {
-  JsonValueSchema,
   qualifyAggregateId,
   PromptSectionsSchema,
   Sha256Schema,
@@ -60,7 +59,7 @@ const RecordedRequestSchema = Schema.Struct({
   tools: Schema.Array(Sha256Schema),
   /** The resolved controls: tool choice, output limit, storage and every
    *  other parameter the binding (the attempt's `origin`) sent. */
-  controls: JsonValueSchema,
+  controls: Schema.Json,
   /** The resolved agent definition the run was launched with. */
   agent: Sha256Schema,
 });

@@ -11,7 +11,7 @@ import { normalizeFilePath } from '@texra-ai/harness/schemas';
 import { Clock, Effect, FileSystem, type PlatformError, Schema } from 'effect';
 
 // Local imports
-import { absentReason, relativeToRoot } from '@texra-ai/harness/node';
+import { meansAbsent, relativeToRoot } from '@texra-ai/harness/node';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 
 import { CHANNEL } from './constants';
@@ -124,7 +124,7 @@ export const collectFilesFromPatterns = Effect.fn(
   const absentAs =
     <A>(value: A) =>
     <R>(effect: Effect.Effect<A, PlatformError.PlatformError, R>) =>
-      effect.pipe(Effect.catchIf(absentReason, () => Effect.succeed(value)));
+      effect.pipe(Effect.catchIf(meansAbsent, () => Effect.succeed(value)));
 
   const files = new Set<string>();
   // Each directory is listed once, up front, when a prefix extension needs

@@ -36,7 +36,7 @@ import {
   requestToolEditApproval,
 } from '@texra-ai/harness/plugins';
 import {
-  absentReason,
+  meansAbsent,
   entryTypeIn,
   readNormalizedFile,
 } from '@texra-ai/harness/node';
@@ -70,7 +70,7 @@ const fileAt = (fs: FileSystem.FileSystem, target: string) =>
     Effect.map((stats) => stats.type === 'File'),
     Effect.catchIf(
       (error) =>
-        absentReason(error) ||
+        meansAbsent(error) ||
         (error.reason._tag === 'BadResource' &&
           Predicate.hasProperty(error.reason.cause, 'code') &&
           error.reason.cause.code === 'ELOOP'),

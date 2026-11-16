@@ -4,7 +4,6 @@ import { Effect, Schema, Struct } from 'effect';
 import { AgentSourceSchema, InlinePersonaSchema } from './agent';
 import { AgentDelegationScopeSchema } from './workspaceAgents';
 import { NullableFileFieldsSchema } from './fileFields';
-import { JsonValueSchema } from './jsonValue';
 
 /** What every script a run opens on records: its source, title, the tools
  *  it is offered, and its wall-clock limit. */
@@ -63,7 +62,7 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.mapFields(
      * owner decodes its own keys.
      */
     launch: Schema.optional(
-      Schema.NullOr(Schema.Record(Schema.String, JsonValueSchema)),
+      Schema.NullOr(Schema.Record(Schema.String, Schema.Json)),
     ),
     /** Run-scoped delegation agent list used by team runs and their children. */
     delegationAgentScope: Schema.optional(
@@ -101,7 +100,7 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.mapFields(
               block: Schema.NonEmptyString,
               /** The launch's options for that task, as its plugin reads them
                *  (the switches that plugin defines). */
-              options: Schema.Record(Schema.String, JsonValueSchema),
+              options: Schema.Record(Schema.String, Schema.Json),
             }),
           ),
         ]),

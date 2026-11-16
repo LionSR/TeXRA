@@ -6,7 +6,11 @@
 
 import { DELIVERY_FAMILY } from '@shared/deliveryTags';
 
-import type { ChildRunDelivery, DisplayRow, ExecResult } from '@shared/schemas';
+import type {
+  ChildRunDelivery,
+  DisplayRow,
+  ProcessExit,
+} from '@shared/schemas';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { appendTail, headTail } from '@utils/text/appendTail';
@@ -52,7 +56,7 @@ export function bashResultDelivery(
   runId: string,
   call: BackgroundBashCall,
   wallTimeMs: number,
-  result: ExecResult,
+  exit: ProcessExit,
   rows: readonly DisplayRow[],
 ): ChildRunDelivery {
   const lines: string[] = [];
@@ -96,11 +100,7 @@ export function bashResultDelivery(
     family: DELIVERY_FAMILY.background,
     runId,
     attributes: callAttributes(call),
-    exit: {
-      code: result.exitCode,
-      timedOut: result.timedOut,
-      noExitCode: result.noExitCode === true,
-    },
+    exit,
     wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
     lines,
   };

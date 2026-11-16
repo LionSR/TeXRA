@@ -1277,15 +1277,15 @@ rather than by a decoding default, so a corrupt record is reported.
 const MODEL_SELECTION_KEY: { readonly key: "modelSelection"; readonly slot: "globalState"; readonly schema: Struct<{ readonly enabledExtras: $Array<String>; readonly disabledDefaults: $Array<String>; }>; }
 ```
 
-## ModelOption
+## ModelVerdict
 
-One visible model's option: whether it can run now, the route that decided
+One visible model's verdict: whether it can run now, the route that decided
 it, and what that route means for the next request. The registry does not
 describe an `unknown-model`. Each host words a row from it (the app's
 `modelOptionsFrom`).
 
 ```ts
-type ModelOption =
+type ModelVerdict =
   | {
       readonly model: string;
       readonly availability: 'unknown-model';
@@ -1824,7 +1824,7 @@ session's `roots`); provider keys and sign-ins come from the process
 {@link Secrets} service.
 
 ```ts
-const readModelOptions: (stores: SettingsStores, models?: readonly string[] | undefined) => Effect<ModelOption[], StateReadFailed | SecretsFailed | RouteUnavailable, Secrets | SubscriptionAccounts>
+const readModelOptions: (stores: SettingsStores, models?: readonly string[] | undefined) => Effect<ModelVerdict[], StateReadFailed | SecretsFailed | RouteUnavailable, Secrets | SubscriptionAccounts>
 ```
 
 ## readStorageInventory

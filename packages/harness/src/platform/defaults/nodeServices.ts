@@ -93,7 +93,7 @@ import {
 import { withLogChannel } from '@logger/effectLog';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import { nodeFileServices } from '@utils/files/fsDurability';
-import { absentReason } from '@utils/files/fsEntryExists';
+import { meansAbsent } from '@utils/files/fsEntryExists';
 import { ensureError } from '@utils/errors/errorMessage';
 import type * as ChildProcess from 'effect/process/ChildProcess';
 import type { PlatformError } from 'effect/PlatformError';
@@ -364,7 +364,7 @@ export const workspaceEnvironmentLayer = (
     // (a virtualenv made with `python -m venv .env`): neither holds variables.
     Effect.catchIf(
       ({ cause }) =>
-        absentReason(cause) ||
+        meansAbsent(cause) ||
         (Predicate.hasProperty(cause, 'code') && cause.code === 'EISDIR'),
       () => Effect.succeed(''),
     ),

@@ -236,7 +236,7 @@ export function upsertCompactionRows(
 // ---------------------------------------------------------------------------
 
 /** One event's working copy: the next value and the slots it wrote. */
-export interface Draft extends TranscriptWork {
+export interface TranscriptUpdate extends TranscriptWork {
   readonly next: TranscriptDraft;
   readonly ctx: TranscriptContext;
   readonly at: number;
@@ -249,7 +249,7 @@ export interface Draft extends TranscriptWork {
 /** A new slot's envelope: the next first-appearance position, and the next
  *  settlement position when it is printable on arrival. */
 export function open(
-  d: Draft,
+  d: TranscriptUpdate,
   id: string,
   stageId: string | undefined,
   messageType: MessageType,
@@ -276,7 +276,7 @@ export function settle(ix: TranscriptIndexes, base: TranscriptRowBase) {
     : base;
 }
 
-export function write(d: Draft, slot: RowState): void {
+export function write(d: TranscriptUpdate, slot: RowState): void {
   d.ix.slots.set(slot.base.id, slot);
   d.written.push(slot);
   d.touched = true;
@@ -324,7 +324,7 @@ export function slotRow(
  * fields with that text, which may have arrived first; a finalizing row
  * drops it.
  */
-export function paint(d: Draft, slot: RowState): void {
+export function paint(d: TranscriptUpdate, slot: RowState): void {
   const { ix, next } = d;
   const id = slot.base.id;
   const takesLive = takesLiveText(slot);

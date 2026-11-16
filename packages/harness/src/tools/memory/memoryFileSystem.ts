@@ -41,7 +41,7 @@ import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
 import { StorageFs } from '@platform/rootedFs';
 import type { MemoryViewItem } from '@shared/tools/memoryView';
-import { absentReason, pathExists } from '@utils/files/fsEntryExists';
+import { meansAbsent, pathExists } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { splitContentLines } from '@utils/text/stringUtils';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -183,7 +183,7 @@ const readMemoryMeta = Effect.fn('memoryFileSystem.readMemoryMeta')(
         }),
       ),
       Effect.catch((cause) =>
-        (absentReason(cause) ? Effect.logDebug : Effect.logWarning)(
+        (meansAbsent(cause) ? Effect.logDebug : Effect.logWarning)(
           `Skipping attribution for unreadable memory file ${storagePath}`,
         ).pipe(
           withLogChannel(CHANNEL),

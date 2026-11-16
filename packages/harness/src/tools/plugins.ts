@@ -27,7 +27,6 @@ import { type AppSignals, emitAppSignal } from '@platform/appSignals';
 import {
   aggregateTarget,
   qualifyAggregateId,
-  type JsonValue,
   type RunId,
   type SessionRow,
   type SessionRowDraft,
@@ -51,8 +50,8 @@ import type {
 
 /** One stored row of a plugin's kind, as its fact kind's transition rule reads
  *  it: the row's decoded value and the run it is parented to, if any. */
-export interface PluginRow {
-  readonly value: JsonValue;
+export interface PluginFactRow {
+  readonly value: Schema.Json;
   readonly parent: RunId | null;
 }
 
@@ -82,18 +81,18 @@ export interface FactKind {
    *  of the kind (none before the first): the rejection's reason, or null
    *  to accept. */
   readonly accepts?: (
-    previous: PluginRow | undefined,
-    next: PluginRow,
+    previous: PluginFactRow | undefined,
+    next: PluginFactRow,
   ) => string | null;
   /** Whether the aggregate's `latest` row already says more than `next`
    *  (a call's fact that lagged behind a later writer): the call's batch
    *  then leaves `next` out instead of failing on `accepts`. */
-  readonly supersedes?: (latest: PluginRow, next: PluginRow) => boolean;
+  readonly supersedes?: (latest: PluginFactRow, next: PluginFactRow) => boolean;
   /** The workspace files a row of the kind says its run wrote past the
    *  editor's own write path: every process that folds the run announces
    *  them (`workspaceFilesWritten`), a window hearing a service task's
    *  write as it hears its own. */
-  readonly writes?: (value: JsonValue) => readonly string[];
+  readonly writes?: (value: Schema.Json) => readonly string[];
 }
 
 /**
@@ -314,7 +313,7 @@ export const ownFactsChecked = Effect.fn('ownFactsChecked')(function* (
   plugin: Plugin | undefined,
   log: Pick<SessionLogShape, 'runRows' | 'facts'>,
 ) {
-  const written = new Map<string, PluginRow>();
+  const written = new Map<string, PluginFactRow>();
   const kept: FactRow[] = [];
   const rejected: PluginFactRejected[] = [];
   for (const draft of drafts) {

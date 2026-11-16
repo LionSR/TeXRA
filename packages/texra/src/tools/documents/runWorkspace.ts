@@ -17,7 +17,7 @@ import {
   createRunStorageLocation,
   withFileWriteLane,
 } from '@texra-ai/harness/host';
-import { absentReason, createSymlink } from '@texra-ai/harness/node';
+import { meansAbsent, createSymlink } from '@texra-ai/harness/node';
 import {
   runDirUnder,
   sourceLocationUnder,
@@ -173,7 +173,7 @@ export class RunWorkspace {
         // real snapshot.
         const hasSnapshot = yield* fs.stat(snapshotAbsolute).pipe(
           Effect.as(true),
-          Effect.catchIf(absentReason, () => Effect.succeed(false)),
+          Effect.catchIf(meansAbsent, () => Effect.succeed(false)),
           Effect.mapError(
             (error) =>
               new Error(
@@ -195,7 +195,7 @@ export class RunWorkspace {
       }).pipe(withFileWriteLane(snapshotAbsolute));
     }).pipe(
       Effect.catch((error) =>
-        absentReason(error)
+        meansAbsent(error)
           ? Effect.succeed(target)
           : Effect.fail(
               new Error(
@@ -334,7 +334,7 @@ export class RunWorkspace {
           // left unlinked, as the destination guard below does.
           const snapshot = yield* fs.stat(snapshotAbsolute).pipe(
             Effect.as('present' as const),
-            Effect.catchIf(absentReason, () =>
+            Effect.catchIf(meansAbsent, () =>
               Effect.succeed('absent' as const),
             ),
             Effect.catch((error) =>

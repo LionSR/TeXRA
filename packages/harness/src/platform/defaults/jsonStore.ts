@@ -16,7 +16,7 @@ import { writeLogLine } from '@logger/logSink';
 import { ensureError } from '@utils/errors/errorMessage';
 import { withFileWriteLane } from '@utils/files/fileWriteLane';
 import { nodeFileServices, writeFileAtomic } from '@utils/files/fsDurability';
-import { absentReason } from '@utils/files/fsEntryExists';
+import { meansAbsent } from '@utils/files/fsEntryExists';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -50,7 +50,7 @@ function readJsonRecordSync(filePath: string): JsonRecord | undefined {
   try {
     content = readFileSync(filePath, 'utf8');
   } catch (error) {
-    if (absentReason(error)) return undefined;
+    if (meansAbsent(error)) return undefined;
     throw error;
   }
   const parsed: unknown = JSON.parse(content);

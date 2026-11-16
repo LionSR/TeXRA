@@ -120,7 +120,7 @@ export const claudeAgent: TexraPlugin = {
         'Or use the native installer from https://claude.com/code (recommended).\n' +
         'See: https://code.claude.com/docs/en/setup\n\n' +
         'Authentication (choose one):\n' +
-        '  • Set ANTHROPIC_API_KEY in TeXRA Settings → API Keys → Anthropic\n' +
+        '  • Store an Anthropic API key in TeXRA, or set ANTHROPIC_API_KEY\n' +
         '  • claude login         : OAuth sign-in (Pro/Max subscription, recommended)\n' +
         '  • claude setup-token   : long-lived OAuth token (CLAUDE_CODE_OAUTH_TOKEN)\n' +
         '  • ANTHROPIC_API_KEY    : environment variable with Console API key',
@@ -134,7 +134,7 @@ export const claudeAgent: TexraPlugin = {
       },
       authCommand: 'claude login',
       configNotes:
-        'Requires the native `claude` binary. Supports OAuth (`claude login`), long-lived tokens (`claude setup-token` → CLAUDE_CODE_OAUTH_TOKEN), or ANTHROPIC_API_KEY (resolved from TeXRA Settings → API Keys or the environment).',
+        'Requires the native `claude` binary. Supports OAuth (`claude login`), long-lived tokens (`claude setup-token` → CLAUDE_CODE_OAUTH_TOKEN), or ANTHROPIC_API_KEY (the Anthropic key TeXRA stores, or the environment).',
       authNote: 'OAuth, OAuth token, or API key',
     },
   },

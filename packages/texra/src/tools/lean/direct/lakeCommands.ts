@@ -38,7 +38,8 @@ function capOutput(output: string): string {
 }
 
 interface LakeCommandResult {
-  exitCode: number;
+  /** lake exited with code 0. */
+  success: boolean;
   stdout: string;
   stderr: string;
 }
@@ -86,24 +87,17 @@ function executeLake(
     maxBuffer: LAKE_PROCESS_MAX_BUFFER_CHARS,
     quiet: true,
   }).pipe(
-    Effect.map((result) => ({
-      // A deadline, an output-limit trip, a spawn failure or a signal death
-      // has no exit code of the command's own.
-      exitCode:
-        result.timedOut ||
-        result.outputLimitExceeded === true ||
-        result.noExitCode === true
-          ? -1
-          : result.exitCode,
+    Effect.map(({ success, stdout, stderr, end }) => ({
+      success,
       // executeCommand trims both ends of each stream, so leading
       // whitespace on lake's first line is not kept.
-      stdout: capOutput(result.stdout),
+      stdout: capOutput(stdout),
       // A non-zero exit that printed nothing still tells the agent why the
       // command failed.
       stderr: capOutput(
-        result.stderr ||
-          (result.exitCode !== 0 && !result.stdout
-            ? `lake exited with code ${result.exitCode}: lake ${options.args.join(' ')}`
+        stderr ||
+          (end._tag === 'Exited' && end.code !== 0 && !stdout
+            ? `lake exited with code ${end.code}: lake ${options.args.join(' ')}`
             : ''),
       ),
     })),

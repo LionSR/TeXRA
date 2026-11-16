@@ -135,7 +135,7 @@ export function buildCliModelAccessItems(
         provider: plan.id,
         state: planStatus?.preferred ? ('off' as const) : ('on' as const),
       },
-      label: plan.preferenceLabel,
+      label: plan.preference.title,
       description: planStatus
         ? formatCliKeyedSubscriptionPreference(
             planStatus.preferred,

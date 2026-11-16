@@ -6,7 +6,7 @@ import { basename, join } from 'node:path';
 import { Predicate } from 'effect';
 
 import { truncatedHexId } from '@utils/core/idHash';
-import { absentReason } from '@utils/files/fsEntryExists';
+import { meansAbsent } from '@utils/files/fsEntryExists';
 
 const STORAGE_LAYOUT = {
   global: 'global-storage',
@@ -37,7 +37,7 @@ function storageIdentity(workspaceRoot: string): string {
     return realpathSync.native(workspaceRoot);
   } catch (error) {
     const code = Predicate.hasProperty(error, 'code') ? error.code : undefined;
-    if (!absentReason(error) && code !== 'EACCES' && code !== 'EPERM')
+    if (!meansAbsent(error) && code !== 'EACCES' && code !== 'EPERM')
       throw error;
     return workspaceRoot;
   }

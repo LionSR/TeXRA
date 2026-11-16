@@ -149,7 +149,7 @@ export {
   MODEL_SELECTION_KEY,
   readModelOptions,
   setModelEnabled,
-  type ModelOption,
+  type ModelVerdict,
 } from '@model/computeModelOptions';
 export {
   decideRunModel,

@@ -1,6 +1,5 @@
 import { Schema, SchemaGetter, SchemaIssue, Struct } from 'effect';
 
-import { JsonValueSchema } from './jsonValue';
 import { LineChangesSchema } from './lineChanges';
 import { Sha256Schema } from './identifiers';
 
@@ -109,7 +108,7 @@ const ToolFactSchema = Schema.Struct({
   kind: Schema.NonEmptyString,
   /** The fact kind's version `value` is written at. */
   version: Schema.Int.check(Schema.isGreaterThan(0)),
-  value: JsonValueSchema,
+  value: Schema.Json,
   /** The plugin's own aggregate the fact is about (`<plugin>:<key>`), hung
    *  under the calling run; absent, the fact is about the run itself. */
   aggregate: Schema.optional(Schema.NonEmptyString),
@@ -135,7 +134,7 @@ const ExecutedResultFieldsSchema = Schema.Struct({
   reads: Schema.optional(Schema.Array(Schema.NonEmptyString)),
   /** What a script's `await` gets for this call in place of
    *  `{ output, summary }`: a tool whose answer is data, not prose. */
-  value: Schema.optional(JsonValueSchema),
+  value: Schema.optional(Schema.Json),
   /** The key a later call of the same tool in this run may take this result
    *  under instead of running again; only an executed result carries one. */
   reuseKey: Schema.optional(Schema.NonEmptyString),
@@ -242,12 +241,7 @@ const SettledFileMetadataSchema = Schema.StructWithRest(
   // `undefined` admitted beside JSON: the optional fields read
   // `string | undefined`, which an index signature must cover in the
   // published declarations, and `JSON.stringify` drops such a key.
-  [
-    Schema.Record(
-      Schema.String,
-      Schema.Union([JsonValueSchema, Schema.Undefined]),
-    ),
-  ],
+  [Schema.Record(Schema.String, Schema.Union([Schema.Json, Schema.Undefined]))],
 );
 const SettledFileSchema = ToolFileAttachmentSchema.pipe(
   Schema.decodeTo(Schema.Unknown, {

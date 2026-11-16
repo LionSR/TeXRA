@@ -158,9 +158,13 @@ export interface ToolRow extends TranscriptRowBase {
   /** The run waited or ended while the call was open: the call never
    *  finished, so nothing records how it ended, and the row reads failed.
    *  A result that lands once the run runs again replaces it. The row
-   *  holds no text for it; each reader words it. */
+   *  holds no text for it; every reader says {@link CUT_BY_RUN_END_NOTE}. */
   readonly cutByRunEnd?: true;
 }
+
+/** What a call the run's end cut short ({@link ToolRow.cutByRunEnd}) reads
+ *  as, to the model reading the run, an export and the tool's card alike. */
+export const CUT_BY_RUN_END_NOTE = 'The task ended before this tool completed.';
 
 /** A web search the model ran; its headline is the query ({@link rowHeadline}). */
 export interface WebSearchRow extends TranscriptRowBase {

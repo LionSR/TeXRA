@@ -9,6 +9,7 @@ import { Schema, Struct } from 'effect';
 
 import { DELIVERY_FAMILY_PATTERN } from '@shared/deliveryTags';
 import { RunIdSchema } from './identifiers';
+import { ProcessExitSchema } from './runRecords';
 import { ScriptDeliverySummarySchema } from './scriptDelivery';
 import { StoredMediaSchema } from './storedTurn';
 import { TokenUsageStatsSchema } from './usage';
@@ -80,15 +81,8 @@ const ChildRunDeliverySchema = Schema.Struct({
       }),
     ),
   ),
-  /** How a background command exited: its code, a conventional one when it
-   *  timed out or had none of its own (`noExitCode`). */
-  exit: Schema.optional(
-    Schema.Struct({
-      code: Schema.Int,
-      timedOut: Schema.Boolean,
-      noExitCode: Schema.Boolean,
-    }),
-  ),
+  /** How a background command exited. */
+  exit: Schema.optional(ProcessExitSchema),
   /** How long the child ran, as it reads (`1.2s`). */
   wallTime: Schema.optional(Schema.String),
   /** A turn's or a script's answer, inline; an empty one reads

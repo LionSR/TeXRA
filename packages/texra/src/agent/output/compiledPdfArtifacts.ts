@@ -7,7 +7,7 @@ import {
   type FileLocation,
 } from '@texra-ai/harness/schemas';
 import { hasExtension, createRunStorageLocation } from '@texra-ai/harness/host';
-import { absentReason } from '@texra-ai/harness/node';
+import { meansAbsent } from '@texra-ai/harness/node';
 
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
@@ -62,7 +62,7 @@ const copyArtifactFile = Effect.fn('publishCompiledPdfArtifact.copy')(
     yield* fs.makeDirectory(path.dirname(destination), { recursive: true });
     yield* fs
       .remove(destination, { recursive: true })
-      .pipe(Effect.catchIf(absentReason, () => Effect.void));
+      .pipe(Effect.catchIf(meansAbsent, () => Effect.void));
     yield* fs.copy(source, destination, { overwrite: true });
   },
 );

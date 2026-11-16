@@ -43,7 +43,6 @@ import {
   AgentConfigSchema,
   AssembleTraceResultSchema,
   AgentRunListingEntrySchema,
-  JsonValueSchema,
   RunEndSchema,
   RunIdSchema,
   RunResultSchema,
@@ -166,7 +165,7 @@ export class ProjectStateFailed extends Schema.TaggedError<ProjectStateFailed>()
  *  unset. */
 const StoredStatesSchema = Schema.Record(
   Schema.String,
-  Schema.Struct({ value: Schema.optional(JsonValueSchema) }),
+  Schema.Struct({ value: Schema.optional(Schema.Json) }),
 );
 
 /** The project a call addresses: its folder, as the client spells it. */

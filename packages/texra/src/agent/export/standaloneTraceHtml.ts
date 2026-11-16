@@ -14,7 +14,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Schema, type PlatformError } from 'effect';
 
 // Local imports
-import { absentReason } from '@texra-ai/harness/node';
+import { meansAbsent } from '@texra-ai/harness/node';
 import type { Session } from '@texra-ai/harness';
 import {
   TraceMissingSchema,
@@ -93,7 +93,7 @@ export const traceHtml = Effect.fn('traceHtml')(function* (
   const template = yield* fs
     .readFileString(templatePath)
     .pipe(
-      Effect.catchIf(absentReason, () =>
+      Effect.catchIf(meansAbsent, () =>
         Effect.fail(new TraceViewerMissing({ path: templatePath })),
       ),
     );

@@ -19,7 +19,6 @@ import {
 
 import {
   RunIdSchema,
-  type JsonValue,
   type RunId,
   type ToolFact,
   NonNegativeIntSchema,
@@ -171,7 +170,7 @@ const InquiryThreadRowSchema = InquiryThreadSummarySchema.mapFields(
 
 /** A thread row as the transition rule reads it. */
 interface ThreadRow {
-  readonly value: JsonValue;
+  readonly value: Schema.Json;
   readonly parent: RunId | null;
 }
 

@@ -10,7 +10,7 @@ import {
   isPathWithin,
   pathToLocationIn,
 } from '@texra-ai/harness/host';
-import { absentReason } from '@texra-ai/harness/node';
+import { meansAbsent } from '@texra-ai/harness/node';
 import {
   normalizeFilePath,
   fileLocationDisplayPath,
@@ -91,7 +91,7 @@ export const OpenPdfTool = defineTool({
     const fs = yield* FileSystem.FileSystem;
     const info = yield* fs
       .stat(location.absolutePath)
-      .pipe(Effect.catchIf(absentReason, () => Effect.succeed(undefined)));
+      .pipe(Effect.catchIf(meansAbsent, () => Effect.succeed(undefined)));
     if (info?.type !== 'File') {
       return yield* Effect.fail(
         new ToolError(`PDF file not found: ${displayPath}`),

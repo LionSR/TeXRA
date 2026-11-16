@@ -64,7 +64,10 @@ export {
 
 // The rows: one kind each, the headline a row is listed by, and the
 // untruncated text a host elides to fit.
-export { rowHeadline } from '@shared/transcript/transcriptRow';
+export {
+  CUT_BY_RUN_END_NOTE,
+  rowHeadline,
+} from '@shared/transcript/transcriptRow';
 export type {
   CompactionActivityRow,
   ContextManagementRow,
