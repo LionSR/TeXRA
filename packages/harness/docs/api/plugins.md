@@ -153,7 +153,7 @@ interface AgentTrace {
    * no phase that never happens. A stream that ends without content emits
    * nothing at all.
    */
-  openRun(kind: MessageType): StreamHandle;
+  openStream(kind: MessageType): StreamHandle;
   /**
    * Open a tool call's card with its first log (`tool.start`). A log whose
    * status is already terminal opens and closes the card at once; one without
@@ -1829,7 +1829,7 @@ class StorageFs extends Context.Service<StorageFs, RootedFileSystem>()(
 
 ## StreamHandle
 
-Handle returned by `openRun` — append chunks then finalize.
+Handle returned by `openStream` — append chunks then finalize.
 
 ```ts
 interface StreamHandle {

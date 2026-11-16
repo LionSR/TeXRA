@@ -44,7 +44,7 @@ describe('createTestRunTrace response.finalized (issue #7086)', () => {
       'stream:test' as RunId,
     );
 
-    const toolRequest = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
+    const toolRequest = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
     toolRequest.append('I will inspect the file.');
     toolRequest.finalize();
 

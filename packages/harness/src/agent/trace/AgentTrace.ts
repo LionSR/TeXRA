@@ -21,7 +21,7 @@ import type { AgentEvent } from '@shared/session/agentEvent';
  *  the trace until the trace closes. */
 export type AgentTraceSink = (event: AgentEvent) => void;
 
-/** Handle returned by `openRun` — append chunks then finalize. */
+/** Handle returned by `openStream` — append chunks then finalize. */
 export interface StreamHandle {
   readonly id: string;
   /** Append a chunk of text; emits `stream.chunk`. */
@@ -89,7 +89,7 @@ export interface AgentTrace {
    * no phase that never happens. A stream that ends without content emits
    * nothing at all.
    */
-  openRun(kind: MessageType): StreamHandle;
+  openStream(kind: MessageType): StreamHandle;
   /**
    * Open a tool call's card with its first log (`tool.start`). A log whose
    * status is already terminal opens and closes the card at once; one without

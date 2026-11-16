@@ -253,8 +253,8 @@ export const modelInvokerLayer = (): Layer.Layer<
         FileSystem.FileSystem | SessionLog
       > {
         const trace = {
-          thinking: logger.openRun(MESSAGE_TYPES.THINKING),
-          output: logger.openRun(MESSAGE_TYPES.MODEL_RESPONSE),
+          thinking: logger.openStream(MESSAGE_TYPES.THINKING),
+          output: logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE),
         };
         // What the events leave behind: the completed turn if it arrived,
         // and the tail of the output text seen so far.

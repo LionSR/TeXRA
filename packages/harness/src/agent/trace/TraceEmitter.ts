@@ -150,7 +150,7 @@ export class TraceEmitter implements AgentTrace {
 
   // ─── Streams ───────────────────────────────────────────────────────
 
-  openRun(kind: MessageType): StreamHandle {
+  openStream(kind: MessageType): StreamHandle {
     const id = crypto.randomUUID();
     return new StreamHandleImpl(this, id, () =>
       this.emit({ type: 'stream.start', id, kind }),
@@ -230,7 +230,7 @@ class StreamHandleImpl implements StreamHandle {
   private readonly trace: TraceEmitter;
   readonly id: string;
   /**
-   * The `stream.start` emission, waiting for content (`openRun`); null once
+   * The `stream.start` emission, waiting for content (`openStream`); null once
    * started. A stream finalized without content emits no events at all,
    * while a finalize that carries text emits the start/end pair so
    * reasoning that only arrives in the final response still lands as a
