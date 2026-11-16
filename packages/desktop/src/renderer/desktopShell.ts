@@ -73,22 +73,14 @@ function sidebarAction(options: {
   title?: string;
   onClick: () => void;
 }): TemplateResult {
-  return html`
-    <wa-button
-      type="button"
-      class="shell-sidebar-action btn-ghost"
-      appearance="plain"
-      size="s"
-      title=${options.title ?? nothing}
-      @click=${options.onClick}
-    >
-      ${waIcon(options.icon, {
-        className: 'shell-sidebar-action-icon',
-        slot: 'start',
-      })}
-      <span>${options.label}</span>
-    </wa-button>
-  `;
+  return renderLabeledActionButton({
+    icon: options.icon,
+    text: options.label,
+    title: options.title,
+    kind: 'ghost',
+    className: 'shell-sidebar-action is-row',
+    onClick: options.onClick,
+  });
 }
 
 /**
@@ -165,7 +157,7 @@ function projectSection(
             })
           : html`<wa-button
               type="button"
-              class="shell-project-row btn-ghost is-row-content"
+              class="shell-project-row btn-ghost is-row is-row-content"
               appearance="plain"
               size="s"
               title=${key}

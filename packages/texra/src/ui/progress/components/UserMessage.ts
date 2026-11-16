@@ -94,10 +94,6 @@ export class UserMessage extends LitElement {
         opacity: 1;
       }
 
-      .user-message-copy.copy-success {
-        opacity: 1;
-      }
-
       .user-message-content {
         color: var(--wa-color-text-normal);
         white-space: pre-wrap;
