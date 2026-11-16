@@ -147,9 +147,6 @@ export function createMarkdownProcessor(
     const restoreProtectedLatex = (value: string): string =>
       restoreReferences(mathProtection.restore(macroProtection.restore(value)));
 
-    // markdown-it v15's `render(src, env)` forwards `env` to renderer rules,
-    // so the env object — carrying `restoreProtectedLatex` — reaches them
-    // without the old cast.
     const rendered = config.renderer.render(formatted, {
       restoreProtectedLatex,
     });

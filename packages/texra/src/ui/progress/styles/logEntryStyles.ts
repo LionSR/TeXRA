@@ -179,9 +179,8 @@ export const logEntryStyles = css`
     color: var(--color-text-secondary);
   }
 
-  /* Per-level log icons (replaces the former emoji map). Font Awesome glyphs
-     render in currentColor, so each level sets its own color to preserve the
-     at-a-glance severity coding the colored emoji used to carry. */
+  /* Per-level log icons. Font Awesome glyphs render in currentColor, so each
+     level sets its own color to keep the severity readable at a glance. */
   .log-level-icon {
     font-size: var(--font-size-sm);
     vertical-align: -0.1em;

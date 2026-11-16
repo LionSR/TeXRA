@@ -93,10 +93,8 @@ function syncWaClass(): void {
 
 /**
  * Imperatively swap the `wa-light`/`wa-dark` class on `<html>` to match the
- * provided dark/light intent. Both hosts (the VS Code webviews and the
- * Electron renderer) used to hand-roll this two-line dance; centralising it
- * here keeps the class names + ordering in one place so any future addition
- * (e.g. `wa-high-contrast`) doesn't need parallel edits.
+ * provided dark/light intent, for the VS Code webviews and the Electron
+ * renderer alike.
  */
 export function setWaColorScheme(dark: boolean): void {
   if (typeof document === 'undefined') return;
