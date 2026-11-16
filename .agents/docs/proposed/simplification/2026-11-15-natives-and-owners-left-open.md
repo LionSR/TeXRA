@@ -55,6 +55,13 @@ another open PR to merge first.
 
 - Item 3: `deletionCleanup.ts`'s two inline pipes are `logFailure`.
   `AgentRunLifecycle.ts` no longer has `logLifecycleWarning`.
+- Item 4: `replyDocuments.ts` reads its three files with
+  `readNormalizedFile`. A file that starts with a UTF-8 BOM now keeps it
+  (`readFileString` dropped it), so the output-structure pass no longer
+  strips a BOM when it rewrites the output file.
+- Item 5: the one script left on `fileURLToPath(new URL(...))`,
+  `packages/harness/scripts/publish-npm.mjs`, runs in the release workflow
+  and was left alone; the others are already converted.
 
 ## Checked and declined
 
