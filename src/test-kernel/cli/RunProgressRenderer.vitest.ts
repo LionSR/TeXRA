@@ -1,5 +1,13 @@
 import { layer } from '@effect/vitest';
-import { Effect, Fiber, Exit, Schema, Scope, type Context } from 'effect';
+import {
+  Effect,
+  Fiber,
+  Exit,
+  Schedule,
+  Schema,
+  Scope,
+  type Context,
+} from 'effect';
 import { expect } from 'vitest';
 import {
   AgentConfigSchema,
@@ -13,7 +21,6 @@ import { attachCliSessionProgressProjection } from '@cli/runtime/headless/sessio
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { holdTestRun, publishTestRows } from '@test/support/sessionTestUtils';
-import { waitForCondition } from '@test/support/asyncTestUtils';
 import {
   SessionGraph,
   sessionHandleOf,
@@ -149,10 +156,19 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                     // Painted once the renderer's fiber sees the running
                     // view, as many event-loop turns later as Effect's
                     // scheduling takes.
-                    yield* Effect.promise(() =>
-                      waitForCondition(() => written().includes(line), {
-                        timeoutMessage:
-                          'The run progress line was never painted.',
+                    yield* Effect.sync(() => written().includes(line)).pipe(
+                      Effect.repeat({
+                        until: (painted) => painted,
+                        schedule: Schedule.spaced('10 millis'),
+                      }),
+                      Effect.timeoutOrElse({
+                        duration: '2 seconds',
+                        orElse: () =>
+                          Effect.die(
+                            new Error(
+                              'The run progress line was never painted.',
+                            ),
+                          ),
                       }),
                     );
                     yield* Scope.close(scope, Exit.void);

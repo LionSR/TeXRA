@@ -51,7 +51,7 @@ import { notices } from '@cli/chat/tui/state/transcript';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import {
   answerOf,
-  parkedRoot,
+  waitingRoot,
   REAL_RUN_TIMEOUT,
   sessionStoreFaults,
   storedRows,
@@ -111,7 +111,7 @@ const rootStarts = (storage: string) =>
  */
 const stoppedConversation = (session: LocalSession) =>
   Effect.gen(function* () {
-    const runId = yield* parkedRoot(yield* sessionHandleOf(session));
+    const runId = yield* waitingRoot(yield* sessionHandleOf(session));
     yield* session.request({ kind: 'run.stop', runId, reason: 'user' });
     yield* session.view.changes.pipe(
       Stream.takeUntil((view) => {

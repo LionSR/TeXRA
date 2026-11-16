@@ -35,7 +35,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import { SessionRequests } from '@agent/runtime/requests';
 import { rootRun } from '@agent/runtime/rootLaunch';
-import { validationModelLayer } from '@cli/runtime/models/validationModel';
 import { SessionViewAccess } from '@shared/session/runHistory';
 import {
   persistentTestSession,
@@ -190,7 +189,7 @@ describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
   // The harness's process, with the notes plugin beside its built-ins.
   layer(
     Layer.provideMerge(
-      SessionGraph.with([notesPlugin], validationModelLayer),
+      SessionGraph.with({ plugins: [notesPlugin] }),
       FakeHost.layer(),
     ),
     { excludeTestServices: true },

@@ -250,9 +250,9 @@ jobs:
         # by suites that stub the platform (`platform: 'win32'`), and 17
         # assertions actively skip themselves when the runner really is
         # Windows — while costing ~16 min per shard against ~10 on Linux and
-        # setting the wall-clock for the entire workflow. The inventory of
-        # genuine Windows defects the matrix did surface is in
-        # 2026-07-29-open-source-readiness.md §4.6.
+        # setting the wall-clock for the entire workflow. The Windows-only
+        # defects it did find were path and filesystem assumptions, which the
+        # nightly run below catches within a day.
         #
         # What it does run on is the nightly schedule, alone (#12943). A suite
         # that hard-codes a `/` in a native absolute path, or mocks POSIX-only
@@ -403,7 +403,7 @@ jobs:
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
 
-      # The build the installers ship; type checking is the static-checks job's.
+      # The build the installers ship; the `typecheck` job type checks it.
       - name: Build desktop app
         run: pnpm run desktop:build
 
@@ -415,8 +415,6 @@ jobs:
         run: pnpm --filter @texra/desktop exec node -e "require('electron')"
 
       - name: Run desktop e2e suite
-        env:
-          TEXRA_NO_UPDATE_CHECK: '1'
         run: pnpm --filter @texra/desktop test:e2e
 
       - name: Upload desktop e2e results
