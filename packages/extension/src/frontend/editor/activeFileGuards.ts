@@ -12,6 +12,7 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import type { HostFailed } from '@texra/hosts/uiHosts';
+import { isLatexFile } from '@texra/shared/latexFileTypes';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'ActiveFileGuards';
@@ -29,7 +30,7 @@ const GUARD_FAILURE_MESSAGES = {
     level: 'warn',
   },
   unsupportedExtension: {
-    user: 'This command only works with LaTeX files (.tex).',
+    user: 'This command only works with LaTeX files (.tex, .ltx, .latex).',
     logTail: 'active document is not a LaTeX file.',
     level: 'warn',
   },
@@ -70,7 +71,7 @@ const getActiveLatexEditor = Effect.fn('activeFileGuards.getActiveLatexEditor')(
       return { status: 'noEditor' } satisfies ActiveFileGuardResult;
     }
 
-    if (!editor.document.fileName.toLowerCase().endsWith('.tex')) {
+    if (!isLatexFile(editor.document.fileName)) {
       yield* vscodeUi.notify(
         'warning',
         GUARD_FAILURE_MESSAGES.unsupportedExtension.user,
