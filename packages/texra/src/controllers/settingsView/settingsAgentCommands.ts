@@ -6,7 +6,7 @@
  */
 import * as path from 'node:path';
 
-import { Effect, FileSystem, absurd } from 'effect';
+import { Effect, FileSystem, Result, Schema, absurd } from 'effect';
 
 import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
@@ -20,6 +20,7 @@ import { entryTypeIn, readNormalizedFile } from '@texra-ai/harness/node';
 import { emitAppSignal } from '@texra-ai/harness/plugins';
 import {
   AGENT_FILE_EXTENSION,
+  AgentNameSchema,
   agentKey,
   isPackagedAgentSource,
   toErrorMessage,
@@ -44,17 +45,15 @@ import {
 
 type HostEffect = Effect.Effect<void, Error, ProcessServices>;
 
-/** Rejection reason for a proposed custom-agent file name, or null. */
-function validateTemplateAgentName(value: string): string | null {
-  if (!value) return 'Name cannot be empty';
-  if (value.includes('/') || value.includes('\\')) {
-    return 'Name cannot contain path separators';
-  }
-  if (value.includes(' ')) return 'Use underscores instead of spaces';
-  if (/[:#[\]{}|>&*!%@`]/.test(value)) {
-    return 'Name cannot contain YAML-special characters';
-  }
-  return null;
+/** The typed name with a `.yaml` or `.yml` suffix dropped, when the agent
+ *  definition schema accepts it as an agent's `name`; the catalog scan
+ *  decodes every agent file with that schema, so a name it refuses would
+ *  write a file that never loads. */
+function newAgentName(typed: string): string | undefined {
+  const decoded = Schema.decodeUnknownResult(AgentNameSchema)(
+    typed.trim().replace(/\.ya?ml$/u, ''),
+  );
+  return Result.isSuccess(decoded) ? decoded.success : undefined;
 }
 
 /**
@@ -67,14 +66,11 @@ const writeTemplateAgentFile = Effect.fn('settings.writeTemplateAgentFile')(
     input: { task: boolean; name: string; customDir: string },
     resourcesRoot: string,
   ) {
-    const baseName = input.name.endsWith(AGENT_FILE_EXTENSION)
-      ? input.name.slice(0, -AGENT_FILE_EXTENSION.length)
-      : input.name;
-    const fileName = `${baseName}${AGENT_FILE_EXTENSION}`;
+    const fileName = `${input.name}${AGENT_FILE_EXTENSION}`;
     const filePath = path.join(input.customDir, fileName);
     const description = input.task
-      ? `${baseName} — document task`
-      : `${baseName} — chat agent`;
+      ? `${input.name} — document task`
+      : `${input.name} — chat agent`;
     const fs = yield* FileSystem.FileSystem;
     if ((yield* entryTypeIn(fs, filePath)) !== undefined) {
       return {
@@ -92,7 +88,7 @@ const writeTemplateAgentFile = Effect.fn('settings.writeTemplateAgentFile')(
     );
     yield* fs.writeFileString(
       filePath,
-      agentFileFromTemplate(raw, { name: baseName, description }),
+      agentFileFromTemplate(raw, { name: input.name, description }),
     );
     return { ok: true, filePath } as const;
   },
@@ -385,13 +381,17 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       present.reported(
         'Failed to create agent',
         Effect.gen(function* () {
-          const name = yield* bindings.dialogs.input({
+          const typed = yield* bindings.dialogs.input({
             prompt: `Enter a name for the new ${message.task ? 'document task' : 'chat'} agent (without .yaml extension)`,
             placeholder: 'my_agent',
           });
-          if (!name) return;
-          const invalid = validateTemplateAgentName(name);
-          if (invalid) return yield* present.alert(invalid);
+          if (!typed) return;
+          const name = newAgentName(typed);
+          if (name === undefined) {
+            return yield* present.alert(
+              `"${typed}" cannot name an agent: start with a letter or digit, and use only letters, digits, "_" and "-".`,
+            );
+          }
           // The custom agent directory is the user's choice, outside every root,
           // so it is created through the process filesystem.
           const customDir = yield* customDirectory;
