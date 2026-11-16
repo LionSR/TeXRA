@@ -23,17 +23,17 @@ heading, body. `renderLoadingState` (`packages/texra/src/ui/wa/loadingState.ts`)
 is a centred, padded block with a spinner. Neither fits a single muted line
 inside a list or a card, so each such line has its own markup and class:
 
-| Site                                                                                 | Markup                                               |
-| ------------------------------------------------------------------------------------ | ---------------------------------------------------- |
-| `packages/texra/src/ui/progress/components/FileSelectGroup.ts`                       | `.file-list-placeholder`                             |
-| `packages/texra/src/ui/progress/components/StageList.ts`                             | `.log-placeholder`                                   |
-| `packages/extension/src/settingsView/frontend/components/shared/SettingsCatalog.ts`  | `.catalog-empty`, twice                              |
-| `packages/extension/src/settingsView/frontend/tabs/GitTab.ts`                        | `.subscription-owner-placeholder`                    |
-| `packages/extension/src/settingsView/frontend/components/profile/ProviderKeyList.ts` | `<em class="text-secondary">`, loading               |
-| `packages/extension/src/settingsView/frontend/components/memory/MemoryItem.ts`       | `<em class="text-secondary">`, loading, error, empty |
-| `packages/desktop/src/renderer/desktopCommandPalette.ts`                             | `.desktop-command-palette-empty`                     |
-| `packages/desktop/src/renderer/desktopShell.ts`                                      | `.shell-history-empty`                               |
-| `packages/desktop/src/renderer/reviewPane.ts`                                        | `.desktop-review-no-results`                         |
+| Site                                                                   | Markup                                               |
+| ---------------------------------------------------------------------- | ---------------------------------------------------- |
+| `packages/texra/src/ui/progress/components/FileSelectGroup.ts`         | `.file-list-placeholder`                             |
+| `packages/texra/src/ui/progress/components/StageList.ts`               | `.log-placeholder`                                   |
+| `packages/texra/src/ui/settings/components/shared/SettingsCatalog.ts`  | `.catalog-empty`, twice                              |
+| `packages/texra/src/ui/settings/tabs/GitTab.ts`                        | `.subscription-owner-placeholder`                    |
+| `packages/texra/src/ui/settings/components/profile/ProviderKeyList.ts` | `<em class="text-secondary">`, loading               |
+| `packages/texra/src/ui/settings/components/memory/MemoryItem.ts`       | `<em class="text-secondary">`, loading, error, empty |
+| `packages/desktop/src/renderer/desktopCommandPalette.ts`               | `.desktop-command-palette-empty`                     |
+| `packages/desktop/src/renderer/desktopShell.ts`                        | `.shell-history-empty`                               |
+| `packages/desktop/src/renderer/reviewPane.ts`                          | `.desktop-review-no-results`                         |
 
 The two loading lines also differ from every other loading state: no spinner
 and no `role="status"`.

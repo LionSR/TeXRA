@@ -98,11 +98,6 @@
         "./packages/extension/src/progressView/*.ts",
         "./packages/extension/src/progressView/*/index.ts"
       ],
-      "@settingsView/*": [
-        "./packages/extension/src/settingsView/*",
-        "./packages/extension/src/settingsView/*.ts",
-        "./packages/extension/src/settingsView/*/index.ts"
-      ],
       "@replacement/*": [
         "./packages/texra/src/replacement/*",
         "./packages/texra/src/replacement/*.ts",

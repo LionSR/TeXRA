@@ -48,7 +48,7 @@ working record. Take it with finding 1, which reworks the same functions.
 which dependency is `LATEX_DEPENDENCIES[dep].needs`
 (`packages/texra/src/shared/constants/latexToolchain.ts`), and the LaTeX tab
 restates it as a `pathKeys` column
-(`packages/extension/src/settingsView/frontend/tabs/LaTeXTab.ts`).
+(`packages/texra/src/ui/settings/tabs/LaTeXTab.ts`).
 
 Proposed: `dependencies: Record<LatexDependency, { installed; paths }>`, built
 by mapping over `LATEX_DEPENDENCIES`.

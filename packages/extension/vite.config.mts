@@ -4,11 +4,10 @@ import { resolve } from 'node:path';
 // Shared path aliases from tsconfig.json (single source of truth)
 import { aliases } from '../../scripts/aliases.mjs';
 
-// Each webview's entry module: the progress view renders from the app's UI
-// kit, the settings view from this package.
+// Each webview's entry module, in the app's UI kit.
 const webviewEntries = {
   progressView: '../texra/src/ui/progress/index.ts',
-  settingsView: 'src/settingsView/frontend/index.ts',
+  settingsView: '../texra/src/ui/settings/index.ts',
 } as const;
 
 /**

@@ -218,13 +218,11 @@ const VSCODE_FREE = [
   'packages/texra/src',
   'packages/llm/src',
   'packages/desktop/src',
-  'packages/extension/src/settingsView/frontend',
 ];
 
 /** Code bundled for a webview or a browser page. */
 const BROWSER_BUNDLES = [
   'packages/texra/src/ui',
-  'packages/extension/src/settingsView/frontend',
   'packages/desktop/src/renderer',
   'packages/trace-viewer/src',
 ];
@@ -296,7 +294,6 @@ const PROPERTY_ZONES: Zone<PropertyBan>[] = [
       'packages/texra/src',
       'packages/llm/src',
       'packages/trace-viewer/src',
-      'packages/extension/src/settingsView/frontend',
     ],
     except: RUNTIME_ENTRIES,
   },

@@ -25,7 +25,6 @@ import { cloneOverleafProject } from '@commands/git/gitCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import type { CommentCommandId } from '@frontend/comments/inlineComments';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import {
   settingsTabByCommand,
@@ -44,6 +43,7 @@ import {
 
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
+import { SettingsViewProvider } from './settingsView/SettingsViewProvider';
 import type { Session, Sessions, WorkspaceRoots } from '@texra-ai/harness';
 import type {
   ProcessRuntime,

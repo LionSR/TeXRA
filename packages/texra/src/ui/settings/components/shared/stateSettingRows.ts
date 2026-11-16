@@ -16,7 +16,7 @@ import { html, type TemplateResult } from 'lit';
 import {
   settingSignal,
   settingsSnapshotRevisions,
-} from '@settingsView/frontend/settingsState';
+} from '@ui/settings/settingsState';
 import type { SettingEnumChoice } from '@texra/shared/settingsView/settingRows';
 import {
   settingEnumChoices,

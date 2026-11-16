@@ -1,7 +1,7 @@
 import { Result, Schema } from 'effect';
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
-import '@settingsView/frontend';
+import '@ui/settings';
 import { html, render } from 'lit';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';

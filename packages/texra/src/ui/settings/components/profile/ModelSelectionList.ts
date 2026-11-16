@@ -12,7 +12,7 @@ import {
   pluralize,
 } from '@texra-ai/harness/schemas';
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
-import { settingSignal } from '@settingsView/frontend/settingsState';
+import { settingSignal } from '@ui/settings/settingsState';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import {
