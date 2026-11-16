@@ -2,11 +2,10 @@
 // denies even with invalid JSON (a policy hook must not fail open), and a
 // `permissionDecision` is read as the hook's answer, whatever the exit code.
 // A JSON answer longer than the context cap is read whole, never as raw text.
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { Effect } from 'effect';
+import { it as effectIt } from '@effect/vitest';
+import { Effect, FileSystem } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { interpretHookRun } from '@common/plugins/hookProtocol';
@@ -80,16 +79,17 @@ describe('the Claude Code hooks protocol at our edge', () => {
     });
   });
 
-  it('reads a JSON answer longer than the context cap as JSON', async () => {
-    const answer = json({
-      hookSpecificOutput: {
-        hookEventName: 'SessionStart',
-        additionalContext: 'x'.repeat(12_000),
-      },
-    });
-    const dir = mkdtempSync(join(tmpdir(), 'texra-hook-'));
-    const { run } = await Effect.runPromise(
-      runHook(
+  effectIt.live('reads a JSON answer longer than the context cap as JSON', () =>
+    Effect.gen(function* () {
+      const answer = json({
+        hookSpecificOutput: {
+          hookEventName: 'SessionStart',
+          additionalContext: 'x'.repeat(12_000),
+        },
+      });
+      const dir =
+        yield* (yield* FileSystem.FileSystem).makeTempDirectoryScoped();
+      const { run } = yield* runHook(
         {
           id: 'test/SessionStart/0/0',
           event: 'SessionStart',
@@ -100,10 +100,13 @@ describe('the Claude Code hooks protocol at our edge', () => {
         },
         '{}',
         { projectDir: dir, pluginRoot: dir, pluginData: join(dir, 'data') },
-      ).pipe(Effect.provide(nodePlatformServices)),
-    );
-    const verdict = interpretHookRun({ hook_event_name: 'SessionStart' }, run);
-    expect(verdict.status).toBe('ok');
-    expect(verdict.context === 'x'.repeat(10_000)).toBe(true);
-  });
+      );
+      const verdict = interpretHookRun(
+        { hook_event_name: 'SessionStart' },
+        run,
+      );
+      expect(verdict.status).toBe('ok');
+      expect(verdict.context === 'x'.repeat(10_000)).toBe(true);
+    }).pipe(Effect.provide(nodePlatformServices)),
+  );
 });
