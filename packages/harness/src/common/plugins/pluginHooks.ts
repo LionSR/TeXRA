@@ -3,8 +3,7 @@
 // runs as a child process in its own process group, with a scrubbed
 // environment, the workspace root as its cwd and a timeout, and the whole
 // group is killed when the hook times out, its caller is interrupted, or it
-// exits (`2026-09-28-code-plugins-hooks-v1.md`). What it prints is read by
-// `./hookProtocol`.
+// exits. What it prints is read by `./hookProtocol`.
 
 // Node imports
 import * as os from 'node:os';

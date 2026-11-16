@@ -29,26 +29,26 @@ Sixty-odd call sites lost their own `Cause.squash`. The ones left hand the
 squashed error to code that branches on its class, which is a decision and
 not a rendering.
 
+## Done on 2026-11-15
+
+- **The decision reading.** `readCause`
+  (`packages/harness/src/shared/session/causeReading.ts`) asks the four
+  questions in one order; `ModelInvoker.ts` (both exits) and
+  `loop/toolUseDispatch.ts` use it. The attempt exit's missing storage check
+  was not intended: a refused write now stops the turn there too, instead of
+  retrying when a provider error rode beside it.
+- **The trace payload.** The trace emitter reads a `Cause` through the log
+  sink's `raisedBy`, so `run/compaction.ts` and `run/backgroundTurn.ts` pass
+  the cause.
+
 ## Open, each needing a decision
 
-1. **The decision reading.** `ModelInvoker.ts` (the stream exit and the
-   attempt exit), `loop/toolUseDispatch.ts`, `tools/core/definition.ts` and
-   `run/compaction.ts` under `packages/harness/src` each sort a cause into
-   interrupt, storage rejection, defect or typed error. They are not
-   identical: the attempt exit in `ModelInvoker.ts` never asks
-   `findStorageRefusal`, and `definition.ts` re-fails the cause where the
-   others end the run. One classifier beside `findStorageRefusal`
-   (`packages/harness/src/shared/session/runHistory.ts`) would own the order
-   of the four questions; before writing it, decide whether the attempt
-   exit's missing storage check is intended. The eleven `hasInterruptsOnly`
-   reads that disagree with the cause-to-outcome mapping on a mixed cause
-   (noted in #14307) are the same decision.
-2. **The trace payload.** `AgentTrace` rows take `data` through
-   `toJsonValue`, not `formatLogData`, so six trace calls
-   (`run/compaction.ts`, `run/backgroundTurn.ts`,
-   `packages/texra/src/tools/documents/documentState.ts`) still squash.
-   Either the trace encoder reads a `Cause` the same way or those rows carry
-   the message only.
+1. `tools/core/definition.ts` re-fails the cause where the others end the
+   run; moving it onto `readCause` decides whether that difference stays.
+   `packages/texra/src/tools/documents/documentState.ts` still squashes for
+   its trace rows. The eleven `hasInterruptsOnly` reads that disagree with
+   the cause-to-outcome mapping on a mixed cause (noted in #14307) are the
+   same decision.
 
 ## Other harvested findings left for a decision
 

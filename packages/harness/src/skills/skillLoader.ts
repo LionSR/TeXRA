@@ -86,21 +86,18 @@ function extractFrontmatter(
 
 export type SkillIssueSeverity = 'error' | 'warning';
 
-export type SkillIssueCode =
-  | 'duplicate_name'
-  | 'duplicate_realpath'
-  | 'invalid_frontmatter'
-  | 'invalid_name'
-  | 'invalid_source'
-  | 'missing_source'
-  | 'missing_description'
-  | 'name_mismatch'
-  | 'read_error'
-  | 'source_read_error';
+/**
+ * What a reader branches on, where it does: `source_error` is a skill source
+ * that is missing, not the expected kind, or unreadable (the CLI's usage
+ * exit); `read_error` is a directory or file that could not be read, which
+ * becomes a `source_error` when it is a required source's own path. Every
+ * other issue says what it is in its message.
+ */
+export type SkillIssueCode = 'source_error' | 'read_error';
 
 export interface SkillLoadIssue {
   severity: SkillIssueSeverity;
-  code: SkillIssueCode;
+  code?: SkillIssueCode;
   message: string;
   path?: string;
   name?: string;
@@ -113,11 +110,10 @@ interface LoadedSkill {
 
 export function issue(
   severity: SkillIssueSeverity,
-  code: SkillIssueCode,
   message: string,
-  options: { path?: string; name?: string } = {},
+  options: { path?: string; name?: string; code?: SkillIssueCode } = {},
 ): SkillLoadIssue {
-  return { severity, code, message, ...options };
+  return { severity, message, ...options };
 }
 
 function normalizeSkillName(
@@ -135,7 +131,6 @@ function normalizeSkillName(
       errors.push(
         issue(
           'warning',
-          'name_mismatch',
           `Skill name "${name}" does not match directory "${directoryName}"`,
           { path: skillPath, name },
         ),
@@ -148,7 +143,6 @@ function normalizeSkillName(
     errors.push(
       issue(
         'warning',
-        'invalid_name',
         `Ignoring invalid skill name: ${parsed.failure.message}`,
         { path: skillPath },
       ),
@@ -163,7 +157,6 @@ function normalizeSkillName(
   errors.push(
     issue(
       'error',
-      'invalid_name',
       `Directory name cannot be used as a skill name: ${fallback.failure.message}`,
       { path: skillPath },
     ),
@@ -184,7 +177,7 @@ function normalizeSkillDescription(
 
   if (!description) {
     errors.push(
-      issue('error', 'missing_description', 'Skill description is required', {
+      issue('error', 'Skill description is required', {
         path: skillPath,
         name,
       }),
@@ -196,7 +189,6 @@ function normalizeSkillDescription(
     errors.push(
       issue(
         'warning',
-        'invalid_frontmatter',
         `Skill description exceeds ${SKILL_DESCRIPTION_MAX_LENGTH} characters and was truncated`,
         { path: skillPath, name },
       ),
@@ -237,7 +229,7 @@ export function loadCommandFile(
       if (!body)
         return {
           errors: [
-            issue('error', 'missing_description', 'Command file is empty', {
+            issue('error', 'Command file is empty', {
               path: file,
               name: nameResult.name,
             }),
@@ -257,7 +249,6 @@ export function loadCommandFile(
         errors.push(
           issue(
             'warning',
-            'invalid_frontmatter',
             `Ignoring the command's frontmatter: ${parsed.failure.message}`,
             { path: file, name: nameResult.name },
           ),
@@ -276,7 +267,7 @@ export function loadCommandFile(
     }),
     Effect.orElseSucceed((err): LoadedSkill => ({
       errors: [
-        issue('error', 'read_error', toErrorMessage(err), { path: file }),
+        issue('error', toErrorMessage(err), { path: file, code: 'read_error' }),
       ],
     })),
   );
@@ -299,12 +290,9 @@ export function loadSkillDirectory(
       if (!Predicate.isObject(frontmatter)) {
         return Effect.succeed<LoadedSkill>({
           errors: [
-            issue(
-              'error',
-              'invalid_frontmatter',
-              'SKILL.md frontmatter must be a YAML object',
-              { path: skillPath },
-            ),
+            issue('error', 'SKILL.md frontmatter must be a YAML object', {
+              path: skillPath,
+            }),
           ],
         });
       }
@@ -340,7 +328,7 @@ export function loadSkillDirectory(
     Effect.catchTag('SkillFrontmatterError', (err) =>
       Effect.succeed<LoadedSkill>({
         errors: [
-          issue('error', 'invalid_frontmatter', err.message, {
+          issue('error', err.message, {
             path: skillPath,
           }),
         ],
@@ -349,7 +337,7 @@ export function loadSkillDirectory(
     Effect.catch((err) =>
       Effect.succeed<LoadedSkill>({
         errors: [
-          issue('error', 'read_error', toErrorMessage(err), {
+          issue('error', toErrorMessage(err), {
             path: skillPath,
           }),
         ],

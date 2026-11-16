@@ -36,7 +36,7 @@ const cleanupIndentLog = Effect.fn('latex.cleanupIndentLog')(function* (
  * would succeed (rmdir) and delete it. An absent `dir` lists nothing; any
  * other listing failure is warned about and lists nothing too.
  */
-export const filesByPrefix = Effect.fn('latex.filesByPrefix')(function* (
+const filesByPrefix = Effect.fn('latex.filesByPrefix')(function* (
   dir: string,
   prefixes: ReadonlyArray<string>,
 ) {

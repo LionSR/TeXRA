@@ -1,8 +1,7 @@
 // A plugin's Claude Code hooks configuration, read as the reference writes
 // it (https://code.claude.com/docs/en/hooks): the `hooks.json` events, their
 // matchers and command handlers, and the tool names a matcher sees. What a
-// hook reads and prints is `./hookProtocol`'s
-// (`2026-09-28-code-plugins-hooks-v1.md`).
+// hook reads and prints is `./hookProtocol`'s.
 
 // Third-party imports
 import { Predicate, Schema } from 'effect';
@@ -25,7 +24,7 @@ const HookHandlerSchema = Schema.Struct({
   shell: Schema.optional(Schema.String),
   /** Accepted, not evaluated: the hook runs for every call its matcher
    *  matches, which the reference allows when it cannot tell what a command
-   *  runs (`2026-09-28-code-plugins-hooks-v1.md`). */
+   *  runs. */
   if: Schema.optional(Schema.String),
 });
 

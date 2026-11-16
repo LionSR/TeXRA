@@ -114,11 +114,9 @@ const TokenCount = Schema.NullOr(NonNegativeIntSchema);
 
 /** One completed provider turn. */
 export const StoredTurnSchema = Schema.Struct({
-  kind: Schema.Literal('http'),
   providerResponseId: Schema.NullOr(Schema.NonEmptyString),
   requestedOrigin: StoredOriginSchema,
   returnedModel: Schema.NullOr(Schema.NonEmptyString),
-  modelFingerprint: Schema.NullOr(Schema.String),
   content: StoredContentSchema,
   finishReason: Schema.Literals([
     'stop',
