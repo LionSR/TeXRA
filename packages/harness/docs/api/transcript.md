@@ -134,6 +134,15 @@ interface ContextManagementRow extends TranscriptRowBase {
 }
 ```
 
+## CUT_BY_RUN_END_NOTE
+
+What a call the run's end cut short ({@link ToolRow.cutByRunEnd}) reads
+as, to the model reading the run, an export and the tool's card alike.
+
+```ts
+const CUT_BY_RUN_END_NOTE: "The task ended before this tool completed."
+```
+
 ## dispatchedChildren
 
 The runs `run` launched that are not a script's calls: what its dispatch
@@ -680,7 +689,7 @@ interface ToolRow extends TranscriptRowBase {
   /** The run waited or ended while the call was open: the call never
    *  finished, so nothing records how it ended, and the row reads failed.
    *  A result that lands once the run runs again replaces it. The row
-   *  holds no text for it; each reader words it. */
+   *  holds no text for it; every reader says {@link CUT_BY_RUN_END_NOTE}. */
   readonly cutByRunEnd?: true;
 }
 ```

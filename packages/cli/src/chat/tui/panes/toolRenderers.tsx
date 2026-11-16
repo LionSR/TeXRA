@@ -15,6 +15,7 @@
 import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
 import { buildDiffHunks } from '@texra-ai/harness/host';
 import {
+  CUT_BY_RUN_END_NOTE,
   isMcpToolName,
   toolDisplayKind,
   transcriptText,
@@ -34,7 +35,6 @@ import { STATUS_DOT, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
 import type { ToolRow } from '@cli/chat/tui/state/sessionView';
 import { TOOL_STATUS } from '@ui/copy/runStatus';
-import { TOOL_CUT_BY_RUN_END_NOTE } from '@ui/copy/scriptStage';
 import { formatLineChanges } from '@ui/copy/format';
 
 // Local imports - CLI TUI rendering
@@ -160,7 +160,7 @@ function toolErrorLines(
   { model, cutByRunEnd }: ToolRow,
   elide: boolean,
 ): string[] {
-  if (cutByRunEnd === true) return [TOOL_CUT_BY_RUN_END_NOTE];
+  if (cutByRunEnd === true) return [CUT_BY_RUN_END_NOTE];
   if (model.errorPreview) return elidedLines(model.errorPreview, elide);
   return model.isError && !model.isUserFeedback ? ['(error)'] : [];
 }
