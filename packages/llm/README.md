@@ -113,15 +113,16 @@ pricing and persistence belong to the caller
 
 The other failures are tagged errors too:
 
-- `SecretsFailed` from a `CredentialStore`, and from a sign-in flow that
-  reads or writes the session. Its `reason` is `store-unavailable` or `io`.
-- `ReasoningChoiceError` from a strict `chooseReasoning`.
+- `SecretsFailed` from a `CredentialStore`, and from a sign-in that reads
+  or writes the session. Its `operation` names the store member that failed.
+- `ReasoningChoiceError` in the failure of the `Result` `chooseReasoning`
+  returns, for a reasoning request the model or its route cannot carry.
 - From `./node`: `SubscriptionOAuthError`, whose `kind` is `fatal`,
   `expired`, `transient` or `config` and whose `needsReauth` says whether to
   sign in again. Also `LoopbackTransportUnavailableError`, raised when the
-  browser sign-in cannot start, so the device-code flow can take over. The
-  sign-in programs fail with a plain `Error` whose `message` is the text to
-  show the user.
+  browser sign-in cannot start, so the device-code sign-in can take over.
+  The sign-ins fail with a plain `Error` whose `message` is the text to show
+  the user.
 
 ## The entries
 
@@ -130,13 +131,13 @@ The package is split by where its code runs, not by topic.
 | Entry    | What it holds                                                                                                                                                                                                                                         | Runs in      |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
 | `.`      | the turn contract (`Model`, the request, result and event schemas, `completedTurn`), `ModelError`, the provider catalog and API-key lookup over `CredentialStore`, model selection, the route decision and endpoint, the reasoning choice, `turnCost` | browser-safe |
-| `./node` | `bindModel(spec) → Binding`, the ChatGPT and Grok sign-in flows and their `SubscriptionCoordinator`s                                                                                                                                                  | Node         |
+| `./node` | `bindModel(spec) → Binding`, and `SubscriptionAccounts`: the ChatGPT and Grok accounts, each running its own sign-in                                                                                                                                  | Node         |
 
 Every type a public signature names is exported from one of the two entries.
 Each entry's exports, with their TSDoc and declarations, are listed in
 [`docs/api/index.md`](./docs/api/index.md) and
 [`docs/api/node.md`](./docs/api/node.md), generated from the source.
-The protocols (`api/`), the prefix fingerprint and the upload cache are
+The protocols (`api/`), the continuation anchor and the upload cache are
 internal: `bindModel` loads the chosen protocol with a literal
 `import('./api/<protocol>.js')`, so a run loads only its provider's SDK.
 oxlint holds the rest (`oxlint.config.mts`): nothing under `src/` imports another repo module, and
@@ -168,10 +169,11 @@ request is accepted or rejected: an unsupported control, an unrepresentable
 history or an unsupported media part fails there, before transport. Execution
 never rewrites an accepted request.
 
-Three optional members, present only where the binding serves them:
-`uploadFile` / `releaseUploads` (provider file ids, held in the model's memory
-only and never persisted) and `background` (`submit`, `observe`, `cancel`) for
-the protocols with remote execution. `observe` takes the accepted turn back
+Two optional members, present only where the binding serves them:
+`uploadFile` (provider file ids, held in the model's memory only and never
+persisted, and deleted when the binding's `Scope` closes), on a route that
+takes documents, and `background` (`submit`, `observe`, `cancel`) for the
+protocols with remote execution. `observe` takes the accepted turn back
 because a completion's continuation anchors to the exact history prefix it
 covers, which the operation handle deliberately does not copy.
 
@@ -193,32 +195,16 @@ store rather than the turn (`ROW_KINDS`, `packages/harness/src/shared/schemas/ro
 
 ## The tree
 
-| File                              | What it owns                                                                                                                                                            |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `turn.ts`                         | the `.` entry's turn contract: the `Model` interface, the request, configuration, result and event contract, the tool and reasoning schemas, `completedTurn`            |
-| `protocol.ts`                     | the protocol enum, binding identity (`BindingSchema`, `ModelOriginSchema`), JSON materialization, and the count and usage schemas                                       |
-| `message.ts`                      | the wire message and history schemas, the prepared-history rules and the call each tool result answers, the content parts, and the continuation prefixes                |
-| `errors.ts`                       | `ModelError` and the failure classification along it, `RemoteOperation` included                                                                                        |
-| `api/transport.ts`                | stream pull, tool-argument parsing, the abort-safe request helper                                                                                                       |
-| `api/openaiResponses.ts`          | `openaiResponsesModel`                                                                                                                                                  |
-| `api/parts.ts`                    | the part events every codec reports a response in, and the canonical-part algebra (identity, restatement, growth)                                                       |
-| `api/assembleTurn.ts`             | the one turn reducer over part events: identity, positions, deltas, call arguments, finish agreement, terminal validation                                               |
-| `api/openaiResponsesCodec.ts`     | the response-side schemas, content lowering, and the one Responses event decoder (stream, WebSocket, observation)                                                       |
-| `api/openaiResponsesUsage.ts`     | the usage receipt schema and its normalization, xAI's final cost included                                                                                               |
-| `api/openaiResponsesLower.ts`     | input lowering and the continuation anchor                                                                                                                              |
-| `api/openaiResponsesRequest.ts`   | preparing a turn, its parameters, the abort classification                                                                                                              |
-| `api/openaiResponsesWebSocket.ts` | the experimental WebSocket transport                                                                                                                                    |
-| `api/anthropicMessages.ts`        | `anthropicMessagesModel`                                                                                                                                                |
-| `api/googleInteractions.ts`       | `googleInteractionsModel`                                                                                                                                               |
-| `api/uploadCache.ts`              | the digest-keyed, model-scoped upload cache behind `uploadFile`                                                                                                         |
-| `api/prefixFingerprint.ts`        | the accepted-history fingerprint a background completion anchors on                                                                                                     |
-| `api/openaiError.ts`              | SDK error classification into `ModelError`                                                                                                                              |
-| `node.ts`                         | the `./node` entry: `bindModel`, the protocol choice, and the sign-in exports                                                                                           |
-| `api/configuration.ts`            | the vendor rules that turn a catalog model, its route and the caller's options into each protocol's configuration (`responsesConfiguration.ts`: the Responses vendors') |
-| `api/verdict.ts`                  | the verdict on a failure, read off the vendor's reply (`failureReply.ts`): status, retryability, scope, quota                                                           |
-| `providers/`                      | the provider plugins, the API-key providers and their key lookup, `CredentialStore`                                                                                     |
-| `models/`                         | model selection over llm-zoo, the route decision and its config and endpoint, the reasoning choice, a turn's cost                                                       |
-| `oauth/`                          | the ChatGPT (`chatgpt/`) and Grok (`xai/`) sign-in flows over the shared subscription coordinator, loopback and device flows                                            |
+By directory; the generated pages in [`docs/api/`](./docs/api/index.md) list
+every export, and each file's header says what it owns.
+
+| Directory        | What it owns                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/`           | the two entries (`index.ts`, `node.ts`: `bindModel`) and the contract they share: `turn.ts` (the `Model` interface, request, configuration, result and event schemas, `completedTurn`), `protocol.ts` (binding identity, origins, usage), `message.ts` (the history schemas, the prepared-history rules, `replayableHistory`, the continuation schemas), `errors.ts` (`ModelError`, `sdkModelError`, the plans)                                                                                                                   |
+| `src/api/`       | the three protocols, each an entry module with its own codec, lowering and request modules; what they share: the part events and the one turn reducer (`parts.ts`, `assembleTurn.ts`), turn preparation (`turnInput.ts`), the stored continuation's prefix rules (`continuation.ts`), background work (`background.ts`), the upload cache, the transport helpers; and the bind-time rules (`configuration.ts`, `responsesConfiguration.ts`) and failure verdict (`verdict.ts` over `failureReply.ts`) `bindModel` loads on demand |
+| `src/models/`    | model selection over llm-zoo, the route decision and the config and endpoint it fixes, the reasoning choice, a turn's cost                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `src/providers/` | the provider plugins, the API-key providers and their key lookup, `CredentialStore`                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `src/oauth/`     | the subscription accounts (`SubscriptionAccounts`) over one coordinator, the loopback and device-code sign-ins it runs, and each provider's policy (`chatgpt/`, `xai/`)                                                                                                                                                                                                                                                                                                                                                           |
 
 ## Who calls it
 
@@ -242,7 +228,10 @@ are contract.
 ## What it deliberately does not do
 
 Unsupported content fails explicitly; no protocol silently discards reasoning,
-media or evidence it cannot represent. The current explicit failures:
+media or evidence it cannot represent. Another protocol's reasoning or
+evidence is refused by every codec; only another model of the same protocol
+replays as plain content, by the contract above. The current explicit
+failures:
 
 - Hosted tools: the run's local `web_search` and `web_fetch` tools are the one
   system for web search and fetch, and the codecs request no provider-hosted

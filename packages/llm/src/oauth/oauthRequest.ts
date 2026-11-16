@@ -14,7 +14,7 @@ import { Duration, Effect, Schema } from 'effect';
 import { HttpBody, HttpClient, HttpClientRequest } from 'effect/http';
 
 // Local imports
-import { toErrorMessage } from './support.js';
+import { toErrorMessage } from '../errors.js';
 import {
   SubscriptionOAuthErrorKindSchema,
   type SubscriptionOAuthErrorKind,

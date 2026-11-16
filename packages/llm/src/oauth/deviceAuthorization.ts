@@ -1,6 +1,6 @@
 /**
  * Device-authorization polling as one Effect program, run by the xAI
- * RFC 8628 flow.
+ * RFC 8628 grant.
  *
  * The poll is `Effect.retry` while the endpoint reports "pending", spaced by
  * the server's interval with RFC 8628 `slow_down` growth applied to the
@@ -15,11 +15,6 @@
  */
 import { Duration, Effect, Ref, Schedule, Schema } from 'effect';
 
-import type {
-  SubscriptionCoordinator,
-  SubscriptionSession,
-} from './subscriptionCoordinator.js';
-
 /** The device-code prompt a host renders while polling for approval. */
 export interface SubscriptionDeviceCodePrompt {
   /** The one-time code the user types at the verification URL. */
@@ -28,16 +23,6 @@ export interface SubscriptionDeviceCodePrompt {
   readonly verificationUrl: string;
   /** Prefilled verification URL when the provider supplies one (xAI). */
   readonly verificationUrlComplete?: string;
-}
-
-/** What a provider's device-code sign-in takes from its host. */
-export interface DeviceLoginOptions<S extends SubscriptionSession> {
-  /** The coordinator that stores the session the sign-in grants. */
-  readonly coordinator: Pick<SubscriptionCoordinator<S>, 'storeTokens'>;
-  /** Show the user the verification URL + one-time code. */
-  readonly onPrompt: (
-    prompt: SubscriptionDeviceCodePrompt,
-  ) => Effect.Effect<void>;
 }
 
 /** The user has not approved yet; `slowDown` asks for a longer interval. */
