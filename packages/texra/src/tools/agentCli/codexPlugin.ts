@@ -63,7 +63,7 @@ export const codex: TexraPlugin = {
     codex_turn: 'check-double',
   },
   terminalOutput: ['codex'],
-  card: {
+  dashboard: {
     name: 'OpenAI Codex CLI',
     description:
       'OpenAI Codex agent runtime. Required by the Codex SDK for local code generation and analysis.',

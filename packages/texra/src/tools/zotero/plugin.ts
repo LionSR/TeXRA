@@ -87,7 +87,7 @@ export const zotero: TexraPlugin = {
       return { available: bbt, statusDetail };
     }),
   },
-  card: {
+  dashboard: {
     name: 'Zotero Integration',
     description:
       'Search, add items to, and export citations from your Zotero library. Requires Better BibTeX plugin.',

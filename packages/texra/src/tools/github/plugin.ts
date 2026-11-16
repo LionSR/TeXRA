@@ -73,7 +73,7 @@ export const githubActivity: TexraPlugin = {
       }),
     },
   }),
-  card: {
+  dashboard: {
     name: 'GitHub Activity Subscription',
     description:
       'Poll GitHub for pull request, issue, and repository activity. Path mirrors GitHub URL shape: "owner/repo" for coarse repo-wide events, "owner/repo/pulls/N" for per-PR comments/reviews/CI, "owner/repo/issues/N" for issue comments and lifecycle.',

@@ -28,7 +28,7 @@ export const externalInquiry: TexraPlugin = {
         Effect.provide(inquiryRecordsLayer),
       ),
   },
-  card: {
+  dashboard: {
     name: 'External Inquiry',
     description:
       'Use premium chat subscriptions such as ChatGPT Pro, Claude Opus, Gemini Deep Think, and Grok without an API key. The agent drafts a question, you paste the answer back, and the run continues. Useful for the deep-reasoning tiers that aren’t available through the API.',

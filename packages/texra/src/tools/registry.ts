@@ -148,7 +148,7 @@ export interface PluginCard {
  *  from the UI toolkit's set (`@ui/wa/iconNames`). A call with no icon, or
  *  with a name the toolkit does not draw, gets the generic one. */
 export type TexraPlugin = Plugin & {
-  readonly card?: PluginCard;
+  readonly dashboard?: PluginCard;
   readonly icons?: Readonly<Record<string, string>>;
   /** The tools, by normalized tool name, whose output the transcript paints
    *  as a terminal session, as it paints `bash`'s. */
@@ -182,7 +182,7 @@ const latexExtract: TexraPlugin = {
     extract_tikz_figures: 'image',
     extract_bib_entries: 'book',
   },
-  card: {
+  dashboard: {
     name: 'LaTeX Extraction',
     description:
       'Extract figures, TikZ diagrams, and bibliography entries from LaTeX documents.',
@@ -204,7 +204,7 @@ const latexDiagnostics = (editors: EditorRegistry): TexraPlugin => ({
     },
   }),
   icons: { diagnostics: 'list-check' },
-  card: {
+  dashboard: {
     name: 'LaTeX Diagnostics',
     description:
       'Report LaTeX compilation errors and warnings from the VS Code Problems panel.',
@@ -368,7 +368,7 @@ export const texraPlugins = (host: {
         glob: 'magnifying-glass',
         grep: 'magnifying-glass',
       },
-      card: {
+      dashboard: {
         name: 'File & Shell Operations',
         description:
           'Read, write, edit files and run shell commands. Includes glob/grep search.',
@@ -380,7 +380,7 @@ export const texraPlugins = (host: {
     {
       ...web,
       icons: { web_search: 'globe', web_fetch: 'globe' },
-      card: {
+      dashboard: {
         name: 'Web Search & Fetch',
         description:
           'Search the web with DuckDuckGo Instant Answers and fetch or extract content from URLs.',
@@ -389,7 +389,7 @@ export const texraPlugins = (host: {
     {
       ...memoryWorkflow,
       icons: { memory: 'database', executions: 'clock-rotate-left' },
-      card: {
+      dashboard: {
         name: 'Memory & Executions',
         description:
           'Persistent memory across sessions and the executions view of the runs an agent launched.',
@@ -397,7 +397,7 @@ export const texraPlugins = (host: {
     },
     {
       ...goal,
-      card: {
+      dashboard: {
         name: 'Goal Mode',
         description:
           'Propose a plan for approval and, when you run it as a goal, let the agent keep working turn after turn until the objective is done or it needs you.',
@@ -413,7 +413,7 @@ export const texraPlugins = (host: {
     {
       ...multiAgent,
       icons: { agent: 'circle-user' },
-      card: {
+      dashboard: {
         name: 'Multi-Agent Workflow',
         description:
           'Run named agents as children of a run: one at a time, or fanned out and joined from a script, resuming safely after interruption. An agent only gets the agent tool if its own configuration names it: this switch is an additional kill switch on top of that per-agent opt-in.',

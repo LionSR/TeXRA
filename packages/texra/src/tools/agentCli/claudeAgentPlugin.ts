@@ -115,7 +115,7 @@ export const claudeAgent: TexraPlugin = {
   // Anthropic's native text-editor tool, which the delegated agent can
   // report even though TeXRA registers no tool of that name.
   icons: { str_replace_editor: 'pencil' },
-  card: {
+  dashboard: {
     name: 'Claude Code CLI',
     description:
       'Spin off a Claude Code CLI agent that works in your workspace. It can read files, run commands, edit code, and search the web on your behalf. Use it to delegate focused exploration or implementation while another agent stays in charge.',
