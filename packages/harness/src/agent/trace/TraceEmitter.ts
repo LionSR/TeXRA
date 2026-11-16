@@ -11,7 +11,7 @@
  * Every event reaches the one sink the trace was built with, until it
  * closes; a sink that throws is logged and does not break the run.
  */
-import { Effect, Exit, Schema, Stream } from 'effect';
+import { Effect, Exit, Result, Schema, Stream } from 'effect';
 
 import { raisedBy } from '@logger/formatLogData';
 import { writeLogLine } from '@logger/logSink';
@@ -20,8 +20,10 @@ import {
   outcomeFromCause,
   RUN_OUTCOME,
   ToolCardEndSchema,
+  formatIssuesForDiagnostics,
   toJsonValue,
   type RunId,
+  type ToolCallStatus,
   type ToolCardEnd,
   type LogLevel,
   type MessageType,
@@ -31,6 +33,7 @@ import type { LogOptions } from '@shared/schemas/logPayload';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import type { AgentEvent } from '@shared/session/agentEvent';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { truncateSummary } from '@utils/text/stringUtils';
 
 import type {
   AgentTrace,
@@ -171,21 +174,49 @@ export class TraceEmitter implements AgentTrace {
     });
     if (log.status === undefined || log.status === 'in_progress')
       return new ToolCardHandleImpl(this, logId, log, true);
-    this.emit({
-      type: 'tool.end',
-      logId,
-      status: log.status,
-      log: cardEnd(log),
-    });
+    this.emit({ type: 'tool.end', logId, ...cardEnd(log, log.status) });
     return new ToolCardHandleImpl(this, logId, log, false);
   }
 }
 
-/** What a card's tool stated, as its `tool.end` stores it: parsed once
- *  here, where a plugin's log enters the trace, with its input and output
- *  as JSON and no status (the row states it). */
-const cardEnd = ({ status: _status, ...log }: ToolUseLog): ToolCardEnd =>
-  Schema.decodeUnknownSync(ToolCardEndSchema)(toJsonValue(log));
+/**
+ * What a card's tool stated, as its `tool.end` stores it: parsed once here,
+ * where a plugin's log enters the trace, with its input and output as JSON
+ * and no status (the row states it). A log the schema rejects (a plugin's
+ * JavaScript is not held to its types) never throws out of the plugin's
+ * call: it is logged at warn and the card keeps its name and input, with a
+ * bounded diagnostic naming the invalid fields, never their values, as its
+ * error; it reads failed unless it says it is still running.
+ */
+function cardEnd(
+  { status: _status, ...log }: ToolUseLog,
+  status: ToolCallStatus,
+): { readonly status: ToolCallStatus; readonly log: ToolCardEnd } {
+  const json = toJsonValue(log);
+  const decoded = Schema.decodeUnknownResult(ToolCardEndSchema)(json);
+  if (Result.isSuccess(decoded)) return { status, log: decoded.success };
+  const fields = [
+    ...new Set(
+      formatIssuesForDiagnostics(decoded.failure)
+        .map((issue) => issue.path)
+        .filter((path) => path.length > 0),
+    ),
+  ];
+  const error = truncateSummary(
+    `Malformed tool payload (${fields.length > 0 ? `invalid ${fields.join(', ')}` : 'unparseable payload'})`,
+    160,
+  );
+  const toolName = typeof log.toolName === 'string' ? log.toolName : '';
+  writeLogLine(CHANNEL, `Tool card of "${toolName}" rejected: ${error}`);
+  return {
+    status: status === 'in_progress' ? status : 'failed',
+    log: {
+      toolName,
+      ...(log.input === undefined ? {} : { input: toJsonValue(log.input) }),
+      error,
+    },
+  };
+}
 
 class ToolCardHandleImpl implements ToolCardHandle {
   private readonly trace: TraceEmitter;
@@ -212,8 +243,7 @@ class ToolCardHandleImpl implements ToolCardHandle {
     this.trace.emit({
       type: 'tool.end',
       logId: this.logId,
-      status,
-      log: cardEnd(log),
+      ...cardEnd(log, status),
     });
   }
 
