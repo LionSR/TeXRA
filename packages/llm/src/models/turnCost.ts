@@ -77,10 +77,9 @@ function standardCost(
 }
 
 /**
- * The cost of one turn, never negative. A plan route (ChatGPT/Codex, Grok,
- * the GLM coding plan, Kimi Code) is covered by the subscription, so every
- * rate is zero and a receipt the provider finalized bills an API key this turn
- * did not use. An API-key route bills the catalog's rates on its service
+ * The cost of one turn, never negative. A turn on a plan route costs nothing:
+ * its subscription paid, and a receipt the provider finalized bills an API
+ * key this turn did not use. An API-key route bills the catalog's rates on its service
  * tier; a model with a long-context tier bills the whole request at it once
  * the prompt, cached tokens included, is above it (llm-zoo's
  * `requestRates`). An xAI receipt carries its own final cost, which wins
@@ -91,7 +90,7 @@ export function turnCost(
   usage: TurnUsage,
   billing: { readonly plan: boolean; readonly tier?: 'fast' },
 ): number {
-  if (billing.plan) return costAt(model, usage, PLAN_RATES);
+  if (billing.plan) return 0;
   const provider = usage.providerUsage;
   if (provider?.kind === 'xai' && provider.costInUsdTicks !== null)
     return Math.max(0, provider.costInUsdTicks / 1e10);
@@ -115,12 +114,6 @@ export function listCost(
     requestRates(model, usage.inputTokens ?? 0, { tier }),
   );
 }
-
-const PLAN_RATES: TurnRates = Object.freeze({
-  inputPrice: 0,
-  outputPrice: 0,
-  cacheDiscountFactor: 1,
-});
 
 /** One turn's cost at `rates`, by its provider's accounting. */
 function costAt(
