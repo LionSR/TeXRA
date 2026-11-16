@@ -39,10 +39,10 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
    * diff view, so this panel's approve is the host's `toolEdit` verb: the
    * tool-edit controller reads the edited content back and sends the
    * `request.decide` itself, with the approval's session `grant`. A reject
-   * stays the runtime arm it is; a host without a diff view (the TUI)
+   * stays the runtime request it is; a host without a diff view (the TUI)
    * decides from the payload alone and never reaches this override.
    */
-  protected override emitRuntimeArm(runtime: RuntimeCommand): void {
+  protected override sendRuntimeDecision(runtime: RuntimeCommand): void {
     if (
       runtime.kind === 'request.decide' &&
       runtime.decision.action === 'approve'
@@ -57,7 +57,7 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
       );
       return;
     }
-    super.emitRuntimeArm(runtime);
+    super.sendRuntimeDecision(runtime);
   }
 
   protected override handleExtraKey(key: string): boolean {

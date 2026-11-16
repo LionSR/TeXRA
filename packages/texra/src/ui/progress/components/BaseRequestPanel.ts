@@ -251,20 +251,21 @@ export abstract class BaseRequestPanel<
         }),
       );
     }
-    const arm = approvalDecisionArm(
+    const request = approvalDecisionArm(
       { payload: this.permission, answeredBy: this.answeredBy },
       decision,
     );
-    if ('host' in arm) this.dispatchEvent(SessionUiEvents.host(arm.host));
-    else this.emitRuntimeArm(arm.runtime);
+    if ('host' in request)
+      this.dispatchEvent(SessionUiEvents.host(request.host));
+    else this.sendRuntimeDecision(request.runtime);
   }
 
   /**
-   * Send a decision's runtime arm. A panel whose host answers it with a verb
+   * Send a decision's runtime request. A panel whose host answers it with a verb
    * of its own (the tool-edit panel's approve) overrides this instead of
-   * re-implementing `emitAction`'s read-only check and host-arm dispatch.
+   * re-implementing `emitAction`'s read-only check and host dispatch.
    */
-  protected emitRuntimeArm(runtime: RuntimeCommand): void {
+  protected sendRuntimeDecision(runtime: RuntimeCommand): void {
     this.dispatchEvent(SessionUiEvents.runtime(runtime));
   }
 

@@ -168,7 +168,7 @@ export class RunTab extends LitElement {
     const metaAgentName =
       run.identity.kind === 'agent' && run.description ? run.label : undefined;
     // The rollup is the row's own fact: the rail carries it with no
-    // disclosure at all (W2), and a tree row hides it while open.
+    // disclosure at all, and a tree row hides it while open.
     const showRollup = run.rollup.total > 0 && !this.expanded;
     const menuItems: ActionMenuItem[] = [];
     if (run.actions.includes('rename')) {

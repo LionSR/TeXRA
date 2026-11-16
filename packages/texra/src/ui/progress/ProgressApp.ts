@@ -13,8 +13,8 @@
  * `view`, `surface`, and `host` are properties: the design harness assigns
  * fixtures to them, and the live host assigns its signals to the same
  * names. Every send leaves as a `runtime-request`, `host-request`, or
- * `surface-action` event with the arm as its detail; the root's owner
- * installs one listener per event.
+ * `surface-action` event with the command as its detail;
+ * `SessionSurfaces.listen` installs one listener per event.
  */
 
 // Third-party imports
@@ -445,7 +445,7 @@ export class ProgressApp extends LitElement {
     // one gets the file section; a chat attaches through the composer alone.
     // The selected option's `rounds` decides, and the host's launch keeps to
     // the same options: a selection naming none of them (an agent hidden
-    // since it was chosen) gets no file section, and its launch is refused.
+    // since it was chosen) gets no file section, and its launch is rejected.
     // Open on a proposal, its own `task` flag decides: the form offers only
     // agents of the proposal's kind, and a team's hidden member's option
     // carries no `rounds` to read.

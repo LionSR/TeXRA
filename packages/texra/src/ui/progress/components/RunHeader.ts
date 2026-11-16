@@ -470,7 +470,8 @@ export class RunHeader extends LitElement {
   }
 
   private renderRunElapsed(run: RunView): TemplateResult | typeof nothing {
-    // The fold keeps a start only while the run works: no clock otherwise.
+    // The session view keeps a start only while the run works: no clock
+    // otherwise.
     if (run.runStartedAt === null) return nothing;
     return html`<tool-timer .startTime=${run.runStartedAt}></tool-timer>`;
   }
