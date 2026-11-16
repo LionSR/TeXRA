@@ -249,6 +249,29 @@ interface SdkHttpFailure {
 }
 
 /**
+ * The HTTP facts to read from a provider SDK failure: those of an `APIError`
+ * that is not a connection error (a connection error never reached a reply).
+ * The SDK's two error classes are passed in so this module imports no provider
+ * SDK; both direct SDKs spell `status`, `headers` and `requestID` identically.
+ */
+export const sdkHttpFailure = (
+  cause: unknown,
+  apiError: new (...args: never[]) => {
+    readonly status: number | undefined;
+    readonly headers: Headers | undefined;
+    readonly requestID: string | null | undefined;
+  },
+  apiConnectionError: new (...args: never[]) => unknown,
+): SdkHttpFailure | undefined =>
+  cause instanceof apiError && !(cause instanceof apiConnectionError)
+    ? {
+        status: cause.status,
+        headers: cause.headers,
+        requestId: cause.requestID,
+      }
+    : undefined;
+
+/**
  * The one classification of a provider SDK failure. A `SyntaxError` is a
  * reply that could not be read (the provider's rejection, as its message
  * says), a failure with an HTTP reply is an authentication or provider

@@ -38,9 +38,9 @@ import {
   wireFail,
 } from './transport.js';
 import { filesApiUploads } from './uploadCache.js';
-import { openaiFailure } from './openaiError.js';
 import { withResponsesContinuation } from './openaiResponsesLower.js';
 import {
+  openaiFailure,
   responseEvents,
   responsesWire,
   sdkEvents,

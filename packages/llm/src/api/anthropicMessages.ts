@@ -29,7 +29,12 @@ import { assembleTurn } from './assembleTurn.js';
 import { boundTurn, resolveTurn } from './turnInput.js';
 import { replayableHistory, systemUpdateText } from '../message.js';
 import { originOf, sameModelOrigin } from '../protocol.js';
-import { ModelError, fillModelError, sdkModelError } from '../errors.js';
+import {
+  ModelError,
+  fillModelError,
+  sdkHttpFailure,
+  sdkModelError,
+} from '../errors.js';
 import {
   decodeWireOrFail,
   parseOutboundToolArguments,
@@ -65,13 +70,7 @@ import type {
 function sdkFailure(cause: unknown): ModelError {
   return sdkModelError(
     cause,
-    cause instanceof APIError && !(cause instanceof APIConnectionError)
-      ? {
-          status: cause.status,
-          headers: cause.headers,
-          requestId: cause.requestID,
-        }
-      : undefined,
+    sdkHttpFailure(cause, APIError, APIConnectionError),
     'The Anthropic transport failed.',
   );
 }

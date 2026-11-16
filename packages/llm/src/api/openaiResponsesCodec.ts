@@ -6,8 +6,13 @@ import { Effect, Result, Schema, Stream } from 'effect';
 import OpenAI from 'openai';
 
 // Local imports - canonical model contract
-import { ModelError, fillModelError, type RemoteOperation } from '../errors.js';
-import { openaiFailure } from './openaiError.js';
+import {
+  ModelError,
+  fillModelError,
+  sdkHttpFailure,
+  sdkModelError,
+  type RemoteOperation,
+} from '../errors.js';
 import {
   decodeWireOrFail,
   parseInboundToolArguments,
@@ -33,6 +38,15 @@ import {
 } from './parts.js';
 
 type Append = Extract<PartEvent, { kind: 'append' }>;
+
+/** Classifies failures shared by the two direct OpenAI protocols. */
+export function openaiFailure(cause: unknown): ModelError {
+  return sdkModelError(
+    cause,
+    sdkHttpFailure(cause, OpenAI.APIError, OpenAI.APIConnectionError),
+    'The model transport failed.',
+  );
+}
 
 // The codec is the lowest module of this split: the input lowering, the
 // request surface and the entry all name the response origin, so it lives
