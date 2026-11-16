@@ -1,3 +1,4 @@
+import { Schema } from 'effect';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import {
   commandCatalogById,
@@ -5,18 +6,11 @@ import {
   type CommandId,
   type SettingsTabCommandId,
 } from '@texra/shared/commands/catalog';
-import {
-  dispatchCommandFromRegistry,
-  type CommandHandler,
-} from '@texra/shared/commands/registry';
 import type { IconName } from '@ui/wa/iconNames';
 import { texraGuideUrl } from '@ui/copy/guide';
 import { toElectronAccelerator } from './accelerators';
 import type { OsPlatform } from '@texra/shared/osPlatform';
-import {
-  DESKTOP_SHELL_COMMANDS,
-  type DesktopWorkbenchKind,
-} from './desktopShellMessages.js';
+import { DESKTOP_SHELL_COMMANDS } from './desktopShellMessages.js';
 import type { DesktopPush } from './desktopOutboundMessages.js';
 
 export const DESKTOP_LOCAL_COMMANDS = {
@@ -35,61 +29,49 @@ export const DESKTOP_DOCS_URL = texraGuideUrl('desktop');
 type DesktopLocalCommandId =
   (typeof DESKTOP_LOCAL_COMMANDS)[keyof typeof DESKTOP_LOCAL_COMMANDS];
 
-const DESKTOP_MENU_GROUPS = [
-  [
-    'texra.showMainView',
-    DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
-    DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
-    'texra.showDashboard',
-    DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
-    DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
-    DESKTOP_LOCAL_COMMANDS.SHOW_BROWSER,
-  ],
-  // One row per settings page that has a command, in nav order. Teams are a
-  // section of Agents, so texra.showTeamSettings gets no row of its own.
-  [
-    'texra.showModels',
-    'texra.showAgents',
-    'texra.showTools',
-    'texra.showMemory',
-    'texra.showGitSettings',
-  ],
-] as const satisfies readonly (readonly CommandId[])[];
-
-const DESKTOP_FILE_COMMANDS = [
+/** Every command the palette lists and the shortcuts reach, in palette
+ *  order. The native menu places its items by hand. */
+const DESKTOP_PALETTE_COMMANDS = [
   DESKTOP_LOCAL_COMMANDS.SAVE_FILE,
   DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
-] as const satisfies readonly DesktopLocalCommandId[];
+  'texra.showMainView',
+  DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
+  DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
+  'texra.showDashboard',
+  DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
+  DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
+  DESKTOP_LOCAL_COMMANDS.SHOW_BROWSER,
+  // One row per settings page that has a command, in nav order. Teams are a
+  // section of Agents, so texra.showTeamSettings gets no row of its own.
+  'texra.showModels',
+  'texra.showAgents',
+  'texra.showTools',
+  'texra.showMemory',
+  'texra.showGitSettings',
+  DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
+] as const satisfies readonly CommandId[];
+
+export type DesktopCommandId = (typeof DESKTOP_PALETTE_COMMANDS)[number];
 
 /**
- * The desktop-local commands the renderer is allowed to post over IPC. Narrower
- * than `DESKTOP_LOCAL_COMMANDS` on purpose: the main-process actions for
- * `SAVE_FILE` and the two `TOGGLE_*` commands post *back* to the renderer, so
- * accepting them here would let a renderer message bounce.
+ * The commands the main process runs itself, since they reach the OS (a
+ * browser, a folder, the file picker). The renderer posts these by id; the
+ * main process posts every other command to the renderer as
+ * `desktop:runCommand`.
  */
-export const DESKTOP_SHELL_IPC_COMMANDS = [
+export const DESKTOP_MAIN_COMMANDS = [
   DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
   DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
   DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
 ] as const satisfies readonly DesktopLocalCommandId[];
 
-export const DESKTOP_HELP_COMMANDS = [
-  DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
-] as const satisfies readonly DesktopLocalCommandId[];
+export type DesktopMainCommandId = (typeof DESKTOP_MAIN_COMMANDS)[number];
 
-type DesktopMenuCommandId = (typeof DESKTOP_MENU_GROUPS)[number][number];
-type DesktopFileCommandId = (typeof DESKTOP_FILE_COMMANDS)[number];
-type DesktopHelpCommandId = (typeof DESKTOP_HELP_COMMANDS)[number];
-export type DesktopCommandId =
-  | DesktopFileCommandId
-  | DesktopMenuCommandId
-  | DesktopHelpCommandId;
-
-const DESKTOP_COMMAND_IDS: readonly DesktopCommandId[] = [
-  ...DESKTOP_FILE_COMMANDS,
-  ...DESKTOP_MENU_GROUPS.flat(),
-  ...DESKTOP_HELP_COMMANDS,
-];
+/** A native menu click on a command the renderer runs. */
+export const DesktopRunCommandMessageSchema = Schema.Struct({
+  command: Schema.Literal(DESKTOP_SHELL_COMMANDS.RUN_COMMAND),
+  id: Schema.Literals(DESKTOP_PALETTE_COMMANDS),
+});
 
 const DESKTOP_COMMAND_ICONS = {
   [DESKTOP_LOCAL_COMMANDS.SAVE_FILE]: 'floppy-disk',
@@ -109,7 +91,7 @@ const DESKTOP_COMMAND_ICONS = {
   [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: 'book',
 } as const satisfies Record<DesktopCommandId, IconName>;
 
-export interface DesktopCommandMenuEntry {
+export interface DesktopPaletteEntry {
   id: DesktopCommandId;
   label: string;
   category: string;
@@ -118,27 +100,25 @@ export interface DesktopCommandMenuEntry {
 }
 
 /**
- * Capabilities the desktop registry handlers need from the host. The handler
- * map requires every action a registered handler can reach, so a miswired
- * host fails to compile instead of producing a menu item that silently does
+ * What the desktop commands do, implemented once, by the renderer, which
+ * holds every UI action. The handler map requires every action, so a miswired
+ * renderer fails to compile instead of producing a command that silently does
  * nothing.
  */
 export interface DesktopCommandActions {
   showLauncher(): void;
-  openWorkbench(kind: DesktopWorkbenchKind): void;
+  openWorkbench(kind: 'logs' | 'browser'): void;
   showSettings(tab?: SettingsTarget): void;
   openDesktopDocs(): void;
   openLogFolder(): void;
   openWorkspaceFolder(): void;
   saveFile(): void;
-  toggleBottomBar(): void;
-  toggleSidePanel(): void;
+  showTerminal(): void;
+  showFiles(): void;
 }
 
-export function getDesktopCommandMenuEntries(
-  platform: OsPlatform,
-): DesktopCommandMenuEntry[] {
-  return DESKTOP_COMMAND_IDS.map((id) => {
+export function paletteEntries(platform: OsPlatform): DesktopPaletteEntry[] {
+  return DESKTOP_PALETTE_COMMANDS.map((id) => {
     const entry = commandCatalogById.get(id);
     if (!entry) throw new Error(`Missing command catalog entry: ${id}`);
 
@@ -156,76 +136,35 @@ export function getDesktopCommandMenuEntries(
   });
 }
 
-type DesktopCommandHandler = CommandHandler<DesktopCommandActions>;
-
-// Run an action and report the command as handled.
-function action(
-  run: (actions: DesktopCommandActions) => void,
-): DesktopCommandHandler {
-  return (actions) => {
-    run(actions);
-    return true;
-  };
-}
-
 const DESKTOP_COMMAND_HANDLERS = {
-  'texra.showMainView': action((a) => a.showLauncher()),
-  [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: action((a) => a.openWorkbench('logs')),
-  [DESKTOP_LOCAL_COMMANDS.SHOW_BROWSER]: action((a) =>
-    a.openWorkbench('browser'),
-  ),
-  [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: action((a) =>
-    a.toggleBottomBar(),
-  ),
-  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: action((a) =>
-    a.toggleSidePanel(),
-  ),
-  'texra.showDashboard': action((a) => a.showSettings()),
-  [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: action((a) => a.openLogFolder()),
-  [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: action((a) =>
+  'texra.showMainView': (a) => a.showLauncher(),
+  [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: (a) => a.openWorkbench('logs'),
+  [DESKTOP_LOCAL_COMMANDS.SHOW_BROWSER]: (a) => a.openWorkbench('browser'),
+  [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: (a) => a.showTerminal(),
+  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: (a) => a.showFiles(),
+  'texra.showDashboard': (a) => a.showSettings(),
+  [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: (a) => a.openLogFolder(),
+  [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: (a) =>
     a.openWorkspaceFolder(),
-  ),
-  [DESKTOP_LOCAL_COMMANDS.SAVE_FILE]: action((a) => a.saveFile()),
-  [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: action((a) =>
-    a.openDesktopDocs(),
-  ),
+  [DESKTOP_LOCAL_COMMANDS.SAVE_FILE]: (a) => a.saveFile(),
+  [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: (a) => a.openDesktopDocs(),
 } as const satisfies Record<
   Exclude<DesktopCommandId, SettingsTabCommandId>,
-  DesktopCommandHandler
+  (actions: DesktopCommandActions) => void
 >;
 
-// The `texra.show*` commands open the tab the catalog's `settingsTab` field
-// names (`settingsTabByCommand`), the same source the extension handler map uses.
-const SETTINGS_TAB_BY_COMMAND = new Map<string, SettingsTarget>(
-  Object.entries(settingsTabByCommand),
-);
-
+/** Run command `id`. The `texra.show*` settings commands open the page the
+ *  catalog names for them, as the extension's do. */
 export function dispatchDesktopCommand(
   id: DesktopCommandId,
   actions: DesktopCommandActions,
-): boolean | Promise<boolean> {
-  const settingsTab = SETTINGS_TAB_BY_COMMAND.get(id);
-  if (settingsTab) {
-    actions.showSettings(settingsTab);
-    return true;
-  }
-  return dispatchCommandFromRegistry(
-    id,
-    DESKTOP_COMMAND_HANDLERS,
-    actions,
-    (failure) => {
-      if (failure.kind === 'invalidArguments') {
-        console.error(
-          `[desktop] dispatch: invalid arguments for ${failure.id}: ${failure.error.message}`,
-        );
-        return;
-      }
-      // Every desktop command id has a handler, so an unhandled id means a
-      // stale IPC payload or schema drift. Surface it at error level so the
-      // bug shows up in support logs without crashing the click handler.
-      console.error(`[desktop] dispatch: unhandled command ${failure.id}`);
-    },
-  );
+): void {
+  if (isSettingsCommand(id)) actions.showSettings(settingsTabByCommand[id]);
+  else DESKTOP_COMMAND_HANDLERS[id](actions);
+}
+
+function isSettingsCommand(id: CommandId): id is SettingsTabCommandId {
+  return Object.hasOwn(settingsTabByCommand, id);
 }
 
 /**

@@ -365,16 +365,17 @@ export async function showLauncher(launched: LaunchedApp): Promise<void> {
 
 type DesktopWorkbenchKind = 'logs';
 
+/** Open a workbench tab as the native menu's View item does. */
 export async function openWorkbench(
   launched: LaunchedApp,
   kind: DesktopWorkbenchKind,
 ): Promise<void> {
-  await launched.page.evaluate((nextKind) => {
+  await launched.page.evaluate(() => {
     window.postMessage(
-      { command: 'desktop:openWorkbench', kind: nextKind },
+      { command: 'desktop:runCommand', id: 'texra.desktop.showLogs' },
       '*',
     );
-  }, kind);
+  });
   await launched.page.waitForFunction(
     (targetKind) => {
       const tab = document.querySelector<HTMLElement>(

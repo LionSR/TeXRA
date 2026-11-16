@@ -55,10 +55,7 @@ import {
 } from './desktopProjectSurface.js';
 import { DesktopPromptController } from './desktopPromptController.js';
 import { SETTINGS_VIEW_INBOUND_COMMANDS } from './desktopSettingsIpc.js';
-import {
-  createDesktopShellActions,
-  createDesktopShellIpc,
-} from './desktopShellIpc.js';
+import { createDesktopShellCommands } from './desktopShellIpc.js';
 import { checkForDesktopUpdate } from './desktopUpdateChecker.js';
 import { openWindowOnboarding } from './desktopWindowOnboarding.js';
 import { createDesktopWindowHost } from './desktopWindowHost.js';
@@ -187,15 +184,10 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
 
   const onboarding = yield* openWindowOnboarding(runtime);
 
-  const shellActions = createDesktopShellActions(host.post, {
+  const shellCommands = createDesktopShellCommands(host.post, {
     openExternalUrl: previewHost.openExternal,
     openLogFolder: () => previewHost.openPath(getDesktopLogDirectory()),
     openWorkspaceFolder: () => navigation.openFolder(),
-    showLauncher: () => {
-      const attached = surface.attached();
-      if (!attached) return;
-      bindings.get(attached.key)?.bridge.surfaceAction({ kind: 'selectNew' });
-    },
     onAsyncError: host.reportAsyncError,
     spawn,
   });
@@ -244,7 +236,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     menuRecent = recent;
     Menu.setApplicationMenu(
       Menu.buildFromTemplate(
-        buildDesktopMenuTemplate(shellActions, {
+        buildDesktopMenuTemplate(shellCommands.run, {
           roots: recent,
           open: (root) => spawn(host.reported(navigation.open(root))),
           clear: () => spawn(host.reported(projects.clearRecent())),
@@ -358,7 +350,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
       showSaveDialog: (dialogOptions) =>
         dialog.showSaveDialog(window, dialogOptions),
     }),
-    createDesktopShellIpc(shellActions),
+    shellCommands.routes,
   ]) {
     for (const [command, route] of Object.entries(routes)) {
       if (commandRoutes.has(command)) {

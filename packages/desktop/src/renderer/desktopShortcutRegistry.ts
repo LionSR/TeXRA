@@ -3,7 +3,7 @@ import { toElectronAccelerator } from '../shared/accelerators';
 import type { OsPlatform } from '@texra/shared/osPlatform';
 import {
   dispatchDesktopCommand,
-  getDesktopCommandMenuEntries,
+  paletteEntries,
   type DesktopCommandActions,
 } from '../shared/desktopCommandSurface';
 
@@ -11,7 +11,7 @@ export const DESKTOP_COMMAND_PALETTE_ID = 'texra.desktop.showCommands';
 
 /**
  * The command palette has no menu entry, so its catalog row is read here
- * rather than coming from `getDesktopCommandMenuEntries`. Sole owner of that
+ * rather than coming from `paletteEntries`. Sole owner of that
  * read: the shell's accelerator hints call it too, before this registry
  * exists (a bootstrap failure leaves no registry at all).
  */
@@ -49,7 +49,7 @@ export function createDesktopShortcutRegistry(
   const { platform } = options;
   const entries = [
     desktopCommandPaletteShortcut(platform),
-    ...getDesktopCommandMenuEntries(platform),
+    ...paletteEntries(platform),
   ];
 
   function handleKeydown(event: KeyboardEvent): void {

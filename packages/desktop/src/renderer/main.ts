@@ -41,10 +41,10 @@ import { formatDesktopAccelerator } from '../shared/accelerators';
 import type { OsPlatform } from '@texra/shared/osPlatform';
 import { type Shell } from './shell';
 
-import { type DesktopLayoutPanel } from '../shared/desktopShellMessages';
 import {
   DESKTOP_LOCAL_COMMANDS,
-  getDesktopCommandMenuEntries,
+  dispatchDesktopCommand,
+  paletteEntries,
   type DesktopCommandActions,
   type DesktopCommandId,
 } from '../shared/desktopCommandSurface';
@@ -244,15 +244,15 @@ const rendererPlatform = ((): OsPlatform => {
   return 'linux';
 })();
 document.body.dataset.desktopPlatform = rendererPlatform;
-const desktopMenuEntries = getDesktopCommandMenuEntries(rendererPlatform);
+const desktopPaletteEntries = paletteEntries(rendererPlatform);
 const shortcutAcceleratorsById = new Map<string, string | undefined>(
-  desktopMenuEntries.map((entry) => [entry.id, entry.accelerator]),
+  desktopPaletteEntries.map((entry) => [entry.id, entry.accelerator]),
 );
 // One name per action: chrome labels and tooltips quote the command catalog
 // verbatim (the same source the palette reads) instead of paraphrasing it in
 // sentence case.
 const commandLabelsById = new Map<string, string>(
-  desktopMenuEntries.map((entry) => [entry.id, entry.label]),
+  desktopPaletteEntries.map((entry) => [entry.id, entry.label]),
 );
 const commandPaletteShortcut = desktopCommandPaletteShortcut(rendererPlatform);
 shortcutAcceleratorsById.set(
@@ -681,8 +681,8 @@ const desktopRendererCommandActions: DesktopCommandActions = {
   saveFile: () => {
     currentWorkbench().saveActiveEditor();
   },
-  toggleBottomBar: showTerminalView,
-  toggleSidePanel: showFilesView,
+  showTerminal: showTerminalView,
+  showFiles: showFilesView,
 };
 const shortcuts = createDesktopShortcutRegistry({
   document,
@@ -703,14 +703,13 @@ function returnToLauncher(): void {
   projectSessions.act(shell.active, { kind: 'selectNew' });
 }
 
-const LAYOUT_PANEL_TOGGLES: Record<DesktopLayoutPanel, () => void> = {
-  bottomBar: showTerminalView,
-  sidePanel: showFilesView,
-};
-
 const routeMessage = createMessageRoutes({
-  'desktop:saveFile': () => {
-    projectWorkbenches.get(shell.active)?.saveActiveEditor();
+  // A native menu click. Every command acts on the shown project's
+  // workbench, so none runs before the project list arrives.
+  'desktop:runCommand': (message) => {
+    if (projectWorkbenches.has(shell.active)) {
+      dispatchDesktopCommand(message.id, desktopRendererCommandActions);
+    }
   },
   // `refresh()` re-lists from the root and drops the expansion state, which is
   // the same reset the Files rail already performs each time it is opened —
@@ -725,14 +724,7 @@ const routeMessage = createMessageRoutes({
     if (message.session === shell.active) settingsDialog.close();
     project.openDocument(message.target);
   },
-  'desktop:openWorkbench': (message) =>
-    projectWorkbenches.get(shell.active)?.workbench.openKind(message.kind),
   'desktop:openSettings': (message) => settingsDialog.open(message.tab),
-  'desktop:toggleLayout': (message) => {
-    if (projectWorkbenches.has(shell.active)) {
-      LAYOUT_PANEL_TOGGLES[message.panel]();
-    }
-  },
   'desktop:setLog': (message) => logsController.applySnapshot(message),
   'desktop:showDiff': (message) => {
     const project = projectWorkbenches.get(message.session);
