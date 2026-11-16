@@ -143,7 +143,7 @@ export interface SwitchRefusal {
  * the route cannot carry (`@none` on a model that always thinks), is refused
  * here, not by that bind inside the loop.
  */
-export const admitSwitch = Effect.fn('admitSwitch')(
+export const acceptSwitch = Effect.fn('acceptSwitch')(
   function* (
     selected: SelectedModel,
     backend: string,

@@ -95,7 +95,7 @@ const persistCompletedChild = (
       `executions/${childRunId}/${relativePath}`,
     );
     yield* publishTestRunStart(session, parentId);
-    yield* Context.get(session, SessionLog).settled;
+    yield* Context.get(session, SessionLog).drained;
     yield* seedRows(Context.get(session, SessionLog))([
       runStart(childRunId, {
         identity: { kind: 'agent', agent: 'draft' },

@@ -9,7 +9,7 @@
 import { Schema } from 'effect';
 
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
-import { JsonValueSchema, PROGRAM_TOOL_NAME } from '@shared/schemas';
+import { PROGRAM_TOOL_NAME } from '@shared/schemas';
 import { defineTool, type DefinedTool } from '@tools/core/definition';
 
 import { launchChildAgent } from './AgentTool';
@@ -36,7 +36,7 @@ const ProgramInputSchema = Schema.Struct({
     'Output paths, used when one is not among `inputFiles`. Otherwise the program writes its own outputs, or revises the inputs when it names none.',
   ),
   args: Schema.optional(
-    Schema.NullOr(Schema.Record(Schema.String, JsonValueSchema)),
+    Schema.NullOr(Schema.Record(Schema.String, Schema.Json)),
   ).annotate({
     description: "The program's own arguments, as its description names them.",
   }),

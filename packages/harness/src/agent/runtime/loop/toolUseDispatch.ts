@@ -59,7 +59,7 @@ import {
 import { SessionRoots } from '@platform/rootedFs';
 import {
   qualifyAggregateId,
-  SettledToolResultSchema,
+  FinishedToolResultSchema,
   toJsonValue,
   type AggregateId,
   type DispatchFacts,
@@ -76,7 +76,7 @@ import { consumedRow } from '@shared/session/runFacts';
 import { type RunHistoryDraft, type RunState } from '@shared/session/runState';
 import {
   attemptOf,
-  callSettlementOf,
+  callResultOf,
   resumedAttempt,
   type ToolCallResult,
   type CallStatus,
@@ -165,9 +165,9 @@ const recordOf = (dispatch: Dispatch, state: RunState, callId: string) =>
     : null;
 
 /** The result of `callId` the rows committed, or null. */
-const settlementOf = (dispatch: Dispatch, state: RunState, callId: string) =>
+const finishedCall = (dispatch: Dispatch, state: RunState, callId: string) =>
   state.pendingResponse?.responseId === dispatch.responseId
-    ? callSettlementOf(state.pendingResponse, callId)
+    ? callResultOf(state.pendingResponse, callId)
     : null;
 
 /** The calls the `script` call `scriptCallId` issued, as rows record them. */
@@ -181,7 +181,7 @@ const issuedBy = (state: RunState, scriptCallId: string) =>
  *  (own rows) and `facts` dropped, `files` without their bytes, `diagnostics`
  *  narrowed to JSON; a non-JSON value here is a defect, refused not stored. */
 const storedResult = (result: ToolResult): ToolCallResult['result'] =>
-  Schema.decodeUnknownSync(SettledToolResultSchema)(result);
+  Schema.decodeUnknownSync(FinishedToolResultSchema)(result);
 
 /** A duplicate's copy of its primary's result: no edits, no files. */
 const withoutEffects = (
@@ -295,11 +295,11 @@ const commitResult = (
   card = false,
 ) => commit(call, [resultRow(call, attempt, result, card)]);
 
-/** Settle a call that has no result as skipped for `reason`, closing the
+/** Finish a call that has no result as skipped for `reason`, closing the
  *  card an attempt of it opened; one that never started has none. */
 const skipCall = (
   call: Call,
-  status: Exclude<CallStatus, { kind: 'settled' }>,
+  status: Exclude<CallStatus, { kind: 'finished' }>,
   reason: string,
 ) => {
   const reached = attemptOf(status);
@@ -319,7 +319,7 @@ const skipCall = (
 /**
  * Finish one call from where its rows left it, under `place`: the script
  * that issued it, or the door a `script` call issues its own through. A
- * settled call keeps its result; a duplicate derives its primary, effects
+ * finished call keeps its result; a duplicate derives its primary, effects
  * stripped; a call after a group that `ended` the turn, one untouched in a
  * recovered response, and a started body that may have run and may not be
  * replayed are skipped, closing their cards; any other runs at the attempt
@@ -341,9 +341,9 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
   const status: CallStatus = recordOf(dispatch, state, fact.callId)?.status ?? {
     kind: 'issued',
   };
-  if (status.kind === 'settled') return;
+  if (status.kind === 'finished') return;
   if ('duplicateOf' in fact && fact.duplicateOf !== null) {
-    const primary = settlementOf(dispatch, state, fact.duplicateOf);
+    const primary = finishedCall(dispatch, state, fact.duplicateOf);
     if (primary !== null)
       yield* commitResult(call, Math.max(1, attemptOf(status)), {
         disposition: 'duplicate',
@@ -589,7 +589,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
 /**
  * The door a `script` call's guest issues calls through: the same per-call
  * program, each call's card under the script's own card. A resumed script
- * is handed back what its rows settled, in commit order, before any call
+ * is handed back what its rows finished, in commit order, before any call
  * runs again; a call at a recorded `seq` that differs is a divergence. Built
  * in the call body's scope, which owns the calls the guest issues and ends
  * them (`RunCallShape.scriptCalls`).
@@ -599,11 +599,11 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
   script: DispatchFacts,
 ) {
   const { run, cell, step, responseId, session } = dispatch;
-  // What its rows settled reaches the guest in commit order, first: each waits
+  // What its rows finished reaches the guest in commit order, first: each waits
   // until the guest holds the one before it; a call that runs, until the last.
   const replay = issuedBy(yield* cell.current, script.callId)
     .flatMap(({ call, status }) =>
-      status.kind === 'settled' ? [[status.at, call.seq] as const] : [],
+      status.kind === 'finished' ? [[status.at, call.seq] as const] : [],
     )
     .toSorted(([a], [b]) => a - b)
     .map(([, seq]) => seq);
@@ -641,7 +641,7 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
     yield* Deferred.succeed(slot(places, seq), undefined);
     if (done !== null)
       for (const call of after) if (call !== null) yield* Deferred.await(call);
-    // Nothing runs again until the guest holds all that settled.
+    // Nothing runs again until the guest holds all that finished.
     yield* handedBack(seq);
     if (done === null) return;
     // A call that did not finish (a stop, a durable write that failed)
@@ -661,7 +661,7 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
           Effect.forEach(
             issuedBy(state, script.callId),
             ({ call: fact, status }) => {
-              if (status.kind === 'settled') return Effect.void;
+              if (status.kind === 'finished') return Effect.void;
               const call: Call = {
                 dispatch,
                 fact,
@@ -677,7 +677,7 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
                   ? Effect.void
                   : decideRequest(run.runId, last.requestId, {
                       action: 'cancel',
-                      cause: 'The script ended before this call settled.',
+                      cause: 'The script ended before this call finished.',
                     }).pipe(
                       Effect.provideService(
                         SessionLog,
@@ -720,10 +720,10 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
     shared,
   });
 
-  /** Settles `op`: from its rows when they settled it; else by `answer`,
+  /** Finishes `op`: from its rows when they finished it; else by `answer`,
    *  one of the script's host functions, recorded with no card; else by
    *  running its tool through the per-call program. */
-  const settle = Effect.fn('toolUse.scriptCall')(function* (
+  const answerScriptCall = Effect.fn('toolUse.scriptCall')(function* (
     op: ScriptOp,
     source: ScriptSource,
     answer?: () => ToolResultPayload['result'],
@@ -754,7 +754,7 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
       section: op.section,
     };
     const call: Call = { dispatch, fact, input, stage: script.logId };
-    if (known?.status.kind === 'settled') {
+    if (known?.status.kind === 'finished') {
       // Replayed from its row: it takes no lane and does not run.
       yield* inLane(op.seq, null, Effect.void);
     } else if (answer !== undefined) {
@@ -773,14 +773,14 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
         tool?.lane ?? 'barrier',
         finishCall(call, { script: scopeOf(source), scriptCalls: null }),
       );
-    const settled = settlementOf(dispatch, yield* cell.current, callId);
-    if (settled === null)
+    const finished = finishedCall(dispatch, yield* cell.current, callId);
+    if (finished === null)
       return yield* Effect.die(
-        new Error(`Script call ${callId} is unsettled after its run.`),
+        new Error(`Script call ${callId} has no result after its run.`),
       );
-    return { result: settled.result, attachments: settled.attachments };
+    return { result: finished.result, attachments: finished.attachments };
   });
-  /** Settles `op` on its own fiber of the door's map; an await the
+  /** Finishes `op` on its own fiber of the door's map; an await the
    *  sandbox stops stops it. */
   const call = (
     op: ScriptOp,
@@ -790,7 +790,7 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
     Effect.suspend(() => {
       const fiber = fork(
         scriptCallId(script.callId, op.seq),
-        settle(op, source, answer),
+        answerScriptCall(op, source, answer),
       );
       return Effect.onInterrupt(Fiber.join(fiber), () =>
         Fiber.interrupt(fiber),
@@ -846,9 +846,9 @@ const groupsOf = (calls: readonly DispatchFacts[]): DispatchFacts[][] => {
 const deliver = Effect.fn('toolUse.deliver')(function* (dispatch: Dispatch) {
   const { run, cell, responseId } = dispatch;
   const { runId, logger } = run;
-  const settledState = yield* cell.current;
-  const settledPending = settledState.pendingResponse;
-  if (settledPending === null || settledPending.responseId !== responseId) {
+  const latestState = yield* cell.current;
+  const latestPending = latestState.pendingResponse;
+  if (latestPending === null || latestPending.responseId !== responseId) {
     return yield* Effect.die(
       new Error('The pending response changed during dispatch.'),
     );
@@ -856,14 +856,14 @@ const deliver = Effect.fn('toolUse.deliver')(function* (dispatch: Dispatch) {
   // A handed-down call has no model to answer it, so it ends the turn; else
   // one of the response's own calls (never a script's) may, by its result.
   const endTurn =
-    settledState.handedDown !== null ||
-    settledPending.calls.some(({ callId }) =>
-      endsTurn(callSettlementOf(settledPending, callId)),
+    latestState.handedDown !== null ||
+    latestPending.calls.some(({ callId }) =>
+      endsTurn(callResultOf(latestPending, callId)),
     );
   const bound = yield* ScopedRef.get(run.model);
   const media: { readonly path: string; readonly part: StoredMediaPart }[] = [];
-  const results = settledPending.calls.map((fact, ordinal) => {
-    const recorded = callSettlementOf(settledPending, fact.callId);
+  const results = latestPending.calls.map((fact, ordinal) => {
+    const recorded = callResultOf(latestPending, fact.callId);
     if (recorded === null) {
       throw new Error(`Call ${fact.callId} has no result at delivery.`);
     }
@@ -879,7 +879,7 @@ const deliver = Effect.fn('toolUse.deliver')(function* (dispatch: Dispatch) {
         content.text,
         ...content.media.map(({ part }) => part),
         // What the call's hooks add, after its result.
-        ...dispatch.step.hooks.callText(settledState, responseId, fact.callId),
+        ...dispatch.step.hooks.callText(latestState, responseId, fact.callId),
       ],
     };
   });
@@ -899,7 +899,7 @@ const deliver = Effect.fn('toolUse.deliver')(function* (dispatch: Dispatch) {
     const bytes = yield* (yield* SessionLog).blobs(
       documents.map(({ part }) => part.digest),
     );
-    // Settled uploads leave the set; the aggregate deadline names the rest.
+    // Finished uploads leave the set; the aggregate deadline names the rest.
     const pendingUploads = new Set(documents.map(({ path }) => path));
     yield* Effect.forEach(
       documents,
@@ -942,7 +942,7 @@ const deliver = Effect.fn('toolUse.deliver')(function* (dispatch: Dispatch) {
   return { state: delivered, endTurn } satisfies DispatchOutcome;
 });
 
-/** Dispatch the pending response's unsettled calls under `step`'s tools,
+/** Dispatch the pending response's unfinished calls under `step`'s tools,
  *  then deliver. */
 export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   cell: RunCell,
@@ -1001,7 +1001,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     );
     const state = yield* cell.current;
     ended ||= group.some(({ callId }) =>
-      endsTurn(settlementOf(dispatch, state, callId)),
+      endsTurn(finishedCall(dispatch, state, callId)),
     );
   }
   return yield* deliver(dispatch);

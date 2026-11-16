@@ -87,11 +87,11 @@ export interface ChildRunsShape {
     readonly exists: Effect.Effect<boolean, Error>;
     readonly end: Effect.Effect<RunEnd | null, Error>;
   };
-  /** The latest value of `arm`'s kind among the run's own facts, decoded
-   *  by the arm's schema; undefined while the run recorded none. */
+  /** The latest value of `factKind` among the run's own facts, decoded
+   *  by its schema; undefined while the run recorded none. */
   readonly fact: <A>(
     runId: RunId,
-    arm: {
+    factKind: {
       readonly plugin: string;
       readonly kind: string;
       readonly schema: Schema.Codec<A, unknown>;
@@ -163,12 +163,12 @@ export const childRuns = (
       exists: inSession(getRunRecords(id).exists()),
       end: inSession(getRunRecords(id).readRunEnd()),
     }),
-    fact: (id, arm) =>
+    fact: (id, factKind) =>
       Effect.map(log.facts(id), (held) => {
-        const row = held?.facts[factName(arm)];
+        const row = held?.facts[factName(factKind)];
         return row === undefined
           ? undefined
-          : Schema.decodeUnknownSync(arm.schema)(row.value);
+          : Schema.decodeUnknownSync(factKind.schema)(row.value);
       }),
     autoApproved: inSession(workAutoApproved(runId)),
     requested: (id, requestId) =>

@@ -16,6 +16,7 @@ import {
 } from '@shared/schemas';
 import {
   executionsWaitTimeoutSeconds,
+  lineRangeOf,
   TOOL_RESULT_METADATA_FIELDS,
 } from '@shared/toolUse';
 import { executionsAction } from '@shared/tools/executionsDisplay';
@@ -200,12 +201,9 @@ function buildEditSections(ctx: SectionContext): ToolSection[] {
 
 function buildReadSections(ctx: SectionContext): ToolSection[] {
   if (!ctx.filePath) return [];
-  const range =
-    Predicate.isObject(ctx.input) && Predicate.isObject(ctx.input.range)
-      ? ctx.input.range
-      : undefined;
-  const start = typeof range?.start === 'number' ? range.start : undefined;
-  const end = typeof range?.end === 'number' ? range.end : undefined;
+  const { start, end } = lineRangeOf(
+    Predicate.isObject(ctx.input) ? ctx.input.range : undefined,
+  );
   return [
     {
       kind: 'file',
@@ -314,16 +312,14 @@ function buildExecutionsSections(ctx: SectionContext): ToolSection[] {
     sections.push(textSection('SQL:', input.sql));
   }
 
-  const viewRange = input.view_range;
-  if (
-    Array.isArray(viewRange) &&
-    typeof viewRange[0] === 'number' &&
-    typeof viewRange[1] === 'number'
-  ) {
+  const viewRange = lineRangeOf(input.view_range);
+  if (viewRange.start !== undefined)
     sections.push(
-      textSection('Range:', `lines ${viewRange[0]}-${viewRange[1]}`),
+      textSection(
+        'Range:',
+        `lines ${viewRange.start}-${viewRange.end ?? 'end'}`,
+      ),
     );
-  }
   if (typeof input.offset === 'number') {
     sections.push(textSection('Offset:', String(input.offset)));
   }

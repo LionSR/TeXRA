@@ -136,7 +136,7 @@ layer(
   // A fresh host per test, and a session over its roots whose requests a
   // person answers from the view.
   const perTest = Layer.provideMerge(
-    TestSession.layer(undefined, { host: {} }),
+    TestSession.layer(undefined, { answeredFromView: true }),
     FakeHost.layer(BASH_PLATFORM_OPTIONS),
   );
 

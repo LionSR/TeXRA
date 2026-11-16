@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, PlatformError } from 'effect';
 
-import { absentReason } from '@texra-ai/harness/node';
+import { meansAbsent } from '@texra-ai/harness/node';
 import { CliUsageError } from '@cli/runtime/platform/cliContext';
 
 /**
@@ -29,7 +29,7 @@ export function resolveFileBackedInstruction(
   return FileSystem.FileSystem.use((fs) =>
     fs.readFileString(absolutePath),
   ).pipe(
-    Effect.catchIf(absentReason, () =>
+    Effect.catchIf(meansAbsent, () =>
       Effect.fail(
         new CliUsageError({
           message: `--instruction-file: file not found: ${trimmed}`,

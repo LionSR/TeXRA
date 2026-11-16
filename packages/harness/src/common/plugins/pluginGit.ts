@@ -2,46 +2,26 @@
 // out detached. git only fetches here; nothing from a plugin runs.
 
 // Third-party imports
-import { Effect, Stream } from 'effect';
-import * as ChildProcess from 'effect/process/ChildProcess';
+import { Effect } from 'effect';
 
 // Local imports - utilities
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { makeMachineGitEnv } from '@utils/system/gitEnv';
+import { machineGit } from '@utils/system/git';
 
 // Local imports - this module's neighbours
 import { PluginError } from './pluginManifest';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-// Machine git env only: extending would merge back the helper-invoking keys
-// makeMachineGitEnv strips. A failure names the command and git's stderr.
-function git(
-  args: readonly string[],
-): Effect.Effect<string, PluginError, ChildProcessSpawner> {
+/** Run `git args`, answering its trimmed stdout; a failure names the command
+ *  and git's stderr. */
+const git = (args: readonly string[]) => {
   const commandLine = `git ${args.join(' ')}`;
-  return Effect.gen(function* () {
-    const handle = yield* ChildProcess.make('git', args, {
-      env: yield* makeMachineGitEnv,
-      extendEnv: false,
-      stdin: 'ignore',
-      detached: false,
-      forceKillAfter: '5 seconds',
-    });
-    const [stdout, stderr, code] = yield* Effect.all(
-      [
-        handle.stdout.pipe(Stream.decodeText(), Stream.mkString),
-        handle.stderr.pipe(Stream.decodeText(), Stream.mkString),
-        handle.exitCode,
-      ],
-      { concurrency: 'unbounded' },
-    );
-    return { stdout, stderr: stderr.trim(), code };
-  }).pipe(
-    Effect.scoped,
-    Effect.mapError((error) => {
-      const message = `${commandLine} could not start: ${toErrorMessage(error)}`;
-      return new PluginError({ message });
-    }),
+  return machineGit(args).pipe(
+    Effect.mapError(
+      (error) =>
+        new PluginError({
+          message: `${commandLine} could not start: ${toErrorMessage(error)}`,
+        }),
+    ),
     Effect.flatMap(({ stdout, stderr, code }) =>
       code === 0
         ? Effect.succeed(stdout.trim())
@@ -52,7 +32,7 @@ function git(
           ),
     ),
   );
-}
+};
 
 /**
  * Check `rev` out detached in `dir`, forced and cleaned, so the directory

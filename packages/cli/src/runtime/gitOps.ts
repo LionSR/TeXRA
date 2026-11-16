@@ -1,7 +1,6 @@
 // Thin wrappers over `git` and `gh` for the `install-github-action` command's
-// writes and its two command-specific checks. The repository reads it shares
-// with the app (work tree, root, origin, branches) are
-// `@texra/utils/git/gitReads`. Every call captures output and never fails —
+// writes and its `gh` check. The repository reads are the harness's
+// (`@texra-ai/harness/node`). Every call captures output and never fails —
 // callers branch on `success`.
 //
 // These commands carry no TeXRA settings, so they use the user's Git identity.
@@ -30,16 +29,6 @@ export function gh(
     cwd,
     quiet: true,
   });
-}
-
-export function localBranchExists(
-  cwd: string,
-  branch: string,
-): GitRead<boolean> {
-  return Effect.map(
-    git(cwd, 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`),
-    (result) => result.success,
-  );
 }
 
 export function ghAvailable(cwd: string): GitRead<boolean> {

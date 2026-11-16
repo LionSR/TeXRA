@@ -19,7 +19,7 @@ import {
   REASONING_LEVEL_LABELS,
 } from '@texra/shared/model/modelPicker';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
-import type { ModelOption } from '@texra-ai/harness/host';
+import type { ModelVerdict } from '@texra-ai/harness/host';
 import {
   formatCompactTokenCount,
   formatCostUsd,
@@ -47,13 +47,13 @@ function modelHint(config: ModelConfig): string {
 
 /**
  * The reasoning column of a model row: what a run on the row's route sends
- * (`ModelOption.reasoning`, the bind's own decision). The saved level, else
+ * (`ModelVerdict.reasoning`, the bind's own decision). The saved level, else
  * the default; a saved level the route cannot send names the level it sends
  * instead; `(fixed)` where the route offers no choice; the refusal a run
  * would fail with; nothing for a model that does not reason there.
  */
 function reasoningLevelLabel(
-  option: Extract<ModelOption, { config: ModelConfig }>,
+  option: Extract<ModelVerdict, { config: ModelConfig }>,
 ): string | undefined {
   const { reasoning, savedEffort } = option;
   if (reasoning === undefined) return undefined;
@@ -69,7 +69,7 @@ function reasoningLevelLabel(
 }
 
 /** One verdict as a picker row. */
-function optionRow(verdict: ModelOption): ModelOptionData {
+function optionRow(verdict: ModelVerdict): ModelOptionData {
   const { model, availability } = verdict;
   if (!('config' in verdict)) {
     return { value: model, label: model, availability };
@@ -104,7 +104,7 @@ function optionRow(verdict: ModelOption): ModelOptionData {
 
 /** The picker rows for every visible model, in the order they are shown. */
 export function modelOptionsFrom(
-  options: readonly ModelOption[],
+  options: readonly ModelVerdict[],
 ): ModelOptionData[] {
   return options.map(optionRow);
 }

@@ -22,9 +22,13 @@ import {
   AgentCatalog,
   type WorkspaceAgentsStores,
 } from '@agent/index/agentCatalog';
+import { agentToolNames } from '@agent/index/agentEntry';
 import type { StepTools } from '@agent/runtime/loop/step';
 import { withLogChannel } from '@logger/effectLog';
-import { readModelOptions, type ModelOption } from '@model/computeModelOptions';
+import {
+  readModelOptions,
+  type ModelVerdict,
+} from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
 import {
   AGENT_TOOL_NAME,
@@ -36,10 +40,13 @@ import {
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { GIT_WORKTREE_SUPPORT_SETTING } from '@shared/state/stateSettings';
+import {
+  GIT_WORKTREE_SUPPORT_SETTING,
+  settingName,
+} from '@shared/state/stateSettings';
 
 /** The models that can run now, in picker order. */
-const availableModelNames = (options: readonly ModelOption[]): string[] =>
+const availableModelNames = (options: readonly ModelVerdict[]): string[] =>
   options.flatMap(({ model, availability }) =>
     MODEL_AVAILABILITY_STATUS[availability].available ? [model] : [],
   );
@@ -72,18 +79,16 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
     scope: AgentDelegationScope | undefined,
   ) {
     if (registry.get(AGENT_TOOL_NAME) === undefined) return undefined;
-    const agents = (yield* delegationAgents(stores, scope)).map(
-      ({ name, description, tools: agentTools }) => ({
-        name,
-        // One line per agent: a blank line in a (user-defined) description
-        // would otherwise read as the end of the list.
-        description: (description || 'No description').replaceAll(
-          /\s*\n\s*/g,
-          ' ',
-        ),
-        tools: agentTools ?? [],
-      }),
-    );
+    const agents = (yield* delegationAgents(stores, scope)).map((entry) => ({
+      name: entry.name,
+      // One line per agent: a blank line in a (user-defined) description
+      // would otherwise read as the end of the list.
+      description: (entry.description || 'No description').replaceAll(
+        /\s*\n\s*/g,
+        ' ',
+      ),
+      tools: agentToolNames(entry),
+    }));
     const models = yield* readModelOptions(stores).pipe(
       Effect.map(availableModelNames),
       // A failed read (an unreadable store, a host call that rejected) tells
@@ -111,7 +116,7 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
 const worktreeLine = (enabled: boolean): string =>
   enabled
     ? 'Git worktree support: ENABLED. Pass `working_directory` (absolute path) to `agent` to run a tool-use subagent rooted in a git worktree; every tool call in the subagent resolves paths against that directory. The subagent reports its working directory back in its delivery result.'
-    : 'Git worktree support: DISABLED in this workspace. Do not pass `working_directory` to `agent` because the call will be rejected. Ask the user to turn on `git.worktreeSupport` ("Subagent worktrees" in Settings > Agents > Advanced) if worktree operation is needed.';
+    : `Git worktree support: DISABLED in this workspace. Do not pass \`working_directory\` to \`agent\` because the call will be rejected. Ask the user to turn on the ${settingName(GIT_WORKTREE_SUPPORT_SETTING)} setting if worktree operation is needed.`;
 
 /** The system text's delegation section, rendered once, at the freeze. */
 export function delegationSection(targets: DelegationTargets): string {
@@ -119,7 +124,7 @@ export function delegationSection(targets: DelegationTargets): string {
   const lines =
     targets.agents.length === 0
       ? [
-          `${head} none are currently enabled in this workspace. Ask the user to enable delegation targets in Settings → Agents before delegating.`,
+          `${head} none are currently enabled in this workspace. Ask the user to enable the agents they want to delegate to before delegating.`,
         ]
       : [
           head,

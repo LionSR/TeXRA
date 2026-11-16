@@ -29,7 +29,7 @@ const storagePath = '/storage';
 // The process session over the host's roots, opened as a host whose
 // person answers from the view: its runs' requests wait for a decision.
 layer(
-  TestSession.layer(undefined, { host: {} }).pipe(
+  TestSession.layer(undefined, { answeredFromView: true }).pipe(
     Layer.provideMerge(SessionGraph.layer),
     Layer.provideMerge(
       FakeHost.layer({ workspaceRoot: '/workspace', storagePath }),

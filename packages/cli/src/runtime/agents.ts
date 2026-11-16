@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 
 import {
   AgentCatalog,
+  agentToolNames,
   type AgentEntry,
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness/host';
@@ -120,9 +121,10 @@ export function formatCliAgentDetails(entry: AgentEntry): string {
     lines.push('');
     lines.push(entry.description);
   }
-  if (entry.tools?.length) {
+  const tools = agentToolNames(entry);
+  if (tools.length > 0) {
     lines.push('');
-    lines.push(`tools: ${entry.tools.join(', ')}`);
+    lines.push(`tools: ${tools.join(', ')}`);
   }
   return lines.join('\n');
 }

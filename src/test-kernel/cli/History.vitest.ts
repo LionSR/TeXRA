@@ -73,7 +73,7 @@ const publishRunFacts = (
 ) =>
   Effect.gen(function* () {
     yield* publishTestRunStart(session, runId);
-    yield* Context.get(session, SessionLog).settled;
+    yield* Context.get(session, SessionLog).drained;
     yield* seedRunRecord(session, runId, facts.record);
     if (facts.edited) yield* seedEditedFiles(session, runId, facts.edited);
     if (facts.outcome) {
@@ -86,7 +86,7 @@ const publishRunFacts = (
         },
       ]);
     }
-    yield* Context.get(session, SessionLog).settled;
+    yield* Context.get(session, SessionLog).drained;
   });
 
 // Live clock: the history readers run as the command runs them.

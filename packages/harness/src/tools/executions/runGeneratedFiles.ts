@@ -20,7 +20,7 @@ import type { RunId } from '@shared/schemas';
 // swap; safe here since the input is a storage-relative path produced by the
 // walk below, not raw user input.
 import { toPosixPath } from '@utils/core/pathCore';
-import { absentReason } from '@utils/files/fsEntryExists';
+import { meansAbsent } from '@utils/files/fsEntryExists';
 
 const CHANNEL = 'runGeneratedFiles';
 
@@ -82,7 +82,7 @@ const walkRunStorage = Effect.fn('walkRunStorage')(function* (
     // The run directory itself has no rest to keep: its failure propagates
     // rather than reading as "no generated files".
     Effect.catch((error) => {
-      if (absentReason(error)) return Effect.succeed<string[]>([]);
+      if (meansAbsent(error)) return Effect.succeed<string[]>([]);
       if (relativePath === '') return Effect.fail(error);
       return Effect.logWarning(
         `Unreadable run directory '${fullPath}'; listing it as empty`,
@@ -108,7 +108,7 @@ const walkRunStorage = Effect.fn('walkRunStorage')(function* (
         // that now loops, say); anything else is a real fault and
         // propagates.
         Effect.catchIf(
-          (error) => absentReason(error) || error.reason._tag === 'BadResource',
+          (error) => meansAbsent(error) || error.reason._tag === 'BadResource',
           () => Effect.void,
         ),
       );

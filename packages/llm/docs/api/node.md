@@ -189,9 +189,9 @@ interface SubscriptionCoordinator<S extends SubscriptionSession> {
    * be reached, fails with `LoopbackTransportUnavailableError` before
    * anything is asked of the user.
    */
-  signInWithBrowser(
+  readonly signInWithBrowser: (
     openBrowser: (url: string) => Effect.Effect<void, Error>,
-  ): Effect.Effect<S, Error, HttpClient.HttpClient>;
+  ) => Effect.Effect<S, Error, HttpClient.HttpClient>;
   /**
    * Sign in with a one-time device code (RFC 8628): `onPrompt` shows the
    * code, and the session is stored once the user approves. Absent where

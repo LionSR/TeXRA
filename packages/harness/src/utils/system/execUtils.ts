@@ -5,7 +5,7 @@ import * as ChildProcess from 'effect/process/ChildProcess';
 import * as CommandLine from 'effect/process/CommandLine';
 
 import { withLogChannel } from '@logger/effectLog';
-import type { ExecResult } from '@shared/schemas';
+import type { ExecEnd, ExecResult } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { inheritedEnv } from '@utils/system/envFlags';
 import { IS_WINDOWS, withCommandDirs } from '@utils/system/platformPaths';
@@ -85,25 +85,16 @@ function commandEnv(
   });
 }
 
-function resultFromProcessOutput(
+function execResult(
   stdout: string | null | undefined,
   stderr: string | null | undefined,
-  exitCode: number,
-  flags: {
-    timedOut?: boolean;
-    outputLimitExceeded?: boolean;
-    noExitCode?: boolean;
-  } = {},
+  end: ExecEnd,
 ): ExecResult {
-  const timedOut = flags.timedOut ?? false;
   return {
-    success: exitCode === 0 && !timedOut && !flags.outputLimitExceeded,
+    success: end._tag === 'Exited' && end.code === 0,
     stdout: normalizeOutput(stdout),
     stderr: normalizeOutput(stderr),
-    timedOut,
-    exitCode,
-    ...(flags.outputLimitExceeded ? { outputLimitExceeded: true } : {}),
-    ...(flags.noExitCode ? { noExitCode: true } : {}),
+    end,
   };
 }
 
@@ -269,46 +260,44 @@ function resultFromOutcome(
 ): ExecResult {
   switch (outcome._tag) {
     case 'Exited':
-      return resultFromProcessOutput(stdout, stderr, outcome.code);
+      return execResult(stdout, stderr, outcome);
     case 'Signalled':
-      return resultFromProcessOutput(
+      return execResult(
         stdout,
         stderr || `Command was killed: ${outcome.description}`,
-        1,
-        { noExitCode: true },
+        { _tag: 'NoExit', why: 'signal' },
       );
     case 'ReadFailed':
-      return resultFromProcessOutput(
+      return execResult(
         stdout,
         stderr || `Could not read the command's output: ${outcome.description}`,
-        1,
-        { noExitCode: true },
+        { _tag: 'NoExit', why: 'read' },
       );
     case 'TimedOut':
-      return resultFromProcessOutput(
+      return execResult(
         stdout,
         stderr ||
           `Command timed out after ${options.timeout} milliseconds: ${displayCommand(command)}`,
-        1,
-        { timedOut: true },
+        outcome,
       );
     case 'LimitExceeded':
-      return resultFromProcessOutput(
+      return execResult(
         stdout,
         stderr ||
           `Command's ${outcome.stream} was larger than ${options.maxBuffer ?? DEFAULT_MAX_BUFFER} characters (maxBuffer exceeded): ${displayCommand(command)}`,
-        2,
-        { outputLimitExceeded: true },
+        outcome,
       );
     case 'SpawnFailed': {
       // Never `error.message`: it embeds the argv, which can carry a token.
       const { reason } = outcome.error;
       const detail = reason.description ? `: ${reason.description}` : '';
-      return resultFromProcessOutput(
+      return execResult(
         '',
         `Command could not start: ${reason._tag}${detail}`,
-        127,
-        { noExitCode: true },
+        {
+          _tag: 'NoExit',
+          why: 'spawn',
+        },
       );
     }
   }
@@ -390,9 +379,9 @@ const runSpawned = Effect.fnUntraced(function* (
  * Execute an external command in `cwd` with the workspace env, over the
  * process's `ChildProcessSpawner`. Its lines take the caller's log channel.
  *
- * Never fails: a spawn failure or missing cwd (127), a non-zero exit, a
- * timeout (`timedOut`) and a max-buffer trip (2,
- * `outputLimitExceeded`) are all reported in the {@link ExecResult}.
+ * Never fails: how the command ended (an exit code, a timeout, a max-buffer
+ * trip, or no exit of its own: a spawn failure or missing cwd, a signal, an
+ * unreadable stream) is the {@link ExecResult}'s `end`.
  *
  * The process lives exactly as long as this call's scope. A deadline, an
  * output-limit trip or an interrupted fiber closes that scope, and
@@ -415,7 +404,10 @@ export const executeCommand = Effect.fn('executeCommand')(function* (
   const { cwd } = options;
   if (!cwd) {
     yield* logError('No workspace path found');
-    return resultFromProcessOutput('', 'No workspace path found', 127);
+    return execResult('', 'No workspace path found', {
+      _tag: 'NoExit',
+      why: 'spawn',
+    });
   }
   const env = yield* commandEnv(yield* inheritedEnv(), cwd, options.env);
   if (!options.quiet) {

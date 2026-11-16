@@ -6,7 +6,7 @@
  * popup and a headless run; a host only decides how a row looks.
  *
  * Nothing here is a fact of its own: a status is the card's, read with its
- * settlement (`reusedFrom`, a `Skipped` error, a cut by the run's end) and
+ * result (`reusedFrom`, a `Skipped` error, a cut by the run's end) and
  * whether a child exists;
  * a row's agent, model, files and attempt are its input's and its card's;
  * its answer is its card's typed result (`childAnswer`); its duration and
@@ -25,15 +25,16 @@ import {
   acceptsFollowUp,
   isInterrupted,
   requestAnswerability,
+  type RunView,
+  type SessionView,
 } from '@shared/session/sessionView';
-import type { RunView, SessionView } from '@shared/session/readonlyViews';
 import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
 import { formatScriptCallFiles } from '@shared/transcript/scriptCall';
 import { getBasename } from '@utils/core/pathBasics';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 import { childAnswer } from './toolRowSections';
-import type { ToolRow as FoldedToolRow, TranscriptRow } from './transcriptRow';
+import type { ToolRow as AppliedToolRow, TranscriptRow } from './transcriptRow';
 import { transcriptTimeline } from './transcriptTimeline';
 
 /** A child call's agent or program as the card shows it: an agent may be
@@ -121,7 +122,7 @@ export interface ScriptStageView {
 }
 
 /** A tool row as a reader holds it (`Session.view`). */
-type ToolRow = ReadonlyDeep<FoldedToolRow>;
+type ToolRow = ReadonlyDeep<AppliedToolRow>;
 
 /** The run under `run` that is asking: itself, else the first descendant
  *  the fold marked, following `descendant` down. */

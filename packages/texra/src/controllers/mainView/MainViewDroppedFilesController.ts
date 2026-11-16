@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports
-import { absentReason, relativeToRoot } from '@texra-ai/harness/node';
+import { meansAbsent, relativeToRoot } from '@texra-ai/harness/node';
 import { toErrorMessage, Rejected } from '@texra-ai/harness/schemas';
 
 /**
@@ -16,7 +16,7 @@ import { toErrorMessage, Rejected } from '@texra-ai/harness/schemas';
  * A path outside the workspace, and one that does not name a regular file,
  * are both dropped. So is one that is no longer there: a drag whose source
  * moved between the drop and this probe is the user's own race, and
- * `absentReason`'s absence (nothing at the path, or a parent component that
+ * `meansAbsent`'s absence (nothing at the path, or a parent component that
  * is now a file) is the only failure this treats as one. Every other stat
  * failure (an unreadable folder, a symlink loop) fails the whole drop
  * instead of quietly shrinking it, because a path discarded in silence looks
@@ -42,7 +42,7 @@ const droppedWorkspaceFile = Effect.fn('droppedWorkspaceFile')(function* (
   const fs = yield* FileSystem.FileSystem;
   const info = yield* fs
     .stat(path.resolve(workspaceRoot, relative))
-    .pipe(Effect.catchIf(absentReason, () => Effect.succeed(undefined)));
+    .pipe(Effect.catchIf(meansAbsent, () => Effect.succeed(undefined)));
   return info?.type === 'File' ? relative : null;
 });
 

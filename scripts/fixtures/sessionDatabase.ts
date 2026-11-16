@@ -16,6 +16,6 @@ export {
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 export { openDesktopProjectRecords } from '@desktop/main/desktopProjectRecords';
-export { nodePlatformServices } from '@platform/defaults/nodePlatform';
+export { nodePlatformServices } from '@platform/defaults/nodeServices';
 export { ToolRegistry, toolTable } from '@tools/toolTable';
 export { servicePaths } from '@texra/controllers/server/discovery';

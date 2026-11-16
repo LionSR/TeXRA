@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { absentReason, entryTypeIn } from '@texra-ai/harness/node';
+import { meansAbsent, entryTypeIn } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { runTool } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
@@ -45,7 +45,7 @@ const filesByPrefix = Effect.fn('latex.filesByPrefix')(function* (
     .readDirectory(dir)
     .pipe(
       Effect.catch((error) =>
-        absentReason(error)
+        meansAbsent(error)
           ? Effect.succeed<ReadonlyArray<string>>([])
           : Effect.logWarning(`Failed to list ${dir}`).pipe(
               Effect.annotateLogs({ data: error }),

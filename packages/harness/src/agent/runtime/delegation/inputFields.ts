@@ -33,10 +33,13 @@ import { errorResult } from '@tools/core/result';
 import type { ToolRegistry } from '@tools/toolTable';
 import { nullishWithDefault, timeoutMsField } from '@tools/core/inputSchema';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
-import { absentReason, entryExists } from '@utils/files/fsEntryExists';
+import { meansAbsent, entryExists } from '@utils/files/fsEntryExists';
 import { ensureError, formatError } from '@utils/errors/errorMessage';
 import { escapesRoot } from '@utils/core/pathCore';
-import { GIT_WORKTREE_SUPPORT_SETTING } from '@shared/state/stateSettings';
+import {
+  GIT_WORKTREE_SUPPORT_SETTING,
+  settingName,
+} from '@shared/state/stateSettings';
 
 /**
  * Shared field for the `memories` parameter on delegation tools.
@@ -59,8 +62,7 @@ const memoriesField = nullishWithDefault(
   ),
 );
 
-const WORKTREE_DISABLED_MESSAGE =
-  "git worktree support is disabled in this workspace. Omit working_directory, or ask the user to turn on `git.worktreeSupport` ('Subagent worktrees' in Settings > Agents > Advanced).";
+const WORKTREE_DISABLED_MESSAGE = `git worktree support is disabled in this workspace. Omit working_directory, or ask the user to turn on the ${settingName(GIT_WORKTREE_SUPPORT_SETTING)} setting.`;
 
 /**
  * The `working_directory` gate, over the settings of the project the call
@@ -275,7 +277,7 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
       // then no referenced file can lie under it.
       const storageRoot = yield* fs
         .realPath(storage)
-        .pipe(Effect.catchIf(absentReason, () => Effect.void));
+        .pipe(Effect.catchIf(meansAbsent, () => Effect.void));
       const references = yield* Effect.forEach(
         files,
         Effect.fnUntraced(function* (file) {

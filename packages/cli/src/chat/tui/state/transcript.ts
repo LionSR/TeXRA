@@ -49,7 +49,7 @@ export interface LocalNotice {
 
 /** The transcript seq a row finishes at, for the notice join. */
 function rowSeq(row: TranscriptRow): number {
-  return row.settlementSeqNo ?? row.seqNo;
+  return row.finalSeqNo ?? row.seqNo;
 }
 
 export const notices = chatField('localNotices');
@@ -169,18 +169,18 @@ export function noticesFor(
  * The run's rows with its notices inserted after the last row whose seq is at
  * or below their own `seqNo`, in notice order: the merged index is the print
  * order. A notice written before the run's first row goes ahead of it. The
- * merged `settledRows` is the finished prefix plus every notice anchored
+ * merged `finalRows` is the finished prefix plus every notice anchored
  * inside it (a notice is immutable the moment it is written, and keeps its
  * identity across merges).
  */
 export function mergeLocalNotices(
   run: RunView | undefined,
   runNotices: readonly LocalNotice[],
-): { readonly rows: readonly TranscriptRow[]; readonly settledRows: number } {
+): { readonly rows: readonly TranscriptRow[]; readonly finalRows: number } {
   const rows = run?.transcript.rows ?? [];
-  const settledRows = run?.transcript.settledRows ?? 0;
-  if (runNotices.length === 0) return { rows, settledRows };
-  const settledSeq = settledRows === 0 ? 0 : rowSeq(rows[settledRows - 1]);
+  const finalRows = run?.transcript.finalRows ?? 0;
+  if (runNotices.length === 0) return { rows, finalRows };
+  const settledSeq = finalRows === 0 ? 0 : rowSeq(rows[finalRows - 1]);
   const out: TranscriptRow[] = [];
   let next = 0;
   const flushThrough = (seq: number): void => {
@@ -198,8 +198,8 @@ export function mergeLocalNotices(
   for (; next < rows.length; next += 1) out.push(rows[next]);
   return {
     rows: out,
-    settledRows:
-      settledRows +
+    finalRows:
+      finalRows +
       runNotices.filter((notice) => notice.row.seqNo <= settledSeq).length,
   };
 }

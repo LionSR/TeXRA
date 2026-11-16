@@ -162,7 +162,7 @@ const isOutcomeOf: <K extends RuntimeCommand["kind"]>(kind: K, outcome: { readon
 ## LaunchError
 
 What a launch refuses before any model work: the two an embedder
-branches on. A run that fails after admission fails with
+branches on. A run that fails after acceptance fails with
 {@link RunFailure} instead.
 
 ```ts
@@ -240,7 +240,7 @@ interface LocalSession extends Session {
   /** Wait until everything already sent to the session is written, shown
    *  in the view, and handled: for example, a failed run's end has been
    *  shown to the attached host (or queued for the next one). */
-  readonly settled: Effect.Effect<void>;
+  readonly drained: Effect.Effect<void>;
 }
 ```
 
@@ -267,8 +267,8 @@ class ModelFetch extends Context.Service<ModelFetch, typeof fetch>()(
 
 How a root's session is opened. A later open of the same root gets the
 session already there, and must ask for the same store: one that
-differs fails with `SessionOptionsConflict`. What `host` says is read
-only by the open that builds the session.
+differs fails with `SessionOptionsConflict`. What `answeredFromView`
+says is read only by the open that builds the session.
 
 ```ts
 interface OpenOptions {
@@ -278,14 +278,14 @@ interface OpenOptions {
    *  ends with the session. */
   readonly persistent?: boolean;
   /**
-   * Set when a person is present to answer the runs' requests from the
-   * view (`request.decide`), as in an editor window. Absent, nobody can
-   * answer until a host with an `approve` handler attaches
+   * True when a person is present to answer the runs' requests from the
+   * view (`request.decide`), as in an editor window. Absent or false,
+   * nobody can answer until a host with an `approve` handler attaches
    * ({@link Session.attach}), so every request is denied. A session
    * resumes nothing at open either way: a run a closed or crashed process
    * left unfinished is listed as interrupted and continues on a resume.
    */
-  readonly host?: Record<string, never>;
+  readonly answeredFromView?: boolean;
 }
 ```
 
@@ -488,7 +488,7 @@ interface RunRecords {
   /** Its result as delivered: the terminal fact with the output its
    *  delivery reported, or a background command's own record. */
   readonly readResult: Effect.Effect<RunResult | null, Error>;
-  /** The workspace files its settled calls edited that are still there,
+  /** The workspace files its finished calls edited that are still there,
    *  under its working directory, by path. */
   readonly readWorkspaceFiles: Effect.Effect<
     readonly RunWorkspaceFile[],
@@ -499,11 +499,6 @@ interface RunRecords {
   /** Its rows hold a point it continues from, ownership aside; rows that
    *  cannot be read (logged) hold none. */
   readonly readResumable: Effect.Effect<boolean, Error>;
-  /** Why a resume of it here is refused before its agent is checked
-   *  (`finished`, `earlierBuild`, `unusableCheckpoint` or
-   *  `pluginUnavailable`), or null when it may go ahead; a fact that could
-   *  not be read right now fails. */
-  readonly readRejection: Effect.Effect<ResumeRefusal | null, Error>;
   /** Its conversation as every conversation view renders it. */
   readonly readConversation: Effect.Effect<readonly ExportNode[], Error>;
   /** Its exported trace: its display rows and its record. */
@@ -660,7 +655,7 @@ class Sessions extends Context.Service<
       roots: WorkspaceRoots,
     ) => Effect.Effect<SessionCloseReport>;
     /** A process shutdown's close: drain what the plugins' pollers
-     *  admitted, then close every open session at once, under one
+     *  accepted, then close every open session at once, under one
      *  deadline. */
     readonly closeAll: Effect.Effect<readonly SessionCloseReport[]>;
     readonly list: Effect.Effect<readonly LocalSession[]>;

@@ -68,7 +68,7 @@ import {
   type SkillCatalogEntry,
 } from '@skills/runtimeSkills';
 import { toolDefinitionsFor, toolDigests } from '@tools/catalogEntries';
-import { readDisabledTools } from '@tools/plugins';
+import { readDisabledTools } from '@shared/state/disabledTools';
 import type { SessionTools } from '@tools/sessionTools';
 import { sha256 } from '@utils/core/idHash';
 import type { StepRoot } from '@utils/files/externalRoots';
@@ -267,7 +267,7 @@ const openStep = Effect.fn('Step.open')(function* (
     const contributing = pinned.plugins.filter(
       ({ prompt }) => prompt !== undefined,
     );
-    // Only the plugins this step uses hold services: a parked run keeps up
+    // Only the plugins this step uses hold services: a waiting run keeps up
     // nothing it does not offer.
     const used = new Set([
       ...tools.offered.map(({ plugin }) => plugin),
@@ -465,12 +465,16 @@ export const stepFor = Effect.fn('Step.for')(function* (
     run.config.delegationAgentScope ?? undefined,
   );
   const context = {
-    ...stepInstructions(step.contributing, step.listed, {
-      offered: tools.definitions.map(({ name }) => name),
-      isChild: run.entry.parent !== null,
-      isAnthropic: model.config.provider === ModelProvider.ANTHROPIC,
-      config: roots.config,
-    }),
+    ...stepInstructions(
+      step.contributing,
+      step.listed,
+      {
+        offered: tools.definitions.map(({ name }) => name),
+        isChild: run.entry.parent !== null,
+        config: roots.config,
+      },
+      model.config.provider === ModelProvider.ANTHROPIC,
+    ),
     ...(delegation && { delegation }),
   };
   const base =

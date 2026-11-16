@@ -29,8 +29,7 @@ const Count = NonNegativeIntSchema;
  * nothing goes out that the edge would reject. Field names are the wire's,
  * not `NormalizedUsage`'s.
  *
- * The edge decodes the same entry (`supabase/functions/log-usage-v2/usageBatch.ts`)
- * and the two must match: everything this schema accepts, that one accepts.
+ * The edge function decodes the same entry, and the two must match: everything this schema accepts, that one accepts.
  * There the counts are non-negative ints, `listCost` a non-negative finite
  * number, `timestamp` a UTC ISO 8601 date-time and every string non-empty,
  * `provider` and `usageRoute` included.

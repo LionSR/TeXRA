@@ -2,11 +2,16 @@
  * The coding plans TeXRA offers (Kimi Code, the GLM Coding Plan): API-key
  * subscriptions a provider key pays through, with the names, links and
  * labels every host shows for them. Plain data, so browser webviews render
- * the same catalog; the app attaches each plan's preference toggle
- * (`model/codingPlanSubscriptions.ts`). What a used-up plan falls back to is
+ * the same catalog; each plan names its switch's setting row, whose title is
+ * the label every host shows for it. What a used-up plan falls back to is
  * the payment copy's (`planFallbackName` in `@ui/copy/modelAccess`), not
  * this catalog's.
  */
+import {
+  GLM_CODING_PLAN_SETTING,
+  KIMI_CODE_PREFER_SETTING,
+  type SettingRow,
+} from '@texra-ai/harness/schemas';
 import type { KeyPlanRoute } from '@texra-ai/llm';
 import type { SubscriptionUsageProvider } from './subscriptionUsage';
 
@@ -20,7 +25,8 @@ interface CodingPlanSubscriptionDescriptor {
   readonly exclusiveCredential: boolean;
   readonly usageRoute: KeyPlanRoute;
   readonly displayName: string;
-  readonly preferenceLabel: string;
+  /** The switch that routes the provider's models through the plan. */
+  readonly preference: SettingRow<boolean>;
   readonly modelFamily: string;
 }
 
@@ -32,7 +38,7 @@ export const CODING_PLAN_SUBSCRIPTIONS = Object.freeze([
     exclusiveCredential: true,
     usageRoute: 'kimi-code-subscription',
     displayName: 'Kimi Code',
-    preferenceLabel: 'Kimi Code subscription',
+    preference: KIMI_CODE_PREFER_SETTING,
     modelFamily: 'Kimi models',
   }),
   Object.freeze({
@@ -41,7 +47,7 @@ export const CODING_PLAN_SUBSCRIPTIONS = Object.freeze([
     exclusiveCredential: false,
     usageRoute: 'glm-coding-plan-subscription',
     displayName: 'GLM Coding Plan',
-    preferenceLabel: 'GLM Coding Plan',
+    preference: GLM_CODING_PLAN_SETTING,
     modelFamily: 'GLM models',
   }),
 ] as const satisfies readonly CodingPlanSubscriptionDescriptor[]);

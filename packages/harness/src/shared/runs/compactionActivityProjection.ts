@@ -2,8 +2,8 @@ import { Result, Schema } from 'effect';
 
 import {
   CompactionActivityDataSchema,
-  ContextManagementDataSchema,
   MESSAGE_TYPES,
+  type CompactionActivityData,
   type CompactionActivityOutcome,
   type TraceRowFields,
 } from '@shared/schemas';
@@ -20,17 +20,15 @@ export interface CompactionActivityBlock {
   /** Whether the block may move into finalized transcript output. */
   readonly finalized: boolean;
   /** Source-log boundary that finalized an otherwise unmatched start. */
-  readonly settledThroughSeqNo?: number;
+  readonly finalThroughSeqNo?: number;
   readonly startPosition: number;
   readonly startedAt: number;
   readonly finishedAt?: number;
-  /** What the compaction freed, from the `compaction` context-management
-   *  entry the run writes just before the activity completes. */
-  readonly freed?: {
-    readonly tokens: number;
-    readonly utilizationBefore: number;
-    readonly utilizationAfter: number;
-  };
+  /** What the compaction freed, from its `completed` row. */
+  readonly freed?: Extract<
+    CompactionActivityData,
+    { state: 'completed' }
+  >['freed'];
 }
 
 export const COMPACTION_ACTIVITY_LABEL: Record<
@@ -72,35 +70,6 @@ function interruptRunningBlocks(
   return changedIndices;
 }
 
-/** The figures a `compaction` context-management payload freed, carried by
- *  the one activity row: the latest running block. */
-function applyFreed(
-  projection: CompactionActivityProjection,
-  payload: unknown,
-): readonly number[] {
-  // A payload its schema rejects moves nothing here; the transcript fold
-  // writes it as an error row (`transcriptLogRows.ts`).
-  const parsed = Schema.decodeUnknownResult(ContextManagementDataSchema)(
-    payload,
-  );
-  if (!Result.isSuccess(parsed) || parsed.success.action !== 'compaction')
-    return [];
-  const index = projection.blocks.findLastIndex(
-    (block) => block.status === 'running',
-  );
-  if (index === -1) return [];
-  const data = parsed.success;
-  projection.blocks[index] = {
-    ...projection.blocks[index],
-    freed: {
-      tokens: data.tokensBefore - data.tokensAfter,
-      utilizationBefore: data.utilizationBefore,
-      utilizationAfter: data.utilizationAfter,
-    },
-  };
-  return [index];
-}
-
 /**
  * Apply one transcript event to the projection, in source order. `position`
  * is the seqNo of the row the event wrote: a tool event's is the tool row's
@@ -122,8 +91,6 @@ export function applyCompactionActivityEvent(
     case MESSAGE_TYPES.USER_MESSAGE:
     case MESSAGE_TYPES.ERROR:
       return interruptRunningBlocks(projection, position, at);
-    case MESSAGE_TYPES.CONTEXT_MANAGEMENT:
-      return applyFreed(projection, event.data);
     case MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY:
       break;
     default:
@@ -132,7 +99,9 @@ export function applyCompactionActivityEvent(
   const activity = Schema.decodeUnknownResult(CompactionActivityDataSchema)(
     event.data,
   );
-  if (!Result.isSuccess(activity)) return []; // an error row, like applyFreed
+  // A payload its schema rejects moves nothing here; the transcript fold
+  // writes it as an error row (`transcriptLogRows.ts`).
+  if (!Result.isSuccess(activity)) return [];
   const { operationId, state } = activity.success;
   const existingIndex = projection.indexByOperationId.get(operationId);
 
@@ -151,31 +120,33 @@ export function applyCompactionActivityEvent(
   }
 
   // A terminal event without its start is ambiguous and must not create a
-  // phantom transcript row. An outcome queued before settlement may still
+  // phantom transcript row. An outcome queued before result may still
   // replace its provisional interruption; one appended afterward may not.
   if (existingIndex === undefined) return [];
   const block = projection.blocks[existingIndex];
-  const withinSettlementBoundary =
+  const withinFinalBoundary =
     block.status === 'interrupted' &&
-    block.settledThroughSeqNo !== undefined &&
-    position <= block.settledThroughSeqNo;
-  if (block.finalized && !withinSettlementBoundary) return [];
-  const { settledThroughSeqNo: _settledThroughSeqNo, ...unsettledBlock } =
-    block;
+    block.finalThroughSeqNo !== undefined &&
+    position <= block.finalThroughSeqNo;
+  if (block.finalized && !withinFinalBoundary) return [];
+  const { finalThroughSeqNo: _finalThroughSeqNo, ...openBlock } = block;
   projection.blocks[existingIndex] = {
-    ...unsettledBlock,
+    ...openBlock,
     status: state,
     finalized: true,
     finishedAt: at,
+    ...(activity.success.state === 'completed' && {
+      freed: activity.success.freed,
+    }),
   };
   return [existingIndex];
 }
 
 /**
- * Finalize every start the projection has seen, at the settlement boundary the
+ * Finalize every start the projection has seen, at the result boundary the
  * events themselves drew: `maxAppliedSeqNo`, the newest row position applied.
  */
-export function settleCompactionActivities(
+export function finalizeCompactionActivities(
   projection: CompactionActivityProjection,
   finishedAt: number,
 ): readonly number[] {
@@ -187,7 +158,7 @@ export function settleCompactionActivities(
       ...block,
       status: 'interrupted',
       finalized: true,
-      settledThroughSeqNo: throughSeqNo,
+      finalThroughSeqNo: throughSeqNo,
       ...(block.finishedAt === undefined ? { finishedAt } : {}),
     };
     changedIndices.push(index);

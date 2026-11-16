@@ -19,7 +19,7 @@ interface ExtractedToolAttachments {
   /** Sanitized result payload without binary data or facts. */
   sanitizedResult: ToolResult;
   /** The facts an executed result states about its run, which commit as
-   *  rows beside its settlement, never on the stored result. */
+   *  rows beside its result, never on the stored result. */
   facts: readonly ToolFact[];
 }
 

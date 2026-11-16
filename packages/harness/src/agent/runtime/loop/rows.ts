@@ -1,11 +1,11 @@
 /**
  * The loops' row constructors: every run history draft a loop appends, built
- * from the folded `RunState` and nothing else. A `run.position` is the one
+ * from the applied `RunState` and nothing else. A `run.position` is the one
  * record of where the loop stands; a `run.config` is what the run runs on
  * (its model and binding); an `append` carries what its messages change
  * about the run's input. Every fact a row already carries (the pending
  * response, its intents, the invocation's attempts
- * and failures) is folded from that row and never restated here.
+ * and failures) is applied from that row and never restated here.
  */
 
 import { randomUUID } from 'node:crypto';

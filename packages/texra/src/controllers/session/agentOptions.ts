@@ -7,6 +7,7 @@ import { Effect } from 'effect';
 import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
 import {
   AgentCatalog,
+  agentToolNames,
   type AgentEntry,
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness/host';
@@ -36,7 +37,7 @@ export const agentOptionsData = (stores: WorkspaceAgentsStores) =>
         .map((entry): AgentOptionData => ({
           value: agentKeyOf(entry),
           label: entry.name,
-          isOrchestrator: entry.tools?.includes(AGENT_TOOL_NAME) === true,
+          isOrchestrator: agentToolNames(entry).includes(AGENT_TOOL_NAME),
           source: entry.source,
         })),
   );

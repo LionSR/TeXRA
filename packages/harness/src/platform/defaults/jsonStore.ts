@@ -16,11 +16,12 @@ import { writeLogLine } from '@logger/logSink';
 import { ensureError } from '@utils/errors/errorMessage';
 import { withFileWriteLane } from '@utils/files/fileWriteLane';
 import { nodeFileServices, writeFileAtomic } from '@utils/files/fsDurability';
-import { absentReason } from '@utils/files/fsEntryExists';
+import { meansAbsent } from '@utils/files/fsEntryExists';
 
 type JsonRecord = Record<string, unknown>;
 
-/** Preserve the Node error identity exposed by this store's existing callers. */
+/** The Node error under a filesystem service failure, whose message names
+ *  the file and the reason without the service's wrapping. */
 function storageError(error: PlatformError.PlatformError): Error {
   return ensureError(error.reason.cause ?? error);
 }
@@ -38,13 +39,18 @@ function fileVersion(filePath: string): string {
 const probeVersion = (filePath: string): Effect.Effect<string, Error> =>
   Effect.try({ try: () => fileVersion(filePath), catch: ensureError });
 
-/** The file's record, read synchronously as a read follows the file. */
-function readJsonRecordSync(filePath: string): JsonRecord {
+/**
+ * The store file's record, read synchronously so a plain `get` can follow
+ * the file: `undefined` when the file is absent. Unreadable or non-object
+ * content throws the reason (`SyntaxError`, `TypeError`, or the Node
+ * filesystem error).
+ */
+function readJsonRecordSync(filePath: string): JsonRecord | undefined {
   let content: string;
   try {
     content = readFileSync(filePath, 'utf8');
   } catch (error) {
-    if (absentReason(error)) return {};
+    if (meansAbsent(error)) return undefined;
     throw error;
   }
   const parsed: unknown = JSON.parse(content);
@@ -52,35 +58,9 @@ function readJsonRecordSync(filePath: string): JsonRecord {
   throw new TypeError(`Expected ${filePath} to contain a JSON object.`);
 }
 
-/**
- * Read the store file as a JSON object. A missing file reads as a copy of
- * `missingFallback`; unreadable or non-object content fails with the
- * original error (`SyntaxError`, `TypeError`, or the Node filesystem error).
- * The standard filesystem service's error is unwrapped at this store boundary
- * because its existing callers match the underlying Node errors.
- */
-const readJsonRecord = Effect.fn('JsonStore.readJsonRecord')(function* (
-  filePath: string,
-  missingFallback: JsonRecord = {},
-) {
-  const fs = yield* FileSystem.FileSystem;
-  const content = yield* fs.readFile(filePath).pipe(
-    // Preserve the existing UTF-8 decoding, including a leading BOM.
-    Effect.map((bytes) => Buffer.from(bytes).toString('utf8')),
-    Effect.catchIf(absentReason, () => Effect.void),
-    Effect.mapError(storageError),
-  );
-  if (content === undefined) return { ...missingFallback };
-  const parsed: unknown = yield* Effect.try({
-    try: () => JSON.parse(content),
-    // JSON.parse throws a SyntaxError, which passes through unchanged.
-    catch: ensureError,
-  });
-  if (Predicate.isObject(parsed)) return parsed;
-  return yield* Effect.fail(
-    new TypeError(`Expected ${filePath} to contain a JSON object.`),
-  );
-});
+/** {@link readJsonRecordSync} as an effect, failing with the reason. */
+const readJsonRecord = (filePath: string) =>
+  Effect.try({ try: () => readJsonRecordSync(filePath), catch: ensureError });
 
 /**
  * Persist one mutation as a read-modify-write: prepare the directory, re-read
@@ -98,7 +78,7 @@ const flush = Effect.fn('JsonStore.flush')(function* (
   yield* fs
     .makeDirectory(path.dirname(filePath), { recursive: true })
     .pipe(Effect.mapError(storageError));
-  const record = yield* readJsonRecord(filePath, missingFallback);
+  const record = (yield* readJsonRecord(filePath)) ?? { ...missingFallback };
   if (value === undefined) {
     delete record[key];
   } else {
@@ -168,8 +148,7 @@ export class JsonStore {
     try {
       const version = fileVersion(this.filePath);
       if (version === this.version) return this.data;
-      const data = readJsonRecordSync(this.filePath);
-      this.data = data;
+      this.data = readJsonRecordSync(this.filePath) ?? {};
       this.version =
         fileVersion(this.filePath) === version ? version : undefined;
     } catch (error) {
@@ -200,7 +179,7 @@ export class JsonStore {
     // The version is taken before the read, so a write landing during it
     // is read again at the first `get`.
     const version = yield* probeVersion(storePath);
-    const data = yield* readJsonRecord(storePath);
+    const data = (yield* readJsonRecord(storePath)) ?? {};
     return new JsonStore(storePath, data, version);
   });
 

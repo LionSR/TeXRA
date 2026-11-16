@@ -37,7 +37,7 @@ export type HookAnswer = 'allow' | 'ask' | undefined;
 export interface SessionApprovals {
   /** Who bypasses one kind's prompts for a run, read from the view. */
   bypass(runId: RunId, kind: ApprovalBypassKind): 'goal' | 'human' | null;
-  /** Update grants in one transaction, returning once durable and folded.
+  /** Update grants in one transaction, returning once durable and applied.
    *  An unchanged grant writes nothing. A grant turned on answers every
    *  open request it covers in that transaction, unless the request says
    *  only a person answers it. */

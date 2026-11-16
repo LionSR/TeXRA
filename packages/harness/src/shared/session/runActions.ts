@@ -9,7 +9,6 @@ import {
 } from '@shared/schemas';
 
 import { isInterrupted, type RunView } from './sessionView';
-import type { RunView as ReadonlyRunView } from './readonlyViews';
 
 /** Opening the run's folder, exporting its conversation, copying its
  *  diagnostics: what any run offers, a fresh list per run so no two views
@@ -24,14 +23,14 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * this process holds (working, waiting, or spawned and not started yet) can
  * be stopped; an agent's run takes approval grants, and a conversation (not
  * a program) its compaction, unless it is still starting (no loop
- * step and no settled point yet). Nothing that rewrites or
+ * step and no finished point yet). Nothing that rewrites or
  * removes a run's files or history is offered while it is live. Any run this
  * process can act on can be renamed, and a conversation whose first turn has
- * ended forked (at its latest settled point, before any turn it is in now). After, a
+ * ended forked (at its latest finished point, before any turn it is in now). After, a
  * run can be deleted and its files worked on (`run.files`); a plain
  * agent's conversation run again from the launch form. Resume is offered
  * where it is the way to continue: on any loop-driven run that was
- * interrupted, and on a background script that did not complete. A settled
+ * interrupted, and on a background script that did not complete. A finished
  * conversation continues through its composer. Whether a resume can
  * proceed is `deriveResumability`'s.
  */
@@ -91,7 +90,7 @@ export const continuesFromRows = (
   run: Pick<RunView, 'identity' | 'program'> & { readonly ended: boolean },
 ): boolean => isLoopDriven(run.identity) && !(run.ended && run.program);
 
-/** A conversation with a settled point to cut at: a plain agent's run, not
+/** A conversation with a finished point to cut at: a plain agent's run, not
  *  a program, whose first turn has ended. */
 const forkable = (
   run: Pick<RunView, 'identity' | 'program' | 'forkPoint'>,
@@ -100,7 +99,7 @@ const forkable = (
 
 /** Why a run no longer takes `action`: the refusal every handler words. */
 export function runActionRefusal(
-  run: Pick<ReadonlyRunView, 'holder' | 'label'>,
+  run: Pick<RunView, 'holder' | 'label'>,
   action: RunAction,
 ): string {
   const what = ACTION_LABEL[action];

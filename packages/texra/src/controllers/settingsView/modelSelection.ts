@@ -14,7 +14,7 @@ import {
   getHelperModelName,
   readModelOptions,
   StateWriteFailed,
-  type ModelOption,
+  type ModelVerdict,
   REASONING_LEVELS_KEY,
 } from '@texra-ai/harness/host';
 import {
@@ -146,14 +146,14 @@ const buildSelectionItems = Effect.fn('buildModelSelectionItems')(function* (
 
 /**
  * A Models-tab row's reasoning controls, from what a run on the row's route
- * sends (`ModelOption.reasoning`, the bind's own decision): the levels the
+ * sends (`ModelVerdict.reasoning`, the bind's own decision): the levels the
  * route can carry, the level a run sends with none saved, and, with a level
  * saved, the level a run sends for it: the saved one, or the one the policy
  * substitutes where the route cannot carry it. The row offers no choice
  * where the route carries one level or none.
  */
 function reasoningChoice(
-  decided: Extract<ModelOption, { config: ModelConfig }>,
+  decided: Extract<ModelVerdict, { config: ModelConfig }>,
 ): ModelSelectionItem['reasoning'] {
   const { reasoning, savedEffort } = decided;
   if (reasoning === undefined || reasoning.efforts.length <= 1)

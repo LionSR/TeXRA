@@ -178,10 +178,10 @@ function deliverySummary(delivery: ChildRunDelivery): string {
       ).trim();
     const failed =
       message !== undefined || (exit !== undefined && exit.code !== 0);
-    // A timeout or a lost exit status has only a conventional code; name it.
+    // A timeout or a lost exit status has no code; name which.
     let outcome: string | undefined;
     if (exit?.timedOut) outcome = 'timed out';
-    else if (exit?.noExitCode) outcome = 'no exit code';
+    else if (exit?.code === null) outcome = 'no exit code';
     else if (exit !== undefined) outcome = `exit ${exit.code}`;
     const head = [
       `${failed ? '✗' : '✓'} ${label('description') || `$ ${label('command') || 'background command'}`}`,
@@ -254,9 +254,8 @@ function echoedDelivery(xml: string, tag: string): ChildRunDelivery {
     attributes,
     ...(code !== undefined && {
       exit: {
-        code: Number(code),
+        code: code === 'none' ? null : Number(code),
         timedOut: innerTag(xml, 'timed-out') !== undefined,
-        noExitCode: innerTag(xml, 'no-exit-code') !== undefined,
       },
     }),
     wallTime: innerTag(xml, 'wall-time'),

@@ -20,7 +20,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure } from '@logger/effectLog';
 import {
   qualifyAggregateId,
   referencedAggregates,
@@ -65,11 +65,8 @@ const requiredRead = <A>(
   read: Effect.Effect<A, DatabaseReadFailed>,
 ): Effect.Effect<A> =>
   read.pipe(
-    Effect.tapError((error) =>
-      Effect.logWarning('Session view read failed; retrying').pipe(
-        Effect.annotateLogs({ data: error }),
-        withLogChannel('sessionInputs'),
-      ),
+    Effect.tapError(
+      logFailure('sessionInputs', 'Session view read failed; retrying'),
     ),
     Effect.retry({
       schedule: Schedule.exponential('50 millis'),

@@ -48,7 +48,7 @@ const toolTestCall = Layer.unwrap(
 /** A host in a temp directory of its own per test, and a session over its
  *  roots whose requests a person answers from the view. */
 const perTest = Layer.provideMerge(
-  TestSession.layer(undefined, { host: {} }),
+  TestSession.layer(undefined, { answeredFromView: true }),
   FakeHost.layer(() => createTempDirPlatform('texra-executions-', tempDirs)),
 );
 
@@ -82,7 +82,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               // only `review.md`.
               const runId = Schema.decodeSync(RunIdSchema)('abc123');
               yield* publishTestRunStart(session, runId);
-              yield* Context.get(session, SessionLog).settled;
+              yield* Context.get(session, SessionLog).drained;
               yield* seedRunRecord(
                 session,
                 runId,

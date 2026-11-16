@@ -21,11 +21,11 @@ export function scriptCallsView(
   calls: readonly ScriptCallCard[],
   live: boolean,
 ): unknown {
-  const unsettled = live ? 'running' : 'interrupted';
+  const unfinished = live ? 'running' : 'interrupted';
   const status = (call: ScriptCallCard) =>
-    call.status === 'unsettled' ? unsettled : call.status;
+    call.status === 'unfinished' ? unfinished : call.status;
   const rank = (call: ScriptCallCard) => {
-    if (call.status === 'unsettled') return 0;
+    if (call.status === 'unfinished') return 0;
     if (call.status === 'failed') return 1;
     return 2;
   };

@@ -59,7 +59,7 @@ const startedRun = (session: Session) =>
 // The file's session over a fresh host's roots, opened as a host whose
 // person answers from the view: its runs' requests wait for a decision.
 layer(
-  TestSession.layer(undefined, { host: {} }).pipe(
+  TestSession.layer(undefined, { answeredFromView: true }).pipe(
     Layer.provideMerge(SessionGraph.layer),
     Layer.provideMerge(FakeHost.layer()),
   ),

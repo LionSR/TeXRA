@@ -7,8 +7,8 @@
  * reads and writes around them are this module's.
  */
 import * as path from 'node:path';
-import { RunFileService } from '@texra-ai/harness/plugins';
 import { entryTypeIn } from '@texra-ai/harness/node';
+import type { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 
 import { Effect, FileSystem } from 'effect';
 
@@ -56,7 +56,7 @@ interface ReplyContext {
   readonly expected: ExpectedDocuments;
   readonly run: {
     readonly logger: AgentTrace;
-    readonly fileService: RunFileService;
+    readonly fileService: RunWorkspace;
   };
 }
 

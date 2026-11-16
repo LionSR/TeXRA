@@ -29,7 +29,6 @@ import {
   type RunEnd,
   type RunId,
   type ToolResult,
-  type JsonValue,
   programOf,
   AGENT_TOOL_NAME,
 } from '@shared/schemas';
@@ -136,7 +135,7 @@ type ChildLaunch = {
   | {
       readonly program: {
         readonly name: string;
-        readonly args: Readonly<Record<string, JsonValue>>;
+        readonly args: Readonly<Record<string, Schema.Json>>;
       };
       readonly files: {
         readonly inputFiles: readonly string[];
@@ -509,7 +508,7 @@ export const agentTool = (): DefinedTool<AgentInput, PluginToolServices> =>
   defineTool({
     name: AGENT_TOOL_NAME,
     requiresApproval: 'inBody',
-    // A resumed call finds the child its earlier attempt launched and settles
+    // A resumed call finds the child its earlier attempt launched and finishes
     // from it, or resumes it under its own id: it never launches a second one.
     replay: 'safe',
     // A script's calls run beside each other, held to the child-run budget.

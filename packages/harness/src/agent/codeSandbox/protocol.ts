@@ -24,8 +24,8 @@ export const WorkerInputSchema = Schema.Struct({
 });
 export type WorkerInput = typeof WorkerInputSchema.Type;
 
-/** One settlement, delivered to the realm in the order the host chooses. */
-export const SettleMessageSchema = Schema.Union([
+/** One result, delivered to the realm in the order the host chooses. */
+export const ResultMessageSchema = Schema.Union([
   Schema.Struct({
     seq: NonNegativeIntSchema,
     ok: Schema.Literal(true),
@@ -39,7 +39,7 @@ export const SettleMessageSchema = Schema.Union([
     message: Schema.String,
   }),
 ]);
-export type SettleMessage = typeof SettleMessageSchema.Type;
+export type ResultMessage = typeof ResultMessageSchema.Type;
 
 /** JSON text from the realm, parsed into the value it encodes. */
 const JsonText = Schema.fromJsonString(Schema.Unknown);

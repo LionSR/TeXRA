@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { Layer } from 'effect';
 
 // Local imports
-import { RunFileService } from '@texra-ai/harness/plugins';
+import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import { createRunStorageLocation } from '@texra-ai/harness/host';
 import { FakeHost } from '@test/support/testKernel';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
@@ -64,7 +64,7 @@ export function compileContext(
 ): Parameters<typeof runCompileCheck>[0] {
   return {
     roots,
-    fileService: new RunFileService(runId, roots),
+    fileService: new RunWorkspace(runId, roots),
     logger: spiedTrace(),
     runId,
     inputDirs: [],

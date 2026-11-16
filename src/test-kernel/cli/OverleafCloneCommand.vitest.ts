@@ -4,7 +4,6 @@ import { Effect, Layer } from 'effect';
 import { afterEach, beforeEach, expect, vi } from 'vitest';
 
 // Local imports
-import { makeMachineGitEnv } from '@texra-ai/harness/node';
 import { Secrets } from '@texra-ai/harness/plugins';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { overleafGitClone } from '@latex/overleafProject';
@@ -68,7 +67,7 @@ function cloneCalls(): ChildProcess.StandardCommand[] {
  * helper.
  */
 const expectClonedInto = (cwd: string) =>
-  Effect.map(makeMachineGitEnv, (machineEnv) => {
+  Effect.sync(() => {
     const clone = overleafGitClone(
       { host: 'git.overleaf.com', path: `/${PROJECT_ID}`, isOverleaf: true },
       'olp_secret',
@@ -78,7 +77,7 @@ const expectClonedInto = (cwd: string) =>
     expect(command?.options).toMatchObject({
       cwd,
       env: {
-        ...machineEnv,
+        GIT_TERMINAL_PROMPT: '0',
         ...clone.env,
         LC_ALL: 'C',
         LANGUAGE: 'C',
