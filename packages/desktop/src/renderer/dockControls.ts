@@ -130,7 +130,7 @@ export function dockTab(id: string, actions: DockActions): ITabRenderer {
         <span class="shell-dock-tab-label" title=${tab.target ?? tab.title}
           >${tab.title}</span
         >
-        ${tab.dirty ? html`<span class="shell-dock-dirty" aria-label="Unsaved changes">•</span>` : nothing}
+        ${tab.dirty ? html`<span class="status-dot shell-dock-dirty" role="img" aria-label="Unsaved changes"></span>` : nothing}
         <span
           class="shell-dock-tab-close"
           @pointerdown=${(event: Event) => event.stopPropagation()}

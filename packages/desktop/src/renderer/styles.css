@@ -876,8 +876,8 @@ wa-input.desktop-command-palette-input {
 }
 
 /* Small filled circle, shared by every status-indicator dot in the desktop
-   renderer (this file's dirty-file dot, desktopShell.css's pending-approval
-   badge). Callers size and color it through --dot-size/--dot-color and add
+   renderer (the editor's and the dock tab's unsaved-file dots,
+   desktopShell.css's pending-approval badge). Callers size and color it through --dot-size/--dot-color and add
    their own position/border on top. */
 .status-dot {
   width: var(--dot-size, 6px);
