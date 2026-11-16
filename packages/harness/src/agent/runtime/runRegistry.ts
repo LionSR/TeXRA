@@ -31,10 +31,11 @@ import {
 
 import { stopRun } from '@agent/storage/runLifecycle';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
+import { workspaceEnvironmentLayer } from '@platform/defaults/nodeServices';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import type { RunId, RunStopReason } from '@shared/schemas';
 import type { SessionLog } from '@shared/session/runHistory';
+import { ancestorIds } from '@shared/session/runRelation';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import type { LiveRun, RunControls, RunsShape } from './runs';
@@ -94,7 +95,7 @@ type AnyFiber = Fiber.Fiber<unknown, unknown>;
 /** A launch's opening commits in its caller's fiber
  *  ({@link SessionRunRegistry.start}): a second launch is refused, a stop
  *  asked meanwhile is kept for the launch to apply once the opening
- *  answered, and `settled` resolves once the launch forked the run or
+ *  answered, and `launched` resolves once the launch forked the run or
  *  failed. */
 interface Opening {
   readonly kind: 'opening';
@@ -102,7 +103,7 @@ interface Opening {
   /** Whether the stop asked reaches the runs under this one: a stop under
    *  an ancestor's cascade does not, the ancestor's covering them. */
   cascade: boolean;
-  readonly settled: Deferred.Deferred<void>;
+  readonly launched: Deferred.Deferred<void>;
 }
 
 /** The fiber driving the run here, from that fiber's first step until it
@@ -249,7 +250,7 @@ export class SessionRunRegistry implements RunsShape {
     // It drains once its launch answered and the fiber that launch forked,
     // if any, exited.
     const drained = Effect.flatMap(
-      Deferred.await(entry.settled),
+      Deferred.await(entry.launched),
       () => this.liveRun(runId)?.drained ?? Effect.succeed(undefined),
     );
     return { runId, controls: undefined, drained };
@@ -288,27 +289,15 @@ export class SessionRunRegistry implements RunsShape {
     );
   }
 
-  /** The run's attached ancestors, nearest first. */
-  private ancestorsOf = Effect.fnUntraced(
-    { self: this },
-    function* (runId: RunId) {
-      const line: RunId[] = [];
-      for (
-        let id = yield* this.attachedParent(runId);
-        id !== null && !line.includes(id);
-        id = yield* this.attachedParent(id)
-      )
-        line.push(id);
-      return line;
-    },
-  );
-
   /** The runs held here under `runId`, at any depth, by the stored parent
    *  edges: an ended run between them hides none. What a stop covers, and
    *  what keeps a run's input open and its rows in place. */
   private heldUnder(runId: RunId): Effect.Effect<readonly RunId[]> {
     return this.heldWhere((id) =>
-      Effect.map(this.ancestorsOf(id), (line) => line.includes(runId)),
+      Effect.map(
+        ancestorIds((up) => this.attachedParent(up), id),
+        (line) => line.includes(runId),
+      ),
     );
   }
 
@@ -404,7 +393,7 @@ export class SessionRunRegistry implements RunsShape {
   openingOf(runId: RunId): Effect.Effect<void> | undefined {
     const entry = this.entries.get(runId);
     return entry?.kind === 'opening'
-      ? Deferred.await(entry.settled)
+      ? Deferred.await(entry.launched)
       : undefined;
   }
 
@@ -480,7 +469,7 @@ export class SessionRunRegistry implements RunsShape {
                 this.entries.delete(runId);
                 this.publishHeld();
               }
-              Deferred.doneUnsafe(entered.opening.settled, Effect.void);
+              Deferred.doneUnsafe(entered.opening.launched, Effect.void);
             })
           : Effect.void,
     );
@@ -511,7 +500,7 @@ export class SessionRunRegistry implements RunsShape {
       kind: 'opening',
       stop: entry?.reason ?? null,
       cascade: entry !== undefined,
-      settled: Deferred.makeUnsafe<void>(),
+      launched: Deferred.makeUnsafe<void>(),
     };
     this.entries.set(runId, opening);
     this.publishHeld();
@@ -688,7 +677,7 @@ export class SessionRunRegistry implements RunsShape {
 
   /**
    * One stop of one run: what it does is decided and marked on the run in
-   * one step (`claimStop`), carried out, and the mark settled on every
+   * one step (`claimStop`), carried out, and the mark finished on every
    * exit. `cascade` is whether it reaches the runs under it and ends a run
    * no fiber here drives; a stop under an ancestor's cascade does neither,
    * the ancestor's covering the whole tree. Answers whether a fiber here
@@ -794,27 +783,17 @@ export class SessionRunRegistry implements RunsShape {
     return { kind: 'ending', ending };
   }
 
-  /** A stop of `runId` stops every run held here under it, at any depth. */
+  /** A stop of `runId` stops every run held here under it, at any depth,
+   *  each with no cascade of its own (this one covers the whole tree). */
   private stopUnder(
     runId: RunId,
     reason: RunStopReason,
   ): Effect.Effect<void, Error> {
     return Effect.flatMap(this.heldUnder(runId), (held) =>
-      Effect.forEach(held, (id) => this.stopHeld(id, reason), {
+      Effect.forEach(held, (id) => this.stopping(id, reason, false), {
         discard: true,
       }),
     );
-  }
-
-  /** The stop of one run under a stopped ancestor, with no cascade of its
-   *  own (the ancestor's covers the whole tree): asked of its opening, or
-   *  its row and its fiber's interruption; one that left meanwhile needs
-   *  none. */
-  private stopHeld(
-    runId: RunId,
-    reason: RunStopReason,
-  ): Effect.Effect<void, Error> {
-    return Effect.asVoid(this.stopping(runId, reason, false));
   }
 
   /** The session is closing: refuse every run started from here on, and

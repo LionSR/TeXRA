@@ -11,7 +11,6 @@ import {
   formatHunkLines,
 } from '@texra-ai/harness/schemas';
 import { hiddenRowsText } from '@cli/tui/overflowText';
-import { agentProposalLabel } from '@texra/shared/plugins/documents';
 import { DEFINED_AGENT_COPY } from '@ui/copy/delegationApproval';
 import { modelFailureText } from '@ui/copy/modelAccess';
 import {
@@ -28,6 +27,11 @@ const TOOL_EDIT_APPROVAL_DIFF_MAX_LINES = 80;
 const TOOL_EDIT_APPROVAL_DIFF_MAX_LINE_CHARS = 240;
 const AGENT_PROPOSAL_INSTRUCTION_MAX_CHARS = 6_000;
 const AGENT_PROPOSAL_INSTRUCTION_MAX_LINES = 40;
+
+/** What a proposal launches, as its approval copy names it. */
+export const agentProposalLabel = (
+  proposal: Pick<AgentProposalRequest, 'task'>,
+): string => (proposal.task ? 'program' : 'agent');
 const AGENT_PROPOSAL_INSTRUCTION_MAX_LINE_CHARS = 240;
 const AGENT_PROPOSAL_FILE_GROUP_MAX_FILES = 10;
 

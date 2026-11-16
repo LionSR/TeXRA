@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { Effect, FileSystem, Schema } from 'effect';
 
 import { BUNDLED_AGENTS_DIRECTORY } from '@texra-ai/harness/host';
-import { absentReason } from '@texra-ai/harness/node';
+import { meansAbsent } from '@texra-ai/harness/node';
 
 /** The app's resources directory holds no bundled agents. */
 class DesktopResourcesNotFound extends Schema.TaggedError<DesktopResourcesNotFound>()(
@@ -57,5 +57,5 @@ export const checkResourcesPath = Effect.fn('checkResourcesPath')(function* (
 const isExistingDirectory = (fs: FileSystem.FileSystem, path: string) =>
   fs.stat(path).pipe(
     Effect.map((info) => info.type === 'Directory'),
-    Effect.catchIf(absentReason, () => Effect.succeed(false)),
+    Effect.catchIf(meansAbsent, () => Effect.succeed(false)),
   );

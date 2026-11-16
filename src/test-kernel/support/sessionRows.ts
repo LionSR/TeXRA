@@ -3,11 +3,7 @@
 // renamed in one fixture.
 
 // Local imports - harness
-import {
-  qualifyAggregateId,
-  type RunId,
-  type SessionRowDraft,
-} from '@shared/schemas';
+import { type RunId, type SessionRowDraft } from '@shared/schemas';
 import type { RunHistoryDraft } from '@shared/session/runState';
 
 type RunStartDraft = Extract<SessionRowDraft, { type: 'run.start' }>;
@@ -24,7 +20,7 @@ export const runStart = (
   over: Partial<Omit<RunStartDraft, 'type' | 'aggregateId'>> = {},
 ): RunStartDraft => ({
   type: 'run.start',
-  aggregateId: qualifyAggregateId('run', runId),
+  aggregateId: runId,
   identity: { kind: 'agent', agent: 'chat' },
   takesFollowUps: false,
   parent: null,
@@ -41,7 +37,7 @@ export const runStart = (
  * so no suite can change another's input.
  */
 export function toolUseTurn(runId: RunId) {
-  const aggregateId = qualifyAggregateId('run', runId);
+  const aggregateId = runId;
   const ORIGIN = {
     protocol: 'openai-responses',
     requestedModel: 'gpt-test',

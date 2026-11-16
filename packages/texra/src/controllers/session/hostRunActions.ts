@@ -9,7 +9,6 @@ import {
   type WorkspaceRoots,
 } from '@texra-ai/harness';
 import {
-  AgentCatalog,
   getHelperModelName,
   type ProcessServices,
   type readModelOptions,
@@ -18,14 +17,14 @@ import {
   presentRunFailure,
   type Notices,
   workspaceEnvironmentLayer,
+  programLaunch,
 } from '@texra-ai/harness/host';
 import { Secrets, withLogChannel } from '@texra-ai/harness/plugins';
 import { Effect, FileSystem, Scope } from 'effect';
 
 import {
   toErrorMessage,
-  isTaskConfig,
-  recipeBlockOf,
+  programOf,
   runActionRefusal,
   type RunAction,
   type RunId,
@@ -37,13 +36,9 @@ import {
 import { DEFAULT_AGENT_MODEL } from '@texra/model/curatedModels';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import { forkRun, resumeRun } from '@texra/controllers/session/runActionPolicy';
-import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { packDestination } from '@texra/tools/documents/runOutputs';
 import type { FileOpResult } from '@texra/shared/session/hostRequest';
-import {
-  DOCUMENT_TASK_BLOCK,
-  documentRoundsOf,
-} from '@texra/shared/plugins/documents';
+import { documentRoundsOf } from '@texra/shared/plugins/documents';
 import type { Dialogs, HostFailed } from '@texra/hosts/uiHosts';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';
@@ -117,8 +112,8 @@ export interface HostRunActions {
     config: AgentConfig,
     options?: RunValidatedOptions,
   ): Effect.Effect<Run, LaunchError | RunFailure, ProcessServices>;
-  /** Merge `editedFile` into `baseFile`: the merge agent's document task on
-   *  the helper model, answering once its run is admitted. */
+  /** Merge `editedFile` into `baseFile`: the `merge` program on the helper
+   *  model, answering once its run is admitted. */
   merge(
     baseFile: string,
     editedFile: string,
@@ -172,10 +167,8 @@ export const createHostRunActions = Effect.fn(
 ): Effect.fn.Return<
   HostRunActions,
   never,
-  FileSystem.FileSystem | AgentCatalog | Secrets | Scope.Scope
+  FileSystem.FileSystem | Secrets | Scope.Scope
 > {
-  // The catalog the merge's task resolves its agent against.
-  const catalog = yield* AgentCatalog;
   // Resolved once here and carried: the planner's workspace probes below
   // read through this filesystem rather than taking one from whatever
   // context each of its callers happens to run on.
@@ -215,20 +208,17 @@ export const createHostRunActions = Effect.fn(
           }),
       ),
     );
-  /** When a run this window started ends, a document task's final output
-   *  opens. Presentation reacts to the outcome the run committed; it never
+  /** When a run this window started ends, the final output of the documents
+   *  it recorded opens. Presentation reacts to the outcome the run committed; it never
    *  runs inside the run, so it cannot change that outcome. Its documents
    *  are read from the store, which holds the run's rows once its end is
    *  read, whichever process the window's view follows. */
   const whenEnded = (run: Run) =>
     Effect.gen(function* () {
       const result = yield* run.result;
-      const config = yield* readConfig(run.runId);
-      if (config === undefined || !isTaskConfig(config)) return;
       const stored = yield* session.view.read([]);
       const output = yield* selectAutoOpenFinalOutput(
         roots,
-        config,
         result,
         stored.runs.get(run.runId),
       );
@@ -315,7 +305,7 @@ export const createHostRunActions = Effect.fn(
         return yield* new Rejected({
           reason: 'This run saved no setup to act on.',
         });
-      if (recipeBlockOf(config) !== DOCUMENT_TASK_BLOCK.key)
+      if (programOf(config) === null)
         return yield* new Rejected({
           reason: 'This action applies to a document task.',
         });
@@ -398,35 +388,34 @@ export const createHostRunActions = Effect.fn(
     runAgain: (runId) => nativeAgentRun(runId, 'runAgain'),
     runValidated,
     merge: Effect.fn('HostRunActions.merge')(function* (baseFile, editedFile) {
-      // A launch that cannot be built (no catalog, no merge task) says
-      // why, beside the merge docs, and logs it.
-      const refuse = ({ message }: { readonly message: string }) =>
-        Effect.logWarning(message).pipe(
-          withLogChannel(CHANNEL),
-          Effect.andThen(
-            ports.present.emit('requestShowError', {
-              message,
-              docsPage: 'intelligent-merge',
-            }),
-          ),
-          Effect.as(null),
-        );
-      const config = yield* documentTaskConfig(
-        {
-          agent: 'merge',
-          model: (yield* getHelperModelName(roots)) ?? DEFAULT_AGENT_MODEL,
-          inputFiles: [baseFile],
-          editedFile,
-        },
-        roots,
+      const inputFiles = [baseFile];
+      const launch = yield* programLaunch(
+        'merge',
+        {},
+        { inputFiles, outputFiles: [] },
       ).pipe(
-        Effect.provideService(AgentCatalog, catalog),
-        Effect.catchTags({
-          DocumentTaskRefused: refuse,
-          AgentCatalogLoadError: refuse,
-        }),
+        // No merge program is registered: said beside the merge docs, and
+        // logged.
+        Effect.catchTag('ProgramNotRegistered', ({ message }) =>
+          Effect.logWarning(message).pipe(
+            withLogChannel(CHANNEL),
+            Effect.andThen(
+              ports.present.emit('requestShowError', {
+                message,
+                docsPage: 'intelligent-merge',
+              }),
+            ),
+            Effect.as(null),
+          ),
+        ),
       );
-      if (config !== null) yield* startAgentRequest(config);
+      if (launch !== null)
+        yield* startAgentRequest({
+          ...launch,
+          model: (yield* getHelperModelName(roots)) ?? DEFAULT_AGENT_MODEL,
+          inputFiles,
+          editedFile,
+        });
     }),
     documentTaskDiffRequest: Effect.fn(
       'HostRunActions.documentTaskDiffRequest',

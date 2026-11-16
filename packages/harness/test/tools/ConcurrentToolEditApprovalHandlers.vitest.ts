@@ -85,8 +85,8 @@ layer(perTest, { buildPerTest: true, excludeTestServices: true })(
           const runB = yield* publishTestRunStart(sessionB);
           yield* Effect.all(
             [
-              Context.get(sessionA, SessionLog).settled,
-              Context.get(sessionB, SessionLog).settled,
+              Context.get(sessionA, SessionLog).drained,
+              Context.get(sessionB, SessionLog).drained,
             ],
             {
               concurrency: 'unbounded',

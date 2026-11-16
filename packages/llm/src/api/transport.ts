@@ -263,3 +263,19 @@ export function ownedAbortSafeRequest<A>(
     );
   });
 }
+
+/**
+ * Refuses a request when an ambient `*_CUSTOM_HEADERS` override is set: those
+ * headers would override the selected binding's credentials and protocol, so
+ * the binding, not the environment, determines its request headers. Each
+ * provider names its own environment variable and its own message.
+ */
+export const refuseAmbientHeaders = (
+  envVar: string,
+  message: string,
+): Effect.Effect<void, ModelError> =>
+  Effect.suspend(() =>
+    process.env[envVar]
+      ? Effect.fail(new ModelError({ kind: 'invalid-request', message }))
+      : Effect.void,
+  );

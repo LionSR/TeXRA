@@ -29,22 +29,14 @@ const runCatalog = (roots: WorkspaceRoots, workspaceRoot: string) => ({
   plugins: { loadable: [], withheld: [] },
 });
 
-/** The process's skill sources as one contribution per fixture root, each
- *  in its own tier, labelled with the tier id. */
-const testSkillRoots = (
-  roots: readonly {
-    readonly tier: 'project' | 'user';
-    readonly path: string;
-  }[],
-) =>
+/** The process's skill sources: the fixture roots as custom roots, in
+ *  order, over an empty resources tree. */
+const testSkillRoots = (paths: readonly string[], resourcesPath: string) =>
   Layer.succeed(HostSkillSources)({
-    resourcesPath: '',
-    options: {},
-    contributions: roots.map((root, index) => ({
-      id: `test:${index}`,
-      tier: root.tier,
-      roots: () => [{ path: root.path, label: root.tier }],
-    })),
+    resourcesPath,
+    projectDataDirName: undefined,
+    pluginIds: [],
+    options: { additionalPaths: paths },
   });
 
 async function createTempRoot(): Promise<string> {
@@ -82,10 +74,10 @@ layer(FakeHost.layer({ workspaceRoot: WORKSPACE_ROOT }), {
         runCatalog(roots, WORKSPACE_ROOT),
       ).pipe(
         Effect.provide(
-          testSkillRoots([
-            { tier: 'project', path: projectRoot },
-            { tier: 'user', path: userRoot },
-          ]),
+          testSkillRoots(
+            [projectRoot, userRoot],
+            yield* Effect.promise(createTempRoot),
+          ),
         ),
       );
 
@@ -117,7 +109,9 @@ layer(FakeHost.layer({ workspaceRoot: WORKSPACE_ROOT }), {
         const { catalog } = yield* loadRuntimeSkillCatalogEffect(
           runCatalog(roots, projectA),
         ).pipe(
-          Effect.provide(testSkillRoots([{ tier: 'user', path: skillsRoot }])),
+          Effect.provide(
+            testSkillRoots([skillsRoot], yield* Effect.promise(createTempRoot)),
+          ),
           Effect.provide(nodePlatformLayer),
         );
         const rootsOf = (listed: typeof catalog) =>

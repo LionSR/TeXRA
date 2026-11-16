@@ -21,7 +21,6 @@ import { afterEach, assert, beforeEach, describe, expect, vi } from 'vitest';
 import { setLogSink } from '@texra-ai/harness/node';
 import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
-import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import { runCli } from '@cli/commands/root';
 import { runHeadlessAgent } from '@cli/commands/run';
 import { runResumeCommand } from '@cli/commands/resumeRun';
@@ -132,9 +131,6 @@ describe('texra resume', { timeout: REAL_RUN_TIMEOUT }, () => {
                   inputFiles: [],
                   contextFiles: [],
                   instruction: 'GOLDEN-PARK',
-                  options: Schema.decodeUnknownSync(DocumentTaskOptionsSchema)(
-                    {},
-                  ),
                 }).pipe(provideCliInvocation(context)),
               );
               // The project's store appears once the run's session opens,

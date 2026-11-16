@@ -118,7 +118,7 @@ describe(
               yield* send(session, runId, 'Keep this input.');
               const faults = yield* sessionStoreFaults(storage);
               // The resume reads the run's queued input and then its lineage
-              // (`persistedParentRunId`): that read fails.
+              // (`persistedParentId`): that read fails.
               const input = yield* faults.holdNext('readAggregate');
               const resumed = yield* Effect.forkChild(
                 Effect.flip(resume(runId, { session })),
@@ -263,7 +263,10 @@ describe('a root launched to run once', { timeout: REAL_RUN_TIMEOUT }, () => {
           Effect.gen(function* () {
             const { roots } = yield* FakeHost;
             const sessions = yield* Sessions;
-            const options = { persistent: true, host: {} } as const;
+            const options = {
+              persistent: true,
+              answeredFromView: true,
+            } as const;
             // Ended in a session that then closed, so no fiber holds it.
             const runId = yield* Effect.scoped(
               Effect.gen(function* () {
@@ -302,7 +305,7 @@ describe('a root launched to run once', { timeout: REAL_RUN_TIMEOUT }, () => {
             const { roots } = yield* FakeHost;
             const session = yield* TestSession.open(roots, {
               persistent: true,
-              host: {},
+              answeredFromView: true,
             });
             const run = yield* session.start({
               agent: NOTES_AGENT,

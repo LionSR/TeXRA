@@ -8,7 +8,7 @@ import path from 'node:path';
 
 import { Effect, FileSystem, PlatformError } from 'effect';
 
-import { absentReason, writeFileAtomic } from '@texra-ai/harness/node';
+import { meansAbsent, writeFileAtomic } from '@texra-ai/harness/node';
 import { TEXRA_STORAGE_DIR_NAME } from '@texra/platform/defaults/nodeStorage';
 import type { CliOutputFormat } from '@texra/shared/cliOutputFormat';
 
@@ -47,7 +47,7 @@ function writeInitFileAtomic(
   return FileSystem.FileSystem.use((fs) =>
     fs.access(filePath, { writable: true }),
   ).pipe(
-    Effect.catchIf(absentReason, () => Effect.void),
+    Effect.catchIf(meansAbsent, () => Effect.void),
     Effect.andThen(writeFileAtomic(filePath, new TextEncoder().encode(data))),
   );
 }
@@ -100,7 +100,7 @@ export const ensureTexraGitignored = Effect.fn('ensureTexraGitignored')(
       // a transient I/O error, ...) must not be treated as "file absent":
       // doing so would fall through to the write below and overwrite
       // unreadable-but-present content instead of surfacing the failure.
-      Effect.catchIf(absentReason, () => Effect.succeed(undefined)),
+      Effect.catchIf(meansAbsent, () => Effect.succeed(undefined)),
     );
     const next = gitignoreWithTexra(existing ?? '');
     if (next === null) return 'present';

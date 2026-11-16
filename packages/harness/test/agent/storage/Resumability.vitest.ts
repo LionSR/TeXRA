@@ -5,7 +5,6 @@ import { expect } from 'vitest';
 import {
   RunIdSchema,
   AgentConfigSchema,
-  qualifyAggregateId,
   RUN_OUTCOME,
   type RunId,
 } from '@texra-ai/harness/schemas';
@@ -30,7 +29,7 @@ const processSession = Effect.flatMap(TestSession.open(), sessionHandleOf);
 
 const start = (session: Session, runId: RunId) =>
   publishTestRunStart(session, runId).pipe(
-    Effect.andThen(Context.get(session, SessionLog).settled),
+    Effect.andThen(Context.get(session, SessionLog).drained),
   );
 
 /** Open the run aggregate the way the loop does: its activation, then
@@ -47,7 +46,7 @@ const fail = (session: Session, runId: RunId) =>
   Context.get(session, SessionLog).transact([
     {
       type: 'run.end',
-      aggregateId: qualifyAggregateId('run', runId),
+      aggregateId: runId,
       outcome: RUN_OUTCOME.FAILED,
       output: emptyRunEndOutput(),
     },
@@ -85,9 +84,9 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             yield* seedRows(Context.get(session, SessionLog))([
               {
                 type: 'run.config',
-                aggregateId: qualifyAggregateId('run', runId),
+                aggregateId: runId,
                 config: Schema.decodeUnknownSync(AgentConfigSchema)(
-                  asDocumentTask({ agent: 'polish', model: 'test-model' }),
+                  asDocumentTask({ model: 'test-model' }),
                 ),
               },
             ]);

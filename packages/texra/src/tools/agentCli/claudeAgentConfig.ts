@@ -19,7 +19,7 @@ import {
   homeDirectory,
   inheritedEnv,
 } from '@texra-ai/harness/node';
-import { absentReason } from '@texra-ai/harness/node';
+import { meansAbsent } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -70,7 +70,7 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
       // traversable. Neither is a usable credential, but only absence is
       // ordinary: a path that cannot be traversed says why a signed-in
       // person's session is not used.
-      Effect.catchIf(absentReason, () => Effect.succeed(false)),
+      Effect.catchIf(meansAbsent, () => Effect.succeed(false)),
       Effect.catch((error) =>
         Effect.as(
           Effect.logWarning(
@@ -88,19 +88,19 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
         configDir,
         defaultConfigDir,
       )) {
-        const { exitCode } = yield* executeCommand(['security', ...probe], {
+        const { end, success } = yield* executeCommand(['security', ...probe], {
           cwd: process.cwd(),
           timeout: 1000,
           quiet: true,
         });
         // `quiet` also silences the spawn-failure log, and `security` is part
         // of macOS, so its absence is worth a line before reading not-found.
-        if (exitCode === 127) {
+        if (end._tag === 'NoExit' && end.why === 'spawn') {
           yield* Effect.logWarning(
             'The macOS `security` tool could not start; the keychain credential probe reads as not found.',
           ).pipe(withLogChannel(CHANNEL));
         }
-        if (exitCode === 0) return true;
+        if (success) return true;
       }
     }
 
@@ -169,8 +169,8 @@ function claudeKeychainCredentialProbes(
  *      API key" failures).
  *   2. Otherwise an explicit `ANTHROPIC_API_KEY` inherited from the
  *      environment passes through untouched.
- *   3. Otherwise the workspace-managed secret (Settings → API Keys →
- *      Anthropic) is injected as `ANTHROPIC_API_KEY`.
+ *   3. Otherwise the Anthropic key TeXRA stores is injected as
+ *      `ANTHROPIC_API_KEY`.
  *
  * The SDK identifies itself in the User-Agent via CLAUDE_AGENT_SDK_CLIENT_APP.
  */

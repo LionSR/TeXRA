@@ -21,7 +21,7 @@ import {
 } from '@shared/config/settings';
 import type { StateKey } from '@shared/state/stateSettings';
 import type { AgentSource } from '@shared/schemas';
-import { ToolRegistry, boundFile, boundFiles } from '@tools/toolTable';
+import type { ToolRegistry } from '@tools/toolTable';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { entryExists } from '@utils/files/fsEntryExists';
 
@@ -299,10 +299,9 @@ export function agentSourceRoots(
 
 /**
  * `customize` or `removeCustom` refused the change: the entry has no file of
- * its own to copy or delete (`noFile`), its copy would land outside the
- * custom directory, a file it binds lies outside its own directory or the
- * file to delete lies outside the custom directory (`escapes`), a copy is
- * already there (`exists`, at `path`), or a copy has no newer bundled version
+ * its own to copy or delete (`noFile`), its copy or the file to delete
+ * would lie outside the custom directory (`escapes`), a copy is already
+ * there (`exists`, at `path`), or a copy has no newer bundled version
  * to keep (`current`).
  */
 export class AgentCustomizeRefused extends Schema.TaggedError<AgentCustomizeRefused>()(
@@ -316,7 +315,7 @@ export class AgentCustomizeRefused extends Schema.TaggedError<AgentCustomizeRefu
 
 /**
  * A change to a custom copy of a bundled agent: `copy` writes a new one
- * into the custom directory, with the files its blocks bind beside it, stamped with the bundled file's digest
+ * into the custom directory, stamped with the bundled file's digest
  * (`basedOn`), and is refused when one is there; `overwrite` replaces it;
  * `keep` re-stamps the user's copy with the changed bundled version, which
  * dismisses its newer-version notice and touches nothing else.
@@ -365,9 +364,7 @@ const copyTarget = Effect.fn('AgentDirectoryService.copyTarget')(function* (
 });
 
 /** Apply `change` to the custom copy of `entry`; `newerBuiltIn` is the
- *  changed bundled version a `keep` re-stamps with. The copy's path, and
- *  the bound files (as the agent names them) that were already beside it
- *  and were kept although they differ from the originals. */
+ *  changed bundled version a `keep` re-stamps with. The copy's path. */
 export const customizeCopy = Effect.fn('customizeCopy')(function* (
   entry: AgentEntry,
   change: AgentCustomization,
@@ -390,27 +387,6 @@ export const customizeCopy = Effect.fn('customizeCopy')(function* (
       reason: 'escapes',
       message: 'Refusing to copy: target escapes the custom agents directory.',
     });
-  // The files the agent's blocks bind are part of it: a copy carries them
-  // from beside the original to beside itself. A `keep` re-stamps only.
-  const { blocks } = yield* ToolRegistry;
-  const fromDir = path.dirname(entry.path);
-  const bound =
-    change === 'keep'
-      ? []
-      : boundFiles(entry.blocks, blocks).map((file) => ({
-          file,
-          from: boundFile(entry.path, file),
-          to: boundFile(target, file),
-        }));
-  const escaping = bound.find(
-    ({ from }) => !isStrictlyWithin(fromDir, from.path),
-  );
-  if (escaping)
-    return yield* new AgentCustomizeRefused({
-      reason: 'escapes',
-      path: escaping.from.path,
-      message: `Refusing to copy: ${escaping.from.path}, a file the agent binds, is outside its directory.`,
-    });
   const fs = yield* FileSystem.FileSystem;
   if (change === 'copy' && (yield* fs.exists(target)))
     return yield* new AgentCustomizeRefused({
@@ -418,20 +394,6 @@ export const customizeCopy = Effect.fn('customizeCopy')(function* (
       path: target,
       message: `A custom copy already exists: ${target}`,
     });
-  // A bound file already beside the copy is kept as it is, in every mode:
-  // several agents can bind one file, and another customized agent, or the
-  // person, may have edited it. The stamp still names the bundled version,
-  // whose digest covers the original, so a kept file that differs is
-  // returned for the caller to tell the person; nothing else would.
-  const keptDiffering: string[] = [];
-  for (const { file, from, to } of bound) {
-    if (yield* fs.exists(to.path)) {
-      if ((yield* from.read) !== (yield* to.read)) keptDiffering.push(file);
-      continue;
-    }
-    yield* fs.makeDirectory(path.dirname(to.path), { recursive: true });
-    yield* fs.copyFile(from.path, to.path);
-  }
   yield* writeStampedCopy(entry.path, target, base.digest);
-  return { path: target, keptDiffering };
+  return { path: target };
 });

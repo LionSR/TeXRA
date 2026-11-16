@@ -3,7 +3,6 @@ import { assert, describe, expect, it } from 'vitest';
 import { Schema } from 'effect';
 import {
   MESSAGE_TYPES,
-  qualifyAggregateId,
   RunIdSchema,
   type TraceDocument,
   TraceDocumentSchema,
@@ -19,7 +18,7 @@ function trace(message = 'hello'): TraceDocument {
     runId: RUN_ID,
     events: [
       Schema.decodeUnknownSync(DisplayRowSchema)({
-        aggregateId: qualifyAggregateId('run', RUN_ID),
+        aggregateId: RUN_ID,
         seq: 1,
         commit: 1,
         at: 1_767_225_600_000,

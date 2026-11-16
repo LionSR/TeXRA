@@ -57,7 +57,6 @@ export function agentErrorPresentation(
       payload: {
         key: HARNESS_INSTRUCTION_KEY.MISSING_API_KEY,
         message: MISSING_API_KEY_MESSAGE,
-        showSuppress: false,
       },
     };
   return {

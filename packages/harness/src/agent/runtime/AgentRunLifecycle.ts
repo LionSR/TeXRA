@@ -10,7 +10,7 @@ import { logSdkError } from '@agent/trace/traceLogs';
 import { endRunRows, type RunEnding } from '@agent/storage/runLifecycle';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure, withLogChannel } from '@logger/effectLog';
 import { DELIVERY_FAMILY } from '@shared/deliveryTags';
 import type { ResultEvent } from '@shared/session/agentEvent';
 import { SessionLog } from '@shared/session/runHistory';
@@ -28,13 +28,6 @@ import { RunRegistry, type AgentRunServices } from './runRegistry';
 import type { RunLaunch } from './run/AgentRun';
 
 const CHANNEL = 'agentRunLifecycle';
-
-/** A lifecycle diagnostic: guarded cleanup logs past its failure here. */
-const logLifecycleWarning = (message: string, data: unknown) =>
-  Effect.logWarning(message).pipe(
-    Effect.annotateLogs({ data }),
-    withLogChannel(CHANNEL),
-  );
 
 /** How a run ends, as {@link endVerdict} decides it. */
 interface EndVerdict {
@@ -117,7 +110,10 @@ export const commitEnd = Effect.fn('commitEnd')(function* (
     report: yield* report(end),
   }).pipe(
     Effect.tapError((unsaved) =>
-      logLifecycleWarning(`Run ${runId}: its end could not be saved`, {
+      logFailure(
+        CHANNEL,
+        `Run ${runId}: its end could not be saved`,
+      )({
         runId,
         error: unsaved,
       }),
@@ -182,26 +178,29 @@ export const endRun = Effect.fn('endRun')(function* (
             : classified;
         })();
   // Read once as the run entered.
-  const parentRunId = ctx.entry.parent;
+  const parentId = ctx.entry.parent;
   if (thrown !== undefined && error !== undefined) {
     if (verdict.outcome === RUN_OUTCOME.CANCELLED)
       // A stop that met a failure (a finalizer that died or failed as the
       // stop unwound it) is still a stop: the row says CANCELLED and
       // carries the failure, which is logged, not lost.
-      yield* logLifecycleWarning('A stopped run also failed', {
+      yield* logFailure(
+        CHANNEL,
+        'A stopped run also failed',
+      )({
         runId,
         error: thrown,
       });
     // A root's failure is logged here; a child's is delivered to its
     // orchestrator, so a second wrapper error would blame the parent.
-    if (parentRunId === null)
+    if (parentId === null)
       yield* logSdkError(ctx.logger, runEndErrorMessage(error), thrown, {
         operation: `execute ${agentIdentifier}`,
       });
   }
   // A child's failure rides its result, the error its delivery reports.
   const childResult: RunReport | undefined =
-    parentRunId === null
+    parentId === null
       ? carried
       : {
           ...(carried ?? emptyReport(ctx, verdict.outcome)),
@@ -235,10 +234,10 @@ export const endRun = Effect.fn('endRun')(function* (
             ).pipe(
               Effect.catch((unbuilt) =>
                 Effect.as(
-                  logLifecycleWarning(
+                  logFailure(
+                    CHANNEL,
                     `Run ${runId}: its report could not be built`,
-                    { runId, error: unbuilt },
-                  ),
+                  )({ runId, error: unbuilt }),
                   {
                     family:
                       ctx.config.script?.kind === 'background'
@@ -252,7 +251,7 @@ export const endRun = Effect.fn('endRun')(function* (
             );
           }),
   );
-  if (parentRunId === null && thrown !== undefined && error !== undefined)
+  if (parentId === null && thrown !== undefined && error !== undefined)
     // A root run's failure. Once its `run.end` row committed, the
     // session's presenter shows that row (`presentTerminalResult`); a run
     // that never opened has no row, so its launch's caller presents this.

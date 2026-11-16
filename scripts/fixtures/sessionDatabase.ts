@@ -10,12 +10,12 @@ export {
 } from '@controllers/session/databaseLayer';
 export { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 export { Database, GlobalDatabase } from '@shared/session/database';
-export { qualifyAggregateId, SessionRowSchema } from '@shared/schemas';
+export { SessionRowSchema } from '@shared/schemas';
 export {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 export { openDesktopProjectRecords } from '@desktop/main/desktopProjectRecords';
-export { nodePlatformServices } from '@platform/defaults/nodePlatform';
+export { nodePlatformServices } from '@platform/defaults/nodeServices';
 export { ToolRegistry, toolTable } from '@tools/toolTable';
 export { servicePaths } from '@texra/controllers/server/discovery';

@@ -46,12 +46,12 @@ const PLAN_NAMES = Object.freeze({
     fallback: 'your own xAI API key',
   },
   'kimi-code-subscription': {
-    plan: codingPlanForUsageRoute('kimi-code-subscription').preferenceLabel,
+    plan: codingPlanForUsageRoute('kimi-code-subscription').preference.title,
     fallback: 'your own Moonshot API keys',
   },
   'glm-coding-plan-subscription': {
-    plan: codingPlanForUsageRoute('glm-coding-plan-subscription')
-      .preferenceLabel,
+    plan: codingPlanForUsageRoute('glm-coding-plan-subscription').preference
+      .title,
     fallback: 'the regular GLM endpoint',
   },
 } satisfies Record<DeclinableUsageRoute, { plan: string; fallback: string }>);

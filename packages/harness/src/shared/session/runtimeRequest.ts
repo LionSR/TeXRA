@@ -51,7 +51,7 @@ export const RuntimeCommandSchema = Schema.Union([
   }),
   /**
    * A new task holding this run's conversation up to `at`, the `seq` of a
-   * settled position in its history (its latest when absent): answered with
+   * finished position in its history (its latest when absent): answered with
    * the new run's id, which waits for its host to resume it.
    */
   Schema.Struct({

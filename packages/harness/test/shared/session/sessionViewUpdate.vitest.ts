@@ -12,7 +12,6 @@ import {
   isInterrupted,
   MESSAGE_TYPES,
   needsUser,
-  qualifyAggregateId,
   rollupOf,
   type RunId,
   RunIdSchema,
@@ -143,7 +142,7 @@ describe('session view update', () => {
     const inputs = [subscribe(ROOT), ...log.events.map(tail), log.drained()];
     const held = runView(viewOf([...inputs, alive], updater), ROOT);
     expect(held.compactingActive).toBe(true);
-    expect(held.transcript.settledRows).toBe(0);
+    expect(held.transcript.finalRows).toBe(0);
 
     // No row says the turn ended; the owner's death alone ends it, so the
     // open compaction finishes and the scrollback may print every row.
@@ -151,7 +150,7 @@ describe('session view update', () => {
     expect(isInterrupted(lost)).toBe(true);
     expect(lost.compactingActive).toBe(false);
     expect(lost.transcript.rows).toHaveLength(1);
-    expect(lost.transcript.settledRows).toBe(1);
+    expect(lost.transcript.finalRows).toBe(1);
   });
 });
 
@@ -162,7 +161,7 @@ describe('session view update', () => {
 // ---------------------------------------------------------------------------
 
 const RUN_HISTORY_RUN = Schema.decodeUnknownSync(RunIdSchema)('ab12cd');
-const RUN_HISTORY_AGGREGATE = qualifyAggregateId('run', RUN_HISTORY_RUN);
+const RUN_HISTORY_AGGREGATE = RUN_HISTORY_RUN;
 const toolTurn = toolUseTurn(RUN_HISTORY_RUN);
 /** Where the loop stands: its first position opens the run. */
 const position = (at: string, turn: number) => ({

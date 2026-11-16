@@ -13,7 +13,7 @@ import {
   type ProcessRuntime,
   withProcessServices,
 } from '@texra-ai/harness/host';
-import { absentReason } from '@texra-ai/harness/node';
+import { meansAbsent } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { HostFailed } from '@texra/hosts/uiHosts';
@@ -86,7 +86,7 @@ export function createDesktopPreviewHost(
     return FileSystem.FileSystem.use((fs) => fs.access(filePath)).pipe(
       Effect.catch((error: PlatformError.PlatformError) =>
         fail(
-          absentReason(error)
+          meansAbsent(error)
             ? `File not found: ${filePath}`
             : `Cannot access file ${filePath}: ${toErrorMessage(error.reason.cause ?? error)}`,
         ),

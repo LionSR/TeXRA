@@ -4,7 +4,7 @@ import * as path from 'node:path';
 // Third-party imports
 import { Effect, FileSystem, PlatformError } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { RunFileService } from '@texra-ai/harness/plugins';
+import { runEntryUnder } from '@texra-ai/harness/plugins';
 
 // Local imports
 import { errnoError, nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -12,7 +12,6 @@ import { RunIdSchema } from '@texra-ai/harness/schemas';
 
 const runId = RunIdSchema.make('abcdef123456');
 const storageRoot = path.resolve(path.sep, 'storage');
-const workspaceRoot = path.resolve(path.sep, 'workspace');
 
 /** The absolute path the rooted helper probes for a run-relative entry. */
 function primaryEntry(...segments: string[]): string {
@@ -54,23 +53,18 @@ const inspect = (relativePath: string) =>
     Effect.gen(function* () {
       const processFs = yield* FileSystem.FileSystem;
       const info = { ...(yield* processFs.stat('/')), type: 'File' as const };
-      return yield* new RunFileService(runId, {
-        storage: storageRoot,
-        workspace: workspaceRoot,
-      })
-        .inspectEntry(relativePath)
-        .pipe(
-          Effect.provideService(FileSystem.FileSystem, {
-            ...processFs,
-            // The entry probe is one `lstat`: each path reports its case type.
-            lstat: (target: string) =>
-              probe(target).pipe(Effect.map((type) => ({ ...info, type }))),
-          }),
-        );
+      return yield* runEntryUnder(storageRoot, runId, relativePath).pipe(
+        Effect.provideService(FileSystem.FileSystem, {
+          ...processFs,
+          // The entry probe is one `lstat`: each path reports its case type.
+          lstat: (target: string) =>
+            probe(target).pipe(Effect.map((type) => ({ ...info, type }))),
+        }),
+      );
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-describe('RunFileService.inspectEntry', () => {
+describe('runEntryUnder', () => {
   it('rejects a regular file reached through an ancestor symlink', async () => {
     await expect(inspect('r1/link/result.tex')).resolves.toMatchObject({
       kind: 'symlink',

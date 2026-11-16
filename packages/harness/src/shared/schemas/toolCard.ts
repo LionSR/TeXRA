@@ -35,7 +35,7 @@ export const UserMessagePayloadSchema = Schema.Struct({
 });
 
 /**
- * The one status of a tool call: carried by `tool.end`, folded onto the
+ * The one status of a tool call: carried by `tool.end`, applied onto the
  * card, and read by every renderer. A failed call is `failed`; there is no
  * side-channel error flag beside it.
  */

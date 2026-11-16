@@ -1,7 +1,7 @@
 /**
  * What TeXRA offers beside an instruction notice, by the notice's key: the
- * action tokens, the label a window's button carries, and the hint the CLI
- * prints in its place. The harness emits only the key and the message; which
+ * action tokens, the label a window's button carries, the hint the CLI
+ * prints in its place, and whether the notice can be silenced for good. The harness emits only the key and the message; which
  * affordances a key gets is the application's to say, here, once.
  */
 
@@ -37,7 +37,6 @@ const ACTIONS_BY_KEY: Record<
   [HARNESS_INSTRUCTION_KEY.MODEL_NOT_RECOGNIZED]: Object.freeze([
     INSTRUCTION_ACTION.OPEN_MODELS_DOC,
   ]),
-  [HARNESS_INSTRUCTION_KEY.RESUME_REFUSED]: NO_ACTIONS,
 });
 
 function isHarnessKey(key: string): key is HarnessInstructionKey {
@@ -48,6 +47,13 @@ function isHarnessKey(key: string): key is HarnessInstructionKey {
  *  table does not name. */
 export function instructionActions(key: string): readonly InstructionAction[] {
   return isHarnessKey(key) ? ACTIONS_BY_KEY[key] : NO_ACTIONS;
+}
+
+/** Whether a notice with `key` offers "never remind again": the harness's
+ *  name a launch that cannot run until the person acts, so they are never
+ *  silenced; TeXRA's own may be. */
+export function instructionSuppressible(key: string): boolean {
+  return !isHarnessKey(key);
 }
 
 /** The button a window shows for each action. What the button runs is the

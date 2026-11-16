@@ -46,7 +46,7 @@ export function createExternalLocation(
  * path as external.
  *
  * NOT run-storage aware — it can only create workspace or external locations.
- * For run-storage awareness, use RunFileService.createLocation() instead.
+ * For run-storage awareness, use `sourceLocationUnder` (`storageLayout.ts`).
  *
  * Path normalization is handled internally - you can pass paths with either
  * forward slashes or backslashes. It's safe to pass already-normalized paths

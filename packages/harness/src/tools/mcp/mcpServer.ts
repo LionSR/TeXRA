@@ -11,7 +11,7 @@
  * whose JSON Schema passes through as its parameters. Every call is
  * approval-gated through the loop's one guard (the session's bash approval),
  * is never parallel-safe, is replay-safe only when its server marks it
- * read-only or idempotent (any other interrupted call settles as outcome
+ * read-only or idempotent (any other interrupted call finishes as outcome
  * unknown on resume, and the model decides), and is bounded by a timeout and
  * an output cap.
  *

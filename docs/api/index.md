@@ -37,7 +37,7 @@ Service tags hold capabilities fixed for their scope; per-run values (`runId`, a
 
 ### 4. One loop, one `script` tool, everything else a plugin
 
-Every run executes on the same loop. [`codemode`](./plugins-and-codemode#codemode-script-and-tool-discovery) provides the `script` tool—a QuickJS worker that calls the run's tools (`await tools.read_file(...)`, `await agent(...)`, `await self(...)`) with deterministic replay across crashes—and [`Plugin`](./harness/plugins#plugin)s contribute tools, prompt sections, Effect layers, versioned durable rows (`FactKind`), and custom YAML blocks (`AgentBlock`).
+Every run executes on the same loop. [`codemode`](./plugins-and-codemode#codemode-script-and-tool-discovery) provides the `script` tool—a QuickJS worker that calls the run's tools (`await tools.read_file(...)`, `await agent(...)`, `await self(...)`) with deterministic replay across crashes—and [`Plugin`](./harness/plugins#plugin)s contribute tools, prompt sections, Effect layers, versioned durable rows (`FactKind`), and programs started by name (`Program`).
 
 The harness's own tools are six plugins of that same type ([`harnessBuiltins`](./plugins-and-codemode#built-in-plugins-harnessbuiltins)). The TeXRA app passes the same six (with `file-ops` given TeXRA's write filter) plus thirteen of its own, among them LaTeX, arXiv, Zotero, Lean and document tasks. An embedder passes its own list to `Sessions.layer({ platform, plugins })`, and a built-in left out of the list offers no tools. Switching a plugin off withdraws its tools, prompt section and layers at the run's next step; the rows it wrote stay in the store.
 

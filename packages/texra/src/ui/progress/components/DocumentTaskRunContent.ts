@@ -28,9 +28,9 @@ export class DocumentTaskRunContent extends BaseRunContent {
 
   override render(): TemplateResult | typeof nothing {
     const { run, view, surface } = this;
-    if (!run || !view || !surface || !run.recipe) return nothing;
-    // Any plugin's recipe run shows its log here; the files panel is the
-    // documents plugin's, for its own tasks only.
+    if (!run || !view || !surface || !run.program) return nothing;
+    // Any plugin's program run shows its log here; the files panel is the
+    // theory plugin's, for its own tasks only.
     const rounds = isDocumentTaskRun(run) ? documentRoundsOf(run) : null;
     return html`
       <div class="conversation-content">

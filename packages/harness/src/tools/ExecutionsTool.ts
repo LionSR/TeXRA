@@ -12,7 +12,6 @@
 import { Duration, Effect, FileSystem, Stream, SubscriptionRef } from 'effect';
 
 // Local imports
-import { isDeliveryOf } from '@agent/storage/runLifecycle';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import {
   listRunWorkspaceFiles,
@@ -27,7 +26,6 @@ import { findExistingRunStoragePathUnder } from '@common/storage/storageLayout';
 import { SessionRoots, StorageFs } from '@platform/rootedFs';
 import {
   isRunId,
-  qualifyAggregateId,
   ToolError,
   type RunId,
   type ToolResult,
@@ -53,7 +51,7 @@ import {
   type RunDisplayCategory,
 } from './executionFormatters';
 import { defineTool } from './core/definition';
-import { formatFileView } from './formatting';
+import { formatFileView, type LineRange } from './formatting';
 import { serializeFilteredConfig } from './executions/configView';
 import { formatConversation } from './executions/conversationFormat';
 import { orchestratorKillDenial } from './executions/killPolicy';
@@ -83,8 +81,8 @@ interface RunToolContext {
  * The caller is inside this tool call, so nothing it is sent is taken before
  * the wait sees it, whoever sent it; a change landing before the stream's
  * first emission, or after `initial` (the view `runIds` were chosen on),
- * still wakes it; `settled` is re-checked once the stream is up. The view
- * stream ends with the session, which ends the wait too. The race settles on
+ * still wakes it; `finished` is re-checked once the stream is up. The view
+ * stream ends with the session, which ends the wait too. The race finishes on
  * the first completion, success or failure, so a dead fold surfaces at once
  * instead of stalling until the deadline.
  */
@@ -115,10 +113,10 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
       ),
       Stream.runHead,
     );
-    const alreadySettled = Effect.suspend(() =>
+    const alreadyFinished = Effect.suspend(() =>
       settled(SubscriptionRef.getUnsafe(ref)) ? Effect.void : Effect.never,
     );
-    yield* Effect.raceAllFirst([change, alreadySettled]).pipe(
+    yield* Effect.raceAllFirst([change, alreadyFinished]).pipe(
       Effect.timeoutOption(Duration.seconds(timeoutSeconds)),
     );
   },
@@ -199,14 +197,18 @@ const EXECUTION_ROUTES: ReadonlyArray<{
       wait: Effect.fn('wait')(function* ({ context, input, runId }) {
         yield* waitForRuns(context, input.timeout, [runId]);
         // The child's report still queued on the caller: this result
-        // answers it, and its settlement consumes it with it.
+        // answers it, and its result consumes it with it.
         const { followUps } = yield* (yield* SessionLog).runRows(
-          qualifyAggregateId('run', context.runId),
+          context.runId,
           'input',
         );
-        const answered = followUps
-          .map(({ followUpId }) => followUpId)
-          .filter((followUpId) => isDeliveryOf(runId, followUpId));
+        const answered = followUps.flatMap(({ followUpId, content }) =>
+          'delivery' in content &&
+          content.from.kind === 'run' &&
+          content.from.runId === runId
+            ? [followUpId]
+            : [],
+        );
         const summary = yield* showSummary(context, runId);
         return { ...summary, consumedFollowUps: answered };
       }),
@@ -404,7 +406,7 @@ const waitForRuns = Effect.fn('ExecutionsTool.waitForRuns')(function* (
  * One line set for a live run and a finished one alike: the fold answers
  * for both, so there is no second summary shape to keep in step.
  *
- * The view is folded cold rather than read off the live projection, which
+ * The view is applied cold rather than read off the live projection, which
  * deliberately keeps only a bounded transcript for inactive runs: a
  * script's board would otherwise lose its terminal cards and its
  * board-level opened state. That board is why this is the one read on the
@@ -607,7 +609,7 @@ const readFile = Effect.fn('ExecutionsTool.readFile')(function* (
   context: RunToolContext,
   runId: RunId,
   filePath: string,
-  viewRange?: readonly [number, number],
+  viewRange?: LineRange,
 ) {
   const displayPath = `/executions/${runId}/files/${filePath}`;
   yield* assertNoParentTraversal(filePath);
@@ -658,7 +660,7 @@ const readWorkspaceFile = Effect.fn('ExecutionsTool.readWorkspaceFile')(
     context: RunToolContext,
     runId: RunId,
     filePath: string,
-    viewRange?: readonly [number, number],
+    viewRange?: LineRange,
   ) {
     const [record, paths] = yield* readRecordAndWorkspaceFiles(runId);
     const recordedPaths = new Set(
@@ -748,7 +750,7 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
   }: {
     directoryErrorPath: string;
     resultPath: string;
-    viewRange: readonly [number, number] | undefined;
+    viewRange: LineRange | undefined;
   },
 ) {
   // A recorded file the user since deleted is an outcome the model reads, not
@@ -774,7 +776,7 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
   return formatFileView({
     path: resultPath,
     lines: splitContentLines(content),
-    viewRange,
+    range: viewRange,
     maxLines: Infinity,
   });
 });

@@ -6,8 +6,8 @@
 // at full width with a dim annotation pill calling out each part, so the
 // metadata-strip vocabulary and the three action icons are unambiguous.
 //
-// Reuses MemoryHero's `.mem-item` markup + the `.yh-note` annotation-pill
-// idiom from AgentYamlHero (right-aligned dim pill, hidden on narrow screens).
+// Reuses MemoryHero's `.mem-item` markup + a right-aligned dim annotation
+// pill (hidden on narrow screens).
 // Standalone (no MockupFrame / dash-nav). The root carries `.mockup` so the
 // shared `--mk-*` colour + dimensional tokens resolve and the card flips
 // cleanly between the docs light / dark themes.
@@ -96,7 +96,7 @@
 
 <style scoped>
 /* Standalone. Tokens come from `.mockup` (theme/mockup.css). The note pills
-   reuse the AgentYamlHero `.yh-note` idiom; the item markup mirrors
+   are right-aligned dim annotations; the item markup mirrors
    MemoryHero's `.mem-item`, but the styles are self-contained here. */
 .mem-anat {
   display: flex;
@@ -243,7 +243,7 @@
   color: var(--mk-accent);
 }
 
-/* Annotation pills (the `.yh-note` idiom from AgentYamlHero). */
+/* Annotation pills. */
 .ma-note {
   flex-shrink: 0;
   font-size: var(--mk-fs-70);

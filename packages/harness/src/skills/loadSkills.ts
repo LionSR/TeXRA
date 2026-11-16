@@ -6,7 +6,7 @@ import { Effect, FileSystem } from 'effect';
 
 // Local imports - common
 import { SKILL_FILE_NAME, type ActiveSkillSourceScope } from '@shared/schemas';
-import { absentReason } from '@utils/files/fsEntryExists';
+import { meansAbsent } from '@utils/files/fsEntryExists';
 
 // Local imports - skill parsing
 import {
@@ -36,25 +36,39 @@ interface SkillRootScan {
 export interface SkillSource {
   readonly scope: ActiveSkillSourceScope;
   readonly path: string;
-  readonly label?: string;
+  /** What a listing shows the source as. */
+  readonly label: string;
   readonly required?: boolean;
-  /** The plugin that ships these skills: a tool plugin, whose switch gates
-   *  them, or an installed plugin (`plugin:<name>`). */
-  readonly plugin?: string;
-  /** The installed plugin whose skills these are, named `<namespace>:<name>`. */
-  readonly namespace?: string;
-  /** `path` is one plugin command file, read as the skill its name names. */
-  readonly command?: boolean;
+  /** The plugin that ships these skills, absent for a core source. */
+  readonly plugin?: SkillSourcePlugin;
 }
 
 /**
- * One precedence tier of sources. A `source` tier takes its roots' skills
- * in root order (the roots are read at once); a `name` tier pools its roots
- * and orders their skills by directory name, the order one root holding all
- * of them would give.
+ * A tool plugin, whose switch (by `id`) gates its skills, or an installed
+ * plugin, whose skills are named `<name>:<skill>` and whose switch is
+ * `plugin:<name>`. An installed plugin's source may be one command file
+ * (`command`), read as the skill its name names.
+ */
+export type SkillSourcePlugin =
+  | { readonly kind: 'tool'; readonly id: string }
+  | {
+      readonly kind: 'installed';
+      readonly name: string;
+      readonly command: boolean;
+    };
+
+/** Whether `source.path` is one plugin command file, not a skill root. */
+const isCommandFile = ({ plugin }: SkillSource): boolean =>
+  plugin?.kind === 'installed' && plugin.command;
+
+/**
+ * One precedence tier of sources. A tier takes its roots' skills in root
+ * order (the roots are read at once); a `pooled` tier pools its roots and
+ * orders their skills by directory name, the order one root holding all of
+ * them would give.
  */
 export interface SkillSourceTier {
-  readonly order: 'source' | 'name';
+  readonly pooled?: boolean;
   readonly sources: readonly SkillSource[];
 }
 
@@ -78,17 +92,17 @@ function dupNameIssue(name: string, path: string): SkillLoadIssue {
 function dupRealpathIssue(
   realPath: string,
   path: string,
-  name?: string,
+  name: string,
 ): SkillLoadIssue {
-  return issue(
-    'warning',
-    `Skipping duplicate skill path ${realPath}`,
-    name === undefined ? { path } : { path, name },
-  );
+  return issue('warning', `Skipping duplicate skill path ${realPath}`, {
+    path,
+    name,
+  });
 }
 
 /**
- * Discover one-level `SKILL.md` packages below `root`.
+ * Discover one-level `SKILL.md` packages below `root`, in directory-name
+ * order; the caller decides between duplicates.
  *
  * Missing roots are treated as empty because user and project skill directories
  * are optional. Per-skill failures are reported and do not abort discovery.
@@ -101,13 +115,11 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
   const fs = yield* FileSystem.FileSystem;
   const skills: DiscoveredSkill[] = [];
   const errors: SkillLoadIssue[] = [];
-  const seenNames = new Set<string>();
-  const seenRealPaths = new Set<string>();
 
   const names: string[] | undefined = yield* fs.readDirectory(root).pipe(
     Effect.catch((error) =>
       Effect.sync(() => {
-        if (!absentReason(error)) {
+        if (!meansAbsent(error)) {
           errors.push(
             issue('error', error.message, { path: root, code: 'read_error' }),
           );
@@ -118,9 +130,8 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
   );
   if (names === undefined) return { skills, errors };
 
-  // Each entry resolves and loads in one concurrent pass; duplicates and
-  // issues are decided afterwards in name order (a duplicate's load, which
-  // has no side effects, is dropped).
+  // Each entry resolves and loads in one concurrent pass; its issues are
+  // reported afterwards in name order.
   const entries = yield* Effect.forEach(
     names.toSorted((a, b) => a.localeCompare(b)),
     (name) => {
@@ -144,7 +155,7 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
             skillPath,
             realSkillPath: undefined,
             loaded: undefined,
-            issue: absentReason(error)
+            issue: meansAbsent(error)
               ? undefined
               : issue('warning', error.message, {
                   path: skillPath,
@@ -160,20 +171,8 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
     if (entry.issue !== undefined) errors.push(entry.issue);
     const { loaded, realSkillPath } = entry;
     if (loaded === undefined) continue;
-    if (seenRealPaths.has(realSkillPath)) {
-      errors.push(dupRealpathIssue(realSkillPath, entry.skillPath));
-      continue;
-    }
-    seenRealPaths.add(realSkillPath);
     errors.push(...loaded.errors);
     if (!loaded.skill) continue;
-
-    if (seenNames.has(loaded.skill.name)) {
-      errors.push(dupNameIssue(loaded.skill.name, loaded.skill.path));
-      continue;
-    }
-
-    seenNames.add(loaded.skill.name);
     skills.push({
       skill: loaded.skill,
       realPath: realSkillPath,
@@ -212,7 +211,7 @@ function validateRequiredSource(
 ): Effect.Effect<SkillLoadIssue | undefined, never, FileSystem.FileSystem> {
   return FileSystem.FileSystem.use((fs) => fs.stat(source.path)).pipe(
     Effect.map((info) =>
-      info.type === (source.command ? 'File' : 'Directory')
+      info.type === (isCommandFile(source) ? 'File' : 'Directory')
         ? undefined
         : issue('error', 'Skill source is not a directory', {
             path: source.path,
@@ -220,7 +219,7 @@ function validateRequiredSource(
           }),
     ),
     Effect.catch((error) => {
-      if (absentReason(error)) {
+      if (meansAbsent(error)) {
         return Effect.succeed(
           issue('error', 'Skill source does not exist', {
             path: source.path,
@@ -241,9 +240,9 @@ function validateRequiredSource(
 /**
  * Discover skills from tiers of roots in precedence order.
  *
- * On top of the per-root scan this adds the cross-root invariants runtimes
- * need: a skill name or canonical `SKILL.md` file is accepted only from the
- * first source that provides it, in the tier's order.
+ * A skill name or canonical `SKILL.md` file is accepted only from the first
+ * source that provides it, in the tier's order (within one root, the first
+ * in directory-name order).
  */
 export const discoverSkillSources = Effect.fn('skills.discoverSkillSources')(
   function* (
@@ -290,13 +289,13 @@ export const discoverSkillSources = Effect.fn('skills.discoverSkillSources')(
               if (sourceError)
                 return { source, sourceError, scanned: undefined };
             }
-            const scanned = source.command
+            const scanned = isCommandFile(source)
               ? yield* scanCommandFile(source.path)
               : yield* scanSkillRoot(source.path);
             return { source, sourceError: undefined, scanned };
           }),
           { concurrency: 8 },
-        ).pipe(Effect.map((sources) => ({ order: tier.order, sources }))),
+        ).pipe(Effect.map((sources) => ({ pooled: tier.pooled, sources }))),
       { concurrency: 'unbounded' },
     );
 
@@ -308,8 +307,9 @@ export const discoverSkillSources = Effect.fn('skills.discoverSkillSources')(
           errors.push(sourceError);
           continue;
         }
+        const { plugin } = source;
         const result =
-          source.namespace === undefined
+          plugin?.kind !== 'installed'
             ? scanned
             : {
                 ...scanned,
@@ -317,7 +317,7 @@ export const discoverSkillSources = Effect.fn('skills.discoverSkillSources')(
                   ...entry,
                   skill: {
                     ...entry.skill,
-                    name: `${source.namespace}:${entry.skill.name}`,
+                    name: `${plugin.name}:${entry.skill.name}`,
                   },
                 })),
               };
@@ -333,8 +333,8 @@ export const discoverSkillSources = Effect.fn('skills.discoverSkillSources')(
         );
 
         const found = result.skills.map((entry) => ({ ...entry, source }));
-        if (tier.order === 'source') accept(found);
-        else pooled.push(...found);
+        if (tier.pooled === true) pooled.push(...found);
+        else accept(found);
       }
       accept(pooled.toSorted((a, b) => a.entryName.localeCompare(b.entryName)));
     }

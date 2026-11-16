@@ -2,11 +2,7 @@ import { Effect, Schema, SubscriptionRef, Context } from 'effect';
 import { layer } from '@effect/vitest';
 import { expect } from 'vitest';
 
-import {
-  RunIdSchema,
-  AgentConfigSchema,
-  qualifyAggregateId,
-} from '@texra-ai/harness/schemas';
+import { RunIdSchema, AgentConfigSchema } from '@texra-ai/harness/schemas';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
@@ -29,7 +25,7 @@ const seedReport = (
     .transact([
       {
         type: 'run.report',
-        aggregateId: qualifyAggregateId('run', runId),
+        aggregateId: runId,
         report,
       },
     ])
@@ -104,13 +100,13 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             yield* Context.get(session, SessionLog).transact([
               {
                 type: 'process.exit',
-                aggregateId: qualifyAggregateId('run', runId),
+                aggregateId: runId,
                 code: 0,
                 timedOut: false,
               },
               {
                 type: 'run.end',
-                aggregateId: qualifyAggregateId('run', runId),
+                aggregateId: runId,
                 outcome: 'completed',
                 output: { response: 'done', files: [] },
               },
@@ -125,7 +121,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             yield* Context.get(session, SessionLog).transact([
               {
                 type: 'run.removed',
-                aggregateId: qualifyAggregateId('run', runId),
+                aggregateId: runId,
               },
             ]);
             expect(

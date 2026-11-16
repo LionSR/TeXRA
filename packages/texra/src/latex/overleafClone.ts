@@ -12,12 +12,11 @@
  * instead of running them out.
  */
 
-import { Effect, type FileSystem, Schema, Stream } from 'effect';
-import * as ChildProcess from 'effect/process/ChildProcess';
+import { Effect, type FileSystem, Schema } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { executeCommand, makeMachineGitEnv } from '@texra-ai/harness/node';
+import { executeCommand, machineGit } from '@texra-ai/harness/node';
 import {
   overleafGitClone,
   overleafTokenSpec,
@@ -170,36 +169,6 @@ export class GitCloneFailed extends Schema.TaggedError<GitCloneFailed>()(
 ) {}
 
 /**
- * Run one `git` command in `cwd` with the machine git environment plus
- * `env`: `extendEnv: false`, because `makeMachineGitEnv` omits the
- * credential-helper keys a merge with `process.env` would bring back.
- */
-const runGit = Effect.fn('runGit')(function* (
-  args: readonly string[],
-  cwd: string,
-  env: Readonly<Record<string, string>>,
-  input?: string,
-) {
-  const handle = yield* ChildProcess.make('git', [...args], {
-    cwd,
-    env: { ...(yield* makeMachineGitEnv), ...env },
-    extendEnv: false,
-    stdin:
-      input === undefined
-        ? 'ignore'
-        : Stream.make(new TextEncoder().encode(input)),
-    stdout: 'ignore',
-    detached: false,
-    forceKillAfter: '5 seconds',
-  });
-  const [stderr, code] = yield* Effect.all(
-    [handle.stderr.pipe(Stream.decodeText(), Stream.mkString), handle.exitCode],
-    { concurrency: 'unbounded' },
-  );
-  return { stderr: stderr.trim(), code };
-}, Effect.scoped);
-
-/**
  * git translates its messages; the clone runs in the C locale so its stderr
  * carries the English wording {@link GIT_AUTH_FAILURE} matches.
  */
@@ -215,9 +184,9 @@ export const gitClone = Effect.fn('overleafClone.gitClone')(function* (
   clone: OverleafGitClone,
   into: string,
 ): Effect.fn.Return<void, GitCloneFailed, ChildProcessSpawner> {
-  const cloned = yield* runGit(clone.args, into, {
-    ...clone.env,
-    ...GIT_C_LOCALE,
+  const cloned = yield* machineGit(clone.args, {
+    cwd: into,
+    env: { ...clone.env, ...GIT_C_LOCALE },
   }).pipe(
     Effect.mapError(
       (error: PlatformError) =>
@@ -234,7 +203,10 @@ export const gitClone = Effect.fn('overleafClone.gitClone')(function* (
     });
   }
   const approved = yield* Effect.result(
-    runGit(['credential', 'approve'], into, {}, clone.approval),
+    machineGit(['credential', 'approve'], {
+      cwd: into,
+      input: clone.approval,
+    }),
   );
   let approveFailure: string | undefined;
   if (approved._tag === 'Failure') {

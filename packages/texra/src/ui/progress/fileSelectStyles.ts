@@ -192,21 +192,10 @@ const multiFilesStyles = css`
   }
 `;
 
-/** Outline cue for the file-select button when document options are active.
- *  (The dropdown itself is a native <wa-dropdown>.) */
-const dropdownStyles = css`
-  wa-button.has-options::part(base) {
-    outline: var(--border-thin) solid
-      var(--wa-color-brand-border-quiet, var(--wa-color-focus));
-    outline-offset: -1px;
-  }
-`;
-
 /** Combined file-select styles for components that need all of them. */
 export const fileSelectStyles = [
   buttonStyles,
   compactFormControlStyles,
   fileSelectLayoutStyles,
   multiFilesStyles,
-  dropdownStyles,
 ];

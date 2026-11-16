@@ -23,7 +23,6 @@ import {
   type ApprovalBypassKind,
 } from '@shared/approvalBypassKind';
 import { RunIdSchema } from './identifiers';
-import { JsonValueSchema } from './jsonValue';
 import {
   AgentProposalRequestSchema,
   BashRequestSchema,
@@ -36,8 +35,8 @@ import {
 
 export const RequestDecisionSchema = Schema.Union([
   /** A plain approval. A proposal's approve may carry what the person
-   *  changed in the launch form (its agent, model, instruction, files and
-   *  plugin options); a tool edit's approve carries the proposed file as the
+   *  changed in the launch form (its agent, model, instruction and files);
+   *  a tool edit's approve carries the proposed file as the
    *  user left it in the host's diff view. */
   Schema.Struct({
     action: Schema.Literal('approve'),
@@ -47,9 +46,6 @@ export const RequestDecisionSchema = Schema.Union([
     inputFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
     contextFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
     mediaFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
-    options: Schema.optional(
-      Schema.NullOr(Schema.Record(Schema.String, JsonValueSchema)),
-    ),
     content: Schema.optional(Schema.NullOr(Schema.String)),
   }),
   Schema.Struct({
@@ -128,7 +124,7 @@ const PluginRequestSchema = Schema.Struct({
   answers: Schema.Array(AnswerActionSchema),
   data: Schema.StructWithRest(
     Schema.Struct({ requestId: Schema.String, runId: RunIdSchema }),
-    [Schema.Record(Schema.String, JsonValueSchema)],
+    [Schema.Record(Schema.String, Schema.Json)],
   ),
 });
 /** A request a plugin opens (`RequestPayload`'s plugin case). */
@@ -198,7 +194,7 @@ type AnswerSource =
 
 /** The decisions a request of kind `K` takes: its own actions and the three
  *  refusals. A plugin's request declares its actions on its row, so its
- *  type admits any decision. */
+ *  type accepts any decision. */
 export type DecisionOf<K extends RequestPayload['kind']> =
   | Extract<
       RequestDecision,

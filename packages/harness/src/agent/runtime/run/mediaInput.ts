@@ -7,8 +7,8 @@
  * it was attached to, saying so ({@link skippedMediaPart}): the model is
  * told, in the row that carries the message. A file that cannot be read or
  * classified fails the read. The caller decides what a failed read means for
- * its message: the run loop fails the opening message loudly (a task's
- * revision included), and a follow-up's send is refused (`attachedMedia`:
+ * its message: the run loop fails the opening message loudly (a program's
+ * child included), and a follow-up's send is refused (`attachedMedia`:
  * its media is read once, as it is sent, and stored by address). Nothing
  * drops an attachment silently.
  */

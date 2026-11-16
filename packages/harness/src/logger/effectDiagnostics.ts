@@ -13,7 +13,7 @@ const MAX_ATTRIBUTE_LENGTH = 512;
  * already carries level, timestamp, fiber, cause, annotations, and spans, so
  * the entry needs no adaptation and nothing is flattened into a message. The
  * host's minimum level is the only filter: nothing here
- * drops a level the runtime admitted.
+ * drops a level the runtime accepted.
  */
 export const diagnosticLogger = Logger.make<unknown, void>((options) => {
   const entry = logEntryOf(options);

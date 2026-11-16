@@ -22,9 +22,13 @@ import {
   AgentCatalog,
   type WorkspaceAgentsStores,
 } from '@agent/index/agentCatalog';
+import { agentToolNames } from '@agent/index/agentEntry';
 import type { StepTools } from '@agent/runtime/loop/step';
 import { withLogChannel } from '@logger/effectLog';
-import { readModelOptions, type ModelOption } from '@model/computeModelOptions';
+import {
+  readModelOptions,
+  type ModelVerdict,
+} from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
 import {
   AGENT_TOOL_NAME,
@@ -36,10 +40,13 @@ import {
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { GIT_WORKTREE_SUPPORT_SETTING } from '@shared/state/stateSettings';
+import {
+  GIT_WORKTREE_SUPPORT_SETTING,
+  settingName,
+} from '@shared/state/stateSettings';
 
 /** The models that can run now, in picker order. */
-const availableModelNames = (options: readonly ModelOption[]): string[] =>
+const availableModelNames = (options: readonly ModelVerdict[]): string[] =>
   options.flatMap(({ model, availability }) =>
     MODEL_AVAILABILITY_STATUS[availability].available ? [model] : [],
   );
@@ -61,43 +68,27 @@ export const delegationAgents = Effect.fn('delegationAgents')(function* (
 });
 
 /**
- * The targets the offered `definitions` can launch, or `undefined` when they
- * hold no delegation tool: the run's pinned delegation scope's agents, or
- * the workspace's visible ones, each marked when it is a task (it holds a
- * plugin's block);
- * only those when a tool that launches tasks is offered without `agent`.
+ * The targets the `agent` tool can launch, or `undefined` when the step's
+ * tools hold none: the run's pinned delegation scope's agents, or the
+ * workspace's visible ones.
  */
 export const readDelegationTargets = Effect.fn('readDelegationTargets')(
   function* (
-    { definitions, registry }: Pick<StepTools, 'definitions' | 'registry'>,
+    { registry }: Pick<StepTools, 'registry'>,
     stores: SettingsStores,
     scope: AgentDelegationScope | undefined,
   ) {
-    const chats = registry.get(AGENT_TOOL_NAME) !== undefined;
-    const tasks = definitions.some(
-      ({ name }) => registry.get(name)?.launchesTasks,
-    );
-    if (!chats && !tasks) return undefined;
-    const agents = (yield* delegationAgents(stores, scope)).flatMap(
-      ({ name, description, tools: agentTools, blocks }) => {
-        const task = Object.keys(blocks).length > 0;
-        return chats || task
-          ? [
-              {
-                name,
-                // One line per agent: a blank line in a (user-defined)
-                // description would otherwise read as the end of the list.
-                description: (description || 'No description').replaceAll(
-                  /\s*\n\s*/g,
-                  ' ',
-                ),
-                tools: agentTools ?? [],
-                task,
-              },
-            ]
-          : [];
-      },
-    );
+    if (registry.get(AGENT_TOOL_NAME) === undefined) return undefined;
+    const agents = (yield* delegationAgents(stores, scope)).map((entry) => ({
+      name: entry.name,
+      // One line per agent: a blank line in a (user-defined) description
+      // would otherwise read as the end of the list.
+      description: (entry.description || 'No description').replaceAll(
+        /\s*\n\s*/g,
+        ' ',
+      ),
+      tools: agentToolNames(entry),
+    }));
     const models = yield* readModelOptions(stores).pipe(
       Effect.map(availableModelNames),
       // A failed read (an unreadable store, a host call that rejected) tells
@@ -113,9 +104,7 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
     return {
       agents,
       models,
-      worktree: chats
-        ? yield* Settings.get(stores, GIT_WORKTREE_SUPPORT_SETTING)
-        : null,
+      worktree: yield* Settings.get(stores, GIT_WORKTREE_SUPPORT_SETTING),
     } satisfies DelegationTargets;
   },
 );
@@ -127,7 +116,7 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
 const worktreeLine = (enabled: boolean): string =>
   enabled
     ? 'Git worktree support: ENABLED. Pass `working_directory` (absolute path) to `agent` to run a tool-use subagent rooted in a git worktree; every tool call in the subagent resolves paths against that directory. The subagent reports its working directory back in its delivery result.'
-    : 'Git worktree support: DISABLED in this workspace. Do not pass `working_directory` to `agent` because the call will be rejected. Ask the user to turn on `git.worktreeSupport` ("Subagent worktrees" in Settings > Agents > Advanced) if worktree operation is needed.';
+    : `Git worktree support: DISABLED in this workspace. Do not pass \`working_directory\` to \`agent\` because the call will be rejected. Ask the user to turn on the ${settingName(GIT_WORKTREE_SUPPORT_SETTING)} setting if worktree operation is needed.`;
 
 /** The system text's delegation section, rendered once, at the freeze. */
 export function delegationSection(targets: DelegationTargets): string {
@@ -135,21 +124,14 @@ export function delegationSection(targets: DelegationTargets): string {
   const lines =
     targets.agents.length === 0
       ? [
-          `${head} none are currently enabled in this workspace. Ask the user to enable delegation targets in Settings → Agents before delegating.`,
+          `${head} none are currently enabled in this workspace. Ask the user to enable the agents they want to delegate to before delegating.`,
         ]
       : [
           head,
           ...targets.agents.map(
-            ({ name, description, tools: agentTools, task }) =>
-              `- ${name}${task ? ' (task)' : ''}: ${description}${agentTools.length > 0 ? `\n  Tools: ${agentTools.join(', ')}` : ''}`,
+            ({ name, description, tools: agentTools }) =>
+              `- ${name}: ${description}${agentTools.length > 0 ? `\n  Tools: ${agentTools.join(', ')}` : ''}`,
           ),
-          // What a task is belongs to the plugin whose block makes the agent
-          // one; the harness says only that the marker names such an agent.
-          ...(targets.agents.some(({ task }) => task)
-            ? [
-                "An agent marked (task) also runs as its plugin's task, through that plugin's task tool where it is offered.",
-              ]
-            : []),
         ];
   if (targets.models === null)
     lines.push(

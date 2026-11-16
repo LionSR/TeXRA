@@ -21,7 +21,7 @@ import { SecretsFailed, type SecretsOperation } from '@texra-ai/llm';
 import type { PlatformSecrets } from '@platform/secrets';
 import { nodeFileServices } from '@utils/files/fsDurability';
 import {
-  absentReason,
+  meansAbsent,
   fileWatchRetrySchedule,
 } from '@utils/files/fsEntryExists';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -70,7 +70,7 @@ const storedKeys = (
         .filter((name) => !name.startsWith(STAGED_PREFIX))
         .map((name) => decodeURIComponent(name)),
     ),
-    Effect.catchIf(absentReason, () => Effect.succeed([])),
+    Effect.catchIf(meansAbsent, () => Effect.succeed([])),
     Effect.mapError((cause) => failure(directory, 'listStoredKeys', cause)),
     Effect.provide(nodeFileServices),
   );
@@ -95,7 +95,7 @@ export class FileSecrets implements PlatformSecrets {
       fs.readFileString(this.fileOf(key)),
     ).pipe(
       Effect.map((value): string | undefined => value),
-      Effect.catchIf(absentReason, () => Effect.succeed(undefined)),
+      Effect.catchIf(meansAbsent, () => Effect.succeed(undefined)),
       Effect.mapError((cause) => failure(this.directory, 'get', cause, key)),
       Effect.provide(nodeFileServices),
     );

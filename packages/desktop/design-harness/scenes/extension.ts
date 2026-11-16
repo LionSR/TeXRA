@@ -59,10 +59,8 @@ function host(): HostSnapshot {
     ...emptyHostSnapshot(PROJECT),
     agentOptions: [
       { value: 'orchestrator', label: 'orchestrator', isOrchestrator: true },
-      { value: 'polish', label: 'polish' },
       { value: 'search', label: 'search' },
-      { value: 'correct', label: 'correct', rounds: 1 },
-      { value: 'review', label: 'review', rounds: 3 },
+      { value: 'review', label: 'review' },
     ],
     modelOptions: [
       { value: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
@@ -515,7 +513,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     const view = withProposal();
     return sidebar(view, surface(view, { kind: 'select', runId: ROOT }));
   },
-  // A proposed document task on the child, in place of its bash request:
+  // A proposed `edit` program on the child, in place of its bash request:
   // the card's model menu over the host's models.
   'ext-proposal-pickers': () => {
     const log = new Log();
@@ -528,14 +526,16 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
           requestId: 'req-task',
           runId: CHILD,
           task: true,
-          agent: 'correct',
+          agent: 'edit',
+          agentSource: 'inline',
+          persona: { name: 'edit' },
           model: 'gemini-3.8-flash',
           instruction: 'Fix the typos and notation slips in Section 2.',
           memories: [],
           inputFiles: ['/paper/section2.tex'],
           contextFiles: [],
           mediaFiles: [],
-          outputFiles: ['/paper/section2_correct.tex'],
+          outputFiles: ['/paper/section2_edit.tex'],
         },
       },
       answeredBy: 'superYolo',
@@ -597,14 +597,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       type: 'run.config',
       config: Schema.decodeUnknownSync(AgentConfigSchema)({
         agent: 'review',
-        script: {
-          code: 'return await tools.document_propose({});',
-          title: 'review',
-          tools: ['agent'],
-          kind: 'recipe',
-          block: 'task',
-          options: {},
-        },
+        script: { kind: 'program', name: 'annotate', args: {} },
       }),
     });
     log.emit(ROOT, T.root, { type: 'run.activate' });
@@ -615,6 +608,12 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       version: DOCUMENTS_OUTPUT_KIND.version,
       parent: null,
       value: {
+        task: {
+          intro: '',
+          requests: ['Revise.', 'Review.', 'Finish.'],
+          templates: [],
+          creates: false,
+        },
         rounds: [0, 1].map((round) => ({
           round,
           outputs: [],

@@ -61,7 +61,7 @@ const servableHelper = Effect.fn('servableHelper')(function* (
 
 /**
  * One helper call: bind the configured helper model (else `runModel`) for
- * this call alone and run one completion off the rows (`run/modelCall.ts`),
+ * this call alone and run one completion off the run's rows,
  * gated on the process's retry gate, priced and reported to the usage log
  * as `attribution`. No row is written. Returns the
  * turn's assistant text and its priced usage (`null`: the provider reported

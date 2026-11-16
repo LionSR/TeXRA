@@ -2,18 +2,16 @@ import { Effect } from 'effect';
 
 import {
   AgentCatalog,
+  agentToolNames,
   type AgentEntry,
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness/host';
 import { agentKeyOf, formatResultCount } from '@texra-ai/harness/schemas';
-import { documentTaskOf } from '@texra/tools/documents/documentTask';
 
 import { CliUsageError } from './platform/cliContext';
 
 export interface CliAgentListOptions {
   readonly includeHidden?: boolean;
-  /** Only the agents that are also document tasks. */
-  readonly tasks?: boolean;
 }
 
 interface CliAgentListResult {
@@ -29,11 +27,19 @@ const TEAM_LOOKUP_HINT =
 export const AGENT_NAME_DESCRIPTION =
   'Agent name from `texra agents list` or `texra agents list --all`';
 
-export const LAUNCHABLE_AGENT_NAME_DESCRIPTION =
-  'Agent name from `texra agents list --all`';
+export const RUN_TARGET_NAME_DESCRIPTION =
+  'Program name (an unknown name prints the programs) or agent name from `texra agents list --all`';
 
 export function missingAgentMessage(name: string): string {
   return `Agent not found: ${name}. ${AGENT_LOOKUP_HINT}`;
+}
+
+/** The error for a `texra run` name that is neither a program nor an agent. */
+export function missingRunTargetMessage(
+  name: string,
+  programNames: readonly string[],
+): string {
+  return `No program or agent is named ${name}. Programs: ${programNames.toSorted().join(', ')}. ${AGENT_LOOKUP_HINT}`;
 }
 
 export function missingTeamMessage(name: string): string {
@@ -43,11 +49,12 @@ export function missingTeamMessage(name: string): string {
 /**
  * Resolve the agent a launch names, through the launch resolver, so the
  * check lands on the exact entry the launch loads. A name nothing resolves is
- * a usage error.
+ * a usage error saying `notFoundMessage`.
  */
 export function resolveCliRunAgent(
   stores: WorkspaceAgentsStores,
   name: string,
+  notFoundMessage = missingAgentMessage(name),
 ) {
   return Effect.flatMap(AgentCatalog, (catalog) =>
     catalog
@@ -55,9 +62,7 @@ export function resolveCliRunAgent(
       .forLaunch(name)
       .pipe(
         Effect.catchTag('AgentNotFound', () =>
-          Effect.fail(
-            new CliUsageError({ message: missingAgentMessage(name) }),
-          ),
+          Effect.fail(new CliUsageError({ message: notFoundMessage })),
         ),
       ),
   );
@@ -69,15 +74,12 @@ export function loadCliAgentList(
 ) {
   const includeHidden = options.includeHidden === true;
   return Effect.gen(function* () {
-    const agents = yield* collectCliAgents(
-      stores,
-      includeHidden ? 'all' : 'visible',
-      options.tasks === true,
-    );
-    const hiddenCount = includeHidden
-      ? 0
-      : (yield* collectCliAgents(stores, 'all', options.tasks === true))
-          .length - agents.length;
+    const catalog = yield* AgentCatalog;
+    const all = catalog.list();
+    const agents = includeHidden
+      ? all
+      : yield* catalog.workspaceAgents(stores).visible();
+    const hiddenCount = all.length - agents.length;
 
     return { agents, hiddenCount } satisfies CliAgentListResult;
   });
@@ -85,17 +87,11 @@ export function loadCliAgentList(
 
 export function formatCliAgentList(
   agents: readonly AgentEntry[],
-  options: {
-    readonly tasks?: boolean;
-    readonly showEmptyState?: boolean;
-  } = {},
+  options: { readonly showEmptyState?: boolean } = {},
 ): string {
   if (agents.length === 0) {
     if (options.showEmptyState !== true) return '';
-    const { filterArg, catalog, qualifier } = cliAgentCatalogHint(
-      options.tasks === true,
-    );
-    return `No visible ${qualifier} are enabled for this workspace. Use \`texra agents list${filterArg} --all\` to show ${catalog}.`;
+    return 'No visible agents are enabled for this workspace. Use `texra agents list --all` to show all agents.';
   }
 
   // Shell completion reads the name column straight back into `texra run`,
@@ -113,37 +109,22 @@ export function formatCliAgentList(
   return agents
     .map(
       (agent) =>
-        `${documentTaskOf(agent) === null ? 'chat' : 'task'}\t${collidingNames.has(agent.name) ? agentKeyOf(agent) : agent.name}\t${agent.description ?? ''}`,
+        `${collidingNames.has(agent.name) ? agentKeyOf(agent) : agent.name}\t${agent.description ?? ''}`,
     )
     .join('\n');
 }
 
 export function formatCliAgentDetails(entry: AgentEntry): string {
-  const task = documentTaskOf(entry);
-  const lines: string[] = [
-    `name: ${entry.name}`,
-    `kind: ${task === null ? 'chat' : 'document task'}`,
-    `source: ${entry.source}`,
-  ];
+  const lines: string[] = [`name: ${entry.name}`, `source: ${entry.source}`];
   if (entry.path) lines.push(`path: ${entry.path}`);
   if (entry.description) {
     lines.push('');
     lines.push(entry.description);
   }
-  const metadataFields: readonly [string, readonly string[] | undefined][] = [
-    ['tools', entry.tools],
-    ['outputs', task?.outputs],
-  ];
-  const metadataLines = metadataFields.flatMap(([label, values]) =>
-    values?.length ? [`${label}: ${values.join(', ')}`] : [],
-  );
-  if (metadataLines.length > 0) {
+  const tools = agentToolNames(entry);
+  if (tools.length > 0) {
     lines.push('');
-    lines.push(...metadataLines);
-  }
-  if (task !== null) {
-    if (metadataLines.length === 0) lines.push('');
-    lines.push(`revisions: ${task.requests.length}`);
+    lines.push(`tools: ${tools.join(', ')}`);
   }
   return lines.join('\n');
 }
@@ -154,39 +135,7 @@ export function formatCliNewerBuiltInNotice(name: string): string {
 
 export function formatCliHiddenAgentsNotice(
   hiddenCount: number,
-  tasks = false,
 ): string | undefined {
   if (hiddenCount <= 0) return undefined;
-  const { filterArg, catalog } = cliAgentCatalogHint(tasks);
-  return `Showing visible agents only; ${formatResultCount(hiddenCount, 'hidden agent')} omitted. Use \`texra agents list${filterArg} --all\` to show ${catalog}.`;
-}
-
-function cliAgentCatalogHint(tasks: boolean): {
-  readonly filterArg: string;
-  readonly catalog: string;
-  readonly qualifier: string;
-} {
-  return tasks
-    ? {
-        filterArg: ' --tasks',
-        catalog: 'all document tasks',
-        qualifier: 'document tasks',
-      }
-    : { filterArg: '', catalog: 'all agents', qualifier: 'agents' };
-}
-
-function collectCliAgents(
-  stores: WorkspaceAgentsStores,
-  source: 'all' | 'visible',
-  tasks: boolean,
-) {
-  return Effect.map(
-    Effect.flatMap(AgentCatalog, (catalog) =>
-      source === 'visible'
-        ? catalog.workspaceAgents(stores).visible()
-        : Effect.succeed(catalog.list()),
-    ),
-    (agents) =>
-      tasks ? agents.filter((agent) => documentTaskOf(agent) !== null) : agents,
-  );
+  return `Showing visible agents only; ${formatResultCount(hiddenCount, 'hidden agent')} omitted. Use \`texra agents list --all\` to show all agents.`;
 }

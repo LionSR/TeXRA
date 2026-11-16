@@ -30,7 +30,7 @@ export const nodeSpawnerLayer: Layer.Layer<ChildProcessSpawner> = Layer.effect(
   Effect.gen(function* () {
     const scope = yield* Effect.scope;
     const real = yield* Effect.cached(
-      Effect.promise(() => import('@platform/defaults/nodePlatform')).pipe(
+      Effect.promise(() => import('@platform/defaults/nodeServices')).pipe(
         Effect.flatMap(({ nodePlatformServices }) =>
           Layer.buildWithScope(nodePlatformServices, scope),
         ),

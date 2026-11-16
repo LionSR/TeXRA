@@ -2,7 +2,7 @@ import { it, layer } from '@effect/vitest';
 import { Effect, FileSystem, Schema } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
-import { RunFileService } from '@texra-ai/harness/plugins';
+import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import { createExternalLocation } from '@texra-ai/harness/host';
 
 import { RunIdSchema } from '@texra-ai/harness/schemas';
@@ -43,7 +43,7 @@ function replyContext(
         },
         { strict: true },
       ),
-      fileService: new RunFileService(RUN_ID, roots),
+      fileService: new RunWorkspace(RUN_ID, roots),
     },
   };
 }
@@ -263,8 +263,8 @@ layer(
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  // Agents like ocr/paper2slide declare one `task.outputs` entry while
-  // accepting several attached input files. The document tools then build
+  // Programs like `transcribe` and `slides` declare one output of their own
+  // (`Program.outputs`) while accepting several attached input files. The document tools then build
   // baseFiles from outputFiles, not inputFiles, so baseFiles[i] no longer
   // corresponds to inputFiles[i].
   it.effect(

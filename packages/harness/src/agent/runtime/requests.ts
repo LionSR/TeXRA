@@ -57,7 +57,6 @@ import {
 import {
   grantAnswering,
   decisionFits,
-  qualifyAggregateId,
   type AnsweredBy,
   type CommitOrdinal,
   type DecisionOf,
@@ -336,7 +335,7 @@ export const decideRequest = <E = never>(
   SessionLog.use((log) =>
     log.transact((tx) =>
       Effect.gen(function* () {
-        const aggregateId = qualifyAggregateId('run', runId);
+        const aggregateId = runId;
         const { requests } = yield* log.runRows(aggregateId, 'requests');
         if (requests[requestId]?.decision !== null) return false;
         yield* runStateAppend(tx.append)([
@@ -363,7 +362,7 @@ export const decisionOf = (
   from: CommitOrdinal,
 ): Effect.Effect<RequestDecision, DatabaseReadFailed, SessionLog> =>
   SessionLog.use((log) => {
-    const aggregate = qualifyAggregateId('run', runId);
+    const aggregate = runId;
     return log.tail(from).pipe(
       Stream.filter(isRequestDecision),
       Stream.filter(
@@ -435,7 +434,7 @@ export const openRequest = <P extends RequestPayload, E>(
   Effect.gen(function* () {
     const { runId } = cell;
     const { requestId } = payload.data;
-    const aggregateId = qualifyAggregateId('run', runId);
+    const aggregateId = runId;
     const { hook } = opening;
     const answeredBy = answererOf(
       opening.operation ?? KIND_OPERATIONS[payload.kind],

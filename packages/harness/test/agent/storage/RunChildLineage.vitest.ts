@@ -27,7 +27,7 @@ layer(
           session,
           Schema.decodeUnknownSync(RunIdSchema)('aaa0ff'),
         );
-        yield* Context.get(session, SessionLog).settled;
+        yield* Context.get(session, SessionLog).drained;
         const rows = yield* Context.get(session, SessionLog).transact([
           runStart(Schema.decodeUnknownSync(RunIdSchema)('aaa010'), {
             identity: { kind: 'agent', agent: 'assistant' },

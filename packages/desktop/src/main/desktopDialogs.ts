@@ -178,8 +178,8 @@ export function createDesktopDialogs(
     /**
      * Instructions (e.g. a missing API key) are actionable guidance, not
      * failures, so this stays an 'info' dialog, with each action token as a
-     * real button. `showSuppress` still has no affordance to attach to: a
-     * native dialog has no persistent "never remind again" control.
+     * real button. A native dialog has no persistent "never remind again"
+     * control, so no notice is silenced here (`instructionSuppressible`).
      */
     showInstructionDialog: (
       message: string,

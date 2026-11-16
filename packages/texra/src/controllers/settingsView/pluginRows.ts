@@ -11,6 +11,7 @@ import { Effect } from 'effect';
 import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
   AgentCatalog,
+  agentToolNames,
   InstalledPlugins,
   mcpConfigPathOf,
   readMcpConfig,
@@ -46,7 +47,7 @@ export const buildPluginRows = Effect.fn('buildPluginRows')(function* (
 ) {
   const agents = (yield* AgentCatalog).list().map((agent) => ({
     name: agent.name,
-    tools: agent.tools ?? [],
+    tools: agentToolNames(agent),
   }));
   const usedBy = (reaches: (tool: string) => boolean) => [
     ...new Set(

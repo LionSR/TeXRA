@@ -13,7 +13,6 @@ import {
   Effect,
   Result,
   Schema,
-  SchemaGetter,
   type Scope,
   Stream,
 } from 'effect';
@@ -30,16 +29,22 @@ import { assembleTurn } from './assembleTurn.js';
 import { boundTurn, resolveTurn } from './turnInput.js';
 import { replayableHistory, systemUpdateText } from '../message.js';
 import { originOf, sameModelOrigin } from '../protocol.js';
-import { ModelError, fillModelError, sdkModelError } from '../errors.js';
+import {
+  ModelError,
+  fillModelError,
+  sdkHttpFailure,
+  sdkModelError,
+} from '../errors.js';
 import {
   decodeWireOrFail,
   parseOutboundToolArguments,
+  refuseAmbientHeaders,
   sdkStream,
   wireFail as fail,
 } from './transport.js';
 import {
   filesApiUploads,
-  UploadedSchema,
+  uploadedFileSchema,
   type UploadCache,
 } from './uploadCache.js';
 import {
@@ -62,37 +67,10 @@ import type {
   ToolResultBlockParam,
 } from '@anthropic-ai/sdk/resources/messages';
 
-/**
- * What a Files API upload must return before its id is cached. The SDK's
- * type is not a check on the JSON, so a missing or empty id, or an expiry
- * that is not an RFC 3339 time (null means the file does not expire), is a
- * malformed response: the upload counts as failed and the bytes are sent.
- */
-const UploadedFileSchema = Schema.Struct({
-  id: Schema.NonEmptyString,
-  expires_at: Schema.optional(Schema.NullOr(Schema.DateTimeUtcFromString)),
-}).pipe(
-  Schema.decodeTo(UploadedSchema, {
-    decode: SchemaGetter.transform((file) => ({
-      fileId: file.id,
-      expiresAtMs:
-        file.expires_at == null
-          ? null
-          : DateTime.toEpochMillis(file.expires_at),
-    })),
-    encode: SchemaGetter.forbidden(() => 'decode-only'),
-  }),
-);
 function sdkFailure(cause: unknown): ModelError {
   return sdkModelError(
     cause,
-    cause instanceof APIError && !(cause instanceof APIConnectionError)
-      ? {
-          status: cause.status,
-          headers: cause.headers,
-          requestId: cause.requestID,
-        }
-      : undefined,
+    sdkHttpFailure(cause, APIError, APIConnectionError),
     'The Anthropic transport failed.',
   );
 }
@@ -570,13 +548,10 @@ export const anthropicMessagesModel = Effect.fn('llm.anthropicMessages.model')(
       });
     }
     // The SDK otherwise lets these ambient headers override selected credentials and protocol.
-    if (process.env.ANTHROPIC_CUSTOM_HEADERS) {
-      return yield* new ModelError({
-        kind: 'invalid-request',
-        message:
-          'Anthropic Messages does not support ANTHROPIC_CUSTOM_HEADERS; the selected binding must determine its request headers.',
-      });
-    }
+    yield* refuseAmbientHeaders(
+      'ANTHROPIC_CUSTOM_HEADERS',
+      'Anthropic Messages does not support ANTHROPIC_CUSTOM_HEADERS; the selected binding must determine its request headers.',
+    );
     const origin = originOf(config);
     const client = new Anthropic({
       apiKey: transport.apiKey,
@@ -596,8 +571,12 @@ export const anthropicMessagesModel = Effect.fn('llm.anthropicMessages.model')(
           catch: (cause) =>
             fillModelError(sdkFailure(cause), { model: origin.requestedModel }),
         }),
-      parseUploaded: (raw) =>
-        Schema.decodeUnknownResult(UploadedFileSchema)(raw),
+      parseUploaded: Schema.decodeUnknownResult(
+        uploadedFileSchema(
+          Schema.DateTimeUtcFromString,
+          DateTime.toEpochMillis,
+        ),
+      ),
       create: async (upload, signal) =>
         client.files.upload(
           {

@@ -147,8 +147,6 @@ const AgentSelectionItemSchema = Schema.Struct({
   name: Schema.Trim.check(Schema.isMinLength(1)).check(
     Schema.isPattern(/^(?:[a-z0-9][a-z0-9-]*:)?[A-Za-z0-9][A-Za-z0-9_-]*$/u),
   ),
-  /** Its file has a `task:` block: it is also launchable as a document task. */
-  hasTask: Schema.Boolean,
   description: Schema.optional(Schema.String),
   source: AgentSourceSchema,
   filePath: Schema.optional(Schema.String),
@@ -569,8 +567,6 @@ const OpenAgentFolderMessageSchema = Schema.Struct({
 });
 const CreateAgentMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.CREATE_AGENT),
-  /** From the document-task template rather than the chat one. */
-  task: Schema.Boolean,
 });
 const CustomizeAgentMessageSchema = agentCommand(
   SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT,

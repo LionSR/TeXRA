@@ -1,84 +1,81 @@
+/**
+ * A document task run's workspace in its run storage: the pre-run snapshots
+ * of the files it rewrites, the workspace dependencies it mirrors so a build
+ * in run storage resolves them, and the round directories' links to both.
+ * One per run activation (`runWorkspaceOf`), since what it has mirrored is
+ * what later calls of the run link into a round directory.
+ */
+
 // Standard library imports
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, type PlatformError } from 'effect';
+import { Effect, FileSystem, type PlatformError, type Scope } from 'effect';
 
-import { withLogChannel } from '@logger/effectLog';
+// Local imports
 import {
-  type RunId,
-  type FileLocation,
-  type RunStorageFileLocation,
-} from '@shared/schemas';
-import { normalizeFilePath } from '@utils/core/pathBasics';
-import { getPathSegments } from '@utils/core/pathCore';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import { withFileWriteLane } from '@utils/files/fileWriteLane';
-import { createSymlink } from '@utils/files/fsDurability';
-import {
-  absentReason,
-  entryExists,
-  entryTypeIn,
-} from '@utils/files/fsEntryExists';
-import { locateInWorkspace } from '@utils/files/workspaceFS';
-
-import {
-  createExternalLocation,
   createRunStorageLocation,
-  pathToLocationIn,
-} from './fileLocation';
+  withFileWriteLane,
+} from '@texra-ai/harness/host';
+import { meansAbsent, createSymlink } from '@texra-ai/harness/node';
 import {
-  ensureRunDirUnder,
   runDirUnder,
-  runStorageAbsolutePathUnder,
-  runStorageLocationUnder,
-  shouldSkipRelocation,
-  WORKSPACE_STORAGE_LAYOUT,
-} from './storageLayout';
+  sourceLocationUnder,
+  withLogChannel,
+} from '@texra-ai/harness/plugins';
+import {
+  type FileLocation,
+  type RunId,
+  toErrorMessage,
+} from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'runStorage';
+
+/** The directory under a run's storage that holds its pre-run snapshots. */
+const ORIGINAL_DIR = 'original';
+
+/**
+ * Workspace-relative directories never moved into run storage: `History`
+ * folders hold prior run data that is managed separately.
+ */
+const IGNORED_WORKSPACE_ROOTS = new Set(['History', 'history']);
+
+/** Whether a workspace-relative path stays out of run storage. */
+const skipsRelocation = (relativePath: string): boolean =>
+  IGNORED_WORKSPACE_ROOTS.has(relativePath.split(/[\\/]/)[0] ?? '');
 
 /** `createSymlink`'s refusal to replace an entry that is not a link. */
 const isStanding = (error: PlatformError.PlatformError): boolean =>
   error.reason._tag === 'AlreadyExists';
 
-/** One run-relative entry of a run's storage, read without following a link. */
-export type RunStorageEntry =
-  | { readonly kind: 'file'; readonly location: RunStorageFileLocation }
-  | {
-      readonly kind: 'symlink' | 'directory' | 'unsupported';
-      readonly absolutePath: string;
-    }
-  | { readonly kind: 'missing' }
-  | { readonly kind: 'invalid'; readonly reason: string };
+/** The roots a run workspace resolves its paths against, held as data. */
+interface WorkspaceRootsOf {
+  readonly storage: string;
+  readonly workspace: string | undefined;
+}
 
-export class RunFileService {
-  public readonly runDirectory: string;
+export class RunWorkspace {
+  readonly runDirectory: string;
+  readonly runId: RunId;
   /** The base files' pre-run locations, decided by `prepareRunWorkspace`. */
   private preparedBaseFiles: FileLocation[] | undefined;
   private readonly mirroredDependencies = new Set<string>();
+  private readonly roots: WorkspaceRootsOf;
 
-  public readonly runId: RunId;
-  private readonly roots: {
-    readonly storage: string;
-    readonly workspace: string | undefined;
-  };
-
-  constructor(
-    runId: RunId,
-    /**
-     * The run's session roots. Every workspace and storage path this service
-     * resolves reads them here rather than from the calling context's roots
-     * scope, which a run's Effect fiber is not guaranteed to sit inside.
-     */
-    roots: {
-      readonly storage: string;
-      readonly workspace: string | undefined;
-    },
-  ) {
+  constructor(runId: RunId, roots: WorkspaceRootsOf) {
     this.runId = runId;
     this.roots = roots;
     this.runDirectory = runDirUnder(roots.storage, runId);
+  }
+
+  /** The run's directory, created with the runs directory if absent. */
+  private readonly ensureRunDirectory = FileSystem.FileSystem.use((fs) =>
+    fs.makeDirectory(this.runDirectory, { recursive: true }),
+  );
+
+  /** An absolute path inside the run's directory. */
+  private inRunDirectory(relativePath: string): string {
+    return path.join(this.runDirectory, relativePath);
   }
 
   /**
@@ -97,9 +94,7 @@ export class RunFileService {
    * against for the whole run; a resumed run re-prepares and gets the
    * snapshots its first attempt captured.
    */
-  public readonly prepareRunWorkspace = Effect.fn(
-    'RunFileService.prepareRunWorkspace',
-  )(
+  readonly prepareRunWorkspace = Effect.fn('RunWorkspace.prepare')(
     { self: this },
     function* (
       baseFiles: FileLocation[],
@@ -109,7 +104,7 @@ export class RunFileService {
     ): Effect.fn.Return<FileLocation[], Error, FileSystem.FileSystem> {
       if (this.preparedBaseFiles) return this.preparedBaseFiles;
 
-      yield* ensureRunDirUnder(this.roots.storage, this.runId);
+      yield* this.ensureRunDirectory;
 
       const linkTargets = new Map<string, FileLocation>();
       for (const target of [...baseFiles, ...(options.linkFiles ?? [])]) {
@@ -161,7 +156,7 @@ export class RunFileService {
   ): Effect.Effect<FileLocation, Error, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       if (target.kind !== 'workspace') return target;
-      if (shouldSkipRelocation(target.relativePath)) return target;
+      if (skipsRelocation(target.relativePath)) return target;
 
       const snapshotAbsolute = this.originalSnapshotPath(target.relativePath);
       const snapshot = createRunStorageLocation(
@@ -178,7 +173,7 @@ export class RunFileService {
         // real snapshot.
         const hasSnapshot = yield* fs.stat(snapshotAbsolute).pipe(
           Effect.as(true),
-          Effect.catchIf(absentReason, () => Effect.succeed(false)),
+          Effect.catchIf(meansAbsent, () => Effect.succeed(false)),
           Effect.mapError(
             (error) =>
               new Error(
@@ -200,7 +195,7 @@ export class RunFileService {
       }).pipe(withFileWriteLane(snapshotAbsolute));
     }).pipe(
       Effect.catch((error) =>
-        absentReason(error)
+        meansAbsent(error)
           ? Effect.succeed(target)
           : Effect.fail(
               new Error(
@@ -212,134 +207,23 @@ export class RunFileService {
     );
   }
 
-  /** Whether this run has a directory under its storage root. */
-  public readonly hasDirectory = Effect.fn('RunFileService.hasDirectory')(
-    { self: this },
-    function* (): Effect.fn.Return<
-      boolean,
-      PlatformError.PlatformError,
-      FileSystem.FileSystem
-    > {
-      return yield* entryExists(
-        yield* FileSystem.FileSystem,
-        this.runDirectory,
-      );
-    },
-  );
-
   /** Where a workspace file's pre-run snapshot lives in this run. */
-  public originalSnapshotPath(workspaceRelativePath: string): string {
-    return path.join(
-      this.runDirectory,
-      WORKSPACE_STORAGE_LAYOUT.original,
-      workspaceRelativePath,
-    );
+  originalSnapshotPath(workspaceRelativePath: string): string {
+    return path.join(this.runDirectory, ORIGINAL_DIR, workspaceRelativePath);
   }
 
   /**
-   * Inspect one run-relative entry of this run's storage without following
-   * a workspace-mirror symlink, the entry's own or an ancestor directory's.
+   * The location a declared output is written to: a path already in run
+   * storage, or outside the workspace, stays where it is; a workspace path is
+   * written at the same relative path in this run's directory.
    */
-  public readonly inspectEntry = Effect.fn('RunFileService.inspectEntry')(
-    { self: this },
-    function* (
-      relativePath: string,
-    ): Effect.fn.Return<
-      RunStorageEntry,
-      PlatformError.PlatformError,
-      FileSystem.FileSystem
-    > {
-      const fs = yield* FileSystem.FileSystem;
-      const posixPath = normalizeFilePath(relativePath);
-      const pathSegments = getPathSegments(posixPath);
-      if (
-        pathSegments.length === 0 ||
-        path.posix.isAbsolute(posixPath) ||
-        path.win32.isAbsolute(relativePath) ||
-        pathSegments.includes('..')
-      ) {
-        return {
-          kind: 'invalid',
-          reason:
-            'Run-storage paths must be non-empty relative paths without parent traversal.',
-        } as const;
-      }
-      const normalizedPath = path.posix.normalize(posixPath);
-      // Every directory the walk descends through, run root first, with the
-      // entry's own path excluded: one path per prefix of `pathSegments`.
-      const ancestors = [
-        this.runDirectory,
-        ...pathSegments
-          .slice(0, -1)
-          .map((_, index) =>
-            path.join(this.runDirectory, ...pathSegments.slice(0, index + 1)),
-          ),
-      ];
-      for (const ancestor of ancestors) {
-        const ancestorType = yield* entryTypeIn(fs, ancestor);
-        if (ancestorType === undefined) return { kind: 'missing' } as const;
-        if (ancestorType === 'SymbolicLink') {
-          return { kind: 'symlink', absolutePath: ancestor } as const;
-        }
-        if (ancestorType !== 'Directory') {
-          return { kind: 'unsupported', absolutePath: ancestor } as const;
-        }
-      }
-
-      const absolutePath = path.join(this.runDirectory, normalizedPath);
-      const type = yield* entryTypeIn(fs, absolutePath);
-      if (type === undefined) return { kind: 'missing' } as const;
-      if (type === 'SymbolicLink') {
-        return { kind: 'symlink', absolutePath } as const;
-      }
-      if (type === 'File') {
-        return {
-          kind: 'file',
-          location: createRunStorageLocation(
-            absolutePath,
-            normalizedPath,
-            this.runId,
-          ),
-        } as const;
-      }
-      if (type === 'Directory') {
-        return { kind: 'directory', absolutePath } as const;
-      }
-      return { kind: 'unsupported', absolutePath } as const;
-    },
-  );
-
-  /** Create a FileLocation for a declared output file. */
-  public createLocation(inputPath: string): FileLocation {
-    const runStorageLocation = runStorageLocationUnder(
-      this.roots.storage,
-      inputPath,
-    );
-    if (runStorageLocation) return runStorageLocation;
-
-    const resolved = locateInWorkspace(this.roots.workspace, inputPath);
-
-    if (resolved.kind === 'external') {
-      return createExternalLocation(resolved.absolutePath);
-    }
-
-    const runAbsolute = runStorageAbsolutePathUnder(
-      this.roots.storage,
-      this.runId,
-      resolved.relativePath,
-    );
+  createLocation(inputPath: string): FileLocation {
+    const source = sourceLocationUnder(this.roots, inputPath);
+    if (source.kind !== 'workspace') return source;
     return createRunStorageLocation(
-      runAbsolute,
-      resolved.relativePath,
+      this.inRunDirectory(source.relativePath),
+      source.relativePath,
       this.runId,
-    );
-  }
-
-  /** Preserve the storage provenance of an existing input or comparison base. */
-  public locateSource(inputPath: string): FileLocation {
-    return (
-      runStorageLocationUnder(this.roots.storage, inputPath) ??
-      pathToLocationIn(this.roots.workspace, inputPath)
     );
   }
 
@@ -351,9 +235,7 @@ export class RunFileService {
    * `original/<relPath>`; round-dir symlinks then point there rather than
    * chaining back to the live workspace.
    */
-  public readonly mirrorWorkspaceFile = Effect.fn(
-    'RunFileService.mirrorWorkspaceFile',
-  )(
+  readonly mirrorWorkspaceFile = Effect.fn('RunWorkspace.mirrorWorkspaceFile')(
     { self: this },
     function* (
       location: FileLocation,
@@ -361,17 +243,13 @@ export class RunFileService {
     ): Effect.fn.Return<FileLocation, Error, FileSystem.FileSystem> {
       if (
         location.kind !== 'workspace' ||
-        shouldSkipRelocation(location.relativePath)
+        skipsRelocation(location.relativePath)
       ) {
         return location;
       }
 
-      yield* ensureRunDirUnder(this.roots.storage, this.runId);
-      const runAbsolute = runStorageAbsolutePathUnder(
-        this.roots.storage,
-        this.runId,
-        location.relativePath,
-      );
+      yield* this.ensureRunDirectory;
+      const runAbsolute = this.inRunDirectory(location.relativePath);
 
       const mirrored = this.mirroredDependencies;
       // Checked and linked as the link's one writer: two mirrors of one
@@ -415,8 +293,8 @@ export class RunFileService {
    *   - any existing real file at the destination, which a symlink to the
    *     original workspace source would silently destroy.
    */
-  public readonly ensureMirroredInRunSubdir = Effect.fn(
-    'RunFileService.ensureMirroredInRunSubdir',
+  readonly ensureMirroredInRunSubdir = Effect.fn(
+    'RunWorkspace.ensureMirroredInRunSubdir',
   )(
     { self: this },
     function* (
@@ -448,11 +326,7 @@ export class RunFileService {
           // workspace mirror at `runDir/<rel>`, which is correct — those
           // are never written to.
           const snapshotAbsolute = this.originalSnapshotPath(relativePath);
-          const workspaceMirrorAbsolute = runStorageAbsolutePathUnder(
-            this.roots.storage,
-            this.runId,
-            relativePath,
-          );
+          const workspaceMirrorAbsolute = this.inRunDirectory(relativePath);
           // No snapshot is the ordinary case for a read-only build asset.
           // Any other failure leaves unknown whether one exists, and
           // linking the workspace mirror then could hand an agent write at
@@ -460,7 +334,7 @@ export class RunFileService {
           // left unlinked, as the destination guard below does.
           const snapshot = yield* fs.stat(snapshotAbsolute).pipe(
             Effect.as('present' as const),
-            Effect.catchIf(absentReason, () =>
+            Effect.catchIf(meansAbsent, () =>
               Effect.succeed('absent' as const),
             ),
             Effect.catch((error) =>
@@ -472,9 +346,7 @@ export class RunFileService {
           if (snapshot === 'unreadable') return;
           const sourceAbsolute =
             snapshot === 'present' ? snapshotAbsolute : workspaceMirrorAbsolute;
-          const destinationAbsolute = runStorageAbsolutePathUnder(
-            this.roots.storage,
-            this.runId,
+          const destinationAbsolute = this.inRunDirectory(
             path.join(relativeDirectory, relativePath),
           );
 
@@ -499,4 +371,23 @@ export class RunFileService {
       );
     },
   );
+}
+
+/** Each run activation's workspace, by the activation's scope. */
+const workspaces = new WeakMap<Scope.Scope, RunWorkspace>();
+
+/**
+ * The workspace of the run activation `run` is, created at its first call:
+ * one per launch or resume, held as long as the activation's scope is, so
+ * what an earlier call prepared and mirrored is what a later call links.
+ */
+export function runWorkspaceOf(
+  run: { readonly runId: RunId; readonly scope: Scope.Scope },
+  roots: WorkspaceRootsOf,
+): RunWorkspace {
+  const known = workspaces.get(run.scope);
+  if (known !== undefined) return known;
+  const workspace = new RunWorkspace(run.runId, roots);
+  workspaces.set(run.scope, workspace);
+  return workspace;
 }

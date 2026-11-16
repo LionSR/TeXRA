@@ -8,7 +8,6 @@ const preset = {
   id: 'mathematician',
   name: 'Mathematician',
   description: 'Coordinate proof-oriented agents.',
-  agents: { workflow: ['polish'], toolUse: ['team'] },
   source: 'built-in',
 };
 

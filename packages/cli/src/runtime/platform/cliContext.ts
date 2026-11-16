@@ -22,7 +22,7 @@ import {
 import { Settings } from '@texra-ai/harness/plugins';
 import { modelConfig } from '@texra-ai/llm';
 import {
-  absentReason,
+  meansAbsent,
   APPROVAL_POLICY_ENV,
   canonicalizeWorkspaceRoot,
   pathExists,
@@ -415,7 +415,7 @@ const resolveCliCwd = Effect.fn('cliContext.resolveCliCwd')(function* (
   const fs = yield* FileSystem.FileSystem;
   const info = yield* fs.stat(requested).pipe(
     Effect.mapError((error) =>
-      absentReason(error)
+      meansAbsent(error)
         ? new CliUsageError({
             message: `--cwd: path does not exist: ${requested}`,
           })

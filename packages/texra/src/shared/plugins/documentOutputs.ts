@@ -1,5 +1,5 @@
 /**
- * The documents plugin's output vocabulary: what a document task's revisions
+ * The theory plugin's output vocabulary: what a document task's revisions
  * wrote (`RoundOutput`, with their compile failures), the flattened
  * summaries a reader of its documents row reports (`DocumentsResult`, with
  * the proposed revision's diffs),
@@ -228,7 +228,7 @@ export const RoundOutputSchema = Schema.Struct({
   /** What this round should have written and did not: the expected output
    *  files it lacks (the disk check owns those) and the documents its reply
    *  held that did not extract. Persisted with all round outputs in the
-   *  documents plugin's output fact. */
+   *  theory plugin's output fact. */
   missingOutputs: Schema.Array(Schema.String),
   /** The round's latexdiffs, as its last `document_diff` wrote them. */
   latexdiffs: Schema.Array(LatexdiffEntrySchema),

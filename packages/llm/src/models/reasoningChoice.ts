@@ -76,9 +76,7 @@ export interface ReasoningChoice {
   /** The effort level to send; `null` sends none (the model has no effort control, or thinking is off without one). */
   readonly effort: ReasoningEffort | null;
   readonly mode: ReasoningMode | null;
-  /** The level that was asked for (explicitly or by default), when it differs from `effort`. */
-  readonly requested?: ReasoningEffort;
-  /** Why `effort` differs from `requested`, for the run's log. */
+  /** Why `effort` is not the level asked for (explicitly or by default), for the run's log. */
   readonly note?: string;
 }
 
@@ -123,7 +121,7 @@ function snapped(
   wanted: ReasoningEffort,
   label: string,
 ): Result.Result<
-  { effort: ReasoningEffort; requested?: ReasoningEffort; note?: string },
+  { effort: ReasoningEffort; note?: string },
   ReasoningChoiceError
 > {
   if (accepted.includes(wanted)) return Result.succeed({ effort: wanted });
@@ -137,7 +135,6 @@ function snapped(
   }
   return Result.succeed({
     effort,
-    requested: wanted,
     note: `${label} has no ${wanted} effort; using ${effort} (accepts ${accepted.join(', ')}).`,
   });
 }
@@ -213,7 +210,6 @@ export function chooseReasoning(
           ),
           (choice) => ({
             ...choice,
-            requested: ReasoningEffort.NONE,
             note: `${label} cannot turn thinking off; using the default ${DEFAULT_EFFORT}.`,
           }),
         );
@@ -245,7 +241,6 @@ export function chooseReasoning(
       thinking: true,
       effort: null,
       mode,
-      requested: wanted,
       note: `${label} has no effort levels; ignoring ${wanted}.`,
     });
   }

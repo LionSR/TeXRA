@@ -3,13 +3,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem, PlatformError, Result } from 'effect';
 
 import { pathExists } from '@texra-ai/harness/node';
-import {
-  ensureError,
-  agentKey,
-  agentName,
-  isTaskConfig,
-  type RunId,
-} from '@texra-ai/harness/schemas';
+import { ensureError, programOf, type RunId } from '@texra-ai/harness/schemas';
 import { forkRun } from '@texra/controllers/session/runActionPolicy';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { requestErrorText } from '@ui/copy/requestErrors';
@@ -24,7 +18,6 @@ import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import { cliErrorMessage, writeTextStderr } from '../runtime/platform/logSinks';
 import { buildHeadlessRunContext } from '../runtime/models/runModel';
-import { resolveCliRunAgent } from '../runtime/agents';
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
@@ -110,10 +103,10 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
     writeTextStderr(`Run not found: ${id}`);
     return CliExitCode.Usage;
   }
-  const documentTask = isTaskConfig(config);
+  const documentTask = programOf(config) !== null;
   if (fork && documentTask) {
     writeTextStderr(
-      `Task ${id} is a document task: only a conversation can be forked.`,
+      `Task ${id} is a program run: only a conversation can be forked.`,
     );
     return CliExitCode.Usage;
   }
@@ -197,18 +190,6 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
       chat: { initialResume: { id, config } },
     };
   }
-
-  // The launch pinned the resolved source on the record, so resume checks
-  // that exact entry rather than re-resolving the bare name.
-  const agent = yield* Effect.result(
-    resolveCliRunAgent(
-      stores,
-      config.agentSource
-        ? agentKey(config.agentSource, agentName(config.agent))
-        : config.agent,
-    ),
-  );
-  if (Result.isFailure(agent)) return resumeFailureExit(id, agent.failure);
 
   // Fast-fail on an unusable destination before the run restarts;
   // `executeCliRun` reads the same persisted `cli` block. Each

@@ -55,7 +55,7 @@ const setUp = (
     const host = Context.get(yield* Layer.build(FakeHost.layer()), FakeHost);
     const workspaceRoot = host.path('workspace');
     const session = yield* Effect.flatMap(
-      TestSession.open(host.roots, { host: {} }),
+      TestSession.open(host.roots, { answeredFromView: true }),
       sessionHandleOf,
     );
     const approvalPolicy = (
@@ -64,7 +64,7 @@ const setUp = (
       setTestApprovalPolicy(policy).pipe(Effect.provideService(FakeHost, host));
     yield* approvalPolicy('ask');
     const runId = yield* publishTestRunStart(session, generateRunId());
-    yield* Context.get(session, SessionLog).settled;
+    yield* Context.get(session, SessionLog).drained;
     const decisions = yield* autoDecideRequests(session, decide);
 
     // The write side of both views the edit flow reaches: an absolute path
@@ -247,7 +247,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           // The door a surface reads the diff through answers from the store,
           // for a request its view lists: the log's tail above can see the
           // row before the view applies it.
-          yield* Context.get(session, SessionLog).settled;
+          yield* Context.get(session, SessionLog).drained;
           const { preview } = yield* Context.get(session, SessionRequests)
             .request({
               kind: 'request.preview',

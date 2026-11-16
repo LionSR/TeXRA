@@ -60,8 +60,8 @@ type SelfInput = typeof SelfInputSchema.Type;
  * commit they cut before. In the caller's own script that is the caller,
  * mid-turn. A background script is its conversation's agent: the
  * conversation it launched from (its recorded parent, whether or not it was
- * since detached) as it stood when the script started. A task's script is
- * its own agent, with no conversation to fork.
+ * since detached) as it stood when the script started. A program's script
+ * is its own agent, with no conversation to fork.
  */
 const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
   const { run } = call;
@@ -109,12 +109,12 @@ const runSelf = Effect.fn('self.call')(function* (
   script: ScriptScope,
 ) {
   const { run } = call;
-  const { runId: parentRunId } = run;
+  const { runId: parentId } = run;
   const { config, source, before, boundAt } = yield* selfOf(call);
   if (input.fork && source === null)
     return yield* Effect.fail(
       new ToolError(
-        "A task's script has no conversation to fork: call self() with `fork: false`.",
+        "A program's script has no conversation to fork: call self() with `fork: false`.",
       ),
     );
   const name = config.agent;
@@ -144,7 +144,7 @@ const runSelf = Effect.fn('self.call')(function* (
         : null;
       return yield* executeSubagentInBand({
         runId,
-        parentRunId,
+        parentId,
         configPayload: Schema.decodeUnknownSync(AgentConfigSchema)({
           ...(forked?.record ?? {
             ...launch,

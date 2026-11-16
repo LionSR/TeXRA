@@ -1,8 +1,10 @@
 import { Effect, type FileSystem } from 'effect';
 
-import { readRecipeResult } from '@agent/runtime/recipeResult';
-import { RunFileService } from '@common/storage/runStorage';
-import { runStorageLocationUnder } from '@common/storage/storageLayout';
+import { readProgramResult } from '@agent/runtime/programRun';
+import {
+  runEntryUnder,
+  runStorageLocationUnder,
+} from '@common/storage/storageLayout';
 import { SessionRoots } from '@platform/rootedFs';
 import {
   RUN_OUTCOME,
@@ -20,10 +22,10 @@ import { normalizeFilePath } from '@utils/core/pathBasics';
 import { getRunRecords } from './runOwnership';
 
 /** Fail unless `reference` names a declared output of a completed direct
- *  child of `parentRunId`. */
+ *  child of `parentId`. */
 const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
   function* (
-    parentRunId: RunId,
+    parentId: RunId,
     reference: Pick<
       RunStorageFileLocation,
       'runId' | 'relativePath' | 'absolutePath'
@@ -37,27 +39,25 @@ const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
     // The store's edge, not the view's: the view trails the log, and a
     // child it has not applied yet would be refused as no child at all.
     const facts = yield* (yield* SessionLog).facts(reference.runId);
-    if (facts?.parent?.id !== parentRunId) {
+    if (facts?.parent?.id !== parentId) {
       return yield* Effect.fail(
         new Error(
-          `Run ${reference.runId} is not a direct child of ${parentRunId}.`,
+          `Run ${reference.runId} is not a direct child of ${parentId}.`,
         ),
       );
     }
-    // A completed recipe's changes are its declared outputs: the files it
-    // wrote, which its block names (`AgentBlock.result.changes`).
-    const recipe =
+    // A completed program's changes are its declared outputs: the files it
+    // wrote, which its registration names (`Program.result.changes`).
+    const program =
       runEnd?.outcome === RUN_OUTCOME.COMPLETED
-        ? yield* readRecipeResult(config, reference.runId, yield* SessionRoots)
+        ? yield* readProgramResult(config, reference.runId, yield* SessionRoots)
         : undefined;
-    if (recipe === undefined) {
+    if (program === undefined) {
       return yield* Effect.fail(
-        new Error(
-          `Run ${reference.runId} has no completed task output manifest.`,
-        ),
+        new Error(`Run ${reference.runId} is no completed program's run.`),
       );
     }
-    const declared = recipe.changes.some(
+    const declared = program.changes.some(
       ({ absolutePath }) =>
         normalizeFilePath(absolutePath) ===
         normalizeFilePath(reference.absolutePath),
@@ -73,14 +73,14 @@ const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
 );
 
 /**
- * Resolve a file of the calling run's own storage (a recipe's
+ * Resolve a file of the calling run's own storage (a program's
  * figures), or a declared output of a completed direct child run. The
  * absolute path is only a lookup token; persisted lineage and result
  * metadata are the source of authority.
  */
 export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
   function* (
-    parentRunId: RunId,
+    parentId: RunId,
     absolutePath: string,
   ): Effect.fn.Return<
     RunStorageFileLocation | undefined,
@@ -102,13 +102,14 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
     }
 
     // The calling run's own storage needs no manifest: it is its own.
-    if (reference.runId !== parentRunId)
-      yield* checkDeclaredChildOutput(parentRunId, reference);
+    if (reference.runId !== parentId)
+      yield* checkDeclaredChildOutput(parentId, reference);
 
-    const entry = yield* new RunFileService(
+    const entry = yield* runEntryUnder(
+      storageRoot,
       reference.runId,
-      roots,
-    ).inspectEntry(reference.relativePath);
+      reference.relativePath,
+    );
     switch (entry.kind) {
       case 'file':
         return entry.location;

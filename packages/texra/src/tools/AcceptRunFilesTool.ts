@@ -23,10 +23,11 @@ import {
 // Local imports
 import { ToolContext, type ToolContextShape } from '@texra-ai/harness/plugins';
 import { pathToLocationIn } from '@texra-ai/harness/host';
+import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import {
   ChildRuns,
   assertNoParentTraversal,
-  RunFileService,
+  runEntryUnder,
   ToolError,
   type EditRecord,
   type RefusalDecision,
@@ -35,7 +36,7 @@ import {
   requestToolEditApproval,
 } from '@texra-ai/harness/plugins';
 import {
-  absentReason,
+  meansAbsent,
   entryTypeIn,
   readNormalizedFile,
 } from '@texra-ai/harness/node';
@@ -69,7 +70,7 @@ const fileAt = (fs: FileSystem.FileSystem, target: string) =>
     Effect.map((stats) => stats.type === 'File'),
     Effect.catchIf(
       (error) =>
-        absentReason(error) ||
+        meansAbsent(error) ||
         (error.reason._tag === 'BadResource' &&
           Predicate.hasProperty(error.reason.cause, 'code') &&
           error.reason.cause.code === 'ELOOP'),
@@ -203,9 +204,14 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
 ): Effect.fn.Return<ToolResult, Error, PluginToolServices> {
   const call = yield* ToolContext;
   // The run whose files are accepted, which is not the calling run.
-  const runFiles = new RunFileService(input.execution_id, call.env.roots);
+  const runFiles = new RunWorkspace(input.execution_id, call.env.roots);
+  const hasDirectory =
+    (yield* entryTypeIn(
+      yield* FileSystem.FileSystem,
+      runFiles.runDirectory,
+    ).pipe(Effect.mapError(ensureError))) !== undefined;
   if (
-    !(yield* runFiles.hasDirectory()) &&
+    !hasDirectory &&
     !(yield* (yield* ChildRuns).records(input.execution_id).exists)
   ) {
     return yield* Effect.fail(
@@ -434,7 +440,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
  */
 const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
   function* (
-    runFiles: RunFileService,
+    runFiles: RunWorkspace,
     runPath: string,
     call: ToolContextShape,
   ): Effect.fn.Return<
@@ -443,7 +449,11 @@ const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
     FileSystem.FileSystem | WorkspaceFs
   > {
     const { runId } = runFiles;
-    const entry = yield* runFiles.inspectEntry(runPath);
+    const entry = yield* runEntryUnder(
+      call.env.roots.storage,
+      runId,
+      runPath,
+    ).pipe(Effect.mapError(ensureError));
     switch (entry.kind) {
       case 'file':
         return entry.location;

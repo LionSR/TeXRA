@@ -52,7 +52,7 @@ const guideSidebar = [
     items: [
       { text: 'Built-in Agents', link: '/guide/built-in-agents.md' },
       {
-        text: 'Workflow Agents',
+        text: 'Programs',
         link: '/guide/agent-architecture.md',
       },
       { text: 'Custom Agents', link: '/guide/custom-agents' },

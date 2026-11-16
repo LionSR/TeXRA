@@ -4,8 +4,6 @@
  * to), what it opens with (the proposal as it would launch), and what its
  * Send answers (an approval carrying the form's changes).
  */
-import { Result, Schema } from 'effect';
-
 import {
   agentKey,
   agentName,
@@ -13,7 +11,6 @@ import {
   type RunView,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface, SurfaceAction } from '@texra/shared/session/surface';
 
@@ -56,38 +53,36 @@ export function editedProposal(
 }
 
 /**
- * The agents a proposal may launch instead: the ones the asking run may
- * delegate to (its team's, which may be hidden from the catalog, else
- * every visible one), only those of the proposal's kind (a document task's
- * agents for a task, the others for a chat: a task agent run as a chat has
- * no tools), and the proposed one always, so an unchanged form launches
- * what was proposed.
+ * The agents a proposal may launch instead: for a chat, the ones the asking
+ * run may delegate to (its team's, which may be hidden from the catalog,
+ * else every visible one); for a program, none, since the proposal names
+ * the program and not an agent. The proposed one is always among them, so
+ * an unchanged form launches what was proposed.
  */
 function proposalAgentOptions(
   data: AgentProposalRequest,
   run: RunView | undefined,
   host: HostSnapshot,
 ): HostSnapshot['agentOptions'] {
-  const { task } = data;
-  const offered = (option: HostSnapshot['agentOptions'][number]) =>
-    (option.rounds !== undefined) === task;
+  const proposed = { value: proposedAgentKey(data), label: data.agent };
+  if (data.task) return [proposed];
   const scope = run?.agentScope ?? null;
   const agents =
     scope === null
-      ? host.agentOptions.filter(offered)
+      ? host.agentOptions
       : scope.flatMap((key) => {
           const option = host.agentOptions.find(({ value }) => value === key);
           // A member the catalog hides is offered, as the team names it,
-          // only when proposed: whether it has a task is not in the catalog.
+          // only when proposed.
           if (option === undefined)
             return isProposedAgent(key, data)
               ? [{ value: key, label: agentName(key) }]
               : [];
-          return offered(option) ? [option] : [];
+          return [option];
         });
   return agents.some((option) => isProposedAgent(option.value, data))
     ? agents
-    : [{ value: proposedAgentKey(data), label: data.agent }, ...agents];
+    : [proposed, ...agents];
 }
 
 /** The catalogs as the launch form offers them: while it is open on a
@@ -116,13 +111,7 @@ export function proposalLaunchPatch(
     proposalAgentOptions(data, run, host).find((option) =>
       isProposedAgent(option.value, data),
     )?.value ?? data.agent;
-  // Options the documents plugin cannot read open as its defaults.
-  const options =
-    Result.getOrUndefined(
-      Schema.decodeUnknownResult(DocumentTaskOptionsSchema)(data.options ?? {}),
-    ) ?? Schema.decodeUnknownSync(DocumentTaskOptionsSchema)({});
   return {
-    ...options,
     agent,
     // As proposed, effort and mode included: the model menu offers a
     // model it does not list as itself.
@@ -135,8 +124,8 @@ export function proposalLaunchPatch(
 }
 
 /** The approval the form's Send answers: the proposal with the form's
- *  agent and model when they differ from it, and its instruction, files
- *  and, for a task, options, which the run compares with the proposal. */
+ *  agent and model when they differ from it, and its instruction and
+ *  files, which the run compares with the proposal. */
 export function proposalApproval(
   data: AgentProposalRequest,
   launch: Launch,
@@ -149,8 +138,5 @@ export function proposalApproval(
     inputFiles: [...launch.inputFiles],
     contextFiles: [...launch.contextFiles],
     mediaFiles: [...launch.mediaFiles],
-    options: data.task
-      ? Schema.decodeUnknownSync(DocumentTaskOptionsSchema)(launch)
-      : null,
   };
 }

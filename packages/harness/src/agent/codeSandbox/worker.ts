@@ -5,10 +5,10 @@
 // `scripts/code-sandbox-worker.mjs`), so no host resolves a worker path.
 //
 // The realm advances only inside a step: the first evaluates the script, and
-// each later one delivers one settlement. A step then drains QuickJS's job
+// each later one delivers one result. A step then drains QuickJS's job
 // queue to quiescence and reports the ops the guest issued meanwhile, so the
-// same settlements in the same order always issue the same ops in the same
-// order. There are no timers: nothing settles except a host delivery.
+// same results in the same order always issue the same ops in the same
+// order. There are no timers: nothing finishes except a host delivery.
 
 import { workerData } from 'node:worker_threads';
 
@@ -36,7 +36,7 @@ import {
 } from './limits';
 import { BRIDGE_PRELUDE, DETERMINISM_PRELUDE } from './prelude';
 import {
-  SettleMessageSchema,
+  ResultMessageSchema,
   type StepReportWire,
   type WorkerInput,
   WorkerInputSchema,
@@ -97,8 +97,8 @@ function isOutOfMemory(thrown: { name: string; message: string }): boolean {
 interface Realm {
   /** Evaluate the script and run it to its first wait. */
   readonly begin: () => StepReportWire;
-  /** Deliver one settlement and run the realm to its next wait. */
-  readonly settle: (message: typeof SettleMessageSchema.Type) => StepReportWire;
+  /** Deliver one result and run the realm to its next wait. */
+  readonly settle: (message: typeof ResultMessageSchema.Type) => StepReportWire;
 }
 
 const openRealm = Effect.fn('worker.openRealm')(function* (
@@ -135,20 +135,26 @@ const openRealm = Effect.fn('worker.openRealm')(function* (
     (runtime) => Effect.sync(() => runtime.dispose()),
   );
   // A specifier names a module whole: one the host passed loads, any
-  // other (a relative path included) rejects the import.
+  // other (a relative path included) rejects the import. The specifier
+  // is looked up as written: QuickJS's own normalizer would resolve a
+  // relative one against the importer first, so `./builtIn:goal` would
+  // load `builtIn:goal`.
   const offered = Object.keys(input.modules).map((name) => `"${name}"`);
-  runtime.setModuleLoader((name) => {
-    const source = Object.hasOwn(input.modules, name)
-      ? input.modules[name]
-      : undefined;
-    return (
-      source ?? {
-        error: new Error(
-          `No module "${name}" is offered to this script; it may import ${offered.length === 0 ? 'none' : offered.join(', ')}.`,
-        ),
-      }
-    );
-  });
+  runtime.setModuleLoader(
+    (name) => {
+      const source = Object.hasOwn(input.modules, name)
+        ? input.modules[name]
+        : undefined;
+      return (
+        source ?? {
+          error: new Error(
+            `No module "${name}" is offered to this script; it may import ${offered.length === 0 ? 'none' : offered.join(', ')}.`,
+          ),
+        }
+      );
+    },
+    (_importer, specifier) => specifier,
+  );
   const context = yield* Effect.acquireRelease(
     Effect.try({ try: () => runtime.newContext(), catch: ensureError }),
     (context) => Effect.sync(() => context.dispose()),
@@ -352,7 +358,7 @@ const program = Effect.gen(function* () {
   yield* runner.send(0, realm.begin());
   yield* Effect.raceFirst(
     runner.run((_port, raw) => {
-      const message = Schema.decodeUnknownResult(SettleMessageSchema)(raw);
+      const message = Schema.decodeUnknownResult(ResultMessageSchema)(raw);
       return Result.isSuccess(message)
         ? runner.send(0, realm.settle(message.success))
         : Deferred.fail(
