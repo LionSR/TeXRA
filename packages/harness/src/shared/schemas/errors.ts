@@ -23,6 +23,16 @@ export const SubscriptionSessionFailureSchema = Schema.Struct({
   needsReauth: Schema.Boolean,
 });
 
+/** Model access finding no route to send a call on: the facts a run's
+ *  `route` failure records and `RouteUnavailable` raises. */
+export const RouteFailureFieldsSchema = Schema.Struct({
+  message: Schema.String,
+  /** The route's credential is not set anywhere the run reads. */
+  missingApiKey: Schema.optional(Schema.Literal(true)),
+  /** A signed-in subscription that could not bill the call. */
+  session: Schema.optional(SubscriptionSessionFailureSchema),
+});
+
 /**
  * A model call's failure as a run records it: the verdict, never its words.
  * `model` is llm's verdict on the vendor's reply (its kind, the vendor's own
@@ -47,10 +57,7 @@ export const ModelFailureSchema = Schema.Union([
   Schema.Struct({
     source: Schema.Literal('route'),
     provider: Schema.optional(Schema.String),
-    message: Schema.String,
-    /** The route's credential is not set anywhere the run reads. */
-    missingApiKey: Schema.optional(Schema.Literal(true)),
-    session: Schema.optional(SubscriptionSessionFailureSchema),
+    ...RouteFailureFieldsSchema.fields,
   }),
 ]);
 /** {@link ModelFailureSchema}'s value. */

@@ -970,9 +970,7 @@ interface ReasoningChoice {
   /** The effort level to send; `null` sends none (the model has no effort control, or thinking is off without one). */
   readonly effort: ReasoningEffort | null;
   readonly mode: ReasoningMode | null;
-  /** The level that was asked for (explicitly or by default), when it differs from `effort`. */
-  readonly requested?: ReasoningEffort;
-  /** Why `effort` differs from `requested`, for the run's log. */
+  /** Why `effort` is not the level asked for (explicitly or by default), for the run's log. */
   readonly note?: string;
 }
 ```
@@ -1234,7 +1232,7 @@ interface SelectedModel {
   readonly id: string;
   readonly config: ModelConfig;
   /** The effort, thinking and mode the string asks for, if any. */
-  readonly request: Omit<ModelSelection, 'ref'>;
+  readonly request: ReasoningRequest;
 }
 ```
 
