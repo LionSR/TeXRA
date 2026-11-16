@@ -25,9 +25,8 @@ export const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
  * fatal error tends to sit near the top of the log, well before the tail's
  * trailing window. The head is emitted as-is and may end mid-line: a
  * char-capped excerpt, not a line-bounded preview. The gap between head and
- * tail is stated (mirroring the foreground `checkToolResultTextLimit`'s
- * "[... N characters elided ...]" note) so the model doesn't mistake the
- * excerpt for the complete stream.
+ * tail is stated (an "[... N characters elided ...]" note) so the model
+ * doesn't mistake the excerpt for the complete stream.
  */
 export const BACKGROUND_OUTPUT_HEAD_CHARS = 1_000;
 
