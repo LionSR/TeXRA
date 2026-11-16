@@ -23,7 +23,7 @@ import {
   StateStores,
 } from '@texra-ai/harness/host';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
-import { openNodeWorkspaceRoots, setLogSink } from '@texra-ai/harness/node';
+import { openNodeWorkspaceRoots } from '@texra-ai/harness/node';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { openLocalSession } from '@texra/controllers/session/openProjectSession';
 import {
@@ -34,12 +34,7 @@ import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 
 // Local file imports
 import type { CliProcessRuntime } from './cliProcessRuntime';
-import {
-  flush,
-  silentLogSink,
-  writeTextStderr,
-  writeTextStderrAndWait,
-} from './logSinks';
+import { flush, writeTextStderr, writeTextStderrAndWait } from './logSinks';
 import { SIGNAL_EXIT_CODE } from './exitCodes';
 import { holdSignals, type SignalPolicy } from './processSignals';
 import { isLinked, linkCliService, type CliServiceLink } from './cliService';
@@ -161,9 +156,6 @@ const openCliPlatform = Effect.fn('openCliPlatform')(function* (
   runtime: () => CliProcessRuntime,
   scope: Scope.Closeable,
 ): Effect.fn.Return<CliPlatformServices, Error, ProcessServices | Sessions> {
-  // Every command renders its own output, so the platform's log lines go
-  // nowhere.
-  setLogSink(silentLogSink, { trusted: true });
   const globalState = yield* AppState;
   const sessions = yield* Sessions;
   // A running service holds the project's state and runs: this process

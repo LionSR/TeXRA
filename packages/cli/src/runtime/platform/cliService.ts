@@ -34,14 +34,12 @@ import {
   resolveGlobalStoragePath,
   envFlag,
   JsonStore,
-  setLogSink,
 } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { openLocalSession } from '@texra/controllers/session/openProjectSession';
 import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
-import { type ServiceInfo } from '@texra/controllers/server/protocol';
 import {
   runsAtWork,
   type ServiceLoad,
@@ -54,14 +52,13 @@ import {
   probeRecordedService,
   spawnService,
   type ServiceLink,
-  type ServiceUnavailable,
   WINDOWS_UNSUPPORTED,
 } from '@texra/controllers/server/client';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 
 import { readCliEntrypointPath } from './cliContext';
-import { silentLogSink, writeTextStderr } from './logSinks';
+import { writeTextStderr } from './logSinks';
 import type { CliContext } from './cliContext';
 
 /** The service's own log channel. */
@@ -244,20 +241,6 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     load,
   } satisfies Context.Service.Shape<typeof ServiceProjects>;
 });
-
-/** A client prints its own result; its process's log lines go nowhere, as
- *  a platform command's do (`CliPlatform`). The service keeps its own
- *  log. */
-const quietClient = Effect.sync(() =>
-  setLogSink(silentLogSink, { trusted: true }),
-);
-
-/** The hello of the storage root's service, or null when none answers. */
-export const probeCliService: Effect.Effect<
-  ServiceInfo | null,
-  ServiceUnavailable,
-  GlobalValues
-> = quietClient.pipe(Effect.andThen(probeRecordedService));
 
 /** `TEXRA_NO_SERVICE=1`: this process uses no background service, so a
  *  chat runs here, as where the service cannot run. */

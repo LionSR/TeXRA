@@ -71,8 +71,9 @@ export interface CliContext {
   /**
    * The diagnostics emission threshold this process's runtime builds with,
    * decided once from argv — `--quiet` is `None`, `--verbose` is `Debug`,
-   * otherwise `Info` — because a terminal is the one surface with no live
-   * level filter of its own. A flag is exactly the kind of fact a
+   * otherwise `Warn` — because a terminal is the one surface with no live
+   * level filter of its own. The process's diagnostic sink applies the same
+   * level (`stderrDiagnosticSink`). A flag is exactly the kind of fact a
    * layer-build capture is for: it cannot change mid-process.
    */
   readonly minimumLogLevel: LogLevel.LogLevel;
@@ -484,7 +485,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
         configWarnings,
       )) ??
       Settings.getConfig(config, CLI_OUTPUT_FORMAT_SETTING);
-    let minimumLogLevel: LogLevel.LogLevel = 'Info';
+    let minimumLogLevel: LogLevel.LogLevel = 'Warn';
     if (init.globalArgs.quiet) minimumLogLevel = 'None';
     else if (init.globalArgs.verbose) minimumLogLevel = 'Debug';
     return {

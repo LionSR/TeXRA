@@ -85,7 +85,7 @@ describe('texra run, document tasks', { timeout: REAL_RUN_TIMEOUT }, () => {
   });
   afterEach(() => {
     vi.restoreAllMocks();
-    // The CLI's platform silences the process's log sink: put it back.
+    // The CLI installs its own log sink: put it back.
     setLogSink(null);
   });
 

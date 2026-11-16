@@ -3,7 +3,7 @@ import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
 
 // Third-party imports
-import { Effect, PlatformError, Predicate } from 'effect';
+import { Effect, LogLevel, PlatformError, Predicate } from 'effect';
 
 // Local imports
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
@@ -236,30 +236,44 @@ export function confirmCliQuestion(
 }
 
 /**
- * The host diagnostic sink of this process until a platform installs its own.
- * The harness's console fallback sends DEBUG and INFO to stdout, and
- * the process runtime logs while its layers build (`UsageLogService started
- * …`) — before `CliPlatform` runs its own `setLogSink`, and for `clone`
- * and `install-github-action` before a platform that never comes up. Under
- * `--output-format ndjson` that line is the first thing on stdout and the
- * stream stops being parseable. This renders the same line `consoleLogSink`
- * does, with every level on stderr: nothing is dropped, and stdout stays the
- * command's result. Installed by `bin/texra.ts` as its first statement and
- * again by `defineCliCommand` once the context has answered `--quiet`.
+ * The process's diagnostic sink at `minimumLogLevel`, the level the
+ * context decided from argv: each entry at that level or above on stderr,
+ * as `[channel] message`, so stdout stays the command's result. The
+ * runtime drops an `Effect.log*` below the level before it gets here; the
+ * sink applies it to the fiberless writes too. `None` (`--quiet`) writes
+ * nothing. A command keeps this sink for its whole life; the chat replaces
+ * it with {@link silentLogSink} while Ink owns the terminal.
  */
-export const prePlatformDiagnosticSink: HostLogSink = Object.freeze({
-  write(entry: LogEntry) {
-    const channel = entryChannel(entry);
-    writeTextStderr(`${channel ? `[${channel}] ` : ''}${entryMessage(entry)}`);
-  },
-});
+export function stderrDiagnosticSink(
+  minimumLogLevel: LogLevel.LogLevel,
+): HostLogSink {
+  return Object.freeze({
+    write(entry: LogEntry) {
+      if (
+        minimumLogLevel === 'None' ||
+        LogLevel.isLessThan(ENTRY_LOG_LEVEL[entry.level], minimumLogLevel)
+      )
+        return;
+      const channel = entryChannel(entry);
+      writeTextStderr(
+        `${channel ? `[${channel}] ` : ''}${entryMessage(entry)}`,
+      );
+    },
+  });
+}
 
-/**
- * The sink of a process that wants no diagnostics at all: `defineCliCommand`
- * installs it for a command run with `--quiet` before it builds the process
- * runtime, and the CLI platform init installs it for every command that
- * reaches one, since each command renders its own output.
- */
+/** The `LogLevel` each entry level was logged at. */
+const ENTRY_LOG_LEVEL = Object.freeze({
+  FATAL: 'Fatal',
+  ERROR: 'Error',
+  WARN: 'Warn',
+  INFO: 'Info',
+  DEBUG: 'Debug',
+  TRACE: 'Trace',
+}) satisfies { [L in LogEntry['level']]: LogLevel.Severity };
+
+/** The sink of a surface that owns the terminal (the chat's Ink frame) or
+ *  whose own output reports every failure (`texra doctor`). */
 export const silentLogSink: HostLogSink = Object.freeze({
   write: () => undefined,
 });

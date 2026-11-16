@@ -1,5 +1,5 @@
 import { defineCommand } from 'citty';
-import { Deferred, Effect, Exit } from 'effect';
+import { Deferred, Effect, Exit, References } from 'effect';
 
 import { Sessions } from '@texra-ai/harness';
 import { formatResultCount } from '@texra-ai/harness/schemas';
@@ -24,8 +24,8 @@ import {
   cliServiceProjects,
   isLinked,
   linkCliService,
-  probeCliService,
 } from '../runtime/platform/cliService';
+import { probeRecordedService } from '@texra/controllers/server/client';
 import { cliProcessLayer } from '../runtime/platform/cliProcessRuntime';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { writeTextStderr } from '../runtime/platform/logSinks';
@@ -147,7 +147,14 @@ export const serveCommand = defineCliCommand({
   catchExitCode: CliExitCode.AgentError,
   layer: cliProcessLayer,
   run: (context, ctx) =>
-    runServe(context, parseIdleSeconds(ctx.args['idle-timeout'])),
+    runServe(context, parseIdleSeconds(ctx.args['idle-timeout'])).pipe(
+      // The service's log is read after the fact, so by default it keeps the
+      // info lines a one-shot command's default level drops.
+      Effect.provideService(
+        References.MinimumLogLevel,
+        context.minimumLogLevel === 'Warn' ? 'Info' : context.minimumLogLevel,
+      ),
+    ),
 });
 
 function statusText(info: ServiceInfo | null, context: CliContext): string {
@@ -180,7 +187,7 @@ const stopRunningService = Effect.gen(function* () {
   // procedure every build keeps; its socket is all this build knows of it.
   const target:
     | (Pick<ServiceInfo, 'socket'> & { readonly pid?: number })
-    | null = yield* probeCliService.pipe(
+    | null = yield* probeRecordedService.pipe(
     Effect.catchIf(
       (error) => error.unspoken !== undefined,
       (error) => Effect.succeed({ socket: error.unspoken ?? '' }),
@@ -209,7 +216,7 @@ const statusCommand = defineCliCommand({
   layer: cliProcessLayer,
   catchExitCode: CliExitCode.AgentError,
   run: () =>
-    probeCliService.pipe(
+    probeRecordedService.pipe(
       Effect.flatMap(emitStatus),
       Effect.as(CliExitCode.Success),
     ),

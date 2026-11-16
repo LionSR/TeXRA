@@ -42,7 +42,8 @@ import type { CliProcessRuntime } from '@cli/runtime/platform/cliProcessRuntime'
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { cliPlatform } from '@cli/runtime/platform/initPlatform';
 import { selectCliRunnableModel } from '@cli/runtime/models/modelAccess';
-import { writeTextStderr } from '@cli/runtime/platform/logSinks';
+import { silentLogSink, writeTextStderr } from '@cli/runtime/platform/logSinks';
+import { setLogSink } from '@texra-ai/harness/node';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import {
@@ -541,6 +542,9 @@ export async function runChat(
       ),
   };
 
+  // Ink owns the terminal from here: a diagnostic line would land inside
+  // the frame it redraws, so the chat's diagnostics go nowhere.
+  setLogSink(silentLogSink, { trusted: true });
   const ink = render(
     <SlashContextProvider value={slashContext}>
       <App
