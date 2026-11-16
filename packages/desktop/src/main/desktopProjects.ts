@@ -327,12 +327,6 @@ export const openDesktopProjectRegistry: (
       current().projects.find(
         (project) => project.key === current().activeKey,
       ) ?? fallback;
-    // On the selection lane, as every other write of `recent`: a read taken
-    // before another's write must not land after it.
-    const syncRecent = Effect.gen(function* () {
-      const recent = yield* records.readRecent;
-      yield* SubscriptionRef.update(state, (s) => ({ ...s, recent }));
-    }).pipe(selectionLane.withPermit);
     const activate = Effect.fn('activate')(function* (
       root: string | undefined,
     ) {
@@ -349,7 +343,6 @@ export const openDesktopProjectRegistry: (
         return Effect.gen(function* () {
           const existing = byRoot(root);
           if (existing) return existing;
-          yield* records.remember(root);
           const projectScope = yield* Scope.make();
           return yield* Effect.gen(function* () {
             const { roots, warnings } = yield* openProjectRoots(
@@ -367,13 +360,14 @@ export const openDesktopProjectRegistry: (
               yield* Effect.logWarning(message).pipe(withLogChannel('desktop'));
               yield* warn(message);
             }
-            // Acquire the session and install its registry owner before
-            // interruption can leave this operation.
+            // Acquire the session, remember it for the next launch and
+            // install its registry owner before interruption can leave this
+            // operation; a failed write closes the session again.
             return yield* Effect.uninterruptible(
               openProject(root, roots, projectScope, options.service).pipe(
                 Effect.tap(
                   Effect.fnUntraced(function* (project) {
-                    const recent = yield* records.readRecent;
+                    const { recent } = yield* records.remember(root);
                     yield* SubscriptionRef.update(state, (s) => ({
                       ...s,
                       projects: [...s.projects, project],
@@ -413,8 +407,10 @@ export const openDesktopProjectRegistry: (
                 current().projects.findLast(
                   (candidate) => candidate.root !== root,
                 )?.root;
-              yield* records.forget(root, wasActive ? next : undefined);
-              const recent = yield* records.readRecent;
+              const { recent } = yield* records.forget(
+                root,
+                wasActive ? next : undefined,
+              );
               yield* SubscriptionRef.update(state, (s) => ({
                 projects: s.projects.filter(
                   (candidate) => candidate !== project,
@@ -433,9 +429,13 @@ export const openDesktopProjectRegistry: (
         }).pipe(withPerKeyLane(lanes, root), Effect.mapError(ensureError));
       },
       clearRecent: () =>
-        records
-          .replaceRecent([])
-          .pipe(Effect.andThen(syncRecent), Effect.mapError(ensureError)),
+        records.replaceRecent([]).pipe(
+          Effect.flatMap(({ recent }) =>
+            SubscriptionRef.update(state, (s) => ({ ...s, recent })),
+          ),
+          selectionLane.withPermit,
+          Effect.mapError(ensureError),
+        ),
       dispose: () =>
         Effect.suspend(() =>
           current()
