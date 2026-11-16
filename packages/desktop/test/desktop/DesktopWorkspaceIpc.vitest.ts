@@ -25,26 +25,22 @@ let missingExternalPath = '';
  *  a process-global bus, so a follower that outlived the test would keep
  *  reacting to later tests' emits. */
 const createIpc = Effect.gen(function* () {
-  const ipc = createDesktopWorkspaceIpc(
-    { postToRenderer: () => {} },
-    {
-      ptyHost: {
-        create: () =>
-          Effect.die(new Error('Terminal is not used in this test.')),
-        get: () => undefined,
-        disposeAll: () => {},
-      },
-      browserViews: {
-        open: () => {},
-        show: () => {},
-        hideAll: () => {},
-        close: () => {},
-        disposeAll: () => {},
-      },
-      toWindowBounds: (bounds) => bounds,
-      getWorkspacePath: () => workspaceRoot,
+  const ipc = createDesktopWorkspaceIpc(() => {}, {
+    ptyHost: {
+      create: () => Effect.die(new Error('Terminal is not used in this test.')),
+      get: () => undefined,
+      disposeAll: () => {},
     },
-  );
+    browserViews: {
+      open: () => {},
+      show: () => {},
+      hideAll: () => {},
+      close: () => {},
+      disposeAll: () => {},
+    },
+    toWindowBounds: (bounds) => bounds,
+    getWorkspacePath: () => workspaceRoot,
+  });
   yield* Effect.forkScoped(ipc.followFilesWritten, { startImmediately: true });
   return ipc;
 });
