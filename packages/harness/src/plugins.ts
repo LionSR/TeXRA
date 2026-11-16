@@ -206,10 +206,10 @@ export {
 } from '@agent/prompt/templateInputs';
 export type {
   AgentTrace,
-  LogOptions,
   StreamHandle,
   ToolCardHandle,
 } from '@agent/trace/AgentTrace';
+export type { LogOptions } from '@shared/schemas/logPayload';
 export type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 export type {
   ModelRetryGate,

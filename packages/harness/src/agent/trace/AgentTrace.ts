@@ -12,6 +12,7 @@
 import type { Effect } from 'effect';
 
 import type { MessageType, ToolUseLog } from '@shared/schemas';
+import type { LogOptions } from '@shared/schemas/logPayload';
 
 import type { AgentEvent } from '@shared/session/agentEvent';
 
@@ -49,13 +50,6 @@ export interface ToolCardHandle {
    * is left as it closed.
    */
   failIfOpen(): void;
-}
-
-/** Sugar passed to debug/info/warn/error. */
-export interface LogOptions {
-  readonly data?: unknown;
-  /** The row's category; subscribers pick a render style from it. */
-  readonly messageType?: MessageType;
 }
 
 /**

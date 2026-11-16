@@ -1043,14 +1043,15 @@ class JsonRpcRequestError extends Schema.TaggedError<JsonRpcRequestError>()(
 
 ## LogOptions
 
-Sugar passed to debug/info/warn/error.
+What a trace's log methods take: a row's category (subscribers pick a
+render style from it) with the payload the transcript decodes for it,
+so a pairing is checked where it is written; or no category, a default
+row with any data.
 
 ```ts
-interface LogOptions {
-  readonly data?: unknown;
-  /** The row's category; subscribers pick a render style from it. */
-  readonly messageType?: MessageType;
-}
+type LogOptions =
+  | { readonly messageType?: undefined; readonly data?: unknown }
+  | { [K in MessageType]: LogWriteOf<K> }[MessageType];
 ```
 
 ## makeJsonRpcConnection

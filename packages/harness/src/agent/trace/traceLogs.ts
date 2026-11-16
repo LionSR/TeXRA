@@ -173,7 +173,7 @@ export function logUserMessage(
 export function logContextManagementEvent(
   trace: AgentTrace,
   text: string,
-  data?: ContextManagementData,
+  data: ContextManagementData,
 ): void {
   trace.info(text, { messageType: MESSAGE_TYPES.CONTEXT_MANAGEMENT, data });
 }

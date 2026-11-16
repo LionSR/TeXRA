@@ -26,6 +26,7 @@ import {
   type MessageType,
   type ToolUseLog,
 } from '@shared/schemas';
+import type { LogOptions } from '@shared/schemas/logPayload';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import type { AgentEvent } from '@shared/session/agentEvent';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -33,7 +34,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import type {
   AgentTrace,
   AgentTraceSink,
-  LogOptions,
   StreamHandle,
   ToolCardHandle,
 } from './AgentTrace';
