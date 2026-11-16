@@ -109,7 +109,7 @@ export const buildWorkspaceInfoBlock = Effect.fn(function* (
     lines.push(parts.join(', '));
   } else if (wsPath) {
     lines.push(
-      'Git: no repository detected or git could not be checked for this workspace; avoid git history/status checks unless you first confirm a repository exists.',
+      'Git: this workspace is not a git work tree, or git could not be checked; confirm a repository exists before running git history or status checks.',
     );
   }
 

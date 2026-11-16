@@ -149,8 +149,8 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
     path.fsPath,
   ];
 
-  // `executeCommand` reports every failure in its result (`success`,
-  // `exitCode`, `timedOut`, `outputLimitExceeded`) and never fails, so the
+  // `executeCommand` reports how the command ended in its result (`end`: an
+  // exit, a timeout, the output limit, or no exit) and never fails, so the
   // spawn has no error channel of its own. The region is interruptible, and
   // interrupting the tool tears the `rg` process down instead of abandoning
   // it — parallel batches must be able to stop large-repo searches.

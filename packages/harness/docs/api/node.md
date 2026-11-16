@@ -718,7 +718,8 @@ const readNormalizedFile: (fs: FileSystem, target: string) => Effect<string, Pla
 
 Up to `limit` recent commits, each labelled `<shortHash>: <subject>
 (<relativeDate>)`, or null when `cwd` is not a work tree. A repository
-with no commit, where `git log` fails, has none.
+with no commit has none; a `git log` that fails on one that has commits
+(unreadable objects, a timeout) is logged at warn and reads as none.
 
 ```ts
 const recentCommitLabels: (cwd: string, limit: number) => Effect<readonly string[] | null, never, ChildProcessSpawner>
