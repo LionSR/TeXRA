@@ -47,8 +47,7 @@ type PlatformInfo = { pkg: string; triple: string };
 export function importCodexClass() {
   return importForeignSdk({
     load: () => import('@openai/codex-sdk'),
-    notFoundMessage:
-      '@openai/codex-sdk package not found. Install with: npm install -g @openai/codex',
+    notFoundMessage: '@openai/codex-sdk package not found. Reinstall TeXRA.',
     exportName: 'Codex',
     specifier: '@openai/codex-sdk',
     errorLabel: 'Codex class',
