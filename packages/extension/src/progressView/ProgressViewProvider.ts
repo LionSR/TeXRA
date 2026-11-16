@@ -55,7 +55,6 @@ import type {
   SessionBridge,
 } from '@texra/controllers/session/SessionBridge';
 import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
-import { checkCoreDependencies } from './checkCoreDependencies';
 import { BundledViewContentProvider } from '../common/webview/BundledViewContentProvider';
 
 import {
@@ -235,8 +234,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               value: folder.uri.fsPath,
             })) ?? [],
           shows: { apiKeyBanner: true, gettingStarted: true },
-          // A failed probe reads as a missing tool, so the read never fails.
-          missingTools: () => checkCoreDependencies(),
         },
         // The tool-edit preview: staged copies of the original and proposed
         // content the diff editor shows, for each tool edit the session

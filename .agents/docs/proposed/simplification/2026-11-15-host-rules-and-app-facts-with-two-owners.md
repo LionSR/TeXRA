@@ -202,3 +202,11 @@ In order of size. Each needs the decision named.
   registry's change and the surface's re-attach) looked the run up in the
   other project. A host's "bring the run view up" is the window host's
   `runs.showRunView`.
+- **App fact 5, the banner's check**: `missingDependencyTools` in
+  `packages/texra/src/latex/latexToolchain.ts`, read by the host snapshot
+  itself, so `missingTools` is no longer a host option, and its "Recheck"
+  (`recheckDependencies`) is the shared body's, not a host binding. The
+  desktop passed no missing tools, so its banner never showed; it now shows
+  the same banner as VS Code, and its "Install guide" opens Settings'
+  Plugins page as before. The LaTeX status's seven `*Path` fields stay
+  open.

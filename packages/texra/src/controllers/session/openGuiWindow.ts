@@ -189,7 +189,6 @@ export interface SharedHostCommandBindings {
   setApiKey(provider?: ApiKeyProviderId): HostVerb<void>;
   /** Open a web address in the browser. */
   openExternal(url: string): HostVerb<void>;
-  readonly recheckDependencies: HostVerb<void>;
   readonly openInstallGuide: HostVerb<void>;
   /** The onboarding card's verbs a host performs. "Set an API key" is
    *  {@link SharedHostCommandBindings.setApiKey}, the same verb the banner
@@ -679,7 +678,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           }
           return done;
         case 'recheckDependencies':
-          yield* bindings.recheckDependencies;
+          yield* snapshot.refreshHostBanners;
           return done;
         case 'openInstallGuide':
           yield* bindings.openInstallGuide;

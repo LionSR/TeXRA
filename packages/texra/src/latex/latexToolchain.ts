@@ -3,7 +3,15 @@ import { Effect } from 'effect';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // Local imports
-import type { LatexToolName } from '@texra/shared/constants/latexToolchain';
+import {
+  CORE_DEPENDENCY_TOOLS,
+  DEPENDENCY_USE,
+  IMAGE_LATEX_TOOLS,
+  LATEX_TOOL_ENTRIES,
+  missingLatexTools,
+  type LatexToolName,
+} from '@texra/shared/constants/latexToolchain';
+import type { MissingTool } from '@texra/shared/session/hostSnapshot';
 import { findCommand } from '@texra/utils/system/binaryResolver';
 import { probeTool } from '@texra/utils/system/toolChecks';
 
@@ -56,3 +64,23 @@ export function probeLatexTools<T extends LatexToolName>(
     Effect.withSpan('latex.probeLatexTools'),
   );
 }
+
+/**
+ * The tools TeXRA's features need that this machine lacks (latexindent,
+ * Perl, Ghostscript, GraphicsMagick or ImageMagick), as the dependency
+ * banner lists them. Every probe answers `false` rather than failing, so
+ * this has no failure of its own to mask; the banner is what tells the user.
+ */
+export const missingDependencyTools = Effect.fn('latex.missingDependencyTools')(
+  function* (): Effect.fn.Return<MissingTool[], never, ChildProcessSpawner> {
+    const { tools } = yield* probeLatexTools([
+      ...CORE_DEPENDENCY_TOOLS,
+      ...IMAGE_LATEX_TOOLS,
+    ]);
+    return missingLatexTools(tools).map(({ name, interchangeable }) => ({
+      label: LATEX_TOOL_ENTRIES[name].label ?? name,
+      interchangeable,
+      usedFor: DEPENDENCY_USE[name],
+    }));
+  },
+);

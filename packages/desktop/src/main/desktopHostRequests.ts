@@ -6,7 +6,6 @@
 // perform is `Rejected` with its reason, never dropped.
 
 import { Effect } from 'effect';
-import type { ProcessServices } from '@texra-ai/harness/host';
 import { Rejected } from '@texra-ai/harness/schemas';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 
@@ -43,8 +42,6 @@ interface DesktopHostRequestsOptions {
    *  projects; the onboarding card's sign-in goes through it. */
   settings(): DesktopSettingsIpc | undefined;
   openExternalUrl(url: string): Effect.Effect<void, HostFailed>;
-  /** Re-probe the LaTeX toolchain. */
-  recheckTools(): Effect.Effect<void, never, ProcessServices>;
 }
 
 /** The desktop's half of a project's window, for the window's scope. */
@@ -117,7 +114,6 @@ export const createDesktopHostRequests = (
           postDesktopSettingsView(options.postToRenderer, 'models/keys'),
         ),
       openExternal: (url) => options.openExternalUrl(url),
-      recheckDependencies: Effect.suspend(() => options.recheckTools()),
       openInstallGuide: Effect.sync(() =>
         postDesktopSettingsView(options.postToRenderer, 'plugins'),
       ),

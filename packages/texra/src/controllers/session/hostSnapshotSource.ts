@@ -62,6 +62,7 @@ import type {
 import { agentOptionsData } from '@texra/controllers/session/agentOptions';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
+import { missingDependencyTools } from '@latex/latexToolchain';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import {
   deriveOnboardingFunnelState,
@@ -103,12 +104,6 @@ interface HostSnapshotSourceOptions {
   >;
   /** The launcher's root picker; empty where a session has exactly one. */
   workspaceRoots(): HostSnapshot['workspaceRoots'];
-  /** The tools TeXRA needs that this machine lacks. */
-  missingTools(): Effect.Effect<
-    readonly MissingTool[],
-    never,
-    ChildProcessSpawner
-  >;
   /** The notices this host shows: the lost-credential banner, and the offer
    *  to start a project (a sample, an Overleaf clone, an arXiv download)
    *  while the folder has no LaTeX files. */
@@ -336,7 +331,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     );
     const loadDependencies = yield* producer(
       'the missing tools',
-      Effect.flatMap(options.missingTools(), (missingTools) =>
+      Effect.flatMap(missingDependencyTools(), (missingTools) =>
         write({ missingTools }),
       ),
     );

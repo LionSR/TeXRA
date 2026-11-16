@@ -12,7 +12,6 @@ import { Effect, Exit, Queue, Scope, Stream, SubscriptionRef } from 'effect';
 import {
   type ProcessRuntime,
   type ProcessServices,
-  ToolAvailability,
   type Notices,
 } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
@@ -256,7 +255,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         snapshot: {
           fileOptions: () => files.fileOptions(),
           workspaceRoots: () => [],
-          missingTools: () => Effect.succeed([]),
           shows: { apiKeyBanner: false, gettingStarted: false },
         },
         // The tool-edit preview: staged copies of the original and proposed
@@ -281,10 +279,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
             onboarding: options.onboarding,
             settings: options.settings,
             openExternalUrl: host.openExternalUrl,
-            recheckTools: () =>
-              Effect.flatMap(ToolAvailability, (tools) =>
-                Effect.asVoid(tools.refresh(project.roots)),
-              ),
           }),
       });
       const { bridge, snapshot, present, runValidated, settingsRuns } = gui;
