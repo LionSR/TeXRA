@@ -1,3 +1,4 @@
+import * as nodeFs from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
@@ -7,6 +8,10 @@ import { describe, expect } from 'vitest';
 import { createWorkspaceLocation } from '@texra-ai/harness/host';
 import { AppSignals } from '@texra-ai/harness/plugins';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+
+const tempDirs = useTempDirs();
 
 describe('acceptEditedFileReplace', () => {
   it.effect(
@@ -31,7 +36,7 @@ describe('acceptEditedFileReplace', () => {
         const fs = {
           readFileString: () => Effect.succeed('edited content'),
           writeFileString: () => Effect.void,
-          rename: () => Effect.void,
+          realPath: (absolutePath: string) => Effect.succeed(absolutePath),
           exists: () => Effect.succeed(false),
           remove: (absolutePath: string) =>
             Effect.sync(() => {
@@ -49,6 +54,43 @@ describe('acceptEditedFileReplace', () => {
 
         expect(Option.isSome(accepted)).toBe(true);
         expect(removed).toEqual([]);
+      }),
+  );
+
+  it.effect(
+    'writes through a symlinked target, keeping the link and its mode',
+    () =>
+      Effect.gen(function* () {
+        const ws = yield* Effect.promise(() =>
+          makeTempDir('texra-accept-', tempDirs),
+        );
+        const shared = path.join(ws, 'shared.tex');
+        const base = path.join(ws, 'paper.tex');
+        const edited = path.join(ws, 'paper_edited.tex');
+        yield* Effect.promise(async () => {
+          await nodeFs.writeFile(shared, 'old');
+          await nodeFs.chmod(shared, 0o640);
+          await nodeFs.symlink(shared, base);
+          await nodeFs.writeFile(edited, 'new');
+        });
+
+        const accepted = yield* acceptEditedFileReplace(
+          createWorkspaceLocation(base, 'paper.tex'),
+          createWorkspaceLocation(edited, 'paper_edited.tex'),
+          {
+            confirm: () => Effect.succeed(true),
+            showInfo: () => Effect.void,
+          },
+        ).pipe(Effect.provide([nodePlatformLayer, AppSignals.layer]));
+
+        expect(Option.getOrUndefined(accepted)).toBe('new');
+        const link = yield* Effect.promise(() => nodeFs.lstat(base));
+        expect(link.isSymbolicLink()).toBe(true);
+        const target = yield* Effect.promise(() => nodeFs.stat(shared));
+        expect(target.mode & 0o777).toBe(0o640);
+        expect(
+          yield* Effect.promise(() => nodeFs.readFile(shared, 'utf8')),
+        ).toBe('new');
       }),
   );
 });
