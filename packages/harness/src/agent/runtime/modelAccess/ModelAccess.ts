@@ -25,7 +25,7 @@ import type { DeclinableUsageRoute, ModelBackend } from '@shared/schemas';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 
 import { bindRoute } from './binding';
-import { acceptSwitch, type SwitchRefusal } from './routeDecision';
+import { acceptSwitch } from './routeDecision';
 import type { Binding } from '@texra-ai/llm/node';
 import type { CallFailure } from './failureInfo';
 
@@ -92,12 +92,13 @@ export class ModelAccess extends Context.Service<
     readonly bind: (
       request: BindRequest,
     ) => Effect.Effect<BoundModel, CallFailure, Scope.Scope>;
-    /** Why `modelId` cannot replace `current`'s model; null when it can. */
+    /** Why `modelId` cannot replace `current`'s model, as a sentence; null
+     *  when it can. */
     readonly switchRejection: (
       modelId: string,
       current: BoundModel,
       declinedRoutes: readonly DeclinableUsageRoute[],
-    ) => Effect.Effect<SwitchRefusal | null, RouteUnavailable>;
+    ) => Effect.Effect<string | null, RouteUnavailable>;
   }
 >()('@texra-ai/harness/ModelAccess') {}
 
@@ -142,8 +143,7 @@ export const modelAccessLayer = (
           if (current.modelId === modelId) return Effect.succeed(null);
           const selected = selectModel(modelId);
           if (!selected) {
-            const reason = `Model ${modelId} is not registered`;
-            return Effect.succeed({ reason, message: reason });
+            return Effect.succeed(`Model ${modelId} is not registered`);
           }
           return inProject(
             Effect.flatMap(settingsOf(stores), (settings) =>

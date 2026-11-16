@@ -130,18 +130,12 @@ export const decideRoute = Effect.fn('decideRoute')(function* (
   return { route: decided, backend: served };
 });
 
-/** Why a model cannot replace a run's: a short reason, and the error's sentence. */
-export interface SwitchRefusal {
-  readonly reason: string;
-  readonly message: string;
-}
-
 /**
  * Why `selected` cannot replace a run on `backend`, decided as the bind at
- * the run's next model boundary will decide it; null when it can. A route
- * that would serve the model from another backend, or a reasoning request
- * the route cannot carry (`@none` on a model that always thinks), is refused
- * here, not by that bind inside the loop.
+ * the run's next model boundary will decide it, as a sentence; null when it
+ * can. A route that would serve the model from another backend, or a
+ * reasoning request the route cannot carry (`@none` on a model that always
+ * thinks), is refused here, not by that bind inside the loop.
  */
 export const acceptSwitch = Effect.fn('acceptSwitch')(
   function* (
@@ -165,8 +159,8 @@ export const acceptSwitch = Effect.fn('acceptSwitch')(
     );
     return null;
   },
-  Effect.catch((error): Effect.Effect<SwitchRefusal | null> =>
-    Effect.succeed({ reason: error.message, message: error.message }),
+  Effect.catch((error): Effect.Effect<string | null> =>
+    Effect.succeed(error.message),
   ),
 );
 
