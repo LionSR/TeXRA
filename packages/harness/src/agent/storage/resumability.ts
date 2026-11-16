@@ -25,7 +25,7 @@ type ResumabilityDecision =
  * The one answer to "can this run resume?". An opened run continues whatever its outcome: rows live
  * until deletion, so a failed or cancelled run continues from where they
  * left it. A task that ended does not: its recipe's result is
- * settled, so it runs again instead. One holding a fact of a plugin this
+ * finished, so it runs again instead. One holding a fact of a plugin this
  * process does not load waits for it: the plugin's state is part of where
  * it continues from.
  */
@@ -75,8 +75,8 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
 /**
  * {@link deriveResumability} as a refusal, or null when the run may
  * continue; facts that could not be read right now fail. The one decider
- * for a run with no loop here: a message's admission, a recovered child
- * and a host's run record all ask it.
+ * for a run with no loop here: a resume, a message to a stored run and a
+ * recovered child all ask it.
  */
 export const checkpointRefusal = Effect.fn('checkpointRefusal')(function* (
   runId: RunId,

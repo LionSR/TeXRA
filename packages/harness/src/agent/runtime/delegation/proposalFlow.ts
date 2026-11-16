@@ -228,7 +228,7 @@ function formEdits(
 }
 
 /** How an approved delegation launches: the proposal with the agent and
- *  model the approval settled on, and how it was approved. */
+ *  model the approval finished on, and how it was approved. */
 interface ApprovedDelegation {
   readonly proposal: AgentProposal;
   readonly approvalMeta: ApprovalMeta;

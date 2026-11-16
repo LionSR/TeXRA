@@ -6,7 +6,7 @@ import { basename, join } from 'node:path';
 import { Predicate } from 'effect';
 
 import { truncatedHexId } from '@utils/core/idHash';
-import { absentReason } from '@utils/files/fsEntryExists';
+import { meansAbsent } from '@utils/files/fsEntryExists';
 
 const STORAGE_LAYOUT = {
   global: 'global-storage',
@@ -28,7 +28,7 @@ function sanitizeWorkspaceBasename(workspaceRoot: string): string {
  * filesystem holds; the JS realpath keeps the typed case, so on a
  * case-insensitive volume one folder would key two stores. On Windows the
  * JS realpath stays (the native one rewrites a mapped drive to UNC, see
- * `canonicalizePath`) and the key is case-folded. A root that does not
+ * `canonicalizePath`) and the key is case-applied. A root that does not
  * resolve (missing, unreadable) keys by its canonical spelling.
  */
 function storageIdentity(workspaceRoot: string): string {
@@ -37,7 +37,7 @@ function storageIdentity(workspaceRoot: string): string {
     return realpathSync.native(workspaceRoot);
   } catch (error) {
     const code = Predicate.hasProperty(error, 'code') ? error.code : undefined;
-    if (!absentReason(error) && code !== 'EACCES' && code !== 'EPERM')
+    if (!meansAbsent(error) && code !== 'EACCES' && code !== 'EPERM')
       throw error;
     return workspaceRoot;
   }

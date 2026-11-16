@@ -6,7 +6,7 @@ import type { AgentConfig, RunWorkspaceFile } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core/pathBasics';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { entryMetadataAt } from '@utils/files/fsDurability';
-import { absentReason } from '@utils/files/fsEntryExists';
+import { meansAbsent } from '@utils/files/fsEntryExists';
 
 export function resolveRunWorkspaceFilePath(
   config: Pick<AgentConfig, 'workingDirectory'> | null,
@@ -58,7 +58,7 @@ export const listRunWorkspaceFiles = Effect.fn('storage.listRunWorkspaceFiles')(
             size: entry.size,
             isDirectory: entry.type === 'Directory',
           })),
-          Effect.catchIf(absentReason, () => Effect.succeed(undefined)),
+          Effect.catchIf(meansAbsent, () => Effect.succeed(undefined)),
         ),
       { concurrency: 8 },
     );

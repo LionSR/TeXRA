@@ -24,7 +24,6 @@ import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { registrationRows } from '@agent/storage/runLifecycle';
 import { TraceEmitter } from '@agent/trace/TraceEmitter';
-import { logUserMessage } from '@agent/trace/traceLogs';
 import { runEventDraft } from '@agent/trace/TraceEmitter';
 import { AgentError } from '@common/errors/agentErrors';
 import { withLogChannel } from '@logger/effectLog';
@@ -47,11 +46,7 @@ import { ChildRunBudget } from './childRunBudget';
 import { openToolUse, runToolUse } from './loop/runLoop';
 import { modelInvokerLayer } from './ModelInvoker';
 import { agentRunLayer, type RunLaunch } from './run/AgentRun';
-import {
-  getDisplayedInstruction,
-  LabelsRootRuns,
-  withSessionDescription,
-} from './sessionDescription';
+import { LabelsRootRuns, withSessionDescription } from './sessionDescription';
 import type { AgentRunServices } from './runRegistry';
 import type { PreparedAgentDefinition } from './AgentLaunchContext';
 
@@ -69,6 +64,11 @@ export interface ExecuteAgentOptions {
   readonly tools?: readonly ITool<Error, PluginToolServices>[];
   /** Fires on meaningful progress: plan changes and tool call milestones. */
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
+  /** The caller asks a root to end after one model/tool cycle instead of
+   *  waiting for input (a launch that is not interactive). A child, a
+   *  script and a root launched to run once end after it whatever this
+   *  says. */
+  readonly stopAfterCycle?: boolean;
 }
 
 /** A run whose opening committed: the commit of that batch, and the run
@@ -82,7 +82,7 @@ export interface PreparedRun {
  * How a launch enters its run (`LaunchEntry`), its trace held until then:
  * the opening's batch carries it up to its first stream (the prompt line and
  * the run's stage commit with the opening), the rest is published once that
- * settled. One that never enters drops it. A run that exists is refused.
+ * finished. One that never enters drops it. A run that exists is refused.
  */
 const enterRun = Effect.fn('enterRun')(function* (
   definition: PreparedAgentDefinition,
@@ -90,15 +90,35 @@ const enterRun = Effect.fn('enterRun')(function* (
   options: ExecuteAgentOptions,
 ) {
   const log = yield* SessionLog;
-  const { config, stopAfterCycle } = definition;
+  const { config } = definition;
+  const parent =
+    options.registration?.parentRunId ?? options.parentRunId ?? null;
+  // A resumed run's facts, read once: whether its parent's call awaits it,
+  // and whether its launch let it take input.
+  const facts =
+    options.registration === undefined ? yield* log.facts(runId) : null;
+  // Whether the parent's call awaits the child: a fresh run's
+  // registration says; a resumed run's rows do.
+  const awaited =
+    options.registration !== undefined
+      ? options.registration.parentCall?.awaited === true
+      : (facts?.parent?.call?.awaited ?? false);
+  // Whether the run ends after one cycle, decided once: every child does
+  // (a message to it is a resume), a script's run (its call is its only
+  // turn), a root its caller asks to, and a root launched to run once,
+  // which no message may reach, whoever resumes it.
+  const stopAfterCycle =
+    parent !== null ||
+    config.script != null ||
+    options.stopAfterCycle === true ||
+    facts?.start?.takesFollowUps === false;
   const registered =
     options.registration === undefined
       ? null
       : yield* registrationRows(runId, config, {
           ...options.registration,
           // A child takes a message as its resume; a one-shot root none.
-          takesFollowUps:
-            !stopAfterCycle || options.registration.parentRunId !== undefined,
+          takesFollowUps: !stopAfterCycle || parent !== null,
         });
   if (registered !== null && registered.start === null)
     return yield* new AgentError({
@@ -132,23 +152,16 @@ const enterRun = Effect.fn('enterRun')(function* (
     );
   };
   const seed = options.registration?.seed ?? null;
-  const parent =
-    options.registration?.parentRunId ?? options.parentRunId ?? null;
-  // Whether the parent's call awaits the child: a fresh run's
-  // registration says; a resumed run's rows do.
-  const awaited =
-    options.registration !== undefined
-      ? options.registration.parentCall?.awaited === true
-      : ((yield* log.facts(runId))?.parent?.call?.awaited ?? false);
   return {
     logger,
+    stopAfterCycle,
     entry: { parent, awaited, registration, seed, enter },
   };
 });
 
 /**
- * Resolve the context of a run admitted for launch: a fresh one, which its
- * opening registers, or a resume. Interruptible: every acquisition settles
+ * Resolve the context of a run accepted for launch: a fresh one, which its
+ * opening registers, or a resume. Interruptible: every acquisition finishes
  * atomically inside its own `acquireRelease`, so an interruption lands
  * between steps and the scope's finalizers release whatever was acquired.
  */
@@ -157,7 +170,7 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
   runId: RunId,
   options: ExecuteAgentOptions,
 ) {
-  const { config, persona, modelConfig, stopAfterCycle } = definition;
+  const { config, persona, modelConfig } = definition;
   // The run's working directory is decided here, once: absolute or absent.
   // Every tool call of the run carries it as `ToolContext.env.workingDirectory`
   // and trusts it rather than re-validating.
@@ -169,25 +182,11 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
   // session, and a root launch on the session it was started on.
   const roots = yield* SessionRoots;
   const resumed = options.registration === undefined;
-  const { logger: agentLogger, entry } = yield* enterRun(
-    definition,
-    runId,
-    options,
-  );
-
-  // Log the initial instruction as a user message so the run's tab
-  // displays it inline with the stream log (no separate panel).
-  const displayInstruction = getDisplayedInstruction(config);
-  const initialInstruction =
-    displayInstruction && !resumed ? displayInstruction : undefined;
-  const supportsMediaInMessage =
-    modelConfig.capabilities.supportsVision ||
-    modelConfig.capabilities.supportsNativeAudio;
-  const initialMediaMayBeInserted =
-    config.mediaFiles.length > 0 && supportsMediaInMessage;
-
-  if (!initialMediaMayBeInserted && initialInstruction)
-    logUserMessage(agentLogger, initialInstruction);
+  const {
+    logger: agentLogger,
+    stopAfterCycle,
+    entry,
+  } = yield* enterRun(definition, runId, options);
 
   // A task's tools render their templates from this opening at every
   // call, so it is built on resume too; a conversation's rows hold its own.
@@ -217,12 +216,7 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
     toolPolicy: { stopAfterCycle },
     logger: agentLogger,
     opening,
-    entry: {
-      ...entry,
-      initialUserMessage: initialMediaMayBeInserted
-        ? initialInstruction
-        : undefined,
-    },
+    entry,
   };
   return launch;
 });

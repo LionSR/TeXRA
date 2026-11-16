@@ -29,7 +29,7 @@
 export {
   nodePlatform,
   type NodePlatformOptions,
-} from '@platform/defaults/sdkPlatform';
+} from '@platform/defaults/nodePlatform';
 
 // The Node building blocks `nodePlatform` is made of, for a host that
 // composes its own platform: workspace roots over Node, the Node services a
@@ -40,7 +40,7 @@ export {
   openNodeWorkspaceRoots,
   type NodeWorkspaceRootsInit,
 } from '@platform/defaults/nodeHost';
-export { nodePlatformServices } from '@platform/defaults/nodePlatform';
+export { nodePlatformServices } from '@platform/defaults/nodeServices';
 // The global root's SQLite handle, and the bound its input history keeps. The project stores stay beneath the session composition.
 export { GlobalDatabase, INPUT_HISTORY_LIMIT } from '@shared/session/database';
 export {
@@ -59,7 +59,7 @@ export {
   executeCommand,
   type ExecuteCommandBaseOptions,
 } from '@utils/system/execUtils';
-export type { ExecResult } from '@shared/schemas';
+export type { ExecEnd, ExecResult } from '@shared/schemas';
 export {
   CommandDirs,
   existsAtAbsolute,
@@ -69,29 +69,43 @@ export {
 } from '@utils/system/platformPaths';
 export { runsInWsl } from '@utils/system/wslDetect';
 // The process environment as the harness reads it: a flag (any value but
-// unset, empty, `0`, `false`, `no` or `off` is on), the environment a child
-// agent CLI starts from (no provider key but the one it authenticates
-// with), and the one a non-interactive git child starts from (no
-// helper-invoking key, no terminal prompt).
+// unset, empty, `0`, `false`, `no` or `off` is on), and the environment a
+// child agent CLI starts from (no provider key but the one it authenticates
+// with).
 export {
   APPROVAL_POLICY_ENV,
   envFlag,
   envVar,
   inheritedEnv,
 } from '@utils/system/envFlags';
-export { makeMachineGitEnv } from '@utils/system/gitEnv';
+// git: the reads of a repository, under one timeout and never failing, and
+// the one runner of a command that changes something, under the machine git
+// environment (no helper-invoking key, no terminal prompt).
+export {
+  commitExists,
+  currentBranch,
+  isGitRepository,
+  localBranchExists,
+  machineGit,
+  type MachineGitResult,
+  originDefaultBranch,
+  originUrl,
+  recentCommitLabels,
+  repositoryRoot,
+} from '@utils/system/git';
 // The file reads `FileSystem` has no form for: crash-safe replace, existence
 // with a path under a file read as absent, text with a leading BOM kept and
 // line endings normalized, a listing that types each entry from its dirent
 // and drops one it cannot type, an entry's own (lstat) type, and the
 // failures a probe reads as absent (`NotFound`, or a parent that is a file).
 export {
+  createSymlink,
   readDirectoryTypedTolerant,
   readNormalizedFile,
   writeFileAtomic,
 } from '@utils/files/fsDurability';
 export {
-  absentReason,
+  meansAbsent,
   entryTypeIn,
   isNotADirectoryError,
   pathExists,

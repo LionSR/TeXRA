@@ -131,7 +131,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 label: 'Running stage',
               },
             ]);
-            yield* Context.get(session, SessionLog).settled;
+            yield* Context.get(session, SessionLog).drained;
             // A live run whose stop ends it, as its lifecycle's terminal does.
             yield* Effect.forkDetach(
               startAwaited(

@@ -37,7 +37,7 @@ interface HarnessInit extends Omit<ScriptedRunInit, 'model'> {
 /** The calls a folded state holds settled. */
 const settledIds = (state: RunState | null | undefined): string[] =>
   Object.entries(state?.pendingResponse?.records ?? {}).flatMap(([id, call]) =>
-    call.status.kind === 'settled' ? [id] : [],
+    call.status.kind === 'finished' ? [id] : [],
   );
 
 function loopLayer(init: HarnessInit) {

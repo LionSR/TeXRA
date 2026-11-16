@@ -32,7 +32,7 @@ import {
 import writeFileAtomicLib from 'write-file-atomic';
 
 import { withLogChannel } from '@logger/effectLog';
-import { absentReason, entryTypeIn } from './fsEntryExists';
+import { meansAbsent, entryTypeIn } from './fsEntryExists';
 
 const CHANNEL = 'fsDurability';
 
@@ -185,7 +185,7 @@ export const entryMetadataAt = Effect.fn('fsDurability.entryMetadataAt')(
         }).pipe(
           Effect.catchIf(
             (error) =>
-              absentReason(error) ||
+              meansAbsent(error) ||
               (Predicate.hasProperty(error.reason.cause, 'code') &&
                 error.reason.cause.code === 'ELOOP'),
             () => Effect.succeed(link),

@@ -3,7 +3,6 @@
 import { Schema } from 'effect';
 
 import { ContextStateDataSchema } from './contextManagement';
-import { JsonValueSchema } from './jsonValue';
 import { FileListEntrySchema, LogLevelSchema, MessageTypeSchema } from './log';
 import { ToolCallStatusSchema, ToolCardSchema } from './toolCard';
 import { RunOutcomeSchema } from './run';
@@ -30,7 +29,7 @@ export const TraceRowFieldsSchema = Schema.Union([
   trace('log', {
     level: LogLevelSchema,
     message: Schema.String,
-    data: Schema.optional(JsonValueSchema),
+    data: Schema.optional(Schema.Json),
     messageType: Schema.optional(MessageTypeSchema),
   }),
   /** A chunk of a process run's output (a background command's), on the
@@ -58,7 +57,7 @@ export const TraceRowFieldsSchema = Schema.Union([
   trace('tool.start', {
     logId: Schema.String,
     toolName: Schema.String,
-    input: JsonValueSchema,
+    input: Schema.Json,
     /** A script's call: the guest's latest `section()` title when it issued
      *  the call (`script.call.section`). */
     section: Schema.optional(Schema.String),
@@ -78,7 +77,7 @@ export const TraceRowFieldsSchema = Schema.Union([
   trace('tool.end', {
     logId: Schema.String,
     status: ToolCallStatusSchema,
-    result: Schema.optional(JsonValueSchema),
+    result: Schema.optional(Schema.Json),
     files: Schema.optional(Schema.Array(FileListEntrySchema)),
   }),
   /**

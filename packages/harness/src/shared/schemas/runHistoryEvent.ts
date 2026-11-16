@@ -17,7 +17,6 @@
 import { Schema } from 'effect';
 
 import { ModelFailureSchema } from './errors';
-import { JsonValueSchema } from './jsonValue';
 import { Sha256Schema } from './identifiers';
 import { RunOutcomeSchema } from './run';
 import { RunInputSchema } from './runInput';
@@ -29,7 +28,10 @@ import {
   StoredTurnSchema,
 } from './storedTurn';
 import { ToolCardSchema } from './toolCard';
-import { SettledAttachmentSchema, SettledToolResultSchema } from './toolResult';
+import {
+  FinishedAttachmentSchema,
+  FinishedToolResultSchema,
+} from './toolResult';
 import { NonNegativeIntSchema } from './nonNegativeInt';
 
 /* ------------------------------------------------------------------ ids */
@@ -147,7 +149,7 @@ export const ModelMessagePayloadSchema = Schema.Union([
     usage: Schema.optional(NormalizedUsageSchema),
   }),
   /** The commit barrier: the accepted remote operation, committed before
-   *  `observe` is called. `deadlineAtMs` is the limit admitted with the
+   *  `observe` is called. `deadlineAtMs` is the limit accepted with the
    *  submission, never one recomputed from current settings; the package
    *  produces neither it nor an attempt, so both ride the envelope. */
   Schema.Struct({
@@ -198,7 +200,7 @@ export const ModelMessagePayloadSchema = Schema.Union([
   }),
   /**
    * Canonical messages appended to history, verbatim. When
-   * `sourceResponse` is set the row carries ONLY the settlement group
+   * `sourceResponse` is set the row carries ONLY the result group
    * (and any accompanying user message). The assistant message is derived
    * by the fold from the pending response's own row, so the paid turn is
    * stored once on an aggregate that never rewrites and never deletes, and
@@ -233,8 +235,8 @@ export const ModelMessagePayloadSchema = Schema.Union([
     const issues: Schema.FilterIssue[] = [];
     const ids = new Set(p.calls.map((c) => c.callId));
     // A duplicate has a primary to reuse, so it names a call that precedes it
-    // and is not itself a duplicate. Membership in `ids` alone would admit a
-    // call naming itself, which can never settle.
+    // and is not itself a duplicate. Membership in `ids` alone would accept a
+    // call naming itself, which can never finish.
     const earlierPrimaries = new Set<string>();
     p.calls.forEach((call, index) => {
       // Order, identity and tool: a fact that names another tool than the
@@ -277,7 +279,7 @@ export const ModelMessagePayloadSchema = Schema.Union([
  * (`context-limit`), the user's `/compact` (`user`), or a request the
  * model's window could not hold (`overflow`); null for the other causes. A
  * fork's seed carries the source's `input` with its messages. `usage` is a
- * summary call's priced usage, folded as a response's (`null` when no model
+ * summary call's priced usage, applied as a response's (`null` when no model
  * was called). Compaction (`run/compaction.ts`), on the run's own fiber, and
  * the fork seed (`forkRun.ts`), a run's first row, write it, so an edit
  * always applies to the view it was computed from. Whether the result is
@@ -334,7 +336,7 @@ export const ScriptCallPayloadSchema = Schema.Struct({
   /** `<scriptCallId>/<seq>`. */
   callId: CallIdSchema,
   toolName: Schema.NonEmptyString,
-  input: JsonValueSchema,
+  input: Schema.Json,
   /** As a response's dispatch fact records it (`DispatchFacts.replay`). */
   replay: Schema.Literals(['safe', 'unsafe']),
   logId: Schema.NonEmptyString,
@@ -376,7 +378,7 @@ export const ToolIntentPayloadSchema = Schema.Struct({
   toolName: Schema.NonEmptyString,
   /** What the body runs on: the issued input as the call's PreToolUse hooks
    *  left it. */
-  input: JsonValueSchema,
+  input: Schema.Json,
   /** The card the tool states for that input (`ToolDefinition.card`). */
   card: Schema.optional(ToolCardSchema),
   /** A script's call: the guest's latest `section()` title when it issued
@@ -387,9 +389,9 @@ export const ToolIntentPayloadSchema = Schema.Struct({
 /* ------------------------------------------------------------ tool.result */
 
 /**
- * One call's settlement: what it returned and the attachments captured with
+ * One call's result: what it returned and the attachments captured with
  * it. What the call did to the run (the files it edited, that it ran) is
- * folded from these fields, never restated beside them, and so is what its
+ * applied from these fields, never restated beside them, and so is what its
  * card shows: a display read shows the row as the `tool.end` of `logId`,
  * with this output and the files `result.edits` names.
  */
@@ -406,8 +408,8 @@ export const ToolResultPayloadSchema = Schema.Struct({
    *  prose of an error message. */
   disposition: Schema.Literals(['executed', 'failed', 'skipped', 'duplicate']),
   duplicateOf: Schema.NullOr(CallIdSchema),
-  result: SettledToolResultSchema,
-  attachments: Schema.Array(SettledAttachmentSchema),
+  result: FinishedToolResultSchema,
+  attachments: Schema.Array(FinishedAttachmentSchema),
 }).check(
   Schema.makeFilter((p) => {
     const issues: Schema.FilterIssue[] = [];

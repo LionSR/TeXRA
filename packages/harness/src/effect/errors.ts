@@ -65,6 +65,6 @@ export class ResumeRefused extends Schema.TaggedError<ResumeRefused>()(
 ) {}
 
 /** What a launch refuses before any model work: the two an embedder
- *  branches on. A run that fails after admission fails with
+ *  branches on. A run that fails after acceptance fails with
  *  {@link RunFailure} instead. */
 export type LaunchError = LaunchRefused | ToolsRefused;

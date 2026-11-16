@@ -26,8 +26,8 @@ import type { StepRoot } from '@utils/files/externalRoots';
 /**
  * The guard the run loop applies before a tool's body runs, declared on the
  * tool instead of called inside it: the paths the call writes and the command
- * it must get approved. `agent/runtime/loop/toolGuard.ts` is the one place
- * either is checked, so no tool body re-checks its own roots or asks for the
+ * it must get approved. The run loop is the one place either is checked,
+ * so no tool body re-checks its own roots or asks for the
  * command's approval; a tool whose body asks its own question declares
  * `requiresApproval: 'inBody'` (below).
  */
@@ -92,7 +92,7 @@ export interface ITool<E = Error, R = never> {
    *   read-only tool that prompts for approval is not parallel: it needs an
    *   approval round-trip first, so it stays a barrier.
    * - `'barrier'`: waits for every call issued before it and holds back
-   *   every call after it until it settles.
+   *   every call after it until it finishes.
    * - `'own'`: in a script, its calls neither wait for the calls issued
    *   before them nor block the ones after, and take no place in the
    *   parallel window: the tool bounds how many of its own calls run at
@@ -187,7 +187,7 @@ export interface CallRequests {
 /**
  * Where a call works: the session's roots (its workspace folder, the
  * setting slots and its storage), the run's working directory, and the
- * read-only roots the call's step admits (the skills it lists or its user
+ * read-only roots the call's step accepts (the skills it lists or its user
  * activated). A tool's paths resolve against it.
  * `workingDirectory` is already absolute or absent: the run decides it once
  * where it is launched (`buildAgentLaunchContext`).

@@ -76,7 +76,7 @@ function buildOverleafClonePorts(
       FileSystem.FileSystem.use((fs) => fs.readDirectory(dir)).pipe(
         // A destination that does not exist yet is an empty destination, not
         // an unreadable one: `runClone` creates it. Only `NotFound` counts,
-        // not all of `absentReason`: a path under a regular file (ENOTDIR)
+        // not all of `meansAbsent`: a path under a regular file (ENOTDIR)
         // cannot be created, so it stays unreadable and stops the clone
         // before the token prompt.
         Effect.catchReason('PlatformError', 'NotFound', () =>

@@ -55,7 +55,7 @@ import { APPROVAL_POLICY_SETTING } from '@shared/state/stateSettings';
  * activation's either.
  */
 function afterActivation(
-  source: ApprovalGrantSource<RunId>,
+  source: ApprovalGrantSource,
   runId: RunId,
   recorded: ApprovalGrants,
 ): ApprovalGrants | null {
@@ -99,7 +99,7 @@ const grantsOn = (grants: ApprovalGrants, kind: ApprovalBypassKind): boolean =>
  */
 const approvalsUnder = Effect.fn('approvalsUnder')(function* (
   log: Pick<SessionLogShape, 'runRows' | 'facts'>,
-  view: ApprovalGrantSource<RunId>,
+  view: ApprovalGrantSource,
   runId: RunId,
   recorded: ApprovalGrants,
   next: ApprovalGrants,
@@ -128,7 +128,7 @@ const approvalsUnder = Effect.fn('approvalsUnder')(function* (
     const grants = (yield* log.facts(id))?.grants;
     if (grants != null) policy.set(id, grants);
   }
-  const after: ApprovalGrantSource<RunId> = {
+  const after: ApprovalGrantSource = {
     runs: view.runs,
     policy: policy.set(runId, next),
   };
@@ -161,7 +161,7 @@ const approvalsUnder = Effect.fn('approvalsUnder')(function* (
  *  answers ({@link approvalsUnder}). Read under the transaction's lock. */
 const grantRows = Effect.fn('grantRows')(function* (
   log: Pick<SessionLogShape, 'runRows' | 'facts'>,
-  view: ApprovalGrantSource<RunId>,
+  view: ApprovalGrantSource,
   runId: RunId,
   edit: (grants: ApprovalGrants) => ApprovalGrants,
   except?: string,

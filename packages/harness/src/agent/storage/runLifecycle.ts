@@ -134,8 +134,10 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
     const config = yield* Schema.decodeUnknownEffect(RunRecordFieldsSchema)(
       pinRunWorkingDirectory(record, (yield* SessionRoots).workspace),
     );
-    const ended = prior ? yield* (yield* Approvals).activationRows(runId) : [];
-    return registrationDrafts(runId, config, options, !prior, ended);
+    const ended = prior
+      ? yield* (yield* Approvals).activationRows(runId)
+      : null;
+    return registrationDrafts(runId, config, options, ended);
   }).pipe(defectAsFailure);
 });
 
@@ -215,8 +217,8 @@ const parentDelivery = Effect.fn('parentDelivery')(function* (
     from: { kind: 'run', runId } as const,
     deliveryId: deliveryId(runId, facts),
   };
-  const admitted = yield* Inbox.use((inbox) =>
-    inbox.admission(parent.id, item, {}),
+  const accepted = yield* Inbox.use((inbox) =>
+    inbox.acceptance(parent.id, item, {}),
   ).pipe(
     Effect.catchTags({
       DatabaseReadFailed: (error) =>
@@ -228,11 +230,11 @@ const parentDelivery = Effect.fn('parentDelivery')(function* (
         ),
     }),
   );
-  if (admitted.sent.kind === 'refused')
+  if (accepted.sent.kind === 'refused')
     yield* Effect.logWarning(
-      `Run ${runId}: its report was not delivered; parent run ${parent.id} is unavailable (${admitted.sent.reason}). The report stays on the run.`,
+      `Run ${runId}: its report was not delivered; parent run ${parent.id} is unavailable (${accepted.sent.reason}). The report stays on the run.`,
     );
-  return admitted.rows;
+  return accepted.rows;
 });
 
 /**

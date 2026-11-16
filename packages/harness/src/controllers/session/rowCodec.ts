@@ -39,7 +39,6 @@ import {
   SessionRowSchema,
   unavailableFactReason,
   type AggregateId,
-  type JsonValue,
   type SessionRow,
   type SessionRowDraft,
   factName,
@@ -294,7 +293,7 @@ export function decodeRow(
   const refused = rowRefusal(row);
   if (refused === 'retired') return Result.succeed(undefined);
   if (refused !== null) return Result.fail(refused);
-  let data: Record<string, JsonValue>;
+  let data: Record<string, Schema.Json>;
   try {
     data = jsonObject(parseData(row.data, blobs));
     if (row.type === 'context.blob') {

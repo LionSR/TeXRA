@@ -15,7 +15,12 @@ describe('createTestRunTrace undecodable compaction payload', () => {
     // cast: a fixture run id; the trace only stamps it on its rows.
     const { trace, rows } = createTestRunTrace('stream:test' as RunId);
 
-    trace.info('Compacting context', {
+    // A stored row a typed log call cannot write: an earlier or foreign
+    // producer's.
+    trace.emit({
+      type: 'log',
+      level: 'info',
+      message: 'Compacting context',
       messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
       data: { activity: 'context_compaction', state: 'started' },
     });
@@ -39,7 +44,7 @@ describe('createTestRunTrace response.finalized (issue #7086)', () => {
       'stream:test' as RunId,
     );
 
-    const toolRequest = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
+    const toolRequest = trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
     toolRequest.append('I will inspect the file.');
     toolRequest.finalize();
 

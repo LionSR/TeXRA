@@ -21,7 +21,7 @@ import {
 
 // Local imports - common
 import { SKILL_FILE_NAME, SkillNameSchema } from '@shared/schemas';
-import { absentReason, pathExists } from '@utils/files/fsEntryExists';
+import { meansAbsent, pathExists } from '@utils/files/fsEntryExists';
 import { isPathWithin } from '@utils/core/pathCore';
 
 // Local imports - this module's neighbours
@@ -139,7 +139,7 @@ export const readJsonFile = Effect.fn('readJsonFile')(function* <T>(
 ) {
   const fs = yield* FileSystem.FileSystem;
   const text = yield* fs.readFileString(file).pipe(
-    Effect.catchIf(absentReason, () => Effect.void),
+    Effect.catchIf(meansAbsent, () => Effect.void),
     Effect.mapError(ioError),
   );
   if (text === undefined) return undefined;

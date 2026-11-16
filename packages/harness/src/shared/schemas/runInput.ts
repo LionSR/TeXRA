@@ -88,7 +88,7 @@ export type RunInput = typeof RunInputSchema.Type;
  * What a run is bound to beyond its model id, recorded on its `run.config`
  * once it binds: the backend a resume or a switch rebinds on, whatever the
  * provider preferences say by then, and the subscription routes it
- * declined. Routes declined by a retry are folded from that retry's
+ * declined. Routes declined by a retry are applied from that retry's
  * decision.
  *
  * `backend` reads as written: a row naming a provider this build no longer

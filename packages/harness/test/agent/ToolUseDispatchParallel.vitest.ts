@@ -45,7 +45,7 @@ import type { ITool, ToolResult } from '@texra-ai/harness/plugins';
 /** The calls a folded state holds settled. */
 const settledIds = (state: RunState | null | undefined): string[] =>
   Object.entries(state?.pendingResponse?.records ?? {}).flatMap(([id, call]) =>
-    call.status.kind === 'settled' ? [id] : [],
+    call.status.kind === 'finished' ? [id] : [],
   );
 
 /** A tool as the step's registry holds it. */
@@ -136,7 +136,7 @@ const committedResults = (
 ) =>
   Effect.gen(function* () {
     const log = Context.get(session, SessionLog);
-    yield* log.settled;
+    yield* log.drained;
     return (yield* log.runRows(qualifyAggregateId('run', runId), 'results'))
       .results;
   });

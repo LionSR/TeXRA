@@ -85,6 +85,15 @@ export interface SettingRow<A = unknown> extends StateKey<A> {
   readonly choices?: { readonly [V in A & string]: SettingChoiceCopy };
 }
 
+/**
+ * How a message points a person to `row`: the title every settings UI shows
+ * and the key `/config`, `texra config` and a config file take, so the pointer
+ * is right on every host. A message names no settings page: where a row is
+ * shown is the app's to decide.
+ */
+export const settingName = (row: Pick<SettingRow, 'title' | 'key'>): string =>
+  `"${row.title}" (\`${row.key}\`)`;
+
 /** How a settings UI shows one value of an enum setting. */
 export interface SettingChoiceCopy {
   readonly label?: string;

@@ -18,7 +18,7 @@ const id = Schema.decodeUnknownSync(RunIdSchema)('bbb001');
 const startedSession = Effect.gen(function* () {
   const session = yield* isolatedTestSession();
   yield* publishTestRunStart(session, id);
-  yield* Context.get(session, SessionLog).settled;
+  yield* Context.get(session, SessionLog).drained;
   return session;
 });
 

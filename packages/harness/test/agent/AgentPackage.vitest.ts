@@ -60,7 +60,7 @@ class FakeSession {
   readonly log = {
     movedAside: null,
     tail: () => Stream.empty,
-    settled: Effect.suspend(() => Deferred.await(this.foldDeath)).pipe(
+    drained: Effect.suspend(() => Deferred.await(this.foldDeath)).pipe(
       Effect.orDie,
     ),
   };

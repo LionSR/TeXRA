@@ -19,7 +19,6 @@ import {
   NO_USAGE,
   type CommitOrdinal,
   type HookOutcomes,
-  type JsonValue,
   type DeclinableUsageRoute,
   type OfferedTool,
   type PositionAt,
@@ -158,7 +157,7 @@ export type RunState = Omit<RunRowState, 'at'> &
       'skills' | 'hooks' | 'modules'
     >;
     /** The run's `context.blob` rows: model-facing content by address. */
-    readonly contents: Readonly<Record<string, JsonValue>>;
+    readonly contents: Readonly<Record<string, Schema.Json>>;
     /** The `hook.outcome` rows by point: a recorded point never runs again. */
     readonly hookOutcomes: HookOutcomes;
   };

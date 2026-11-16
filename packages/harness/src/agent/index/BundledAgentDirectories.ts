@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { AppState } from '@platform/interfaces';
 import type { StateReadFailed } from '@shared/config/settings';
 import { bundledPluginDir } from '@common/storage/storageLayout';
-import { readDisabledTools } from '@tools/plugins';
+import { readDisabledTools } from '@shared/state/disabledTools';
 import { ToolRegistry } from '@tools/toolTable';
 
 /** The one bundled agent directory under a host's packaged resources. */

@@ -143,7 +143,7 @@ const openChat = (
     const { roots } = yield* FakeHost;
     const session = yield* TestSession.open(roots, {
       persistent: true,
-      host: {},
+      answeredFromView: true,
     });
     const runtime = yield* SessionGraph.runtime;
     const unbind = bindSessionView(runtime, {

@@ -119,7 +119,7 @@ interface AgentBlockResult<R = unknown> {
 
 Agent-general SDK surface. Every method ultimately reduces to `emit()` so
 the trace channel is a single source of truth. App-specific helpers are
-plain functions over this interface (see `traceLogs.ts`).
+plain functions over this interface.
 
 ```ts
 interface AgentTrace {
@@ -153,7 +153,7 @@ interface AgentTrace {
    * no phase that never happens. A stream that ends without content emits
    * nothing at all.
    */
-  openRun(kind: MessageType): StreamHandle;
+  openStream(kind: MessageType): StreamHandle;
   /**
    * Open a tool call's card with its first log (`tool.start`). A log whose
    * status is already terminal opens and closes the card at once; one without
@@ -473,11 +473,11 @@ interface ChildRunsShape {
     readonly exists: Effect.Effect<boolean, Error>;
     readonly end: Effect.Effect<RunEnd | null, Error>;
   };
-  /** The latest value of `arm`'s kind among the run's own facts, decoded
-   *  by the arm's schema; undefined while the run recorded none. */
+  /** The latest value of `factKind` among the run's own facts, decoded
+   *  by its schema; undefined while the run recorded none. */
   readonly fact: <A>(
     runId: RunId,
-    arm: {
+    factKind: {
       readonly plugin: string;
       readonly kind: string;
       readonly schema: Schema.Codec<A, unknown>;
@@ -513,7 +513,7 @@ const codemode: Plugin
 
 The decisions a request of kind `K` takes: its own actions and the three
 refusals. A plugin's request declares its actions on its row, so its
-type admits any decision.
+type accepts any decision.
 
 ```ts
 type DecisionOf<K extends RequestPayload['kind']> =
@@ -595,8 +595,8 @@ type DefineToolOptions<T, R = never> = Required<
     schema: Schema.Codec<T, unknown>;
     /**
      * What the run loop checks before this tool's body runs: the paths the
-     * call writes and the command it must get approved. Declared here,
-     * applied once in `agent/runtime/loop/toolGuard.ts`.
+     * call writes and the command it must get approved. Declared here; the
+     * loop applies it once, so the body never re-checks it.
      *
      * `NoInfer<R>`: the guard is checked against the requirement channel the
      * tool already has, it never sets it.
@@ -678,19 +678,27 @@ interface FactKind {
    *  of the kind (none before the first): the rejection's reason, or null
    *  to accept. */
   readonly accepts?: (
-    previous: PluginRow | undefined,
-    next: PluginRow,
+    previous: PluginFactRow | undefined,
+    next: PluginFactRow,
   ) => string | null;
   /** Whether the aggregate's `latest` row already says more than `next`
    *  (a call's fact that lagged behind a later writer): the call's batch
    *  then leaves `next` out instead of failing on `accepts`. */
-  readonly supersedes?: (latest: PluginRow, next: PluginRow) => boolean;
+  readonly supersedes?: (latest: PluginFactRow, next: PluginFactRow) => boolean;
   /** The workspace files a row of the kind says its run wrote past the
    *  editor's own write path: every process that folds the run announces
    *  them (`workspaceFilesWritten`), a window hearing a service task's
    *  write as it hears its own. */
-  readonly writes?: (value: JsonValue) => readonly string[];
+  readonly writes?: (value: Schema.Json) => readonly string[];
 }
+```
+
+## FactKinds
+
+The plugin fact kinds a store reads, by `plugin/kind`.
+
+```ts
+type FactKinds = Readonly<Record<FactName, FactKind>>;
 ```
 
 ## fileList
@@ -714,7 +722,7 @@ const fileOps: (options?: { readonly writeFilter?: WriteFilter | undefined; }) =
 
 Who a producer says a follow-up is from. Runs talk as a graph: any run may
 message any run in the project, whatever their places in the supervision
-tree. A run names only itself; the recipient's admission
+tree. A run names only itself; the recipient's acceptance
 (`Inbox.send`) stamps how it relates to the recipient.
 
 ```ts
@@ -879,7 +887,7 @@ interface ITool<E = Error, R = never> {
    *   read-only tool that prompts for approval is not parallel: it needs an
    *   approval round-trip first, so it stays a barrier.
    * - `'barrier'`: waits for every call issued before it and holds back
-   *   every call after it until it settles.
+   *   every call after it until it finishes.
    * - `'own'`: in a script, its calls neither wait for the calls issued
    *   before them nor block the ones after, and take no place in the
    *   parallel window: the tool bounds how many of its own calls run at
@@ -1043,16 +1051,29 @@ class JsonRpcRequestError extends Schema.TaggedError<JsonRpcRequestError>()(
 
 ## LogOptions
 
-Sugar passed to debug/info/warn/error.
+What a trace's log methods take: a row's category (subscribers pick a
+render style from it) with the payload the transcript decodes for it,
+so a pairing is checked where it is written; or no category, a default
+row with any data. The row stores the payload as JSON; a `Cause` stores
+as the error it raised.
 
 ```ts
-interface LogOptions {
-  /** The payload the log row stores as JSON; a `Cause` stores as the error
-   *  it raised. */
-  readonly data?: unknown;
-  /** The row's category; subscribers pick a render style from it. */
-  readonly messageType?: MessageType;
-}
+type LogOptions =
+  | { readonly messageType?: undefined; readonly data?: unknown }
+  | {
+      // A payload is required unless the type's schema accepts none.
+      [
+        K in MessageType
+      ]: undefined extends (typeof LOG_PAYLOAD_SCHEMAS)[K]['Encoded']
+        ? {
+            readonly messageType: K;
+            readonly data?: (typeof LOG_PAYLOAD_SCHEMAS)[K]['Encoded'];
+          }
+        : {
+            readonly messageType: K;
+            readonly data: (typeof LOG_PAYLOAD_SCHEMAS)[K]['Encoded'];
+          };
+    }[MessageType];
 ```
 
 ## makeJsonRpcConnection
@@ -1283,6 +1304,18 @@ interface PluginDefinition<ROut> extends Omit<
 }
 ```
 
+## PluginFactRow
+
+One stored row of a plugin's kind, as its fact kind's transition rule reads
+it: the row's decoded value and the run it is parented to, if any.
+
+```ts
+interface PluginFactRow {
+  readonly value: Schema.Json;
+  readonly parent: RunId | null;
+}
+```
+
 ## PluginHold
 
 Keep the session layer that provides this service up until `until` ends:
@@ -1312,18 +1345,6 @@ type PluginLayerServices =
   | ChildProcessSpawner
   | AppState
   | AppSignals;
-```
-
-## PluginRow
-
-One stored row of a plugin's kind, as its fact kind's transition rule reads
-it: the row's decoded value and the run it is parented to, if any.
-
-```ts
-interface PluginRow {
-  readonly value: JsonValue;
-  readonly parent: RunId | null;
-}
 ```
 
 ## PluginToolServices
@@ -1426,8 +1447,6 @@ workspace configuration ('' for none).
 type PromptSection = (ctx: {
   readonly offered: readonly string[];
   readonly isChild: boolean;
-  /** The step's bound model is an Anthropic model. */
-  readonly isAnthropic: boolean;
   /** The run's workspace configuration, for a section that follows a
    *  setting of its plugin's. */
   readonly config: ConfigProvider;
@@ -1512,7 +1531,7 @@ interface RequestDecisionRecord {
    *  and checked in the transaction: one its kind refuses is logged and
    *  left out. */
   readonly facts: readonly (ToolFact & { readonly aggregate: string })[];
-  /** The input the plugin sends a run of the session, admitted in the
+  /** The input the plugin sends a run of the session, accepted in the
    *  transaction (one the run's closed input refuses is logged), the run
    *  woken for it once that commits. */
   readonly followUp?: { readonly runId: RunId; readonly item: InboxItem };
@@ -1521,8 +1540,8 @@ interface RequestDecisionRecord {
 
 ## requestToolEditApproval
 
-Ask the person for an edit when `sessionPermission` (`loop/toolGuard.ts`),
-given what the call's hooks said, asks: a `request.opened` on the run
+Ask the person for an edit when the session's policy, given what the
+call's hooks said, asks: a `request.opened` on the run
 that names the proposal's content (the original and proposed text with
 their diff) by its address in the session's blob store, stored with the
 row, so every process the request reaches shows the same diff
@@ -1539,7 +1558,7 @@ const requestToolEditApproval: (request: ToolEditProposal) => Effect<ToolEditApp
 Resolve a tool path, relative or absolute, against the call's working
 directory when the run has one and its workspace folder otherwise.
 
-A path that escapes that root is admitted only inside a registered external
+A path that escapes that root is accepted only inside a registered external
 root or with path protection switched off; otherwise it fails with a
 `ToolError` the tool runner reports to the model. With no folder open and
 no working directory, only an absolute path can resolve (the agent
@@ -1607,10 +1626,22 @@ interface RoutePolicy {
 }
 ```
 
-## RunFileService
+## runDirUnder
+
+A run's directory under `storageRoot`.
 
 ```ts
-class RunFileService
+function runDirUnder(storageRoot: string, id: RunId): string
+```
+
+## runEntryUnder
+
+Inspect one run-relative entry of run `runId`'s storage under
+`storageRoot` without following a workspace-mirror symlink, the entry's
+own or an ancestor directory's.
+
+```ts
+const runEntryUnder: (storageRoot: string, runId: string & Brand<"RunId">, relativePath: string) => Effect<{ readonly kind: "file"; readonly location: { readonly kind: "runStorage"; readonly absolutePath: string; readonly relativePath: string; readonly runId: string & Brand<"RunId">; }; } | { readonly kind: "symlink" | "directory" | "unsupported"; readonly absolutePath: string; } | { readonly kind: "missing"; } | { kind: "invalid"; reason: string; }, PlatformError, FileSystem>
 ```
 
 ## RunHistoryInconsistent
@@ -1681,7 +1712,7 @@ class RunHistoryRefused extends Schema.TaggedError<RunHistoryRefused>()(
 ## RunInbox
 
 One run's input, as a plugin reaches it: what it sends the run (routed,
-admitted and woken as {@link submitFollowUp} does), and when the run
+accepted and woken as {@link submitFollowUp} does), and when the run
 takes no more.
 
 ```ts
@@ -1806,9 +1837,22 @@ interface SettingsStores {
 }
 ```
 
+## sourceLocationUnder
+
+Where a path a run reads from lives, under the roots its caller holds: a
+file in run storage keeps its run's provenance, anything else is its
+workspace or external location.
+
+```ts
+function sourceLocationUnder(
+  roots: { readonly storage: string; readonly workspace: string | undefined },
+  inputPath: string,
+): FileLocation
+```
+
 ## StepRoot
 
-A read-only directory one step admits for its own calls, beside the
+A read-only directory one step accepts for its own calls, beside the
 registered roots: a skill it lists or its user activated, canonical as
 its catalog entry records it (`canonicalizePath`).
 
@@ -1831,7 +1875,7 @@ class StorageFs extends Context.Service<StorageFs, RootedFileSystem>()(
 
 ## StreamHandle
 
-Handle returned by `openRun` — append chunks then finalize.
+Handle returned by `openStream` — append chunks then finalize.
 
 ```ts
 interface StreamHandle {
@@ -1850,8 +1894,8 @@ interface StreamHandle {
 
 Three outcomes: the input reached a running loop, it waits in the run's
 queue for its next turn (the resume the send started, or an explicit
-one), or it was not admitted, with the words that say why. A delivery the
-admission boundary had already accepted is `sent`. A resume the input
+one), or it was not accepted, with the words that say why. A delivery the
+acceptance boundary had already accepted is `sent`. A resume the input
 started that the run refused is told by the resume itself.
 
 ```ts
@@ -2032,7 +2076,7 @@ interface ToolEditProposal {
 
 Where a call works: the session's roots (its workspace folder, the
 setting slots and its storage), the run's working directory, and the
-read-only roots the call's step admits (the skills it lists or its user
+read-only roots the call's step accepts (the skills it lists or its user
 activated). A tool's paths resolve against it.
 `workingDirectory` is already absolute or absent: the run decides it once
 where it is launched (`buildAgentLaunchContext`).
@@ -2063,8 +2107,8 @@ type ToolFileAttachment = typeof ToolFileAttachmentSchema.Type;
 
 The guard the run loop applies before a tool's body runs, declared on the
 tool instead of called inside it: the paths the call writes and the command
-it must get approved. `agent/runtime/loop/toolGuard.ts` is the one place
-either is checked, so no tool body re-checks its own roots or asks for the
+it must get approved. The run loop is the one place either is checked,
+so no tool body re-checks its own roots or asks for the
 command's approval; a tool whose body asks its own question declares
 `requiresApproval: 'inBody'` (below).
 
@@ -2109,7 +2153,7 @@ interface ToolGuard<T> {
 The call fields a tool path resolves against: the session's roots (its
 workspace folder and the setting slots containment policy is read from),
 the run's working directory, and the read-only roots the call's step
-admits (the skills it lists or its user activated; none outside a run).
+accepts (the skills it lists or its user activated; none outside a run).
 A tool's `ToolContext.env` satisfies it structurally.
 `workingDirectory` is already absolute or absent: the run decides it once
 where it is launched (`buildAgentLaunchContext`).
@@ -2247,6 +2291,9 @@ interface ToolTable {
   readonly get: (name: string) => ITool<Error, PluginToolServices> | undefined;
   /** The agent-file blocks the plugins own, by key (`Plugin.agentBlock`). */
   readonly blocks: ReadonlyMap<string, AgentBlock>;
+  /** The row kinds the plugins own, by `plugin/kind` (`Plugin.factKinds`):
+   *  what a store opened in this process reads. */
+  readonly factKinds: FactKinds;
 }
 ```
 

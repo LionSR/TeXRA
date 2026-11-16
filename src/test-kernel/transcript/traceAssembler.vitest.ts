@@ -52,7 +52,7 @@ layer(
       };
 
       yield* publishTestRunStart(session, runId);
-      yield* Context.get(session, SessionLog).settled;
+      yield* Context.get(session, SessionLog).drained;
       yield* seedRunRecord(
         session,
         runId,

@@ -11,8 +11,8 @@ import type { Plugin } from '@tools/plugins';
 import type { PromptSection } from '@tools/toolTable';
 
 // Local imports - utilities
-import { renderPrompt } from '@utils/prompt';
-import { loadAgentsMd } from '@utils/files/agentsMd';
+import { renderPrompt } from '@agent/prompt/promptRender';
+import { loadAgentsMd } from '@agent/prompt/agentsMd';
 import { buildWorkspaceInfoBlock } from './workspaceInfo';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -41,7 +41,7 @@ Never mention tool names when speaking to the user.
  * parallel tool calls natively, so they get the parallel encouragement
  * instead of the weak-model boilerplate.
  */
-const ANTHROPIC_TOOL_CALLS = `Independent tool calls may be issued together in one response. Sequence only calls that depend on an earlier result.
+const PARALLEL_TOOL_CALLS = `Independent tool calls may be issued together in one response. Sequence only calls that depend on an earlier result.
 Do not create excessive markdown files or documentation unless explicitly requested.`;
 const SEQUENTIAL_TOOL_CALLS = `When using a tool, follow the JSON schema exactly and include all required properties.
 Always produce valid JSON when calling a tool.
@@ -51,7 +51,8 @@ Call tools sequentially and wait for the output before calling another.`;
 /**
  * The context a step renders: the tools it offers and the sections it adds
  * after the run's recorded prompt, by name, in order: the tool-call
- * mechanics of the step's model, the skills the step lists, then each pinned plugin's
+ * mechanics of the step's model (`parallelToolCalls`: it issues independent
+ * calls together natively), the skills the step lists, then each pinned plugin's
  * section, in plugin id order. They are built from the step (its model,
  * settings, offered tools and pinned contributors) and the skill catalog it
  * discovers, so a model switch or a setting change reaches the next request,
@@ -61,6 +62,7 @@ export function stepInstructions(
   plugins: readonly Pick<Plugin, 'id' | 'prompt'>[],
   skills: readonly SkillCatalogEntry[],
   ctx: Parameters<PromptSection>[0],
+  parallelToolCalls: boolean,
 ): PromptSections {
   const sections = Object.fromEntries([
     // A step that offers no tool (a document reviser, the critic) has no
@@ -69,7 +71,7 @@ export function stepInstructions(
       ? [
           [
             'tool-call',
-            ctx.isAnthropic ? ANTHROPIC_TOOL_CALLS : SEQUENTIAL_TOOL_CALLS,
+            parallelToolCalls ? PARALLEL_TOOL_CALLS : SEQUENTIAL_TOOL_CALLS,
           ],
         ]
       : []),

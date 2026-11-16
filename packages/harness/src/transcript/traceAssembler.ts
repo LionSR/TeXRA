@@ -2,16 +2,13 @@
  * Assemble a static trace: the run aggregate's own display events, in commit
  * order, plus the run's persisted record for the caller's filename.
  *
- * Three facts are authored rather than copied, because an exported file has
- * no siblings and no writable host: the creation row carries no parent, no
- * checkpoint and no follow-up support (a visible composer would be a dead
- * control against a read-only bridge).
- *
- * A fourth is redacted: a decided request keeps its action and loses what the
- * user typed or approved (see `decisionAction`).
+ * The creation row loses its parent and its follow-up support, because an
+ * exported file has no siblings and no writable host (a visible composer
+ * would be a dead control against a read-only bridge), and a decided request
+ * keeps its action but loses what the user typed or approved (see
+ * `decisionAction`).
  */
 import { Effect, absurd } from 'effect';
-import type { RunRecord } from '@agent/core/definition/RunRecord';
 import { getRunRecords } from '@agent/storage/runOwnership';
 
 import {
@@ -22,7 +19,7 @@ import {
 import { SessionLog } from '@shared/session/runHistory';
 import { isRequestDecision } from '@shared/session/runRowReads';
 
-import type { TraceDocument } from './traceDocumentSchema';
+import type { AssembleTraceResult } from './traceDocumentSchema';
 
 /**
  * A decision's action, without what the user typed or approved. The fold reads
@@ -61,18 +58,6 @@ const decisionAction = (decision: RequestDecision): RequestDecision => {
   }
 };
 
-export type AssembleTraceResult =
-  | {
-      readonly status: 'ok';
-      readonly trace: TraceDocument;
-      readonly record: RunRecord;
-    }
-  | { readonly status: 'config_missing' | 'streamLogs_missing' };
-
-/**
- * `streamLogs_missing` means no replayable run timeline is available: the
- * run's aggregate is empty or tombstoned.
- */
 export const assembleTrace = Effect.fn('assembleTrace')(function* (
   runId: RunId,
 ): Effect.fn.Return<AssembleTraceResult, Error, SessionLog> {
@@ -81,13 +66,13 @@ export const assembleTrace = Effect.fn('assembleTrace')(function* (
     [getRunRecords(runId).readRunRecord(), log.display(runId)],
     { concurrency: 2 },
   );
-  if (!record) return { status: 'config_missing' };
+  if (!record) return { status: 'no_record' };
   // The display rows are what the document carries, so the emptiness guard
-  // belongs after the filter: a tombstoned aggregate and one holding only
+  // belongs after the filter: a deleted aggregate and one holding only
   // run-history-private rows are both "no replayable timeline", and readers may
   // then treat a non-empty document as having a creation row.
   const displayEvents = events.filter(isDisplayRow);
-  if (displayEvents.length === 0) return { status: 'streamLogs_missing' };
+  if (displayEvents.length === 0) return { status: 'no_rows' };
   return {
     status: 'ok',
     record,

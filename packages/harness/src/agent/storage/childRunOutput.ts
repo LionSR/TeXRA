@@ -1,8 +1,10 @@
 import { Effect, type FileSystem } from 'effect';
 
 import { readRecipeResult } from '@agent/runtime/recipeResult';
-import { RunFileService } from '@common/storage/runStorage';
-import { runStorageLocationUnder } from '@common/storage/storageLayout';
+import {
+  runEntryUnder,
+  runStorageLocationUnder,
+} from '@common/storage/storageLayout';
 import { SessionRoots } from '@platform/rootedFs';
 import {
   RUN_OUTCOME,
@@ -105,10 +107,11 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
     if (reference.runId !== parentRunId)
       yield* checkDeclaredChildOutput(parentRunId, reference);
 
-    const entry = yield* new RunFileService(
+    const entry = yield* runEntryUnder(
+      storageRoot,
       reference.runId,
-      roots,
-    ).inspectEntry(reference.relativePath);
+      reference.relativePath,
+    );
     switch (entry.kind) {
       case 'file':
         return entry.location;

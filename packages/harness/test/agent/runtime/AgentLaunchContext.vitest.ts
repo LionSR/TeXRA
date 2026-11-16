@@ -77,7 +77,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               EXECUTION_ID,
               goalGrant(['bash']),
             );
-            yield* Context.get(session, SessionLog).settled;
+            yield* Context.get(session, SessionLog).drained;
 
             // A resume's activation, as its run's cell commits it.
             yield* Context.get(session, RunHistory).open(EXECUTION_ID, {

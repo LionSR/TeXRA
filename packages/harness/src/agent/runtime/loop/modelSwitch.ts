@@ -1,5 +1,5 @@
 /**
- * A host-admitted model switch, recorded by the tool-use loop at its next
+ * A host-accepted model switch, recorded by the tool-use loop at its next
  * model boundary: the rows that record it are appended by the one fiber that
  * holds the run's state.
  */
@@ -79,8 +79,8 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
 );
 
 /** The host port's model switch: whether `model` can replace the run's, and
- *  the admission the loop applies at its next model boundary, answered once
- *  its row commits. The switch is admitted over the routes the run's cell
+ *  the switchRejection the loop applies at its next model boundary, answered once
+ *  its row commits. The switch is accepted over the routes the run's cell
  *  holds, the set the next bind decides over. */
 export function modelSwitchPort(
   run: AgentRunShape,
@@ -89,15 +89,19 @@ export function modelSwitchPort(
   cell: RunCell,
 ) {
   /** Why `model` cannot replace the run's, decided as the next bind will. */
-  const admission = (model: string) =>
+  const switchRejection = (model: string) =>
     Effect.flatMap(cell.current, (state) =>
-      access.admit(model, ScopedRef.getUnsafe(run.model), state.declinedRoutes),
+      access.switchRejection(
+        model,
+        ScopedRef.getUnsafe(run.model),
+        state.declinedRoutes,
+      ),
     );
   return {
     modelSwitchDisabledReason: (model: string) =>
-      Effect.map(admission(model), (refused) => refused?.reason),
+      Effect.map(switchRejection(model), (refused) => refused?.reason),
     switchModel: Effect.fn('toolUse.switchModel')(function* (model: string) {
-      const refused = yield* admission(model);
+      const refused = yield* switchRejection(model);
       if (refused !== null)
         return yield* Effect.fail(new Error(refused.message));
       // Queued on the run's input, durable at once; the loop binds and
@@ -108,7 +112,7 @@ export function modelSwitchPort(
         from: { kind: 'user' },
         control: { kind: 'model', model },
       });
-      // Its input closed while the switch was admitted: nothing switches.
+      // Its input closed while the switch was accepted: nothing switches.
       if (sent.kind === 'refused')
         return yield* Effect.fail(
           new Error('This conversation takes no more input.'),

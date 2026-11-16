@@ -49,6 +49,7 @@ import {
   APPROVAL_POLICY_SETTING,
   ensureError,
 } from '@texra-ai/harness/schemas';
+import { recentCommitLabels } from '@texra-ai/harness/node';
 import { apiKeyEntry } from '@texra-ai/llm';
 import { GIT_COMMITS_TO_SHOW_SETTING } from '@texra/shared/settings/texraSettings';
 import { loadTeamOptions } from '@texra/agent/teams/teamLaunch';
@@ -68,7 +69,6 @@ import {
   readOnboardingFlags,
   setOnboardingDeclined,
 } from '@texra/controllers/onboarding/onboardingFunnel';
-import { readRecentCommits } from '@texra/utils/git/repositoryOverview';
 import type { AgentCatalog } from '@texra-ai/harness/host';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
@@ -325,11 +325,13 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       'the recent commits',
       Effect.gen(function* () {
         if (options.root === undefined) return;
-        const commits = yield* readRecentCommits(
+        const labels = yield* recentCommitLabels(
           options.root,
           yield* Settings.get(stores, GIT_COMMITS_TO_SHOW_SETTING),
-        ).pipe(withLogChannel(CHANNEL));
-        yield* write({ commits });
+        );
+        yield* write({
+          commits: { commits: [...(labels ?? [])], isGitRepo: labels !== null },
+        });
       }),
     );
     const loadDependencies = yield* producer(

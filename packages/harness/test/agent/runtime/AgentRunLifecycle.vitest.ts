@@ -40,7 +40,7 @@ import { testLaunch } from '@test/support/scriptedRunLayers';
  *  what the run's one terminal writer (`endRun`) said. */
 const runEnds = (session: Context.Context<SessionServices>, runId: RunId) =>
   Effect.andThen(
-    Context.get(session, SessionLog).settled,
+    Context.get(session, SessionLog).drained,
     Effect.map(
       Context.get(session, SessionLog).runRows(
         qualifyAggregateId('run', runId),

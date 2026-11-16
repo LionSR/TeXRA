@@ -143,7 +143,7 @@ describe('session view update', () => {
     const inputs = [subscribe(ROOT), ...log.events.map(tail), log.drained()];
     const held = runView(viewOf([...inputs, alive], updater), ROOT);
     expect(held.compactingActive).toBe(true);
-    expect(held.transcript.settledRows).toBe(0);
+    expect(held.transcript.finalRows).toBe(0);
 
     // No row says the turn ended; the owner's death alone ends it, so the
     // open compaction finishes and the scrollback may print every row.
@@ -151,7 +151,7 @@ describe('session view update', () => {
     expect(isInterrupted(lost)).toBe(true);
     expect(lost.compactingActive).toBe(false);
     expect(lost.transcript.rows).toHaveLength(1);
-    expect(lost.transcript.settledRows).toBe(1);
+    expect(lost.transcript.finalRows).toBe(1);
   });
 });
 

@@ -6,7 +6,7 @@
  *  has applied every commit it made, so a caller that reads the view next
  *  sees what it wrote. The view, the presenter and the trace's text all take
  *  the publisher's batches, published from what each job wrote; nothing here
- *  reads the store back. "Settled" waits further, for the presenter to run
+ *  reads the store back. "Finished" waits further, for the presenter to run
  *  over a commit. */
 import {
   Deferred,
@@ -56,8 +56,8 @@ interface SessionStore {
   /** Remove a run and its dependents, as the publisher's next job. */
   readonly removeRun: SessionEventsShape['removeRun'];
   /** The committed display rows, each batch released once the view has
-   *  applied it, for the session's one presenter: `settled` waits until it
-   *  has run over a commit, so the presenter never waits on `settled`. */
+   *  applied it, for the session's one presenter: `finished` waits until it
+   *  has run over a commit, so the presenter never waits on `finished`. */
   readonly applied: Stream.Stream<DisplayRow>;
   /** Drain the publisher inside the close deadline, then shut the doors:
    *  from here on a trace row, a transcript subscription and an interrupted
@@ -129,7 +129,7 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
     const closed = () => doorsShut;
     /** The presenter ran past every job committed so far; its end fails
      *  only this. */
-    const settled = Effect.suspend(() =>
+    const drained = Effect.suspend(() =>
       reach(
         SubscriptionRef.changes(presented).pipe(
           Stream.interruptWhen(Deferred.await(presenterEnded)),
@@ -175,7 +175,7 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       publish: trace.publish,
       lost: trace.lost,
       closure: trace.closure,
-      settled,
+      drained,
       now: events.head,
       history: (id, fromSeq = 1, types = RUN_STATE_ROW_TYPES) =>
         database.readAggregate(id, fromSeq, types),

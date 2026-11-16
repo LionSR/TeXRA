@@ -16,6 +16,7 @@ import {
   type AgentConfig,
   type FileLocation,
 } from '@texra-ai/harness/schemas';
+import type { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import { Effect, FileSystem } from 'effect';
 
 import { readNormalizedFile } from '@texra-ai/harness/node';
@@ -29,7 +30,7 @@ import {
 import { replaceInputCommands } from './fileMapping';
 import { extractReplyDocuments } from './replyDocuments';
 import type { ExpectedDocuments } from './extraction/filenameHeaders';
-import type { AgentTrace, RunFileService } from '@texra-ai/harness/plugins';
+import type { AgentTrace } from '@texra-ai/harness/plugins';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
 /** What the output pipeline reads of the document task's run. */
@@ -41,7 +42,7 @@ export interface OutputDependencies {
    *  is matched against and its `\input`s are rewritten from. */
   readonly sources: FileLocation[];
   readonly logger: AgentTrace;
-  readonly fileService: RunFileService;
+  readonly fileService: RunWorkspace;
   /** The run's session roots, held as data: the pipeline runs on the run's
    *  fiber, and nothing about a fiber names the project it works on. */
   readonly roots: WorkspaceRoots;

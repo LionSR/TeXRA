@@ -24,19 +24,17 @@ import {
 import { SessionLog } from '@shared/session/runHistory';
 import type { UsageLog } from '@shared/usageLog';
 import { descriptionRow } from '@shared/session/runFacts';
-import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import type { RouteRetries } from './ModelRetryGate';
 import type { HttpClient } from 'effect/http';
 
 const CHANNEL = 'SessionDescription';
-const MAX_DESCRIPTION_LENGTH = 80;
 const MAX_DESCRIPTION_WORDS = 12;
 
 /**
  * Normalize a model-generated session description: collapse newlines,
- * strip surrounding quotes/backticks, drop trailing sentence punctuation,
- * and truncate to a UI-friendly length. Returns an empty string when the
- * cleaned result has no meaningful content.
+ * strip surrounding quotes/backticks, and drop trailing sentence
+ * punctuation (its row cuts the length, `descriptionRow`). Returns an empty
+ * string when the cleaned result has no meaningful content.
  */
 function cleanSessionDescription(text: string): string {
   const cleaned = text
@@ -47,7 +45,7 @@ function cleanSessionDescription(text: string): string {
     .trim();
   if (!cleaned) return '';
   if (cleaned.split(/\s+/).length > MAX_DESCRIPTION_WORDS) return '';
-  return truncateWithEllipsis(cleaned, MAX_DESCRIPTION_LENGTH);
+  return cleaned;
 }
 
 const SYSTEM_PROMPT = `Generate a short session label from the agent name, description, and user's instruction. Use at most 10 words and no trailing period. Be specific but terse. Use no full sentences, meta-commentary, or quotes. Use present-tense verb phrases (e.g. "Reviewing introduction for clarity", "Fixing TikZ arrow alignment").`;

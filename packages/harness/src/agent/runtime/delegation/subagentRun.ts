@@ -135,11 +135,10 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
     const { runId, grants } = launch;
     const { runId: parentRunId } = parent.run;
     const agentName = childConfigPayload.agent;
-    // One cycle: the child ends with its reply, and a follow-up to it is a
-    // resume with a message.
+    // Like every child, it ends with its reply, and a follow-up to it is
+    // a resume with a message.
     const definition = yield* prepareAgentDefinition({
       config: Schema.decodeUnknownSync(AgentConfigSchema)(childConfigPayload),
-      stopAfterCycle: true,
     });
     const { config } = definition;
     // The child registers with its opening, which commits here.

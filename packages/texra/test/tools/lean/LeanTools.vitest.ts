@@ -111,8 +111,8 @@ describe('runLakeCommand mutex', () => {
         yield* Effect.promise(() => waitForFile(readyB));
         writeFileSync(gateB, 'go');
 
-        expect(yield* Fiber.join(first)).toMatchObject({ exitCode: 0 });
-        expect(yield* Fiber.join(second)).toMatchObject({ exitCode: 0 });
+        expect(yield* Fiber.join(first)).toMatchObject({ success: true });
+        expect(yield* Fiber.join(second)).toMatchObject({ success: true });
       }).pipe(Effect.provide(nodeSpawnerLayer)),
   );
 });

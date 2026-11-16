@@ -5,7 +5,7 @@
 /**
  * The guest-facing globals and the two functions the host calls. It captures
  * the host functions, deletes their temporary globals, and evaluates to
- * `{ start, settle }`, which stay host-side handles. `tools.<name>(args)`
+ * `{ start, finish }`, which stay host-side handles. `tools.<name>(args)`
  * returns a realm-native promise whose resolver waits in a realm-side table
  * keyed by op number; the host never holds a guest object, and only JSON text
  * crosses in either direction.

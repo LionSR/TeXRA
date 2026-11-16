@@ -121,7 +121,7 @@ export type RunRowsRead<R extends RunRowRead> = ReturnType<
   (typeof RUN_ROW_READS)[R]['fold']
 >;
 
-/** Read `read` over `rows`: the rows of its kinds among them, folded. */
+/** Read `read` over `rows`: the rows of its kinds among them, applied. */
 export function foldRunRows<R extends RunRowRead>(
   read: R,
   rows: readonly SessionRow[],
