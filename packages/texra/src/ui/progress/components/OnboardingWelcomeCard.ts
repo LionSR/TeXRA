@@ -73,7 +73,7 @@ export class OnboardingWelcomeCard extends LitElement {
         display: block;
         font-weight: var(--font-weight-semibold);
         font-size: var(--font-size-h1);
-        letter-spacing: -0.025em;
+        letter-spacing: var(--letter-spacing-tight);
         line-height: var(--line-height-heading);
         margin: 0 0 var(--wa-space-xs);
         text-wrap: balance;

@@ -95,8 +95,8 @@ export class RunHeader extends LitElement {
         color: var(--wa-color-text-normal);
         font-size: var(--font-size);
         font-weight: var(--font-weight-semibold);
-        line-height: 1.2;
-        letter-spacing: -0.012em;
+        line-height: var(--line-height-heading);
+        letter-spacing: var(--letter-spacing-tight);
       }
 
       .rename-input {

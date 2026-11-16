@@ -156,7 +156,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--letter-spacing-caps);
 }
 .shell-history-section {
   margin-top: var(--wa-space-m);
@@ -231,7 +231,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   margin: var(--wa-space-2xs) var(--wa-space-xs);
   font-size: var(--font-size-xs);
   color: var(--wa-color-text-quiet);
-  line-height: 1.5;
+  line-height: var(--line-height-normal);
 }
 .shell-project-runs {
   --run-tab-padding-inline-start: var(--wa-space-xs);

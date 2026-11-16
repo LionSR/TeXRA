@@ -133,7 +133,7 @@ export class TeamsTab extends LitElement {
         padding: 0 var(--wa-space-2xs);
         min-height: 18px;
         font-size: var(--font-size-xs);
-        line-height: 1.2;
+        line-height: var(--line-height-heading);
       }
 
       wa-tag.preset-agent-badge--orchestrator {
@@ -142,7 +142,7 @@ export class TeamsTab extends LitElement {
 
       .preset-orchestrator-icon {
         font-size: var(--font-size-xs);
-        line-height: 1;
+        line-height: var(--line-height-tight);
       }
 
       .preset-delete-btn {

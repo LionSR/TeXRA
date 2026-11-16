@@ -116,7 +116,7 @@ export const settingsViewStyles: CSSResult[] = [
       width: 1em;
       height: 1em;
       place-items: center;
-      line-height: 1;
+      line-height: var(--line-height-tight);
     }
 
     .settings-panel {

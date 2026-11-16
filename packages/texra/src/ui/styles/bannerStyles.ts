@@ -35,7 +35,7 @@ const bannerFrameStyles: CSSResult = css`
 
   .banner-row strong {
     font-weight: var(--font-weight-semibold);
-    letter-spacing: -0.005em;
+    letter-spacing: var(--letter-spacing-tight);
   }
 
   .actions {

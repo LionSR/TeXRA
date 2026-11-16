@@ -92,8 +92,8 @@ export class BackgroundTasksPanel extends LitElement {
         color: var(--wa-color-brand-on-quiet);
       }
       .dispatch-summary wa-badge::part(base) {
-        font-size: 10px;
-        line-height: 1;
+        font-size: var(--font-size-xs);
+        line-height: var(--line-height-tight);
         padding: var(--wa-space-3xs) var(--wa-space-2xs);
       }
       .dispatch-since {

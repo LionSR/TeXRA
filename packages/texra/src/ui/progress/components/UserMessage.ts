@@ -117,7 +117,7 @@ export class UserMessage extends LitElement {
         );
         border-radius: var(--wa-border-radius-m, var(--border-radius-small));
         font-size: var(--font-size-sm);
-        line-height: 1.5;
+        line-height: var(--line-height-normal);
         white-space: normal;
       }
 

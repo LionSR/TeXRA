@@ -83,7 +83,7 @@ export const logEntryStyles = css`
   }
 
   .file-list-content .file-media {
-    font-size: 0.85em;
+    font-size: var(--font-size-xs);
   }
 
   .file-list-content .file-var {
@@ -92,7 +92,7 @@ export const logEntryStyles = css`
   }
 
   .file-list-content .file-source {
-    font-size: 0.85em;
+    font-size: var(--font-size-xs);
     font-style: italic;
   }
 
@@ -127,7 +127,7 @@ export const logEntryStyles = css`
 
   .memory-path .file-source {
     opacity: var(--opacity-subtle);
-    font-size: 0.85em;
+    font-size: var(--font-size-xs);
   }
 
   /* Web search result styles */

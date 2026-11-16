@@ -91,7 +91,7 @@ const scriptStageStyles = css`
   .row-icon {
     display: inline-flex;
     flex: 0 0 auto;
-    font-size: 12px;
+    font-size: var(--font-size-xs);
     color: var(--tone-color);
   }
 
@@ -143,7 +143,7 @@ const scriptStageStyles = css`
       flex: 1 0 100%;
       max-width: none;
       box-sizing: border-box;
-      padding-left: calc(12px + var(--wa-space-xs));
+      padding-left: calc(var(--font-size-xs) + var(--wa-space-xs));
     }
   }
 

@@ -272,7 +272,7 @@ wa-input.desktop-command-palette-input::part(input) {
   font-family: var(--wa-font-family-mono);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
-  line-height: 1;
+  line-height: var(--line-height-tight);
 }
 
 .desktop-command-palette-key {
@@ -656,7 +656,7 @@ wa-input.desktop-command-palette-input::part(input) {
   height: var(--font-size-icon-sm);
   min-height: var(--font-size-icon-sm);
   margin: 0;
-  line-height: 1;
+  line-height: var(--line-height-tight);
   transform: translate(-50%, -50%);
 }
 

@@ -114,7 +114,7 @@ export const conversationContentStyles: CSSResult = css`
     padding: var(--wa-space-s) 0 0;
     border-top: var(--border-thin) solid var(--wa-color-surface-border);
     color: var(--color-text-muted);
-    font-size: var(--wa-font-size-s);
+    font-size: var(--font-size-sm);
   }
 
   /* A fork's first line, where its own transcript begins. */
@@ -124,7 +124,7 @@ export const conversationContentStyles: CSSResult = css`
     gap: var(--wa-space-2xs);
     margin: var(--wa-space-xs) 0;
     color: var(--color-text-secondary);
-    font-size: var(--wa-font-size-s);
+    font-size: var(--font-size-sm);
   }
 
   .conversation-ended > span {

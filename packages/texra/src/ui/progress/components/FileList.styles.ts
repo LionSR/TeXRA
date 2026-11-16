@@ -22,7 +22,7 @@ export const fileListStyles: CSSResult = css`
     padding: var(--wa-space-3xs) 0 var(--wa-space-2xs);
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
-    line-height: 1.4;
+    line-height: var(--line-height-normal);
   }
 
   .storage-hint wa-icon {
