@@ -156,7 +156,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
-  letter-spacing: var(--letter-spacing-caps);
+  letter-spacing: 0.02em;
 }
 .shell-history-section {
   margin-top: var(--wa-space-m);
