@@ -44,7 +44,7 @@ const ProgramInputSchema = Schema.Struct({
 });
 type ProgramInput = typeof ProgramInputSchema.Type;
 
-export const programTool = (): DefinedTool<ProgramInput, PluginToolServices> =>
+export const programTool: DefinedTool<ProgramInput, PluginToolServices> =
   defineTool({
     name: PROGRAM_TOOL_NAME,
     requiresApproval: 'inBody',

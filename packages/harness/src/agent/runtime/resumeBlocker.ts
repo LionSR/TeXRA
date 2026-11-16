@@ -1,6 +1,7 @@
 /**
- * What a resume of a run waits for in this process: its agent is missing
- * from the catalog, or its agent comes from an
+ * What a resume of a run waits for in this process: its program is one no
+ * plugin registers, its agent is missing from the catalog, or its agent
+ * comes from an
  * installed plugin that is off or not trusted as it is now. An inline
  * persona travels with its record, so nothing blocks it. A resume that
  * meets one does not fail the run: the resume is refused with the reason,
@@ -23,18 +24,29 @@ import { SessionRoots } from '@platform/rootedFs';
 import type { StateReadFailed } from '@shared/config/settings';
 import {
   agentName,
+  programOf,
   type ResumeBlocked,
   type AgentConfig,
 } from '@shared/schemas';
+import { ToolRegistry } from '@tools/toolTable';
 
 /** What blocks resuming a run of `config` here, or null when nothing does. */
 export const resumeBlocker = Effect.fn('resumeBlocker')(function* (
-  config: Pick<AgentConfig, 'agent' | 'agentSource'>,
+  config: AgentConfig,
 ): Effect.fn.Return<
   ResumeBlocked | null,
   AgentCatalogLoadError | StateReadFailed,
-  AgentCatalog | AgentCatalogServices | FileSystem.FileSystem | SessionRoots
+  | AgentCatalog
+  | AgentCatalogServices
+  | FileSystem.FileSystem
+  | SessionRoots
+  | ToolRegistry
 > {
+  // A program's run is its program: one no plugin registers here (another
+  // build's, or a plugin this process does not list) waits for it.
+  const program = programOf(config);
+  if (program !== null && !(yield* ToolRegistry).programs.has(program))
+    return { kind: 'blocked', blocker: 'agentMissing', name: program };
   if (config.agentSource === 'inline') return null;
   const roots = yield* SessionRoots;
   // The launch's own resolution: the settled catalog, rescanned once on a

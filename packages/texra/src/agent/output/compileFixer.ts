@@ -130,6 +130,9 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
     return {
       ...savedTaskConfig,
       agent: 'latexFixer',
+      // The catalog's latexFixer, not the persona the program's run carried.
+      agentSource: null,
+      persona: null,
       model,
       instruction: buildCompileFixerQuestion(
         compileFailures,

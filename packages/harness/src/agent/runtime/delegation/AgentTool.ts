@@ -40,6 +40,8 @@ import {
   SessionViewAccess,
 } from '@shared/session/runHistory';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
+import { readDisabledTools } from '@tools/plugins';
+import { ToolRegistry } from '@tools/toolTable';
 import { defineTool, type DefinedTool } from '@tools/core/definition';
 import { errorResult, executed } from '@tools/core/result';
 import { sha256 } from '@utils/core/idHash';
@@ -278,6 +280,18 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       programLaunch(program.name, program.args, launch.files),
     );
     if (Result.isFailure(known)) return errorResult(known.failure.message);
+    // A run that reads the plugin switches starts no program of a plugin
+    // switched off; a program's own run reads none.
+    if (programOf(run.config) === null) {
+      const owner = [...(yield* ToolRegistry).entries.values()].find(
+        ({ programs = {} }) => Object.hasOwn(programs, program.name),
+      );
+      const off = yield* readDisabledTools(call.env.roots.globalState);
+      if (owner !== undefined && off.has(owner.id))
+        return errorResult(
+          `The program '${program.name}' belongs to the ${owner.id} plugin, which is off.`,
+        );
+    }
   }
   // A chat's files are the media on its prompt; a program names its four
   // lists.

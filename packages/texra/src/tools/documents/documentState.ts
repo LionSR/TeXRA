@@ -12,7 +12,7 @@
  * request with the child's reply to it, then this revision's request with
  * the compile failures that rejected the last one.
  */
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, ScopedRef } from 'effect';
 
@@ -200,6 +200,14 @@ const readTemplates = Effect.fn('documents.readTemplates')(function* (
         return yield* Effect.fail(
           new ToolError(
             `This host ships no document templates, so '${name}' cannot be read.`,
+          ),
+        );
+      // A template is one of the shipped files, by its name: a path would
+      // read outside their directory.
+      if (basename(name) !== name || name === '..')
+        return yield* Effect.fail(
+          new ToolError(
+            `'${name}' is not a template's file name: name one of the shipped templates, with no directory.`,
           ),
         );
       const path = join(directory, name);
