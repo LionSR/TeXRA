@@ -84,6 +84,11 @@ model encodes "output withheld" as `showOutput`, `output?` and
 with it: once the card carries a typed result, `toolUse` has no reader the
 model cannot serve.
 
+Landed 2026-11-16: `ToolRow` carries `log` (the `ToolCallLog`) and `model`;
+the readers that needed the stated texts read them from the log
+(`toolCallTexts`), and the model's output is one `ToolRowOutput` union
+(`shown`, `empty`, or `withheld` with its reason and text).
+
 ## 7. Smaller, each a few lines
 
 - `RunRows.parent` repeats `start.parent`

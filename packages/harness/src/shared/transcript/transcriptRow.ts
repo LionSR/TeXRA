@@ -18,7 +18,6 @@ import {
   type MediaAttachmentKind,
   type LogLevel,
   type MessageType,
-  type NormalizedToolUse,
   type ResponseCut,
   type ToolCallLog,
   type ScriptDeliverySummary,
@@ -146,10 +145,10 @@ export interface ErrorRow extends TranscriptRowBase {
 
 export interface ToolRow extends TranscriptRowBase {
   readonly kind: 'tool';
-  readonly toolUse: NormalizedToolUse;
+  /** What a host paints for the call, live output included. */
   readonly model: ToolRowModel;
-  /** The decoded durable payload the row was built from, without live
-   *  output: what a conversation export formats. */
+  /** The card the row was built from, without live output: what a
+   *  conversation export formats. */
   readonly log: ToolCallLog;
   /** A script's call's section, as its card's `tool.start` names it. */
   readonly section?: string;
@@ -289,8 +288,8 @@ export function isFinalRow(row: TranscriptRow, hasLaterRow: boolean): boolean {
       return !row.streaming && hasLaterRow;
     case 'tool':
       return (
-        row.toolUse.status === TOOL_CALL_STATUS.COMPLETED ||
-        row.toolUse.status === TOOL_CALL_STATUS.FAILED
+        row.model.status === TOOL_CALL_STATUS.COMPLETED ||
+        row.model.status === TOOL_CALL_STATUS.FAILED
       );
     case 'compactionActivity':
       return row.block.finalized;

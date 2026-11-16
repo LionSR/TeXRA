@@ -29,6 +29,7 @@ import {
   type SessionView,
 } from '@shared/session/sessionView';
 import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
+import { toolCallTexts } from '@shared/toolUse';
 import { formatScriptCallFiles } from '@shared/transcript/scriptCall';
 import { getBasename } from '@utils/core/pathBasics';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
@@ -156,7 +157,7 @@ function statusOf(
   interrupted: boolean,
 ): ScriptCallStatus {
   const { result } = row.log;
-  switch (row.toolUse.status) {
+  switch (row.model.status) {
     case TOOL_CALL_STATUS.COMPLETED:
       return result?.status === 'executed' && result.reusedFrom !== undefined
         ? 'reused'
@@ -182,8 +183,9 @@ function callView(
   run: RunView,
   view: Pick<SessionView, 'runs' | 'requests'>,
 ): ScriptCallView {
-  const agent = CHILD_TOOLS.has(row.toolUse.toolName);
-  const input = Predicate.isObject(row.toolUse.input) ? row.toolUse.input : {};
+  const toolName = row.log.toolName.trim();
+  const agent = CHILD_TOOLS.has(toolName);
+  const input = Predicate.isObject(row.log.input) ? row.log.input : {};
   // The newest child this card launched: a re-run attempt launches its own.
   const child = run.childIds
     .map((id) => view.runs.get(id))
@@ -219,16 +221,17 @@ function callView(
       : undefined,
   ].filter(Predicate.isNotUndefined);
   const label = agent
-    ? (stringOf(input.label) ?? nameOf(input) ?? row.toolUse.toolName)
+    ? (stringOf(input.label) ?? nameOf(input) ?? toolName)
     : [row.model.headerLabel, row.model.headerPreview]
         .filter((part) => part.length > 0)
         .join(' ');
   let detail: ScriptCallView['detail'];
   if (request !== undefined)
     detail = { kind: 'request', payload: request.payload };
-  else if (status === 'failed' && row.toolUse.errorText.length > 0)
-    detail = { kind: 'error', text: row.toolUse.errorText };
-  else if (status === 'not run') detail = { kind: 'notRun' };
+  else if (status === 'failed') {
+    const { errorText } = toolCallTexts(row.log);
+    if (errorText.length > 0) detail = { kind: 'error', text: errorText };
+  } else if (status === 'not run') detail = { kind: 'notRun' };
   else if (status === 'interrupted') detail = { kind: 'interrupted' };
   const answer = childAnswer(row.log.result);
   const said =
@@ -238,7 +241,7 @@ function callView(
   const summary = said == null ? undefined : firstLine(said);
   return {
     id: row.id,
-    toolName: row.toolUse.toolName,
+    toolName,
     label,
     status,
     section: row.section ?? null,

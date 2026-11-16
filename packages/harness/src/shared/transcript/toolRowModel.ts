@@ -146,17 +146,27 @@ export type ToolSection =
 // Model
 // ---------------------------------------------------------------------------
 
-/**
- * Why the generic output block carries nothing for this call. Absent when the
- * output is shown.
- */
+/** Why the generic output block withholds the output a call has. */
 export type ToolOutputSuppression =
-  | 'empty'
   | 'duplicate-of-header'
   | 'duplicate-of-error'
   | 'rendered-by-sections'
   | 'file-link'
   | 'trivial-write';
+
+/**
+ * A call's output as the generic output block carries it: shown, absent, or
+ * withheld because the row already says it (`reason`). A withheld output
+ * keeps its untruncated text, which a full transcript may print.
+ */
+export type ToolRowOutput =
+  | { readonly kind: 'shown'; readonly text: TranscriptText }
+  | { readonly kind: 'empty' }
+  | {
+      readonly kind: 'withheld';
+      readonly reason: ToolOutputSuppression;
+      readonly text: TranscriptText;
+    };
 
 export interface ToolRowModel {
   /** Tool name as a user reads it (`MCP fs/read`, `Multi-agent workflow`). */
@@ -165,14 +175,11 @@ export interface ToolRowModel {
    *  call says nothing beyond its name. Hosts cut it to their own width. */
   readonly headerPreview: string;
   readonly sections: readonly ToolSection[];
-  /** Untruncated tool output; present only when {@link showOutput}. */
-  readonly output?: TranscriptText;
+  readonly output: ToolRowOutput;
   /** Untruncated error text. Named `preview` because hosts cut it. */
   readonly errorPreview?: TranscriptText;
   /** The instruction a user typed when rejecting or redirecting the call. */
   readonly userInstruction?: TranscriptText;
-  readonly showOutput: boolean;
-  readonly outputSuppression?: ToolOutputSuppression;
   /** A completed shell or MCP call that printed nothing: "it ran and printed
    *  nothing" is a result for a call whose output is the point. */
   readonly showsNoOutputMarker: boolean;
@@ -251,10 +258,10 @@ function toolHeaderPreview(
 // ---------------------------------------------------------------------------
 
 /**
- * Tool output is SHOWN. It is withheld from the generic output block only
- * when that block would repeat something the row already says:
+ * Tool output is SHOWN, unless there is none (`empty`). It is withheld from
+ * the generic output block only when that block would repeat something the
+ * row already says:
  *
- *  - `empty`                — there is no output.
  *  - `duplicate-of-header`  — the output is exactly the header preview.
  *  - `duplicate-of-error`   — the output is exactly the error text.
  *  - `rendered-by-sections` — the matched section builder already carries it:
@@ -273,27 +280,32 @@ function toolHeaderPreview(
  * "hide unless bash or MCP" allowlist is gone: terminal economy is a paint-
  * time head/tail elision, never a decision to drop the data.
  */
-function outputSuppression(
-  normalized: NormalizedToolUse,
+function rowOutput(
+  { outputText, errorText }: NormalizedToolUse,
   headerPreview: string,
   carriesOutput: boolean,
   fileLinkKind: 'read' | 'write' | undefined,
-): ToolOutputSuppression | undefined {
-  const { outputText, errorText } = normalized;
-  if (!outputText) return 'empty';
+): ToolRowOutput {
+  if (!outputText) return { kind: 'empty' };
+  const text = transcriptText(outputText);
+  const withheld = (reason: ToolOutputSuppression): ToolRowOutput => ({
+    kind: 'withheld',
+    reason,
+    text,
+  });
   const collapsed = collapseWhitespace(outputText);
   if (collapsed && collapsed === collapseWhitespace(headerPreview)) {
-    return 'duplicate-of-header';
+    return withheld('duplicate-of-header');
   }
   if (collapsed && collapsed === collapseWhitespace(errorText)) {
-    return 'duplicate-of-error';
+    return withheld('duplicate-of-error');
   }
-  if (carriesOutput) return 'rendered-by-sections';
-  if (fileLinkKind === 'read') return 'file-link';
+  if (carriesOutput) return withheld('rendered-by-sections');
+  if (fileLinkKind === 'read') return withheld('file-link');
   if (fileLinkKind === 'write' && outputText.trim() === TRIVIAL_WRITE_OUTPUT) {
-    return 'trivial-write';
+    return withheld('trivial-write');
   }
-  return undefined;
+  return { kind: 'shown', text };
 }
 
 // ---------------------------------------------------------------------------
@@ -379,16 +391,12 @@ export function toolRowModel(
           deriveToolInputPreview(normalized.toolName, normalized.input),
         ) || headerSummaryText(normalized.headerSummary)
       : headerPreview;
-  const suppression = outputSuppression(
+  const output = rowOutput(
     normalized,
     echoPreview,
     carriesOutput,
     fileLinkKind,
   );
-  const output =
-    suppression === undefined
-      ? transcriptText(normalized.outputText)
-      : undefined;
   // A user-feedback row shows the instruction, not the tool's error text: the
   // "error" is the user's own rejection.
   const errorPreview =
@@ -407,13 +415,11 @@ export function toolRowModel(
     headerLabel: card?.title ?? displayToolName(normalized.toolName),
     headerPreview,
     sections,
-    ...(output ? { output } : {}),
+    output,
     ...(errorPreview ? { errorPreview } : {}),
     ...(userInstruction ? { userInstruction } : {}),
-    showOutput: suppression === undefined,
-    ...(suppression ? { outputSuppression: suppression } : {}),
     showsNoOutputMarker:
-      suppression === 'empty' &&
+      output.kind === 'empty' &&
       normalized.status === TOOL_CALL_STATUS.COMPLETED &&
       (toolDisplayKind(normalized.toolName) === 'bash' ||
         isMcpToolName(normalized.toolName)),

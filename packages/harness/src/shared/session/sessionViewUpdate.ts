@@ -46,6 +46,7 @@ import { getModelLabel } from '@shared/model/modelLabel';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
 import { followUpDisplay } from '@shared/subagentFollowup';
+import { toolCallTexts } from '@shared/toolUse';
 import { isFinalRow, rowHeadline } from '../transcript/transcriptRow';
 import {
   applyRunRow,
@@ -551,7 +552,8 @@ function operationalLatestLine(
     const row = rows[index];
     if (row.kind === 'tool') {
       const line =
-        nonEmpty(row.toolUse.headerSummary) ?? nonEmpty(row.model.headerLabel);
+        nonEmpty(toolCallTexts(row.log).headerSummary) ??
+        nonEmpty(row.model.headerLabel);
       if (line) return line;
       continue;
     }

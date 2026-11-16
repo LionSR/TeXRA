@@ -199,13 +199,11 @@ export function toolRow(
 ): ToolRow {
   const { result: _result, ...stated } = log;
   const shown: ToolCallLog = output === undefined ? log : { ...stated, output };
-  const toolUse = normalizeToolUse(shown);
   return {
     ...base,
     ...call,
     kind: 'tool',
-    toolUse,
-    model: toolRowModel(toolUse, {
+    model: toolRowModel(normalizeToolUse(shown), {
       ...(runLabels ? { runLabels } : {}),
       parsedOutput:
         shown.result === undefined ? shown.output : resultFields(shown.result),
