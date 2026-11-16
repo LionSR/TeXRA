@@ -832,7 +832,9 @@ const SCENARIOS = [
     },
     keys: ['/model', '\r', '\r'],
     frame: 'viewport',
-    expect: ['Harness model selected. Future turns:'],
+    // The pick reaches `/model`'s own handler, which answers for the
+    // harness's stored root.
+    expect: ['Resume the task to switch its model.'],
     unexpect: [
       'Finish the active response before switching models.',
       'Platform not initialized',
@@ -850,7 +852,9 @@ const SCENARIOS = [
     keys: ['/model', '\r', '21'],
     frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
-    expect: ['Harness model selected. Future turns:'],
+    // The pick reaches `/model`'s own handler, which answers for the
+    // harness's stored root.
+    expect: ['Resume the task to switch its model.'],
     unexpect: [
       'Finish the active response before switching models.',
       'Platform not initialized',
@@ -1163,7 +1167,9 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/login', '\r', '1'],
     frame: 'viewport',
-    expect: ['chatgpt preference set to on.'],
+    // The pick reaches the real account action: turning the subscription
+    // on starts its sign-in.
+    expect: ['Updating model access'],
   },
   {
     name: 'api-form-kimi-hotkey',
