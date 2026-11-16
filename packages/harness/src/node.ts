@@ -29,7 +29,7 @@
 export {
   nodePlatform,
   type NodePlatformOptions,
-} from '@platform/defaults/sdkPlatform';
+} from '@platform/defaults/nodePlatform';
 
 // The Node building blocks `nodePlatform` is made of, for a host that
 // composes its own platform: workspace roots over Node, the Node services a
@@ -40,7 +40,7 @@ export {
   openNodeWorkspaceRoots,
   type NodeWorkspaceRootsInit,
 } from '@platform/defaults/nodeHost';
-export { nodePlatformServices } from '@platform/defaults/nodePlatform';
+export { nodePlatformServices } from '@platform/defaults/nodeServices';
 // The global root's SQLite handle, and the bound its input history keeps. The project stores stay beneath the session composition.
 export { GlobalDatabase, INPUT_HISTORY_LIMIT } from '@shared/session/database';
 export {

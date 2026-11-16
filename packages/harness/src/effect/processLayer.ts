@@ -30,7 +30,7 @@ import {
   type ProcessServicesOptions,
 } from '@controllers/session/sessionLayer';
 import { installProcessHttpDispatcher } from '@platform/defaults/longRunningModelTransport';
-import { nodePlatformServices } from '@platform/defaults/nodePlatform';
+import { nodePlatformServices } from '@platform/defaults/nodeServices';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalValues } from '@platform/processRuntime';

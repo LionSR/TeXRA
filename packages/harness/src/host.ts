@@ -41,7 +41,7 @@ export type {
 export type { ProcessLayerOptions } from './effect/processLayer.js';
 export type { ProcessServicesOptions } from '@controllers/session/sessionLayer';
 // A project's `.env` over the process environment, for a one-project host.
-export { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
+export { workspaceEnvironmentLayer } from '@platform/defaults/nodeServices';
 export {
   withProcessServices,
   type ProcessRuntime,
