@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
   like every other command, and warns about an invalid value. SDK: new
   `APPROVAL_POLICY_ENV` in `@texra-ai/harness/node`.
 
+- **A stopped subagent takes your message.** The composer shows on a
+  stopped or finished agent another run launched, as it does on one you
+  started; the message resumes it for one cycle and its launcher gets the
+  report. SDK: `RunInbox.send` takes only the item, and
+  `RunInboxSendOptions` is gone from `@texra-ai/harness/plugins`.
+
 - **SDK: a store an earlier build wrote is refused, never moved aside.**
   Opening a session store stamped with another build's schema fails and
   changes nothing in the file; the error says to move it away. Only a

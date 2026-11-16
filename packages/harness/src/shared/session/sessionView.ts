@@ -255,15 +255,16 @@ export const isUnreadable = (run: Pick<ReadRunView, 'statusNotice'>): boolean =>
  * Whether a run takes a follow-up at all, the one rule every host reads (it
  * decides whether the composer shows). A run launched taking none
  * (`takesFollowUps`) and a run whose rows this build cannot read take none;
- * a run still going or waiting takes one, as does a stopped root agent with
- * saved steps, which a resume continues from its history.
+ * a run still going or waiting takes one, as does a stopped agent with
+ * saved steps, which a resume continues from its history, whoever launched
+ * it: a run a run launched reports to its launcher when the resumed cycle
+ * ends.
  */
 export function acceptsFollowUp(run: ReadRunView): boolean {
   if (!run.takesFollowUps || isUnreadable(run)) return false;
   if (run.holder === 'here' && run.position !== 'ready') return true;
   return (
     run.identity.kind === 'agent' &&
-    run.parentId === null &&
     !run.recipe &&
     (run.turn !== null || run.forkPoint !== null)
   );
