@@ -82,13 +82,11 @@ interface CompactionActivityBlock {
   readonly startPosition: number;
   readonly startedAt: number;
   readonly finishedAt?: number;
-  /** What the compaction freed, from the `compaction` context-management
-   *  entry the run writes just before the activity completes. */
-  readonly freed?: {
-    readonly tokens: number;
-    readonly utilizationBefore: number;
-    readonly utilizationAfter: number;
-  };
+  /** What the compaction freed, from its `completed` row. */
+  readonly freed?: Extract<
+    CompactionActivityData,
+    { state: 'completed' }
+  >['freed'];
 }
 ```
 

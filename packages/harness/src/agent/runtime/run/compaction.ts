@@ -12,10 +12,7 @@
 import { Cause, Effect, Exit } from 'effect';
 
 import type { AgentTrace } from '@agent/trace/AgentTrace';
-import {
-  logContextManagementEvent,
-  startCompactionActivity,
-} from '@agent/trace/traceLogs';
+import { startCompactionActivity } from '@agent/trace/traceLogs';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { Settings, type SettingsStores } from '@shared/config/settings';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
@@ -176,10 +173,10 @@ const summarize = Effect.fn('compaction.summarize')(function* (
   );
   if (Exit.isFailure(summarized)) {
     if (Cause.hasInterrupts(summarized.cause)) {
-      activity.finish('cancelled');
+      activity.finish({ state: 'cancelled' });
       return yield* Effect.interrupt;
     }
-    activity.finish('failed');
+    activity.finish({ state: 'failed' });
     logger.warn(
       `Compaction failed, continuing with original messages: ${toErrorMessage(summarized.cause)}`,
       { data: Cause.squash(summarized.cause) },
@@ -190,7 +187,7 @@ const summarize = Effect.fn('compaction.summarize')(function* (
   const summary = turnText(summarized.value.turn).trim();
   if (!summary) {
     logger.warn('Compaction returned empty summary, skipping');
-    activity.finish('skipped');
+    activity.finish({ state: 'skipped' });
     return null;
   }
   return {
@@ -237,24 +234,14 @@ const land = Effect.fn('compaction.land')(function* (
   const tokensBefore = contextTokens(state);
   const tokensAfter = Math.max(1, estimateMessageTokens(compacted.messages));
   const { contextWindow } = summary;
-  const reductionPercent =
-    tokensBefore > 0
-      ? (((tokensBefore - tokensAfter) / tokensBefore) * 100).toFixed(1)
-      : '0';
-  logContextManagementEvent(
-    input.logger,
-    `Compacted conversation: ${tokensBefore.toLocaleString()} → ~${tokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
-    {
-      action: 'compaction',
-      tokensBefore,
-      tokensAfter,
-      contextWindow,
+  summary.activity.finish({
+    state: 'completed',
+    freed: {
+      tokens: tokensBefore - tokensAfter,
       utilizationBefore: roundedUtilizationPercent(tokensBefore, contextWindow),
       utilizationAfter: roundedUtilizationPercent(tokensAfter, contextWindow),
-      details: `${summary.to} messages summarized`,
     },
-  );
-  summary.activity.finish('completed');
+  });
   return compacted;
 });
 

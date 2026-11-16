@@ -352,8 +352,7 @@ export function compactionActivityRow(
     timestamp: block.startedAt,
     level: 'info',
     block,
-    // `Context compacted · freed 41k tokens (78% → 22%)`: the one row
-    // carries the figures its stats entry used to repeat as a second row.
+    // `Context compacted · freed 41k tokens (78% → 22%)`.
     label: joinFacts([
       COMPACTION_ACTIVITY_LABEL[block.status],
       block.freed &&

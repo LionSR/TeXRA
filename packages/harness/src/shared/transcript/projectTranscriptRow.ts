@@ -275,9 +275,6 @@ export function logPayloadRow(
 
     case MESSAGE_TYPES.CONTEXT_MANAGEMENT: {
       const data = payload.data;
-      // A client compaction is one row, its activity, which carries these
-      // figures (`compactionActivityRow`); a second row would repeat it.
-      if (data.action === 'compaction') return undefined;
       const reduced = data.action === 'max_tokens_reduced';
       if (
         reduced &&
