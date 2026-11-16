@@ -338,7 +338,7 @@ export interface ScriptedRunInit {
   readonly bound?: TestBinding;
   /** A child run: its parent owns continuation across its turns. */
   readonly parentRunId?: RunId | null;
-  /** Headless: the run stops after one turn instead of parking for input. */
+  /** Headless: the run stops after one turn instead of waiting for input. */
   readonly stopAfterCycle?: boolean;
   /** The terminal structured-output tool, when the run has one. */
   readonly finalToolName?: string | null;

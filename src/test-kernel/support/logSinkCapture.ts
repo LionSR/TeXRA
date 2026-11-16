@@ -19,7 +19,7 @@ interface CapturedLog {
   readonly annotations: LogEntry['annotations'];
 }
 
-export interface LogCapture {
+interface LogCapture {
   /** Every entry written since the capture was installed, in order. */
   readonly entries: () => readonly CapturedLog[];
   /** Entries at `level`, optionally narrowed to one channel. */
