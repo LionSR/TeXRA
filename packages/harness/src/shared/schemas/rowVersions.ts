@@ -139,7 +139,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // block (an earlier build's team and output fields would be dropped).
   // v8: a plugin's script is a `program` named by its registration, with
   // its `args`; no `recipe` kind with its source, block and options.
-  'run.config': { version: 8, listing: 'own' },
+  // v9: no `editedFile`: the merge program reads it from its `args` (an
+  // earlier build would resume a merge without the edited file).
+  'run.config': { version: 9, listing: 'own' },
   // v2: no `shutdown` reason: a process that exits writes nothing for its
   // runs (an earlier build's shutdown stop would fail as damaged).
   'run.stop': { version: 2, listing: 'own' },
