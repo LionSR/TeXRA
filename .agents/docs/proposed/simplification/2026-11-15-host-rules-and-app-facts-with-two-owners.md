@@ -189,3 +189,46 @@ In order of size. Each needs the decision named.
   banner's check (`packages/extension/src/progressView/checkCoreDependencies.ts`)
   is VS Code-free code living in the extension, which belongs in the app
   once its one importer, the progress view provider, can be edited.
+
+## Landed in the 2026-11-16 sweep
+
+- **Host rule 5** (run verbs): `openGuiWindow` returns the settings body's
+  `selectLauncherAgent`, `revealRun` and `runLabel` over the window's own
+  bridge and session (`GuiWindowSettingsRuns`), and each host binds them;
+  the extension's three `ProgressViewProvider` methods and the desktop's
+  `ProjectBindings.active` are gone. The desktop read the shown project
+  (`projects.active()`), not the one its settings belong to, so a settings
+  request handled while the window switched projects (between the
+  registry's change and the surface's re-attach) looked the run up in the
+  other project. A host's "bring the run view up" is the window host's
+  `runs.showRunView`.
+- **App fact 5, the banner's check**: `missingDependencyTools` in
+  `packages/texra/src/latex/latexToolchain.ts`, read by the host snapshot
+  itself, so `missingTools` is no longer a host option, and its "Recheck"
+  (`recheckDependencies`) is the shared body's, not a host binding. Whether
+  a host shows the banner is a row of its `shows` table beside the
+  credential banner: VS Code shows it, the desktop does not. Showing it on
+  the desktop is left for a decision: the banner outranks the "tasks run in
+  this window only" notice (`SessionBanners`), so on a machine without
+  latexindent, Perl, Ghostscript or an image tool it would hide that
+  notice, as the desktop E2E `serviceClient.spec.ts` showed. The LaTeX
+  status's seven `*Path` fields stay open.
+- **App fact 6** (agent CLI models): `isClaudeCodeModel` and `isCodexModel`
+  ask llm's `isUnservedModel`, so an OpenRouter-only model leaves the Claude
+  Code and Codex pickers. No listed model changes today: the registry's
+  OpenRouter-only OpenAI models have no Codex entry and no Anthropic model
+  is OpenRouter-only.
+- **Host rule 1, "decided a second time"**: not a finding. In
+  `openProjectSession` the second test is the first one's other branch,
+  restated so TypeScript narrows `reached`; the service-or-local choice has
+  one owner there.
+- **App fact 7** (key pages): left open. The three toggle links are chosen
+  per toggle with their own labels (Moonshot's and MiniMax's point at the
+  international platform, GLM's at the China one, against Moonshot's and
+  GLM's China default), so they are not "the key page the toggle picks".
+  `settingSurfaces.ts` cannot read `KEY_PAGES`: `texraSettings.ts` imports
+  it and `providerPresentation.ts` imports `texraSettings.ts`, a cycle that
+  breaks at module load when `providerPresentation.ts` is evaluated first.
+  Either `KEY_PAGES` moves below both (a leaf module, or llm beside
+  `providerDisplayName`), or the link follows the toggle, which changes its
+  copy.

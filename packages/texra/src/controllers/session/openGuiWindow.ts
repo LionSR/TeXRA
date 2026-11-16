@@ -111,6 +111,7 @@ import {
   setOnboardingDeclined,
 } from '@texra/controllers/onboarding/onboardingFunnel';
 import type { WindowSetupLaunch } from '@texra/controllers/onboarding/setupLaunch';
+import type { SettingsHostBindings } from '@texra/controllers/settingsView/settingsHostBindings';
 import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
 
 /** A window's runs: its project's session, wherever its runs run (here,
@@ -188,7 +189,6 @@ export interface SharedHostCommandBindings {
   setApiKey(provider?: ApiKeyProviderId): HostVerb<void>;
   /** Open a web address in the browser. */
   openExternal(url: string): HostVerb<void>;
-  readonly recheckDependencies: HostVerb<void>;
   readonly openInstallGuide: HostVerb<void>;
   /** The onboarding card's verbs a host performs. "Set an API key" is
    *  {@link SharedHostCommandBindings.setApiKey}, the same verb the banner
@@ -225,7 +225,14 @@ export interface GuiWindowHost {
    *  service. Announcing the files a service task wrote is the same on
    *  every host, so the window's opening adds it. */
   readonly window: Omit<WindowHost, 'filesWritten' | 'emit'>;
-  readonly runs: Pick<HostRunActionPorts, 'openFinalOutput' | 'revealProgress'>;
+  readonly runs: Pick<
+    HostRunActionPorts,
+    'openFinalOutput' | 'revealProgress'
+  > & {
+    /** Bring the window's run view into view, so a selection reaches the
+     *  surface that brings up. */
+    showRunView(): Effect.Effect<void, Error>;
+  };
   readonly files: Omit<ProgressDocumentTaskFileActionsHost, 'showInfo'>;
   /** The transcript export's format picker and opener. */
   readonly export: TranscriptExportHost;
@@ -251,6 +258,13 @@ interface GuiWindowPorts {
     parts: GuiWindowParts,
   ): Effect.Effect<GuiWindowHost, never, Scope.Scope | ProcessServices>;
 }
+
+/** The settings body's verbs on a window's runs: its own session and
+ *  launcher, never those of another project its host happens to show. */
+export type GuiWindowSettingsRuns = Pick<
+  SettingsHostBindings,
+  'selectLauncherAgent' | 'revealRun' | 'runLabel'
+>;
 
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
 
@@ -664,7 +678,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           }
           return done;
         case 'recheckDependencies':
-          yield* bindings.recheckDependencies;
+          yield* snapshot.refreshHostBanners;
           return done;
         case 'openInstallGuide':
           yield* bindings.openInstallGuide;
@@ -730,5 +744,32 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     );
   }
 
-  return { bridge, snapshot, present, runValidated: runActions.runValidated };
+  const settingsRuns: GuiWindowSettingsRuns = {
+    selectLauncherAgent: (agent) =>
+      Effect.sync(() =>
+        bridge.surfaceAction({ kind: 'launch', patch: { agent } }),
+      ),
+    revealRun: (runId) =>
+      session.view.current().runs.has(runId)
+        ? host.runs
+            .showRunView()
+            .pipe(
+              Effect.andThen(
+                Effect.sync(() =>
+                  bridge.surfaceAction({ kind: 'select', runId }),
+                ),
+              ),
+              Effect.as('revealed' as const),
+            )
+        : Effect.succeed('missing' as const),
+    runLabel: (runId) => session.view.current().runs.get(runId)?.label,
+  };
+
+  return {
+    bridge,
+    snapshot,
+    present,
+    runValidated: runActions.runValidated,
+    settingsRuns,
+  };
 });
