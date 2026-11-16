@@ -26,7 +26,6 @@ import {
   qualifyAggregateId,
   type AggregateId,
 } from './identifiers';
-import { JsonValueSchema } from './jsonValue';
 import { listingTypeOf } from './rowVersions';
 import {
   RunEndRowSchema,
@@ -226,7 +225,7 @@ export const PluginFactDraftSchema = durable('plugin.fact', {
   /** The arm's version `value` was written at: a plugin evolves its
    *  kinds without a core row version. */
   version: Schema.Int.check(Schema.isGreaterThan(0)),
-  value: JsonValueSchema,
+  value: Schema.Json,
   parent: Schema.NullOr(RunIdSchema),
 }).mapFields(Struct.assign({ aggregateId: AggregateIdSchema }));
 

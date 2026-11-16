@@ -16,7 +16,6 @@ import {
 } from '@agent/core/tools/toolSchema';
 import {
   ToolError,
-  JsonValueSchema,
   STRUCTURED_OUTPUT_TOOL_NAME,
   type ToolResult,
 } from '@shared/schemas';
@@ -213,7 +212,7 @@ export function buildTerminalTool(
           new ToolError('submit_output can only be accepted once per run.'),
         );
       }
-      const value = yield* Schema.decodeUnknownEffect(JsonValueSchema)(input);
+      const value = yield* Schema.decodeUnknownEffect(Schema.Json)(input);
       return {
         status: 'executed',
         endTurn: true,

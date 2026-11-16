@@ -1186,22 +1186,6 @@ function joinFacts(
 ): string
 ```
 
-## JsonValue
-
-```ts
-type JsonValue = typeof JsonValueSchema.Type;
-```
-
-## JsonValueSchema
-
-Any JSON-serializable value. Shared home for `Schema.Json` so structured tool
-output, script results, and agent run results validate the
-same contract instead of re-declaring it per module.
-
-```ts
-const JsonValueSchema: Codec<Json, Json, never, never>
-```
-
 ## KIMI_CODE_PREFER_SETTING
 
 ```ts

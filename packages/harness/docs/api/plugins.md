@@ -689,7 +689,7 @@ interface FactKind {
    *  editor's own write path: every process that folds the run announces
    *  them (`workspaceFilesWritten`), a window hearing a service task's
    *  write as it hears its own. */
-  readonly writes?: (value: JsonValue) => readonly string[];
+  readonly writes?: (value: Schema.Json) => readonly string[];
 }
 ```
 
@@ -1319,7 +1319,7 @@ it: the row's decoded value and the run it is parented to, if any.
 
 ```ts
 interface PluginRow {
-  readonly value: JsonValue;
+  readonly value: Schema.Json;
   readonly parent: RunId | null;
 }
 ```

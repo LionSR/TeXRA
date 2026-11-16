@@ -73,7 +73,6 @@ import {
   TOOL_CALL_STATUS,
   RunIdSchema,
   toJsonValue,
-  type JsonValue,
   type LogLevel,
   type MessageType,
   type AgentProposalRequest,
@@ -728,7 +727,7 @@ interface HarnessLogRow {
   readonly timestamp: number;
   readonly messageType: MessageType;
   readonly text?: string;
-  readonly data?: JsonValue;
+  readonly data?: Schema.Json;
   readonly groupId?: string;
 }
 

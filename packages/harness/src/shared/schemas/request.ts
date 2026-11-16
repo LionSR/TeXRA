@@ -23,7 +23,6 @@ import {
   type ApprovalBypassKind,
 } from '@shared/approvalBypassKind';
 import { RunIdSchema } from './identifiers';
-import { JsonValueSchema } from './jsonValue';
 import {
   AgentProposalRequestSchema,
   BashRequestSchema,
@@ -48,7 +47,7 @@ export const RequestDecisionSchema = Schema.Union([
     contextFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
     mediaFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
     options: Schema.optional(
-      Schema.NullOr(Schema.Record(Schema.String, JsonValueSchema)),
+      Schema.NullOr(Schema.Record(Schema.String, Schema.Json)),
     ),
     content: Schema.optional(Schema.NullOr(Schema.String)),
   }),
@@ -128,7 +127,7 @@ const PluginRequestSchema = Schema.Struct({
   answers: Schema.Array(AnswerActionSchema),
   data: Schema.StructWithRest(
     Schema.Struct({ requestId: Schema.String, runId: RunIdSchema }),
-    [Schema.Record(Schema.String, JsonValueSchema)],
+    [Schema.Record(Schema.String, Schema.Json)],
   ),
 });
 /** A request a plugin opens (`RequestPayload`'s plugin case). */

@@ -11,8 +11,6 @@
  */
 import { Schema } from 'effect';
 
-import { JsonValueSchema, type JsonValue } from '@shared/schemas';
-
 /**
  * One family of current values: its stored name and the schema its value
  * decodes with. A change that answers `undefined` deletes the row.
@@ -23,16 +21,16 @@ export interface ValueFamily<T> {
 }
 
 /** The process's settings store, keyed by the setting key. */
-export const APP_STATE: ValueFamily<JsonValue> = {
+export const APP_STATE: ValueFamily<Schema.Json> = {
   name: 'app-state',
-  schema: JsonValueSchema,
+  schema: Schema.Json,
 };
 
 /** The settings every checkout of one repository shares, keyed by the
  *  repository root and the setting key. */
-export const REPO_STATE: ValueFamily<JsonValue> = {
+export const REPO_STATE: ValueFamily<Schema.Json> = {
   name: 'repo-state',
-  schema: JsonValueSchema,
+  schema: Schema.Json,
 };
 
 /**

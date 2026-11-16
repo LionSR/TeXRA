@@ -42,7 +42,6 @@ import { LaunchRefused, type RunRecords } from '@texra-ai/harness';
 import {
   AgentConfigSchema,
   AgentRunListingEntrySchema,
-  JsonValueSchema,
   ResumeRefusalSchema,
   RunEndSchema,
   RunIdSchema,
@@ -170,7 +169,7 @@ export class ProjectStateFailed extends Schema.TaggedError<ProjectStateFailed>()
  *  unset. */
 const StoredStatesSchema = Schema.Record(
   Schema.String,
-  Schema.Struct({ value: Schema.optional(JsonValueSchema) }),
+  Schema.Struct({ value: Schema.optional(Schema.Json) }),
 );
 
 /** The project a call addresses: its folder, as the client spells it. */

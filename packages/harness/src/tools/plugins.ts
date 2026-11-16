@@ -28,7 +28,6 @@ import { StateReadFailed, type StateStore } from '@shared/config/settings';
 import {
   aggregateTarget,
   qualifyAggregateId,
-  type JsonValue,
   type RunId,
   type SessionRow,
   type SessionRowDraft,
@@ -57,7 +56,7 @@ import type {
 /** One stored row of a plugin's kind, as its fact kind's transition rule reads
  *  it: the row's decoded value and the run it is parented to, if any. */
 export interface PluginRow {
-  readonly value: JsonValue;
+  readonly value: Schema.Json;
   readonly parent: RunId | null;
 }
 
@@ -98,7 +97,7 @@ export interface FactKind {
    *  editor's own write path: every process that folds the run announces
    *  them (`workspaceFilesWritten`), a window hearing a service task's
    *  write as it hears its own. */
-  readonly writes?: (value: JsonValue) => readonly string[];
+  readonly writes?: (value: Schema.Json) => readonly string[];
 }
 
 /**

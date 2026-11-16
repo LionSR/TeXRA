@@ -16,7 +16,6 @@ import {
   AnsweredBySchema,
   CommitOrdinalSchema,
   ContextStateDataSchema,
-  JsonValueSchema,
   RequestPayloadSchema,
   PluginFactDraftSchema,
   blocksCaller,
@@ -93,7 +92,7 @@ const RunViewSchema = Schema.Struct({
   agentScope: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
   /** Each plugin row kind's latest value, by `plugin/kind` (`plugin.fact`):
    *  undecoded here, read through its plugin's reader. */
-  facts: Schema.Record(FactNameSchema, JsonValueSchema),
+  facts: Schema.Record(FactNameSchema, Schema.Json),
   worktree: Schema.NullOr(WorktreeInfoSchema),
   /** Where its loop stands (`standingAfter`): `ready` before its first
    *  activation and after an end, `running` inside a turn, `waiting`

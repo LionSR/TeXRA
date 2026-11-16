@@ -5,7 +5,6 @@ import { normalizeFilePath } from '@utils/core/pathBasics';
 
 import { AgentConfigSchema } from './agentConfig';
 import { RunIdSchema } from './identifiers';
-import { JsonValueSchema } from './jsonValue';
 import { ModelFailureSchema, modelFailureMessage } from './errors';
 import { RunOutcomeSchema } from './run';
 import { RunIdentitySchema } from './runIdentity';
@@ -93,7 +92,7 @@ const RunEndOutputSchema = Schema.Struct({
   /** Value captured by the `submit_output` terminal tool, or the value a
    *  recipe's script returned (its plugin's block reads it:
    *  `AgentBlock.result`). */
-  structured: Schema.optional(JsonValueSchema),
+  structured: Schema.optional(Schema.Json),
 });
 export type RunEndOutput = typeof RunEndOutputSchema.Type;
 

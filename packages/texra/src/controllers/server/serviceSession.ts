@@ -6,11 +6,7 @@
  * listing folded here, and a watch is the service's feed, read back as the
  * fold inputs it carries.
  */
-import {
-  JsonValueSchema,
-  type RunId,
-  Rejected,
-} from '@texra-ai/harness/schemas';
+import { type RunId, Rejected } from '@texra-ai/harness/schemas';
 import {
   Cause,
   Effect,
@@ -160,9 +156,9 @@ export const serviceProjectState = (
    *  is refused here, as the local store refuses it. */
   const stored = (values: Readonly<Record<string, unknown>>) =>
     Effect.forEach(Object.entries(values), ([key, value]) => {
-      const parsed = Schema.decodeUnknownResult(
-        Schema.optional(JsonValueSchema),
-      )(value);
+      const parsed = Schema.decodeUnknownResult(Schema.optional(Schema.Json))(
+        value,
+      );
       return Result.isSuccess(parsed)
         ? Effect.succeed([key, { value: parsed.success }] as const)
         : Effect.fail(

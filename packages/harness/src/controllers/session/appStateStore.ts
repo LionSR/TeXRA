@@ -9,7 +9,6 @@ import { withLogChannel } from '@logger/effectLog';
 import { GlobalValues, StateStores } from '@platform/processRuntime';
 import { AppState, type AppStateStore } from '@platform/interfaces';
 import { StateReadFailed, StateWriteFailed } from '@shared/config/settings';
-import { JsonValueSchema, type JsonValue } from '@shared/schemas';
 import type { SettingsCatalog } from '@shared/state/stateSettings';
 import {
   DatabaseWriteFailed,
@@ -53,7 +52,7 @@ function appStateStoreFromDatabase(
     value === undefined
       ? Result.succeed(undefined)
       : Result.mapError(
-          Schema.decodeUnknownResult(JsonValueSchema)(value),
+          Schema.decodeUnknownResult(Schema.Json)(value),
           (cause) =>
             refused(
               key,
@@ -78,7 +77,7 @@ function appStateStoreFromDatabase(
         (
           current,
         ): Result.Result<
-          readonly [A] | readonly [A, Record<string, JsonValue | undefined>],
+          readonly [A] | readonly [A, Record<string, Schema.Json | undefined>],
           E | StateWriteFailed
         > => {
           const result = change(
@@ -91,7 +90,7 @@ function appStateStoreFromDatabase(
           if (result.success.length === 1)
             return Result.succeed([result.success[0]]);
           const [answer, next] = result.success;
-          const rows: Record<string, JsonValue | undefined> = {};
+          const rows: Record<string, Schema.Json | undefined> = {};
           for (const key of keys) {
             const json = encode(key, next[key]);
             if (Result.isFailure(json)) return Result.fail(json.failure);

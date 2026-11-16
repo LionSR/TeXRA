@@ -17,7 +17,6 @@
 import { Schema } from 'effect';
 
 import { ModelFailureSchema } from './errors';
-import { JsonValueSchema } from './jsonValue';
 import { Sha256Schema } from './identifiers';
 import { RunOutcomeSchema } from './run';
 import { RunInputSchema } from './runInput';
@@ -334,7 +333,7 @@ export const ScriptCallPayloadSchema = Schema.Struct({
   /** `<scriptCallId>/<seq>`. */
   callId: CallIdSchema,
   toolName: Schema.NonEmptyString,
-  input: JsonValueSchema,
+  input: Schema.Json,
   /** As a response's dispatch fact records it (`DispatchFacts.replay`). */
   replay: Schema.Literals(['safe', 'unsafe']),
   logId: Schema.NonEmptyString,
@@ -376,7 +375,7 @@ export const ToolIntentPayloadSchema = Schema.Struct({
   toolName: Schema.NonEmptyString,
   /** What the body runs on: the issued input as the call's PreToolUse hooks
    *  left it. */
-  input: JsonValueSchema,
+  input: Schema.Json,
   /** The card the tool states for that input (`ToolDefinition.card`). */
   card: Schema.optional(ToolCardSchema),
   /** A script's call: the guest's latest `section()` title when it issued

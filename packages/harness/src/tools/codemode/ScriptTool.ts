@@ -23,7 +23,6 @@ import {
   type ScriptDoor,
 } from '@agent/runtime/RunCall';
 import {
-  JsonValueSchema,
   SettledToolResultSchema,
   ToolError,
   type ToolFileAttachment,
@@ -293,7 +292,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
     );
   if (outcome._tag === 'EndedTurn') return outcome.result;
   const { value } = outcome.result;
-  const returned = Schema.decodeUnknownResult(JsonValueSchema)(value);
+  const returned = Schema.decodeUnknownResult(Schema.Json)(value);
   const log = logTail();
   const foreground =
     input.run_in_background === true
