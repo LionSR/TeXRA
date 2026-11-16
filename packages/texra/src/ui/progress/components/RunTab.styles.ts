@@ -262,8 +262,8 @@ export const runTabStyles = css`
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    min-width: 24px;
+    width: var(--control-size-s);
+    min-width: var(--control-size-s);
     height: 100%;
     color: var(--color-text-muted);
   }
