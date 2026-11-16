@@ -16,6 +16,7 @@ import {
   createWorkspaceLocation,
   withFileWriteLane,
 } from '@texra-ai/harness/host';
+import { writeFileAtomic } from '@texra-ai/harness/node';
 import {
   withLogChannel,
   WorkspaceFs,
@@ -172,12 +173,13 @@ const commitAcceptedFile = Effect.fn('commitAcceptedFile')(function* <E>(
   // meanwhile (the user's editor, a run) is not replaced on that answer.
   // The check and the write hold the file's write lane, shared with every
   // other writer that reads, decides and writes it (an approved edit, the
-  // desktop editor's save), and the write is in place, as theirs are, so a
-  // symlinked target is written where it points and keeps its mode.
+  // desktop editor's save). The replace is atomic, so a write that fails
+  // partway leaves the user's file as it was; it lands where a symlinked
+  // target points and keeps the file's mode.
   const written = yield* Effect.gen(function* () {
     if ((yield* contentOrMissing(fs, targetPath)) !== confirmedAgainst)
       return false;
-    yield* fs.writeFileString(targetPath, editedContent);
+    yield* writeFileAtomic(targetPath, new TextEncoder().encode(editedContent));
     return true;
   }).pipe(withFileWriteLane(targetPath));
   if (!written) {
