@@ -236,9 +236,9 @@ export function forcedToolChoice(
 
 /**
  * Whether the binding serves Responses over its persistent WebSocket: the
- * caller's opt-in, on OpenAI's own endpoint (the ChatGPT subscription or the
- * API; a per-model or dashboard endpoint may not speak it), and never for
- * turns that go out as background work.
+ * caller's opt-in, on OpenAI's own API endpoint (a per-model or dashboard
+ * endpoint may not speak it, and the ChatGPT plan's requests are HTTP
+ * streams), and never for turns that go out as background work.
  */
 export function servesWebSocket(
   options: Options,
@@ -248,6 +248,7 @@ export function servesWebSocket(
     configuration.protocol === 'openai-responses' &&
     options.webSocket &&
     !(options.background && backgroundCapable(configuration)) &&
+    configuration.requestDialect === 'openai' &&
     onOpenAiEndpoint(configuration)
   );
 }

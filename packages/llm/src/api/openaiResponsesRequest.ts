@@ -15,7 +15,7 @@ import { ModelError } from '../errors.js';
 import { responseInput, toolNamespaceOf } from './openaiResponsesLower.js';
 import type { ResponseOrigin } from './openaiResponsesCodec.js';
 import type { UploadCache } from './uploadCache.js';
-import type { ModelCredential, SessionToken } from '../node.js';
+import type { SessionToken } from '../node.js';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
 
 /** Resolves controls before admission; a route with no output limit
@@ -201,10 +201,6 @@ const tokenOf = (bearer: string | SessionToken) =>
       ),
     ),
   );
-
-/** The bearer a Responses credential sends. */
-export const bearerOf = (credential: ModelCredential): string | SessionToken =>
-  credential.kind === 'api-key' ? credential.apiKey : credential.accessToken;
 
 /**
  * Send `request` with `bearer`'s token. A session token the provider

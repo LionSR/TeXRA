@@ -54,70 +54,69 @@ import { assembleTurn, turnAssembly } from './assembleTurn.js';
 import {
   authorized,
   bearerHeaders,
-  bearerOf,
   openaiAbortMatch,
   openaiClient,
   prepareResponsesTurn,
   refuseAmbientHeaders,
   responseParameters,
 } from './openaiResponsesRequest.js';
-import type { ModelCredential } from '../node.js';
+import type { SessionToken } from '../node.js';
 
 /** Direct Responses operations, with no application model adapter; its
  *  uploads live in the caller's scope. */
 export const openaiResponsesModel = Effect.fn('llm.responses.model')(function* (
   config: OpenAIResponsesConfiguration,
   transport: {
-    readonly authentication: ModelCredential;
+    readonly bearer: string | SessionToken;
     readonly fetch?: typeof fetch;
   },
 ): Effect.fn.Return<Model, ModelError, Scope.Scope> {
   const origin = originOf(config);
   yield* refuseAmbientHeaders;
-  const bearer = bearerOf(transport.authentication);
+  const { bearer } = transport;
   const client = openaiClient(
     config.deployment.endpoint,
     bearer,
     transport.fetch,
   );
-  // Uploads need a files endpoint: an API-key route's. The ChatGPT plan's
-  // backend serves none.
-  const uploads =
-    transport.authentication.kind === 'api-key'
-      ? yield* filesApiUploads({
-          providerName: 'OpenAI',
-          model: origin.requestedModel,
-          request: (call) =>
-            authorized(bearer, (token) =>
-              Effect.tryPromise({
-                try: (signal) => call(signal, bearerHeaders(token)),
-                catch: (cause) =>
-                  fillModelError(openaiFailure(cause), {
-                    model: origin.requestedModel,
-                  }),
-              }),
-            ),
-          parseUploaded: decodeUploadedFile,
-          create: async (upload, signal, headers) =>
-            client.files.create(
-              {
-                file: await OpenAI.toFile(
-                  Buffer.from(upload.base64, 'base64'),
-                  upload.filename,
-                  { type: upload.mimeType },
-                ),
-                purpose: 'user_data',
-                expires_after: {
-                  anchor: 'created_at',
-                  seconds: FILE_UPLOAD_LIFETIME_SECONDS,
-                },
+  // Uploads serve the documents a turn sends, so they exist exactly where
+  // the route takes one; the ChatGPT plan's backend and the vendor routes
+  // take none.
+  const uploads = config.supportsDocumentInput
+    ? yield* filesApiUploads({
+        providerName: 'OpenAI',
+        model: origin.requestedModel,
+        request: (call) =>
+          authorized(bearer, (token) =>
+            Effect.tryPromise({
+              try: (signal) => call(signal, bearerHeaders(token)),
+              catch: (cause) =>
+                fillModelError(openaiFailure(cause), {
+                  model: origin.requestedModel,
+                }),
+            }),
+          ),
+        parseUploaded: decodeUploadedFile,
+        create: async (upload, signal, headers) =>
+          client.files.create(
+            {
+              file: await OpenAI.toFile(
+                Buffer.from(upload.base64, 'base64'),
+                upload.filename,
+                { type: upload.mimeType },
+              ),
+              purpose: 'user_data',
+              expires_after: {
+                anchor: 'created_at',
+                seconds: FILE_UPLOAD_LIFETIME_SECONDS,
               },
-              { signal, headers },
-            ),
-          remove: (fileId, signal, headers) =>
-            client.files.delete(fileId, { signal, headers }),
-        })
-      : null;
+            },
+            { signal, headers },
+          ),
+        remove: (fileId, signal, headers) =>
+          client.files.delete(fileId, { signal, headers }),
+      })
+    : null;
   const prepareTurn: Model['prepareTurn'] = (request) =>
     prepareResponsesTurn(config, origin, request, uploads, background);
 

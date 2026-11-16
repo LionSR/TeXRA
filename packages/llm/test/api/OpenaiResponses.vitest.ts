@@ -127,7 +127,7 @@ function response(frames: object[]): Response {
 }
 function modelWith(fetch: typeof globalThis.fetch, configuration = CONFIG) {
   return openaiResponsesModel(configuration, {
-    authentication: { kind: 'api-key', apiKey: 'synthetic-not-a-secret' },
+    bearer: 'synthetic-not-a-secret',
     fetch,
   });
 }

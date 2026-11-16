@@ -201,7 +201,7 @@ function bind(spec: LiveProtocol, apiKey: string): Model {
   const { configuration } = configurationFor({
     model: selected.config,
     route: { ...route, endpoint: spec.endpoint },
-    credential: { kind: 'api-key', apiKey },
+    bearer: apiKey,
     options: {
       maxOutputTokens: 2048,
       temperature: 0,
@@ -226,7 +226,7 @@ function bind(spec: LiveProtocol, apiKey: string): Model {
       return Effect.runSync(
         Scope.provide(
           openaiResponsesModel(configuration, {
-            authentication: { kind: 'api-key', apiKey },
+            bearer: apiKey,
           }),
           SUITE_SCOPE,
         ),
