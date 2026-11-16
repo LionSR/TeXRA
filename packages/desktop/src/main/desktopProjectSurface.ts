@@ -101,7 +101,7 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
             }),
           ),
         // The window's dialogs behind the host-neutral port. The renderer
-        // overlay settles a prompt it could not deliver as "no answer", so
+        // overlay answers a prompt it could not deliver with "no answer", so
         // `input` has no failure of its own; the native confirmation fails
         // once the window it anchors to is gone.
         dialogs: {

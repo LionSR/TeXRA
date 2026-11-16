@@ -1,9 +1,9 @@
 // The desktop's half of a project's window (`openGuiWindow`): every
 // capability a surface asks its host for, mapped onto the window's dialogs,
 // the preview host, the file pickers, and the project's launch path, plus
-// the arms the desktop answers its own way. Each arm answers exactly once
-// with an outcome or a request error; an arm the desktop does not perform is
-// `Rejected` with its reason, never dropped.
+// the requests the desktop answers its own way. Each request is answered
+// exactly once with an outcome or a request error; one the desktop does not
+// perform is `Rejected` with its reason, never dropped.
 
 import { Effect } from 'effect';
 import type { ProcessServices } from '@texra-ai/harness/host';
@@ -57,9 +57,9 @@ export const createDesktopHostRequests = (
   Effect.sync(() => {
     const { host } = options;
     /**
-     * Each arm answers with the program that presents its notice; the
-     * session forks it, so nothing here settles a dialog on a fiber of its
-     * own. Where the failure is reported depends on the arm: the two dialog
+     * Each notice answers with the program that presents it; the session
+     * forks it, so nothing here waits on a dialog on a fiber of its own.
+     * Where the failure is reported depends on the notice: the two dialog
      * members report their own (a dialog rejects when its window is torn
      * down beneath it, and the host binds them through `awaitOrReport`), so
      * the programs they hand back cannot fail; `openPath` fails in its own
@@ -151,9 +151,9 @@ export const createDesktopHostRequests = (
       },
     };
 
-    /** The arms this window performs its own way. A capability's failure is
-     *  named through `hostFailure`, so the failure channel is the value the
-     *  arm failed with. */
+    /** The requests this window performs its own way. A capability's failure
+     *  is named through `hostFailure`, so the failure channel is the value
+     *  the request failed with. */
     const own: OwnHostArms = {
       workspaceFile: (request) => options.workspaceFile(request.action),
     };

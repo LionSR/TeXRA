@@ -57,7 +57,7 @@ interface DesktopProjectFacts {
    *  for it, derived once from `key` and `root`. */
   readonly display: ProjectDisplay;
   readonly roots: WorkspaceRoots;
-  /** Release the session from its owner; settles once its entry has unwound. */
+  /** Release the session from its owner; finishes once its entry has unwound. */
   dispose(): Effect.Effect<void>;
 }
 
@@ -130,7 +130,7 @@ export interface DesktopProjectRegistry {
   /**
    * Close an open project: forget it for the next launch (it joins the
    * recent list), close its session in its own scope (its runs stopped and
-   * settled under the shutdown deadline), and show the most recently shown remaining
+   * finished under the shutdown deadline), and show the most recently shown remaining
    * project if it was the active one. The other projects' runs are untouched.
    */
   close(root: string): Effect.Effect<void, Error>;

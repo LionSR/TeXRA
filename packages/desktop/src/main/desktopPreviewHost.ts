@@ -37,7 +37,7 @@ interface DesktopShellAdapter {
  *
  * `openBuildDisplayIn` answers with the core {@link BuildDisplayFn}, a
  * program like the rest: the approval controller forks it onto a fiber of its
- * own so a build outlives the preview program whose settle race interrupts it.
+ * own so a build outlives the preview program whose race for the first answer interrupts it.
  */
 interface DesktopPreviewHost {
   /** Open a URL in the default browser. The shell's rejection is
@@ -57,7 +57,7 @@ interface DesktopPreviewHostOptions {
   postToRenderer(message: DesktopPush): void;
   shell: DesktopShellAdapter;
   /** The process runtime the window was handed. It only supplies the
-   *  filesystem `openPath` probes through; nothing settles on it. */
+   *  filesystem `openPath` probes through; nothing else runs on it. */
   runtime: ProcessRuntime;
 }
 

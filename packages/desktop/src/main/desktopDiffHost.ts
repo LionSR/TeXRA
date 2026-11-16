@@ -20,7 +20,7 @@ interface DesktopDiffHostOptions {
   postToRenderer(message: DesktopPush): void;
   /** The process runtime the window was handed. The members below are
    *  programs the caller runs, so this only supplies the filesystem they
-   *  read and write through — nothing settles here. */
+   *  read and write through; nothing runs on it here. */
   runtime: ProcessRuntime;
 }
 

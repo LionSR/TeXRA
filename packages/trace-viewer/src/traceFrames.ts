@@ -1,5 +1,5 @@
 /**
- * An exported trace answered through the live plane's own vocabulary: the document already IS the run aggregate's
+ * An exported trace answered through the live reader's own vocabulary: the document already IS the run aggregate's
  * display events, so this file only splits them into the two reads a
  * `Subscribe` is answered with — the cold listing, and the named aggregate's
  * history. No synthetic envelope and no reconstruction: the export authored
@@ -66,7 +66,7 @@ export function traceHost(trace: TraceDocument): HostSnapshot {
  *
  * `cut` is the scrubber's position: the index of the `run.position` the view is
  * read at, `null` for the whole document. A cut is a commit — the prefix the
- * live plane would have delivered at that moment — so the phase, the progress
+ * live reader would have delivered at that moment — so the phase, the progress
  * counters and the transcript are all the session view's own reading at position k, with
  * no separate rule per tier.
  *

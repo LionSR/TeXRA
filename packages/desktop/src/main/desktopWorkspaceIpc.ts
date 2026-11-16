@@ -9,7 +9,7 @@
 // `FileSystem`, which the window's router runs and reports. The paths are the
 // canonical ones the containment check vouched for, which a workspace symlink
 // can place outside the lexical root, so they go to the process filesystem,
-// not a root-confined view that would refuse them.
+// not a root-confined view that would reject them.
 
 import { basename, dirname, join } from 'node:path';
 import {
@@ -105,11 +105,11 @@ interface DesktopWorkspaceIpc {
 }
 
 /**
- * A workspace request the editor refused, carrying the whole sentence the
+ * A workspace request the editor rejected, carrying the whole sentence the
  * renderer shows for it — never a prefix over another message.
  */
-class WorkspaceRequestRefused extends Schema.TaggedError<WorkspaceRequestRefused>()(
-  'WorkspaceRequestRefused',
+class WorkspaceRequestRejected extends Schema.TaggedError<WorkspaceRequestRejected>()(
+  'WorkspaceRequestRejected',
   {
     message: Schema.String,
   },
@@ -117,7 +117,7 @@ class WorkspaceRequestRefused extends Schema.TaggedError<WorkspaceRequestRefused
 
 /** Everything a file-I/O program here can fail with. */
 type WorkspaceFileFailure =
-  | WorkspaceRequestRefused
+  | WorkspaceRequestRejected
   | AgentDocumentUnavailable
   | PlatformError.PlatformError;
 
@@ -134,11 +134,11 @@ const WORKSPACE_BOUNDARY_ERROR =
 function assertWithinWorkspace(
   canonicalRoot: string,
   canonicalTarget: string,
-): Effect.Effect<string, WorkspaceRequestRefused> {
+): Effect.Effect<string, WorkspaceRequestRejected> {
   return isPathWithin(canonicalRoot, canonicalTarget)
     ? Effect.succeed(canonicalTarget)
     : Effect.fail(
-        new WorkspaceRequestRefused({ message: WORKSPACE_BOUNDARY_ERROR }),
+        new WorkspaceRequestRejected({ message: WORKSPACE_BOUNDARY_ERROR }),
       );
 }
 
@@ -153,13 +153,13 @@ function locateWorkspaceTarget(
   inputPath: string,
 ): Effect.Effect<
   { absolutePath: string; root: string },
-  WorkspaceRequestRefused
+  WorkspaceRequestRejected
 > {
   // With no folder open every path is outside it.
   const located = root ? pathToLocationIn(root, inputPath) : undefined;
   if (!root || located?.kind !== 'workspace') {
     return Effect.fail(
-      new WorkspaceRequestRefused({ message: WORKSPACE_BOUNDARY_ERROR }),
+      new WorkspaceRequestRejected({ message: WORKSPACE_BOUNDARY_ERROR }),
     );
   }
   return Effect.succeed({ absolutePath: located.absolutePath, root });
@@ -212,11 +212,11 @@ const resolveWorkspaceWritePath = Effect.fn(
   // A dangling symlink also makes realPath fail with ENOENT. It must remain
   // rejected: writing through it could create a target outside the workspace.
   // The link-aware probe reports a link as itself — `stat` follows it — and
-  // any failure other than "not there" refuses the write instead of reading
+  // any failure other than "not there" rejects the write instead of reading
   // as "no link here".
   const entryType = yield* entryTypeIn(fs, absolutePath);
   if (entryType === 'SymbolicLink') {
-    return yield* new WorkspaceRequestRefused({
+    return yield* new WorkspaceRequestRejected({
       message: 'Symbolic links cannot be recreated by the editor.',
     });
   }
@@ -227,7 +227,7 @@ const resolveWorkspaceWritePath = Effect.fn(
   ).pipe(
     Effect.catchIf(absentReason, () =>
       Effect.fail(
-        new WorkspaceRequestRefused({
+        new WorkspaceRequestRejected({
           message:
             'The file cannot be recreated because its parent folder no longer exists.',
         }),
@@ -373,9 +373,9 @@ export function createDesktopWorkspaceIpc(
       }).pipe(withFileWriteLane(absolutePath));
     });
 
-  /** A refused file request is the request's answer: the editor pane shows
+  /** A rejected file request is the request's answer: the editor pane shows
    *  it. */
-  const refuse = Effect.mapError(
+  const rejected = Effect.mapError(
     (error: WorkspaceFileFailure) =>
       new Rejected({ reason: toErrorMessage(error) }),
   );
@@ -400,7 +400,7 @@ export function createDesktopWorkspaceIpc(
       // being absorbed as a terminal that would not start.
       // Surface in the terminal itself: a silent no-op looks like a shell
       // that never printed a prompt. Then fail with the cause, so the
-      // window's router reports it and the request never settles in silence.
+      // window's router reports it and the request never ends in silence.
       Effect.catch((error: HostFailed) =>
         Effect.andThen(
           Effect.sync(() =>
@@ -427,11 +427,11 @@ export function createDesktopWorkspaceIpc(
     file(action) {
       switch (action.kind) {
         case 'list':
-          return refuse(listFiles(action.directory));
+          return rejected(listFiles(action.directory));
         case 'read':
-          return refuse(readFile(action.path));
+          return rejected(readFile(action.path));
         case 'write':
-          return refuse(writeFile(action.path, action.contents, action.base));
+          return rejected(writeFile(action.path, action.contents, action.base));
       }
     },
 

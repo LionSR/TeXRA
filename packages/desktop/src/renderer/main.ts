@@ -734,7 +734,7 @@ const routeMessage = createMessageRoutes({
   },
   'desktop:closeDiff': (message) => {
     // A close takes its own diff off the pane and nothing else; the Review
-    // tab goes only once that leaves the pane empty, so a request settling
+    // tab goes only once that leaves the pane empty, so a request answered
     // never dismisses another request's preview or an unrelated review.
     const project = projectWorkbenches.get(message.session);
     if (project?.reviewPane.close(message.previewId)) {
@@ -857,7 +857,7 @@ window.addEventListener('resize', () => {
 // Shell events: the identity translation of host-bridge messages
 // =============================================================================
 //
-// Every component dispatches the arm it wants as a bubbling, composed event
+// Every component dispatches the action it wants as a bubbling, composed event
 // (`uiEvents.ts`); the root forwards it to the project it came from. The project
 // is the nearest `data-session` on the event's path: the conversation column
 // (the shell and its dock) carries the shown project's key, and each project's

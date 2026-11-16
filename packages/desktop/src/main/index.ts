@@ -87,7 +87,7 @@ export const startDesktop = (mainDir: string): void => {
         yield* initializeElectronPlatform(mainDir);
       // The process's shutdown is this scope's close. Its finalizers run in
       // the reverse of their registration: the window releases everything it
-      // held (awaited), every session closes (its runs stopped and settled,
+      // held (awaited), every session closes (its runs stopped and finished,
       // its artifacts flushed), the recording stops, the external-editor patch
       // directories every window's diff host recorded are removed, every
       // project is released (or, before the registry opened, the fallback

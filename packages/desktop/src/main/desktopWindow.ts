@@ -84,7 +84,7 @@ interface DesktopWindowOptions {
   /** Where this build's preload script and renderer page are. */
   readonly layout: Pick<DesktopLayout, 'preload' | 'rendererPage'>;
   /** The process runtime the composition root built. Every Effect this window
-   *  runs settles on it. */
+   *  runs runs on it. */
   readonly runtime: ProcessRuntime;
 }
 
