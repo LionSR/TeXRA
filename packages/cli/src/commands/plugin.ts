@@ -21,7 +21,7 @@ import { CliInvocation, CliUsageError } from '../runtime/platform/cliContext';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import {
-  askCliQuestion,
+  confirmCliQuestion,
   writeErrorStderr,
   writeTextStderr,
 } from '../runtime/platform/logSinks';
@@ -111,8 +111,9 @@ const askTrust = (review: PluginReview) => {
       ...review.lines.map((line) => `  ${line}`),
     ].join('\n'),
   );
-  return askCliQuestion(`Trust ${review.name} and enable it? [y/N] `).pipe(
-    Effect.map((answer) => /^y(es)?$/i.test(answer.trim())),
+  return confirmCliQuestion(`Trust ${review.name} and enable it?`, {
+    default: false,
+  }).pipe(
     Effect.catch((error) =>
       Effect.sync(() => {
         writeTextStderr(`No answer (${error.message}).`);

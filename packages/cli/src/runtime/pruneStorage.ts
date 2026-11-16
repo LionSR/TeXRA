@@ -15,7 +15,7 @@ import { formatBytes } from '@ui/copy/format';
 
 import { CliExitCode } from './platform/exitCodes';
 import {
-  askCliQuestion,
+  confirmCliQuestion,
   writeTextStderr,
   writeTextStdout,
 } from './platform/logSinks';
@@ -68,9 +68,7 @@ export const pruneStorage = Effect.fn('pruneStorage')(function* (
   const confirmed =
     yes ||
     (context.mode === 'interactive' &&
-      /^y(es)?$/i.test(
-        (yield* askCliQuestion(`Delete ${count}? [y/N] `)).trim(),
-      ));
+      (yield* confirmCliQuestion(`Delete ${count}?`, { default: false })));
   if (!confirmed) {
     writeTextStderr('Nothing was deleted. Re-run with --yes to delete them.');
     return CliExitCode.Success;

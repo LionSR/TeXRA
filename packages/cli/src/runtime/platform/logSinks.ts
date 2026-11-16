@@ -217,6 +217,25 @@ export function askCliQuestion(
 }
 
 /**
+ * Ask a yes-or-no question on stdin, with the `[Y/n]` or `[y/N]` hint its
+ * default decides. An empty answer takes the default; any other answer is
+ * yes only when it is `y` or `yes`, in any case.
+ */
+export function confirmCliQuestion(
+  question: string,
+  options: { readonly default: boolean },
+): Effect.Effect<boolean, Error> {
+  return askCliQuestion(
+    `${question} ${options.default ? '[Y/n]' : '[y/N]'} `,
+  ).pipe(
+    Effect.map((answer) => {
+      const trimmed = answer.trim();
+      return trimmed === '' ? options.default : /^y(es)?$/i.test(trimmed);
+    }),
+  );
+}
+
+/**
  * The host diagnostic sink of this process until a platform installs its own.
  * The harness's console fallback sends DEBUG and INFO to stdout, and
  * the process runtime logs while its layers build (`UsageLogService started
