@@ -64,6 +64,11 @@ export interface ExecuteAgentOptions {
   readonly tools?: readonly ITool<Error, PluginToolServices>[];
   /** Fires on meaningful progress: plan changes and tool call milestones. */
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
+  /** The caller asks a root to end after one model/tool cycle instead of
+   *  waiting for input (a launch that is not interactive). A child, a
+   *  script and a root launched to run once end after it whatever this
+   *  says. */
+  readonly stopAfterCycle?: boolean;
 }
 
 /** A run whose opening committed: the commit of that batch, and the run
@@ -85,15 +90,35 @@ const enterRun = Effect.fn('enterRun')(function* (
   options: ExecuteAgentOptions,
 ) {
   const log = yield* SessionLog;
-  const { config, stopAfterCycle } = definition;
+  const { config } = definition;
+  const parent =
+    options.registration?.parentRunId ?? options.parentRunId ?? null;
+  // A resumed run's facts, read once: whether its parent's call awaits it,
+  // and whether its launch let it take input.
+  const facts =
+    options.registration === undefined ? yield* log.facts(runId) : null;
+  // Whether the parent's call awaits the child: a fresh run's
+  // registration says; a resumed run's rows do.
+  const awaited =
+    options.registration !== undefined
+      ? options.registration.parentCall?.awaited === true
+      : (facts?.parent?.call?.awaited ?? false);
+  // Whether the run ends after one cycle, decided once: every child does
+  // (a message to it is a resume), a script's run (its call is its only
+  // turn), a root its caller asks to, and a root launched to run once,
+  // which no message may reach, whoever resumes it.
+  const stopAfterCycle =
+    parent !== null ||
+    config.script != null ||
+    options.stopAfterCycle === true ||
+    facts?.start?.takesFollowUps === false;
   const registered =
     options.registration === undefined
       ? null
       : yield* registrationRows(runId, config, {
           ...options.registration,
           // A child takes a message as its resume; a one-shot root none.
-          takesFollowUps:
-            !stopAfterCycle || options.registration.parentRunId !== undefined,
+          takesFollowUps: !stopAfterCycle || parent !== null,
         });
   if (registered !== null && registered.start === null)
     return yield* new AgentError({
@@ -127,16 +152,9 @@ const enterRun = Effect.fn('enterRun')(function* (
     );
   };
   const seed = options.registration?.seed ?? null;
-  const parent =
-    options.registration?.parentRunId ?? options.parentRunId ?? null;
-  // Whether the parent's call awaits the child: a fresh run's
-  // registration says; a resumed run's rows do.
-  const awaited =
-    options.registration !== undefined
-      ? options.registration.parentCall?.awaited === true
-      : ((yield* log.facts(runId))?.parent?.call?.awaited ?? false);
   return {
     logger,
+    stopAfterCycle,
     entry: { parent, awaited, registration, seed, enter },
   };
 });
@@ -152,7 +170,7 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
   runId: RunId,
   options: ExecuteAgentOptions,
 ) {
-  const { config, persona, modelConfig, stopAfterCycle } = definition;
+  const { config, persona, modelConfig } = definition;
   // The run's working directory is decided here, once: absolute or absent.
   // Every tool call of the run carries it as `ToolContext.env.workingDirectory`
   // and trusts it rather than re-validating.
@@ -164,11 +182,11 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
   // session, and a root launch on the session it was started on.
   const roots = yield* SessionRoots;
   const resumed = options.registration === undefined;
-  const { logger: agentLogger, entry } = yield* enterRun(
-    definition,
-    runId,
-    options,
-  );
+  const {
+    logger: agentLogger,
+    stopAfterCycle,
+    entry,
+  } = yield* enterRun(definition, runId, options);
 
   // A task's tools render their templates from this opening at every
   // call, so it is built on resume too; a conversation's rows hold its own.

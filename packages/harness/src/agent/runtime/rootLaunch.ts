@@ -142,11 +142,9 @@ export const rootRun = Effect.fn('rootRun')(function* (
       const config = launch.helperModel
         ? yield* applyHelperModelPreference(launch.config, yield* SessionRoots)
         : launch.config;
-      const definition = yield* prepareAgentDefinition({
-        config,
-        stopAfterCycle: launch.interactive !== true,
-      });
+      const definition = yield* prepareAgentDefinition({ config });
       return yield* executeAgent(definition, runId, {
+        stopAfterCycle: launch.interactive !== true,
         tools: launch.tools,
         registration: {
           identity: { kind: 'agent', agent: definition.config.agent },

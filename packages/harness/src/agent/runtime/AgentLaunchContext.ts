@@ -55,15 +55,9 @@ const validateModelExists = Effect.fn('AgentLaunchContext.validateModelExists')(
  * Resolve what a launch runs: the agent entry (an inline persona, or the
  * catalog's over this session's roots), its declared tools against this
  * build's table, and its model, each refused before any run is registered.
- * `stopAfterCycle` is decided once: a launch that ends the run after one
- * cycle, or a script that is its only turn.
  */
 export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
-  function* (input: {
-    config: AgentConfig;
-    /** The launch ends the run after one cycle (an awaited child). */
-    stopAfterCycle?: boolean;
-  }) {
+  function* (input: { config: AgentConfig }) {
     const fullConfig = input.config;
     const roots = yield* SessionRoots;
     // A persona the config carries (its schema admitted it) is the agent;
@@ -120,12 +114,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       ...fullConfig,
       agentSource: agentEntry.source,
     };
-    // Whether the run takes follow-ups, decided once: a run whose launch
-    // ends it after one cycle, or whose script is its only turn, does not,
-    // and registers as such.
-    const stopAfterCycle =
-      input.stopAfterCycle === true || config.script != null;
-    return { config, persona, agentEntry, modelConfig, stopAfterCycle };
+    return { config, persona, agentEntry, modelConfig };
   },
 );
 

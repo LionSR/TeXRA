@@ -46,16 +46,12 @@ type ResumeHandOff =
   | { readonly ownedBy: RunId };
 
 /** What a resume's caller supplies: the run's extra tools, its progress
- *  callback, and whether it stops after one cycle. It resumes in the
+ *  callback, and whether a root stops after one cycle. It resumes in the
  *  caller's session, with the caller's `LaunchKeys`. */
-export interface ResumeRunOptions extends Pick<
+export type ResumeRunOptions = Pick<
   ExecuteAgentOptions,
-  'tools' | 'onProgress'
-> {
-  /** Stop the run after one model/tool cycle instead of waiting for
-   *  follow-up input. */
-  readonly stopAfterCycle?: boolean;
-}
+  'tools' | 'onProgress' | 'stopAfterCycle'
+>;
 
 const CHANNEL = 'ResumeRun';
 
@@ -224,22 +220,12 @@ export const openResume = Effect.fn('resumeRun.open')(function* (
   // Nothing to continue from, or rows this build cannot use.
   const rejected = yield* checkpointRefusal(runId);
   if (rejected !== null) return yield* refuse({ failed: rejected });
-  // Its parent, read once: the run's edge for this activation; and whether
-  // its launch let it take input (`run.start.takesFollowUps`).
+  // Its parent, read once: the run's edge for this activation.
   const parentRunId = yield* persistedParentRunId(runId);
-  const takesInput =
-    (yield* (yield* SessionLog).facts(runId))?.start?.takesFollowUps !== false;
   // A stop asked while those reads ran: the registry ends the run on its
   // rows as this opening fails; there is nothing to activate.
   if (runs.stopAsked(runId) !== null) return yield* refuse(REFUSED);
-  // A child runs one cycle and ends with its report, and so does a root
-  // launched to run once, which no message may reach, whoever resumes it;
-  // any other root as its caller asks.
-  const definition = yield* prepareAgentDefinition({
-    config,
-    stopAfterCycle:
-      options.stopAfterCycle || parentRunId !== undefined || !takesInput,
-  }).pipe(
+  const definition = yield* prepareAgentDefinition({ config }).pipe(
     // An agent or plugin this process cannot run now refuses the resume
     // with the reason; the run stays interrupted, never failed, and
     // nothing is launched.
@@ -248,6 +234,7 @@ export const openResume = Effect.fn('resumeRun.open')(function* (
     ),
   );
   return yield* executeAgent(definition, runId, {
+    stopAfterCycle: options.stopAfterCycle,
     tools: options.tools,
     onProgress: options.onProgress,
     parentRunId,

@@ -2,8 +2,8 @@
  * How a parent's call launches a native child, and how it awaits one.
  *
  * Every native child (an `agent` call's subagent, a `script` sent to the
- * background, a goal round through `self()`) is `executeAgent` with
- * `stopAfterCycle`: it ends with its `run.end`, whose transaction delivers
+ * background, a goal round through `self()`) is `executeAgent` under a
+ * parent edge, so it runs one cycle: it ends with its `run.end`, whose transaction delivers
  * its report to the parent's input unless the call awaits it
  * (`RunParent.call.awaited`). The run opens in the caller's fiber and is
  * forked on the session's registry under its id, so a launch that fails
@@ -97,12 +97,7 @@ const resumeOwnedChild = Effect.fn('resumeOwnedChild')(function* (
 ): Effect.fn.Return<CommitOrdinal, Error, AgentRunServices> {
   const runs = yield* RunRegistry;
   const { opened } = yield* runs.start(runId, {
-    open: openResume(
-      runs,
-      runId,
-      { stopAfterCycle: true, ...options },
-      parentRunId,
-    ).pipe(
+    open: openResume(runs, runId, options, parentRunId).pipe(
       Effect.catchTag('ResumeRefused', ({ answer }) =>
         Effect.fail(
           new Error(
@@ -216,7 +211,6 @@ export const executeSubagentInBand = (
         config: Schema.decodeUnknownSync(AgentConfigSchema)(
           launch.configPayload,
         ),
-        stopAfterCycle: true,
       });
       return yield* startChildRun(
         launch.runId,
