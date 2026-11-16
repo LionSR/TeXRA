@@ -41,7 +41,6 @@ import {
   SessionRequests,
 } from '@agent/runtime/requests';
 import { queuedRow } from '@agent/followUp/followUpMessages';
-import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
@@ -73,7 +72,6 @@ import {
   TOOL_CALL_STATUS,
   RunIdSchema,
   toJsonValue,
-  type JsonValue,
   type LogLevel,
   type MessageType,
   type AgentProposalRequest,
@@ -87,6 +85,7 @@ import {
   type SessionRowDraft,
   type UserQuestionRequest,
   aggregateTarget,
+  describeRefusal,
   type ToolEditContent,
 } from '@shared/schemas';
 import type { DraftBlob } from '@shared/session/historyTurns';
@@ -728,7 +727,7 @@ interface HarnessLogRow {
   readonly timestamp: number;
   readonly messageType: MessageType;
   readonly text?: string;
-  readonly data?: JsonValue;
+  readonly data?: Schema.Json;
   readonly groupId?: string;
 }
 
@@ -1719,7 +1718,7 @@ function handleHarnessSubmit(line: string): void {
     // The session refuses a message to an agent that takes none.
     if (!acceptsFollowUp(focused)) {
       appendHarnessAssistantTranscript(
-        describeFollowUpFailure('notResumable'),
+        describeRefusal({ kind: 'notResumable' }),
         focused.id,
       );
       return;
@@ -1862,7 +1861,7 @@ const harnessCommands = builtinSlashCommands({
       );
     }),
   onModelAccessSelect: (selection) =>
-    selection.provider === 'kimi-code' && selection.state === 'on'
+    selection.provider === 'kimiCode' && selection.state === 'on'
       ? updateCliModelAccess(
           HARNESS_PLATFORM_SERVICES,
           HARNESS_CLI_CONTEXT,

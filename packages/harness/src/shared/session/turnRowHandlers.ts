@@ -22,7 +22,7 @@ import { byId, copyById, ownCopy, type BatchCopies } from './runRows';
 import { resultFacts, turnText, withInput, callKey } from './runFacts';
 import {
   attemptOf,
-  callSettlementOf,
+  callResultOf,
   invocationAfter,
   outOfOrder,
   type PendingCall,
@@ -90,7 +90,7 @@ const closedTo = (
   status: PendingCall['status'],
   attempt: number,
 ): string | null => {
-  if (status.kind === 'settled')
+  if (status.kind === 'finished')
     return `${callId} already has a result at attempt ${status.attempt}`;
   const reached = attemptOf(status);
   return attempt < reached
@@ -134,7 +134,7 @@ const unreportedCall = (
   if (results.length !== pending.calls.length)
     return `${results.length} results for ${pending.calls.length} calls`;
   for (const [ordinal, { callId }] of pending.calls.entries()) {
-    const settled = callSettlementOf(pending, callId)?.result.status;
+    const settled = callResultOf(pending, callId)?.result.status;
     const reported = results[ordinal];
     const expected = settled === 'executed' ? 'success' : 'error';
     if (
@@ -361,14 +361,14 @@ export const TURN_ROW_HANDLERS: {
       // before its body started, closes the call; and only once.
       const rejection = closedTo(p.callId, call.status, p.attempt);
       if (rejection !== null)
-        return call.status.kind === 'settled'
+        return call.status.kind === 'finished'
           ? Result.fail({ reason: 'orphan-settlement', detail: rejection })
           : outOfOrder(rejection);
       return Result.succeed({
         ...withCall(copies, state, pending, p.callId, {
           ...call,
           status: {
-            kind: 'settled',
+            kind: 'finished',
             at: row.commit,
             attempt: p.attempt,
             disposition: p.disposition,

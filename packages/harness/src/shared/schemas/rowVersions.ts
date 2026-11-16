@@ -76,7 +76,7 @@ export const RETIRED_ROW_KINDS: ReadonlyMap<string, 'display' | 'execution'> =
     ['run.fact', 'execution'],
     // The loop state a resume continued from.
     ['run.snapshot', 'execution'],
-    // A child's turns, parks and result manifest, which its resume and its
+    // A child's turns, waits and result manifest, which its resume and its
     // parent's call read: a child is a run that ends, its `run.end` the
     // result.
     ['child.turn', 'execution'],
@@ -184,7 +184,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v6: a child's delivery carries its facts typed (`delivery`), rendered
   // where the row becomes its parent's message, not its envelope's text and
   // summary (a v5 delivery would read as a message, its facts untyped).
-  'followup.queued': { version: 6, listing: 'followup' },
+  // v7: a background command's `exit` has no code when it timed out or had
+  // none of its own, and no `noExitCode` (a v6 row's conventional code would
+  // read as the command's own).
+  'followup.queued': { version: 7, listing: 'followup' },
   // v2: `disposition` says why the follow-up left the queue; a v1 row lacks
   // it and fails to decode.
   // v3: no `stale` reason: nothing drops a notice of an ended child (a v2
@@ -256,7 +259,11 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // `model.message` v18.
   // v10: no `quotaFallback` message type: a used-up plan asks before the
   // run moves off it (an earlier build's notice would fail as damaged).
-  log: { version: 10, listing: 'none' },
+  // v11: a completed compaction's activity row carries what it `freed`, and
+  // no context-management row has the `compaction` action (an earlier
+  // build's would fail as damaged, and its activity would read with
+  // nothing freed).
+  log: { version: 11, listing: 'none' },
   // v2: no `phase` kind and no `index`/`total` (an earlier build's script
   // phase stage would fail its run as damaged rather than read as that
   // build's).
@@ -343,7 +350,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v19: a failed attempt has no `next: decline`: a used-up plan opens the
   // retry request, whose answer declines the route (an earlier build's
   // row would fail as damaged).
-  'model.message': { version: 19, listing: 'none' },
+  // v20: a completed turn has no `kind` or `modelFingerprint`, and a
+  // Responses anchor no `kind` (an earlier build reads this build's turn as
+  // damaged without them).
+  'model.message': { version: 20, listing: 'none' },
   // v2: the causes are `compaction` and `fork` alone (an earlier build's edit
   // of another cause would fail its run as damaged rather than read as that
   // build's).

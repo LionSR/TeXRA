@@ -12,15 +12,14 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Predicate, Result, Schema } from 'effect';
 
 // Local imports - common
-import {
-  readInstalledPluginLoad,
-  type InstalledPluginLoad,
-} from '@common/plugins/pluginTrust';
+import { AgentUnavailable } from '@common/errors/agentErrors';
+import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
 import { texraToolOfClaudeTool } from '@common/plugins/hookConfig';
 import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
+import type { SettingsStores } from '@shared/config/settings';
 import {
   PersonaSchema,
   AgentNameSchema,
@@ -100,7 +99,6 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
     source: 'plugin',
     path: file,
     description: parsed.success.description,
-    tools: tools === undefined ? undefined : [...tools],
     // None named: `AgentRun` gives it what it inherits. The task arrives as
     // the user message, as a Claude Code subagent's does.
     persona: Schema.decodeUnknownSync(PersonaSchema)({
@@ -116,26 +114,37 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
 });
 
 /**
- * A plugin agent runs only while its plugin loads (enabled, and trusted as it
- * is). The catalog that listed it may predate a change another host made, so
- * the launch asks again and refuses, saying why, if it no longer does.
+ * A plugin agent (`agent`, named `<plugin>:<name>` as {@link readPluginAgent}
+ * writes it) runs only while its plugin loads (enabled, and trusted as it
+ * is). The catalog that listed it may predate a change another host made,
+ * and lists a plugin's agents only while the plugin loads, so a launch asks
+ * the install record, and fails with {@link AgentUnavailable} naming the
+ * plugin and why it does not load: an enabled plugin the load holds back
+ * carries the load's reason; any other is off or gone.
  */
-export const requirePluginAgentLoads = (
-  entry: AgentEntry,
-  load: InstalledPluginLoad,
-): Effect.Effect<void, Error> => {
-  const plugin = entry.name.slice(0, entry.name.indexOf(':'));
-  return load.loadable.some(({ record }) => record.name === plugin)
-    ? Effect.void
-    : Effect.fail(
-        new Error(
-          `Agent ${entry.name} does not run: ${
-            load.withheld.find((held) => held.plugin === plugin)?.reason ??
-            `plugin ${plugin} is not installed or not enabled.`
-          }`,
-        ),
-      );
-};
+export const requirePluginLoads = Effect.fn('requirePluginLoads')(function* (
+  agent: string,
+  stores: Pick<SettingsStores, 'globalState'>,
+) {
+  const plugin = agent.slice(0, agent.indexOf(':'));
+  const load = yield* readInstalledPluginLoad(stores);
+  if (load.loadable.some(({ record }) => record.name === plugin)) return;
+  const withheld = load.withheld.find((held) => held.plugin === plugin);
+  return yield* new AgentUnavailable({
+    blocked:
+      withheld === undefined
+        ? { kind: 'blocked', blocker: 'pluginOff', name: plugin }
+        : {
+            kind: 'blocked',
+            blocker: 'pluginWithheld',
+            name: plugin,
+            reason: withheld.reason,
+          },
+    message: `Agent ${agent} does not run: ${
+      withheld?.reason ?? `plugin ${plugin} is not installed or not enabled.`
+    }`,
+  });
+});
 
 /**
  * The catalog entries of the agents of the installed plugins that load now

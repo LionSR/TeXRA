@@ -8,6 +8,7 @@ import { afterEach, beforeEach, vi } from 'vitest';
 
 // Local imports
 import { apiKeyEnvName } from '@texra-ai/llm';
+import { outputOf } from '@test/support/toolResultFields';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { withEnv } from '@test/support/testEnv';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
@@ -33,15 +34,11 @@ vi.mock('@texra/tools/setup/toolProbing', async (importOriginal) => ({
   locateTool: mocks.locateTool,
 }));
 
-function outputOf(result: { output?: string }): string {
-  return result.output ?? '';
-}
-
 /** The process environment a case runs under: it holds a provider key. */
 const ENV = { [apiKeyEnvName('deepseek')]: 'private-test-value' };
 
-/** A host whose setup platform the probe reads. */
-const host = FakeHost.layer({}, { setup: createFakeSetupPlatform() });
+/** A host of the test's own. */
+const host = FakeHost.layer();
 
 beforeEach(() => {
   // The default fake host has no credentials at all, so the aggregate probe
@@ -66,13 +63,19 @@ layer(SessionGraph.hosted)('setup credential reporting', (it) => {
       () =>
         Effect.gen(function* () {
           const result = yield* ProbeEnvironmentTool.call({}).pipe(
-            Effect.provide(withSetup(nativeToolTestLayer(), 'cli')),
+            Effect.provide(
+              withSetup(
+                nativeToolTestLayer(),
+                createFakeSetupPlatform(),
+                'cli',
+              ),
+            ),
           );
 
-          assert.match(outputOf(result), /"host": "cli"/);
-          assert.match(outputOf(result), /"provider": "deepseek"/);
-          assert.match(outputOf(result), /"origin": "env"/);
-          assert.doesNotMatch(outputOf(result), /private-test-value/);
+          assert.match(outputOf(result) ?? '', /"host": "cli"/);
+          assert.match(outputOf(result) ?? '', /"provider": "deepseek"/);
+          assert.match(outputOf(result) ?? '', /"origin": "env"/);
+          assert.doesNotMatch(outputOf(result) ?? '', /private-test-value/);
         }).pipe(withEnv(ENV)),
     );
   });

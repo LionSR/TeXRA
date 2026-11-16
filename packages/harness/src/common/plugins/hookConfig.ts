@@ -1,14 +1,14 @@
 // A plugin's Claude Code hooks configuration, read as the reference writes
 // it (https://code.claude.com/docs/en/hooks): the `hooks.json` events, their
 // matchers and command handlers, and the tool names a matcher sees. What a
-// hook reads and prints is `./hookProtocol`'s
-// (`2026-09-28-code-plugins-hooks-v1.md`).
+// hook reads and prints is `./hookProtocol`'s.
 
 // Third-party imports
 import { Predicate, Schema } from 'effect';
 
 // Local imports - shared contracts
 import { SUPPORTED_HOOK_EVENTS, type HookEvent } from '@shared/schemas';
+import { lineRangeOf } from '@shared/toolUse';
 
 const isSupportedEvent = (event: string): event is HookEvent =>
   SUPPORTED_HOOK_EVENTS.some((supported) => supported === event);
@@ -25,7 +25,7 @@ const HookHandlerSchema = Schema.Struct({
   shell: Schema.optional(Schema.String),
   /** Accepted, not evaluated: the hook runs for every call its matcher
    *  matches, which the reference allows when it cannot tell what a command
-   *  runs (`2026-09-28-code-plugins-hooks-v1.md`). */
+   *  runs. */
   if: Schema.optional(Schema.String),
 });
 
@@ -213,15 +213,7 @@ const CLAUDE_TOOLS: Readonly<
   read_file: {
     name: 'Read',
     input: (input, abs) => {
-      const { range } = input;
-      const start =
-        Predicate.hasProperty(range, 'start') && typeof range.start === 'number'
-          ? range.start
-          : undefined;
-      const end =
-        Predicate.hasProperty(range, 'end') && typeof range.end === 'number'
-          ? range.end
-          : undefined;
+      const { start, end } = lineRangeOf(input.range);
       return {
         file_path: abs(input.path),
         offset: start,

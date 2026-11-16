@@ -2,10 +2,9 @@ import { Context, Effect, Layer, PubSub, type Scope, Stream } from 'effect';
 
 /**
  * Cross-cutting, process-scoped app-lifecycle signals (subscriptions,
- * credentials, workspace-file writes). Not for run/session progress
- * events — those extend `AgentEvent` (`agent/trace/`) or the `SessionRow`
- * schema (`shared/schemas/sessionEvent.ts`), per the event-channel rule in
- * the harness AGENTS.md.
+ * credentials, workspace-file writes). Not for run or session progress:
+ * that is a run's trace event (`AgentEvent`) or a session row
+ * (`SessionRow`).
  *
  * Delivery and error order, which this module owns and no caller may vary:
  *
@@ -54,7 +53,7 @@ export interface AppSignalPayloads {
   githubTokenInvalid: { message: string };
 
   /**
-   * A write or removal of one secret-store entry settled. Emitted by the
+   * A write or removal of one secret-store entry finished. Emitted by the
    * store itself, so every writer is covered — the settings controllers, the
    * setup agent's `unset_api_key`, the GitHub token forms — without any of
    * them remembering to. The one file store emits from its own commit
@@ -84,12 +83,14 @@ export interface AppSignalPayloads {
    * (`onWrite.invalidatesModelOptions`). Keyless on purpose: a listener
    * re-reads the routes it shows.
    *
-   * Emitted by the writers a person drives: the CLI's, the settings views'
-   * (`settingsViewBody.ts`) and the extension's ChatGPT sign-in from the
-   * getting-started card (`extensionHostRequests.ts`). Consumed by: the CLI chat TUI's status
-   * bar, which re-reads the route and quota it shows, and the extension's
-   * and desktop's launchers (`hostSnapshotSource.ts`), which re-read their
-   * credential check and model catalog.
+   * Emitted by the app's writers themselves, so no caller announces for
+   * them: a subscription's sign-in, sign-out and preference write, a coding
+   * plan's toggle, and the settings write path for a row that re-routes
+   * models. The enabled-model write is the one still announced by its
+   * caller, the settings view. Consumed by: the CLI chat TUI's status bar,
+   * which re-reads the route and quota it shows, and the extension's and
+   * desktop's launchers, which re-read their credential check and model
+   * catalog.
    */
   modelAccessChanged: undefined;
 
@@ -115,14 +116,12 @@ export interface AppSignalPayloads {
    * even in a background service task), and when the agent catalog is
    * reloaded after a tool switch, a plugin install or an agent file's edit:
    * `agentCatalogFollower` emits both, in this process or another. The
-   * settings views' agent and team writes emit it themselves
-   * (`settingsAgentCommands.ts`).
+   * settings views' agent and team writes emit it themselves.
    *
    * Consumed by: extension and desktop settings views, both re-reading the
-   * agent list and team presets, and their launchers
-   * (`hostSnapshotSource.ts`). Not the CLI:
-   * it reads the agent list per command
-   * and has no persistent panel that could go stale.
+   * agent list and team presets, and their launchers. Not the CLI: it reads
+   * the agent list per command and has no persistent panel that could go
+   * stale.
    */
   workspaceAgentsChanged: undefined;
 
@@ -131,7 +130,7 @@ export interface AppSignalPayloads {
    * settings commands' `updateStateSetting`).
    *
    * Consumed by: the extension's status-bar tooltip and the launchers'
-   * approval snapshot (`hostSnapshotSource.ts`), painted outside the
+   * approval snapshot, painted outside the
    * settings webview's round-trip. The settings views repaint their own
    * approval snapshot inline, and the CLI repaints its session line from the
    * `/config` form and `/approval` directly. Enforcement reads the config

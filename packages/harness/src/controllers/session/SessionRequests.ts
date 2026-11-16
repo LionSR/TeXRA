@@ -45,7 +45,7 @@ import { factRows } from '@tools/plugins';
 import { ToolRegistry, type ToolTable } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
-  deleteAdmittedRun,
+  deleteAcceptedRun,
   runFiles,
   type RunFilesServices,
 } from './deletionCleanup';
@@ -67,7 +67,7 @@ type SessionRequestLog = Pick<
 
 /** What the session layer builds a session's requests over. */
 interface SessionRequestsInit {
-  /** The root's log: admission reads and removal. */
+  /** The root's log: acceptance reads and removal. */
   readonly log: SessionRequestLog;
   readonly plugins: ToolTable;
   readonly services: Context.Context<RequestServices | ChildProcessSpawner>;
@@ -87,7 +87,7 @@ const GATED_ACTIONS: Partial<Record<RuntimeCommand['kind'], RunAction>> = {
 /** Refuse a gated request the run's `actions` no longer hold, read from
  *  the log as of the call (the current view trails it, and a window fed by
  *  the log can ask before the view has applied a row); a run the log does
- *  not hold is left to `admit`. */
+ *  not hold is left to `accept`. */
 const requireRunAction = (
   deps: SessionRequestsInit,
   req: RuntimeCommand,
@@ -122,8 +122,8 @@ const noLongerOpen = (deps: SessionRequestsInit, runId: RunId) =>
     reason: `The ${runNoun(deps.view, runId)} is no longer open.`,
   });
 
-/** Admit on current sequence rows: the run exists and is open. */
-const admit = (
+/** Accept on current sequence rows: the run exists and is open. */
+const accept = (
   deps: SessionRequestsInit,
   req: RuntimeCommand,
 ): Effect.Effect<AggregateState, RequestError> => {
@@ -177,7 +177,7 @@ const decideSurfaceRequest = (
     write: Effect.Effect<boolean, RequestError, R>,
   ) {
     const pending = yield* pendingOf(deps, req.runId, req.requestId);
-    if (pending === undefined) return yield* settled(req.runId);
+    if (pending === undefined) return yield* notPending(req.runId);
     // A request that blocks its caller is answered by the fiber waiting on it,
     // and that fiber died with the owner this decision takes over from:
     // recording a decision would clear the panel without doing what it says.
@@ -191,13 +191,13 @@ const decideSurfaceRequest = (
     }
     const { payload } = pending;
     if (payload.kind !== 'plugin') {
-      if (!(yield* write)) return yield* settled(req.runId);
+      if (!(yield* write)) return yield* notPending(req.runId);
       return done;
     }
     // A plugin's request: the plugin's record outside the session's store
     // first (`Plugin.decision`, idempotent), then one checked transaction
     // holding the decision, the facts the plugin states, checked in the
-    // job, and the input it sends a run, admitted in the job. None of them
+    // job, and the input it sends a run, accepted in the job. None of them
     // lands without the decision, and a request decided meanwhile commits
     // none of them. The run is woken for that input once it committed.
     const plugin =
@@ -218,16 +218,16 @@ const decideSurfaceRequest = (
     const beside = Effect.gen(function* () {
       const facts = yield* factRows(recorded.facts, req.runId, plugin, log);
       if (followUp === undefined) return facts;
-      const admitted = yield* inbox.admission(
+      const accepted = yield* inbox.acceptance(
         followUp.runId,
         followUp.item,
         {},
       );
-      if (admitted.sent.kind === 'refused')
+      if (accepted.sent.kind === 'refused')
         yield* Effect.logWarning(
           `Run ${followUp.runId} refused what plugin "${payload.plugin}" sent it with the answer to request ${req.requestId}: its input is closed.`,
         );
-      return [...facts, ...admitted.rows];
+      return [...facts, ...accepted.rows];
     }).pipe(Effect.scoped);
     const landed = yield* decideRequest(
       req.runId,
@@ -240,7 +240,7 @@ const decideSurfaceRequest = (
         writeRejection(req.runId, 'The decision could not be recorded'),
       ),
     );
-    if (!landed) return yield* settled(req.runId);
+    if (!landed) return yield* notPending(req.runId);
     if (followUp !== undefined) yield* wakeIfOwed(followUp.runId);
     return done;
   });
@@ -287,13 +287,13 @@ const viaControls = Effect.fn('SessionRequests.viaControls')(function* (
 const handle = (
   deps: SessionRequestsInit,
   req: Exclude<RuntimeCommand, { kind: 'run.stop' | `followUp.${string}` }>,
-  admitted: AggregateState,
+  accepted: AggregateState,
   heldHere: boolean,
   runs: RunRegistry['Service'],
 ): Effect.Effect<Outcome, RequestError, RequestServices | SessionServices> => {
   switch (req.kind) {
     case 'run.delete':
-      return deleteAdmittedRun(deps, req.runId, admitted, runs);
+      return deleteAcceptedRun(deps, req.runId, accepted, runs);
     case 'run.compact':
     case 'run.model':
       return viaControls(deps, req, runs);
@@ -302,7 +302,7 @@ const handle = (
     case 'run.files':
       return runFiles(runs, req);
     case 'run.fork':
-      return forkRun({ id: req.runId, uid: admitted.uid }, req.at ?? null).pipe(
+      return forkRun({ id: req.runId, uid: accepted.uid }, req.at ?? null).pipe(
         Effect.provideService(ToolRegistry, deps.plugins),
         Effect.catchIf((e): e is Error => !(e instanceof Rejected), Effect.die),
         Effect.map((runId): Outcome => ({ kind: 'forked', runId })),
@@ -333,7 +333,7 @@ const handle = (
   }
 };
 
-/** The session's requests: the handler that admits on the log's sequence
+/** The session's requests: the handler that accepts on the log's sequence
  *  table, and a run's questions to a person. One value per session. */
 export function sessionRequests(
   deps: SessionRequestsInit,
@@ -341,7 +341,7 @@ export function sessionRequests(
   const request = Effect.fn('SessionRequests.request')(function* (
     req: RuntimeCommand,
   ) {
-    // A message skips `admit`: `submitFollowUp` refuses on the run's rows
+    // A message skips `accept`: `submitFollowUp` refuses on the run's rows
     // and keeps its run's sends in order, its media read included.
     if (req.kind === 'followUp.send') {
       const attach = Effect.provideContext(
@@ -389,12 +389,12 @@ export function sessionRequests(
       );
     }
     yield* requireRunAction(deps, req);
-    const admitted = yield* admit(deps, req);
+    const accepted = yield* accept(deps, req);
     // A launch here holds the run: a blocked request has a fiber here.
     const heldHere =
       runs.get(req.kind === 'policy.set' ? req.change.runId : req.runId) !==
       undefined;
-    return yield* handle(deps, req, admitted, heldHere, runs).pipe(
+    return yield* handle(deps, req, accepted, heldHere, runs).pipe(
       Effect.provideContext(
         Context.merge(servicesOf(deps.services), yield* sessionServices),
       ),
@@ -407,5 +407,5 @@ export function sessionRequests(
 }
 
 /** A decision for a request no longer pending: decided already, or never opened. */
-const settled = (runId: RunId): Unavailable =>
+const notPending = (runId: RunId): Unavailable =>
   new Unavailable({ runId, reason: 'No pending request under that id.' });

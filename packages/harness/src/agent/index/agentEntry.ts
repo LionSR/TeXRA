@@ -10,7 +10,7 @@ import type { FileSystem } from 'effect';
  * The services an agent catalog load reads: the global and filesystem views
  * the local agent directories are scanned through, the app state the
  * disabled-plugin switch is read from, and the plugin table whose agent-file
- * blocks a scan admits.
+ * blocks a scan accepts.
  */
 export type AgentCatalogServices =
   | GlobalStorageFs
@@ -30,7 +30,6 @@ export interface AgentEntry {
   source: AgentSource;
   path: string; // absolute path to the definition file
   description?: string;
-  tools?: string[]; // tool names, for display
   /** Digest of the definition file and the files its blocks bind; absent
    *  on a plugin agent. */
   digest?: string;
@@ -42,3 +41,8 @@ export interface AgentEntry {
    *  them (`agentBlockOf` reads one); empty for a chat agent. */
   blocks: Readonly<Record<string, unknown>>;
 }
+
+/** The names of the tools `entry`'s persona is offered. */
+export const agentToolNames = (
+  entry: Pick<AgentEntry, 'persona'>,
+): readonly string[] => entry.persona.tools.map((tool) => tool.name);

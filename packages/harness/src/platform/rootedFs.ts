@@ -102,7 +102,7 @@ export function sessionFsLayer(
 
 /**
  * Run `program` over the rooted filesystems of `roots` — the form a host
- * boundary uses, so a file that only settles a housekeeping program does not
+ * boundary uses, so a file that only finishes a housekeeping program does not
  * have to name `Effect` as a value to provide a layer.
  */
 export function withSessionFs<A, E, R>(

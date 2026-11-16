@@ -24,9 +24,9 @@ import {
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-import { createFakeHost } from '@test/support/setupPlatform';
+import { createFakeHost } from '@test/support/fakeHost';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
+import { asDocumentTask } from '@test/support/documentTasks';
 import { seedEditedFiles, seedRunRecord } from '@test/support/runRecordSeeds';
 import {
   FakeHost,
@@ -74,7 +74,7 @@ const publishRunFacts = (
 ) =>
   Effect.gen(function* () {
     yield* publishTestRunStart(session, runId);
-    yield* Context.get(session, SessionLog).settled;
+    yield* Context.get(session, SessionLog).drained;
     yield* seedRunRecord(session, runId, facts.record);
     if (facts.edited) yield* seedEditedFiles(session, runId, facts.edited);
     if (facts.outcome) {
@@ -87,7 +87,7 @@ const publishRunFacts = (
         },
       ]);
     }
-    yield* Context.get(session, SessionLog).settled;
+    yield* Context.get(session, SessionLog).drained;
   });
 
 // Live clock: the history readers run as the command runs them.
@@ -98,13 +98,8 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     // the process session over that store.
     it.layer(
       FakeHost.layer(async () => {
-        const historyStoragePath = await makeTempDir(
-          'texra-history-storage-',
-          tempDirs,
-        );
         return createFakeHost({
-          storagePath: historyStoragePath,
-          globalStoragePath: historyStoragePath,
+          storageRoot: await makeTempDir('texra-history-storage-', tempDirs),
         });
       }),
       { buildPerTest: true },

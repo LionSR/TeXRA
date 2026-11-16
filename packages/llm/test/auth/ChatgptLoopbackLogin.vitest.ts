@@ -5,16 +5,26 @@ import { FetchHttpClient } from 'effect/http';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import { chatgptLoginWithLoopback as loginWithLoopback } from '@texra-ai/llm/node';
+import { CHATGPT_POLICY } from '../../src/oauth/chatgpt/chatgptProvider.js';
+import { loginWithLoopback } from '../../src/oauth/loopbackLogin.js';
+import { SubscriptionAccounts } from '../../src/oauth/subscriptionAccounts.js';
 import type { ChatgptSession } from '../../src/oauth/chatgpt/chatgptProvider.js';
+import type { CredentialStore } from '../../src/providers/credentials.js';
 import type { SubscriptionAuthorizeRequest } from '../../src/oauth/subscriptionCoordinator.js';
 
 /** The callback path ChatGPT's sign-in returns to. */
 const CALLBACK_PATH = '/auth/callback';
 
-/** The login program with the HTTP client a host provides. */
-const login = (options: Parameters<typeof loginWithLoopback>[0]) =>
-  loginWithLoopback(options).pipe(Effect.provide(FetchHttpClient.layer));
+/** The ChatGPT login program with the HTTP client a host provides. */
+const login = (
+  options: Omit<
+    Parameters<typeof loginWithLoopback<ChatgptSession>>[0],
+    'loopback'
+  >,
+) =>
+  loginWithLoopback({ ...options, loopback: CHATGPT_POLICY.loopback }).pipe(
+    Effect.provide(FetchHttpClient.layer),
+  );
 
 // it.live throughout: the flow binds a real loopback socket on the ChatGPT
 // callback port (or any free one), answers real fetches, and its callback
@@ -32,9 +42,10 @@ describe('ChatGPT loopback login', () => {
           expiresAtMs: Date.now() + 60_000,
         };
         let request: SubscriptionAuthorizeRequest | undefined;
-        const loginWithCode = vi.fn(() => Effect.succeed(expectedSession));
-        const coordinator: Parameters<typeof login>[0]['coordinator'] = {
-          buildAuthorizeRequest: (port: number) => {
+        const exchange = vi.fn(() => Effect.succeed(expectedSession));
+
+        const session = yield* login({
+          authorize: (port: number) => {
             const redirectUri = `http://127.0.0.1:${port}${CALLBACK_PATH}`;
             const url = new URL('https://auth.example.test/oauth/authorize');
             url.searchParams.set('redirect_uri', redirectUri);
@@ -50,11 +61,7 @@ describe('ChatGPT loopback login', () => {
             };
             return Effect.succeed(request);
           },
-          loginWithCode,
-        };
-
-        const session = yield* login({
-          coordinator,
+          exchange,
           openBrowser: () =>
             Effect.promise(async () => {
               if (request === undefined) {
@@ -81,10 +88,35 @@ describe('ChatGPT loopback login', () => {
 
         expect(session).toEqual(expectedSession);
         // The client a registering sign-in was issued reaches the exchange.
-        expect(loginWithCode).toHaveBeenCalledWith(request, {
+        expect(exchange).toHaveBeenCalledWith(request, {
           code: 'valid-code',
           clientId: 'oaiapp_issued',
         });
       }),
+  );
+
+  // An account's sign-in is handed around as a function (the app reads it
+  // off the account), so it must not depend on being called as a method.
+  it.live('runs a sign-in read off its account', () =>
+    Effect.gen(function* () {
+      const secrets = new Map<string, string>();
+      const store: CredentialStore = {
+        get: (key) => Effect.sync(() => secrets.get(key)),
+        set: (key, value) =>
+          Effect.sync(() => {
+            secrets.set(key, value);
+          }),
+        delete: (key) =>
+          Effect.sync(() => {
+            secrets.delete(key);
+          }),
+      };
+      const accounts = yield* SubscriptionAccounts.make(store);
+      const { signInWithBrowser } = accounts['chatgpt-subscription'];
+      const failure = yield* Effect.flip(
+        signInWithBrowser(() => Effect.fail(new Error('No browser here.'))),
+      ).pipe(Effect.provide(FetchHttpClient.layer));
+      expect(failure.message).toBe('No browser here.');
+    }),
   );
 });

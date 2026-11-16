@@ -2,24 +2,26 @@
  * AgentTrace — agent-general SDK surface.
  *
  * Discriminated-event channel for an agent run. Every {@link AgentEvent}
- * reaches the sinks the trace was built with ({@link AgentTraceSink}). Every other method on this interface is sugar
- * over `emit()` so the trace channel remains a single source of truth.
+ * reaches the sink the trace was built with ({@link AgentTraceSink}). Every
+ * other method on this interface is sugar over `emit()` so the trace channel
+ * remains a single source of truth.
  *
- * App-specific helpers (`logSdkError`/`logUserMessage`/etc.) are plain functions in `helpers.ts` that operate on
- * this interface — there is no host subtype. SDK consumers program directly
- * against `AgentTrace`.
+ * App-specific helpers (`logSdkError`, `logUserMessage`, …) are plain
+ * functions in `traceLogs.ts` that operate on this interface — there is no
+ * host subtype. SDK consumers program directly against `AgentTrace`.
  */
 import type { Effect } from 'effect';
 
 import type { MessageType, ToolUseLog } from '@shared/schemas';
+import type { LogOptions } from '@shared/schemas/logPayload';
 
 import type { AgentEvent } from '@shared/session/agentEvent';
 
-/** A sink the trace was built with: it receives every event emitted on the
- *  trace until the trace closes. */
+/** The sink the trace was built with: it receives every event emitted on
+ *  the trace until the trace closes. */
 export type AgentTraceSink = (event: AgentEvent) => void;
 
-/** Handle returned by `openRun` — append chunks then finalize. */
+/** Handle returned by `openStream` — append chunks then finalize. */
 export interface StreamHandle {
   readonly id: string;
   /** Append a chunk of text; emits `stream.chunk`. */
@@ -51,17 +53,10 @@ export interface ToolCardHandle {
   failIfOpen(): void;
 }
 
-/** Sugar passed to debug/info/warn/error. */
-export interface LogOptions {
-  readonly data?: unknown;
-  /** The row's category; subscribers pick a render style from it. */
-  readonly messageType?: MessageType;
-}
-
 /**
  * Agent-general SDK surface. Every method ultimately reduces to `emit()` so
  * the trace channel is a single source of truth. App-specific helpers are
- * plain functions over this interface (see `helpers.ts`).
+ * plain functions over this interface.
  */
 export interface AgentTrace {
   // ─── SSoT primitives ────────────────────────────────────────────────
@@ -94,7 +89,7 @@ export interface AgentTrace {
    * no phase that never happens. A stream that ends without content emits
    * nothing at all.
    */
-  openRun(kind: MessageType): StreamHandle;
+  openStream(kind: MessageType): StreamHandle;
   /**
    * Open a tool call's card with its first log (`tool.start`). A log whose
    * status is already terminal opens and closes the card at once; one without

@@ -9,6 +9,7 @@ import { expect } from 'vitest';
 // Local imports
 import { WorkspaceFs } from '@texra-ai/harness/plugins';
 import { RunIdSchema } from '@texra-ai/harness/schemas';
+import { errorOf } from '@test/support/toolResultFields';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
@@ -28,7 +29,7 @@ const storagePath = '/storage';
 // The process session over the host's roots, opened as a host whose
 // person answers from the view: its runs' requests wait for a decision.
 layer(
-  TestSession.layer(undefined, { host: {} }).pipe(
+  TestSession.layer(undefined, { answeredFromView: true }).pipe(
     Layer.provideMerge(SessionGraph.layer),
     Layer.provideMerge(
       FakeHost.layer({ workspaceRoot: '/workspace', storagePath }),
@@ -102,7 +103,7 @@ layer(
           );
 
           expect(result.status).toBe('error');
-          expect(result.error).toContain('symlink');
+          expect(errorOf(result)).toContain('symlink');
           expect(requests.opened).toEqual([]);
           expect(written).toEqual([]);
         }).pipe(Effect.provide(nativeToolTestLayer())),

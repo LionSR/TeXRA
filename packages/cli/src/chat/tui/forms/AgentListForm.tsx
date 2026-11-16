@@ -59,7 +59,7 @@ interface AgentGroups {
 }
 
 function teamRowDescription(team: TeamOptionData): string {
-  if (team.disabled === true) return team.disabledReason ?? 'Unavailable';
+  if (team.disabledReason != null) return team.disabledReason;
   const missing = team.unavailableMembers.length;
   return joinFacts([missing > 0 && `${missing} unavailable`, team.description]);
 }
@@ -82,7 +82,7 @@ function agentPickerItems(
       value: { kind: 'team' as const, teamId: team.value },
       label: joinFacts(['Team', team.label]),
       description: teamRowDescription(team),
-      ...(team.disabled === true ? { disabled: true } : {}),
+      ...(team.disabledReason != null ? { disabled: true } : {}),
     })),
   ];
 }

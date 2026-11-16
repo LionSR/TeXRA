@@ -3,17 +3,17 @@
  *
  * This is the agent-general core: no app-specific sugar; `MessageType`
  * is the only product vocabulary it takes. Product-specific helpers are plain
- * functions in `helpers.ts` that operate on the emitted event stream.
+ * functions in `traceLogs.ts` over the {@link AgentTrace} interface.
  *
  * It also owns how its streams read back: `responseText` picks the answer's
  * text out of the chunks it emits.
  *
- * Responsibilities at the emit boundary (one place, not many):
- *   - fan out to the sinks it was built with
- *   - swallow per-sink exceptions so one bad sink can't break the run
+ * Every event reaches the one sink the trace was built with, until it
+ * closes; a sink that throws is logged and does not break the run.
  */
 import { Effect, Exit, Stream } from 'effect';
 
+import { raisedBy } from '@logger/formatLogData';
 import { writeLogLine } from '@logger/logSink';
 import {
   MESSAGE_TYPES,
@@ -26,6 +26,7 @@ import {
   type MessageType,
   type ToolUseLog,
 } from '@shared/schemas';
+import type { LogOptions } from '@shared/schemas/logPayload';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import type { AgentEvent } from '@shared/session/agentEvent';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -33,7 +34,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import type {
   AgentTrace,
   AgentTraceSink,
-  LogOptions,
   StreamHandle,
   ToolCardHandle,
 } from './AgentTrace';
@@ -41,11 +41,11 @@ import type {
 const CHANNEL = 'TraceEmitter';
 
 export class TraceEmitter implements AgentTrace {
-  /** The sinks this trace was built with, in order; null once it closed. */
-  private sinks: readonly AgentTraceSink[] | null;
+  /** The sink this trace was built with; null once it closed. */
+  private sink: AgentTraceSink | null;
 
-  constructor(...sinks: readonly AgentTraceSink[]) {
-    this.sinks = sinks;
+  constructor(sink: AgentTraceSink) {
+    this.sink = sink;
   }
 
   // ─── SSoT primitives ───────────────────────────────────────────────
@@ -53,28 +53,24 @@ export class TraceEmitter implements AgentTrace {
   /** End the trace with its run: an event emitted after this reaches no
    *  sink, since the run it would describe has ended. */
   close(): void {
-    this.sinks = null;
+    this.sink = null;
   }
 
   emit(event: AgentEvent): void {
-    for (const sink of this.sinks ?? []) {
-      try {
-        sink(event);
-      } catch (err) {
-        // A misbehaving sink must not break the run. Write the entry
-        // to the host log sink directly (not back through this emitter, and
-        // not through a fiber: `emit` is the trace plane's one synchronous
-        // publication point) so a throwing sink is diagnosable without
-        // recursing into the trace stream.
-        // `warn`, not `debug`: swallowing a sink fault at debug level is
-        // the quiet-degradation shape the guardrail forbids, and it matches the
-        // sibling session plane (the session log's trace sink) and the app-signal
-        // bus, whose delivery fiber warns and keeps its subscription.
-        writeLogLine(
-          CHANNEL,
-          `Trace sink threw while handling event: ${toErrorMessage(err)}`,
-        );
-      }
+    if (this.sink === null) return;
+    try {
+      this.sink(event);
+    } catch (err) {
+      // A misbehaving sink must not break the run. Write the entry to the
+      // host log sink directly (not back through this emitter, and not
+      // through a fiber: `emit` is the trace's one synchronous publication
+      // point) so a throwing sink is diagnosable without recursing into the
+      // trace stream, at `warn`: a sink fault swallowed at `debug` would
+      // degrade silently.
+      writeLogLine(
+        CHANNEL,
+        `Trace sink threw while handling event: ${toErrorMessage(err)}`,
+      );
     }
   }
 
@@ -109,7 +105,7 @@ export class TraceEmitter implements AgentTrace {
       // JSON RPC encodes an explicit undefined as null, a different payload.
       ...(options.data === undefined
         ? {}
-        : { data: toJsonValue(options.data) }),
+        : { data: toJsonValue(raisedBy(options.data)) }),
       messageType: options.messageType,
     });
   }
@@ -154,7 +150,7 @@ export class TraceEmitter implements AgentTrace {
 
   // ─── Streams ───────────────────────────────────────────────────────
 
-  openRun(kind: MessageType): StreamHandle {
+  openStream(kind: MessageType): StreamHandle {
     const id = crypto.randomUUID();
     return new StreamHandleImpl(this, id, () =>
       this.emit({ type: 'stream.start', id, kind }),
@@ -234,7 +230,7 @@ class StreamHandleImpl implements StreamHandle {
   private readonly trace: TraceEmitter;
   readonly id: string;
   /**
-   * The `stream.start` emission, waiting for content (`openRun`); null once
+   * The `stream.start` emission, waiting for content (`openStream`); null once
    * started. A stream finalized without content emits no events at all,
    * while a finalize that carries text emits the start/end pair so
    * reasoning that only arrives in the final response still lands as a

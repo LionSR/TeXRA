@@ -2,7 +2,6 @@ import { Schema, Struct } from 'effect';
 
 import { AgentConfigSchema } from './agentConfig';
 import { NullableFileFieldsSchema } from './fileFields';
-import { JsonValueSchema } from './jsonValue';
 
 export const BaseProposalFieldsSchema = Schema.Struct({
   // The agent's resolved source and inline persona, its memories and its
@@ -43,7 +42,7 @@ export const TaskProposalFieldsSchema = NullableFileFieldsSchema.mapFields(
 ).mapFields(
   Struct.assign({
     options: Schema.optional(
-      Schema.NullOr(Schema.Record(Schema.String, JsonValueSchema)),
+      Schema.NullOr(Schema.Record(Schema.String, Schema.Json)),
     ),
   }),
 );

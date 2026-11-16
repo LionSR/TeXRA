@@ -9,7 +9,7 @@ import { escapesRoot } from '@utils/core/pathCore';
 /**
  * Result of resolving a path against a workspace root.
  * 'workspace' paths live inside the root; 'external' paths do not. Whether an
- * external path is admitted is the tool path resolver's question
+ * external path is accepted is the tool path resolver's question
  * (`resolveToolPath`), asked of the external-root allowlist for the calling
  * session's project.
  */

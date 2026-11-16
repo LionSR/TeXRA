@@ -14,7 +14,7 @@ import {
   getHelperModelName,
   readModelOptions,
   StateWriteFailed,
-  type ModelOption,
+  type ModelVerdict,
   REASONING_LEVELS_KEY,
 } from '@texra-ai/harness/host';
 import {
@@ -137,7 +137,8 @@ const buildSelectionItems = Effect.fn('buildModelSelectionItems')(function* (
       usageRoute: option.usageRoute,
     };
 
-    items.push({ ...item, ...reasoningLevelData(decided) });
+    const reasoning = reasoningChoice(decided);
+    items.push(reasoning === undefined ? item : { ...item, reasoning });
   }
 
   return items.toSorted((a, b) => a.name.localeCompare(b.name));
@@ -145,32 +146,26 @@ const buildSelectionItems = Effect.fn('buildModelSelectionItems')(function* (
 
 /**
  * A Models-tab row's reasoning controls, from what a run on the row's route
- * sends (`ModelOption.reasoning`, the bind's own decision): the levels the
+ * sends (`ModelVerdict.reasoning`, the bind's own decision): the levels the
  * route can carry, the level a run sends with none saved, and, with a level
  * saved, the level a run sends for it: the saved one, or the one the policy
  * substitutes where the route cannot carry it. The row offers no choice
  * where the route carries one level or none.
  */
-function reasoningLevelData(
-  decided: Extract<ModelOption, { config: ModelConfig }>,
-): Pick<
-  ModelSelectionItem,
-  | 'supportsReasoningLevel'
-  | 'supportedReasoningLevels'
-  | 'defaultReasoningLevel'
-  | 'reasoningLevel'
-> {
+function reasoningChoice(
+  decided: Extract<ModelVerdict, { config: ModelConfig }>,
+): ModelSelectionItem['reasoning'] {
   const { reasoning, savedEffort } = decided;
-  if (reasoning === undefined || reasoning.efforts.length <= 1) return {};
+  if (reasoning === undefined || reasoning.efforts.length <= 1)
+    return undefined;
   const sent = 'refused' in reasoning.sent ? undefined : reasoning.sent.effort;
   return {
-    supportsReasoningLevel: true,
-    supportedReasoningLevels: [...reasoning.efforts],
+    levels: [...reasoning.efforts],
     ...(!('refused' in reasoning.fallback) && {
-      defaultReasoningLevel: reasoning.fallback.effort,
+      default: reasoning.fallback.effort,
     }),
     ...(savedEffort !== undefined &&
       sent !== undefined &&
-      reasoning.efforts.includes(sent) && { reasoningLevel: sent }),
+      reasoning.efforts.includes(sent) && { saved: sent }),
   };
 }

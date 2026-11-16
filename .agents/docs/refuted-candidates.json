@@ -292,7 +292,7 @@
         {
           "file": "packages/llm/src/turn.ts",
           "symbol": "completedTurn",
-          "signature": "export const completedTurn = Effect.fn('llm.generateTurn')(function* ( events: Stream.Stream<TurnEvent, ModelError>, ) {…});"
+          "signature": "export const completedTurn = Effect.fn('llm.completedTurn')(function* ( events: Stream.Stream<TurnEvent, ModelError>, ) {…});"
         }
       ]
     },
@@ -777,6 +777,37 @@
           "signature": "export function walkFiles(startDir, { include } = {}) {…}"
         }
       ]
+    },
+    {
+      "id": "LLM-verdict-not-retryable-is-the-default",
+      "candidate": "judgeFailure's notRetryable rule deleted as a restatement of the ModelError constructor's retryableByDefault, keeping only the overflow half (LM-8 b of the 2026-11-15 design red-flag audit)",
+      "why": "The two rules read different statuses. retryableByDefault reads the status the error was built with; notRetryable reads the reply's, which readReply (packages/llm/src/api/failureReply.ts) takes from the body's error type or code when the error carries no HTTP status of 400 or above (statusFromBody: invalid_request_error is 400), and judgeFailure keeps the producer's kind. The `transport` default is retryable, so the rules agree only while no producer pairs `transport` with a body whose type names a non-retryable status. No producer is shown to do so today, but nothing holds it either: sdkModelError (packages/llm/src/errors.ts) classifies any SDK failure without HTTP facts as `transport`, and the Responses WebSocket wraps any cause that is not a ModelError as `transport`, which readReply reads as the body when it is a plain object. Deleting the rule moves a guarantee the verdict makes in one place onto every producer, the opposite of one owner per decision.",
+      "ruling": ".agents/docs/evidence/2026-11-15-design-red-flags/LM-llm.md#lm-8-small-instances-batched-a-binder-that-throws-and-catches-its-own-errors-a-verdict-rule-that-restates-the-errors-default-and-three-hand-written-helpers",
+      "symbols": [
+        {
+          "file": "packages/llm/src/api/verdict.ts",
+          "symbol": "notRetryable",
+          "signature": "function notRetryable(reply: Reply, overflow: boolean): false | undefined {…}"
+        }
+      ]
+    },
+    {
+      "id": "HARNESS-approval-denial-kinds-already-collapsed",
+      "candidate": "The approval policy's seven named denial reasons collapsed into the denial's message, with one decider and one answer type (HS-3 of the 2026-11-15 design red-flag audit)",
+      "why": "Already built on main by #14963 before the row was taken up: decideApproval (packages/harness/src/shared/approvalPolicy.ts) is the one decider, and it returns { action: 'deny', reason } where reason is the message itself; the named reason kinds and their per-kind message functions are gone. Rebuilding the row would only restate that change.",
+      "ruling": ".agents/docs/evidence/2026-11-15-design-red-flags/HS-harness-store.md#hs-3-the-approval-policy-names-seven-denial-reasons-that-nothing-branches-on-each-mapped-back-to-its-message-by-its-own-function",
+      "symbols": [
+        {
+          "file": "packages/harness/src/shared/approvalPolicy.ts",
+          "symbol": "decideApproval",
+          "signature": "export function decideApproval(input: { readonly policy: ApprovalPolicy; readonly canPresent: boolean; readonly ask: ApprovalAsk; }): ApprovalDecision {…}"
+        }
+      ]
+    },
+    {
+      "id": "TEST-kernel-default-process-without-validation-model",
+      "candidate": "The test kernel's default process provides no ValidationModel, so harness suites stop loading the CLI's validation bundle layer and each suite that plays a scenario names its model (RT-6, model half, of the 2026-11-15 design red-flag audit)",
+      "why": "The default model is not always off in a kernel worker. validationHost (src/test-kernel/support/storeFaults.ts) and the golden store's killed-run block (src/test-kernel/controllers/session/goldenStore.vitest.ts, 'the golden run killed after its effect') stub VALIDATION_SWITCH and the flag file per test and run over the block's default process (SessionGraph.hosted or texraHosted), whose validationModelLayer then answers. Those blocks build one process per block and a host per test, so the model cannot move into the host; dropping the default would make every validationHost suite (the crash conformance shards, resumeRun, ExecuteCli, ResumeCommand, HeadlessRunCommand, chatSessionController, the run-loop hooks and session programs suites, about fifteen, several of them harness suites) name the CLI's layer itself, which spreads the @cli import the change meant to remove. What did hold landed instead: SessionGraph.with takes named options with the validation model as its default, so the two harness suites that imported the CLI module only to fill its positional model slot (BashTool, ExecutionsToolOutput) no longer do."
     }
   ]
 }

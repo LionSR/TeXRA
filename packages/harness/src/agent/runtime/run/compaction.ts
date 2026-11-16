@@ -12,10 +12,7 @@
 import { Cause, Effect, Exit } from 'effect';
 
 import type { AgentTrace } from '@agent/trace/AgentTrace';
-import {
-  logContextManagementEvent,
-  startCompactionActivity,
-} from '@agent/trace/traceLogs';
+import { startCompactionActivity } from '@agent/trace/traceLogs';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { Settings, type SettingsStores } from '@shared/config/settings';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
@@ -29,7 +26,7 @@ import type { ModelInvoker } from '../ModelInvoker';
 import type { ModelCallResult } from './modelCall';
 import { MODEL_COMPACTION_THRESHOLD_SETTING } from '@shared/state/stateSettings';
 
-/** Prepended to a summary folded back into the conversation as a user
+/** Prepended to a summary applied back into the conversation as a user
  *  message: the same marker for every provider. */
 const COMPACTION_SUMMARY_PREFIX = '[Previous conversation summary]\n\n';
 
@@ -68,15 +65,15 @@ interface CompactionInput {
   readonly stores: SettingsStores;
 }
 
-/** Why a compaction runs: as its `context.edit` records it (`trigger`), and
- *  as its debug line names it. */
-const COMPACTION_REASONS = {
-  request: { trigger: 'user', debug: 'manually requested' },
-  threshold: { trigger: 'context-limit', debug: 'token threshold exceeded' },
-  overflow: { trigger: 'overflow', debug: 'context window exceeded' },
+/** Why a compaction runs, as its `context.edit` records it (`trigger`),
+ *  and how its debug line names it. */
+const TRIGGER_DEBUG = {
+  user: 'manually requested',
+  'context-limit': 'token threshold exceeded',
+  overflow: 'context window exceeded',
 } as const;
 
-type Reason = keyof typeof COMPACTION_REASONS;
+type Trigger = keyof typeof TRIGGER_DEBUG;
 
 /** A summary the bound model produced of messages `[0, to)`. */
 interface Summary {
@@ -112,7 +109,7 @@ const overThreshold = Effect.fn('compaction.overThreshold')(function* (
 const summarize = Effect.fn('compaction.summarize')(function* (
   state: RunState,
   input: Pick<CompactionInput, 'logger' | 'bound' | 'invoker' | 'cell'>,
-  reason: Reason,
+  trigger: Trigger,
 ): Effect.fn.Return<Summary | null> {
   const { logger, bound } = input;
   // A threshold summary leaves the newest exchange as it is: the last
@@ -123,30 +120,27 @@ const summarize = Effect.fn('compaction.summarize')(function* (
     ({ role }) => role === 'assistant',
   );
   const conversation =
-    reason === 'threshold'
+    trigger === 'context-limit'
       ? state.messages.slice(0, Math.max(answered, 0))
       : state.messages;
   if (conversation.length <= 2) {
-    if (reason !== 'threshold') {
+    if (trigger !== 'context-limit') {
       logger.debug('Conversation too short for compaction, skipping');
     }
     return null;
   }
   const contextWindow = bound.config.contextWindow;
   const tokensBefore = contextTokens(state);
-  logger.debug(
-    `Compacting conversation (${COMPACTION_REASONS[reason].debug})`,
-    {
-      data: {
-        inputTokens: tokensBefore,
-        utilizationPercent: roundedUtilizationPercent(
-          tokensBefore,
-          contextWindow,
-        ),
+  logger.debug(`Compacting conversation (${TRIGGER_DEBUG[trigger]})`, {
+    data: {
+      inputTokens: tokensBefore,
+      utilizationPercent: roundedUtilizationPercent(
+        tokensBefore,
         contextWindow,
-      },
+      ),
+      contextWindow,
     },
-  );
+  });
   const activity = startCompactionActivity(logger);
   // A model call like any other (gated, priced, reported; its usage rides
   // the edit that lands it), without the context updates, which the next
@@ -176,13 +170,13 @@ const summarize = Effect.fn('compaction.summarize')(function* (
   );
   if (Exit.isFailure(summarized)) {
     if (Cause.hasInterrupts(summarized.cause)) {
-      activity.finish('cancelled');
+      activity.finish({ state: 'cancelled' });
       return yield* Effect.interrupt;
     }
-    activity.finish('failed');
+    activity.finish({ state: 'failed' });
     logger.warn(
       `Compaction failed, continuing with original messages: ${toErrorMessage(summarized.cause)}`,
-      { data: Cause.squash(summarized.cause) },
+      { data: summarized.cause },
     );
     return null;
   }
@@ -190,7 +184,7 @@ const summarize = Effect.fn('compaction.summarize')(function* (
   const summary = turnText(summarized.value.turn).trim();
   if (!summary) {
     logger.warn('Compaction returned empty summary, skipping');
-    activity.finish('skipped');
+    activity.finish({ state: 'skipped' });
     return null;
   }
   return {
@@ -218,7 +212,7 @@ const land = Effect.fn('compaction.land')(function* (
   answers: readonly RunHistoryDraft[],
   summary: Summary,
   state: RunState,
-  reason: Reason,
+  trigger: Trigger,
 ) {
   const compacted = yield* input.cell.append([
     ...answers,
@@ -227,7 +221,7 @@ const land = Effect.fn('compaction.land')(function* (
       aggregateId: qualifyAggregateId('run', input.runId),
       payload: {
         cause: 'compaction',
-        trigger: COMPACTION_REASONS[reason].trigger,
+        trigger,
         range: { from: 0, to: summary.to },
         messages: [summary.replacement],
         usage: summary.usage,
@@ -237,24 +231,14 @@ const land = Effect.fn('compaction.land')(function* (
   const tokensBefore = contextTokens(state);
   const tokensAfter = Math.max(1, estimateMessageTokens(compacted.messages));
   const { contextWindow } = summary;
-  const reductionPercent =
-    tokensBefore > 0
-      ? (((tokensBefore - tokensAfter) / tokensBefore) * 100).toFixed(1)
-      : '0';
-  logContextManagementEvent(
-    input.logger,
-    `Compacted conversation: ${tokensBefore.toLocaleString()} → ~${tokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
-    {
-      action: 'compaction',
-      tokensBefore,
-      tokensAfter,
-      contextWindow,
+  summary.activity.finish({
+    state: 'completed',
+    freed: {
+      tokens: tokensBefore - tokensAfter,
       utilizationBefore: roundedUtilizationPercent(tokensBefore, contextWindow),
       utilizationAfter: roundedUtilizationPercent(tokensAfter, contextWindow),
-      details: `${summary.to} messages summarized`,
     },
-  );
-  summary.activity.finish('completed');
+  });
   return compacted;
 });
 
@@ -267,13 +251,13 @@ const land = Effect.fn('compaction.land')(function* (
  */
 const compact = Effect.fn('compaction.compact')(function* (
   input: CompactionInput,
-  reason: Reason,
+  trigger: Trigger,
   answers: readonly RunHistoryDraft[],
 ) {
   const state = yield* input.cell.current;
-  const summary = yield* summarize(state, input, reason);
+  const summary = yield* summarize(state, input, trigger);
   if (summary === null) return yield* input.cell.current; // nothing landed
-  return yield* land(input, answers, summary, state, reason);
+  return yield* land(input, answers, summary, state, trigger);
 });
 
 /**
@@ -286,10 +270,10 @@ export const compactAtBoundary = Effect.fn('compaction.atBoundary')(function* (
   input: CompactionInput,
   requests: readonly RunHistoryDraft[],
 ) {
-  if (requests.length > 0) return yield* compact(input, 'request', requests);
+  if (requests.length > 0) return yield* compact(input, 'user', requests);
   const state = yield* input.cell.current;
   if (!(yield* overThreshold(state, input))) return state;
-  return yield* compact(input, 'threshold', []);
+  return yield* compact(input, 'context-limit', []);
 });
 
 /**

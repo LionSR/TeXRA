@@ -2,6 +2,7 @@
 
 // Third-party imports
 import { String as Str } from 'effect';
+import { runNoun } from '@ui/copy/nestedRuns';
 import {
   LitElement,
   css,
@@ -456,7 +457,7 @@ export class StageList extends LitElement {
     // pane, so show the same "Task is starting" / idle text instead.
     if (this.rows.length === 0 && this.stages.length === 0) {
       const active = this.run !== null && isWorking(this.run);
-      const noun = this.run?.parentId ? 'agent' : 'task';
+      const noun = this.run === null ? 'task' : runNoun(this.run);
       return renderEmptyMessage(
         active
           ? `${Str.capitalize(noun)} is starting. Progress updates will appear here.`

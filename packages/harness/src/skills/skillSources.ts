@@ -4,7 +4,6 @@ import {
   installedPluginId,
   type LoadablePlugin,
 } from '@common/plugins/pluginTrust';
-import type { ActiveSkillSourceScope } from '@shared/schemas';
 import { bundledPluginDir } from '@common/storage/storageLayout';
 
 import type { SkillSource, SkillSourceTier } from './loadSkills';
@@ -47,119 +46,103 @@ const INTEROP_SKILL_DIRS = Object.freeze([
   '.gemini',
 ] as const);
 
-/**
- * The skill tiers in precedence order. A tier fixes the persisted scope its
- * sources carry, so a contribution never picks its own scope: a tool plugin
- * can only land in `bundled`, and the `ActiveSkillSourceScope` vocabulary in
- * `skills.disabledSources` cannot drift.
- * A `source` tier keeps its roots in registration order; the `name` tier
- * pools its roots and orders their skills by directory name, so bundled
- * skills read the same whether one directory or several ship them.
- *
- * Installed plugins sit right below the user's own skills and carry the
- * `user` scope: installing one is a per-user act like writing to
- * the storage root's `skills/`, so the user source switch governs both. Their skills
- * and commands are named `<plugin>:<name>`, so they never shadow, or are
- * shadowed by, a skill of another source.
- */
-const SKILL_TIERS = [
-  { id: 'custom', scope: 'custom', order: 'source' },
-  { id: 'project', scope: 'project', order: 'source' },
-  { id: 'interop-project', scope: 'interop', order: 'source' },
-  { id: 'user', scope: 'user', order: 'source' },
-  { id: 'plugin', scope: 'user', order: 'source' },
-  { id: 'interop-user', scope: 'interop', order: 'source' },
-  { id: 'bundled', scope: 'bundled', order: 'name' },
-] as const satisfies readonly {
-  id: string;
-  scope: ActiveSkillSourceScope;
-  order: SkillSourceTier['order'];
-}[];
-
-type SkillTierId = (typeof SKILL_TIERS)[number]['id'];
-
-/** What one discovery asks of the contributions: its folder and flags. */
-interface SkillSourceCall {
+/** What one discovery reads its sources from: the host's data, the
+ *  session's folders and the installed plugins that load. */
+export interface SkillSourceCall {
+  readonly resourcesPath: string;
+  readonly projectDataDirName: string | undefined;
+  /** The process's tool plugins, each of which may ship bundled skills. */
+  readonly pluginIds: readonly string[];
+  readonly options: SkillSourceOptions;
   /** The session's workspace; none for a session without one, which has
    *  no project skills (its home is not a project). */
   readonly cwd: string | undefined;
   readonly home: string;
   /** The storage root the host opened; its `skills/` holds the user's own. */
   readonly storageRoot: string;
-  readonly resourcesPath: string;
-  readonly options: SkillSourceOptions;
   /** The installed plugins that load: enabled, and trusted as they are. */
   readonly plugins: readonly LoadablePlugin[];
 }
 
-interface SkillRoot {
-  readonly path: string;
-  readonly label: string;
-  readonly required?: true;
-  /** The plugin that ships these skills: a tool plugin's id, or an
-   *  installed plugin's (`plugin:<name>`). */
-  readonly plugin?: string;
-  /** The installed plugin whose name prefixes the skills' names. */
-  readonly namespace?: string;
-  /** `path` is one command file (`commands/<name>.md`), not a skill root. */
-  readonly command?: true;
-}
-
-/**
- * One producer of skill roots: a stable id, the tier it lands in, and its
- * roots as a function of the call, so project sources follow each session's
- * workspace and the CLI's per-command flags.
- */
-export interface SkillSourceContribution {
-  readonly id: string;
-  readonly tier: SkillTierId;
-  readonly roots: (call: SkillSourceCall) => readonly SkillRoot[];
-}
-
-function interopRoots(base: string, scopeLabel: string): SkillRoot[] {
+function interopRoots(base: string, scopeLabel: string): SkillSource[] {
   return INTEROP_SKILL_DIRS.map((dir) => ({
+    scope: 'interop',
     path: path.join(base, dir, 'skills'),
     label: `${dir} ${scopeLabel}`,
   }));
 }
 
-const CORE_SKILL_CONTRIBUTIONS: readonly SkillSourceContribution[] = [
-  {
-    id: 'core:custom',
-    tier: 'custom',
-    // A relative path with no workspace resolves from the home directory.
-    roots: ({ cwd, home, options }) =>
-      (options.additionalPaths ?? []).map((candidate) => ({
+/**
+ * The tiers one discovery scans, in precedence order: custom roots, the
+ * project's skills, the other agent tools' project folders, the user's own
+ * skills, the installed plugins', the other agent tools' home folders, and
+ * the bundled ones.
+ *
+ * Installed plugins sit right below the user's own skills and carry the
+ * `user` scope: installing one is a per-user act like writing to the storage
+ * root's `skills/`, so the user source switch governs both. Their skills and
+ * commands are named `<plugin>:<name>`, so they never shadow, or are shadowed
+ * by, a skill of another source.
+ *
+ * The bundled tier pools the resources tree's skills with each tool plugin's
+ * (`resources/plugins/<id>/skills`; a plugin that ships none has no such
+ * directory, which reads as no skills), so bundled skills read the same
+ * whether one directory or several ship them. A tool plugin's are tagged with
+ * the plugin: its switch (`tools.disabled`) gates them, and a run's step lists
+ * them while it pins the plugin. Only the switch hides them, not a failed
+ * dependency probe: the probe answers per workspace and can be stale, and a
+ * plugin's skills are often what tells the user how to install the dependency
+ * it probes for.
+ *
+ * A path seen twice keeps its first occurrence (and becomes required if any
+ * occurrence is), so an explicitly requested project skills root still
+ * absorbs the project root.
+ */
+export function skillTiers(call: SkillSourceCall): SkillSourceTier[] {
+  const { cwd, home, projectDataDirName, resourcesPath } = call;
+  const tiers: SkillSourceTier[] = [
+    {
+      // A relative path with no workspace resolves from the home directory.
+      sources: (call.options.additionalPaths ?? []).map((candidate) => ({
+        scope: 'custom',
         path: path.resolve(cwd ?? home, candidate),
         label: 'custom',
         required: true,
       })),
-  },
-  {
-    id: 'core:interop-project',
-    tier: 'interop-project',
-    roots: ({ cwd }) => (cwd === undefined ? [] : interopRoots(cwd, 'project')),
-  },
-  {
-    id: 'core:user',
-    tier: 'user',
-    roots: ({ storageRoot }) => [
-      { path: path.join(storageRoot, 'skills'), label: 'user' },
-    ],
-  },
-  {
-    id: 'core:plugins',
-    tier: 'plugin',
-    // Each skill root and command file the plugin declares, read when it
-    // loaded; a root that has gone missing since is reported, not skipped.
-    roots: ({ plugins }) =>
-      plugins.flatMap(({ record, plugin }) => {
+    },
+    {
+      sources:
+        cwd === undefined || projectDataDirName === undefined
+          ? []
+          : [
+              {
+                scope: 'project',
+                path: path.join(cwd, projectDataDirName, 'skills'),
+                label: 'project',
+              },
+            ],
+    },
+    { sources: cwd === undefined ? [] : interopRoots(cwd, 'project') },
+    {
+      sources: [
+        {
+          scope: 'user',
+          path: path.join(call.storageRoot, 'skills'),
+          label: 'user',
+        },
+      ],
+    },
+    {
+      // Each skill root and command file the plugin declares, read when it
+      // loaded; a root that has gone missing since is reported, not skipped.
+      sources: call.plugins.flatMap(({ record, plugin }) => {
         const root = {
+          scope: 'user',
           label: `plugin ${record.name}`,
-          required: true as const,
+          required: true,
           plugin: installedPluginId(record.name),
           namespace: record.name,
-        };
+        } as const;
         return [
           ...plugin.skills.map((skills) => ({
             ...root,
@@ -168,135 +151,45 @@ const CORE_SKILL_CONTRIBUTIONS: readonly SkillSourceContribution[] = [
           ...plugin.commands.map((command) => ({
             ...root,
             path: path.join(record.path, command),
-            command: true as const,
+            command: true,
           })),
         ];
       }),
-  },
-  {
-    id: 'core:interop-user',
-    tier: 'interop-user',
-    roots: ({ home }) => interopRoots(home, 'user'),
-  },
-  {
-    id: 'core:bundled',
-    tier: 'bundled',
-    roots: ({ resourcesPath }) => [
-      { path: path.join(resourcesPath, 'skills'), label: 'bundled' },
-    ],
-  },
-];
-
-/**
- * A tool plugin's bundled skills, shipped at `resources/plugins/<id>/skills`
- * (a plugin that ships none has no such directory, which reads as no skills)
- * and tagged with the plugin. A plugin is one on/off unit, so its switch
- * (`tools.disabled`) gates them (`readDisabledSkills`), and a run's
- * step lists them while it pins the plugin. Only the switch hides them, not
- * a failed dependency probe: the probe answers per workspace and can be
- * stale, and a plugin's skills are often what tells the user how to install
- * the dependency it probes for.
- */
-function pluginSkillContribution(pluginId: string): SkillSourceContribution {
-  return {
-    id: pluginId,
-    tier: 'bundled',
-    roots: ({ resourcesPath }) => [
-      {
-        path: bundledPluginDir(resourcesPath, pluginId, 'skills'),
-        label: 'bundled',
-        plugin: pluginId,
-      },
-    ],
-  };
-}
-
-/**
- * The contributions a host installs: the core sources, the project skills
- * in the folder it keeps in each project (`HostSkillOptions.projectDataDirName`),
- * then the bundled skills of each tool plugin. The ids come in as strings
- * from the host bootstrap, which reads the process's plugin list, so
- * `@skills` keeps no edge to `@tools`.
- */
-export function hostSkillContributions(
-  pluginIds: readonly string[],
-  projectDataDirName?: string,
-): readonly SkillSourceContribution[] {
-  const project: SkillSourceContribution = {
-    id: 'core:project',
-    tier: 'project',
-    roots: ({ cwd }) =>
-      cwd === undefined || projectDataDirName === undefined
-        ? []
-        : [
-            {
-              path: path.join(cwd, projectDataDirName, 'skills'),
-              label: 'project',
-            },
-          ],
-  };
-  return [
-    ...CORE_SKILL_CONTRIBUTIONS,
-    project,
-    ...pluginIds.map(pluginSkillContribution),
+    },
+    { sources: interopRoots(home, 'user') },
+    {
+      pooled: true,
+      sources: [
+        {
+          scope: 'bundled',
+          path: path.join(resourcesPath, 'skills'),
+          label: 'bundled',
+        },
+        ...call.pluginIds.map((pluginId): SkillSource => ({
+          scope: 'bundled',
+          path: bundledPluginDir(resourcesPath, pluginId, 'skills'),
+          label: 'bundled',
+          plugin: pluginId,
+        })),
+      ],
+    },
   ];
-}
-
-/**
- * Fold contributions into the tiers one discovery scans. Contributions are
- * stable-sorted by tier and flattened with the tier's scope stamped on; a
- * path seen twice keeps its first occurrence (and becomes required if any
- * occurrence is), so an explicitly requested project skills root still
- * absorbs the project root. Contribution ids are unique; a repeated id is a
- * wiring defect and throws, so the id stays a checked key for the display and
- * toggle consumers that will read it.
- */
-export function foldSkillSources(
-  contributions: readonly SkillSourceContribution[],
-  call: SkillSourceCall,
-): SkillSourceTier[] {
-  const ids = new Set<string>();
-  for (const { id } of contributions) {
-    if (ids.has(id)) {
-      throw new Error(`Duplicate skill source contribution id: ${id}`);
-    }
-    ids.add(id);
-  }
   const seen = new Map<string, { tier: number; source: SkillSource }>();
-  SKILL_TIERS.forEach((tier, index) => {
-    for (const contribution of contributions) {
-      if (contribution.tier !== tier.id) continue;
-      for (const root of contribution.roots(call)) {
-        const key = path.resolve(root.path);
-        const existing = seen.get(key);
-        if (existing) {
-          if (root.required === true) {
-            existing.source = { ...existing.source, required: true };
-          }
-          continue;
-        }
-        seen.set(key, {
-          tier: index,
-          source: {
-            scope: tier.scope,
-            path: key,
-            label: root.label,
-            ...(root.required === true ? { required: true } : {}),
-            ...(root.plugin === undefined ? {} : { plugin: root.plugin }),
-            ...(root.namespace === undefined
-              ? {}
-              : { namespace: root.namespace }),
-            ...(root.command === undefined ? {} : { command: root.command }),
-          },
-        });
-      }
+  tiers.forEach((tier, index) => {
+    for (const source of tier.sources) {
+      const key = path.resolve(source.path);
+      const existing = seen.get(key);
+      if (existing === undefined)
+        seen.set(key, { tier: index, source: { ...source, path: key } });
+      else if (source.required === true)
+        existing.source = { ...existing.source, required: true };
     }
   });
   const entries = [...seen.values()];
-  return SKILL_TIERS.flatMap((tier, index) => {
+  return tiers.flatMap((tier, index) => {
     const sources = entries
       .filter((entry) => entry.tier === index)
       .map((entry) => entry.source);
-    return sources.length === 0 ? [] : [{ order: tier.order, sources }];
+    return sources.length === 0 ? [] : [{ ...tier, sources }];
   });
 }

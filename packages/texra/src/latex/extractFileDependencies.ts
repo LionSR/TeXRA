@@ -26,10 +26,9 @@ import {
   joinLatexPath,
   resolveLatexDir,
   stripLatexComments,
+  texInputPaths,
 } from './latexParsingUtils';
 
-const INPUT_PATTERN = /\\input\s*\{([^}]+)\}/g;
-const INCLUDE_PATTERN = /\\include\s*\{([^}]+)\}/g;
 const USEPACKAGE_PATTERN =
   /\\(?:usepackage|RequirePackage)\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g;
 
@@ -84,10 +83,6 @@ export const extractLatexFileDependencies = Effect.fn(
   ).pipe(Effect.mapError(ensureError));
   const uncommented = stripLatexComments(content);
 
-  const texInputPaths = [INPUT_PATTERN, INCLUDE_PATTERN].flatMap((pattern) =>
-    [...uncommented.matchAll(pattern)].map((match) => match[1]),
-  );
-
   const bibCandidates = collectBibliographyPaths(latexDir, uncommented);
   const styCandidates = collectCommaSeparatedMatches(
     uncommented,
@@ -100,7 +95,7 @@ export const extractLatexFileDependencies = Effect.fn(
   const [texResolved, bibResolved, styResolved] = yield* Effect.all(
     [
       Effect.forEach(
-        texInputPaths,
+        texInputPaths(uncommented),
         (raw) => resolveTexInputPath(raw, latexDir),
         { concurrency: RESOLVE_CONCURRENCY },
       ),

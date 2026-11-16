@@ -56,7 +56,7 @@ import { APPROVAL_POLICY_SETTING } from '@shared/state/stateSettings';
  * activation's either.
  */
 function afterActivation(
-  source: ApprovalGrantSource<RunId>,
+  source: ApprovalGrantSource,
   runId: RunId,
   recorded: ApprovalGrants,
 ): ApprovalGrants | null {
@@ -124,7 +124,7 @@ const approvalsUnder = Effect.fn('approvalsUnder')(function* (
     const grants = (yield* log.facts(id))?.grants;
     if (grants != null) policy.set(id, grants);
   }
-  const after: ApprovalGrantSource<RunId> = {
+  const after: ApprovalGrantSource = {
     runs: view.runs,
     policy: policy.set(runId, next),
   };

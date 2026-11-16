@@ -1,6 +1,6 @@
 /**
  * `resumeRun`, the one door every host resumes a persisted run through, over
- * a real store: each case parks a root run, crashes its process, and resumes
+ * a real store: each case leaves a root run waiting, crashes its process, and resumes
  * it in a fresh session on the validation model, failing or holding the
  * store's own operations where the case needs a race (`StoreFaults`).
  *
@@ -32,7 +32,7 @@ import { Runs } from '@agent/runtime/runRegistry';
 import { queuedFollowUps } from '@test/support/sessionTestUtils';
 import {
   answersOf,
-  parkedRunAfterCrash,
+  waitingRunAfterCrash,
   sessionStoreFaults,
   storedRows,
   untilStored,
@@ -114,7 +114,7 @@ describe(
           "a store read that fails under a resume fails it with the store's error, activates nothing and keeps the queued input",
           () =>
             Effect.gen(function* () {
-              const { session, runId, storage } = yield* parkedRunAfterCrash();
+              const { session, runId, storage } = yield* waitingRunAfterCrash();
               yield* send(session, runId, 'Keep this input.');
               const faults = yield* sessionStoreFaults(storage);
               // The resume reads the run's queued input and then its lineage
@@ -140,7 +140,7 @@ describe(
           'input sent while a resume reads the run reaches the resumed run',
           () =>
             Effect.gen(function* () {
-              const { session, runId, storage } = yield* parkedRunAfterCrash();
+              const { session, runId, storage } = yield* waitingRunAfterCrash();
               const faults = yield* sessionStoreFaults(storage);
               // The first records read finds the run's owner; the second, its
               // config, is inside the resume.
@@ -177,7 +177,7 @@ describe(
           'a resume on a host that cannot answer approval prompts offers its run no approval-gated tool',
           () =>
             Effect.gen(function* () {
-              const { session, runId, storage } = yield* parkedRunAfterCrash({
+              const { session, runId, storage } = yield* waitingRunAfterCrash({
                 interactions: { approvalPromptsUnavailable: true },
               });
               yield* send(session, runId, 'continue');
@@ -216,7 +216,7 @@ describe(
           "a user's stop while a resume decides records its reason, ends the run cancelled, and the resume activates nothing",
           () =>
             Effect.gen(function* () {
-              const { session, runId, storage } = yield* parkedRunAfterCrash();
+              const { session, runId, storage } = yield* waitingRunAfterCrash();
               const faults = yield* sessionStoreFaults(storage);
               // Past its record checks, the resume reads the run's input
               // before it launches: the stop lands there.
@@ -263,7 +263,10 @@ describe('a root launched to run once', { timeout: REAL_RUN_TIMEOUT }, () => {
           Effect.gen(function* () {
             const { roots } = yield* FakeHost;
             const sessions = yield* Sessions;
-            const options = { persistent: true, host: {} } as const;
+            const options = {
+              persistent: true,
+              answeredFromView: true,
+            } as const;
             // Ended in a session that then closed, so no fiber holds it.
             const runId = yield* Effect.scoped(
               Effect.gen(function* () {
@@ -302,7 +305,7 @@ describe('a root launched to run once', { timeout: REAL_RUN_TIMEOUT }, () => {
             const { roots } = yield* FakeHost;
             const session = yield* TestSession.open(roots, {
               persistent: true,
-              host: {},
+              answeredFromView: true,
             });
             const run = yield* session.start({
               agent: NOTES_AGENT,

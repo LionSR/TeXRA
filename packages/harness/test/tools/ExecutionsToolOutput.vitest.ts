@@ -25,9 +25,9 @@ import {
 } from '@texra-ai/harness/schemas';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { validationModelLayer } from '@cli/runtime/models/validationModel';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { SessionLog } from '@shared/session/runHistory';
+import { outputOf } from '@test/support/toolResultFields';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { startAwaited } from '@test/support/runHandleFixtures';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -114,8 +114,8 @@ function launchBackgroundRun(
     yield* Fiber.join(published);
 
     yield* Deferred.await(outputRead);
-    yield* Context.get(session, SessionLog).settled;
-    const reported = /Run ID: (\S+)/.exec(launched.output ?? '')?.[1];
+    yield* Context.get(session, SessionLog).drained;
+    const reported = /Run ID: (\S+)/.exec(outputOf(launched) ?? '')?.[1];
     assert.ok(reported, 'Background launch should report its run ID');
     const runId = Schema.decodeUnknownSync(RunIdSchema)(reported);
 
@@ -140,7 +140,7 @@ function readOutput(
   viewRange?: [number, number],
 ) {
   return Effect.gen(function* () {
-    yield* Context.get(session, SessionLog).settled;
+    yield* Context.get(session, SessionLog).drained;
     return yield* ExecutionsTool.call({
       path: `/executions/${runId}/output`,
       ...(viewRange ? { view_range: viewRange } : {}),
@@ -154,7 +154,7 @@ const sessionHandle = Effect.flatMap(TestSession, sessionHandleOf);
 /** A fresh host per test, and a session over its roots whose requests a
  *  person answers from the view. */
 const perTest = Layer.provideMerge(
-  TestSession.layer(undefined, { host: {} }),
+  TestSession.layer(undefined, { answeredFromView: true }),
   FakeHost.layer({
     workspaceRoot: '/workspace',
     config: { [APPROVAL_POLICY_SETTING.key]: 'yolo' },
@@ -163,11 +163,9 @@ const perTest = Layer.provideMerge(
 
 // Live clock: the background run settles on real turns.
 layer(
-  SessionGraph.with(
-    [],
-    validationModelLayer,
-    Layer.provideMerge(scripted.layer, nodeFileServices),
-  ).pipe(Layer.provideMerge(FakeHost.layer())),
+  SessionGraph.with({
+    platform: Layer.provideMerge(scripted.layer, nodeFileServices),
+  }).pipe(Layer.provideMerge(FakeHost.layer())),
   { excludeTestServices: true },
 )('ExecutionsTool /executions/{id}/output', (it) => {
   afterEach(() => {
@@ -191,7 +189,7 @@ layer(
 
           const result = yield* readOutput(session, run.runId);
 
-          const output = result.output ?? '';
+          const output = outputOf(result) ?? '';
           assert.ok(output.includes('[ 42%] Building CXX object src/foo.cc.o'));
           assert.ok(output.includes("err: warning: unused variable 'x'"));
           assert.ok(output.includes('[ 84%] Building CXX object src/bar.cc.o'));
@@ -218,7 +216,7 @@ layer(
           const childId = yield* publishTestRunStart(session, undefined, {
             parent: PARENT_RUN_ID,
           });
-          yield* Context.get(session, SessionLog).settled;
+          yield* Context.get(session, SessionLog).drained;
           // Launched and admitted, its program not yet past its setup: the
           // window between `start` and the child's loop being under way.
           const launch = yield* Effect.forkChild(
@@ -235,7 +233,7 @@ layer(
             action: 'kill',
           }).pipe(Effect.provide(parentRunCall(session)));
 
-          assert.equal(result.output, `Run ${childId} terminated.`);
+          assert.equal(outputOf(result), `Run ${childId} terminated.`);
           yield* Fiber.await(launch);
         }),
     );

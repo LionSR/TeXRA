@@ -11,10 +11,10 @@ import {
   type MessageType,
   type TraceRowFields,
 } from '@shared/schemas';
-import { outputGapNotice } from '@shared/toolUse';
+import { elidedNote } from '@shared/toolUse';
 import type { StreamingTextRow } from '@shared/transcript/transcriptRow';
 
-import { open, write, type Draft } from './transcriptState';
+import { open, write, type TranscriptUpdate } from './transcriptState';
 
 /** The three message types whose payload is streaming markdown text. */
 export const STREAMING_TEXT_ROW_KIND: Partial<
@@ -29,7 +29,7 @@ export const STREAMING_TEXT_ROW_KIND: Partial<
  *  row, its stderr at the warning level, led by the gap a capped log left
  *  before it. */
 export function recordProcessOutputRow(
-  d: Draft,
+  d: TranscriptUpdate,
   event: Extract<TraceRowFields, { type: 'process.output' }>,
 ): void {
   const level = event.stream === 'stderr' ? 'warn' : 'info';
@@ -47,7 +47,7 @@ export function recordProcessOutputRow(
     text:
       event.elided === undefined
         ? event.text
-        : `${outputGapNotice(event.elided)}\n${event.text}`,
+        : `${elidedNote(event.elided)}\n${event.text}`,
     payload: { messageType: MESSAGE_TYPES.DEFAULT, data: undefined },
   });
 }
@@ -56,7 +56,7 @@ export function recordProcessOutputRow(
  *  payload its schema rejects written as an error row naming the
  *  diagnostic, never dropped. */
 export function recordLogRow(
-  d: Draft,
+  d: TranscriptUpdate,
   event: Extract<TraceRowFields, { type: 'log' }>,
 ): void {
   if (event.level === 'debug' && !d.ctx.debug) return;

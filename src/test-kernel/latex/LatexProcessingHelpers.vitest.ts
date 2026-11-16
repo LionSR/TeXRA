@@ -5,11 +5,7 @@ import { Context, Effect, Layer } from 'effect';
 import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
 
-import { RunFileService } from '@texra-ai/harness/plugins';
-import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@texra-ai/harness/node';
+import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import {
   createWorkspaceLocation,
   sessionFsLayer,
@@ -66,8 +62,7 @@ describe('latexMedia figure extraction', () => {
       figurePath,
       host: {
         workspaceRoot: workspaceDir,
-        storagePath: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
-        globalStoragePath: resolveGlobalStoragePath(storageRoot),
+        storageRoot,
       },
     };
   }
@@ -101,7 +96,7 @@ describe('latexMedia figure extraction', () => {
         FakeHost,
       );
       const media = yield* processInputFiles(
-        { logger, roots, fileService: new RunFileService(runId, roots) },
+        { logger, roots, fileService: new RunWorkspace(runId, roots) },
         [createWorkspaceLocation(texPath, 'main.tex')],
         extractFiguresConfig,
       ).pipe(Effect.provide(sessionFsLayer(roots)));

@@ -2,7 +2,7 @@ import { it, layer } from '@effect/vitest';
 import { Effect, FileSystem, Schema } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
-import { RunFileService } from '@texra-ai/harness/plugins';
+import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import { createExternalLocation } from '@texra-ai/harness/host';
 
 import { RunIdSchema } from '@texra-ai/harness/schemas';
@@ -43,7 +43,7 @@ function replyContext(
         },
         { strict: true },
       ),
-      fileService: new RunFileService(RUN_ID, roots),
+      fileService: new RunWorkspace(RUN_ID, roots),
     },
   };
 }

@@ -10,7 +10,7 @@ import { expect } from 'vitest';
 import { generateRunId } from '@texra-ai/harness/schemas';
 import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
 import { SessionLog } from '@shared/session/runHistory';
-import { createFakeHost } from '@test/support/setupPlatform';
+import { createFakeHost } from '@test/support/fakeHost';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';
@@ -74,7 +74,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         );
         const runId = generateRunId();
         yield* publishTestRunStart(session, runId);
-        yield* Context.get(session, SessionLog).settled;
+        yield* Context.get(session, SessionLog).drained;
         const requests = yield* autoDecideRequests(session, () => ({
           action: 'reject',
         }));

@@ -9,6 +9,7 @@
 // Third-party imports
 import { Array as Arr, Effect, Result } from 'effect';
 import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
+import { agentToolNames, type AgentEntry } from '@texra-ai/harness/host';
 import {
   agentKeyOf,
   agentMatchesIdentifier,
@@ -45,10 +46,9 @@ function slugKey(value: string): string {
   return lookupKey(value).replaceAll(/\s+/g, '-');
 }
 
-export interface TeamCatalogAgent {
+export interface TeamCatalogAgent extends Pick<AgentEntry, 'persona'> {
   readonly name: string;
   readonly source: AgentSource;
-  readonly tools?: string[];
 }
 
 export interface TeamRunPlan<T extends TeamCatalogAgent = TeamCatalogAgent> {
@@ -116,7 +116,7 @@ function selectTeamRootAgent<T extends TeamCatalogAgent>(
   rootAgentNames: readonly string[],
 ): T | undefined {
   const delegatingAgents = members.filter((agent) =>
-    agent.tools?.includes(AGENT_TOOL_NAME),
+    agentToolNames(agent).includes(AGENT_TOOL_NAME),
   );
   if (source === 'custom') return delegatingAgents[0];
   for (const identifier of rootAgentNames) {

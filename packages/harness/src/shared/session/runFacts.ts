@@ -12,6 +12,8 @@
  * built here, beside the readers of their facts;
  * `agent/storage/runLifecycle.ts` commits them.
  */
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import type { Schema } from 'effect';
 import {
   NO_APPROVAL_GRANTS,
   type ApprovalGrants,
@@ -22,7 +24,6 @@ import {
   type FollowUpContent,
   type FollowUpDisposition,
   type FollowUpMessage,
-  type JsonValue,
   qualifyAggregateId,
   type RunEnd,
   type RunEndOutput,
@@ -76,7 +77,7 @@ export type RunFacts = {
   readonly toolCalls: number;
   /** The result value of a `submit_output` call, whether the response or
    *  one of its scripts issued it, or of a script run's handed-down call. */
-  readonly structured: { readonly value: JsonValue } | null;
+  readonly structured: { readonly value: Schema.Json } | null;
   /** The result a script run's handed-down call finished with: no model
    *  answers it, so its turn ends there, and an error fails it. */
   readonly handedDown: ToolResultPayload['result'] | null;
@@ -246,7 +247,8 @@ export interface Registration {
   readonly config: RunConfigRow;
 }
 
-/** The row that titles `runId`: the model's summary, or the user's rename. */
+/** The row that titles `runId`: the model's summary, a child's label, or
+ *  the user's rename, each cut to the length a run list shows. */
 export const descriptionRow = (
   runId: RunId,
   description: string,
@@ -254,20 +256,19 @@ export const descriptionRow = (
 ): Extract<SessionRowDraft, { type: 'run.description' }> => ({
   type: 'run.description',
   aggregateId: qualifyAggregateId('run', runId),
-  description,
+  description: truncateWithEllipsis(description, 80),
   by,
 });
 
-/** The rows that register a run, in commit order: a new run's (`born`)
- *  `run.start`, its `run.activate` (a re-registration's with the grants it
- *  ends, `ended`), and the description it is born with; and its
+/** The rows that register a run, in commit order: a new run's `run.start`,
+ *  its `run.activate` (a re-registration's with the grants it ends, `ended`:
+ *  null for a run being born), and the description it is born with; and its
  *  configuration, for its first batch to record ({@link Registration}). */
 export function registrationDrafts(
   runId: RunId,
   config: RunConfigRow['config'],
   options: RegisterRunOptions,
-  born: boolean,
-  ended: readonly SessionRowDraft[],
+  ended: readonly SessionRowDraft[] | null,
 ): Registration {
   const target = qualifyAggregateId('run', runId);
   const worktree = config.workingDirectory?.trim();
@@ -285,15 +286,15 @@ export function registrationDrafts(
     approvalPolicy: options.grants ?? NO_APPROVAL_GRANTS,
   };
   const rows: SessionRowDraft[] = [
-    ...(born ? [start] : []),
+    ...(ended === null ? [start] : []),
     { type: 'run.activate', aggregateId: target },
-    ...(born ? [] : ended),
+    ...(ended ?? []),
   ];
   if (options.description !== undefined)
     rows.push(descriptionRow(runId, options.description, 'model'));
   return {
     rows,
-    start: born ? start : null,
+    start: ended === null ? start : null,
     config: { type: 'run.config', aggregateId: target, config },
   };
 }

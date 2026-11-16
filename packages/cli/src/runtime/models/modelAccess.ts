@@ -5,16 +5,12 @@ import { Effect, Result, absurd } from 'effect';
 import {
   decideRunModel,
   readModelOptions,
-  type ModelOption,
+  type ModelVerdict,
   type ProcessRuntime,
   type RunModelCandidate,
 } from '@texra-ai/harness/host';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
-import {
-  type UsageRoute,
-  isModelOptionAvailable,
-  joinFacts,
-} from '@texra-ai/harness/schemas';
+import { isModelOptionAvailable, joinFacts } from '@texra-ai/harness/schemas';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
@@ -28,8 +24,6 @@ export interface CliModelAccess {
   /** Runnable with the currently configured credentials. */
   readonly available: boolean;
   readonly status: string;
-  /** The subscription the picker decided pays for the next request. */
-  readonly usageRoute?: UsageRoute;
 }
 
 export interface CliModelPickerItem {
@@ -133,10 +127,10 @@ function formatModelAccessStatus(model: ModelOptionData): string {
 
 /**
  * The picker row's access, naming the coding plan when one pays for the next
- * request (the row's `usageRoute`, decided by the picker).
+ * request (the option's `usageRoute`, decided by the picker).
  */
 function formatModelStatusForCli(model: CliModelAccess): string {
-  const plan = codingPlanForUsageRoute(model.usageRoute);
+  const plan = codingPlanForUsageRoute(model.model.usageRoute);
   return `api: ${plan?.displayName ?? model.status}`;
 }
 
@@ -171,13 +165,13 @@ export function modelSelectItemsForCli(
 }
 
 /** Each option's picker row, with the plan its route pays through. */
-function cliModelAccessFrom(options: readonly ModelOption[]): CliModelAccess[] {
-  const routes = new Map(options.map((option) => [option.model, option]));
+function cliModelAccessFrom(
+  options: readonly ModelVerdict[],
+): CliModelAccess[] {
   return modelOptionsFrom(options).map((model) => ({
     model,
     available: isModelOptionAvailable(model),
     status: formatModelAccessStatus(model),
-    usageRoute: routes.get(model.value)?.usageRoute,
   }));
 }
 

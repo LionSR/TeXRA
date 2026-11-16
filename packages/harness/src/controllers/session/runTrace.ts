@@ -219,10 +219,10 @@ export function replayTrace<E>(
         debug: boolean,
       ) => Stream.Stream<readonly SessionViewInput[]>;
     };
-    /** `settled`: the view applied every write committed so far; `now()`:
+    /** `finished`: the view applied every write committed so far; `now()`:
      *  the head. */
     readonly log: {
-      readonly settled: Effect.Effect<void>;
+      readonly drained: Effect.Effect<void>;
       readonly now: () => CommitOrdinal;
     };
   },
@@ -331,7 +331,7 @@ export function replayTrace<E>(
       return read.flatMap(readInput);
     };
     const over = Effect.exit(result).pipe(
-      Effect.andThen(session.log.settled),
+      Effect.andThen(session.log.drained),
       Effect.andThen(Effect.sync(session.log.now)),
     );
     return session.view.inputs([{ id, fromSeq: 0 }], 0, false).pipe(

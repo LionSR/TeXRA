@@ -295,7 +295,7 @@ export class Database extends Context.Service<
     readonly deletions: {
       readonly pending: () => EventsRead;
       readonly collect: (
-        tombstone: Extract<SessionRow, { type: 'run.removed' }>,
+        removal: Extract<SessionRow, { type: 'run.removed' }>,
         cleanup: (runIds: readonly RunId[]) => Effect.Effect<void, Error>,
       ) => Effect.Effect<void, Error>;
     };

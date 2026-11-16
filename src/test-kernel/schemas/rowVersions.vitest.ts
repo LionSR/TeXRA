@@ -25,8 +25,8 @@ import { TEXRA_SERVICE } from '@texra/controllers/server/protocol';
 import { INQUIRY_THREADS } from '@texra/shared/plugins/externalInquiry';
 import { UPDATE_CHECKS } from '@texra/utils/system/updateCheck';
 import { texraPlugins } from '@texra/tools/registry';
-import { factKindsOf } from '@tools/plugins';
-import { REPO_ROOT } from '../support/repoScan';
+import { toolTable } from '@tools/toolTable';
+import { REPO_ROOT } from '../support/repoRoot';
 
 /**
  * The release watermark of the session store:
@@ -70,7 +70,7 @@ const VERSIONED: readonly Versioned[] = [
       schema: arm,
     };
   }),
-  ...Object.entries(factKindsOf(texraPlugins({ name: 'vscode' }))).map(
+  ...Object.entries(toolTable(texraPlugins({ name: 'vscode' })).factKinds).map(
     ([name, factKind]) => ({
       name: `plugin.fact.${name.replace('/', '.')}`,
       version: factKind.version,

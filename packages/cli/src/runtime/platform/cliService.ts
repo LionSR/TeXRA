@@ -4,8 +4,6 @@
  * as the desktop opens its folders), the detached start a client asks for
  * when no service answers, and the connection the chat TUI holds.
  */
-import * as path from 'node:path';
-
 import {
   Context,
   Duration,
@@ -29,18 +27,17 @@ import {
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { SERVICE_SUBCOMMAND } from '@texra/controllers/server/discovery';
 import {
-  openNodeWorkspaceRoots,
   canonicalizeWorkspaceRoot,
-  resolveGlobalStoragePath,
   envFlag,
-  JsonStore,
   setLogSink,
 } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import { openLocalSession } from '@texra/controllers/session/openProjectSession';
-import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
-import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
+import {
+  openLocalSession,
+  openProjectRoots,
+} from '@texra/controllers/session/openProjectSession';
+import { openTexraGlobalConfigStore } from '@texra/platform/defaults/nodeStores';
 import { type ServiceInfo } from '@texra/controllers/server/protocol';
 import {
   runsAtWork,
@@ -57,7 +54,6 @@ import {
   type ServiceUnavailable,
   WINDOWS_UNSUPPORTED,
 } from '@texra/controllers/server/client';
-import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 
 import { readCliEntrypointPath } from './cliContext';
@@ -84,52 +80,28 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
   idleAfter: Duration.Input,
 ) {
   const { storageRoot } = context;
-  const globalState = yield* AppState;
   // The windows and the CLI write these files while the service runs: a
   // store's read serves what they hold now, so a setting changed in any
   // client reaches the next task and the next turn.
-  const globalConfig = yield* JsonStore.open(
-    path.join(resolveGlobalStoragePath(storageRoot), TEXRA_CONFIG_FILE_NAME),
-  );
-  const openRoots = Effect.fn('cliServiceProjects.openRoots')(function* (
-    workspace: string | undefined,
-    within: Scope.Scope,
-  ) {
-    const { warnings, ...configs } = yield* openTexraWorkspaceConfigStores(
-      TEXRA_SETTINGS.catalog,
-      storageRoot,
-      workspace,
-    );
-    yield* Effect.forEach(
-      warnings,
-      (message) => Effect.logWarning(message).pipe(withLogChannel(CHANNEL)),
-      { discard: true },
-    );
-    return yield* openNodeWorkspaceRoots({
-      workspaceRoot: workspace,
-      storageRoot,
-      config: {
-        ...configs,
-        global: globalConfig,
-        catalog: TEXRA_SETTINGS.catalog,
-      },
-      stateStores: yield* StateStores,
-      globalState,
-    }).pipe(Scope.provide(within));
-  });
+  const globalConfig = yield* openTexraGlobalConfigStore(storageRoot);
   // What opening a project reads, captured once: `open` is the port's,
   // called from handlers that hold no process context of their own. Exactly
   // these services, never the build's scope with them: provided over a
   // handler's lease, that scope would hold the lease's release until the
   // service exits, so no project would ever go idle.
   const services = Context.pick(
+    AppState,
     ChildProcessSpawner,
     FileSystem.FileSystem,
     Path.Path,
     StateStores,
   )(
     yield* Effect.context<
-      ChildProcessSpawner | FileSystem.FileSystem | Path.Path | StateStores
+      | AppState
+      | ChildProcessSpawner
+      | FileSystem.FileSystem
+      | Path.Path
+      | StateStores
     >(),
   );
   // The sessions open now, by storage root, and the load they carry (a
@@ -155,6 +127,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     ServiceProject,
     Error,
     | Scope.Scope
+    | AppState
     | ChildProcessSpawner
     | FileSystem.FileSystem
     | Path.Path
@@ -167,7 +140,18 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     // serves, not one it may leave. A failed lookup gives the count back
     // with its scope.
     yield* Effect.acquireRelease(count(1, 0), () => count(-1, 0));
-    const roots = yield* openRoots(root, projectScope);
+    // The service is the process that holds each project's state.
+    const { roots, warnings } = yield* openProjectRoots(
+      storageRoot,
+      root,
+      globalConfig,
+      undefined,
+    ).pipe(Scope.provide(projectScope));
+    yield* Effect.forEach(
+      warnings,
+      (message) => Effect.logWarning(message).pipe(withLogChannel(CHANNEL)),
+      { discard: true },
+    );
     // A project store is held by one process, and one service serves a
     // storage root at a time (the client that replaces a service waits for
     // its exit), so a held store is another process's to answer for. The

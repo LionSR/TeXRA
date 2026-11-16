@@ -39,7 +39,7 @@ interface InboxPort {
   /** The session's log: a send is one transaction. */
   readonly log: Pick<
     SessionLogShape,
-    'transact' | 'runRows' | 'history' | 'settled'
+    'transact' | 'runRows' | 'history' | 'drained'
   >;
   /** Enqueue a job on the session's publisher and return. */
   readonly detach: SessionEventsShape['detach'];
@@ -82,7 +82,7 @@ interface SendOptions {
 }
 
 /** A send decided inside a job: its rows, and how it landed. */
-type Admission = { rows: readonly RunInputDraft[]; sent: Sent };
+type Acceptance = { rows: readonly RunInputDraft[]; sent: Sent };
 
 /** What observers hear: a run takes no more input, or the inbox closed. */
 type InboxClosed =
@@ -92,7 +92,7 @@ type InboxClosed =
 /** The session's follow-up inbox; see the module comment. */
 export class SessionInbox {
   private readonly readers = new Map<RunId, FollowUpReader>();
-  /** Each run's sends, admitted one at a time in call order. */
+  /** Each run's sends, accepted one at a time in call order. */
   readonly sendLanes = new Map<RunId, PerKeyLane>();
   private readonly observers = new Set<(closed: InboxClosed) => void>();
   private disposed = false;
@@ -114,12 +114,12 @@ export class SessionInbox {
   ): Effect.Effect<Sent, LogWriteError | DatabaseReadFailed> {
     if (this.disposed) return Effect.succeed(CLOSED);
     return this.port.log.transact((tx) =>
-      this.admit(runId, item, options, tx.append),
+      this.accept(runId, item, options, tx.append),
     );
   }
 
   /** Open the run's reader for the generation running it (the caller's
-   *  scope); the registry admits one at a time, so a second is a defect. */
+   *  scope); the registry accepts one at a time, so a second is a defect. */
   open(runId: RunId): Effect.Effect<FollowUpReader, never, Scope.Scope> {
     return Effect.acquireRelease(
       Effect.suspend(() => {
@@ -141,7 +141,7 @@ export class SessionInbox {
 
   /** End the run's reader `input`; `terminal`: the observers hear the run
    *  takes no more input here, on the publisher after the sends already
-   *  admitted, and only if none left a row queued. Idempotent. */
+   *  accepted, and only if none left a row queued. Idempotent. */
   release(runId: RunId, input: FollowUpReader, terminal: boolean): void {
     if (this.readers.get(runId) !== input) return;
     this.readers.delete(runId);
@@ -157,11 +157,11 @@ export class SessionInbox {
 
   /** Whether the run is owed a resume: its input obliges one
    *  (`needsWake`) and no reader here takes it, read once the publisher
-   *  settled. Undefined only if the input could not be read (`wakeRun`'s
+   *  finished. Undefined only if the input could not be read (`wakeRun`'s
    *  caller resumes it). */
   owesResume(runId: RunId): Effect.Effect<boolean | undefined> {
     return Effect.gen({ self: this }, function* () {
-      yield* this.port.log.settled;
+      yield* this.port.log.drained;
       if (this.disposed || this.readers.has(runId)) return false;
       const input = yield* this.read(runId);
       return !input.inputClosed && needsWake(input);
@@ -237,13 +237,13 @@ export class SessionInbox {
     this.observers.clear();
   }
 
-  private readonly admit: (
+  private readonly accept: (
     runId: RunId,
     item: InboxItem,
     options: SendOptions,
     append: Append,
   ) => Effect.Effect<Sent, LogWriteError | DatabaseReadFailed> = Effect.fn(
-    'SessionInbox.admit',
+    'SessionInbox.accept',
   )(
     { self: this },
     function* (
@@ -252,7 +252,7 @@ export class SessionInbox {
       options: SendOptions,
       append: Append,
     ) {
-      const { rows, sent } = yield* this.admission(runId, item, options);
+      const { rows, sent } = yield* this.acceptance(runId, item, options);
       if (rows.length > 0) yield* append(rows);
       return sent;
     },
@@ -260,14 +260,14 @@ export class SessionInbox {
 
   /** One send decided in the caller's job: the row the job appends with
    *  its own, and how it landed (see {@link send}). */
-  admission(
+  acceptance(
     runId: RunId,
     item: InboxItem,
     options: SendOptions,
-  ): Effect.Effect<Admission, DatabaseReadFailed> {
+  ): Effect.Effect<Acceptance, DatabaseReadFailed> {
     const closed = (input: RunRowsRead<'input'>) =>
       this.disposed || (!this.readers.has(runId) && input.inputClosed);
-    const only = (sent: Sent): Admission => ({ rows: [], sent });
+    const only = (sent: Sent): Acceptance => ({ rows: [], sent });
     // The reader hears the row: it reads committed rows, so a wake ahead
     // of the commit costs it one empty read.
     const landed = (replay: boolean) =>
@@ -325,7 +325,7 @@ const queued = (input: RunRowsRead<'input'>): boolean =>
   input.followUps.some(isMessage);
 
 /** The session's follow-up inbox ({@link SessionInbox}): every run's input,
- *  one reader each, which every message to a run is admitted through.
+ *  one reader each, which every message to a run is accepted through.
  *  Built by the session layer and disposed with the session. */
 export class Inbox extends Context.Service<Inbox, SessionInbox>()(
   '@texra-ai/harness/session/Inbox',

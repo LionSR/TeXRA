@@ -15,6 +15,7 @@ import {
   Effect,
   FileSystem,
   type Path,
+  Schema,
   Scope,
   type Semaphore,
 } from 'effect';
@@ -23,13 +24,15 @@ import {
   isStrictlyWithin,
   createExternalLocation,
   createWorkspaceLocation,
+  withSessionFs,
 } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { absentReason } from '@texra-ai/harness/node';
+import { meansAbsent } from '@texra-ai/harness/node';
 import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
+import { collectFilesFromPatterns } from '@housekeeping/artifactFiles';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
-import { filesByPrefix } from '@latex/formatter/latexindentpt';
 import { latexdiff } from '@latex/latexdiff';
+import { compileLatex2Pdf } from '@latex/texTools';
 import {
   generateDiffFileName,
   WORKSPACE_DIFF_SUFFIX,
@@ -48,6 +51,54 @@ export type BuildDisplayFn = (
   location: FileLocation,
   options?: { preserveFocus?: boolean },
 ) => Effect.Effect<void, Error, PreviewServices>;
+
+/**
+ * A TeX file a host could not compile to show it. The message is the whole
+ * sentence the user reads.
+ */
+export class DisplayCompileFailed extends Schema.TaggedError<DisplayCompileFailed>()(
+  'DisplayCompileFailed',
+  { message: Schema.String },
+) {}
+
+/**
+ * Compile a TeX file to show it, into `outputDirectory` (where the host's
+ * viewer reads the PDF), answering the PDF's path. A missing compiler or a
+ * failed build fails with the sentence the host shows. A failed build's log
+ * tail goes to the app log, not the sentence: a toast or a native dialog
+ * cannot scroll a log of a few hundred lines, and in the message rather than
+ * a `data` annotation because the sink bounds an annotation to 2000
+ * characters.
+ */
+export const compileForDisplay = Effect.fn('latexPreview.compileForDisplay')(
+  function* (
+    roots: WorkspaceRoots,
+    location: FileLocation,
+    outputDirectory: string,
+  ): Effect.fn.Return<string, DisplayCompileFailed, PreviewServices> {
+    const sourcePath = location.absolutePath;
+    const built = yield* withSessionFs(
+      roots,
+      compileLatex2Pdf(location, roots, { outputDirectory }),
+    ).pipe(
+      // No compiler to drive: the message names it and how to install one.
+      Effect.catchTag('ToolMissing', (missing) =>
+        Effect.fail(
+          new DisplayCompileFailed({
+            message: `Cannot preview ${sourcePath}: ${missing.message}`,
+          }),
+        ),
+      ),
+    );
+    if (built.ok) return built.pdfPath;
+    yield* Effect.logError(
+      `LaTeX build failed for ${sourcePath}:\n${built.logTail}`,
+    ).pipe(withLogChannel(CHANNEL));
+    return yield* new DisplayCompileFailed({
+      message: `LaTeX build failed for ${sourcePath}. See the LaTeX log in ${outputDirectory} for details.`,
+    });
+  },
+);
 
 interface LatexPreviewDisplayOptions {
   openBuildDisplay: BuildDisplayFn;
@@ -111,33 +162,35 @@ const silentDelete = Effect.fn('latexPreview.silentDelete')(function* (
   );
 });
 
-/** Delete a file and the LaTeX auxiliary files built beside it */
+/**
+ * Delete a file and the LaTeX auxiliary files its build wrote, beside it or
+ * in its `build/` folder, found the way Clean Build finds them. A listing
+ * that fails is logged and deletes only the file.
+ */
 const deleteWithAuxFiles = Effect.fn('latexPreview.deleteWithAuxFiles')(
   function* (
     filePath: string,
   ): Effect.fn.Return<void, never, FileSystem.FileSystem> {
-    const ext = path.extname(filePath);
-    // An extensionless file (extname returns '') has no suffix to strip:
-    // `slice(0, -0)` is `slice(0, 0)`, which would drop the path entirely and
-    // unlink bare relative names (and list every `*.bak*`) in the process cwd.
-    const basePathNoExt =
-      ext === '' ? filePath : filePath.slice(0, -ext.length);
-    const dir = path.dirname(basePathNoExt);
-    const baseName = path.basename(basePathNoExt);
-    const exactTargets: string[] = [];
-    const backupPrefixes: string[] = [];
-    for (const tempExt of TEMP_EXTENSIONS) {
-      if (tempExt.endsWith('*')) {
-        backupPrefixes.push(baseName + tempExt.slice(0, -1));
-      } else {
-        exactTargets.push(basePathNoExt + tempExt);
-      }
-    }
-    const backupTargets = yield* filesByPrefix(dir, backupPrefixes).pipe(
+    const dir = path.dirname(filePath);
+    // An extensionless file keeps its whole name as the stem.
+    const stem = path.basename(filePath, path.extname(filePath));
+    // Listed relative to the file's own directory.
+    const auxFiles = yield* collectFilesFromPatterns(
+      dir,
+      '.',
+      [stem],
+      TEMP_EXTENSIONS,
+    ).pipe(
+      Effect.catch((error) =>
+        Effect.logWarning(`Failed to list the build files of ${filePath}`).pipe(
+          Effect.annotateLogs({ data: error }),
+          Effect.as(new Set<string>()),
+        ),
+      ),
       withLogChannel(CHANNEL),
     );
     yield* Effect.forEach(
-      [filePath, ...exactTargets, ...backupTargets],
+      [filePath, ...[...auxFiles].map((file) => path.resolve(dir, file))],
       silentDelete,
       { concurrency: 8, discard: true },
     );
@@ -196,7 +249,7 @@ const readFileWithFallback = Effect.fn('latexPreview.readFileWithFallback')(
     return yield* fs.readFile(uri.fsPath).pipe(
       Effect.map((bytes) => Buffer.from(bytes).toString('utf8')),
       Effect.catch((error) =>
-        absentReason(error)
+        meansAbsent(error)
           ? Effect.succeed(fallback)
           : Effect.logWarning(
               `Failed to read ${uri.fsPath}; previewing held content (saved hand edits may be missing): ${toErrorMessage(error)}`,

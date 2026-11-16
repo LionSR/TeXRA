@@ -5,7 +5,8 @@ import { Effect, Schema } from 'effect';
 import { ToolContext } from '@texra-ai/harness/plugins';
 
 // Local imports
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { settingName, toErrorMessage } from '@texra-ai/harness/schemas';
+import { INLINE_CRITICISM_SETTING } from '@texra/shared/settings/texraSettings';
 import {
   resolveToolPath,
   type ToolPathCall,
@@ -168,7 +169,7 @@ const addCriticism = Effect.fn('DiagnosticsTool.addCriticism')(function* (
   );
   if (!accepted) {
     return executed(
-      'Inline criticism diagnostics are disabled. Ask the user to turn on "Show criticism as editor diagnostics" (`texra.inlineCriticism.enabled`) in Settings > LaTeX to surface critiques as diagnostics.',
+      `Inline criticism diagnostics are disabled. Ask the user to turn on the ${settingName(INLINE_CRITICISM_SETTING)} setting to surface critiques as diagnostics.`,
       'Criticism not accepted',
     );
   }
@@ -197,8 +198,7 @@ export const DiagnosticsTool = defineTool({
   // (`EditorHost`): the extension's own session, or a service task with
   // one of its windows.
   hostCapability: 'diagnostics' satisfies EditorCapability,
-  description:
-    'Inspect or annotate diagnostics for a file. Use "list"/"count" to retrieve linter diagnostics; use "add" to push a critique annotation as a VS Code diagnostic (squiggle + Problems panel entry) instead of inserting a literal \\criticize{...}{...}{...} macro. The "add" command requires the "Show criticism as editor diagnostics" setting (`texra.inlineCriticism.enabled`, Settings > LaTeX) and reports "not accepted" if disabled; criticisms pushed this way are read back by "list".',
+  description: `Inspect or annotate diagnostics for a file. Use "list"/"count" to retrieve linter diagnostics; use "add" to push a critique annotation as a VS Code diagnostic (squiggle + Problems panel entry) instead of inserting a literal \\criticize{...}{...}{...} macro. The "add" command requires the ${settingName(INLINE_CRITICISM_SETTING)} setting and reports "not accepted" if disabled; criticisms pushed this way are read back by "list".`,
   schema: DiagnosticsInputSchema,
   execute: diagnose,
 });

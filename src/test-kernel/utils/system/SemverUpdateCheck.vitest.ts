@@ -7,7 +7,7 @@ import { FetchHttpClient, type HttpClient } from 'effect/http';
 import { TestClock } from 'effect/testing';
 import { GlobalValues } from '@texra-ai/harness/host';
 import { globalDatabaseLayer } from '@controllers/session/databaseLayer';
-import { globalValuesOver } from '@test/support/setupPlatform';
+import { globalValuesOver } from '@test/support/fsTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { jsonResponse } from '@test/support/fetchTestUtils';
 import { checkForDesktopUpdate } from '@desktop/main/desktopUpdateChecker';

@@ -19,28 +19,25 @@ import {
 
 import { type Session, Sessions } from '@texra-ai/harness';
 import {
+  AppState,
   withPerKeyLane,
   type PerKeyLane,
   StateStores,
 } from '@texra-ai/harness/host';
-import {
-  absentReason,
-  openNodeWorkspaceRoots,
-  canonicalizeWorkspaceRoot,
-} from '@texra-ai/harness/node';
+import { meansAbsent, canonicalizeWorkspaceRoot } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
 import {
   projectDisplayOf,
   type ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
-import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
-import { serviceProjectState } from '@texra/controllers/server/serviceSession';
 import type { ServiceLink } from '@texra/controllers/server/client';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import type { WindowClient } from '@texra/controllers/server/windowHost';
-import { openProjectSession } from '@texra/controllers/session/openProjectSession';
+import {
+  openProjectRoots,
+  openProjectSession,
+} from '@texra/controllers/session/openProjectSession';
 import type { GuiSession } from '@texra/controllers/session/openGuiWindow';
 import { DesktopProjectRecords } from './desktopProjectRecords.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
@@ -178,7 +175,7 @@ const partitionFolders = Effect.fn('desktopProjects.partitionFolders')(
         } else {
           missing.push(root);
         }
-      } else if (absentReason(stat.failure)) {
+      } else if (meansAbsent(stat.failure)) {
         missing.push(root);
       } else {
         const reason = toErrorMessage(
@@ -294,7 +291,7 @@ export const openDesktopProjectRegistry: (
 ) => Effect.Effect<
   DesktopProjectRegistry,
   Error,
-  DesktopProjectRecords | StateStores | Sessions | HostWindows
+  DesktopProjectRecords | StateStores | AppState | Sessions | HostWindows
 > = Effect.fn('openDesktopProjectRegistry')(
   function* (options: DesktopProjectRegistryOptions) {
     // The process's sessions and windows, which every project opens with.
@@ -313,7 +310,9 @@ export const openDesktopProjectRegistry: (
         Effect.provideService(HostWindows, hosts),
       );
     const records = yield* DesktopProjectRecords;
+    // Every project's roots share the process's state stores.
     const stateStores = yield* StateStores;
+    const appState = yield* AppState;
     // One open or close of a root at a time; and one write of the selection
     // and the recent list at a time, across roots.
     const lanes = new Map<string, PerKeyLane>();
@@ -366,36 +365,21 @@ export const openDesktopProjectRegistry: (
           yield* records.remember(root);
           const projectScope = yield* Scope.make();
           return yield* Effect.gen(function* () {
-            const { warnings: configWarnings, ...workspaceConfigs } =
-              yield* openTexraWorkspaceConfigStores(
-                TEXRA_SETTINGS.catalog,
-                options.dataRoot,
-                root,
-              );
-            for (const message of configWarnings) {
+            const { roots, warnings } = yield* openProjectRoots(
+              options.dataRoot,
+              root,
+              options.globalConfigStore,
+              Result.isSuccess(options.service)
+                ? options.service.success
+                : undefined,
+            ).pipe(
+              Effect.provideService(StateStores, stateStores),
+              Effect.provideService(AppState, appState),
+            );
+            for (const message of warnings) {
               yield* Effect.logWarning(message).pipe(withLogChannel('desktop'));
               yield* warn(message);
             }
-            const roots = yield* openNodeWorkspaceRoots({
-              workspaceRoot: root,
-              storageRoot: options.dataRoot,
-              config: {
-                ...workspaceConfigs,
-                global: options.globalConfigStore,
-                catalog: TEXRA_SETTINGS.catalog,
-              },
-              // A folder of the service keeps its state there: this process
-              // opens no store of that project.
-              ...(Result.isSuccess(options.service) && {
-                workspaceState: serviceProjectState(
-                  options.service.success,
-                  root,
-                ),
-              }),
-              stateStores,
-              // Every project's roots share the process's global state.
-              globalState: options.processRoots.globalState,
-            });
             // Acquire the session and install its registry owner before
             // interruption can leave this operation.
             return yield* Effect.uninterruptible(

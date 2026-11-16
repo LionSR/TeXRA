@@ -19,6 +19,7 @@ import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
+import { outputOf } from '@test/support/toolResultFields';
 import { BUNDLED_AGENTS } from '@test/support/storeFaults';
 import {
   publishTestRunStart,
@@ -96,11 +97,11 @@ layer(texraHosted, { excludeTestServices: true })(
             const session = yield* sessionHandleOf(
               yield* TestSession.open((yield* FakeHost).roots, {
                 persistent: true,
-                host: {},
+                answeredFromView: true,
               }),
             );
             yield* publishTestRunStart(session, runId);
-            yield* Context.get(session, SessionLog).settled;
+            yield* Context.get(session, SessionLog).drained;
             yield* seedRunRecord(session, runId, config);
             yield* publishTestRows(session, [
               {
@@ -116,7 +117,7 @@ layer(texraHosted, { excludeTestServices: true })(
                 text: 'First proof.',
               },
             ]);
-            yield* Context.get(session, SessionLog).settled;
+            yield* Context.get(session, SessionLog).drained;
 
             // The one fact a resume reads: the run's opening `run.position`.
             yield* seedRows(Context.get(session, SessionLog))([
@@ -142,7 +143,7 @@ layer(texraHosted, { excludeTestServices: true })(
                 text: 'Second proof.',
               },
             ]);
-            yield* Context.get(session, SessionLog).settled;
+            yield* Context.get(session, SessionLog).drained;
 
             // The resumed launch stops before it enters the run (no provider key
             // binds its model): it writes nothing.
@@ -184,18 +185,20 @@ layer(texraHosted, { excludeTestServices: true })(
               offset: 2,
               limit: 2,
             }).pipe(Effect.provide(toolLayer));
-            expect(firstPage.output).toContain(
+            expect(outputOf(firstPage)).toContain(
               'Returned message interval: [0, 2)',
             );
-            expect(firstPage.output).toContain('Next offset: 2');
-            expect(firstPage.output).not.toContain(
+            expect(outputOf(firstPage)).toContain('Next offset: 2');
+            expect(outputOf(firstPage)).not.toContain(
               'Now prove the second lemma.',
             );
-            expect(secondPage.output).toContain(
+            expect(outputOf(secondPage)).toContain(
               'Returned message interval: [2, 4)',
             );
-            expect(secondPage.output).toContain('Next offset: none');
-            expect(secondPage.output).not.toContain('Prove the first lemma.');
+            expect(outputOf(secondPage)).toContain('Next offset: none');
+            expect(outputOf(secondPage)).not.toContain(
+              'Prove the first lemma.',
+            );
           }),
       );
     });

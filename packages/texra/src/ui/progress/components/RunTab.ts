@@ -2,6 +2,7 @@
 // row actions (expand, and, where the list is `removable`, delete). An
 // interrupted row says so; its one Resume is on the task's ended line, which
 // the row opens. `run-tabs` lays the rows out.
+import { String as Str } from 'effect';
 import {
   getBasename,
   formatResultCount,
@@ -43,6 +44,7 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import {
   NESTED_AGENT,
   nestedRollupLabel,
+  runNoun,
   TASK_ACTIONS,
 } from '@ui/copy/nestedRuns';
 import { formatRelativeTime } from '@ui/copy/format';
@@ -164,8 +166,7 @@ export class RunTab extends LitElement {
       : status.word;
     const runTitle = run.title;
     const tooltip = buildTooltip(run, this.ticker.now);
-    const deleteLabel =
-      run.parentId === null ? TASK_ACTIONS.delete : TASK_ACTIONS.deleteAgent;
+    const noun = runNoun(run);
     const childCountLabel = formatResultCount(
       run.rollup.total,
       NESTED_AGENT.countNoun,
@@ -335,14 +336,11 @@ export class RunTab extends LitElement {
                   id: 'run-tab-actions',
                   icon: 'ellipsis',
                   slot: 'trigger',
-                  label: `Actions for ${run.identity.kind === 'agent' ? 'agent' : 'task'} ${runTitle}`,
-                  tooltip:
-                    run.identity.kind === 'agent'
-                      ? 'Agent actions'
-                      : 'Task actions',
+                  label: `Actions for ${noun} ${runTitle}`,
+                  tooltip: `${Str.capitalize(noun)} actions`,
                 })}
                 ${run.actions.includes('rename') ? html`<wa-dropdown-item value="rename">${waIcon('pencil', { slot: 'icon' })}${TASK_ACTIONS.rename}</wa-dropdown-item>` : nothing}
-                ${this.removable ? html`<wa-dropdown-item class="tab-remove" value="delete" variant="danger">${waIcon('trash', { slot: 'icon' })}${deleteLabel}</wa-dropdown-item>` : nothing}
+                ${this.removable ? html`<wa-dropdown-item class="tab-remove" value="delete" variant="danger">${waIcon('trash', { slot: 'icon' })}${TASK_ACTIONS.delete(run)}</wa-dropdown-item>` : nothing}
               </wa-dropdown>`
             : nothing
         }

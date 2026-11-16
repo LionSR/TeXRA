@@ -2,6 +2,7 @@ import { layer } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
 import { expect } from 'vitest';
 
+import { outputOf } from '@test/support/toolResultFields';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
@@ -22,7 +23,7 @@ layer(SessionGraph.hosted)('GrepTool run', (it) => {
             head_limit: 2,
           });
 
-          expect(result.output).toBe(
+          expect(outputOf(result)).toBe(
             'two\nthree\n\n[Showing 2 of 4 results. Use offset=3 to see more.]',
           );
         }).pipe(

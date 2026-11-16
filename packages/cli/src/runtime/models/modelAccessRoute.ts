@@ -14,7 +14,7 @@ export const CLI_ACCOUNT_ACCESS_DESCRIPTION =
 
 type CliSubscriptionProvider =
   | SubscriptionAuthStatus['provider']
-  | CodingPlanSubscription['cliProvider'];
+  | CodingPlanSubscription['id'];
 
 interface CliCodingPlanStatus {
   readonly preferred: boolean;
@@ -132,10 +132,10 @@ export function buildCliModelAccessItems(
     const planStatus = status ? cliCodingPlanStatus(status, plan) : undefined;
     return {
       value: {
-        provider: plan.cliProvider,
+        provider: plan.id,
         state: planStatus?.preferred ? ('off' as const) : ('on' as const),
       },
-      label: plan.preferenceLabel,
+      label: plan.preference.title,
       description: planStatus
         ? formatCliKeyedSubscriptionPreference(
             planStatus.preferred,

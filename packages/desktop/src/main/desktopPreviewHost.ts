@@ -12,10 +12,8 @@ import {
 import {
   type ProcessRuntime,
   withProcessServices,
-  withSessionFs,
 } from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
-import { absentReason } from '@texra-ai/harness/node';
+import { meansAbsent } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { HostFailed } from '@texra/hosts/uiHosts';
@@ -90,7 +88,7 @@ export function createDesktopPreviewHost(
     return FileSystem.FileSystem.use((fs) => fs.access(filePath)).pipe(
       Effect.catch((error: PlatformError.PlatformError) =>
         fail(
-          absentReason(error)
+          meansAbsent(error)
             ? `File not found: ${filePath}`
             : `Cannot access file ${filePath}: ${toErrorMessage(error.reason.cause ?? error)}`,
         ),
@@ -140,43 +138,24 @@ export function createDesktopPreviewHost(
       return;
     }
 
-    const outputDirectory = path.dirname(sourcePath);
-    const { compileLatex2Pdf } = yield* Effect.promise(
-      () => import('@latex/texTools'),
+    // Loaded on the first preview, not with the window.
+    const { compileForDisplay } = yield* Effect.promise(
+      () => import('@texra/tools/latex/latexPreview'),
     );
-    const built = yield* withSessionFs(
+    // The PDF lands beside its source; a failure's sentence is presented in
+    // a native dialog (desktopWindowHost.ts's `presented`).
+    const pdfPath = yield* compileForDisplay(
       roots,
-      compileLatex2Pdf({ kind: 'external', absolutePath: sourcePath }, roots, {
-        outputDirectory,
-      }),
+      fileLocation,
+      path.dirname(sourcePath),
     ).pipe(
-      // No compiler to drive: the message names it and how to install one.
-      Effect.catchTag('ToolMissing', (missing) =>
-        fail(`Cannot preview ${sourcePath}: ${missing.message}`),
-      ),
+      Effect.catchTag('DisplayCompileFailed', (failed) => fail(failed.message)),
     );
-    if (!built.ok) {
-      // The full engine log (up to 200 lines) goes to the app log, not the
-      // failure's message -- its caller presents it in a blocking native
-      // `dialog.showMessageBox` modal (desktopWindowHost.ts's `presented`),
-      // which has no scrolling affordance and would render as an oversized,
-      // unreadable dialog for a multi-hundred-line raw compiler log.
-      // In the message, not a `data` annotation: the sink bounds an
-      // annotation to 2000 characters, and the tail runs to 200 lines.
-      yield* Effect.logError(
-        `LaTeX build failed for ${sourcePath}:\n${built.logTail}`,
-      ).pipe(withLogChannel('desktop'));
-      yield* fail(
-        `LaTeX build failed for ${sourcePath}. See the LaTeX log next to the source for details.`,
-      );
-      return;
-    }
 
     // A successful build names a PDF on disk. Every build gets its own
     // number, so its tab reloads however close in time two builds land.
     // It opens in the renderer's pdf workbench tab (an `<iframe>` on
     // Electron's built-in Chromium viewer).
-    const { pdfPath } = built;
     options.postToRenderer({
       command: DESKTOP_PDF_COMMANDS.SHOW_PDF,
       session: roots.storage,

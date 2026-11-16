@@ -11,7 +11,7 @@ import { getModelLabel, joinFacts } from '@texra-ai/harness/schemas';
 import type { ProcessRuntime } from '@texra-ai/harness/host';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 
-import { printableSettledRows } from './transcriptEntries';
+import { printableFinalRows } from './transcriptEntries';
 import {
   transcriptEntryLayout,
   transcriptEntryMarginBottomRows,
@@ -103,7 +103,7 @@ export interface ChildHeader {
  */
 export interface StaticScrollbackSource {
   readonly entries: readonly TranscriptRow[] | undefined;
-  readonly settledRows: number;
+  readonly finalRows: number;
   /** Whether the run is working: a user prompt still waiting for its live
    *  continuation stays out of the scrollback while it is. */
   readonly working: boolean;
@@ -589,10 +589,10 @@ function buildScrollback(origin: number, input: ScrollbackInput): Scrollback {
     width,
   });
   const rows = source.entries ?? [];
-  const printable = printableSettledRows(
+  const printable = printableFinalRows(
     rows,
     0,
-    source.settledRows,
+    source.finalRows,
     source.working,
   );
   const tail = retainedStaticTranscriptTail(
@@ -669,10 +669,10 @@ export function advanceScrollback(
     origin += 1;
   }
 
-  const printable = printableSettledRows(
+  const printable = printableFinalRows(
     rows,
     current.printedThrough,
-    source.settledRows,
+    source.finalRows,
     source.working,
   );
   if (printable.rows.length > 0) {

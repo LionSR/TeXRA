@@ -141,7 +141,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               content: { text: asked, from: { kind: 'user' as const } },
             };
             yield* publishTestRows(session, [queued]);
-            yield* Context.get(session, SessionLog).settled;
+            yield* Context.get(session, SessionLog).drained;
 
             const resumed = yield* forkLoop({
               runId,
@@ -163,7 +163,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             // A producer that replays the delivery after a restart writes the
             // same id again; it names a follow-up already consumed.
             yield* publishTestRows(session, [queued]);
-            yield* Context.get(session, SessionLog).settled;
+            yield* Context.get(session, SessionLog).drained;
             const again = yield* forkLoop({
               runId,
               session,
@@ -212,7 +212,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 },
               },
             ]);
-            yield* Context.get(session, SessionLog).settled;
+            yield* Context.get(session, SessionLog).drained;
 
             const resumed = yield* forkLoop({
               runId,
@@ -286,7 +286,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         Effect.gen(function* () {
           const session = yield* quietSession();
           const runId = yield* startedRun(session);
-          yield* Context.get(session, SessionLog).settled;
+          yield* Context.get(session, SessionLog).drained;
           const file = path.join(os.tmpdir(), `texra-${generateRunId()}.png`);
           writeFileSync(file, Buffer.from(PIXEL, 'base64'));
           const attached = yield* attachedMedia(

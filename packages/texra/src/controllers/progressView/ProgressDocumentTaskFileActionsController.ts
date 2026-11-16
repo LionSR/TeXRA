@@ -12,12 +12,12 @@ import {
 } from '@texra-ai/harness/host';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import {
-  RunFileService,
+  runDirUnder,
   withLogChannel,
   type AppSignals,
 } from '@texra-ai/harness/plugins';
 import {
-  absentReason,
+  meansAbsent,
   entryTypeIn,
   readNormalizedFile,
 } from '@texra-ai/harness/node';
@@ -26,6 +26,7 @@ import {
   type RunId,
   Rejected,
 } from '@texra-ai/harness/schemas';
+import type { ConfirmQuestion } from '@texra/hosts/uiHosts';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import { revisionLayout } from '@texra/shared/constants/revisionLayout';
 import type { ProcessServices } from '@texra-ai/harness/host';
@@ -60,8 +61,10 @@ export interface ProgressDocumentTaskFileActionsHost {
     editedFile: string,
     title: string,
   ): FileAction<void>;
-  /** Ask to write an accepted file; false when the user declines. */
-  confirmAccept(message: string): Effect.Effect<boolean, HostCommandFailure>;
+  /** Ask a question that names its action; false when the user declines. */
+  confirm(
+    question: ConfirmQuestion,
+  ): Effect.Effect<boolean, HostCommandFailure>;
   openDirectory(directory: string): FileAction<void>;
   showInfo(message: string): Effect.Effect<void, HostCommandFailure>;
 }
@@ -106,10 +109,7 @@ export class ProgressDocumentTaskFileActionsController {
   )(
     { self: this },
     function* (runId: RunId) {
-      const { runDirectory } = new RunFileService(runId, {
-        storage: this.deps.storageRoot,
-        workspace: undefined,
-      });
+      const runDirectory = runDirUnder(this.deps.storageRoot, runId);
       const fs = yield* FileSystem.FileSystem;
       if ((yield* entryTypeIn(fs, runDirectory)) === undefined) {
         yield* fs.makeDirectory(runDirectory, { recursive: true });
@@ -152,7 +152,10 @@ export class ProgressDocumentTaskFileActionsController {
     const written = yield* acceptEditedFileReplace(
       pathToLocationIn(workspace, base),
       pathToLocationIn(workspace, file),
-      { confirm: host.confirmAccept, showInfo: host.showInfo },
+      {
+        confirm: (message) => host.confirm({ message, action: 'Replace file' }),
+        showInfo: host.showInfo,
+      },
     );
     if (Option.isNone(written) || !activeRun) return;
     const edit = yield* this.userEdit(activeRun, file, written.value);
@@ -181,14 +184,11 @@ export class ProgressDocumentTaskFileActionsController {
       output && revisionLayout(output.round).modelCopy(output.location);
     if (output === undefined || copyPath === undefined)
       return Effect.succeed(undefined);
-    const { runDirectory } = new RunFileService(stream, {
-      storage: this.deps.storageRoot,
-      workspace: undefined,
-    });
+    const runDirectory = runDirUnder(this.deps.storageRoot, stream);
     const copy = path.join(runDirectory, copyPath);
     return Effect.gen(function* () {
       const kept = yield* readOutputFile(copy).pipe(
-        Effect.catchIf(absentReason, () => Effect.succeed(undefined)),
+        Effect.catchIf(meansAbsent, () => Effect.succeed(undefined)),
       );
       if (kept === undefined) return undefined;
       const diff = unifiedDiffText(kept, accepted);

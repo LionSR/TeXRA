@@ -2,21 +2,24 @@
 
 Generated from `packages/harness/src/node.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 49
+Exports: 60
 
-- `absentReason` — `const absentReason: (error: unknown) => boolean`
 - `APPROVAL_POLICY_ENV` — `const APPROVAL_POLICY_ENV: "TEXRA_APPROVAL_POLICY"`
 - `canonicalizeWorkspaceRoot` — `function canonicalizeWorkspaceRoot: (workspaceRoot: string) => string`
 - `CommandDirs` — `const CommandDirs: Reference<() => readonly string[]>`
+- `commitExists` — `function commitExists: (cwd: string, hash: string) => Effect<boolean, never, ChildProcessSpawner>`
 - `ConfigStore` — `interface ConfigStore { get(key: string): unknown; set(key: string, value: unknown): Effect.Effect<void, Error>; }`
+- `createSymlink` — `const createSymlink: (sourceAbsolute: string, destination: string) => Effect<void, PlatformError, FileSystem>`
+- `currentBranch` — `function currentBranch: (cwd: string) => Effect<null | string, never, ChildProcessSpawner>`
 - `effectDiagnosticsLayer` — `const effectDiagnosticsLayer: (minimumLogLevel: LogLevel) => Layer<never, never, never>`
 - `entryChannel` — `function entryChannel: (entry: LogEntry) => string | undefined`
 - `entryMessage` — `function entryMessage: (entry: LogEntry) => string`
 - `entryTypeIn` — `const entryTypeIn: (fs: FileSystem, target: string) => Effect<Type | undefined, PlatformError, never>`
 - `envFlag` — `const envFlag: (name: string, env?: Readonly<Record<string, string | undefined>> | undefined) => Effect<boolean, never, never>`
 - `envVar` — `const envVar: (name: string) => Effect<string | undefined, never, never>`
-- `ExecResult` — `type ExecResult = typeof ExecResultSchema.Type; ≡ { readonly exitCode: number; readonly noExitCode?: boolean | undefined; readonly outputLimitExceeded?: boolean | undefined; readonly stderr: string; readonly stdout: string; readonly success: boolean; readonly timedOut: boolean; }`
-- `executeCommand` — `const executeCommand: (command: string | string[], options: ExecuteCommandBaseOptions) => Effect<{ readonly exitCode: number; readonly noExitCode?: boolean | undefined; readonly outputLimitExceeded?: boolean | undefined; readonly stderr: string; readonly stdout: string; readonly success: boolean; readonly timedOut: boolean; }, never, ChildProcessSpawner>`
+- `ExecEnd` — `type ExecEnd = { readonly _tag: 'Exited'; readonly code: number; } | { readonly _tag: 'TimedOut'; } | { readonly _tag: 'LimitExceeded'; readonly stream: 'stdout' | 'stderr'; } | { readonly _tag: 'NoExit'; readonly why: 'spawn' | 'signal' | 'read'; }; ≡ ExecEnd`
+- `ExecResult` — `interface ExecResult { readonly success: boolean; readonly stdout: string; readonly stderr: string; readonly end: ExecEnd; }`
+- `executeCommand` — `const executeCommand: (command: string | string[], options: ExecuteCommandBaseOptions) => Effect<ExecResult, never, ChildProcessSpawner>`
 - `ExecuteCommandBaseOptions` — `interface ExecuteCommandBaseOptions { readonly env?: Record<string, string>; readonly timeout?: number; readonly cwd: string | undefined; readonly onStdout?: (chunk: string) => void; readonly onStderr?: (chunk: string) => void; readonly buffer?: boolean; readonly maxBuffer?: number; readonly quiet?: boolean; readonly killProcessTree?: boolean; }`
 - `existsAtAbsolute` — `function existsAtAbsolute: (target: string) => boolean`
 - `FileSecrets` — `class FileSecrets { constructor: new (directory: string, onChanged: (key: string) => void) => FileSecrets; static: watch: <R>(directory: string, announce: (key: string) => Effect<void, never, R>) => Effect<void, never, FileSystem | R>; instance: delete: (key: string) => Effect<void, SecretsFailed, never>; get: (key: string) => Effect<string | undefined, SecretsFailed, never>; listStoredKeys: () => Effect<readonly string[], SecretsFailed, never>; set: (key: string, value: string) => Effect<void, SecretsFailed, never> }`
@@ -24,25 +27,33 @@ Exports: 49
 - `homeDirectory` — `const homeDirectory: Effect<string | undefined, never, never>`
 - `inheritedEnv` — `const inheritedEnv: (keep?: "anthropic" | "dashscope" | "deepseek" | "glm" | "google" | "kimiCode" | "meta" | "minimax" | "moonshot" | "openai" | "xai" | undefined) => Effect<Record<string, string>, never, never>`
 - `INPUT_HISTORY_LIMIT` — `const INPUT_HISTORY_LIMIT: 1000`
+- `isGitRepository` — `function isGitRepository: (cwd: string | undefined) => Effect<boolean, never, ChildProcessSpawner>`
 - `isNotADirectoryError` — `function isNotADirectoryError: (err: unknown) => boolean`
 - `JsonConfigProvider` — `class JsonConfigProvider { constructor: new ({ workspace, global, local, catalog, }: JsonConfigProviderOptions) => JsonConfigProvider; static: ; instance: catalog: SettingsCatalog; get: <T>(key: string) => T; inspect: <T = unknown>(key: string) => Partial<Record<"globalValue" | "workspaceValue", T>>; update: <T>(key: string, value: T, target?: ConfigTarget) => Effect<void, ConfigWriteFailed, never> }`
 - `JsonConfigProviderOptions` — `interface JsonConfigProviderOptions { workspace: ConfigStore; global: ConfigStore; local: ConfigStore; catalog: SettingsCatalog; }`
-- `JsonStore` — `class JsonStore { constructor: new (filePath: string, data: JsonRecord, version: string | undefined) => JsonStore; static: open: (filePath: string) => Effect<JsonStore, Error, FileSystem | Path>; unreadable: (filePath: string) => Effect<JsonStore, never, Path>; instance: filePath: string; get: (key: string) => unknown; keys: () => string[]; set: (key: string, value: unknown) => Effect<void, Error, never>; snapshot: () => Record<string, unknown> }`
+- `JsonStore` — `class JsonStore { constructor: new (filePath: string, data: JsonRecord, version: string | undefined) => JsonStore; static: open: (filePath: string) => Effect<JsonStore, Error, Path>; unreadable: (filePath: string) => Effect<JsonStore, never, Path>; instance: filePath: string; get: (key: string) => unknown; keys: () => string[]; set: (key: string, value: unknown) => Effect<void, Error, never>; snapshot: () => Record<string, unknown> }`
+- `localBranchExists` — `function localBranchExists: (cwd: string, branch: string) => Effect<boolean, never, ChildProcessSpawner>`
 - `LOG_CHANNEL` — `const LOG_CHANNEL: "channel"`
 - `LogEntry` — `type LogEntry = Omit<ReturnType<typeof Logger.formatStructured.log>, 'level'> & { readonly level: Uppercase<LogLevel.Severity>; }; ≡ LogEntry`
 - `LogSink` — `interface LogSink { write(entry: LogEntry): void; dispose?(): void; }`
-- `makeMachineGitEnv` — `const makeMachineGitEnv: Effect<ProcessEnv, never, never>`
+- `machineGit` — `const machineGit: (args: readonly string[], options?: undefined | { readonly cwd?: string | undefined; readonly env?: Readonly<Record<string, string>> | undefined; readonly input?: string | undefined; }) => Effect<{ code: ExitCode; stderr: string; stdout: string; }, PlatformError, ChildProcessSpawner>`
+- `MachineGitResult` — `interface MachineGitResult { readonly stdout: string; readonly stderr: string; readonly code: number; }`
+- `meansAbsent` — `const meansAbsent: (error: unknown) => boolean`
 - `nodeFileServices` — `const nodeFileServices: Layer<FileSystem | Path, never, never>`
 - `nodePlatform` — `function nodePlatform: (options: NodePlatformOptions) => AgentPlatform`
 - `NodePlatformOptions` — `interface NodePlatformOptions { readonly agentsDir: string; readonly workspaceDir?: string; readonly storageDir: string; readonly settings?: SettingsCatalog; }`
 - `nodePlatformServices` — `const nodePlatformServices: Layer<ChildProcessSpawner | FileSystem | Path, never, never>`
 - `NodeWorkspaceRootsInit` — `interface NodeWorkspaceRootsInit { readonly workspaceRoot: string | undefined; readonly storageRoot: string; readonly config: JsonConfigProviderOptions | ConfigProvider; readonly stateStores: Context.Service.Shape<typeof StateStores>; readonly globalState: StateStore; readonly workspaceState?: StateStore; }`
 - `openNodeWorkspaceRoots` — `const openNodeWorkspaceRoots: (init: NodeWorkspaceRootsInit) => Effect<WorkspaceRoots, DatabaseOpenFailed, Scope>`
+- `originDefaultBranch` — `function originDefaultBranch: (cwd: string) => Effect<null | string, never, ChildProcessSpawner>`
+- `originUrl` — `function originUrl: (cwd: string) => Effect<null | string, never, ChildProcessSpawner>`
 - `pathExists` — `const pathExists: (fs: FileSystem, target: string) => Effect<boolean, PlatformError, never>`
 - `projectValueIgnored` — `function projectValueIgnored: (row: SettingRow<unknown> | undefined, value: unknown) => boolean`
 - `readDirectoryTypedTolerant` — `const readDirectoryTypedTolerant: (target: string) => Effect<(readonly [string, Type])[], PlatformError, Path>`
 - `readNormalizedFile` — `const readNormalizedFile: (fs: FileSystem, target: string) => Effect<string, PlatformError, never>`
+- `recentCommitLabels` — `const recentCommitLabels: (cwd: string, limit: number) => Effect<null | readonly string[], never, ChildProcessSpawner>`
 - `relativeToRoot` — `function relativeToRoot: (root: string, filePath: string) => string | undefined`
+- `repositoryRoot` — `function repositoryRoot: (cwd: string) => Effect<null | string, never, ChildProcessSpawner>`
 - `resolveGlobalStoragePath` — `function resolveGlobalStoragePath: (storageRoot: string) => string`
 - `resolveWorkspaceStoragePath` — `function resolveWorkspaceStoragePath: (storageRoot: string, workspaceRoot: string | undefined) => string`
 - `runsInWsl` — `function runsInWsl: () => boolean`

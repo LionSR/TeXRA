@@ -4,7 +4,7 @@
  * (`@agent/codeSandbox/codeSandbox`); every call it issues goes through the
  * run loop's per-call program, reached through the door on the call's
  * `RunCall` (`scriptCalls`), which commits its rows and, on a resume, hands
- * back what they already settled. This tool names no other tool and writes
+ * back what they already finished. This tool names no other tool and writes
  * no row.
  */
 import * as NodeWorker from '@effect/platform-node/NodeWorker';
@@ -13,7 +13,7 @@ import { Duration, Effect, Layer, Predicate, Result, Schema } from 'effect';
 import {
   CodeSandbox,
   type ScriptOp,
-  type ScriptSettlement,
+  type ScriptOpResult,
 } from '@agent/codeSandbox/codeSandbox';
 import { RUN_LOG_MAX_LINES } from '@agent/codeSandbox/limits';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
@@ -23,8 +23,7 @@ import {
   type ScriptDoor,
 } from '@agent/runtime/RunCall';
 import {
-  JsonValueSchema,
-  SettledToolResultSchema,
+  FinishedToolResultSchema,
   ToolError,
   type ToolFileAttachment,
   type ToolResultPayload,
@@ -85,7 +84,7 @@ const SearchArgsSchema = Schema.Tuple([
 ]);
 const DescribeArgsSchema = Schema.Tuple([Schema.NonEmptyString]);
 
-/** What one host-function op answers, as a settled call. */
+/** What one host-function op answers, as a finished call. */
 const answerOf = (
   op: ScriptOp,
   catalog: ScriptDoor['catalog'],
@@ -119,17 +118,17 @@ const answerOf = (
 
 /** A call's result ended the turn: the script ends with it. */
 class EndedTurn extends Schema.TaggedError<EndedTurn>()('EndedTurn', {
-  // The executed member of a settled result: only an executed result ends
+  // The executed member of a finished result: only an executed result ends
   // the turn.
-  result: SettledToolResultSchema.members[0],
+  result: FinishedToolResultSchema.members[0],
 }) {}
 
-/** What the guest's `await` gets from a settled call: `{ output, summary }`
+/** What the guest's `await` gets from a finished call: `{ output, summary }`
  *  of a tool, the list `searchTools` found, the text `describeTool` wrote. */
-const settlementOf = (
+const guestAnswerOf = (
   result: ToolResultPayload['result'],
   op?: ScriptOp,
-): Effect.Effect<ScriptSettlement, EndedTurn> => {
+): Effect.Effect<ScriptOpResult, EndedTurn> => {
   if (result.status === 'error')
     return Effect.succeed({
       _tag: 'Failure',
@@ -199,8 +198,8 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
   // they reach the model on the script's own result.
   const files: ToolFileAttachment[] = [];
   const issue = (op: ScriptOp) =>
-    Effect.flatMap(scriptCalls.call(op, script), (settled) => {
-      for (const attached of settled.attachments)
+    Effect.flatMap(scriptCalls.call(op, script), (finished) => {
+      for (const attached of finished.attachments)
         if (attached.content.kind === 'stored')
           files.push({
             path: attached.path,
@@ -210,7 +209,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
             }),
             digest: attached.content.digest,
           });
-      return settlementOf(settled.result);
+      return guestAnswerOf(finished.result);
     });
   // The tools that are also globals, by the op name a global issues.
   const globals = new Map(
@@ -234,7 +233,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
           // the call is the tool's, recorded as the tool's.
           const [first, rest] = Array.isArray(op.input) ? op.input : [];
           if (rest != null && !Predicate.isObject(rest))
-            return Effect.succeed<ScriptSettlement>({
+            return Effect.succeed<ScriptOpResult>({
               _tag: 'Failure',
               name: 'TypeError',
               message: `${global.tool}() takes an options object as its second argument.`,
@@ -250,7 +249,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
               scriptCalls.answer(op, script, () =>
                 answerOf(op, scriptCalls.catalog),
               ),
-              (result) => settlementOf(result, op),
+              (result) => guestAnswerOf(result, op),
             )
           : issue(op);
       },
@@ -293,7 +292,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
     );
   if (outcome._tag === 'EndedTurn') return outcome.result;
   const { value } = outcome.result;
-  const returned = Schema.decodeUnknownResult(JsonValueSchema)(value);
+  const returned = Schema.decodeUnknownResult(Schema.Json)(value);
   const log = logTail();
   const foreground =
     input.run_in_background === true
@@ -335,7 +334,7 @@ const SURFACE = [
 export const ScriptTool = defineTool({
   name: SCRIPT_TOOL_NAME,
   // A resume runs the script again from the top against its recorded calls:
-  // each settled call is handed back from its row, never run twice.
+  // each finished call is handed back from its row, never run twice.
   replay: 'safe',
   description: SURFACE,
   describe: (declared, modules) =>

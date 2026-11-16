@@ -79,7 +79,7 @@ type PresentationProgram = (
 
 /**
  * Ask a host to present one notice, fire-and-forget: the program the host
- * answers with (a dialog settles on dismissal) runs on a detached fiber, so
+ * answers with (a dialog finishes on dismissal) runs on a detached fiber, so
  * no caller blocks on it and its failure is reported, while a host that
  * throws synchronously reaches the caller as {@link HostPresentationFailed}.
  */

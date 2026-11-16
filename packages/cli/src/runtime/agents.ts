@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 
 import {
   AgentCatalog,
+  agentToolNames,
   type AgentEntry,
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness/host';
@@ -131,7 +132,7 @@ export function formatCliAgentDetails(entry: AgentEntry): string {
     lines.push(entry.description);
   }
   const metadataFields: readonly [string, readonly string[] | undefined][] = [
-    ['tools', entry.tools],
+    ['tools', agentToolNames(entry)],
     ['outputs', task?.outputs],
   ];
   const metadataLines = metadataFields.flatMap(([label, values]) =>

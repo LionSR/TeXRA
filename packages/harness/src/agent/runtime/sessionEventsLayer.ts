@@ -1,5 +1,5 @@
 /**
- * The session event plane over its root's SQLite database. Each job commits
+ * The session event layer over its root's SQLite database. Each job commits
  * one transaction, then publishes the rows it wrote, from memory, to the
  * session's subscribers in commit order. Listing and aggregate reads are
  * finite; a tail reads what it starts behind from the store and follows the
@@ -163,20 +163,20 @@ export const sessionEventsLayer = Layer.effect(
             Effect.provideService(Scheduler.PreventSchedulerYield, true),
           );
       });
-    /** `work`, unless the plane has closed or a job is asking: decided in
+    /** `work`, unless the session events has closed or a job is asking: decided in
      *  the same uninterrupted turn that runs it, so a close cannot land
      *  between the answer and the transaction. */
     const awaited = <A, E>(work: Effect.Effect<A, E>): Effect.Effect<A, E> =>
       Effect.gen(function* () {
         if (closed) {
           return yield* Effect.die(
-            new Error('Session publication after the plane closed'),
+            new Error('Session publication after the session events closed'),
           );
         }
         if (yield* InPublisherJob) return yield* reentered;
         return yield* work;
       }).pipe(Effect.provideService(Scheduler.PreventSchedulerYield, true));
-    // The tails end with the plane.
+    // The tails end with the session events.
     yield* Effect.addFinalizer(() =>
       Effect.suspend(() => {
         closed = true;
@@ -212,7 +212,7 @@ export const sessionEventsLayer = Layer.effect(
       if (closed) {
         writeLogLine(
           CHANNEL,
-          'Session publication dropped: the plane has closed',
+          'Session publication dropped: the session events have closed',
         );
         return;
       }

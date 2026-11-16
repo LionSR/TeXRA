@@ -5,10 +5,6 @@ import { it } from '@effect/vitest';
 import { Context, Effect, Layer } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
-import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@texra-ai/harness/node';
 import { createExternalLocation } from '@texra-ai/harness/host';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -53,8 +49,7 @@ describe('latexdiff shadow output', () => {
             {
               app: TEXRA_APP,
               workspaceRoot: sourceDir,
-              storagePath: resolveWorkspaceStoragePath(storageRoot, sourceDir),
-              globalStoragePath: resolveGlobalStoragePath(storageRoot),
+              storageRoot,
             },
             {
               globalState: new MemoryStateStore(),
@@ -70,8 +65,7 @@ describe('latexdiff shadow output', () => {
           stdout: '',
           stderr:
             'OPENAI_API_KEY=sk-abcdefghijklmnop1234 Authorization: Bearer tok.en-123',
-          timedOut: false,
-          exitCode: 1,
+          end: { _tag: 'Exited', code: 1 },
         }),
       );
 

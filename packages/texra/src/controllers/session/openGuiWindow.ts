@@ -15,15 +15,28 @@
  */
 import * as path from 'node:path';
 
-import { Effect, Exit, Layer, Scope, Stream, SubscriptionRef } from 'effect';
+import {
+  Context,
+  Effect,
+  Exit,
+  FileSystem,
+  Layer,
+  Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 import { type Session, type WorkspaceRoots } from '@texra-ai/harness';
 import {
+  AgentCatalog,
   AgentDirectories,
   presenterOn,
   sessionFsLayer,
   workspaceEnvironmentLayer,
+  type HostPresentation,
+  type PresentationEventHandlers,
   type ProcessServices,
+  type RuntimePresentationEventPayloads,
 } from '@texra-ai/harness/host';
 import {
   AppSignals,
@@ -31,6 +44,7 @@ import {
   type StorageFs,
   type WorkspaceFs,
 } from '@texra-ai/harness/plugins';
+import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type {
   FileOpResult,
@@ -87,6 +101,7 @@ import { SessionBridge } from './SessionBridge';
 import { findLabelInWorkspace } from './workspaceFileOptions';
 import type { RunId } from '@texra-ai/harness/schemas';
 import {
+  agentKeyOf,
   formatResultCount,
   Cancelled,
   Rejected,
@@ -200,15 +215,21 @@ interface GuiWindowParts {
 
 /** What a host does for its window: the shared body's verbs, the requests
  *  it answers its own way, and the host verbs of the window's parts. */
-interface GuiWindowHost {
+export interface GuiWindowHost {
   /** The window's notices. */
   readonly notify: Dialogs['notify'];
   readonly bindings: SharedHostCommandBindings;
   readonly own: OwnHostArms;
-  /** What the window does for its project's runs, here or in the service.
-   *  Announcing the files a service task wrote is the same on every host,
-   *  so the window's opening adds it. */
-  readonly window: Omit<WindowHost, 'filesWritten'>;
+  /** The runtime's notices this host presents its own way. A missing agent
+   *  is the window's own banner, so the window's opening answers that one. */
+  readonly notices: PresentationEventHandlers<
+    Omit<RuntimePresentationEventPayloads, 'agentNotFound'>,
+    HostPresentation
+  >;
+  /** What the window's editor does for its project's runs, here or in the
+   *  service. Announcing the files a service task wrote is the same on
+   *  every host, so the window's opening adds it. */
+  readonly window: Omit<WindowHost, 'filesWritten' | 'emit'>;
   readonly runs: Pick<HostRunActionPorts, 'openFinalOutput' | 'revealProgress'>;
   readonly files: Omit<ProgressDocumentTaskFileActionsHost, 'showInfo'>;
   /** The transcript export's format picker and opener, the LaTeX export's
@@ -309,6 +330,27 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     handleHostCommand: handle,
     onPortClosed: draftRequests.closePort,
   }).pipe(Scope.provide(bridgeScope));
+  // Entering the setup step selects the setup agent on the launcher; a
+  // snapshot already there leaves a user who switched agents alone. It
+  // never starts setup: the user launches it from the setup card.
+  const catalog = yield* AgentCatalog;
+  yield* Effect.forkScoped(
+    snapshot.changes.pipe(
+      Stream.map((current) => current.onboarding),
+      Stream.changes,
+      Stream.filter((step) => step === 'setup'),
+      Stream.runForEach(() =>
+        Effect.sync(() => {
+          // The catalog's key, so the launcher's list matches by value.
+          const entry = catalog.get(SETUP_AGENT_NAME);
+          bridge.surfaceAction({
+            kind: 'launch',
+            patch: { agent: entry ? agentKeyOf(entry) : SETUP_AGENT_NAME },
+          });
+        }),
+      ),
+    ),
+  );
   const host = yield* ports.host({ bridge, snapshot });
 
   // The window is its project's window wherever its runs run: here,
@@ -316,10 +358,24 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   // it for the same. Its own failures before a run opens, it presents
   // itself.
   const workspace = roots.workspace ?? roots.storage;
-  const present = presenterOn(host.window);
   const signals = yield* AppSignals;
+  // A notice is presented after the request that opened the window has
+  // returned, so the banner's read carries its two services with it.
+  const bannerServices = Context.pick(
+    AgentDirectories,
+    FileSystem.FileSystem,
+  )(yield* Effect.context<AgentDirectories | FileSystem.FileSystem>());
+  const notices: PresentationEventHandlers<
+    RuntimePresentationEventPayloads,
+    HostPresentation
+  > = {
+    ...host.notices,
+    agentNotFound: ({ agentName }) =>
+      Effect.provide(snapshot.showAgentConfigBanner(agentName), bannerServices),
+  };
   const window: WindowHost = {
     ...host.window,
+    emit: (event, payload) => notices[event](payload),
     // What a service task wrote is announced as a task here announces it:
     // the host's file tree or decorations follow the signal.
     filesWritten: (absolutePaths) =>
@@ -327,6 +383,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         absolutePaths: [...absolutePaths],
       }),
   };
+  const present = presenterOn(window);
   yield* Effect.forkScoped(
     attachWindowHost(runs.link, workspace, window, ports.focused),
   );

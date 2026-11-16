@@ -11,7 +11,7 @@ import { normalizeFilePath } from '@texra-ai/harness/schemas';
 import { Clock, Effect, FileSystem, type PlatformError, Schema } from 'effect';
 
 // Local imports
-import { absentReason, relativeToRoot } from '@texra-ai/harness/node';
+import { meansAbsent, relativeToRoot } from '@texra-ai/harness/node';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 
 import { CHANNEL } from './constants';
@@ -77,11 +77,13 @@ export const fileNameTimestamp: Effect.Effect<string> = Effect.map(
 );
 
 /**
- * The workspace-relative files named `pattern` + `extension` under
- * `inputDir` (then its `build/`), deduplicated: overlapping patterns match the
- * same path more than once. `workspaceRoot` is the root of the caller's
- * `WorkspaceFs`, passed in rather than read from an ambient store, so a
- * listing and the deletions it feeds name the same workspace.
+ * The LaTeX artifacts of a base name: the files named `pattern` + `extension`
+ * under `inputDir` (then its `build/`), relative to `workspaceRoot`,
+ * deduplicated: overlapping patterns match the same path more than once.
+ * Clean Build and packing pass the root of their `WorkspaceFs`, passed in
+ * rather than read from an ambient store, so a listing and the deletions it
+ * feeds name the same workspace; a preview's cleanup passes its file's own
+ * directory.
  *
  * Paths are built and compared as plain strings, never globbed, so a path
  * holding glob metacharacters (`[`, `{`, `?`, a Windows backslash) names
@@ -122,7 +124,7 @@ export const collectFilesFromPatterns = Effect.fn(
   const absentAs =
     <A>(value: A) =>
     <R>(effect: Effect.Effect<A, PlatformError.PlatformError, R>) =>
-      effect.pipe(Effect.catchIf(absentReason, () => Effect.succeed(value)));
+      effect.pipe(Effect.catchIf(meansAbsent, () => Effect.succeed(value)));
 
   const files = new Set<string>();
   // Each directory is listed once, up front, when a prefix extension needs

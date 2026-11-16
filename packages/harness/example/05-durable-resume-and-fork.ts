@@ -70,7 +70,7 @@ const program = Effect.gen(function* () {
   // resumes it from its committed history in SQLite. The turn it starts has
   // ended once the fork waits again: its `forkPoint`, the seq of its newest
   // wait, moves on.
-  yield* session.settled;
+  yield* session.drained;
   const forkedAt = session.view.current().runs.get(forkedRunId)?.forkPoint;
   const sendOutcome = yield* session.request({
     kind: 'followUp.send',
@@ -111,7 +111,7 @@ const program = Effect.gen(function* () {
     runId: resumed.runId,
     reason: 'user',
   });
-  yield* session.settled;
+  yield* session.drained;
 
   const listed = yield* session.listRuns;
   const originalConversation = yield* session.records(run1.runId)

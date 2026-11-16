@@ -9,6 +9,7 @@ import { Schema, Struct } from 'effect';
 
 import { DELIVERY_FAMILY_PATTERN } from '@shared/deliveryTags';
 import { RunIdSchema } from './identifiers';
+import { ProcessExitSchema } from './runRecords';
 import { ScriptDeliverySummarySchema } from './scriptDelivery';
 import { StoredMediaSchema } from './storedTurn';
 import { TokenUsageStatsSchema } from './usage';
@@ -61,15 +62,8 @@ const ChildRunDeliverySchema = Schema.Struct({
       }),
     ),
   ),
-  /** How a background command exited: its code, a conventional one when it
-   *  timed out or had none of its own (`noExitCode`). */
-  exit: Schema.optional(
-    Schema.Struct({
-      code: Schema.Int,
-      timedOut: Schema.Boolean,
-      noExitCode: Schema.Boolean,
-    }),
-  ),
+  /** How a background command exited. */
+  exit: Schema.optional(ProcessExitSchema),
   /** How long the child ran, as it reads (`1.2s`). */
   wallTime: Schema.optional(Schema.String),
   /** A turn's or a script's answer, inline; an empty one reads
@@ -173,13 +167,25 @@ export const FollowUpDispositionSchema = Schema.Union([
 export type FollowUpDisposition = typeof FollowUpDispositionSchema.Type;
 
 /** A run this process cannot continue until its agent, or its agent's
- *  plugin, is back: a fact about this build's catalog, never a row's. */
-const ResumeBlockedSchema = Schema.Struct({
-  kind: Schema.Literal('blocked'),
-  blocker: Schema.Literals(['agentMissing', 'pluginOff', 'pluginUntrusted']),
-  /** The agent or plugin it names. */
-  name: Schema.NonEmptyString,
-});
+ *  plugin, is back: a fact about this build's catalog, never a row's. The
+ *  agent is missing, its plugin is off, or its enabled plugin does not load
+ *  (`reason`: unreadable, shipping code, or changed since it was trusted). */
+export const ResumeBlockedSchema = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal('blocked'),
+    blocker: Schema.Literals(['agentMissing', 'pluginOff']),
+    /** The agent or plugin it names. */
+    name: Schema.NonEmptyString,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('blocked'),
+    blocker: Schema.Literal('pluginWithheld'),
+    /** The plugin it names. */
+    name: Schema.NonEmptyString,
+    /** Why the plugin's load holds it back, as the load words it. */
+    reason: Schema.String,
+  }),
+]);
 /** What a blocked resume waits for ({@link ResumeBlockedSchema}). */
 export type ResumeBlocked = typeof ResumeBlockedSchema.Type;
 
@@ -208,3 +214,37 @@ export const ResumeRefusalSchema = Schema.Union([
 ]);
 /** One reason a resume is refused ({@link ResumeRefusalSchema}). */
 export type ResumeRefusal = typeof ResumeRefusalSchema.Type;
+
+/**
+ * The one wording of a refused resume or message, shared by every host and
+ * tool output: a resume's refusal ({@link ResumeRefusal}), or `readFailed`,
+ * a message whose run's rows could not be read just now (a failing store),
+ * which says nothing about the run itself.
+ */
+export function describeRefusal(
+  reason: ResumeRefusal | { readonly kind: 'readFailed' },
+): string {
+  switch (reason.kind) {
+    case 'finished':
+      return 'This run has finished. Start a new agent task to continue.';
+    case 'unusableCheckpoint':
+      return "This run's saved state could not be loaded, so it cannot be continued. Delete it from history and start a new agent task.";
+    case 'earlierBuild':
+      return 'This run was written by an earlier build, and this build cannot continue it.';
+    case 'pluginUnavailable':
+      return `This run needs the ${reason.plugin} plugin, which is not loaded here (${reason.cause}). It can continue once the plugin loads.`;
+    case 'readFailed':
+      return "This run couldn't be read right now. Try again in a moment.";
+    case 'notResumable':
+      return 'This run cannot accept messages right now. Resume it, or start a new agent task.';
+    case 'blocked':
+      switch (reason.blocker) {
+        case 'agentMissing':
+          return `This task's agent, ${reason.name}, is not installed. It can continue once the agent is back.`;
+        case 'pluginOff':
+          return `This task's agent comes from the ${reason.name} plugin, which is off. It can continue once the plugin is on.`;
+        case 'pluginWithheld':
+          return `This task's agent comes from the ${reason.name} plugin. ${reason.reason} It can continue once the plugin loads.`;
+      }
+  }
+}

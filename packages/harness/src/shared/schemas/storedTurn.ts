@@ -15,14 +15,13 @@
  */
 import { Schema } from 'effect';
 
-import { JsonValueSchema } from './jsonValue';
 import { Sha256Schema } from './identifiers';
 import { NonNegativeIntSchema } from './nonNegativeInt';
 
 /** Provider bytes, kept verbatim and never interpreted by storage. */
 const ProviderEvidenceSchema = Schema.Struct({
   kind: Schema.NonEmptyString,
-  data: Schema.Record(Schema.String, JsonValueSchema),
+  data: Schema.Record(Schema.String, Schema.Json),
 });
 
 /** The wire surface recorded by a turn or usage fact. Its identity outlives
@@ -115,11 +114,9 @@ const TokenCount = Schema.NullOr(NonNegativeIntSchema);
 
 /** One completed provider turn. */
 export const StoredTurnSchema = Schema.Struct({
-  kind: Schema.Literal('http'),
   providerResponseId: Schema.NullOr(Schema.NonEmptyString),
   requestedOrigin: StoredOriginSchema,
   returnedModel: Schema.NullOr(Schema.NonEmptyString),
-  modelFingerprint: Schema.NullOr(Schema.String),
   content: StoredContentSchema,
   finishReason: Schema.Literals([
     'stop',

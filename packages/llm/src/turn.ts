@@ -202,7 +202,7 @@ export type ModelConfiguration =
     });
 
 /**
- * Whether a configuration admits background work: a Responses route that
+ * Whether a configuration takes background work: a Responses route that
  * runs it, and Google, which retrieves a background result through
  * server-side state. The one answer: a protocol model carries its
  * `background` member exactly when this holds, and the binding reports that
@@ -308,11 +308,9 @@ export const AnthropicRefusalCategorySchema = Schema.Literals([
 
 /** A completed provider turn, not a completed agent execution. */
 export const TurnResultSchema = Schema.Struct({
-  kind: Schema.Literal('http'),
   ...IdentitySchema.fields,
   /** Null for a stateless Google response with no retrievable ID. */
   providerResponseId: Schema.NullOr(IdentitySchema.fields.providerResponseId),
-  modelFingerprint: Schema.NullOr(Schema.String),
   content: ContentSchema,
   finishReason: Schema.Literals([
     'stop',
@@ -509,7 +507,7 @@ export interface Model {
 }
 
 /** A foreground turn's completed result: assembled from `streamTurn`'s events. */
-export const completedTurn = Effect.fn('llm.generateTurn')(function* (
+export const completedTurn = Effect.fn('llm.completedTurn')(function* (
   events: Stream.Stream<TurnEvent, ModelError>,
 ) {
   const result = yield* Stream.runFold(

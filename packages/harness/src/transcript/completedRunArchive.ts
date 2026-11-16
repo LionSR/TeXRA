@@ -14,16 +14,12 @@ import {
 import { SessionLog } from '@shared/session/runHistory';
 import type { TranscriptView } from '@shared/session/sessionView';
 import { buildRunTranscript } from '@shared/session/transcriptUpdate';
+import { CUT_BY_RUN_END_NOTE } from '@shared/transcript/transcriptRow';
 import { DEBUG_MODE_SETTING } from '@shared/state/stateSettings';
 
 // ============================================================================
 // Conversation
 // ============================================================================
-
-/** The result a call the run's end cut short (`ToolRow.cutByRunEnd`)
- *  reads with, for a model reading the run through `executions` and for an
- *  export: nothing records how the call ended. */
-const CUT_BY_RUN_END_RESULT = 'The task ended before this tool completed.';
 
 /**
  * A call's `tool-result` node, when it has a result: the text the model read
@@ -101,7 +97,7 @@ function conversationNodesForRow(
           input: row.log.input ?? {},
         },
         ...(row.cutByRunEnd === true
-          ? [{ kind: 'tool-result' as const, text: CUT_BY_RUN_END_RESULT }]
+          ? [{ kind: 'tool-result' as const, text: CUT_BY_RUN_END_NOTE }]
           : toolResultNodes(row.log)),
       ];
     case 'webSearch':

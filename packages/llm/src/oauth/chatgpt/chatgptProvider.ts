@@ -32,14 +32,12 @@ import {
 import { NonEmptyJwtClaim, decodeJwtClaimsWithSchema } from '../jwtDecode.js';
 import { verifyIdToken } from '../idToken.js';
 import { oauthHttpError, postOAuthForm } from '../oauthRequest.js';
-import { defineLoopbackLogin } from '../loopbackLogin.js';
 import { SubscriptionOAuthError } from '../subscriptionOAuthError.js';
 import {
   SubscriptionSessionBaseSchema,
   SubscriptionTokenResponseSchema,
 } from '../subscriptionSessionSchema.js';
-import { toErrorMessage } from '../support.js';
-import { isRetryableStatus } from '../../errors.js';
+import { isRetryableStatus, toErrorMessage } from '../../errors.js';
 import { OPENAI_DEFAULT_ENDPOINT } from '../../providers/providerPlugins.js';
 import type {
   CredentialStore,
@@ -326,6 +324,11 @@ export const CHATGPT_POLICY = Object.freeze<
     params: Object.freeze({ resource: CHATGPT_RESOURCE }),
   }),
   notSignedInMessage: 'Not signed in with ChatGPT. Run sign-in first.',
+  loopback: Object.freeze({
+    ports: CHATGPT_CALLBACK_PORTS,
+    callbackPath: CHATGPT_CALLBACK_PATH,
+    displayName: 'ChatGPT',
+  }),
   authorize: Object.freeze({
     url: CHATGPT_AUTHORIZE_URL,
     scope: CHATGPT_SCOPE,
@@ -370,11 +373,4 @@ export const CHATGPT_POLICY = Object.freeze<
       planType: claims.planType ?? previous?.planType,
     };
   },
-});
-
-/** The browser sign-in, on the loopback callback OpenAI accepts. */
-export const chatgptLoginWithLoopback = defineLoopbackLogin<ChatgptSession>({
-  ports: CHATGPT_CALLBACK_PORTS,
-  callbackPath: CHATGPT_CALLBACK_PATH,
-  displayName: 'ChatGPT',
 });

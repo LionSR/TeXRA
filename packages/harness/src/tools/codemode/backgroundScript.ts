@@ -18,7 +18,6 @@ import {
   agentChildRunId,
   earlierChild,
 } from '@agent/runtime/delegation/agentChild';
-import { childRunDescription } from '@agent/runtime/delegation/childRun';
 import { startChildRun } from '@agent/runtime/delegation/childLaunch';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
@@ -101,7 +100,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
     identity: { kind: 'script', title },
     parentRunId,
     parentCall: { callId: call.callId, card: call.logId, awaited: false },
-    description: childRunDescription(title),
+    description: title,
     ...(grants !== undefined && { grants }),
   });
   return receipt(title, runId, false);

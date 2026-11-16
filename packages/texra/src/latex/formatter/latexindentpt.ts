@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { absentReason, entryTypeIn } from '@texra-ai/harness/node';
+import { meansAbsent, entryTypeIn } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { runTool } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
@@ -36,7 +36,7 @@ const cleanupIndentLog = Effect.fn('latex.cleanupIndentLog')(function* (
  * would succeed (rmdir) and delete it. An absent `dir` lists nothing; any
  * other listing failure is warned about and lists nothing too.
  */
-export const filesByPrefix = Effect.fn('latex.filesByPrefix')(function* (
+const filesByPrefix = Effect.fn('latex.filesByPrefix')(function* (
   dir: string,
   prefixes: ReadonlyArray<string>,
 ) {
@@ -45,7 +45,7 @@ export const filesByPrefix = Effect.fn('latex.filesByPrefix')(function* (
     .readDirectory(dir)
     .pipe(
       Effect.catch((error) =>
-        absentReason(error)
+        meansAbsent(error)
           ? Effect.succeed<ReadonlyArray<string>>([])
           : Effect.logWarning(`Failed to list ${dir}`).pipe(
               Effect.annotateLogs({ data: error }),

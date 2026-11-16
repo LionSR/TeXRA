@@ -182,13 +182,13 @@ const updateKeyedCliModelAccess = Effect.fn(
           new ModelAccessPreferenceFailed({
             member: 'setEnabled',
             subscription: plan.id,
-            message: `${plan.preferenceLabel} could not be disabled: ${toErrorMessage(cause)}`,
+            message: `${plan.preference.title} could not be disabled: ${toErrorMessage(cause)}`,
             cause,
           }),
       ),
     );
     return {
-      message: `${plan.preferenceLabel} disabled for ${plan.modelFamily}.`,
+      message: `${plan.preference.title} disabled for ${plan.modelFamily}.`,
     } satisfies CliModelAccessSelectionResult;
   }
 
@@ -207,13 +207,13 @@ const updateKeyedCliModelAccess = Effect.fn(
         new ModelAccessPreferenceFailed({
           member: 'setEnabled',
           subscription: plan.id,
-          message: `${plan.preferenceLabel} could not be enabled: ${toErrorMessage(cause)}`,
+          message: `${plan.preference.title} could not be enabled: ${toErrorMessage(cause)}`,
           cause,
         }),
     ),
   );
   return {
-    message: `${plan.preferenceLabel} enabled for ${plan.modelFamily} · other models still use ${OWN_API_KEYS.inline}.`,
+    message: `${plan.preference.title} enabled for ${plan.modelFamily} · other models still use ${OWN_API_KEYS.inline}.`,
   } satisfies CliModelAccessSelectionResult;
 });
 
@@ -231,7 +231,7 @@ export const updateCliModelAccess = Effect.fn(
   options: CliSubscriptionLoginOptions = { writeProgress: () => undefined },
 ) {
   const codingPlan = codingPlanSubscriptionRuntimes.find(
-    (runtime) => runtime.descriptor.cliProvider === selection.provider,
+    (runtime) => runtime.descriptor.id === selection.provider,
   );
   if (codingPlan) {
     return yield* updateKeyedCliModelAccess(stores, selection, codingPlan);

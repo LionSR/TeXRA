@@ -28,6 +28,7 @@ import {
   textTurn,
   toolCallTurn,
 } from '@test/support/scriptedRunLayers';
+import { outputOf } from '@test/support/toolResultFields';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
@@ -44,7 +45,7 @@ import type { ITool, ToolResult } from '@texra-ai/harness/plugins';
 /** The calls a folded state holds settled. */
 const settledIds = (state: RunState | null | undefined): string[] =>
   Object.entries(state?.pendingResponse?.records ?? {}).flatMap(([id, call]) =>
-    call.status.kind === 'settled' ? [id] : [],
+    call.status.kind === 'finished' ? [id] : [],
   );
 
 /** A tool as the step's registry holds it. */
@@ -135,7 +136,7 @@ const committedResults = (
 ) =>
   Effect.gen(function* () {
     const log = Context.get(session, SessionLog);
-    yield* log.settled;
+    yield* log.drained;
     return (yield* log.runRows(qualifyAggregateId('run', runId), 'results'))
       .results;
   });
@@ -211,10 +212,10 @@ return { columns: page.columns, count: page.rows.length,
           const query = results.find(
             ({ callId }) => callId === 'query-script/0',
           );
-          expect(query?.result.output).toContain(
+          expect(outputOf(query?.result)).toContain(
             'select a substr() to read them',
           );
-          expect(query?.result.output).toContain(
+          expect(outputOf(query?.result)).toContain(
             'More rows exist past these 200',
           );
         }),

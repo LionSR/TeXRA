@@ -1,12 +1,10 @@
-import * as path from 'node:path';
-
 import { layer } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, expect, vi } from 'vitest';
 
 import { runCli } from '@cli/commands/root';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
-import { createFakeHost } from '@test/support/setupPlatform';
+import { createFakeHost } from '@test/support/fakeHost';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { FakeHost, SessionGraph, TestSession } from '@test/support/testKernel';
 
@@ -63,8 +61,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       FakeHost.layer(() =>
         createFakeHost({
           workspaceRoot: process.cwd(),
-          storagePath: path.join(platformStorageRoot, 'storage'),
-          globalStoragePath: path.join(platformStorageRoot, 'global-storage'),
+          storageRoot: platformStorageRoot,
         }),
       ),
       { buildPerTest: true },

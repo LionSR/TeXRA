@@ -27,7 +27,6 @@ import {
   emitAppSignal,
 } from '@texra-ai/harness/plugins';
 import {
-  APPROVAL_POLICY_SETTING,
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
   Cancelled,
@@ -193,22 +192,16 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       yield* changed('credentials');
       if (usageProvider) yield* changed('usage');
     });
-    /** A write that re-routes models (a subscription preference, a routing
-     *  setting): the pages, and every launcher's catalogs through the
-     *  signal. */
-    const modelAccessChanged = Effect.andThen(
-      credentialsChanged(),
-      emitAppSignal('modelAccessChanged', undefined),
-    );
-    /** Run a subscription mutation, report its failure, and say the
-     *  subscription changed whatever the mutation did. */
+    /** Run a subscription mutation, report its failure, and show the pages
+     *  the subscription whatever the mutation did. The mutation's own
+     *  writes announce the change to every launcher. */
     const subscriptionChange = <E>(
       failure: string,
       work: Effect.Effect<void, E, ProcessServices>,
     ) =>
       reported(failure, work).pipe(
         Effect.andThen(changed('subscriptions')),
-        Effect.andThen(modelAccessChanged),
+        Effect.andThen(credentialsChanged()),
       );
     /** Every sign-in entry point of a window (the Models page, the
      *  onboarding card, a command) ends here, so each tells the user the
@@ -290,14 +283,12 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       // Every outcome is sent back, so a rejected edit shows the stored value.
       yield* changed('settings');
       if (result.kind !== 'applied') return;
+      // A row that re-routes models changes what the credentials page says.
       if (result.entry.onWrite?.invalidatesModelOptions) {
-        yield* modelAccessChanged;
+        yield* credentialsChanged();
       }
       if (codingPlanForUsageSetting(key) !== undefined) {
         yield* changed('usage');
-      }
-      if (key === APPROVAL_POLICY_SETTING.key) {
-        yield* emitAppSignal('approvalPolicyChanged', undefined);
       }
     });
 
@@ -482,7 +473,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
             return provider === undefined || provider === 'unknown'
               ? undefined
               : credentialsChanged(
-                  CODING_PLAN_BY_API_PROVIDER.get(provider)?.usageProvider,
+                  CODING_PLAN_BY_API_PROVIDER.get(provider)?.id,
                 );
           }),
         ],

@@ -12,7 +12,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { settingsMemoryCommands } from '@texra/controllers/settingsView/settingsMemoryCommands';
 import type { SettingsViewOutboundMessage } from '@texra/shared/settingsView/settingsViewMessages';
 
-import { createFakeUIHosts } from '../support/FakeHosts';
+import { createFakeUIHosts } from '../support/fakeUiPorts';
 import { nodePlatformLayer } from '../support/fsTestUtils';
 
 /** The Memory page over a capturing view; a reported failure fails the test. */

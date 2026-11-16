@@ -11,6 +11,7 @@ import { type RootedFileSystem } from '@texra-ai/harness/host';
 import { StorageFs } from '@texra-ai/harness/plugins';
 import { MEMORY_DISPLAY_ROOT } from '@agent/memory/memoryLayout';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
+import { outputOf } from '@test/support/toolResultFields';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { SessionGraph } from '@test/support/testKernel';
 import { MemoryTool } from '@tools/memory/MemoryTool';
@@ -109,7 +110,7 @@ layer(SessionGraph.hosted)('MemoryTool view with an omitted path', (it) => {
       const result = yield* viewMemory(storageFs, MEMORY_DISPLAY_ROOT);
 
       expect(result.status).toBe('executed');
-      expect(result.output).not.toContain('cycle');
+      expect(outputOf(result)).not.toContain('cycle');
     }),
   );
 });

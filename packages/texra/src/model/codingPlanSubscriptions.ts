@@ -1,9 +1,10 @@
-import { Settings, type SettingsStores } from '@texra-ai/harness/plugins';
 import {
-  providerRegionSetting,
-  GLM_CODING_PLAN_SETTING,
-  KIMI_CODE_PREFER_SETTING,
-} from '@texra-ai/harness/schemas';
+  emitAppSignal,
+  Settings,
+  type AppSignals,
+  type SettingsStores,
+} from '@texra-ai/harness/plugins';
+import { providerRegionSetting } from '@texra-ai/harness/schemas';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
@@ -12,7 +13,7 @@ import type {
   ConfigWriteFailed,
   StateReadFailed,
 } from '@texra-ai/harness/host';
-import type { Effect } from 'effect';
+import { Effect } from 'effect';
 
 export interface CodingPlanSubscriptionRuntime {
   readonly descriptor: CodingPlanSubscription;
@@ -20,31 +21,20 @@ export interface CodingPlanSubscriptionRuntime {
     stores: SettingsStores,
   ) => Effect.Effect<boolean, StateReadFailed>;
   /**
-   * Persist the toggle through the shared config write path. An `Effect`, like
-   * every other write of a catalog-backed setting, so the caller's program
-   * composes it and owns the failure.
+   * Persist the toggle through the shared config write path and announce
+   * `modelAccessChanged`. An `Effect`, like every other write of a
+   * catalog-backed setting, so the caller's program composes it and owns the
+   * failure.
    */
   readonly setEnabled: (
     stores: SettingsStores,
     enabled: boolean,
-  ) => Effect.Effect<void, ConfigWriteFailed | Error>;
+  ) => Effect.Effect<void, ConfigWriteFailed | Error, AppSignals>;
 }
 
-const RUNTIME_BY_ID = {
-  glmCodingPlan: {
-    getEnabled: (stores) => Settings.get(stores, GLM_CODING_PLAN_SETTING),
-    setEnabled: (stores, enabled) =>
-      Settings.set(stores, GLM_CODING_PLAN_SETTING, enabled),
-  },
-  kimiCode: {
-    getEnabled: (stores) => Settings.get(stores, KIMI_CODE_PREFER_SETTING),
-    setEnabled: (stores, enabled) =>
-      Settings.set(stores, KIMI_CODE_PREFER_SETTING, enabled),
-  },
-} as const satisfies Record<
-  CodingPlanSubscription['id'],
-  Omit<CodingPlanSubscriptionRuntime, 'descriptor'>
->;
+/** A plan's toggle re-routes its models, so its write says so. */
+const announced = <E>(write: Effect.Effect<void, E>) =>
+  Effect.andThen(write, emitAppSignal('modelAccessChanged', undefined));
 
 /**
  * Runtime catalog consumed by retry policy and host route presentation. Which
@@ -54,7 +44,13 @@ const RUNTIME_BY_ID = {
 export const codingPlanSubscriptionRuntimes: readonly CodingPlanSubscriptionRuntime[] =
   Object.freeze(
     CODING_PLAN_SUBSCRIPTIONS.map((descriptor) =>
-      Object.freeze({ descriptor, ...RUNTIME_BY_ID[descriptor.id] }),
+      Object.freeze({
+        descriptor,
+        getEnabled: (stores: SettingsStores) =>
+          Settings.get(stores, descriptor.preference),
+        setEnabled: (stores: SettingsStores, enabled: boolean) =>
+          announced(Settings.set(stores, descriptor.preference, enabled)),
+      }),
     ),
   );
 

@@ -24,7 +24,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             const child = Schema.decodeUnknownSync(RunIdSchema)('bb0002');
             yield* publishTestRunStart(session, parent);
             yield* publishTestRunStart(session, child, { parent });
-            yield* Context.get(session, SessionLog).settled;
+            yield* Context.get(session, SessionLog).drained;
             yield* publishTestRows(session, [
               {
                 type: 'request.opened',
@@ -49,7 +49,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 answeredBy: 'person',
               },
             ]);
-            yield* Context.get(session, SessionLog).settled;
+            yield* Context.get(session, SessionLog).drained;
             expect(
               SubscriptionRef.getUnsafe(
                 Context.get(session, SessionViewAccess).ref,
@@ -62,7 +62,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 aggregateId: qualifyAggregateId('run', parent),
               },
             ]);
-            yield* Context.get(session, SessionLog).settled;
+            yield* Context.get(session, SessionLog).drained;
             expect(
               SubscriptionRef.getUnsafe(
                 Context.get(session, SessionViewAccess).ref,

@@ -134,8 +134,10 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
     const config = yield* Schema.decodeUnknownEffect(RunRecordFieldsSchema)(
       pinRunWorkingDirectory(record, (yield* SessionRoots).workspace),
     );
-    const ended = prior ? yield* (yield* Approvals).activationRows(runId) : [];
-    return registrationDrafts(runId, config, options, !prior, ended);
+    const ended = prior
+      ? yield* (yield* Approvals).activationRows(runId)
+      : null;
+    return registrationDrafts(runId, config, options, ended);
   }).pipe(defectAsFailure);
 });
 
@@ -238,15 +240,17 @@ const replyDelivery = Effect.fn('replyDelivery')(function* (
   };
   const rows: RunInputDraft[] = [];
   for (const recipient of recipients) {
-    const admitted = yield* Effect.result(inbox.admission(recipient, item, {}));
-    if (Result.isFailure(admitted))
+    const accepted = yield* Effect.result(
+      inbox.acceptance(recipient, item, {}),
+    );
+    if (Result.isFailure(accepted))
       yield* undelivered(
         `run ${recipient} is closed or cannot be read`,
-        admitted.failure,
+        accepted.failure,
       );
-    else if (admitted.success.sent.kind === 'refused')
+    else if (accepted.success.sent.kind === 'refused')
       yield* undelivered(`the input of run ${recipient} is closed`);
-    else rows.push(...admitted.success.rows);
+    else rows.push(...accepted.success.rows);
   }
   return rows;
 });

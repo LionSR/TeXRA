@@ -12,7 +12,7 @@ import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { runNoticeText, runStatus } from '@ui/copy/runStatus';
-import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
+import { runNoun, TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type {
   PendingRequest,
@@ -101,7 +101,7 @@ export abstract class BaseRunContent extends LitElement {
       this.dispatchEvent(SessionUiEvents.host({ kind, runId: run.id }));
     let explanation = `${runStatus(run).word}.`;
     if (run.holder === 'here')
-      explanation = `This ${run.parentId === null ? 'task' : 'agent'} takes no messages.`;
+      explanation = `This ${runNoun(run)} takes no messages.`;
     else if (run.actions.includes('resume'))
       explanation += ' Resume to continue.';
     else if (run.actions.includes('fork'))
@@ -148,10 +148,9 @@ export abstract class BaseRunContent extends LitElement {
   protected renderForkedFrom(run: RunView): TemplateResult | typeof nothing {
     const source = run.forkedFrom;
     if (source === null) return nothing;
-    const from = this.view?.runs.get(source.id);
-    const title = from ? from.title : 'a deleted task';
     return html`<p class="forked-from-line">
-      ${waIcon('code-branch')} ${TASK_ACTIONS.forkedFrom(title)} at step
+      ${waIcon('code-branch')}
+      ${TASK_ACTIONS.forkedFromRun(this.view?.runs.get(source.id))} at step
       ${source.at}: the model holds that conversation up to there.
     </p>`;
   }

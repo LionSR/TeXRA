@@ -13,6 +13,7 @@ import {
   RunIdSchema,
 } from '@texra-ai/harness/schemas';
 import { SessionLog } from '@shared/session/runHistory';
+import { errorOf } from '@test/support/toolResultFields';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { seedEditedFiles, seedRunRecord } from '@test/support/runRecordSeeds';
 import {
@@ -47,7 +48,7 @@ const toolTestCall = Layer.unwrap(
 /** A host in a temp directory of its own per test, and a session over its
  *  roots whose requests a person answers from the view. */
 const perTest = Layer.provideMerge(
-  TestSession.layer(undefined, { host: {} }),
+  TestSession.layer(undefined, { answeredFromView: true }),
   FakeHost.layer(() => createTempDirPlatform('texra-executions-', tempDirs)),
 );
 
@@ -65,7 +66,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             });
 
             expect(result.status).toBe('error');
-            expect(result.error).toContain("must not contain '..'");
+            expect(errorOf(result)).toContain("must not contain '..'");
           }).pipe(Effect.provide(toolTestCall)),
       );
 
@@ -81,7 +82,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               // only `review.md`.
               const runId = Schema.decodeSync(RunIdSchema)('abc123');
               yield* publishTestRunStart(session, runId);
-              yield* Context.get(session, SessionLog).settled;
+              yield* Context.get(session, SessionLog).drained;
               yield* seedRunRecord(
                 session,
                 runId,
@@ -98,7 +99,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               }).pipe(Effect.provide(toolTestCall));
 
               expect(result.status).toBe('error');
-              expect(result.error).toContain('Workspace file not found');
+              expect(errorOf(result)).toContain('Workspace file not found');
             }),
           );
         }),

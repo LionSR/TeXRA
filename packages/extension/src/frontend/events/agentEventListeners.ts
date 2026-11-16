@@ -16,11 +16,6 @@ import { Effect, Scope } from 'effect';
 import {
   withProcessServices,
   type ProcessRuntime,
-  type HostPresentation,
-  type RuntimePresentationEvent,
-  type RuntimePresentationEventPayloads,
-  type HostInteractions,
-  type PresentationEventHandlers,
 } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
@@ -35,11 +30,12 @@ import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openBuilt } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
+import type { GuiWindowHost } from '@texra/controllers/session/openGuiWindow';
 import {
   INSTRUCTION_ACTION,
   INSTRUCTION_ACTION_BUTTON_LABELS,
   instructionActions,
+  instructionSuppressible,
   READ_GUIDE_BUTTON_LABEL,
   type InstructionAction,
 } from '@ui/copy/instructionActions';
@@ -130,7 +126,7 @@ function handleRequestShowInstruction(
     payload.key,
     payload.message,
     actions,
-    payload.showSuppress,
+    instructionSuppressible(payload.key),
     { deferDismissal: true },
   ).pipe(
     Effect.catchCause((cause) =>
@@ -206,26 +202,18 @@ export const revealProgressView = Effect.fn('revealProgressView')(function* (
 });
 
 /**
- * Builds the extension's presentation host over its handler map. Every
- * `RuntimePresentationEvent` key is required by
- * `PresentationEventHandlers<RuntimePresentationEventPayloads, HostPresentation>`:
- * omitting one here is a compile error rather than a silently dropped event.
- * The session's `Interactions` (the runtime) owns replaying an event emitted
- * before this host attaches.
+ * The runtime's notices this extension presents its own way; the window's
+ * opening adds the missing-agent banner. The session's `Interactions` (the
+ * runtime) owns replaying an event emitted before this host attaches.
  */
 export function createAgentPresentationHost(
-  /** The window's host snapshot, which shows the missing-agent banner. */
-  snapshot: Pick<HostSnapshotSource, 'showAgentConfigBanner'>,
   globalState: StateStore,
   runtime: ProcessRuntime,
   roots: WorkspaceRoots,
   /** The view's scope, which a scheduled PDF viewer open runs in. */
   scope: Scope.Scope,
-): Pick<HostInteractions, 'emit'> {
-  const handlers: PresentationEventHandlers<
-    RuntimePresentationEventPayloads,
-    HostPresentation
-  > = {
+): GuiWindowHost['notices'] {
+  return {
     // The open-and-build program takes this window's file services from the
     // runtime's context, which the session that forks it does not carry, and
     // schedules the PDF viewer in the view's scope.
@@ -238,19 +226,6 @@ export function createAgentPresentationHost(
       ),
     requestShowInstruction: (payload) =>
       handleRequestShowInstruction(globalState, roots, runtime, payload),
-    agentNotFound: (payload) =>
-      withProcessServices(
-        runtime,
-        snapshot.showAgentConfigBanner(payload.agentName),
-      ),
     requestShowError: handleRequestShowError,
-  };
-  return {
-    emit<K extends RuntimePresentationEvent>(
-      event: K,
-      payload: RuntimePresentationEventPayloads[K],
-    ): HostPresentation {
-      return handlers[event](payload);
-    },
   };
 }

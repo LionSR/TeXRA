@@ -13,7 +13,7 @@
  * schema (persisted config validation), the settings-view message schemas, and
  * the LaTeX tab UI.
  */
-export const NON_REGEX_REPLACEMENT_CATEGORIES = [
+export const NON_REGEX_REPLACEMENT_CATEGORIES = Object.freeze([
   'latex_spacing',
   'equations',
   'sections',
@@ -27,9 +27,9 @@ export const NON_REGEX_REPLACEMENT_CATEGORIES = [
   'gptness',
   'personal_style',
   'max_style',
-] as const;
+] as const);
 
-export const REGEX_REPLACEMENT_CATEGORIES = [
+export const REGEX_REPLACEMENT_CATEGORIES = Object.freeze([
   'fenced_latex_blocks',
   'inline_math',
   'parentheses',
@@ -38,7 +38,7 @@ export const REGEX_REPLACEMENT_CATEGORIES = [
   'equation_macros',
   'personal_style_contextual',
   'max_style_regex',
-] as const;
+] as const);
 
 export type NonRegexReplacementCategory =
   (typeof NON_REGEX_REPLACEMENT_CATEGORIES)[number];
@@ -53,12 +53,14 @@ const OPT_IN_CATEGORIES: ReadonlySet<string> = new Set([
   'max_style_regex',
 ] satisfies (NonRegexReplacementCategory | RegexReplacementCategory)[]);
 
-export const DEFAULT_ENABLED_REPLACEMENTS =
+export const DEFAULT_ENABLED_REPLACEMENTS = Object.freeze(
   NON_REGEX_REPLACEMENT_CATEGORIES.filter(
     (category) => !OPT_IN_CATEGORIES.has(category),
-  );
+  ),
+);
 
-export const DEFAULT_ENABLED_REGEX_REPLACEMENTS =
+export const DEFAULT_ENABLED_REGEX_REPLACEMENTS = Object.freeze(
   REGEX_REPLACEMENT_CATEGORIES.filter(
     (category) => !OPT_IN_CATEGORIES.has(category),
-  );
+  ),
+);

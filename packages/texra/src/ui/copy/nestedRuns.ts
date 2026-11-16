@@ -29,6 +29,11 @@ export const NESTED_NOUNS = Object.freeze({
   script: 'script',
 } as const satisfies Record<RunIdentity['kind'], string>);
 
+/** What a run is called on screen: the task the user started, or what a
+ *  task started, by the kind of its run. */
+export const runNoun = (run: Pick<RunView, 'parentId' | 'identity'>): string =>
+  run.parentId === null ? 'task' : NESTED_NOUNS[run.identity.kind];
+
 /** The agents a task started. */
 export const NESTED_AGENT = {
   /** Count noun (singular; pair with a formatter): "3 agents". */
@@ -73,10 +78,10 @@ export const AGENT_LIST = {
 
 /** The task-level actions every host names the same way. */
 export const TASK_ACTIONS = {
-  /** The header menu's destructive item and the desktop rail's ×. */
-  delete: 'Delete task',
-  /** The same on an agent's row or header. */
-  deleteAgent: 'Delete agent',
+  /** The header and row menus' destructive item, named for what it
+   *  deletes: "Delete task", "Delete agent". */
+  delete: (run: Pick<RunView, 'parentId' | 'identity'>) =>
+    `Delete ${runNoun(run)}`,
   /** The header menu's clipboard item: the task's facts for a bug report. */
   copyDiagnostics: 'Copy diagnostics',
   /** A new task holding this conversation: the ended line and the header
@@ -87,6 +92,9 @@ export const TASK_ACTIONS = {
   forkFromHere: 'Fork from here',
   /** A forked task's header line and its empty transcript's first line. */
   forkedFrom: (title: string) => `Forked from ${title}`,
+  /** The same for a source the view may no longer hold. */
+  forkedFromRun: (source: Pick<RunView, 'title'> | undefined) =>
+    `Forked from ${source ? source.title : 'a deleted task'}`,
   /** The source's header menu item for each of its forks. */
   openFork: (title: string) => `Open fork: ${title}`,
   /** The header and run-row menus' title item (the TUI's `/rename`). */

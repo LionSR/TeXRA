@@ -7,22 +7,22 @@ export const SETUP_AGENT_NAME = 'setup';
  * Bundled orchestrator roots that delegate to a team. They ship with every
  * host and need no sign-in; UIs surface them first.
  */
-export const BUILTIN_TEAM_ROOT_AGENT_NAMES = [
+export const BUILTIN_TEAM_ROOT_AGENT_NAMES = Object.freeze([
   'orchestrator',
   'leanOrchestrator',
   'engineer',
-] as const;
+] as const);
 
 /**
  * Preferred agents for dropdown fallback and sorting.
  * Orchestrators come first, then general and task-flavored fallbacks.
  */
-export const PREFERRED_TOOL_USE_AGENTS = [
+export const PREFERRED_TOOL_USE_AGENTS = Object.freeze([
   ...BUILTIN_TEAM_ROOT_AGENT_NAMES,
   'assistant',
   'research',
   'review',
-] as const;
+] as const);
 
 // Agents that exist in the catalog but must never be auto-selected as the
 // implicit chat default — e.g. `simplifier` is a code utility, not a chat
