@@ -5,8 +5,13 @@ lists their scopes): eleven area audits (`HR`, `HS`, `HT`, `TC`, `TT`, `TU`,
 `CL`, `DT`, `EX`, `LM`, `RT`) and five whole-repo lenses (`LS`, `LI`, `LT`,
 `LC`, `LN`). Every report read the code at `main` `d70ad92`. Each finding was
 re-read and refuted where it could be before it was written; the reports
-record about 220 candidates dropped that way. Findings an earlier round made
+record about 225 candidates dropped that way. Findings an earlier round made
 appear only as remainders or regressions and name the earlier id.
+
+**Line citations and "open PR" fields are as of `d70ad92`.** Several PRs
+the reports name as open have merged since (#14949, #14955 among them), and
+some cited lines have moved. Each owner re-verifies its rows on current
+`main` before building them; that reading supersedes the reports' citations.
 
 **Ownership.** Each package has one owner session and one PR, which builds
 every row in its table below. A row belongs to the package that owns most of
