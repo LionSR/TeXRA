@@ -277,8 +277,7 @@ export const logEntryStyles = css`
     line-height: 1.6;
   }
 
-  .banner-content--thinking,
-  .banner-content--scratchpad {
+  .banner-content--thinking {
     padding: var(--wa-space-xs) var(--wa-space-s);
     border-radius: var(--wa-border-radius-m, var(--border-radius));
     background: color-mix(

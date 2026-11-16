@@ -27,7 +27,6 @@ const StreamingTextDataSchema = Schema.StructWithRest(
  */
 const LOG_PAYLOAD_SCHEMAS = {
   [MESSAGE_TYPES.THINKING]: Schema.optional(StreamingTextDataSchema),
-  [MESSAGE_TYPES.SCRATCHPAD]: Schema.optional(StreamingTextDataSchema),
   [MESSAGE_TYPES.FILE_LIST]: Schema.Array(FileListEntrySchema),
   // Passthrough: a tool's extra fields (e.g. `files`) are forwarded as-is.
   [MESSAGE_TYPES.TOOL_USE]: Schema.StructWithRest(ToolUseLogSchema, [
