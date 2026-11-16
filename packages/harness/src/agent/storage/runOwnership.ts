@@ -75,13 +75,22 @@ const parentEdge = Effect.fn('parentEdge')(function* (runId: RunId) {
 });
 
 /** The run one attempt of a parent's call launches (an `agent` child, a
- *  background script), named by its response too: call ids repeat. */
-export const callChildRunId = (call: {
+ *  background script), named by its response too: call ids repeat. The id
+ *  is a hash of these fields under these names, `parentRunId` among them:
+ *  a resumed call finds the run an earlier attempt launched by deriving
+ *  the same id, so the names are part of the stored format. */
+export const callChildRunId = ({
+  parentId,
+  responseId,
+  callId,
+  attempt,
+}: {
   readonly parentId: RunId;
   readonly responseId: string;
   readonly callId: string;
   readonly attempt: number;
-}): RunId => deriveRunId(call);
+}): RunId =>
+  deriveRunId({ parentRunId: parentId, responseId, callId, attempt });
 
 /** The runs the attempts so far of `runId`'s open calls launched under
  *  their derived ids (they may not exist), by call: a call no attempt of

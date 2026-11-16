@@ -1164,8 +1164,8 @@ async function normalize(file, root) {
       const { origin, attempt } = intent.value.payload;
       if (origin.kind !== 'script' || intent.value.payload.callId !== callId)
         continue;
-      const parentId = logicalOf.get(row.aggregate);
-      const fields = { parentId, responseId, callId, attempt };
+      const parentRunId = logicalOf.get(row.aggregate);
+      const fields = { parentRunId, responseId, callId, attempt };
       children.set(derive(fields), fields);
     }
   }
@@ -1176,16 +1176,16 @@ async function normalize(file, root) {
     if (row.type !== 'run.start' || row.value.identity?.kind !== 'script')
       continue;
     const runId = logicalOf.get(row.aggregate);
-    const parentId = row.value.parent?.id;
+    const parentRunId = row.value.parent?.id;
     const launch = rows.find(
       (other) =>
         other.type === 'tool.result' &&
-        logicalOf.get(other.aggregate) === parentId &&
+        logicalOf.get(other.aggregate) === parentRunId &&
         other.value.payload.result.value?.runId === runId,
     );
     if (launch === undefined) fail(`no launching call for script run ${runId}`);
     const { responseId, callId, attempt } = launch.value.payload;
-    const fields = { parentId, responseId, callId, attempt };
+    const fields = { parentRunId, responseId, callId, attempt };
     if (derive(fields) !== runId)
       fail(`script run ${runId} is not named by its launching call`);
     children.set(runId, fields);
@@ -1198,7 +1198,7 @@ async function normalize(file, root) {
         row.logical_id,
         derive({
           ...fields,
-          parentId: ids.get(fields.parentId),
+          parentRunId: ids.get(fields.parentRunId),
           responseId: uuids.get(fields.responseId),
         }),
       );
