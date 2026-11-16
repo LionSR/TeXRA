@@ -10,6 +10,7 @@
  * recorded effect is used instead.
  */
 import { callKey } from '@shared/session/runFacts';
+import { ancestryRows } from '@shared/session/runRelation';
 import * as path from 'node:path';
 
 import {
@@ -217,17 +218,9 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
 const inputBase = Effect.fn('inputBase')(function* (run: AgentRunShape) {
   const { parent } = run.entry;
   const log = yield* SessionLog;
-  let root = parent ?? run.runId;
-  if (parent !== null) {
-    // Parentage is a tree; the visited check only stops a corrupt cycle.
-    const seen = new Set([root]);
-    for (;;) {
-      const up = (yield* Effect.orDie(log.facts(root)))?.parent?.id;
-      if (up == null || seen.has(up)) break;
-      seen.add(up);
-      root = up;
-    }
-  }
+  const from = parent ?? run.runId;
+  const line = yield* Effect.orDie(ancestryRows((id) => log.facts(id), from));
+  const root = [...line.keys()].at(-1) ?? from;
   return {
     session_id: root,
     cwd: run.workingDirectory ?? (yield* SessionRoots).workspace ?? '',

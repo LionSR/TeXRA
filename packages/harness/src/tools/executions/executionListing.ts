@@ -14,7 +14,6 @@ import { Effect, Predicate, SubscriptionRef } from 'effect';
 
 // Local imports
 import type { RunId } from '@shared/schemas';
-import { runRelation, type RunRelation } from '@shared/session/runRelation';
 import { type RunView } from '@shared/session/sessionView';
 import { SessionViewAccess } from '@shared/session/runHistory';
 import { executed } from '@tools/core/result';
@@ -23,14 +22,22 @@ import { executed } from '@tools/core/result';
 import { formatListingLine } from '../executionFormatters';
 import { formatPaginationHint, paginateToolListing } from '../formatting';
 
-/** What a listed run is to the caller, in the caller's words. */
-const RELATION_NOUN: Record<Exclude<RunRelation, 'peer'>, string> = {
-  parent: 'orchestrator',
-  child: 'subagent',
-  ancestor: 'upstream orchestrator',
-  descendant: 'downstream subagent',
-  sibling: 'sibling',
-};
+/**
+ * What `run` is to `caller`, in the caller's words, read from the lines
+ * the view states on each run (`parentId`, `ancestors`); undefined for a
+ * run on no line of the caller's and with no parent in common.
+ */
+function relationNoun(run: RunView, caller: RunView): string | undefined {
+  if (caller.parentId === run.id) return 'orchestrator';
+  if (run.parentId === caller.id) return 'subagent';
+  if (caller.ancestors.some(({ id }) => id === run.id))
+    return 'upstream orchestrator';
+  if (run.ancestors.some(({ id }) => id === caller.id))
+    return 'downstream subagent';
+  return run.parentId !== null && run.parentId === caller.parentId
+    ? 'sibling'
+    : undefined;
+}
 
 /** The caller's session's runs, as the run asking (`caller`) relates to
  *  each. */
@@ -54,14 +61,11 @@ export const listExecutions = Effect.fn('listExecutions')(function* (
 
   // Unread input is the live fold's: the listing tier carries no follow-ups.
   const { queuedFollowUps } = SubscriptionRef.getUnsafe(access.ref);
-  const parentOf = (id: RunId) => view.runs.get(id)?.parentId;
+  const asking = caller === undefined ? undefined : view.runs.get(caller);
   const relationTo = (run: RunView): string | undefined => {
-    if (caller === undefined) return undefined;
     if (run.id === caller) return '(you)';
-    const relation = runRelation(run.id, caller, parentOf);
-    return relation === 'peer'
-      ? undefined
-      : `(your ${RELATION_NOUN[relation]})`;
+    const noun = asking === undefined ? undefined : relationNoun(run, asking);
+    return noun === undefined ? undefined : `(your ${noun})`;
   };
   const marks = (run: RunView): string => {
     const unread = queuedFollowUps.get(run.id)?.length ?? 0;
