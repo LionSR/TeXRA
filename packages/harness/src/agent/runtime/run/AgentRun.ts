@@ -65,8 +65,7 @@ const sessionModelAccess = Layer.unwrap(
  * How a launch enters its run's cell: a fresh run's `registration` rides
  * its opening batch (null: a resume, whose cell activates the run), on the
  * history a fork is born with when it has a `seed`, and `enter` commits
- * that batch with the trace held until then. `initialUserMessage`: a fresh
- * run's instruction, logged once its opening inserted the launch's media.
+ * that batch with the trace held until then.
  */
 interface LaunchEntry {
   /** The parent this activation runs under, read once as it starts (a
@@ -85,7 +84,6 @@ interface LaunchEntry {
   readonly enter: <A, E, R>(
     commit: (alongside: Alongside) => Effect.Effect<A, E, R>,
   ) => Effect.Effect<A, E, R>;
-  readonly initialUserMessage: string | undefined;
 }
 
 /**

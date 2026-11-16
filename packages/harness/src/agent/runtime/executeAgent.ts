@@ -24,7 +24,6 @@ import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { registrationRows } from '@agent/storage/runLifecycle';
 import { TraceEmitter } from '@agent/trace/TraceEmitter';
-import { logUserMessage } from '@agent/trace/traceLogs';
 import { runEventDraft } from '@agent/trace/TraceEmitter';
 import { AgentError } from '@common/errors/agentErrors';
 import { withLogChannel } from '@logger/effectLog';
@@ -47,11 +46,7 @@ import { ChildRunBudget } from './childRunBudget';
 import { openToolUse, runToolUse } from './loop/runLoop';
 import { modelInvokerLayer } from './ModelInvoker';
 import { agentRunLayer, type RunLaunch } from './run/AgentRun';
-import {
-  getDisplayedInstruction,
-  LabelsRootRuns,
-  withSessionDescription,
-} from './sessionDescription';
+import { LabelsRootRuns, withSessionDescription } from './sessionDescription';
 import type { AgentRunServices } from './runRegistry';
 import type { PreparedAgentDefinition } from './AgentLaunchContext';
 
@@ -175,20 +170,6 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
     options,
   );
 
-  // Log the initial instruction as a user message so the run's tab
-  // displays it inline with the stream log (no separate panel).
-  const displayInstruction = getDisplayedInstruction(config);
-  const initialInstruction =
-    displayInstruction && !resumed ? displayInstruction : undefined;
-  const supportsMediaInMessage =
-    modelConfig.capabilities.supportsVision ||
-    modelConfig.capabilities.supportsNativeAudio;
-  const initialMediaMayBeInserted =
-    config.mediaFiles.length > 0 && supportsMediaInMessage;
-
-  if (!initialMediaMayBeInserted && initialInstruction)
-    logUserMessage(agentLogger, initialInstruction);
-
   // A task's tools render their templates from this opening at every
   // call, so it is built on resume too; a conversation's rows hold its own.
   const opening =
@@ -217,12 +198,7 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
     toolPolicy: { stopAfterCycle },
     logger: agentLogger,
     opening,
-    entry: {
-      ...entry,
-      initialUserMessage: initialMediaMayBeInserted
-        ? initialInstruction
-        : undefined,
-    },
+    entry,
   };
   return launch;
 });

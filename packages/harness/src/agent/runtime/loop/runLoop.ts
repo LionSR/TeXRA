@@ -26,12 +26,14 @@
 import { Effect, Exit, type Scope, ScopedRef } from 'effect';
 
 import { buildOpeningSystemPrompt } from '@agent/prompt/PromptBuilder';
+import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import { logUserMessage } from '@agent/trace/traceLogs';
 import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
 import { Inbox } from '@agent/followUp/Inbox';
 import { SessionRoots } from '@platform/rootedFs';
 import {
   type CommitOrdinal,
+  type MediaAttachmentKind,
   RUN_OUTCOME,
   type RunOutcome,
 } from '@shared/schemas';
@@ -159,6 +161,13 @@ export const openToolUse = Effect.fn('toolUse.open')(function* (
     logger.debug('Resuming tool-use run from the run history.');
     return { cell, activation: cell.opened.commit };
   }
+  // A fresh run's transcript opens with the user's instruction, with the
+  // kinds of the media its opening inserts (a conversation's; a fork's
+  // history or a script's call inserts none).
+  const echo = (attachments: readonly MediaAttachmentKind[] = []) => {
+    const text = getDisplayedInstruction(run.config);
+    if (text) logUserMessage(logger, text, { attachments });
+  };
   const bound = yield* ScopedRef.get(run.model);
   // The state its first step opens on: what the opening batch records.
   const { backend, declinedRoutes } = bound;
@@ -170,6 +179,7 @@ export const openToolUse = Effect.fn('toolUse.open')(function* (
   // A fork is born on the history it was cut from, its turn ready.
   const { seed } = run.entry;
   if (seed != null) {
+    echo();
     const born = [
       ...seed.rows,
       configRow(runId, run.config, bound.modelId, binding),
@@ -187,6 +197,7 @@ export const openToolUse = Effect.fn('toolUse.open')(function* (
       // A script's run renders no prompt: what it runs is its call.
       const { script } = run.config;
       if (script != null) {
+        echo();
         const step = yield* stepFor(run, opening, false);
         const content: InputPart[] = [
           { kind: 'text', text: `Run the script "${script.title}".` },
@@ -217,11 +228,7 @@ export const openToolUse = Effect.fn('toolUse.open')(function* (
             )
           : Effect.succeed({ parts: [], kinds: [] }),
       );
-      if (run.entry.initialUserMessage) {
-        logUserMessage(logger, run.entry.initialUserMessage, {
-          attachments: Exit.isSuccess(media) ? media.value.kinds : [],
-        });
-      }
+      echo(Exit.isSuccess(media) ? media.value.kinds : []);
       if (Exit.isFailure(media)) return yield* Effect.failCause(media.cause);
       content.push(...media.value.parts, { kind: 'text', text: userRequest });
       const hooked = yield* step.tools.hooks.opening(opening, userRequest);

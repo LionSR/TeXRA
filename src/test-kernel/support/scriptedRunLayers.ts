@@ -272,7 +272,6 @@ const testEntry = (): RunLaunch['entry'] => ({
   awaited: false,
   registration: null,
   enter: (commit) => Effect.uninterruptible(commit(Effect.succeed([]))),
-  initialUserMessage: TEST_INSTRUCTION,
 });
 
 /**
@@ -345,8 +344,8 @@ export interface ScriptedRunInit {
   /** The terminal structured-output tool, when the run has one. */
   readonly finalToolName?: string | null;
   readonly mediaFiles?: readonly string[];
-  /** Absent means the launch had no transcript row to write. */
-  readonly initialUserMessage?: string | undefined;
+  /** A script run: what it runs is its call, not a prompt. */
+  readonly scriptCall?: (typeof AgentConfigSchema.Encoded)['script'];
 }
 
 export function agentRunTestLayer(init: ScriptedRunInit) {
@@ -366,6 +365,7 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
           config: Schema.decodeUnknownSync(AgentConfigSchema)({
             ...testConfig(),
             ...(init.mediaFiles ? { mediaFiles: init.mediaFiles } : {}),
+            ...(init.scriptCall ? { script: init.scriptCall } : {}),
           }),
           persona: Schema.decodeUnknownSync(PersonaSchema)({
             tools: Object.keys(tools).map((name) => ({ name })),
@@ -373,14 +373,7 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
           toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
           ...testRunTools(tools),
           finalToolName: init.finalToolName ?? null,
-          entry: {
-            ...testEntry(),
-            parent: init.parentRunId ?? null,
-            initialUserMessage:
-              'initialUserMessage' in init
-                ? init.initialUserMessage
-                : TEST_INSTRUCTION,
-          },
+          entry: { ...testEntry(), parent: init.parentRunId ?? null },
         },
       );
     }),
