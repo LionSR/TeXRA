@@ -28,12 +28,11 @@ import { decodeWireOrFail, rejoin, wireFail } from './transport.js';
 import {
   authorized,
   bearerHeaders,
-  bearerOf,
   prepareResponsesTurn,
   refuseAmbientHeaders,
   responseParameters,
 } from './openaiResponsesRequest.js';
-import type { ModelCredential } from '../node.js';
+import type { SessionToken } from '../node.js';
 import type { ClientRequest, IncomingMessage } from 'node:http';
 
 const JsonFrameSchema = Schema.fromJsonString(Schema.Unknown);
@@ -274,7 +273,7 @@ const connect = Effect.fnUntraced(function* (
         ),
       );
       return responseEvents(chunks, origin, (result) =>
-        withResponsesContinuation(config, turn, result),
+        withResponsesContinuation(turn, result),
       ).pipe(
         Stream.mapEffect(
           Effect.fnUntraced(function* (event) {
@@ -326,11 +325,10 @@ export const openaiResponsesWebSocketModel = Effect.fn(
   'llm.responses.webSocketModel',
 )(function* (
   config: OpenAIResponsesConfiguration,
-  authentication: ModelCredential,
+  bearer: string | SessionToken,
 ): Effect.fn.Return<Model, ModelError, Scope.Scope> {
   const origin = originOf(config);
   yield* refuseAmbientHeaders;
-  const bearer = bearerOf(authentication);
   const endpoint = new URL(config.deployment.endpoint);
   if (endpoint.username || endpoint.password)
     return yield* new ModelError({

@@ -119,7 +119,7 @@ interface AgentBlockResult<R = unknown> {
 
 Agent-general SDK surface. Every method ultimately reduces to `emit()` so
 the trace channel is a single source of truth. App-specific helpers are
-plain functions over this interface (see `helpers.ts`).
+plain functions over this interface (see `traceLogs.ts`).
 
 ```ts
 interface AgentTrace {
@@ -1046,7 +1046,8 @@ class JsonRpcRequestError extends Schema.TaggedError<JsonRpcRequestError>()(
 What a trace's log methods take: a row's category (subscribers pick a
 render style from it) with the payload the transcript decodes for it,
 so a pairing is checked where it is written; or no category, a default
-row with any data.
+row with any data. The row stores the payload as JSON; a `Cause` stores
+as the error it raised.
 
 ```ts
 type LogOptions =

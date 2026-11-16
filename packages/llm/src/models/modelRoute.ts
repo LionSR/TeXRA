@@ -306,10 +306,11 @@ const KIMI_CODE_WIRE_MODEL_IDS: Readonly<Record<string, string>> = {
 const KIMI_CODE_SUBSCRIPTION_CONTEXT_WINDOW = 262_144;
 
 /**
- * The config `config` runs with on `route`: a subscription's zero per-token
- * price and context ceiling, and for a dual-backend Kimi model on Kimi Code
- * the coding wire id and tier window. The endpoint is not part of it: the
- * route itself names it.
+ * The config `config` runs with on `route`. Every route with a plan is paid
+ * by its subscription, so its per-token prices are zero; the ChatGPT plan
+ * also takes its granted context window, and a dual-backend Kimi model on
+ * Kimi Code its coding wire id and tier window. The endpoint is not part of
+ * it: the route itself names it.
  */
 export function routeConfig(
   config: ModelConfig,
@@ -334,9 +335,12 @@ export function routeConfig(
       };
     }
     case 'api-key': {
-      if (route.provider !== 'kimiCode' || isKimiCodeExclusiveModel(config)) {
-        return config;
-      }
+      if (route.plan === null) return config;
+      if (
+        route.plan !== 'kimi-code-subscription' ||
+        isKimiCodeExclusiveModel(config)
+      )
+        return { ...config, ...zeroCostAccessOverrides(config.contextWindow) };
       const wireId = KIMI_CODE_WIRE_MODEL_IDS[config.id] ?? config.id;
       return {
         ...config,

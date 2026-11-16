@@ -101,12 +101,13 @@ const inputRefused = (cause: Schema.SchemaError): LaunchRefused =>
  */
 function admitTools(
   tools: readonly ITool[],
-  canAsk: boolean,
+  session: Context.Context<SessionServices>,
 ): Effect.Effect<void, ToolsRefused> {
   const needApproval = tools
     .filter(asksApproval)
     .map((tool) => tool.definition.name);
-  return needApproval.length > 0 && !canAsk
+  return needApproval.length > 0 &&
+    Context.get(session, Interactions).approvalPromptsUnavailable
     ? Effect.fail(
         new ToolsRefused({
           tools: needApproval,
@@ -125,8 +126,7 @@ const admitInput = Effect.fn('admitInput')(function* (
   session: Context.Context<SessionServices>,
   catalog: Catalog,
 ): Effect.fn.Return<typeof AgentConfigSchema.Type, LaunchError> {
-  const canAsk = !Context.get(session, Interactions).approvalPromptsUnavailable;
-  yield* admitTools(input.tools ?? [], canAsk);
+  yield* admitTools(input.tools ?? [], session);
   // A host's whole configuration: its launch resolves the agent itself.
   if ('config' in input) return input.config;
   const { agent } = input;
@@ -224,10 +224,7 @@ function resume(
 ): Effect.Effect<Run, ResumeError> {
   const { tools, interactive, apiKeys } = input;
   return Effect.gen(function* () {
-    yield* admitTools(
-      tools ?? [],
-      !Context.get(session, Interactions).approvalPromptsUnavailable,
-    );
+    yield* admitTools(tools ?? [], session);
     const resumed = yield* resumeRun(runId, {
       stopAfterCycle: interactive !== true,
       tools,

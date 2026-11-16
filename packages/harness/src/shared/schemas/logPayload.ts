@@ -61,7 +61,8 @@ type LogWriteOf<K extends MessageType> =
  * What a trace's log methods take: a row's category (subscribers pick a
  * render style from it) with the payload the transcript decodes for it,
  * so a pairing is checked where it is written; or no category, a default
- * row with any data.
+ * row with any data. The row stores the payload as JSON; a `Cause` stores
+ * as the error it raised.
  */
 export type LogOptions =
   | { readonly messageType?: undefined; readonly data?: unknown }

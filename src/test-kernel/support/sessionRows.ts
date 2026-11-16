@@ -58,11 +58,9 @@ export function toolUseTurn(runId: RunId) {
   const RESPONSE_ID = '9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d';
   /** The provider's turn: a message and two `bash` calls. */
   const TURN = {
-    kind: 'http',
     providerResponseId: 'resp-1',
     requestedOrigin: ORIGIN,
     returnedModel: null,
-    modelFingerprint: null,
     content: [
       { kind: 'message', content: [{ kind: 'text', text: 'running ls' }] },
       {
