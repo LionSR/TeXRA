@@ -43,11 +43,9 @@ export function formatDelivery(delivery: ChildRunDelivery): string {
   const { exit, output } = delivery;
   const body: string[] = [];
   if (exit !== undefined) {
-    body.push(`<exit-code>${exit.code}</exit-code>`);
-    // The code is a conventional one when the process timed out or its exit
-    // status was lost; say which, so no reader takes it for a real exit.
+    // A process that timed out or lost its exit status has no code.
+    body.push(`<exit-code>${exit.code ?? 'none'}</exit-code>`);
     if (exit.timedOut) body.push('<timed-out>true</timed-out>');
-    if (exit.noExitCode) body.push('<no-exit-code>true</no-exit-code>');
   }
   if (delivery.wallTime !== undefined) {
     body.push(`<wall-time>${delivery.wallTime}</wall-time>`);

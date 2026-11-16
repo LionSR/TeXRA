@@ -112,12 +112,7 @@ export function bashResultDelivery(
     family: DELIVERY_FAMILY.background,
     runId,
     attributes: callAttributes(call),
-    // A command without a code of its own reads with the conventional 1.
-    exit: {
-      code: exit.code ?? 1,
-      timedOut: exit.timedOut,
-      noExitCode: exit.code === null && !exit.timedOut,
-    },
+    exit,
     wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
     lines,
   };
