@@ -1,5 +1,13 @@
 // Third-party imports
-import { Cause, Context, Effect, Exit, Layer, Record as Rec, Scope } from 'effect';
+import {
+  Cause,
+  Context,
+  Effect,
+  Exit,
+  Layer,
+  Record as Rec,
+  Scope,
+} from 'effect';
 
 // Local imports
 import {

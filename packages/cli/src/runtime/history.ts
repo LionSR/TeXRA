@@ -88,8 +88,6 @@ interface CliHistoryDetails {
   /** The whole conversation when the caller asked for it, else a preview. */
   readonly conversation: CliHistoryConversation | null;
   readonly files: readonly RunGeneratedFile[];
-  /** Whether the run's loop opened it: its rows hold a `run.position`. */
-  readonly checkpointPresent: boolean;
   /** The model the run is on; `config.model` is its launch model. */
   readonly currentModel?: string;
 }
@@ -184,7 +182,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       report,
       conversation,
       workspaceFiles,
-      checkpointPresent,
+      continues,
       generatedFiles,
     ] = yield* Effect.all(
       [
@@ -200,13 +198,14 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       { concurrency: 8 },
     );
     const run = view.runs.get(id);
-    if (!run && !config && conversation.length === 0 && !checkpointPresent) {
+    if (!run && !config && conversation.length === 0 && !continues) {
       return null;
     }
     // The model the run is on, as the view derives it for the listing too.
     const currentModel = config ? (run?.model ?? undefined) : undefined;
-    // A run with no config is corrupt: there is nothing to resume it under.
-    const resumable = config !== null && checkpointPresent;
+    // Whether `texra resume` takes it: its rows hold a point it continues
+    // from, and its config to continue under (a run with none is corrupt).
+    const resumable = config !== null && continues;
     const shownConversation = options.includeFullConversation
       ? createConversationTranscript(conversation)
       : createConversationPreview(conversation);
@@ -236,7 +235,6 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       report,
       conversation: shownConversation,
       files,
-      checkpointPresent,
       currentModel,
     } satisfies CliHistoryDetails;
   },
@@ -412,7 +410,6 @@ export function formatCliHistoryDetailsText(
   );
   lines.push('', 'Config:', shown, '', `Files (${files.length}):`);
   lines.push(...(files.length ? files : ['(none)']));
-  if (details.checkpointPresent) lines.push('', 'Checkpoint: present');
   return lines.join('\n');
 }
 
