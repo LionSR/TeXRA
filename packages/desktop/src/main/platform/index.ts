@@ -39,13 +39,6 @@ interface ElectronPlatformInitResult {
    * re-resolving it — this root no longer lives under `userData` (#7987).
    */
   dataRoot: string;
-  /**
-   * Resolved `packages/extension/resources` tree (bundled verbatim as
-   * `extraResources` — see `electron-builder.yml`). Threaded out so callers
-   * that need a specific bundled asset (e.g. the trace viewer page) don't
-   * each re-resolve it.
-   */
-  resourcesPath: string;
   /** The directory of the built main bundle, beside its preload and renderer. */
   mainDir: string;
 }
@@ -121,7 +114,6 @@ export const initializeElectronPlatform = Effect.fn(
       processRoots,
       globalConfigStore: configStores.global,
       dataRoot,
-      resourcesPath,
       mainDir,
     };
   });

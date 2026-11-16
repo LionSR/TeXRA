@@ -7,7 +7,6 @@
 
 import { Effect } from 'effect';
 import type { ProcessServices } from '@texra-ai/harness/host';
-import latexPreamble from '@resources/templates/chatExport.tex';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 
 import {
@@ -35,8 +34,6 @@ interface DesktopHostRequestsOptions {
   host: DesktopAgentRunHost;
   files: DesktopFileSelection;
   workspaceFile: ReturnType<typeof createDesktopWorkspaceIpc>['file'];
-  /** Packaged app resources root (`…/resources`), for export templates. */
-  resourcesPath: string;
   postToRenderer(message: unknown): void;
   onboarding: WindowOnboarding;
   openExternalUrl(url: string): Effect.Effect<void, HostFailed>;
@@ -177,8 +174,6 @@ export const createDesktopHostRequests = (
           host
             .openPath(filePath)
             .pipe(Effect.mapError((cause) => hostFailed('openPath', cause))),
-        latexPreamble,
-        resourcesPath: options.resourcesPath,
       },
     };
   });

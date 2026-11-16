@@ -81,8 +81,6 @@ interface DesktopWindowOptions {
   readonly projects: DesktopProjectRegistry;
   /** Recording has one process owner, shared by every project and window. */
   readonly draftRequests: HostDraftRequests;
-  /** See ElectronPlatformInitResult.resourcesPath. */
-  readonly resourcesPath: string;
   /** See ElectronPlatformInitResult.mainDir. */
   readonly mainDir: string;
   /** The process runtime the composition root built. Every Effect this window
@@ -215,7 +213,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     host,
     runtime,
     projects,
-    resourcesPath: options.resourcesPath,
     draftRequests: options.draftRequests,
     onboarding,
   });
@@ -225,7 +222,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     projects,
     bindings,
     promptController,
-    resourcesPath: options.resourcesPath,
   });
   const navigation = createProjectNavigation({
     host,

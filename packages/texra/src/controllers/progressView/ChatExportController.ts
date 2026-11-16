@@ -4,11 +4,14 @@
  * of window startup. File opening and notices belong to the caller.
  */
 
+// Node imports
+import * as path from 'node:path';
+
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Local imports - export data and storage
-import { pathToLocationIn } from '@texra-ai/harness/host';
+import { AgentDirectories, pathToLocationIn } from '@texra-ai/harness/host';
 import { StorageFs } from '@texra-ai/harness/plugins';
 import { toErrorMessage, Rejected } from '@texra-ai/harness/schemas';
 import { compileLatex2Pdf } from '@latex/texTools';
@@ -51,20 +54,25 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
   format: 'html' | 'md' | 'tex',
   options: {
     readonly roots: WorkspaceRoots;
-    /** The preamble is a host asset, independent of its installation path. */
-    readonly latexPreamble: string;
-    /** The host's resources directory, which holds the trace-viewer bundle. */
-    readonly resourcesPath: string;
     /** The run's session, whose records the export reads: this process's
      *  own, or the service's. */
     readonly session: Session;
   },
 ) {
+  // The packaged resources hold the trace-viewer bundle and the LaTeX
+  // export's preamble.
+  const { resourcesRoot } = yield* AgentDirectories;
+  if (resourcesRoot === undefined) {
+    const cause = new Error(
+      'This host ships no packaged resources, so it cannot export a transcript.',
+    );
+    return yield* new TranscriptExportFailed({ message: cause.message, cause });
+  }
   if (format === 'html') {
     const { html, trace, record } = yield* traceHtml(
       options.session,
       runId,
-      options.resourcesPath,
+      resourcesRoot,
     ).pipe(
       Effect.catch(
         (error): Effect.Effect<never, Rejected | TranscriptExportFailed> => {
@@ -134,7 +142,14 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
     generateExportFilename(exportInput, format),
     format === 'md'
       ? formatChatAsMarkdown(exportInput)
-      : formatChatAsLatex(exportInput, options.latexPreamble),
+      : formatChatAsLatex(
+          exportInput,
+          yield* FileSystem.FileSystem.use((fs) =>
+            fs.readFileString(
+              path.join(resourcesRoot, 'templates', 'chatExport.tex'),
+            ),
+          ),
+        ),
   );
   if (format === 'md') return { ...result, format };
 

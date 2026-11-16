@@ -232,13 +232,8 @@ export interface GuiWindowHost {
   readonly window: Omit<WindowHost, 'filesWritten' | 'emit'>;
   readonly runs: Pick<HostRunActionPorts, 'openFinalOutput' | 'revealProgress'>;
   readonly files: Omit<ProgressDocumentTaskFileActionsHost, 'showInfo'>;
-  /** The transcript export's format picker and opener, the LaTeX export's
-   *  preamble, and the host's resources directory, which holds the
-   *  standalone trace viewer's template. */
-  readonly export: TranscriptExportHost & {
-    readonly latexPreamble: string;
-    readonly resourcesPath: string;
-  };
+  /** The transcript export's format picker and opener. */
+  readonly export: TranscriptExportHost;
 }
 
 interface GuiWindowPorts {
@@ -481,8 +476,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       notify: host.notify,
       roots,
       session,
-      latexPreamble: host.export.latexPreamble,
-      resourcesPath: host.export.resourcesPath,
     });
   /**
    * One program per shared request, as a host's own arms are: it runs on the

@@ -1,10 +1,9 @@
 /**
  * LaTeX format spec for chat export.
  *
- * The document preamble is passed into `formatChatAsLatex` rather
- * than imported here: the `.tex` template lives under the extension package's
- * `resources/` (host-specific), so this core formatter stays free of any
- * `@resources` import and is buildable from any host.
+ * The document preamble is passed into `formatChatAsLatex`: the caller reads
+ * it from the packaged resources' `templates/chatExport.tex`, so this
+ * formatter stays pure.
  */
 
 import type {

@@ -45,7 +45,6 @@ import { quickPick } from '@frontend/ui/dialogs';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { previewFinalOutput } from '@frontend/agents/finalOutputOpener';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
-import latexPreamble from '@resources/templates/chatExport.tex';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
@@ -452,8 +451,6 @@ export const createExtensionHostRequests = Effect.fn(
         ),
       ),
       openPath: openExportPath,
-      latexPreamble,
-      resourcesPath: path.join(options.extensionPath, 'resources'),
     },
   };
 });

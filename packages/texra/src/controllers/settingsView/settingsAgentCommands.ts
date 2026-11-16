@@ -59,14 +59,16 @@ function validateTemplateAgentName(value: string): string | null {
 
 /**
  * Write a template agent into its file, refusing to overwrite an existing
- * file. `resourcesRoot` is the packaged `…/resources` directory that holds
- * `templates/<kind>.yaml`.
+ * file. The templates are the packaged resources' `templates/<kind>.yaml`.
  */
 const writeTemplateAgentFile = Effect.fn('settings.writeTemplateAgentFile')(
-  function* (
-    input: { task: boolean; name: string; customDir: string },
-    resourcesRoot: string,
-  ) {
+  function* (input: { task: boolean; name: string; customDir: string }) {
+    const { resourcesRoot } = yield* AgentDirectories;
+    if (resourcesRoot === undefined) {
+      return yield* Effect.fail(
+        new Error('This host ships no agent templates.'),
+      );
+    }
     const baseName = input.name.endsWith(AGENT_FILE_EXTENSION)
       ? input.name.slice(0, -AGENT_FILE_EXTENSION.length)
       : input.name;
@@ -100,8 +102,6 @@ const writeTemplateAgentFile = Effect.fn('settings.writeTemplateAgentFile')(
 
 interface SettingsAgentCommandsPorts {
   readonly roots: Pick<WorkspaceRoots, 'repoState' | 'globalState'>;
-  /** The packaged resources root; the agent templates live under it. */
-  readonly resourcesPath: string;
   readonly bindings: SettingsHostBindings;
   readonly present: SettingsPresentation;
 }
@@ -398,10 +398,11 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
           yield* FileSystem.FileSystem.use((fs) =>
             fs.makeDirectory(customDir, { recursive: true }),
           );
-          const written = yield* writeTemplateAgentFile(
-            { task: message.task, name, customDir },
-            ports.resourcesPath,
-          );
+          const written = yield* writeTemplateAgentFile({
+            task: message.task,
+            name,
+            customDir,
+          });
           if (!written.ok) return yield* present.alert(written.message);
           yield* agentFilesChanged;
           yield* bindings.openPath(written.filePath);

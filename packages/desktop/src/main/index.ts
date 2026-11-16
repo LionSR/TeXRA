@@ -183,7 +183,6 @@ void Effect.runPromise(
               {
                 projects: registry,
                 draftRequests,
-                resourcesPath: platformInit.resourcesPath,
                 mainDir: platformInit.mainDir,
                 runtime,
               },

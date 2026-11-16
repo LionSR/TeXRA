@@ -163,11 +163,7 @@ const HOME_SETUP_FILES = [
 ];
 
 export default defineConfig({
-  plugins: [
-    texTemplatePlugin(),
-    quickJsWasmPlugin(),
-    codeSandboxWorkerPlugin(),
-  ],
+  plugins: [quickJsWasmPlugin(), codeSandboxWorkerPlugin()],
   resolve: {
     alias: {
       ...aliases,
@@ -244,21 +240,6 @@ export default defineConfig({
     ],
   },
 });
-
-function texTemplatePlugin() {
-  return {
-    name: 'tex-template-loader',
-    transform(_source, id) {
-      if (!id.endsWith('.tex')) return undefined;
-
-      const contents = readFileSync(id, 'utf8');
-      return {
-        code: `export default ${JSON.stringify(contents)};`,
-        map: null,
-      };
-    },
-  };
-}
 
 function quickJsWasmPlugin() {
   return {
