@@ -51,11 +51,6 @@ import { CLI_OUTPUT_FORMAT_SETTING } from '@texra/shared/settings/texraSettings'
 
 type CliMode = 'headless' | 'interactive';
 
-export interface CliPromptRequest {
-  readonly summary: string;
-  readonly prompt: string;
-}
-
 /** Fully normalized CLI state produced by {@link buildCliContext}. */
 export interface CliContext {
   /** Root of the shared TeXRA storage directory, decided once at build. */
@@ -103,9 +98,6 @@ export interface CliContext {
   readonly envAgent?: string;
   readonly envModel?: string;
   readonly skillSourceOptions: SkillSourceOptions;
-  readonly approvalPrompt?: (
-    request: CliPromptRequest,
-  ) => Effect.Effect<string, Error>;
 }
 
 /**
