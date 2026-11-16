@@ -208,11 +208,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 followUpId: 'follow-up-2',
                 content: {
                   text: asked,
-                  from: {
-                    kind: 'run' as const,
-                    runId: parentRunId,
-                    relation: 'parent' as const,
-                  },
+                  from: { kind: 'run' as const, runId: parentRunId },
                 },
               },
             ]);

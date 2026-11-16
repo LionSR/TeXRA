@@ -16,6 +16,12 @@ All notable changes to this project will be documented in this file.
   started; the message resumes it for one cycle and its launcher gets the
   report. SDK: `RunInbox.send` takes only the item, and
   `RunInboxSendOptions` is gone from `@texra-ai/harness/plugins`.
+- **Agents message each other as equals.** A message one agent sends
+  another with `executions send` is read as an instruction and continues a
+  finished agent, whichever of them launched the other. A run you stopped
+  still continues only on your own message. SDK: a run sender of a
+  follow-up is `{ kind: 'run', runId }` with no `relation`, and
+  `FollowUpSenderInput` is gone (`InboxItem.from` is a `FollowUpSender`).
 
 - **SDK: a store an earlier build wrote is refused, never moved aside.**
   Opening a session store stamped with another build's schema fails and

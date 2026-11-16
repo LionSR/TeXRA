@@ -175,15 +175,13 @@ function outputOf(
   return tool === STRUCTURED_OUTPUT_TOOL_NAME ? 'submitted' : null;
 }
 
-/** Input that asks the run to do something: its user's and its parent's
- *  messages. A child's report, another run's message and a host notice only
- *  inform it. */
+/** Input that asks the run to do something: a message from its user or
+ *  from any run. A run's report at its end and a host notice only inform
+ *  it. */
 export const isInstruction = (
   content: FollowUpContent,
 ): content is FollowUpMessage =>
-  !('delivery' in content) &&
-  (content.from.kind === 'user' ||
-    (content.from.kind === 'run' && content.from.relation === 'parent'));
+  !('delivery' in content) && content.from.kind !== 'notification';
 
 /** The row that consumes one follow-up, committed beside the rows that took
  *  it; its writer states why (`disposition`). */

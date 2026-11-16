@@ -43,8 +43,8 @@ export const missingRun = (
  * Send `message` from the calling run to `target` (from the user when no
  * run calls). Any run may message any run in the project, whatever their
  * places in the supervision tree, and a message to a blocked or waiting run
- * wakes it. A run the user stopped is not revived by a run's message: that
- * is refused, and only the user's own message continues it.
+ * wakes it, as it does one that ended. A run the user stopped is not
+ * revived by a run's message: only the user's own message continues it.
  */
 export const sendToRun = Effect.fn('ExecutionsTool.send')(function* (
   caller: RunId | undefined,

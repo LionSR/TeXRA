@@ -14,33 +14,14 @@ import { StoredMediaSchema } from './storedTurn';
 import { TokenUsageStatsSchema } from './usage';
 
 /**
- * Where one run stands relative to another in the supervision tree: who
- * launched whom, who stops whom, who reports to whom. It never limits who
- * may talk to whom; every run in a project may message every other.
- * `peer` is any run with no ancestor line to the other and no shared parent.
- */
-const RunRelationSchema = Schema.Literals([
-  'parent',
-  'child',
-  'ancestor',
-  'descendant',
-  'sibling',
-  'peer',
-]);
-export type RunRelation = typeof RunRelationSchema.Type;
-
-/**
- * Who put the input on the run. A run sender's `relation` is what the sender
- * is to the recipient, stamped by the recipient's admission from both runs'
- * lineage as the session view holds it, never taken from the sender: it is
- * the relation as admitted.
+ * Who put the input on the run. A run names only itself: where it stands
+ * relative to the recipient changes nothing about how its message is read.
  */
 const FollowUpSenderSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('user') }),
   Schema.Struct({
     kind: Schema.Literal('run'),
     runId: RunIdSchema,
-    relation: RunRelationSchema,
   }),
   /** A host notice about the run's world (a watched PR's CI or review). It
    *  informs the run and never becomes its instruction. */

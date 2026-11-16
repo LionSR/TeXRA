@@ -1,12 +1,20 @@
 /**
  * The one reading of where two runs stand in the supervision tree, for
- * every surface that says it: admission stamping a message's sender, the
- * `/executions` listing. A job that stamps reads parentage off the rows
- * (`run.start`); a listing reads the view's `parentId`, their projection.
+ * the `/executions` listing, which reads the view's `parentId`.
  */
 import { Effect } from 'effect';
 
-import type { RunId, RunRelation } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
+
+/** What one run is to another; `peer` is any run with no ancestor line to
+ *  the other and no shared parent. */
+export type RunRelation =
+  | 'parent'
+  | 'child'
+  | 'ancestor'
+  | 'descendant'
+  | 'sibling'
+  | 'peer';
 
 type ParentOf = (runId: RunId) => RunId | null | undefined;
 

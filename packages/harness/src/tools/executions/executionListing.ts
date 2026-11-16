@@ -13,8 +13,8 @@
 import { Effect, Predicate, SubscriptionRef } from 'effect';
 
 // Local imports
-import type { RunId, RunRelation } from '@shared/schemas';
-import { runRelation } from '@shared/session/runRelation';
+import type { RunId } from '@shared/schemas';
+import { runRelation, type RunRelation } from '@shared/session/runRelation';
 import { type RunView } from '@shared/session/sessionView';
 import { SessionViewAccess } from '@shared/session/runHistory';
 import { executed } from '@tools/core/result';

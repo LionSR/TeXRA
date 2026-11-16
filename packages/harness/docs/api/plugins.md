@@ -710,19 +710,6 @@ Files and the shell: every agent needs them. An app passes the filter
 const fileOps: (options?: { readonly writeFilter?: WriteFilter | undefined; }) => Plugin
 ```
 
-## FollowUpSenderInput
-
-Who a producer says a follow-up is from. Runs talk as a graph: any run may
-message any run in the project, whatever their places in the supervision
-tree. A run names only itself; the recipient's admission
-(`Inbox.send`) stamps how it relates to the recipient.
-
-```ts
-type FollowUpSenderInput =
-  | Exclude<FollowUpSender, { readonly kind: 'run' }>
-  | { readonly kind: 'run'; readonly runId: RunId };
-```
-
 ## formatToolOutput
 
 Format tool output with a header and content.
@@ -811,7 +798,7 @@ type InboxItem = (
     }
   | { readonly delivery: ChildRunDelivery }
 ) & {
-  readonly from: FollowUpSenderInput;
+  readonly from: FollowUpSender;
   /** Identity of a delivery its producer may repeat (a child's result):
    *  the row's `followUpId`, so a replay writes nothing. */
   readonly deliveryId?: string;

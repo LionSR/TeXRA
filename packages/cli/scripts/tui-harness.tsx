@@ -1360,7 +1360,7 @@ publish(
     type: 'followup.queued' as const,
     aggregateId: qualifyAggregateId('run', HARNESS_RUN_ID),
     followUpId: `harness-follow-up-${index + 1}`,
-    content: queuedRow(item, undefined, () => 'child').content,
+    content: queuedRow(item, undefined).content,
   })),
 );
 const HARNESS_INITIAL_RUN_STANDING = harnessInitialRunStatus();

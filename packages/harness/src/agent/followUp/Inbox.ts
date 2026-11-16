@@ -11,11 +11,11 @@ import { logFailure } from '@logger/effectLog';
 import {
   qualifyAggregateId,
   type ChildRunDelivery,
+  type FollowUpSender,
   type RunId,
   type StoredMedia,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
-import { ancestryRows, runRelation } from '@shared/session/runRelation';
 import type { DraftBlob } from '@shared/session/historyTurns';
 import type { RunInputDraft } from '@shared/session/runState';
 import { consumedRow } from '@shared/session/runFacts';
@@ -29,7 +29,7 @@ import type {
 import type { PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError } from '@utils/errors/errorMessage';
 import { FollowUpReader, needsWake } from './FollowUpReader';
-import { queuedRow, type FollowUpSenderInput } from './followUpMessages';
+import { queuedRow } from './followUpMessages';
 
 const CHANNEL = 'Inbox';
 
@@ -61,7 +61,7 @@ export type InboxItem = (
     }
   | { readonly delivery: ChildRunDelivery }
 ) & {
-  readonly from: FollowUpSenderInput;
+  readonly from: FollowUpSender;
   /** Identity of a delivery its producer may repeat (a child's result):
    *  the row's `followUpId`, so a replay writes nothing. */
   readonly deliveryId?: string;
@@ -283,12 +283,7 @@ export class SessionInbox {
     return Effect.gen({ self: this }, function* () {
       const input = yield* this.read(runId);
       if (closed(input)) return only(CLOSED);
-      const sender = item.from.kind === 'run' ? item.from.runId : null;
-      // Stamped inside the job, from the parent edges the rows record.
-      const line = yield* ancestryRows(this.read, runId, sender);
-      const row = queuedRow(item, options.hold, (from) =>
-        runRelation(from, runId, (id) => line.get(id)?.parent?.id),
-      );
+      const row = queuedRow(item, options.hold);
       const queuedStill = input.followUps.some(
         (f) => f.followUpId === row.followUpId,
       );
