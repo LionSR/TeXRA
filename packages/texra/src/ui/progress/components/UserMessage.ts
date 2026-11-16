@@ -111,10 +111,7 @@ export class UserMessage extends LitElement {
         max-height: min(45vh, 520px);
         overflow: auto;
         padding: var(--wa-space-xs);
-        background: var(
-          --wa-color-surface-lowered,
-          var(--wa-color-surface-default)
-        );
+        background: var(--wa-color-surface-lowered);
         border-radius: var(--border-radius-medium);
         font-size: var(--font-size-sm);
         line-height: var(--line-height-normal);

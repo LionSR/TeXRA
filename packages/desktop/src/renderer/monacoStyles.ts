@@ -98,7 +98,7 @@ export const monacoStyles = css`
 
   .monaco-resizable-hover,
   .monaco-editor .monaco-hover {
-    border-radius: var(--wa-tooltip-border-radius, var(--field-radius));
+    border-radius: var(--wa-tooltip-border-radius);
   }
 
   .quick-input-widget .quick-input-header {

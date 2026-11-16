@@ -263,7 +263,7 @@ export const commonViewStyles: CSSResult = css`
 
   .panel-collapsible::part(header) {
     padding: var(--wa-space-2xs) var(--wa-space-xs);
-    background-color: var(--wa-color-surface-lowered, transparent);
+    background-color: var(--wa-color-surface-lowered);
     color: var(--wa-color-text-normal);
   }
 

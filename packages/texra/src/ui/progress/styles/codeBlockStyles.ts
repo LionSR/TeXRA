@@ -113,7 +113,7 @@ export const codeBlockStyles = css`
   .hljs-keyword,
   .hljs-selector-tag,
   .hljs-tag {
-    color: var(--wa-color-symbol-keyword, var(--wa-color-text-link));
+    color: var(--wa-color-symbol-keyword);
   }
 
   .hljs-string,
@@ -134,7 +134,7 @@ export const codeBlockStyles = css`
   .hljs-variable,
   .hljs-params,
   .hljs-attr {
-    color: var(--wa-color-symbol-variable, var(--wa-color-text-normal));
+    color: var(--wa-color-symbol-variable);
   }
 
   .hljs-function,
@@ -151,7 +151,7 @@ export const codeBlockStyles = css`
 
   .hljs-property,
   .hljs-name {
-    color: var(--wa-color-symbol-property, var(--wa-color-text-normal));
+    color: var(--wa-color-symbol-property);
   }
 
   .hljs-operator,
@@ -168,7 +168,7 @@ export const codeBlockStyles = css`
   .hljs-meta,
   .hljs-meta .hljs-keyword,
   .hljs-meta .hljs-string {
-    color: var(--wa-color-symbol-keyword, var(--wa-color-text-link));
+    color: var(--wa-color-symbol-keyword);
   }
 
   .hljs-addition {

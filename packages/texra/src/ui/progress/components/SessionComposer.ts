@@ -146,7 +146,7 @@ export class SessionComposer extends LitElement {
         overflow-y: auto;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
-        font-family: var(--wa-font-family-body, inherit);
+        font-family: var(--wa-font-family-body);
         font-size: var(--font-size-reading);
         line-height: var(--line-height-normal);
       }

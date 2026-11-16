@@ -130,8 +130,7 @@ const multiFilesStyles = css`
 
   .multiple-files-list {
     background-color: var(--background-color);
-    border: var(--border-thin) solid
-      var(--wa-color-surface-border, var(--dropdown-border));
+    border: var(--border-thin) solid var(--wa-color-surface-border);
     border-radius: var(--border-radius);
     padding: var(--wa-space-2xs);
     font-size: var(--font-size);

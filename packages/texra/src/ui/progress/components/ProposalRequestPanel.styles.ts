@@ -106,7 +106,7 @@ export const proposalRequestPanelStyles: CSSResult = css`
 
   .workflow-proposal__file-name:hover {
     text-decoration: underline;
-    color: var(--wa-color-text-link-active, var(--wa-color-text-link));
+    color: var(--wa-color-text-link-active);
   }
 
   /* Radius only — the ring comes from focusRingStyles. */

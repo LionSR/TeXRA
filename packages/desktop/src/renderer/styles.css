@@ -911,7 +911,7 @@ wa-input.desktop-command-palette-input::part(input) {
 
 .desktop-editor-dirty-dot {
   flex: 0 0 auto;
-  --dot-color: var(--wa-color-brand-fill-loud, currentColor);
+  --dot-color: var(--wa-color-brand-fill-loud);
 }
 
 .desktop-editor-surface {

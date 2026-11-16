@@ -310,19 +310,10 @@ export const logEntryStyles = css`
      Applied to runs that proxy raw process output (e.g. bash child runs)
      so their stdout/stderr reads like a terminal instead of a logger. */
   :host([terminal]) .log-container {
-    font-family: var(
-      --wa-font-family-mono,
-      ui-monospace,
-      SFMono-Regular,
-      Consolas,
-      monospace
-    );
-    font-size: var(--wa-editor-font-size, var(--font-size));
-    background-color: var(
-      --wa-color-terminal-background,
-      var(--wa-color-surface-default, transparent)
-    );
-    color: var(--wa-color-terminal-foreground, var(--wa-color-text-normal));
+    font-family: var(--wa-font-family-mono);
+    font-size: var(--wa-editor-font-size);
+    background-color: var(--wa-color-terminal-background);
+    color: var(--wa-color-terminal-foreground);
     padding-block: var(--wa-space-xs);
     /* <terminal-output> fills this box and scrolls inside its own viewport;
        the outer container must not add a second scrollbar. */

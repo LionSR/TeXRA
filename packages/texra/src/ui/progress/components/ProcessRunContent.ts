@@ -22,22 +22,12 @@ export class ProcessRunContent extends BaseRunContent {
         gap: var(--wa-space-2xs);
         padding: var(--wa-space-2xs) var(--wa-space-s);
         margin: 0;
-        background: var(
-          --wa-color-terminal-background,
-          var(--wa-color-surface-default, transparent)
-        );
-        color: var(--wa-color-terminal-foreground, var(--wa-color-text-normal));
-        border: var(--border-thin) solid
-          var(--wa-color-surface-border, transparent);
+        background: var(--wa-color-terminal-background);
+        color: var(--wa-color-terminal-foreground);
+        border: var(--border-thin) solid var(--wa-color-surface-border);
         border-radius: var(--border-radius-large);
-        font-family: var(
-          --wa-font-family-mono,
-          ui-monospace,
-          SFMono-Regular,
-          Consolas,
-          monospace
-        );
-        font-size: var(--wa-editor-font-size, var(--font-size-sm));
+        font-family: var(--wa-font-family-mono);
+        font-size: var(--wa-editor-font-size);
         max-height: min(32vh, 320px);
         overflow-y: auto;
         overflow-x: hidden;

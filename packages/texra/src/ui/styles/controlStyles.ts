@@ -403,7 +403,7 @@ export const buttonStyles: CSSResult = css`
   }
 
   .action-icon-button.composer-primary-action::part(base):hover {
-    background: var(--wa-color-button-hover, var(--wa-color-brand-fill-loud));
+    background: var(--wa-color-button-hover);
     color: var(--wa-color-brand-on-loud);
   }
 

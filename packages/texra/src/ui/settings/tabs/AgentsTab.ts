@@ -62,7 +62,7 @@ export class AgentsTab extends SignalWatcher(LitElement) {
       /* max-width and centering provided by .tab-content-container */
 
       .agents-dir-path {
-        font-family: var(--wa-font-family-mono, monospace), monospace;
+        font-family: var(--wa-font-family-mono), monospace;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;

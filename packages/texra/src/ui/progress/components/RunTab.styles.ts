@@ -182,10 +182,7 @@ export const runTabStyles = css`
       --wa-color-list-active-bg,
       color-mix(in srgb, var(--wa-color-brand-fill-quiet) 85%, transparent)
     );
-    color: var(
-      --wa-color-list-active-fg,
-      var(--wa-color-brand-on-quiet, var(--wa-color-text-normal))
-    );
+    color: var(--wa-color-list-active-fg, var(--wa-color-brand-on-quiet));
   }
 
   /*

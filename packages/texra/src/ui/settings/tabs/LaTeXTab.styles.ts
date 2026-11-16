@@ -63,7 +63,7 @@ export const latexTabStyles: CSSResult = css`
 
   .dependency-path {
     margin-top: var(--wa-space-3xs);
-    font-family: var(--wa-font-family-mono, monospace), monospace;
+    font-family: var(--wa-font-family-mono), monospace;
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
     overflow-wrap: anywhere;
@@ -81,7 +81,7 @@ export const latexTabStyles: CSSResult = css`
     padding: var(--wa-space-2xs) var(--wa-space-xs);
     background: var(--wa-color-surface-lowered);
     border-radius: var(--border-radius-small);
-    font-family: var(--wa-font-family-mono, monospace), monospace;
+    font-family: var(--wa-font-family-mono), monospace;
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-normal);
     direction: ltr;
@@ -100,14 +100,14 @@ export const latexTabStyles: CSSResult = css`
   }
 
   .setting-config-key {
-    font-family: var(--wa-font-family-mono, monospace), monospace;
+    font-family: var(--wa-font-family-mono), monospace;
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
     margin-bottom: var(--wa-space-2xs);
   }
 
   .setting-value {
-    font-family: var(--wa-font-family-mono, monospace), monospace;
+    font-family: var(--wa-font-family-mono), monospace;
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-link);
   }

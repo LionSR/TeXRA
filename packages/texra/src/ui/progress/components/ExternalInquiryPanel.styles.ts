@@ -101,7 +101,7 @@ export const externalInquiryPanelStyles: CSSResult = css`
     align-items: center;
     gap: var(--wa-space-2xs);
     font-size: var(--font-size-sm);
-    color: var(--wa-color-brand-on-quiet, var(--wa-color-focus));
+    color: var(--wa-color-brand-on-quiet);
     padding: var(--wa-space-2xs) 0;
   }
 
