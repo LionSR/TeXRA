@@ -7,14 +7,8 @@ import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import { Effect, FileSystem } from 'effect';
 import { afterEach } from 'vitest';
 
-// Local imports
-import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
-
 // Local file imports
-import { createFakeHost, type FakeHost } from './setupPlatform';
+import { createFakeHost, type HostRecord } from './fakeHost';
 import type { TestApp } from './FakePlatform';
 
 /**
@@ -38,22 +32,20 @@ export async function makeTempDir(
 
 /**
  * Creates a fake host rooted in a fresh temp directory of its own
- * (`<tempDir>/workspace` and `<tempDir>/storage`), and records the temp
+ * (`<tempDir>/workspace`, and `<tempDir>/storage` as its storage root, which
+ * its workspace and global storage lie under), and records the temp
  * directory on `tempDirs` for later cleanup via `cleanupTempDirs`.
  */
 export async function createTempDirPlatform(
   prefix: string,
   tempDirs: string[],
   app?: TestApp,
-): Promise<FakeHost> {
+): Promise<HostRecord> {
   const tempDir = await makeTempDir(prefix, tempDirs);
-  const workspaceDir = path.join(tempDir, 'workspace');
-  const storageRoot = path.join(tempDir, 'storage');
   return createFakeHost({
     ...(app ? { app } : {}),
-    workspaceRoot: workspaceDir,
-    storagePath: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
-    globalStoragePath: resolveGlobalStoragePath(storageRoot),
+    workspaceRoot: path.join(tempDir, 'workspace'),
+    storageRoot: path.join(tempDir, 'storage'),
   });
 }
 

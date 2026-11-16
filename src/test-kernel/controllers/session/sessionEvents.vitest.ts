@@ -91,7 +91,7 @@ import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { runStart } from '@test/support/sessionRows';
 import { readStoreSnapshot } from '@test/support/storeFaults';
 import { storePluginsLayer } from '@test/support/texraApp';
-import { REPO_ROOT } from '@test/support/repoScan';
+import { REPO_ROOT } from '@test/support/repoRoot';
 import {
   EXTERNAL_INQUIRY_THREAD_KIND,
   inquiryThreadFact,
@@ -190,7 +190,7 @@ const rowsOf = (
 
 const runStartRow = runStart(RUN);
 
-/** The loop parked on the request below: the phase the fold reads. */
+/** The loop blocked on the request below: the phase the fold reads. */
 const waiting: SessionRowDraft = {
   type: 'run.position',
   aggregateId: qualifyAggregateId('run', RUN),
@@ -433,7 +433,7 @@ describe('session events and view', () => {
   it.effect('runs no job that reached the publisher after it closed', () =>
     Effect.gen(function* () {
       // The step budget decides where the scheduler first takes the
-      // publishing fiber off: over these budgets, one parks it between the
+      // publishing fiber off: over these budgets, one suspends it between the
       // publisher's closed check and its transaction, where the close lands.
       for (let budget = 2; budget < 80; budget++) {
         const ranAfterClose = yield* Effect.gen(function* () {
