@@ -311,9 +311,9 @@ The rows a bypass is read from: each run's parent edge and grants, as
 the session view folds them.
 
 ```ts
-interface ApprovalGrantSource<Id> {
-  readonly runs: ReadonlyMap<Id, { readonly parentId: Id | null }>;
-  readonly policy: ReadonlyMap<Id, ApprovalGrants>;
+interface ApprovalGrantSource {
+  readonly runs: ReadonlyMap<RunId, { readonly parentId: RunId | null }>;
+  readonly policy: ReadonlyMap<RunId, ApprovalGrants>;
 }
 ```
 
@@ -1909,9 +1909,9 @@ it. Past a `parent` value only human values decide. The one reading of the
 grants, for enforcement and every surface.
 
 ```ts
-function resolveBypass<Id>(
-  source: ApprovalGrantSource<Id>,
-  runId: Id,
+function resolveBypass(
+  source: ApprovalGrantSource,
+  runId: RunId,
   kind: ApprovalBypassKind,
 ): 'goal' | 'human' | null
 ```
@@ -2017,9 +2017,9 @@ class RunActive extends Schema.TaggedError<RunActive>()('RunActive', {
 Every kind's bypass for one run, as surfaces show it.
 
 ```ts
-function runBypasses<Id>(
-  source: ApprovalGrantSource<Id>,
-  runId: Id,
+function runBypasses(
+  source: ApprovalGrantSource,
+  runId: RunId,
 ): Readonly<Record<ApprovalBypassKind, boolean>>
 ```
 

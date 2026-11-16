@@ -260,16 +260,15 @@ export const descriptionRow = (
   by,
 });
 
-/** The rows that register a run, in commit order: a new run's (`born`)
- *  `run.start`, its `run.activate` (a re-registration's with the grants it
- *  ends, `ended`), and the description it is born with; and its
+/** The rows that register a run, in commit order: a new run's `run.start`,
+ *  its `run.activate` (a re-registration's with the grants it ends, `ended`:
+ *  null for a run being born), and the description it is born with; and its
  *  configuration, for its first batch to record ({@link Registration}). */
 export function registrationDrafts(
   runId: RunId,
   config: RunConfigRow['config'],
   options: RegisterRunOptions,
-  born: boolean,
-  ended: readonly SessionRowDraft[],
+  ended: readonly SessionRowDraft[] | null,
 ): Registration {
   const target = qualifyAggregateId('run', runId);
   const worktree = config.workingDirectory?.trim();
@@ -287,15 +286,15 @@ export function registrationDrafts(
     approvalPolicy: options.grants ?? NO_APPROVAL_GRANTS,
   };
   const rows: SessionRowDraft[] = [
-    ...(born ? [start] : []),
+    ...(ended === null ? [start] : []),
     { type: 'run.activate', aggregateId: target },
-    ...(born ? [] : ended),
+    ...(ended ?? []),
   ];
   if (options.description !== undefined)
     rows.push(descriptionRow(runId, options.description, 'model'));
   return {
     rows,
-    start: born ? start : null,
+    start: ended === null ? start : null,
     config: { type: 'run.config', aggregateId: target, config },
   };
 }

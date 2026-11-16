@@ -9,15 +9,11 @@
 import { Schema } from 'effect';
 
 import type { ApprovalPolicy } from './approvalPolicy';
+import type { RunId } from './schemas/identifiers';
 
 export const APPROVAL_BYPASS_KINDS = ['bash', 'toolEdit', 'superYolo'] as const;
 
 export type ApprovalBypassKind = (typeof APPROVAL_BYPASS_KINDS)[number];
-
-/** A run's own value for one kind: a human's `on` or `off`, or `parent`,
- *  derived at an activation: follow the ancestry's human values, not its
- *  goals. */
-type OwnGrant = 'on' | 'off' | 'parent';
 
 /** The policies a launch can narrow a run to: anything below Auto-approve,
  *  which is never stricter than a project's policy. */
@@ -33,6 +29,12 @@ export const LaunchApprovalSchema = Schema.Union([
 ]);
 export type LaunchApproval = typeof LaunchApprovalSchema.Type;
 
+/** A run's own value for one kind: a human's `on` or `off`, or `parent`,
+ *  derived at an activation: follow the ancestry's human values, not its
+ *  goals. */
+const OwnGrantSchema = Schema.Literals(['on', 'off', 'parent']);
+type OwnGrant = typeof OwnGrantSchema.Type;
+
 /**
  * A run's own approval grants, the one record of them (its latest
  * `approval.policy` row, else its `run.start`): what the run itself
@@ -45,7 +47,7 @@ export const ApprovalPolicySnapshotSchema = Schema.Struct({
    *  ended an ancestor's goal grant, following the ancestry's human values. */
   own: Schema.Record(
     Schema.Literals(APPROVAL_BYPASS_KINDS),
-    Schema.optionalKey(Schema.Literals(['on', 'off', 'parent'])),
+    Schema.optionalKey(OwnGrantSchema),
   ),
   /** The kinds the run's own goal grants it, over its own values, until the
    *  goal ends, a human decides the kind, or a resume ends the goal. */
@@ -88,10 +90,10 @@ export function launchPolicy(
 
 /** A run's policy: the project's (`project`), narrowed by the strictest
  *  launch limit on its ancestry; without a run, the project's. */
-export function runPolicy<Id>(
+export function runPolicy(
   project: ApprovalPolicy,
-  source: ApprovalGrantSource<Id>,
-  runId: Id | undefined,
+  source: ApprovalGrantSource,
+  runId: RunId | undefined,
 ): ApprovalPolicy {
   const limit = runId === undefined ? undefined : policyLimit(source, runId);
   return limit === undefined ? project : stricterPolicy(project, limit);
@@ -100,14 +102,14 @@ export function runPolicy<Id>(
 /** `source` holding a run it has not folded yet with the parent edge and
  *  grants its `run.start` names: what the run is born with, read before
  *  that row commits. A run `source` holds is read as it holds it. */
-export function withUnborn<Id>(
-  source: ApprovalGrantSource<Id>,
-  runId: Id,
-  parentId: Id | null,
+export function withUnborn(
+  source: ApprovalGrantSource,
+  runId: RunId,
+  parentId: RunId | null,
   grants: ApprovalGrants | null | undefined,
-): ApprovalGrantSource<Id> {
+): ApprovalGrantSource {
   if (source.runs.has(runId)) return source;
-  const runs = new Map<Id, { readonly parentId: Id | null }>(source.runs);
+  const runs = new Map<RunId, { readonly parentId: RunId | null }>(source.runs);
   return {
     runs: runs.set(runId, { parentId }),
     policy: new Map(source.policy).set(runId, grants ?? NO_APPROVAL_GRANTS),
@@ -116,9 +118,9 @@ export function withUnborn<Id>(
 
 /** The strictest launch limit on a run's ancestry while its edges stand,
  *  or undefined when no launch narrowed it. */
-function policyLimit<Id>(
-  source: ApprovalGrantSource<Id>,
-  runId: Id,
+function policyLimit(
+  source: ApprovalGrantSource,
+  runId: RunId,
 ): ApprovalPolicyLimit | undefined {
   let limit: ApprovalPolicyLimit | undefined;
   for (const grants of ancestry(source, runId)) {
@@ -131,13 +133,13 @@ function policyLimit<Id>(
 
 /** The grants of a run and each ancestor while its edges stand, the run
  *  first; a cycle in the edges ends the walk. */
-function* ancestry<Id>(
-  source: ApprovalGrantSource<Id>,
-  runId: Id,
+function* ancestry(
+  source: ApprovalGrantSource,
+  runId: RunId,
 ): Generator<ApprovalGrants | undefined> {
-  const seen = new Set<Id>();
+  const seen = new Set();
   for (
-    let current: Id | null | undefined = runId;
+    let current: RunId | null | undefined = runId;
     current !== null && current !== undefined && !seen.has(current);
     current = source.runs.get(current)?.parentId
   ) {
@@ -151,9 +153,9 @@ export const NO_APPROVAL_GRANTS: ApprovalGrants = { own: {}, goal: [] };
 
 /** The rows a bypass is read from: each run's parent edge and grants, as
  *  the session view folds them. */
-export interface ApprovalGrantSource<Id> {
-  readonly runs: ReadonlyMap<Id, { readonly parentId: Id | null }>;
-  readonly policy: ReadonlyMap<Id, ApprovalGrants>;
+export interface ApprovalGrantSource {
+  readonly runs: ReadonlyMap<RunId, { readonly parentId: RunId | null }>;
+  readonly policy: ReadonlyMap<RunId, ApprovalGrants>;
 }
 
 /**
@@ -163,9 +165,9 @@ export interface ApprovalGrantSource<Id> {
  * it. Past a `parent` value only human values decide. The one reading of the
  * grants, for enforcement and every surface.
  */
-export function resolveBypass<Id>(
-  source: ApprovalGrantSource<Id>,
-  runId: Id,
+export function resolveBypass(
+  source: ApprovalGrantSource,
+  runId: RunId,
   kind: ApprovalBypassKind,
 ): 'goal' | 'human' | null {
   let goals = true;
@@ -179,9 +181,9 @@ export function resolveBypass<Id>(
 }
 
 /** Every kind's bypass for one run, as surfaces show it. */
-export function runBypasses<Id>(
-  source: ApprovalGrantSource<Id>,
-  runId: Id,
+export function runBypasses(
+  source: ApprovalGrantSource,
+  runId: RunId,
 ): Readonly<Record<ApprovalBypassKind, boolean>> {
   return {
     bash: resolveBypass(source, runId, 'bash') !== null,
@@ -193,9 +195,9 @@ export function runBypasses<Id>(
 /** The human values a run's ancestry gives it, as grants of its own: what a
  *  run keeps when its edge goes, or a conversation's next round starts
  *  with. A goal's grant is not carried: it ends with its goal. */
-export function inheritedGrants<Id>(
-  source: ApprovalGrantSource<Id>,
-  runId: Id,
+export function inheritedGrants(
+  source: ApprovalGrantSource,
+  runId: RunId,
 ): ApprovalGrants {
   const own: Partial<Record<ApprovalBypassKind, OwnGrant>> = {};
   for (const kind of APPROVAL_BYPASS_KINDS) {
@@ -212,17 +214,17 @@ export function inheritedGrants<Id>(
 
 /** The grant source over runs' rows: each run's parent edge and its grants,
  *  none for a run whose rows carry none. */
-export function grantSource<Id>(
+export function grantSource(
   rows: ReadonlyMap<
-    Id,
+    RunId,
     {
-      readonly parent: { readonly id: Id } | null;
+      readonly parent: { readonly id: RunId } | null;
       readonly grants: ApprovalGrants | null;
     }
   >,
-): ApprovalGrantSource<Id> {
-  const runs = new Map<Id, { parentId: Id | null }>();
-  const policy = new Map<Id, ApprovalGrants>();
+): ApprovalGrantSource {
+  const runs = new Map<RunId, { parentId: RunId | null }>();
+  const policy = new Map<RunId, ApprovalGrants>();
   for (const [id, own] of rows) {
     runs.set(id, { parentId: own.parent?.id ?? null });
     policy.set(id, own.grants ?? NO_APPROVAL_GRANTS);
