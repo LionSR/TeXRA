@@ -71,19 +71,18 @@ export function setReasoningLevel(
   // concurrent write. The stored record is carried as written, so every
   // entry goes back to storage; reads that need the effort go through
   // `reasoningEffortOverrides`.
-  return globalState
-    .modify(REASONING_LEVELS_KEY.key, (stored) => {
-      const overrides: Record<string, unknown> = {
-        ...(Predicate.isObject(stored) && stored),
-      };
-      if (input.level == null) {
-        delete overrides[input.modelName];
-      } else {
-        overrides[input.modelName] = input.level;
-      }
-      return Result.succeed(overrides);
-    })
-    .pipe(Effect.asVoid);
+  const { key } = REASONING_LEVELS_KEY;
+  return globalState.modify([key], ({ [key]: stored }) => {
+    const overrides: Record<string, unknown> = {
+      ...(Predicate.isObject(stored) && stored),
+    };
+    if (input.level == null) {
+      delete overrides[input.modelName];
+    } else {
+      overrides[input.modelName] = input.level;
+    }
+    return Result.succeed([undefined, { [key]: overrides }] as const);
+  });
 }
 
 const buildSelectionItems = Effect.fn('buildModelSelectionItems')(function* (

@@ -166,10 +166,12 @@ export class ProjectStateFailed extends Schema.TaggedError<ProjectStateFailed>()
   { message: Schema.String },
 ) {}
 
-/** A state key's stored value: `value` absent when the key is unset. */
-const StoredStateSchema = Schema.Struct({
-  value: Schema.optional(JsonValueSchema),
-});
+/** State keys' stored values, by key: a key's `value` absent when it is
+ *  unset. */
+const StoredStatesSchema = Schema.Record(
+  Schema.String,
+  Schema.Struct({ value: Schema.optional(JsonValueSchema) }),
+);
 
 /** The project a call addresses: its folder, as the client spells it. */
 const workspace = Schema.String;
@@ -335,21 +337,20 @@ export const TexraRpcs = RpcGroup.make(
     error: TaskFailed,
     stream: true,
   }),
-  /** A key of the project's state store, as it is stored now. */
+  /** Keys of the project's state store, as they are stored now. */
   Rpc.make('state.get', {
-    payload: { workspace, key: Schema.String },
-    success: StoredStateSchema,
+    payload: { workspace, keys: Schema.Array(Schema.String) },
+    success: StoredStatesSchema,
     error: ProjectStateFailed,
   }),
-  /** Store `next` under a key of the project's state store (an absent
-   *  value clears it); with `ifCurrent`, only while the stored value is
-   *  still that one. Answers whether it was written. */
+  /** Store `next` under keys of the project's state store in one step (an
+   *  absent value clears its key); with `ifCurrent`, only while the stored
+   *  values are still those. Answers whether it was written. */
   Rpc.make('state.set', {
     payload: {
       workspace,
-      key: Schema.String,
-      next: StoredStateSchema,
-      ifCurrent: Schema.NullOr(StoredStateSchema),
+      next: StoredStatesSchema,
+      ifCurrent: Schema.NullOr(StoredStatesSchema),
     },
     success: Schema.Boolean,
     error: ProjectStateFailed,

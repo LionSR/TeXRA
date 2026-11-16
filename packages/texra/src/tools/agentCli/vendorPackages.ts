@@ -21,7 +21,7 @@
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 
-import { Effect, FileSystem, Predicate, SynchronizedRef } from 'effect';
+import { Duration, Effect, Exit, FileSystem, Predicate } from 'effect';
 import which from 'which';
 
 import { isModuleNotFoundError } from '@texra-ai/harness/host';
@@ -236,10 +236,10 @@ const resolveBinary = Effect.fn('vendorPackages.resolveBinary')(function* (
 
 /**
  * Wrap a process-lifetime cache around {@link resolveBinary}. The returned program
- * caches a resolved path for the process lifetime but always retries misses
- * (so a mid-session `npm install -g` is picked up). Probes run one at a
- * time, so callers racing on a miss share the first probe's answer instead of
- * each spawning `npm prefix -g`.
+ * caches a resolved path for the process lifetime but keeps a miss or a
+ * failure for no time (so a mid-session `npm install -g` is picked up).
+ * Callers racing on a probe share it instead of each spawning
+ * `npm prefix -g`.
  *
  * `buildConfig` returns the {@link ResolveBinaryConfig} for the current
  * platform, or `undefined` when the platform is unsupported — in which case the
@@ -252,20 +252,30 @@ export function createCachedBinaryResolver(
   Error,
   ChildProcessSpawner | FileSystem.FileSystem
 > {
-  const cached = SynchronizedRef.makeUnsafe<string | undefined>(undefined);
+  const lookup = Effect.suspend(() => {
+    const config = buildConfig();
+    return config ? resolveBinary(config) : Effect.succeed(undefined);
+  }).pipe(
+    // The probe steps are plain synchronous calls (Node module resolution,
+    // the PATH extension, `which.sync`); one that throws is a
+    // failed lookup the caller reports, not a crash of the calling fiber.
+    Effect.catchDefect((defect) => Effect.fail(ensureError(defect))),
+  );
+  // Made by the first call: the shared computation has no synchronous
+  // constructor, and the resolvers are module constants.
+  let shared: typeof lookup | undefined;
   return () =>
-    SynchronizedRef.modifyEffect(cached, (found) => {
-      if (found) return Effect.succeed([found, found] as const);
-      const config = buildConfig();
-      if (!config) return Effect.succeed([undefined, undefined] as const);
-      return resolveBinary(config).pipe(
-        Effect.map((result) => [result, result] as const),
-      );
-    }).pipe(
-      // The probe steps are plain synchronous calls (Node module resolution,
-      // the PATH extension, `which.sync`); one that throws is a
-      // failed lookup the caller reports, not a crash of the calling fiber.
-      Effect.catchDefect((defect) => Effect.fail(ensureError(defect))),
+    Effect.suspend(
+      () =>
+        shared ??
+        Effect.map(
+          Effect.cachedWithTTL(lookup, (exit) =>
+            Exit.isSuccess(exit) && exit.value !== undefined
+              ? Duration.infinity
+              : Duration.zero,
+          ),
+          (made) => (shared ??= made),
+        ).pipe(Effect.flatten),
     );
 }
 

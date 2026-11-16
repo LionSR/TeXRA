@@ -14,7 +14,7 @@ import {
 // Local imports
 import { writeLogLine } from '@logger/logSink';
 import { ensureError } from '@utils/errors/errorMessage';
-import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
+import { withFileWriteLane } from '@utils/files/fileWriteLane';
 import { nodeFileServices, writeFileAtomic } from '@utils/files/fsDurability';
 import { absentReason } from '@utils/files/fsEntryExists';
 
@@ -83,13 +83,6 @@ const readJsonRecord = Effect.fn('JsonStore.readJsonRecord')(function* (
 });
 
 /**
- * One-at-a-time flush lane per resolved store path. Module-wide (not per
- * instance) so writers holding separate `JsonStore` instances on the same
- * file preserve call order.
- */
-const writeLanes = new Map<string, PerKeyLane>();
-
-/**
  * Persist one mutation as a read-modify-write: prepare the directory, re-read
  * the file (falling back to `missingFallback` when it is gone), apply the
  * mutation, and write the result atomically.
@@ -130,8 +123,8 @@ const flush = Effect.fn('JsonStore.flush')(function* (
  * applies only that one mutation, so an instance held open across an awaited
  * operation (e.g. a network fetch) can't clobber keys a concurrent writer —
  * another process, or another instance on the same file — persisted in the
- * meantime. Flushes for a given file path are serialized through
- * {@link writeLanes}, which orders this process's writers; across processes
+ * meantime. Flushes of a file are serialized through its write lane
+ * (`withFileWriteLane`), which this process's writers of it share; across processes
  * the atomic rename is the only guarantee, so two hosts flushing the same file
  * in the same instant can still lose one of the two mutations. Reads (`get`,
  * `snapshot`, `keys`) follow the file: each compares its inode, mtime and
@@ -236,16 +229,15 @@ export class JsonStore {
   }
 
   /**
-   * Commit one mutation: take the file's lane in {@link writeLanes}, flush
-   * it, and only once the flush has succeeded apply it to this instance's
-   * record — a failed flush (e.g. a store opened over an unreadable file,
-   * {@link JsonStore.unreadable}) leaves `get` serving what it
-   * served before, never a value that did not reach disk. Because the lane
-   * serializes every commit on the file, no later `set` can apply between
-   * this one's flush and its in-memory apply, so there is nothing to roll
-   * back and no ordering to reconcile. Lanes are claimed
-   * in the effect's first synchronous step, so commits run in `set()` order
-   * rather than racing on `mkdir`/read/`write-file-atomic` timing; a failed
+   * Commit one mutation: take the file's write lane (`withFileWriteLane`,
+   * shared with every other writer of the file: another `JsonStore` on it,
+   * an approved edit, an editor's save), flush it, and only once the flush
+   * has succeeded apply it to this instance's record — a failed flush (e.g.
+   * a store opened over an unreadable file, {@link JsonStore.unreadable})
+   * leaves `get` serving what it served before, never a value that did not
+   * reach disk. Because the lane serializes every commit on the file, no
+   * later `set` can apply between this one's flush and its in-memory apply,
+   * so there is nothing to roll back and no ordering to reconcile; a failed
    * flush doesn't stop the lane from running subsequent commits.
    *
    * Waiting for the lane is interruptible, the commit behind it is not — and
@@ -260,28 +252,21 @@ export class JsonStore {
    * one mutator: removal uses `set(key, undefined)` in this same region.
    */
   set(key: string, value: unknown): Effect.Effect<void, Error> {
-    return withPerKeyLane(
-      writeLanes,
-      this.filePath,
-    )(
-      Effect.uninterruptible(
-        Effect.suspend(() =>
-          Effect.provide(
-            flush(this.filePath, key, value, this.snapshot()),
-            nodeFileServices,
-          ),
-        ).pipe(
-          Effect.tap(() =>
-            Effect.sync(() => {
-              if (value === undefined) {
-                delete this.data[key];
-              } else {
-                this.data[key] = value;
-              }
-            }),
-          ),
-        ),
+    return Effect.suspend(() =>
+      flush(this.filePath, key, value, this.snapshot()),
+    ).pipe(
+      Effect.tap(() =>
+        Effect.sync(() => {
+          if (value === undefined) {
+            delete this.data[key];
+          } else {
+            this.data[key] = value;
+          }
+        }),
       ),
+      Effect.uninterruptible,
+      withFileWriteLane(this.filePath),
+      Effect.provide(nodeFileServices),
     );
   }
 

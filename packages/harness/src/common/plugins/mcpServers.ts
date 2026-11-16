@@ -63,12 +63,18 @@ export const revisionKey = Effect.fn('mcpServers.revisionKey')(function* (
   const isKey = Schema.is(MCP_REVISION_KEY.schema);
   const stored = yield* globalState.get(MCP_REVISION_KEY.key);
   if (isKey(stored)) return stored;
-  let replaced = false;
-  const key = yield* globalState.modify(MCP_REVISION_KEY.key, (current) => {
-    if (isKey(current)) return Result.succeed(current);
-    replaced = current !== undefined;
-    return Result.succeed(randomBytes(32).toString('hex'));
-  });
+  const { key: stateKey } = MCP_REVISION_KEY;
+  const [key, replaced] = yield* globalState.modify(
+    [stateKey],
+    ({ [stateKey]: current }) => {
+      if (isKey(current)) return Result.succeed([[current, false]] as const);
+      const created = randomBytes(32).toString('hex');
+      return Result.succeed([
+        [created, current !== undefined],
+        { [stateKey]: created },
+      ] as const);
+    },
+  );
   if (replaced)
     yield* Effect.logWarning(
       'The stored MCP revision key was not a key; a new one was created, so every MCP server records a new revision once.',

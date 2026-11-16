@@ -26,10 +26,13 @@ export const readOrCreateInstallId = Effect.fn('UsageLogService.installId')(
   function* () {
     const state = yield* AppState;
     const isId = Schema.is(INSTALL_ID_KEY.schema);
-    const stored = yield* state.get(INSTALL_ID_KEY.key);
+    const { key } = INSTALL_ID_KEY;
+    const stored = yield* state.get(key);
     if (isId(stored)) return stored;
-    return yield* state.modify(INSTALL_ID_KEY.key, (current) =>
-      Result.succeed(isId(current) ? current : randomUUID()),
-    );
+    return yield* state.modify([key], ({ [key]: current }) => {
+      if (isId(current)) return Result.succeed([current] as const);
+      const id = randomUUID();
+      return Result.succeed([id, { [key]: id }] as const);
+    });
   },
 );

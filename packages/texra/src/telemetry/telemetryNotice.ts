@@ -1,4 +1,4 @@
-import { Effect, Result, Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import { AppState, type ConfigProvider } from '@texra-ai/harness/host';
 import { Settings } from '@texra-ai/harness/plugins';
@@ -27,7 +27,7 @@ export const telemetryNoticeIfDue = Effect.fn('telemetryNoticeIfDue')(
     if ((yield* usageLoggingOptOut(config)) !== null) return null;
     const state = yield* AppState;
     if (yield* Settings.state(state, NOTICE_SHOWN_KEY)) return null;
-    yield* state.modify(NOTICE_SHOWN_KEY.key, () => Result.succeed(true));
+    yield* state.update(NOTICE_SHOWN_KEY.key, true);
     // The config line as the file stores it: the row's key under the
     // catalog's namespace.
     return `TeXRA sends anonymous usage metadata (agent, model, token counts, duration, host, version) with a random anonymous install ID. It never sends prompts, document content, file paths or error text. Turn it off with "${config.catalog.namespace}.${TELEMETRY_ENABLED_SETTING.key}": false, TEXRA_NO_TELEMETRY=1 or DO_NOT_TRACK=1. A custom agent is reported only as "custom". The "Usage logging" section of the configuration guide on texra.ai shows how to reset the ID.`;
