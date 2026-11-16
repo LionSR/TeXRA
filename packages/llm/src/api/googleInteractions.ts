@@ -29,7 +29,7 @@ import { replayableHistory, systemUpdateText } from '../message.js';
 import { originOf, sameModelOrigin } from '../protocol.js';
 import {
   ModelError,
-  RemoteOperationSchema,
+  remoteOperation,
   sdkModelError,
   fillModelError,
   type RemoteOperation,
@@ -713,10 +713,7 @@ export const googleInteractionsModel = Effect.fn('llm.google.model')(function* (
         'Google returned no background interaction identifier.',
         raw,
       );
-      const operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
-        origin,
-        providerResponseId: identity.id,
-      });
+      const operation = remoteOperation(origin, identity.id);
       yield* Ref.set(learned, { operation });
       const interaction = yield* snapshot(raw, operation);
       yield* Ref.set(learned, { operation, model: interaction.model });

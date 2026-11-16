@@ -3,6 +3,7 @@ import { Schema, Struct } from 'effect';
 
 // Local imports - canonical protocol binding
 import { CountSchema, ModelOriginSchema, TurnUsageSchema } from './protocol.js';
+import type { ModelOrigin } from './protocol.js';
 import type { ApiKeyProviderId } from './providers/providerPlugins.js';
 
 // Local imports - canonical messages
@@ -18,6 +19,21 @@ export const RemoteOperationSchema = Schema.Struct({
 });
 /** {@link RemoteOperationSchema}'s value. */
 export type RemoteOperation = typeof RemoteOperationSchema.Type;
+
+/**
+ * An accepted remote operation from a submit site: the origin narrowed to the
+ * two background-capable protocols with the id the provider gave. The decode
+ * throws when the origin is not background-capable, which is a programming
+ * error at the submit site, not a provider reply to classify.
+ */
+export const remoteOperation = (
+  origin: ModelOrigin,
+  providerResponseId: string,
+): RemoteOperation =>
+  Schema.decodeUnknownSync(RemoteOperationSchema)({
+    origin,
+    providerResponseId,
+  });
 
 /**
  * The subscription plans a model can bill through instead of the caller's

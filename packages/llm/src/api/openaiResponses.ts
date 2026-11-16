@@ -24,11 +24,7 @@ import {
   type TurnEvent,
   backgroundCapable,
 } from '../turn.js';
-import {
-  ModelError,
-  RemoteOperationSchema,
-  fillModelError,
-} from '../errors.js';
+import { ModelError, fillModelError, remoteOperation } from '../errors.js';
 import { originOf } from '../protocol.js';
 import { backgroundLifecycle } from './background.js';
 import {
@@ -210,10 +206,7 @@ export const openaiResponsesModel = Effect.fn('llm.responses.model')(function* (
       yield* Ref.update(learned, (known) => ({
         ...known,
         model: response.model,
-        operation: Schema.decodeUnknownSync(RemoteOperationSchema)({
-          origin,
-          providerResponseId: response.id,
-        }),
+        operation: remoteOperation(origin, response.id),
       }));
       if (
         (type === 'response.completed' && response.status === 'completed') ||
