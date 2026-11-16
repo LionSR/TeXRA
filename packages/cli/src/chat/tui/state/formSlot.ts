@@ -2,11 +2,10 @@
 //
 // Two surfaces put a form on screen: a slash command's own form
 // (`openRegisteredCliSlashForm`) and a host dialog opened through
-// `tuiUiHost`. Both used to write the signal directly, so whichever arrived
-// second unmounted the first and threw away whatever the user had typed into
-// it, and a displaced dialog was left with no form to answer its fiber.
-// They go through the owner below instead, which keeps the forms
-// that did not get the slot in arrival order and hands it on as each closes.
+// `tuiUiHost`. A second form written straight into the slot would unmount
+// the first, losing what the user typed and leaving its fiber unanswered, so
+// both go through the owner below, which keeps the forms that did not get the
+// slot in arrival order and hands it on as each closes.
 
 import { randomUUID } from 'node:crypto';
 

@@ -89,8 +89,8 @@ const toWorkspaceOrigin = Effect.fn('documents.toWorkspaceOrigin')(function* (
   const fs = yield* FileSystem.FileSystem;
   if (!loc || loc.kind !== 'runStorage') return loc;
   const resolved = pathToLocationIn(workspace, loc.relativePath);
-  // `stat` follows a link, as the `isFile` this replaces did, so a symlink to
-  // a file counts and a dangling one (or a directory) does not.
+  // `stat` follows a link, so a symlink to a file counts and a dangling one
+  // (or a directory) does not.
   const isFile = yield* fs.stat(resolved.absolutePath).pipe(
     Effect.map((info) => info.type === 'File'),
     Effect.catchIf(absentReason, () => Effect.succeed(false)),

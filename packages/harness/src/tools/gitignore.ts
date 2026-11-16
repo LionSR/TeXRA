@@ -92,7 +92,7 @@ export const getGitignoreMatcher = Effect.fn('getGitignoreMatcher')(function* (
       const normalized = toPosixPath(relativePath);
       // Try plain path first; also try with trailing slash so that
       // directory-only rules (e.g. "dist/") match bare directory names
-      // ("dist") the same way the old minimatch-based parser did.
+      // ("dist").
       // Known deviation from strict git spec: a *file* named "dist" would
       // also be ignored by a "dist/" rule, because we cannot distinguish
       // files from directories without a stat call. The old parser had the

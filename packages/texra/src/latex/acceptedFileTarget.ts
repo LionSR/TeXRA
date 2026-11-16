@@ -322,7 +322,7 @@ export const cleanupAcceptedWorkspaceDiffFiles = Effect.fn(
   // A missing or locked diff companion does not undo an accepted file, so the
   // sweep keeps every deletion that worked and names the ones that did not
   // rather than dropping them silently. `force` keeps an already-absent
-  // companion a success, as the platform delete this replaced did.
+  // companion a success: there is nothing left to remove.
   const workspaceFs = yield* WorkspaceFs;
   const removed = yield* Effect.forEach(
     stale,

@@ -72,8 +72,7 @@ export const sweepStaleFiles = Effect.fn('sweepStaleFiles')(function* (
       const filePath = path.join(directory, name);
       return fs.stat(filePath).pipe(
         Effect.flatMap((stats) => {
-          // The stat follows links, as the sweep it replaced did by filtering
-          // on the provider's type bits: a link to a file is swept by its
+          // The stat follows links: a link to a file is swept by its
           // target's age, a link to a directory is not swept at all.
           if (stats.type !== 'File') return Effect.void;
           const mtime = Option.match(stats.mtime, {

@@ -82,7 +82,7 @@ export function runEndErrorMessage(error: RunEndError): string {
 }
 
 /**
- * What a run produced (one run model, section 3.4): the value the flow hands
+ * What a run produced: the value the flow hands
  * its lifecycle and every result reader returns, stored whole as the
  * `run.end` row ({@link RunEndRowSchema}).
  */

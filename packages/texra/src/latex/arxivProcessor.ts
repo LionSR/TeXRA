@@ -287,7 +287,7 @@ function downloadFileOnce(
     // Extract filename from Content-Disposition header if available.
     // Uses content-disposition package for full RFC 6266 / RFC 5987 compliance,
     // which handles both `filename=` and `filename*=UTF-8''...` (percent-encoded
-    // Unicode names that the old regex silently dropped).
+    // Unicode names).
     const disposition = Headers.get(response.headers, 'content-disposition');
     let filename: string | undefined;
     if (Option.isSome(disposition)) {
@@ -627,10 +627,10 @@ const downloadAndPlaceSource = Effect.fn(
     }),
   );
   // The staging directory belongs to this scope, so removing it is a scope
-  // finalizer rather than a step on the happy path. Every non-success exit
-  // used to leave `.arxiv-download-<id>/` behind in the paper directory: a
-  // download that ran out of retries, a PDF-only submission detected from
-  // the content type, a failed extraction, and interruption.
+  // finalizer rather than a step on the happy path, so no exit leaves
+  // `.arxiv-download-<id>/` behind in the paper directory: not a download
+  // that ran out of retries, a PDF-only submission detected from the content
+  // type, a failed extraction, or interruption.
   yield* Effect.addFinalizer(() =>
     cleanUpBestEffort(downloadDirFull, 'staging download dir', {
       recursive: true,
