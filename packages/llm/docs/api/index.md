@@ -1232,7 +1232,7 @@ interface SelectedModel {
   readonly id: string;
   readonly config: ModelConfig;
   /** The effort, thinking and mode the string asks for, if any. */
-  readonly request: Omit<ModelSelection, 'ref'>;
+  readonly request: ReasoningRequest;
 }
 ```
 
