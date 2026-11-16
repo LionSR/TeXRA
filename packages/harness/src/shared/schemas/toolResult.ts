@@ -264,3 +264,5 @@ export const FinishedToolResultSchema = Schema.Union([
   ),
   ErrorToolResultSchema,
 ]);
+/** A call's result as its `tool.result` row stores it. */
+export type FinishedToolResult = typeof FinishedToolResultSchema.Type;

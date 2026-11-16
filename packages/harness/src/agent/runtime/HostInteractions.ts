@@ -332,7 +332,7 @@ export const presentTerminalResult = Effect.fn('presentTerminalResult')(
     const facts = yield* (yield* SessionLog)
       .facts(target.id)
       .pipe(Effect.orDie);
-    if (facts?.parent != null) return;
+    if (facts?.start?.parent != null) return;
     yield* presentAgentFailure(yield* Interactions, row.error);
   },
 );

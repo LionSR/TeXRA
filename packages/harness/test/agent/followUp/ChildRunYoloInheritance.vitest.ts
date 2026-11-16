@@ -28,25 +28,22 @@ function rows(
     string,
     { parent?: string; grants?: ApprovalGrants; interrupted?: true }
   >,
-): Pick<SessionView, 'runs' | 'policy'> {
+): Pick<SessionView, 'runs'> {
   return {
     runs: new Map(
       Object.entries(runs).map(([id, run]) => [
         runId(id),
-        // The bypass reads parentId, holder and outcome, the only fields set here.
+        // The bypass reads parentId, grants, holder and outcome, the only
+        // fields set here.
         // cast: a partial RunView with the fields the bypass reads.
         {
           parentId: run.parent === undefined ? null : runId(run.parent),
+          grants: run.grants,
           holder: run.interrupted ? 'none' : 'here',
           position: 'running',
           outcome: null,
         } as RunView,
       ]),
-    ),
-    policy: new Map(
-      Object.entries(runs).flatMap(([id, run]) =>
-        run.grants === undefined ? [] : [[runId(id), run.grants] as const],
-      ),
     ),
   };
 }

@@ -31,6 +31,12 @@ computed, which reorders the one function every session row passes through.
 That deserves its own PR with the session-view suites as the check. About 15
 reader sites across the harness, the CLI and the progress view.
 
+Landed 2026-11-16: `RunView.grants` and `RunView.queuedFollowUps` (empty when
+none), and `ApprovalGrantSource = { runs: ReadonlyMap<RunId, { parentId;
+grants }> }`. The held-back ordering does not hold: no field `applyEvent`
+derives reads the grants, so they are written with the run's other columns.
+`SessionViewSchema` changes on the service wire.
+
 ## 2. `RunView.turnStartedAt` is the updater's working state
 
 Its own comment calls it the updater's input to `runStartedAt`; no host reads
@@ -39,6 +45,9 @@ it. It belongs in the per-run working record this audit added (`RunWork`).
 Held back: `applyStanding` and the `run.activate` case of `applyRunEvent` are
 pure functions over the run that write it. Moving it makes them write the
 working record. Take it with finding 1, which reworks the same functions.
+
+Landed 2026-11-16 with finding 1: `RunWork.turnStartedAt`, written where
+`applyEvent` puts the run at its standing; `applyStanding` is gone.
 
 ## 3. LaTeX settings status: seven `*Path` fields beside `installed`
 
@@ -84,10 +93,16 @@ model encodes "output withheld" as `showOutput`, `output?` and
 with it: once the card carries a typed result, `toolUse` has no reader the
 model cannot serve.
 
+Landed 2026-11-16: `ToolRow` carries `log` (the `ToolCallLog`) and `model`;
+the readers that needed the stated texts read them from the log
+(`toolCallTexts`), and the model's output is one `ToolRowOutput` union
+(`shown`, `empty`, or `withheld` with its reason and text).
+
 ## 7. Smaller, each a few lines
 
 - `RunRows.parent` repeats `start.parent`
   (`packages/harness/src/shared/session/runRowsShape.ts`); eleven readers.
+  Landed 2026-11-16: readers read `start.parent`.
 - The route-failure fields are declared in `RouteUnavailable`
   (`packages/harness/src/common/errors/agentErrors.ts`) and again in the
   `ModelFailure` route branch

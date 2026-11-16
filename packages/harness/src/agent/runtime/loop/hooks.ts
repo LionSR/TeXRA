@@ -225,7 +225,10 @@ const inputBase = Effect.fn('inputBase')(function* (run: AgentRunShape) {
       : yield* ancestorIds(
           (id) =>
             Effect.orDie(
-              Effect.map(log.facts(id), (facts) => facts?.parent?.id ?? null),
+              Effect.map(
+                log.facts(id),
+                (facts) => facts?.start?.parent?.id ?? null,
+              ),
             ),
           parent,
         );

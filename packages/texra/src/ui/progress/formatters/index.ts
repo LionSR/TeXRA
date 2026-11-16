@@ -66,7 +66,7 @@ const ROW_FORMATTERS: RowFormatters = {
 /** Label a render failure by what failed to render. */
 function renderLabel(row: TranscriptRow): string {
   if (row.kind !== 'tool') return row.kind;
-  const toolName = row.toolUse.toolName.trim();
+  const toolName = row.log.toolName.trim();
   return toolName ? `tool use (${toolName})` : 'tool use';
 }
 

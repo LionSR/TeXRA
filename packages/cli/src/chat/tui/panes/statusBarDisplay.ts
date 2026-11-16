@@ -612,12 +612,11 @@ function resolveStatusBarBindings(input: StatusBarChrome): string {
 
 /**
  * The bar for the displayed run (`statusBarRunTarget`), read straight off
- * its `RunView` and the view's per-run policy and follow-up queue, around
- * the chrome the TUI supplies.
+ * its `RunView` and the view's runs, around the chrome the TUI supplies.
  */
 export function buildStatusBarDisplay(
   run: RunView | undefined,
-  view: Pick<SessionView, 'policy' | 'queuedFollowUps' | 'runs'>,
+  view: Pick<SessionView, 'runs'>,
   input: StatusBarChrome,
 ): StatusBarDisplay {
   const left: StatusBarSegment[] = [
@@ -631,8 +630,7 @@ export function buildStatusBarDisplay(
   ];
   const turn = input.turn;
   const active = run != null && isWorking(run);
-  const queuedCount =
-    run === undefined ? 0 : (view.queuedFollowUps.get(run.id)?.length ?? 0);
+  const queuedCount = run?.queuedFollowUps.length ?? 0;
 
   // No run yet: the root keeps its status slot.
   const statusLabel = run ? runStatus(run).word : '-';

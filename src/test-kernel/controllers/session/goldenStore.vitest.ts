@@ -441,7 +441,9 @@ describe('the golden 1.0 store', () => {
       // report stay queued for a resume to join. The headless parent holds
       // none: its child's message joined its one cycle.
       expect(
-        [...folded.queuedFollowUps].map(([id, queued]) => [id, queued.length]),
+        [...folded.runs].flatMap(([id, { queuedFollowUps: queued }]) =>
+          queued.length > 0 ? [[id, queued.length]] : [],
+        ),
       ).toEqual([[CHAT, 2]]);
       const runHistory = makeRunHistory((yield* makeSessionStore(storage)).log);
       const stateOf = (id: RunId) =>

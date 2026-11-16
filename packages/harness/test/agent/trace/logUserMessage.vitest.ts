@@ -111,3 +111,34 @@ describe('logUserMessage', () => {
     });
   });
 });
+
+// Failure mode (#14999 review): a plugin's tool card enters the trace through
+// `openToolCard`/`update`, the published plugin contract. A card its schema
+// rejects (a section of no known kind) must not throw out of the plugin's
+// call and break its run: the card ends failed with a bounded diagnostic
+// naming the invalid field, never its value.
+describe('a plugin tool card the schema rejects', () => {
+  it('records a failed card with a diagnostic instead of throwing', () => {
+    const events: AgentEvent[] = [];
+    const trace = new TraceEmitter((event) => events.push(event));
+    const card = trace.openToolCard({
+      toolName: 'plugin:probe',
+      status: 'in_progress',
+    });
+    const malformed = {
+      toolName: 'plugin:probe',
+      card: { title: 'Probe', sections: [{ kind: 'gauge', label: 'x' }] },
+      status: 'completed',
+    };
+    // cast: a plugin's JavaScript can hand the trace a card its types reject.
+    expect(() => card.update(malformed as never)).not.toThrow();
+    expect(events.at(-1)).toMatchObject({
+      type: 'tool.end',
+      status: 'failed',
+      log: {
+        toolName: 'plugin:probe',
+        error: expect.stringContaining('Malformed tool payload (invalid card'),
+      },
+    });
+  });
+});

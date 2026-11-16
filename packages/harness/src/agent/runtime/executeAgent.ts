@@ -101,7 +101,7 @@ const enterRun = Effect.fn('enterRun')(function* (
   const awaited =
     options.registration !== undefined
       ? options.registration.parentCall?.awaited === true
-      : (facts?.parent?.call?.awaited ?? false);
+      : (facts?.start?.parent?.call?.awaited ?? false);
   // Whether the run ends after one cycle, decided once: every child does
   // (a message to it is a resume), a script's run (its call is its only
   // turn), a root its caller asks to, and a root launched to run once,

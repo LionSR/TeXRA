@@ -71,7 +71,7 @@ export const persistedParentId = Effect.fn('persistedParentId')(function* (
 });
 
 const parentEdge = Effect.fn('parentEdge')(function* (runId: RunId) {
-  return (yield* (yield* SessionLog).facts(runId))?.parent ?? null;
+  return (yield* (yield* SessionLog).facts(runId))?.start?.parent ?? null;
 });
 
 /** The run one attempt of a parent's call launches (an `agent` child, a

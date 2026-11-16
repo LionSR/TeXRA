@@ -57,10 +57,10 @@ export function formatToolUseTemplate(
   interrupted: boolean,
   tools: HostSnapshot['tools'],
 ): FormatResult {
-  const { toolUse, model } = row;
+  const { model } = row;
   const running = model.isInProgress && !interrupted;
   const stopped = model.isInProgress && interrupted;
-  const { toolName } = toolUse;
+  const toolName = row.log.toolName.trim();
   const normalizedToolName = normalizeToolName(toolName);
   const displayKind = toolDisplayKind(toolName);
   const showAsError = model.isError && !model.isUserFeedback;
@@ -88,12 +88,12 @@ export function formatToolUseTemplate(
 
   // Output is shown unless the model suppressed it (empty, already said by
   // the header, the error, or the sections above).
-  if (model.output) {
+  if (model.output.kind === 'shown') {
     sections.push(
       displayKind === 'bash' ||
         tools.terminalOutput.includes(normalizedToolName)
-        ? buildTerminalSection('', model.output.full)
-        : buildToolSection('', model.output.full, {
+        ? buildTerminalSection('', model.output.text.full)
+        : buildToolSection('', model.output.text.full, {
             extraClass: 'tool-output-full',
           }),
     );

@@ -27,9 +27,14 @@ export interface LatexdiffPair {
   /** The round `base` came from; null for the document the task started
    *  from. */
   readonly baseRound: number | null;
-  /** What the diff file's name adds to the revised file's stem. */
-  readonly suffix: string;
 }
+
+/** What a pair's diff file name adds to the revised file's stem: `_diff`
+ *  against the starting document, its two rounds against an earlier one. */
+export const pairDiffSuffix = ({ revised, baseRound }: LatexdiffPair): string =>
+  baseRound === null
+    ? WORKSPACE_DIFF_SUFFIX
+    : buildBetweenRoundDiffSuffix(revised.round, baseRound);
 
 /**
  * The latexdiffs a round's recorded `outputs` call for: each output against
@@ -57,7 +62,6 @@ export function latexdiffPairs(
               document,
               base,
               baseRound: null,
-              suffix: WORKSPACE_DIFF_SUFFIX,
             },
           ]
         : [];
@@ -76,7 +80,6 @@ export function latexdiffPairs(
               document,
               base: prior.location,
               baseRound: prior.round,
-              suffix: buildBetweenRoundDiffSuffix(revised.round, prior.round),
             },
           ]
         : [];
