@@ -95,9 +95,17 @@ const COMPACTION_ACTIVITY_LOG_TEXT: Record<
   skipped: 'Conversation context compaction skipped',
 };
 
+/** How a compaction ended: its outcome, and what a completed one freed. */
+type CompactionActivityEnd =
+  | { readonly state: Exclude<CompactionActivityOutcome, 'completed'> }
+  | Omit<
+      Extract<CompactionActivityData, { state: 'completed' }>,
+      'activity' | 'operationId'
+    >;
+
 interface CompactionActivityOperation {
   /** Emit the first terminal result; later calls are no-ops. */
-  finish(outcome: CompactionActivityOutcome): void;
+  finish(end: CompactionActivityEnd): void;
 }
 
 /** Start one idempotently-terminalized context-compaction operation. */
@@ -106,23 +114,25 @@ export function startCompactionActivity(
 ): CompactionActivityOperation {
   const operationId = `compaction-${crypto.randomUUID()}`;
   let finished = false;
-  const emit = (state: CompactionActivityData['state']): void => {
-    trace.info(COMPACTION_ACTIVITY_LOG_TEXT[state], {
+  const emit = (
+    end: CompactionActivityEnd | { readonly state: 'started' },
+  ): void => {
+    trace.info(COMPACTION_ACTIVITY_LOG_TEXT[end.state], {
       messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
       data: {
         activity: 'context_compaction',
         operationId,
-        state,
+        ...end,
       } satisfies CompactionActivityData,
     });
   };
 
-  emit('started');
+  emit({ state: 'started' });
   return {
-    finish: (outcome) => {
+    finish: (end) => {
       if (finished) return;
       finished = true;
-      emit(outcome);
+      emit(end);
     },
   };
 }

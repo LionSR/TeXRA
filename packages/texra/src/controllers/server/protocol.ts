@@ -41,12 +41,11 @@ import { Rpc, RpcGroup, RpcSchema } from 'effect/rpc';
 import { LaunchRefused, type RunRecords } from '@texra-ai/harness';
 import {
   AgentConfigSchema,
+  AssembleTraceResultSchema,
   AgentRunListingEntrySchema,
   JsonValueSchema,
-  ResumeRefusalSchema,
   RunEndSchema,
   RunIdSchema,
-  RunRecordFieldsSchema,
   RunResultSchema,
   RunWorkspaceFileSchema,
   OutcomeSchema,
@@ -57,10 +56,7 @@ import {
   NonNegativeIntSchema,
 } from '@texra-ai/harness/schemas';
 import { RunStatusKeySchema } from '@texra/shared/session/runStatusKey';
-import {
-  CommitOrdinalSchema,
-  DisplayRowSchema,
-} from '@texra-ai/harness/transcript';
+import { CommitOrdinalSchema } from '@texra-ai/harness/transcript';
 
 import {
   EventsFrameSchema,
@@ -190,25 +186,11 @@ export const RUN_RECORDS = Object.freeze({
   readWorkspaceFiles: Schema.Array(RunWorkspaceFileSchema),
   readSkills: Schema.Array(Schema.String),
   readResumable: Schema.Boolean,
-  readRejection: Schema.NullOr(ResumeRefusalSchema),
   /** The run's conversation as every conversation view renders it. */
   readConversation: Schema.Array(ExportNodeSchema),
   /** What the HTML transcript export reads: the run's display rows and its
    *  record (`assembleTrace`), or why it has none. */
-  readTrace: Schema.Union([
-    Schema.Struct({
-      status: Schema.Literal('ok'),
-      // A `TraceDocument`: the run's display rows, in commit order.
-      trace: Schema.Struct({
-        runId: RunIdSchema,
-        events: Schema.Array(DisplayRowSchema),
-      }),
-      record: RunRecordFieldsSchema,
-    }),
-    Schema.Struct({
-      status: Schema.Literals(['config_missing', 'streamLogs_missing']),
-    }),
-  ]),
+  readTrace: AssembleTraceResultSchema,
 }) satisfies {
   readonly [K in keyof RunRecords]: Schema.Codec<
     Effect.Success<RunRecords[K]>,

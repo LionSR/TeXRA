@@ -56,7 +56,7 @@ export interface ToolCardHandle {
 /**
  * Agent-general SDK surface. Every method ultimately reduces to `emit()` so
  * the trace channel is a single source of truth. App-specific helpers are
- * plain functions over this interface (see `traceLogs.ts`).
+ * plain functions over this interface.
  */
 export interface AgentTrace {
   // ─── SSoT primitives ────────────────────────────────────────────────

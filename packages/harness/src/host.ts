@@ -28,7 +28,6 @@ export {
   formatConversationMessage,
   type ConversationFormatOptions,
 } from '@agent/storage/conversationFormat';
-export type { AssembleTraceResult } from '@transcript/traceAssembler';
 // What `SessionHost.emit` takes and answers: the notices a session's runs
 // ask a host to present.
 export type {
@@ -63,7 +62,7 @@ export {
   type WorkspaceAgents,
   type WorkspaceAgentsStores,
 } from '@agent/index/agentCatalog';
-export type { AgentEntry } from '@agent/index/agentEntry';
+export { agentToolNames, type AgentEntry } from '@agent/index/agentEntry';
 export {
   InvalidAgentTeamError,
   type WorkspaceAgentsController,

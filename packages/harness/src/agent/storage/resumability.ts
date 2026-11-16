@@ -75,8 +75,8 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
 /**
  * {@link deriveResumability} as a refusal, or null when the run may
  * continue; facts that could not be read right now fail. The one decider
- * for a run with no loop here: a message's admission, a recovered child
- * and a host's run record all ask it.
+ * for a run with no loop here: a resume, a message to a stored run and a
+ * recovered child all ask it.
  */
 export const checkpointRefusal = Effect.fn('checkpointRefusal')(function* (
   runId: RunId,

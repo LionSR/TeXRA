@@ -98,7 +98,7 @@ const resumeOwnedChild = Effect.fn('resumeOwnedChild')(function* (
   const runs = yield* RunRegistry;
   const { opened } = yield* runs.start(runId, {
     open: openResume(runs, runId, options, parentRunId).pipe(
-      Effect.catchTag('ResumeRefused', ({ answer }) =>
+      Effect.catchTag('ResumeNotOpened', ({ answer }) =>
         Effect.fail(
           new Error(
             'failed' in answer

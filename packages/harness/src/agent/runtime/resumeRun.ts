@@ -62,11 +62,11 @@ type ResumeRefusalAnswer = Exclude<
   { activation: CommitOrdinal }
 >;
 
-/** A resume refused as it opens: told as the opening's failure, so the
- *  registry's launch ends with no fiber behind it, and answered as the
- *  refusal it carries. */
-class ResumeRefused extends Schema.TaggedError<ResumeRefused>()(
-  'ResumeRefused',
+/** A resume that did not open: told as the opening's failure, so the
+ *  registry's launch ends with no fiber behind it, and answered as what it
+ *  carries (the refusal, or the parent that owns the run). */
+class ResumeNotOpened extends Schema.TaggedError<ResumeNotOpened>()(
+  'ResumeNotOpened',
   {
     answer: Schema.Union([
       Schema.Struct({ failed: ResumeRefusalSchema }),
@@ -126,8 +126,8 @@ export const resumeRun = (
         Effect.map(({ opened }): ResumeHandOff => ({
           activation: opened.activation,
         })),
-        Effect.catchTag('ResumeRefused', (refused) =>
-          Effect.succeed<ResumeHandOff>(refused.answer),
+        Effect.catchTag('ResumeNotOpened', (notOpened) =>
+          Effect.succeed<ResumeHandOff>(notOpened.answer),
         ),
         Effect.catch((error) =>
           error instanceof RunLive
@@ -194,9 +194,9 @@ export const openResume = Effect.fn('resumeRun.open')(function* (
   runId: RunId,
   options: ResumeRunOptions,
   owner?: RunId,
-): Effect.fn.Return<PreparedRun, Error | ResumeRefused, AgentRunServices> {
+): Effect.fn.Return<PreparedRun, Error | ResumeNotOpened, AgentRunServices> {
   const refuse = (answer: ResumeRefusalAnswer) =>
-    Effect.fail(new ResumeRefused({ answer }));
+    Effect.fail(new ResumeNotOpened({ answer }));
   const inbox = yield* Inbox;
   const store = getRunRecords(runId);
   const records = yield* Effect.result(

@@ -9,7 +9,6 @@ import {
 } from '@shared/schemas';
 
 import { isInterrupted, type RunView } from './sessionView';
-import type { RunView as ReadonlyRunView } from './readonlyViews';
 
 /** Opening the run's folder, exporting its conversation, copying its
  *  diagnostics: what any run offers, a fresh list per run so no two views
@@ -98,7 +97,7 @@ const forkable = (
 
 /** Why a run no longer takes `action`: the refusal every handler words. */
 export function runActionRefusal(
-  run: Pick<ReadonlyRunView, 'holder' | 'label'>,
+  run: Pick<RunView, 'holder' | 'label'>,
   action: RunAction,
 ): string {
   const what = ACTION_LABEL[action];

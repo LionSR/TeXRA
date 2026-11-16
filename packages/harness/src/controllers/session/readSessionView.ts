@@ -21,7 +21,7 @@ import {
   type DatabaseOpenFailed,
   ProjectDatabases,
 } from '@shared/session/database';
-import type { SessionView } from '@shared/session/readonlyViews';
+import type { SessionView } from '@shared/session/sessionView';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import type { ToolRegistry } from '@tools/toolTable';
 import { absentReason } from '@utils/files/fsEntryExists';

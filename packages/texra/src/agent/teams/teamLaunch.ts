@@ -21,7 +21,10 @@ import {
   type TeamRunOptions,
   type TeamRunPlan,
 } from '@texra/agent/teams/teamPlan';
-import type { AgentDelegationScope } from '@texra-ai/harness/host';
+import {
+  agentToolNames,
+  type AgentDelegationScope,
+} from '@texra-ai/harness/host';
 
 /** The team a run was launched as, the one key TeXRA keeps in a run's
  *  `launch` record for every host (a command line adds its output targets). */
@@ -59,7 +62,7 @@ const NO_TEAM_ROOT = 'no runnable team root';
 
 export function teamLaunchBlockReason(plan: TeamRunPlan): string | undefined {
   if (!plan.rootAgent) return NO_TEAM_ROOT;
-  if (!plan.rootAgent.tools?.includes(AGENT_TOOL_NAME)) {
+  if (!agentToolNames(plan.rootAgent).includes(AGENT_TOOL_NAME)) {
     return `team root ${plan.rootAgent.name} is not a delegating agent`;
   }
   if (availableTeamMemberCount(plan) === 0) {

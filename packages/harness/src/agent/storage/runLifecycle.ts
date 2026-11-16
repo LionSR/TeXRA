@@ -134,8 +134,10 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
     const config = yield* Schema.decodeUnknownEffect(RunRecordFieldsSchema)(
       pinRunWorkingDirectory(record, (yield* SessionRoots).workspace),
     );
-    const ended = prior ? yield* (yield* Approvals).activationRows(runId) : [];
-    return registrationDrafts(runId, config, options, !prior, ended);
+    const ended = prior
+      ? yield* (yield* Approvals).activationRows(runId)
+      : null;
+    return registrationDrafts(runId, config, options, ended);
   }).pipe(defectAsFailure);
 });
 

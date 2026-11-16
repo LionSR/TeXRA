@@ -512,7 +512,7 @@ describe('Sessions owner', () => {
       yield* Effect.gen(function* () {
         const session = yield* (yield* Sessions).open(platform.roots, {
           persistent: true,
-          host: {},
+          answeredFromView: true,
         });
         expect((yield* session.view.read([RUN])).requests).toHaveLength(1);
         yield* Stream.runHead(
@@ -580,7 +580,10 @@ describe('Sessions owner', () => {
       });
       yield* Effect.gen(function* () {
         const sessions = yield* Sessions;
-        yield* sessions.open(platform.roots, { persistent: true, host: {} });
+        yield* sessions.open(platform.roots, {
+          persistent: true,
+          answeredFromView: true,
+        });
         yield* Deferred.await(up);
         yield* sessions.close(platform.roots);
         expect(drains).toBe(0);

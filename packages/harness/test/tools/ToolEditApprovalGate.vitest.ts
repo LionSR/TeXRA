@@ -55,7 +55,7 @@ const setUp = (
     const host = Context.get(yield* Layer.build(FakeHost.layer()), FakeHost);
     const workspaceRoot = host.path('workspace');
     const session = yield* Effect.flatMap(
-      TestSession.open(host.roots, { host: {} }),
+      TestSession.open(host.roots, { answeredFromView: true }),
       sessionHandleOf,
     );
     const approvalPolicy = (

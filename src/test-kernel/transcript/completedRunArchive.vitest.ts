@@ -97,7 +97,7 @@ layer(texraHosted, { excludeTestServices: true })(
             const session = yield* sessionHandleOf(
               yield* TestSession.open((yield* FakeHost).roots, {
                 persistent: true,
-                host: {},
+                answeredFromView: true,
               }),
             );
             yield* publishTestRunStart(session, runId);

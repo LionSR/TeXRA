@@ -50,7 +50,7 @@ import {
   generateRunId,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
-import type { SessionView } from '@shared/session/readonlyViews';
+import type { SessionView } from '@shared/session/sessionView';
 import { SessionViewAccess } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -287,11 +287,14 @@ export function makeSessions(
       // owner's refusal. Until a host that can prompt attaches, nobody here
       // can answer: the session's policy denies every request its runs
       // raise and offers them no approval-gated tool.
-      open: (roots: WorkspaceRoots, { persistent, host }: OpenOptions = {}) =>
+      open: (
+        roots: WorkspaceRoots,
+        { persistent, answeredFromView }: OpenOptions = {},
+      ) =>
         Effect.map(
           owner.open({
             roots,
-            ...(host === undefined && {
+            ...(answeredFromView !== true && {
               interactions: { approvalPromptsUnavailable: true },
             }),
             ...(!persistent && {

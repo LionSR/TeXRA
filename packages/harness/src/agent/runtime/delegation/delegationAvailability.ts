@@ -22,6 +22,7 @@ import {
   AgentCatalog,
   type WorkspaceAgentsStores,
 } from '@agent/index/agentCatalog';
+import { agentToolNames } from '@agent/index/agentEntry';
 import type { StepTools } from '@agent/runtime/loop/step';
 import { withLogChannel } from '@logger/effectLog';
 import { readModelOptions, type ModelOption } from '@model/computeModelOptions';
@@ -78,26 +79,25 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
       ({ name }) => registry.get(name)?.launchesTasks,
     );
     if (!chats && !tasks) return undefined;
-    const agents = (yield* delegationAgents(stores, scope)).flatMap(
-      ({ name, description, tools: agentTools, blocks }) => {
-        const task = Object.keys(blocks).length > 0;
-        return chats || task
-          ? [
-              {
-                name,
-                // One line per agent: a blank line in a (user-defined)
-                // description would otherwise read as the end of the list.
-                description: (description || 'No description').replaceAll(
-                  /\s*\n\s*/g,
-                  ' ',
-                ),
-                tools: agentTools ?? [],
-                task,
-              },
-            ]
-          : [];
-      },
-    );
+    const agents = (yield* delegationAgents(stores, scope)).flatMap((entry) => {
+      const { name, description, blocks } = entry;
+      const task = Object.keys(blocks).length > 0;
+      return chats || task
+        ? [
+            {
+              name,
+              // One line per agent: a blank line in a (user-defined)
+              // description would otherwise read as the end of the list.
+              description: (description || 'No description').replaceAll(
+                /\s*\n\s*/g,
+                ' ',
+              ),
+              tools: agentToolNames(entry),
+              task,
+            },
+          ]
+        : [];
+    });
     const models = yield* readModelOptions(stores).pipe(
       Effect.map(availableModelNames),
       // A failed read (an unreadable store, a host call that rejected) tells

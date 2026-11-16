@@ -123,10 +123,10 @@ const FORK_SOURCE = Schema.decodeUnknownSync(RunIdSchema)('a0000000000e');
 const FORKED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000f');
 /** Killed after its command's effect, before the command's result. */
 const KILLED = Schema.decodeUnknownSync(RunIdSchema)('a00000000010');
-/** The service's task; the background command it sent, whose input the
- *  service's resume closed, is a finished shell the deletion's open swept
- *  (its rows stay, under its deletion marker, for the next open to collect). */
+/** The service's task, and the background command it sent, a finished
+ *  shell whose input the service's resume closed. */
 const SERVICE_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000012');
+const SERVICE_COMMAND = 'a00000000013';
 /** The `texra run --output` document task and the revisions its recipe
  *  ran, named by the calls that launched them. */
 const DOCUMENT_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000005');
@@ -433,11 +433,12 @@ describe('the golden 1.0 store', () => {
         // Killed while its command's result was uncommitted: it still reads
         // as running, its owner dead.
         run(KILLED, 'golden_effect', { position: 'running', outcome: null }),
-        // Stopped with `texra tasks stop` once its command reported back;
-        // the command itself was swept with the deletion's open.
+        // Stopped with `texra tasks stop` once its command reported back.
         run(SERVICE_TASK, 'golden_script', {
           outcome: 'cancelled',
+          children: [SERVICE_COMMAND],
         }),
+        run(SERVICE_COMMAND, 'bash', { parent: SERVICE_TASK }),
       ]);
       expect(folded.requests).toEqual([]);
       // The message typed behind the stopped turn and the Codex child's
@@ -707,7 +708,7 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
       if (rewrite !== undefined) raw(storage, (db) => db.exec(rewrite));
       const session = yield* (yield* Sessions).open(
         { ...(yield* FakeHost).roots, storage },
-        { persistent: true, host: {} },
+        { persistent: true, answeredFromView: true },
       );
       return { storage, session };
     });

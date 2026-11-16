@@ -334,12 +334,10 @@ export function agentEntryOf(
     throw new Error(
       `A task works text-only, so \`tools\` and \`${keys[0]}\` cannot be combined: remove one.`,
     );
-  const tools = persona.tools.map((tool) => tool.name);
   return {
     name,
     ...at,
     description,
-    tools: tools.length ? tools : undefined,
     basedOn,
     persona,
     blocks,
