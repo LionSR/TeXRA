@@ -21,7 +21,7 @@ import {
   nodePlatformLayer,
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
-import { REPO_ROOT } from '@test/support/repoScan';
+import { REPO_ROOT } from '@test/support/repoRoot';
 import { createFakeHost } from '@test/support/setupPlatform';
 import { storePluginsLayer } from '@test/support/texraApp';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';

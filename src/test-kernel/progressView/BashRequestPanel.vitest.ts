@@ -6,7 +6,7 @@ import type { BashRequestPanel } from '@ui/progress/components/BashRequestPanel'
 import {
   mountComponent,
   useLitComponentTestDom,
-} from '../settings/litComponentTestUtils';
+} from './litComponentTestUtils';
 import type {
   BashRequest,
   RunId,

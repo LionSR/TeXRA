@@ -83,7 +83,7 @@ import { Database } from '@shared/session/database';
 import { SessionViewAccess } from '@shared/session/runHistory';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { REPO_ROOT } from '@test/support/repoScan';
+import { REPO_ROOT } from '@test/support/repoRoot';
 import { storePluginsLayer } from '@test/support/texraApp';
 import {
   persistentTestSession,

@@ -19,7 +19,7 @@ import {
 import { rootRun, type SessionServices } from '@agent/runtime/rootLaunch';
 import { Runs } from '@agent/runtime/runRegistry';
 import {
-  parkedAfter,
+  waitingAfter,
   persistentTestSession,
   sessionStoreFaults,
   storedRows,
@@ -57,7 +57,7 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
             const first = yield* Effect.forkChild(launch(session, runId));
             yield* untilStored(
               roots.storage,
-              parkedAfter(runId, 1, roots.storage),
+              waitingAfter(runId, 1, roots.storage),
             );
 
             expect(yield* Effect.flip(launch(session, runId))).toMatchObject({

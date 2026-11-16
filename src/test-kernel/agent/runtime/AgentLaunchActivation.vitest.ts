@@ -25,7 +25,7 @@ import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { rootRun, type SessionServices } from '@agent/runtime/rootLaunch';
 import {
-  parkedAfter,
+  waitingAfter,
   persistentTestSession,
   sessionStoreFaults,
   storedRows,
@@ -113,7 +113,7 @@ describe(
               }).pipe(Effect.provide(session), Effect.forkChild);
               yield* untilStored(
                 roots.storage,
-                parkedAfter(parentRunId, 1, roots.storage),
+                waitingAfter(parentRunId, 1, roots.storage),
               );
               const faults = yield* sessionStoreFaults(roots.storage);
               yield* faults.failNext('appendAll', 'run.start');

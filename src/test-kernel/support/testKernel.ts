@@ -25,6 +25,7 @@ import {
   Option,
   Path,
   Ref,
+  SubscriptionRef,
   type Scope,
 } from 'effect';
 import { HttpClient } from 'effect/http';
@@ -75,14 +76,34 @@ import {
 } from '@shared/session/database';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import type { Plugin } from '@tools/plugins';
+import type { ExternalToolCheckResult } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
 
 import {
   createFakeHost,
   type FakeHost as InstalledHost,
 } from './setupPlatform';
-import { unprobedToolAvailability } from './toolAvailabilityTestLayer';
 import type { FakeHostOverrides, FakePlatformOptions } from './FakePlatform';
+
+/**
+ * The tool availability every test runtime serves: no dependency probe runs
+ * (a real one spawns the CLIs it looks for on every session open, so its
+ * answer would be the developer's machine's), and the tool gate withholds
+ * nothing. A suite of availability itself builds the real layer.
+ */
+const unprobedToolAvailability = Layer.effect(
+  ToolAvailability,
+  Effect.map(
+    SubscriptionRef.make<
+      ReadonlyMap<string | undefined, readonly ExternalToolCheckResult[]>
+    >(new Map()),
+    (results) => ({
+      results,
+      refresh: () => Effect.succeed([]),
+      hold: () => Effect.void,
+    }),
+  ),
+);
 
 /** A host computed when the layer builds, so a per-test temp directory
  *  made in `beforeEach` is already there. */

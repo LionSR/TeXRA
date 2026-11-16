@@ -1,3 +1,6 @@
+// Node imports
+import { pathToFileURL } from 'node:url';
+
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
@@ -9,10 +12,7 @@ import {
 } from '@desktop/shared/hostBridgeChannels';
 
 // Local imports - desktop test paths
-import {
-  desktopSourcePath,
-  moduleFileUrl,
-} from '@test/desktop/desktopTestPaths.ts';
+import { desktopSourcePath } from '@test/desktop/desktopTestPaths.ts';
 
 async function loadPreloadModule(electron: {
   contextBridge: { exposeInMainWorld(name: string, api: unknown): void };
@@ -24,7 +24,7 @@ async function loadPreloadModule(electron: {
 }): Promise<void> {
   vi.resetModules();
   vi.doMock('electron', () => electron);
-  await import(moduleFileUrl(desktopSourcePath('preload', 'index.ts')));
+  await import(pathToFileURL(desktopSourcePath('preload', 'index.ts')).href);
 }
 
 describe('desktop Electron host bridge', () => {

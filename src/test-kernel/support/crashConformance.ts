@@ -418,8 +418,8 @@ const editsOf = (rows: readonly Row[], root: string) =>
     .filter((row) => row.run === root && row.type === 'context.edit')
     .map((row) => payload(row).cause);
 
-/** The root parks with `count` answers, after its last view edit. */
-const parkedAfter = (rows: readonly Row[], root: string, count: number) => {
+/** The root waits for input with `count` answers, after its last view edit. */
+const waitingAfter = (rows: readonly Row[], root: string, count: number) => {
   const mine = rows.filter((row) => row.run === root);
   const last = mine.findLast((row) => row.type === 'run.position');
   const edit = mine.findLast((row) => row.type === 'context.edit');
@@ -445,7 +445,7 @@ const requested = (rows: readonly Row[], root: string, kind: string) =>
 
 /**
  * The user's part, each step issued only if its rows are not committed: a
- * model switch and a compaction once the run parks, then, once it has
+ * model switch and a compaction once the run waits, then, once it has
  * answered from the summary, a fork of the conversation.
  */
 const userSteps = (
@@ -457,14 +457,14 @@ const userSteps = (
     // A switch, then a compaction, each asked for once: a request whose
     // row is committed is the resumed run's to apply.
     if (!requested(yield* liveRows(storage), root, 'model')) {
-      yield* until(storage, (rows) => parkedAfter(rows, root, 1));
+      yield* until(storage, (rows) => waitingAfter(rows, root, 1));
       const controls = Context.get(session, Runs).get(root)?.controls;
       if (controls === undefined)
-        return yield* Effect.die('the parked run has no live controls');
+        return yield* Effect.die('the waiting run has no live controls');
       yield* controls.switchModel(SWITCH_TO);
     }
     if (!requested(yield* liveRows(storage), root, 'compact')) {
-      yield* until(storage, (rows) => parkedAfter(rows, root, 1));
+      yield* until(storage, (rows) => waitingAfter(rows, root, 1));
       yield* Context.get(session, SessionRequests).request({
         kind: 'run.compact',
         runId: root,
@@ -475,7 +475,7 @@ const userSteps = (
         storage,
         (rows) =>
           editsOf(rows, root).includes('compaction') &&
-          parkedAfter(rows, root, 2),
+          waitingAfter(rows, root, 2),
       );
       yield* Context.get(session, SessionRequests).request({
         kind: 'run.fork',
@@ -849,11 +849,11 @@ const resumeFrom = (
  * second of CPU apiece, so a scenario's points are spread over files: Vitest
  * spreads files, not tests, over its workers and CI shards.
  */
-export type CrashScenario = 'resume' | 'child-results';
+type CrashScenario = 'resume' | 'child-results';
 
 /** Which of a scenario's crash points one file replays: every `count`th
  *  from `index`. The clean pass runs in each file. */
-export interface CrashShard {
+interface CrashShard {
   readonly index: number;
   readonly count: number;
 }
