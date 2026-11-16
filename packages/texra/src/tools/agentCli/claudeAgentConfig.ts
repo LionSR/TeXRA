@@ -169,8 +169,8 @@ function claudeKeychainCredentialProbes(
  *      API key" failures).
  *   2. Otherwise an explicit `ANTHROPIC_API_KEY` inherited from the
  *      environment passes through untouched.
- *   3. Otherwise the workspace-managed secret (Settings → API Keys →
- *      Anthropic) is injected as `ANTHROPIC_API_KEY`.
+ *   3. Otherwise the Anthropic key TeXRA stores is injected as
+ *      `ANTHROPIC_API_KEY`.
  *
  * The SDK identifies itself in the User-Agent via CLAUDE_AGENT_SDK_CLIENT_APP.
  */

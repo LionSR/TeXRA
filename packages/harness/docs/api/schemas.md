@@ -2319,6 +2319,17 @@ interface SettingChoiceCopy {
 }
 ```
 
+## settingName
+
+How a message points a person to `row`: the title every settings UI shows
+and the key `/config`, `texra config` and a config file take, so the pointer
+is right on every host. A message names no settings page: where a row is
+shown is the app's to decide.
+
+```ts
+const settingName: (row: Pick<SettingRow<unknown>, "title" | "key">) => string
+```
+
 ## SettingRow
 
 One setting, whose schema decodes its stored value to an `A`.

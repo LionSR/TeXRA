@@ -241,6 +241,7 @@ export {
   WEBSOCKET_OPENAI_SETTING,
   type HarnessRowKey,
   type SettingChoiceCopy,
+  settingName,
   type SettingRow,
   type SettingsCatalog,
   type SettingStore,
