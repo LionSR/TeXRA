@@ -327,10 +327,10 @@ class RemoteSessionView extends Context.Service<
   RemoteSessionView,
   {
     /** The current view. */
-    readonly current: () => ReadonlySessionView;
+    readonly current: () => SessionView;
     /** The current view, then every later one; as
      *  `SessionViewService.changes`, it ends, or dies, with the updates. */
-    readonly changes: Stream.Stream<ReadonlySessionView>;
+    readonly changes: Stream.Stream<SessionView>;
     /** Subscribe `set`'s transcripts for the caller's scope; the handle
      *  replaces the set. */
     readonly subscribe: (

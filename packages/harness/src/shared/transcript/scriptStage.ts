@@ -24,8 +24,9 @@ import {
   acceptsFollowUp,
   isInterrupted,
   requestAnswerability,
+  type RunView,
+  type SessionView,
 } from '@shared/session/sessionView';
-import type { RunView, SessionView } from '@shared/session/readonlyViews';
 import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
 import { formatScriptCallFiles } from '@shared/transcript/scriptCall';
 import { getBasename } from '@utils/core/pathBasics';

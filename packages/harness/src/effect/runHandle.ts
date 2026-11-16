@@ -21,7 +21,7 @@ import {
 import { boundsLifecycle } from '@shared/session/runFacts';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { descendantRuns } from '@shared/session/sessionView';
-import type { SessionView } from '@shared/session/readonlyViews';
+import type { SessionView } from '@shared/session/sessionView';
 import type { TranscriptInterest } from '@shared/session/sessionViewAccess';
 
 import { RunFailure } from './errors.js';

@@ -34,10 +34,7 @@ import type {
   RuntimeCommand,
   StartRequestSchema,
 } from '@shared/session/runtimeRequest';
-import type {
-  PendingRequest,
-  SessionView,
-} from '@shared/session/readonlyViews';
+import type { PendingRequest, SessionView } from '@shared/session/sessionView';
 import type { HostSkillOptions } from '@skills/skillSources';
 import type { Plugin } from '@tools/plugins';
 import type { Effect, Stream, Scope, SubscriptionRef } from 'effect';

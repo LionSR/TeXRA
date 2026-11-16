@@ -34,7 +34,7 @@ a run still going or waiting takes one, as does a stopped root agent with
 saved steps, which a resume continues from its history.
 
 ```ts
-function acceptsFollowUp(run: ReadRunView): boolean
+function acceptsFollowUp(run: RunView): boolean
 ```
 
 ## ActiveSkillSourceScope
@@ -361,7 +361,7 @@ What wants this window: the requests it can answer (the badge), and since
 interface Attention<Request> {
   readonly requests: readonly Request[];
   readonly arrived: readonly Request[];
-  readonly finished: readonly ReadRunView[];
+  readonly finished: readonly RunView[];
 }
 ```
 
@@ -373,9 +373,9 @@ the user when this window can answer it (not one on a run another process
 holds or waiting for its run's resume), and a run when its outcome lands.
 
 ```ts
-function attentionOf<View extends ReadSessionView>(
+function attentionOf<View extends SessionView>(
   view: View,
-  previous?: ReadSessionView,
+  previous?: SessionView,
 ): Attention<View['requests'][number]>
 ```
 
@@ -580,7 +580,7 @@ so a host walks the view's own facts instead of re-deriving them.
 
 ```ts
 function descendantRuns(
-  view: Pick<ReadSessionView, 'runs'>,
+  view: Pick<SessionView, 'runs'>,
   rootRunId: RunId | undefined,
   { includeRoot }: { includeRoot: boolean },
 ): readonly RunId[]
@@ -1454,8 +1454,8 @@ surface's collapsed choice.
 
 ```ts
 function needsUser(
-  run: ReadRunView,
-  runs: ReadonlyMap<RunId, ReadRunView>,
+  run: RunView,
+  runs: ReadonlyMap<RunId, RunView>,
 ): boolean
 ```
 
@@ -1811,7 +1811,7 @@ function replayInputs(read: {
 
 ```ts
 function requestAnswerability(
-  run: ReadRunView,
+  run: RunView,
   payload: RequestPayload,
 ): RequestAnswerability
 ```
@@ -1966,9 +1966,9 @@ finished, not running.
 
 ```ts
 function rollupOf(
-  children: readonly ReadRunView[],
-  below = (child: ReadRunView) => child.rollup,
-): ReadRunView['rollup']
+  children: readonly RunView[],
+  below = (child: RunView) => child.rollup,
+): RunView['rollup']
 ```
 
 ## RUN_OUTCOME
@@ -1997,7 +1997,7 @@ Why a run no longer takes `action`: the refusal every handler words.
 
 ```ts
 function runActionRefusal(
-  run: Pick<ReadonlyRunView, 'holder' | 'label'>,
+  run: Pick<RunView, 'holder' | 'label'>,
   action: RunAction,
 ): string
 ```
@@ -2211,14 +2211,7 @@ const RuntimeCommandSchema: Union<readonly [Struct<{ readonly reason: Literals<r
 One stream of the {@link SessionView}.
 
 ```ts
-type RunView = ReadonlyDeep<
-  (typeof SessionViewSchema.Type)['runs'] extends ReadonlyMap<
-    unknown,
-    infer Run
-  >
-    ? Run
-    : never
->;
+type RunView = ReadonlyDeep<typeof RunViewSchema.Type>;
 ```
 
 ## RunWorkspaceFile
@@ -2282,7 +2275,7 @@ view and nothing else: a request this window can answer outranks a run
 working right now; a conversation waiting on its user is idle.
 
 ```ts
-function sessionActivity(view: ReadSessionView): SessionTitleState
+function sessionActivity(view: SessionView): SessionTitleState
 ```
 
 ## SessionRow
@@ -2740,7 +2733,7 @@ const TraceMissingSchema: Literals<readonly ["no_record", "no_rows"]>
 A stream's transcript slice: what hosts paint.
 
 ```ts
-type TranscriptView = RunView['transcript'];
+type TranscriptView = ReadonlyDeep<typeof TranscriptViewSchema.Type>;
 ```
 
 ## truncateSummary

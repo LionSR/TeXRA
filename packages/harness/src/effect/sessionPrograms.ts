@@ -50,7 +50,7 @@ import {
   generateRunId,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
-import type { SessionView } from '@shared/session/readonlyViews';
+import type { SessionView } from '@shared/session/sessionView';
 import { SessionViewAccess } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

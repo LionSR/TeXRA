@@ -51,16 +51,13 @@ export {
   sessionActivity,
   SessionViewSchema,
   type Attention,
+  type PendingRequest,
   type RequestAnswerability,
+  type RunView,
   type SessionTitleState,
+  type SessionView,
+  type TranscriptView,
 } from '@shared/session/sessionView';
-// The views, read-only all the way down, and the request a run waits on.
-export type {
-  PendingRequest,
-  RunView,
-  SessionView,
-  TranscriptView,
-} from '@shared/session/readonlyViews';
 // Why a run no longer takes an action its `actions` once listed.
 export { runActionRefusal } from '@shared/session/runActions';
 // What makes the views read-only all the way down.
