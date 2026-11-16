@@ -7,7 +7,7 @@ import { html, render } from 'lit';
 import { isPackagedAgentSource } from '@texra-ai/harness/schemas';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
-import { postMessage } from '@texra/shared/hostBridge';
+import { postToMain } from './messageRoutes';
 import type { Theme } from '@texra/shared/ipc';
 import type { SessionSurfaces } from '@ui/progress/sessionSurfaces';
 import type { ProgressApp } from '@ui/progress/ProgressApp';
@@ -92,7 +92,7 @@ export function createProjectWorkbench(options: {
     options.onLayoutChanged(session, previous, next);
   }
   const send = (message: DesktopWorkspaceRequest) =>
-    postMessage(message.command, { ...message, session });
+    postToMain({ ...message, session });
   // The editor's file I/O is a host request answered to the pane, its
   // refusal worded as the progress view words one; closing the pane
   // interrupts whatever is still pending.

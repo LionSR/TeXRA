@@ -15,7 +15,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postMessage } from '@texra/shared/hostBridge';
+import { postToHost } from '@settingsView/frontend/messageDispatcher';
 import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import type { IconName } from '@ui/wa/iconNames';
 import {
@@ -102,7 +102,8 @@ export class AgentSelectionPanel extends LitElement {
         pressed: agent.enabled,
         onClick: (event) => {
           event.stopPropagation();
-          postMessage(SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED, {
+          postToHost({
+            command: SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
             agentName: agent.name,
             agentSource: agent.source,
             enabled: !agent.enabled,
@@ -136,7 +137,8 @@ export class AgentSelectionPanel extends LitElement {
           className: 'catalog-action-btn',
           kind: 'ghost',
           onClick: () =>
-            postMessage(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML, {
+            postToHost({
+              command: SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML,
               agentName: agent.name,
               agentSource: agent.source,
             }),
@@ -151,7 +153,8 @@ export class AgentSelectionPanel extends LitElement {
           className: 'catalog-action-btn',
           kind: 'ghost',
           onClick: () =>
-            postMessage(SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE, {
+            postToHost({
+              command: SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE,
               agentName: agent.name,
               agentSource: agent.source,
             }),
@@ -171,7 +174,8 @@ export class AgentSelectionPanel extends LitElement {
           variant: 'brand',
           kind: 'primary',
           onClick: () =>
-            postMessage(SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT, {
+            postToHost({
+              command: SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT,
               agentName: agent.name,
               agentSource: agent.source,
             }),
@@ -187,7 +191,8 @@ export class AgentSelectionPanel extends LitElement {
           className: 'catalog-action-btn',
           kind: 'danger',
           onClick: () =>
-            postMessage(SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT, {
+            postToHost({
+              command: SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT,
               agentName: agent.name,
             }),
         },
@@ -308,7 +313,7 @@ export class AgentSelectionPanel extends LitElement {
                 [true, false].map(
                   (enabled) => html`
                     <wa-dropdown-item
-                      @click=${() => postMessage(SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED, { source, enabled })}
+                      @click=${() => postToHost({ command: SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED, source, enabled })}
                     >
                       ${waIcon(enabled ? 'eye' : 'eye-slash', { slot: 'icon' })}
                       ${enabled ? 'Show' : 'Hide'} all

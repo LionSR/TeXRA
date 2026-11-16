@@ -1,9 +1,49 @@
-// The inbound window-message dispatcher. The route table is typed over the
-// outbound union (`DesktopOutboundMessageSchema`), so a main-process push added
-// there without its renderer end fails to compile.
+// The renderer's window messages, both ways. The inbound dispatcher's route
+// table is typed over the outbound union (`DesktopOutboundMessageSchema`), so
+// a main-process push added there without its renderer end fails to compile;
+// every request to the main process goes through `postToMain`, typed over the
+// schemas its routes decode.
 
 import { Predicate, Result, Schema } from 'effect';
+import { hostBridge } from '@texra/shared/hostBridge';
+import type { DESKTOP_LOCAL_COMMANDS } from '../shared/desktopCommandSurface';
+import type {
+  DESKTOP_LOG_COMMANDS,
+  DesktopFollowLogMessageSchema,
+} from '../shared/desktopLogMessages';
 import { DesktopOutboundMessageSchema } from '../shared/desktopOutboundMessages';
+import type {
+  DESKTOP_PROJECT_COMMANDS,
+  DesktopCloseProjectMessageSchema,
+  DesktopOpenRecentProjectMessageSchema,
+  DesktopSelectProjectMessageSchema,
+} from '../shared/desktopProjectMessages';
+import type { DesktopSettlePromptMessageSchema } from '../shared/desktopPromptMessages';
+import type { DesktopWorkspaceInboundMessageSchema } from '../shared/desktopWorkspaceMessages';
+
+/** A request the main process routes, by the schema its route decodes; a
+ *  command whose route reads no field carries only its name. */
+type DesktopRequest =
+  | typeof DesktopSelectProjectMessageSchema.Encoded
+  | typeof DesktopCloseProjectMessageSchema.Encoded
+  | typeof DesktopOpenRecentProjectMessageSchema.Encoded
+  | typeof DesktopFollowLogMessageSchema.Encoded
+  | typeof DesktopSettlePromptMessageSchema.Encoded
+  | typeof DesktopWorkspaceInboundMessageSchema.Encoded
+  | {
+      readonly command:
+        | typeof DESKTOP_PROJECT_COMMANDS.REQUEST_PROJECTS
+        | typeof DESKTOP_LOG_COMMANDS.REQUEST_LOG
+        | typeof DESKTOP_LOG_COMMANDS.COPY_LOG
+        | typeof DESKTOP_LOG_COMMANDS.EXPORT_LOG
+        | (typeof DESKTOP_LOCAL_COMMANDS)[keyof typeof DESKTOP_LOCAL_COMMANDS];
+    };
+
+/** Ask the main process for something, checked here, at the send, against
+ *  what its route decodes. */
+export function postToMain(message: DesktopRequest): void {
+  hostBridge.postMessage(message);
+}
 
 type Push = typeof DesktopOutboundMessageSchema.Type;
 

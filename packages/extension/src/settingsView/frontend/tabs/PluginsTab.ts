@@ -14,7 +14,7 @@ import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postMessage } from '@texra/shared/hostBridge';
+import { postToHost } from '@settingsView/frontend/messageDispatcher';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
@@ -134,7 +134,8 @@ export class PluginsTab extends SignalWatcher(LitElement) {
           text: PLUGINS_PAGE.add,
           kind: 'primary',
           onClick: () =>
-            postMessage(SETTINGS_VIEW_COMMANDS.PLUGIN_ACTION, {
+            postToHost({
+              command: SETTINGS_VIEW_COMMANDS.PLUGIN_ACTION,
               action: 'install',
             }),
         })}
@@ -206,7 +207,8 @@ export class PluginsTab extends SignalWatcher(LitElement) {
             kind: 'secondary',
             appearance: 'outlined',
             onClick: () =>
-              postMessage(SETTINGS_VIEW_COMMANDS.PLUGIN_ACTION, {
+              postToHost({
+                command: SETTINGS_VIEW_COMMANDS.PLUGIN_ACTION,
                 action: 'openMcpConfig',
               }),
           })}
@@ -216,7 +218,9 @@ export class PluginsTab extends SignalWatcher(LitElement) {
             kind: 'secondary',
             appearance: 'outlined',
             onClick: () =>
-              postMessage(SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS),
+              postToHost({
+                command: SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
+              }),
           })}
         </div>
       </div>

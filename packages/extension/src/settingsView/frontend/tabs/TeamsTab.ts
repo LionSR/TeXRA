@@ -10,7 +10,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postMessage } from '@texra/shared/hostBridge';
+import { postToHost } from '@settingsView/frontend/messageDispatcher';
 import type { SettingsTeamPreset } from '@texra/shared/settingsView/settingsViewMessages';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import {
@@ -182,14 +182,16 @@ export class TeamsTab extends LitElement {
   @property({ attribute: false }) activePresetId: string | null = null;
 
   private handlePresetClick(preset: SettingsTeamPreset): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET, {
+    postToHost({
+      command: SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET,
       presetId: preset.id,
     });
   }
 
   private handleDeletePreset(event: Event, preset: SettingsTeamPreset): void {
     event.stopPropagation();
-    postMessage(SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET, {
+    postToHost({
+      command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET,
       presetId: preset.id,
     });
   }
@@ -309,7 +311,9 @@ export class TeamsTab extends LitElement {
             kind: 'secondary',
             appearance: 'outlined',
             onClick: () =>
-              postMessage(SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET),
+              postToHost({
+                command: SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET,
+              }),
           }),
         })}
 

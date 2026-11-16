@@ -20,7 +20,6 @@ import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import './TexraDiffView';
 import { extractErrorMessage } from '@texra-ai/harness/schemas';
-import { hostBridge, postMessage } from '@texra/shared/hostBridge';
 import {
   PersistedState,
   type KeyValueStore,
@@ -80,7 +79,7 @@ import { createLogsPane } from './logsPane';
 import { createProjectWorkbench } from './projectWorkbench';
 import { injectXtermStyles } from './terminalPane';
 import { createProjectRail } from './projectRail';
-import { createMessageRoutes } from './messageRoutes';
+import { createMessageRoutes, postToMain } from './messageRoutes';
 
 const foundAppRoot = document.querySelector<HTMLElement>('#app');
 
@@ -363,7 +362,9 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
             variant: 'brand',
             className: 'btn-primary',
             onClick: () =>
-              postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
+              postToMain({
+                command: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
+              }),
           })}
         </div>
       </section>
@@ -392,7 +393,7 @@ const logsController = createLogsPane();
 const logsPane = logsController.element;
 
 const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
-  hostBridge.postMessage(message),
+  postToMain(message),
 );
 const confirmDiscard = createDiscardChangesDialog(appRoot);
 applyTheme();
@@ -556,9 +557,14 @@ function shellTemplate(): TemplateResult {
               onNewTask: returnToLauncher,
               onOpenCommands: () => palette.open(),
               onOpenFolder: () =>
-                postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
+                postToMain({
+                  command: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
+                }),
               onOpenRecent: (root) =>
-                postMessage(DESKTOP_PROJECT_COMMANDS.OPEN_RECENT, { root }),
+                postToMain({
+                  command: DESKTOP_PROJECT_COMMANDS.OPEN_RECENT,
+                  root,
+                }),
               onSelectProject: selectProject,
               onProjectAction: (key, action) => {
                 if (action !== 'rename')
@@ -670,13 +676,13 @@ const desktopRendererCommandActions: DesktopCommandActions = {
   openWorkbench: (kind) => currentWorkbench().workbench.openKind(kind),
   showSettings: settingsDialog.open,
   openDesktopDocs: () => {
-    postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS);
+    postToMain({ command: DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS });
   },
   openLogFolder: () => {
-    postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER);
+    postToMain({ command: DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER });
   },
   openWorkspaceFolder: () => {
-    postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER);
+    postToMain({ command: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER });
   },
   saveFile: () => {
     currentWorkbench().saveActiveEditor();
@@ -909,7 +915,7 @@ appRoot.addEventListener('composer-submit', (event) => {
 // The projects list arrives in reply; each project's session subscribes as it
 // opens, and the file tree refreshes when the list names the project this
 // window shows.
-postMessage(DESKTOP_PROJECT_COMMANDS.REQUEST_PROJECTS);
+postToMain({ command: DESKTOP_PROJECT_COMMANDS.REQUEST_PROJECTS });
 document.body.dataset.desktopReady = 'true';
 
 // Sole owner of "the workspace has unsaved editor changes": the main process

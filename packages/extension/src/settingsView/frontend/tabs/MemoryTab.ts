@@ -5,7 +5,7 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postMessage } from '@texra/shared/hostBridge';
+import { postToHost } from '@settingsView/frontend/messageDispatcher';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
@@ -56,7 +56,8 @@ export class MemoryTab extends SignalWatcher(LitElement) {
             text: 'Refresh memories',
             kind: 'secondary',
             appearance: 'outlined',
-            onClick: () => postMessage(SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA),
+            onClick: () =>
+              postToHost({ command: SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA }),
           })}
           ${renderLabeledActionButton({
             icon: 'folder-open',
@@ -64,7 +65,9 @@ export class MemoryTab extends SignalWatcher(LitElement) {
             kind: 'secondary',
             appearance: 'outlined',
             onClick: () =>
-              postMessage(SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER),
+              postToHost({
+                command: SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER,
+              }),
           })}
         </div>
         ${renderStateSettingToggleRow(MEMORY_ENABLED_SETTING)}
