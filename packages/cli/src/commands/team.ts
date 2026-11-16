@@ -40,7 +40,7 @@ import {
   optString,
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
-import { executeCliToolUseConfig } from '../runtime/headless/executeCli';
+import { executeCliConfig } from '../runtime/headless/executeCli';
 import { toolUseResultText } from '../runtime/headless/terminalStatus';
 import { withExpandedRunInputs } from '../runtime/headless/documentTaskInputs';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
@@ -216,7 +216,7 @@ const runTeam = Effect.fn('runTeam')(function* (
         delegationAgentScope: [...plan.agentKeys],
       };
 
-      const run = yield* executeCliToolUseConfig(config, context, {
+      const run = yield* executeCliConfig(config, context, {
         services,
         recoveryInputIsDurable: stdinInputPath === undefined,
       });

@@ -15,6 +15,7 @@ import {
   type AgentConfigPayload,
   generateRunId,
   ensureError,
+  isTaskConfig,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import {
@@ -71,10 +72,10 @@ export interface CliExecuteOptions {
     readonly session: Effect.Effect<LocalSession, SessionOpenError>;
     readonly shutdownScope: Scope.Scope;
   };
-  /** Called once when a shutdown left the run without an end, if its rows
-   *  say it can be resumed (`readResumable`): part of the finalization a
-   *  shutdown waits for within its deadline. */
-  readonly onInterruptedRunFinalized?: (runId: RunId) => Effect.Effect<void>;
+  /** False when invocation-owned temporary inputs will not survive exit:
+   *  a shutdown that leaves the run resumable then prints no resume
+   *  command, as nothing could resume it. */
+  readonly recoveryInputIsDurable: boolean;
   /** What the command does with the run once its end is committed (a
    *  document task's output copy and result record), with its committed
    *  outcome: part of the finalization a shutdown waits for, so a signal
@@ -89,45 +90,13 @@ type CliConfigExecuteResult =
   | {
       readonly ok: true;
       readonly result: CliRunResult;
+      /** The exit code the run's outcome maps to. */
+      readonly exitCode: CliExitCode;
     }
   | {
       readonly ok: false;
       readonly exitCode: CliExitCode;
     };
-
-/** A tool-use run (`texra run` on an agent with no task, `texra team run`):
- *  one model/tool cycle, with the session resume hint on an interrupt. */
-export const executeCliToolUseConfig = Effect.fn('executeCliToolUseConfig')(
-  function* (
-    config: AgentConfigPayload,
-    runContext: CliContext,
-    options: {
-      readonly services: CliExecuteOptions['services'];
-      /** False when invocation-owned temporary inputs will not survive exit. */
-      readonly recoveryInputIsDurable: boolean;
-    },
-  ) {
-    const recoveryProcessCwd = tryReadCliCwd();
-    const workingDirectory = config.workingDirectory || runContext.cwd;
-    const run = yield* executeCliConfig(config, runContext, {
-      services: options.services,
-      onInterruptedRunFinalized: options.recoveryInputIsDurable
-        ? (runId) =>
-            writeTextStderrAndWait(
-              formatInterruptedResumeHint(
-                runContext,
-                runId,
-                'session',
-                workingDirectory,
-                recoveryProcessCwd,
-              ),
-            )
-        : undefined,
-    });
-    if (!run.ok) return run;
-    return { ...run, exitCode: runOutcomeExitCode(run.result.outcome) };
-  },
-);
 
 /** How a headless run enters its session: `texra resume`'s resume of the
  *  persisted run (a refusal is the caller's usage exit), or a fresh start
@@ -186,6 +155,8 @@ export const executeCliConfig: (
     runContext: CliContext,
     options: CliExecuteOptions,
   ) {
+    // Read before the run: the launch directory may be gone by its end.
+    const recoveryProcessCwd = tryReadCliCwd();
     const parsed = yield* Effect.result(decodeLaunchConfig(config));
     if (Result.isFailure(parsed)) {
       writeTextStderr(parsed.failure.reason);
@@ -388,14 +359,21 @@ export const executeCliConfig: (
     const finalization = yield* Effect.result(
       Effect.gen(function* () {
         // A run the shutdown left: its committed rows say whether it can be
-        // resumed.
-        const onFinalized = options.onInterruptedRunFinalized;
+        // resumed, and the resume command is said on stderr.
         if (
           interrupted &&
-          onFinalized !== undefined &&
+          options.recoveryInputIsDurable &&
           (yield* session.records(launchRunId).readResumable)
         )
-          yield* onFinalized(launchRunId);
+          yield* writeTextStderrAndWait(
+            formatInterruptedResumeHint(
+              runContext,
+              launchRunId,
+              isTaskConfig(request.config) ? 'task' : 'session',
+              config.workingDirectory || runContext.cwd,
+              recoveryProcessCwd,
+            ),
+          );
         // A failed run's end reaches the host through the session's
         // presenter, which `settled` waits for: the presentation host stays
         // attached until it has.
@@ -433,7 +411,10 @@ export const executeCliConfig: (
     }
 
     yield* detachPresentation;
-    return runResult;
+    return {
+      ...runResult,
+      exitCode: runOutcomeExitCode(runResult.result.outcome),
+    };
   },
   Effect.catchCause((cause) => Effect.fail(ensureError(cause))),
 );

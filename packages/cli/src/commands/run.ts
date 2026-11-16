@@ -23,13 +23,8 @@ import {
 } from '../runtime/platform/cliContext';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import {
-  formatInterruptedResumeHint,
-  tryReadCliCwd,
-} from '../runtime/headless/interruptedResumeHint';
-import {
   writeErrorStderr,
   writeTextStderr,
-  writeTextStderrAndWait,
 } from '../runtime/platform/logSinks';
 import { selectCliRunModel } from '../runtime/models/runModel';
 import {
@@ -53,7 +48,6 @@ import {
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import {
   executeCliConfig,
-  executeCliToolUseConfig,
   type CliExecuteOptions,
 } from '../runtime/headless/executeCli';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
@@ -306,7 +300,7 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
         workingDirectory: context.cwd,
       };
 
-      const run = yield* executeCliToolUseConfig(config, context, {
+      const run = yield* executeCliConfig(config, context, {
         services,
         recoveryInputIsDurable: stdinInputPath === undefined,
       });
@@ -349,22 +343,10 @@ export const executeCliRun = Effect.fn('executeCliRun')(function* (
   // writes; never take the destinations a second time as call options.
   const output = resumeDocumentTaskOutputFile(config);
   const outputDir = resumeDocumentTaskOutputDirectory(config);
-  const recoveryProcessCwd = tryReadCliCwd();
   const run = yield* executeCliConfig(config, runContext, {
     services: options.services,
     runId: options.runId,
-    onInterruptedRunFinalized: options.recoveryInputIsDurable
-      ? (runId) =>
-          writeTextStderrAndWait(
-            formatInterruptedResumeHint(
-              runContext,
-              runId,
-              'workflow',
-              config.workingDirectory || runContext.cwd,
-              recoveryProcessCwd,
-            ),
-          )
-      : undefined,
+    recoveryInputIsDurable: options.recoveryInputIsDurable,
     // The run's output is published after its end commits, gated on that
     // committed outcome (`resolveDocumentTaskOutput` copies only a completed
     // run's): output that cannot be written fails this command, never the
