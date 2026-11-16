@@ -30,11 +30,11 @@ const bannerFrameStyles: CSSResult = css`
     /* Full-sentence reading text, so it takes the ≥4.5:1 token rather than
        the 3:1 non-text --color-text-muted. */
     color: var(--wa-color-text-quiet);
-    line-height: var(--line-height-relaxed, 1.5);
+    line-height: var(--line-height-relaxed);
   }
 
   .banner-row strong {
-    font-weight: var(--font-weight-semibold, 600);
+    font-weight: var(--font-weight-semibold);
     letter-spacing: -0.005em;
   }
 

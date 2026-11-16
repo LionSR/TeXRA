@@ -113,7 +113,7 @@ const busyIconButtonStyles: CSSResult = css`
     position: absolute;
     inset: 0;
     margin: auto;
-    font-size: var(--font-size-icon, 1em);
+    font-size: var(--font-size-icon);
     pointer-events: none;
   }
 `;

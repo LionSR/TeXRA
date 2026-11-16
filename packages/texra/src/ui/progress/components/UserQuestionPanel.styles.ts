@@ -2,7 +2,7 @@
 
 import { css, type CSSResult } from 'lit';
 
-import { sp, visuallyHiddenDeclarations } from '@ui/styles';
+import { visuallyHiddenDeclarations } from '@ui/styles';
 
 export const userQuestionPanelStyles: CSSResult = css`
   /* The questions are the card; the dock scrolls rather than this body. */
@@ -14,16 +14,16 @@ export const userQuestionPanelStyles: CSSResult = css`
   .user-question-request__questions {
     display: flex;
     flex-direction: column;
-    gap: ${sp.medium};
+    gap: var(--wa-space-xs);
   }
 
   .user-question-request__question {
     display: flex;
     flex-direction: column;
-    gap: ${sp.small};
+    gap: var(--wa-space-2xs);
     min-inline-size: 0;
     margin: 0;
-    padding: ${sp.medium};
+    padding: var(--wa-space-xs);
     border: var(--border-thin) solid var(--wa-color-surface-border);
     border-radius: var(--border-radius);
     background: var(--wa-color-surface-lowered);
@@ -42,7 +42,7 @@ export const userQuestionPanelStyles: CSSResult = css`
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
-    gap: ${sp.small};
+    gap: var(--wa-space-2xs);
     max-inline-size: 100%;
   }
 
@@ -56,7 +56,7 @@ export const userQuestionPanelStyles: CSSResult = css`
   .user-question-request__options {
     display: flex;
     flex-direction: column;
-    gap: ${sp.small};
+    gap: var(--wa-space-2xs);
   }
 
   /* wa-radio-group has no exposed "radios" CSS part in the pinned
@@ -66,7 +66,7 @@ export const userQuestionPanelStyles: CSSResult = css`
   wa-radio-group {
     display: flex;
     flex-direction: column;
-    gap: ${sp.small};
+    gap: var(--wa-space-2xs);
   }
 
   /* Web Awesome requires its label API to name the internal radio group. Keep
@@ -85,7 +85,7 @@ export const userQuestionPanelStyles: CSSResult = css`
   .user-question-request__option::part(label) {
     display: flex;
     flex-direction: column;
-    gap: ${sp.tiny};
+    gap: var(--wa-space-3xs);
     min-inline-size: 0;
     overflow-wrap: anywhere;
   }

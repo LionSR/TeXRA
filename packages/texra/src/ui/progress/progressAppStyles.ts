@@ -58,7 +58,7 @@ export const progressAppStyles = css`
   .shell-header {
     display: flex;
     flex: 0 0 auto;
-    min-height: var(--height-header, 38px);
+    min-height: var(--height-header);
     border-bottom: var(--border-thin) solid var(--color-border);
   }
 

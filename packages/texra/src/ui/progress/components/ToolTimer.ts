@@ -22,13 +22,13 @@ export class ToolTimer extends LitElement {
       display: inline;
     }
     .timer {
-      font-size: var(--font-size-sm, 11px);
-      opacity: var(--opacity-normal, 0.85);
+      font-size: var(--font-size-sm);
+      opacity: var(--opacity-normal);
       margin-inline-start: var(--wa-space-xs, 8px);
       font-variant-numeric: tabular-nums;
     }
     .timer-limit {
-      opacity: var(--opacity-subtle, 0.7);
+      opacity: var(--opacity-subtle);
     }
   `;
 

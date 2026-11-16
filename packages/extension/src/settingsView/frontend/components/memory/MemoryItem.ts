@@ -57,7 +57,7 @@ export class MemoryItem extends LitElement {
 
       .memory-preview {
         font-size: var(--font-size-sm);
-        line-height: var(--line-height-relaxed, 1.5);
+        line-height: var(--line-height-relaxed);
         padding: var(--wa-space-3xs) var(--wa-space-2xs);
         border-radius: var(--border-radius);
         margin: 0;
