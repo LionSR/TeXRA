@@ -176,21 +176,20 @@ export async function runCli(
     return { exitCode: CliExitCode.Usage };
   }
 
-  // Bare `texra`, global flags at most: an interactive chat where `texra
-  // chat` would run, usage otherwise. The flags follow the name, as
-  // `reorderGlobalFlags` places them.
-  if (firstPositionalIndex(rawArgs) === undefined) {
-    const globalArgs = pickGlobalArgs(
-      parseArgs(rawArgs, AGENT_RUN_GLOBAL_ARGS),
-      rawArgs,
-    );
-    rawArgs = [
-      isInteractiveCli(globalArgs, readCliAmbientState()) ? 'chat' : 'help',
-      ...rawArgs,
-    ];
-  }
-
   try {
+    // Bare `texra`, global flags at most: an interactive chat where `texra
+    // chat` would run, usage otherwise. The flags follow the name, as
+    // `reorderGlobalFlags` places them.
+    if (firstPositionalIndex(rawArgs) === undefined) {
+      const globalArgs = pickGlobalArgs(
+        parseArgs(rawArgs, AGENT_RUN_GLOBAL_ARGS),
+        rawArgs,
+      );
+      rawArgs = [
+        isInteractiveCli(globalArgs, readCliAmbientState()) ? 'chat' : 'help',
+        ...rawArgs,
+      ];
+    }
     return { exitCode: await runCommandForExitCode(rootCommand, rawArgs) };
   } catch (error) {
     if (error instanceof CliUsageError) {
