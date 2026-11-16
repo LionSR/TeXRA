@@ -18,8 +18,8 @@ const QUICKJS_WASM_VIRTUAL_ID = '\0texra-quickjs-wasm';
 const quickJsWasmPath = require.resolve(QUICKJS_WASM_ID);
 // Full Windows shards intermittently exceed 10s in unrelated suites; retain the
 // tighter timeout elsewhere so genuine local/Linux hangs fail fast. Windows CI
-// is opt-in (see the `test` job in .github/workflows/ci.yml), so this branch
-// still applies to on-demand runs and to local runs on Windows.
+// runs nightly and on dispatch (the `test` job in .github/workflows/ci.yml),
+// and this branch also applies to local runs on Windows.
 const kernelTimeoutMs = process.platform === 'win32' ? 20_000 : 10_000;
 
 // Suites are tiered by what they reach, and pay only for that.
