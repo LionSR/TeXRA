@@ -40,13 +40,11 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 // Local imports - shared packaging invariants
 import {
-  readJson as readJsonSync,
   requiredMonacoWorkers,
   vscodeRuntimeImportPattern,
 } from './extension-package-utils.mjs';
 import { esmCjsGlobalsBanner } from './esm-cjs-globals-banner.mjs';
 import { stopServices } from './texra-services.mjs';
-import { walkFiles } from './walkFiles.mjs';
 
 // Local imports - smoke process helpers
 import {
@@ -134,79 +132,12 @@ async function verifyElectronBinary() {
 // Stage: build-artifacts
 // ---------------------------------------------------------------------------
 
-function fileExists(filePath) {
-  return statSync(filePath, { throwIfNoEntry: false })?.isFile() ?? false;
-}
-
 async function verifyBuildArtifacts() {
-  const label = 'Desktop build artifact check';
-  const failures = [];
-
-  const packageJson = readJsonSync(join(desktopRoot, 'package.json'));
-  const manifestMain = join(desktopRoot, packageJson.main);
-  const requiredFiles = [
-    manifestMain,
-    join(desktopRoot, 'dist', 'preload', 'index.cjs'),
-    join(desktopRoot, 'dist', 'renderer', 'index.html'),
-  ];
-
-  for (const filePath of requiredFiles) {
-    if (!fileExists(filePath)) {
-      failures.push(
-        `Missing desktop build artifact: ${repoRelative(filePath)}`,
-      );
-    }
-  }
-
-  const rendererAssetsDir = join(desktopRoot, 'dist', 'renderer', 'assets');
-  const rendererAssets = (await exists(rendererAssetsDir))
-    ? walkFiles(rendererAssetsDir)
-        .map((entry) => entry.absolutePath)
-        .sort()
-    : [];
-  if (!rendererAssets.some((filePath) => filePath.endsWith('.js'))) {
-    failures.push('Desktop renderer build did not emit a JavaScript asset.');
-  }
-  if (!rendererAssets.some((filePath) => filePath.endsWith('.css'))) {
-    failures.push('Desktop renderer build did not emit a CSS asset.');
-  }
-  for (const workerName of requiredMonacoWorkers) {
-    if (
-      !rendererAssets.some((filePath) =>
-        basename(filePath).includes(workerName),
-      )
-    ) {
-      failures.push(
-        `Desktop renderer build did not emit Monaco worker asset: ${workerName}`,
-      );
-    }
-  }
-  if (
-    fileExists(manifestMain) &&
-    vscodeRuntimeImportPattern.test(await readFile(manifestMain, 'utf8'))
-  ) {
-    failures.push(
-      'Desktop main bundle contains a runtime import of the VS Code extension host module.',
-    );
-  }
-
-  if (failures.length > 0) return { label, failures };
-
-  const artifactList = [
-    ...requiredFiles,
-    ...rendererAssets.filter(
-      (filePath) => filePath.endsWith('.js') || filePath.endsWith('.css'),
-    ),
-  ].map(repoRelative);
-
-  return {
-    label,
-    summary: [
-      'Desktop build artifact check passed:',
-      ...artifactList.map((artifact) => `- ${artifact}`),
-      '- Monaco worker assets are present',
-    ],
-  };
+  return runChecks(
+    'Desktop build artifact check',
+    createDirectoryAppReader(desktopRoot),
+    buildChecks,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -787,7 +718,7 @@ async function checkNoVscodeRuntimeImport(app, failures) {
     const mainBundle = await app.readText(bundlePath);
     if (!vscodeRuntimeImportPattern.test(mainBundle)) continue;
     failures.push(
-      `Packaged desktop main bundle contains a runtime import of the VS Code extension host module: ${bundlePath}`,
+      `Desktop main bundle contains a runtime import of the VS Code extension host module: ${bundlePath}`,
     );
   }
 }
@@ -1039,19 +970,17 @@ async function checkMonacoWorkerAssets(app, failures) {
   for (const workerName of requiredMonacoWorkers) {
     if (!assets.some((asset) => asset.includes(workerName))) {
       failures.push(
-        `Packaged desktop app is missing Monaco worker asset: dist/renderer/assets/${workerName}*.js`,
+        `Desktop app is missing Monaco worker asset: dist/renderer/assets/${workerName}*.js`,
       );
     }
   }
 }
 
 async function checkMacIcon(app, failures) {
-  if (!app.label.includes('.app/Contents/Resources/app.asar')) return false;
-
   const appIconPath = 'icon.icns';
   if (!(await app.exists(appIconPath))) {
     failures.push(`Packaged macOS app is missing TeXRA icon: ${appIconPath}`);
-    return true;
+    return;
   }
 
   const [expectedIcon, actualIcon] = await Promise.all([
@@ -1063,14 +992,11 @@ async function checkMacIcon(app, failures) {
       `Packaged macOS app icon does not match source icon: ${appIconPath}`,
     );
   }
-  return true;
 }
 
 // node-pty starts every macOS terminal through `spawn-helper`, and its
 // published package ships that file without the executable bit.
 async function checkMacPtyHelpers(app, failures) {
-  if (!app.label.includes('.app/Contents/Resources/app.asar')) return;
-
   const prebuilds = 'app.asar.unpacked/node_modules/node-pty/prebuilds';
   const helpers = (await app.listDir(prebuilds))
     .filter((platformArch) => platformArch.startsWith('darwin-'))
@@ -1083,6 +1009,115 @@ async function checkMacPtyHelpers(app, failures) {
       failures.push(`Packaged node-pty helper is not executable: ${helper}`);
     }
   }
+}
+
+/**
+ * What a desktop build must contain, as named checks over an app reader:
+ * the build stage runs them over `packages/desktop`, the package stage over
+ * the packaged app, then its own. A check whose `applies` is false for the
+ * app is skipped and left out of the summary.
+ */
+const buildChecks = [
+  {
+    name: 'package.json main is ./dist/main/index.js',
+    async run(app, failures) {
+      const { main } = await app.readJson('package.json');
+      if (main !== './dist/main/index.js')
+        failures.push(
+          `The app's main must be ./dist/main/index.js, got ${main}`,
+        );
+    },
+  },
+  {
+    name: 'dist/main/index.js, dist/preload/index.cjs, dist/renderer/index.html',
+    async run(app, failures) {
+      await checkExists(app, 'dist/main/index.js', 'main bundle', failures);
+      await checkExists(
+        app,
+        'dist/preload/index.cjs',
+        'preload bundle',
+        failures,
+      );
+      await checkExists(
+        app,
+        'dist/renderer/index.html',
+        'renderer HTML',
+        failures,
+      );
+    },
+  },
+  {
+    name: 'dist/renderer/assets: a JavaScript and a CSS asset',
+    async run(app, failures) {
+      const assets = await app.listDir('dist/renderer/assets');
+      if (!assets.some((asset) => asset.endsWith('.js')))
+        failures.push('No renderer JavaScript asset found');
+      if (!assets.some((asset) => asset.endsWith('.css')))
+        failures.push('No renderer CSS asset found');
+    },
+  },
+  { name: 'Monaco worker assets', run: checkMonacoWorkerAssets },
+  {
+    name: 'no VS Code extension host runtime import',
+    run: checkNoVscodeRuntimeImport,
+  },
+];
+
+const isMacApp = (app) =>
+  app.label.includes('.app/Contents/Resources/app.asar');
+
+const packageOnlyChecks = [
+  {
+    name: 'package.json runtime dependencies and their node_modules packages',
+    async run(app, failures) {
+      await checkRuntimeDependencies(
+        app,
+        await app.readJson('package.json'),
+        failures,
+      );
+    },
+  },
+  {
+    name: 'resources/agents, skills, plugins, traceViewer and serve/texra-serve.mjs',
+    run: checkBundledResources,
+  },
+  { name: 'macOS app icon', applies: isMacApp, run: checkMacIcon },
+  {
+    name: 'macOS node-pty spawn-helper is executable',
+    applies: isMacApp,
+    run: checkMacPtyHelpers,
+  },
+  {
+    name: 'no bundled Codex or Claude Code CLI payload',
+    run: checkNoBundledNativeCliPayload,
+  },
+  {
+    name: 'desktop main dynamic require shim',
+    run: checkDesktopMainDynamicRequireShim,
+  },
+  {
+    name: 'desktop startup import graph excludes provider SDKs',
+    run: checkDesktopStartupBundles,
+  },
+];
+
+/** Run `checks` over `app`: the failures, or the names of what passed. */
+async function runChecks(label, app, checks) {
+  const failures = [];
+  const ran = [];
+  for (const check of checks) {
+    if (check.applies && !check.applies(app)) continue;
+    await check.run(app, failures);
+    ran.push(check.name);
+  }
+  if (failures.length > 0) return { label, failures };
+  return {
+    label,
+    summary: [
+      `${label} passed for ${app.label}`,
+      ...ran.map((name) => `- ${name}`),
+    ],
+  };
 }
 
 async function verifyPackage() {
@@ -1100,57 +1135,7 @@ async function verifyPackage() {
     };
   }
 
-  const failures = [];
-  const appPackageJson = await app.readJson('package.json');
-
-  if (appPackageJson.main !== './dist/main/index.js') {
-    failures.push(
-      `Packaged app main must be ./dist/main/index.js, got ${appPackageJson.main}`,
-    );
-  }
-  await checkRuntimeDependencies(app, appPackageJson, failures);
-  await checkExists(app, 'dist/main/index.js', 'main bundle', failures);
-  await checkExists(app, 'dist/preload/index.cjs', 'preload bundle', failures);
-  await checkExists(app, 'dist/renderer/index.html', 'renderer HTML', failures);
-  await checkBundledResources(app, failures);
-  await checkMonacoWorkerAssets(app, failures);
-  const checkedMacIcon = await checkMacIcon(app, failures);
-  await checkMacPtyHelpers(app, failures);
-  await checkNoBundledNativeCliPayload(app, failures);
-  await checkNoVscodeRuntimeImport(app, failures);
-  await checkDesktopMainDynamicRequireShim(app, failures);
-  await checkDesktopStartupBundles(app, failures);
-
-  const assets = await app.listDir('dist/renderer/assets');
-  if (!assets.some((asset) => asset.endsWith('.js'))) {
-    failures.push('No renderer JavaScript asset found');
-  }
-  if (!assets.some((asset) => asset.endsWith('.css'))) {
-    failures.push('No renderer CSS asset found');
-  }
-
-  if (failures.length > 0) return { label, failures };
-
-  const summary = [
-    `Desktop package check passed for ${app.label}`,
-    '- dist/main/index.js',
-    '- dist/preload/index.cjs',
-    '- dist/renderer/index.html',
-    '- dist/renderer/assets/*.js',
-    '- dist/renderer/assets/*.css',
-    '- dist/renderer/assets Monaco worker chunks',
-    '- resources/agents, resources/skills, and resources/plugins',
-    '- resources/traceViewer/index.html',
-    '- package.json runtime dependencies',
-    '- node_modules runtime dependency packages',
-    '- no bundled Codex or Claude Code CLI payload',
-    '- no VS Code extension host runtime import',
-    '- desktop main dynamic require shim',
-    '- desktop startup import graph excludes provider SDKs',
-  ];
-  if (checkedMacIcon) summary.splice(7, 0, '- macOS app icon');
-
-  return { label, summary };
+  return runChecks(label, app, [...buildChecks, ...packageOnlyChecks]);
 }
 
 // ---------------------------------------------------------------------------
