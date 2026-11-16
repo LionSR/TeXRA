@@ -3,11 +3,11 @@
  * record they change, unchanged, as their `detail`: a `RuntimeCommand` for
  * the session runtime, a `HostCommand` for a host capability, and a
  * `SurfaceAction` for the surface the root owns. The fourth, `submit`, is
- * the composer's Send: the root resolves what it sends (a follow-up to the
- * selected stream, or a launch) from the surface, so the button and the
- * run accelerator share one decision. The root installs one listener per
- * event; nothing translates in between, and
- * a harness that assigns fixtures simply ignores them.
+ * the composer's Send: the surfaces resolve what it sends (a follow-up to
+ * the selected stream, or a launch), so the button and the run accelerator
+ * share one decision. `SessionSurfaces.listen` installs one listener per
+ * event on a root; nothing translates in between, and a harness that
+ * assigns fixtures simply ignores them.
  */
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { SurfaceAction } from '@texra/shared/session/surface';

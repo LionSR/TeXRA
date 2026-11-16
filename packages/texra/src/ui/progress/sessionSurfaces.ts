@@ -96,14 +96,18 @@ export interface SessionSurfaces {
   get(key: string): SessionSurface | undefined;
   /** Apply a surface action to one session's surface. */
   act(key: string, action: SurfaceAction): void;
-  runtimeRequest(key: string, request: RuntimeCommand): void;
-  hostRequest(key: string, request: HostCommand): void;
   /** A host request answered to its caller, not presented on the surface. */
   answer: WebviewTransport['hostRequest'];
-  /** The composer's Send for the resolved selection: a follow-up to the
-   *  selected run, else a launch from the launcher's instruction. The
-   *  button and the run accelerator both land here. */
-  submit(key: string): void;
+  /**
+   * Send the shell's events (`uiEvents.ts`) dispatched under `root` to the
+   * session `sessionOf` names: a runtime or host request, a surface
+   * action, or the composer's Send (a follow-up to the selected run, else a
+   * launch from the launcher's instruction). Returns the removal.
+   */
+  listen(
+    root: HTMLElement,
+    sessionOf: (event: Event) => string | undefined,
+  ): () => void;
   /** Fires after any session's view, surface, or host changed. */
   onChange(listener: () => void): () => void;
   /** Record the run the `shown` session shows as seen after every change
@@ -629,18 +633,38 @@ export function createSessionSurfaces(options: {
       const entry = held.get(key);
       if (entry) act(entry, action);
     },
-    runtimeRequest(key, request) {
-      const entry = held.get(key);
-      if (entry) runtimeRequestFor(entry, request);
-    },
     answer: transport.hostRequest,
-    hostRequest(key, hostRequest) {
-      const entry = held.get(key);
-      if (entry) hostRequestFor(entry, hostRequest);
-    },
-    submit(key) {
-      const entry = held.get(key);
-      if (entry) submit(entry);
+    listen(root, sessionOf) {
+      const entryOf = (event: Event) => {
+        const key = sessionOf(event);
+        return key === undefined ? undefined : held.get(key);
+      };
+      const onRuntime = (event: CustomEvent<RuntimeCommand>) => {
+        const entry = entryOf(event);
+        if (entry) runtimeRequestFor(entry, event.detail);
+      };
+      const onHost = (event: CustomEvent<HostCommand>) => {
+        const entry = entryOf(event);
+        if (entry) hostRequestFor(entry, event.detail);
+      };
+      const onSurface = (event: CustomEvent<SurfaceAction>) => {
+        const entry = entryOf(event);
+        if (entry) act(entry, event.detail);
+      };
+      const onSubmit = (event: Event) => {
+        const entry = entryOf(event);
+        if (entry) submit(entry);
+      };
+      root.addEventListener('runtime-request', onRuntime);
+      root.addEventListener('host-request', onHost);
+      root.addEventListener('surface-action', onSurface);
+      root.addEventListener('composer-submit', onSubmit);
+      return () => {
+        root.removeEventListener('runtime-request', onRuntime);
+        root.removeEventListener('host-request', onHost);
+        root.removeEventListener('surface-action', onSurface);
+        root.removeEventListener('composer-submit', onSubmit);
+      };
     },
     onChange(listener) {
       listeners.add(listener);
