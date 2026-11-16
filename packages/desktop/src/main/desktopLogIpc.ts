@@ -21,7 +21,6 @@ const LOG_FOLLOW_QUIET_MS = 300;
 class DesktopLogActionFailed extends Schema.TaggedError<DesktopLogActionFailed>()(
   'DesktopLogActionFailed',
   {
-    action: Schema.Literals(['copy', 'export']),
     message: Schema.String,
     cause: Schema.Defect(),
   },
@@ -78,8 +77,7 @@ export function createDesktopLogIpc(
       try: () => options.copyLog(text),
       catch: (cause) =>
         new DesktopLogActionFailed({
-          action: 'copy',
-          message: toErrorMessage(cause),
+          message: `The log could not be copied: ${toErrorMessage(cause)}`,
           cause,
         }),
     });
@@ -95,7 +93,6 @@ export function createDesktopLogIpc(
         }),
       catch: (cause) =>
         new DesktopLogActionFailed({
-          action: 'export',
           message: `The save dialog could not be shown: ${toErrorMessage(cause)}`,
           cause,
         }),
@@ -109,7 +106,6 @@ export function createDesktopLogIpc(
               Effect.mapError(
                 (error) =>
                   new DesktopLogActionFailed({
-                    action: 'export',
                     message: `The log could not be written to ${filePath}: ${toErrorMessage(error.reason.cause ?? error)}`,
                     cause: error,
                   }),

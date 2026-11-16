@@ -12,12 +12,10 @@ import {
   openDesktopProjectRecords,
 } from './desktopProjectRecords.js';
 import {
-  DesktopAttentionPort,
   electronAttentionPort,
   followDesktopAttention,
 } from './desktopAttention.js';
 import {
-  DesktopProjects,
   openDesktopProjectRegistry,
   readRememberedDesktopProjects,
   type DesktopProjectRegistry,
@@ -220,16 +218,14 @@ export const startDesktop = (mainDir: string): void => {
           });
           // For the process lifetime: the fallback project's scope is the
           // last the shutdown releases.
-          yield* followDesktopAttention.pipe(
-            Effect.provideService(DesktopProjects, registry),
-            Effect.provideService(
-              DesktopAttentionPort,
-              electronAttentionPort({
-                window: windows.window,
-                reveal: (key, runId) =>
-                  windows.focus(() => windows.revealRun(key, runId)),
-              }),
-            ),
+          yield* followDesktopAttention(
+            registry,
+            electronAttentionPort({
+              window: windows.window,
+              reveal: (key, runId) =>
+                windows.focus(() => windows.revealRun(key, runId)),
+            }),
+          ).pipe(
             Effect.catchCause((cause) =>
               Effect.logWarning(
                 'The dock badge and notifications stopped following the projects',

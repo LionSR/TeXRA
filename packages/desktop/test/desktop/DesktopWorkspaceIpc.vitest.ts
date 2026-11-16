@@ -39,7 +39,7 @@ const createIpc = Effect.gen(function* () {
       disposeAll: () => {},
     },
     toWindowBounds: (bounds) => bounds,
-    getWorkspacePath: () => workspaceRoot,
+    workspaceRoot,
   });
   yield* Effect.forkScoped(ipc.followFilesWritten, { startImmediately: true });
   return ipc;

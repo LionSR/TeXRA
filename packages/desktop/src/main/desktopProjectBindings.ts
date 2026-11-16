@@ -183,7 +183,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
             height: Math.round(bounds.height * zoom),
           };
         },
-        getWorkspacePath: () => project.root,
+        workspaceRoot: project.root,
       });
       return {
         workspace,

@@ -103,10 +103,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   const logFollowing = yield* FiberHandle.make<void>();
   const initialProject = projects.active();
   const window = yield* openDesktopBrowserWindow({
-    title: getDesktopWindowTitle(
-      initialProject.session,
-      initialProject.root && initialProject.display.name,
-    ),
+    title: getDesktopWindowTitle(initialProject),
     preload: options.layout.preload,
   });
   // The renderer's channels exist before anything can post to them; the
@@ -272,7 +269,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
       promptController.dispose();
       yield* bindings.releaseAll;
       yield* bindings.sync;
-      yield* surface.attach(true);
+      yield* surface.reattach();
     }),
   );
 
@@ -288,10 +285,8 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   // (quit, document reload, window close) asks here and nowhere else.
   bootstrapDesktopWindowLifecycle({
     webContents: window.webContents,
-    workspaceIpc: {
-      disposeRendererResources: () =>
-        spawn(routing(resetForNewDocument), { startImmediately: true }),
-    },
+    onDocumentReloaded: () =>
+      spawn(routing(resetForNewDocument), { startImmediately: true }),
     showDiscardDialog: host.showDiscardDialog,
     isFatalShutdownRequested: isFatalDesktopShutdownRequested,
     clearContinueQuitAfterWindowClose: hooks.cancelPendingQuit,

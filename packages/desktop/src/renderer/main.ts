@@ -59,6 +59,7 @@ import { shellSidebarTemplate, type RailProject } from './desktopShell';
 import {
   initialDesktopShellState,
   openWorkbenchTab,
+  workbenchTabId,
   renameWorkbenchTab,
   setSidebarWidth,
   toggleSidebar,
@@ -737,7 +738,7 @@ const routeMessage = createMessageRoutes({
     // never dismisses another request's preview or an unrelated review.
     const project = projectWorkbenches.get(message.session);
     if (project?.reviewPane.close(message.previewId)) {
-      project.workbench.disposeWorkbenchTab('workbench:review');
+      project.workbench.disposeWorkbenchTab(workbenchTabId('review'));
     }
   },
   'desktop:showPdf': (message) => {

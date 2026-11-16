@@ -70,14 +70,11 @@ interface DesktopWorkspaceIpcOptions {
    */
   toWindowBounds(bounds: DesktopBrowserBounds): DesktopBrowserBounds;
   /**
-   * Root of the project this window shows, and the only workspace root this
-   * handler resolves against — a request names a path relative to the project
-   * it was sent for, not to whichever project happens to be active. An
-   * app-signal listener hears every project's writes, including a run in
-   * another open project; the window's own project is what a re-list decision
-   * compares to.
+   * Root of this binding's project, which every request resolves against;
+   * none for the no-workspace session. The file signal hears every project's
+   * writes, and only this root's re-list the tree.
    */
-  getWorkspacePath(): string | undefined;
+  readonly workspaceRoot: string | undefined;
 }
 
 interface DesktopWorkspaceIpc {
@@ -255,7 +252,7 @@ export function createDesktopWorkspaceIpc(
   const followFilesWritten = onAppSignal(
     'workspaceFilesWritten',
     ({ absolutePaths }) => {
-      const root = options.getWorkspacePath();
+      const root = options.workspaceRoot;
       if (!root) return;
       if (!absolutePaths.some((path) => isPathWithin(root, path))) return;
       post({
@@ -266,7 +263,7 @@ export function createDesktopWorkspaceIpc(
 
   const listDirectory = Effect.fn('desktopWorkspaceIpc.listDirectory')(
     function* (directory: string) {
-      const root = options.getWorkspacePath();
+      const root = options.workspaceRoot;
       if (!root) return [];
 
       // The project tree is a code editor, not the agent input picker. Reuse
@@ -343,7 +340,7 @@ export function createDesktopWorkspaceIpc(
     const fs = yield* FileSystem.FileSystem;
     const absolutePath = yield* isAgentDocumentTarget(path)
       ? resolveAgentDocument(path, false)
-      : resolveWorkspacePath(options.getWorkspacePath(), path);
+      : resolveWorkspacePath(options.workspaceRoot, path);
     const contents = yield* editorText(fs, absolutePath);
     return { kind: 'contents', contents } satisfies HostOutcome;
   });
@@ -362,7 +359,7 @@ export function createDesktopWorkspaceIpc(
       const fs = yield* FileSystem.FileSystem;
       const absolutePath = yield* isAgentDocumentTarget(path)
         ? resolveAgentDocument(path, true)
-        : resolveWorkspaceWritePath(options.getWorkspacePath(), path);
+        : resolveWorkspaceWritePath(options.workspaceRoot, path);
       return yield* Effect.gen(function* () {
         if (base !== null) {
           const onDisk = yield* editorText(fs, absolutePath).pipe(

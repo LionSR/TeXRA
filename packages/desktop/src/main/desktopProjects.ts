@@ -6,7 +6,6 @@
 // the process; the window switches which project it shows.
 
 import {
-  Context,
   Effect,
   Exit,
   FileSystem,
@@ -141,13 +140,6 @@ export interface DesktopProjectRegistry {
    *  no-workspace session. */
   dispose(): Effect.Effect<void>;
 }
-
-/** The open projects, served to the surfaces that follow them (the dock
- *  badge and notifications) by the startup program that opened them. */
-export class DesktopProjects extends Context.Service<
-  DesktopProjects,
-  DesktopProjectRegistry
->()('@texra/desktop/DesktopProjects') {}
 
 /** The folder paths among `candidates`, deduplicated by canonical root, split
  *  three ways: still folders, gone (or no longer a folder), and unreadable
