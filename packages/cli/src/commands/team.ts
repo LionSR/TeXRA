@@ -22,7 +22,6 @@ import {
 import { writeTextStderr } from '../runtime/platform/logSinks';
 import {
   cliTeamListRecord,
-  cliTeamNdjsonRecords,
   formatCliTeamLaunchBlockMessage,
   formatCliTeamInspection,
   formatCliTeamList,
@@ -34,7 +33,7 @@ import { selectCliRunModel } from '../runtime/models/runModel';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
 import { formatTeamRunInstruction } from './_helpers/runInstructions';
-import { emitCliResult } from './_helpers/output';
+import { cliResult, emitCliResult } from './_helpers/output';
 import {
   SKILL_SOURCE_ARGS,
   collectCommonAgentRunFlags,
@@ -98,11 +97,9 @@ const runTeamList = Effect.fn('runTeamList')(function* (
     rootAgentNames: BUILTIN_TEAM_ROOT_AGENT_NAMES,
   });
 
-  yield* emitCliResult({
-    json: plans.map(cliTeamListRecord),
-    ndjson: cliTeamNdjsonRecords(plans),
-    text: formatCliTeamList(plans),
-  });
+  yield* emitCliResult(
+    cliResult('team', plans.map(cliTeamListRecord), formatCliTeamList(plans)),
+  );
 });
 
 const runTeamShow = Effect.fn('runTeamShow')(function* (
@@ -111,11 +108,9 @@ const runTeamShow = Effect.fn('runTeamShow')(function* (
 ) {
   const plan = yield* loadTeamRunPlan({ team: teamIdOrName }, services);
 
-  yield* emitCliResult({
-    json: plan,
-    ndjson: { kind: 'team-inspection', plan },
-    text: formatCliTeamInspection(plan),
-  });
+  yield* emitCliResult(
+    cliResult('team-inspection', plan, formatCliTeamInspection(plan)),
+  );
 });
 
 const runTeam = Effect.fn('runTeam')(function* (

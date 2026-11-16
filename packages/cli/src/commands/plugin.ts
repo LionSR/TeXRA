@@ -29,7 +29,7 @@ import {
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
 import { collectStringFlagValues } from './_helpers/globalArgs';
-import { commandResult, emitCliResult } from './_helpers/output';
+import { cliResult, commandResult, emitCliResult } from './_helpers/output';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
@@ -176,14 +176,13 @@ const pluginInstallCommand = defineCliCommand({
           ),
         ),
         Effect.flatMap((installed) =>
-          emitCliResult({
-            json: installed,
-            ndjson: installed.map((plugin) => ({
-              kind: 'plugin' as const,
-              plugin,
-            })),
-            text: `Installed:\n${formatPluginList(installed)}\nEnable with \`texra plugin enable <name>\`.`,
-          }),
+          emitCliResult(
+            cliResult(
+              'plugin',
+              installed,
+              `Installed:\n${formatPluginList(installed)}\nEnable with \`texra plugin enable <name>\`.`,
+            ),
+          ),
         ),
       ),
     );
@@ -197,14 +196,9 @@ const pluginListCommand = defineCliCommand({
     withPluginEnv((env) =>
       InstalledPlugins.list(env).pipe(
         Effect.flatMap((plugins) =>
-          emitCliResult({
-            json: plugins,
-            ndjson: plugins.map((plugin) => ({
-              kind: 'plugin' as const,
-              plugin,
-            })),
-            text: formatPluginList(plugins),
-          }),
+          emitCliResult(
+            cliResult('plugin', plugins, formatPluginList(plugins)),
+          ),
         ),
       ),
     ),
@@ -254,11 +248,7 @@ const pluginShowCommand = defineCliCommand({
               }),
             );
           return Effect.flatMap(formatPluginShow(plugin), (text) =>
-            emitCliResult({
-              json: plugin,
-              ndjson: { kind: 'plugin' as const, plugin },
-              text,
-            }),
+            emitCliResult(cliResult('plugin', plugin, text)),
           );
         }),
       ),

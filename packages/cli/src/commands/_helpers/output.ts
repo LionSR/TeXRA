@@ -8,7 +8,11 @@ import {
 import { pageStdout } from '@cli/runtime/terminal/pager';
 import { CliInvocation } from '@cli/runtime/platform/cliContext';
 import type { CliOutputFormat } from '@texra/shared/cliOutputFormat';
-import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
+import {
+  CLI_RESULT_FIELD,
+  type CliNdjsonRecord,
+  type CliResultKind,
+} from '@cli/schemas/cliOutput';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
@@ -26,6 +30,24 @@ interface CliResult {
   readonly text: string;
 }
 
+/** A result of a one-field kind: `value` in JSON; in NDJSON, `value` (each
+ *  element of a list, one line each) under the field its kind fixes. */
+export function cliResult(
+  kind: CliResultKind,
+  value: unknown,
+  text: string,
+): CliResult {
+  const field = CLI_RESULT_FIELD[kind];
+  // cast: the field is the one `CLI_RESULT_FIELD` names for `kind`.
+  const line = (payload: unknown) =>
+    ({ kind, [field]: payload }) as CliNdjsonRecord;
+  return {
+    json: value,
+    ndjson: Array.isArray(value) ? value.map(line) : line(value),
+    text,
+  };
+}
+
 /** A command's own result record: itself in JSON, a `result` record naming
  *  the command in NDJSON. */
 export const commandResult = (
@@ -41,9 +63,7 @@ export const commandResult = (
 /**
  * Single home for the `json` / `ndjson` / `text` switch every headless command
  * repeats. Pass the already-formatted value for each format; the active
- * `outputFormat` selects one. NDJSON accepts a single record or a list, and a
- * `ts` timestamp is stamped on any record that doesn't already carry one (so
- * pre-built record helpers keep their own).
+ * `outputFormat` selects one. NDJSON accepts a single record or a list.
  *
  * Values are eager: a one-shot command renders a single result, so formatting
  * the unused branches is negligible and keeps call sites flat.
@@ -64,16 +84,10 @@ export function writeCliResult(
     return;
   }
   if (outputFormat === 'ndjson') {
-    const ts = new Date().toISOString();
     const records = Array.isArray(result.ndjson)
       ? result.ndjson
       : [result.ndjson];
-    for (const record of records) {
-      // Append `ts` rather than prepending so call sites that put `kind`
-      // first keep it as the first JSON key — line-oriented consumers
-      // (`grep`, `awk`) often anchor on `{"kind":` at the start of each line.
-      writeNdjsonStdout('ts' in record ? record : { ...record, ts });
-    }
+    for (const record of records) writeNdjsonStdout(record);
     return;
   }
   // Skip the write for empty text so list commands print nothing (not a bare

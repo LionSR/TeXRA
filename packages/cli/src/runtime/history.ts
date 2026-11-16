@@ -17,7 +17,6 @@ import {
   listRunGeneratedFiles,
   type RunGeneratedFile,
 } from '@texra-ai/harness/host';
-import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
 import { launchTeamId } from '@texra/agent/teams/teamLaunch';
@@ -354,27 +353,6 @@ export function historyStanding(
 ): string {
   const outcome = entry.outcome ?? 'no outcome';
   return entry.resumable ? `${outcome} (resumable)` : outcome;
-}
-
-export function cliHistoryNdjsonRecords(
-  entries: readonly CliHistoryEntry[],
-): CliNdjsonRecord[] {
-  const ts = new Date().toISOString();
-  return entries.map((entry) => ({
-    kind: 'history-entry',
-    ts,
-    entry,
-  }));
-}
-
-/** `history show`'s NDJSON record. */
-export function cliHistoryDetailNdjsonRecord(
-  details: CliHistoryDetails,
-): CliNdjsonRecord {
-  return {
-    kind: 'history-detail',
-    detail: details,
-  };
 }
 
 export function formatCliHistoryDetailsText(

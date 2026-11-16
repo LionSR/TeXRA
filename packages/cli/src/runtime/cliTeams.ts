@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 
 // Local imports
 import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
-import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
   availableTeamMemberCount,
   teamAvailability,
@@ -105,17 +104,6 @@ export function formatCliTeamInspection(plan: CliTeamRunPlan): string {
     'Missing agents:',
     formatAgentNames(plan.missingAgents),
   ].join('\n');
-}
-
-export function cliTeamNdjsonRecords(
-  plans: readonly CliTeamRunPlan[],
-): CliNdjsonRecord[] {
-  const ts = new Date().toISOString();
-  return plans.map((plan) => ({
-    kind: 'team',
-    ts,
-    preset: cliTeamListRecord(plan),
-  }));
 }
 
 export function formatCliTeamLaunchBlockMessage(

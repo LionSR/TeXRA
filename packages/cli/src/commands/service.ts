@@ -31,7 +31,7 @@ import { CliExitCode } from '../runtime/platform/exitCodes';
 import { writeTextStderr } from '../runtime/platform/logSinks';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { emitCliResult } from './_helpers/output';
+import { cliResult, emitCliResult } from './_helpers/output';
 
 /** How long a service with no project open stays up. */
 const DEFAULT_IDLE_SECONDS = 600;
@@ -167,11 +167,9 @@ function statusText(info: ServiceInfo | null, context: CliContext): string {
 const emitStatus = (info: ServiceInfo | null) =>
   CliInvocation.use(({ context }) => {
     const service = { ...info, online: info !== null };
-    return emitCliResult({
-      json: service,
-      ndjson: { kind: 'service', service },
-      text: statusText(info, context),
-    });
+    return emitCliResult(
+      cliResult('service', service, statusText(info, context)),
+    );
   });
 
 /** Ask the service to stop and wait until it is gone, within

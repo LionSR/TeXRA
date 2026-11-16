@@ -8,8 +8,6 @@ import { formatCliHistoryDeletionSummary } from '@ui/copy/runHistory';
 
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import {
-  cliHistoryDetailNdjsonRecord,
-  cliHistoryNdjsonRecords,
   deleteCliHistory,
   formatCliHistoryDetailsText,
   formatCliHistoryNotFoundText,
@@ -31,7 +29,11 @@ import {
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
-import { emitCliResult, emitPagedCliResult } from './_helpers/output';
+import {
+  cliResult,
+  emitCliResult,
+  emitPagedCliResult,
+} from './_helpers/output';
 import { CliUsageError, type CliContext } from '../runtime/platform/cliContext';
 
 function parseHistoryListLimit(value: string | undefined): number | undefined {
@@ -48,13 +50,15 @@ const runHistoryList = Effect.fn('runHistoryList')(function* (options: {
   const visibleEntries =
     options.limit !== undefined ? entries.slice(0, options.limit) : entries;
 
-  yield* emitPagedCliResult({
-    json: visibleEntries,
-    ndjson: cliHistoryNdjsonRecords(visibleEntries),
-    text: visibleEntries.length
-      ? formatCliHistoryText(visibleEntries)
-      : 'No history yet. Runs appear here after you start an agent.',
-  });
+  yield* emitPagedCliResult(
+    cliResult(
+      'history-entry',
+      visibleEntries,
+      visibleEntries.length
+        ? formatCliHistoryText(visibleEntries)
+        : 'No history yet. Runs appear here after you start an agent.',
+    ),
+  );
 });
 
 const runHistoryShow = Effect.fn('runHistoryShow')(function* (
@@ -74,11 +78,9 @@ const runHistoryShow = Effect.fn('runHistoryShow')(function* (
     return CliExitCode.Usage;
   }
 
-  yield* emitCliResult({
-    json: details,
-    ndjson: cliHistoryDetailNdjsonRecord(details),
-    text: formatCliHistoryDetailsText(details),
-  });
+  yield* emitCliResult(
+    cliResult('history-detail', details, formatCliHistoryDetailsText(details)),
+  );
 });
 
 /**
@@ -225,11 +227,7 @@ const runHistoryDelete = Effect.fn('runHistoryDelete')(function* (
     text = '';
   }
 
-  yield* emitCliResult({
-    json: result,
-    ndjson: { kind: 'history-delete', result },
-    text,
-  });
+  yield* emitCliResult(cliResult('history-delete', result, text));
   return result.deleted === 'all' && result.failed.length > 0
     ? CliExitCode.Usage
     : CliExitCode.Success;

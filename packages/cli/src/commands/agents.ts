@@ -19,7 +19,11 @@ import { cliPlatform } from '../runtime/platform/initPlatform';
 import { writeTextStderr } from '../runtime/platform/logSinks';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { emitCliResult, emitPagedCliResult } from './_helpers/output';
+import {
+  cliResult,
+  emitCliResult,
+  emitPagedCliResult,
+} from './_helpers/output';
 import type { CliContext } from '../runtime/platform/cliContext';
 
 const listAgents = Effect.fn('listAgents')(function* (
@@ -46,17 +50,19 @@ const listAgents = Effect.fn('listAgents')(function* (
     }
   }
 
-  yield* emitPagedCliResult({
-    json: result.agents,
-    ndjson: result.agents.map((agent) => ({ kind: 'agent', agent })),
-    text: formatCliAgentList(result.agents, {
-      tasks: options.tasks === true,
-      showEmptyState:
-        options.includeHidden !== true &&
-        !context.quietLogs &&
-        context.outputFormat === 'text',
-    }),
-  });
+  yield* emitPagedCliResult(
+    cliResult(
+      'agent',
+      result.agents,
+      formatCliAgentList(result.agents, {
+        tasks: options.tasks === true,
+        showEmptyState:
+          options.includeHidden !== true &&
+          !context.quietLogs &&
+          context.outputFormat === 'text',
+      }),
+    ),
+  );
 });
 
 const showAgent = Effect.fn('showAgent')(function* (
@@ -74,11 +80,7 @@ const showAgent = Effect.fn('showAgent')(function* (
     writeTextStderr(formatCliNewerBuiltInNotice(entry.name));
   }
 
-  yield* emitCliResult({
-    json: entry,
-    ndjson: { kind: 'agent', agent: entry },
-    text: formatCliAgentDetails(entry),
-  });
+  yield* emitCliResult(cliResult('agent', entry, formatCliAgentDetails(entry)));
 });
 
 /** The bundled agent a bare name or a bundled `source:name` key names. */
@@ -98,11 +100,7 @@ function emitCopyResult(result: {
   readonly text: string;
 }) {
   const { text, ...copy } = result;
-  return emitCliResult({
-    json: copy,
-    ndjson: { kind: 'agent-copy', copy },
-    text,
-  });
+  return emitCliResult(cliResult('agent-copy', copy, text));
 }
 
 function refuse(message: string) {

@@ -27,7 +27,7 @@ import {
 } from '../runtime/models/modelAccess';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { emitCliResult } from './_helpers/output';
+import { cliResult, emitCliResult } from './_helpers/output';
 
 interface InitAgentOption {
   readonly name: string;
@@ -124,11 +124,9 @@ function emitInitSummary(
     warning,
     next: initNextSteps(warning),
   };
-  return emitCliResult({
-    json: summary,
-    ndjson: { kind: 'init-config', init: summary },
-    text: initTextSummary(summary),
-  });
+  return emitCliResult(
+    cliResult('init-config', summary, initTextSummary(summary)),
+  );
 }
 
 const runInit = Effect.fn('runInit')(function* (

@@ -26,7 +26,11 @@ import {
 } from '../runtime/models/modelAccess';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { emitCliResult, emitPagedCliResult } from './_helpers/output';
+import {
+  cliResult,
+  emitCliResult,
+  emitPagedCliResult,
+} from './_helpers/output';
 import type { CliContext } from '../runtime/platform/cliContext';
 
 /**
@@ -66,13 +70,15 @@ const listModels = Effect.fn('listModels')(function* (
     writeTextStderr(formatNoListableModelsMessage(options));
   }
   const records = listedModels.map(({ model }) => cliModelRecord(model));
-  yield* emitPagedCliResult({
-    json: records,
-    ndjson: records.map((model) => ({ kind: 'model', model })),
-    text: listedModels
-      .map(({ model, status }) => `${model.value}\t${model.label}\t${status}`)
-      .join('\n'),
-  });
+  yield* emitPagedCliResult(
+    cliResult(
+      'model',
+      records,
+      listedModels
+        .map(({ model, status }) => `${model.value}\t${model.label}\t${status}`)
+        .join('\n'),
+    ),
+  );
 });
 
 const showModel = Effect.fn('showModel')(function* (id: string) {
@@ -93,11 +99,9 @@ const showModel = Effect.fn('showModel')(function* (id: string) {
   }
 
   const record = cliModelRecord(entry.model);
-  yield* emitCliResult({
-    json: record,
-    ndjson: { kind: 'model', model: record },
-    text: formatCliModelDetails(entry),
-  });
+  yield* emitCliResult(
+    cliResult('model', record, formatCliModelDetails(entry)),
+  );
 });
 
 const modelsListCommand = defineCliCommand({

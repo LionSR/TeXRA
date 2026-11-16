@@ -249,7 +249,8 @@ export const silentLogSink: HostLogSink = Object.freeze({
  *  it would describe a stream with a hole in it, so none are written. */
 let ndjsonClosed = false;
 
-/** Write one public NDJSON record to stdout, stamped with the contract. */
+/** Write one public NDJSON record to stdout, stamped with the time it is
+ *  written (`ts`) and the contract. */
 export function writeNdjsonStdout(record: CliNdjsonRecord): void {
   if (ndjsonClosed) return;
   const stream = openStream('stdout');
@@ -259,7 +260,7 @@ export function writeNdjsonStdout(record: CliNdjsonRecord): void {
       stream.write(
         // Appended, never prepended: line-oriented consumers anchor on the
         // record's leading `{"kind":`.
-        `${JSON.stringify({ ...record, contract: CLI_NDJSON_CONTRACT })}\n`,
+        `${JSON.stringify({ ...record, ts: new Date().toISOString(), contract: CLI_NDJSON_CONTRACT })}\n`,
         (error) => {
           if (error) closed.stdout = true;
         },
