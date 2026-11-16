@@ -1784,40 +1784,6 @@ type SubmitFollowUpResult =
   | { status: 'failed'; message: string };
 ```
 
-## TemplateInputs
-
-The fixed variables every prompt template may read.
-
-```ts
-type TemplateInputs = typeof TemplateInputsSchema.Type;
-```
-
-## TemplateOpening
-
-What a launch opens from: the template inputs; the names of the skills a
-tool-use run's instruction activated; the attached memories' XML block,
-appended to the system prompt (null when none are attached); and the
-attached memories that could not be read.
-
-```ts
-interface TemplateOpening {
-  readonly inputs: TemplateVars;
-  readonly activated: readonly string[];
-  readonly attachedMemories: string | null;
-  readonly attachedMemoryMisses: AttachedMemoryMiss[];
-}
-```
-
-## TemplateVars
-
-The template-variable map a launch opens with: fixed variables may be
-absent (template rendering keeps `throwOnUndefined` off, so templates
-must tolerate absence). A plugin's tools read it as `opening.inputs`.
-
-```ts
-type TemplateVars = Partial<TemplateInputs>;
-```
-
 ## ToolAvailabilityChecks
 
 How a plugin with an external dependency answers "is it available": one

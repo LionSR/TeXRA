@@ -105,7 +105,6 @@ export function nativeToolTestLayer(
         logger: noopTrace,
         steps: noStep(),
         scope: yield* Effect.scope,
-        opening: null,
         callbacks: {},
         awaitedCalls: Semaphore.makeUnsafe(Number.MAX_SAFE_INTEGER),
         // A root unless the fixture names its parent edge.

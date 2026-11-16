@@ -10,7 +10,7 @@ import {
   getExtractedDocOutputFileName,
   getSafeDocumentRelativePath,
 } from '@texra/utils/files/outputFileUtils';
-import { readFilesAsPromptXml } from '@agent/prompt/promptFilesXml';
+import { readFilesAsPromptXml } from '@texra/tools/documents/promptDocuments';
 
 layer(
   FakeHost.layer({

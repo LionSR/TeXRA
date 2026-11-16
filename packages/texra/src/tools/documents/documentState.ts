@@ -51,13 +51,17 @@ import {
   failureContextFromLogs,
 } from '@texra/agent/output/compileFailureRoundContext';
 import { runWorkspaceOf } from '@texra/tools/documents/runWorkspace';
+import {
+  promptDocument,
+  readFilesAsPromptXml,
+} from '@texra/tools/documents/promptDocuments';
 import type { CallRequests, ToolEnv } from '@texra-ai/harness/plugins';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 /** What the documents read of the run their tool call serves. */
 type DocumentRun = Pick<
   ToolRun,
-  'config' | 'logger' | 'scope' | 'runId' | 'opening' | 'model'
+  'config' | 'logger' | 'scope' | 'runId' | 'model'
 >;
 
 /** The tool call the documents are opened for: its roots and run, and
@@ -249,7 +253,28 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
   critique?: string | null,
 ) {
   const { task, run, deps } = docs;
-  const inputs = run.opening?.inputs ?? {};
+  const { config } = run;
+  const workspace = deps.roots.workspace;
+  // The launch's files as they read now; one that does not read changes
+  // what the model sees, so it is reported on the run's own channel.
+  const [contexts, inputs, edited] = yield* Effect.all(
+    [
+      readFilesAsPromptXml(workspace, config.contextFiles),
+      readFilesAsPromptXml(workspace, config.inputFiles),
+      readFilesAsPromptXml(
+        workspace,
+        config.editedFile === null ? [] : [config.editedFile],
+      ),
+    ],
+    { concurrency: 'unbounded' },
+  );
+  for (const { file, reason } of [contexts, inputs, edited].flatMap(
+    (read) => read.skipped,
+  ))
+    deps.logger.warn(
+      `Skipping unreadable file in prompt context: ${file} (${reason})`,
+    );
+  const editedDocument = edited.readable[0];
   const templates = yield* readTemplates(task);
   const fs = yield* FileSystem.FileSystem;
   const parts: string[] = [];
@@ -260,27 +285,25 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
   }
   // The documents: the context, the task's templates, then the inputs.
   const documents = [
-    inputs.ALL_CONTEXTS,
-    ...templates.map(
-      ({ name, content }) =>
-        `<document name="${name}">\n${content}\n</document>`,
-    ),
-    inputs.ALL_INPUTS,
+    contexts.xml,
+    ...templates.map(({ name, content }) => promptDocument(name, content)),
+    inputs.xml,
   ].filter(Boolean);
+  const instruction = config.instruction.trim();
   parts.push(
     task.intro.trim(),
     ...(documents.length > 0
       ? [`<documents>\n${documents.join('\n')}\n</documents>`]
       : []),
     // A partial edit of the input, which a merge puts back into it.
-    ...(inputs.EDITED_CONTENT
+    ...(editedDocument?.content
       ? [
-          `The edited version, ${inputs.EDITED_FILE ?? 'as given'}:\n<edited_document>\n${inputs.EDITED_CONTENT}\n</edited_document>`,
+          `The edited version, ${editedDocument.file}:\n<edited_document>\n${editedDocument.content}\n</edited_document>`,
         ]
       : []),
-    ...(inputs.INSTRUCTION?.trim()
+    ...(instruction
       ? [
-          `Follow this instruction closely. Where it names a part of the documents, leave the rest as it is:\n<instruction>\n${inputs.INSTRUCTION.trim()}\n</instruction>`,
+          `Follow this instruction closely. Where it names a part of the documents, leave the rest as it is:\n<instruction>\n${instruction}\n</instruction>`,
         ]
       : []),
   );
@@ -306,10 +329,10 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
   const request = (task.requests[revision] ?? '').trim();
   // The reply format the program parses, written here so no task restates
   // it: one document per name the revision writes (its outputs, or the
-  // inputs it rewrites), in order.
-  const names =
-    (deps.expected.rewritesInputs ? inputs.INPUT_FILES : inputs.OUTPUT_FILES) ??
-    [];
+  // readable inputs it rewrites, by the names the prompt shows), in order.
+  const names = deps.expected.rewritesInputs
+    ? inputs.readable.map(({ name }) => name)
+    : deps.expected.names;
   const reply = [
     `Output the documents, complete and in this order, as:`,
     `<${OUTPUT_DOCUMENTS_TAG}>`,
