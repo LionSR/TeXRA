@@ -16,13 +16,12 @@ import type { StreamingTextRow } from '@shared/transcript/transcriptRow';
 
 import { open, write, type TranscriptUpdate } from './transcriptState';
 
-/** The three message types whose payload is streaming markdown text. */
+/** The two message types whose payload is streaming markdown text. */
 export const STREAMING_TEXT_ROW_KIND: Partial<
   Record<MessageType, StreamingTextRow['kind']>
 > = {
   [MESSAGE_TYPES.MODEL_RESPONSE]: 'assistant',
   [MESSAGE_TYPES.THINKING]: 'thinking',
-  [MESSAGE_TYPES.SCRATCHPAD]: 'scratchpad',
 };
 
 /** One chunk of a process run's output onto the transcript: a plain log
@@ -81,7 +80,6 @@ export function recordLogRow(
   switch (payload.messageType) {
     case MESSAGE_TYPES.MODEL_RESPONSE:
     case MESSAGE_TYPES.THINKING:
-    case MESSAGE_TYPES.SCRATCHPAD:
       write(d, {
         kind: 'text',
         base,

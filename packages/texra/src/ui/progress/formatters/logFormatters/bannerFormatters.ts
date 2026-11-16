@@ -1,5 +1,5 @@
 /**
- * Banner-style formatter for thinking, scratchpad, and model response messages:
+ * Banner-style formatter for thinking and model response messages:
  * one collapsible `<wa-details>` shell driven by a per-message-type config.
  * Uses Lit templates with unsafeHTML for markdown content rendering.
  */
@@ -47,15 +47,6 @@ const BANNER_CONFIG: Record<StreamingTextRow['kind'], BannerConfig> = {
     showTimestamp: false,
     defaultOpen: false,
   },
-  scratchpad: {
-    iconName: 'pencil',
-    labelText: 'Scratchpad',
-    copyTitle: 'Copy scratchpad',
-    contentClass: 'banner-content--scratchpad',
-    levelClass: false,
-    showTimestamp: false,
-    defaultOpen: false,
-  },
   assistant: {
     iconName: 'wand-magic-sparkles',
     labelText: 'Assistant',
@@ -68,7 +59,7 @@ const BANNER_CONFIG: Record<StreamingTextRow['kind'], BannerConfig> = {
 };
 
 /**
- * Format thinking, scratchpad, or model-response banner content as a
+ * Format thinking or model-response banner content as a
  * TemplateResult.
  */
 export function formatBannerContentTemplate(
@@ -80,7 +71,7 @@ export function formatBannerContentTemplate(
 
   const config = BANNER_CONFIG[kind];
   // Formatted only for the rows that actually paint one: this runs per
-  // streaming chunk, and a thinking or scratchpad row never shows it.
+  // streaming chunk, and a thinking row never shows it.
   const timestampInfo =
     config.showTimestamp && verbose
       ? formatDisplayTimestamp(new Date(timestamp))

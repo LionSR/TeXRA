@@ -13,7 +13,6 @@ export type LogLevel = typeof LogLevelSchema.Type;
 
 export const MESSAGE_TYPES = {
   THINKING: 'thinking',
-  SCRATCHPAD: 'scratchpad',
   FILE_LIST: 'fileList',
   TOOL_USE: 'toolUse',
   WEB_SEARCH: 'webSearch',
