@@ -17,6 +17,7 @@ import {
   type KeyValueStore,
 } from '@texra/shared/state/PersistedState';
 import { createSessionSurfaces } from '@ui/progress/sessionSurfaces';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 import type { WebviewTransport } from '@ui/progress/sessionTransport';
 import type { RuntimeCommand } from '@texra-ai/harness/schemas';
 import { Rejected } from '@texra-ai/harness/schemas';
@@ -46,6 +47,7 @@ let storage: KeyValueStore;
 let webviewState: unknown;
 let view: ReturnType<typeof signal<ReturnType<typeof emptySessionView>>>;
 let host: ReturnType<typeof signal<HostSnapshot | null>>;
+let root: EventTarget;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -75,7 +77,15 @@ beforeEach(() => {
   });
   surfaces = createSessionSurfaces({ storage, post: vi.fn() });
   surfaces.sync([KEY]);
+  // The shell's events reach the surfaces as a root dispatches them.
+  root = new EventTarget();
+  // cast: listen reads only addEventListener/removeEventListener.
+  surfaces.listen(root as HTMLElement, () => KEY);
 });
+
+const submit = () => root.dispatchEvent(SessionUiEvents.submit());
+const runtimeRequest = (request: RuntimeCommand) =>
+  root.dispatchEvent(SessionUiEvents.runtime(request));
 
 afterEach(() => surfaces.dispose());
 
@@ -103,7 +113,7 @@ describe('session Surface ownership', () => {
     // The launch request settles only with its run: the next task must not
     // inherit the choice while it runs.
     response('hostRequest');
-    surfaces.submit(KEY);
+    submit();
     expect(transport.hostRequest.mock.calls[0]?.[0]).toMatchObject({
       request: { kind: 'launch', launch: { approval: 'autoApprove' } },
     });
@@ -114,8 +124,8 @@ describe('session Surface ownership', () => {
     surfaces.act(KEY, { kind: 'select', runId: null });
     surfaces.act(KEY, { kind: 'launch', patch: { instruction: 'Proofread' } });
     const admit = response('hostRequest');
-    surfaces.submit(KEY);
-    surfaces.submit(KEY);
+    submit();
+    submit();
     expect(transport.hostRequest).toHaveBeenCalledOnce();
     admit(Effect.succeed({ kind: 'done' }));
     await vi.waitFor(() =>
@@ -138,8 +148,8 @@ describe('session Surface ownership', () => {
       media: [image.media],
     };
     const reject = response('runtimeRequest');
-    surfaces.runtimeRequest(KEY, request);
-    surfaces.runtimeRequest(KEY, request);
+    runtimeRequest(request);
+    runtimeRequest(request);
     expect(transport.runtimeRequest).toHaveBeenCalledOnce();
     surfaces.act(KEY, {
       kind: 'draft',
@@ -158,7 +168,7 @@ describe('session Surface ownership', () => {
     });
 
     const acceptEdited = response('runtimeRequest');
-    surfaces.runtimeRequest(KEY, { ...request, text: 'New text' });
+    runtimeRequest({ ...request, text: 'New text' });
     surfaces.act(KEY, {
       kind: 'draft',
       runId: ROOT,
@@ -173,7 +183,7 @@ describe('session Surface ownership', () => {
     );
 
     const accept = response('runtimeRequest');
-    surfaces.runtimeRequest(KEY, { ...request, text: 'Later text' });
+    runtimeRequest({ ...request, text: 'Later text' });
     accept(Effect.succeed({ kind: 'done' }));
     await vi.waitFor(() =>
       expect(surfaces.get(KEY)?.surface$.get().runs.get(ROOT)?.draft).toEqual({

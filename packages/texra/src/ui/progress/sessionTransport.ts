@@ -61,7 +61,7 @@ export interface WebviewSession {
   readonly view$: StreamSignal<SessionView>;
   /** Null until the first frame carries the host's snapshot. */
   readonly host$: StreamSignal<HostSnapshot | null>;
-  /** Frames of another generation are dropped by the frames service (8.1). */
+  /** The frames service drops frames of an older generation. */
   generation: number;
 }
 
@@ -171,7 +171,7 @@ export function installWebviewTransport(
   };
 
   /** A down-message that failed its schema is the host's defect. A response
-   *  settles its request `Invalid` rather than hang it; a frame of the live
+   *  ends its request `Invalid` rather than hang it; a frame of the live
    *  generation is said on the surface's notice, since its events are lost
    *  until the view reopens. */
   const reportMalformed = (data: unknown, error: Schema.SchemaError): void => {
@@ -251,21 +251,20 @@ export function installWebviewTransport(
       const session = sessions.get(message.session);
       if (!session) return Effect.interrupt;
       return Effect.acquireUseRelease(
-        Effect.flatMap(Deferred.make<A, BridgeError>(), (settled) =>
+        Effect.flatMap(Deferred.make<A, BridgeError>(), (reply) =>
           Effect.sync(() => {
             session.pending.set(message.requestId, {
-              answer: (response) =>
-                Deferred.doneUnsafe(settled, read(response)),
-              fail: (error) => Deferred.doneUnsafe(settled, Effect.fail(error)),
+              answer: (response) => Deferred.doneUnsafe(reply, read(response)),
+              fail: (error) => Deferred.doneUnsafe(reply, Effect.fail(error)),
             });
             post(message);
-            return settled;
+            return reply;
           }),
         ),
-        (settled) =>
+        (reply) =>
           timeoutMs === undefined
-            ? Deferred.await(settled)
-            : Deferred.await(settled).pipe(
+            ? Deferred.await(reply)
+            : Deferred.await(reply).pipe(
                 Effect.timeoutOrElse({
                   duration: timeoutMs,
                   orElse: () =>
@@ -379,7 +378,7 @@ export function installWebviewTransport(
   };
 }
 
-/** The aggregate a surface names for a selected run (contract C7): the
+/** The aggregate a surface names for a selected run: the
  *  run's own, from the seq the view retained for it. */
 export function transcriptAggregates(
   view: SessionView,

@@ -33,7 +33,7 @@ import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
  * package entry does not re-export it): `archive.SUBJECT`, or the archive
  * alone where it has no subjects (`quant-ph`, `hep-th`). A name outside it
  * matches no paper, so the search would come back empty rather than fail.
- * The client's type also admits a subdivided archive alone (`math`); that is
+ * The client's type also accepts a subdivided archive alone (`math`); that is
  * left out, since papers are filed under its subjects.
  */
 const ARXIV_CATEGORIES: ReadonlySet<string> = new Set(
@@ -174,7 +174,7 @@ const searchArxiv = Effect.fn('ArxivSearchTool.execute')(function* (
   const termQueries = terms.map((term) => fieldQueryFn(term));
   let query = termQueries.length === 1 ? termQueries[0] : and(...termQueries);
 
-  // The schema admitted only categories in the client's table.
+  // The schema accepts only categories in the client's table.
   const categoryFilters = (input.categories ?? []).map((cat) => catQuery(cat));
 
   if (categoryFilters.length > 0) {

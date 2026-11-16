@@ -75,9 +75,9 @@ export interface TranscriptRowBase {
 // Row variants
 // ---------------------------------------------------------------------------
 
-/** Model text, thinking, and scratchpad share one shape: streaming markdown. */
+/** Model text and thinking share one shape: streaming markdown. */
 export interface StreamingTextRow extends TranscriptRowBase {
-  readonly kind: 'assistant' | 'thinking' | 'scratchpad';
+  readonly kind: 'assistant' | 'thinking';
   readonly text: TranscriptText;
   /** True while the producer is still appending to `text`. */
   readonly streaming: boolean;
@@ -286,7 +286,6 @@ export function isFinalRow(row: TranscriptRow, hasLaterRow: boolean): boolean {
     case 'assistant':
       return !row.pendingEmbeddedFollowup && hasLaterRow;
     case 'thinking':
-    case 'scratchpad':
       return !row.streaming && hasLaterRow;
     case 'tool':
       return (
@@ -321,8 +320,6 @@ export function rowHeadline(row: ReadonlyDeep<TranscriptRow>): string {
       return row.summary.full;
     case 'thinking':
       return 'Thinking';
-    case 'scratchpad':
-      return 'Scratchpad';
     case 'webSearch':
       return `Web Search${row.query ? `: "${row.query}"` : ''}`;
     case 'contextManagement':

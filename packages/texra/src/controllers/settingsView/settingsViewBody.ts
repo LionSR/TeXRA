@@ -18,6 +18,7 @@ import { apiKeyEntry } from '@texra-ai/llm';
 import {
   type PerKeyLane,
   setModelEnabled,
+  Skills,
   withPerKeyLane,
   withSessionFs,
 } from '@texra-ai/harness/host';
@@ -63,9 +64,9 @@ import { buildSettingsSnapshotMessage } from '@texra/controllers/settingsView/se
 import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
 import {
   DERIVED_SETTINGS_SNAPSHOTS,
-  type SettingsHostState,
   type SettingsViewInboundMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
+import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { GITHUB_TOKEN_CREATE_URL } from '@texra/tools/github/githubAuth';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
@@ -77,33 +78,13 @@ import type {
 } from '@texra-ai/harness/host';
 
 type HostEffect<A = void> = Effect.Effect<A, Error, ProcessServices>;
-type SettingsArms = SettingsViewInboundHandlerRegistry<
+type SettingsHandlers = SettingsViewInboundHandlerRegistry<
   ProcessServices | StorageFs
 >;
 
 interface SettingsViewBodyPorts {
   readonly roots: WorkspaceRoots;
-  /** The packaged resources root; the agent templates live under it. */
-  readonly resourcesPath: string;
   readonly bindings: SettingsHostBindings;
-  /** The skills the Skills page lists, from the skills subsystem, which
-   *  controllers take from their host rather than import. */
-  readonly skillDisplay: HostEffect<SettingsHostState['skills']>;
-  /** The account copy (`src/ui`), which controllers likewise take from
-   *  their host. */
-  readonly accountCopy: {
-    signedInEnabled(
-      providerDisplayName: string,
-      accountLabel: string,
-      modelFamily: string,
-    ): string;
-    subscriptionNotDisabled(
-      providerDisplayName: string,
-      reason: string,
-    ): string;
-    signedOut(providerDisplayName: string): string;
-    signOutFailed(providerDisplayName: string): string;
-  };
 }
 
 /**
@@ -127,12 +108,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
     const gitPage = settingsGitCommands({ bindings, present });
     const toolsPage = settingsToolCommands({ roots, bindings, present });
     const pluginsPage = settingsPluginCommands({ roots, bindings, present });
-    const agents = settingsAgentCommands({
-      roots,
-      resourcesPath: ports.resourcesPath,
-      bindings,
-      present,
-    });
+    const agents = settingsAgentCommands({ roots, bindings, present });
 
     // ── Pages ──
 
@@ -152,7 +128,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
         buildModelSelectionPage(roots),
       ),
       // A plugin's skills are listed on the Skills page as `<plugin>:<name>`.
-      hostStatePage('skills', ['settings', 'plugins'], ports.skillDisplay),
+      hostStatePage('skills', ['settings', 'plugins'], Skills.display(roots)),
       hostStatePage(
         'subscriptionAuth',
         ['subscriptions'],
@@ -213,7 +189,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
         bindings.signInSubscription(providerId).pipe(
           Effect.flatMap((account) =>
             notice(
-              ports.accountCopy.signedInEnabled(
+              ACCOUNT_OUTCOME.signedInEnabled(
                 provider.displayName,
                 account.label,
                 provider.modelFamily,
@@ -231,14 +207,14 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
     const signOutSubscription = (providerId: SubscriptionProviderId) => {
       const provider = subscriptionProvider(providerId);
       return subscriptionChange(
-        ports.accountCopy.signOutFailed(provider.displayName),
+        ACCOUNT_OUTCOME.signOutFailed(provider.displayName),
         Effect.flatMap(provider.signOut(roots), ({ preferenceError }) =>
           Effect.andThen(
-            notice(ports.accountCopy.signedOut(provider.displayName)),
+            notice(ACCOUNT_OUTCOME.signedOut(provider.displayName)),
             preferenceError === undefined
               ? Effect.void
               : alert(
-                  ports.accountCopy.subscriptionNotDisabled(
+                  ACCOUNT_OUTCOME.subscriptionNotDisabled(
                     provider.displayName,
                     preferenceError,
                   ),
@@ -388,11 +364,11 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       ...gitPage.handlers,
       ...toolsPage.handlers,
       ...pluginsPage.handlers,
-    } satisfies SettingsArms;
+    } satisfies SettingsHandlers;
 
     // ── The boundary every settings program finishes on ──
 
-    const settle = <E>(
+    const finish = <E>(
       work: Effect.Effect<void, E, ProcessServices | StorageFs>,
     ): Effect.Effect<void, never, ProcessServices> =>
       withSessionFs(roots, work).pipe(
@@ -414,7 +390,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
           (input) => input === 'view' || page.follows.includes(input),
         ),
         Stream.buffer({ capacity: 1, strategy: 'sliding' }),
-        Stream.runForEach(() => settle(bindings.post(page.build))),
+        Stream.runForEach(() => finish(bindings.post(page.build))),
       );
     /** Turn each app signal the view follows into the input it changes. */
     const followSignal = <K extends AppSignal>(
@@ -424,7 +400,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       ) => Effect.Effect<void, Error, ProcessServices> | undefined,
     ) =>
       Stream.runForEach(appSignalStream(signal), (payload) =>
-        settle(input(payload) ?? Effect.void),
+        finish(input(payload) ?? Effect.void),
       );
 
     return {
@@ -432,7 +408,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       handleMessage(
         message: SettingsViewInboundMessage,
       ): Effect.Effect<void, never, ProcessServices> {
-        return settle(
+        return finish(
           Effect.suspend(() => {
             // cast: the discriminant selects exactly this handler's member of
             // the union.
@@ -460,7 +436,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
           // view's ready answer, so the host's tab reveal is not kept waiting.
           Stream.fromPubSub(inputs).pipe(
             Stream.filter((input) => input === 'view'),
-            Stream.runForEach(() => settle(toolsPage.refresh)),
+            Stream.runForEach(() => finish(toolsPage.refresh)),
           ),
           // A run that binds a GitHub subscription, the setup agent's
           // `apply_team`, and a provider key written by any writer (the setup

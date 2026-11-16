@@ -4,7 +4,7 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import {
   DESKTOP_PROMPT_COMMANDS,
-  type DesktopSettlePromptMessage,
+  type DesktopAnswerPromptMessage,
   type DesktopShowPromptMessage,
 } from '../shared/desktopPromptMessages';
 import { createOverlayDialog, renderElement } from './overlayDialog';
@@ -16,7 +16,7 @@ interface DesktopPromptOverlay {
 /** Renders correlated text and password prompts in the desktop renderer. */
 export function createDesktopPromptOverlay(
   appRoot: HTMLElement,
-  send: (message: DesktopSettlePromptMessage) => void,
+  send: (message: DesktopAnswerPromptMessage) => void,
 ): DesktopPromptOverlay {
   const form = document.createElement('form');
   form.classList.add('desktop-prompt-form');
@@ -34,7 +34,7 @@ export function createDesktopPromptOverlay(
       text: 'Cancel',
       appearance: 'outlined',
       className: 'desktop-prompt-cancel btn-secondary',
-      onClick: () => settle(null),
+      onClick: () => answer(null),
     }),
   );
 
@@ -64,39 +64,39 @@ export function createDesktopPromptOverlay(
   const dialog = shell.dialog;
   let current: DesktopShowPromptMessage | undefined;
 
-  function sendSettlement(
+  function sendAnswer(
     request: DesktopShowPromptMessage,
     value: string | null,
   ): void {
     send({
-      command: DESKTOP_PROMPT_COMMANDS.SETTLE,
+      command: DESKTOP_PROMPT_COMMANDS.ANSWER,
       requestId: request.requestId,
       value,
     });
   }
 
-  function settle(value: string | null): void {
+  function answer(value: string | null): void {
     const request = current;
     if (!request) return;
     current = undefined;
-    sendSettlement(request, value);
+    sendAnswer(request, value);
     dialog.open = false;
   }
 
   form.addEventListener('submit', (event) => {
     event.preventDefault();
-    settle(input.value ?? '');
+    answer(input.value ?? '');
   });
   input.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter' || event.isComposing) return;
     event.preventDefault();
     form.requestSubmit();
   });
-  dialog.addEventListener('wa-hide', () => settle(null));
+  dialog.addEventListener('wa-hide', () => answer(null));
   dialog.addEventListener('wa-after-show', () => input.focus());
 
   function open(message: DesktopShowPromptMessage): void {
-    if (current) sendSettlement(current, null);
+    if (current) sendAnswer(current, null);
     current = message;
     shell.titleEl.textContent = message.title;
     input.type = message.password ? 'password' : 'text';

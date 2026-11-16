@@ -23,7 +23,7 @@ export const arxiv: TexraPlugin = {
     },
   }),
   icons: { arxiv_search: 'book', download_arxiv_source: 'cloud-arrow-down' },
-  card: {
+  dashboard: {
     name: 'ArXiv Search & Download',
     description: 'Search arXiv papers and download LaTeX source packages.',
   },

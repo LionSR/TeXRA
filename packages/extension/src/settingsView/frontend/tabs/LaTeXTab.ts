@@ -13,7 +13,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postMessage } from '@texra/shared/hostBridge';
+import { postToHost } from '@settingsView/frontend/messageDispatcher';
 import {
   type LatexSettingsStatus,
   DEFAULT_LATEX_SETTINGS_STATUS,
@@ -151,7 +151,11 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
     field?: LatexRecommendedSettingField,
     reset = false,
   ): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS, { field, reset });
+    postToHost({
+      command: SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS,
+      field,
+      reset,
+    });
   }
 
   /** How to install `key` on this machine's platform. */
@@ -161,7 +165,8 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
   }
 
   private handleRunInTerminal(command: string): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND, {
+    postToHost({
+      command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
       installCommand: command,
     });
   }
@@ -201,7 +206,8 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
           size="s"
           title="Install"
           @click=${() =>
-            postMessage(SETTINGS_VIEW_COMMANDS.INSTALL_EXTENSION, {
+            postToHost({
+              command: SETTINGS_VIEW_COMMANDS.INSTALL_EXTENSION,
               extensionId: LATEX_WORKSHOP_EXT_ID,
             })}
         >

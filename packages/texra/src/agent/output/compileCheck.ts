@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import {
   normalizeFilePath,
   fileLocationDisplayPath,
-  type RunId,
   type FileLocation,
   type RunStorageFileLocation,
   toErrorMessage,
@@ -46,9 +45,9 @@ import {
 interface CompileCheckContext {
   /** The run's session roots: its workspace, storage, and setting stores. */
   roots: WorkspaceRoots;
+  /** The run's files; its `runId` names the run. */
   fileService: RunWorkspace;
   logger: AgentTrace;
-  runId: RunId;
   /** Directories the compile searches besides the output's own: where the
    *  task's templates live (a poster's theme `.sty`). */
   inputDirs: readonly string[];
@@ -349,7 +348,7 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
       extraInputDirs,
     },
   ).pipe(
-    withLogChannel(ctx.runId),
+    withLogChannel(runId),
     Effect.catchTag('ToolMissing', () =>
       Effect.succeed('no-compiler' as const),
     ),

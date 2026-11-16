@@ -18,7 +18,7 @@
  * a decision sent just before a tab closes still completes: closing the
  * bridge waits for the requests in flight, up to the session's close
  * deadline, then interrupts what still hangs. A launch answers once its run
- * is admitted, so nothing here waits for a run to end. An answer whose port
+ * is started, so nothing here waits for a run to end. An answer whose port
  * is gone is dropped.
  *
  * A `runtime.request` runs the session's `request` and posts one
@@ -98,8 +98,7 @@ interface SessionBridgeOptions {
    *  `Internal`. The channel is {@link HostCommandFailure}: each host lifts
    *  a Promise-faced capability once, under the member's name, so every case
    *  fails with a tag and a bare rejection value can no longer reach this
-   *  channel. The last case that widened it to `Error` was the transcript
-   *  export; its steps carry tags now. */
+   *  channel. */
   readonly handleHostCommand: (
     request: HostCommand,
     port: string,

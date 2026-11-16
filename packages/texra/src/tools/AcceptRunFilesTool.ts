@@ -16,7 +16,6 @@ import {
   Effect,
   FileSystem,
   Predicate,
-  Result,
   Schema,
 } from 'effect';
 
@@ -516,11 +515,6 @@ Parameters map directly to subagent-result delivery attributes:
   path         ← <output-files><file path="...">
   original     ← <output-files><file original="...">`,
   schema: AcceptRunFilesInputSchema,
-  card: (raw) => {
-    const input = Schema.decodeUnknownResult(AcceptRunFilesInputSchema)(raw);
-    return Result.isSuccess(input)
-      ? acceptRunFilesCard(input.success)
-      : undefined;
-  },
+  card: acceptRunFilesCard,
   execute: acceptFiles,
 });

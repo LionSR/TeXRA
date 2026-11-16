@@ -29,10 +29,10 @@ const TEX_EXTENSION_REGEX = /\.tex$/i;
  * Update the \input and \include commands in output files to reference new
  * file paths.
  *
- * Each output is paired with its base the way lineage tracing pairs them: by
- * its model-reported `source` first, so two bases that share a file name in
- * different directories each keep their own output, and by file name for an
- * output the model renamed.
+ * Each output is paired with its base the way lineage tracing pairs them
+ * (`pairOutputsWithBases`). A base paired with several outputs (one input
+ * split into chapters) has no one output to point its references at, so its
+ * references are left as written.
  *
  * @param baseFiles Base file paths
  * @param outputs The round's outputs with their reported sources
@@ -49,11 +49,18 @@ export const replaceInputCommands = Effect.fn('documents.replaceInputCommands')(
       return;
     }
 
-    const baseToOutputMap = new Map<string, FileLocation>();
     const bases = pairOutputsWithBases(baseFiles, outputs);
-    for (const { location } of outputs) {
-      const base = bases.get(fileLocationDisplayPath(location))?.base;
-      if (base) baseToOutputMap.set(fileLocationDisplayPath(base), location);
+    const outputsByBase = Map.groupBy(
+      outputs.flatMap(({ location }) => {
+        const base = bases.get(fileLocationDisplayPath(location))?.base;
+        return base ? [[fileLocationDisplayPath(base), location] as const] : [];
+      }),
+      ([basePath]) => basePath,
+    );
+    const baseToOutputMap = new Map<string, FileLocation>();
+    for (const [basePath, paired] of outputsByBase) {
+      const only = paired.length === 1 ? paired[0] : undefined;
+      if (only) baseToOutputMap.set(basePath, only[1]);
     }
 
     if (baseToOutputMap.size === 0) {

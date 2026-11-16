@@ -12,18 +12,6 @@ import {
   EditorIntegration,
 } from '@texra/hosts/editorIntegration';
 
-// Local file imports
-import { assertInSetupAllowlist } from './platform';
-
-/**
- * Allowlist of VS Code extensions the setup agent may install.
- * Matches the install flows already surfaced by the LaTeX tab.
- */
-const ALLOWED_EXTENSIONS: ReadonlySet<string> = new Set([
-  LATEX_WORKSHOP_EXT_ID,
-  LEAN4_EXTENSION_ID,
-]);
-
 /**
  * How long to poll the extension registry after an install. VS Code registers
  * a new extension asynchronously after the install command resolves.
@@ -31,10 +19,12 @@ const ALLOWED_EXTENSIONS: ReadonlySet<string> = new Set([
 const REGISTRATION_TIMEOUT = '3 seconds';
 
 const InstallVscodeExtensionInputSchema = Schema.Struct({
-  extensionId: Schema.NonEmptyString.annotate({
-    description:
-      'VS Code extension ID in "<publisher>.<name>" form (e.g. "James-Yu.latex-workshop").',
-  }),
+  // The extensions the setup agent may install: the install flows the
+  // LaTeX tab already offers.
+  extensionId: Schema.Literals([
+    LATEX_WORKSHOP_EXT_ID,
+    LEAN4_EXTENSION_ID,
+  ]).annotate({ description: 'VS Code extension ID.' }),
 });
 
 type InstallVscodeExtensionInput =
@@ -42,10 +32,7 @@ type InstallVscodeExtensionInput =
 
 const installExtension = Effect.fn('InstallVscodeExtensionTool.execute')(
   function* (input: InstallVscodeExtensionInput) {
-    const id = input.extensionId.trim();
-
-    yield* assertInSetupAllowlist('Extension', id, ALLOWED_EXTENSIONS);
-
+    const id = input.extensionId;
     const extensions = yield* EditorIntegration;
     if (!extensions) {
       return yield* Effect.fail(
@@ -98,7 +85,7 @@ export const InstallVscodeExtensionTool = defineTool({
   // Offered where the host has an editor (VS Code).
   hostCapability: EDITOR_EXTENSIONS_CAPABILITY,
   requiresApproval: true,
-  description: `Install a VS Code extension from the Marketplace. Allowlisted: James-Yu.latex-workshop, leanprover.lean4. Blocks other extension IDs. Use this (rather than \`invoke_command workbench.extensions.installExtension\`) so the caller gets a clean success/failure status.`,
+  description: `Install a VS Code extension from the Marketplace. \`extensionId\` lists the extensions it may install (LaTeX Workshop, Lean 4). Use this (rather than \`invoke_command workbench.extensions.installExtension\`) so the caller gets a clean success/failure status.`,
   schema: InstallVscodeExtensionInputSchema,
   execute: installExtension,
 });

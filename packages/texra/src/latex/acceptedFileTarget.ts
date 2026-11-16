@@ -15,6 +15,7 @@ import {
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
+  withFileWriteLane,
 } from '@texra-ai/harness/host';
 import {
   withLogChannel,
@@ -134,7 +135,9 @@ interface AcceptEditedFileReplacePorts<
  * Write `editedLocation`'s content into `target`, emitting a workspace-write
  * notification, cleaning up the stale diff companion, and reporting success.
  * Answers the content it wrote, read once, so a caller describing the
- * accepted file reads exactly what was written.
+ * accepted file reads exactly what was written; none when the target no
+ * longer holds `confirmedAgainst` (`undefined` for no file), the content
+ * the person confirmed the replacement against.
  * Runs once the target has been resolved and confirmed. `targetExisted`
  * (whether the target already had content, for the "replaced" vs "created"
  * wording) is the caller's to compute, since it already needs it to word its
@@ -148,39 +151,64 @@ const commitAcceptedFile = Effect.fn('commitAcceptedFile')(function* <E>(
   baseLocation: FileLocation,
   editedLocation: FileLocation,
   target: { targetLocation: FileLocation; targetFileName: string },
+  confirmedAgainst: string | undefined,
   targetExisted: boolean,
   ports: CommitAcceptedFilePorts<E>,
 ): Effect.fn.Return<
-  string,
+  Option.Option<string>,
   E | PlatformError.PlatformError,
   FileSystem.FileSystem | AppSignals
 > {
   const fs = yield* FileSystem.FileSystem;
   const { targetLocation, targetFileName } = target;
+  const targetPath = targetLocation.absolutePath;
   const editedPath = editedLocation.absolutePath;
 
   const editedContent = (yield* fs.readFileString(editedPath)).replaceAll(
     '\r\n',
     '\n',
   );
-  // Staged beside the target and renamed over it, so a crash mid-write
-  // leaves the user's file whole: the old content or the new, never part.
-  const staged = path.join(
-    path.dirname(targetLocation.absolutePath),
-    `.${targetFileName}.${randomUUID()}.tmp`,
-  );
-  yield* fs.writeFileString(staged, editedContent).pipe(
-    Effect.andThen(fs.rename(staged, targetLocation.absolutePath)),
-    Effect.onError(() =>
-      fs.remove(staged, { force: true }).pipe(
-        Effect.ignore({
-          log: 'Warn',
-          message: `A staged accept file stays behind: ${staged}`,
-        }),
+  // The confirmation was given to the target as it was when the dialog
+  // opened; the dialog can stay open for minutes. A save to the target
+  // meanwhile (the user's editor, a run) is not replaced on that answer.
+  // The check and the write hold the file's write lane, shared with every
+  // other writer that reads, decides and writes it (an approved edit, the
+  // desktop editor's save). The new content is staged beside the file and
+  // renamed over it, so a write that fails partway leaves the user's file as
+  // it was. An existing target is replaced where a symlink points, with the
+  // mode it had.
+  const written = yield* Effect.gen(function* () {
+    const current = yield* contentOrMissing(fs, targetPath);
+    if (current !== confirmedAgainst) return false;
+    const real =
+      current === undefined ? targetPath : yield* fs.realPath(targetPath);
+    const mode =
+      current === undefined ? undefined : (yield* fs.stat(real)).mode & 0o7777;
+    const staged = path.join(
+      path.dirname(real),
+      `.${path.basename(real)}.${randomUUID()}.tmp`,
+    );
+    yield* fs.writeFileString(staged, editedContent).pipe(
+      Effect.andThen(mode === undefined ? Effect.void : fs.chmod(staged, mode)),
+      Effect.andThen(fs.rename(staged, real)),
+      Effect.onError(() =>
+        fs.remove(staged, { force: true }).pipe(
+          Effect.ignore({
+            log: 'Warn',
+            message: `A staged accept file stays behind: ${staged}`,
+          }),
+        ),
       ),
-    ),
-    Effect.uninterruptible,
-  );
+      Effect.uninterruptible,
+    );
+    return true;
+  }).pipe(withFileWriteLane(targetPath));
+  if (!written) {
+    yield* ports.showInfo(
+      `${targetFileName} changed while the confirmation was open; nothing was written. Accept again to replace the current content.`,
+    );
+    return Option.none();
+  }
   if (targetLocation.kind === 'workspace') {
     yield* emitAppSignal('workspaceFilesWritten', {
       absolutePaths: [targetLocation.absolutePath],
@@ -213,7 +241,7 @@ const commitAcceptedFile = Effect.fn('commitAcceptedFile')(function* <E>(
   yield* ports.showInfo(
     buildAcceptSuccessMessage(targetFileName, editedPath, targetExisted),
   );
-  return editedContent;
+  return Option.some(editedContent);
 });
 
 /** The file's content, or `undefined` for a file that is not there. */
@@ -261,24 +289,13 @@ export const acceptEditedFileReplace = Effect.fn('acceptEditedFileReplace')(
       ),
     );
     if (!confirmed) return Option.none();
-
-    // The confirmation was given to the target as it was when the dialog
-    // opened; the dialog can stay open for minutes. A save to the target
-    // meanwhile (the user's editor, a run) is not replaced on that answer.
-    if ((yield* contentOrMissing(fs, targetPath)) !== confirmedAgainst) {
-      yield* ports.showInfo(
-        `${target.targetFileName} changed while the confirmation was open; nothing was written. Accept again to replace the current content.`,
-      );
-      return Option.none();
-    }
-    return Option.some(
-      yield* commitAcceptedFile(
-        baseLocation,
-        editedLocation,
-        target,
-        !isNewFile || targetExists,
-        ports,
-      ),
+    return yield* commitAcceptedFile(
+      baseLocation,
+      editedLocation,
+      target,
+      confirmedAgainst,
+      !isNewFile || targetExists,
+      ports,
     );
   },
 );
@@ -328,7 +345,7 @@ export const cleanupAcceptedWorkspaceDiffFiles = Effect.fn(
   // A missing or locked diff companion does not undo an accepted file, so the
   // sweep keeps every deletion that worked and names the ones that did not
   // rather than dropping them silently. `force` keeps an already-absent
-  // companion a success, as the platform delete this replaced did.
+  // companion a success: there is nothing left to remove.
   const workspaceFs = yield* WorkspaceFs;
   const removed = yield* Effect.forEach(
     stale,

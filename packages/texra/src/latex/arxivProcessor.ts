@@ -29,6 +29,7 @@ import { Headers, HttpClient } from 'effect/http';
 import { StatusCodes } from 'http-status-codes';
 import * as tar from 'tar';
 
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import { hasExtension } from '@texra-ai/harness/host';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
@@ -37,7 +38,7 @@ import {
   indentLatexFilesInDirectory,
   type IndentLatexResult,
 } from './formatter/indentDirectory';
-import type { LatexFormatter } from './formatter/texFormatter';
+import { resolveLatexFormatter } from './formatter/texFormatter';
 
 // Cover the entire request, including body streaming, while allowing large
 // tarballs to complete on a slow link.
@@ -51,10 +52,10 @@ const EXTRACT_TIMEOUT_MS = 30_000;
 
 /**
  * A source-download failure that ends the retry loop immediately — a PDF-only
- * submission, a 404, or another non-transient HTTP status, the failures the
- * old p-retry `AbortError` marked permanent. `downloadSource` also fails with
- * it for the non-download errors (invalid input, no open workspace,
- * extraction or placement failure), which never had a retry loop to abort.
+ * submission, a 404, or another non-transient HTTP status: retrying cannot
+ * change the answer. `downloadArxivSource` also fails with it for the
+ * non-download errors (invalid input, no open workspace, extraction or
+ * placement failure), which no retry can fix either.
  */
 class ArxivSourcePermanentError extends Schema.TaggedError<ArxivSourcePermanentError>()(
   'ArxivSourcePermanentError',
@@ -102,11 +103,17 @@ const permanentFs = <T, R>(
 
 export type ArxivDownloadDestination = 'root' | 'references';
 
+/** Whether a download into `destination` is indented: never the workspace
+ *  root, whose existing files the indenter would reformat. */
+export const indentsDestination = (
+  destination: ArxivDownloadDestination,
+): boolean => destination !== 'root';
+
 interface DownloadSourceOptions {
-  workspaceRoot: string;
-  formatter: LatexFormatter | null;
-  autoIndent?: boolean;
-  destination?: ArxivDownloadDestination;
+  readonly roots: WorkspaceRoots;
+  readonly destination: ArxivDownloadDestination;
+  /** The caller's wish; a root download is not indented either way. */
+  readonly indent: boolean;
 }
 
 const INVALID_ARXIV_INPUT_ERROR =
@@ -280,7 +287,7 @@ function downloadFileOnce(
     // Extract filename from Content-Disposition header if available.
     // Uses content-disposition package for full RFC 6266 / RFC 5987 compliance,
     // which handles both `filename=` and `filename*=UTF-8''...` (percent-encoded
-    // Unicode names that the old regex silently dropped).
+    // Unicode names).
     const disposition = Headers.get(response.headers, 'content-disposition');
     let filename: string | undefined;
     if (Option.isSome(disposition)) {
@@ -344,7 +351,7 @@ function downloadFileOnce(
 
 /**
  * Extract `tarPath` into `destDir`. tar has no abort option, so
- * interruption (the deadline's included) stops admitting entries, and tar's
+ * interruption (the deadline's included) stops accepting entries, and tar's
  * own promise is joined outside the timeout race so a distinct late
  * rejection stays observable. The join is unbounded; a rejection need not
  * mean every write closed.
@@ -415,12 +422,8 @@ const extractTarFile = Effect.fn('arxivProcessor.extractTarFile')(function* (
 
 export const downloadArxivSource = Effect.fn('arxivProcessor.downloadSource')(
   function* (input: string, options: DownloadSourceOptions) {
-    const {
-      workspaceRoot,
-      formatter,
-      autoIndent = true,
-      destination = 'references',
-    } = options;
+    const { roots, destination, indent } = options;
+    const workspaceRoot = roots.workspace;
     const progress = yield* LatexProgress;
     // Normalize input (URL or ID) to plain arXiv ID
     const id = normaliseArxivIdentifier(input);
@@ -451,12 +454,15 @@ export const downloadArxivSource = Effect.fn('arxivProcessor.downloadSource')(
       yield* claimDirAndPlaceSource(id, paperDirFull, isRoot);
     }
 
-    // Skip auto-indent for root destination to avoid reformatting existing workspace files
-    if (autoIndent && !isRoot) {
+    if (indent && indentsDestination(destination)) {
       progress('Formatting LaTeX files...', 85);
 
       const indentResult = yield* permanentFs(
-        indentLatexFilesInDirectory(workspaceRoot, formatter, paperDirFull),
+        indentLatexFilesInDirectory(
+          workspaceRoot,
+          yield* resolveLatexFormatter(roots),
+          paperDirFull,
+        ),
       );
 
       // Formatting is post-processing on a source that has landed, so its
@@ -471,7 +477,11 @@ export const downloadArxivSource = Effect.fn('arxivProcessor.downloadSource')(
 
     yield* Effect.logInfo(`arXiv source downloaded to: ${paperDirFull}`);
 
-    return { path: paperDirFull, alreadyExisted: !needsDownload };
+    return {
+      path: paperDirFull,
+      workspaceRoot,
+      alreadyExisted: !needsDownload,
+    };
   },
   withLogChannel(ARXIV_CHANNEL),
 );
@@ -499,12 +509,8 @@ const hasExistingSource: (
   if ((yield* permanentFs(entryTypeIn(fs, paperDirFull))) === undefined) {
     return false;
   }
-  // The tolerant listing is the facade's `readDir`: the provider typed
-  // ordinary entries from the `readdir` dirent, but a *symlink* dirent
-  // still ran one `stat` (`fileTypeFor` → `resolveSymlinkType`). The
-  // strict form fails the whole listing on one unreadable entry, which
-  // would abort the download -- turning "the source is already here"
-  // into a failure.
+  // One unreadable entry must not turn "the source is already here" into a
+  // failed download; the tolerant listing drops that entry instead.
   const entries = yield* permanentFs(readDirectoryTypedTolerant(paperDirFull));
   const hasTexFiles = entries.some(([name]) => hasExtension(name, '.tex'));
   if (hasTexFiles) {
@@ -621,10 +627,10 @@ const downloadAndPlaceSource = Effect.fn(
     }),
   );
   // The staging directory belongs to this scope, so removing it is a scope
-  // finalizer rather than a step on the happy path. Every non-success exit
-  // used to leave `.arxiv-download-<id>/` behind in the paper directory: a
-  // download that ran out of retries, a PDF-only submission detected from
-  // the content type, a failed extraction, and interruption.
+  // finalizer rather than a step on the happy path, so no exit leaves
+  // `.arxiv-download-<id>/` behind in the paper directory: not a download
+  // that ran out of retries, a PDF-only submission detected from the content
+  // type, a failed extraction, or interruption.
   yield* Effect.addFinalizer(() =>
     cleanUpBestEffort(downloadDirFull, 'staging download dir', {
       recursive: true,

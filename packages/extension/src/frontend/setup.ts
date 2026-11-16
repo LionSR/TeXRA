@@ -2,11 +2,10 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { withExtendedPath } from '@texra-ai/harness/node';
+import { withCommandDirs } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
-import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import { LATEX_WORKSHOP_EXT_ID } from '@texra/shared/constants/latexToolchain';
 import type { StateStore } from '@texra-ai/harness/host';
 
@@ -22,15 +21,14 @@ export function initializeLatexSupport(
   // find latexmk, pdflatex, and other TeX binaries.  When VS Code is launched
   // from the macOS Finder or Windows Start Menu it often inherits a minimal
   // PATH that excludes TeX directories, causing "spawn latexmk ENOENT" errors.
-  const extendPath = Effect.sync(() => {
-    const extendedPath = withExtendedPath(
-      { PATH: process.env.PATH },
-      commandDirs(),
-    ).PATH;
-    if (extendedPath === process.env.PATH) return false;
-    process.env.PATH = extendedPath;
-    return true;
-  }).pipe(
+  const extendPath = Effect.map(
+    withCommandDirs({ PATH: process.env.PATH }),
+    ({ PATH: extendedPath }) => {
+      if (extendedPath === process.env.PATH) return false;
+      process.env.PATH = extendedPath;
+      return true;
+    },
+  ).pipe(
     Effect.flatMap((extended) =>
       extended
         ? Effect.logInfo('Extended process PATH with TeX directories').pipe(

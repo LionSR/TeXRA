@@ -132,7 +132,7 @@ export type TaskSummary = typeof TaskSummarySchema.Type;
 /** The run a `task.start` or `task.resume` reached, and the commit of the
  *  activation it reached (`Run.activation`): a window's handle is for that
  *  activation, whatever later activation the run has by then. */
-const TaskAdmitted = Schema.Struct({
+const TaskStarted = Schema.Struct({
   runId: RunIdSchema,
   activation: CommitOrdinalSchema,
 });
@@ -253,18 +253,18 @@ export const TexraRpcs = RpcGroup.make(
      *  configuration, which the service takes and resolves nothing for. */
     payload: { workspace, start: StartRequestSchema.members[1] },
     /** The run that started: the asked id, or the one the launch resolved. */
-    success: TaskAdmitted,
+    success: TaskStarted,
     error: TaskStartFailed,
   }),
   Rpc.make('task.resume', {
-    /** `apiKeys`: as a start carries them (`StartOptions.apiKeys`). */
+    /** `apiKeys`: as a start carries them (`StartInput.apiKeys`). */
     payload: {
       workspace,
       runId: RunIdSchema,
       apiKeys: Schema.optional(Schema.Record(Schema.String, Schema.String)),
     },
     /** The run that resumed: the asked one, or the parent that owns it. */
-    success: TaskAdmitted,
+    success: TaskStarted,
     error: TaskStartFailed,
   }),
   /** What the task's activation at `activation` ends with, once it ends:
@@ -273,7 +273,7 @@ export const TexraRpcs = RpcGroup.make(
    *  showed the end, so a window's view at or past it shows the end (or the
    *  run's removal) too. */
   Rpc.make('task.result', {
-    payload: TaskAdmitted.mapFields(Struct.assign({ workspace })),
+    payload: TaskStarted.mapFields(Struct.assign({ workspace })),
     success: RunEndSchema.mapFields(Struct.assign({ at: CommitOrdinalSchema })),
     error: TaskFailed,
   }),

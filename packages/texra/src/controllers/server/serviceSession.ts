@@ -24,6 +24,7 @@ import {
   Stream,
   Struct,
 } from 'effect';
+import type { RpcClientError } from 'effect/rpc';
 
 import {
   LaunchRefused,
@@ -68,42 +69,36 @@ import type {
   TranscriptSubscription,
 } from '@texra-ai/harness/transcript';
 
-/** A call through `link`'s client now; `offline` words a call made while
- *  the link holds none, with why it holds none. */
+const isRpcClientError = (
+  error: unknown,
+): error is RpcClientError.RpcClientError =>
+  Predicate.isTagged(error, 'RpcClientError');
+
+/**
+ * A call through `link`'s client now, its failures to reach an answer
+ * worded once: a call made while the link holds none fails `failed` with
+ * why it holds none, and a failed transport with what it said. The
+ * service's own refusals pass through as the classes it failed with.
+ */
 const callService = <A, E>(
   link: ServiceLink,
-  offline: (reason: string) => E,
-  use: (client: ServiceClient) => Effect.Effect<A, E>,
+  failed: (message: string, cause: Error) => E,
+  use: (
+    client: ServiceClient,
+  ) => Effect.Effect<A, E | RpcClientError.RpcClientError>,
 ): Effect.Effect<A, E> =>
   linkedClient(link).pipe(
-    Effect.mapError((away) => offline(away.message)),
+    Effect.mapError((away) => failed(away.message, away)),
     Effect.flatMap(use),
+    Effect.mapError((error) =>
+      isRpcClientError(error)
+        ? failed(`The TeXRA service did not answer: ${error.message}`, error)
+        : error,
+    ),
   );
 
-/** A call that reached no answer, a lost link or a failed transport, as
- *  the window's user reads it. */
-const unanswered = (reason: string) =>
-  `The TeXRA service did not answer: ${reason}`;
-
-/** A call the service answers or fails as the session's own `Error`: the
- *  service's refusal as the class it failed with, a transport failure or
- *  an offline link worded for the user. */
-const asked = <A>(
-  link: ServiceLink,
-  use: (client: ServiceClient) => Effect.Effect<A, Error>,
-): Effect.Effect<A, Error> =>
-  callService(
-    link,
-    (reason) => new Error(unanswered(reason)),
-    (client) =>
-      use(client).pipe(
-        Effect.mapError((error) =>
-          Predicate.isTagged(error, 'RpcClientError')
-            ? new Error(unanswered(error.message))
-            : error,
-        ),
-      ),
-  );
+/** A failure to reach an answer, as a plain `Error`. */
+const failedCall = (message: string) => new Error(message);
 
 /** How many times a change to project state keys is tried again while
  *  another writer moves one between its read and its write. */
@@ -120,28 +115,17 @@ export const serviceProjectState = (
   workspace: string,
 ): StateStore => {
   const call = <A, E>(
-    failed: (message: string, cause: unknown) => E,
+    failed: (message: string, cause: Error) => E,
     use: (
       client: ServiceClient,
-    ) => Effect.Effect<
-      A,
-      ProjectStateFailed | { readonly _tag: 'RpcClientError'; message: string }
-    >,
+    ) => Effect.Effect<A, ProjectStateFailed | RpcClientError.RpcClientError>,
   ): Effect.Effect<A, E> =>
-    callService(
-      link,
-      (reason) => failed(reason, undefined),
-      (client) =>
-        use(client).pipe(
-          Effect.mapError((error) =>
-            failed(
-              error._tag === 'ProjectStateFailed'
-                ? error.message
-                : unanswered(error.message),
-              error,
-            ),
-          ),
+    callService(link, failed, (client) =>
+      use(client).pipe(
+        Effect.catchTag('ProjectStateFailed', (error) =>
+          Effect.fail(failed(error.message, error)),
         ),
+      ),
     );
   const read = (keys: readonly string[]) =>
     call(
@@ -243,20 +227,11 @@ export const serviceProjectState = (
 const runFailure = (message: string) =>
   new RunFailure({ cause: new Error(message), message });
 
-/** The service's answer to a start or resume it did not run: a refused
- *  launch as itself, for this window's presenter to show with its notice,
- *  anything else worded `prefix` and its message, as the run's own. */
-const refusedByService =
-  (prefix = '') =>
-  (
-    error:
-      | TaskFailed
-      | LaunchRefused
-      | { readonly _tag: 'RpcClientError'; readonly message: string },
-  ) =>
-    error._tag === 'LaunchRefused'
-      ? error
-      : runFailure(`${prefix}${error.message}`);
+/** The service's answer to a start or resume it did not run, as the run's
+ *  own failure, worded `prefix` and its message; a refused launch passes
+ *  as itself, for this window's presenter to show with its notice. */
+const taskFailed = (prefix: string) => (error: TaskFailed) =>
+  Effect.fail(runFailure(`${prefix}${error.message}`));
 
 /**
  * The session of `workspace` in the service, keyed by `roots.storage` (the
@@ -398,7 +373,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     );
   /** The run's stored end from the service's answer, whatever its outcome,
    *  held until this window's fold shows it too: the answer and the fold's
-   *  `task.watch` stream arrive apart, so an end that settled on the answer
+   *  `task.watch` stream arrive apart, so an end that went by the answer
    *  alone could find the window still showing the run live, or a resumed
    *  run with the outcome its previous activation left. Held until this
    *  window's fold is at or past `at`, the log's commit when the service
@@ -422,19 +397,14 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       (reason) => new Rejected({ reason }),
       (client) =>
         requestOnService(client, workspace, runtimeRequest).pipe(
-          // A transport failure is a refusal worded for the user, and so is
-          // the service's own bridge error (a request it could not parse, a
-          // handler that died); a runtime refusal arrives as its class.
-          Effect.mapError((error) => {
-            switch (error._tag) {
-              case 'RpcClientError':
-                return new Rejected({ reason: unanswered(error.message) });
-              case 'Invalid':
-              case 'Internal':
-                return new Rejected({ reason: requestErrorText(error) });
-              default:
-                return error;
-            }
+          // The service's own bridge error (a request it could not parse, a
+          // handler that died) is a refusal worded for the user; a runtime
+          // refusal arrives as its class.
+          Effect.catchTags({
+            Invalid: (error) =>
+              Effect.fail(new Rejected({ reason: requestErrorText(error) })),
+            Internal: (error) =>
+              Effect.fail(new Rejected({ reason: requestErrorText(error) })),
           }),
         ),
     );
@@ -486,7 +456,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         );
       }),
     );
-  /** The run the service admitted, as this window holds it: the `Run` of
+  /** The run the service started, as this window holds it: the `Run` of
    *  the activation the service named, over this window's view and the
    *  service's rows. Its end is the service's answer (asked once, at once),
    *  held until this window's view shows it too; its view this window's,
@@ -529,7 +499,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         ),
       ),
       // The service's rows, through the watch; the service's log is the
-      // store, settled once it answered.
+      // store, final once it answered.
       events: replayTrace(
         {
           view: {
@@ -569,7 +539,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     Object.fromEntries(
       Struct.keys(RUN_RECORDS).map((member) => [
         member,
-        asked<unknown>(link, (client) =>
+        callService<unknown, Error>(link, failedCall, (client) =>
           client[`records.${member}`]({ workspace, runId }),
         ),
       ]),
@@ -581,14 +551,16 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       changes: graph.view.changes,
       watch,
       read: (runIds) =>
-        asked(link, (client) => client['session.view']({ workspace, runIds })),
+        callService(link, failedCall, (client) =>
+          client['session.view']({ workspace, runIds }),
+        ),
     },
     records,
-    listRuns: asked(link, (client) =>
+    listRuns: callService(link, failedCall, (client) =>
       client['session.listRuns']({ workspace }),
     ),
     deleteRuns: (target) =>
-      asked(link, (client) =>
+      callService(link, failedCall, (client) =>
         client['session.deleteRuns']({ workspace, target }),
       ),
     request,
@@ -605,8 +577,9 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           workspace,
           start: { ...start, apiKeys: start.apiKeys ?? environmentApiKeys() },
         }).pipe(
-          Effect.mapError(
-            refusedByService('The TeXRA service could not start the task: '),
+          Effect.catchTag(
+            'TaskFailed',
+            taskFailed('The TeXRA service could not start the task: '),
           ),
         ),
       ).pipe(Effect.flatMap(runOf));
@@ -619,7 +592,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           workspace,
           runId,
           apiKeys: input?.apiKeys ?? environmentApiKeys(),
-        }).pipe(Effect.mapError(refusedByService())),
+        }).pipe(Effect.catchTag('TaskFailed', taskFailed(''))),
       ).pipe(
         Effect.flatMap((resumed) =>
           runOf(resumed, resumed.runId === runId ? undefined : runId),

@@ -12,14 +12,16 @@
  *    package resolution. We probe Electron's `app.asar.unpacked` resources,
  *    the local `node_modules`, the global npm prefix, and PATH (in that
  *    priority order) and pass the result as `pathToClaudeCodeExecutable` to
- *    `query()`. Results are cached for the session.
+ *    `query()`. A found path is kept for the process lifetime.
  */
 
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
+
 import {
   binaryIfPresent,
-  createCachedBinaryResolver,
+  findCliBinary,
   importForeignSdk,
 } from './vendorPackages';
 
@@ -80,19 +82,20 @@ const CLAUDE_BINARY_NAME =
   process.platform === 'win32' ? 'claude.exe' : 'claude';
 
 /**
- * Locate the native Claude Code CLI binary. Results are cached for the session
- * (misses are always retried so mid-session installs are picked up).
+ * Locate the native Claude Code CLI binary. A found path is kept for the
+ * process lifetime; a miss is retried, so an install made meanwhile is
+ * picked up.
  *
  * The caller should pass the result as `pathToClaudeCodeExecutable` to the
  * SDK's `query()` options. Returning `undefined` lets the SDK fall back to
  * its own resolution.
  */
-export const findClaudeBinaryPath = createCachedBinaryResolver(() => {
+export function findClaudeBinaryPath() {
   const platformPackages =
     PLATFORM_PACKAGES[`${process.platform}-${process.arch}`];
-  if (!platformPackages) return undefined;
+  if (!platformPackages) return Effect.succeed(undefined);
 
-  return {
+  return findCliBinary({
     platformPackages,
     // The platform binary sits directly in the platform-package directory.
     binaryInPlatformPackage: (platformPkgDir) =>
@@ -110,5 +113,5 @@ export const findClaudeBinaryPath = createCachedBinaryResolver(() => {
       path.join(prefix, 'node_modules', '@anthropic-ai', 'claude-agent-sdk'),
     ],
     pathCommand: 'claude',
-  };
-});
+  });
+}

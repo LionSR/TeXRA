@@ -7,8 +7,13 @@ import {
 } from '@texra/shared/sessionTitle';
 import type { Session } from '@texra-ai/harness';
 
-type DesktopTitleSession = {
-  readonly view: Pick<Session['view'], 'current' | 'changes'>;
+type DesktopTitleProject = {
+  readonly session: {
+    readonly view: Pick<Session['view'], 'current' | 'changes'>;
+  };
+  /** Absent for the no-workspace session, whose title names no project. */
+  readonly root: string | undefined;
+  readonly display: { readonly name: string };
 };
 
 type DesktopTitleWindow = Pick<
@@ -17,14 +22,10 @@ type DesktopTitleWindow = Pick<
 >;
 
 /** Compute the current title synchronously, including before a window opens. */
-export function getDesktopWindowTitle(
-  session: DesktopTitleSession,
-  /** The project's display name; undefined for the no-workspace session. */
-  projectName: string | undefined,
-): string {
+export function getDesktopWindowTitle(project: DesktopTitleProject): string {
   return formatSessionTitle(
-    projectName,
-    sessionActivity(session.view.current()),
+    project.root === undefined ? undefined : project.display.name,
+    sessionActivity(project.session.view.current()),
     { style: NATIVE_WINDOW_TITLE },
   );
 }
@@ -37,8 +38,7 @@ export function getDesktopWindowTitle(
 export const installDesktopWindowTitle = Effect.fn('installDesktopWindowTitle')(
   function* (
     window: DesktopTitleWindow,
-    session: DesktopTitleSession,
-    projectName: string | undefined,
+    project: DesktopTitleProject,
   ): Effect.fn.Return<void, never, Scope.Scope> {
     const preventRendererTitle = (event: { preventDefault(): void }): void => {
       event.preventDefault();
@@ -61,8 +61,8 @@ export const installDesktopWindowTitle = Effect.fn('installDesktopWindowTitle')(
     );
     // Registered last, so the scope interrupts and joins this follower before
     // releasing the renderer-title listener.
-    yield* session.view.changes.pipe(
-      Stream.map(() => getDesktopWindowTitle(session, projectName)),
+    yield* project.session.view.changes.pipe(
+      Stream.map(() => getDesktopWindowTitle(project)),
       Stream.changes,
       Stream.runForEach((title) =>
         Effect.sync(() => {

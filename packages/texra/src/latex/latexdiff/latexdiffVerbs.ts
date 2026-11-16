@@ -25,6 +25,7 @@ import {
 } from '@texra-ai/harness/plugins';
 import {
   Rejected,
+  runActionRefusal,
   type RunId,
   type SettingRow,
 } from '@texra-ai/harness/schemas';
@@ -51,9 +52,9 @@ import {
 
 /** The latexdiff verbs taken against a commit rather than an edited file. */
 type LatexdiffCommitAction = Extract<
-  Extract<HostCommand, { kind: 'latexdiffs' }>['action'],
-  'latexdiffvc' | 'packLatexdiffvc' | 'cleanLatexdiffvc'
->;
+  HostCommand,
+  { kind: 'latexdiffCommit' }
+>['action'];
 
 /** A host verb, run on the fiber of the window's request dispatch. */
 type LatexdiffVerb<A> = Effect.Effect<
@@ -97,16 +98,11 @@ export function latexdiffVerbs(parts: {
       Effect.flatMap((diffPath) => host.openDiffs([diffPath])),
     );
 
-  /** latexdiff over two files of the workspace. */
+  /** latexdiff over two files of the workspace, both named. */
   const file = Effect.fn('latexdiffVerbs.file')(function* (
     baseFile: string,
     editedFile: string,
   ) {
-    if (!baseFile || !editedFile) {
-      return yield* new Rejected({
-        reason: 'Choose a base file and an edited file first.',
-      });
-    }
     yield* open(
       latexdiff(at(baseFile), at(editedFile), {
         roots,
@@ -144,12 +140,17 @@ export function latexdiffVerbs(parts: {
    * `document_diff` recorded them, then for each round with outputs and no
    * recorded diff (or a failed one, or one made under another math markup
    * than the setting's now), a latexdiff of the pairs it calls for. A run
-   * whose every diff failed is refused.
+   * that no longer offers its files as the request is handled (it is
+   * running again), or whose every diff failed, is refused.
    */
   const run = Effect.fn('latexdiffVerbs.run')(function* (runId: RunId) {
-    const rounds = documentRoundsOf(
-      session.view.current().runs.get(runId) ?? { facts: {} },
-    );
+    const held = session.view.current().runs.get(runId);
+    if (held !== undefined && !held.actions.includes('files')) {
+      return yield* new Rejected({
+        reason: runActionRefusal(held, 'files'),
+      });
+    }
+    const rounds = documentRoundsOf(held ?? { facts: {} });
     const setting = <A>(row: SettingRow<A>) =>
       Settings.get(roots, row).pipe(
         Effect.mapError((cause) => hostFailure('runLatexdiff', cause)),

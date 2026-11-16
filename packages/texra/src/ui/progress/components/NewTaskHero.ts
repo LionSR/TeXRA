@@ -33,7 +33,7 @@ export const heroStyles = css`
     font-size: var(--hero-heading-size, var(--font-size-h1));
     font-weight: var(--font-weight-semibold);
     letter-spacing: -0.025em;
-    line-height: var(--line-height-heading, 1.25);
+    line-height: var(--line-height-heading);
     text-wrap: balance;
   }
 
@@ -41,7 +41,7 @@ export const heroStyles = css`
     margin: 0;
     max-width: 52ch;
     font-size: var(--font-size);
-    line-height: var(--line-height-normal, 1.5);
+    line-height: var(--line-height-normal);
     color: var(--color-text-secondary);
     text-wrap: pretty;
   }

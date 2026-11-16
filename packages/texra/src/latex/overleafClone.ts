@@ -2,10 +2,9 @@
  * Host-neutral Overleaf / ShareLaTeX clone workflow: token caching and
  * validation, clone-precondition checks, and clone execution with
  * auth-failure handling (clears the bad token and reports the failure; does
- * not retry the clone itself). Reaches every side effect (secret storage,
- * prompts, the actual `git clone`, and user-facing messages) through
- * `ports`, so the decision logic is unit-testable and reusable by any host —
- * not just the VS Code command it was extracted from.
+ * not retry the clone itself). It reaches secret storage, the token prompt,
+ * the destination listing and the `git clone` through `ports`, and returns
+ * one {@link OverleafCloneOutcome}; each host turns that outcome into words.
  *
  * Every port is an Effect: the workflow is one program the host runs at its
  * own entry, so a cancelled clone interrupts the prompt and the subprocess
@@ -43,52 +42,42 @@ export interface OverleafCloneWorkflowPorts {
    * error for the caller to report, not a cancelled clone.
    */
   promptToken(spec: OverleafTokenSpec): Effect.Effect<string | null, Error>;
-  /** Surface an invalid-token-format error for the given spec. */
-  showInvalidToken(
-    spec: OverleafTokenSpec,
-    message: string,
-  ): Effect.Effect<void>;
-
-  /** `git` isn't on PATH — surface install guidance. */
-  showGitMissing(): Effect.Effect<void>;
   /** Fails when the directory can't be read at all. */
   listWorkspaceEntries(
     workspaceRoot: string,
   ): Effect.Effect<Iterable<string>, Error, FileSystem.FileSystem>;
-  showWorkspaceUnreadable(error: unknown): Effect.Effect<void>;
-  showWorkspaceNotEmpty(): Effect.Effect<void>;
-
-  /** Run {@link gitClone} for `clone`. Fails when `git clone` does. */
+  /**
+   * Run {@link gitClone} for `clone` and return the directory it cloned
+   * into. Fails when `git clone` does.
+   */
   runClone(
     clone: OverleafGitClone,
     workspaceRoot: string,
-  ): Effect.Effect<void, Error, CloneServices>;
-  showCloneSucceeded(label: string): Effect.Effect<void>;
-  /** The clone failed for what looks like an auth reason (bad/expired token). */
-  showAuthFailure(remote: OverleafRemote): Effect.Effect<void>;
-  showCloneFailed(message: string): Effect.Effect<void>;
-  logCloneError(message: string): Effect.Effect<void>;
+  ): Effect.Effect<string, Error, CloneServices>;
 }
 
-type OverleafCloneOutcome =
-  | { status: 'success' }
-  | { status: 'cancelled' }
-  | { status: 'invalidToken' }
-  | { status: 'gitMissing' }
-  | { status: 'workspaceUnreadable' }
-  | { status: 'workspaceNotEmpty' }
-  | { status: 'authFailure' }
-  | { status: 'cloneFailed' };
+/**
+ * How a clone ended. `AuthFailure` (git rejected the token, now cleared) and
+ * `CloneFailed` carry git's message, which cannot hold the token: it travels
+ * in no argument or URL.
+ */
+export type OverleafCloneOutcome =
+  | { readonly _tag: 'Cloned'; readonly destination: string }
+  | { readonly _tag: 'Cancelled' }
+  | {
+      readonly _tag: 'InvalidToken';
+      readonly spec: OverleafTokenSpec;
+      readonly message: string;
+    }
+  | { readonly _tag: 'GitMissing' }
+  | { readonly _tag: 'WorkspaceUnreadable'; readonly error: Error }
+  | { readonly _tag: 'WorkspaceNotEmpty' }
+  | { readonly _tag: 'AuthFailure'; readonly error: string }
+  | { readonly _tag: 'CloneFailed'; readonly error: string };
 
 type TokenResolution =
-  | { status: 'ready'; token: string }
-  | { status: 'cancelled' }
-  | { status: 'invalidToken' };
-
-type ClonePreconditionFailure =
-  | { status: 'gitMissing' }
-  | { status: 'workspaceUnreadable' }
-  | { status: 'workspaceNotEmpty' };
+  | { readonly _tag: 'Ready'; readonly token: string }
+  | Extract<OverleafCloneOutcome, { _tag: 'Cancelled' | 'InvalidToken' }>;
 
 const resolveOverleafToken = Effect.fn('overleaf.resolveToken')(function* (
   remote: OverleafRemote,
@@ -99,23 +88,22 @@ const resolveOverleafToken = Effect.fn('overleaf.resolveToken')(function* (
 
   const stored = (yield* ports.secrets.get(spec.tokenKey))?.trim() ?? '';
   if (stored && isValid(stored)) {
-    return { status: 'ready', token: stored };
+    return { _tag: 'Ready', token: stored };
   }
   if (stored) yield* ports.secrets.delete(spec.tokenKey);
 
   const input = yield* ports.promptToken(spec);
-  if (!input) return { status: 'cancelled' };
+  if (!input) return { _tag: 'Cancelled' };
 
   if (!isValid(input)) {
     const message = spec.tokenHint
       ? `Invalid token format. ${spec.tokenHint}`
       : 'Invalid token format.';
-    yield* ports.showInvalidToken(spec, message);
-    return { status: 'invalidToken' };
+    return { _tag: 'InvalidToken', spec, message };
   }
 
   yield* ports.secrets.set(spec.tokenKey, input);
-  return { status: 'ready', token: input };
+  return { _tag: 'Ready', token: input };
 });
 
 const checkOverleafClonePreconditions = Effect.fn(
@@ -123,31 +111,22 @@ const checkOverleafClonePreconditions = Effect.fn(
 )(function* (
   workspaceRoot: string,
   ports: OverleafCloneWorkflowPorts,
-): Effect.fn.Return<ClonePreconditionFailure | null, never, CloneServices> {
+): Effect.fn.Return<OverleafCloneOutcome | null, never, CloneServices> {
   // Directory-independent: the clone target may not exist yet.
   const gitVersion = yield* executeCommand(['git', '--version'], {
     cwd: process.cwd(),
     quiet: true,
   });
-  if (!gitVersion.success) {
-    yield* ports.showGitMissing();
-    return { status: 'gitMissing' };
+  if (!gitVersion.success) return { _tag: 'GitMissing' };
+
+  const entries = yield* Effect.result(
+    ports.listWorkspaceEntries(workspaceRoot),
+  );
+  if (entries._tag === 'Failure') {
+    return { _tag: 'WorkspaceUnreadable', error: entries.failure };
   }
-
-  const entries = yield* ports
-    .listWorkspaceEntries(workspaceRoot)
-    .pipe(
-      Effect.catch((error) =>
-        ports
-          .showWorkspaceUnreadable(error)
-          .pipe(Effect.as<Iterable<string> | null>(null)),
-      ),
-    );
-  if (entries === null) return { status: 'workspaceUnreadable' };
-
-  if ([...entries].some((name) => !IGNORED_CLONE_FILES.has(name))) {
-    yield* ports.showWorkspaceNotEmpty();
-    return { status: 'workspaceNotEmpty' };
+  if ([...entries.success].some((name) => !IGNORED_CLONE_FILES.has(name))) {
+    return { _tag: 'WorkspaceNotEmpty' };
   }
 
   return null;
@@ -255,36 +234,27 @@ export const cloneOverleafProject = Effect.fn('overleaf.cloneProject')(
     if (preconditionFailure) return preconditionFailure;
 
     const token = yield* resolveOverleafToken(remote, ports);
-    if (token.status !== 'ready') return token;
-
-    const label = remote.isOverleaf ? 'Overleaf' : 'ShareLaTeX';
+    if (token._tag !== 'Ready') return token;
 
     return yield* ports
       .runClone(overleafGitClone(remote, token.token), workspaceRoot)
       .pipe(
-        Effect.flatMap(() =>
-          ports
-            .showCloneSucceeded(label)
-            .pipe(Effect.as<OverleafCloneOutcome>({ status: 'success' })),
-        ),
-        Effect.catch(
-          Effect.fnUntraced(function* (error) {
-            const authError = isCloneAuthError(error);
-            if (authError) {
-              yield* ports.secrets.delete(overleafTokenSpec(remote).tokenKey);
-              yield* ports.showAuthFailure(remote);
-            } else {
-              yield* ports.showCloneFailed(
-                'Clone failed. Check credentials and connection.',
-              );
-            }
-            // The token travels in no argument or URL, so git's message
-            // cannot carry it.
-            yield* ports.logCloneError(error.message);
-            return {
-              status: authError ? 'authFailure' : 'cloneFailed',
-            } satisfies OverleafCloneOutcome;
-          }),
+        Effect.map((destination): OverleafCloneOutcome => ({
+          _tag: 'Cloned',
+          destination,
+        })),
+        Effect.catch((error) =>
+          isCloneAuthError(error)
+            ? ports.secrets.delete(overleafTokenSpec(remote).tokenKey).pipe(
+                Effect.as<OverleafCloneOutcome>({
+                  _tag: 'AuthFailure',
+                  error: error.message,
+                }),
+              )
+            : Effect.succeed<OverleafCloneOutcome>({
+                _tag: 'CloneFailed',
+                error: error.message,
+              }),
         ),
       );
   },

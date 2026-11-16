@@ -12,7 +12,7 @@
  *   before it starts the next build's (`ensureService`), so a project is
  *   never held by two processes;
  * - idleness: no project open (each is released once nothing has held it
- *   for `idleAfter`, a run at work included) and no task admitting, for
+ *   for `idleAfter`, a run at work included) and no task starting, for
  *   `idleAfter` more (a conversation waiting for its next message stops
  *   with it, resumable, as in a drain).
  *
@@ -53,7 +53,7 @@ import {
   servicePaths,
 } from './discovery';
 import {
-  ServiceControl,
+  type ServiceControl,
   serviceHandlers,
   ServiceProjects,
   runningTasks,
@@ -101,7 +101,7 @@ interface ServeOptions {
   readonly shutdown: Deferred.Deferred<void>;
   /** Stop and finish every task, run once the service is ending and while
    *  its clients are still connected, so they see each task's last rows. */
-  readonly settle: Effect.Effect<void>;
+  readonly finishTasks: Effect.Effect<void>;
 }
 
 /** How long the watch streams get, after the tasks are stopped, to end
@@ -150,12 +150,12 @@ export const serve = Effect.fn('server.serve')(function* (
   const ended = yield* Deferred.make<ServeExit>();
   // The service's own lifecycle facts: why it is leaving, if it is (a
   // drain finishes its tasks first, an end stops them), and the task
-  // admissions under way; one value, so an admission is claimed in the
+  // starts under way; one value, so a start is claimed in the
   // same step that checks for a leave.
   const state = yield* SubscriptionRef.make<{
     readonly leaving: 'drain' | 'end' | null;
-    readonly admitting: number;
-  }>({ leaving: null, admitting: 0 });
+    readonly starting: number;
+  }>({ leaving: null, starting: 0 });
   // Once, as the service exits.
   const release = yield* Effect.cached(
     releaseServiceRecord(paths, record).pipe(
@@ -169,7 +169,7 @@ export const serve = Effect.fn('server.serve')(function* (
       ...now,
       leaving: now.leaving ?? why,
     }));
-  // Every end leaves first, so no task is admitted once the run has ended.
+  // Every end leaves first, so no task starts once the run has ended.
   const end = (exit: ServeExit) =>
     leave('end').pipe(
       Effect.andThen(Deferred.succeed(ended, exit)),
@@ -189,8 +189,7 @@ export const serve = Effect.fn('server.serve')(function* (
     .pipe(
       Effect.mapError((cause) => new ServiceListenFailed({ socket, cause })),
     );
-  const control: Context.Service.Shape<typeof ServiceControl> = {
-    version: BUILD_VERSION,
+  const control: ServiceControl = {
     socket,
     startedAt,
     clients: Effect.map(protocol.clientIds, (ids) => ids.size),
@@ -198,17 +197,17 @@ export const serve = Effect.fn('server.serve')(function* (
       SubscriptionRef.get(state),
       (now) => now.leaving !== null,
     ),
-    admission: Effect.acquireRelease(
+    holdStart: Effect.acquireRelease(
       SubscriptionRef.modify(state, (now) =>
         now.leaving !== null
           ? [false, now]
-          : [true, { ...now, admitting: now.admitting + 1 }],
+          : [true, { ...now, starting: now.starting + 1 }],
       ),
-      (admitted) =>
-        admitted
+      (held) =>
+        held
           ? SubscriptionRef.update(state, (now) => ({
               ...now,
-              admitting: now.admitting - 1,
+              starting: now.starting - 1,
             }))
           : Effect.void,
     ),
@@ -217,11 +216,7 @@ export const serve = Effect.fn('server.serve')(function* (
   };
   yield* Effect.forkScoped(
     RpcServer.make(TexraRpcs).pipe(
-      Effect.provide(
-        serviceHandlers.pipe(
-          Layer.provide(Layer.succeed(ServiceControl)(control)),
-        ),
-      ),
+      Effect.provide(serviceHandlers(control)),
       Effect.provideService(RpcServer.Protocol, protocol),
     ),
   );
@@ -258,14 +253,14 @@ export const serve = Effect.fn('server.serve')(function* (
     SubscriptionRef.changes(state),
     SubscriptionRef.changes(projects.load),
   );
-  // A drain ends once no task is at work and none is admitting. The
+  // A drain ends once no task is at work and none is starting. The
   // projects' load is the trigger; the decision reads the registries, which
-  // hold a run as its admission ends, where the view shows it only once its
+  // hold a run as its start ends, where the view shows it only once its
   // rows fold.
   yield* Effect.forkScoped(
     facts.pipe(
       Stream.filterEffect(([now]) =>
-        now.leaving === 'drain' && now.admitting === 0
+        now.leaving === 'drain' && now.starting === 0
           ? Effect.map(runningTasks(projects, true), (atWork) => atWork === 0)
           : Effect.succeed(false),
       ),
@@ -273,21 +268,21 @@ export const serve = Effect.fn('server.serve')(function* (
       Effect.andThen(Deferred.succeed(ended, 'drained')),
     ),
   );
-  // Idle: no project open and nothing admitting, for `idleAfter`. The leave
-  // is decided in the same step that checks the admissions again, so a
+  // Idle: no project open and nothing starting, for `idleAfter`. The leave
+  // is decided in the same step that checks the starts again, so a
   // start that landed meanwhile keeps its run.
   yield* Effect.forkScoped(
     facts.pipe(
       Stream.map(
         ([now, load]) =>
-          now.leaving === null && now.admitting === 0 && load.open === 0,
+          now.leaving === null && now.starting === 0 && load.open === 0,
       ),
       Stream.changes,
       Stream.debounce(options.idleAfter),
       Stream.filter((idle) => idle),
       Stream.mapEffect(() =>
         SubscriptionRef.modify(state, (now) =>
-          now.leaving === null && now.admitting === 0
+          now.leaving === null && now.starting === 0
             ? [true, { ...now, leaving: 'end' as const }]
             : [false, now],
         ),
@@ -303,8 +298,8 @@ export const serve = Effect.fn('server.serve')(function* (
   const exit = yield* Deferred.await(ended);
   yield* Effect.logInfo(`TeXRA service exiting: ${exit}`);
   yield* leave('end');
-  yield* options.settle;
-  // The watch streams end with the sessions the settle closed, each having
+  yield* options.finishTasks;
+  // The watch streams end with the sessions `finishTasks` closed, each having
   // carried its tasks' last rows; the socket closes once they have.
   yield* SubscriptionRef.changes(control.watching).pipe(
     Stream.filter((open) => open === 0),

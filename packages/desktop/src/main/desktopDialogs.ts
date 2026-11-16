@@ -1,9 +1,9 @@
-// The window's native dialogs, each a program over Electron's `showMessageBox`
-// that raises the failure its port names. A dialog a project's run raised
-// names that project, since the window may be showing another.
+// The app's native message boxes, each a call of `choose` over Electron's
+// `showMessageBox`. A dialog a project's run raised names that project, since
+// the window may be showing another.
 
-import { type BrowserWindow, dialog } from 'electron';
-import { Effect, Predicate } from 'effect';
+import { BrowserWindow, dialog, type MessageBoxOptions } from 'electron';
+import { Effect, Predicate, type Scope } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
@@ -32,6 +32,82 @@ function inProject(project: string | undefined, detail?: string) {
   };
 }
 
+interface MessageBox<T> {
+  readonly type: NonNullable<MessageBoxOptions['type']>;
+  readonly message: string;
+  readonly detail?: string;
+  /** The project the box is about, shown as its title. */
+  readonly project?: string;
+  /** The answers, one button each. The default button is the one marked
+   *  `default`, else the closing button. */
+  readonly choices: readonly {
+    readonly label: string;
+    readonly value: T;
+    readonly default?: true;
+  }[];
+  /** The closing button's label, after the choices; a box with no choices
+   *  and no label shows the platform's own OK. */
+  readonly close?: string;
+}
+
+/**
+ * Ask the user to pick one of `box.choices`, answering its value, or
+ * `undefined` when they close the box. The box sits on `parent`; one with no
+ * window of its own (a startup warning) sits on the focused window, else any
+ * open one, else on none.
+ */
+export function choose<T>(
+  parent: BrowserWindow | undefined,
+  box: MessageBox<T>,
+): Effect.Effect<T | undefined, HostFailed> {
+  const { choices } = box;
+  const closeId = choices.length;
+  const defaultIndex = choices.findIndex((choice) => choice.default);
+  const options: MessageBoxOptions = {
+    type: box.type,
+    message: box.message,
+    ...inProject(box.project, box.detail),
+    ...((choices.length > 0 || box.close !== undefined) && {
+      buttons: [...choices.map((choice) => choice.label), box.close ?? 'OK'],
+      defaultId: defaultIndex === -1 ? closeId : defaultIndex,
+      cancelId: closeId,
+    }),
+  };
+  return Effect.tryPromise({
+    try: () => {
+      const window =
+        parent ??
+        BrowserWindow.getFocusedWindow() ??
+        BrowserWindow.getAllWindows().find((open) => !open.isDestroyed());
+      return window
+        ? dialog.showMessageBox(window, options)
+        : dialog.showMessageBox(options);
+    },
+    catch: (cause) =>
+      new HostFailed({
+        member: 'dialog.showMessageBox',
+        message: `A desktop ${box.type} dialog could not be shown: ${toErrorMessage(cause)}`,
+        cause,
+      }),
+  }).pipe(Effect.map(({ response }) => choices[response]?.value));
+}
+
+/** Show a box with nothing to answer on a fiber of `scope`, without waiting
+ *  for the user. One that cannot be shown is logged with what it said, and
+ *  once `scope` has closed a notice starts nothing. */
+export const noticeIn =
+  (scope: Scope.Scope) =>
+  (type: 'info' | 'warning', message: string): Effect.Effect<void> =>
+    choose(undefined, { type, message, choices: [] }).pipe(
+      Effect.catch((error) =>
+        Effect.logWarning(`${error.message}: ${message}`).pipe(
+          withLogChannel('desktop'),
+        ),
+      ),
+      Effect.forkIn(scope),
+      Effect.asVoid,
+    );
+
 export function createDesktopDialogs(
   window: BrowserWindow,
   /** The window's fibers, where a notice waits for its dismissal. */
@@ -52,19 +128,9 @@ export function createDesktopDialogs(
   ): Effect.Effect<void> =>
     Effect.sync(() =>
       spawn(
-        Effect.tryPromise({
-          try: () =>
-            dialog.showMessageBox(window, {
-              type: level,
-              message,
-              ...inProject(project),
-            }),
-          catch: ensureError,
-        }).pipe(
-          Effect.catch((cause) =>
-            Effect.logWarning(
-              `A desktop ${level} dialog could not be shown: ${cause.message}`,
-            ).pipe(withLogChannel('desktop')),
+        choose(window, { type: level, message, project, choices: [] }).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning(error.message).pipe(withLogChannel('desktop')),
           ),
           Effect.asVoid,
         ),
@@ -72,31 +138,18 @@ export function createDesktopDialogs(
     );
   return {
     notify,
-    /**
-     * A warning with the action's button (defaulted, id 0) and 'Cancel'
-     * (id 1), collapsed to a boolean.
-     */
     confirm: (
       question: ConfirmQuestion,
       project?: string,
     ): Effect.Effect<boolean, HostFailed> =>
-      Effect.tryPromise({
-        try: () =>
-          dialog.showMessageBox(window, {
-            type: 'warning',
-            ...inProject(project, question.detail),
-            message: question.message,
-            buttons: [question.action, 'Cancel'],
-            defaultId: 0,
-            cancelId: 1,
-          }),
-        catch: (cause) =>
-          new HostFailed({
-            member: 'dialog.showMessageBox',
-            message: `The confirmation dialog could not be shown: ${toErrorMessage(cause)}`,
-            cause,
-          }),
-      }).pipe(Effect.map((result) => result.response === 0)),
+      choose(window, {
+        type: 'warning',
+        message: question.message,
+        detail: question.detail,
+        project,
+        choices: [{ label: question.action, value: true, default: true }],
+        close: 'Cancel',
+      }).pipe(Effect.map((confirmed) => confirmed ?? false)),
     /**
      * A failure is an 'error' dialog; a refusal that names a docs page
      * (`docsPage`, e.g. a launch without an input file) adds a guide
@@ -110,92 +163,72 @@ export function createDesktopDialogs(
       project: string,
     ): Effect.Effect<void, HostFailed> => {
       if (!docsPage) return notify('error', message, project);
-      return Effect.tryPromise({
-        try: () =>
-          dialog.showMessageBox(window, {
-            type: 'error',
-            message,
-            ...inProject(project),
-            buttons: [READ_GUIDE_BUTTON_LABEL, 'OK'],
-            defaultId: 1,
-            cancelId: 1,
-          }),
-        catch: (cause) =>
-          new HostFailed({
-            member: 'dialog.showMessageBox',
-            message: `A desktop error dialog could not be shown: ${toErrorMessage(cause)}`,
-            cause,
-          }),
+      return choose(window, {
+        type: 'error',
+        message,
+        project,
+        choices: [{ label: READ_GUIDE_BUTTON_LABEL, value: docsPage }],
+        close: 'OK',
       }).pipe(
-        Effect.map(({ response }) => {
-          if (response === 0) actions.openGuide(docsPage);
+        Effect.map((page) => {
+          if (page) actions.openGuide(page);
         }),
       );
     },
     /**
      * Instructions (e.g. a missing API key) are actionable guidance, not
-     * failures, so this stays an 'info' dialog — but each action token
-     * renders as a real button instead of degrading to trailing hint text
-     * with nothing to click. A native dialog has no persistent "never remind
-     * again" control, so no notice is silenced here (`instructionSuppressible`).
+     * failures, so this stays an 'info' dialog, with each action token as a
+     * real button. A native dialog has no persistent "never remind again"
+     * control, so no notice is silenced here (`instructionSuppressible`).
      */
     showInstructionDialog: (
       message: string,
       choices: readonly InstructionAction[],
       project: string,
-    ): Effect.Effect<void, HostFailed> => {
-      const buttons = [
-        ...choices.map((token) => INSTRUCTION_ACTION_BUTTON_LABELS[token]),
-        'Dismiss',
-      ];
-      const dismissId = buttons.length - 1;
-      return Effect.tryPromise({
-        try: () =>
-          dialog.showMessageBox(window, {
-            type: 'info',
-            message,
-            ...inProject(project),
-            buttons,
-            defaultId: dismissId,
-            cancelId: dismissId,
-          }),
-        catch: (cause) =>
-          new HostFailed({
-            member: 'dialog.showMessageBox',
-            message: `The instruction dialog could not be shown: ${toErrorMessage(cause)}`,
-            cause,
-          }),
+    ): Effect.Effect<void, HostFailed> =>
+      choose(window, {
+        type: 'info',
+        message,
+        project,
+        choices: choices.map((action) => ({
+          label: INSTRUCTION_ACTION_BUTTON_LABELS[action],
+          value: action,
+        })),
+        close: 'Dismiss',
       }).pipe(
-        Effect.map(({ response }) => {
-          const action = choices[response];
+        Effect.map((action) => {
           if (action) actions.dispatchInstructionAction(action);
         }),
-      );
-    },
+      ),
     /** The export's format dialog; a cancelled dialog answers `undefined`. */
     pickTranscriptExportFormat: (project: string) =>
       Effect.tryPromise({
-        try: async () => {
-          const { TRANSCRIPT_EXPORT_FORMAT_CHOICES } =
-            await import('@texra/controllers/progressView/exportTranscript');
-          const { response } = await dialog.showMessageBox(window, {
+        try: () => import('@texra/controllers/progressView/exportTranscript'),
+        catch: ensureError,
+      }).pipe(
+        Effect.flatMap(({ TRANSCRIPT_EXPORT_FORMAT_CHOICES }) =>
+          choose(window, {
             type: 'question',
             message: 'Export transcript',
-            ...inProject(project, 'Choose a format'),
-            buttons: [
-              ...TRANSCRIPT_EXPORT_FORMAT_CHOICES.map((choice) => choice.label),
-              'Cancel',
-            ],
-            defaultId: 0,
-            cancelId: TRANSCRIPT_EXPORT_FORMAT_CHOICES.length,
-          });
-          return TRANSCRIPT_EXPORT_FORMAT_CHOICES[response]?.format;
-        },
-        catch: (cause) =>
-          new TranscriptExportFailed({
-            message: toErrorMessage(cause),
-            cause,
+            detail: 'Choose a format',
+            project,
+            choices: TRANSCRIPT_EXPORT_FORMAT_CHOICES.map(
+              ({ label, format }, index) => ({
+                label,
+                value: format,
+                ...(index === 0 && { default: true as const }),
+              }),
+            ),
+            close: 'Cancel',
           }),
-      }),
+        ),
+        Effect.mapError(
+          (cause) =>
+            new TranscriptExportFailed({
+              message: toErrorMessage(cause),
+              cause,
+            }),
+        ),
+      ),
   };
 }

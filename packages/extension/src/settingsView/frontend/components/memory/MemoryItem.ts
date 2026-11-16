@@ -18,7 +18,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postMessage } from '@texra/shared/hostBridge';
+import { postToHost } from '@settingsView/frontend/messageDispatcher';
 import { DetailsOpenController } from '@ui/litControllers/DetailsOpenController';
 import { getLightweightMd } from '@ui/markdown/lightweightMd';
 import { markdownStyles } from '@ui/styles/markdownStyles';
@@ -57,7 +57,7 @@ export class MemoryItem extends LitElement {
 
       .memory-preview {
         font-size: var(--font-size-sm);
-        line-height: var(--line-height-relaxed, 1.5);
+        line-height: var(--line-height-relaxed);
         padding: var(--wa-space-3xs) var(--wa-space-2xs);
         border-radius: var(--border-radius);
         margin: 0;
@@ -100,14 +100,16 @@ export class MemoryItem extends LitElement {
 
   private handleOpen(): void {
     if (!this.item) return;
-    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FILE, {
+    postToHost({
+      command: SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FILE,
       storagePath: this.item.storagePath,
     });
   }
 
   private handleDelete(): void {
     if (!this.item) return;
-    postMessage(SETTINGS_VIEW_COMMANDS.DELETE_MEMORY, {
+    postToHost({
+      command: SETTINGS_VIEW_COMMANDS.DELETE_MEMORY,
       storagePath: this.item.storagePath,
       displayPath: this.item.displayPath,
     });
@@ -116,12 +118,12 @@ export class MemoryItem extends LitElement {
   private handleTogglePin(): void {
     if (!this.item) return;
     const { storagePath, pinned } = this.item;
-    postMessage(
-      pinned
+    postToHost({
+      command: pinned
         ? SETTINGS_VIEW_COMMANDS.UNPIN_MEMORY
         : SETTINGS_VIEW_COMMANDS.PIN_MEMORY,
-      { storagePath },
-    );
+      storagePath,
+    });
   }
 
   private requestPreviewIfNeeded(): void {
@@ -129,7 +131,8 @@ export class MemoryItem extends LitElement {
     if (this.item.previewError) return;
     if (this.requestedPreviewFor === this.item.storagePath) return;
     this.requestedPreviewFor = this.item.storagePath;
-    postMessage(SETTINGS_VIEW_COMMANDS.GET_MEMORY_PREVIEW, {
+    postToHost({
+      command: SETTINGS_VIEW_COMMANDS.GET_MEMORY_PREVIEW,
       storagePath: this.item.storagePath,
     });
   }

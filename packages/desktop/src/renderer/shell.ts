@@ -13,6 +13,6 @@ export interface Shell {
   readonly active: string;
   /** Rail order, user-arranged. */
   readonly open: readonly string[];
-  /** Rail rows the user folded shut. */
+  /** Rail rows the user collapsed. */
   readonly collapsed: readonly string[];
 }

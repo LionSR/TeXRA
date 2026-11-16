@@ -14,8 +14,9 @@ import { ServiceProjects } from '@texra/controllers/server/service';
 import { serve } from '@texra/controllers/server/serve';
 import { PROTOCOL, type ServiceInfo } from '@texra/controllers/server/protocol';
 
+import { adoptLoginShellEnvironment } from '@texra/platform/defaults/loginShellEnvironment';
+
 import {
-  adoptLoginShellEnvironment,
   CliInvocation,
   CliUsageError,
   type CliContext,
@@ -110,7 +111,7 @@ const runServe = Effect.fn('runServe')(function* (
     return yield* serve({
       idleAfter: `${idleSeconds} seconds`,
       shutdown,
-      settle: Effect.asVoid(sessions.closeAll),
+      finishTasks: Effect.asVoid(sessions.closeAll),
     }).pipe(Effect.provideService(ServiceProjects, projects));
   }).pipe(Effect.scoped);
   return yield* served.pipe(
@@ -188,10 +189,12 @@ const stopRunningService = Effect.gen(function* () {
   const target:
     | (Pick<ServiceInfo, 'socket'> & { readonly pid?: number })
     | null = yield* probeRecordedService.pipe(
-    Effect.catchIf(
-      (error) => error.unspoken !== undefined,
-      (error) => Effect.succeed({ socket: error.unspoken ?? '' }),
-    ),
+    Effect.catch((error) => {
+      const { failure } = error;
+      return failure.kind === 'unreadable'
+        ? Effect.succeed({ socket: failure.socket })
+        : Effect.fail(error);
+    }),
   );
   if (target === null) return null;
   const service =

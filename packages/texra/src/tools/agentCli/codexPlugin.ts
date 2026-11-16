@@ -9,12 +9,22 @@ import { definePlugin } from '@texra-ai/harness/plugins';
 import { CODEX_SETTINGS } from '@texra/shared/settings/integrationSettings';
 import { CodexThreads, codexThreadsLayer } from './agentCliSessionStores';
 import {
+  installCommandLines,
   preferredInstallCommand,
   probeSdkBinaryStatus,
+  type InstallCommands,
 } from './availabilityProbes';
 import { CodexTool } from './codex';
 import { findCodexBinaryPath, importCodexClass } from './codexImport';
 import type { TexraPlugin } from '../registry';
+
+/** Codex supports Windows through WSL2, so Windows gets the WSL2 setup and
+ *  installs the CLI inside WSL, never the npm package on the Windows side. */
+const CODEX_INSTALL: InstallCommands = {
+  brew: 'brew install codex',
+  win32: 'wsl --install',
+  default: 'npm install -g @openai/codex',
+};
 
 export const codex: TexraPlugin = {
   ...definePlugin<CodexThreads>({
@@ -36,9 +46,8 @@ export const codex: TexraPlugin = {
               msg.includes('Unsupported platform')
                 ? `Platform not supported: ${msg}`
                 : undefined,
-            binaryNotFoundMessage:
-              'Codex SDK loaded but native binary not found. ' +
-              'Install with: npm install -g @openai/codex',
+            binaryLabel: 'Codex SDK loaded but native binary',
+            install: CODEX_INSTALL,
           }),
           (status) => ({
             available: status.ok,
@@ -57,7 +66,7 @@ export const codex: TexraPlugin = {
     codex_turn: 'check-double',
   },
   terminalOutput: ['codex'],
-  card: {
+  dashboard: {
     name: 'OpenAI Codex CLI',
     description:
       'OpenAI Codex agent runtime. Required by the Codex SDK for local code generation and analysis.',
@@ -65,25 +74,20 @@ export const codex: TexraPlugin = {
     setup: {
       installGuide:
         'Install the Codex CLI (choose one):\n\n' +
-        '  npm install -g @openai/codex\n' +
-        '  brew install codex          (macOS)\n\n' +
-        'On Windows, use WSL or the Codex app.\n' +
-        'In WSL, install inside the WSL environment (not on the Windows side).\n' +
+        `${installCommandLines(CODEX_INSTALL)}\n\n` +
+        'On Windows, Codex runs in WSL2: set up WSL2 with the Windows command,\n' +
+        'then install the CLI inside WSL (not on the Windows side).\n' +
         'See: https://developers.openai.com/codex/cli\n\n' +
         'Authentication (choose one):\n' +
         '  • codex login       : sign in with ChatGPT account (recommended)\n' +
         '  • OPENAI_API_KEY    : environment variable with API key',
       installUrl: 'https://github.com/openai/codex',
       get installCommand(): string {
-        return preferredInstallCommand({
-          brew: 'brew install codex',
-          default: 'npm install -g @openai/codex',
-        });
+        return preferredInstallCommand(CODEX_INSTALL);
       },
       authCommand: 'codex login',
       configNotes:
-        'Requires @openai/codex npm package with platform binaries. Used by @openai/codex-sdk. ' +
-        'Supports OAuth via `codex login` or OPENAI_API_KEY env var.',
+        'Requires the native `codex` binary, which @openai/codex-sdk drives.',
       authNote: 'Uses ChatGPT subscription (free with Plus/Pro)',
     },
   },

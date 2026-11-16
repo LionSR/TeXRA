@@ -22,8 +22,8 @@ import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
+import { actionMenu } from '@ui/wa/actionMenu';
 import { inlineRenameField } from '@ui/wa/inlineRename';
-import { afterDropdownHides } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type { Shell } from './shell';
 
@@ -62,7 +62,8 @@ interface ShellSidebarCallbacks {
   onOpenRecent(root: string): void;
   onSelectProject(key: string): void;
   onProjectAction(key: string, action: ProjectAction): void;
-  onRenameProject?(key: string, name: string | null): void;
+  onRenameProject?(key: string, name: string): void;
+  onCloseRename?(): void;
   onOpenSettings(): void;
 }
 
@@ -132,6 +133,24 @@ function projectSection(
   // Tooltip anchors: the key is a path, so it is encoded into the DOM id.
   const idBase = `shell-project-${encodeURIComponent(key)}`;
   const status = projectStatus(project);
+  const menu = actionMenu([
+    {
+      icon: 'plus',
+      label: 'New task',
+      activate: () => callbacks.onProjectAction(key, 'new-task'),
+    },
+    {
+      icon: 'pencil',
+      label: 'Rename project…',
+      focusesOwn: true,
+      activate: () => callbacks.onProjectAction(key, 'rename'),
+    },
+    {
+      icon: 'xmark',
+      label: 'Close project',
+      activate: () => callbacks.onProjectAction(key, 'close'),
+    },
+  ]);
   return html`
     <div class="shell-project-item ${active ? 'is-active' : ''}">
       ${
@@ -141,7 +160,8 @@ function projectSection(
               label: 'Project display name',
               className: 'shell-project-row shell-project-rename',
               maxLength: 80,
-              onFinish: (value) => callbacks.onRenameProject?.(key, value),
+              onRename: (value) => callbacks.onRenameProject?.(key, value),
+              onClose: () => callbacks.onCloseRename?.(),
             })
           : html`<wa-button
               type="button"
@@ -179,15 +199,7 @@ function projectSection(
       <wa-dropdown
         class="shell-project-menu"
         placement="bottom-end"
-        @wa-select=${(event: CustomEvent<{ item: { value: string } }>) => {
-          const action = event.detail.item.value;
-          if (action === 'rename')
-            afterDropdownHides(event, () =>
-              callbacks.onProjectAction(key, action),
-            );
-          if (action === 'new-task' || action === 'close')
-            callbacks.onProjectAction(key, action);
-        }}
+        @wa-select=${menu.onSelect}
       >
         ${renderIconActionButton({
           id: `${idBase}-menu`,
@@ -196,15 +208,7 @@ function projectSection(
           label: `Actions for ${name}`,
           tooltip: `Actions for ${name}`,
         })}
-        <wa-dropdown-item value="new-task">
-          ${waIcon('plus', { slot: 'icon' })} New task
-        </wa-dropdown-item>
-        <wa-dropdown-item value="rename">
-          ${waIcon('pencil', { slot: 'icon' })} Rename project…
-        </wa-dropdown-item>
-        <wa-dropdown-item value="close">
-          ${waIcon('xmark', { slot: 'icon' })} Close project
-        </wa-dropdown-item>
+        ${menu.items}
       </wa-dropdown>
     </div>
   `;

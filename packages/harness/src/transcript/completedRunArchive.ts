@@ -103,10 +103,7 @@ function conversationNodesForRow(
     case 'webSearch':
       return row.query ? [{ kind: 'web-search', query: row.query }] : [];
     // ── Deliberately skipped: not conversation content ──────────────────
-    // scratchpad is a derived view carved from the model response's raw
-    // text (already mapped above); the rest are run diagnostics and status
-    // rows, not conversation content.
-    case 'scratchpad':
+    // Run diagnostics and status rows, not conversation content.
     case 'error':
     case 'fileList':
     case 'contextManagement':

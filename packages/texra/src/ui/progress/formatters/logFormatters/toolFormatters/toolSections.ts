@@ -24,10 +24,6 @@ import {
   buildStatusBadge,
   buildLineChangeStats,
 } from '@ui/progress/formatters/htmlBuilders';
-import {
-  getLanguageFromPath,
-  TOOL_OUTPUT_LANGUAGES,
-} from '@ui/progress/formatters/constants';
 import { statusGlyph, TOOL_STATUS } from '@ui/copy/runStatus';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -42,24 +38,17 @@ import type {
 import '@ui/progress/components/TerminalOutput';
 
 type ToolSectionOptions = {
-  toolName?: string;
   language?: string;
   extraClass?: string;
 };
 
-/**
- * Build a tool section with appropriate code highlighting based on tool type.
- */
+/** Build a tool section, highlighted in `language` unless it is plaintext. */
 export function buildToolSection(
   label: string,
   text: string,
   options: ToolSectionOptions = {},
 ): TemplateResult {
-  const { toolName = '', language: contentLanguage, extraClass = '' } = options;
-
-  // Determine language: tool config > content metadata > plaintext
-  const language =
-    TOOL_OUTPUT_LANGUAGES.get(toolName) || contentLanguage || 'plaintext';
+  const { language = 'plaintext', extraClass = '' } = options;
   const shouldHighlight = language !== 'plaintext';
 
   const content = shouldHighlight
@@ -81,6 +70,46 @@ export function buildTerminalSection(
       .text=${text}
     ></terminal-output>`,
   );
+}
+
+/**
+ * Map file extensions that don't match highlight.js language names.
+ * Focused on LaTeX research context. Unknown extensions try the extension directly.
+ */
+const EXTENSION_ALIASES = new Map<string, string>([
+  // LaTeX ecosystem
+  ['tex', 'latex'],
+  ['sty', 'latex'],
+  ['cls', 'latex'],
+  ['dtx', 'latex'],
+  ['tikz', 'latex'],
+  ['bib', 'bibtex'],
+  ['bst', 'latex'],
+  // Scientific computing
+  ['py', 'python'],
+  ['jl', 'julia'],
+  ['wl', 'mathematica'],
+  ['m', 'mathematica'],
+  ['f90', 'fortran'],
+  ['f95', 'fortran'],
+  ['ipynb', 'json'],
+  // Config/docs
+  ['yml', 'yaml'],
+  ['md', 'markdown'],
+  ['sh', 'bash'],
+]);
+
+/** Get highlight.js language from file path based on extension. Uses alias map for non-standard extensions, otherwise tries the extension directly. */
+function getLanguageFromPath(filePath: string): string {
+  if (!filePath) return 'plaintext';
+  const fileName = getBasename(filePath) || filePath;
+  const lowerFileName = fileName.toLowerCase();
+  if (lowerFileName === 'dockerfile') return 'dockerfile';
+  if (lowerFileName === 'makefile') return 'makefile';
+  const lastDot = fileName.lastIndexOf('.');
+  if (lastDot === -1 || lastDot === fileName.length - 1) return 'plaintext';
+  const extension = fileName.slice(lastDot + 1).toLowerCase();
+  return EXTENSION_ALIASES.get(extension) ?? extension;
 }
 
 /** Line count past which a text section becomes a fixed-height scroll box. */
@@ -170,7 +199,6 @@ function renderFileListSection(section: ToolFileListSection): TemplateResult {
  *  used to resolve the `file` language hint on a following code section. */
 function renderToolSection(
   section: ToolSection,
-  toolName: string,
   filePath: string,
 ): TemplateResult {
   switch (section.kind) {
@@ -189,7 +217,6 @@ function renderToolSection(
       );
     case 'code':
       return buildToolSection(section.label, section.text.full, {
-        toolName,
         language: codeLanguage(section.language, filePath),
         ...(isCommandInput(section.language)
           ? { extraClass: 'tool-command-input' }
@@ -234,11 +261,10 @@ function renderToolSection(
 /** Paint every section of a tool row, in model order. */
 export function renderToolSections(
   sections: readonly ToolSection[],
-  toolName: string,
 ): TemplateResult[] {
   let filePath = '';
   return sections.map((section) => {
     if (section.kind === 'file') filePath = section.path;
-    return renderToolSection(section, toolName, filePath);
+    return renderToolSection(section, filePath);
   });
 }

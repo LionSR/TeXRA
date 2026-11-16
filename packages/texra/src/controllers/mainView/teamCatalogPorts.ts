@@ -2,7 +2,6 @@
 import { Effect } from 'effect';
 import { AgentCatalog, type StateStore } from '@texra-ai/harness/host';
 import { workspaceTeams } from '@texra/shared/agentTeams';
-import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra/shared/constants/agents';
 
 /**
  * Live team-catalog ports shared by every host's main view. Launch resolution
@@ -15,7 +14,6 @@ export const createTeamCatalogPorts = Effect.fn('createTeamCatalogPorts')(
     return {
       presets: yield* workspaceTeams(repoState),
       resolveAgent: (yield* AgentCatalog).get,
-      rootAgentNames: BUILTIN_TEAM_ROOT_AGENT_NAMES,
     };
   },
 );

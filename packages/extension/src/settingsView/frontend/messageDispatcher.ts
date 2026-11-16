@@ -1,12 +1,16 @@
 /**
- * What the settings view does with each host message: decode it against the
- * outbound union once, then write it into the state in `settingsState.ts`.
+ * The settings view's two directions of messages: what it does with each
+ * host message (decode it against the outbound union once, then write it
+ * into the state in `settingsState.ts`), and the one way it asks the host
+ * for something, typed by the inbound union the host decodes.
  */
 import { Result, Schema } from 'effect';
 
+import { hostBridge } from '@texra/shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {
   SettingsViewOutboundMessageSchema,
+  type SettingsViewInboundMessageSchema,
   type SettingsViewOutboundMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import {
@@ -22,6 +26,15 @@ import {
   settingsSnapshotRevisions,
 } from './settingsState';
 import { HELPER_MODEL_SETTING } from '@texra-ai/harness/schemas';
+
+/** Ask the host for something: one member of the union the host decodes
+ *  every settings message against, so a command and its fields are checked
+ *  here, at the send. */
+export function postToHost(
+  message: typeof SettingsViewInboundMessageSchema.Encoded,
+): void {
+  hostBridge.postMessage(message);
+}
 
 const decodeOutbound = Schema.decodeUnknownResult(
   SettingsViewOutboundMessageSchema,

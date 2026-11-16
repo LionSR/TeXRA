@@ -31,7 +31,7 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   // The run decided the offer; the card only renders it.
   const canSwitchToPersonalKey = data.credentialSwitch != null;
   // The modal only names the answers, as `REQUEST_ACTIONS` keys them. `y`
-  // retries on the credentials the run already has; `approvalDecisionArm`
+  // retries on the credentials the run already has; `approvalDecisionDelivery`
   // turns `k`, a retry on personal credentials, into the host's
   // `useOwnApiKey`, which asks for the key when none is stored and then runs
   // the retry on it.

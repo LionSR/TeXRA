@@ -8,7 +8,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Side-effect imports - register WA icon component
@@ -60,7 +59,6 @@ interface FileActionOptions {
   readonly file: string;
   // Unique per (round, file-index); see renderFileActionButton for the id contract.
   readonly idPrefix: string;
-  readonly base?: string;
 }
 
 function renderFileActionButton(opts: FileActionOptions): TemplateResult {
@@ -84,7 +82,6 @@ function renderFileActionButton(opts: FileActionOptions): TemplateResult {
       aria-label=${opts.label}
       data-command=${opts.command}
       data-file=${opts.file}
-      data-base=${ifDefined(opts.base)}
     >
       ${waIcon(opts.icon)}
     </wa-button>
@@ -265,24 +262,14 @@ export class FileList extends LitElement {
     const location = file.location;
     const { dir, basename } = parsePath(outputDisplayName(file));
     const tooltipPath = fileLocationDisplayPath(location);
-    const base = file.lineage?.base.absolutePath ?? '';
-
     const filePath = location.absolutePath;
-    // Compare against the live workspace document so the diff opens the
-    // user's real, editable file rather than the immutable run-storage
-    // snapshot. Fall back to the snapshot base when the output IS the
-    // workspace file (true in-place overwrite) — diffing it against itself
-    // would show nothing.
-    const document = file.lineage?.document?.absolutePath;
-    const compareBase = document && document !== filePath ? document : base;
     const diffStats = this.renderDiffStats(file);
-    const baseActions = this.renderBaseActions(
-      filePath,
-      base,
-      compareBase,
-      tooltipPath,
-      idPrefix,
-    );
+    // The verbs over an output and what it revises; the host picks which
+    // file each takes as its base.
+    const baseActions =
+      file.lineage === null
+        ? nothing
+        : this.renderBaseActions(filePath, tooltipPath, idPrefix);
 
     return html`
       <li class="file-item">
@@ -353,7 +340,7 @@ export class FileList extends LitElement {
   }
 
   private dispatchFileAction(actionEl: HTMLElement): void {
-    const { command, file, base } = actionEl.dataset;
+    const { command, file } = actionEl.dataset;
     const runId = this.runId;
     if (!command || !file || runId === null) return;
     if (command === OPEN_FILE) {
@@ -367,18 +354,12 @@ export class FileList extends LitElement {
       console.warn(`Unknown file action: ${command}`);
       return;
     }
-    // Every verb button carries its base file (`renderBaseActions`).
-    if (!base) {
-      console.warn(`File action ${command} carries no base file`);
-      return;
-    }
     this.dispatchEvent(
       SessionUiEvents.host({
         kind: 'fileAction',
-        runId,
         action: command,
         file,
-        base,
+        base: { kind: 'runOutput', runId },
       }),
     );
   }
@@ -404,22 +385,17 @@ export class FileList extends LitElement {
 
   private renderBaseActions(
     filePath: string,
-    basePath: string,
-    compareBase: string,
     displayPath: string,
     idPrefix: string,
-  ): TemplateResult | typeof nothing {
-    if (!basePath) return nothing;
-
+  ): TemplateResult {
     return html`
       ${renderFileActionButton({
         icon: 'code-compare',
         label: `Compare ${displayPath} with base`,
         title: 'Compare with base in a side-by-side diff',
         className: 'compare-btn',
-        command: 'compareOriginal',
+        command: 'compare',
         file: filePath,
-        base: compareBase,
         idPrefix,
       })}
       ${renderFileActionButton({
@@ -429,7 +405,6 @@ export class FileList extends LitElement {
         className: 'latexdiff-btn',
         command: 'latexdiff',
         file: filePath,
-        base: basePath,
         idPrefix,
       })}
       ${renderFileActionButton({
@@ -439,7 +414,6 @@ export class FileList extends LitElement {
         className: 'accept-btn',
         command: 'accept',
         file: filePath,
-        base: compareBase,
         idPrefix,
       })}
       ${renderFileActionButton({
@@ -449,7 +423,6 @@ export class FileList extends LitElement {
         className: 'merge-btn',
         command: 'merge',
         file: filePath,
-        base: basePath,
         idPrefix,
       })}
     `;

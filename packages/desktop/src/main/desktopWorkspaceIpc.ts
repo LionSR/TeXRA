@@ -9,7 +9,7 @@
 // `FileSystem`, which the window's router runs and reports. The paths are the
 // canonical ones the containment check vouched for, which a workspace symlink
 // can place outside the lexical root, so they go to the process filesystem,
-// not a root-confined view that would refuse them.
+// not a root-confined view that would reject them.
 
 import { basename, dirname, join } from 'node:path';
 import {
@@ -70,14 +70,11 @@ interface DesktopWorkspaceIpcOptions {
    */
   toWindowBounds(bounds: DesktopBrowserBounds): DesktopBrowserBounds;
   /**
-   * Root of the project this window shows, and the only workspace root this
-   * handler resolves against — a request names a path relative to the project
-   * it was sent for, not to whichever project happens to be active. An
-   * app-signal listener hears every project's writes, including a run in
-   * another open project; the window's own project is what a re-list decision
-   * compares to.
+   * Root of this binding's project, which every request resolves against;
+   * none for the no-workspace session. The file signal hears every project's
+   * writes, and only this root's re-list the tree.
    */
-  getWorkspacePath(): string | undefined;
+  readonly workspaceRoot: string | undefined;
 }
 
 interface DesktopWorkspaceIpc {
@@ -108,11 +105,11 @@ interface DesktopWorkspaceIpc {
 }
 
 /**
- * A workspace request the editor refused, carrying the whole sentence the
+ * A workspace request the editor rejected, carrying the whole sentence the
  * renderer shows for it — never a prefix over another message.
  */
-class WorkspaceRequestRefused extends Schema.TaggedError<WorkspaceRequestRefused>()(
-  'WorkspaceRequestRefused',
+class WorkspaceRequestRejected extends Schema.TaggedError<WorkspaceRequestRejected>()(
+  'WorkspaceRequestRejected',
   {
     message: Schema.String,
   },
@@ -120,7 +117,7 @@ class WorkspaceRequestRefused extends Schema.TaggedError<WorkspaceRequestRefused
 
 /** Everything a file-I/O program here can fail with. */
 type WorkspaceFileFailure =
-  | WorkspaceRequestRefused
+  | WorkspaceRequestRejected
   | AgentDocumentUnavailable
   | PlatformError.PlatformError;
 
@@ -137,11 +134,11 @@ const WORKSPACE_BOUNDARY_ERROR =
 function assertWithinWorkspace(
   canonicalRoot: string,
   canonicalTarget: string,
-): Effect.Effect<string, WorkspaceRequestRefused> {
+): Effect.Effect<string, WorkspaceRequestRejected> {
   return isPathWithin(canonicalRoot, canonicalTarget)
     ? Effect.succeed(canonicalTarget)
     : Effect.fail(
-        new WorkspaceRequestRefused({ message: WORKSPACE_BOUNDARY_ERROR }),
+        new WorkspaceRequestRejected({ message: WORKSPACE_BOUNDARY_ERROR }),
       );
 }
 
@@ -156,13 +153,13 @@ function locateWorkspaceTarget(
   inputPath: string,
 ): Effect.Effect<
   { absolutePath: string; root: string },
-  WorkspaceRequestRefused
+  WorkspaceRequestRejected
 > {
   // With no folder open every path is outside it.
   const located = root ? pathToLocationIn(root, inputPath) : undefined;
   if (!root || located?.kind !== 'workspace') {
     return Effect.fail(
-      new WorkspaceRequestRefused({ message: WORKSPACE_BOUNDARY_ERROR }),
+      new WorkspaceRequestRejected({ message: WORKSPACE_BOUNDARY_ERROR }),
     );
   }
   return Effect.succeed({ absolutePath: located.absolutePath, root });
@@ -215,11 +212,11 @@ const resolveWorkspaceWritePath = Effect.fn(
   // A dangling symlink also makes realPath fail with ENOENT. It must remain
   // rejected: writing through it could create a target outside the workspace.
   // The link-aware probe reports a link as itself — `stat` follows it — and
-  // any failure other than "not there" refuses the write instead of reading
+  // any failure other than "not there" rejects the write instead of reading
   // as "no link here".
   const entryType = yield* entryTypeIn(fs, absolutePath);
   if (entryType === 'SymbolicLink') {
-    return yield* new WorkspaceRequestRefused({
+    return yield* new WorkspaceRequestRejected({
       message: 'Symbolic links cannot be recreated by the editor.',
     });
   }
@@ -230,7 +227,7 @@ const resolveWorkspaceWritePath = Effect.fn(
   ).pipe(
     Effect.catchIf(meansAbsent, () =>
       Effect.fail(
-        new WorkspaceRequestRefused({
+        new WorkspaceRequestRejected({
           message:
             'The file cannot be recreated because its parent folder no longer exists.',
         }),
@@ -244,7 +241,7 @@ const resolveWorkspaceWritePath = Effect.fn(
 });
 
 export function createDesktopWorkspaceIpc(
-  renderer: { postToRenderer(message: DesktopWorkspaceReply): void },
+  post: (message: DesktopWorkspaceReply) => void,
   options: DesktopWorkspaceIpcOptions,
 ): DesktopWorkspaceIpc {
   // Accepted run outputs and accepted LaTeX diffs write straight to disk, past
@@ -255,10 +252,10 @@ export function createDesktopWorkspaceIpc(
   const followFilesWritten = onAppSignal(
     'workspaceFilesWritten',
     ({ absolutePaths }) => {
-      const root = options.getWorkspacePath();
+      const root = options.workspaceRoot;
       if (!root) return;
       if (!absolutePaths.some((path) => isPathWithin(root, path))) return;
-      renderer.postToRenderer({
+      post({
         command: DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED,
       });
     },
@@ -266,7 +263,7 @@ export function createDesktopWorkspaceIpc(
 
   const listDirectory = Effect.fn('desktopWorkspaceIpc.listDirectory')(
     function* (directory: string) {
-      const root = options.getWorkspacePath();
+      const root = options.workspaceRoot;
       if (!root) return [];
 
       // The project tree is a code editor, not the agent input picker. Reuse
@@ -343,18 +340,20 @@ export function createDesktopWorkspaceIpc(
     const fs = yield* FileSystem.FileSystem;
     const absolutePath = yield* isAgentDocumentTarget(path)
       ? resolveAgentDocument(path, false)
-      : resolveWorkspacePath(options.getWorkspacePath(), path);
+      : resolveWorkspacePath(options.workspaceRoot, path);
     const contents = yield* editorText(fs, absolutePath);
     return { kind: 'contents', contents } satisfies HostOutcome;
   });
 
   // The disk is the one owner of what the file holds: a save carries what
   // the editor last read (`base`) and lands only while the file still holds
-  // it. The check and the write hold the file's write lane, which an agent's
-  // approved edit of the same file holds too, so neither lands between the
-  // other's check and write. A run that rewrote the file meanwhile is
-  // answered `changedOnDisk` instead of overwritten; the editor asks
-  // whether to overwrite or reload. A file gone since the read is
+  // it. A run that rewrote the file meanwhile is answered `changedOnDisk`
+  // instead of overwritten; the editor asks whether to overwrite or reload.
+  // The check and the write hold the file's write lane, which an approved
+  // edit run in this process holds too, so neither lands between the
+  // other's check and write. The lane is per process: a run in the
+  // background service takes its own, and an edit it lands between this
+  // check and write is replaced unseen. A file gone since the read is
   // recreated, as a deleted file always was. Saves of one file arrive one
   // at a time: the editor pane waits for each answer before the next.
   const writeFile = (path: string, contents: string, base: string | null) =>
@@ -362,7 +361,7 @@ export function createDesktopWorkspaceIpc(
       const fs = yield* FileSystem.FileSystem;
       const absolutePath = yield* isAgentDocumentTarget(path)
         ? resolveAgentDocument(path, true)
-        : resolveWorkspaceWritePath(options.getWorkspacePath(), path);
+        : resolveWorkspaceWritePath(options.workspaceRoot, path);
       return yield* Effect.gen(function* () {
         if (base !== null) {
           const onDisk = yield* editorText(fs, absolutePath).pipe(
@@ -376,9 +375,9 @@ export function createDesktopWorkspaceIpc(
       }).pipe(withFileWriteLane(absolutePath));
     });
 
-  /** A refused file request is the request's answer: the editor pane shows
+  /** A rejected file request is the request's answer: the editor pane shows
    *  it. */
-  const refuse = Effect.mapError(
+  const rejected = Effect.mapError(
     (error: WorkspaceFileFailure) =>
       new Rejected({ reason: toErrorMessage(error) }),
   );
@@ -403,11 +402,11 @@ export function createDesktopWorkspaceIpc(
       // being absorbed as a terminal that would not start.
       // Surface in the terminal itself: a silent no-op looks like a shell
       // that never printed a prompt. Then fail with the cause, so the
-      // window's router reports it and the request never settles in silence.
+      // window's router reports it and the request never ends in silence.
       Effect.catch((error: HostFailed) =>
         Effect.andThen(
           Effect.sync(() =>
-            renderer.postToRenderer({
+            post({
               command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_ERROR,
               sessionId,
               message: `Could not start a terminal: ${toErrorMessage(error)}`,
@@ -430,11 +429,11 @@ export function createDesktopWorkspaceIpc(
     file(action) {
       switch (action.kind) {
         case 'list':
-          return refuse(listFiles(action.directory));
+          return rejected(listFiles(action.directory));
         case 'read':
-          return refuse(readFile(action.path));
+          return rejected(readFile(action.path));
         case 'write':
-          return refuse(writeFile(action.path, action.contents, action.base));
+          return rejected(writeFile(action.path, action.contents, action.base));
       }
     },
 

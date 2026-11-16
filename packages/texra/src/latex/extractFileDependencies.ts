@@ -91,7 +91,7 @@ export const extractLatexFileDependencies = Effect.fn(
 
   // The probe sets run as one bounded fan-out under the calling fiber:
   // a failure interrupts the siblings instead of leaving them running behind
-  // an all-results aggregate, which is what `stopOnError: false` used to do.
+  // an all-results aggregate.
   const [texResolved, bibResolved, styResolved] = yield* Effect.all(
     [
       Effect.forEach(

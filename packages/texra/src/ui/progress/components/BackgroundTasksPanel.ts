@@ -1,5 +1,5 @@
 /**
- * The dispatch card (board E2): what a run has fanned out, in its
+ * The dispatch card: what a run has fanned out, in its
  * conversation prelude. A `<wa-details>` headed by the counts of what it
  * lists, each kind by its noun ("3 agents, 4 commands in the background"),
  * with how many of them still run as a badge and "since <time>" from the

@@ -42,13 +42,13 @@ export class GettingStartedBanner extends LitElement {
       }
 
       .getting-started-title strong {
-        font-weight: var(--font-weight-semibold, 600);
+        font-weight: var(--font-weight-semibold);
       }
 
       .getting-started-copy {
         margin: 0;
         color: var(--wa-color-text-quiet);
-        line-height: var(--line-height-normal, 1.4);
+        line-height: var(--line-height-normal);
       }
 
       /* Layout only — button sizing (min-height/padding-inline/

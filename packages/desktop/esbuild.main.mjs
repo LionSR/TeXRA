@@ -59,7 +59,6 @@ const options = {
   // a bundle chunk. Keep it external so the require resolves to the real
   // installed package (electron-builder ships it via node_modules).
   external: ['electron', 'fsevents', 'node-pty'],
-  loader: { ...base.loader, '.tex': 'text' },
   tsconfig: 'tsconfig.main.json',
   // The Node of the Electron that runs this bundle: 24.22 at the `electron`
   // floor, 45.2.3. The installed package records its ABI, not its Node

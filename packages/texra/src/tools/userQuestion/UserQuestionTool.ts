@@ -23,9 +23,18 @@ const AskUserQuestionInputSchema = Schema.Struct({
   questions: Schema.Array(UserQuestionPromptSchema)
     .check(Schema.isMinLength(1))
     .check(Schema.isMaxLength(3))
+    // The answers are keyed by question text, so two questions with one
+    // wording would share one answer.
+    .check(
+      Schema.makeFilter(
+        (questions) =>
+          new Set(questions.map((q) => q.question)).size === questions.length,
+        { message: 'Each question needs its own wording.' },
+      ),
+    )
     .annotate({
       description:
-        'One to three questions for the user. Keep each question short and provide two to four clear options.',
+        'One to three questions for the user, each worded differently. Keep each question short and provide two to four clear options.',
     }),
   context: Schema.optional(Schema.NullOr(Schema.String)).annotate({
     description: 'Optional short context explaining why the answer is needed.',

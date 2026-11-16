@@ -52,7 +52,6 @@ type RowFormatters = {
 const ROW_FORMATTERS: RowFormatters = {
   assistant: formatBannerContentTemplate,
   thinking: formatBannerContentTemplate,
-  scratchpad: formatBannerContentTemplate,
   user: formatUserMessageTemplate,
   error: formatErrorTemplate,
   tool: formatToolUseTemplate,

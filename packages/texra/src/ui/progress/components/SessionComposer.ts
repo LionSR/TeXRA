@@ -9,7 +9,7 @@
  * row, under a line that offers the parent instead when there is one.
  *
  * It reads `Surface` (the draft or the launch selections) and the `host`
- * snapshot (the catalogs) and dispatches the arm for every change: a
+ * snapshot (the catalogs) and dispatches the action for every change: a
  * `SurfaceAction` for text and selections, a `HostCommand` for launch,
  * polish, dictation, pickers, and pasted images, a `RuntimeCommand` for a
  * follow-up. It holds no draft of its own.
@@ -391,7 +391,7 @@ export class SessionComposer extends LitElement {
       added.map(({ fileName }) => fileName),
     );
     // The draft holds each chip's name now and its stored path once the
-    // host answers (`sessionSurfaces.settleHost`).
+    // host answers (`sessionSurfaces.applyHostOutcome`).
     const pending = added.map(({ fileName }) => ({ fileName, media: null }));
     // An empty insert (every image failed, no text) leaves the draft be.
     if (insert !== '') {

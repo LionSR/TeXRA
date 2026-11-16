@@ -89,7 +89,6 @@ const ROW_GEOMETRY = {
   assistant: PROSE_GEOMETRY,
   log: PROSE_GEOMETRY,
   thinking: DETAIL_GEOMETRY,
-  scratchpad: DETAIL_GEOMETRY,
   webSearch: DETAIL_GEOMETRY,
   contextManagement: DETAIL_GEOMETRY,
   progressStatus: DETAIL_GEOMETRY,

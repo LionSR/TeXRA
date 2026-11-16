@@ -26,7 +26,7 @@ import {
   type SettingsPresentation,
 } from './settingsHostBindings';
 
-/** The Plugins and LaTeX pages: their arms, their pages, and the follower
+/** The Plugins and LaTeX pages: their handlers, their pages, and the follower
  *  of the tool availability the Plugins page reads. */
 export function settingsToolCommands(ports: {
   readonly roots: PluginPageRoots;

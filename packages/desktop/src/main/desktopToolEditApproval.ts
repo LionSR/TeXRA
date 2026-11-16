@@ -20,8 +20,8 @@ import type {
   ToolEditPreviewRequest,
 } from '@texra/controllers/approval/ToolEditApprovalController';
 import { hostFailure } from '@texra/controllers/session/hostCallFailure';
-import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
-import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
+import type { BuildDisplayFn } from '@texra/controllers/approval/latexPreview';
+import { writeApprovalTempFiles } from '@texra/controllers/approval/tempFileManager';
 import { UNAPPLIED_TOOL_EDIT } from '@ui/copy/toolEditPreview';
 
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
@@ -45,7 +45,7 @@ type DesktopToolEditApprovalUi = Pick<
   ): Effect.Effect<void, Error>;
   /**
    * Take this request's staged diff off the Review workbench and nothing
-   * else: settling here must not dismiss another request's pending preview
+   * else: an answer here must not dismiss another request's pending preview
    * or an unrelated review, whichever of them the user is looking at.
    */
   closeDiff(previewId: string): Effect.Effect<void, never>;
@@ -189,7 +189,7 @@ class DesktopToolEditPreview implements ToolEditPreview {
 
   /**
    * Close the view before the files behind it go, in that order. The close
-   * names this request's preview, so a request settling while the user reads
+   * names this request's preview, so a request answered while the user reads
    * another diff takes only its own off the Review workbench. `unapplied` is
    * the proposed copy as the user's editor saved it: that file stays where
    * the editor has it open, and only the original beside it goes.

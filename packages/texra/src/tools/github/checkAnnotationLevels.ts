@@ -1,32 +1,26 @@
-import { Struct } from 'effect';
+import { Schema } from 'effect';
 
-export type GitHubCheckAnnotationLevel = 'notice' | 'warning' | 'failure';
+/** GitHub's check-annotation levels, most severe first. */
+export const GitHubCheckAnnotationLevelSchema = Schema.Literals([
+  'failure',
+  'warning',
+  'notice',
+]);
+
+export type GitHubCheckAnnotationLevel =
+  typeof GitHubCheckAnnotationLevelSchema.Type;
 
 export const DEFAULT_CHECK_ANNOTATION_LEVEL: GitHubCheckAnnotationLevel =
   'failure';
 
-const ANNOTATION_LEVEL_RANK: Readonly<
-  Record<GitHubCheckAnnotationLevel, number>
-> = {
-  notice: 0,
-  warning: 1,
-  failure: 2,
-};
-
-/** Every level, most severe first: the one order RANK declares, read back. */
-const ANNOTATION_LEVELS_BY_SEVERITY: readonly GitHubCheckAnnotationLevel[] =
-  Struct.keys(ANNOTATION_LEVEL_RANK).toSorted(
-    (a, b) => ANNOTATION_LEVEL_RANK[b] - ANNOTATION_LEVEL_RANK[a],
-  );
+const LEVELS_BY_SEVERITY = GitHubCheckAnnotationLevelSchema.literals;
+const isCheckAnnotationLevel = Schema.is(GitHubCheckAnnotationLevelSchema);
 
 /** Unknown or missing levels read as GitHub's own default, `notice`. */
 export function normalizeCheckAnnotationLevel(
   level: string | null | undefined,
 ): GitHubCheckAnnotationLevel {
-  if (level === 'warning' || level === 'failure') {
-    return level;
-  }
-  return 'notice';
+  return isCheckAnnotationLevel(level) ? level : 'notice';
 }
 
 export function includesCheckAnnotationLevel(
@@ -34,8 +28,9 @@ export function includesCheckAnnotationLevel(
   minLevel: GitHubCheckAnnotationLevel,
 ): boolean {
   return (
-    ANNOTATION_LEVEL_RANK[normalizeCheckAnnotationLevel(annotationLevel)] >=
-    ANNOTATION_LEVEL_RANK[minLevel]
+    LEVELS_BY_SEVERITY.indexOf(
+      normalizeCheckAnnotationLevel(annotationLevel),
+    ) <= LEVELS_BY_SEVERITY.indexOf(minLevel)
   );
 }
 
@@ -47,7 +42,7 @@ export function formatCheckAnnotationLevelList(
       normalizeCheckAnnotationLevel(annotation.annotation_level),
     ),
   );
-  return ANNOTATION_LEVELS_BY_SEVERITY.filter((level) => levels.has(level))
+  return LEVELS_BY_SEVERITY.filter((level) => levels.has(level))
     .map((level) => `[${level.toUpperCase()}]`)
     .join(', ');
 }

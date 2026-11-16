@@ -11,7 +11,7 @@ import { html } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - shared schemas and utilities
-import { buildDetailsSummary, buildFileListRender } from '../htmlBuilders';
+import { buildDetailsCard, buildFileListRender } from '../htmlBuilders';
 import type { FileListRow } from '@texra-ai/harness/transcript';
 
 // Local imports - formatter helpers
@@ -20,10 +20,14 @@ import type { FormatResult } from '../baseLogFormatter';
 /** Format file list entry as TemplateResult: an icon/label summary over a
  *  `<ul>` of file rows. */
 export function formatFileListTemplate(row: FileListRow): FormatResult {
-  // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="start" class="banner-details file-list-details">${buildDetailsSummary({
-    iconName: 'file',
-    label: row.summary,
-    labelClass: 'summary-text',
-  })}<ul class="file-list-content" data-log-id=${ifDefined(row.id)}>${buildFileListRender(row.files)}</ul></wa-details>`;
+  return buildDetailsCard({
+    summary: {
+      iconName: 'file',
+      label: row.summary,
+      labelClass: 'summary-text',
+    },
+    // prettier-ignore
+    body: html`<ul class="file-list-content" data-log-id=${ifDefined(row.id)}>${buildFileListRender(row.files)}</ul>`,
+    classes: { 'file-list-details': true },
+  });
 }

@@ -7,8 +7,16 @@ import { Config, Effect, Option, Predicate, Schema } from 'effect';
 
 // Local imports
 import { API_KEY_PROVIDER_IDS, apiKeyEntry, apiKey } from '@texra-ai/llm';
+import { SubscriptionAccounts } from '@texra-ai/llm/node';
+import { readModelOptions } from '@texra-ai/harness/host';
+import type { SettingsStores } from '@texra-ai/harness/plugins';
+import { CHATGPT_SETUP_MODEL } from '@texra/model/setupModelDefaults';
 import { ToolContext } from '@texra-ai/harness/plugins';
-import { homeDirectory, withExtendedPath } from '@texra-ai/harness/node';
+import {
+  CommandDirs,
+  homeDirectory,
+  withExtendedPath,
+} from '@texra-ai/harness/node';
 import {
   executed,
   ToolError,
@@ -17,7 +25,6 @@ import {
   withLogChannel,
 } from '@texra-ai/harness/plugins';
 import { probeLatexTools } from '@latex/latexToolchain';
-import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import { EditorIntegration } from '@texra/hosts/editorIntegration';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import {
@@ -35,8 +42,58 @@ import { detectPackageManager } from '@texra/utils/system/toolChecks';
 
 // Local file imports
 
-import { getChatGptSubscriptionStatus, SetupHost } from './platform';
+import { SetupHost } from './platform';
 import { locateTool } from './toolProbing';
+
+/**
+ * The ChatGPT subscription routing probe could not answer. It reads the
+ * routing built from the stored OAuth session; it never reports "no
+ * subscription" this way, which is a value.
+ */
+class SubscriptionProbeFailed extends Schema.TaggedError<SubscriptionProbeFailed>()(
+  'SubscriptionProbeFailed',
+  {
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
+
+/** Subscription access reported separately from provider API keys. */
+export const getChatGptSubscriptionStatus = Effect.fn(
+  'getChatGptSubscriptionStatus',
+)(function* (
+  stores: SettingsStores,
+): Effect.fn.Return<
+  { signedIn: boolean; enabled: boolean },
+  SubscriptionProbeFailed,
+  Secrets | SubscriptionAccounts
+> {
+  const accounts = yield* SubscriptionAccounts;
+  const status = yield* accounts['chatgpt-subscription'].getStatus().pipe(
+    Effect.mapError(
+      (cause) =>
+        new SubscriptionProbeFailed({
+          message: 'The ChatGPT subscription session could not be read.',
+          cause,
+        }),
+    ),
+  );
+  // Routing is consulted only for a signed-in account.
+  if (!status.signedIn) return { signedIn: false, enabled: false };
+  const [option] = yield* readModelOptions(stores, [CHATGPT_SETUP_MODEL]).pipe(
+    Effect.mapError(
+      (cause) =>
+        new SubscriptionProbeFailed({
+          message: 'ChatGPT subscription routing could not be resolved.',
+          cause,
+        }),
+    ),
+  );
+  return {
+    signedIn: true,
+    enabled: option?.usageRoute === 'chatgpt-subscription',
+  };
+});
 
 const CHANNEL = 'Setup Credentials';
 const ProbeEnvironmentInputSchema = Schema.Struct({
@@ -118,9 +175,10 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
   // Where no home directory resolves (logged by `homeDirectory`), the
   // report names it unresolved, so the probe still answers.
   const homedir = (yield* homeDirectory) ?? '<unresolved>';
+  const appDirs = (yield* CommandDirs)();
   const extendedPath =
-    withExtendedPath({ PATH: process.env.PATH }, commandDirs()).PATH ?? '';
-  const pm = detectPackageManager();
+    withExtendedPath({ PATH: process.env.PATH }, appDirs).PATH ?? '';
+  const pm = detectPackageManager(appDirs);
   const hostInfo = yield* readHostInfo;
   const [
     coreTools,

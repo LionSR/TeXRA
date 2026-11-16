@@ -13,14 +13,11 @@ import { normalizeFilePath, toErrorMessage } from '@texra-ai/harness/schemas';
 // Common LaTeX tool names used across the system
 const TEX_TOOLS = ['latexdiff', 'latexindent', 'latexmk'] as const;
 
-// Cache for extra directories to avoid repeated glob operations
-let cachedExtraDirs: string[] | null = null;
-
 /**
  * Name a directory {@link commandDirs} had to skip. The directories are
- * computed once, synchronously, by whichever PATH consumer runs first (often
- * extension activation), with no fiber to log from, so this writes the sink
- * directly at computation time.
+ * computed synchronously, when the process layer is built or when an
+ * install-command getter asks, with no fiber to log from, so this writes the
+ * sink directly at computation time.
  */
 function warnSkippedDir(message: string): void {
   writeLogLine('platformPaths', message);
@@ -34,10 +31,10 @@ const MSYS_SUBDIRS = ['usr\\bin', 'mingw64\\bin', 'mingw32\\bin'];
  *
  * `existsAtAbsolute` throws on a relative path on purpose, so that a
  * mistyped root is never silently dropped. But these roots come from user
- * environment variables, and this runs inside `commandDirs()` — on the path
- * of *every* subprocess the harness spawns. A throw there is not a loud
- * failure for one directory, it is every command in the session failing with
- * `Path must be absolute`, which reads to the user as the tool being missing.
+ * environment variables, and this runs inside `commandDirs()`, which the
+ * process layer runs as it is built. A throw there is not a loud failure for
+ * one directory, it is the process failing to start with `Path must be
+ * absolute`.
  * So a relative value is skipped and reported, never thrown.
  */
 function absoluteEnvRoot(value: string, variable: string): string | null {
@@ -72,14 +69,12 @@ function pushHomeBinDirs(dirs: string[]): void {
 }
 
 /**
- * Return common tool directories based on the current platform.
- * Results are cached for the session to improve performance.
- * Served as `CommandDirs`, and searched first by `findCommand`.
+ * Compute the common tool directories for the current platform, expanding
+ * the version-stamped install roots (TeX Live, Ghostscript, Scoop apps) as
+ * they are now. The process layer computes them once and serves them as the
+ * harness's `CommandDirs`; every caller inside Effect reads that service.
  */
 export function commandDirs(): readonly string[] {
-  if (cachedExtraDirs !== null) {
-    return cachedExtraDirs;
-  }
   const dirs: string[] = [];
   const platform = process.platform;
 
@@ -258,6 +253,5 @@ export function commandDirs(): readonly string[] {
     dirs.push(...globDescending(pattern));
   }
 
-  cachedExtraDirs = [...new Set(dirs)];
-  return cachedExtraDirs;
+  return [...new Set(dirs)];
 }

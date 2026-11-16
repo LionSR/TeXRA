@@ -15,8 +15,8 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
   (a tool's `execute()`, a VS Code command, a desktop handler, a CLI command).
   A new function converts together with its callers up to such a boundary; a
   Promise → Effect → Promise sandwich is rejected.
-- **Cancellation is interruption.** Subprocesses spawn inside
-  `Effect.tryPromise`, whose thunk gets a signal that aborts when the fiber is
+- **Cancellation is interruption.** Subprocesses run through the harness's
+  `executeCommand`, which kills the child from its finalizer when the fiber is
   interrupted. Do not add a `signal` parameter.
 - **Diagnostics are `Effect.log*`** under a channel named once with
   `withLogChannel`; tests assert on the sink's entries
@@ -27,9 +27,8 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
 ## Files
 
 - **Compilation**: `texTools.ts` (kpathsea search path, `compileLatex2Pdf`);
-  `latexToolchain.ts` (the CLI tools TeXRA needs, type-checked against
-  `@texra/shared/constants/latexToolchain`, which catches a removed tool but
-  not a missing new one); `latexLogging.ts` (the shared channel for
+  `latexToolchain.ts` (the `texra doctor` probe over the tools the
+  `@texra/shared/constants/latexToolchain` catalog lists); `latexLogging.ts` (the shared channel for
   `texcount.ts`, `formatter/` and the GUI hosts' latexdiff verbs; other
   `latexdiff` callers name their own with `withLogChannel`).
 - **Extraction**: `extractFigure.ts` (figure paths); `extractBibliography.ts`
@@ -39,9 +38,7 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
   local `.sty` files, for `latexMedia.ts` to mirror);
   `latexParsingUtils.ts` (comment stripping and bibliography-directive
   matching shared by the extractors; put new shared parsing here);
-  `labelSearch.ts` (`\label{}` lookup); `criticismParser.ts` (`\criticize{}`
-  annotations; `replacement/advanced.ts` strips them with the same macro
-  scanner).
+  `labelSearch.ts` (`\label{}` lookup).
 - **Output**: `texcount.ts` (word counts); `latexdiff.ts` (`latexdiff` and
   `latexdiffAgainstCommit`: one run of the tool, its `--flatten` fallback and
   the clean-up of its output, which restores bibliography directives and

@@ -113,7 +113,7 @@ export class ProgressApiKeyRetryController {
             ? error
             : new Unavailable({
                 runId,
-                reason: 'The retry could not be settled.',
+                reason: 'The retry could not finish.',
               }),
         ),
       );

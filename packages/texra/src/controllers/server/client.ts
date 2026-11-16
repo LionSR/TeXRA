@@ -66,7 +66,7 @@ export type ServiceClient = RpcClient.FromGroup<
 
 /**
  * The provider API keys this process's environment holds, as a start, a
- * resume or a message sends them to the service (`StartOptions.apiKeys`): a
+ * resume or a message sends them to the service (`StartInput.apiKeys`): a
  * key a terminal or a window was given reaches the task it asks for,
  * wherever the task runs.
  */
@@ -111,23 +111,37 @@ export interface ServiceConnection {
   readonly info: ServiceInfo;
 }
 
+/** Why no service could be reached, for the callers that act on it;
+ *  `failed` for every other reason, which a caller only reports. */
+const ServiceFailureSchema = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal('failed') }),
+  /** The running service is a newer build speaking another protocol: it
+   *  stays until it exits, so waiting does not bring this client back. */
+  Schema.Struct({ kind: Schema.Literal('newer') }),
+  /** The running service answered the hello with something this build
+   *  cannot read, or refused the hello itself: a build from before the
+   *  digest. Its socket, for the one procedure every build keeps,
+   *  `service.stop`. */
+  Schema.Struct({
+    kind: Schema.Literal('unreadable'),
+    socket: Schema.String,
+  }),
+  /** The running service accepted the connection and did not answer the
+   *  hello within its deadline. */
+  Schema.Struct({ kind: Schema.Literal('unanswered') }),
+  /** A started service that does not answer this protocol yet: no record,
+   *  or one naming a service still coming up or draining. */
+  Schema.Struct({ kind: Schema.Literal('notYetUp') }),
+]);
+
 /** No service could be reached or started; the message says why. */
 export class ServiceUnavailable extends Schema.TaggedError<ServiceUnavailable>()(
   'ServiceUnavailable',
   {
     reason: Schema.String,
-
-    /** The running service is a newer build speaking another protocol: it
-     *  stays until it exits, so waiting does not bring this client back. */
-    newer: Schema.optional(Schema.Literal(true)),
-    /** The running service answered the hello with something this build
-     *  cannot read, or refused the hello itself: a build from before the
-     *  digest. Its socket, for the one procedure every build keeps,
-     *  `service.stop`. */
-    unspoken: Schema.optional(Schema.String),
-    /** The running service accepted the connection and did not answer the
-     *  hello within its deadline. */
-    unanswered: Schema.optional(Schema.Literal(true)),
+    failure: ServiceFailureSchema.pipe(
+      Schema.withConstructorDefault(Effect.succeed({ kind: 'failed' })),
+    ),
   },
 ) {
   override get message(): string {
@@ -143,8 +157,6 @@ export const WINDOWS_UNSUPPORTED =
 /** How long a started service has to answer its first hello: it loads the
  *  agent catalog first, which a loaded machine makes slow. */
 const START_TIMEOUT = '60 seconds';
-/** A started service's probe before it answers this protocol. */
-const NOT_YET_UP = 'not yet up';
 /** How long a service that accepts the connection may take to say hello. */
 const HELLO_TIMEOUT = '10 seconds';
 
@@ -234,13 +246,13 @@ export function probeService(
           ? Effect.fail(
               new ServiceUnavailable({
                 reason: `The TeXRA service on ${socket} accepts connections but did not answer (${error.message}). Stop it with \`texra service stop\`, or end its process.`,
-                unanswered: true,
+                failure: { kind: 'unanswered' },
               }),
             )
           : Effect.fail(
               new ServiceUnavailable({
                 reason: `The TeXRA service on ${socket} speaks a protocol this build cannot read (${error.message}).`,
-                unspoken: socket,
+                failure: { kind: 'unreadable', socket },
               }),
             ),
     ),
@@ -301,7 +313,7 @@ export function spawnService(
       try: () => openSync(paths.log, 'a', 0o600),
       catch: ensureError,
     });
-    // Settle on the child's own report: an `error` event (no such binary,
+    // Finish on the child's own report: an `error` event (no such binary,
     // EACCES, no processes left) fails the start with its cause.
     yield* Effect.callback<void, Error>((resume) => {
       const child = spawn(command, [...args], {
@@ -392,7 +404,7 @@ export const stopService = (
 const newerService = (info: ServiceInfo) =>
   new ServiceUnavailable({
     reason: `The running TeXRA service (${info.version}, pid ${info.pid}) is newer than this TeXRA (${BUILD_VERSION}) and speaks another protocol. Update TeXRA, or stop the service with \`texra service stop\`.`,
-    newer: true,
+    failure: { kind: 'newer' },
   });
 
 /**
@@ -421,27 +433,28 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
   // A service from before the digest cannot read this hello: it is older
   // by construction, and `service.stop` is the one procedure it shares.
   let info = yield* probeRecordedService.pipe(
-    Effect.catchIf(
-      (error) => error.unspoken !== undefined,
-      (error) =>
-        options
-          .waiting(
-            "Retiring a TeXRA service that speaks a protocol this build cannot read; it finishes its tasks and exits, then this build's starts.",
-          )
-          .pipe(
-            Effect.andThen(
-              stopService(error.unspoken ?? '', true).pipe(
-                Effect.mapError(
-                  (failure) =>
-                    new ServiceUnavailable({
-                      reason: `The older TeXRA service could not be asked to retire: ${failure.message}`,
-                    }),
+    Effect.catch((error) => {
+      const { failure } = error;
+      return failure.kind !== 'unreadable'
+        ? Effect.fail(error)
+        : options
+            .waiting(
+              "Retiring a TeXRA service that speaks a protocol this build cannot read; it finishes its tasks and exits, then this build's starts.",
+            )
+            .pipe(
+              Effect.andThen(
+                stopService(failure.socket, true).pipe(
+                  Effect.mapError(
+                    (stopFailure) =>
+                      new ServiceUnavailable({
+                        reason: `The older TeXRA service could not be asked to retire: ${stopFailure.message}`,
+                      }),
+                  ),
                 ),
               ),
-            ),
-            Effect.as(null),
-          ),
-    ),
+              Effect.as(null),
+            );
+    }),
   );
   if (info !== null && isNewer(info))
     return yield* Effect.fail(newerService(info));
@@ -480,21 +493,23 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     // window lasts, and a newer build's service that came up meanwhile
     // refuses this one at once. Past the deadline, the last probe's reason
     // stands; only "not yet up" reads as the service not answering.
-    const lastRefusal = yield* Ref.make(
-      new ServiceUnavailable({ reason: NOT_YET_UP }),
-    );
+    const notYetUp = new ServiceUnavailable({
+      reason: `The TeXRA service did not answer within ${START_TIMEOUT} (its log: ${servicePaths(storageRoot).log}).`,
+      failure: { kind: 'notYetUp' },
+    });
+    const lastRefusal = yield* Ref.make(notYetUp);
     const probed = probeRecordedService.pipe(
-      Effect.retry({ while: (error) => error.unanswered === true }),
+      Effect.retry({ while: (error) => error.failure.kind === 'unanswered' }),
       Effect.flatMap((answer) => {
         if (answer !== null && isNewer(answer))
           return Effect.fail(newerService(answer));
         return answer !== null && compatible(answer) && !answer.draining
           ? Effect.succeed(answer)
-          : Effect.fail(new ServiceUnavailable({ reason: NOT_YET_UP }));
+          : Effect.fail(notYetUp);
       }),
       Effect.tapError((refusal) => Ref.set(lastRefusal, refusal)),
       Effect.catchIf(
-        (error) => error.newer !== true,
+        (error) => error.failure.kind !== 'newer',
         () => Effect.succeed(null),
       ),
     );
@@ -512,13 +527,6 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
         duration: START_TIMEOUT,
         orElse: () => Effect.flatMap(Ref.get(lastRefusal), Effect.fail),
       }),
-      Effect.mapError((error) =>
-        error.reason === NOT_YET_UP
-          ? new ServiceUnavailable({
-              reason: `The TeXRA service did not answer within ${START_TIMEOUT} (its log: ${servicePaths(storageRoot).log}).`,
-            })
-          : error,
-      ),
     );
   }
   const { socket } = info;
@@ -696,7 +704,9 @@ export const linkService = Effect.fn('server.linkService')(function* (
               if (error.message === told) return Effect.void;
               told = error.message;
               return awayFor(
-                error.newer === true ? WINDOW_OUTDATED : SERVICE_OFFLINE,
+                error.failure.kind === 'newer'
+                  ? WINDOW_OUTDATED
+                  : SERVICE_OFFLINE,
               ).pipe(
                 Effect.andThen(
                   Effect.logWarning(

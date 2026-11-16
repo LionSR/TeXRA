@@ -19,7 +19,7 @@ not a commit.
 
 ## 1. Audio transcription calls the OpenAI SDK from the app
 
-`packages/texra/src/tools/media/audio.ts` imports `openai`, builds its own
+`packages/texra/src/controllers/session/audio.ts` imports `openai`, builds its own
 client and names the model (`gpt-4o-transcribe`). To get a key,
 `packages/texra/src/controllers/session/hostDraftRequests.ts` asks for the
 route of a pinned chat model it never calls. It is the only provider SDK

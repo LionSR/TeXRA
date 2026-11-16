@@ -65,7 +65,7 @@ In order of size. Each needs the decision named.
    PDF". On a failed compile the extension logs a warning and shows nothing;
    the desktop shows the error. The desktop names a missing compiler; the
    extension passes the raw error on. Proposed: one "compile for display"
-   program in `packages/texra/src/tools/latex/latexPreview.ts`, which already
+   program in `packages/texra/src/controllers/approval/latexPreview.ts`, which already
    defines `BuildDisplayFn`, answering a PDF path or a sentence. The output
    directory stays a host fact (LaTeX Workshop's `outDir`). Decision: the
    extension starts showing the failure.
@@ -118,7 +118,7 @@ In order of size. Each needs the decision named.
 2. **The aux files of a base name.** `collectFilesFromPatterns`
    (`packages/texra/src/housekeeping/artifactFiles.ts`) folds case on macOS
    and Windows and searches `build/`; `deleteWithAuxFiles`
-   (`packages/texra/src/tools/latex/latexPreview.ts`) expands the same
+   (`packages/texra/src/controllers/approval/latexPreview.ts`) expands the same
    extension table over `filesByPrefix`, a case-sensitive lister exported
    from the latexindent module
    (`packages/texra/src/latex/formatter/latexindentpt.ts`).

@@ -14,10 +14,10 @@ import { formatDesktopAccelerator } from '../shared/accelerators';
 import type { OsPlatform } from '@texra/shared/osPlatform';
 import {
   dispatchDesktopCommand,
-  getDesktopCommandMenuEntries,
+  paletteEntries,
   type DesktopCommandActions,
   type DesktopCommandId,
-  type DesktopCommandMenuEntry,
+  type DesktopPaletteEntry,
 } from '../shared/desktopCommandSurface';
 
 // Single command row. `meta` is the trailing label (an accelerator hint, a
@@ -83,34 +83,13 @@ function getNextCommandPaletteIndex(
   return (currentIndex + delta + itemCount) % itemCount;
 }
 
-function executeCommandPaletteEntry(
-  entry: CommandPaletteEntry | undefined,
-  onExecute: (id: DesktopCommandId) => boolean | Promise<boolean>,
-): boolean {
-  if (!entry) return false;
-  // Sync handlers report their actual result; an async handler returns a
-  // Promise, which counts as "handled" so the palette closes immediately and
-  // the work runs in the background. A background rejection is left to the
-  // renderer's `unhandledrejection` reporter, the one owner of asynchronous
-  // renderer failures, which logs it and tells the user instead of leaving a
-  // devtools-only line; sync handler errors still throw and bubble to the
-  // caller.
-  const result = onExecute(entry.id);
-  return typeof result === 'boolean' ? result : true;
-}
-
 export function createDesktopCommandPalette({
   document,
   actions,
   platform,
 }: DesktopCommandPaletteOptions): CommandPaletteController {
   const getEntries = (): CommandPaletteEntry[] =>
-    getDesktopCommandMenuEntries(platform).map((entry) =>
-      toPaletteEntry(entry, platform),
-    );
-
-  const onExecute = (id: DesktopCommandId): boolean | Promise<boolean> =>
-    dispatchDesktopCommand(id, actions);
+    paletteEntries(platform).map((entry) => toPaletteEntry(entry, platform));
 
   // Reactive state: every mutation calls renderTemplate() to keep the DOM in
   // sync. wa-dialog handles modal backdrop, focus trap, escape key, and focus
@@ -128,7 +107,9 @@ export function createDesktopCommandPalette({
 
   const executeActiveCommand = (): void => {
     const entry = visibleEntries[activeIndex];
-    if (executeCommandPaletteEntry(entry, onExecute)) close();
+    if (!entry) return;
+    dispatchDesktopCommand(entry.id, actions);
+    close();
   };
 
   const applyQuery = (nextQuery: string): void => {
@@ -172,7 +153,8 @@ export function createDesktopCommandPalette({
   };
 
   const handleItemClick = (entry: CommandPaletteEntry) => (): void => {
-    if (executeCommandPaletteEntry(entry, onExecute)) close();
+    dispatchDesktopCommand(entry.id, actions);
+    close();
   };
 
   const renderTemplate = (): void => {
@@ -319,7 +301,7 @@ export function createDesktopCommandPalette({
 }
 
 function toPaletteEntry(
-  entry: DesktopCommandMenuEntry,
+  entry: DesktopPaletteEntry,
   platform: OsPlatform,
 ): CommandPaletteEntry {
   return {

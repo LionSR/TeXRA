@@ -10,7 +10,7 @@ import { customElement, property } from 'lit/decorators.js';
 // Local imports - shared styles, schemas, and templates
 import type { SubscriptionAuthStatuses } from '@texra/shared/model/subscriptionAuthStatus';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postMessage } from '@texra/shared/hostBridge';
+import { postToHost } from '@settingsView/frontend/messageDispatcher';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
@@ -46,7 +46,8 @@ export class SubscriptionsTab extends LitElement {
   // request's snapshots.
   override connectedCallback(): void {
     super.connectedCallback();
-    postMessage(SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE, {
+    postToHost({
+      command: SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE,
       forceRefresh: false,
     });
   }
@@ -65,7 +66,8 @@ export class SubscriptionsTab extends LitElement {
             kind: 'secondary',
             appearance: 'outlined',
             onClick: () =>
-              postMessage(SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE, {
+              postToHost({
+                command: SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE,
                 forceRefresh: true,
               }),
           }),
