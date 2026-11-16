@@ -209,7 +209,7 @@ const loaded = Effect.fn('RunHistory.loaded')(function* (
     return yield* inconsistent(run, applied.failure);
   const state = applied.success;
   // A run's input changes no state; a request before its opening leaves
-  // an unopened state (`phase` null), which the fold lets through only
+  // an unopened state (`at` null), which the fold lets through only
   // with no run history row in it.
   if (state === null) return null;
   if (prepared && state.messages.length > 0) {

@@ -180,7 +180,8 @@ export type CellError =
  * One exception to the rest: a run whose stored rows cannot be used
  * ({@link runReadRefusal}) opens no cell, so `endIn`
  * (`agent/storage/runLifecycle.ts`) appends its `run.end` and closing rows
- * straight to the ending transaction, without the halt a cell would write.
+ * straight to the ending transaction, without the cancellations of its open
+ * requests a cell would add.
  * The loop hands the same cell to the invoker and the
  * dispatch unit, so no run service keeps a copy of the state it commits
  * against.

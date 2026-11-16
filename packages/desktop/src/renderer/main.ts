@@ -845,7 +845,9 @@ const routeMessage = createMessageRoutes({
 // protocol has its own channel (`sessionWire`, above). The settings view's
 // pushes reach `<settings-app>` through its own listener and match no route
 // here. The preload holds every push until this listener exists.
-window.addEventListener('message', (event) => routeMessage(event.data));
+const routeHostMessage = (event: MessageEvent): void =>
+  routeMessage(event.data);
+window.addEventListener('message', routeHostMessage);
 resolveDesktopPushes().listening();
 
 // Keep the embedded browser aligned when the window resizes: its view is
@@ -924,6 +926,10 @@ window.addEventListener('beforeunload', (event) => {
 window.addEventListener(
   'unload',
   () => {
+    // Nothing is routed to what is disposed below: a project list that
+    // arrives late (a window closed while it starts) would open a session
+    // on the disposed runtime.
+    window.removeEventListener('message', routeHostMessage);
     surfaceResizeObserver.disconnect();
     if (surfaceLayoutFrame !== undefined)
       cancelAnimationFrame(surfaceLayoutFrame);

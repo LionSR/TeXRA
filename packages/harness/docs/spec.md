@@ -365,7 +365,11 @@ also read by `applyRunRows`.
 - `run.activate` (folded: yes): One activation: the first launch or a resume.
 - `run.config` (folded: yes): What the run runs on: configuration, model,
   binding.
-- `run.end` (folded: no): The terminal fact: outcome, classified error, output.
+- `run.stop` (folded: yes): A stop asked of the run, and why: `user`, or
+  `released` by the call that awaited it.
+- `run.end` (folded: yes): The terminal fact: outcome, classified error,
+  output. The run state checks a stop and an end against an existing run and
+  changes nothing: nothing continues from either until the next open.
 - `run.removed` (folded: no): The deletion marker: last row of its aggregate, final.
 - `run.description` (folded: no): A title, by `model` or `user`.
 - `plugin.fact` (folded: no): A plugin's own kind; core never reads `value`.
