@@ -18,7 +18,7 @@ import type {
   DesktopOpenRecentProjectMessageSchema,
   DesktopSelectProjectMessageSchema,
 } from '../shared/desktopProjectMessages';
-import type { DesktopSettlePromptMessageSchema } from '../shared/desktopPromptMessages';
+import type { DesktopAnswerPromptMessageSchema } from '../shared/desktopPromptMessages';
 import type { DesktopWorkspaceInboundMessageSchema } from '../shared/desktopWorkspaceMessages';
 
 /** A request the main process routes, by the schema its route decodes; a
@@ -28,7 +28,7 @@ type DesktopRequest =
   | typeof DesktopCloseProjectMessageSchema.Encoded
   | typeof DesktopOpenRecentProjectMessageSchema.Encoded
   | typeof DesktopFollowLogMessageSchema.Encoded
-  | typeof DesktopSettlePromptMessageSchema.Encoded
+  | typeof DesktopAnswerPromptMessageSchema.Encoded
   | typeof DesktopWorkspaceInboundMessageSchema.Encoded
   | {
       readonly command:
