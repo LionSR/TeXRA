@@ -16,12 +16,7 @@ import {
   formatIssuesForDiagnostics,
   Rejected,
 } from '@texra-ai/harness/schemas';
-import {
-  formatTeamLaunchBlockedMessage,
-  formatUnknownTeamMessage,
-  launchTeamId,
-  resolveTeamLaunch,
-} from '@texra/agent/teams/teamLaunch';
+import { launchTeamId, resolveTeamLaunch } from '@texra/agent/teams/teamLaunch';
 import { isPastedImage } from '@texra/shared/utils/pastedImageName';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
@@ -171,14 +166,8 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
       ...(yield* createTeamCatalogPorts(roots.repoState)),
     });
     switch (resolution.status) {
-      case 'unknown-team':
-        return yield* new Rejected({
-          reason: formatUnknownTeamMessage(teamId),
-        });
-      case 'blocked':
-        return yield* new Rejected({
-          reason: formatTeamLaunchBlockedMessage(teamId, resolution.reason),
-        });
+      case 'refused':
+        return yield* new Rejected({ reason: resolution.message });
       case 'ready':
         // The renderer's selected agent is intentionally ignored: the
         // authoritative team plan resolves both the root and delegation

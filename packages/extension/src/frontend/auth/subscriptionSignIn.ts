@@ -18,7 +18,7 @@ import {
   type SubscriptionProviderId,
   type SubscriptionSignInPresenter,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
-import type { SettingsStores } from '@texra-ai/harness/plugins';
+import type { AppSignals, SettingsStores } from '@texra-ai/harness/plugins';
 import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import type { HttpClient } from 'effect/http';
 
@@ -112,7 +112,7 @@ export function signInWithSubscription(
 ): Effect.Effect<
   SubscriptionAccount,
   Error,
-  HttpClient.HttpClient | SubscriptionAccounts
+  HttpClient.HttpClient | SubscriptionAccounts | AppSignals
 > {
   const provider = subscriptionProvider(providerId);
   return withVSCodeProgress(

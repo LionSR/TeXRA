@@ -6,15 +6,7 @@
 // `Rejected` with its reason, never dropped.
 
 import { Effect } from 'effect';
-import {
-  withProcessServices,
-  type ProcessRuntime,
-  type ProcessServices,
-  type HostPresentation,
-  type PresentationEventHandlers,
-  type RuntimePresentationEvent,
-  type RuntimePresentationEventPayloads,
-} from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/harness/host';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 
@@ -22,8 +14,8 @@ import {
   hostFailed,
   hostFailure,
 } from '@texra/controllers/session/hostCallFailure';
-import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import type {
+  GuiWindowHost,
   OwnHostArms,
   SharedHostCommandBindings,
 } from '@texra/controllers/session/openGuiWindow';
@@ -40,8 +32,6 @@ import type { DesktopFileSelection } from './desktopFileSelection.js';
 import type { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 
 interface DesktopHostRequestsOptions {
-  /** The window's host snapshot. */
-  snapshot: HostSnapshotSource;
   host: DesktopAgentRunHost;
   files: DesktopFileSelection;
   workspaceFile: ReturnType<typeof createDesktopWorkspaceIpc>['file'];
@@ -52,9 +42,6 @@ interface DesktopHostRequestsOptions {
   openExternalUrl(url: string): Effect.Effect<void, HostFailed>;
   /** Re-probe the LaTeX toolchain. */
   recheckTools(): Effect.Effect<void, never, ProcessServices>;
-  /** The process runtime this window was handed; every request handler below runs
-   *  on it. */
-  runtime: ProcessRuntime;
 }
 
 /** The desktop's half of a project's window, for the window's scope. */
@@ -62,7 +49,7 @@ export const createDesktopHostRequests = (
   options: DesktopHostRequestsOptions,
 ) =>
   Effect.sync(() => {
-    const { host, runtime, snapshot } = options;
+    const { host } = options;
     /**
      * Each arm answers with the program that presents its notice; the
      * session forks it, so nothing here settles a dialog on a fiber of its
@@ -72,10 +59,7 @@ export const createDesktopHostRequests = (
      * the programs they hand back cannot fail; `openPath` fails in its own
      * channel and the session's fork warn-logs it.
      */
-    const presentationEventHandlers: PresentationEventHandlers<
-      RuntimePresentationEventPayloads,
-      HostPresentation
-    > = {
+    const notices: GuiWindowHost['notices'] = {
       requestShowError: (failure) =>
         host.showErrorDialog(shownFailureText(failure), failure.docsPage),
       // An instruction is actionable guidance, not a failure, so it uses
@@ -85,8 +69,6 @@ export const createDesktopHostRequests = (
           instruction.message,
           instructionActions(instruction.key),
         ),
-      agentNotFound: ({ agentName }) =>
-        withProcessServices(runtime, snapshot.showAgentConfigBanner(agentName)),
       // Desktop has no editor integration to preview through, so the
       // resolved path goes to the preview-with-fallback host directly.
       openFile: (data) => host.openPath(data.location.absolutePath),
@@ -160,12 +142,8 @@ export const createDesktopHostRequests = (
     return {
       bindings,
       own,
-      window: {
-        emit: <K extends RuntimePresentationEvent>(
-          event: K,
-          payload: RuntimePresentationEventPayloads[K],
-        ): HostPresentation => presentationEventHandlers[event](payload),
-      },
+      notices,
+      window: {},
       notify: host.notify,
       runs: {
         // Desktop has no editor integration to preview through, so the
@@ -187,7 +165,7 @@ export const createDesktopHostRequests = (
               },
             )
             .pipe(Effect.mapError((cause) => hostFailed('openDiff', cause))),
-        confirmAccept: (message: string) => host.confirmAcceptFile(message),
+        confirm: host.confirm,
         openDirectory: (directory: string) => host.openPath(directory),
       },
       export: {

@@ -491,10 +491,12 @@ interface AppSignalPayloads {
    * (`onWrite.invalidatesModelOptions`). Keyless on purpose: a listener
    * re-reads the routes it shows.
    *
-   * Emitted by the writers a person drives: the CLI's, the settings views'
-   * (`settingsViewBody.ts`) and the extension's ChatGPT sign-in from the
-   * getting-started card (`extensionHostRequests.ts`). Consumed by: the CLI chat TUI's status
-   * bar, which re-reads the route and quota it shows, and the extension's
+   * Emitted by the app's writers themselves, so no caller announces for
+   * them: a subscription's sign-in, sign-out and preference write, a coding
+   * plan's toggle, and the settings write path for a row that re-routes
+   * models. The enabled-model write is the one still announced by its
+   * caller, the settings view (`settingsViewBody.ts`). Consumed by: the CLI chat
+   * TUI's status bar, which re-reads the route and quota it shows, and the extension's
    * and desktop's launchers (`hostSnapshotSource.ts`), which re-read their
    * credential check and model catalog.
    */

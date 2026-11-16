@@ -308,7 +308,7 @@ export class RunHeader extends LitElement {
     const source = run.forkedFrom;
     if (source === null) return nothing;
     const from = this.view?.runs.get(source.id);
-    const label = TASK_ACTIONS.forkedFrom(from ? from.title : 'a deleted task');
+    const label = TASK_ACTIONS.forkedFromRun(from);
     return html`<button
       type="button"
       class="forked-from"
@@ -523,7 +523,7 @@ export class RunHeader extends LitElement {
           canDelete
             ? html`<wa-divider></wa-divider
                 ><wa-dropdown-item value=${DELETE_SESSION} variant="danger"
-                  >${waIcon('trash', { slot: 'icon' })}${run.parentId === null ? TASK_ACTIONS.delete : TASK_ACTIONS.deleteAgent}</wa-dropdown-item
+                  >${waIcon('trash', { slot: 'icon' })}${TASK_ACTIONS.delete(run)}</wa-dropdown-item
                 >`
             : nothing
         }

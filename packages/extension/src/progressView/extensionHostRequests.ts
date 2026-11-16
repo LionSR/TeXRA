@@ -54,7 +54,11 @@ import type {
   HostCommand,
 } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
-import type { HostFailed, NoticeLevel } from '@texra/hosts/uiHosts';
+import type {
+  ConfirmQuestion,
+  HostFailed,
+  NoticeLevel,
+} from '@texra/hosts/uiHosts';
 
 import { normalizeMainViewFileExtension } from '@texra/controllers/mainView/MainViewDroppedFilesController';
 import {
@@ -68,11 +72,11 @@ import {
 } from '@texra/controllers/session/hostCallFailure';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import type {
+  GuiWindowHost,
   OwnHostArms,
   SharedHostCommandBindings,
 } from '@texra/controllers/session/openGuiWindow';
 import type { SessionBridge } from '@texra/controllers/session/SessionBridge';
-import type { WindowHost } from '@texra/controllers/server/windowHost';
 import {
   type HostCommandFailure,
   type RequestRefusal,
@@ -93,8 +97,10 @@ export interface ExtensionHostRequestsOptions {
   /** The window's bridge and snapshot. */
   readonly bridge: SessionBridge;
   readonly snapshot: HostSnapshotSource;
-  /** What this window does for its project's runs. */
-  readonly window: Omit<WindowHost, 'filesWritten'>;
+  /** The runtime's notices this window presents its own way. */
+  readonly notices: GuiWindowHost['notices'];
+  /** What this window's editor does for its project's runs. */
+  readonly window: GuiWindowHost['window'];
   readonly extensionPath: string;
   /** The extension's id, which names its getting-started walkthrough. */
   readonly extensionId: string;
@@ -409,6 +415,7 @@ export const createExtensionHostRequests = Effect.fn(
   return {
     bindings,
     own,
+    notices: options.notices,
     window: options.window,
     // The host's members read `this`, so they cross the boundary bound.
     notify: (level: NoticeLevel, message: string) =>
@@ -424,8 +431,8 @@ export const createExtensionHostRequests = Effect.fn(
           'compare',
           handleCompare(at(base), at(edited), title, diffRefresh),
         ),
-      confirmAccept: (message: string) =>
-        vscodeUi.confirm({ message, action: 'Replace file' }),
+      // The host's members read `this`, so they cross the boundary bound.
+      confirm: (question: ConfirmQuestion) => vscodeUi.confirm(question),
       openDirectory: revealFileInOS,
     },
     export: {

@@ -4,6 +4,7 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
+import { AppSignals } from '@texra-ai/harness/plugins';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
 import { LATEX_FORMATTER_SETTING } from '@texra/shared/settings/texraSettings';
@@ -43,6 +44,6 @@ describe('applyStateSettingUpdate', () => {
           ports,
         ),
       ).toEqual({ kind: 'ignored' });
-    }),
+    }).pipe(Effect.provide(AppSignals.layer)),
   );
 });

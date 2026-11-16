@@ -44,7 +44,7 @@ function createDeps(
     ],
     host: {
       openDiff: () => Effect.void,
-      confirmAccept: () => Effect.succeed(true),
+      confirm: () => Effect.succeed(true),
       openDirectory: () => Effect.void,
       showInfo: () => Effect.void,
       ...overrides,
@@ -65,8 +65,7 @@ layer(SessionGraph.hosted)(
           const followUps: string[] = [];
           const confirmations = [false, true];
           const deps = createDeps({
-            confirmAccept: () =>
-              Effect.sync(() => confirmations.shift() ?? false),
+            confirm: () => Effect.sync(() => confirmations.shift() ?? false),
           });
           deps.runs.followUpLauncher = (_run, text) =>
             Effect.sync(() => {
