@@ -12,7 +12,7 @@
  * request with the child's reply to it, then this revision's request with
  * the compile failures that rejected the last one.
  */
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, ScopedRef } from 'effect';
 
@@ -209,6 +209,15 @@ const readTemplates = Effect.fn('documents.readTemplates')(function* (
         return yield* Effect.fail(
           new ToolError(
             `This host ships no document templates, so '${name}' cannot be read.`,
+          ),
+        );
+      // A template is a file of the bundled directory, named by a program's
+      // arguments, which a model may write: a name that leaves the directory
+      // would read any file into the prompt unasked.
+      if (basename(name) !== name)
+        return yield* Effect.fail(
+          new ToolError(
+            `'${name}' is not a bundled template: name one by its file name.`,
           ),
         );
       const path = join(directory, name);
