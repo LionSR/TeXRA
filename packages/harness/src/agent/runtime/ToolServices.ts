@@ -15,7 +15,6 @@ import {
 import type { PlatformServices } from '@platform/processRuntime';
 import { SessionRoots, StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
-  qualifyAggregateId,
   type RunEnd,
   type RunId,
   type ToolResult,
@@ -175,7 +174,7 @@ export const childRuns = (
     autoApproved: inSession(workAutoApproved(runId)),
     requested: (id, requestId) =>
       Effect.map(
-        log.runRows(qualifyAggregateId('run', id), 'requests'),
+        log.runRows(id, 'requests'),
         (rows) => rows.requests[requestId] !== undefined,
       ),
   };

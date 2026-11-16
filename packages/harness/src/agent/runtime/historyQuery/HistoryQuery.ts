@@ -28,7 +28,6 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { withLogChannel } from '@logger/effectLog';
 import {
   modelFailureMessage,
-  qualifyAggregateId,
   type CommitOrdinal,
   type DispatchFacts,
   type InvocationRef,
@@ -391,17 +390,15 @@ export class HistoryQueryStore implements Context.Service.Shape<
         // replaces its view.
         if (fed?.view === run && run.outcome !== null) continue;
         const after = fed?.seq ?? 0;
-        const rows = yield* this.session.log
-          .history(qualifyAggregateId('run', run.id), after + 1)
-          .pipe(
-            Effect.catchIf(
-              (error) => runReadRefusal(error) !== undefined,
-              (error) =>
-                Effect.logWarning(
-                  `History query leaves out the calls of run ${run.id}: ${error.message}`,
-                ).pipe(withLogChannel(CHANNEL), Effect.as(error.message)),
-            ),
-          );
+        const rows = yield* this.session.log.history(run.id, after + 1).pipe(
+          Effect.catchIf(
+            (error) => runReadRefusal(error) !== undefined,
+            (error) =>
+              Effect.logWarning(
+                `History query leaves out the calls of run ${run.id}: ${error.message}`,
+              ).pipe(withLogChannel(CHANNEL), Effect.as(error.message)),
+          ),
+        );
         // A run whose rows do not decode in this build never will: its row
         // in runs says why its calls are missing, and it is not read again.
         if (typeof rows === 'string') {

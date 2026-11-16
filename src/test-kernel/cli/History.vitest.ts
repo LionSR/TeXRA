@@ -5,7 +5,6 @@ import { layer } from '@effect/vitest';
 import { expect } from 'vitest';
 import {
   AgentConfigSchema,
-  qualifyAggregateId,
   RUN_OUTCOME,
   RunIdSchema,
   type RunId,
@@ -81,7 +80,7 @@ const publishRunFacts = (
       yield* publishTestRows(session, [
         {
           type: 'run.end',
-          aggregateId: qualifyAggregateId('run', runId),
+          aggregateId: runId,
           outcome: facts.outcome,
           output: emptyRunEndOutput(),
         },

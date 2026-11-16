@@ -15,7 +15,6 @@ import {
   runEndErrorMessage,
   RUN_OUTCOME,
   RunRecordFieldsSchema,
-  qualifyAggregateId,
   type ChildRunDelivery,
   type SessionRowDraft,
   type RunEnd,
@@ -288,7 +287,7 @@ const endIn = Effect.fn('endIn')(function* (
   const end = runEndDraft(runId, { outcome, error, output: input.output });
   const unapplied =
     facts.parent === null ? (yield* (yield* Inbox).read(runId)).followUps : [];
-  const target = qualifyAggregateId('run', runId);
+  const target = runId;
   const report =
     input.report == null
       ? []
@@ -368,7 +367,7 @@ export const stopRun = Effect.fn('stopRun')(function* (
           ? [
               {
                 type: 'run.stop',
-                aggregateId: qualifyAggregateId('run', runId),
+                aggregateId: runId,
                 reason,
               } as const,
             ]

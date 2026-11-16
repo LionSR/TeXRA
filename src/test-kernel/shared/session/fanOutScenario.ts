@@ -12,7 +12,6 @@ import {
   type DisplayRow,
   type LocalRuntimeState,
   MESSAGE_TYPES,
-  qualifyAggregateId,
   type RunId,
   type RunIdentity,
   RunIdSchema,
@@ -90,7 +89,7 @@ export class Log {
   private commit = 0;
 
   emit(runId: RunId, at: number, body: DisplaySessionEventBody): DisplayRow {
-    const key = qualifyAggregateId('run', runId);
+    const key = runId;
     const seq = (this.seq.get(key) ?? 0) + 1;
     this.seq.set(key, seq);
     this.commit += 1;
@@ -153,7 +152,7 @@ export const tail = (event: DisplayRow): SessionViewInput => ({
 
 export const subscribe = (...ids: RunId[]): SessionViewInput => ({
   _tag: 'subscriptions',
-  set: ids.map((id) => ({ id: qualifyAggregateId('run', id), fromSeq: 0 })),
+  set: ids.map((id) => ({ id: id, fromSeq: 0 })),
 });
 
 /** Every run of the scenario, as launched here. */
@@ -479,7 +478,7 @@ export function withWaitingGrandchild(): SessionView {
     (input) =>
       !(
         input._tag === 'event' &&
-        ((input.event.aggregateId === qualifyAggregateId('run', GRANDCHILD) &&
+        ((input.event.aggregateId === GRANDCHILD &&
           input.event.type === 'run.end' &&
           input.event.at === T.grandchildDone) ||
           input.event.type === 'request.opened')

@@ -12,11 +12,7 @@ import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { freshRunState } from '@shared/session/runState';
-import {
-  qualifyAggregateId,
-  RunRecordFieldsSchema,
-  type RunId,
-} from '@shared/schemas';
+import { RunRecordFieldsSchema, type RunId } from '@shared/schemas';
 import { SessionLog, RunHistory } from '@shared/session/runHistory';
 import { seedRows } from './sessionTestUtils';
 
@@ -29,7 +25,7 @@ export const seedRunRecord = (
     seedRows(Context.get(session, SessionLog))([
       {
         type: 'run.config',
-        aggregateId: qualifyAggregateId('run', runId),
+        aggregateId: runId,
         config: Schema.decodeUnknownSync(RunRecordFieldsSchema)(record),
       },
     ]),
@@ -56,7 +52,7 @@ export const seedEditedFiles = (
       positionRow(runId, freshRunState(0), 'turn.ready'),
       {
         type: 'model.message',
-        aggregateId: qualifyAggregateId('run', runId),
+        aggregateId: runId,
         payload: {
           kind: 'handed-down',
           responseId,
@@ -73,7 +69,7 @@ export const seedEditedFiles = (
       },
       {
         type: 'tool.result',
-        aggregateId: qualifyAggregateId('run', runId),
+        aggregateId: runId,
         payload: {
           responseId,
           callId,

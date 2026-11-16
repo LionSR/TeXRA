@@ -22,11 +22,7 @@ import {
   type ApprovalGrantSource,
   grantSource,
 } from '@shared/approvalBypassKind';
-import {
-  grantAnswering,
-  qualifyAggregateId,
-  type RunId,
-} from '@shared/schemas';
+import { grantAnswering, type RunId } from '@shared/schemas';
 import {
   Unavailable,
   type RequestError,
@@ -78,7 +74,7 @@ const sameGrants = (a: ApprovalGrants, b: ApprovalGrants): boolean =>
 /** The `approval.policy` row that records `snapshot` as a run's grants. */
 const policyRow = (runId: RunId, snapshot: ApprovalGrants) => ({
   type: 'approval.policy' as const,
-  aggregateId: qualifyAggregateId('run', runId),
+  aggregateId: runId,
   snapshot,
 });
 
@@ -134,7 +130,7 @@ const approvalsUnder = Effect.fn('approvalsUnder')(function* (
       (kind) => id === runId || resolveBypass(after, id, kind) !== null,
     );
     if (covering.length === 0) continue;
-    const aggregateId = qualifyAggregateId('run', id);
+    const aggregateId = id;
     const { requests } = yield* log.runRows(aggregateId, 'requests');
     for (const [requestId, request] of Object.entries(requests))
       if (
@@ -219,7 +215,7 @@ export const sessionApprovals: Effect.Effect<
     decideUnder: (runId, requestId, decision, edit) =>
       log.transact((tx) =>
         Effect.gen(function* () {
-          const aggregateId = qualifyAggregateId('run', runId);
+          const aggregateId = runId;
           const { requests } = yield* log.runRows(aggregateId, 'requests');
           const open = requests[requestId]?.decision === null;
           const all: readonly SessionRowDraft[] = [

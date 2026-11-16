@@ -12,7 +12,6 @@ import {
   isInterrupted,
   MESSAGE_TYPES,
   needsUser,
-  qualifyAggregateId,
   rollupOf,
   type RunId,
   RunIdSchema,
@@ -162,7 +161,7 @@ describe('session view update', () => {
 // ---------------------------------------------------------------------------
 
 const RUN_HISTORY_RUN = Schema.decodeUnknownSync(RunIdSchema)('ab12cd');
-const RUN_HISTORY_AGGREGATE = qualifyAggregateId('run', RUN_HISTORY_RUN);
+const RUN_HISTORY_AGGREGATE = RUN_HISTORY_RUN;
 const toolTurn = toolUseTurn(RUN_HISTORY_RUN);
 /** Where the loop stands: its first position opens the run. */
 const position = (at: string, turn: number) => ({

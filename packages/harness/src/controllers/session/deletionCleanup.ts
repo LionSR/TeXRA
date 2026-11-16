@@ -26,11 +26,7 @@ import {
   WorkspaceFs,
   withSessionFs,
 } from '@platform/rootedFs';
-import {
-  qualifyAggregateId,
-  type RunId,
-  type SessionRow,
-} from '@shared/schemas';
+import { type RunId, type SessionRow } from '@shared/schemas';
 import {
   DatabaseAggregateClosed,
   RunChanged,
@@ -257,7 +253,7 @@ export const deleteAcceptedRun = (
   accepted: AggregateState,
   runs: InactiveRunStep,
 ): Effect.Effect<OutcomeOf<'run.delete'>, RequestError> => {
-  const aggregateId = qualifyAggregateId('run', runId);
+  const aggregateId = runId;
   return Effect.gen(function* () {
     if (accepted.startCommit === null) {
       return yield* new Unavailable({

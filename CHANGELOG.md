@@ -22,6 +22,11 @@ All notable changes to this project will be documented in this file.
   still continues only on your own message. SDK: a run sender of a
   follow-up is `{ kind: 'run', runId }` with no `relation`, and
   `FollowUpSenderInput` is gone (`InboxItem.from` is a `FollowUpSender`).
+- **SDK: a run's aggregate key is its run id.** `aggregateId` on a run's
+  row is the `RunId` itself, and `qualifyAggregateId` is gone; a plugin's
+  aggregate is `pluginAggregateId(key)`. `AggregateKind` and `LogicalId`
+  are gone from `@texra-ai/harness/schemas`. The store is unchanged: it
+  keeps an aggregate as its kind and id columns.
 - **An agent reports to whoever gave it the work.** When an agent finishes,
   its report goes to every agent whose message it took up since it last
   finished, and the first time also to the agent that launched it. It used

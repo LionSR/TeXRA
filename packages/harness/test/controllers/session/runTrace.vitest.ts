@@ -12,7 +12,6 @@ import { expect } from 'vitest';
 import { replayTrace } from '@controllers/session/runTrace';
 import {
   emptyRunEndOutput,
-  qualifyAggregateId,
   RunIdSchema,
   type DisplayRow,
   type SessionViewInput,
@@ -22,7 +21,7 @@ it.effect("reads the usage row projected from a model's priced title", () =>
   Effect.gen(function* () {
     const runId = RunIdSchema.make('aa0001');
     const envelope = (seq: number) => ({
-      aggregateId: qualifyAggregateId('run', runId),
+      aggregateId: runId,
       seq,
       commit: seq,
       at: 1_700_000_000_000 + seq,

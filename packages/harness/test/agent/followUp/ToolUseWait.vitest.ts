@@ -8,7 +8,7 @@ import { Effect, Fiber, Layer, Stream, Context } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { generateRunId, qualifyAggregateId } from '@texra-ai/harness/schemas';
+import { generateRunId } from '@texra-ai/harness/schemas';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import { openToolUse, runToolUse } from '@agent/runtime/loop/runLoop';
 import { attachedMedia } from '@agent/runtime/run/mediaInput';
@@ -77,7 +77,7 @@ const forkLoop = Effect.fn('test.forkLoop')(function* (init: LoopInit) {
   const scripted = scriptedModel(init.script);
   const from = Context.get(init.session, SessionLog).now();
   const fiber = yield* Effect.forkChild(loopProgram(init, scripted.model));
-  const run = qualifyAggregateId('run', init.runId);
+  const run = init.runId;
   const park = (n: number) =>
     Context.get(init.session, SessionLog)
       .tail(from)
@@ -136,7 +136,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             // and nothing else: no process holds the follow-up in memory.
             const queued = {
               type: 'followup.queued' as const,
-              aggregateId: qualifyAggregateId('run', runId),
+              aggregateId: runId,
               followUpId: 'follow-up-1',
               content: { text: asked, from: { kind: 'user' as const } },
             };
@@ -204,7 +204,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             yield* publishTestRows(session, [
               {
                 type: 'followup.queued' as const,
-                aggregateId: qualifyAggregateId('run', runId),
+                aggregateId: runId,
                 followUpId: 'follow-up-2',
                 content: {
                   text: asked,

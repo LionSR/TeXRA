@@ -27,7 +27,6 @@ import { TraceEmitter } from '@agent/trace/TraceEmitter';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import {
   generateRunId,
-  qualifyAggregateId,
   runEndErrorMessage,
   RUN_OUTCOME,
   type ChildRunDelivery,
@@ -156,7 +155,7 @@ const endingOf = (
           : [
               {
                 type: 'process.exit',
-                aggregateId: qualifyAggregateId('run', runId),
+                aggregateId: runId,
                 ...processExit,
               },
             ],

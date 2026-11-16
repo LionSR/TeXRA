@@ -23,7 +23,6 @@ import {
   addUsage,
   type CommitOrdinal,
   NO_USAGE,
-  qualifyAggregateId,
   isTaskConfig,
   sumUsageStats,
   RunWorkspaceFilesSchema,
@@ -47,7 +46,7 @@ type RecordRead<A, R = SessionLog> = Effect.Effect<A, DatabaseReadFailed, R>;
 
 /** A run's lifecycle rows and its history, one read each. */
 const rowsOf = (runId: RunId) => {
-  const id = qualifyAggregateId('run', runId);
+  const id = runId;
   return Effect.flatMap(SessionLog, (log) =>
     Effect.map(
       Effect.all([log.runRows(id, 'lifecycle'), log.history(id)]),

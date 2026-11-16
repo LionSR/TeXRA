@@ -27,7 +27,6 @@ import { findExistingRunStoragePathUnder } from '@common/storage/storageLayout';
 import { SessionRoots, StorageFs } from '@platform/rootedFs';
 import {
   isRunId,
-  qualifyAggregateId,
   ToolError,
   type RunId,
   type ToolResult,
@@ -201,7 +200,7 @@ const EXECUTION_ROUTES: ReadonlyArray<{
         // The child's report still queued on the caller: this result
         // answers it, and its result consumes it with it.
         const { followUps } = yield* (yield* SessionLog).runRows(
-          qualifyAggregateId('run', context.runId),
+          context.runId,
           'input',
         );
         const answered = followUps

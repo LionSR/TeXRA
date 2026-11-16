@@ -25,7 +25,6 @@ import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import { getRunRecords, callChildRunId } from '@agent/storage/runOwnership';
 import type { RunCall, RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import {
-  qualifyAggregateId,
   RUN_OUTCOME,
   type RunEnd,
   type RunId,
@@ -271,7 +270,7 @@ export const reusable = Effect.fn('agent.reusable')(function* (
   siblings.set(key, callId);
   const log = yield* SessionLog;
   const results = (yield* Effect.forEach(yield* reuseScope(call), (runId) =>
-    log.runRows(qualifyAggregateId('run', runId), 'results'),
+    log.runRows(runId, 'results'),
   )).flatMap((run) => run.results);
   const found = results.flatMap((payload) =>
     payload.result.status === 'executed' && payload.result.reuseKey === key

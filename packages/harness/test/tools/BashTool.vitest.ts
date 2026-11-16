@@ -20,7 +20,6 @@ import { afterEach, vi } from 'vitest';
 
 import {
   APPROVAL_POLICY_SETTING,
-  qualifyAggregateId,
   RUN_OUTCOME,
   type RunId,
   RunIdSchema,
@@ -71,7 +70,7 @@ async function parkRunWaiting(
     publishTestRows(session, [
       {
         type: 'run.position',
-        aggregateId: qualifyAggregateId('run', runId),
+        aggregateId: runId,
         payload: { at: 'waiting' },
       },
     ]),

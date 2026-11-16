@@ -24,7 +24,6 @@ import {
   type FollowUpContent,
   type FollowUpDisposition,
   type FollowUpMessage,
-  qualifyAggregateId,
   type RunEnd,
   type RunEndOutput,
   type RunBinding,
@@ -192,7 +191,7 @@ export const consumedRow = (
   disposition: FollowUpDisposition,
 ): Extract<RunInputDraft, { readonly type: 'followup.consumed' }> => ({
   type: 'followup.consumed',
-  aggregateId: qualifyAggregateId('run', runId),
+  aggregateId: runId,
   followUpId,
   disposition,
 });
@@ -204,7 +203,7 @@ export const boundsLifecycle = (
   row: Pick<SessionRow, 'aggregateId' | 'type'>,
   runId: RunId,
 ): boolean =>
-  row.aggregateId === qualifyAggregateId('run', runId) &&
+  row.aggregateId === runId &&
   (row.type === 'run.activate' || row.type === 'run.end');
 
 /** What a run is registered with: the facts its `run.start` carries. */
@@ -255,7 +254,7 @@ export const descriptionRow = (
   by: 'model' | 'user',
 ): Extract<SessionRowDraft, { type: 'run.description' }> => ({
   type: 'run.description',
-  aggregateId: qualifyAggregateId('run', runId),
+  aggregateId: runId,
   description: truncateWithEllipsis(description, 80),
   by,
 });
@@ -270,7 +269,7 @@ export function registrationDrafts(
   options: RegisterRunOptions,
   ended: readonly SessionRowDraft[] | null,
 ): Registration {
-  const target = qualifyAggregateId('run', runId);
+  const target = runId;
   const worktree = config.workingDirectory?.trim();
   const start: NonNullable<Registration['start']> = {
     type: 'run.start',
@@ -306,7 +305,7 @@ export function activationDrafts(
   ended: readonly SessionRowDraft[],
   config: RunConfigRow['config'] | null,
 ): SessionRowDraft[] {
-  const target = qualifyAggregateId('run', runId);
+  const target = runId;
   const changed: RunConfigRow[] =
     config === null
       ? []
@@ -327,7 +326,7 @@ export function runEndDraft(
   const { outcome, error } = end;
   return {
     type: 'run.end',
-    aggregateId: qualifyAggregateId('run', runId),
+    aggregateId: runId,
     outcome,
     ...(error && { error }),
     output: end.output ?? emptyRunEndOutput(),

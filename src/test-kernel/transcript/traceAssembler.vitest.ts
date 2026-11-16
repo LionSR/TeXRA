@@ -5,7 +5,6 @@ import { expect } from 'vitest';
 import {
   AgentConfigSchema,
   MESSAGE_TYPES,
-  qualifyAggregateId,
   RunIdSchema,
 } from '@texra-ai/harness/schemas';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
@@ -43,7 +42,7 @@ layer(
         yield* TestSession.open(),
       );
       const runId = Schema.decodeSync(RunIdSchema)('aa11bb22cc33');
-      const aggregateId = qualifyAggregateId('run', runId);
+      const aggregateId = runId;
       const planFact = {
         plugin: 'goal',
         kind: 'plan',

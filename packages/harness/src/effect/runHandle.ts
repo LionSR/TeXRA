@@ -14,7 +14,6 @@ import { getRunRecords } from '@agent/storage/runOwnership';
 import { replayTrace } from '@controllers/session/runTrace';
 import {
   type CommitOrdinal,
-  qualifyAggregateId,
   type RunId,
   type TranscriptSubscription,
 } from '@shared/schemas';
@@ -62,7 +61,7 @@ export function activationView(
         ...descendantRuns(level, runId, { includeRoot: false }),
       ];
       const setOf = (ids: readonly RunId[]) =>
-        ids.map((id) => ({ id: qualifyAggregateId('run', id), fromSeq: 0 }));
+        ids.map((id) => ({ id: id, fromSeq: 0 }));
       let subscribed = idsOf(source.current());
       const held = yield* source.subscribe(setOf(subscribed));
       // A level that names the same runs changes nothing, so the union is
@@ -73,7 +72,7 @@ export function activationView(
         subscribed = ids;
         return held.set(setOf(ids));
       };
-      const replayed = qualifyAggregateId('run', runId);
+      const replayed = runId;
       return source.changes.pipe(
         // The level replays on subscribe, and the fold lands the
         // activation's row and the subscription's replay asynchronously,

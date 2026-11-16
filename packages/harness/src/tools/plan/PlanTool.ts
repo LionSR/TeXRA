@@ -32,7 +32,6 @@ import {
 } from '@shared/session/runHistory';
 import {
   GOAL_PLAN_KIND,
-  qualifyAggregateId,
   RunIdSchema,
   type Plan,
   type RunId,
@@ -120,10 +119,7 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
   const { runId } = call.run;
   // A plan call, by the response its result names (`RunFacts.calls`).
   const issued = (yield* (yield* RunHistory).load(runId))?.calls ?? {};
-  const { results } = yield* (yield* SessionLog).runRows(
-    qualifyAggregateId('run', runId),
-    'results',
-  );
+  const { results } = yield* (yield* SessionLog).runRows(runId, 'results');
   const { runs } = SubscriptionRef.getUnsafe((yield* SessionViewAccess).ref);
   const live = yield* Runs;
   // A goal that ended still holds the conversation while work it started

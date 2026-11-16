@@ -18,7 +18,6 @@ import { writeLogLine } from '@logger/logSink';
 import {
   MESSAGE_TYPES,
   outcomeFromCause,
-  qualifyAggregateId,
   RUN_OUTCOME,
   toJsonValue,
   type RunId,
@@ -281,7 +280,7 @@ export function runEventDraft(
   event: AgentEvent,
 ): UnfoldedDraft | null {
   if (event.type === 'stream.chunk') return null;
-  return { ...event, aggregateId: qualifyAggregateId('run', runId) };
+  return { ...event, aggregateId: runId };
 }
 
 /**

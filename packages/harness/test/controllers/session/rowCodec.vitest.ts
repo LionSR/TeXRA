@@ -1,11 +1,7 @@
 import { Result, Schema } from 'effect';
 import { expect, it } from 'vitest';
 
-import {
-  factName,
-  qualifyAggregateId,
-  RunIdSchema,
-} from '@texra-ai/harness/schemas';
+import { factName, RunIdSchema } from '@texra-ai/harness/schemas';
 import { decodeRow, encodeDraft } from '@controllers/session/rowCodec';
 import { ROW_KINDS } from '@shared/schemas';
 import type { FactKinds } from '@tools/plugins';
@@ -17,7 +13,7 @@ const read = (factKinds: FactKinds, version: number, value: number) =>
       ...encodeDraft(
         {
           type: 'plugin.fact',
-          aggregateId: qualifyAggregateId('run', RunIdSchema.make('aa0001')),
+          aggregateId: RunIdSchema.make('aa0001'),
           plugin: 'example',
           kind: 'count',
           version,

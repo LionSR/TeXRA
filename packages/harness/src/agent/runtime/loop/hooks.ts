@@ -39,7 +39,6 @@ import { pluginDataDir, runHook } from '@common/plugins/pluginHooks';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { SessionRoots } from '@platform/rootedFs';
 import {
-  qualifyAggregateId,
   type HookOutcomePayload,
   type ToolDefinition,
   type ToolResult,
@@ -204,7 +203,7 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
     outcomes,
     outcomes.map((payload): RunHistoryDraft => ({
       type: 'hook.outcome',
-      aggregateId: qualifyAggregateId('run', run.runId),
+      aggregateId: run.runId,
       payload,
     })),
   );

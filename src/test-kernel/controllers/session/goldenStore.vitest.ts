@@ -49,7 +49,6 @@ import {
 import { afterAll, describe, expect, vi } from 'vitest';
 
 import {
-  qualifyAggregateId,
   type RunId,
   RunIdSchema,
   type SessionView,
@@ -252,7 +251,7 @@ describe('the golden 1.0 store', () => {
           expect(types, type).toContain(type);
         // The chat's `/model` switch: the configs naming the model before and
         // after it; and its `/compact`, the one edit.
-        const chat = qualifyAggregateId('run', CHAT);
+        const chat = CHAT;
         expect(
           events.flatMap((event) =>
             event.type === 'context.edit' && event.aggregateId === chat
@@ -295,7 +294,7 @@ describe('the golden 1.0 store', () => {
         // source, and its first history row seeds the source's view; an
         // awaited child names the call
         // that owns it; a process child names the call that launched it.
-        const forked = qualifyAggregateId('run', FORKED);
+        const forked = FORKED;
         expect(
           events.flatMap((event) =>
             event.type === 'run.start' && event.aggregateId === forked
@@ -337,10 +336,7 @@ describe('the golden 1.0 store', () => {
         ]);
         // It asked for `executions`, and a child is offered what it declares,
         // whatever its parent was offered.
-        const defined = qualifyAggregateId(
-          'run',
-          Schema.decodeUnknownSync(RunIdSchema)(DEFINED),
-        );
+        const defined = Schema.decodeUnknownSync(RunIdSchema)(DEFINED);
         expect(
           events.flatMap((event) =>
             event.type === 'tools.offered' && event.aggregateId === defined
@@ -351,7 +347,7 @@ describe('the golden 1.0 store', () => {
         // The plan the chat ran as a goal: a run on the default strategy, its
         // agent the chat's, that ends with the goal's result: what its one
         // round verified, and what that round spent.
-        const goal = qualifyAggregateId('run', GOAL);
+        const goal = GOAL;
         expect(
           events.flatMap((event) =>
             event.type === 'run.end' && event.aggregateId === goal

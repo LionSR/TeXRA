@@ -9,7 +9,6 @@ import { Context, Effect, Result, type Scope } from 'effect';
 
 import { logFailure } from '@logger/effectLog';
 import {
-  qualifyAggregateId,
   type ChildRunDelivery,
   type FollowUpSender,
   type RunId,
@@ -182,7 +181,7 @@ export class SessionInbox {
    *  read in the same transaction; a failure is logged. */
   closeInput(runId: RunId): Effect.Effect<void> {
     if (this.disposed) return Effect.void;
-    const run = qualifyAggregateId('run', runId);
+    const run = runId;
     return this.port.log
       .transact((tx) =>
         Effect.gen({ self: this }, function* () {
@@ -284,7 +283,7 @@ export class SessionInbox {
         (f) => f.followUpId === row.followUpId,
       );
       if (!queuedStill && !input.taken.has(row.followUpId)) {
-        const aggregate = qualifyAggregateId('run', runId);
+        const aggregate = runId;
         const queued = { type: 'followup.queued', ...row } as const;
         return {
           rows: [{ ...queued, aggregateId: aggregate }],
@@ -302,9 +301,7 @@ export class SessionInbox {
   readonly read = (
     runId: RunId,
   ): Effect.Effect<RunRowsRead<'input'>, DatabaseReadFailed> =>
-    Effect.suspend(() =>
-      this.port.log.runRows(qualifyAggregateId('run', runId), 'input'),
-    );
+    Effect.suspend(() => this.port.log.runRows(runId, 'input'));
 
   private notify(closed: InboxClosed): void {
     for (const observer of this.observers) {

@@ -14,7 +14,6 @@ import { Effect, Ref } from 'effect';
 
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import {
-  qualifyAggregateId,
   type FollowUpDisposition,
   type PositionAt,
   type RunBinding,
@@ -44,7 +43,7 @@ export const finalizedRows = (
   return [
     {
       type: 'response.finalized',
-      aggregateId: qualifyAggregateId('run', runId),
+      aggregateId: runId,
       text,
       ...((finish === 'length' || finish === 'content-filter') && {
         cut: finish,
@@ -74,7 +73,7 @@ export function positionRow(
 ): RunHistoryDraft {
   return {
     type: 'run.position',
-    aggregateId: qualifyAggregateId('run', runId),
+    aggregateId: runId,
     payload: {
       at,
       turn: state.turn,
@@ -100,7 +99,7 @@ export function appendRow(
   const addressed = addressedMessages(messages);
   return {
     type: 'model.message',
-    aggregateId: qualifyAggregateId('run', runId),
+    aggregateId: runId,
     payload: {
       kind: 'append',
       messages: addressed.messages,
@@ -126,7 +125,7 @@ export function configRow(
 ): RunHistoryDraft {
   return {
     type: 'run.config',
-    aggregateId: qualifyAggregateId('run', runId),
+    aggregateId: runId,
     config: { ...config, model },
     binding,
   };
@@ -157,7 +156,7 @@ export const handedDown = Effect.fn('rows.handedDown')(function* (
     return yield* Effect.die(new Error('One call in, one dispatch fact out.'));
   return {
     type: 'model.message',
-    aggregateId: qualifyAggregateId('run', runId),
+    aggregateId: runId,
     payload: {
       kind: 'handed-down',
       responseId: randomUUID(),

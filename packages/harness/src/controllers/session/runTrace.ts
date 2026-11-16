@@ -12,7 +12,6 @@ import { runEventDraft } from '@agent/trace/TraceEmitter';
 import { writeLogLine } from '@logger/logSink';
 import type { AgentEvent } from '@shared/session/agentEvent';
 import {
-  qualifyAggregateId,
   aggregateTarget,
   TOOL_CALL_STATUS,
   type RunId,
@@ -111,7 +110,7 @@ export function makeRunTrace({
       return new Map(held).set(runId, rows);
     });
   const closure = (runId: RunId): StreamClosure[] => {
-    const aggregateId = qualifyAggregateId('run', runId);
+    const aggregateId = runId;
     return events.openWork(aggregateId).map((id) => ({
       type: 'stream.end',
       aggregateId,
@@ -231,7 +230,7 @@ export function replayTrace<E>(
   activation: CommitOrdinal,
   result: Effect.Effect<unknown, E>,
 ): Stream.Stream<AgentEvent, E> {
-  const id = qualifyAggregateId('run', runId);
+  const id = runId;
   /** A row of this run; the listing is a summary of every run, not history. */
   const own = (
     input: SessionViewInput,

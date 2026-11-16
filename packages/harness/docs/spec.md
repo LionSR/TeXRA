@@ -37,8 +37,9 @@ its kind is its `type` column.
 - **Session**: The process's handle on one storage root: its store connection,
   its one publisher, its fold and its live runs.
 - **Aggregate**: A keyed sequence of rows. Kinds are `run` (keyed by run id) and
-  `plugin` (keyed `<plugin>:<key>`)
-  (`shared/schemas/identifiers.ts#AggregateKindSchema`).
+  `plugin` (keyed `<plugin>:<key>`); in memory a run's key is its run id and
+  a plugin's is its key behind `plugin:`
+  (`shared/schemas/identifiers.ts#AggregateIdSchema`).
 - **Run**: One `run` aggregate. It exists while its `run.start` row exists and
   no `run.removed` has closed it
   (`controllers/session/databaseLayer.ts#A run must begin with exactly one run.start`,

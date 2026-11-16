@@ -11,7 +11,6 @@ import {
 import { expect } from 'vitest';
 import {
   AgentConfigSchema,
-  qualifyAggregateId,
   RunIdSchema,
   type RunId,
 } from '@texra-ai/harness/schemas';
@@ -41,7 +40,7 @@ const publishRun = (
   runId: RunId,
 ) => {
   const agent = 'polish';
-  const aggregateId = qualifyAggregateId('run', runId);
+  const aggregateId = runId;
   // One batch, so the renderer's first view of the run already holds its
   // inputs and its running phase.
   return publishTestRows(session, [
@@ -203,7 +202,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 yield* publishTestRows(handle, [
                   {
                     type: 'run.start',
-                    aggregateId: qualifyAggregateId('run', parentRunId),
+                    aggregateId: parentRunId,
                     identity: { kind: 'agent', agent: 'chat' },
                     takesFollowUps: true,
                     parent: null,
@@ -211,7 +210,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                   },
                   {
                     type: 'run.start',
-                    aggregateId: qualifyAggregateId('run', childRunId),
+                    aggregateId: childRunId,
                     identity: { kind: 'agent', agent: 'review' },
                     takesFollowUps: false,
                     parent: { id: parentRunId, call: null },

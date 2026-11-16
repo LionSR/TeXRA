@@ -23,7 +23,6 @@ import { GlobalValues } from '@platform/processRuntime';
 import { SessionRoots } from '@platform/rootedFs';
 import {
   answerMismatch,
-  qualifyAggregateId,
   blocksCaller,
   readToolEditContent,
   type RunAction,
@@ -111,7 +110,7 @@ const storedState = (
   deps: SessionRequestsInit,
   runId: RunId,
 ): Effect.Effect<AggregateState | undefined> =>
-  deps.log.aggregateState([qualifyAggregateId('run', runId)]).pipe(
+  deps.log.aggregateState([runId]).pipe(
     Effect.orDie,
     Effect.map((rows) => rows[0]),
   );

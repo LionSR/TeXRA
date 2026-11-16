@@ -8,7 +8,6 @@
 import { Effect, Predicate, Result, SynchronizedRef, absurd } from 'effect';
 
 import {
-  qualifyAggregateId,
   type RunId,
   type SessionRow,
   type SessionRowDraft,
@@ -64,7 +63,7 @@ function contractViolation(
   run: RunId,
   rows: readonly RunHistoryDraft[],
 ): string | null {
-  const aggregate = qualifyAggregateId('run', run);
+  const aggregate = run;
   // A row naming another aggregate would reach the live state and be
   // invisible to a reload, which reads the run's aggregate.
   const foreign = rows.find((row) => row.aggregateId !== aggregate);
@@ -282,7 +281,7 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
       });
     drafts.push(draft.success);
   }
-  const target = qualifyAggregateId('run', run);
+  const target = run;
   const job = Effect.fn('job')(function* (append: Append) {
     // Decided in the job, so it reads what the jobs before it left.
     // The store refuses a `run.start` anywhere but a run's first row.
@@ -318,8 +317,7 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
 export function makeRunHistory(
   sessionLog: Pick<SessionLogShape, 'transact' | 'history'>,
 ): RunHistory['Service'] {
-  const stored = (run: RunId) =>
-    sessionLog.history(qualifyAggregateId('run', run));
+  const stored = (run: RunId) => sessionLog.history(run);
 
   /** `load`, and a read inside a job (`prepared` false: a batch that
    *  changes the history is checked from where it changes). */
