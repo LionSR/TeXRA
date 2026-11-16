@@ -205,11 +205,14 @@ In order of size. Each needs the decision named.
 - **App fact 5, the banner's check**: `missingDependencyTools` in
   `packages/texra/src/latex/latexToolchain.ts`, read by the host snapshot
   itself, so `missingTools` is no longer a host option, and its "Recheck"
-  (`recheckDependencies`) is the shared body's, not a host binding. The
-  desktop passed no missing tools, so its banner never showed; it now shows
-  the same banner as VS Code, and its "Install guide" opens Settings'
-  Plugins page as before. The LaTeX status's seven `*Path` fields stay
-  open.
+  (`recheckDependencies`) is the shared body's, not a host binding. Whether
+  a host shows the banner is a row of its `shows` table beside the
+  credential banner: VS Code shows it, the desktop does not. Showing it on
+  the desktop is left for a decision: the banner outranks the "tasks run in
+  this window only" notice (`SessionBanners`), so on a machine without
+  latexindent, Perl, Ghostscript or an image tool it would hide that
+  notice, as the desktop E2E `serviceClient.spec.ts` showed. The LaTeX
+  status's seven `*Path` fields stay open.
 - **App fact 6** (agent CLI models): `isClaudeCodeModel` and `isCodexModel`
   ask llm's `isUnservedModel`, so an OpenRouter-only model leaves the Claude
   Code and Codex pickers. No listed model changes today: the registry's

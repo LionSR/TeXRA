@@ -255,7 +255,11 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         snapshot: {
           fileOptions: () => files.fileOptions(),
           workspaceRoots: () => [],
-          shows: { apiKeyBanner: false, gettingStarted: false },
+          shows: {
+            apiKeyBanner: false,
+            dependencyBanner: false,
+            gettingStarted: false,
+          },
         },
         // The tool-edit preview: staged copies of the original and proposed
         // content the review pane diffs, for each tool edit the project's

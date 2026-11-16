@@ -233,7 +233,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               label: folder.name,
               value: folder.uri.fsPath,
             })) ?? [],
-          shows: { apiKeyBanner: true, gettingStarted: true },
+          shows: {
+            apiKeyBanner: true,
+            dependencyBanner: true,
+            gettingStarted: true,
+          },
         },
         // The tool-edit preview: staged copies of the original and proposed
         // content the diff editor shows, for each tool edit the session
