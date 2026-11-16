@@ -143,7 +143,7 @@ export const settingsViewStyles: CSSResult[] = [
       margin: 0;
       color: var(--wa-color-text-normal);
       font-size: var(--font-size-h1);
-      font-weight: var(--wa-font-weight-semibold);
+      font-weight: var(--font-weight-semibold);
       line-height: var(--line-height-heading);
     }
 

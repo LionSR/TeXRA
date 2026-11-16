@@ -55,7 +55,7 @@ const scriptStageStyles = css`
 
   .section {
     padding: var(--wa-space-xs) var(--wa-space-s) var(--wa-space-3xs);
-    font-weight: var(--wa-font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
   }
 
   .summary {
@@ -98,7 +98,7 @@ const scriptStageStyles = css`
   .row-label {
     flex: 0 0 auto;
     max-width: 40%;
-    font-weight: var(--wa-font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
