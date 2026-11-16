@@ -28,6 +28,7 @@ import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { validationModelLayer } from '@cli/runtime/models/validationModel';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { SessionLog } from '@shared/session/runHistory';
+import { outputOf } from '@test/support/toolResultFields';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { startAwaited } from '@test/support/runHandleFixtures';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -115,7 +116,7 @@ function launchBackgroundRun(
 
     yield* Deferred.await(outputRead);
     yield* Context.get(session, SessionLog).settled;
-    const reported = /Run ID: (\S+)/.exec(launched.output ?? '')?.[1];
+    const reported = /Run ID: (\S+)/.exec(outputOf(launched) ?? '')?.[1];
     assert.ok(reported, 'Background launch should report its run ID');
     const runId = Schema.decodeUnknownSync(RunIdSchema)(reported);
 
@@ -191,7 +192,7 @@ layer(
 
           const result = yield* readOutput(session, run.runId);
 
-          const output = result.output ?? '';
+          const output = outputOf(result) ?? '';
           assert.ok(output.includes('[ 42%] Building CXX object src/foo.cc.o'));
           assert.ok(output.includes("err: warning: unused variable 'x'"));
           assert.ok(output.includes('[ 84%] Building CXX object src/bar.cc.o'));
@@ -235,7 +236,7 @@ layer(
             action: 'kill',
           }).pipe(Effect.provide(parentRunCall(session)));
 
-          assert.equal(result.output, `Run ${childId} terminated.`);
+          assert.equal(outputOf(result), `Run ${childId} terminated.`);
           yield* Fiber.await(launch);
         }),
     );

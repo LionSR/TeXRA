@@ -58,6 +58,11 @@ Landed: the stored fields are their own struct in
 extends it with `files`, `consumedFollowUps` and `facts`, so the stored schema
 is no longer derived by omitting them. The stored shape is unchanged.
 
+Landed 2026-11-15: the `Schema.optional(Schema.Undefined)` placeholders
+(`error` on the executed branch; `output`, `edits`, `files` on the error
+branch) are gone. No source reader depended on them; 32 test reads did, and
+now narrow on `status`.
+
 Left, in order:
 
 1. Decide the tool-facing shape. Two candidates: `execute` returns
@@ -68,10 +73,6 @@ Left, in order:
 2. With the fields off the result, `extractToolAttachments`
    (`packages/harness/src/agent/core/tools/toolAttachmentExtraction.ts`) only
    strips bytes.
-3. The `Schema.optional(Schema.Undefined)` placeholders (`error` on the
-   executed branch; `output`, `edits`, `files` on the error branch) let readers
-   skip narrowing on `status`. Removing them is a separate sweep of those
-   readers and does not depend on the steps above.
 
 ## 3. `ChildRunDelivery`: a union on family and outcome
 

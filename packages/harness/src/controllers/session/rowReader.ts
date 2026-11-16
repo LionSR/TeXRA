@@ -434,11 +434,7 @@ export function callCard(row: SessionRow): readonly DisplayRow[] {
     source: 'tool',
     sourceDisplay: 'Tool use',
   }));
-  const { status: _status, ...rest } = result;
-  const output = {
-    ...rest,
-    ...(files.length > 0 ? { editedFiles: files } : {}),
-  };
+  const { status: _status, ...output } = result;
   // A stored result's optional keys may read `undefined`: the card's result
   // is JSON, so they are dropped.
   const json = toJsonValue({
