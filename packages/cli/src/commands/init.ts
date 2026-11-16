@@ -20,13 +20,13 @@ import {
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import { writeTextStderr } from '../runtime/platform/logSinks';
 import {
-  formatCliNoAvailableModelsRecovery,
+  CLI_SETUP_RECOVERY,
   getCliModelAccessList,
   type CliModelAccess,
 } from '../runtime/models/modelAccess';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { emitCliResult } from './_helpers/output';
+import { cliResult, emitCliResult } from './_helpers/output';
 
 interface InitAgentOption {
   readonly name: string;
@@ -69,7 +69,7 @@ function initWarning(
   return {
     model: answers.model,
     message: `"${answers.model}" is not currently usable.`,
-    recovery: `${formatCliNoAvailableModelsRecovery()} Run \`texra models list --all\` to inspect access.`,
+    recovery: `${CLI_SETUP_RECOVERY} Run \`texra models list --all\` to inspect access.`,
   };
 }
 
@@ -123,11 +123,9 @@ function emitInitSummary(
     warning,
     next: initNextSteps(warning),
   };
-  return emitCliResult({
-    json: summary,
-    ndjson: { kind: 'init-config', init: summary },
-    text: initTextSummary(summary),
-  });
+  return emitCliResult(
+    cliResult('init-config', summary, initTextSummary(summary)),
+  );
 }
 
 const runInit = Effect.fn('runInit')(function* (

@@ -12,14 +12,10 @@ import {
   InstalledPlugins,
   ToolAvailability,
   type PluginReview,
-  type ProcessRuntime,
 } from '@texra-ai/harness/host';
 import { setCliToolEnabled } from '@cli/runtime/tools';
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
-import {
-  buildPluginRows,
-  type PluginPageRoots,
-} from '@texra/controllers/settingsView/pluginRows';
+import { buildPluginRows } from '@texra/controllers/settingsView/pluginRows';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 import {
   PLUGINS_PAGE,
@@ -35,12 +31,10 @@ import {
 } from '@ui/copy/plugins';
 
 import { AsyncListForm } from './_shared/ListForm';
+import { useChatProcess } from '../chatProcess';
 
 interface PluginsListFormProps {
   readonly availableRows?: number;
-  readonly roots: PluginPageRoots;
-  /** The process runtime the probes and writes run on. */
-  readonly runtime: ProcessRuntime;
   readonly onClose: () => void;
 }
 
@@ -68,7 +62,7 @@ export function PluginsListForm(
   props: PluginsListFormProps,
 ): React.JSX.Element {
   const [pending, setPending] = useState<PendingTrust | null>(null);
-  const { roots } = props;
+  const { roots } = useChatProcess();
 
   // Suspends the enable until the user answers in this form.
   const confirmTrust = (review: PluginReview) =>
@@ -123,7 +117,6 @@ export function PluginsListForm(
           (results) => buildPluginRows(roots, results),
         )
       }
-      runtime={props.runtime}
       isEmpty={(data) => data.rows.length === 0}
       items={(data) =>
         pending

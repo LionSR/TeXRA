@@ -23,7 +23,7 @@ import {
   type CliContext,
 } from '@cli/runtime/platform/cliContext';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
-import { executeCliToolUseConfig } from '@cli/runtime/headless/executeCli';
+import { executeCliConfig } from '@cli/runtime/headless/executeCli';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import {
@@ -59,7 +59,7 @@ const headless = (overrides: Partial<CliContext> = {}) =>
 const runHeadless = (config: AgentConfigPayload, context: CliContext) =>
   Effect.gen(function* () {
     const session = yield* TestSession;
-    return yield* executeCliToolUseConfig(config, context, {
+    return yield* executeCliConfig(config, context, {
       services: {
         session: Effect.succeed(session),
         shutdownScope: (yield* FakeHost).platform.shutdownScope,

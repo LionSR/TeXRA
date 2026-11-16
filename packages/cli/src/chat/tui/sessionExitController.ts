@@ -15,7 +15,7 @@ import {
 } from '@texra-ai/harness/host';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { readCliCwd } from '@cli/runtime/platform/cliContext';
-import { CliExitCode } from '@cli/runtime/platform/exitCodes';
+import { CliExitCode, SIGNAL_EXIT_CODE } from '@cli/runtime/platform/exitCodes';
 import { leaveAtOnce, runCliExit } from '@cli/runtime/platform/initPlatform';
 import {
   writeTextStderrAndWait,
@@ -304,8 +304,8 @@ export function createSessionExitController(
   // `leave` releases it.
   const policy: SignalPolicy = {
     SIGINT: handleSigint,
-    SIGTERM: handleTermSignal(CliExitCode.Terminated),
-    SIGHUP: handleTermSignal(129),
+    SIGTERM: handleTermSignal(SIGNAL_EXIT_CODE.SIGTERM),
+    SIGHUP: handleTermSignal(SIGNAL_EXIT_CODE.SIGHUP),
     ...(terminalJobControlSupported && {
       SIGTSTP: handleSigtstp,
       SIGCONT: handleSigcont,

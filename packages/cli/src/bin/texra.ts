@@ -8,20 +8,17 @@ import { CliExitCode } from '../runtime/platform/exitCodes';
 import {
   cliErrorMessage,
   installCliPipeErrorHandlers,
-  prePlatformDiagnosticSink,
+  stderrDiagnosticSink,
   writeTextStderr,
 } from '../runtime/platform/logSinks';
 
-// This process owns its diagnostic sink from here, not from the platform
-// that eventually installs its own: the harness's console fallback sends
-// DEBUG and INFO to stdout, and a command's runtime logs while its layers
-// build (`UsageLogService started …`) — before its platform comes up, or
-// for a command with none at all. Under `--output-format ndjson` that line
-// was the first thing on stdout and the stream was no longer parseable.
-// Every pre-platform diagnostic goes to stderr instead; `--quiet` is not
-// known until citty has parsed the argv, so `defineCliCommand` swaps in the
-// silent sink for it, and the platform swaps in its own as before.
-setLogSink(prePlatformDiagnosticSink, { trusted: true });
+// This process owns its diagnostic sink from here: the harness's console
+// fallback sends DEBUG and INFO to stdout, where under `--output-format
+// ndjson` a line would break the stream. Until citty has parsed the argv,
+// diagnostics go to stderr at the default level; `defineCliCommand` then
+// installs the sink at the level the context decides (`--quiet`,
+// `--verbose`) for the command's whole life.
+setLogSink(stderrDiagnosticSink('Warn'), { trusted: true });
 
 // The process entry: one run. Each command disposes the runtime it built
 // (`defineCliCommand`), so nothing is left here to shut down.

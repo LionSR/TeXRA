@@ -28,7 +28,6 @@ function writeProgressRecord(event: string, payload: unknown): void {
   writeNdjsonStdout({
     kind: 'progress',
     event,
-    ts: new Date().toISOString(),
     payload,
   });
 }

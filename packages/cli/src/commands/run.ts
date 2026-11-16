@@ -17,18 +17,10 @@ import {
 } from '../runtime/platform/cliContext';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import {
-  formatInterruptedResumeHint,
-  tryReadCliCwd,
-} from '../runtime/headless/interruptedResumeHint';
-import {
   writeErrorStderr,
   writeTextStderr,
-  writeTextStderrAndWait,
 } from '../runtime/platform/logSinks';
-import {
-  buildHeadlessRunContext,
-  selectCliRunModel,
-} from '../runtime/models/runModel';
+import { selectCliRunModel } from '../runtime/models/runModel';
 import {
   RUN_TARGET_NAME_DESCRIPTION,
   missingRunTargetMessage,
@@ -51,7 +43,6 @@ import {
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import {
   executeCliConfig,
-  executeCliToolUseConfig,
   type CliExecuteOptions,
 } from '../runtime/headless/executeCli';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
@@ -192,7 +183,6 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         'run',
         services,
       );
-      const runContext = buildHeadlessRunContext(context);
       // Only the input-derived names: the program's own outputs are stamped
       // on the config below, and read back from the recorded config at
       // finalization.
@@ -202,10 +192,10 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
       // Persist CLI destinations absolutely so resumption has one path
       // representation and never reconstructs output locations.
       const cliOutputFile = init.output
-        ? path.resolve(runContext.cwd, init.output)
+        ? path.resolve(context.cwd, init.output)
         : undefined;
       const cliOutputDirectory = init.outputDir
-        ? path.resolve(runContext.cwd, init.outputDir)
+        ? path.resolve(context.cwd, init.outputDir)
         : undefined;
       const launch = {
         model,
@@ -229,14 +219,14 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
             }
           : {}),
         instruction,
-        workingDirectory: runContext.cwd,
+        workingDirectory: context.cwd,
       };
       const config: AgentConfigPayload = {
         ...launch,
         ...(yield* programLaunch(init.agent, {}, launch)),
       };
 
-      return yield* executeCliRun(config, runContext, {
+      return yield* executeCliRun(config, context, {
         services,
         recoveryInputIsDurable: stdinInputPath === undefined,
       });
@@ -269,12 +259,11 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
   }
 
   const model = yield* selectCliRunModel(context, init.model, 'chat', services);
-  const runContext = buildHeadlessRunContext(context);
 
   return yield* withExpandedRunInputs(
     init.inputFiles,
     init.contextFiles,
-    runContext.cwd,
+    context.cwd,
     {
       allowEmptyInput: true,
       requireWorkspaceFiles: true,
@@ -298,10 +287,10 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
           instruction,
         }),
         displayInstruction: instruction,
-        workingDirectory: runContext.cwd,
+        workingDirectory: context.cwd,
       };
 
-      const run = yield* executeCliToolUseConfig(config, runContext, {
+      const run = yield* executeCliConfig(config, context, {
         services,
         recoveryInputIsDurable: stdinInputPath === undefined,
       });
@@ -344,22 +333,10 @@ export const executeCliRun = Effect.fn('executeCliRun')(function* (
   // writes; never take the destinations a second time as call options.
   const output = resumeDocumentTaskOutputFile(config);
   const outputDir = resumeDocumentTaskOutputDirectory(config);
-  const recoveryProcessCwd = tryReadCliCwd();
   const run = yield* executeCliConfig(config, runContext, {
     services: options.services,
     runId: options.runId,
-    onInterruptedRunFinalized: options.recoveryInputIsDurable
-      ? (runId) =>
-          writeTextStderrAndWait(
-            formatInterruptedResumeHint(
-              runContext,
-              runId,
-              'workflow',
-              config.workingDirectory || runContext.cwd,
-              recoveryProcessCwd,
-            ),
-          )
-      : undefined,
+    recoveryInputIsDurable: options.recoveryInputIsDurable,
     // The run's output is published after its end commits, gated on that
     // committed outcome (`resolveDocumentTaskOutput` copies only a completed
     // run's): output that cannot be written fails this command, never the

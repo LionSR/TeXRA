@@ -40,12 +40,9 @@ import { resolveChatDefaults } from '@cli/runtime/models/chatDefaults';
 import type { CliProcessRuntime } from '@cli/runtime/platform/cliProcessRuntime';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { cliPlatform } from '@cli/runtime/platform/initPlatform';
-import {
-  formatCliNoAvailableModelsRecovery,
-  selectCliRunnableModel,
-  type CliNoAvailableModelsRecoveryOptions,
-} from '@cli/runtime/models/modelAccess';
-import { writeTextStderr } from '@cli/runtime/platform/logSinks';
+import { selectCliRunnableModel } from '@cli/runtime/models/modelAccess';
+import { silentLogSink, writeTextStderr } from '@cli/runtime/platform/logSinks';
+import { setLogSink } from '@texra-ai/harness/node';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import {
@@ -63,18 +60,12 @@ import {
   type ChatSessionController,
 } from '../chatSessionController';
 import { App } from './App';
-import {
-  applyCliModelSelection,
-  applyCliTeamSelection,
-  applyInitialCliAgentSelection,
-  resolveChatToolUseAgent,
-} from './commands/handlers/agentModelCommands';
-import { applyCliModelAccessSelection } from './commands/handlers/modelAccessCommands';
-import { showCliMemoryPreview } from './commands/handlers/memoryCommands';
-import { loginFromChat } from './commands/handlers/loginCommands';
+import { resolveChatToolUseAgent } from './commands/handlers/agentModelCommands';
 import { type SlashCommandContext } from './commands/handlers/slashContext';
 import { builtinSlashCommands } from './commands/registerBuiltins';
-import { SlashCommandsProvider } from './commands/slashRegistry';
+import { handleTuiSlashCommand } from './commands/handleSlashCommand';
+import { expandText } from './input/draftAttachments';
+import { SlashContextProvider } from './commands/slashRegistry';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
 import { announceForegroundApprovals } from './state/subscribeApprovals';
@@ -97,7 +88,6 @@ import {
 } from './state/sessionView';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
 import {
-  appendLocalErrorTranscript,
   appendLocalNotice,
   appendLocalRequestRefusal,
   paintedRunIds,
@@ -112,6 +102,7 @@ import {
 import { installTerminalTitleUpdates } from './terminalTitle';
 import { TuiSession } from './state/sessionRunState';
 import { createSessionExitController } from './sessionExitController';
+import { ChatProcessProvider } from './chatProcess';
 
 interface ChatResult {
   exitCode: number;
@@ -136,10 +127,6 @@ export interface RunChatInit {
     readonly config: AgentConfig;
   };
 }
-
-const CHAT_STARTUP_MODEL_RECOVERY = {
-  configureKeyAction: 'add a provider API key with `texra setup`',
-} satisfies CliNoAvailableModelsRecoveryOptions;
 
 /** `runtime` is the one the command entry built and ran its program on;
  *  platform signals hand off before Ink mounts. */
@@ -223,12 +210,7 @@ export async function runChat(
         credential.ready
           ? selectCliRunnableModel(
               [{ model: defaults.model, reason: defaults.modelSource }],
-              {
-                stores: services,
-                noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-                  CHAT_STARTUP_MODEL_RECOVERY,
-                ),
-              },
+              { stores: services },
             )
           : Effect.succeed({ model: defaults.model, notice: undefined }),
       );
@@ -363,25 +345,6 @@ export async function runChat(
       { discard: true },
     );
   };
-  // The slash-command context is identical at every call site; build it once
-  // lazily so the closures it captures (resetSessionForClear,
-  // chatController.resume, commands) are all defined before the first use.
-  const slashCommandContext = (): SlashCommandContext => ({
-    commands,
-    cliContext: context,
-    session,
-    runSession,
-    stores: services,
-    runtime: services.runtime,
-    processCwd: process.cwd(),
-    requestInputExit: exitController.exit,
-    getApprovalPolicy,
-    setApprovalPolicy,
-    resetSession: resetSessionForClear,
-    resumeRun: chatController.resume,
-    resumeTask: chatController.resumeTask,
-  });
-
   // From here on `chatScope` owns everything the session holds: what is
   // added below closes before the service hold above, last in first out,
   // and the exit drain awaits that close.
@@ -483,8 +446,16 @@ export async function runChat(
   };
   // Chat-session controller: owns run start/resume/stop orchestration.
   // The Ink layer never directly mutates session run-state fields, every
-  // state transition flows through one of the controller's narrow commands.
+  // state change flows through one of the controller's narrow commands.
   const draft = runtime.runSync(SubscriptionRef.make(EMPTY_DRAFT));
+  // The chat's slash commands; their handlers and forms act over the slash
+  // context built below.
+  const commands = builtinSlashCommands({
+    ...(link !== undefined && {
+      connectService: () =>
+        Effect.map(linkedClient(link), (client) => ({ client })),
+    }),
+  });
   const modelConnection = makeModelConnection(() =>
     openRegisteredCliSlashForm(commands.login),
   );
@@ -492,11 +463,10 @@ export async function runChat(
     session,
     runSession,
     served: runsElsewhere,
-    sessionContext: { ...context, quietLogs: true },
+    commandName: context.commandName,
     chatScope,
     shutdownScope: services.shutdownScope,
     cwd: context.cwd,
-    getSlashCommandContext: slashCommandContext,
     stores: services,
     runtime,
     approvalPolicy: () => chatPolicy,
@@ -533,39 +503,23 @@ export async function runChat(
     return true;
   };
 
-  // The chat's slash commands, over the controller they drive.
-  const commands = builtinSlashCommands({
+  // What every slash command, its handler or its form, acts over.
+  const slashContext: SlashCommandContext = {
+    commands,
+    cliContext: context,
+    session,
     runSession,
-    ...(link !== undefined && {
-      connectService: () =>
-        Effect.map(linkedClient(link), (client) => ({ client })),
-    }),
-    onAccountChanged: () =>
-      connectChatModel(
-        slashCommandContext(),
-        {
-          modelSource: defaults.modelSource,
-          recovery: CHAT_STARTUP_MODEL_RECOVERY,
-          firstRunSetupAgent: startup.firstRunSetupAgent,
-        },
-        modelConnection,
-      ),
     stores: services,
     runtime,
-    canSelectAgent: () => session.canStartRootRun(),
-    onAgentSelect: (nextAgent) =>
-      applyInitialCliAgentSelection(nextAgent, slashCommandContext()),
-    onTeamSelect: (teamId) =>
-      applyCliTeamSelection(teamId, slashCommandContext()),
+    processCwd: process.cwd(),
+    // The exit controller is built after Ink mounts; `/exit` runs later.
+    requestInputExit: () => void exitController.exit(),
     getApprovalPolicy,
-    onApprovalPolicySelect: (policy) =>
-      setApprovalPolicy(policy).pipe(
-        Effect.andThen(
-          Effect.sync(() =>
-            appendLocalNotice(`Approval mode: ${formatApprovalPolicy(policy)}`),
-          ),
-        ),
-      ),
+    setApprovalPolicy,
+    resetSession: resetSessionForClear,
+    resumeRun: chatController.resume,
+    resumeTask: chatController.resumeTask,
+    activateSkill: chatController.activateSkill,
     onProjectApprovalPolicyChanged: (policy) => {
       patchSessionMeta({
         approvalPolicy: effectiveApprovalPolicy(chatPolicy, policy),
@@ -574,50 +528,45 @@ export async function runChat(
         `Project approval policy: ${formatApprovalPolicy(policy)}`,
       );
     },
-    canSelectModel: () => session.canSelectModel(),
     getModelSwitchDisabledReason,
-    onModelSelect: (nextModel) =>
-      applyCliModelSelection(nextModel, slashCommandContext()),
-    onModelAccessSelect: (route, output) =>
-      applyCliModelAccessSelection(
-        services,
-        route,
-        slashCommandContext(),
-        output,
+    onAccountChanged: () =>
+      connectChatModel(
+        slashContext,
+        {
+          modelSource: defaults.modelSource,
+          firstRunSetupAgent: startup.firstRunSetupAgent,
+        },
+        modelConnection,
       ),
-    // `/key` and sign-out use the registry's own handlers. Only `/login`
-    // needs an override, to carry this session's CliContext.
-    onLoginSelect: (value, output) =>
-      loginFromChat(value, services, context, output),
-    onMemorySelect: (storagePath) =>
-      showCliMemoryPreview(services.roots, storagePath),
-    onSkillSelect: (selection) =>
-      Effect.sync(() => chatController.activateSkill(selection)),
-    onResumeSelect: chatController.resume,
-    configRoots: services.roots,
-    onError: (error) => {
-      appendLocalErrorTranscript(toErrorMessage(error));
-    },
-  });
+  };
 
+  // Ink owns the terminal from here: a diagnostic line would land inside
+  // the frame it redraws, so the chat's diagnostics go nowhere.
+  setLogSink(silentLogSink, { trusted: true });
   const ink = render(
-    <SlashCommandsProvider value={commands}>
-      <App
-        stores={services}
-        runtime={runtime}
-        session={runSession}
-        draft={draft}
-        onSubmit={(message, holdUntil) => {
-          runtime.runFork(chatController.submit(message, holdUntil));
-        }}
-        commandName={context.commandName}
-        scrollback={scrollback}
-        onCtrlC={() => exitController.handleSigint()}
-        onSuspend={() => exitController.handleSigtstp()}
-        history={inputHistory}
-        performHost={chatController.performHost}
-      />
-    </SlashCommandsProvider>,
+    <SlashContextProvider value={slashContext}>
+      <ChatProcessProvider value={{ runtime, roots: services.roots }}>
+        <App
+          session={runSession}
+          draft={draft}
+          onSubmit={(message, holdUntil) => {
+            runtime.runFork(
+              Effect.gen(function* () {
+                const line = expandText(message).trim();
+                if (yield* handleTuiSlashCommand(line, slashContext)) return;
+                yield* chatController.submit(message, holdUntil);
+              }),
+            );
+          }}
+          commandName={context.commandName}
+          scrollback={scrollback}
+          onCtrlC={() => exitController.handleSigint()}
+          onSuspend={() => exitController.handleSigtstp()}
+          history={inputHistory}
+          performHost={chatController.performHost}
+        />
+      </ChatProcessProvider>
+    </SlashContextProvider>,
     {
       stdout: tuiOutputStreamForColor(
         process.stdout,
@@ -670,10 +619,10 @@ export async function runChat(
     leaveProcess: services.leave,
     submitted: chatController.submitted,
     getApprovalPolicy,
-    // What the session's publisher still holds, drained before shutdown
-    // within the close budget; one that does not drain is said on stderr.
     // What the session's publisher still holds, when the session is this
-    // process's; the service's publisher is its own.
+    // process's (the service's publisher is its own), drained before
+    // shutdown within the close budget; one that does not drain is said on
+    // stderr.
     flushArtifacts: (runsElsewhere
       ? Effect.void
       : Effect.flatMap(services.session, (local) => local.drained)
@@ -682,7 +631,7 @@ export async function runChat(
       Effect.mapError(
         () =>
           new Error(
-            `the session's rows did not settle within ${SESSION_CLOSE_DEADLINE_MS} ms`,
+            `the session's rows were not all written within ${SESSION_CLOSE_DEADLINE_MS} ms`,
           ),
       ),
     ),
@@ -691,7 +640,7 @@ export async function runChat(
   });
 
   // Interactive resume: kick off the continued tool-use run now that Ink is
-  // mounted (so the rehydrated transcript + streamed continuation render) and
+  // mounted (so the reloaded transcript + streamed continuation render) and
   // the signal handlers are armed. Fire-and-forget, the resume claims the
   // root launch, and the normal first-input path stays available so the
   // user can keep chatting (follow-ups target the root run as usual).

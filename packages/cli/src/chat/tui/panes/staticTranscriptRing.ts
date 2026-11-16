@@ -99,7 +99,7 @@ export interface ChildHeader {
 
 /**
  * What the scrollback paints: the run's rows joined with this
- * TUI's notices, its settled prefix, and the facts the session header names.
+ * TUI's notices, its final prefix, and the facts the session header names.
  */
 export interface StaticScrollbackSource {
   readonly entries: readonly TranscriptRow[] | undefined;
@@ -155,7 +155,7 @@ interface StaticTranscriptItemMetrics {
   readonly declaredTopRows: number;
   /** The separator the item declares below itself. It never collapses — only
    *  the *next* item's top margin collapses against it — so it belongs to the
-   *  item, while a top margin belongs to the seam above it. */
+   *  item, while a top margin belongs to the boundary above it. */
   readonly marginBottomRows: number;
   readonly bytes: number;
 }
@@ -165,7 +165,7 @@ interface StaticTranscriptItemMetrics {
  *  render; the other roles sum plain layout lines without those wrappers, so
  *  the byte figure is an estimate rather than an upper bound. The header's
  *  fixed `+64` is a floor for its chrome, not a bound. Entry metrics come from
- *  the same `scrollback-budget` layout the row budget uses, so the ring never
+ *  the same `measured` layout the row budget uses, so the ring never
  *  pays for a second full layout pass. */
 function staticTranscriptItemMetrics(
   item: StaticTranscriptItem,
@@ -188,7 +188,7 @@ function staticTranscriptItemMetrics(
   }
 
   const layout = transcriptEntryLayout(item.entry, {
-    mode: 'scrollback-budget',
+    mode: 'measured',
     previousEntry: undefined,
     width,
   });
@@ -204,7 +204,7 @@ function staticTranscriptItemMetrics(
 
 /** The separator an item offers to whatever sits below it, which that item's
  *  top margin collapses against. Reading it needs no layout pass, so pricing
- *  the seam under an item never lays that item out again. A header offers
+ *  the boundary under an item never lays that item out again. A header offers
  *  none. */
 function itemMarginBottomRows(item: StaticTranscriptItem | undefined): number {
   return item?.kind === 'entry'
@@ -216,7 +216,7 @@ function itemMarginBottomRows(item: StaticTranscriptItem | undefined): number {
  *  top separator, collapsed against the separator the upper item offers.
  *  Nothing below means no boundary, and the top of the list collapses against
  *  nothing (`aboveMarginBottomRows` of 0). */
-function seamRows(
+function boundaryRows(
   aboveMarginBottomRows: number,
   below: StaticTranscriptItemMetrics | undefined,
 ): number {
@@ -227,8 +227,8 @@ function seamRows(
 /**
  * Running row/byte totals for a static ring. Margin collapse makes the row
  * cost of a list non-additive in its items — the separator between two
- * neighbours is priced once, at the seam between them — so admitting or
- * dropping an item re-prices the seam it closed as well as the two it opened.
+ * neighbours is priced once, at the boundary between them — so adding or
+ * dropping an item re-prices the boundary it closed as well as the two it opened.
  * Every incremental site (rebuild totals, the low-water trim, the backward
  * retain walk, the header insert, the per-tick append) keeps its totals through
  * this one accumulator instead of rederiving that bookkeeping.
@@ -273,7 +273,7 @@ class StaticTranscriptTotalsAccumulator {
   }
 
   /** Account for `item` leaving the list, described by the neighbourhood it
-   *  had while it was in it: the seam its two neighbours now share is
+   *  had while it was in it: the boundary its two neighbours now share is
    *  re-priced against each other. */
   remove(
     aboveMarginBottomRows: number,
@@ -290,15 +290,15 @@ class StaticTranscriptTotalsAccumulator {
     below: StaticTranscriptItemMetrics | undefined,
   ): number {
     // The item's own lines plus the separator it declares below itself, then
-    // the two seams it opens less the one it closes. A top separator is priced
+    // the two boundaries it opens less the one it closes. A top separator is priced
     // at the boundary rather than on the item that declared it, because that is
     // where collapse decides what it actually costs.
     return (
       item.contentRows +
       item.marginBottomRows +
-      seamRows(aboveMarginBottomRows, item) +
-      seamRows(item.marginBottomRows, below) -
-      seamRows(aboveMarginBottomRows, below)
+      boundaryRows(aboveMarginBottomRows, item) +
+      boundaryRows(item.marginBottomRows, below) -
+      boundaryRows(aboveMarginBottomRows, below)
     );
   }
 }
@@ -395,7 +395,7 @@ function retainedStaticTranscriptTail(
   }
 
   // Layout each item at most once in the backward walk: the accumulator prices
-  // a seam from the neighbour's bottom margin alone, so growing the tail never
+  // a boundary from the neighbour's bottom margin alone, so growing the tail never
   // triggers a second layout pass for an item that is already measured.
   const metricsOf = (item: StaticTranscriptItem): StaticTranscriptItemMetrics =>
     staticTranscriptItemMetrics(item, options.width);
@@ -616,7 +616,7 @@ function buildScrollback(origin: number, input: ScrollbackInput): Scrollback {
 }
 
 /**
- * The scrollback after one tick of its source: the settled rows past
+ * The scrollback after one tick of its source: the final rows past
  * `printedThrough` appended in the session view's order, the header inserted
  * once its facts arrive, and the tail trimmed to its budget. Anything that is
  * not an append (another owner, a source that no longer extends what was

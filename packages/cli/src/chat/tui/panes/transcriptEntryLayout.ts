@@ -29,7 +29,22 @@ const USER_ENTRY_MARGIN_BOTTOM_ROWS = 1;
 const ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS = 0;
 const LIVE_TAIL_ROWS = 24;
 
-type TranscriptEntryLayoutMode = 'live' | 'scrollback' | 'scrollback-budget';
+/**
+ * The surface a row is laid out for; each owns its whole answer.
+ * - `live`: the redrawn region, a streaming answer's tail and tool rows
+ *   elided to the terminal's budget.
+ * - `printed`: a finalized row Ink prints once to scrollback, its body
+ *   elided; a tool row there is painted by `ToolUseRow`, as in `live`.
+ * - `measured`: the scrollback ring's size estimate of a printed row, every
+ *   line of it.
+ * - `reader`: the print-once full text (the transcript reader, an attached
+ *   task), tool output in full.
+ */
+type TranscriptEntryLayoutMode = 'live' | 'printed' | 'measured' | 'reader';
+
+/** Whether the surface shows a row's body whole rather than elided. */
+const showsWholeBody = (mode: TranscriptEntryLayoutMode): boolean =>
+  mode === 'measured' || mode === 'reader';
 
 interface RowGeometry {
   readonly firstPrefix: string;
@@ -194,15 +209,15 @@ function liveAssistantDisplayLines({
 
 /**
  * The body block a row paints beneath its headline: the shared row's own
- * untruncated texts, elided to this terminal's head/tail budget. The
- * print-once path ('scrollback-budget') takes the whole thing.
+ * untruncated texts, elided to this terminal's head/tail budget where the
+ * surface does not show it whole.
  */
 function entryBodyLines(
   row: TranscriptRow,
   mode: TranscriptEntryLayoutMode,
   columns: number,
 ): readonly string[] {
-  const lines = transcriptRowBodyLines(row, mode !== 'scrollback-budget');
+  const lines = transcriptRowBodyLines(row, !showsWholeBody(mode));
   if (lines.length === 0) return lines;
   // The body hangs under the headline, in the kind's own continuation gutter.
   const gutter = ROW_GEOMETRY[row.kind].continuationPrefix;
@@ -259,16 +274,18 @@ function entryLines(
         ...cut,
       ];
     }
-    case 'tool': {
-      const useRichDisplay = mode === 'live' || mode === 'scrollback-budget';
-      const lines = toolUseDisplayLines(row, {
-        elide: mode !== 'scrollback-budget',
-        ...(useRichDisplay ? { width: columns } : {}),
+    case 'tool':
+      // Rich rows keep each display line on one terminal row; the reader's
+      // full output is plain text, wrapped here.
+      if (mode === 'reader')
+        return wrapDisplayLines(
+          toolUseDisplayLines(row, { elide: false, showFullOutput: true }),
+          columns,
+        );
+      return toolUseDisplayLines(row, {
+        elide: mode !== 'measured',
+        width: columns,
       });
-      // Rich rows and their bounded fallback keep each display line on one
-      // terminal row. Other modes paint the wrapped text projection directly.
-      return useRichDisplay ? lines : wrapDisplayLines(lines, columns);
-    }
     default: {
       const geometry = ROW_GEOMETRY[row.kind];
       return [
@@ -300,18 +317,18 @@ export function transcriptEntryMarginBottomRows(row: TranscriptRow): number {
 export function transcriptEntryLayout(
   row: TranscriptRow,
   {
-    mode = 'scrollback',
+    mode,
     previousEntry,
     width,
   }: {
-    readonly mode?: TranscriptEntryLayoutMode;
+    readonly mode: TranscriptEntryLayoutMode;
     /** The row rendered directly above this one, when the caller knows it.
      *  Yoga does not collapse adjacent margins, so without this a boundary
      *  where both sides declare a separator costs two blank rows instead of
      *  one (user to user). */
     readonly previousEntry?: TranscriptRow;
     readonly width?: number;
-  } = {},
+  },
 ): TranscriptEntryLayout {
   const base = ROW_GEOMETRY[row.kind];
   const inset = base.inset;
@@ -345,21 +362,7 @@ export function fullTranscriptEntryLayout(
   // Ordinary Ink rows spend this inset as paddingX. Printed text has no Box
   // padding, so add it back before the shared layout subtracts it.
   const printWidth = width + ROW_GEOMETRY[row.kind].inset;
-  const layout = transcriptEntryLayout(row, {
-    mode: 'scrollback-budget',
-    width: printWidth,
-  });
-  if (row.kind !== 'tool') return layout;
-  return {
-    ...layout,
-    lines: wrapDisplayLines(
-      toolUseDisplayLines(row, {
-        elide: false,
-        showFullOutput: true,
-      }),
-      layout.columns,
-    ),
-  };
+  return transcriptEntryLayout(row, { mode: 'reader', width: printWidth });
 }
 
 export function transcriptEntryLayoutRows(

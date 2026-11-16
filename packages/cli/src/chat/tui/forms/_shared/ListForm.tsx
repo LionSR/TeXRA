@@ -25,7 +25,7 @@ import {
   renderAsyncListFormTransient,
 } from './FormFrame';
 import { useAsyncListForm } from './useAsyncListForm';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/harness/host';
 import type { Effect } from 'effect';
 
 const LIST_FORM_FRAME_ROWS = 3;
@@ -235,7 +235,6 @@ export function useAsyncPickerForm<TData, TValue>(args: {
   readonly loadingLabel: string;
   readonly showTransientCloseHint?: boolean;
   readonly load: () => Effect.Effect<TData, Error, ProcessServices>;
-  readonly runtime: ProcessRuntime;
   readonly isEmpty?: (data: TData) => boolean;
   readonly closeEmptyOnEnter?: boolean;
   readonly items: (data: TData) => ReadonlyArray<SelectItem<TValue>>;
@@ -250,7 +249,6 @@ export function useAsyncPickerForm<TData, TValue>(args: {
   const { data, loading, error, pendingInput, clearPendingInput, update } =
     useAsyncListForm<TData>({
       load: args.load,
-      runtime: args.runtime,
       onClose: args.onClose,
       isEmpty: args.isEmpty,
       closeEmptyOnEnter: args.closeEmptyOnEnter,
@@ -294,7 +292,6 @@ interface AsyncListFormProps<TData, TValue> extends Omit<
 > {
   readonly loadingLabel: string;
   readonly load: () => Effect.Effect<TData, Error, ProcessServices>;
-  readonly runtime: ProcessRuntime;
   readonly items: (data: TData) => ReadonlyArray<SelectItem<TValue>>;
   readonly isEmpty?: (data: TData) => boolean;
   readonly showTransientCloseHint?: boolean;
@@ -314,7 +311,6 @@ export function AsyncListForm<TData, TValue>(
   const {
     loadingLabel,
     load,
-    runtime,
     items: itemsFor,
     isEmpty,
     showTransientCloseHint,
@@ -329,7 +325,6 @@ export function AsyncListForm<TData, TValue>(
     loadingLabel,
     showTransientCloseHint,
     load,
-    runtime,
     isEmpty: isEmpty ?? ((loaded) => itemsFor(loaded).length === 0),
     items: itemsFor,
     onSelect,

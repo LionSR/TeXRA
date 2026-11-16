@@ -36,7 +36,7 @@ import {
 import { SlashPalette, slashPaletteOwnsArrows } from '../commands/SlashPalette';
 import {
   parseSlashInput,
-  useSlashCommands,
+  useSlashContext,
   type SlashCommand,
   type SlashPickIntent,
 } from '../commands/slashRegistry';
@@ -48,21 +48,13 @@ import {
 } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
 import { useSubscriptionRef } from '../state/useSubscriptionRef';
-import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { ProcessRuntime } from '@texra-ai/harness/host';
 import type { CursorEdit } from '../input/textInputEditing';
 import type { InputHistory } from '../history/inputHistory';
+import { useChatProcess } from '../chatProcess';
 
 const CSI_SEQUENCE_TAIL_RE = /^\[[0-?]*[ -/]*[@-~]$/u;
 
 interface InputBarProps {
-  /** The process runtime the history write and the Ctrl-V image probe run
-   *  on, threaded from the chat root that holds it — this bar runs no
-   *  Effect of its own. */
-  readonly runtime: ProcessRuntime;
-  /** The chat session's roots: the Ctrl-V image probe writes under this
-   *  project's own storage, never under whichever root a later call reads. */
-  readonly roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>;
   /** The chat's draft: what the input shows, its chips' content and the
    *  activated skills. A message the session does not take comes back here. */
   readonly draft: SubscriptionRef.SubscriptionRef<Draft>;
@@ -119,13 +111,14 @@ const INPUT_BAR_MAX_CONTENT_ROWS = 5;
 const INPUT_BAR_DECORATION_COLUMNS = 6;
 
 export function InputBar(props: InputBarProps): React.JSX.Element {
-  const { disabled, history, holdsKeystroke, onSubmit, roots, runtime } = props;
+  const { disabled, history, holdsKeystroke, onSubmit } = props;
+  const { roots, runtime } = useChatProcess();
   const draftRef = props.draft;
   const keyboardActive = props.keyboardActive ?? true;
   const value = useSubscriptionRef(runtime, draftRef).text;
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
   const { columns } = useWindowSize();
-  const commands = useSlashCommands();
+  const commands = useSlashContext().commands;
   // Reads and writes go to the ref at once, so a keystroke chunk handled
   // before the next render sees the one before it.
   const readDraft = useCallback(

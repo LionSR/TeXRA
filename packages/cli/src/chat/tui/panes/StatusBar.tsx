@@ -38,7 +38,7 @@ import {
   subscriptionUsageProviderForStatus,
 } from './statusBarDisplay';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
-import type { SettingsStores } from '@texra-ai/harness/plugins';
+import { useChatProcess } from '../chatProcess';
 
 // Polling re-reads what another process changed; an in-process change to
 // model access is followed at once.
@@ -61,14 +61,6 @@ const modelAccessChanges: Stream.Stream<void, never, ProcessServices> =
 interface StatusBarProps {
   /** True when the focused stream has a composer for slash commands and text. */
   readonly chatInputAvailable: boolean;
-  /** The three setting slots the subscription route probe reads. */
-  readonly stores: SettingsStores;
-  /**
-   * The runtime that runs the quota and route programs (their credentials
-   * come from its `Secrets`), threaded from the chat surface that opened it —
-   * this component owns no runtime of its own.
-   */
-  readonly runtime: ProcessRuntime;
   readonly commandName?: string;
   readonly foregroundInputActive?: boolean;
   /** The active run's transcript holds a script's calls (Ctrl-O). */
@@ -110,9 +102,10 @@ function useFollowedRead<K extends string, A, E>(
 }
 
 export function StatusBar(props: StatusBarProps): React.JSX.Element {
+  const { roots, runtime } = useChatProcess();
   const subscriptionUsage = useMemo(
-    () => new SubscriptionUsageService({ stores: props.stores }),
-    [props.stores],
+    () => new SubscriptionUsageService({ stores: roots }),
+    [roots],
   );
   const { write: writeStderr } = useStderr();
   const activeRunId = useSignal(selectedRunIdSignal);
@@ -151,13 +144,13 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   // failures.
   const readRoute = useCallback(
     (model: string) =>
-      readModelOptions(props.stores, [model]).pipe(
+      readModelOptions(roots, [model]).pipe(
         Effect.map(([option]) => option?.usageRoute),
       ),
-    [props.stores],
+    [roots],
   );
   const routeRead = useFollowedRead(
-    props.runtime,
+    runtime,
     accessModel,
     readRoute,
     ROUTE_REFRESH,
@@ -190,7 +183,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     [subscriptionUsage],
   );
   const quotaRead = useFollowedRead(
-    props.runtime,
+    runtime,
     subscriptionUsageProvider,
     readQuota,
     QUOTA_REFRESH,

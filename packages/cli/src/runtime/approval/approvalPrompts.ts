@@ -7,7 +7,7 @@ import {
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 
-import { CliInvocation, type CliPromptRequest } from '../platform/cliContext';
+import { CliInvocation } from '../platform/cliContext';
 import { askCliQuestion, writeTextStderr } from '../platform/logSinks';
 import { safeTerminalText } from '../terminal/terminalText';
 
@@ -43,18 +43,15 @@ export interface CliApprovalContent {
   readonly details?: () => string;
 }
 
-const askCliApprovalQuestion = Effect.fn(
-  'approvalPrompts.askCliApprovalQuestion',
-)(function* (request: CliPromptRequest) {
-  const injected = (yield* CliInvocation).context.approvalPrompt;
-  return injected
-    ? yield* injected(request)
-    : yield* askCliQuestion(
-        request.summary
-          ? `${request.summary}\n${request.prompt}`
-          : request.prompt,
-      );
-});
+interface CliPromptRequest {
+  readonly summary: string;
+  readonly prompt: string;
+}
+
+const askCliApprovalQuestion = (request: CliPromptRequest) =>
+  askCliQuestion(
+    request.summary ? `${request.summary}\n${request.prompt}` : request.prompt,
+  );
 
 interface ParsedApprovalAnswer {
   readonly accepted: boolean;

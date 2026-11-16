@@ -14,11 +14,11 @@ import { CliExitCode } from '../runtime/platform/exitCodes';
 import {
   cliErrorMessage,
   installCliPipeErrorHandlers,
-  prePlatformDiagnosticSink,
+  stderrDiagnosticSink,
   writeTextStderr,
 } from '../runtime/platform/logSinks';
 
-setLogSink(prePlatformDiagnosticSink, { trusted: true });
+setLogSink(stderrDiagnosticSink('Warn'), { trusted: true });
 
 await Effect.runPromise(
   Effect.tryPromise({

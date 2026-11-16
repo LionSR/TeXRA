@@ -4,10 +4,6 @@ import { agentName as bareAgentName } from '@texra-ai/harness/schemas';
 import { resolveCliRunAgent } from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/platform/cliContext';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
-import {
-  formatCliNoAvailableModelsRecovery,
-  selectCliRunnableModel,
-} from '@cli/runtime/models/modelAccess';
 
 import {
   patchSessionMeta,
@@ -21,10 +17,7 @@ import {
 } from '@cli/chat/tui/state/transcript';
 import { resolveTeamLaunch } from '@texra/agent/teams/teamLaunch';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
-import {
-  CHAT_API_MODE_MODEL_RECOVERY,
-  type SlashCommandContext,
-} from './slashContext';
+import { selectChatModel, type SlashCommandContext } from './slashContext';
 import type { WorkspaceAgentsStores } from '@texra-ai/harness/host';
 
 /** Resolve the chat root agent once: the entry the run pins, or the refusal. */
@@ -132,14 +125,10 @@ export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
   function* (model: string, context: SlashCommandContext) {
     const nextModel = model.trim();
     if (context.session.canStartRootRun()) {
-      const selection = yield* selectCliRunnableModel(
-        [{ model: nextModel, reason: 'explicit-override' }],
-        {
-          stores: { ...context.stores, runtime: context.runtime },
-          noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-            CHAT_API_MODE_MODEL_RECOVERY,
-          ),
-        },
+      const selection = yield* selectChatModel(
+        context.stores,
+        context.runtime,
+        { model: nextModel, reason: 'explicit-override' },
       );
       setCliSessionModelOverride(selection.model);
       appendLocalNotice(`Root model set to ${selection.model}.`);

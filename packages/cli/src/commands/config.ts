@@ -30,7 +30,7 @@ import { setWorkspaceCliChatAgent } from '../runtime/platform/cliConfig';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { optString } from './_helpers/globalArgs';
-import { emitCliResult } from './_helpers/output';
+import { cliResult, emitCliResult } from './_helpers/output';
 
 function parseAgentKeys(value: string): string[] {
   return [
@@ -75,17 +75,19 @@ const showConfig = Effect.fn('showConfig')(function* (
     ),
   );
   const record = { settings, agents };
-  yield* emitCliResult({
-    json: record,
-    ndjson: { kind: 'config', config: record },
-    text: [
-      ...Object.entries(settings).map(
-        ([key, value]) => `${key}: ${formatConfigValue(value)}`,
-      ),
-      '',
-      formatCliWorkspaceAgents(agents),
-    ].join('\n'),
-  });
+  yield* emitCliResult(
+    cliResult(
+      'config',
+      record,
+      [
+        ...Object.entries(settings).map(
+          ([key, value]) => `${key}: ${formatConfigValue(value)}`,
+        ),
+        '',
+        formatCliWorkspaceAgents(agents),
+      ].join('\n'),
+    ),
+  );
 });
 
 const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
@@ -170,11 +172,9 @@ const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
     }
 
     const record = yield* readCliWorkspaceAgents(roots);
-    yield* emitCliResult({
-      json: record,
-      ndjson: { kind: 'workspace-agents', agents: record },
-      text: formatCliWorkspaceAgents(record),
-    });
+    yield* emitCliResult(
+      cliResult('workspace-agents', record, formatCliWorkspaceAgents(record)),
+    );
   },
 );
 

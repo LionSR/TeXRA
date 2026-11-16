@@ -281,20 +281,19 @@ function hasConcatenatedCredentialPrefix(
   return /^(?:sk[-_]|gh[pousr]_|AIza|xai-)/iu.test(remainder);
 }
 
-const SlashCommandsContext = createContext<SlashCommands | undefined>(
-  undefined,
-);
+const SlashContext = createContext<SlashCommandContext | undefined>(undefined);
 
-/** Hands the chat's slash commands to the input bar and its palette. */
-export const SlashCommandsProvider = SlashCommandsContext.Provider;
+/** Hands the chat's slash context, its commands among it, to the input bar,
+ *  its palette and the commands' forms. */
+export const SlashContextProvider = SlashContext.Provider;
 
-/** The slash commands of the chat this component renders in. */
-export function useSlashCommands(): SlashCommands {
-  const commands = useContext(SlashCommandsContext);
-  if (commands === undefined) {
-    throw new Error('No slash commands: render under SlashCommandsProvider.');
+/** The slash context of the chat this component renders in. */
+export function useSlashContext(): SlashCommandContext {
+  const context = useContext(SlashContext);
+  if (context === undefined) {
+    throw new Error('No slash context: render under SlashContextProvider.');
   }
-  return commands;
+  return context;
 }
 
 /**

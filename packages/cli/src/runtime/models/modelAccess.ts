@@ -70,30 +70,20 @@ interface CliRunnableModelOptions extends Pick<
   CliModelAccessEntryOptions,
   'stores' | 'accessList'
 > {
-  readonly noAvailableModelsMessage?: string;
+  /** What to do when no model can run, as one sentence; the shell's
+   *  `texra setup` unless the surface has its own way to add a key. */
+  readonly recovery?: string;
 }
 
 export interface CliModelListOptions {
   readonly includeUnavailable?: boolean;
 }
 
-export interface CliNoAvailableModelsRecoveryOptions {
-  readonly configureKeyAction?: string;
-}
-
 const NO_RUNNABLE_MODEL_ACCESS_COPY = 'No models are available';
 
-// Point shell users at the guided setup picker rather than leaving them to
-// figure out key storage on their own; TUI contexts override this with
-// slash-command phrasing.
-const DEFAULT_CONFIGURE_KEY_ACTION =
-  'add a provider API key with `texra setup`';
-
-function startSentence(text: string): string {
-  const first = text.at(0);
-  if (first === undefined) return text;
-  return `${first.toUpperCase()}${text.slice(1)}`;
-}
+/** Points shell users at the guided setup picker rather than leaving them
+ *  to figure out key storage on their own. */
+export const CLI_SETUP_RECOVERY = 'Add a provider API key with `texra setup`.';
 
 function runnableCliModelAccessEntries(
   models: readonly CliModelAccess[],
@@ -101,18 +91,10 @@ function runnableCliModelAccessEntries(
   return models.filter((entry) => entry.available);
 }
 
-export function formatCliNoAvailableModelsRecovery(
-  options: CliNoAvailableModelsRecoveryOptions = {},
-): string {
-  const configureKeyAction =
-    options.configureKeyAction ?? DEFAULT_CONFIGURE_KEY_ACTION;
-  return `${startSentence(configureKeyAction)}.`;
-}
-
 export function formatCliNoRunnableModelsMessage(
-  options: CliNoAvailableModelsRecoveryOptions = {},
+  recovery: string = CLI_SETUP_RECOVERY,
 ): string {
-  return `${NO_RUNNABLE_MODEL_ACCESS_COPY}. ${formatCliNoAvailableModelsRecovery(options)}`;
+  return `${NO_RUNNABLE_MODEL_ACCESS_COPY}. ${recovery}`;
 }
 
 /** The kind's label, lower-cased for the terminal's sentence-case rows. */
@@ -236,7 +218,7 @@ export function formatNoListableModelsMessage(
       : [
           'Run `texra models list --all` to see unavailable models and access status.',
         ]),
-    formatCliNoAvailableModelsRecovery(),
+    CLI_SETUP_RECOVERY,
   ].join('\n');
 }
 
@@ -247,7 +229,7 @@ function formatCliModelRecovery(entry: CliModelAccess): string | undefined {
 
   switch (availability) {
     case 'missing-key':
-      return formatCliNoAvailableModelsRecovery();
+      return CLI_SETUP_RECOVERY;
     case 'key-unreadable':
       return 'The API key could not be read from secret storage: check that the store is unlocked and readable, then retry.';
     case 'provider-key':
@@ -328,7 +310,7 @@ export const loadCliModelAccessEntry = Effect.fn('loadCliModelAccessEntry')(
 
 type CliAvailableModelsMessageOptions = Pick<
   CliRunnableModelOptions,
-  'noAvailableModelsMessage'
+  'recovery'
 >;
 
 function formatAvailableModels(
@@ -336,9 +318,7 @@ function formatAvailableModels(
   options: CliAvailableModelsMessageOptions,
 ): string {
   if (ids.length > 0) return `Available models: ${ids.join(', ')}.`;
-  const recoveryMessage =
-    options.noAvailableModelsMessage ?? formatCliNoAvailableModelsRecovery();
-  return `No models are currently available. ${recoveryMessage}`;
+  return `No models are currently available. ${options.recovery ?? CLI_SETUP_RECOVERY}`;
 }
 
 function formatUnavailableModelMessage(

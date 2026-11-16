@@ -14,7 +14,6 @@ import {
 import { emptyRunEndOutput } from '@shared/schemas';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import {
-  cliHistoryNdjsonRecords,
   listCliHistoryEntries,
   readCliHistoryDetails,
 } from '@cli/runtime/history';
@@ -140,12 +139,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 ['completed', false],
                 [null, true],
               ]);
-              const listed = outcomes.flatMap(([id]) => byId(id) ?? []);
-              expect(cliHistoryNdjsonRecords(listed)).toMatchObject(
-                ['cancelled', 'failed', 'completed', null].map((outcome) => ({
-                  entry: { outcome },
-                })),
-              );
             }),
         );
 

@@ -9,13 +9,13 @@ import {
   DISABLED_SKILL_SOURCES_SETTING,
   joinFacts,
 } from '@texra-ai/harness/schemas';
-import { type WorkspaceRoots } from '@texra-ai/harness';
-import { Skills, type ProcessRuntime } from '@texra-ai/harness/host';
+import { Skills } from '@texra-ai/harness/host';
 import { Settings } from '@texra-ai/harness/plugins';
 import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
 import { enabledLabel } from '@ui/copy/format';
 
 import { AsyncListForm } from './_shared/ListForm';
+import { useChatProcess } from '../chatProcess';
 
 type SkillToggle =
   | { readonly kind: 'source'; readonly scope: ActiveSkillSourceScope }
@@ -30,14 +30,6 @@ interface SkillsSettingsData {
 
 interface SkillsSettingsFormProps {
   readonly availableRows?: number;
-  /** The session's roots: where its skills are discovered, and the setting
-   *  slots their switches live in. */
-  readonly roots: WorkspaceRoots;
-  /**
-   * The process runtime the shared write path runs on. Ink components run
-   * no Effect of their own, so it arrives as a prop from `/config`.
-   */
-  readonly runtime: ProcessRuntime;
   readonly onClose: () => void;
 }
 
@@ -54,13 +46,13 @@ function toggleDisabled<T>(
 export function SkillsSettingsForm(
   props: SkillsSettingsFormProps,
 ): React.JSX.Element {
+  const { roots } = useChatProcess();
   return (
     <AsyncListForm<SkillsSettingsData, SkillToggle>
       title="/config · Skills"
       loadingLabel="Loading skills..."
       load={() =>
         Effect.gen(function* () {
-          const { roots } = props;
           const result = yield* Skills.display(roots);
           return {
             skills: result.skills,
@@ -73,7 +65,6 @@ export function SkillsSettingsForm(
           };
         })
       }
-      runtime={props.runtime}
       items={(data) => [
         ...ActiveSkillSourceScopeSchema.literals.map((scope) => ({
           value: { kind: 'source' as const, scope },
@@ -113,7 +104,7 @@ export function SkillsSettingsForm(
           Effect.flatMap(
             applyStateSettingUpdate(key, next, {
               host: 'cli',
-              stores: props.roots,
+              stores: roots,
             }),
             (result) =>
               result.kind === 'applied'

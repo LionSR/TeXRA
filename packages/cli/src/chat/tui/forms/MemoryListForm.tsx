@@ -13,31 +13,25 @@ import {
 
 import { AsyncListForm } from './_shared/ListForm';
 import type { MemoryViewItem } from '@texra-ai/harness/schemas';
-import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { ProcessRuntime } from '@texra-ai/harness/host';
+import { useChatProcess } from '../chatProcess';
 
 interface MemoryListFormProps {
-  /** The process runtime the listing runs on, from the surface that
-   *  registered this form. */
-  readonly runtime: ProcessRuntime;
-  /** The roots the listing's storage view is built from. */
-  readonly roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>;
   readonly availableRows?: number;
   readonly onSelect: (storagePath: string) => void;
   readonly onClose: () => void;
 }
 
 export function MemoryListForm(props: MemoryListFormProps): React.JSX.Element {
+  const { roots } = useChatProcess();
   return (
     <AsyncListForm<readonly MemoryViewItem[], string>
       title="/memory"
       loadingLabel="Loading memories..."
       load={() =>
-        Effect.map(withSessionFs(props.roots, MemoryStore.list), (items) =>
+        Effect.map(withSessionFs(roots, MemoryStore.list), (items) =>
           items.slice(0, CLI_MEMORY_LIST_LIMIT),
         )
       }
-      runtime={props.runtime}
       items={(entries) =>
         entries.map((item) => ({
           value: item.storagePath,

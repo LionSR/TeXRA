@@ -55,8 +55,8 @@ const readyReport = (context: CliContext) =>
 const doctorReport = (context: CliContext): Effect.Effect<DoctorReport> =>
   Effect.try({
     try: () => {
-      // The report is the whole output, so the runtime's log lines go nowhere
-      // from its build on, as a platform's do.
+      // The report is the whole output and names every failure, so the
+      // runtime's log lines go nowhere from its build on.
       setLogSink(silentLogSink, { trusted: true });
       return makeCliProcessRuntime(context);
     },
