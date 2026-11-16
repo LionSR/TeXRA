@@ -520,6 +520,19 @@ export function createSessionSurfaces(options: {
       act(entry, { kind: 'launch', patch: { instruction: '' } });
       act(entry, { kind: 'select', runId: request.runId });
     }
+    // A decision the runtime accepted answers its request, so the card's
+    // unsent draft (kept under the request's id) goes with it.
+    if (
+      Result.isSuccess(result) &&
+      request.kind === 'request.decide' &&
+      entry.surface$.get().requestDrafts.has(request.requestId)
+    ) {
+      act(entry, {
+        kind: 'requestDraft',
+        key: request.requestId,
+        draft: null,
+      });
+    }
     if (request.kind !== 'followUp.send' || Result.isFailure(result)) return;
     if (
       submitted !== undefined &&

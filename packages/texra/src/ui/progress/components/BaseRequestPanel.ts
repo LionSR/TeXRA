@@ -239,24 +239,14 @@ export abstract class BaseRequestPanel<
   // Decisions
   // ---------------------------------------------------------------------------
 
-  /** Send a decision. One that answers the request takes the card's draft
-   *  with it; a tool-edit preview leaves the request open, and the draft. */
+  /** Send a decision. The draft stays until the runtime accepts it
+   *  (`applyRuntimeAnswer`), so a send that fails can be sent again. */
   protected emitAction(decision: SurfaceDecision): void {
     if (this.readOnly) return;
     const delivery = approvalDecisionDelivery(
       { payload: this.permission, answeredBy: this.answeredBy },
       decision,
     );
-    const answers = !('host' in delivery) || delivery.host.kind !== 'toolEdit';
-    if (answers && this.surface?.requestDrafts.has(this.draftKey)) {
-      this.dispatchEvent(
-        SessionUiEvents.surface({
-          kind: 'requestDraft',
-          key: this.draftKey,
-          draft: null,
-        }),
-      );
-    }
     if ('host' in delivery)
       this.dispatchEvent(SessionUiEvents.host(delivery.host));
     else this.sendRuntimeDecision(delivery.runtime);
