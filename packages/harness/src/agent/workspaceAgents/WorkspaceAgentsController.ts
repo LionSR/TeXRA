@@ -93,11 +93,6 @@ const decodedSelection = (stored: unknown): WorkspaceAgentsSelection =>
     () => INHERITED_WORKSPACE_AGENTS,
   );
 
-/** A stored hidden list as every read takes it: a malformed one, which the
- *  reads report, as none. A write refuses it instead ({@link storedHidden}). */
-const readableHidden = (stored: unknown): readonly string[] =>
-  Result.getOrElse(storedHidden(stored), () => []);
-
 export class WorkspaceAgentsController<
   Entry extends WorkspaceAgentsEntry = WorkspaceAgentsEntry,
 > {
@@ -374,30 +369,31 @@ export class WorkspaceAgentsController<
     readonly name: string | readonly string[];
     readonly enabled: boolean;
   }): Effect.Effect<void, StateWriteFailed | StateReadFailed> {
-    return this.changeFromSelection([], (_selection, resolved, current) => {
-      const agents = this.deps.getAgents();
-      const shown = readableHidden(current[HIDDEN]);
-      const target = [
-        ...(this.selectionKeys(resolved, shown) ??
-          visibleAgents(shown, agents).map(agentKeyOf)),
-      ];
-      // Every name flips the same way, so the length says if any changed.
-      const before = target.length;
-      for (const name of [input.name].flat()) {
-        const agent = { source: input.source, name };
-        const index = target.findIndex((candidate) =>
-          agentMatchesIdentifier(agent, candidate),
-        );
-        if (input.enabled === index >= 0) continue;
-        if (input.enabled) target.push(agentKeyOf(agent));
-        else target.splice(index, 1);
-      }
-      if (target.length === before) return Result.succeed(undefined);
-      return Result.map(storedHidden(current[HIDDEN]), (hidden) => ({
-        [SELECTION]: storedSelection({ kind: 'custom', agentKeys: target }),
-        [HIDDEN]: withCustomChoices(hidden, agents, target),
-      }));
-    });
+    return this.changeFromSelection([], (_selection, resolved, current) =>
+      Result.flatMap(storedHidden(current[HIDDEN]), (hidden) => {
+        const agents = this.deps.getAgents();
+        const target = [
+          ...(this.selectionKeys(resolved, hidden) ??
+            visibleAgents(hidden, agents).map(agentKeyOf)),
+        ];
+        // Every name flips the same way, so the length says if any changed.
+        const before = target.length;
+        for (const name of [input.name].flat()) {
+          const agent = { source: input.source, name };
+          const index = target.findIndex((candidate) =>
+            agentMatchesIdentifier(agent, candidate),
+          );
+          if (input.enabled === index >= 0) continue;
+          if (input.enabled) target.push(agentKeyOf(agent));
+          else target.splice(index, 1);
+        }
+        if (target.length === before) return Result.succeed(undefined);
+        return Result.succeed({
+          [SELECTION]: storedSelection({ kind: 'custom', agentKeys: target }),
+          [HIDDEN]: withCustomChoices(hidden, agents, target),
+        });
+      }),
+    );
   }
 
   /**
@@ -417,23 +413,25 @@ export class WorkspaceAgentsController<
     return this.changeFromSelection(
       [teams.key],
       (selection, resolved, current) =>
-        Result.map(teams.remove(current[teams.key]), (saved) => {
+        Result.flatMap(teams.remove(current[teams.key]), (saved) => {
           const next: Record<string, unknown> = {
             ...current,
             [teams.key]: saved,
           };
-          if (selection.kind === 'team' && selection.teamId === teamId) {
-            const keys = this.selectionKeys(
-              resolved,
-              readableHidden(current[HIDDEN]),
-            );
+          if (selection.kind !== 'team' || selection.teamId !== teamId) {
+            return Result.succeed(next);
+          }
+          // The selection the team leaves is written from the hidden list,
+          // so a malformed one refuses the whole step.
+          return Result.map(storedHidden(current[HIDDEN]), (hidden) => {
+            const keys = this.selectionKeys(resolved, hidden);
             next[SELECTION] = storedSelection(
               keys === undefined
                 ? { kind: 'all' }
                 : { kind: 'custom', agentKeys: keys },
             );
-          }
-          return next;
+            return next;
+          });
         }),
     );
   }
