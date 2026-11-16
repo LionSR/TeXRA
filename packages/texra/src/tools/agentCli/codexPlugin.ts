@@ -18,8 +18,11 @@ import { CodexTool } from './codex';
 import { findCodexBinaryPath, importCodexClass } from './codexImport';
 import type { TexraPlugin } from '../registry';
 
+/** Codex supports Windows through WSL2, so Windows gets the WSL2 setup and
+ *  installs the CLI inside WSL, never the npm package on the Windows side. */
 const CODEX_INSTALL: InstallCommands = {
   brew: 'brew install codex',
+  win32: 'wsl --install',
   default: 'npm install -g @openai/codex',
 };
 
@@ -72,8 +75,8 @@ export const codex: TexraPlugin = {
       installGuide:
         'Install the Codex CLI (choose one):\n\n' +
         `${installCommandLines(CODEX_INSTALL)}\n\n` +
-        'On Windows, use WSL or the Codex app.\n' +
-        'In WSL, install inside the WSL environment (not on the Windows side).\n' +
+        'On Windows, Codex runs in WSL2: set up WSL2 with the Windows command,\n' +
+        'then install the CLI inside WSL (not on the Windows side).\n' +
         'See: https://developers.openai.com/codex/cli\n\n' +
         'Authentication (choose one):\n' +
         '  • codex login       : sign in with ChatGPT account (recommended)\n' +
