@@ -227,13 +227,9 @@ const activeRailProject = (projects: readonly RailProject[]) =>
   projects.find((project) => project.display.key === shell.active);
 let renamingProjectKey: string | null = null;
 
-function finishProjectRename(key: string, name: string | null): void {
-  if (renamingProjectKey !== key) return;
-  renamingProjectKey = null;
+function renameProject(key: string, name: string): void {
   const project = projectWorkbenches.get(key);
-  if (project && name?.trim())
-    project.updateState({ ...project.getState(), projectName: name.trim() });
-  rerenderShell();
+  project?.updateState({ ...project.getState(), projectName: name });
 }
 // The renderer has no Node types by design, so the platform is read from the
 // navigator, and an inconclusive one takes the non-mac branch.
@@ -566,7 +562,11 @@ function shellTemplate(): TemplateResult {
                 renamingProjectKey = key;
                 rerenderShell();
               },
-              onRenameProject: finishProjectRename,
+              onRenameProject: renameProject,
+              onCloseRename: () => {
+                renamingProjectKey = null;
+                rerenderShell();
+              },
               onOpenSettings: () => settingsDialog.open(),
             },
           )}

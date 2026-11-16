@@ -62,7 +62,8 @@ interface ShellSidebarCallbacks {
   onOpenRecent(root: string): void;
   onSelectProject(key: string): void;
   onProjectAction(key: string, action: ProjectAction): void;
-  onRenameProject?(key: string, name: string | null): void;
+  onRenameProject?(key: string, name: string): void;
+  onCloseRename?(): void;
   onOpenSettings(): void;
 }
 
@@ -141,7 +142,8 @@ function projectSection(
               label: 'Project display name',
               className: 'shell-project-row shell-project-rename',
               maxLength: 80,
-              onFinish: (value) => callbacks.onRenameProject?.(key, value),
+              onRename: (value) => callbacks.onRenameProject?.(key, value),
+              onClose: () => callbacks.onCloseRename?.(),
             })
           : html`<wa-button
               type="button"

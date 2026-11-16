@@ -278,24 +278,21 @@ export class RunHeader extends LitElement {
     this.renaming = true;
   }
 
-  /** Enter or leaving the field saves a changed title; Esc keeps the old. */
-  private finishRename(run: RunView, value: string | null) {
-    if (!this.renaming) return;
-    this.renaming = false;
-    const title = value?.trim();
-    if (!title || title === run.title) return;
-    this.dispatchEvent(
-      SessionUiEvents.runtime({ kind: 'run.rename', runId: run.id, title }),
-    );
-  }
-
   private renderTitle(run: RunView): TemplateResult {
     if (this.renaming)
       return inlineRenameField({
         value: run.title,
         label: 'Task title',
         className: 'rename-input',
-        onFinish: (value) => this.finishRename(run, value),
+        onRename: (title) =>
+          this.dispatchEvent(
+            SessionUiEvents.runtime({
+              kind: 'run.rename',
+              runId: run.id,
+              title,
+            }),
+          ),
+        onClose: () => (this.renaming = false),
       });
     return html`<h1 id=${ELEMENT_IDS.ACTIVE_RUN_NAME} data-run=${run.id}>
         ${run.title}

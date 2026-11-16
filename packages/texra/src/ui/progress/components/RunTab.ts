@@ -122,19 +122,9 @@ export class RunTab extends LitElement {
     this.renaming = true;
   }
 
-  private finishRename(value: string | null): void {
-    if (!this.renaming) return;
+  /** Closing the field hands focus back to the row it replaced. */
+  private closeRename(): void {
     this.renaming = false;
-    const title = value?.trim();
-    if (title && title !== (this.run.description || this.run.label)) {
-      this.dispatchEvent(
-        SessionUiEvents.runtime({
-          kind: 'run.rename',
-          runId: this.run.id,
-          title,
-        }),
-      );
-    }
     void this.updateComplete.then(() => this.focus());
   }
 
@@ -222,7 +212,15 @@ export class RunTab extends LitElement {
                   value: runTitle,
                   label: 'Task title',
                   className: 'tab-rename',
-                  onFinish: (value) => this.finishRename(value),
+                  onRename: (title) =>
+                    this.dispatchEvent(
+                      SessionUiEvents.runtime({
+                        kind: 'run.rename',
+                        runId: run.id,
+                        title,
+                      }),
+                    ),
+                  onClose: () => this.closeRename(),
                 })
               : nothing
           }
