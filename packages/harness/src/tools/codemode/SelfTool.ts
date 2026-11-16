@@ -25,20 +25,17 @@ import {
   recoverAgentChild,
 } from '@agent/runtime/delegation/agentChild';
 import { executeSubagentInBand } from '@agent/runtime/delegation/childLaunch';
-import { describeSubagentProgress } from '@agent/runtime/delegation/subagentRun';
 import {
-  AgentConfigSchema,
-  ToolError,
-  type SubagentProgressUpdate,
-} from '@shared/schemas';
+  childOutputSchema,
+  printSubagentProgress,
+} from '@agent/runtime/delegation/subagentRun';
+import { AgentConfigSchema, ToolError } from '@shared/schemas';
 import { RunHistory, SessionLog } from '@shared/session/runHistory';
 import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
-import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const SelfInputSchema = Schema.Struct({
-  prompt: Schema.String.check(Schema.isMinLength(1)).annotate({
+  prompt: Schema.NonEmptyString.annotate({
     description: 'What this run of you works on.',
   }),
   fork: nullishWithDefault(
@@ -121,21 +118,8 @@ const runSelf = Effect.fn('self.call')(function* (
       ),
     );
   const name = config.agent;
-  const outputSchema =
-    input.schema == null
-      ? undefined
-      : yield* Effect.try({
-          try: () =>
-            normalizeStructuredOutputSchema(input.schema ?? {}).jsonSchema,
-          catch: (error) =>
-            new ToolError(
-              `\`schema\` is not a supported object-root JSON Schema: ${toErrorMessage(error)}`,
-            ),
-        });
-  const notify = (update: SubagentProgressUpdate): void => {
-    const line = describeSubagentProgress(name, update);
-    if (line) call.emit(`${line}\n`);
-  };
+  const outputSchema = yield* childOutputSchema(input.schema);
+  const notify = printSubagentProgress(name, call.emit);
   // An earlier attempt's child answers the call, or continues under its id.
   const recovered = yield* Effect.result(
     recoverAgentChild(call, { notify, running: (work) => work }),

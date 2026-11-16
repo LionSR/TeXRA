@@ -43,7 +43,7 @@ const DEFAULT_TIMEOUT_MS = 60 * 60 * 1000;
 const FAULT_FRAMES = 3;
 
 const ScriptInputSchema = Schema.Struct({
-  code: Schema.String.check(Schema.isMinLength(1)).annotate({
+  code: Schema.NonEmptyString.annotate({
     description:
       'The body of an async JavaScript function: `await` at top level, `return` the result. Inputs are literals in the code.',
   }),
@@ -68,7 +68,7 @@ const DESCRIBE_TOOL = 'describeTool';
 const DEFAULT_SEARCH_LIMIT = 8;
 
 const SearchArgsSchema = Schema.Tuple([
-  Schema.String.check(Schema.isMinLength(1)),
+  Schema.NonEmptyString,
   Schema.optional(
     Schema.NullOr(
       Schema.Struct({
@@ -83,9 +83,7 @@ const SearchArgsSchema = Schema.Tuple([
     ),
   ),
 ]);
-const DescribeArgsSchema = Schema.Tuple([
-  Schema.String.check(Schema.isMinLength(1)),
-]);
+const DescribeArgsSchema = Schema.Tuple([Schema.NonEmptyString]);
 
 /** What one host-function op answers, as a settled call. */
 const answerOf = (

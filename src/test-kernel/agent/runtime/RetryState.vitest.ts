@@ -233,7 +233,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           expect(
             (yield* Context.get(session, RunHistory).load(runId))?.lastError,
           ).toBeNull();
-          // The decision neither parks nor ends the run: the phase the fold
+          // The decision neither blocks nor ends the run: the phase the fold
           // reports is still running.
           expect(
             Context.get(session, SessionViewAccess).run(runId)?.position,

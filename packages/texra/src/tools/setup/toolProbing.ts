@@ -2,44 +2,35 @@
 import { Effect } from 'effect';
 
 // Local imports
+import { probeLatexTools } from '@latex/latexToolchain';
 import { findCommand } from '@texra/utils/system/binaryResolver';
 import {
   LATEX_TOOL_ENTRIES,
   type LatexToolName,
 } from '@texra/shared/constants/latexToolchain';
-import { probeTool } from '@texra/utils/system/toolChecks';
 
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** Installation status of one probed tool, with its path when discoverable. */
 interface ToolStatus {
-  name: string;
-  installed: boolean;
-  path?: string;
+  readonly name: string;
+  readonly installed: boolean;
+  readonly path: string | undefined;
 }
 
 /**
- * Resolve a tool as installed by (1) the catalog tool's version probe, or
- * (2) a PATH search for tools without a catalog entry
- * (e.g. `node`, `git`, or an arbitrary binary the user asks about). The PATH
- * search also supplies the absolute path presented alongside the flag.
+ * Whether one tool is installed: a catalog tool as the toolchain probe
+ * reports it, any other binary (`node`, `python3`, one the user asks about)
+ * by a PATH search, which also supplies the path presented beside the flag.
  */
 export const locateTool = Effect.fn('locateTool')(function* (
   name: string,
 ): Effect.fn.Return<ToolStatus, never, ChildProcessSpawner> {
-  // The probe reports a missing tool as `false` and has no failure of its
-  // own. Interruption reaches the spawned `<tool> --version`, so
-  // interrupting a probe kills the processes (several at once, since the
-  // core tools are probed concurrently) instead of leaving them to run out
-  // their timeout.
-  const knownInstalled = Object.hasOwn(LATEX_TOOL_ENTRIES, name)
-    ? // cast: `hasOwn` just found `name` among the catalog's keys.
-      yield* probeTool(name as LatexToolName)
-    : false;
+  if (Object.hasOwn(LATEX_TOOL_ENTRIES, name)) {
+    // cast: `hasOwn` just found `name` among the catalog's keys.
+    const { tools } = yield* probeLatexTools([name as LatexToolName]);
+    return tools[0];
+  }
   const found = yield* findCommand(name);
-  return {
-    name,
-    installed: knownInstalled || found !== null,
-    path: found?.resolvedPath,
-  };
+  return { name, installed: found !== null, path: found?.resolvedPath };
 });

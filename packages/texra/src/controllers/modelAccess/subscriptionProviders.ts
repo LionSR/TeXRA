@@ -12,14 +12,11 @@
 import { Effect } from 'effect';
 
 import {
-  chatgptLoginWithLoopback,
   LoopbackTransportUnavailableError,
   SubscriptionAccounts,
   type SubscriptionDeviceCodePrompt,
   type SubscriptionOAuthError,
   type SubscriptionSessionStatus,
-  xaiLoginWithDeviceCode,
-  xaiLoginWithLoopback,
 } from '@texra-ai/llm/node';
 import {
   ConfigWriteFailed,
@@ -34,7 +31,12 @@ import {
 import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
 import type { SecretsFailed } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
-import { withLogChannel, type SettingsStores } from '@texra-ai/harness/plugins';
+import {
+  emitAppSignal,
+  withLogChannel,
+  type AppSignals,
+  type SettingsStores,
+} from '@texra-ai/harness/plugins';
 
 const CHANNEL = 'subscriptionProviders';
 
@@ -116,12 +118,13 @@ export interface SubscriptionProvider {
   ): Effect.Effect<
     SubscriptionAccount,
     Error,
-    HttpClient.HttpClient | SubscriptionAccounts
+    HttpClient.HttpClient | SubscriptionAccounts | AppSignals
   >;
   /**
    * The sign-out program, the mirror of `signIn`: the account signed out,
    * then the provider's subscription preference turned off, so its models
-   * stop routing to an account that is gone. A host runs it at its own
+   * stop routing to an account that is gone, and `modelAccessChanged`
+   * announced however the sign-out ends. A host runs it at its own
    * edge; a failure is the provider's own auth error or the secret store's
    * rejection. A preference write that fails after the sign-out succeeded
    * is reported in the result, since the account is already signed out.
@@ -131,7 +134,7 @@ export interface SubscriptionProvider {
   ): Effect.Effect<
     SubscriptionSignOutResult,
     SubscriptionStatusError,
-    SubscriptionAccounts | HttpClient.HttpClient
+    SubscriptionAccounts | HttpClient.HttpClient | AppSignals
   >;
   /**
    * The signed-in status. A store that cannot be read, or a stored session
@@ -144,14 +147,15 @@ export interface SubscriptionProvider {
   >;
   isPreferSubscription(stores: SettingsStores): boolean;
   /**
-   * Persist the preference. An `Effect`, like
+   * Persist the preference and announce `modelAccessChanged`, as a sign-in
+   * and a sign-out do for the preference they write. An `Effect`, like
    * every other write of a catalog-backed setting, so a host runs it at its own
    * edge and owns the failure.
    */
   setPreferSubscription(
     stores: SettingsStores,
     enabled: boolean,
-  ): Effect.Effect<void, ConfigWriteFailed | Error>;
+  ): Effect.Effect<void, ConfigWriteFailed | Error, AppSignals>;
 }
 
 /** What a sign-out reports beside the sign-out itself: why the provider's
@@ -160,18 +164,12 @@ export interface SubscriptionSignOutResult {
   readonly preferenceError?: string;
 }
 
-/** Fields the flow reads off a provider session; providers carry more. */
-interface SubscriptionSessionFields {
-  readonly email?: string;
-  readonly accountId?: string;
-}
-
 /** The account a provider's session is held in, named by its route. */
 type AccountOf<Id extends SubscriptionProviderId> =
   SubscriptionAccounts['Service'][(typeof SUBSCRIPTION_ROUTES)[Id]];
 
-/** A row's descriptor fields pass through to the provider unchanged; the
- *  rest bind its transports to the shared flow. */
+/** A row's descriptor fields pass through to the provider unchanged; its
+ *  account runs the sign-in itself. */
 interface SubscriptionProviderBindings<
   Id extends SubscriptionProviderId,
 > extends Pick<
@@ -179,15 +177,6 @@ interface SubscriptionProviderBindings<
   'displayName' | 'sessionName' | 'copyTarget' | 'modelFamily'
 > {
   readonly id: Id;
-  /** Absent where the provider offers no device-code sign-in. */
-  readonly loginWithDeviceCode?: (options: {
-    coordinator: AccountOf<Id>;
-    onPrompt: (prompt: SubscriptionDeviceCodePrompt) => Effect.Effect<void>;
-  }) => Effect.Effect<SubscriptionSessionFields, Error, HttpClient.HttpClient>;
-  readonly loginWithLoopback: (options: {
-    coordinator: AccountOf<Id>;
-    openBrowser: (url: string) => Effect.Effect<void, Error>;
-  }) => Effect.Effect<SubscriptionSessionFields, Error, HttpClient.HttpClient>;
   readonly accountLabel: (
     account:
       | { readonly email?: string | null; readonly accountId?: string | null }
@@ -197,12 +186,10 @@ interface SubscriptionProviderBindings<
 }
 
 /**
- * Bind one provider's transports to the shared sign-in flow. Two callers (the
+ * Bind one provider's account to the shared sign-in flow. Two callers (the
  * catalog rows below); the flow it closes over is the whole point.
  */
 function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
-  loginWithDeviceCode,
-  loginWithLoopback,
   accountLabel,
   ...descriptor
 }: SubscriptionProviderBindings<Id>): SubscriptionProvider {
@@ -215,39 +202,44 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
     (accounts) => accounts[SUBSCRIPTION_ROUTES[descriptor.id]],
   );
   const deviceCodeLogin = (
-    coordinator: AccountOf<Id>,
+    signIn: AccountOf<Id>['signInWithDeviceCode'],
     options: SubscriptionSignInOptions,
-  ): Effect.Effect<SubscriptionSessionFields, Error, HttpClient.HttpClient> =>
-    loginWithDeviceCode === undefined
+  ) =>
+    signIn === undefined
       ? Effect.fail(
           new Error(
             `${descriptor.displayName} sign-in has no device code: it returns to a browser on this machine (127.0.0.1). Sign in where TeXRA runs, or forward port 1455 from your browser's machine to this one.`,
           ),
         )
-      : loginWithDeviceCode({
-          coordinator,
-          // The prompt is shown beside the poll, not before it: the poll waits on
-          // the user, who may be reading (or dismissing) exactly this prompt. A
-          // child fiber, so cancelling the sign-in closes it with the flow.
-          onPrompt: (prompt) =>
-            Effect.asVoid(
-              Effect.forkChild(options.present.presentDeviceCode(prompt)),
-            ),
-        });
+      : // The prompt is shown beside the poll, not before it: the poll waits
+        // on the user, who may be reading (or dismissing) exactly this
+        // prompt. A child fiber, so cancelling the sign-in closes it with
+        // the flow.
+        signIn((prompt) =>
+          Effect.asVoid(
+            Effect.forkChild(options.present.presentDeviceCode(prompt)),
+          ),
+        );
+
+  /** Write the preference and say model access changed, so every launcher
+   *  and status bar that shows a route reads it again. */
+  const setPreference = (stores: SettingsStores, enabled: boolean) =>
+    SubscriptionPreference.set(descriptor.id, stores, enabled).pipe(
+      Effect.andThen(emitAppSignal('modelAccessChanged', undefined)),
+    );
 
   const signIn = Effect.fn(`subscriptionProviders.${descriptor.id}.signIn`)(
     function* (options: SubscriptionSignInOptions) {
-      const coordinator = yield* account;
+      const { signInWithBrowser, signInWithDeviceCode } = yield* account;
       // A provider without a device code signs in through the browser even
       // when the host asked for one: on a remote host whose callback port is
       // forwarded, that still completes.
-      const session =
-        options.transport === 'device' && loginWithDeviceCode !== undefined
-          ? yield* deviceCodeLogin(coordinator, options)
-          : yield* loginWithLoopback({
-              coordinator,
-              openBrowser: (url) => options.present.presentSignInUrl(url),
-            }).pipe(
+      const session: Pick<SubscriptionSessionStatus, 'email' | 'accountId'> =
+        options.transport === 'device' && signInWithDeviceCode !== undefined
+          ? yield* deviceCodeLogin(signInWithDeviceCode, options)
+          : yield* signInWithBrowser((url) =>
+              options.present.presentSignInUrl(url),
+            ).pipe(
               Effect.catchIf(
                 (error): error is LoopbackTransportUnavailableError =>
                   error instanceof LoopbackTransportUnavailableError,
@@ -261,11 +253,15 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
                   ).pipe(
                     Effect.annotateLogs({ data: error }),
                     withLogChannel(CHANNEL),
-                    Effect.andThen(deviceCodeLogin(coordinator, options)),
+                    Effect.andThen(
+                      deviceCodeLogin(signInWithDeviceCode, options),
+                    ),
                   );
                 },
               ),
             );
+      // The session is stored by now, so the change is announced whether
+      // or not the preference write follows it, as the sign-out's is.
       yield* SubscriptionPreference.set(
         descriptor.id,
         options.stores,
@@ -278,6 +274,7 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
               { cause },
             ),
         ),
+        Effect.ensuring(emitAppSignal('modelAccessChanged', undefined)),
       );
       return {
         signedIn: true,
@@ -292,8 +289,7 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
     ...descriptor,
     isPreferSubscription: (stores: SettingsStores) =>
       SubscriptionPreference.get(descriptor.id, stores),
-    setPreferSubscription: (stores: SettingsStores, enabled: boolean) =>
-      SubscriptionPreference.set(descriptor.id, stores, enabled),
+    setPreferSubscription: setPreference,
     signIn,
     signOut: (stores: SettingsStores) =>
       Effect.flatMap(account, (coordinator) => coordinator.signOut()).pipe(
@@ -307,6 +303,9 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
             }),
           ),
         ),
+        // The local session is deleted even when ending it at the provider
+        // fails, so the change is announced however the sign-out ends.
+        Effect.ensuring(emitAppSignal('modelAccessChanged', undefined)),
       ),
     getStatus: () =>
       Effect.flatMap(account, (coordinator) =>
@@ -322,10 +321,6 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
  * "Sign in with ChatGPT": Codex-eligible models then run on the user's
  * ChatGPT plan instead of an OpenAI API key, through OpenAI's token sharing.
  * The sign-in is browser-only: OpenAI's flow has no device code.
- *
- * Each binding calls through rather than capturing the imported function, so
- * a host suite that swaps `@texra-ai/llm/node` still intercepts the row —
- * the catalog is built once at module load.
  */
 const CHATGPT_PROVIDER = defineSubscriptionProvider({
   id: 'chatgpt',
@@ -333,7 +328,6 @@ const CHATGPT_PROVIDER = defineSubscriptionProvider({
   sessionName: 'ChatGPT',
   copyTarget: 'ChatGPT',
   modelFamily: 'OpenAI models',
-  loginWithLoopback: (options) => chatgptLoginWithLoopback(options),
   accountLabel: (account) => codexAccountLabel(account),
 });
 
@@ -347,8 +341,6 @@ const GROK_PROVIDER = defineSubscriptionProvider({
   sessionName: 'xAI',
   copyTarget: 'Grok / xAI',
   modelFamily: 'xAI models',
-  loginWithDeviceCode: (options) => xaiLoginWithDeviceCode(options),
-  loginWithLoopback: (options) => xaiLoginWithLoopback(options),
   accountLabel: (account) => xaiAccountLabel(account),
 });
 

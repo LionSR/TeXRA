@@ -4,7 +4,7 @@ import { NonNegativeIntSchema } from '@texra-ai/harness/schemas';
 /**
  * The subscriptions whose usage is reported. Storage owns the enum, so a
  * catalog change is never a silent stored format change; a coding plan's
- * `usageProvider` in the llm catalog is passed where this type is expected,
+ * `id` (`CODING_PLAN_SUBSCRIPTIONS`) is declared as this type,
  * so a plan it lacks does not compile.
  */
 const SUBSCRIPTION_USAGE_PROVIDERS = Object.freeze([
@@ -19,7 +19,7 @@ export type SubscriptionUsageProvider =
   (typeof SubscriptionUsageProviderSchema)['Type'];
 
 const SubscriptionUsageWindowSchema = Schema.Struct({
-  name: Schema.String.check(Schema.isMinLength(1)),
+  name: Schema.NonEmptyString,
   percentUsed: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)).check(
     Schema.isLessThanOrEqualTo(100),
   ),
@@ -35,8 +35,8 @@ export type SubscriptionUsageWindow =
   (typeof SubscriptionUsageWindowSchema)['Type'];
 
 const SubscriptionUsageSnapshotBaseSchema = Schema.Struct({
-  providerName: Schema.String.check(Schema.isMinLength(1)),
-  planName: Schema.String.check(Schema.isMinLength(1)),
+  providerName: Schema.NonEmptyString,
+  planName: Schema.NonEmptyString,
   fetchedAt: NonNegativeIntSchema,
 });
 

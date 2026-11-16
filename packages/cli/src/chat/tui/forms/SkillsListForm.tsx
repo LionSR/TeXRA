@@ -12,7 +12,7 @@ import {
   type ProcessRuntime,
   type SkillLoadIssue,
 } from '@texra-ai/harness/host';
-import { formatResultCount } from '@texra-ai/harness/schemas';
+import { formatResultCount, joinFacts } from '@texra-ai/harness/schemas';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { readCliSkillsOffNotice } from '@cli/runtime/skills';
 
@@ -49,7 +49,7 @@ function skillSelectItemsForTui(
   return skills.map(({ display, activation }) => ({
     value: { name: display.name, activationPrompt: activation },
     label: display.name,
-    description: `${display.label} · ${display.description}`,
+    description: joinFacts([display.label, display.description]),
   }));
 }
 

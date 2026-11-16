@@ -8,7 +8,6 @@
 import { Effect, Predicate, Result, SynchronizedRef, absurd } from 'effect';
 
 import {
-  blocksCaller,
   qualifyAggregateId,
   type RunId,
   type SessionRow,
@@ -210,7 +209,7 @@ const loaded = Effect.fn('RunHistory.loaded')(function* (
     return yield* inconsistent(run, applied.failure);
   const state = applied.success;
   // A run's input changes no state; a request before its opening leaves
-  // an unopened state (`phase` null), which the fold lets through only
+  // an unopened state (`at` null), which the fold lets through only
   // with no run history row in it.
   if (state === null) return null;
   if (prepared && state.messages.length > 0) {
@@ -354,10 +353,7 @@ export function makeRunHistory(
           );
           const cancels = cancelRequestRows(
             run,
-            Object.entries(before?.requests ?? {}).flatMap(
-              ([requestId, { decision, payload }]) =>
-                decision === null && blocksCaller(payload) ? [requestId] : [],
-            ),
+            before,
             'The process that asked exited.',
           );
           const rows: readonly SessionRowDraft[] = [

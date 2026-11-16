@@ -3,7 +3,14 @@
  *  storage root. */
 import * as path from 'node:path';
 
-import { Context, Effect, FileSystem, Layer, RcMap } from 'effect';
+import {
+  Context,
+  Effect,
+  FileSystem,
+  Layer,
+  Number as Num,
+  RcMap,
+} from 'effect';
 
 import {
   resolveGlobalStoragePath,
@@ -116,7 +123,7 @@ export const readStorageInventory = Effect.fn('readStorageInventory')(
             ),
           { concurrency: 8 },
         );
-        const bytes = sizes.reduce((sum, size) => sum + size, 0);
+        const bytes = Num.sumAll(sizes);
         // A store whose database is not SQLite is still an orphan.
         const unreadable =
           (yield* fs.exists(database)) &&

@@ -12,7 +12,7 @@
  * This module knows no row kind or payload field.
  */
 import { Clock, Effect, Exit, FileSystem, Scope } from 'effect';
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure, withLogChannel } from '@logger/effectLog';
 import {
   isDamaged,
   pragmaValue,
@@ -241,10 +241,11 @@ export const reclaimFreePages = (sql: Sql, path: string) =>
     }
   }).pipe(
     Effect.uninterruptible,
-    Effect.catch((error) =>
-      Effect.logWarning(
+    Effect.catch(
+      logFailure(
+        CHANNEL,
         `Could not return the pages freed in ${path} to the filesystem; the next collection retries.`,
-      ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
+      ),
     ),
   );
 

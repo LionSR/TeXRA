@@ -46,7 +46,7 @@ import type { SessionServices } from '@agent/runtime/rootLaunch';
 import type { SessionHandleInit } from '@agent/runtime/SessionHandle';
 import type { RunServices } from '@agent/runtime/ToolServices';
 import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionEventsLayer';
-import { logFailure, withLogChannel } from '@logger/effectLog';
+import { logFailure } from '@logger/effectLog';
 import { SessionRoots, sessionFsLayer } from '@platform/rootedFs';
 import type { RunId, SessionCloseReport } from '@shared/schemas';
 import { Database, type DatabaseReadFailed } from '@shared/session/database';
@@ -260,12 +260,10 @@ export const sessionOwnersLayer = (
                 const parent = yield* Effect.exit(runs.attachedParent(id));
                 yield* wakeIfOwed(id);
                 if (Exit.isFailure(parent))
-                  return yield* Effect.logWarning(
+                  return yield* logFailure(
+                    CHANNEL,
                     `Run ${id}: its parent edge could not be read, so no parent is woken for its last delivery`,
-                  ).pipe(
-                    Effect.annotateLogs({ data: Cause.squash(parent.cause) }),
-                    withLogChannel(CHANNEL),
-                  );
+                  )(Cause.squash(parent.cause));
                 if (parent.value !== null) yield* wakeIfOwed(parent.value);
               }),
             ),
@@ -282,9 +280,10 @@ export const sessionOwnersLayer = (
       // and the dependency probes, held for its life and probed beside the
       // open (the gate withholds nothing until they answer).
       const plugins = yield* ToolRegistry;
-      // The registry's phase notification rides the applied rows: its
-      // waiters read `RunView.status` once the view holds a row's state.
-      // Host notices go to the author. `log.settled` waits for this reader.
+      // The one reader of the rows the view has applied: a fact that wrote
+      // workspace files is announced, and a run's end is presented to the
+      // host, each once the view holds the row. `log.settled` waits for
+      // this reader.
       const announce = announceWrites(factKindsOf(plugins.entries.values()));
       yield* Stream.runForEach(
         store.applied,

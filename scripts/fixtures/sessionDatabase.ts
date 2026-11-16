@@ -1,0 +1,21 @@
+/**
+ * The production modules the desktop e2e fixtures and the packaged smoke
+ * drive, bundled by `loadDatabaseFixture`
+ * (`scripts/desktop-package-smoke-environment.mjs`). The fixture's type is
+ * this module's, so a name listed here is a name the bundle has.
+ */
+export {
+  databaseLayer,
+  globalDatabaseLayer,
+} from '@controllers/session/databaseLayer';
+export { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+export { Database, GlobalDatabase } from '@shared/session/database';
+export { qualifyAggregateId, SessionRowSchema } from '@shared/schemas';
+export {
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@platform/defaults/workspaceStorage';
+export { openDesktopProjectRecords } from '@desktop/main/desktopProjectRecords';
+export { nodePlatformServices } from '@platform/defaults/nodePlatform';
+export { ToolRegistry, toolTable } from '@tools/toolTable';
+export { servicePaths } from '@texra/controllers/server/discovery';

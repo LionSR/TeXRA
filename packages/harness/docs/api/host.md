@@ -484,10 +484,12 @@ interface AppSignalPayloads {
    * (`onWrite.invalidatesModelOptions`). Keyless on purpose: a listener
    * re-reads the routes it shows.
    *
-   * Emitted by the writers a person drives: the CLI's, the settings views'
-   * (`settingsViewBody.ts`) and the extension's ChatGPT sign-in from the
-   * getting-started card (`extensionHostRequests.ts`). Consumed by: the CLI chat TUI's status
-   * bar, which re-reads the route and quota it shows, and the extension's
+   * Emitted by the app's writers themselves, so no caller announces for
+   * them: a subscription's sign-in, sign-out and preference write, a coding
+   * plan's toggle, and the settings write path for a row that re-routes
+   * models. The enabled-model write is the one still announced by its
+   * caller, the settings view (`settingsViewBody.ts`). Consumed by: the CLI chat
+   * TUI's status bar, which re-reads the route and quota it shows, and the extension's
    * and desktop's launchers (`hostSnapshotSource.ts`), which re-read their
    * credential check and model catalog.
    */
@@ -808,17 +810,20 @@ interface CurrentValues {
     key: string,
   ) => Effect.Effect<T | undefined, DatabaseReadFailed>;
   /**
-   * Change one value from the one read under the write lock: `change`
-   * answers with its result and the next value, with its result alone to
-   * write nothing, or refuses and nothing is written. A next value of
-   * `undefined` deletes the row.
+   * Change the values of `keys` from the ones read under the write lock:
+   * `change` answers with its result and the next value of every key, with
+   * its result alone to write nothing, or refuses and nothing is written. A
+   * next value of `undefined` deletes the row.
    */
-  readonly modify: <T, A, E = never>(
+  readonly modify: <T, K extends string, A, E = never>(
     family: ValueFamily<T>,
-    key: string,
+    keys: readonly K[],
     change: (
-      current: T | undefined,
-    ) => Result.Result<readonly [A] | readonly [A, T | undefined], E>,
+      current: Readonly<Record<K, T | undefined>>,
+    ) => Result.Result<
+      readonly [A] | readonly [A, Readonly<Record<K, T | undefined>>],
+      E
+    >,
   ) => Effect.Effect<A, E | DatabaseWriteFailed>;
   /** Every row of a family, latest write first. */
   readonly list: <T>(
@@ -2210,18 +2215,14 @@ function setModelEnabled(input: {
 
 ## SkillIssueCode
 
+What a reader branches on, where it does: `source_error` is a skill source
+that is missing, not the expected kind, or unreadable (the CLI's usage
+exit); `read_error` is a directory or file that could not be read, which
+becomes a `source_error` when it is a required source's own path. Every
+other issue says what it is in its message.
+
 ```ts
-type SkillIssueCode =
-  | 'duplicate_name'
-  | 'duplicate_realpath'
-  | 'invalid_frontmatter'
-  | 'invalid_name'
-  | 'invalid_source'
-  | 'missing_source'
-  | 'missing_description'
-  | 'name_mismatch'
-  | 'read_error'
-  | 'source_read_error';
+type SkillIssueCode = 'source_error' | 'read_error';
 ```
 
 ## SkillIssueSeverity
@@ -2235,7 +2236,7 @@ type SkillIssueSeverity = 'error' | 'warning';
 ```ts
 interface SkillLoadIssue {
   severity: SkillIssueSeverity;
-  code: SkillIssueCode;
+  code?: SkillIssueCode;
   message: string;
   path?: string;
   name?: string;
@@ -2295,24 +2296,29 @@ class StateReadFailed extends Schema.TaggedError<StateReadFailed>()(
 Application state read from its authority when the Effect executes. A read
 answers the stored JSON as `unknown`: the caller decodes it with its key's
 schema (`readState`), which also owns the default of an absent key. Updates
-finish after commit. A change
-that depends on the current value goes through `modify`, never a `get`
-then an `update`: the settings surfaces do not serialize their messages,
-and hosts in separate processes share one store.
+finish after commit. A change that depends on current values goes through
+`modify`, never a `get` then an `update`: the settings surfaces do not
+serialize their messages, and hosts in separate processes share one store.
 
 ```ts
 interface StateStore {
   get(key: string): Effect.Effect<unknown, StateReadFailed>;
   update(key: string, value: unknown): Effect.Effect<void, StateWriteFailed>;
   /**
-   * Read-modify-write of one key as one step at the store's authority:
-   * `change` sees the stored value (`undefined` when absent) and returns the
-   * next one, or refuses with its own error and nothing is written.
+   * Read-modify-write of `keys` as one step at the store's authority:
+   * `change` sees their stored values and answers its result with the next
+   * value of every key (`undefined` deletes it), with its result alone to
+   * write nothing, or refuses with its own error and nothing is written.
    */
-  modify<T, E = never>(
-    key: string,
-    change: (current: unknown) => Result.Result<T, E>,
-  ): Effect.Effect<T, E | StateWriteFailed>;
+  modify<K extends string, A, E = never>(
+    keys: readonly K[],
+    change: (
+      current: Readonly<Record<K, unknown>>,
+    ) => Result.Result<
+      readonly [A] | readonly [A, Readonly<Record<K, unknown>>],
+      E
+    >,
+  ): Effect.Effect<A, E | StateWriteFailed>;
 }
 ```
 
@@ -2583,7 +2589,7 @@ number, `timestamp` a UTC ISO 8601 date-time and every string non-empty,
 `provider` and `usageRoute` included.
 
 ```ts
-const UsageLogEntrySchema: Struct<{ readonly timestamp: String; readonly model: String; readonly provider: Literals<readonly ["google-interactions", "openai-responses", "anthropic-messages"]>; readonly agentName: optional<String>; readonly usageRoute: optional<Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription", "api-key"]>>; readonly streamId: optional<String>; readonly inputTokens: Int; readonly outputTokens: Int; readonly listCost: Finite; readonly responseTimeMs: optional<Int>; readonly cachedInputTokens: optional<Int>; readonly reasoningTokens: optional<Int>; readonly extensionVersion: optional<String>; readonly editorType: optional<String>; }>
+const UsageLogEntrySchema: Struct<{ readonly timestamp: String; readonly model: NonEmptyString; readonly provider: Literals<readonly ["google-interactions", "openai-responses", "anthropic-messages"]>; readonly agentName: optional<NonEmptyString>; readonly usageRoute: optional<Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription", "api-key"]>>; readonly streamId: optional<NonEmptyString>; readonly inputTokens: Int; readonly outputTokens: Int; readonly listCost: Finite; readonly responseTimeMs: optional<Int>; readonly cachedInputTokens: optional<Int>; readonly reasoningTokens: optional<Int>; readonly extensionVersion: optional<NonEmptyString>; readonly editorType: optional<NonEmptyString>; }>
 ```
 
 ## ValidationModel

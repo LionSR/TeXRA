@@ -4,7 +4,7 @@ import * as path from 'node:path';
 
 import { glob } from 'glob';
 
-import { Effect, FileSystem, Result, Schema, SchemaIssue } from 'effect';
+import { Effect, FileSystem, Order, Result, Schema, SchemaIssue } from 'effect';
 import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -111,7 +111,7 @@ export function scanDirectory(
     }
     const [parsed, unreadable] = yield* Effect.partition(
       // Code-unit order, which the default sort gave one directory's paths.
-      [...rootOf].toSorted(([a], [b]) => Number(a > b) - Number(a < b)),
+      [...rootOf].toSorted(([a], [b]) => Order.String(a, b)),
       ([yamlPath, root]) => readYamlDefinition(yamlPath, root),
       { concurrency: 8 },
     );

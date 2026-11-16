@@ -42,14 +42,18 @@ export function isRequestRefusal(error: unknown): error is RequestRefusal {
   );
 }
 
+/** A host member's failure in the cause's own words, for a member that
+ *  raises no refusal. */
+export function hostFailed(member: string, cause: unknown): HostFailed {
+  return new HostFailed({ member, message: toErrorMessage(cause), cause });
+}
+
 /** How a host call's failure is worded, whatever shape it arrived in. */
 export function hostFailure(
   member: string,
   cause: unknown,
 ): HostFailed | RequestRefusal {
-  return isRequestRefusal(cause)
-    ? cause
-    : new HostFailed({ member, message: toErrorMessage(cause), cause });
+  return isRequestRefusal(cause) ? cause : hostFailed(member, cause);
 }
 
 /** A host capability that still answers with a promise, lifted once and

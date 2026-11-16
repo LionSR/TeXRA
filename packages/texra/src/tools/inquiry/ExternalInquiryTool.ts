@@ -58,7 +58,7 @@ const InquiryInputSchema = Schema.Union([
         'Returns immediately with {status: "dispatched", thread_id}. ' +
         'Do NOT wait: the answer arrives as a separate [inquiry] continuation message later.',
     }),
-    question: Schema.String.check(Schema.isMinLength(1)).annotate({
+    question: Schema.NonEmptyString.annotate({
       description:
         'The self-contained question. The external model has NO context from this conversation; ' +
         'include all definitions, notation, and problem setup directly, and say what kind of ' +

@@ -71,19 +71,18 @@ export function setReasoningLevel(
   // concurrent write. The stored record is carried as written, so every
   // entry goes back to storage; reads that need the effort go through
   // `reasoningEffortOverrides`.
-  return globalState
-    .modify(REASONING_LEVELS_KEY.key, (stored) => {
-      const overrides: Record<string, unknown> = {
-        ...(Predicate.isObject(stored) && stored),
-      };
-      if (input.level == null) {
-        delete overrides[input.modelName];
-      } else {
-        overrides[input.modelName] = input.level;
-      }
-      return Result.succeed(overrides);
-    })
-    .pipe(Effect.asVoid);
+  const { key } = REASONING_LEVELS_KEY;
+  return globalState.modify([key], ({ [key]: stored }) => {
+    const overrides: Record<string, unknown> = {
+      ...(Predicate.isObject(stored) && stored),
+    };
+    if (input.level == null) {
+      delete overrides[input.modelName];
+    } else {
+      overrides[input.modelName] = input.level;
+    }
+    return Result.succeed([undefined, { [key]: overrides }] as const);
+  });
 }
 
 const buildSelectionItems = Effect.fn('buildModelSelectionItems')(function* (
@@ -138,7 +137,8 @@ const buildSelectionItems = Effect.fn('buildModelSelectionItems')(function* (
       usageRoute: option.usageRoute,
     };
 
-    items.push({ ...item, ...reasoningLevelData(decided) });
+    const reasoning = reasoningChoice(decided);
+    items.push(reasoning === undefined ? item : { ...item, reasoning });
   }
 
   return items.toSorted((a, b) => a.name.localeCompare(b.name));
@@ -152,26 +152,20 @@ const buildSelectionItems = Effect.fn('buildModelSelectionItems')(function* (
  * substitutes where the route cannot carry it. The row offers no choice
  * where the route carries one level or none.
  */
-function reasoningLevelData(
+function reasoningChoice(
   decided: Extract<ModelOption, { config: ModelConfig }>,
-): Pick<
-  ModelSelectionItem,
-  | 'supportsReasoningLevel'
-  | 'supportedReasoningLevels'
-  | 'defaultReasoningLevel'
-  | 'reasoningLevel'
-> {
+): ModelSelectionItem['reasoning'] {
   const { reasoning, savedEffort } = decided;
-  if (reasoning === undefined || reasoning.efforts.length <= 1) return {};
+  if (reasoning === undefined || reasoning.efforts.length <= 1)
+    return undefined;
   const sent = 'refused' in reasoning.sent ? undefined : reasoning.sent.effort;
   return {
-    supportsReasoningLevel: true,
-    supportedReasoningLevels: [...reasoning.efforts],
+    levels: [...reasoning.efforts],
     ...(!('refused' in reasoning.fallback) && {
-      defaultReasoningLevel: reasoning.fallback.effort,
+      default: reasoning.fallback.effort,
     }),
     ...(savedEffort !== undefined &&
       sent !== undefined &&
-      reasoning.efforts.includes(sent) && { reasoningLevel: sent }),
+      reasoning.efforts.includes(sent) && { saved: sent }),
   };
 }

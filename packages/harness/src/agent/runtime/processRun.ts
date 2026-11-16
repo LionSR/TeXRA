@@ -29,6 +29,7 @@ import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import {
   generateRunId,
   qualifyAggregateId,
+  runEndErrorMessage,
   RUN_OUTCOME,
   type ChildRunDelivery,
   type ProcessExit,
@@ -107,8 +108,16 @@ const runProcessChild = (
         ),
       );
       const { report, ...ending } = endingOf(runId, turn, exit, error);
-      return commitEnd(exit, { runId, outcome, ...ending }, () =>
-        Effect.succeed(report),
+      // A failure the end adds to the turn's own verdict (rows the store
+      // refused) is the delivery's too: the parent reads what the end says.
+      return commitEnd(exit, { runId, outcome, ...ending }, (end) =>
+        Effect.succeed(
+          report !== null &&
+            end.error !== undefined &&
+            ending.error === undefined
+            ? { ...report, message: runEndErrorMessage(end.error) }
+            : report,
+        ),
       );
     }),
   ).pipe(Effect.ensuring(Effect.sync(() => logger.close())));

@@ -6,6 +6,7 @@ import {
   formatResultCount,
   type MemoryViewItem,
   truncateSummary,
+  joinFacts,
 } from '@texra-ai/harness/schemas';
 import { memoryItemFacts } from '@ui/copy/memory';
 import { moreRowsText } from '@cli/tui/overflowText';
@@ -15,7 +16,7 @@ const MEMORY_DESCRIPTION_MAX = 72;
 
 export function cliMemoryItemDescription(item: MemoryViewItem): string {
   return truncateSummary(
-    memoryItemFacts(item).join(' · '),
+    joinFacts(memoryItemFacts(item)),
     MEMORY_DESCRIPTION_MAX,
   );
 }

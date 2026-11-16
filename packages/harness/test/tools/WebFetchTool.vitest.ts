@@ -8,6 +8,7 @@ import { afterAll, beforeAll, expect, vi } from 'vitest';
 
 import { fetch as undiciFetch } from 'undici';
 
+import { errorOf } from '@test/support/toolResultFields';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { SessionGraph } from '@test/support/testKernel';
 import { WebFetchTool } from '@tools/web/WebFetchTool';
@@ -62,7 +63,7 @@ layer(SessionGraph.hosted)('WebFetchTool', (it) => {
       );
 
       expect(result).toMatchObject({ status: 'error' });
-      expect(result.error).toMatch(/cannot fetch/i);
+      expect(errorOf(result)).toMatch(/cannot fetch/i);
     }),
   );
 
@@ -83,7 +84,7 @@ layer(SessionGraph.hosted)('WebFetchTool', (it) => {
       }).pipe(Effect.provide(nativeToolTestLayer()));
 
       expect(result).toMatchObject({ status: 'error' });
-      expect(result.error).toMatch(/cannot fetch/i);
+      expect(errorOf(result)).toMatch(/cannot fetch/i);
       expect(fetchStub).toHaveBeenCalledTimes(1);
     }),
   );
@@ -105,7 +106,7 @@ layer(SessionGraph.hosted)('WebFetchTool', (it) => {
         .pipe(Effect.provide(nativeToolTestLayer()));
 
       expect(result).toMatchObject({ status: 'error' });
-      expect(result.error).toMatch(/cannot fetch/i);
+      expect(errorOf(result)).toMatch(/cannot fetch/i);
     }).pipe(Effect.ensuring(Effect.sync(clearProxyEnv))),
   );
 

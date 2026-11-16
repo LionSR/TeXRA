@@ -44,7 +44,7 @@ export const FileActionSchema = Schema.Literals([
 export const HostCommandSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('openFile'),
-    path: Schema.String.check(Schema.isMinLength(1)),
+    path: Schema.NonEmptyString,
     line: Schema.optional(
       Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
     ),
@@ -80,7 +80,7 @@ export const HostCommandSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('useOwnApiKey'),
     ...runScoped,
-    requestId: Schema.String.check(Schema.isMinLength(1)),
+    requestId: Schema.NonEmptyString,
     credentialSwitch: CredentialSwitchSchema,
   }),
   Schema.Struct({ kind: Schema.Literal('latexdiff'), ...runScoped }),
@@ -155,8 +155,8 @@ export const HostCommandSchema = Schema.Union([
    *  follow-up's `media` then carries. */
   Schema.Struct({
     kind: Schema.Literal('savePastedImage'),
-    fileName: Schema.String.check(Schema.isMinLength(1)),
-    base64: Schema.String.check(Schema.isMinLength(1)),
+    fileName: Schema.NonEmptyString,
+    base64: Schema.NonEmptyString,
   }),
   /** The desktop editor pane's file I/O on the session's workspace: a
    *  directory's entries, a file's contents, or a write. */
@@ -184,7 +184,7 @@ export const HostCommandSchema = Schema.Union([
    *  is an approval's session bypass, sent with its `request.decide`. */
   Schema.Struct({
     kind: Schema.Literal('toolEdit'),
-    requestId: Schema.String.check(Schema.isMinLength(1)),
+    requestId: Schema.NonEmptyString,
     action: Schema.Literals([
       'approve',
       'openDiff',
@@ -200,9 +200,9 @@ export const HostCommandSchema = Schema.Union([
     kind: Schema.Literal('fileAction'),
     ...runScoped,
     action: FileActionSchema,
-    file: Schema.String.check(Schema.isMinLength(1)),
+    file: Schema.NonEmptyString,
     /** The workspace file the output is compared with or written into. */
-    base: Schema.String.check(Schema.isMinLength(1)),
+    base: Schema.NonEmptyString,
   }),
   // The New-task state's banners and onboarding cards (host-owned state,
   // HostSnapshot.banners and .onboarding).

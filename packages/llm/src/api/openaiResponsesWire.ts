@@ -29,7 +29,7 @@ const ReasoningTextSchema = Schema.Struct({
 const OutputItemSchema = Schema.Union([
   Schema.Struct({
     type: Schema.Literal('message'),
-    id: Schema.String.check(Schema.isMinLength(1)),
+    id: Schema.NonEmptyString,
     role: Schema.Literal('assistant'),
     status: ItemStatusSchema,
     phase: Schema.optional(
@@ -54,7 +54,7 @@ const OutputItemSchema = Schema.Union([
   }),
   Schema.Struct({
     type: Schema.Literal('reasoning'),
-    id: Schema.String.check(Schema.isMinLength(1)),
+    id: Schema.NonEmptyString,
     status: Schema.optional(ItemStatusSchema),
     encrypted_content: Schema.optional(Schema.NullOr(Schema.String)),
     // Zhipu reports no summary and one reasoning-text object, not a list.
@@ -78,10 +78,10 @@ const OutputItemSchema = Schema.Union([
   }),
   Schema.Struct({
     type: Schema.Literal('function_call'),
-    id: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+    id: Schema.optional(Schema.NonEmptyString),
     status: Schema.optional(ItemStatusSchema),
-    call_id: Schema.String.check(Schema.isMinLength(1)),
-    name: Schema.String.check(Schema.isMinLength(1)),
+    call_id: Schema.NonEmptyString,
+    name: Schema.NonEmptyString,
     arguments: Schema.String,
   }),
 ]);
@@ -90,9 +90,9 @@ export type OutputItem = typeof OutputItemSchema.Type;
 
 /** A response snapshot: identity, status, output items and usage. */
 export const ResponseSchema = Schema.Struct({
-  id: Schema.String.check(Schema.isMinLength(1)),
+  id: Schema.NonEmptyString,
   object: Schema.Literal('response'),
-  model: Schema.String.check(Schema.isMinLength(1)),
+  model: Schema.NonEmptyString,
   status: ResponsesStatusSchema,
   output: Schema.Array(OutputItemSchema),
   usage: Schema.optional(Schema.NullOr(ResponsesUsageSchema)),
@@ -133,7 +133,7 @@ export const ItemEventSchema = EventSchema.mapFields(
 /** An event carrying a text delta for one item's content. */
 export const DeltaEventSchema = EventSchema.mapFields(
   Struct.assign({
-    item_id: Schema.String.check(Schema.isMinLength(1)),
+    item_id: Schema.NonEmptyString,
     output_index: CountSchema,
     delta: Schema.String,
     logprobs: Schema.optional(Schema.NullOr(Schema.Array(Schema.Never))),
@@ -191,7 +191,7 @@ export const WebSocketErrorSchema = Schema.Union([
  * bytes are sent.
  */
 const UploadedFileSchema = Schema.Struct({
-  id: Schema.String.check(Schema.isMinLength(1)),
+  id: Schema.NonEmptyString,
   expires_at: Schema.optional(Schema.NullOr(CountSchema)),
 }).pipe(
   Schema.decodeTo(UploadedSchema, {

@@ -13,7 +13,7 @@ import {
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
 import { LaunchRefused } from '@common/errors/agentErrors';
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure, withLogChannel } from '@logger/effectLog';
 import { aggregateTarget, type SessionRow } from '@shared/schemas';
 import { Rejected } from '@shared/session/runtimeRequest';
 import { SessionLog } from '@shared/session/runHistory';
@@ -155,12 +155,7 @@ const presentLogged = (
   message: string,
 ): Effect.Effect<void> =>
   notice(host).pipe(
-    Effect.catch((failure) =>
-      Effect.logWarning(message).pipe(
-        Effect.annotateLogs({ data: failure.cause }),
-        withLogChannel(CHANNEL),
-      ),
-    ),
+    Effect.catch((failure) => logFailure(CHANNEL, message)(failure.cause)),
   );
 
 /** Notices shown on one host that is not a session's: a window presenting

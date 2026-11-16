@@ -368,8 +368,8 @@ dump of this instance's in-memory snapshot: the flush re-reads the file and
 applies only that one mutation, so an instance held open across an awaited
 operation (e.g. a network fetch) can't clobber keys a concurrent writer —
 another process, or another instance on the same file — persisted in the
-meantime. Flushes for a given file path are serialized through
-{@link writeLanes}, which orders this process's writers; across processes
+meantime. Flushes of a file are serialized through its write lane
+(`withFileWriteLane`), which this process's writers of it share; across processes
 the atomic rename is the only guarantee, so two hosts flushing the same file
 in the same instant can still lose one of the two mutations. Reads (`get`,
 `snapshot`, `keys`) follow the file: each compares its inode, mtime and

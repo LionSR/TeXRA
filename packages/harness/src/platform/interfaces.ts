@@ -36,7 +36,7 @@ export class AppState extends Context.Service<AppState, AppStateStore>()(
     return Layer.succeed(AppState)({
       get: (key) => store.get(key),
       update: (key, value) => store.update(key, value),
-      modify: (key, change) => store.modify(key, change),
+      modify: (keys, change) => store.modify(keys, change),
       changes: () => Stream.succeed(undefined),
     });
   }

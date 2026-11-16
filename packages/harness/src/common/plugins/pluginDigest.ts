@@ -14,6 +14,7 @@ import {
   Effect,
   FileSystem,
   Option,
+  Order,
   type PlatformError,
 } from 'effect';
 import { LRUCache } from 'lru-cache';
@@ -110,7 +111,7 @@ const pluginFiles = Effect.fn('pluginDigest.pluginFiles')(function* (
         }),
     ),
   );
-  return files.toSorted(([a], [b]) => Number(a > b) - Number(a < b));
+  return files.toSorted(([a], [b]) => Order.String(a, b));
 });
 
 /** A file a server names that lies outside the plugin: trusted by its

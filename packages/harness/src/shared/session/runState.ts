@@ -14,6 +14,7 @@ import { Result, Schema, Struct } from 'effect';
 import { type Continuation, type TurnResult } from '@texra-ai/llm';
 import {
   addUsage,
+  blocksCaller,
   CommitOrdinalSchema,
   NO_USAGE,
   type CommitOrdinal,
@@ -216,20 +217,30 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   hookOutcomes: {},
 });
 
-/** The `request.decided` rows that cancel `requestIds` of `runId` with
- *  `cause`: what a run's end writes for every request it leaves open, and
- *  a resume's activation for those a dead process left. */
+/** The `request.decided` rows that cancel, with `cause`, every request
+ *  `state` leaves open that kept its caller waiting: what a run's end
+ *  writes, so no surface keeps offering one nobody waits on, and a resume's
+ *  activation for those a dead process left. One that does not block its
+ *  caller (`blocksCaller`) keeps nothing waiting and stays open: its
+ *  plugin's answer resumes the run. */
 export const cancelRequestRows = (
   runId: RunId,
-  requestIds: readonly string[],
+  state: Pick<RunState, 'requests'> | null,
   cause: string,
 ): Extract<SessionRowDraft, { type: 'request.decided' }>[] =>
-  requestIds.map((requestId) => ({
-    type: 'request.decided' as const,
-    aggregateId: qualifyAggregateId('run', runId),
-    requestId,
-    decision: { action: 'cancel' as const, cause },
-  }));
+  Object.entries(state?.requests ?? {}).flatMap(
+    ([requestId, { decision, payload }]) =>
+      decision === null && blocksCaller(payload)
+        ? [
+            {
+              type: 'request.decided' as const,
+              aggregateId: qualifyAggregateId('run', runId),
+              requestId,
+              decision: { action: 'cancel' as const, cause },
+            },
+          ]
+        : [],
+  );
 
 /** Why a row cannot be applied; `applyRow` adds the row's commit. */
 export type RowRejection = Pick<RunHistoryInconsistent, 'reason' | 'detail'>;

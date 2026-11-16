@@ -1862,7 +1862,7 @@ const harnessCommands = builtinSlashCommands({
       );
     }),
   onModelAccessSelect: (selection) =>
-    selection.provider === 'kimi-code' && selection.state === 'on'
+    selection.provider === 'kimiCode' && selection.state === 'on'
       ? updateCliModelAccess(
           HARNESS_PLATFORM_SERVICES,
           HARNESS_CLI_CONTEXT,

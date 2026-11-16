@@ -14,12 +14,11 @@ import {
   Stream,
 } from 'effect';
 
-import { AgentCatalog, scopedFork } from '@texra-ai/harness/host';
+import { scopedFork } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   ensureError,
   toErrorMessage,
-  agentKeyOf,
   type FileLocation,
   type RunId,
 } from '@texra-ai/harness/schemas';
@@ -167,7 +166,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     ) {
       const scope = yield* Scope.Scope;
       const fork = yield* scopedFork<ProcessServices>();
-      const catalog = yield* AgentCatalog;
       const draftRequests = yield* HostDraftRequests.make;
       const contentProvider = new BundledViewContentProvider(
         context,
@@ -260,16 +258,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             ...parts,
             runSession,
             roots,
-            window: {
-              ...createAgentPresentationHost(
-                parts.snapshot,
-                globalState,
-                runtime,
-                roots,
-                scope,
-              ),
-              ...editor,
-            },
+            notices: createAgentPresentationHost(
+              globalState,
+              runtime,
+              roots,
+              scope,
+            ),
+            window: editor,
             runtime,
             extensionPath: context.extensionPath,
             extensionId: context.extension.id,
@@ -296,26 +291,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       yield* Deferred.succeed(built, view);
       yield* Effect.forkScoped(view.attention.follow(runSession));
       yield* view.followWorkspace();
-      // Entering State 1 selects the setup agent on the launcher; a
-      // snapshot already in State 1 leaves a user who switched agents alone.
-      // It never starts setup: the user launches it from the setup card.
-      yield* Effect.forkScoped(
-        gui.snapshot.changes.pipe(
-          Stream.map((snapshot) => snapshot.onboarding),
-          Stream.changes,
-          Stream.filter((state) => state === 'setup'),
-          Stream.runForEach(() =>
-            Effect.sync(() => {
-              // Resolve the registry key so the dropdown matches by value.
-              const entry = catalog.get('setup');
-              view.bridge.surfaceAction({
-                kind: 'launch',
-                patch: { agent: entry ? agentKeyOf(entry) : 'setup' },
-              });
-            }),
-          ),
-        ),
-      );
       yield* gui.snapshot.refresh;
       yield* Effect.logDebug('ProgressViewProvider initialized').pipe(
         withLogChannel(CHANNEL),

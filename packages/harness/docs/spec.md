@@ -365,7 +365,11 @@ also read by `applyRunRows`.
 - `run.activate` (folded: yes): One activation: the first launch or a resume.
 - `run.config` (folded: yes): What the run runs on: configuration, model,
   binding.
-- `run.end` (folded: no): The terminal fact: outcome, classified error, output.
+- `run.stop` (folded: yes): A stop asked of the run, and why: `user`, or
+  `released` by the call that awaited it.
+- `run.end` (folded: yes): The terminal fact: outcome, classified error,
+  output. The run state checks a stop and an end against an existing run and
+  changes nothing: nothing continues from either until the next open.
 - `run.removed` (folded: no): The deletion marker: last row of its aggregate, final.
 - `run.description` (folded: no): A title, by `model` or `user`.
 - `plugin.fact` (folded: no): A plugin's own kind; core never reads `value`.
@@ -756,7 +760,7 @@ run's next append, with nothing written
 (`agent/runtime/makeRunHistory.ts#notOwner`,
 `shared/session/runHistory.ts#runRefusal`). A tool call that meets a storage
 refusal fails the dispatch instead of settling
-(`agent/runtime/loop/toolUseDispatch.ts#findStorageRefusal`). A request on a
+(`agent/runtime/loop/toolUseDispatch.ts#readCause`). A request on a
 run a launch here holds that would need the run stopped first is refused as
 `RunActive` (`controllers/session/deletionCleanup.ts#deleteAdmittedRun`).
 
@@ -818,8 +822,10 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   (`agent/runtime/requests.ts#the session closed before it was decided`).
 - An interrupted asker writes nothing: the request a stopped or failed run
   leaves open is cancelled with the run's end, in the end's batch, so no
-  surface keeps offering it (`agent/storage/runLifecycle.ts#cancelledRequests`);
-  one a dead process left is the next resume's to cancel.
+  surface keeps offering it (`agent/storage/runLifecycle.ts#'The run ended.'`);
+  one a dead process left is the next resume's to cancel. Both cancel the
+  same requests, the open ones that block their caller
+  (`shared/session/runState.ts#cancelRequestRows`).
 - A request is a row, so it outlives its process. A resume cancels every open
   one that blocks its caller (section 7.2), and the call that asked asks again
   (`shared/session/inFlight.ts#resumedAttempt`). An open request that does not

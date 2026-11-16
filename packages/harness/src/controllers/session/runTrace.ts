@@ -9,7 +9,6 @@
 import { Effect, Scheduler, Stream, Struct, SubscriptionRef } from 'effect';
 
 import { runEventDraft } from '@agent/trace/TraceEmitter';
-import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { writeLogLine } from '@logger/logSink';
 import type { AgentEvent } from '@shared/session/agentEvent';
 import {
@@ -156,7 +155,7 @@ export function makeRunTrace({
         return refusal === undefined
           ? undefined
           : {
-              ...classifyAgentError(refusal),
+              kind: 'result-lost' as const,
               message: `Rows this run published were not written: ${refusal.message}`,
             };
       }),

@@ -60,7 +60,6 @@ import { TraceRowFieldsSchema } from './traceEvent';
 /** Per-aggregate append order; `run.start` is seq 1 of its run. Dense from
  *  1, assigned by the substrate's publisher and by nothing else. */
 const SeqSchema = Schema.Int.check(Schema.isGreaterThan(0));
-const NonEmpty = Schema.String.check(Schema.isMinLength(1));
 
 /** The session-wide insert ordinal a replay follows; zero is "before the
  *  first commit", the cursor an empty view starts from. Local: no row
@@ -150,8 +149,8 @@ const RunParentSchema = Schema.Struct({
    *  input; a background child's end is queued on it. */
   call: Schema.NullOr(
     Schema.Struct({
-      callId: NonEmpty,
-      card: NonEmpty,
+      callId: Schema.NonEmptyString,
+      card: Schema.NonEmptyString,
       awaited: Schema.Boolean,
     }),
   ),
@@ -222,8 +221,8 @@ const RunRemovedDraftSchema = RunRemovedEventSchema.mapFields(
  *  run's is `RunView.facts`; a plugin aggregate's is `SessionView.pluginFacts`,
  *  under its `parent` run (whose deletion collects it) or none. */
 export const PluginFactDraftSchema = durable('plugin.fact', {
-  plugin: Schema.String.check(Schema.isMinLength(1)),
-  kind: Schema.String.check(Schema.isMinLength(1)),
+  plugin: Schema.NonEmptyString,
+  kind: Schema.NonEmptyString,
   /** The arm's version `value` was written at: a plugin evolves its
    *  kinds without a core row version. */
   version: Schema.Int.check(Schema.isGreaterThan(0)),
@@ -258,8 +257,8 @@ const DisplayRowDraftSchema = Schema.Union([
    * The terminal fact: outcome, the classified error behind a failure, and
    * a tool-use run's reply (usage and output files have their own rows).
    * Written once per lifecycle, by the storage finalizer, after the run's
-   * last transcript row; the fold derives the terminal phase from it and
-   * from nothing else.
+   * last transcript row; the view reads the run's outcome from it and from
+   * nothing else.
    */
   durable('run.end', RunEndRowSchema.fields),
   /** A run's title, and who gave it: the model's summary, or the user's
@@ -276,20 +275,20 @@ const DisplayRowDraftSchema = Schema.Union([
    *  `followUpId` is the producer's delivery id or minted. Pending is
    *  queued without consumed. */
   durable('followup.queued', {
-    followUpId: Schema.String.check(Schema.isMinLength(1)),
+    followUpId: Schema.NonEmptyString,
     ...FollowUpRequestSchema.fields,
   }),
   /** The follow-up left the queue, in the batch of the rows that took it,
    *  and why (`disposition`: part of a turn's message, answered, applied,
    *  or dropped with its reason): never delivered twice. */
   durable('followup.consumed', {
-    followUpId: Schema.String.check(Schema.isMinLength(1)),
+    followUpId: Schema.NonEmptyString,
     disposition: FollowUpDispositionSchema,
   }),
   /** A run asking a person: what the UI shows, never host handles, and
    *  who answers it (`answeredBy`). Pending is opened without decided. */
   durable('request.opened', {
-    requestId: Schema.String.check(Schema.isMinLength(1)),
+    requestId: Schema.NonEmptyString,
     payload: RequestPayloadSchema,
     answeredBy: AnsweredBySchema,
   }),
@@ -300,7 +299,7 @@ const DisplayRowDraftSchema = Schema.Union([
    * alone, and an automatic close names its cause here.
    */
   durable('request.decided', {
-    requestId: Schema.String.check(Schema.isMinLength(1)),
+    requestId: Schema.NonEmptyString,
     decision: RequestDecisionSchema,
   }),
   durable('approval.policy', { snapshot: ApprovalPolicySnapshotSchema }),

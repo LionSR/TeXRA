@@ -26,12 +26,12 @@ import {
   RunIdSchema,
 } from '@texra-ai/harness/schemas';
 import * as resumeRunModule from '@agent/runtime/resumeRun';
-import { validationModelLayer } from '@cli/runtime/models/validationModel';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { Inbox } from '@agent/followUp/Inbox';
 import { SessionViewAccess } from '@shared/session/runHistory';
+import { outputOf } from '@test/support/toolResultFields';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
@@ -92,7 +92,7 @@ const BASH_PLATFORM_OPTIONS = {
 
 /** The run id a background launch reports in its output. */
 function launchedRunId(result: ToolResult): RunId | undefined {
-  const reported = /Run ID: (\S+)/.exec(String(result.output ?? ''))?.[1];
+  const reported = /Run ID: (\S+)/.exec(String(outputOf(result) ?? ''))?.[1];
   return reported === undefined
     ? undefined
     : Schema.decodeSync(RunIdSchema)(reported);
@@ -124,11 +124,9 @@ const sessionHandle = Effect.flatMap(TestSession, sessionHandleOf);
 
 // Live clock: the background runs settle on real turns.
 layer(
-  SessionGraph.with(
-    [],
-    validationModelLayer,
-    Layer.provideMerge(scripted.layer, nodeFileServices),
-  ).pipe(Layer.provideMerge(FakeHost.layer())),
+  SessionGraph.with({
+    platform: Layer.provideMerge(scripted.layer, nodeFileServices),
+  }).pipe(Layer.provideMerge(FakeHost.layer())),
   { excludeTestServices: true },
 )('BashTool', (it) => {
   afterEach(() => {
@@ -219,7 +217,7 @@ layer(
             ),
           );
 
-          const [head] = String(result.output ?? '').split('\n\n[... ');
+          const [head] = String(outputOf(result) ?? '').split('\n\n[... ');
           assert.equal(head, 'a'.repeat(3_999));
         }),
     );

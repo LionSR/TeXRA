@@ -52,21 +52,23 @@ function response(events: unknown[]): Response {
 describe('canonical Google Interactions protocol', () => {
   const fetchModel = vi.fn<typeof fetch>();
   const configuredModel = () =>
-    googleInteractionsModel(
-      {
-        protocol: 'google-interactions',
-        requestedModel: 'gemini-test',
-        deployment: {
-          endpoint: 'https://synthetic.invalid',
-          credentialScope: 'test-account',
+    Effect.runSync(
+      googleInteractionsModel(
+        {
+          protocol: 'google-interactions',
+          requestedModel: 'gemini-test',
+          deployment: {
+            endpoint: 'https://synthetic.invalid',
+            credentialScope: 'test-account',
+          },
+          defaults: {
+            maxOutputTokens: 2048,
+            store: true,
+            thinkingLevel: 'high',
+          },
         },
-        defaults: {
-          maxOutputTokens: 2048,
-          store: true,
-          thinkingLevel: 'high',
-        },
-      },
-      { apiKey: 'synthetic-key', fetch: fetchModel },
+        { apiKey: 'synthetic-key', fetch: fetchModel },
+      ),
     );
   /** The Request the model sent on fetch call `index`. */
   const sentRequest = (index: number): Request => {

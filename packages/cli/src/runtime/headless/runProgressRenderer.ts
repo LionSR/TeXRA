@@ -15,6 +15,7 @@ import {
   formatClippedList,
   formatCompactDuration,
   pluralize,
+  joinFacts,
 } from '@texra-ai/harness/schemas';
 import {
   formatLoopPositionLabel,
@@ -292,11 +293,8 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     if (toolCallCount && !nameOnlySubagents) {
       parts.push(`tools: ${toolCallCount}`);
     }
-    const state = parts.join(' · ');
-    return {
-      line: elapsed === undefined ? state : `${state} · ${elapsed}`,
-      state,
-    };
+    const state = joinFacts(parts);
+    return { line: joinFacts([state, elapsed]), state };
   }
 
   private descriptionColumnBudget(
@@ -308,11 +306,11 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     if (!this.ansi || columns == null) {
       return ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH;
     }
-    const lineWithoutDescription = [
+    const lineWithoutDescription = joinFacts([
       ...fixedParts,
       nameOnlySubagents,
-      ...(elapsed === undefined ? [] : [elapsed]),
-    ].join(' · ');
+      elapsed,
+    ]);
     return Math.min(
       ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH,
       Math.max(

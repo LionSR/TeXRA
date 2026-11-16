@@ -1,3 +1,4 @@
+import { joinFacts } from '@texra-ai/harness/schemas';
 import type { DiffLabel } from '@texra/hosts/uiHosts';
 import { formatLineChanges } from '@ui/copy/format';
 
@@ -10,10 +11,11 @@ export function toolEditDiffLabel(request: {
   readonly removedLines: number;
 }): DiffLabel {
   const { addedLines: added, removedLines: removed } = request;
-  const changeSuffix =
-    added + removed > 0 ? ` · ${formatLineChanges(added, removed)}` : '';
   return {
-    title: `Tool edit (${request.sourceTool}): ${request.relativePath}${changeSuffix}`,
+    title: joinFacts([
+      `Tool edit (${request.sourceTool}): ${request.relativePath}`,
+      added + removed > 0 && formatLineChanges(added, removed),
+    ]),
     displayPath: request.relativePath,
   };
 }

@@ -402,8 +402,8 @@ that cannot prompt.
 
 `retry` has no tool behind it. The model invoker opens one on a
 user-retryable provider failure, so the flag cannot remove it. The session
-decides it in the batch that opens it (`decideRetryApproval`, read off
-`session.approvalPolicy` and this same flag): a host that cannot answer gets
+decides it in the batch that opens it (`decideApproval` with a `retry` ask,
+read off `session.approvalPolicy` and this same flag): a host that cannot answer gets
 the denial as the run's `request.decided` row, with no listener of its own.
 The `@texra-ai/harness` package's sessions rely on that, and the headless CLI
 answers what its policy leaves open from a terminal prompt

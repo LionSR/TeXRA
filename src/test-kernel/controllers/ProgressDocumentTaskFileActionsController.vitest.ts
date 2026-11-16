@@ -44,7 +44,7 @@ function createDeps(
     ],
     host: {
       openDiff: () => Effect.void,
-      confirmAccept: () => Effect.succeed(true),
+      confirm: () => Effect.succeed(true),
       openDirectory: () => Effect.void,
       showInfo: () => Effect.void,
       ...overrides,
@@ -65,8 +65,7 @@ layer(SessionGraph.hosted)(
           const followUps: string[] = [];
           const confirmations = [false, true];
           const deps = createDeps({
-            confirmAccept: () =>
-              Effect.sync(() => confirmations.shift() ?? false),
+            confirm: () => Effect.sync(() => confirmations.shift() ?? false),
           });
           deps.runs.followUpLauncher = (_run, text) =>
             Effect.sync(() => {
@@ -95,12 +94,11 @@ layer(SessionGraph.hosted)(
                 remove: () => Effect.void,
                 // The model's copy the revision kept, and the file the user
                 // changed before accepting.
-                readFileString: (path) =>
+                readFile: () =>
                   Effect.succeed(
-                    /[/\\]model[/\\]r0[/\\]/.test(path)
-                      ? 'original model output\n'
-                      : 'user edited output\n',
+                    new TextEncoder().encode('original model output\n'),
                   ),
+                readFileString: () => Effect.succeed('user edited output\n'),
               }),
               AppSignals.layer,
             ),

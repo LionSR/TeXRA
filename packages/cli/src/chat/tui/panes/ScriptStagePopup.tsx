@@ -7,7 +7,7 @@
 // call's agent, which the script sees as `Skipped`.
 
 // Third-party imports
-import { Predicate } from 'effect';
+import { joinFacts } from '@texra-ai/harness/schemas';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
 // Local imports - TUI primitives
@@ -17,14 +17,15 @@ import {
 } from '@texra-ai/harness/transcript';
 import { isCtrlInput, isEscapeInput } from '@cli/tui/inputKeys';
 import { ReaderPanel, readerLayout } from '@cli/tui/ui/BorderedPanel';
-import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
-import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import {
-  HOLLOW_DOT,
-  REUSED,
-  SEPARATOR,
-  STATUS_DIAMOND,
-} from '@cli/tui/ui/glyphs';
+  CLOSE_HINT,
+  KeyHints,
+  LEFT_RIGHT_KEYS,
+  UP_DOWN_KEYS,
+  type KeyHint,
+} from '@cli/tui/ui/KeyHints';
+import { Select, type SelectItem } from '@cli/tui/ui/Select';
+import { HOLLOW_DOT, REUSED, STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
 import { fillRows, safeTerminalText } from '@cli/runtime/terminal/terminalText';
@@ -81,7 +82,10 @@ function CallRow({
         </Text>
       </Box>
       <RowSegment flexShrink={0}>
-        {`${safeTerminalText(call.label)} · ${SCRIPT_CALL_STATUS_LABEL[call.status]}`}
+        {joinFacts([
+          safeTerminalText(call.label),
+          SCRIPT_CALL_STATUS_LABEL[call.status],
+        ])}
       </RowSegment>
       {last ? (
         <RowSegment
@@ -167,8 +171,8 @@ export function ScriptStagePopup({
   if (call?.askingRunId !== undefined) enterAction = 'review';
   else if (call?.talkable === true) enterAction = TALK_TO_AGENT.toLowerCase();
   const hints: KeyHint[] = [
-    ...(stages.length > 1 ? [{ key: '←/→', action: 'script' }] : []),
-    { key: '↑/↓', action: 'select' },
+    ...(stages.length > 1 ? [{ key: LEFT_RIGHT_KEYS, action: 'script' }] : []),
+    { key: UP_DOWN_KEYS, action: 'select' },
     ...(target !== undefined
       ? [
           {
@@ -179,15 +183,13 @@ export function ScriptStagePopup({
       : []),
     ...(stoppable ? [{ key: 's', action: 'stop agent' }] : []),
     { key: 'Ctrl-T', action: 'transcript' },
-    { key: 'Esc', action: 'close' },
+    CLOSE_HINT,
   ];
-  const title = [
+  const title = joinFacts([
     'Script',
-    stages.length > 1 ? `${stageIndex + 1}/${stages.length}` : undefined,
+    stages.length > 1 && `${stageIndex + 1}/${stages.length}`,
     (stage && scriptStageSummary(stage)) || `${stage?.calls.length ?? 0} calls`,
-  ]
-    .filter(Predicate.isNotUndefined)
-    .join(SEPARATOR);
+  ]);
   const layout = readerLayout({
     availableRows,
     extraRows: POPUP_EXTRA_ROWS,
@@ -271,7 +273,7 @@ export function ScriptStagePopup({
         )}
         <Box height={1} overflowY="hidden">
           <Text dimColor wrap="truncate-end">
-            {safeTerminalText(call?.facts.join(SEPARATOR) ?? '')}
+            {safeTerminalText(joinFacts(call?.facts ?? []))}
           </Text>
         </Box>
       </Box>

@@ -18,9 +18,7 @@ type UpdateCheckHost = 'cli' | 'desktop';
 /** Persisted update notification state, isolated by host and configured storage root. */
 const UpdateCheckRecordSchema = Schema.Struct({
   lastCheckedAt: Schema.NullOr(NonNegativeIntSchema),
-  lastNotifiedVersion: Schema.NullOr(
-    Schema.String.check(Schema.isMinLength(1)),
-  ),
+  lastNotifiedVersion: Schema.NullOr(Schema.NonEmptyString),
 });
 type UpdateCheckRecord = typeof UpdateCheckRecordSchema.Type;
 
@@ -66,17 +64,23 @@ export const recordUpdateCheck = (
   host: UpdateCheckHost,
   change: Partial<UpdateCheckRecord>,
 ): Effect.Effect<void, Error, GlobalValues> =>
-  Effect.flatMap(GlobalValues, (values) =>
-    values.modify(UPDATE_CHECKS, host, (current) =>
+  Effect.flatMap(GlobalValues, (values) => {
+    const key: string = host;
+    return values.modify(UPDATE_CHECKS, [key], (current) =>
       Result.succeed([
         undefined,
         {
-          ...(current ?? { lastCheckedAt: null, lastNotifiedVersion: null }),
-          ...change,
+          [key]: {
+            ...(current[key] ?? {
+              lastCheckedAt: null,
+              lastNotifiedVersion: null,
+            }),
+            ...change,
+          },
         },
       ] as const),
-    ),
-  );
+    );
+  });
 
 /** Result of consulting an update source. */
 export interface UpdateCheckFetchResult {

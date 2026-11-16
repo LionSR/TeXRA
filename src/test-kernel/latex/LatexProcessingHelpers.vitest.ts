@@ -7,10 +7,6 @@ import { describe, expect } from 'vitest';
 
 import { RunFileService } from '@texra-ai/harness/plugins';
 import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@texra-ai/harness/node';
-import {
   createWorkspaceLocation,
   sessionFsLayer,
 } from '@texra-ai/harness/host';
@@ -63,8 +59,7 @@ describe('latexMedia figure extraction', () => {
       figurePath,
       host: {
         workspaceRoot: workspaceDir,
-        storagePath: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
-        globalStoragePath: resolveGlobalStoragePath(storageRoot),
+        storageRoot,
       },
     };
   }

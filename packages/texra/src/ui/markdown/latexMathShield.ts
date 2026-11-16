@@ -12,7 +12,8 @@ import {
 import {
   MATH_SPAN_PATTERNS,
   protectPatternsInto,
-  restorePlaceholders,
+  holdPlaceholder,
+  placeholderRestorer,
   selectPlaceholderTag,
 } from './latexPlaceholders';
 
@@ -106,8 +107,7 @@ export function protectRenderInlineDollarSpans(
     }
 
     pieces.push(content.slice(copiedUntil, index));
-    const itemIndex = items.push(content.slice(index, closer + 1)) - 1;
-    pieces.push(`@@${tag}-${itemIndex}@@`);
+    pieces.push(holdPlaceholder(items, tag, content.slice(index, closer + 1)));
     copiedUntil = closer + 1;
     matched = true;
     index = closer + 1;
@@ -154,11 +154,7 @@ export function protectLatexMathSpansWithEnvironment(
   const final = protectInlineDollars
     ? protectInlineDollars(patternProtected, selectedTag, items)
     : patternProtected;
-  const placeholder = new RegExp(`@@${selectedTag}-(\\d+)@@`, 'g');
-  return {
-    content: final,
-    restore: (value) => restorePlaceholders(value, placeholder, items),
-  };
+  return { content: final, restore: placeholderRestorer(selectedTag, items) };
 }
 
 let normalizeEnvironmentProbe: BegEndEnvironmentProbe | undefined;

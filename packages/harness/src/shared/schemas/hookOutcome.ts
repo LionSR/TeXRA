@@ -2,7 +2,7 @@
  * The payload of a run history's `hook.outcome` arm (`sessionEvent.ts`): what
  * one invocation of an installed plugin's Claude Code hook did, recorded
  * through the run's one writer so a resume reuses it instead of running the
- * hook again (`2026-09-28-code-plugins-hooks-v1.md`).
+ * hook again.
  */
 import { Schema } from 'effect';
 import { NonNegativeIntSchema } from './nonNegativeInt';
@@ -37,12 +37,12 @@ export const HookOutcomePayloadSchema = Schema.Struct({
   /** The site the hook ran at (`PreToolUse:<call id>`, `Stop:<turn>`, …):
    *  every hook of one point commits in one batch, and a recorded point is
    *  never run again. */
-  point: Schema.String.check(Schema.isMinLength(1)),
+  point: Schema.NonEmptyString,
   event: HookEventSchema,
   /** The contributing installed plugin's id (`plugin:<name>`). */
-  plugin: Schema.String.check(Schema.isMinLength(1)),
+  plugin: Schema.NonEmptyString,
   /** The handler's position in the plugin's hook configuration. */
-  hook: Schema.String.check(Schema.isMinLength(1)),
+  hook: Schema.NonEmptyString,
   durationMs: NonNegativeIntSchema,
   status: HookStatusSchema,
   exitCode: Schema.NullOr(Schema.Int),

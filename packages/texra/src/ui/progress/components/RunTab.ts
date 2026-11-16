@@ -2,7 +2,12 @@
 // row actions (expand, and, where the list is `removable`, delete). An
 // interrupted row says so; its one Resume is on the task's ended line, which
 // the row opens. `run-tabs` lays the rows out.
-import { getBasename, formatResultCount } from '@texra-ai/harness/schemas';
+import { String as Str } from 'effect';
+import {
+  getBasename,
+  formatResultCount,
+  joinFacts,
+} from '@texra-ai/harness/schemas';
 import {
   LitElement,
   html,
@@ -39,6 +44,7 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import {
   NESTED_AGENT,
   nestedRollupLabel,
+  runNoun,
   TASK_ACTIONS,
 } from '@ui/copy/nestedRuns';
 import { formatRelativeTime } from '@ui/copy/format';
@@ -52,15 +58,13 @@ function buildTooltip(run: RunView, nowMs: number): string {
   const worktreeDisplay = worktree
     ? `Worktree: ${getBasename(worktree.workingDirectory)}`
     : undefined;
-  const mainLine = [
+  const mainLine = joinFacts([
     run.label,
     `Status: ${run.approval === 'none' ? runStatus(run).word : 'Needs approval'}`,
     run.rollup.total > 0 && nestedRollupLabel(run.rollup),
     modelDisplay && `Model: ${modelDisplay}`,
     worktreeDisplay,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  ]);
   const lastSeen = formatRelativeTime(run.lastTimestamp, nowMs);
   // No raw id: two parallel agents differ by title, model and time, and
   // the id is for bug reports ("Copy diagnostics").
@@ -162,8 +166,7 @@ export class RunTab extends LitElement {
       : status.word;
     const runTitle = run.title;
     const tooltip = buildTooltip(run, this.ticker.now);
-    const deleteLabel =
-      run.parentId === null ? TASK_ACTIONS.delete : TASK_ACTIONS.deleteAgent;
+    const noun = runNoun(run);
     const childCountLabel = formatResultCount(
       run.rollup.total,
       NESTED_AGENT.countNoun,
@@ -333,14 +336,11 @@ export class RunTab extends LitElement {
                   id: 'run-tab-actions',
                   icon: 'ellipsis',
                   slot: 'trigger',
-                  label: `Actions for ${run.identity.kind === 'agent' ? 'agent' : 'task'} ${runTitle}`,
-                  tooltip:
-                    run.identity.kind === 'agent'
-                      ? 'Agent actions'
-                      : 'Task actions',
+                  label: `Actions for ${noun} ${runTitle}`,
+                  tooltip: `${Str.capitalize(noun)} actions`,
                 })}
                 ${run.actions.includes('rename') ? html`<wa-dropdown-item value="rename">${waIcon('pencil', { slot: 'icon' })}${TASK_ACTIONS.rename}</wa-dropdown-item>` : nothing}
-                ${this.removable ? html`<wa-dropdown-item class="tab-remove" value="delete" variant="danger">${waIcon('trash', { slot: 'icon' })}${deleteLabel}</wa-dropdown-item>` : nothing}
+                ${this.removable ? html`<wa-dropdown-item class="tab-remove" value="delete" variant="danger">${waIcon('trash', { slot: 'icon' })}${TASK_ACTIONS.delete(run)}</wa-dropdown-item>` : nothing}
               </wa-dropdown>`
             : nothing
         }

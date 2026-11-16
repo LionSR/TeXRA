@@ -6,7 +6,7 @@ import { describe, expect } from 'vitest';
 import { GlobalValues } from '@texra-ai/harness/host';
 import { globalDatabaseLayer } from '@controllers/session/databaseLayer';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { globalValuesOver } from '@test/support/setupPlatform';
+import { globalValuesOver } from '@test/support/fsTestUtils';
 import {
   claimServiceRecord,
   readServiceRecord,

@@ -17,14 +17,14 @@ export const DESKTOP_DIFF_COMMANDS = {
 } as const;
 
 export const DesktopShowDiffMessageSchema = Schema.Struct({
-  session: Schema.String.check(Schema.isMinLength(1)),
+  session: Schema.NonEmptyString,
   command: Schema.Literal(DESKTOP_DIFF_COMMANDS.SHOW_DIFF),
   /**
    * Names the diff this message opens, so the `desktop:closeDiff` below can
    * close that diff and no other. A tool-edit preview uses its request id;
    * every other producer gets one minted by `desktopDiffHost.openDiff`.
    */
-  previewId: Schema.String.check(Schema.isMinLength(1)),
+  previewId: Schema.NonEmptyString,
   title: Schema.String,
   // The one path the Review workbench displays. Always supplied by the
   // producer; no fallback reconstruction in the renderer.
@@ -48,7 +48,7 @@ export type DesktopShowDiffMessage =
   (typeof DesktopShowDiffMessageSchema)['Type'];
 
 export const DesktopCloseDiffMessageSchema = Schema.Struct({
-  session: Schema.String.check(Schema.isMinLength(1)),
+  session: Schema.NonEmptyString,
   command: Schema.Literal(DESKTOP_DIFF_COMMANDS.CLOSE_DIFF),
   /**
    * The `previewId` of the diff the sender opened. The Review pane keys its
@@ -56,7 +56,7 @@ export const DesktopCloseDiffMessageSchema = Schema.Struct({
    * second pending edit of the same file stays), and the Review tab goes
    * only once that empties the pane.
    */
-  previewId: Schema.String.check(Schema.isMinLength(1)),
+  previewId: Schema.NonEmptyString,
 });
 
 export type DesktopCloseDiffMessage =

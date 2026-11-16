@@ -1,18 +1,12 @@
 // Third-party imports
-import { Clock, Effect, Schema } from 'effect';
+import { Clock, Effect, Number as Num, Schema } from 'effect';
 import OpenAI from 'openai';
 
 // Local imports - canonical model contract
-import {
-  answeredCalls,
-  callsAnsweredBy,
-  ContinuationSchema,
-  replayableHistory,
-  systemUpdateText,
-} from '../message.js';
+import { replayableHistory, systemUpdateText } from '../message.js';
 import { sameModelOrigin } from '../protocol.js';
 import { ModelError } from '../errors.js';
-import { prefixFingerprint } from './prefixFingerprint.js';
+import { anchoredPrefix, coveredPrefix } from './continuation.js';
 import { onOpenAiEndpoint } from './responsesConfiguration.js';
 import {
   responsesContent,
@@ -38,44 +32,40 @@ const documentAccess = Effect.fn('llm.responses.documentAccess')(function* (
 });
 
 /**
- * The items one admitted message lowers to: one per tool result, one per
- * user message, one per assistant content part. A continuation's covered
- * prefix is counted with this instead of lowered, so the bytes it covers
- * are never materialized again; a count that drifts from the lowering fails
- * the continuation's `coveredItems` check loudly.
+ * How many items the messages lower to: one per tool result, one per user
+ * message, one per assistant content part. A continuation's covered prefix is
+ * counted with this instead of lowered, so the bytes it covers are never
+ * materialized again; a count that drifts from the lowering fails the
+ * continuation's `coveredItems` check loudly.
  */
-const loweredItemCount = (
-  message: Extract<
-    ResolvedTurn,
-    { protocol: 'openai-responses' }
-  >['messages'][number],
-): number => {
-  if (message.role === 'tool') return message.results.length;
-  return message.role === 'assistant' ? message.content.length : 1;
-};
+const coveredItemCount = (
+  prefix: Extract<ResolvedTurn, { protocol: 'openai-responses' }>['messages'],
+): number =>
+  Num.sumAll(
+    prefix.map((message) => {
+      if (message.role === 'tool') return message.results.length;
+      return message.role === 'assistant' ? message.content.length : 1;
+    }),
+  );
 
 /**
- * The messages as Responses input items. Each tool result names its call
- * through `answered`, built over the whole history, so a continuation's
- * suffix finds the calls its covered prefix made.
+ * The turn's messages from entry `from` on as Responses input items. Each
+ * tool result names its call, which may be one a continuation's covered
+ * prefix made.
  */
 const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
   turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
-  messages: Extract<ResolvedTurn, { protocol: 'openai-responses' }>['messages'],
+  from: number,
   config: OpenAIResponsesConfiguration,
   documents: DocumentAccess,
-  answered: ReturnType<typeof answeredCalls>,
 ) {
   const namespace = toolNamespaceOf(config);
   const content = (part: Parameters<typeof responsesContent>[0]) =>
     responsesContent(part, documents);
   const input: OpenAI.Responses.ResponseInput = [];
-  for (const message of replayableHistory(messages, turn)) {
+  for (const message of yield* replayableHistory(turn.messages, turn, from)) {
     if (message.role === 'tool') {
-      for (const { call, result } of yield* callsAnsweredBy(
-        answered,
-        message,
-      )) {
+      for (const { call, result } of message.answered) {
         // A result that carries only text keeps the plain string output
         // the API has always taken. Attachments keep `result.content` order
         // so a label still sits next to the file it names.
@@ -233,13 +223,11 @@ const RESPONSES_PREFIX_DOMAIN = 'texra-openai-responses-prefix-v1';
 
 /**
  * The completed turn with the stored anchor its next round chains on, if the
- * route stores and the turn ended chainable. The configuration was parsed at
- * bind and the result by the turn assembly, so neither is parsed again.
+ * route stores and the turn ended chainable.
  */
 export const withResponsesContinuation = Effect.fn(
   'llm.responses.continuation',
 )(function* (
-  config: OpenAIResponsesConfiguration,
   turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
   result: TurnResult,
 ): Effect.fn.Return<TurnResult, ModelError> {
@@ -247,43 +235,33 @@ export const withResponsesContinuation = Effect.fn(
     return yield* new ModelError({
       kind: 'invalid-request',
       message:
-        'Continuation requires the original admitted input and matching completed output.',
+        'Continuation requires the input the request sent and matching completed output.',
     });
   // HTTP stored-response chaining is separate from temporary background retrieval.
   // https://developers.openai.com/api/docs/guides/conversation-state
   if (
     !turn.controls.store ||
+    result.providerResponseId === null ||
     (result.finishReason !== 'stop' && result.finishReason !== 'tool-calls')
   )
     return result;
-  const prefix: ResolvedTurn['messages'] = [
-    ...turn.messages,
-    {
-      role: 'assistant',
-      origin: result.requestedOrigin,
-      content: result.content,
-    },
-  ];
-  const continuation = Schema.decodeUnknownSync(ContinuationSchema)({
-    origin: result.requestedOrigin,
-    coveredMessages: prefix.length,
-    prefixFingerprint: prefixFingerprint(
-      RESPONSES_PREFIX_DOMAIN,
-      result.requestedOrigin,
-      turn.system,
-      prefix,
-    ),
+  const origin = { ...result.requestedOrigin, protocol: turn.protocol };
+  const { prefix, ...covered } = anchoredPrefix(
+    RESPONSES_PREFIX_DOMAIN,
+    origin,
+    turn,
+    result.content,
+  );
+  const continuation: TurnResult['continuation'] = {
+    origin,
+    ...covered,
     anchor: {
-      kind: 'stored',
       responseId: result.providerResponseId,
       // Counted, not lowered: the covered prefix is never materialized
       // again, and the same count validates the continuation later.
-      coveredItems: prefix.reduce(
-        (count, message) => count + loweredItemCount(message),
-        0,
-      ),
+      coveredItems: coveredItemCount(prefix),
     },
-  });
+  };
   return { ...result, continuation };
 });
 
@@ -296,41 +274,31 @@ export const responseInput = Effect.fn('llm.responses.input')(function* (
   const continuation = turn.continuation;
   if (!continuation)
     return {
-      input: yield* lowerMessages(
-        turn,
-        turn.messages,
-        config,
-        documents,
-        answeredCalls(turn.messages),
-      ),
+      input: yield* lowerMessages(turn, 0, config, documents),
     };
-  const prefix = turn.messages.slice(0, continuation.coveredMessages);
+  const prefix = coveredPrefix(
+    RESPONSES_PREFIX_DOMAIN,
+    continuation.origin,
+    turn,
+    continuation,
+  );
   if (
+    prefix === undefined ||
     !sameModelOrigin(turn, continuation.origin) ||
-    continuation.coveredMessages > turn.messages.length ||
-    continuation.anchor.coveredItems !==
-      prefix.reduce((count, message) => count + loweredItemCount(message), 0) ||
-    continuation.prefixFingerprint !==
-      prefixFingerprint(
-        RESPONSES_PREFIX_DOMAIN,
-        continuation.origin,
-        turn.system,
-        prefix,
-      )
+    continuation.anchor.coveredItems !== coveredItemCount(prefix)
   )
     return yield* new ModelError({
       kind: 'invalid-request',
-      message: 'Continuation does not cover the exact admitted prefix.',
+      message: 'Continuation does not cover the exact prefix the request sent.',
     });
   // The stored response already holds the covered prefix, so only the
   // uncovered suffix is lowered: a covered document's bytes are never
   // materialized again. Its results still name the calls the prefix made.
   const input = yield* lowerMessages(
     turn,
-    turn.messages.slice(continuation.coveredMessages),
+    continuation.coveredMessages,
     config,
     documents,
-    answeredCalls(turn.messages),
   );
   return {
     input,

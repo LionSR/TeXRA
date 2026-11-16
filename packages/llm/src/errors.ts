@@ -14,7 +14,7 @@ export const RemoteOperationSchema = Schema.Struct({
       protocol: Schema.Literals(['openai-responses', 'google-interactions']),
     }),
   ),
-  providerResponseId: Schema.String.check(Schema.isMinLength(1)),
+  providerResponseId: Schema.NonEmptyString,
 });
 /** {@link RemoteOperationSchema}'s value. */
 export type RemoteOperation = typeof RemoteOperationSchema.Type;
@@ -25,7 +25,7 @@ export type RemoteOperation = typeof RemoteOperationSchema.Type;
  * account the plan bills; a route names its plan as `plan`, so it bills
  * `plan ?? 'api-key'`. A `session` plan is the `plan` of a `session` route:
  * it signs in with an OAuth session and renews its token once on a 401; a
- * used-up quota asks before moving onto an API key, because the move starts
+ * used-up quota asks before switching to an API key, because the switch starts
  * spending API credit. A `key` plan is the `plan` of an `api-key` route on a
  * provider console key (`null` for a key paid per token); a used-up quota
  * falls back to the model's own key without asking. Hosts store these
@@ -199,19 +199,18 @@ export const fillModelError = (
     ),
   });
 
+/** The message of a thrown value. */
+export const toErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
 /**
- * Every provider's failure mapping treats HTTP 401/403 (or the equivalent
- * error code carried in a rejection body) as `authentication` and anything
- * else the provider rejected as `provider-rejection`. Pass every status-like
- * value a given failure carries; only the numbers `401`/`403` match, so a
- * status carried as a string never does.
+ * Every provider's failure mapping treats HTTP 401/403 as `authentication`
+ * and anything else the provider rejected as `provider-rejection`.
  */
 export const authOrRejectionKind = (
-  ...statuses: ReadonlyArray<number | string | undefined>
+  status: number | undefined,
 ): 'authentication' | 'provider-rejection' =>
-  statuses.some((status) => status === 401 || status === 403)
-    ? 'authentication'
-    : 'provider-rejection';
+  status === 401 || status === 403 ? 'authentication' : 'provider-rejection';
 
 /**
  * The delay one response asks the caller to wait, in milliseconds:

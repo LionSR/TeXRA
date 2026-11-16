@@ -50,12 +50,8 @@ interface ServicePaths {
 const SOCKET_NAME = /^serve-(\d+)\.sock$/;
 const socketName = (pid: number) => `serve-${pid}.sock`;
 
-/** The subcommand that runs the service, and the headless bundle a GUI
- *  host runs it from under its resources or extension root. */
+/** The subcommand that runs the service. */
 export const SERVICE_SUBCOMMAND = 'serve';
-export function serviceBundlePath(root: string): string {
-  return path.join(root, 'serve', 'texra-serve.mjs');
-}
 
 /** The service files of `storageRoot` (`~/.texra` in production). */
 export function servicePaths(storageRoot: string): ServicePaths {
@@ -193,10 +189,15 @@ export const claimServiceRecord = Effect.fn('claimServiceRecord')(function* <
     const held = yield* values.get(TEXRA_SERVICE, CURRENT);
     const live = held === undefined ? null : yield* probe(held);
     if (live !== null) return live;
-    const claimed = yield* values.modify(TEXRA_SERVICE, CURRENT, (current) =>
-      Result.succeed(
-        sameService(current, held) ? ([true, record] as const) : [false],
-      ),
+    const claimed = yield* values.modify(
+      TEXRA_SERVICE,
+      [CURRENT],
+      ({ current }) =>
+        Result.succeed(
+          sameService(current, held)
+            ? ([true, { current: record }] as const)
+            : [false],
+        ),
     );
     if (claimed) return null;
   }
@@ -213,10 +214,10 @@ export const releaseServiceRecord: (
   Effect.fn('releaseServiceRecord')(
     function* (paths: ServicePaths, record: ServiceRecord) {
       const values = yield* GlobalValues;
-      yield* values.modify(TEXRA_SERVICE, CURRENT, (current) =>
+      yield* values.modify(TEXRA_SERVICE, [CURRENT], ({ current }) =>
         Result.succeed(
           sameService(current, record)
-            ? ([undefined, undefined] as const)
+            ? ([undefined, { current: undefined }] as const)
             : [undefined],
         ),
       );

@@ -3,9 +3,10 @@
 // an installed plugin on or off; switching an untrusted plugin on shows what
 // it declares and asks first. MCP servers are listed read-only.
 
+import { joinFacts } from '@texra-ai/harness/schemas';
 import { Box, Text } from 'ink';
 import { useState } from 'react';
-import { Effect, Predicate } from 'effect';
+import { Effect } from 'effect';
 
 import {
   InstalledPlugins,
@@ -34,7 +35,6 @@ import {
 } from '@ui/copy/plugins';
 
 import { AsyncListForm } from './_shared/ListForm';
-import { SEPARATOR } from '@cli/tui/ui/glyphs';
 
 interface PluginsListFormProps {
   readonly availableRows?: number;
@@ -55,15 +55,13 @@ const TRUST = 'trust';
 const DECLINE = 'decline';
 
 function rowDescription(row: PluginRow): string {
-  return [
+  return joinFacts([
     pluginRowState(row),
     pluginRowSummary(row),
     pluginRowTrust(row),
     pluginRowProblem(row),
     pluginRowUsedBy(row),
-  ]
-    .filter(Predicate.isNotNull)
-    .join(SEPARATOR);
+  ]);
 }
 
 export function PluginsListForm(

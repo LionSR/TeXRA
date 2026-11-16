@@ -78,10 +78,10 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.mapFields(
            *  is that script, and its `agent` calls propose themselves. */
           Schema.Struct({
             kind: Schema.Literal('background'),
-            code: Schema.String.check(Schema.isMinLength(1)),
-            title: Schema.String.check(Schema.isMinLength(1)),
+            code: Schema.NonEmptyString,
+            title: Schema.NonEmptyString,
             /** The tools the run offers the script, by name. */
-            tools: Schema.Array(Schema.String.check(Schema.isMinLength(1))),
+            tools: Schema.Array(Schema.NonEmptyString),
             /** The script's wall-clock limit, when it set one. */
             timeoutMs: Schema.optional(
               Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
@@ -93,7 +93,7 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.mapFields(
            *  its tools, and its `agent` calls were approved with its launch. */
           Schema.Struct({
             kind: Schema.Literal('program'),
-            name: Schema.String.check(Schema.isMinLength(1)),
+            name: Schema.NonEmptyString,
             args: Schema.Record(Schema.String, JsonValueSchema),
           }),
         ]),

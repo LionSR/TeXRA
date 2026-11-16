@@ -91,7 +91,7 @@ import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { runStart } from '@test/support/sessionRows';
 import { readStoreSnapshot } from '@test/support/storeFaults';
 import { storePluginsLayer } from '@test/support/texraApp';
-import { REPO_ROOT } from '@test/support/repoScan';
+import { REPO_ROOT } from '@test/support/repoRoot';
 import {
   EXTERNAL_INQUIRY_THREAD_KIND,
   inquiryThreadFact,
@@ -190,7 +190,7 @@ const rowsOf = (
 
 const runStartRow = runStart(RUN);
 
-/** The loop parked on the request below: the phase the fold reads. */
+/** The loop blocked on the request below: the phase the fold reads. */
 const waiting: SessionRowDraft = {
   type: 'run.position',
   aggregateId: qualifyAggregateId('run', RUN),
@@ -433,7 +433,7 @@ describe('session events and view', () => {
   it.effect('runs no job that reached the publisher after it closed', () =>
     Effect.gen(function* () {
       // The step budget decides where the scheduler first takes the
-      // publishing fiber off: over these budgets, one parks it between the
+      // publishing fiber off: over these budgets, one suspends it between the
       // publisher's closed check and its transaction, where the close lands.
       for (let budget = 2; budget < 80; budget++) {
         const ranAfterClose = yield* Effect.gen(function* () {
@@ -466,8 +466,10 @@ describe('session events and view', () => {
  * holds ends.
  */
 describe('Sessions owner', () => {
-  // A missing plugin must not clear a durable request whose answer it delivers.
-  it.live('keeps a plugin request pending when its plugin is absent', () =>
+  // Neither a missing plugin nor its run's end may clear a durable request
+  // whose answer the plugin delivers: nothing waits on it, and the answer
+  // resumes the run.
+  it.live('keeps a plugin request pending without its plugin or its run', () =>
     Effect.gen(function* () {
       const directory = mkdtempSync(join(tmpdir(), 'texra-missing-plugin-'));
       yield* Effect.addFinalizer(() =>
@@ -532,6 +534,20 @@ describe('Sessions owner', () => {
           _tag: 'Unavailable',
           reason: expect.stringContaining('example'),
         });
+        // A caller that only formats the error still shows why.
+        expect(error.message).toContain('example');
+        expect((yield* session.view.read([RUN])).requests).toHaveLength(1);
+        yield* session.request({
+          kind: 'run.stop',
+          runId: RUN,
+          reason: 'user',
+        });
+        yield* Stream.runHead(
+          Stream.filter(
+            session.view.changes,
+            (view) => view.runs.get(RUN)?.outcome != null,
+          ),
+        );
         expect((yield* session.view.read([RUN])).requests).toHaveLength(1);
       }).pipe(Effect.provide(Sessions.layer({ platform, plugins: [] })));
     }),
@@ -850,8 +866,8 @@ describe('the session event table and its one publisher', () => {
     return Effect.gen(function* () {
       const db = yield* Database;
       const name = 'regression-family';
-      yield* db.values.modify({ name, schema: Schema.String }, 'k', () =>
-        Result.succeed(['written', 'a string'] as const),
+      yield* db.values.modify({ name, schema: Schema.String }, ['k'], () =>
+        Result.succeed(['written', { k: 'a string' }] as const),
       );
       // The same family read with a schema its stored value fails.
       const failed = yield* Effect.flip(

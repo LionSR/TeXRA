@@ -52,7 +52,7 @@ export type FileOptions = typeof FileOptionsSchema.Type;
 
 /** How a project is named in a rail row, a chip, and the hero title. */
 const ProjectDisplaySchema = Schema.Struct({
-  key: Schema.String.check(Schema.isMinLength(1)),
+  key: Schema.NonEmptyString,
   name: Schema.String,
 });
 export type ProjectDisplay = typeof ProjectDisplaySchema.Type;

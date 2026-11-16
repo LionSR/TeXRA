@@ -148,7 +148,6 @@ function buildTeamOptions(plans: readonly TeamRunPlan[]): TeamOptionData[] {
         source: plan.preset.source,
         description: plan.preset.description,
         unavailableMembers: [...plan.missingAgents],
-        disabled: blockReason ? true : undefined,
         disabledReason: blockReason
           ? formatTeamOptionDisabledReason(blockReason)
           : undefined,
@@ -170,8 +169,8 @@ type TeamLaunchResolution =
       readonly fields: ReturnType<typeof teamExecutionFields>;
       readonly missingNames: readonly string[];
     }
-  | { readonly status: 'unknown-team' }
-  | { readonly status: 'blocked'; readonly reason: string };
+  /** The team cannot start; `message` says why, worded for the user. */
+  | { readonly status: 'refused'; readonly message: string };
 
 export function resolveTeamLaunch<T extends TeamCatalogAgent>(
   args: Omit<TeamRunOptions<T>, 'agentOverride'> & {
@@ -180,13 +179,20 @@ export function resolveTeamLaunch<T extends TeamCatalogAgent>(
   },
 ): TeamLaunchResolution {
   const preset = findTeamPreset(launchableTeams(args.presets), args.teamId);
-  if (!preset) return { status: 'unknown-team' };
+  if (!preset)
+    return {
+      status: 'refused',
+      message: formatUnknownTeamMessage(args.teamId),
+    };
 
   const plan = planTeamRun(preset, args);
   const reason = teamLaunchBlockReason(plan);
   const { rootAgent } = plan;
   if (reason !== undefined || !rootAgent) {
-    return { status: 'blocked', reason: reason ?? NO_TEAM_ROOT };
+    return {
+      status: 'refused',
+      message: `Team "${args.teamId}" cannot run: ${reason ?? NO_TEAM_ROOT}.`,
+    };
   }
   return {
     status: 'ready',
@@ -195,20 +201,9 @@ export function resolveTeamLaunch<T extends TeamCatalogAgent>(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Launch copy. Hosts render these strings through their own surfaces;
-// keeping the literals here stops them drifting.
-// ---------------------------------------------------------------------------
-
+/** What a surface says of a team id no preset has. */
 export function formatUnknownTeamMessage(teamId: string): string {
   return `Unknown team "${teamId}".`;
-}
-
-export function formatTeamLaunchBlockedMessage(
-  teamId: string,
-  reason: string,
-): string {
-  return `Team "${teamId}" cannot run: ${reason}.`;
 }
 
 /** Distinct member keys available to the run, excluding the root itself. */

@@ -32,7 +32,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure } from '@logger/effectLog';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   CURRENT_VALUE_VERSION,
@@ -226,9 +226,10 @@ export const databaseLayer = (
               },
               catch: (cause) => openFailed(ensureError(cause)),
             });
-      // A project store never waits for a lock: its one holder is this
-      // process, and a lock another holds refuses the open at once, on the
-      // fiber, never by blocking the thread in SQLite.
+      // A project store has one holder, this process, so the driver opens
+      // it with no busy wait: a lock another process holds refuses the open
+      // instead of waiting out the driver's timeout. The exclusive lock
+      // below waits at most the 25 ms slice `prepareStore` leaves set.
       const busyTimeout = exclusive ? 0 : '5 seconds';
       const { sql, movedAside } = yield* openStore(
         SqliteClient.make({
@@ -353,12 +354,10 @@ export const databaseLayer = (
           Stream.fromEffectSchedule(
             query(execOne('PRAGMA data_version', [])).pipe(
               Effect.map((row) => row?.data_version),
-              Effect.tapError((error) =>
-                Effect.logWarning(
+              Effect.tapError(
+                logFailure(
+                  CHANNEL,
                   'The session database change poll failed; retrying.',
-                ).pipe(
-                  Effect.annotateLogs({ data: error }),
-                  withLogChannel(CHANNEL),
                 ),
               ),
               Effect.retry(READ_RETRY),

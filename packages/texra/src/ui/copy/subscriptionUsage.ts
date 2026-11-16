@@ -6,7 +6,11 @@ import type {
   SubscriptionUsageSnapshot,
   SubscriptionUsageWindow,
 } from '@texra/shared/model/subscriptionUsage';
-import { formatResetDuration } from '@texra-ai/harness/schemas';
+import {
+  formatResetDuration,
+  FACT_SEPARATOR,
+  joinFacts,
+} from '@texra-ai/harness/schemas';
 import { formatRelativeTime } from '@ui/copy/format';
 
 const STALE_AFTER_MS = 2 * 60_000;
@@ -75,7 +79,10 @@ export function formatSubscriptionUsageSummary(
   return snapshot.windows
     .map((window) => {
       const reset = formatSubscriptionUsageReset(window.resetAt, now);
-      return `${subscriptionUsageWindowLabel(window)}: ${formatSubscriptionUsagePercent(window.percentUsed)}${reset ? ` · ${reset}` : ''}`;
+      return joinFacts([
+        `${subscriptionUsageWindowLabel(window)}: ${formatSubscriptionUsagePercent(window.percentUsed)}`,
+        reset,
+      ]);
     })
-    .join(' · ');
+    .join(FACT_SEPARATOR);
 }

@@ -173,12 +173,12 @@ export type AgentProposalRequest = (typeof AgentProposalRequestSchema)['Type'];
 // ============================================================================
 
 const UserQuestionOptionSchema = Schema.Struct({
-  label: Schema.String.check(Schema.isMinLength(1)),
+  label: Schema.NonEmptyString,
   description: Schema.optional(Schema.NullOr(Schema.String)),
 });
 
 export const UserQuestionPromptSchema = Schema.Struct({
-  question: Schema.String.check(Schema.isMinLength(1)),
+  question: Schema.NonEmptyString,
   header: Schema.optional(
     Schema.NullOr(Schema.String.check(Schema.isMaxLength(12))),
   ),

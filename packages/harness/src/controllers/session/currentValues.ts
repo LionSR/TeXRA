@@ -130,37 +130,59 @@ export function currentValues(store: {
           ),
         ),
       ),
-    modify: (family, key, change) =>
+    modify: <T, K extends string, A, E>(
+      family: ValueFamily<T>,
+      keys: readonly K[],
+      change: (
+        current: Readonly<Record<K, T | undefined>>,
+      ) => Result.Result<
+        readonly [A] | readonly [A, Readonly<Record<K, T | undefined>>],
+        E
+      >,
+    ) =>
       transact(
         Effect.gen(function* () {
-          const row = yield* valueRow(family.name, key);
-          const result = change(
-            row === undefined ? undefined : yield* decodeValue(family, row),
-          );
+          const rows = new Map<string, SqlRow>();
+          const current: Partial<Record<K, T>> = {};
+          for (const key of keys) {
+            const row = yield* valueRow(family.name, key);
+            if (row === undefined) continue;
+            rows.set(key, row);
+            current[key] = yield* decodeValue(family, row);
+          }
+          // cast: every key with a row was set above; the others read absent.
+          const result = change(current as Readonly<Record<K, T | undefined>>);
           if (Result.isFailure(result) || result.success.length === 1)
             return result;
           const next = result.success[1];
-          if (next === undefined) {
-            yield* exec(
-              'DELETE FROM current_value WHERE family = ? AND key = ?',
-              [family.name, key],
-            );
-            if (row !== undefined) yield* notifyWritten;
-            return result;
-          }
-          const value = yield* Schema.encodeEffect(
-            Schema.fromJsonString(family.schema),
-          )(next);
-          if (row?.value !== value) {
+          let deleted = false;
+          let upserted = false;
+          for (const key of keys) {
+            const row = rows.get(key);
+            const nextValue = next[key];
+            if (nextValue === undefined) {
+              if (row === undefined) continue;
+              yield* exec(
+                'DELETE FROM current_value WHERE family = ? AND key = ?',
+                [family.name, key],
+              );
+              deleted = true;
+              continue;
+            }
+            const value = yield* Schema.encodeEffect(
+              Schema.fromJsonString(family.schema),
+            )(nextValue);
+            if (row?.value === value) continue;
             yield* exec(UPSERT_VALUE, [
               family.name,
               key,
               value,
               yield* Clock.currentTimeMillis,
             ]);
-            yield* valueWritten;
-            yield* notifyWritten;
+            upserted = true;
           }
+          if (upserted) yield* valueWritten;
+          if (upserted || deleted) yield* notifyWritten;
           return result;
         }),
       ).pipe(

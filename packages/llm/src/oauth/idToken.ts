@@ -23,7 +23,7 @@ interface IdTokenIssuer {
 /** The claims read beyond the registered ones `Jwt` checks. */
 const IdTokenClaimsSchema = Schema.Struct({
   nonce: Schema.String,
-  sub: Schema.String.check(Schema.isMinLength(1)),
+  sub: Schema.NonEmptyString,
 });
 
 const JWKS_TIMEOUT = Duration.seconds(30);

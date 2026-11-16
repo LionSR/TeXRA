@@ -117,7 +117,7 @@ const InlineCommentInputSchema = Schema.Union([
     ).annotate({
       description: '1-based end line of the range; defaults to the start line.',
     }),
-    body: Schema.String.check(Schema.isMinLength(1)).annotate({
+    body: Schema.NonEmptyString.annotate({
       description: COMMENT_BODY_DESCRIPTION,
     }),
   }).check(
@@ -134,10 +134,10 @@ const InlineCommentInputSchema = Schema.Union([
     command: Schema.Literal('reply').annotate({
       description: 'Append a comment to an existing thread.',
     }),
-    threadId: Schema.String.check(Schema.isMinLength(1)).annotate({
+    threadId: Schema.NonEmptyString.annotate({
       description: THREAD_ID_DESCRIPTION,
     }),
-    body: Schema.String.check(Schema.isMinLength(1)).annotate({
+    body: Schema.NonEmptyString.annotate({
       description: COMMENT_BODY_DESCRIPTION,
     }),
   }),
@@ -145,7 +145,7 @@ const InlineCommentInputSchema = Schema.Union([
     command: Schema.Literal('resolve').annotate({
       description: 'Mark a thread resolved.',
     }),
-    threadId: Schema.String.check(Schema.isMinLength(1)).annotate({
+    threadId: Schema.NonEmptyString.annotate({
       description: THREAD_ID_DESCRIPTION,
     }),
   }),
@@ -153,7 +153,7 @@ const InlineCommentInputSchema = Schema.Union([
     command: Schema.Literal('unresolve').annotate({
       description: 'Reopen a resolved thread.',
     }),
-    threadId: Schema.String.check(Schema.isMinLength(1)).annotate({
+    threadId: Schema.NonEmptyString.annotate({
       description: THREAD_ID_DESCRIPTION,
     }),
   }),

@@ -80,7 +80,7 @@ export type PartEvent =
       > & { readonly finishReason: TurnResult['finishReason'] | null };
       /** The terminal item list. It supplies content only for a turn with
        *  no item events, or the items a resumed observation joined too late
-       *  to see close (see `settle`). */
+       *  to see close (see `finishedContent`). */
       readonly snapshot?: readonly Part[];
     };
 

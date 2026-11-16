@@ -178,7 +178,6 @@ export const bindRoute = Effect.fn('ModelAccess.bind')(function* (
     });
   }
   const credential = yield* routeCredential(route);
-  const chatgpt = credential.route === 'chatgpt-subscription';
   const reasoning = yield* reasoningOf(plan, requested);
   const turn = {
     protocol: BACKEND_PROTOCOLS[backend],
@@ -187,11 +186,7 @@ export const bindRoute = Effect.fn('ModelAccess.bind')(function* (
   const bound = yield* bindWireModel({
     model: requested,
     route,
-    // A subscription token is the bearer where an API key would be; the
-    // ChatGPT plan's also selects that plan's request rules.
-    credential: chatgpt
-      ? { kind: 'chatgpt', accessToken: credential.bearer }
-      : { kind: 'api-key', apiKey: credential.bearer },
+    bearer: credential.bearer,
     options: {
       maxOutputTokens: request.textOnly
         ? requested.maxOutputTokens
@@ -212,7 +207,9 @@ export const bindRoute = Effect.fn('ModelAccess.bind')(function* (
     ...commonOf(plan),
     ...bound,
     route,
-    ...(chatgpt && credential.plan ? { plan: credential.plan } : {}),
+    ...(credential.route === 'chatgpt-subscription' && credential.plan
+      ? { plan: credential.plan }
+      : {}),
     routes: routePolicies(
       [
         bound.config.provider,

@@ -109,15 +109,15 @@ const asked = <A>(
       ),
   );
 
-/** How many times a change to a project state key is tried again while
- *  another writer moves the key between its read and its write. */
+/** How many times a change to project state keys is tried again while
+ *  another writer moves one between its read and its write. */
 const STATE_CHANGE_ATTEMPTS = 8;
 
 /**
  * The project's state store (`roots.workspaceState`) as the service holds
  * it: a window in service mode opens no project store of its own. A change
- * is a compare-and-set in the service, tried again while another writer
- * moves the key between the read and the write.
+ * is a compare-and-set of its keys in the service, tried again while another
+ * writer moves one between the read and the write.
  */
 export const serviceProjectState = (
   link: ServiceLink,
@@ -147,70 +147,78 @@ export const serviceProjectState = (
           ),
         ),
     );
-  const get = (key: string) =>
+  const read = (keys: readonly string[]) =>
     call(
-      (message, cause) => new StateReadFailed({ key, message, cause }),
+      (message, cause) =>
+        new StateReadFailed({ key: keys.join(', '), message, cause }),
       (client) =>
-        Effect.map(
-          client['state.get']({ workspace, key }),
-          (stored) => stored.value,
+        Effect.map(client['state.get']({ workspace, keys }), (stored) =>
+          Object.fromEntries(keys.map((key) => [key, stored[key]?.value])),
         ),
     );
-  /** `value` as the wire carries it: JSON, or absent. Anything else is
-   *  refused here, as the local store refuses it. */
-  const json = (key: string, value: unknown) => {
-    const parsed = Schema.decodeUnknownResult(Schema.optional(JsonValueSchema))(
-      value,
-    );
-    return Result.isSuccess(parsed)
-      ? Effect.succeed({ value: parsed.success })
-      : Effect.fail(
-          new StateWriteFailed({
-            key,
-            message: `State key ${key} was given a value that is not JSON`,
-            cause: parsed.failure,
-          }),
-        );
-  };
+  /** `values` as the wire carries them: each JSON, or absent. Anything else
+   *  is refused here, as the local store refuses it. */
+  const stored = (values: Readonly<Record<string, unknown>>) =>
+    Effect.forEach(Object.entries(values), ([key, value]) => {
+      const parsed = Schema.decodeUnknownResult(
+        Schema.optional(JsonValueSchema),
+      )(value);
+      return Result.isSuccess(parsed)
+        ? Effect.succeed([key, { value: parsed.success }] as const)
+        : Effect.fail(
+            new StateWriteFailed({
+              key,
+              message: `State key ${key} was given a value that is not JSON`,
+              cause: parsed.failure,
+            }),
+          );
+    }).pipe(Effect.map((entries) => Object.fromEntries(entries)));
   const set = Effect.fn('set')(function* (
-    key: string,
-    next: unknown,
-    ifCurrent: { value: unknown } | null,
+    next: Readonly<Record<string, unknown>>,
+    ifCurrent: Readonly<Record<string, unknown>> | null,
   ) {
-    const nextJson = yield* json(key, next);
-    const currentJson =
-      ifCurrent === null ? null : yield* json(key, ifCurrent.value);
+    const nextStored = yield* stored(next);
+    const currentStored = ifCurrent === null ? null : yield* stored(ifCurrent);
     return yield* call(
-      (message, cause) => new StateWriteFailed({ key, message, cause }),
+      (message, cause) =>
+        new StateWriteFailed({
+          key: Object.keys(next).join(', '),
+          message,
+          cause,
+        }),
       (client) =>
         client['state.set']({
           workspace,
-          key,
-          next: nextJson,
-          ifCurrent: currentJson,
+          next: nextStored,
+          ifCurrent: currentStored,
         }),
     );
   });
   return {
-    get,
-    update: (key, value) => Effect.asVoid(set(key, value, null)),
-    modify: (key, change) =>
-      Effect.gen(function* () {
-        const current = yield* get(key).pipe(
+    get: (key) => Effect.map(read([key]), (values) => values[key]),
+    update: (key, value) => Effect.asVoid(set({ [key]: value }, null)),
+    modify: (keys, change) => {
+      const named = keys.join(', ');
+      return Effect.gen(function* () {
+        const current = yield* read(keys).pipe(
           Effect.mapError(
             (error) =>
               new StateWriteFailed({
-                key,
+                key: named,
                 message: error.message,
                 cause: error,
               }),
           ),
         );
-        const next = change(current);
-        if (Result.isFailure(next)) return yield* Effect.fail(next.failure);
-        // None: another writer moved the key between the read and the write.
-        return (yield* set(key, next.success, { value: current }))
-          ? Option.some(next.success)
+        // cast: `read` answers one entry for each of `keys`.
+        const result = change(
+          current as Readonly<Record<(typeof keys)[number], unknown>>,
+        );
+        if (Result.isFailure(result)) return yield* Effect.fail(result.failure);
+        if (result.success.length === 1) return Option.some(result.success[0]);
+        // None: another writer moved a key between the read and the write.
+        return (yield* set(result.success[1], current))
+          ? Option.some(result.success[0])
           : Option.none();
       }).pipe(
         Effect.repeat({
@@ -223,14 +231,15 @@ export const serviceProjectState = (
             onNone: () =>
               Effect.fail(
                 new StateWriteFailed({
-                  key,
-                  message: `"${key}" kept changing in the TeXRA service while this window wrote it; try again.`,
+                  key: named,
+                  message: `"${named}" kept changing in the TeXRA service while this window wrote it; try again.`,
                   cause: undefined,
                 }),
               ),
           }),
         ),
-      ),
+      );
+    },
   };
 };
 

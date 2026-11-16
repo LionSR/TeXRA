@@ -19,11 +19,7 @@ import {
   appendLocalNotice,
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
-import {
-  formatTeamLaunchBlockedMessage,
-  formatUnknownTeamMessage,
-  resolveTeamLaunch,
-} from '@texra/agent/teams/teamLaunch';
+import { resolveTeamLaunch } from '@texra/agent/teams/teamLaunch';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,
@@ -93,19 +89,9 @@ export const applyCliTeamSelection = Effect.fn('applyCliTeamSelection')(
       teamId,
       ...(yield* createTeamCatalogPorts(context.runSession.roots.repoState)),
     });
-    switch (resolution.status) {
-      case 'unknown-team':
-        setTransientNotice(formatUnknownTeamMessage(teamId));
-        return;
-      case 'blocked':
-        setTransientNotice(
-          formatTeamLaunchBlockedMessage(teamId, resolution.reason),
-        );
-        return;
-      case 'ready':
-        break;
-      default:
-        return resolution satisfies never;
+    if (resolution.status === 'refused') {
+      setTransientNotice(resolution.message);
+      return;
     }
     const { fields } = resolution;
     const entry = yield* resolveChatToolUseAgent(context.stores, fields.agent);

@@ -5,7 +5,7 @@ import { Effect } from 'effect';
 import { describe } from 'vitest';
 
 import { Secrets } from '@texra-ai/harness/plugins';
-import { createFakeUIHosts } from '@test/support/FakeHosts';
+import { createFakeUIHosts } from '@test/support/fakeUiPorts';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';

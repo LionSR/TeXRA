@@ -1,9 +1,4 @@
-import {
-  emitAppSignal,
-  Secrets,
-  Settings,
-  type AppSignals,
-} from '@texra-ai/harness/plugins';
+import { Secrets, Settings, type AppSignals } from '@texra-ai/harness/plugins';
 import { Effect } from 'effect';
 
 import { apiKeyOrigins } from '@texra-ai/llm';
@@ -107,9 +102,8 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
 
   // The one CLI write path for a `/config` row: the same
   // `applyStateSettingUpdate` the extension and desktop settings views call.
-  // After the write this form applies its consequences: the catalog row's
-  // `onWrite.invalidatesModelOptions` marks the rows whose change re-routes
-  // models, and an approval-policy write repaints the live session's policy
+  // The write announces what it changed to the process; this form adds its
+  // own repaint: an approval-policy write updates the live session's policy
   // line (enforcement reads the config itself). `null` is the shared reset
   // convention (delete the key so the schema default reappears).
   const applyUpdate = Effect.fn('applyUpdate')(function* (
@@ -144,9 +138,6 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
         );
     }
     settings.reload();
-    if (entry.onWrite?.invalidatesModelOptions) {
-      yield* emitAppSignal('modelAccessChanged', undefined);
-    }
     if (entry.key === APPROVAL_POLICY_SETTING.key) {
       // The value is written: a failed repaint is reported, never rolled back.
       yield* Settings.get(roots, APPROVAL_POLICY_SETTING).pipe(

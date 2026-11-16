@@ -12,8 +12,8 @@ import {
 } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core/pathBasics';
 import { getPathSegments } from '@utils/core/pathCore';
-import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { withFileWriteLane } from '@utils/files/fileWriteLane';
 import { createSymlink } from '@utils/files/fsDurability';
 import {
   absentReason,
@@ -57,9 +57,6 @@ export class RunFileService {
   /** The base files' pre-run locations, decided by `prepareRunWorkspace`. */
   private preparedBaseFiles: FileLocation[] | undefined;
   private readonly mirroredDependencies = new Set<string>();
-  /** One lane per workspace-relative path: its snapshot and its mirror are
-   *  each checked and created by one fiber at a time. */
-  private readonly pathLanes = new Map<string, PerKeyLane>();
 
   public readonly runId: RunId;
   private readonly roots: {
@@ -172,6 +169,8 @@ export class RunFileService {
         target.relativePath,
         this.runId,
       );
+      // Checked and copied as the snapshot's one writer: two captures of
+      // one file never both copy it.
       return yield* Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         // Only absence reads as "no snapshot": any other stat failure fails the
@@ -198,7 +197,7 @@ export class RunFileService {
         });
         yield* fs.copyFile(target.absolutePath, snapshotAbsolute);
         return snapshot;
-      }).pipe(withPerKeyLane(this.pathLanes, target.relativePath));
+      }).pipe(withFileWriteLane(snapshotAbsolute));
     }).pipe(
       Effect.catch((error) =>
         absentReason(error)
@@ -375,8 +374,9 @@ export class RunFileService {
       );
 
       const mirrored = this.mirroredDependencies;
-      // Checked and linked on the path's lane: two mirrors of one dependency
-      // never both create it. A file standing at the path is the run's own.
+      // Checked and linked as the link's one writer: two mirrors of one
+      // dependency never both create it. A file standing at the path is the
+      // run's own.
       yield* Effect.suspend(() =>
         mirrored.has(location.relativePath)
           ? Effect.void
@@ -388,7 +388,7 @@ export class RunFileService {
                 }),
               ),
             ),
-      ).pipe(withPerKeyLane(this.pathLanes, location.relativePath));
+      ).pipe(withFileWriteLane(runAbsolute));
 
       if (options.snapshot) {
         yield* this.captureOriginalSnapshot(location);

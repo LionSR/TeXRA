@@ -26,8 +26,8 @@ const EMPTY: ProjectLists = { remembered: [], recent: [] };
 export const DESKTOP_PROJECTS: ValueFamily<ProjectLists> = {
   name: 'desktop-projects',
   schema: Schema.Struct({
-    remembered: Schema.Array(Schema.String.check(Schema.isMinLength(1))),
-    recent: Schema.Array(Schema.String.check(Schema.isMinLength(1))),
+    remembered: Schema.Array(Schema.NonEmptyString),
+    recent: Schema.Array(Schema.NonEmptyString),
   }),
 };
 
@@ -56,11 +56,16 @@ export const openDesktopProjectRecords = (values: CurrentValues) => {
   const readRecent = Effect.map(lists, ({ recent }) => recent);
   // Both lists are one value, so a close that changes both is one write.
   const update = (change: (lists: ProjectLists) => ProjectLists) =>
-    values.modify(DESKTOP_PROJECTS, PROFILE, (stored) => {
-      const next = change(stored ?? EMPTY);
+    values.modify(DESKTOP_PROJECTS, [PROFILE], ({ profile }) => {
+      const next = change(profile ?? EMPTY);
       return Result.succeed([
         undefined,
-        { remembered: [...next.remembered], recent: [...next.recent] },
+        {
+          profile: {
+            remembered: [...next.remembered],
+            recent: [...next.recent],
+          },
+        },
       ] as const);
     });
   const withoutRecent = (recent: readonly string[], root: string) =>

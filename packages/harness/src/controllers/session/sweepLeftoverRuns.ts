@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import { SessionRequests } from '@agent/runtime/requests';
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure } from '@logger/effectLog';
 import type { RunId } from '@shared/schemas';
 import { SessionViewAccess } from '@shared/session/runHistory';
 
@@ -8,10 +8,7 @@ const CHANNEL = 'LeftoverRunSweep';
 
 /** The warning a failed step for `runId` leaves; the sweep goes on. */
 const warning = (message: string, runId: RunId) => (error: unknown) =>
-  Effect.logWarning(message).pipe(
-    Effect.annotateLogs({ data: { runId, error } }),
-    withLogChannel(CHANNEL),
-  );
+  logFailure(CHANNEL, message)({ runId, error });
 
 /**
  * The background shells of the cohort captured before session open that

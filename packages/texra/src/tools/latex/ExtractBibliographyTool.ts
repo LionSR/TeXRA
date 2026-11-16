@@ -35,7 +35,7 @@ const ExtractBibliographyInputSchema = Schema.Struct({
   texPath: texPathField('Path to the LaTeX file to scan for citations.'),
   bibPath: Schema.optional(
     Schema.NullOr(
-      Schema.String.check(Schema.isMinLength(1)).annotate({
+      Schema.NonEmptyString.annotate({
         description:
           'Optional path to a BibTeX file to include when resolving citations.',
       }),

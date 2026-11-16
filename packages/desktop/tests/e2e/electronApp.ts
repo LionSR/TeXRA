@@ -12,10 +12,12 @@ import { _electron as electron, test as base, expect } from '@playwright/test';
 import {
   loadDatabaseFixture,
   rememberOpenProject,
+} from '../../../../scripts/desktop-package-smoke-environment.mjs';
+import { testLaunchEnv } from '../../../../scripts/isolated-home.mjs';
+import {
   servicePids,
   stopServices,
-} from '../../../../scripts/desktop-package-smoke-environment.mjs';
-import { isolatedHomeEnv } from '../../../../scripts/isolated-home.mjs';
+} from '../../../../scripts/texra-services.mjs';
 import { cleanupDirectory } from './workspaceStorageFixture.js';
 import type { ElectronApplication, Locator, Page } from '@playwright/test';
 
@@ -51,7 +53,7 @@ export function createProfile(): Profile {
 
 /** Stop the profile's services and remove its home. */
 export async function removeProfile(profile: Profile): Promise<void> {
-  await stopServices(profile.dataRoot);
+  stopServices(profile.dataRoot, { timeoutMs: 30_000 });
   cleanupDirectory(profile.home);
 }
 
@@ -197,9 +199,7 @@ export async function launchTexraApp(
     cwd: PACKAGE_ROOT,
     env: {
       ...process.env,
-      ...isolatedHomeEnv(profile.home),
-      // Test runs never report usage (and never raise the first-run notice).
-      TEXRA_NO_TELEMETRY: '1',
+      ...testLaunchEnv(profile.home),
       NODE_ENV: 'production',
       ...env,
       // Electron's offscreen renderer keeps native windows, Dock and focus
@@ -244,7 +244,7 @@ export async function launchTexraApp(
   // starts listens before the test begins, so the teardown finds it.
   if (reachesService && process.platform !== 'win32')
     await expect
-      .poll(async () => (await servicePids(profile.dataRoot)).length, {
+      .poll(() => servicePids(profile.dataRoot).length, {
         timeout: 30_000,
       })
       .toBeGreaterThan(0);

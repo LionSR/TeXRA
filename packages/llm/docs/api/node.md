@@ -12,16 +12,14 @@ protocol (`bindModel`) and running subscription OAuth sign-in flows.
 ### Key exports by role
 
 - **Protocol binding**: [`bindModel`](#bindmodel), [`BindSpec`](#bindspec),
-  [`Binding`](#binding), and [`ModelCredential`](#modelcredential) dynamically
-  load only the requested protocol (`anthropic-messages`, `openai-responses`,
-  `google-interactions`), manage scoped connections and file uploads in the
-  caller's `Scope`, and classify provider failures into `ModelError`.
+  [`Binding`](#binding) dynamically load only the requested protocol
+  (`anthropic-messages`, `openai-responses`, `google-interactions`), manage
+  scoped connections and file uploads in the caller's `Scope`, and classify
+  provider failures into `ModelError`.
 - **Subscription sign-in (`chatgpt`, `xai`)**: each subscription's
   account, keyed by its route
-  ([`SubscriptionAccounts`](#subscriptionaccounts)), and the ChatGPT
-  ([`chatgptLoginWithLoopback`](#chatgptloginwithloopback)) and Grok
-  ([`xaiLoginWithLoopback`](#xailoginwithloopback),
-  [`xaiLoginWithDeviceCode`](#xailoginwithdevicecode)) OAuth flows.
+  ([`SubscriptionAccounts`](#subscriptionaccounts)), which runs its own
+  browser and (Grok's) device-code sign-in.
 
 ## Binding
 
@@ -71,7 +69,12 @@ interface BindSpec {
   /** The llm-zoo entry, before its route's overrides. */
   readonly model: ModelConfig;
   readonly route: CredentialRoute;
-  readonly credential: ModelCredential;
+  /**
+   * The token the binding sends: an API key (or any bearer token the
+   * endpoint takes as one), or a subscription plan's session token. Which
+   * plan's request rules apply is the route's `plan`.
+   */
+  readonly bearer: string | SessionToken;
   /** Each option has a default; the booleans default to `false`. */
   readonly options?: {
     /** The output ceiling, before the model's own rules; the catalog's by default. */
@@ -94,60 +97,12 @@ interface BindSpec {
 }
 ```
 
-## chatgptLoginWithLoopback
-
-The browser sign-in, on the loopback callback OpenAI accepts.
-
-```ts
-const chatgptLoginWithLoopback: (options: LoopbackLoginOptions<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly planType?: string | undefined; readonly idToken?: string | undefined; readonly clientId?: string | undefined; readonly accountId?: string | undefined; readonly email?: string | undefined; }>) => Effect<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly planType?: string | undefined; readonly idToken?: string | undefined; readonly clientId?: string | undefined; readonly accountId?: string | undefined; readonly email?: string | undefined; }, Error, HttpClient>
-```
-
 ## ChatgptSession
 
 A stored ChatGPT session.
 
 ```ts
 type ChatgptSession = typeof ChatgptSessionSchema.Type;
-```
-
-## DeviceLoginOptions
-
-What a provider's device-code sign-in takes from its host.
-
-```ts
-interface DeviceLoginOptions<S extends SubscriptionSession> {
-  /** The coordinator that stores the session the sign-in grants. */
-  readonly coordinator: Pick<SubscriptionCoordinator<S>, 'storeTokens'>;
-  /** Show the user the verification URL + one-time code. */
-  readonly onPrompt: (
-    prompt: SubscriptionDeviceCodePrompt,
-  ) => Effect.Effect<void>;
-}
-```
-
-## LoopbackLoginOptions
-
-What a provider's loopback sign-in takes from its host.
-
-```ts
-interface LoopbackLoginOptions<S extends SubscriptionSession> {
-  /**
-   * The coordinator that builds the authorize URL and exchanges the code.
-   * The exchange is a program, so it runs on this flow's own fiber:
-   * interrupting the login reaches the token exchange and the session store.
-   */
-  readonly coordinator: Pick<
-    SubscriptionCoordinator<S>,
-    'buildAuthorizeRequest' | 'loginWithCode'
-  >;
-  /**
-   * Show (and normally open) the consent URL. A program, so the host's own
-   * presentation runs on this flow's fibers and its failure — typically a
-   * {@link LoopbackTransportUnavailableError} — reaches the caller through
-   * the error channel instead of a rejection this flow has to re-wrap.
-   */
-  readonly openBrowser: (url: string) => Effect.Effect<void, Error>;
-}
 ```
 
 ## LoopbackTransportUnavailableError
@@ -162,19 +117,6 @@ class LoopbackTransportUnavailableError extends Schema.TaggedError<LoopbackTrans
   'LoopbackTransportUnavailableError',
   { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
 )
-```
-
-## ModelCredential
-
-The credential a binding sends: an API key (or any bearer token the
-endpoint takes as one), or a ChatGPT plan's access token, which the
-Responses protocol alone serves, under that plan's request rules. Either
-is a fixed string or a {@link SessionToken}.
-
-```ts
-type ModelCredential =
-  | { readonly kind: 'api-key'; readonly apiKey: string | SessionToken }
-  | { readonly kind: 'chatgpt'; readonly accessToken: string | SessionToken };
 ```
 
 ## SessionToken
@@ -210,55 +152,17 @@ class SubscriptionAccounts extends Context.Service<
 >()('@texra-ai/llm/SubscriptionAccounts')
 ```
 
-## SubscriptionAuthorizeRequest
-
-The authorize URL a loopback login opens, and what its callback checks.
-
-```ts
-interface SubscriptionAuthorizeRequest {
-  url: string;
-  /** The high-entropy secret carried through the loopback round-trip. */
-  verifier: string;
-  state: string;
-  /** The OIDC nonce the returned ID token must carry. */
-  nonce: string;
-  redirectUri: string;
-  /** The client this attempt authorizes as. */
-  clientId: string;
-  /**
-   * The attempt registers a new client for the user: the callback names the
-   * client the provider issued, and the grant and the session use that one.
-   */
-  registering: boolean;
-}
-```
-
-## SubscriptionCallback
-
-What a loopback callback delivered: the code, and any client it named.
-
-```ts
-interface SubscriptionCallback {
-  readonly code: string;
-  readonly clientId: string | undefined;
-}
-```
-
 ## SubscriptionCoordinator
 
 One provider's subscription session over the caller's secret store:
-reading it, keeping it fresh, signing in and out. The mutating and
-refreshing programs fail with {@link SubscriptionOAuthError}, or with the
-secret store's own {@link SecretsFailed} when it rejects.
+reading it, keeping it fresh, signing in and out. The account runs the
+provider's sign-in protocol itself; the caller supplies only the
+presentation. The mutating and refreshing programs fail with
+{@link SubscriptionOAuthError}, or with the secret store's own
+{@link SecretsFailed} when it rejects.
 
 ```ts
 interface SubscriptionCoordinator<S extends SubscriptionSession> {
-  /** The stored session, or null when none is stored; a stored one that
-   *  does not parse fails `fatal`. */
-  loadSession(): Effect.Effect<
-    S | null,
-    SecretsFailed | SubscriptionOAuthError
-  >;
   /** Signed-in status of the stored session. */
   getStatus(): Effect.Effect<
     SubscriptionSessionStatus,
@@ -278,21 +182,24 @@ interface SubscriptionCoordinator<S extends SubscriptionSession> {
     SecretsFailed | SubscriptionOAuthError,
     HttpClient.HttpClient
   >;
-  /** The PKCE authorize URL for a loopback callback on `port`. */
-  buildAuthorizeRequest(
-    port: number,
-  ): Effect.Effect<
-    SubscriptionAuthorizeRequest,
-    SecretsFailed | SubscriptionOAuthError
-  >;
-  /** Exchange the code `request`'s callback delivered and store the
-   *  session it grants. */
-  loginWithCode(
-    request: SubscriptionAuthorizeRequest,
-    callback: SubscriptionCallback,
+  /**
+   * Sign in through a browser: bind the provider's loopback callback, show
+   * the consent URL with `openBrowser`, and store the session the callback's
+   * code grants. A callback that cannot be bound, or a browser that cannot
+   * be reached, fails with `LoopbackTransportUnavailableError` before
+   * anything is asked of the user.
+   */
+  signInWithBrowser(
+    openBrowser: (url: string) => Effect.Effect<void, Error>,
   ): Effect.Effect<S, Error, HttpClient.HttpClient>;
-  /** Store the session a completed token grant returned. */
-  storeTokens(tokens: SubscriptionTokenResponse): Effect.Effect<S, Error>;
+  /**
+   * Sign in with a one-time device code (RFC 8628): `onPrompt` shows the
+   * code, and the session is stored once the user approves. Absent where
+   * the provider has no device-code sign-in.
+   */
+  readonly signInWithDeviceCode?: (
+    onPrompt: (prompt: SubscriptionDeviceCodePrompt) => Effect.Effect<void>,
+  ) => Effect.Effect<S, Error, HttpClient.HttpClient>;
 }
 ```
 
@@ -351,33 +258,6 @@ interface SubscriptionSessionStatus {
   email?: string;
   accountId?: string;
 }
-```
-
-## SubscriptionTokenResponse
-
-Raw token-endpoint shape shared by authorization-code and refresh grants.
-
-```ts
-type SubscriptionTokenResponse =
-  (typeof SubscriptionTokenResponseSchema)['Type'];
-```
-
-## xaiLoginWithDeviceCode
-
-Run the device-code flow end to end and persist the session. Succeeds with
-the stored session once the user approves; fails with a tagged error whose
-`message` is the user-facing text.
-
-```ts
-const xaiLoginWithDeviceCode: (options: DeviceLoginOptions<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly idToken?: string | undefined; readonly clientId?: string | undefined; readonly email?: string | undefined; }>) => Effect<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly idToken?: string | undefined; readonly clientId?: string | undefined; readonly email?: string | undefined; }, Error, HttpClient>
-```
-
-## xaiLoginWithLoopback
-
-The browser sign-in, bound to the registered Grok callback.
-
-```ts
-const xaiLoginWithLoopback: (options: LoopbackLoginOptions<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly idToken?: string | undefined; readonly clientId?: string | undefined; readonly email?: string | undefined; }>) => Effect<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly idToken?: string | undefined; readonly clientId?: string | undefined; readonly email?: string | undefined; }, Error, HttpClient>
 ```
 
 ## XaiSession

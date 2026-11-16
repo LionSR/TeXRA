@@ -9,6 +9,8 @@ import {
   type FileLocation,
 } from '@texra-ai/harness/schemas';
 
+import { readNormalizedFile } from '@texra-ai/harness/node';
+import { rewriteTexInputs } from '@latex/latexParsingUtils';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
 
@@ -24,7 +26,8 @@ function normalizeLatexPath(value: string): string {
 const TEX_EXTENSION_REGEX = /\.tex$/i;
 
 /**
- * Update \input commands in output files to reference new file paths.
+ * Update the \input and \include commands in output files to reference new
+ * file paths.
  *
  * Each output is paired with its base the way lineage tracing pairs them: by
  * its model-reported `source` first, so two bases that share a file name in
@@ -114,18 +117,13 @@ export const replaceInputCommands = Effect.fn('documents.replaceInputCommands')(
         const outputPath = fileLocationDisplayPath(outputLocation);
 
         return Effect.gen(function* () {
-          const content = (yield* fs.readFileString(
+          const content = yield* readNormalizedFile(
+            fs,
             outputLocation.absolutePath,
-          )).replaceAll('\r\n', '\n');
-          const newContent = content.replaceAll(
-            /\\input{([^}]+)}/g,
-            (match, rawPath) => {
-              // `register` never stores an empty key, so an empty path misses.
-              const replacement = replacementLookup.get(
-                normalizeLatexPath(rawPath),
-              );
-              return replacement ? `\\input{${replacement}}` : match;
-            },
+          );
+          // `register` never stores an empty key, so an empty path misses.
+          const newContent = rewriteTexInputs(content, (rawPath) =>
+            replacementLookup.get(normalizeLatexPath(rawPath)),
           );
 
           if (newContent !== content) {

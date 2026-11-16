@@ -11,6 +11,7 @@ import {
   type RunView,
   type Stage,
   formatCompactDuration,
+  joinFacts,
 } from '@texra-ai/harness/schemas';
 import { safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import { COLOR_BORDER, COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
@@ -61,14 +62,16 @@ function stageLine(
 ): DocumentTaskRunDetailLine {
   const appearance = TONE_PAINT[status.tone];
   const duration =
-    stage.endTime !== undefined
-      ? ` · ${formatCompactDuration(stage.endTime - stage.startTime)}`
-      : '';
+    stage.endTime !== undefined &&
+    formatCompactDuration(stage.endTime - stage.startTime);
   return {
     key: `stage:${stage.id}`,
     // Worded as the progress view's stage header words it, never with the
     // call-status vocabulary that happens to share key names.
-    text: `${appearance.marker} ${safeTerminalText(stage.name || stage.id)} ${status.word}${duration}`,
+    text: joinFacts([
+      `${appearance.marker} ${safeTerminalText(stage.name || stage.id)} ${status.word}`,
+      duration,
+    ]),
     color: appearance.color,
     role: 'lifecycle',
   };
@@ -137,14 +140,14 @@ function documentTaskRunDetailGroups(
     if (reply && (outputs.length === 0 || missing.length > 0))
       lines.push({
         key: `reply:${round}`,
-        text: `  ${WARNING} ${formatRoundLabel(round)} · ${outputs.length === 0 ? 'Wrote no documents; reply' : 'Reply'} kept at ${safeTerminalText(reply.absolutePath)}`,
+        text: `  ${WARNING} ${joinFacts([formatRoundLabel(round), `${outputs.length === 0 ? 'Wrote no documents; reply' : 'Reply'} kept at ${safeTerminalText(reply.absolutePath)}`])}`,
         color: COLOR_WARNING,
         role: 'alert',
       });
     for (const [index, path] of missing.entries()) {
       lines.push({
         key: `missing:${round}:${path}:${index}`,
-        text: `  ${WARNING} ${formatRoundLabel(round)} · Missing output: ${safeTerminalText(path)}`,
+        text: `  ${WARNING} ${joinFacts([formatRoundLabel(round), `Missing output: ${safeTerminalText(path)}`])}`,
         color: COLOR_WARNING,
         role: 'alert',
       });
@@ -152,7 +155,7 @@ function documentTaskRunDetailGroups(
     for (const [index, failure] of compileFailuresOf(record).entries()) {
       lines.push({
         key: `compile:${round}:${failure.log.absolutePath}:${index}`,
-        text: `  ${CROSS} ${formatRoundLabel(round)} · Compile check failed: ${safeTerminalText(failure.displayName)} · ${safeTerminalText(failure.logRelativePath)}`,
+        text: `  ${CROSS} ${joinFacts([formatRoundLabel(round), `Compile check failed: ${safeTerminalText(failure.displayName)}`, safeTerminalText(failure.logRelativePath)])}`,
         color: COLOR_ERROR,
         role: 'alert',
       });
@@ -160,7 +163,7 @@ function documentTaskRunDetailGroups(
     for (const [index, entry] of record.latexdiffs.entries()) {
       lines.push({
         key: `latexdiff:${round}:${index}`,
-        text: `  ${entry.status === 'ok' ? TICK : CROSS} ${formatRoundLabel(round)} · Latexdiff: ${safeTerminalText(latexdiffDisplayName(entry))}${entry.status === 'failed' ? ` — ${safeTerminalText(entry.error)}` : ''}`,
+        text: `  ${entry.status === 'ok' ? TICK : CROSS} ${joinFacts([formatRoundLabel(round), `Latexdiff: ${safeTerminalText(latexdiffDisplayName(entry))}`])}${entry.status === 'failed' ? ` — ${safeTerminalText(entry.error)}` : ''}`,
         color: entry.status === 'ok' ? undefined : COLOR_ERROR,
         role: entry.status === 'ok' ? 'output' : 'alert',
       });

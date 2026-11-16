@@ -80,8 +80,8 @@ export const TeamOptionDataSchema = PickerOptionBaseSchema.mapFields(
     unavailableMembers: Schema.Array(Schema.String).pipe(
       Schema.withDecodingDefault(Effect.succeed([])),
     ),
-    /** Marks "no runnable team lead"; `disabledReason` carries the human explanation. */
-    disabled: Schema.optional(Schema.Boolean),
+    /** Why the team cannot be launched (no runnable team lead); absent for
+     *  one that can. */
     disabledReason: Schema.optional(Schema.NullOr(Schema.String)),
   }),
 );
