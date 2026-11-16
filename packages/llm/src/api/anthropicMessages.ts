@@ -572,7 +572,10 @@ export const anthropicMessagesModel = Effect.fn('llm.anthropicMessages.model')(
             fillModelError(sdkFailure(cause), { model: origin.requestedModel }),
         }),
       parseUploaded: Schema.decodeUnknownResult(
-        uploadedFileSchema(Schema.DateTimeUtcFromString, DateTime.toEpochMillis),
+        uploadedFileSchema(
+          Schema.DateTimeUtcFromString,
+          DateTime.toEpochMillis,
+        ),
       ),
       create: async (upload, signal) =>
         client.files.upload(
