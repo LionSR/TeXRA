@@ -1,43 +1,18 @@
 // Third-party imports
-import { Effect, Schema } from 'effect';
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
-import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
+import { hostFailed } from '@texra/controllers/session/hostCallFailure';
+import type { HostFailed } from '@texra/hosts/uiHosts';
 import { withCancellationToken } from '@frontend/hosts/VscodeUiHost';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-
-/**
- * VS Code would not show its open dialog: `showOpenDialog` rejects only when
- * the host's own dialog machinery faults, which is the one failure either
- * picker below can raise. `member` names which picker asked.
- */
-class OpenDialogFailed extends Schema.TaggedError<OpenDialogFailed>()(
-  'OpenDialogFailed',
-  {
-    member: Schema.Literals(['selectFiles', 'selectFolder']),
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
-
-/** VS Code would not show a quick pick or input box. */
-export class HostPromptFailed extends Schema.TaggedError<HostPromptFailed>()(
-  'HostPromptFailed',
-  {
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
-
-const hostPromptFailed = (cause: unknown) =>
-  new HostPromptFailed({ message: toErrorMessage(cause), cause });
 
 export function quickPick<T extends string | vscode.QuickPickItem>(
   items: readonly T[],
   options: vscode.QuickPickOptions,
-): Effect.Effect<T | undefined, HostPromptFailed> {
+): Effect.Effect<T | undefined, HostFailed> {
   // A string shows as an item with that label; the pick maps back to its entry.
   const entries = items.map((item) => {
     const shown: string | vscode.QuickPickItem = item;
@@ -46,22 +21,25 @@ export function quickPick<T extends string | vscode.QuickPickItem>(
       pick: typeof shown === 'string' ? { label: shown } : shown,
     };
   });
-  return withCancellationToken(async (token) => {
-    const picked = await vscode.window.showQuickPick(
-      entries.map(({ pick }) => pick),
-      options,
-      token,
-    );
-    return entries.find(({ pick }) => pick === picked)?.item;
-  }, hostPromptFailed);
+  return withCancellationToken(
+    async (token) => {
+      const picked = await vscode.window.showQuickPick(
+        entries.map(({ pick }) => pick),
+        options,
+        token,
+      );
+      return entries.find(({ pick }) => pick === picked)?.item;
+    },
+    (cause) => hostFailed('quickPick', cause),
+  );
 }
 
 export function inputBox(
   options: vscode.InputBoxOptions,
-): Effect.Effect<string | undefined, HostPromptFailed> {
+): Effect.Effect<string | undefined, HostFailed> {
   return withCancellationToken(
     (token) => vscode.window.showInputBox(options, token),
-    hostPromptFailed,
+    (cause) => hostFailed('inputBox', cause),
   );
 }
 
@@ -80,12 +58,11 @@ interface FileDialogOptions {
  */
 export const selectFiles = Effect.fn('selectFiles')(function* (
   options: FileDialogOptions,
-): Effect.fn.Return<string[] | null, OpenDialogFailed> {
+): Effect.fn.Return<string[] | null, HostFailed> {
   const { workspaceRoot } = options;
   if (!workspaceRoot) {
-    // The notice is detached, as the caller's `runFork` left it: the picker
-    // answers "nothing picked" straight away rather than waiting on a toast
-    // the user may never dismiss.
+    // The notice is detached: the picker answers "nothing picked" straight
+    // away rather than waiting on a toast the user may never dismiss.
     yield* showLoggedMessage('No workspace folder open');
     return null;
   }
@@ -100,12 +77,7 @@ export const selectFiles = Effect.fn('selectFiles')(function* (
         defaultUri: vscode.Uri.file(workspaceRoot),
         filters: options.filters,
       }),
-    catch: (cause) =>
-      new OpenDialogFailed({
-        member: 'selectFiles',
-        message: toErrorMessage(cause),
-        cause,
-      }),
+    catch: (cause) => hostFailed('selectFiles', cause),
   });
 
   if (!fileUris?.length) {
@@ -130,7 +102,7 @@ interface FolderDialogOptions {
  */
 export function selectFolder(
   options: FolderDialogOptions,
-): Effect.Effect<string | null, OpenDialogFailed> {
+): Effect.Effect<string | null, HostFailed> {
   return Effect.tryPromise({
     try: async () =>
       vscode.window.showOpenDialog({
@@ -140,11 +112,6 @@ export function selectFolder(
         openLabel: options.openLabel,
         title: options.title,
       }),
-    catch: (cause) =>
-      new OpenDialogFailed({
-        member: 'selectFolder',
-        message: toErrorMessage(cause),
-        cause,
-      }),
+    catch: (cause) => hostFailed('selectFolder', cause),
   }).pipe(Effect.map((folders) => folders?.[0]?.fsPath ?? null));
 }

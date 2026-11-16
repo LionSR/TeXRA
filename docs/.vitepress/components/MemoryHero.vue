@@ -1,6 +1,6 @@
 <script setup>
 // Memory product slice: the Dashboard's Memory tab. Mirrors the real layout
-// from packages/extension/src/settingsView/frontend/components/memory/ —
+// from packages/texra/src/ui/settings/components/memory/ —
 // reminder banner, "Enable memory for chat agents" switch, then a list of
 // memory items with pinned/size/lines/updated/by metadata and a collapsible
 // "Contents" preview. Tab order, icons, and `by <agent>` attributions match

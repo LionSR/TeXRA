@@ -15,7 +15,11 @@ import { withVSCodeProgress } from '@frontend/ui/progress';
 import { compileTikzPictures } from '@latex/tikzPictures';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness/host';
-import type { StorageFs, WorkspaceFs } from '@texra-ai/harness/plugins';
+import {
+  type StorageFs,
+  type WorkspaceFs,
+  withLogChannel,
+} from '@texra-ai/harness/plugins';
 import { pluralize } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'FigCommands';
@@ -26,7 +30,6 @@ export function handleCompileTikzFigures(
   return runGuardedLatexCommand(
     roots,
     {
-      channel: CHANNEL,
       action: 'compile TikZ figures',
       errorMessage: 'compileTikzFigures command failed',
     },
@@ -36,7 +39,7 @@ export function handleCompileTikzFigures(
       );
 
       // The notification lives for exactly as long as the body below, which
-      // is a step of this program rather than a nested settle.
+      // is a step of this program rather than a nested run.
       yield* withVSCodeProgress(
         {
           location: vscode.ProgressLocation.Notification,
@@ -83,5 +86,5 @@ export function handleCompileTikzFigures(
         }),
       );
     }),
-  );
+  ).pipe(withLogChannel(CHANNEL));
 }

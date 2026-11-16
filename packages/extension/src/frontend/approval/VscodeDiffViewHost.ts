@@ -12,7 +12,7 @@ import {
 } from '@texra/controllers/session/hostCallFailure';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 
-import { firstEventOrTimeout } from '../vscode/vscodeEventWait';
+import { firstEventOrTimeout } from '../vscode/vscodeEvents';
 import { type RequestRefusal } from '@texra/controllers/session/hostCallFailure';
 
 /** How long a reveal waits for the diff's proposed side to become visible. */
@@ -119,7 +119,7 @@ export class VscodeDiffViewHost implements DiffViewHost {
 
       // The proposed side may not be visible yet: wait for the visibility
       // change that lets the reveal land, and try once more if the wait times
-      // out — the same last attempt the raced promise made.
+      // out.
       return firstEventOrTimeout<void>(
         (report) =>
           vscode.window.onDidChangeVisibleTextEditors(() => {

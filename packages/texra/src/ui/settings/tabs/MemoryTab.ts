@@ -5,7 +5,7 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postToHost } from '@settingsView/frontend/messageDispatcher';
+import { postToHost } from '@ui/settings/messageDispatcher';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 

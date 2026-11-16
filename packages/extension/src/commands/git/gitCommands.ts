@@ -6,9 +6,10 @@ import * as vscode from 'vscode';
 import { type RootedFileSystem } from '@texra-ai/harness/host';
 import { CommandDirs } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
-import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
+import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { type HostPromptFailed, inputBox } from '@frontend/ui/dialogs';
+import { inputBox } from '@frontend/ui/dialogs';
+import type { HostFailed } from '@texra/hosts/uiHosts';
 import { announce, showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import {
@@ -38,10 +39,10 @@ import {
 
 const CHANNEL = 'gitCommands';
 
-/** Hand a URL to the browser; a refusal is logged, not raised, because the
+/** Hand a URL to the browser; a failure is logged, not raised, because the
  *  dialogs that offer it have nothing further to do about one. */
 const openUrl = (url: string) =>
-  new VscodeExternalOpener()
+  vscodeOpener
     .openExternal(url)
     .pipe(
       Effect.catch((failure) =>
@@ -55,7 +56,7 @@ const promptInput = Effect.fn('promptInput')(function* (
   title: string,
   prompt: string,
   password = false,
-): Effect.fn.Return<string | null, HostPromptFailed> {
+): Effect.fn.Return<string | null, HostFailed> {
   const val = yield* inputBox({
     title,
     prompt,

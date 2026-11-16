@@ -196,6 +196,14 @@ type PreparedFileServices =
 /** How it fails: the editor's own rejections, and the existence probe's. */
 type DisplayFailure = Error | PlatformError.PlatformError;
 
+/** {@link openBuilt} bound once to a window's roots and the scope its PDF
+ *  viewer opens in, as each of the window's "show a built file" callers
+ *  takes it. */
+export type ShowBuilt = (
+  locations: readonly [FileLocation, ...FileLocation[]],
+  options?: { preserveFocus?: boolean },
+) => Effect.Effect<void, DisplayFailure, PreparedFileServices>;
+
 /** Show one file, building it when it is TeX, answering whether its build
  *  left a PDF for the viewer. */
 const prepareFileForDisplay = Effect.fn('openBuild.prepareFileForDisplay')(

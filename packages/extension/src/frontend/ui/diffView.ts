@@ -1,13 +1,15 @@
-import { Effect, Queue, Stream } from 'effect';
+import { Effect, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
+import { eventStream } from '@frontend/vscode/vscodeEvents';
 
 const CHANNEL = 'DiffView';
 
-/** How long a burst of view-column changes settles before one refresh. */
-const REFRESH_SETTLE_MS = 200;
+/** How long a burst of view-column changes must go quiet before one
+ *  refresh. */
+const REFRESH_QUIET_MS = 200;
 
 /**
  * Keep a comparison in place while editors move: re-show the diff after
@@ -22,22 +24,12 @@ export function refreshDiffOnLayoutChange(
   right: vscode.Uri,
   title: string,
 ): Effect.Effect<void> {
-  const viewColumnChanges = Stream.callback<void>((queue) =>
-    Effect.acquireRelease(
-      Effect.sync(() =>
-        vscode.window.onDidChangeTextEditorViewColumn(() =>
-          Queue.offerUnsafe(queue, undefined),
-        ),
-      ),
-      (listener) => Effect.sync(() => listener.dispose()),
-    ),
-  );
-  return viewColumnChanges.pipe(
+  return eventStream(vscode.window.onDidChangeTextEditorViewColumn).pipe(
     // Trailing-edge: a column move fires several events within a few
     // milliseconds, and a leading throttle that dropped the later ones
     // left the diff where the first event found it. The last event
     // always refreshes.
-    Stream.debounce(REFRESH_SETTLE_MS),
+    Stream.debounce(REFRESH_QUIET_MS),
     Stream.runForEach(() =>
       executeVscodeCommand('vscode.diff', left, right, title, {
         preserveFocus: true,

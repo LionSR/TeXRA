@@ -10,7 +10,7 @@ import * as vscode from 'vscode';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
 
-import { firstEventOrTimeout } from './vscodeEventWait';
+import { firstEventOrTimeout } from './vscodeEvents';
 
 const CHANNEL = 'VscodeDiagnostics';
 

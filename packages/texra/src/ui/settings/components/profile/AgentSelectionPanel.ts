@@ -15,7 +15,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postToHost } from '@settingsView/frontend/messageDispatcher';
+import { postToHost } from '@ui/settings/messageDispatcher';
 import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import type { IconName } from '@ui/wa/iconNames';
 import {

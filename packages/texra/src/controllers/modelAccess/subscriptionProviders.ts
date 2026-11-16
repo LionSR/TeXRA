@@ -22,7 +22,11 @@ import {
   ConfigWriteFailed,
   SubscriptionPreference,
 } from '@texra-ai/harness/host';
-import { SUBSCRIPTION_ROUTES, toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  Cancelled,
+  SUBSCRIPTION_ROUTES,
+  toErrorMessage,
+} from '@texra-ai/harness/schemas';
 import {
   codexAccountLabel,
   type SubscriptionAuthStatus,
@@ -31,6 +35,7 @@ import {
 import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
 import type { SecretsFailed } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
+import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import {
   emitAppSignal,
   withLogChannel,
@@ -358,6 +363,37 @@ export function subscriptionProvider(
   id: SubscriptionProviderId,
 ): SubscriptionProvider {
   return SUBSCRIPTION_PROVIDERS[id];
+}
+
+/**
+ * Run a subscription sign-in and tell the user how it ended, in the words
+ * every surface uses: `notice` shows the signed-in sentence, and a user who
+ * backed out of the host's prompt is told nothing, since nothing failed.
+ * Any other failure is the caller's to show, under
+ * `ACCOUNT_OUTCOME.signInFailed`.
+ */
+export function announceSignIn<E, R, R2>(
+  providerId: SubscriptionProviderId,
+  signIn: Effect.Effect<{ readonly label: string }, E, R>,
+  notice: (message: string) => Effect.Effect<unknown, never, R2>,
+): Effect.Effect<void, E, R | R2> {
+  const { displayName, modelFamily } = subscriptionProvider(providerId);
+  return signIn.pipe(
+    Effect.flatMap((account) =>
+      notice(
+        ACCOUNT_OUTCOME.signedInEnabled(
+          displayName,
+          account.label,
+          modelFamily,
+        ),
+      ),
+    ),
+    Effect.asVoid,
+    Effect.catchIf(
+      (error) => error instanceof Cancelled,
+      () => Effect.void,
+    ),
+  );
 }
 
 /**

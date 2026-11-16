@@ -24,7 +24,7 @@ import {
   pluralize,
 } from '@texra-ai/harness/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postToHost } from '@settingsView/frontend/messageDispatcher';
+import { postToHost } from '@ui/settings/messageDispatcher';
 import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import type { SettingsSectionName } from '@texra/shared/settingsView/settingsTarget';
 import {

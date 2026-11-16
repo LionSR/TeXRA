@@ -1,6 +1,7 @@
 import { Effect, FileSystem, Predicate, Array as Arr } from 'effect';
 
-import { hasExtension, pathToLocationIn } from '@texra-ai/harness/host';
+import { pathToLocationIn } from '@texra-ai/harness/host';
+import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { pathExists, readNormalizedFile } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { runTool } from '@texra/utils/system/toolChecks';
@@ -66,7 +67,7 @@ const rejectionReason = Effect.fn('texcount.rejectionReason')(function* (
     return reason;
   }
 
-  if (!hasExtension(filePath, '.tex')) {
+  if (!isLatexFile(filePath)) {
     const reason = `Error: File ${filePath} is not a LaTeX file. Skipping.`;
     yield* Effect.logWarning(reason);
     return reason;

@@ -41,20 +41,6 @@ import type { StateStore } from '@texra-ai/harness/host';
 const CHANNEL = 'VscodeLeanIntegration';
 
 /**
- * A Lean 4 command VS Code dispatched and rejected. There is no
- * "not registered" reason: the ids are the extension's own, and VS Code
- * reports an unregistered id the same way it reports a faulting one.
- */
-class VscodeCommandFailed extends Schema.TaggedError<VscodeCommandFailed>()(
-  'VscodeCommandFailed',
-  {
-    message: Schema.String,
-    commandId: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
-
-/**
  * Why the Lean 4 extension could not answer: it is not installed (the user
  * was offered the install), or it is installed and its activation or feature
  * promise rejected. The reasons carry different advice, which the old
@@ -210,23 +196,6 @@ function getDiagnostics(absolutePath: string): LeanDiagnostic[] {
   return [];
 }
 
-/** Run one of the Lean 4 extension's commands. */
-function executeLeanCommand(
-  commandId: string,
-): Effect.Effect<void, VscodeCommandFailed> {
-  return executeVscodeCommand(commandId).pipe(
-    Effect.asVoid,
-    Effect.mapError(
-      (cause) =>
-        new VscodeCommandFailed({
-          message: `VS Code command "${commandId}" failed: ${cause.message}`,
-          commandId,
-          cause,
-        }),
-    ),
-  );
-}
-
 const executeFileCommand: (
   globalState: StateStore,
   command: LeanFileCommand,
@@ -241,7 +210,7 @@ const executeFileCommand: (
   ) {
     yield* openFileInEditor(filePath, { preview: true, preserveFocus: true });
     yield* getClientProvider(globalState);
-    yield* executeLeanCommand(FILE_COMMAND_VSCODE_IDS[command]);
+    yield* executeVscodeCommand(FILE_COMMAND_VSCODE_IDS[command]);
   },
   Effect.mapError((failure) =>
     // A missing extension is a setup problem; every other failure (an
@@ -456,14 +425,14 @@ const fetchDiagnosticsForFile = Effect.fn('fetchDiagnosticsForFile')(function* (
 const executeProjectCommand = Effect.fn('executeProjectCommand')(function* (
   globalState: StateStore,
   command: LeanProjectCommand,
-): Effect.fn.Return<void, LeanExtensionUnavailable | VscodeCommandFailed> {
+) {
   // vscode-lean4 registers these commands in activateLean4Features(), not
   // during its initial extension activation. Awaiting the exported feature
   // promise prevents a race with command registration after a Lean file opens.
   // Its failure is already the "extension cannot answer" report the tool
   // shows, told apart by reason instead of by one message for both.
   yield* getClientProvider(globalState);
-  yield* executeLeanCommand(PROJECT_COMMAND_VSCODE_IDS[command]);
+  yield* executeVscodeCommand(PROJECT_COMMAND_VSCODE_IDS[command]);
 });
 
 /**

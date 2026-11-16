@@ -10,7 +10,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postToHost } from '@settingsView/frontend/messageDispatcher';
+import { postToHost } from '@ui/settings/messageDispatcher';
 import type { SettingsTeamPreset } from '@texra/shared/settingsView/settingsViewMessages';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import {

@@ -17,7 +17,7 @@ import type { CredentialOrigin } from '@texra-ai/llm';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
-import { postToHost } from '@settingsView/frontend/messageDispatcher';
+import { postToHost } from '@ui/settings/messageDispatcher';
 import { type PRSubscriptionEntry } from '@texra/shared/settingsView/settingsViewMessages';
 import { credentialOriginLabel, TOKEN_ACTION_COPY } from '@ui/copy/credentials';
 import { renderSetStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';

@@ -6,12 +6,10 @@
  * presentation host `ProgressViewProvider` attaches to the session; this
  * module performs the actual UI operations for each event. Every handler
  * answers with the program that presents its event: the session's
- * presentation plane forks it and reports its failure, so nothing here runs
+ * presentation layer forks it and reports its failure, so nothing here runs
  * a fiber of its own.
  */
-import { basename } from 'node:path';
-
-import { Effect, Scope } from 'effect';
+import { Effect } from 'effect';
 
 import {
   withProcessServices,
@@ -20,16 +18,14 @@ import {
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   toErrorMessage,
-  type AgentConfig,
   type RequestShowErrorPayload,
   type RequestShowInstructionPayload,
 } from '@texra-ai/harness/schemas';
 import { setApiKey } from '@commands/api/apiKeyCommands';
 import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { openBuilt } from '@frontend/latex/openBuild';
+import type { ShowBuilt } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { GuiWindowHost } from '@texra/controllers/session/openGuiWindow';
 import {
   INSTRUCTION_ACTION,
@@ -41,13 +37,12 @@ import {
 } from '@ui/copy/instructionActions';
 import { shownFailureText } from '@ui/copy/modelAccess';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { StateStore } from '@texra-ai/harness/host';
 
 const CHANNEL = 'agentEventListeners';
 
 /** Warn-log a step whose failure is a diagnostic rather than non-delivery,
  *  and carry on with the step after it. */
-function warnOnFailure<E>(
+export function warnOnFailure<E>(
   program: Effect.Effect<void, E>,
   what: string,
 ): Effect.Effect<void> {
@@ -80,7 +75,7 @@ function handleRequestShowError(
   failure: RequestShowErrorPayload,
 ): Effect.Effect<void, Error> {
   const { docsPage } = failure;
-  // The notice settles only on dismissal, which no caller waits on: the
+  // The notice finishes only on dismissal, which no caller waits on: the
   // session forks this program, so the handoff and a post-handoff rejection
   // (the extension host tearing down) are reported there rather than
   // becoming an unhandled rejection. A docs page is offered as a button.
@@ -101,7 +96,6 @@ function handleRequestShowError(
 }
 
 function handleRequestShowInstruction(
-  globalState: StateStore,
   roots: WorkspaceRoots,
   runtime: ProcessRuntime,
   payload: RequestShowInstructionPayload,
@@ -118,11 +112,11 @@ function handleRequestShowInstruction(
     };
   });
 
-  // Settles once VS Code has accepted the dialog, not once the user
+  // Finishes once VS Code has accepted the dialog, not once the user
   // dismisses it. The "never remind again" path returns without rendering:
   // the user opted out of this notice.
   return showInstructionWithSuppress(
-    globalState,
+    roots.globalState,
     payload.key,
     payload.message,
     actions,
@@ -142,90 +136,28 @@ function handleRequestShowInstruction(
   );
 }
 
-/** The toast that names a run when its progress view cannot be revealed:
- *  the run's agent, model and files. */
-function launchNotice(config: AgentConfig): string {
-  const primaryInput = config.inputFiles[0];
-  const inputName = primaryInput ? basename(primaryInput) : 'selected input';
-  const { outputFiles } = config;
-  let outputPart = '';
-  if (outputFiles.length > 1) {
-    outputPart = ` (to ${outputFiles.length} files)`;
-  } else if (outputFiles[0]) {
-    outputPart = ` (to ${basename(outputFiles[0])})`;
-  }
-  return `"${config.agent}" is processing ${inputName} with ${config.model}${outputPart}.`;
-}
-
-/**
- * Bring the progress view into view for a run this window just started
- * (`HostRunActionPorts.revealProgress`), or name the run in a toast when it
- * cannot be made visible.
- */
-export const revealProgressView = Effect.fn('revealProgressView')(function* (
-  config: AgentConfig,
-  progressViewProvider: Pick<
-    ProgressViewProvider,
-    'isViewVisible' | 'showProgressView'
-  >,
-): Effect.fn.Return<void, Error> {
-  if (progressViewProvider.isViewVisible()) return;
-
-  // A failed reveal is a diagnostic, not non-delivery: fall through to the
-  // visibility re-check and, when provided, the toast handoff below (#10554).
-  yield* warnOnFailure(
-    progressViewProvider.showProgressView(),
-    'Failed to reveal the progress view',
-  );
-
-  // Delivery is the reveal actually becoming visible, not the reveal command
-  // resolving. Re-check after the command before treating the event as
-  // presented.
-  if (progressViewProvider.isViewVisible()) return;
-
-  // The toast is the delivered surface when the view cannot be made
-  // visible: a successful handoff means the run was presented even if the
-  // user dismisses it without retrying the reveal.
-  const selection = yield* vscodeUi.ask('info', launchNotice(config), {
-    modal: false,
-    detail:
-      'TeXRA agents run in the background; track them under Tasks in the TeXRA panel.',
-    items: ['Show Tasks'],
-  });
-  if (!selection) return;
-  // The toast handoff already established delivery; a failed retry is
-  // a diagnostic, not non-delivery, so it must not downgrade the event.
-  yield* warnOnFailure(
-    progressViewProvider.showProgressView(),
-    'Failed to retry the progress-view reveal',
-  );
-});
-
 /**
  * The runtime's notices this extension presents its own way; the window's
  * opening adds the missing-agent banner. The session's `Interactions` (the
  * runtime) owns replaying an event emitted before this host attaches.
  */
 export function createAgentPresentationHost(
-  globalState: StateStore,
-  runtime: ProcessRuntime,
   roots: WorkspaceRoots,
-  /** The view's scope, which a scheduled PDF viewer open runs in. */
-  scope: Scope.Scope,
+  runtime: ProcessRuntime,
+  showBuilt: ShowBuilt,
 ): GuiWindowHost['notices'] {
   return {
     // The open-and-build program takes this window's file services from the
-    // runtime's context, which the session that forks it does not carry, and
-    // schedules the PDF viewer in the view's scope.
+    // runtime's context, which the session that forks it does not carry.
     openFile: (payload) =>
       withProcessServices(
         runtime,
-        openBuilt(roots, [payload.location], {
+        showBuilt([payload.location], {
           preserveFocus: payload.preserveFocus,
-        }).pipe(Effect.provideService(Scope.Scope, scope)),
+        }),
       ),
     requestShowInstruction: (payload) =>
-      handleRequestShowInstruction(globalState, roots, runtime, payload),
+      handleRequestShowInstruction(roots, runtime, payload),
     requestShowError: handleRequestShowError,
   };
 }

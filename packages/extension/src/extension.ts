@@ -36,13 +36,8 @@ import {
   effectDiagnosticsLayer,
   setLogSink,
 } from '@texra-ai/harness/node';
-import {
-  Cancelled,
-  toErrorMessage,
-  type StateKey,
-} from '@texra-ai/harness/schemas';
+import { toErrorMessage, type StateKey } from '@texra-ai/harness/schemas';
 import { appSignalStream } from '@texra-ai/harness/host';
-import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
@@ -64,14 +59,14 @@ import {
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
-import { subscriptionProvider } from '@texra/controllers/modelAccess/subscriptionProviders';
+import {
+  announceSignIn,
+  subscriptionProvider,
+} from '@texra/controllers/modelAccess/subscriptionProviders';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { createVscodeLeanLanguageServices } from '@frontend/lean/VscodeIntegration';
-import { followInlineCriticism } from '@frontend/latex/inlineCriticism';
-import {
-  inlineCommentProvider,
-  registerInlineComments,
-} from '@frontend/comments/inlineComments';
+import { makeInlineCriticism } from '@frontend/latex/inlineCriticism';
+import { makeInlineComments } from '@frontend/comments/inlineComments';
 import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { openTexraGlobalConfigStore } from '@texra/platform/defaults/nodeStores';
@@ -96,7 +91,11 @@ import type { GuiSession } from '@texra/controllers/session/openGuiWindow';
 
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
-import { registerCommands } from './commands';
+import {
+  registerCommands,
+  registerHandlers,
+  setApiKeyHandler,
+} from './commands';
 import type { SettingsViewProvider } from './settingsView/SettingsViewProvider';
 
 const EXTENSION_CHANNEL = 'extension';
@@ -143,15 +142,16 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     typeof context.extension.packageJSON?.version === 'string'
       ? context.extension.packageJSON.version
       : undefined;
+  // The Comments UI behind the `inline_comment` tool, for a folder's window:
+  // agents run only there.
+  const inlineComments =
+    workspaceRoot === undefined ? undefined : yield* makeInlineComments;
   const managed = withForkFailureReporting(
     ManagedRuntime.make(
       texraProcessLayer({
         name: 'vscode',
         inquiryPanel: true,
-        // The Comments UI behind the `inline_comment` tool. The provider reads
-        // the controller this host registers at activation, so it is a value
-        // from module load; nothing about it waits on that registration.
-        inlineComments: inlineCommentProvider,
+        inlineComments,
         // Lean through the Lean 4 extension, not a direct `lake` pool.
         lean: Layer.effect(
           LeanLanguageServices,
@@ -252,49 +252,40 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
  * before a folder is open. The full command surface is registered only on the
  * single-folder path, so these are standalone variants of its rows.
  */
-const NO_FOLDER_COMMANDS = {
-  // A first-time user without a LaTeX project can create the sample and land
-  // directly in a working workspace.
-  'texra.createSampleProject': (context) =>
-    createSampleProjectWithoutWorkspace(context.extensionPath),
-  'texra.openGettingStarted': (context) =>
-    openGettingStarted(context.extension.id),
-  // This window has no settings view to tell the user how the sign-in
-  // ended, so the command does, in the same sentence.
-  'texra.auth.chatgpt.signIn': (_context, roots) => {
-    const { displayName, modelFamily } = subscriptionProvider('chatgpt');
-    return signInWithSubscription(roots, 'chatgpt').pipe(
-      Effect.flatMap((account) =>
-        showLoggedInfoMessage(
-          ACCOUNT_OUTCOME.signedInEnabled(
-            displayName,
-            account.label,
-            modelFamily,
-          ),
+const noFolderCommands = (
+  context: vscode.ExtensionContext,
+  roots: WorkspaceRoots,
+) =>
+  ({
+    // A first-time user without a LaTeX project can create the sample and
+    // land directly in a working workspace.
+    'texra.createSampleProject': () =>
+      createSampleProjectWithoutWorkspace(context.extensionPath),
+    'texra.openGettingStarted': () => openGettingStarted(context.extension.id),
+    // This window has no settings view to tell the user how the sign-in
+    // ended, so the command does, in the same sentence.
+    'texra.auth.chatgpt.signIn': () =>
+      announceSignIn(
+        'chatgpt',
+        signInWithSubscription(roots, 'chatgpt'),
+        showLoggedInfoMessage,
+      ).pipe(
+        // A defect is reported like a failure, as the settings body reports
+        // one; an interrupt is the window closing, not a failed sign-in.
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.interrupt
+            : showLoggedErrorMessage(
+                ACCOUNT_OUTCOME.signInFailed(
+                  subscriptionProvider('chatgpt').displayName,
+                ),
+                Cause.squash(cause),
+              ),
         ),
+        withLogChannel('welcomeView'),
       ),
-      // A defect is reported like a failure, as the settings body reports
-      // one; an interrupt is the window closing, not a failed sign-in.
-      Effect.catchCause((cause) => {
-        if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt;
-        const error = Cause.squash(cause);
-        return error instanceof Cancelled
-          ? Effect.void
-          : showLoggedErrorMessage(`${displayName} sign-in failed`, error);
-      }),
-      withLogChannel('welcomeView'),
-    );
-  },
-  'texra.setApiKey': (_context, roots) => apiSetApiKey(roots),
-} satisfies Partial<
-  Record<
-    ExtensionCommandId,
-    (
-      context: vscode.ExtensionContext,
-      roots: WorkspaceRoots,
-    ) => Effect.Effect<unknown, Error, ProcessServices | Sessions>
-  >
->;
+    'texra.setApiKey': setApiKeyHandler(roots),
+  }) as const;
 
 /**
  * The commands that need a folder. The getting-started walkthrough's buttons
@@ -303,7 +294,7 @@ const NO_FOLDER_COMMANDS = {
  */
 type WalkthroughCommandNeedingWorkspace = Exclude<
   ExtensionCommandId,
-  keyof typeof NO_FOLDER_COMMANDS
+  keyof ReturnType<typeof noFolderCommands>
 >;
 
 /** Internal command URI used by workspace-bound walkthrough links. */
@@ -329,17 +320,10 @@ const explainWorkspaceRequired = Effect.fn('explainWorkspaceRequired')(
 
 function registerWalkthroughWorkspaceAction(
   context: vscode.ExtensionContext,
-  hasSingleWorkspace: boolean,
-  runtime: ProcessRuntime,
+  run: (command: WalkthroughCommandNeedingWorkspace) => unknown,
 ): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand(
-      WALKTHROUGH_WORKSPACE_ACTION_COMMAND,
-      (command: WalkthroughCommandNeedingWorkspace) =>
-        hasSingleWorkspace
-          ? vscode.commands.executeCommand(command)
-          : runtime.runPromise(explainWorkspaceRequired(context.extensionPath)),
-    ),
+    vscode.commands.registerCommand(WALKTHROUGH_WORKSPACE_ACTION_COMMAND, run),
   );
 }
 
@@ -390,14 +374,16 @@ const activateExtension = Effect.fn('activateExtension')(function* (
       undefined,
     );
     registerWelcomeView(context, fork);
-    for (const [id, command] of Object.entries(NO_FOLDER_COMMANDS)) {
-      context.subscriptions.push(
-        vscode.commands.registerCommand(id, () =>
-          runtime.runPromise(command(context, roots)),
-        ),
-      );
-    }
-    registerWalkthroughWorkspaceAction(context, false, runtime);
+    registerHandlers(
+      context,
+      runtime,
+      fork,
+      roots,
+      noFolderCommands(context, roots),
+    );
+    registerWalkthroughWorkspaceAction(context, () =>
+      runtime.runPromise(explainWorkspaceRequired(context.extensionPath)),
+    );
     return;
   }
   const rawWorkspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -424,7 +410,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
     },
   );
   // The host entry holds the process runtime in a local and threads it to the
-  // surfaces registered below, so code under `activate` settles its Effects on
+  // surfaces registered below, so code under `activate` runs its Effects on
   // the runtime it was handed instead of reading the global back.
   // The activation scope carries the shutdown: the workspace activation
   // registers its own finalizers there.
@@ -483,12 +469,15 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   // The settings view is built with the commands, after the progress view
   // that opens it, so the progress view waits for it.
   const settingsView = yield* Deferred.make<SettingsViewProvider>();
+  // The criticism diagnostics this window's follower shows and its editor
+  // tools add to.
+  const criticism = makeInlineCriticism();
   const progressViewProvider = yield* ProgressViewProvider.make(
     context,
-    globalState,
     runtime,
     roots,
     windowSession,
+    criticism.add,
     {
       openSettings: (target) =>
         Effect.flatMap(Deferred.await(settingsView), (view) =>
@@ -509,7 +498,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     withLogChannel(EXTENSION_CHANNEL),
   );
   // Registered last, so the first thing the activation scope's close runs:
-  // every session stops and settles its runs before the view and the host
+  // every session stops and finishes its runs before the view and the host
   // resources registered above tear down around them.
   yield* Effect.addFinalizer(() =>
     Effect.asVoid(Effect.flatMap(Sessions, (sessions) => sessions.closeAll)),
@@ -524,7 +513,9 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     session,
   );
   yield* Deferred.succeed(settingsView, settingsViewProvider);
-  registerWalkthroughWorkspaceAction(context, true, runtime);
+  registerWalkthroughWorkspaceAction(context, (command) =>
+    vscode.commands.executeCommand(command),
+  );
   yield* registerFileDecorations(context, session);
 
   // VS Code's event emitters don't await async listeners, so we funnel
@@ -547,12 +538,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     // reflects the new state without the user clicking Re-check.
     vscode.extensions.onDidChange(() => {
       fork(refreshToolAvailabilityLogged('extension change'));
-    }),
-    // Workspace folders opened/closed can flip `isGitRepository`, which
-    // gates the GitHub PR subscription tool group. ProgressViewProvider owns
-    // the ordered workspace-storage and native-config replacement.
-    vscode.workspace.onDidChangeWorkspaceFolders(() => {
-      fork(refreshToolAvailabilityLogged('workspace folder change'));
     }),
   );
   // Activation-lifetime listeners run in the activation scope, which ends
@@ -591,8 +576,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     ),
     { startImmediately: true },
   );
-  yield* Effect.forkScoped(followInlineCriticism(session, roots));
-  registerInlineComments(context);
+  yield* Effect.forkScoped(criticism.follow(session, roots));
 
   yield* taskStatusBar(context, session, roots.config);
 

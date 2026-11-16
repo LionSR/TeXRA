@@ -9,7 +9,7 @@
  */
 
 import { toolEditDiffLabel } from '@ui/copy/toolEditPreview';
-import { Effect, FileSystem, Scope } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 import type { ScopedFork } from '@texra-ai/harness/host';
@@ -19,7 +19,7 @@ import {
   type DiffSession,
 } from '@frontend/approval/VscodeDiffViewHost';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { openBuilt } from '@frontend/latex/openBuild';
+import type { ShowBuilt } from '@frontend/latex/openBuild';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   fromHost,
@@ -34,34 +34,26 @@ import type { BuildDisplayFn } from '@texra/controllers/approval/latexPreview';
 import type { ApprovalTempFiles } from '@texra/controllers/approval/tempFileManager';
 import { writeApprovalTempFiles } from '@texra/controllers/approval/tempFileManager';
 import { UNAPPLIED_TOOL_EDIT } from '@ui/copy/toolEditPreview';
-import type { WorkspaceRoots } from '@texra-ai/harness';
 import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
 
 const CHANNEL = 'ToolEditApproval';
 
 export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   private readonly diffViewHost = new VscodeDiffViewHost();
-  readonly openBuildDisplay: BuildDisplayFn = (location, options) =>
-    openBuilt(this.roots, [location], options).pipe(
-      Effect.provideService(Scope.Scope, this.scope),
-    );
+  readonly openBuildDisplay: BuildDisplayFn;
 
   private readonly storageDirectory: string;
   private readonly fork: ScopedFork<never>;
-  private readonly roots: WorkspaceRoots;
-  private readonly scope: Scope.Scope;
   constructor(
     storageDirectory: string,
     /** The view's run function, where a report or warning is shown. */
     fork: ScopedFork<never>,
-    roots: WorkspaceRoots,
-    /** The view's scope, which a scheduled PDF viewer open runs in. */
-    scope: Scope.Scope,
+    showBuilt: ShowBuilt,
   ) {
     this.storageDirectory = storageDirectory;
     this.fork = fork;
-    this.roots = roots;
-    this.scope = scope;
+    this.openBuildDisplay = (location, options) =>
+      showBuilt([location], options);
   }
 
   focused(): boolean {
@@ -96,8 +88,8 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   }
 
   reportError(message: string): void {
-    // Fire-and-forget, as the voided promise was: the report is logged and
-    // shown on its own fiber, and the caller does not wait for the toast.
+    // Fire-and-forget: the report is logged and shown on its own fiber, and
+    // the caller does not wait for the toast.
     this.fork(showLoggedMessage(message).pipe(withLogChannel(CHANNEL)));
   }
 

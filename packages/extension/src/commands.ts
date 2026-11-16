@@ -25,7 +25,6 @@ import { cloneOverleafProject } from '@commands/git/gitCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import type { CommentCommandId } from '@frontend/comments/inlineComments';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import {
   settingsTabByCommand,
@@ -44,6 +43,7 @@ import {
 
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
+import { SettingsViewProvider } from './settingsView/SettingsViewProvider';
 import type { Session, Sessions, WorkspaceRoots } from '@texra-ai/harness';
 import type {
   ProcessRuntime,
@@ -73,14 +73,67 @@ type CommandProgram = Effect.Effect<
  */
 type RegisteredCommandId = Exclude<ExtensionCommandId, CommentCommandId>;
 
+/** `texra.setApiKey`, optionally naming the provider to start on: one row
+ *  for the folder's window and the window without one. */
+export const setApiKeyHandler = (roots: WorkspaceRoots) =>
+  definedHandler(
+    Schema.Tuple([Schema.optional(Schema.Literals(API_KEY_PROVIDER_IDS))]),
+    (_: void, provider?: ApiKeyProviderId) => setApiKey(roots, provider),
+  );
+
 /**
- * Register every catalog command against `vscode.commands`, routing each
- * invocation through `dispatchCommandFromRegistry` so the dispatch path is
- * identical to the desktop's. The registered callback is the command's one
- * execution boundary: it runs the handler's program over the window's rooted
+ * Register a table of catalog commands against `vscode.commands`, routing
+ * each invocation through `dispatchCommandFromRegistry` so the dispatch path
+ * is identical to the desktop's: arguments are decoded and a bad payload is
+ * reported. The registered callback is the command's one execution
+ * boundary: it runs the handler's program over the window's rooted
  * filesystems and returns that promise, so VS Code forwards the program's
- * value and rejection to `executeCommand` callers (the bug fixed by #3782 was
- * a swallowed rejection).
+ * value and rejection to `executeCommand` callers (the bug fixed by #3782
+ * was a swallowed rejection).
+ */
+export function registerHandlers(
+  context: vscode.ExtensionContext,
+  runtime: ProcessRuntime,
+  fork: ScopedFork<ProcessServices | Sessions>,
+  roots: WorkspaceRoots,
+  handlers: Partial<
+    Record<RegisteredCommandId, CommandHandler<void, CommandProgram>>
+  >,
+): void {
+  for (const id of Struct.keys(handlers)) {
+    context.subscriptions.push(
+      vscode.commands.registerCommand(id, (...rawArgs: unknown[]) => {
+        const program = dispatchCommandFromRegistry(
+          id,
+          handlers,
+          undefined,
+          (failure) => {
+            if (failure.kind === 'invalidArguments') {
+              fork(
+                showLoggedMessage(
+                  `Invalid arguments for command ${failure.id}: ${failure.error.message}`,
+                ).pipe(withLogChannel(REGISTRY_CHANNEL)),
+              );
+              return;
+            }
+            fork(
+              Effect.logError(
+                `No handler is registered for command ${failure.id}`,
+              ).pipe(withLogChannel(REGISTRY_CHANNEL)),
+            );
+          },
+          ...rawArgs,
+        );
+        return program === false
+          ? false
+          : runtime.runPromise(withSessionFs(roots, program));
+      }),
+    );
+  }
+}
+
+/**
+ * Register every catalog command a folder's window runs, and its views.
  */
 export function registerCommands(
   context: vscode.ExtensionContext,
@@ -142,21 +195,8 @@ export function registerCommands(
     'texra.compileTikzFigures': () => handleCompileTikzFigures(roots),
     'texra.cloneOverleafProject': () => cloneOverleafProject(),
     'texra.removeApiKey': () => removeApiKey(roots),
-    'texra.showProgressView': definedHandler(
-      Schema.Tuple([
-        Schema.optional(
-          Schema.Struct({ inPlace: Schema.optional(Schema.Boolean) }),
-        ),
-      ]),
-      (_, options?: { inPlace?: boolean }) =>
-        progressViewProvider.showProgressView({
-          inPlace: options?.inPlace ?? false,
-        }),
-    ),
-    'texra.setApiKey': definedHandler(
-      Schema.Tuple([Schema.optional(Schema.Literals(API_KEY_PROVIDER_IDS))]),
-      (_, provider?: ApiKeyProviderId) => setApiKey(roots, provider),
-    ),
+    'texra.showProgressView': () => progressViewProvider.showProgressView(),
+    'texra.setApiKey': setApiKeyHandler(roots),
     // Without a configuration the command is the composer's accelerator
     // (Cmd+Alt+E): its Send, in the view the user is in. With one, it starts
     // a fresh run of it on the window's launcher and finishes when the run
@@ -177,36 +217,7 @@ export function registerCommands(
     CommandHandler<void, CommandProgram>
   >;
 
-  for (const id of Struct.keys(handlers)) {
-    context.subscriptions.push(
-      vscode.commands.registerCommand(id, (...rawArgs: unknown[]) => {
-        const program = dispatchCommandFromRegistry(
-          id,
-          handlers,
-          undefined,
-          (failure) => {
-            if (failure.kind === 'invalidArguments') {
-              fork(
-                showLoggedMessage(
-                  `Invalid arguments for command ${failure.id}: ${failure.error.message}`,
-                ).pipe(withLogChannel(REGISTRY_CHANNEL)),
-              );
-              return;
-            }
-            fork(
-              Effect.logError(
-                `No handler is registered for command ${failure.id}`,
-              ).pipe(withLogChannel(REGISTRY_CHANNEL)),
-            );
-          },
-          ...rawArgs,
-        );
-        return program === false
-          ? false
-          : runtime.runPromise(withSessionFs(roots, program));
-      }),
-    );
-  }
+  registerHandlers(context, runtime, fork, roots, handlers);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(

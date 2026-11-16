@@ -22,7 +22,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postToHost } from '@settingsView/frontend/messageDispatcher';
+import { postToHost } from '@ui/settings/messageDispatcher';
 import { toolDependencyStatusLabel } from '@texra/shared/tools/toolDependencyStatusLabels';
 import type { PluginActionMessage } from '@texra/shared/settingsView/pluginMessages';
 import type {

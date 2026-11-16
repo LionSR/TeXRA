@@ -4,7 +4,7 @@ import { Effect, Latch, Result, Schema } from 'effect';
 import { hasExtension } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { ensureError } from '@texra-ai/harness/schemas';
-import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
+import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
   executeVscodeCommand,
@@ -113,7 +113,7 @@ export class SettingsViewProvider {
                 : Effect.void;
             }),
           dialogs: vscodeUi,
-          externalOpener: new VscodeExternalOpener(),
+          externalOpener: vscodeOpener,
           // Markdown opens in preview mode, the read-only rendered view.
           openPath: (filePath) =>
             hasExtension(filePath, '.md')

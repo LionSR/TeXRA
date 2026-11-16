@@ -13,7 +13,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postToHost } from '@settingsView/frontend/messageDispatcher';
+import { postToHost } from '@ui/settings/messageDispatcher';
 import {
   type LatexSettingsStatus,
   DEFAULT_LATEX_SETTINGS_STATUS,

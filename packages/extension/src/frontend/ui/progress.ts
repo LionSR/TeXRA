@@ -14,8 +14,8 @@ type ProgressReporter = vscode.Progress<{
  * and the body is an Effect rather than a promise.
  *
  * `withProgress` only knows how to wait on a promise, so it is handed one
- * this program resolves when the body settles. The body itself is a step of
- * the calling fiber — not a nested settle on a runtime the caller had to be
+ * this program resolves when the body finishes. The body itself is a step of
+ * the calling fiber — not a nested run on a runtime the caller had to be
  * given — so its services, its interruption and its typed failures are the
  * caller's own. `ensuring` covers every step from the moment the notification
  * opens, so an interrupt landing before the task callback has even run still
@@ -30,7 +30,7 @@ export const withVSCodeProgress = Effect.fn('progress.withVSCodeProgress')(
       token: vscode.CancellationToken,
     ) => Effect.Effect<A, E, R>,
   ): Effect.fn.Return<A, E, R> {
-    const { promise: bodyDone, resolve: taskSettled } =
+    const { promise: bodyDone, resolve: taskDone } =
       Promise.withResolvers<void>();
 
     const started = yield* Deferred.make<{
@@ -46,9 +46,9 @@ export const withVSCodeProgress = Effect.fn('progress.withVSCodeProgress')(
     return yield* Effect.gen(function* () {
       const { progress, token } = yield* Deferred.await(started);
       const exit = yield* Effect.exit(body(progress, token));
-      taskSettled();
+      taskDone();
       yield* Effect.promise(() => dismissed);
       return yield* exit;
-    }).pipe(Effect.ensuring(Effect.sync(() => taskSettled())));
+    }).pipe(Effect.ensuring(Effect.sync(() => taskDone())));
   },
 );

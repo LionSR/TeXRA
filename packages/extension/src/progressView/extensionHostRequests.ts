@@ -1,17 +1,17 @@
 /**
  * The extension's half of its window (`openGuiWindow`): the verbs this host
  * performs, bound onto VS Code's commands, editors, pickers, and dialogs,
- * plus the few arms the extension answers its own way -- its file pickers,
+ * plus the few requests the extension answers its own way -- its file pickers,
  * its editor's current file, its tab pop-out, its getting-started commands.
  * Everything else is the one shared body, which decides the order, the
- * guards, and the refusal wording for both GUI hosts. Each arm answers
- * exactly once with an outcome or a request error; an arm the extension
+ * guards, and the rejection wording for both GUI hosts. Each handler answers
+ * exactly once with an outcome or a request error; a request the extension
  * does not perform is `Rejected` with its reason, never dropped.
  */
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
-import { Effect, FiberHandle, Scope } from 'effect';
+import { Effect, FiberHandle } from 'effect';
 
 import { type Session, type WorkspaceRoots } from '@texra-ai/harness';
 import {
@@ -35,10 +35,10 @@ import { createSampleProject } from '@commands/system/sampleProjectCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import {
   openGuidePage,
-  VscodeExternalOpener,
+  vscodeOpener,
 } from '@frontend/hosts/VscodeExternalOpener';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
-import { openBuilt } from '@frontend/latex/openBuild';
+import type { ShowBuilt } from '@frontend/latex/openBuild';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
@@ -92,6 +92,10 @@ export interface ExtensionHostRequestsOptions {
   /** Where this window's runs run: the session here, or the service's. */
   readonly runSession: Session;
   readonly roots: WorkspaceRoots;
+  /** "Show a built file", bound to this window's roots and the view's
+   *  scope, so a close of the view cancels a PDF viewer open still
+   *  waiting. */
+  readonly showBuilt: ShowBuilt;
   /** The window's bridge and snapshot. */
   readonly bridge: SessionBridge;
   readonly snapshot: HostSnapshotSource;
@@ -102,8 +106,8 @@ export interface ExtensionHostRequestsOptions {
   readonly extensionPath: string;
   /** The extension's id, which names its getting-started walkthrough. */
   readonly extensionId: string;
-  /** The process runtime the extension root holds; every request arm that
-   *  settles an Effect runs it here. */
+  /** The process runtime the extension root holds; every request handler
+   *  that runs an Effect runs it here. */
   readonly runtime: ProcessRuntime;
   /** The settings view at a target (`texra.showDashboard`). */
   openSettings(
@@ -130,7 +134,7 @@ export interface ExtensionHostRequestsOptions {
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
 
 /** One of this extension's own command handlers, or a VS Code command, run
- *  in the arm's fiber: a typed failure or a defect is named and logged. */
+ *  in the handler's fiber: a typed failure or a defect is named and logged. */
 function runHandler<A, E, R>(
   command: string,
   handler: Effect.Effect<A, E, R>,
@@ -166,7 +170,7 @@ const openExportPath = (
   const uri = vscode.Uri.file(filePath);
   if (kind === 'external') {
     // The opener also fails when VS Code declines the file.
-    return new VscodeExternalOpener().openExternal(uri.toString());
+    return vscodeOpener.openExternal(uri.toString());
   }
   if (kind === 'pdf') {
     return executeVscodeCommand('vscode.open', uri).pipe(
@@ -191,11 +195,6 @@ export const createExtensionHostRequests = Effect.fn(
   // The window's one comparison refresh: a newer comparison replaces it,
   // and the view's scope ends it.
   const diffRefresh = yield* FiberHandle.make();
-  /** A file action that schedules a PDF viewer opens it in the view's
-   *  scope, so a close of the view cancels a delayed open. */
-  const scope = yield* Scope.Scope;
-  const inViewScope = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-    Effect.provideService(effect, Scope.Scope, scope);
   const at = (file: string) => pathToLocationIn(roots.workspace, file);
   // A file-action port's handler; the process services come from the runtime.
   const runFileAction = <A, E>(
@@ -307,18 +306,14 @@ export const createExtensionHostRequests = Effect.fn(
     // `null`, as it does for a cancel.
     pickFiles: (fileType) => multipleFilePickers[fileType](),
     latexdiff: {
-      // The diffs' PDF viewer opens in the view's scope, so a close of the
-      // view cancels an open still waiting.
       openDiffs: ([first, ...rest]) =>
         first === undefined
           ? Effect.void
           : runHandler(
               'openLatexdiffs',
-              inViewScope(
-                openBuilt(roots, [at(first), ...rest.map(at)], {
-                  preserveFocus: true,
-                }),
-              ),
+              options.showBuilt([at(first), ...rest.map(at)], {
+                preserveFocus: true,
+              }),
             ),
       withProgress: (title, task) =>
         withVSCodeProgress(
@@ -339,7 +334,7 @@ export const createExtensionHostRequests = Effect.fn(
     // A link VS Code declines or cannot open is answered as a rejection, so
     // the view shows which URL did not open.
     openExternal: (url) =>
-      new VscodeExternalOpener()
+      vscodeOpener
         .openExternal(url)
         .pipe(
           Effect.mapError((failed) => new Rejected({ reason: failed.message })),
@@ -375,10 +370,10 @@ export const createExtensionHostRequests = Effect.fn(
   };
 
   /**
-   * The arms this host performs its own way. The capabilities that still
+   * The requests this host performs its own way. The capabilities that still
    * answer with a promise - VS Code commands, the editor APIs - are lifted
    * once (`executeVscodeCommand`), and this extension's own
-   * commands run as the programs behind them, so no arm re-enters the
+   * commands run as the programs behind them, so no handler re-enters the
    * runtime between here and the bridge that runs this program.
    */
   const own: OwnHostHandlers = {

@@ -16,14 +16,14 @@ import { html, type TemplateResult } from 'lit';
 import {
   settingSignal,
   settingsSnapshotRevisions,
-} from '@settingsView/frontend/settingsState';
+} from '@ui/settings/settingsState';
 import type { SettingEnumChoice } from '@texra/shared/settingsView/settingRows';
 import {
   settingEnumChoices,
   settingNumberBounds,
 } from '@texra/shared/settingsView/settingRows';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postToHost } from '@settingsView/frontend/messageDispatcher';
+import { postToHost } from '@ui/settings/messageDispatcher';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import type { StateSettingValue } from '@texra/shared/settingsView/settingsViewMessages';
 import type { SettingRow } from '@texra-ai/harness/schemas';

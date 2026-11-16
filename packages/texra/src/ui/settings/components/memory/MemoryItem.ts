@@ -18,7 +18,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postToHost } from '@settingsView/frontend/messageDispatcher';
+import { postToHost } from '@ui/settings/messageDispatcher';
 import { DetailsOpenController } from '@ui/litControllers/DetailsOpenController';
 import { getLightweightMd } from '@ui/markdown/lightweightMd';
 import { markdownStyles } from '@ui/styles/markdownStyles';

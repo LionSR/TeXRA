@@ -12,6 +12,7 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import type { HostFailed } from '@texra/hosts/uiHosts';
+import { isLatexFile } from '@texra/shared/latexFileTypes';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'ActiveFileGuards';
@@ -29,7 +30,7 @@ const GUARD_FAILURE_MESSAGES = {
     level: 'warn',
   },
   unsupportedExtension: {
-    user: 'This command only works with LaTeX files (.tex).',
+    user: 'This command only works with LaTeX files (.tex, .ltx, .latex).',
     logTail: 'active document is not a LaTeX file.',
     level: 'warn',
   },
@@ -70,7 +71,7 @@ const getActiveLatexEditor = Effect.fn('activeFileGuards.getActiveLatexEditor')(
       return { status: 'noEditor' } satisfies ActiveFileGuardResult;
     }
 
-    if (!editor.document.fileName.toLowerCase().endsWith('.tex')) {
+    if (!isLatexFile(editor.document.fileName)) {
       yield* vscodeUi.notify(
         'warning',
         GUARD_FAILURE_MESSAGES.unsupportedExtension.user,
@@ -111,8 +112,6 @@ const getActiveLatexEditor = Effect.fn('activeFileGuards.getActiveLatexEditor')(
 );
 
 interface GuardedLatexCommandOptions {
-  /** The command's log channel, named here for its whole program. */
-  channel: string;
   /** Description of the action being performed (e.g. "indent LaTeX document"). */
   action: string;
   /** Whether to save the document before proceeding (default: false) */
@@ -123,9 +122,8 @@ interface GuardedLatexCommandOptions {
 
 /**
  * Run a command against the active editor under the active-file guard: the
- * document must exist and be a `.tex` file, guard failures are logged through
- * the command's channel, and anything the operation throws is surfaced once
- * through that same channel.
+ * document must exist and be a LaTeX file, guard failures are logged on the
+ * caller's log channel, and anything the operation throws is surfaced once.
  */
 export function runGuardedLatexCommand<R = never>(
   roots: WorkspaceRoots,
@@ -134,7 +132,7 @@ export function runGuardedLatexCommand<R = never>(
     guardResult: ActiveFileGuardSuccess,
   ) => Effect.Effect<void, Error, R>,
 ): Effect.Effect<void, never, R> {
-  const { channel, action, saveDocument = false, errorMessage } = options;
+  const { action, saveDocument = false, errorMessage } = options;
 
   return Effect.gen(function* () {
     const guardResult = yield* getActiveLatexEditor(roots, saveDocument);
@@ -150,10 +148,9 @@ export function runGuardedLatexCommand<R = never>(
 
     yield* operation(guardResult);
   }).pipe(
-    // The command's one terminal boundary, as the `try`/`catch` it replaces
-    // was: a failed guard step and a failed operation alike are squashed
-    // back to the value the `catch` clause bound. An interrupt is not one of
-    // them: an extension-host reload or deactivation while a guarded LaTeX
+    // The command's one terminal boundary: a failed guard step and a failed
+    // operation are reported alike, as the squashed cause. An interrupt is
+    // not one of them: an extension-host reload or deactivation while a guarded LaTeX
     // command runs is a cancellation, and re-raising it keeps a spurious
     // "Failed to ..." toast off the screen (#12841).
     Effect.catchCause((cause) =>
@@ -163,6 +160,5 @@ export function runGuardedLatexCommand<R = never>(
             Effect.asVoid,
           ),
     ),
-    withLogChannel(channel),
   );
 }

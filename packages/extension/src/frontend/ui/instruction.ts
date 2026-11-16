@@ -48,10 +48,10 @@ export const showInstructionWithSuppress = Effect.fn(
   const buttons = actions.map((a) => a.title);
   if (showSuppress) buttons.push(NEVER_REMIND);
 
-  // Shown here, before the settlement below: a deferred caller returns once
+  // Shown here, before the answer is awaited below: a deferred caller returns once
   // VS Code has accepted the dialog, not once the user dismisses it.
   const prompt = vscode.window.showInformationMessage(message, ...buttons);
-  const settle = Effect.tryPromise({
+  const showAndAnswer = Effect.tryPromise({
     try: () => Promise.resolve(prompt),
     catch: ensureError,
   }).pipe(
@@ -66,7 +66,7 @@ export const showInstructionWithSuppress = Effect.fn(
     Effect.flatMap((choice): Effect.Effect<void, StateWriteFailed> => {
       if (!choice) return Effect.void;
       // The dismissal write is the caller's own program: this prompt runs
-      // on whichever runtime settles the Effect, so there is no runtime to
+      // on whichever runtime runs the Effect, so there is no runtime to
       // look up and no unpersistable choice to report.
       if (showSuppress && choice === NEVER_REMIND) {
         return store.update(suppressed.key, true);
@@ -76,13 +76,12 @@ export const showInstructionWithSuppress = Effect.fn(
     }),
   );
 
-  if (!options.deferDismissal) return yield* settle;
-  return yield* settle.pipe(
+  if (!options.deferDismissal) return yield* showAndAnswer;
+  return yield* showAndAnswer.pipe(
     Effect.catchCause((cause) =>
-      Effect.logWarning(`Failed to settle instruction "${key}"`).pipe(
-        Effect.annotateLogs({ data: cause }),
-        withLogChannel(CHANNEL),
-      ),
+      Effect.logWarning(
+        `Failed to handle the answer to instruction "${key}"`,
+      ).pipe(Effect.annotateLogs({ data: cause }), withLogChannel(CHANNEL)),
     ),
     Effect.forkDetach,
     Effect.asVoid,

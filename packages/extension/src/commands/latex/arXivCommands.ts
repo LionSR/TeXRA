@@ -11,7 +11,7 @@ import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { inputBox, quickPick } from '@frontend/ui/dialogs';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
-import { tokenCancelled } from '@frontend/vscode/vscodeEventWait';
+import { tokenCancelled } from '@frontend/vscode/vscodeEvents';
 import {
   downloadArxivSource,
   indentsDestination,

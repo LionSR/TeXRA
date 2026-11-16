@@ -68,8 +68,7 @@ export const createSampleProjectWithoutWorkspace: (
  * Copy the bundled sample into the session's workspace and open its
  * README. Every workspace path is named and checked by the session's
  * workspace view; the bundled source lives in the extension, outside every
- * session root, so the tree copy runs at the two absolute paths, with the
- * options the replaced facade used.
+ * session root, so the tree copy runs at the two absolute paths.
  */
 export const createSampleProject: (
   extensionPath: string,
@@ -106,9 +105,8 @@ export const createSampleProject: (
     if (yield* workspaceFs.exists(readmeRelativePath)) {
       yield* openFileInEditor(path.join(destPath, 'README.md'));
     }
-    // One terminal boundary for the whole creation, as the single
-    // `Effect.catch` over the async body it replaces was: a failed workspace
-    // read, a failed tree copy and a failed editor open are reported alike.
+    // One terminal boundary for the whole creation: a failed workspace read,
+    // a failed tree copy and a failed editor open are reported alike.
   },
   Effect.catchCause((cause) => reportFailure(Cause.squash(cause))),
   withLogChannel(CHANNEL),

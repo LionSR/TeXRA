@@ -163,8 +163,8 @@ Where things go:
 - `AppSignals` (`packages/harness/src/platform/appSignals.ts`) carries only
   app-lifecycle signals (auth, subscriptions, credentials, workspace-file
   writes), not run or session progress.
-- Webview base classes are in `packages/extension/src/common/webview/`, not in
-  the harness.
+- The extension's webview HTML provider is in
+  `packages/extension/src/common/webview/`, not in the harness.
 - The transcript row model is `packages/harness/src/shared/transcript/`
   (`@shared/transcript`); `packages/harness/src/transcript/` (`@transcript`) is
   run-transcript persistence.
@@ -180,17 +180,17 @@ storage, and workspace files") and shown in the native TeXRA settings view.
 
 Core logic must not import `vscode`. Check this first on any diff.
 
-**VS Code-free zones:** the harness, app, llm and desktop sources and the
-settings webview frontend; `VSCODE_FREE` in `oxlint.config.mts` lists the
-directories, and lint enforces it. The progress view's frontend is app code
-(`packages/texra/src/ui/progress/`).
+**VS Code-free zones:** the harness, app, llm and desktop sources;
+`VSCODE_FREE` in `oxlint.config.mts` lists the directories, and lint enforces
+it. Both webviews' frontends are app code (`packages/texra/src/ui/progress/`,
+`packages/texra/src/ui/settings/`).
 
 **VS Code-allowed:** `packages/extension/src/extension.ts` (builds its runtime
 over `processLayer()` once), `packages/extension/src/commands/`,
 `packages/extension/src/frontend/` (the extension-host frontend, not a webview),
 `packages/extension/src/common/` (not the harness's `common/`), and the view
-providers in `packages/extension/src/progressView/` and in
-`packages/extension/src/settingsView/` outside its `frontend/`.
+providers in `packages/extension/src/progressView/` and
+`packages/extension/src/settingsView/`.
 
 - Reach process services (`AgentDirectories`, `AppState`, `Secrets`,
   `FileSystem`, `SetupPlatform`, …) from the Effect context the process

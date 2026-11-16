@@ -365,7 +365,7 @@ above.
   `goal()` (`packages/harness/src/tools/plan/goalScript.ts:55`).
 - `latexdiff.tempFileLocation` and `latex.wrapCritiqueInAlign` are one-reader
   two-path toggles with no UI row. (`latexdiff.changesOnly` has one, in the
-  LaTeX tab: `packages/extension/src/settingsView/frontend/tabs/LaTeXTab.ts:490`.)
+  LaTeX tab: `packages/texra/src/ui/settings/tabs/LaTeXTab.ts:490`.)
 - `git.markCommits` gates `git.authorName` and `git.authorEmail`
   (`packages/harness/src/utils/system/execUtils.ts:53-64`): a present name is
   the switch.

@@ -15,7 +15,7 @@ import {
   pluralize,
 } from '@texra-ai/harness/schemas';
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
-import { postToHost } from '@settingsView/frontend/messageDispatcher';
+import { postToHost } from '@ui/settings/messageDispatcher';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';

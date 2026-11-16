@@ -3,7 +3,7 @@
 // holds the approval policy the Tools page used to.
 import { html, type TemplateResult } from 'lit';
 
-import '@settingsView/frontend/SettingsApp';
+import '@ui/settings/SettingsApp';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';

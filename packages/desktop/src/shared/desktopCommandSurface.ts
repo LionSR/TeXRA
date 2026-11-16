@@ -7,7 +7,7 @@ import {
   type SettingsTabCommandId,
 } from '@texra/shared/commands/catalog';
 import type { IconName } from '@ui/wa/iconNames';
-import { SETTINGS_NAV_ENTRIES } from '@settingsView/frontend/settingsNav';
+import { SETTINGS_NAV_ENTRIES } from '@ui/settings/settingsNav';
 import { texraGuideUrl } from '@ui/copy/guide';
 import { toElectronAccelerator } from './accelerators';
 import type { OsPlatform } from '@texra/shared/osPlatform';

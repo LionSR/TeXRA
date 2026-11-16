@@ -9,9 +9,10 @@ import { texraGuideUrl } from '@ui/copy/guide';
 /**
  * VS Code's browser hand-off behind the host-neutral {@link ExternalOpener}.
  * `env.openExternal` is the foreign API this port adapts; it has no
- * cancellation channel, so an interrupted fiber detaches from the wait.
+ * cancellation channel, so an interrupted fiber detaches from the wait. It
+ * holds no state, so every surface shares this one value.
  */
-export class VscodeExternalOpener implements ExternalOpener {
+export const vscodeOpener: ExternalOpener = Object.freeze({
   openExternal(url: string): Effect.Effect<void, HostFailed> {
     return Effect.tryPromise({
       try: () => vscode.env.openExternal(vscode.Uri.parse(url)),
@@ -38,11 +39,11 @@ export class VscodeExternalOpener implements ExternalOpener {
       ),
       Effect.asVoid,
     );
-  }
-}
+  },
+});
 
 /** A page of the TeXRA guide on texra.ai, in the default browser: what
  *  every docs button in this host opens. */
 export function openGuidePage(page: string): Effect.Effect<void, HostFailed> {
-  return new VscodeExternalOpener().openExternal(texraGuideUrl(page));
+  return vscodeOpener.openExternal(texraGuideUrl(page));
 }
