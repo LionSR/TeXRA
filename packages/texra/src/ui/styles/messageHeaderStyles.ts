@@ -59,9 +59,6 @@ export const messageHeaderStyles = css`
     font-weight: var(--font-weight-normal);
     color: var(--color-text-secondary);
   }
-  .message-copy.copy-success::part(base) {
-    color: var(--color-success);
-  }
 `;
 
 /** Identical disclosure geometry for user, assistant and error messages. */

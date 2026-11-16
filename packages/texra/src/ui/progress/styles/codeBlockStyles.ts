@@ -8,8 +8,8 @@ import { css } from 'lit';
 export const codeBlockStyles = css`
   .code-block {
     position: relative;
-    border: var(--border-thin) solid var(--color-border);
-    border-radius: var(--border-radius-medium);
+    border: var(--border-thin) solid var(--wa-color-surface-border);
+    border-radius: var(--wa-border-radius-m, var(--border-radius-small));
     overflow: hidden;
     max-width: 100%;
     min-width: 0;
@@ -20,13 +20,13 @@ export const codeBlockStyles = css`
     align-items: center;
     justify-content: space-between;
     padding: var(--wa-space-3xs) var(--wa-space-2xs);
-    background-color: var(--color-bg-secondary);
+    background-color: var(--wa-color-surface-lowered);
     border-bottom: var(--border-thin) solid var(--color-border);
     font-size: var(--font-size-xs);
   }
 
   .code-block-language {
-    color: var(--color-text-secondary);
+    color: var(--wa-color-text-quiet);
     text-transform: uppercase;
     letter-spacing: var(--letter-spacing-caps);
     font-weight: var(--font-weight-medium);
@@ -63,34 +63,6 @@ export const codeBlockStyles = css`
     word-break: inherit;
   }
 
-  .code-block-copy::part(base) {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--wa-space-2xs) var(--wa-space-xs);
-    border: none;
-    background: transparent;
-    color: var(--color-text-secondary);
-    border-radius: var(--border-radius-small);
-  }
-
-  .code-block-copy::part(base):hover {
-    color: var(--wa-color-text-normal);
-  }
-
-  .code-block-copy.copy-success::part(base) {
-    color: var(--wa-color-git-added);
-  }
-
-  /* Kept rather than deleted like the others: the focus-visible rule in
-     focusRingStyles cannot reach inside wa-button's shadow root, so this
-     part-piercing rule is the only ring this control gets. Widened to the
-     shared tokens. */
-  .code-block-copy:focus-visible::part(base) {
-    outline: var(--focus-ring-width) solid var(--wa-color-focus);
-    outline-offset: var(--focus-ring-offset);
-  }
-
   /* Syntax highlighted code blocks */
   pre.hljs code {
     background: transparent;
@@ -106,14 +78,14 @@ export const codeBlockStyles = css`
 
   .hljs-comment,
   .hljs-quote {
-    color: var(--color-text-secondary);
+    color: var(--wa-color-text-quiet);
     font-style: italic;
   }
 
   .hljs-keyword,
   .hljs-selector-tag,
   .hljs-tag {
-    color: var(--wa-color-symbol-keyword);
+    color: var(--wa-color-symbol-keyword, var(--wa-color-text-link));
   }
 
   .hljs-string,
@@ -134,7 +106,7 @@ export const codeBlockStyles = css`
   .hljs-variable,
   .hljs-params,
   .hljs-attr {
-    color: var(--wa-color-symbol-variable);
+    color: var(--wa-color-symbol-variable, var(--wa-color-text-normal));
   }
 
   .hljs-function,
@@ -151,7 +123,7 @@ export const codeBlockStyles = css`
 
   .hljs-property,
   .hljs-name {
-    color: var(--wa-color-symbol-property);
+    color: var(--wa-color-symbol-property, var(--wa-color-text-normal));
   }
 
   .hljs-operator,
@@ -162,13 +134,13 @@ export const codeBlockStyles = css`
   .hljs-section,
   .hljs-selector-class,
   .hljs-selector-id {
-    color: var(--color-text-link);
+    color: var(--wa-color-text-link);
   }
 
   .hljs-meta,
   .hljs-meta .hljs-keyword,
   .hljs-meta .hljs-string {
-    color: var(--wa-color-symbol-keyword);
+    color: var(--wa-color-symbol-keyword, var(--wa-color-text-link));
   }
 
   .hljs-addition {
@@ -195,7 +167,7 @@ export const codeBlockStyles = css`
   }
 
   .hljs-link {
-    color: var(--color-text-link);
+    color: var(--wa-color-text-link);
     text-decoration: underline;
   }
 `;

@@ -94,13 +94,12 @@ export const designTokens: CSSResult = css`
     --border-medium: 2px;
 
     /* Stacking, for the layers that recur across surfaces: a sticky header
-       or footer over its own scroller, a bar or cue pinned over the content
-       beside it, the tools sheet, and the session drawer above that. A local
-       "above my sibling" 1 inside one component stays a literal. */
+       or footer over its own scroller, and a bar or cue pinned over the
+       content beside it. Drawers and dialogs open in the top layer and need
+       none. A local "above my sibling" 1 inside one component stays a
+       literal. */
     --layer-sticky: 1;
     --layer-pinned: 2;
-    --layer-sheet: 3;
-    --layer-drawer: 4;
 
     /* State overlays. Every hover/active/selected state in the app is one of
        these three translucent overlays on a background-color-only transition —

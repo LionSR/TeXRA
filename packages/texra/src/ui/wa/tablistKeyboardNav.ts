@@ -1,9 +1,8 @@
 /**
- * APG tab-strip keyboard contract, shared by the settings view's page/section
- * tabs and the desktop shell's workbench tabs: ArrowLeft/ArrowRight move to
- * the adjacent tab (wrapping), Home/End jump to the first/last tab. Each host
- * still owns its own DOM lookup and focus/activation mechanics — only the
- * index arithmetic is common.
+ * APG tab-strip keyboard contract for the settings view's page and section
+ * tabs: ArrowLeft/ArrowRight move to the adjacent tab (wrapping), Home/End
+ * jump to the first/last tab. The caller owns the DOM lookup and the focus
+ * and activation; this is only the index arithmetic.
  */
 export function nextTablistIndex(
   key: string,

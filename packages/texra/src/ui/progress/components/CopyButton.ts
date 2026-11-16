@@ -23,7 +23,7 @@ type CopyButtonLook = 'icon' | 'labeled' | 'code';
 const LOOK_CLASS: Readonly<Record<CopyButtonLook, string>> = {
   icon: 'action-icon-button banner-content-copy',
   labeled: 'action-button message-copy banner-content-copy',
-  code: 'code-block-copy',
+  code: 'action-icon-button',
 };
 
 /**

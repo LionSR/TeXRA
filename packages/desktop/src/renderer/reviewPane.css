@@ -31,7 +31,7 @@
 .desktop-review-summary strong {
   overflow: hidden;
   font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--wa-font-weight-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -39,7 +39,7 @@
 .desktop-review-file-count {
   flex: none;
   margin-left: auto;
-  color: var(--color-text-muted);
+  color: var(--wa-color-text-quiet);
   font-size: var(--font-size-xs);
 }
 
@@ -89,13 +89,13 @@
   min-height: var(--height-control-compact);
   padding: 0;
   padding-inline-start: calc(var(--tree-depth, 0) * var(--wa-space-s));
-  border-radius: var(--border-radius);
+  border-radius: var(--wa-border-radius-s);
 }
 
 /* The built-in indicator carries the disclosure affordance: a start-placed
    chevron that rotates with `open`. Sized to match the slotted folder icon. */
 .desktop-review-directory::part(icon) {
-  font-size: var(--font-size-icon);
+  font-size: 16px;
 }
 
 .desktop-review-directory::part(content) {
@@ -109,43 +109,22 @@
 
 .desktop-review-directory [slot='summary'] {
   display: inline-grid;
-  grid-template-columns: var(--font-size-icon) minmax(0, 1fr);
+  grid-template-columns: 16px minmax(0, 1fr);
   align-items: center;
   gap: var(--wa-space-2xs);
   min-width: 0;
 }
 
 .desktop-review-directory [slot='summary'] wa-icon {
-  width: var(--font-size-icon);
-  height: var(--font-size-icon);
-  font-size: var(--font-size-icon);
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
 }
 
 .desktop-review-file {
-  display: block;
-  width: 100%;
   padding-inline-start: calc(
     var(--wa-space-xs) + var(--tree-depth, 0) * var(--wa-space-s)
   );
-}
-
-.desktop-review-file::part(base) {
-  width: 100%;
-  min-height: var(--height-control-compact);
-  justify-content: flex-start;
-  border-radius: var(--border-radius);
-}
-
-.desktop-review-file::part(label) {
-  min-width: 0;
-  overflow: hidden;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.desktop-review-file[data-active='true']::part(base) {
-  background: var(--surface-selected);
 }
 
 .desktop-review-empty {

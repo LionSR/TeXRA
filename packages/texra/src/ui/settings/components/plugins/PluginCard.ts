@@ -5,11 +5,9 @@
  */
 
 import { joinFacts } from '@texra-ai/harness/schemas';
-import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
-import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import {
   LitElement,
   html,
@@ -187,76 +185,51 @@ export class PluginCard extends LitElement {
   private renderInstallAction(
     item: ToolDashboardItem,
     action: ToolInstallAction,
-    secondaryAppearance: 'filled' | 'outlined',
-    secondaryVariant: 'brand' | 'neutral',
+    auxiliaryKind: 'primary' | 'secondary',
   ): TemplateResult | typeof nothing {
     switch (action.kind) {
       case 'guide':
         return nothing;
       case 'command':
-        return html`
-          <wa-button
-            id="plugin-install-btn-${item.id}"
-            appearance="filled"
-            variant="brand"
-            size="s"
-            @click=${() => this.runCommand(item, 'install')}
-          >
-            ${waIcon('terminal', { slot: 'start' })}
-            ${PLUGINS_PAGE.installInTerminal}
-          </wa-button>
-          <wa-tooltip for="plugin-install-btn-${item.id}"
-            >${action.command}</wa-tooltip
-          >
-        `;
+        return renderLabeledActionButton({
+          id: `plugin-install-btn-${item.id}`,
+          icon: 'terminal',
+          text: PLUGINS_PAGE.installInTerminal,
+          tooltip: action.command,
+          kind: 'primary',
+          onClick: () => this.runCommand(item, 'install'),
+        });
       case 'auth':
-        return html`
-          <wa-button
-            id="plugin-auth-btn-${item.id}"
-            appearance=${secondaryAppearance}
-            variant=${secondaryVariant}
-            size="s"
-            @click=${() => this.runCommand(item, 'auth')}
-          >
-            ${waIcon('right-to-bracket', { slot: 'start' })}
-            ${PLUGINS_PAGE.signIn}
-          </wa-button>
-          <wa-tooltip for="plugin-auth-btn-${item.id}"
-            >${action.command}</wa-tooltip
-          >
-        `;
+        return renderLabeledActionButton({
+          id: `plugin-auth-btn-${item.id}`,
+          icon: 'right-to-bracket',
+          text: PLUGINS_PAGE.signIn,
+          tooltip: action.command,
+          kind: auxiliaryKind,
+          onClick: () => this.runCommand(item, 'auth'),
+        });
       case 'extension':
-        return html`
-          <wa-button
-            appearance="filled"
-            variant="brand"
-            size="s"
-            @click=${() =>
-              postToHost({
-                command: SETTINGS_VIEW_COMMANDS.INSTALL_EXTENSION,
-                extensionId: action.extensionId,
-              })}
-          >
-            ${waIcon('cloud-arrow-down', { slot: 'start' })}
-            ${PLUGINS_PAGE.installExtension}
-          </wa-button>
-        `;
+        return renderLabeledActionButton({
+          icon: 'cloud-arrow-down',
+          text: PLUGINS_PAGE.installExtension,
+          kind: 'primary',
+          onClick: () =>
+            postToHost({
+              command: SETTINGS_VIEW_COMMANDS.INSTALL_EXTENSION,
+              extensionId: action.extensionId,
+            }),
+        });
       case 'url':
-        return html`
-          <wa-button
-            appearance=${secondaryAppearance}
-            variant=${secondaryVariant}
-            size="s"
-            @click=${() =>
-              postToHost({
-                command: SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL,
-                url: action.url,
-              })}
-          >
-            ${waIcon('arrow-up-right-from-square', { slot: 'start' })}
-            ${PLUGINS_PAGE.openInstallPage}
-          </wa-button>
-        `;
+        return renderLabeledActionButton({
+          icon: 'arrow-up-right-from-square',
+          text: PLUGINS_PAGE.openInstallPage,
+          kind: auxiliaryKind,
+          onClick: () =>
+            postToHost({
+              command: SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL,
+              url: action.url,
+            }),
+        });
     }
   }
 
@@ -277,8 +250,7 @@ export class PluginCard extends LitElement {
     const hasPrimaryInstallAction = item.installActions.some(
       (action) => action.kind === 'command' || action.kind === 'extension',
     );
-    const secondaryAppearance = hasPrimaryInstallAction ? 'outlined' : 'filled';
-    const secondaryVariant = hasPrimaryInstallAction ? 'neutral' : 'brand';
+    const auxiliaryKind = hasPrimaryInstallAction ? 'secondary' : 'primary';
 
     return html`
       <wa-details
@@ -295,12 +267,7 @@ export class PluginCard extends LitElement {
         )}
         <div class="plugin-actions">
           ${item.installActions.map((action) =>
-            this.renderInstallAction(
-              item,
-              action,
-              secondaryAppearance,
-              secondaryVariant,
-            ),
+            this.renderInstallAction(item, action, auxiliaryKind),
           )}
         </div>
         ${

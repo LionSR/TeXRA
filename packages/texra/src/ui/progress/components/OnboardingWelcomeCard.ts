@@ -15,6 +15,7 @@ import {
   TEXRA_TAGLINE,
 } from '@ui/copy/onboarding';
 import { designTokens, commonViewStyles } from '@ui/styles';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 /**
@@ -150,10 +151,6 @@ export class OnboardingWelcomeCard extends LitElement {
         margin-top: var(--wa-space-l);
       }
 
-      .skip-row wa-button::part(base) {
-        font-size: var(--font-size-sm);
-      }
-
       @container onboarding-card (max-width: 540px) {
         .choices {
           grid-template-columns: 1fr;
@@ -253,25 +250,21 @@ export class OnboardingWelcomeCard extends LitElement {
             </div>
           </div>
           <div class="skip-row">
-            <wa-button
-              id="onboardingWalkthroughButton"
-              class="btn-ghost"
-              appearance="plain"
-              size="s"
-              @click=${this.handleOpenGettingStarted}
-            >
-              ${waIcon(ONBOARDING_OPEN_WALKTHROUGH.icon, { slot: 'start' })}
-              ${ONBOARDING_OPEN_WALKTHROUGH.label}
-            </wa-button>
-            <wa-button
-              id="onboardingSkipButton"
-              class="btn-ghost"
-              appearance="plain"
-              size="s"
-              @click=${this.handleSkip}
-            >
-              ${ONBOARDING_CHOICE_SKIP_LABEL}
-            </wa-button>
+            ${renderLabeledActionButton({
+              id: 'onboardingWalkthroughButton',
+              icon: ONBOARDING_OPEN_WALKTHROUGH.icon,
+              text: ONBOARDING_OPEN_WALKTHROUGH.label,
+              kind: 'ghost',
+              className: 'is-compact',
+              onClick: () => this.handleOpenGettingStarted(),
+            })}
+            ${renderLabeledActionButton({
+              id: 'onboardingSkipButton',
+              text: ONBOARDING_CHOICE_SKIP_LABEL,
+              kind: 'ghost',
+              className: 'is-compact',
+              onClick: () => this.handleSkip(),
+            })}
           </div>
         </section>
       </div>

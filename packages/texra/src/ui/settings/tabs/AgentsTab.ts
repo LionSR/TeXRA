@@ -45,7 +45,6 @@ import {
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/AgentSelectionPanel';
-import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 @customElement('agents-tab')
@@ -146,14 +145,13 @@ export class AgentsTab extends SignalWatcher(LitElement) {
   private renderAgentList(): TemplateResult {
     return html`
       <agent-selection-panel .agents=${this.agents}>
-        <wa-button
-          slot="actions"
-          variant="brand"
-          size="s"
-          @click=${this.handleCreateAgent}
-        >
-          ${waIcon('plus', { slot: 'start' })}New agent
-        </wa-button>
+        ${renderLabeledActionButton({
+          icon: 'plus',
+          text: 'New agent',
+          kind: 'primary',
+          slot: 'actions',
+          onClick: () => this.handleCreateAgent(),
+        })}
       </agent-selection-panel>
     `;
   }

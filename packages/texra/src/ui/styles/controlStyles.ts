@@ -3,7 +3,8 @@
  * a focus ring, and a settings row look like in every TeXRA host.
  *
  * Four button skins (`.btn-primary` / `.btn-secondary` / `.btn-ghost` /
- * `.icon-button`), two modifiers (`.is-link` / `.is-danger`), two input skins
+ * `.icon-button`), the modifiers (`.is-link` / `.is-danger` / `.is-row` /
+ * `.is-row-content` / `.is-compact`), two input skins
  * (`formControlStyles` / `.input-plain`). A surface that needs something else
  * belongs in this file, not in a local override — a per-component skin is how
  * hover ends up meaning three different things on one screen.
@@ -218,6 +219,38 @@ export const buttonStyles: CSSResult = css`
     height: var(--row-height);
   }
 
+  /* A row of a navigation list or tree: it fills its column, the label
+     starts at the leading edge and a long name truncates. The current row
+     takes the selected fill unless its container owns the row's fills. */
+  .btn-ghost.is-row,
+  .action-button.is-row {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .btn-ghost.is-row::part(base),
+  .action-button.is-row::part(base) {
+    width: 100%;
+    height: var(--row-height);
+    min-height: var(--row-height);
+    justify-content: flex-start;
+    padding-inline: var(--wa-space-xs);
+  }
+
+  .btn-ghost.is-row::part(label),
+  .action-button.is-row::part(label) {
+    min-width: 0;
+    overflow: hidden;
+    text-align: start;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .is-row:not(.is-row-content)[aria-current='true']::part(base) {
+    background: var(--surface-selected);
+  }
+
   .btn-ghost wa-icon,
   .action-button wa-icon {
     font-size: var(--font-size-icon-sm);
@@ -368,12 +401,16 @@ export const buttonStyles: CSSResult = css`
     color: var(--color-text-link-active);
   }
 
-  /* focusRingStyles cannot reach inside wa-button's shadow root, so the
-     link skin draws the shared ring on the part itself. */
-  .btn-ghost.is-link:focus-visible::part(base),
-  .action-button.is-link:focus-visible::part(base) {
+  /* focusRingStyles cannot reach inside wa-button's shadow root, so every
+     skin draws the shared ring on the part itself. */
+  :is(${INTERACTIVE_CONTROLS}):focus-visible::part(base) {
     outline: var(--focus-ring-width) solid var(--wa-color-focus);
     outline-offset: var(--focus-ring-offset);
+  }
+
+  /* A copy button's confirmation, wherever it sits. */
+  .copy-success::part(base) {
+    color: var(--color-success);
   }
 
   /* Destructive actions read as red text. A filled red button is reserved for
@@ -467,10 +504,10 @@ export const iconSurfaceStyles: CSSResult = css`
  * which is why six textareas hand-rolled their sizing and why the instruction
  * panel's rendered mono while the follow-up input's rendered sans.
  *
- * `.input-plain` is the deliberate second skin: no box, one bottom hairline,
- * larger type. It is for a search field that owns its whole band (the command
- * palette, the history/memory search wells), where a bordered control would
- * read as a widget floating inside a panel.
+ * `.input-plain` is the deliberate second skin: no box and larger type. It is
+ * for a search field that owns its whole band (the command palette), where a
+ * bordered control would read as a widget floating inside a panel; the band
+ * draws its own edge and spacing.
  */
 export const formControlStyles: CSSResult = css`
   ${compactFormControlStyles}
@@ -570,14 +607,13 @@ export const formControlStyles: CSSResult = css`
 
   .input-plain::part(base) {
     min-height: var(--height-header);
-    border: 0;
-    border-bottom: var(--border-thin) solid var(--border-hairline);
-    border-radius: 0;
+    border-color: transparent;
     background: transparent;
+    box-shadow: none;
   }
 
   .input-plain::part(input) {
-    padding-inline: var(--wa-space-m);
+    padding: 0;
     font-size: var(--font-size-lg);
   }
 `;

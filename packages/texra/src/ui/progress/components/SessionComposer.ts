@@ -44,7 +44,10 @@ import {
 import { generatePastedImageName } from '@texra/shared/utils/pastedImageName';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { overlineDeclarations } from '@ui/styles/commonViewStyles';
-import { renderIconActionButton } from '@ui/wa/actionButtons';
+import {
+  renderIconActionButton,
+  renderLabeledActionButton,
+} from '@ui/wa/actionButtons';
 import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import './QueuedFollowUps';
@@ -518,14 +521,12 @@ export class SessionComposer extends LitElement {
       ${waIcon('code-branch')}
       <span class="routing-target">Your message goes to ${run.label}</span>
       <span aria-hidden="true">·</span>
-      <wa-button
-        class="routing-parent btn-ghost is-link"
-        appearance="plain"
-        size="s"
-        type="button"
-        @click=${() => this.replyToParent(parent.id)}
-        >reply to ${parent.label} instead</wa-button
-      >
+      ${renderLabeledActionButton({
+        text: `reply to ${parent.label} instead`,
+        kind: 'link',
+        className: 'routing-parent',
+        onClick: () => this.replyToParent(parent.id),
+      })}
     </div>`;
   }
 

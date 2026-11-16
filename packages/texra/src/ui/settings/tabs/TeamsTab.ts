@@ -133,7 +133,7 @@ export class TeamsTab extends LitElement {
         padding: 0 var(--wa-space-2xs);
         min-height: 18px;
         font-size: var(--font-size-xs);
-        line-height: var(--line-height-heading);
+        line-height: 1.2;
       }
 
       wa-tag.preset-agent-badge--orchestrator {
@@ -142,30 +142,14 @@ export class TeamsTab extends LitElement {
 
       .preset-orchestrator-icon {
         font-size: var(--font-size-xs);
-        line-height: var(--line-height-tight);
+        line-height: 1;
       }
 
       .preset-delete-btn {
         position: absolute;
         inset-block-start: var(--wa-space-2xs);
         inset-inline-end: var(--wa-space-2xs);
-        z-index: 1;
-      }
-
-      .preset-delete-btn::part(base) {
-        color: var(--color-text-secondary);
-      }
-
-      .preset-delete-btn::part(base):hover {
-        color: var(--color-error);
-      }
-
-      /* Part-piercing: a shadow-scoped :focus-visible cannot reach wa-button's
-         inner control, so this rule is the only ring it gets. */
-      .preset-delete-btn:focus-visible::part(base) {
-        outline: var(--focus-ring-width) solid var(--wa-color-focus);
-        outline-offset: var(--focus-ring-offset);
-        border-radius: var(--border-radius-small);
+        z-index: 10;
       }
     `,
   ];
@@ -288,6 +272,7 @@ export class TeamsTab extends LitElement {
             ? renderIconActionButton({
                 icon: 'trash',
                 label: `Delete ${preset.name} team`,
+                kind: 'danger',
                 className: 'preset-delete-btn',
                 onClick: (e) => this.handleDeletePreset(e, preset),
               })
