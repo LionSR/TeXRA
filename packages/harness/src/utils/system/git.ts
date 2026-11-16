@@ -169,7 +169,8 @@ export function commitExists(
 /**
  * Up to `limit` recent commits, each labelled `<shortHash>: <subject>
  * (<relativeDate>)`, or null when `cwd` is not a work tree. A repository
- * with no commit, where `git log` fails, has none.
+ * with no commit has none; a `git log` that fails on one that has commits
+ * (unreadable objects, a timeout) is logged at warn and reads as none.
  */
 export const recentCommitLabels = Effect.fn('git.recentCommitLabels')(
   function* (
@@ -177,16 +178,30 @@ export const recentCommitLabels = Effect.fn('git.recentCommitLabels')(
     limit: number,
   ): Effect.fn.Return<readonly string[] | null, never, ChildProcessSpawner> {
     if (!(yield* isGitRepository(cwd))) return null;
+    if (
+      (yield* gitOutput(cwd, 'rev-parse', '--verify', '--quiet', 'HEAD')) ===
+      null
+    )
+      return [];
     // `--no-pager` is portable; Windows lacks `cat` on PATH (#3817).
-    const log = yield* gitOutput(
-      cwd,
-      '--no-pager',
-      'log',
-      '-n',
-      String(limit),
-      '--pretty=format:%h: %s (%cr)',
+    const log = yield* executeCommand(
+      [
+        'git',
+        '--no-pager',
+        'log',
+        '-n',
+        String(limit),
+        '--pretty=format:%h: %s (%cr)',
+      ],
+      { cwd, timeout: GIT_READ_TIMEOUT_MS, quiet: true },
     );
-    return (log ?? '')
+    if (!log.success) {
+      yield* Effect.logWarning(
+        `Cannot read the recent commits of ${cwd}: ${log.stderr || 'git gave no answer'}`,
+      ).pipe(withLogChannel('platform'));
+      return [];
+    }
+    return log.stdout
       .split('\n')
       .map((line) => line.trim())
       .filter((line) => line !== '');
