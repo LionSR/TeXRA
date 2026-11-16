@@ -167,6 +167,7 @@ export const createDesktopHostRequests = (
         openFinalOutput: (absolutePath: string) => host.openPath(absolutePath),
         // The progress surface is always on screen in the desktop window.
         revealProgress: () => Effect.void,
+        showRunView: () => Effect.void,
       },
       files: {
         openDiff: (baseFile: string, editedFile: string, title: string) =>

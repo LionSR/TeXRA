@@ -20,7 +20,10 @@ import { ensureError } from '@texra-ai/harness/schemas';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { type HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
-import { openGuiWindow } from '@texra/controllers/session/openGuiWindow';
+import {
+  openGuiWindow,
+  type GuiWindowSettingsRuns,
+} from '@texra/controllers/session/openGuiWindow';
 import type {
   AttachedPort,
   SessionBridge,
@@ -57,6 +60,8 @@ interface ProjectBinding {
   readonly snapshot: HostSnapshotSource;
   /** The project's launcher (`HostRunActions.runValidated`). */
   readonly runValidated: HostRunActions['runValidated'];
+  /** The settings view's verbs on the project's runs. */
+  readonly settingsRuns: GuiWindowSettingsRuns;
   /** Where a failure before one of its runs opens is presented. */
   readonly present: Notices;
   readonly workspace: ReturnType<typeof createDesktopWorkspaceIpc>;
@@ -67,8 +72,6 @@ interface ProjectBinding {
 
 export interface ProjectBindings {
   get(key: string): ProjectBinding | undefined;
-  /** The binding of the project the window shows. */
-  active(): ProjectBinding | undefined;
   all(): readonly ProjectBinding[];
   /** Bind a project that opened and release one that closed. */
   readonly sync: Effect.Effect<void, never, ProcessServices>;
@@ -244,7 +247,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
           Stream.map(() => undefined),
         ),
       );
-      const { bridge, snapshot, present, runValidated } = yield* openGuiWindow({
+      const gui = yield* openGuiWindow({
         runs: project,
         roots: project.roots,
         project: project.display,
@@ -284,6 +287,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
               ),
           }),
       });
+      const { bridge, snapshot, present, runValidated, settingsRuns } = gui;
       // Registered after the host requests, so a port's release (its map
       // entry, its transcript set, `onPortClosed`) precedes their release, as
       // the extension's `dispose` orders them; awaited, unlike the bridge's.
@@ -302,6 +306,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         port,
         snapshot,
         runValidated,
+        settingsRuns,
         present,
         workspace,
         browserViews,
@@ -326,11 +331,8 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
     });
     yield* Effect.addFinalizer(() => releaseAll);
 
-    const active = () => bindings.get(projects.active().key);
-
     return {
       get: (key) => bindings.get(key),
-      active,
       all: () => [...bindings.values()],
       sync: Effect.gen(function* () {
         const open = new Map(

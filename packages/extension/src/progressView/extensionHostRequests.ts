@@ -415,6 +415,7 @@ export const createExtensionHostRequests = Effect.fn(
     runs: {
       revealProgress: options.revealProgress,
       openFinalOutput: previewFinalOutput,
+      showRunView: options.showProgressView,
     },
     // Each command is named, so a failure carries a tag, never a rejection.
     files: {

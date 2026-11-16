@@ -48,6 +48,7 @@ import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshot
 import {
   openGuiWindow,
   type GuiSession,
+  type GuiWindowSettingsRuns,
 } from '@texra/controllers/session/openGuiWindow';
 import type {
   AttachedPort,
@@ -70,8 +71,6 @@ import type {
 } from '@texra-ai/harness/host';
 
 const CHANNEL = 'ProgressViewProvider';
-
-type ProgressRunRevealResult = 'revealed' | 'missing';
 
 /** The toast that names a run when its progress view cannot be revealed:
  *  the run's agent, model and files. */
@@ -119,6 +118,7 @@ interface ViewParts {
   readonly bridge: SessionBridge;
   readonly snapshot: HostSnapshotSource;
   readonly runValidated: HostRunActions['runValidated'];
+  readonly settingsRuns: GuiWindowSettingsRuns;
   /** Where this window's runs run: the service's session, or this one. */
   readonly runSession: Session;
   /** The view's scope: each surface's scope is a child of it, so the
@@ -277,6 +277,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         bridge: gui.bridge,
         snapshot: gui.snapshot,
         runValidated: gui.runValidated,
+        settingsRuns: gui.settingsRuns,
         runSession,
         scope,
         contentProvider,
@@ -314,6 +315,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public readonly credentialUsable: Stream.Stream<boolean>;
   /** The window's launcher (`HostRunActions.runValidated`). */
   public readonly runValidated: HostRunActions['runValidated'];
+  /** The settings view's verbs on this window's runs. */
+  public readonly settingsRuns: GuiWindowSettingsRuns;
   /** Where this window's runs run: the service's session, or this one. */
   private readonly runSession: Session;
 
@@ -330,6 +333,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.contentProvider = parts.contentProvider;
     this.credentialUsable = parts.snapshot.credentialUsable;
     this.runValidated = parts.runValidated;
+    this.settingsRuns = parts.settingsRuns;
     this.runSession = parts.runSession;
     this.globalState = parts.globalState;
     this.runtime = parts.runtime;
@@ -388,13 +392,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       ),
     );
   });
-
-  /** Select `agent` in the launcher. */
-  public selectLauncherAgent(agent: string) {
-    return Effect.sync(() =>
-      this.bridge.surfaceAction({ kind: 'launch', patch: { agent } }),
-    );
-  }
 
   // --- Ports ---
 
@@ -702,23 +699,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     if (newest !== undefined)
       this.bridge.surfaceAction({ kind: 'showSessions', runId: newest });
   });
-
-  public readonly revealRun = Effect.fn('ProgressViewProvider.revealRun')(
-    { self: this },
-    function* (
-      runId: RunId,
-    ): Effect.fn.Return<ProgressRunRevealResult, HostFailed> {
-      const view = this.runSession.view.current();
-      if (!view.runs.has(runId)) return 'missing' as const;
-      yield* this.showProgressView();
-      this.bridge.surfaceAction({ kind: 'select', runId });
-      return 'revealed' as const;
-    },
-  );
-
-  public runLabel(runId: RunId): string | undefined {
-    return this.runSession.view.current().runs.get(runId)?.label;
-  }
 
   public readonly popOutToEditor = Effect.fn(
     'ProgressViewProvider.popOutToEditor',

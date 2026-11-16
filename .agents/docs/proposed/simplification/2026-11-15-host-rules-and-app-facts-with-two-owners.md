@@ -189,3 +189,16 @@ In order of size. Each needs the decision named.
   banner's check (`packages/extension/src/progressView/checkCoreDependencies.ts`)
   is VS Code-free code living in the extension, which belongs in the app
   once its one importer, the progress view provider, can be edited.
+
+## Landed in the 2026-11-16 sweep
+
+- **Host rule 5** (run verbs): `openGuiWindow` returns the settings body's
+  `selectLauncherAgent`, `revealRun` and `runLabel` over the window's own
+  bridge and session (`GuiWindowSettingsRuns`), and each host binds them;
+  the extension's three `ProgressViewProvider` methods and the desktop's
+  `ProjectBindings.active` are gone. The desktop read the shown project
+  (`projects.active()`), not the one its settings belong to, so a settings
+  request handled while the window switched projects (between the
+  registry's change and the surface's re-attach) looked the run up in the
+  other project. A host's "bring the run view up" is the window host's
+  `runs.showRunView`.
