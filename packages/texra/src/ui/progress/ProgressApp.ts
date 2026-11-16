@@ -285,17 +285,18 @@ export class ProgressApp extends LitElement {
     const items = this.windowItems();
     if (items.length === 0) return nothing;
     const menu = actionMenu(items);
+    const more = renderIconActionButtonParts({
+      id: 'shell-more',
+      icon: 'ellipsis',
+      slot: 'trigger',
+      label: 'More',
+      tooltip: 'More',
+    });
     return html`
       <wa-dropdown placement="bottom-end" @wa-select=${menu.onSelect}>
-        ${renderIconActionButton({
-          id: 'shell-more',
-          icon: 'ellipsis',
-          slot: 'trigger',
-          label: 'More',
-          tooltip: 'More',
-        })}
-        ${menu.items}
+        ${more.button} ${menu.items}
       </wa-dropdown>
+      ${more.tooltip}
     `;
   }
 

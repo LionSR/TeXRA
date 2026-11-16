@@ -27,7 +27,7 @@ import {
   focusRingStyles,
   formControlStyles,
 } from '@ui/styles/controlStyles';
-import { renderIconActionButton } from '@ui/wa/actionButtons';
+import { renderIconActionButtonParts } from '@ui/wa/actionButtons';
 import { actionMenu, type ActionMenuItem } from '@ui/wa/actionMenu';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 import { inlineRenameField } from '@ui/wa/inlineRename';
@@ -194,6 +194,13 @@ export class RunTab extends LitElement {
       });
     }
     const menu = actionMenu(menuItems);
+    const actions = renderIconActionButtonParts({
+      id: 'run-tab-actions',
+      icon: 'ellipsis',
+      slot: 'trigger',
+      label: `Actions for ${noun} ${runTitle}`,
+      tooltip: `${Str.capitalize(noun)} actions`,
+    });
 
     return html`
       <div
@@ -337,22 +344,16 @@ export class RunTab extends LitElement {
         ${
           menuItems.length > 0
             ? html`<wa-dropdown
-                class="tab-actions"
-                placement="bottom-end"
-                @wa-select=${(event: WaSelectEvent) => {
-                  event.stopPropagation();
-                  menu.onSelect(event);
-                }}
-              >
-                ${renderIconActionButton({
-                  id: 'run-tab-actions',
-                  icon: 'ellipsis',
-                  slot: 'trigger',
-                  label: `Actions for ${noun} ${runTitle}`,
-                  tooltip: `${Str.capitalize(noun)} actions`,
-                })}
-                ${menu.items}
-              </wa-dropdown>`
+                  class="tab-actions"
+                  placement="bottom-end"
+                  @wa-select=${(event: WaSelectEvent) => {
+                    event.stopPropagation();
+                    menu.onSelect(event);
+                  }}
+                >
+                  ${actions.button} ${menu.items}
+                </wa-dropdown>
+                ${actions.tooltip}`
             : nothing
         }
       </div>

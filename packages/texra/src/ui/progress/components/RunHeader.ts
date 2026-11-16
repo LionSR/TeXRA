@@ -22,7 +22,10 @@ import { runNoticeText, runStatus } from '@ui/copy/runStatus';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { statusIndicatorStyles } from '@ui/styles/statusIndicatorStyles';
-import { renderIconActionButton } from '@ui/wa/actionButtons';
+import {
+  renderIconActionButton,
+  renderIconActionButtonParts,
+} from '@ui/wa/actionButtons';
 import { actionMenu, type ActionMenuItem } from '@ui/wa/actionMenu';
 import { inlineRenameField } from '@ui/wa/inlineRename';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -446,18 +449,20 @@ export class RunHeader extends LitElement {
         : []),
     ];
     const menu = actionMenu(items);
+    const more = renderIconActionButtonParts({
+      id: ELEMENT_IDS.HEADER_MORE_BTN,
+      icon: 'ellipsis',
+      slot: 'trigger',
+      label: 'Task actions',
+      tooltip: 'Task actions',
+    });
     return html`
       <wa-dropdown placement="bottom-end" @wa-select=${menu.onSelect}>
-        ${renderIconActionButton({
-          id: ELEMENT_IDS.HEADER_MORE_BTN,
-          icon: 'ellipsis',
-          slot: 'trigger',
-          label: 'Task actions',
-          tooltip: 'Task actions',
-        })}
+        ${more.button}
         <div class="menu-status">${joinFacts([statusLabel, passLabel])}</div>
         ${menu.items}
       </wa-dropdown>
+      ${more.tooltip}
     `;
   }
 
