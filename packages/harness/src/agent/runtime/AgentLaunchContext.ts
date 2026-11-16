@@ -3,19 +3,27 @@
  * persona the config carries, or a catalog entry, with its plugin's trust
  * checked), the tools it declares against this build, and its model. A
  * miss is refused here, so no run is registered for a launch that cannot
- * run; an unknown agent or model is a `LaunchRefused` with the notice its
- * caller shows. The run program takes the result (`executeAgent`).
+ * run: an agent this process cannot run is `AgentUnavailable` (a launch
+ * reports it as its refusal, a resume refuses with it), and an unknown model
+ * is a `LaunchRefused` with the notice its caller shows. The run program takes the result (`executeAgent`).
  */
 import { Effect } from 'effect';
 
 import { selectModel } from '@texra-ai/llm';
-import { AgentCatalog, missingAgentRefusal } from '@agent/index/agentCatalog';
+import { AgentCatalog } from '@agent/index/agentCatalog';
 import { agentEntryOf } from '@agent/index/agentYamlScanner';
-import { requirePluginAgentLoads } from '@agent/index/pluginAgents';
-import { AgentError, LaunchRefused } from '@common/errors/agentErrors';
-import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
+import { requirePluginLoads } from '@agent/index/pluginAgents';
+import {
+  AgentError,
+  AgentUnavailable,
+  LaunchRefused,
+} from '@common/errors/agentErrors';
 import { SessionRoots } from '@platform/rootedFs';
-import { HARNESS_INSTRUCTION_KEY, type AgentConfig } from '@shared/schemas';
+import {
+  agentName,
+  HARNESS_INSTRUCTION_KEY,
+  type AgentConfig,
+} from '@shared/schemas';
 import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import { ToolRegistry } from '@tools/toolTable';
 
@@ -59,7 +67,9 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     const fullConfig = input.config;
     const roots = yield* SessionRoots;
     // A persona the config carries (its schema admitted it) is the agent;
-    // a named one resolves over a settled catalog, and a miss says why.
+    // a named one resolves over a settled catalog, and a miss says why: a
+    // plugin agent's by its plugin's install record (a launch may record
+    // the source-qualified spelling, `plugin:acme:x`).
     const agentEntry =
       fullConfig.persona != null
         ? agentEntryOf(fullConfig.persona, { source: 'inline', path: '' })
@@ -68,14 +78,25 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
             .forLaunch(fullConfig.agent, fullConfig.agentSource)
             .pipe(
               Effect.catchTag('AgentNotFound', (miss) =>
-                Effect.fail(missingAgentRefusal(miss)),
+                Effect.gen(function* () {
+                  if (fullConfig.agentSource === 'plugin')
+                    yield* requirePluginLoads(
+                      agentName(fullConfig.agent),
+                      roots,
+                    );
+                  return yield* new AgentUnavailable({
+                    blocked: {
+                      kind: 'blocked',
+                      blocker: 'agentMissing',
+                      name: miss.agent,
+                    },
+                    message: miss.message,
+                  });
+                }),
               ),
             );
     if (agentEntry.source === 'plugin')
-      yield* requirePluginAgentLoads(
-        agentEntry,
-        yield* readInstalledPluginLoad(roots),
-      );
+      yield* requirePluginLoads(agentEntry.name, roots);
     const { persona } = agentEntry;
 
     // A declared tool nothing could serve is a configuration error: the run

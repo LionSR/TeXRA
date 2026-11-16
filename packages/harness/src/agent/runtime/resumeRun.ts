@@ -28,7 +28,6 @@ import {
 } from '@shared/schemas';
 import { runReadRefusal, SessionLog } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { resumeBlocker } from './resumeBlocker';
 
 import {
   executeAgent,
@@ -225,11 +224,6 @@ export const openResume = Effect.fn('resumeRun.open')(function* (
   // Nothing to continue from, or rows this build cannot use.
   const rejected = yield* checkpointRefusal(runId);
   if (rejected !== null) return yield* refuse({ failed: rejected });
-  // An agent or plugin this process cannot run now refuses the resume with
-  // the reason; the run stays interrupted, never failed, and nothing is
-  // launched.
-  const blocker = yield* resumeBlocker(config);
-  if (blocker !== null) return yield* refuse({ failed: blocker });
   // Its parent, read once: the run's edge for this activation; and whether
   // its launch let it take input (`run.start.takesFollowUps`).
   const parentRunId = yield* persistedParentRunId(runId);
@@ -245,7 +239,14 @@ export const openResume = Effect.fn('resumeRun.open')(function* (
     config,
     stopAfterCycle:
       options.stopAfterCycle || parentRunId !== undefined || !takesInput,
-  });
+  }).pipe(
+    // An agent or plugin this process cannot run now refuses the resume
+    // with the reason; the run stays interrupted, never failed, and
+    // nothing is launched.
+    Effect.catchTag('AgentUnavailable', ({ blocked }) =>
+      refuse({ failed: blocked }),
+    ),
+  );
   return yield* executeAgent(definition, runId, {
     tools: options.tools,
     onProgress: options.onProgress,

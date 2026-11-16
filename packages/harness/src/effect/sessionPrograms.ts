@@ -35,7 +35,7 @@ import {
 } from '@agent/runtime/rootLaunch';
 import { RunRegistry, Runs } from '@agent/runtime/runRegistry';
 import type { ITool } from '@agent/core/tools/ToolTypes';
-import { LaunchRefused } from '@common/errors/agentErrors';
+import { AgentUnavailable, LaunchRefused } from '@common/errors/agentErrors';
 import { asksApproval } from '@agent/runtime/agentToolResolution';
 
 // The composition root supplies its existing scoped services privately;
@@ -78,10 +78,16 @@ type Catalog = Context.Service.Shape<typeof AgentCatalog>;
 const runFailure = (cause: unknown): RunFailure =>
   new RunFailure({ cause, message: toErrorMessage(cause) });
 
-/** A failure of the launch path: a refused launch as itself, anything
- *  else as the run's own. */
-const launchFailure = (cause: Error): LaunchRefused | RunFailure =>
-  cause instanceof LaunchRefused ? cause : runFailure(cause);
+/** A failure of the launch path: a refused launch as itself, an agent this
+ *  process cannot run as its refusal (a missing one with the notice that
+ *  offers the agent setting), anything else as the run's own. */
+const launchFailure = (cause: Error): LaunchRefused | RunFailure => {
+  if (cause instanceof LaunchRefused) return cause;
+  if (!(cause instanceof AgentUnavailable)) return runFailure(cause);
+  return cause.blocked.blocker === 'agentMissing'
+    ? missingAgentRefusal({ agent: cause.blocked.name, message: cause.message })
+    : new LaunchRefused({ message: cause.message });
+};
 
 /** An input its schema rejects, refused as the caller's. */
 const inputRefused = (cause: Schema.SchemaError): LaunchRefused =>
