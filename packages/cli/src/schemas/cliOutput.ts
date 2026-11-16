@@ -84,7 +84,7 @@ interface CliCommandResult {
 
 /** The field each one-field result kind carries its payload under: an NDJSON
  *  line is `{ kind, [field]: payload }`, one per element of a list. */
-export const CLI_RESULT_FIELD = {
+export const CLI_RESULT_FIELD = Object.freeze({
   agent: 'agent',
   'agent-copy': 'copy',
   'workspace-agents': 'agents',
@@ -105,7 +105,7 @@ export const CLI_RESULT_FIELD = {
   skill: 'skill',
   'skill-issue': 'issue',
   plugin: 'plugin',
-} as const;
+} as const);
 
 /** A kind whose payload sits under its {@link CLI_RESULT_FIELD} field. */
 export type CliResultKind = keyof typeof CLI_RESULT_FIELD;

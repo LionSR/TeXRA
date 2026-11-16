@@ -88,7 +88,7 @@ export interface TuiHostInteractions extends HostInteractions {
  * stdout or stderr. A file the session asks to open has no terminal view.
  */
 export const presentInTranscript: PresentationEventHandlers<RuntimePresentationEventPayloads> =
-  {
+  Object.freeze({
     requestShowError: (payload) =>
       appendLocalErrorTranscript(shownFailureText(payload)),
     requestShowInstruction: ({ key, message }) =>
@@ -98,7 +98,7 @@ export const presentInTranscript: PresentationEventHandlers<RuntimePresentationE
     openFile: () => undefined,
     agentNotFound: ({ agentName }) =>
       appendLocalErrorTranscript(missingAgentMessage(agentName)),
-  };
+  });
 
 /** Create the TUI's presentation host. */
 export function createTuiHostInteractions(
