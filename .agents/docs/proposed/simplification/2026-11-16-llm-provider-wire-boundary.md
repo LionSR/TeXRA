@@ -36,7 +36,15 @@ The PR that adds this note gives each one owner:
 5. **Google's continuation attach** re-decoded the whole turn through
    `TurnResultSchema` only to narrow a loosely-typed continuation; the OpenAI
    path already spreads it raw with a typed continuation. Google now does the
-   same, dropping a redundant re-validation of trusted in-process data.
+   same, dropping a redundant re-validation of trusted in-process data. The
+   nested anchor-count invariants that re-decode also checked hold by
+   construction: `coveredMessages > 0` because `anchoredPrefix` always appends
+   the assistant message (the OpenAI path already spreads raw on this basis),
+   and `coveredSteps > 0` (a Google-only check; OpenAI's `coveredItems` is
+   `>= 0`) because the guard returns `undefined` when the lowered prefix ends in
+   a `user_input` step and now also when it lowers to no steps at all — strictly
+   more graceful than the old re-decode, which failed the whole turn on a zero
+   count rather than attaching no continuation.
 
 ## Gated: OpenAI background submit could go non-streaming
 

@@ -534,8 +534,10 @@ const googleContinuation = Effect.fn('llm.google.continuation')(function* (
     result.content,
   );
   const coveredSteps = yield* lowerMessages(prefix, origin);
-  // With no output step, the next input joins the last user_input step.
-  if (coveredSteps.at(-1)?.type === 'user_input') return undefined;
+  // With no step, or no output step, there is nothing to anchor on and the
+  // next input joins the last user_input step; an anchor covers >0 steps.
+  if (coveredSteps.length === 0 || coveredSteps.at(-1)?.type === 'user_input')
+    return undefined;
   const continuation: TurnResult['continuation'] = {
     origin: { ...origin, protocol: turn.protocol },
     ...covered,
