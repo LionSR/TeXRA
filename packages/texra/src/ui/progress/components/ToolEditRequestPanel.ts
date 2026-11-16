@@ -15,7 +15,7 @@ import { buildLineChangeStats } from '@ui/progress/formatters/htmlBuilders';
 
 // Local imports - shared helpers
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
-import { selectedItemValue } from '@ui/wa/selectTemplates';
+import { actionMenu } from '@ui/wa/actionMenu';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - base class
@@ -24,7 +24,6 @@ import { BaseRequestPanel } from './BaseRequestPanel';
 // Local imports - styles
 import { lineChangeStatsStyles } from '@ui/styles/surfaceStyles';
 import type { RuntimeCommand } from '@texra-ai/harness/schemas';
-import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 @customElement('tool-edit-request-panel')
 export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
@@ -97,12 +96,22 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
     if (!isLatexFile(this.permission.data.path) || this.readOnly)
       return openDiff;
 
+    const menu = actionMenu([
+      {
+        label: 'Proposed version',
+        activate: () => this.emitAction({ action: 'previewProposed' }),
+      },
+      {
+        label: 'With changes marked (LaTeXdiff)',
+        activate: () => this.emitAction({ action: 'showLatexdiff' }),
+      },
+    ]);
     return html`
       ${openDiff}
       <wa-dropdown
         class="diff-dropdown-menu"
         placement="bottom-start"
-        @wa-select=${this.handleMenuSelect}
+        @wa-select=${menu.onSelect}
       >
         <wa-button
           slot="trigger"
@@ -115,12 +124,7 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
           data-action="previewMenu"
           >${waIcon('file-pdf', { slot: 'start' })}Preview PDF</wa-button
         >
-        <wa-dropdown-item value="previewProposed"
-          >Proposed version</wa-dropdown-item
-        >
-        <wa-dropdown-item value="showLatexdiff"
-          >With changes marked (LaTeXdiff)</wa-dropdown-item
-        >
+        ${menu.items}
       </wa-dropdown>
     `;
   }
@@ -134,16 +138,6 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
   // ===========================================================================
   // Diff menu handlers
   // ===========================================================================
-
-  private handleMenuSelect = (event: WaSelectEvent): void => {
-    const action = selectedItemValue(event);
-    switch (action) {
-      case 'showLatexdiff':
-      case 'previewProposed':
-        this.emitAction({ action });
-        break;
-    }
-  };
 
   // Every host answers `openDiff` with its own diff surface: the extension
   // opens a VS Code diff tab (VscodeDiffViewHost), the desktop posts

@@ -1,6 +1,7 @@
 import { html, nothing, render } from 'lit';
 
 import { renderIconActionButton } from '@ui/wa/actionButtons';
+import { actionMenu } from '@ui/wa/actionMenu';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import {
@@ -52,31 +53,36 @@ export function dockGroupActions(
       actions.api().addGroup({ referenceGroup: group, direction });
     }
   }
-  const draw = () =>
+  function closeGroup() {
+    for (const panel of [...group.panels]) actions.close(panel.id);
+    if (actions.api().groups.includes(group) && group.panels.length === 0)
+      actions.api().removeGroup(group);
+  }
+  const draw = () => {
+    const menu = actionMenu([
+      ...GROUP_OPEN_KINDS.map((kind) => ({
+        icon: WORKBENCH_KIND_META[kind].icon,
+        label: WORKBENCH_KIND_META[kind].label,
+        activate: () => actions.open(kind, group),
+      })),
+      {
+        label: 'Split group right',
+        dividerBefore: true,
+        activate: () => split('right'),
+      },
+      { label: 'Split group below', activate: () => split('below') },
+      {
+        label: group.api.isMaximized() ? 'Restore group' : 'Maximize group',
+        activate: () => {
+          if (group.api.isMaximized()) group.api.exitMaximized();
+          else group.api.maximize();
+        },
+      },
+      { label: 'Close group', dividerBefore: true, activate: closeGroup },
+    ]);
     render(
       html`
-        <wa-dropdown
-          placement="bottom-end"
-          @wa-select=${(event: CustomEvent<{ item: { value: string } }>) => {
-            const value = event.detail.item.value;
-            if (value === 'split-right') split('right');
-            else if (value === 'split-below') split('below');
-            else if (value === 'maximize') {
-              if (group.api.isMaximized()) group.api.exitMaximized();
-              else group.api.maximize();
-            } else if (value === 'close-group') {
-              for (const panel of [...group.panels]) actions.close(panel.id);
-              if (
-                actions.api().groups.includes(group) &&
-                group.panels.length === 0
-              )
-                actions.api().removeGroup(group);
-            } else {
-              const kind = GROUP_OPEN_KINDS.find((entry) => entry === value);
-              if (kind) actions.open(kind, group);
-            }
-          }}
-        >
+        <wa-dropdown placement="bottom-end" @wa-select=${menu.onSelect}>
           <wa-button
             slot="trigger"
             appearance="plain"
@@ -86,30 +92,12 @@ export function dockGroupActions(
           >
             ${waIcon('plus')}
           </wa-button>
-          ${GROUP_OPEN_KINDS.map(
-            (kind) => html`
-              <wa-dropdown-item value=${kind}>
-                ${waIcon(WORKBENCH_KIND_META[kind].icon, { slot: 'icon' })}
-                ${WORKBENCH_KIND_META[kind].label}
-              </wa-dropdown-item>
-            `,
-          )}
-          <wa-divider></wa-divider>
-          <wa-dropdown-item value="split-right"
-            >Split group right</wa-dropdown-item
-          >
-          <wa-dropdown-item value="split-below"
-            >Split group below</wa-dropdown-item
-          >
-          <wa-dropdown-item value="maximize">
-            ${group.api.isMaximized() ? 'Restore group' : 'Maximize group'}
-          </wa-dropdown-item>
-          <wa-divider></wa-divider>
-          <wa-dropdown-item value="close-group">Close group</wa-dropdown-item>
+          ${menu.items}
         </wa-dropdown>
       `,
       element,
     );
+  };
   return {
     element,
     init() {
@@ -168,60 +156,43 @@ export function dockTab(id: string, actions: DockActions): ITabRenderer {
     const groups = actions
       .api()
       .groups.filter((group) => group !== panel?.group);
+    const alone = panel?.group.panels.length === 1;
+    const moveToNewGroup = (
+      position: (typeof TAB_MOVE_POSITIONS)[number],
+      label: string,
+    ) => ({
+      label,
+      disabled: alone,
+      activate: () => {
+        if (panel) panel.api.moveTo({ group: panel.group, position });
+      },
+    });
+    const menu = actionMenu([
+      moveToNewGroup('right', 'Move tab to new group right'),
+      moveToNewGroup('bottom', 'Move tab to new group below'),
+      moveToNewGroup('left', 'Move tab to new group left'),
+      moveToNewGroup('top', 'Move tab to new group above'),
+      ...groups.map((group, index) => ({
+        label: `Move to ${group.activePanel?.title ?? `empty group ${index + 1}`}`,
+        dividerBefore: index === 0,
+        activate: () => panel?.api.moveTo({ group }),
+      })),
+      {
+        label: 'Close tab',
+        dividerBefore: true,
+        activate: () => actions.close(id),
+      },
+    ]);
     render(
       html`
         <wa-dropdown
           class="shell-dock-tab-menu"
           placement="bottom-start"
           distance="0"
-          @wa-select=${(event: CustomEvent<{ item: { value: string } }>) => {
-            const value = event.detail.item.value;
-            if (value === 'close') actions.close(id);
-            else if (value.startsWith('move:')) {
-              const group = actions
-                .api()
-                .groups.find((entry) => entry.id === value.slice(5));
-              if (group) panel?.api.moveTo({ group });
-            } else {
-              const position = TAB_MOVE_POSITIONS.find(
-                (entry) => entry === value,
-              );
-              if (panel && position)
-                panel.api.moveTo({ group: panel.group, position });
-            }
-          }}
+          @wa-select=${menu.onSelect}
         >
           <span slot="trigger" class="shell-dock-menu-anchor"></span>
-          <wa-dropdown-item
-            value="right"
-            ?disabled=${panel?.group.panels.length === 1}
-            >Move tab to new group right</wa-dropdown-item
-          >
-          <wa-dropdown-item
-            value="bottom"
-            ?disabled=${panel?.group.panels.length === 1}
-            >Move tab to new group below</wa-dropdown-item
-          >
-          <wa-dropdown-item
-            value="left"
-            ?disabled=${panel?.group.panels.length === 1}
-            >Move tab to new group left</wa-dropdown-item
-          >
-          <wa-dropdown-item
-            value="top"
-            ?disabled=${panel?.group.panels.length === 1}
-            >Move tab to new group above</wa-dropdown-item
-          >
-          ${groups.length ? html`<wa-divider></wa-divider>` : nothing}
-          ${groups.map(
-            (group, index) =>
-              html` <wa-dropdown-item value=${`move:${group.id}`}>
-                Move to
-                ${group.activePanel?.title ?? `empty group ${index + 1}`}
-              </wa-dropdown-item>`,
-          )}
-          <wa-divider></wa-divider>
-          <wa-dropdown-item value="close">Close tab</wa-dropdown-item>
+          ${menu.items}
         </wa-dropdown>
       `,
       menuRoot,

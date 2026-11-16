@@ -2,32 +2,25 @@ import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { IconName } from '@ui/wa/iconNames';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
+import { formatTaskDiagnostics } from '@ui/copy/taskDiagnostics';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
 import type { RunView, RunAction } from '@texra-ai/harness/schemas';
+
+/** What a run action reaches when it is chosen: the header's events, and
+ *  its clipboard. */
+export interface RunMenuTarget {
+  dispatchEvent(event: Event): boolean;
+  copy(text: string): void;
+}
 
 /** One run action in the run header's menu. Stop sits in the row itself. */
 export interface RunMenuAction {
-  id: string;
   /** The run action it performs: shown only while `RunView.actions` holds it. */
   action: RunAction;
   icon: IconName;
   label: string;
-  /**
-   * What choosing it sends: a host arm on the run, the runtime's
-   * compaction, or a clipboard write the header makes itself (it has no
-   * backend leg, so it invents no round trip).
-   */
-  arm:
-    | Extract<
-        HostCommand['kind'],
-        | 'runAgain'
-        | 'openRunStorage'
-        | 'exportTranscript'
-        | 'latexdiff'
-        | 'pack'
-        | 'clean'
-      >
-    | 'run.compact'
-    | 'copyDiagnostics';
+  /** Send what choosing it does for `run`. */
+  activate(run: RunView, target: RunMenuTarget): void;
 }
 
 /**
@@ -40,82 +33,86 @@ export const ELEMENT_IDS = {
   PROGRESS_BADGE: 'progressBadge',
   HEADER_MORE_BTN: 'headerMoreButton',
   STOP_STREAM_BTN: 'stopStreamBtn',
-  RUN_AGAIN_BTN: 'runAgainBtn',
-  EXPORT_TRANSCRIPT_BTN: 'exportTranscriptBtn',
-  DIFF_STREAM_BTN: 'diffStreamBtn',
-  CLEAN_STREAM_BTN: 'cleanStreamBtn',
-  PACK_STREAM_BTN: 'packStreamBtn',
-  OPEN_RUN_STORAGE_BTN: 'openRunStorageBtn',
-  COPY_DIAGNOSTICS_BTN: 'copyDiagnosticsBtn',
-  COMPACT_RESPONSE_BTN: 'compactResponseBtn',
 };
 
+/** An action that sends the host command `kind` on the run. */
+const hostAction =
+  (
+    kind: Extract<
+      HostCommand['kind'],
+      | 'runAgain'
+      | 'openRunStorage'
+      | 'exportTranscript'
+      | 'latexdiff'
+      | 'pack'
+      | 'clean'
+    >,
+  ) =>
+  (run: RunView, target: RunMenuTarget) =>
+    target.dispatchEvent(SessionUiEvents.host({ kind, runId: run.id }));
+
 const OPEN_RUN_STORAGE_ACTION: RunMenuAction = {
-  id: ELEMENT_IDS.OPEN_RUN_STORAGE_BTN,
   action: 'openRunStorage',
-  arm: 'openRunStorage',
   icon: 'folder-open',
   label: TASK_ACTIONS.openFolder,
+  activate: hostAction('openRunStorage'),
 };
 
 const EXPORT_TRANSCRIPT_ACTION: RunMenuAction = {
-  id: ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
   action: 'export',
-  arm: 'exportTranscript',
   icon: 'file-export',
   label: 'Export conversation…',
+  activate: hostAction('exportTranscript'),
 };
 
-/** A task's facts for a bug report: the one place its raw ids are shown. */
+/** A task's facts for a bug report: the one place its raw ids are shown.
+ *  A clipboard write the header makes itself, with no round trip. */
 const COPY_DIAGNOSTICS_ACTION: RunMenuAction = {
-  id: ELEMENT_IDS.COPY_DIAGNOSTICS_BTN,
   action: 'copy',
-  arm: 'copyDiagnostics',
   icon: 'copy',
   label: TASK_ACTIONS.copyDiagnostics,
+  activate: (run, target) => target.copy(formatTaskDiagnostics(run)),
 };
 
 const TASK_RUN_ACTIONS: readonly RunMenuAction[] = [
   {
-    id: ELEMENT_IDS.RUN_AGAIN_BTN,
     action: 'runAgain',
-    arm: 'runAgain',
     icon: 'play',
     label: 'Run again…',
+    activate: hostAction('runAgain'),
   },
   OPEN_RUN_STORAGE_ACTION,
   EXPORT_TRANSCRIPT_ACTION,
   COPY_DIAGNOSTICS_ACTION,
   {
-    id: ELEMENT_IDS.DIFF_STREAM_BTN,
     action: 'files',
-    arm: 'latexdiff',
     icon: 'code-compare',
     label: 'Run latexdiff on the outputs',
+    activate: hostAction('latexdiff'),
   },
   {
-    id: ELEMENT_IDS.PACK_STREAM_BTN,
     action: 'files',
-    arm: 'pack',
     icon: 'box-archive',
     label: 'Archive outputs to History',
+    activate: hostAction('pack'),
   },
   {
-    id: ELEMENT_IDS.CLEAN_STREAM_BTN,
     action: 'files',
-    arm: 'clean',
     icon: 'trash',
     label: 'Delete output files',
+    activate: hostAction('clean'),
   },
 ];
 
 const CONVERSATION_RUN_ACTIONS: readonly RunMenuAction[] = [
   {
-    id: ELEMENT_IDS.COMPACT_RESPONSE_BTN,
     action: 'compact',
-    arm: 'run.compact',
     icon: 'compress',
     label: 'Compact conversation',
+    activate: (run, target) =>
+      target.dispatchEvent(
+        SessionUiEvents.runtime({ kind: 'run.compact', runId: run.id }),
+      ),
   },
   OPEN_RUN_STORAGE_ACTION,
   EXPORT_TRANSCRIPT_ACTION,

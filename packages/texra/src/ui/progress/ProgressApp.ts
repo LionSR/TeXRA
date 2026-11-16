@@ -52,7 +52,6 @@ import {
   renderIconActionButton,
   renderIconActionButtonParts,
 } from '@ui/wa/actionButtons';
-import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 import { ONBOARDING_SETUP_HANDOFF } from '@ui/copy/onboarding';
 import { requestErrorText } from '@ui/copy/requestErrors';
@@ -86,8 +85,7 @@ import './components/OnboardingWelcomeCard';
 import './components/RunHeader';
 import { launchAgentOption } from './components/composerChipMenus';
 import { editedProposal, formHost } from './proposalEdit';
-import type { HeaderMenuItem } from './components/RunHeader';
-import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
+import { actionMenu, type ActionMenuItem } from '@ui/wa/actionMenu';
 import type { SessionView, RunView } from '@texra-ai/harness/schemas';
 
 registerTeXRAWebAwesomeIcons();
@@ -119,7 +117,7 @@ export class ProgressApp extends LitElement {
   /** The window's own items: pop the view out or back, the LaTeXDiffs
    *  sheet. The New-task header shows them in its menu; a run's header
    *  appends them to the run's. An embedded shell's host owns its window. */
-  private windowItems(): HeaderMenuItem[] {
+  private windowItems(): ActionMenuItem[] {
     if (this.placement === 'embedded') return [];
     const inEditor = this.placement === 'editor';
     const host = (kind: 'popOut' | 'popBack') => () =>
@@ -127,19 +125,16 @@ export class ProgressApp extends LitElement {
     return [
       inEditor
         ? {
-            value: 'popBack',
             icon: 'backward-step',
             label: 'Back to sidebar',
             activate: host('popBack'),
           }
         : {
-            value: 'popOut',
             icon: 'picture-in-picture',
             label: 'Open tasks in editor',
             activate: host('popOut'),
           },
       {
-        value: 'latexdiffs',
         icon: 'code-compare',
         label: 'LaTeXDiffs…',
         activate: () =>
@@ -305,14 +300,9 @@ export class ProgressApp extends LitElement {
   private renderOverflow(): TemplateResult | typeof nothing {
     const items = this.windowItems();
     if (items.length === 0) return nothing;
+    const menu = actionMenu(items);
     return html`
-      <wa-dropdown
-        placement="bottom-end"
-        @wa-select=${(event: WaSelectEvent) => {
-          const value = selectedItemValue(event);
-          items.find((item) => item.value === value)?.activate();
-        }}
-      >
+      <wa-dropdown placement="bottom-end" @wa-select=${menu.onSelect}>
         <wa-button
           slot="trigger"
           id="shell-more"
@@ -324,14 +314,7 @@ export class ProgressApp extends LitElement {
           aria-label="More"
           >${waIcon('ellipsis')}</wa-button
         >
-        ${repeat(
-          items,
-          (item) => item.value,
-          (item) =>
-            html`<wa-dropdown-item value=${item.value}
-              >${waIcon(item.icon, { slot: 'icon' })}${item.label}</wa-dropdown-item
-            >`,
-        )}
+        ${menu.items}
       </wa-dropdown>
       <wa-tooltip for="shell-more">More</wa-tooltip>
     `;

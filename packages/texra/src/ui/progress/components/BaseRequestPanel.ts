@@ -365,13 +365,15 @@ export abstract class BaseRequestPanel<
       triggerId: 'request-grant-trigger',
       triggerAriaLabel: 'More approve options',
       tooltip: `${grant.scope ?? grant.label} (a)`,
-      items: html`<wa-dropdown-item value="grant"
-        >${grant.label}</wa-dropdown-item
-      >`,
-      onSelect: (value) => {
-        if (value === 'grant')
-          this.emitAction(grant.decision ?? { action: APPROVE_SESSION_ACTION });
-      },
+      items: [
+        {
+          label: grant.label,
+          activate: () =>
+            this.emitAction(
+              grant.decision ?? { action: APPROVE_SESSION_ACTION },
+            ),
+        },
+      ],
     });
     return html`
       <wa-button-group

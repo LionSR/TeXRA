@@ -28,7 +28,8 @@ import {
   formControlStyles,
 } from '@ui/styles/controlStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
-import { afterDropdownHides } from '@ui/wa/selectTemplates';
+import { actionMenu, type ActionMenuItem } from '@ui/wa/actionMenu';
+import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 import { inlineRenameField } from '@ui/wa/inlineRename';
 import { AGENT_DECORATORS, type RunDecorator } from '@ui/wa/icons';
 
@@ -169,6 +170,30 @@ export class RunTab extends LitElement {
     // The rollup is the row's own fact: the rail carries it with no
     // disclosure at all (W2), and a tree row hides it while open.
     const showRollup = run.rollup.total > 0 && !this.expanded;
+    const menuItems: ActionMenuItem[] = [];
+    if (run.actions.includes('rename')) {
+      menuItems.push({
+        icon: 'pencil',
+        label: TASK_ACTIONS.rename,
+        focusesOwn: true,
+        activate: () => this.startRename(),
+      });
+    }
+    if (this.removable) {
+      menuItems.push({
+        icon: 'trash',
+        label: TASK_ACTIONS.delete(run),
+        variant: 'danger',
+        activate: () =>
+          this.dispatchEvent(
+            new CustomEvent('run-row-delete', {
+              bubbles: true,
+              composed: true,
+            }),
+          ),
+      });
+    }
+    const menu = actionMenu(menuItems);
 
     return html`
       <div
@@ -310,24 +335,13 @@ export class RunTab extends LitElement {
         }
         <wa-tooltip for="run-tab-kind">${this.decorator.label}</wa-tooltip>
         ${
-          this.removable || run.actions.includes('rename')
+          menuItems.length > 0
             ? html`<wa-dropdown
                 class="tab-actions"
                 placement="bottom-end"
-                @wa-select=${(
-                  event: CustomEvent<{ item: { value: string } }>,
-                ) => {
+                @wa-select=${(event: WaSelectEvent) => {
                   event.stopPropagation();
-                  if (event.detail.item.value === 'rename')
-                    afterDropdownHides(event, () => this.startRename());
-                  if (event.detail.item.value === 'delete') {
-                    this.dispatchEvent(
-                      new CustomEvent('run-row-delete', {
-                        bubbles: true,
-                        composed: true,
-                      }),
-                    );
-                  }
+                  menu.onSelect(event);
                 }}
               >
                 ${renderIconActionButton({
@@ -337,8 +351,7 @@ export class RunTab extends LitElement {
                   label: `Actions for ${noun} ${runTitle}`,
                   tooltip: `${Str.capitalize(noun)} actions`,
                 })}
-                ${run.actions.includes('rename') ? html`<wa-dropdown-item value="rename">${waIcon('pencil', { slot: 'icon' })}${TASK_ACTIONS.rename}</wa-dropdown-item>` : nothing}
-                ${this.removable ? html`<wa-dropdown-item class="tab-remove" value="delete" variant="danger">${waIcon('trash', { slot: 'icon' })}${TASK_ACTIONS.delete(run)}</wa-dropdown-item>` : nothing}
+                ${menu.items}
               </wa-dropdown>`
             : nothing
         }

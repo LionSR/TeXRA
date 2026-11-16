@@ -30,23 +30,19 @@ import {
 import { designTokens } from '@ui/styles';
 import { toneStyles } from '@ui/styles/toneStyles';
 import { isActivationKey } from '@ui/wa/keyActivation';
-import { selectedItemValue } from '@ui/wa/selectTemplates';
+import { actionMenu } from '@ui/wa/actionMenu';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type {
   ScriptCallView,
   ScriptStageView,
 } from '@texra-ai/harness/transcript';
 import type { SessionView, RunId } from '@texra-ai/harness/schemas';
-import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 // Side-effect imports - register Web Awesome components
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-
-/** The row menu's one item: stop the call's child run. */
-const STOP_AGENT = 'stop-agent';
 
 const scriptStageStyles = css`
   :host {
@@ -207,13 +203,18 @@ export class ScriptStage extends LitElement {
         ? undefined
         : this.view.runs.get(call.childRunId);
     if (call.status !== 'running' || child === undefined) return nothing;
+    const menu = actionMenu([
+      {
+        icon: 'circle-stop',
+        label: 'Stop this agent',
+        activate: () => this.stop(child.id),
+      },
+    ]);
     return html`<wa-dropdown
       class="row-actions"
       placement="bottom-end"
       @click=${(event: Event) => event.stopPropagation()}
-      @wa-select=${(event: WaSelectEvent) => {
-        if (selectedItemValue(event) === STOP_AGENT) this.stop(child.id);
-      }}
+      @wa-select=${menu.onSelect}
       ><wa-button
         slot="trigger"
         size="s"
@@ -221,10 +222,7 @@ export class ScriptStage extends LitElement {
         variant="neutral"
         aria-label="More"
         >${waIcon('ellipsis')}</wa-button
-      ><wa-dropdown-item value=${STOP_AGENT}
-        >${waIcon('circle-stop', { slot: 'icon' })}Stop this
-        agent</wa-dropdown-item
-      ></wa-dropdown
+      >${menu.items}</wa-dropdown
     >`;
   }
 
