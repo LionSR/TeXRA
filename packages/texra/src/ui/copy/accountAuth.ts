@@ -90,6 +90,8 @@ export const ACCOUNT_OUTCOME = {
   notSignedIn: (providerDisplayName: string): string =>
     `Not signed in with ${providerDisplayName}.`,
   /** Prefix only — the extension appends the reason through its own logger. */
+  signInFailed: (providerDisplayName: string): string =>
+    `${providerDisplayName} sign-in failed`,
   signOutFailed: (providerDisplayName: string): string =>
     `${providerDisplayName} sign-out failed`,
   signOutFailedWithReason: (

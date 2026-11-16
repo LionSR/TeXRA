@@ -29,16 +29,17 @@ import {
 import {
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
-  Cancelled,
 } from '@texra-ai/harness/schemas';
 import { appSignalStream } from '@texra-ai/harness/host';
 import type { SubscriptionUsageProvider } from '@texra/shared/model/subscriptionUsage';
 import { codingPlanForUsageSetting } from '@texra/model/codingPlanSubscriptions';
 import {
+  announceSignIn,
   subscriptionAuthStatus,
   subscriptionProvider,
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
+import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { SubscriptionUsageService } from '@texra/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { settingsAgentCommands } from '@texra/controllers/settingsView/settingsAgentCommands';
 import { settingsGitCommands } from '@texra/controllers/settingsView/settingsGitCommands';
@@ -92,11 +93,6 @@ interface SettingsViewBodyPorts {
   /** The account copy (`src/ui`), which controllers likewise take from
    *  their host. */
   readonly accountCopy: {
-    signedInEnabled(
-      providerDisplayName: string,
-      accountLabel: string,
-      modelFamily: string,
-    ): string;
     subscriptionNotDisabled(
       providerDisplayName: string,
       reason: string,
@@ -206,28 +202,17 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
     /** Every sign-in entry point of a window (the Models page, the
      *  onboarding card, a command) ends here, so each tells the user the
      *  same thing and repaints the same pages. */
-    const signInSubscription = (providerId: SubscriptionProviderId) => {
-      const provider = subscriptionProvider(providerId);
-      return subscriptionChange(
-        `${provider.displayName} sign-in failed`,
-        bindings.signInSubscription(providerId).pipe(
-          Effect.flatMap((account) =>
-            notice(
-              ports.accountCopy.signedInEnabled(
-                provider.displayName,
-                account.label,
-                provider.modelFamily,
-              ),
-            ),
-          ),
-          // The user backed out of the host's prompt: nothing failed.
-          Effect.catchIf(
-            (error) => error instanceof Cancelled,
-            () => Effect.void,
-          ),
+    const signInSubscription = (providerId: SubscriptionProviderId) =>
+      subscriptionChange(
+        ACCOUNT_OUTCOME.signInFailed(
+          subscriptionProvider(providerId).displayName,
+        ),
+        announceSignIn(
+          providerId,
+          bindings.signInSubscription(providerId),
+          notice,
         ),
       );
-    };
     const signOutSubscription = (providerId: SubscriptionProviderId) => {
       const provider = subscriptionProvider(providerId);
       return subscriptionChange(

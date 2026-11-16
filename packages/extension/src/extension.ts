@@ -36,13 +36,8 @@ import {
   effectDiagnosticsLayer,
   setLogSink,
 } from '@texra-ai/harness/node';
-import {
-  Cancelled,
-  toErrorMessage,
-  type StateKey,
-} from '@texra-ai/harness/schemas';
+import { toErrorMessage, type StateKey } from '@texra-ai/harness/schemas';
 import { appSignalStream } from '@texra-ai/harness/host';
-import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
@@ -64,7 +59,10 @@ import {
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
-import { subscriptionProvider } from '@texra/controllers/modelAccess/subscriptionProviders';
+import {
+  announceSignIn,
+  subscriptionProvider,
+} from '@texra/controllers/modelAccess/subscriptionProviders';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { createVscodeLeanLanguageServices } from '@frontend/lean/VscodeIntegration';
 import { followInlineCriticism } from '@frontend/latex/inlineCriticism';
@@ -96,7 +94,11 @@ import type { GuiSession } from '@texra/controllers/session/openGuiWindow';
 
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
-import { registerCommands } from './commands';
+import {
+  registerCommands,
+  registerHandlers,
+  setApiKeyHandler,
+} from './commands';
 import type { SettingsViewProvider } from './settingsView/SettingsViewProvider';
 
 const EXTENSION_CHANNEL = 'extension';
@@ -252,49 +254,40 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
  * before a folder is open. The full command surface is registered only on the
  * single-folder path, so these are standalone variants of its rows.
  */
-const NO_FOLDER_COMMANDS = {
-  // A first-time user without a LaTeX project can create the sample and land
-  // directly in a working workspace.
-  'texra.createSampleProject': (context) =>
-    createSampleProjectWithoutWorkspace(context.extensionPath),
-  'texra.openGettingStarted': (context) =>
-    openGettingStarted(context.extension.id),
-  // This window has no settings view to tell the user how the sign-in
-  // ended, so the command does, in the same sentence.
-  'texra.auth.chatgpt.signIn': (_context, roots) => {
-    const { displayName, modelFamily } = subscriptionProvider('chatgpt');
-    return signInWithSubscription(roots, 'chatgpt').pipe(
-      Effect.flatMap((account) =>
-        showLoggedInfoMessage(
-          ACCOUNT_OUTCOME.signedInEnabled(
-            displayName,
-            account.label,
-            modelFamily,
-          ),
+const noFolderCommands = (
+  context: vscode.ExtensionContext,
+  roots: WorkspaceRoots,
+) =>
+  ({
+    // A first-time user without a LaTeX project can create the sample and
+    // land directly in a working workspace.
+    'texra.createSampleProject': () =>
+      createSampleProjectWithoutWorkspace(context.extensionPath),
+    'texra.openGettingStarted': () => openGettingStarted(context.extension.id),
+    // This window has no settings view to tell the user how the sign-in
+    // ended, so the command does, in the same sentence.
+    'texra.auth.chatgpt.signIn': () =>
+      announceSignIn(
+        'chatgpt',
+        signInWithSubscription(roots, 'chatgpt'),
+        showLoggedInfoMessage,
+      ).pipe(
+        // A defect is reported like a failure, as the settings body reports
+        // one; an interrupt is the window closing, not a failed sign-in.
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.interrupt
+            : showLoggedErrorMessage(
+                ACCOUNT_OUTCOME.signInFailed(
+                  subscriptionProvider('chatgpt').displayName,
+                ),
+                Cause.squash(cause),
+              ),
         ),
+        withLogChannel('welcomeView'),
       ),
-      // A defect is reported like a failure, as the settings body reports
-      // one; an interrupt is the window closing, not a failed sign-in.
-      Effect.catchCause((cause) => {
-        if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt;
-        const error = Cause.squash(cause);
-        return error instanceof Cancelled
-          ? Effect.void
-          : showLoggedErrorMessage(`${displayName} sign-in failed`, error);
-      }),
-      withLogChannel('welcomeView'),
-    );
-  },
-  'texra.setApiKey': (_context, roots) => apiSetApiKey(roots),
-} satisfies Partial<
-  Record<
-    ExtensionCommandId,
-    (
-      context: vscode.ExtensionContext,
-      roots: WorkspaceRoots,
-    ) => Effect.Effect<unknown, Error, ProcessServices | Sessions>
-  >
->;
+    'texra.setApiKey': setApiKeyHandler(roots),
+  }) as const;
 
 /**
  * The commands that need a folder. The getting-started walkthrough's buttons
@@ -303,7 +296,7 @@ const NO_FOLDER_COMMANDS = {
  */
 type WalkthroughCommandNeedingWorkspace = Exclude<
   ExtensionCommandId,
-  keyof typeof NO_FOLDER_COMMANDS
+  keyof ReturnType<typeof noFolderCommands>
 >;
 
 /** Internal command URI used by workspace-bound walkthrough links. */
@@ -329,17 +322,10 @@ const explainWorkspaceRequired = Effect.fn('explainWorkspaceRequired')(
 
 function registerWalkthroughWorkspaceAction(
   context: vscode.ExtensionContext,
-  hasSingleWorkspace: boolean,
-  runtime: ProcessRuntime,
+  run: (command: WalkthroughCommandNeedingWorkspace) => unknown,
 ): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand(
-      WALKTHROUGH_WORKSPACE_ACTION_COMMAND,
-      (command: WalkthroughCommandNeedingWorkspace) =>
-        hasSingleWorkspace
-          ? vscode.commands.executeCommand(command)
-          : runtime.runPromise(explainWorkspaceRequired(context.extensionPath)),
-    ),
+    vscode.commands.registerCommand(WALKTHROUGH_WORKSPACE_ACTION_COMMAND, run),
   );
 }
 
@@ -390,14 +376,16 @@ const activateExtension = Effect.fn('activateExtension')(function* (
       undefined,
     );
     registerWelcomeView(context, fork);
-    for (const [id, command] of Object.entries(NO_FOLDER_COMMANDS)) {
-      context.subscriptions.push(
-        vscode.commands.registerCommand(id, () =>
-          runtime.runPromise(command(context, roots)),
-        ),
-      );
-    }
-    registerWalkthroughWorkspaceAction(context, false, runtime);
+    registerHandlers(
+      context,
+      runtime,
+      fork,
+      roots,
+      noFolderCommands(context, roots),
+    );
+    registerWalkthroughWorkspaceAction(context, () =>
+      runtime.runPromise(explainWorkspaceRequired(context.extensionPath)),
+    );
     return;
   }
   const rawWorkspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -524,7 +512,9 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     session,
   );
   yield* Deferred.succeed(settingsView, settingsViewProvider);
-  registerWalkthroughWorkspaceAction(context, true, runtime);
+  registerWalkthroughWorkspaceAction(context, (command) =>
+    vscode.commands.executeCommand(command),
+  );
   yield* registerFileDecorations(context, session);
 
   // VS Code's event emitters don't await async listeners, so we funnel

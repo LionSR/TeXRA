@@ -74,14 +74,67 @@ type CommandProgram = Effect.Effect<
 type RegisteredCommandId = Exclude<ExtensionCommandId, CommentCommandId>;
 
 /**
- * Register every catalog command against `vscode.commands`, routing each
- * invocation through `dispatchCommandFromRegistry` so the dispatch path is
- * identical to the desktop's. The registered callback is the command's one
- * execution boundary: it runs the handler's program over the window's rooted
- * filesystems and returns that promise, so VS Code forwards the program's
- * value and rejection to `executeCommand` callers (the bug fixed by #3782 was
- * a swallowed rejection).
+ * Register every catalog command a folder's window runs, and its views.
  */
+/** `texra.setApiKey`, optionally naming the provider to start on: one row
+ *  for the folder's window and the window without one. */
+export const setApiKeyHandler = (roots: WorkspaceRoots) =>
+  definedHandler(
+    Schema.Tuple([Schema.optional(Schema.Literals(API_KEY_PROVIDER_IDS))]),
+    (_: void, provider?: ApiKeyProviderId) => setApiKey(roots, provider),
+  );
+
+/**
+ * Register a table of catalog commands against `vscode.commands`, routing
+ * each invocation through `dispatchCommandFromRegistry` so the dispatch path
+ * is identical to the desktop's: arguments are decoded and a bad payload is
+ * reported. The registered callback is the command's one execution
+ * boundary: it runs the handler's program over the window's rooted
+ * filesystems and returns that promise, so VS Code forwards the program's
+ * value and rejection to `executeCommand` callers (the bug fixed by #3782
+ * was a swallowed rejection).
+ */
+export function registerHandlers(
+  context: vscode.ExtensionContext,
+  runtime: ProcessRuntime,
+  fork: ScopedFork<ProcessServices | Sessions>,
+  roots: WorkspaceRoots,
+  handlers: Partial<
+    Record<RegisteredCommandId, CommandHandler<void, CommandProgram>>
+  >,
+): void {
+  for (const id of Struct.keys(handlers)) {
+    context.subscriptions.push(
+      vscode.commands.registerCommand(id, (...rawArgs: unknown[]) => {
+        const program = dispatchCommandFromRegistry(
+          id,
+          handlers,
+          undefined,
+          (failure) => {
+            if (failure.kind === 'invalidArguments') {
+              fork(
+                showLoggedMessage(
+                  `Invalid arguments for command ${failure.id}: ${failure.error.message}`,
+                ).pipe(withLogChannel(REGISTRY_CHANNEL)),
+              );
+              return;
+            }
+            fork(
+              Effect.logError(
+                `No handler is registered for command ${failure.id}`,
+              ).pipe(withLogChannel(REGISTRY_CHANNEL)),
+            );
+          },
+          ...rawArgs,
+        );
+        return program === false
+          ? false
+          : runtime.runPromise(withSessionFs(roots, program));
+      }),
+    );
+  }
+}
+
 export function registerCommands(
   context: vscode.ExtensionContext,
   progressViewProvider: ProgressViewProvider,
@@ -153,10 +206,7 @@ export function registerCommands(
           inPlace: options?.inPlace ?? false,
         }),
     ),
-    'texra.setApiKey': definedHandler(
-      Schema.Tuple([Schema.optional(Schema.Literals(API_KEY_PROVIDER_IDS))]),
-      (_, provider?: ApiKeyProviderId) => setApiKey(roots, provider),
-    ),
+    'texra.setApiKey': setApiKeyHandler(roots),
     // Without a configuration the command is the composer's accelerator
     // (Cmd+Alt+E): its Send, in the view the user is in. With one, it starts
     // a fresh run of it on the window's launcher and finishes when the run
@@ -177,36 +227,7 @@ export function registerCommands(
     CommandHandler<void, CommandProgram>
   >;
 
-  for (const id of Struct.keys(handlers)) {
-    context.subscriptions.push(
-      vscode.commands.registerCommand(id, (...rawArgs: unknown[]) => {
-        const program = dispatchCommandFromRegistry(
-          id,
-          handlers,
-          undefined,
-          (failure) => {
-            if (failure.kind === 'invalidArguments') {
-              fork(
-                showLoggedMessage(
-                  `Invalid arguments for command ${failure.id}: ${failure.error.message}`,
-                ).pipe(withLogChannel(REGISTRY_CHANNEL)),
-              );
-              return;
-            }
-            fork(
-              Effect.logError(
-                `No handler is registered for command ${failure.id}`,
-              ).pipe(withLogChannel(REGISTRY_CHANNEL)),
-            );
-          },
-          ...rawArgs,
-        );
-        return program === false
-          ? false
-          : runtime.runPromise(withSessionFs(roots, program));
-      }),
-    );
-  }
+  registerHandlers(context, runtime, fork, roots, handlers);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
