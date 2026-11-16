@@ -10,7 +10,7 @@ import { logSdkError } from '@agent/trace/traceLogs';
 import { endRunRows, type RunEnding } from '@agent/storage/runLifecycle';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure, withLogChannel } from '@logger/effectLog';
 import { DELIVERY_FAMILY } from '@shared/deliveryTags';
 import type { ResultEvent } from '@shared/session/agentEvent';
 import { SessionLog } from '@shared/session/runHistory';
@@ -28,13 +28,6 @@ import { RunRegistry, type AgentRunServices } from './runRegistry';
 import type { RunLaunch } from './run/AgentRun';
 
 const CHANNEL = 'agentRunLifecycle';
-
-/** A lifecycle diagnostic: guarded cleanup logs past its failure here. */
-const logLifecycleWarning = (message: string, data: unknown) =>
-  Effect.logWarning(message).pipe(
-    Effect.annotateLogs({ data }),
-    withLogChannel(CHANNEL),
-  );
 
 /** How a run ends, as {@link endVerdict} decides it. */
 interface EndVerdict {
@@ -117,7 +110,10 @@ export const commitEnd = Effect.fn('commitEnd')(function* (
     report: yield* report(end),
   }).pipe(
     Effect.tapError((unsaved) =>
-      logLifecycleWarning(`Run ${runId}: its end could not be saved`, {
+      logFailure(
+        CHANNEL,
+        `Run ${runId}: its end could not be saved`,
+      )({
         runId,
         error: unsaved,
       }),
@@ -188,7 +184,10 @@ export const endRun = Effect.fn('endRun')(function* (
       // A stop that met a failure (a finalizer that died or failed as the
       // stop unwound it) is still a stop: the row says CANCELLED and
       // carries the failure, which is logged, not lost.
-      yield* logLifecycleWarning('A stopped run also failed', {
+      yield* logFailure(
+        CHANNEL,
+        'A stopped run also failed',
+      )({
         runId,
         error: thrown,
       });
@@ -235,10 +234,10 @@ export const endRun = Effect.fn('endRun')(function* (
             ).pipe(
               Effect.catch((unbuilt) =>
                 Effect.as(
-                  logLifecycleWarning(
+                  logFailure(
+                    CHANNEL,
                     `Run ${runId}: its report could not be built`,
-                    { runId, error: unbuilt },
-                  ),
+                  )({ runId, error: unbuilt }),
                   {
                     family:
                       ctx.config.script?.kind === 'background'
