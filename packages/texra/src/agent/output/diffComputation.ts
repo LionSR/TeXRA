@@ -118,6 +118,12 @@ export const computeOutputDiffStats = Effect.fn(
   lineage: boolean,
 ) {
   const mapping = pairOutputsWithBases(baseFiles, roundOutputs);
+  // An agent that extracts several documents from one input (`chapter1`,
+  // `methods`) revises it under names it does not share, so with a single
+  // input an unpaired output is diffed against it. The `\input` rewrite
+  // pairs without this fallback: it must not point a reference at an output
+  // only because the run had one input.
+  const onlyBase = baseFiles.length === 1 ? baseFiles[0] : undefined;
 
   return yield* Effect.forEach(
     roundOutputs,
@@ -133,7 +139,12 @@ export const computeOutputDiffStats = Effect.fn(
         const originalLocation = entry?.origin ?? null;
         // `pairOutputsWithBases` coalesces `base: origin ?? …`, so an entry with
         // an origin always carries a base, and no base implies no origin.
-        const base = lineage ? (entry?.base ?? null) : null;
+        const paired =
+          entry?.base ??
+          (onlyBase && fileLocationDisplayPath(onlyBase) !== locationPath
+            ? onlyBase
+            : null);
+        const base = lineage ? paired : null;
         // An output of a task that rewrites its inputs revises one of them;
         // one no input pairs with is recorded as a new document, which the
         // record cannot tell apart from one, so it is said here.

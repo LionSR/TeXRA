@@ -167,9 +167,7 @@ export function baseOf(
  * Pair each output with its base file, keyed by the output's display path:
  * `origin` is the base its model-reported source names ({@link baseOf}).
  * When the model chose a new name (`paper_revised.tex`), `base` falls back
- * to the base whose file name the output's name contains, and with a single
- * base, to that base: an agent that extracts several documents from one
- * input (`chapter1`, `methods`) revises it under names it does not share.
+ * to the base whose file name the output's name contains.
  */
 export function pairOutputsWithBases(
   baseFiles: FileLocation[],
@@ -183,19 +181,12 @@ export function pairOutputsWithBases(
     baseFiles,
   );
 
-  const onlyBase = baseFiles.length === 1 ? baseFiles[0] : undefined;
-
   const mapping = new Map<string, RoundFileEntry>();
   for (const entry of outputs) {
     const key = fileLocationDisplayPath(entry.location);
     const origin = baseOf(baseFiles, entry.source);
     mapping.set(key, {
-      base:
-        origin ??
-        baseToOutput.get(key) ??
-        (onlyBase && fileLocationDisplayPath(onlyBase) !== key
-          ? onlyBase
-          : undefined),
+      base: origin ?? baseToOutput.get(key),
       origin,
     });
   }
