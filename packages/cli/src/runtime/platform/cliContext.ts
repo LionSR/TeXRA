@@ -49,11 +49,6 @@ import { CLI_OUTPUT_FORMAT_SETTING } from '@texra/shared/settings/texraSettings'
 
 type CliMode = 'headless' | 'interactive';
 
-export interface CliPromptRequest {
-  readonly summary: string;
-  readonly prompt: string;
-}
-
 /** Fully normalized CLI state produced by {@link buildCliContext}. */
 export interface CliContext {
   /** Root of the shared TeXRA storage directory, decided once at build. */
@@ -74,13 +69,12 @@ export interface CliContext {
   /**
    * The diagnostics emission threshold this process's runtime builds with,
    * decided once from argv — `--quiet` is `None`, `--verbose` is `Debug`,
-   * otherwise `Info` — because a terminal is the one surface with no live
-   * level filter of its own. A flag is exactly the kind of fact a
+   * otherwise `Warn` — because a terminal is the one surface with no live
+   * level filter of its own. The process's diagnostic sink applies the same
+   * level (`stderrDiagnosticSink`). A flag is exactly the kind of fact a
    * layer-build capture is for: it cannot change mid-process.
    */
   readonly minimumLogLevel: LogLevel.LogLevel;
-  /** Whether a headless run prints progress lines; set by `buildHeadlessRunContext`. */
-  readonly renderRunProgress: boolean;
   readonly stdoutIsTty: boolean;
   readonly termIsDumb: boolean;
   readonly stderrIsTty: boolean;
@@ -103,9 +97,6 @@ export interface CliContext {
   readonly envAgent?: string;
   readonly envModel?: string;
   readonly skillSourceOptions: SkillSourceOptions;
-  readonly approvalPrompt?: (
-    request: CliPromptRequest,
-  ) => Effect.Effect<string, Error>;
 }
 
 /**
@@ -492,7 +483,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
         configWarnings,
       )) ??
       Settings.getConfig(config, CLI_OUTPUT_FORMAT_SETTING);
-    let minimumLogLevel: LogLevel.LogLevel = 'Info';
+    let minimumLogLevel: LogLevel.LogLevel = 'Warn';
     if (init.globalArgs.quiet) minimumLogLevel = 'None';
     else if (init.globalArgs.verbose) minimumLogLevel = 'Debug';
     return {
@@ -503,7 +494,6 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       approvalPolicy,
       ...(requestedApprovalPolicy !== undefined && { requestedApprovalPolicy }),
       quietLogs: init.globalArgs.quiet === true,
-      renderRunProgress: false,
       minimumLogLevel,
       stdoutIsTty: ambient.stdoutIsTty,
       termIsDumb: ambient.termIsDumb === true,

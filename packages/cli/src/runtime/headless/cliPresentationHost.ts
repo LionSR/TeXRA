@@ -53,7 +53,6 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
     if (ndjson) {
       writeNdjsonStdout({
         kind: 'log',
-        ts: new Date().toISOString(),
         level,
         message,
         fields,

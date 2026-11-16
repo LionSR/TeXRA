@@ -6,6 +6,7 @@ import { Secrets, type SettingsStores } from '@texra-ai/harness/plugins';
 import {
   toErrorMessage,
   SUBSCRIPTION_AUTH_PROVIDERS,
+  isSubscriptionAuthProvider,
 } from '@texra-ai/harness/schemas';
 import {
   codingPlanSubscriptionRuntimes,
@@ -35,7 +36,7 @@ interface CliModelAccessSelectionResult {
 }
 
 /**
- * A subscription preference transition the stores would not carry out. The
+ * A subscription preference change the stores would not carry out. The
  * three members are the session read and the two preference writes, and both
  * writes go through the same settings store every host shares.
  */
@@ -95,7 +96,7 @@ export const readCliModelAccessStatus = Effect.fn(
 });
 
 // ---------------------------------------------------------------------------
-// The four subscription arms share two skeletons — an OAuth sign-in flow
+// The four subscription cases share two skeletons — an OAuth sign-in flow
 // (Grok/ChatGPT, driven by the shared provider catalog) and a key-credential
 // gate (Kimi Code/GLM) — so a fifth provider is a catalog row plus a dispatch
 // case, not another 30-line copy.
@@ -218,7 +219,7 @@ const updateKeyedCliModelAccess = Effect.fn(
 });
 
 /**
- * Apply one declarative preference transition. A program: the command action
+ * Apply one declarative preference change. A program: the command action
  * or slash handler runs it, where its cancellation signal (if any) becomes
  * fiber interruption of a sign-in in flight.
  */
@@ -236,7 +237,7 @@ export const updateCliModelAccess = Effect.fn(
   if (codingPlan) {
     return yield* updateKeyedCliModelAccess(stores, selection, codingPlan);
   }
-  if (selection.provider === 'grok' || selection.provider === 'chatgpt') {
+  if (isSubscriptionAuthProvider(selection.provider)) {
     return yield* updateSubscriptionCliModelAccess(
       stores,
       context,

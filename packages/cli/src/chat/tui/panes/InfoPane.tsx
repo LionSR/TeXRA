@@ -50,7 +50,7 @@ export function InfoPane(props: InfoPaneProps): React.JSX.Element | null {
 
   useLayoutEffect(() => {
     // Archive before paint rather than committing an empty foreground frame.
-    // The parent clears this pane in the same transition.
+    // The parent clears this pane in the same update.
     if (!fits) props.onOverflow(props.lines);
   }, [fits, props.lines, props.onOverflow]);
 

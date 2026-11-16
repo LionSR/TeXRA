@@ -106,7 +106,7 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   }
 
   const layout = transcriptEntryLayout(entry, {
-    mode: 'scrollback',
+    mode: 'printed',
     previousEntry,
     width,
   });

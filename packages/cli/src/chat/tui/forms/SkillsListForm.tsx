@@ -5,11 +5,9 @@
 import { Text } from 'ink';
 import { Effect } from 'effect';
 
-import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
   Skills,
   type EnabledSkill,
-  type ProcessRuntime,
   type SkillLoadIssue,
 } from '@texra-ai/harness/host';
 import { formatResultCount, joinFacts } from '@texra-ai/harness/schemas';
@@ -17,17 +15,10 @@ import type { SelectItem } from '@cli/tui/ui/Select';
 import { readCliSkillsOffNotice } from '@cli/runtime/skills';
 
 import { AsyncListForm } from './_shared/ListForm';
+import { useChatProcess } from '../chatProcess';
 
 interface SkillsListFormProps {
   readonly availableRows?: number;
-  /** The session's roots: where its skills are discovered, and the setting
-   *  slots that switch skills off. */
-  readonly roots: WorkspaceRoots;
-  /**
-   * The process runtime the discovery program runs on. Ink components run
-   * no Effect of their own, so it arrives as a prop from `/skills`.
-   */
-  readonly runtime: ProcessRuntime;
   readonly onSelect: (value: SkillActivation) => void;
   readonly onClose: () => void;
 }
@@ -76,20 +67,20 @@ function skillIssueSummaryDetail(
 }
 
 export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
+  const { roots } = useChatProcess();
   return (
     <AsyncListForm<SkillsListData, SkillActivation>
       title="/skills"
       loadingLabel="Loading skills..."
       load={() =>
         Effect.gen(function* () {
-          const result = yield* Skills.enabled(props.roots);
+          const result = yield* Skills.enabled(roots);
           return {
             ...result,
-            offHint: yield* readCliSkillsOffNotice(props.roots, '/config'),
+            offHint: yield* readCliSkillsOffNotice(roots, '/config'),
           };
         })
       }
-      runtime={props.runtime}
       items={(result) => skillSelectItemsForTui(result.skills)}
       isEmpty={(result) => result.skills.length === 0}
       availableRows={props.availableRows}

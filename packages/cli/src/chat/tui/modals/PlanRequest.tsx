@@ -35,7 +35,7 @@ const COMPACT_PLAN_APPROVAL_MAX_ROWS = 7;
 const PLAN_APPROVAL_TITLE = 'Approve plan?';
 const PLAN_APPROVAL_GOAL_NOTICE_ROWS = 2;
 const PLAN_APPROVAL_HIDDEN_NOUN = 'plan rows';
-/** Run as goal: `r` auto-approves commands only; `a`, the card grammar's
+/** Run as goal: `r` auto-approves commands only; `a`, the card's key handlers'
  *  "approve broadly" key, also approves edits and agent work. */
 const PLAN_APPROVAL_GOAL_ACTIONS: readonly ConfirmCardKeyRow[] = [
   {

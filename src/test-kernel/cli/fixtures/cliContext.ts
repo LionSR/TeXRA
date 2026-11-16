@@ -31,7 +31,6 @@ const BASE_CLI_CONTEXT = {
   stderrIsTty: false,
   stdoutColorEnabled: false,
   stderrColorEnabled: false,
-  renderRunProgress: false,
   commandName: 'texra',
   version: '0.0.0',
   resourcesPath: '/tmp/resources',
@@ -46,16 +45,6 @@ export function createTestCliContext(
   overrides: Partial<CliContext> = {},
 ): CliContext {
   return { ...BASE_CLI_CONTEXT, ...overrides };
-}
-
-/**
- * The run-command suites' shared default: progress rendering on, everything
- * else at the base defaults.
- */
-export function createRunCommandCliContext(
-  overrides: Partial<CliContext> = {},
-): CliContext {
-  return createTestCliContext({ renderRunProgress: true, ...overrides });
 }
 
 /**

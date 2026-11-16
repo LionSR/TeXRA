@@ -1,4 +1,4 @@
-// Chat-session controller: owns run start/resume/stop state-transition
+// Chat-session controller: owns run start/resume/stop state-change
 // orchestration and the composer's submit path for the CLI chat session.
 // Host-neutral (no Ink/TUI rendering dependencies): the Ink component
 // consumes narrow commands exposed here.
@@ -23,7 +23,6 @@ import {
   type Notices,
   type ProcessRuntime,
   type ProcessServices,
-  type RuntimePresentationEventPayloads,
 } from '@texra-ai/harness/host';
 import {
   type RuntimeCommand,
@@ -38,28 +37,15 @@ import {
   acceptsFollowUp,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { createCliRuntimeHost } from '@cli/runtime/headless/cliPresentationHost';
-import {
-  formatCliNoAvailableModelsRecovery,
-  selectCliRunnableModel,
-} from '@cli/runtime/models/modelAccess';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
-import {
-  launchApproval,
-  type CliContext,
-} from '@cli/runtime/platform/cliContext';
+import { launchApproval } from '@cli/runtime/platform/cliContext';
 import { resumeRun } from '@texra/controllers/session/runActionPolicy';
 import { createHostRunActions } from '@texra/controllers/session/hostRunActions';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { RequestRefusal } from '@texra/controllers/session/hostCallFailure';
-import { shownFailureText } from '@ui/copy/modelAccess';
 import { requestErrorText } from '@ui/copy/requestErrors';
-import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
-import {
-  CHAT_API_MODE_MODEL_RECOVERY,
-  type SlashCommandContext,
-} from './tui/commands/handlers/slashContext';
+import { selectChatModel } from './tui/commands/handlers/slashContext';
 import {
   selectedRunId as selectedRunIdSignal,
   focusRun,
@@ -73,7 +59,10 @@ import { oneShotResumeNotice } from './tui/state/resumeHint';
 import { currentView, runViewOf, sessionView } from './tui/state/sessionView';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { launchTeamId } from '@texra/agent/teams/teamLaunch';
-import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
+import {
+  createTuiHostInteractions,
+  presentInTranscript,
+} from './tui/state/subscribeApprovals';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import {
   appendLocalErrorTranscript,
@@ -108,8 +97,8 @@ import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
  * from a host call and a throw from the imperative body alike reach
  * `recover` with the original value, which is exactly what the `try`/`catch`
  * around these bodies did before they became programs. Interruption is not
- * folded in: a fiber the runtime is tearing down is not a run failure to
- * report, and the caller's own settlement still sees it.
+ * taken in: a fiber the runtime is tearing down is not a run failure to
+ * report, and the caller's own result still sees it.
  */
 const recoverRun = <A, E, R>(
   program: Effect.Effect<A, E, R>,
@@ -133,7 +122,7 @@ export interface ChatSessionController {
    * Resume a suspended tool-use session by run id.
    *
    * Fire-and-forget from the Ink perspective, the returned program completes
-   * when the resume resolution and rehydration are complete, but the
+   * when the resume resolution and the transcript's reload are complete, but the
    * continued run itself stays pending until the agent finishes or suspends.
    */
   resume(id: RunId): Effect.Effect<void, Error, ProcessServices>;
@@ -144,13 +133,13 @@ export interface ChatSessionController {
    *  caller's to word. */
   resumeTask(id: RunId): Effect.Effect<void, RequestRefusal, ProcessServices>;
 
-  /** Request stop of the root run using the configured child policy, for
-   *  `reason`: a `user` stop also cancels its remote background work. */
+  /** Stop the root run as the user: its remote background work is
+   *  cancelled with it. */
   stop(): void;
 
   /**
-   * The composer's submit path: a slash command, the first
-   * instruction of a fresh root run, or a `followUp.send` request onto the
+   * A message the composer submits (a slash command is the chat's to
+   * dispatch first): the first instruction of a fresh root run, or a `followUp.send` request onto the
    * focused run or the conversation's root, which the session continues if
    * the user stopped it.
    */
@@ -182,20 +171,19 @@ interface ChatSessionControllerInit {
    *  other terminals' conversations. */
   readonly served: boolean;
 
-  /** The chat session's {@link CliContext}: the controller attaches one
-   *  interaction host for the session's lifetime. */
-  readonly sessionContext: CliContext;
+  /** How the user invoked this CLI, for the resume command a notice names. */
+  readonly commandName: string;
 
   /** The chat's scope: the host attachment and the resumed-root watch
    *  close with it, which the exit drain awaits. */
   readonly chatScope: Scope.Scope;
 
-  /** The process's shutdown scope: the interaction host closes there, so
-   *  every exit path, signal or graceful, awaits its close. */
+  /** The process's shutdown scope: the work that outlives a turn (run
+   *  actions, sends, resumed roots) runs there, so every exit path, signal
+   *  or graceful, awaits it. */
   readonly shutdownScope: Scope.Scope;
 
   readonly cwd: string;
-  readonly getSlashCommandContext: () => SlashCommandContext;
   /**
    * The three setting slots a retry's credential work reads, threaded from
    * the `CliPlatformServices` the chat entry point already holds rather than
@@ -255,18 +243,16 @@ export function createChatSessionController(
     session,
     runSession,
     served,
-    sessionContext,
     chatScope,
     shutdownScope,
     cwd,
-    getSlashCommandContext,
     stores,
     runtime,
     draft,
     modelConnection,
   } = init;
   const requests: SessionRequests = runSession;
-  // The fold the chat's runs appear in: the service's, or this session's.
+  // The view the chat's runs appear in: the service's, or this session's.
   const viewChanges: Stream.Stream<SessionView> = runSession.view.changes;
   /** Issue one request to the session's runtime and read its Effect result
    *  as the response: the refusal text, or undefined on success. */
@@ -306,23 +292,13 @@ export function createChatSessionController(
   // Internal helpers
   // -----------------------------------------------------------------------
 
-  // The chat's notices, where the hosts' run actions present a failure: an
-  // error is a transcript line, where the person is reading; any other
-  // notice (a refused launch's instruction, an unknown agent) goes where the
-  // chat's runtime notices show. Nothing is shown once the chat is leaving.
+  // The chat's notices, where the hosts' run actions present a failure: a
+  // transcript row, as the attached host presents the session's. Nothing is
+  // shown once the chat is leaving.
   const notices: Notices = {
     emit: (event, payload) =>
       Effect.sync(() => {
-        if (session.exited) return;
-        if (event === 'requestShowError')
-          appendLocalErrorTranscript(
-            shownFailureText(
-              // cast: `emit` is generic over the event, and this branch is
-              // the error's.
-              payload as RuntimePresentationEventPayloads['requestShowError'],
-            ),
-          );
-        else presentationHost.emit(event, payload);
+        if (!session.exited) presentInTranscript[event](payload);
       }),
   };
   const showFailure = (error: unknown) => presentRunFailure(notices, error);
@@ -345,22 +321,11 @@ export function createChatSessionController(
   // and desktop attach theirs. The session routes every request to its last
   // attachment, so a background child of an earlier turn keeps an answerable
   // approval path after its root finalizes, with no per-turn generation.
-  const presentationHost = createCliRuntimeHost(sessionContext);
-  runtime.runSync(
-    Scope.addFinalizer(
-      shutdownScope,
-      Effect.suspend(() => presentationHost.close()),
-    ),
-  );
-  const interactions = createTuiHostInteractions(
-    presentationHost,
-    sessionContext,
-    {
-      requests: runSession,
-      settings: stores,
-      runtime,
-    },
-  );
+  const interactions = createTuiHostInteractions({
+    requests: runSession,
+    settings: stores,
+    runtime,
+  });
   // Attached to the chat's session for its lifetime: here, its requests'
   // host; in the service, one of its project's windows, whose notices its
   // tasks raise here.
@@ -571,7 +536,7 @@ export function createChatSessionController(
           const stored = (yield* runSession.view.read([id])).runs.get(id);
           if (stored?.takesFollowUps === false && stored.outcome !== null) {
             appendLocalErrorTranscript(
-              oneShotResumeNotice(init.sessionContext.commandName, id),
+              oneShotResumeNotice(init.commandName, id),
             );
             yield* endWithout(CliExitCode.Usage);
             return;
@@ -743,15 +708,10 @@ export function createChatSessionController(
     launchRootRun(
       Effect.gen(function* () {
         const meta = sessionMetaSignal.get();
-        const selection = yield* selectCliRunnableModel(
-          [{ model: meta.model, reason: meta.modelSource }],
-          {
-            stores: { ...stores, runtime },
-            noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-              CHAT_API_MODE_MODEL_RECOVERY,
-            ),
-          },
-        );
+        const selection = yield* selectChatModel(stores, runtime, {
+          model: meta.model,
+          reason: meta.modelSource,
+        });
         return {
           agent: meta.agent,
           agentSource: meta.agentSource,
@@ -966,7 +926,6 @@ export function createChatSessionController(
   ) {
     const line = expandText(submitted).trim();
     if (line.length === 0) return;
-    if (yield* handleTuiSlashCommand(line, getSlashCommandContext())) return;
     yield* submitChatMessage(submitted, line, holdUntil);
   });
 

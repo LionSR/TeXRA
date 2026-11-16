@@ -7,7 +7,7 @@
 import { computed } from '@lit-labs/signals';
 import { layer } from '@effect/vitest';
 import { Context, Effect, Fiber, Layer, Schema, SubscriptionRef } from 'effect';
-import { expect } from 'vitest';
+import { expect, vi } from 'vitest';
 import { apiKeySecretName } from '@texra-ai/llm';
 
 import { SubscriptionPreference } from '@texra-ai/harness/host';
@@ -26,10 +26,10 @@ import {
   openRequest as openRunRequest,
 } from '@agent/runtime/requests';
 import { currentApproval } from '@cli/chat/tui/state/approvalQueue';
+import { notices } from '@cli/chat/tui/state/transcript';
 import { bindSessionView } from '@cli/chat/tui/state/sessionView';
 import { startChat, rootRunId } from '@cli/chat/tui/state/cliState';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
-import { createCliRuntimeHost } from '@cli/runtime/headless/cliPresentationHost';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import {
@@ -40,6 +40,7 @@ import {
 import type { SessionRowDraft } from '@shared/schemas';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
+import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import {
   holdTestRun,
   publishTestRunStart,
@@ -117,17 +118,13 @@ const tui = Effect.gen(function* () {
   yield* setTestApprovalPolicy(cliContext.approvalPolicy);
   const session = yield* sessionHandle;
   yield* Effect.addFinalizer(() => cancelOpenRequests);
-  const interactions = createTuiHostInteractions(
-    createCliRuntimeHost(cliContext),
-    cliContext,
-    {
-      requests: yield* TestSession,
-      settings: roots,
-      runtime: yield* SessionGraph.runtime,
-    },
-  );
+  const interactions = createTuiHostInteractions({
+    requests: yield* TestSession,
+    settings: roots,
+    runtime: yield* SessionGraph.runtime,
+  });
   yield* attachInteractions(Context.get(session, Interactions), interactions);
-  return interactions.performHost;
+  return interactions;
 });
 
 /** Run ids are hex-branded, so a readable case label hashes to a stable one. */
@@ -285,7 +282,7 @@ layer(
 )('TUI request decisions', (it) => {
   it.effect('sets the run bash bypass at the approval decision site', () =>
     Effect.gen(function* () {
-      const performHost = yield* tui;
+      const { performHost } = yield* tui;
       const runId = runIdFor('bash-bypass');
       const pending = yield* Effect.forkChild(
         openRequest(runId, {
@@ -318,7 +315,7 @@ layer(
         yield* SubscriptionPreference.set('chatgpt', roots, true).pipe(
           Effect.orDie,
         );
-        const performHost = yield* tui;
+        const { performHost } = yield* tui;
         const runId = runIdFor('s3');
         const pending = yield* Effect.forkChild(
           openRetry(chatGptSubscriptionRetry('s3')),
@@ -336,6 +333,29 @@ layer(
         ]);
         // The user's stored preference is not rewritten on their behalf.
         expect(SubscriptionPreference.get('chatgpt', roots)).toBe(true);
+      }),
+  );
+
+  it.effect(
+    "shows a failure the session presents in the transcript, not on Ink's stderr",
+    () =>
+      Effect.gen(function* () {
+        const interactions = yield* tui;
+        let stderr = '';
+        spyOnStreamWrite(process.stderr, (chunk) => {
+          stderr += chunk;
+        });
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => vi.restoreAllMocks()),
+        );
+        interactions.emit?.('requestShowError', {
+          message: 'The run failed.',
+        });
+
+        expect(stderr).toBe('');
+        expect(notices.get().map(({ row }) => row)).toMatchObject([
+          { kind: 'error', summary: { full: 'The run failed.' } },
+        ]);
       }),
   );
 });

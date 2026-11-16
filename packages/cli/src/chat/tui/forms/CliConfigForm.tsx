@@ -33,18 +33,10 @@ import {
 } from './ProviderApiKeyForm';
 import { SkillsSettingsForm } from './SkillsSettingsForm';
 import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
-import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { ProcessRuntime } from '@texra-ai/harness/host';
+import { useChatProcess } from '../chatProcess';
 
 export interface CliConfigFormProps {
   readonly availableRows?: number;
-  /** The surface's own roots: the settings slots this form reads and
-   *  writes, and the project the process opened, for the agents and skills
-   *  rows. */
-  readonly roots: WorkspaceRoots;
-  /** The process runtime the rows' reads and writes run on, from the same
-   *  surface; the API-key and GitHub-token rows read and write its `Secrets`. */
-  readonly runtime: ProcessRuntime;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
   /**
@@ -60,12 +52,9 @@ export interface CliConfigFormProps {
  * it, so persistence and runtime side effects cannot diverge between them.
  */
 export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
-  const { roots, runtime } = props;
-  // The status reads are programs like the save and remove rows below them,
-  // so this surface runs all of them on the runtime it was handed.
+  const { roots } = useChatProcess();
   const apiKeys = useAsyncResource({
     load: () => Effect.flatMap(Secrets, apiKeyOrigins),
-    runtime,
     onError: props.onError,
   });
   const apiKeyStatusView: ProviderApiKeyStatusView = {
@@ -75,7 +64,6 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   };
   const githubToken = useAsyncResource({
     load: () => Effect.flatMap(Secrets, resolveGitHubTokenSource),
-    runtime,
     onError: props.onError,
   });
   const githubTokenStatusView: GitHubTokenStatusView = {
@@ -95,7 +83,6 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
         ),
         Object.fromEntries,
       ),
-    runtime,
     onClose: props.onClose,
     onError: props.onError,
   });
@@ -171,7 +158,6 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
       readValue={(entry) => settings.data?.[entry.key]}
       writeValue={(entry, value) => applyUpdate(entry, value)}
       resetValue={(entry) => applyUpdate(entry, null)}
-      runtime={runtime}
       formLinks={[
         {
           name: 'agents',
@@ -192,8 +178,6 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
       formRenderers={{
         agents: (onBack) => (
           <WorkspaceAgentsForm
-            runtime={props.runtime}
-            stores={roots}
             workspaceRoot={roots.workspace}
             availableRows={props.availableRows}
             onClose={onBack}
@@ -204,9 +188,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
           <ProviderApiKeyForm
             availableRows={props.availableRows}
             statusView={apiKeyStatusView}
-            runtime={runtime}
-            // The save and the refresh that follows it are one program; the
-            // form runs it on the runtime this surface handed it.
+            // The save and the refresh that follows it are one program.
             onSave={(provider, key) =>
               Effect.gen(function* () {
                 yield* commitCliProviderApiKey(roots, provider, key);
@@ -224,7 +206,6 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
           <GitHubTokenForm
             availableRows={props.availableRows}
             statusView={githubTokenStatusView}
-            runtime={runtime}
             onSave={(token) =>
               Effect.gen(function* () {
                 yield* storeCredential(yield* Secrets, {
@@ -249,8 +230,6 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
         skills: (onBack) => (
           <SkillsSettingsForm
             availableRows={props.availableRows}
-            roots={roots}
-            runtime={props.runtime}
             onClose={onBack}
           />
         ),

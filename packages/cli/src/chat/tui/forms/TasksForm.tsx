@@ -43,12 +43,11 @@ import {
   type ConnectService,
 } from '../state/attachedTask';
 import { transcriptToLines } from '../state/transcriptLines';
+import { useChatProcess } from '../chatProcess';
 import { AsyncListForm } from './_shared/ListForm';
-import type { ProcessRuntime } from '@texra-ai/harness/host';
 import type { TuiRequest, PendingApprovalFact } from '../state/approvalQueue';
 
 interface TasksFormProps {
-  readonly runtime: ProcessRuntime;
   readonly connect: ConnectService;
   readonly availableRows?: number;
   readonly onClose: () => void;
@@ -64,7 +63,6 @@ export function TasksForm(props: TasksFormProps): React.JSX.Element {
     return (
       <AttachedTask
         task={task}
-        runtime={props.runtime}
         connect={props.connect}
         availableRows={props.availableRows}
         onClose={props.onClose}
@@ -81,7 +79,6 @@ export function TasksForm(props: TasksFormProps): React.JSX.Element {
           ),
         )
       }
-      runtime={props.runtime}
       items={(tasks) =>
         tasks.map((entry) => ({
           value: entry.runId,
@@ -112,14 +109,14 @@ export function TasksForm(props: TasksFormProps): React.JSX.Element {
 
 interface AttachedTaskProps {
   readonly task: TaskSummary;
-  readonly runtime: ProcessRuntime;
   readonly connect: ConnectService;
   readonly availableRows?: number;
   readonly onClose: () => void;
 }
 
 function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
-  const { task, runtime } = props;
+  const { task } = props;
+  const { runtime } = useChatProcess();
   const { columns } = useWindowSize();
   const [level, setLevel] = useState<AttachedTaskLevel>({
     run: undefined,
@@ -157,7 +154,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
 
   /** Run one action on the service, saying so when it fails. The notice
    *  is about the latest attempt: a new one clears it, and an older attempt
-   *  that settles later says nothing. */
+   *  that finishes later says nothing. */
   const attempt = useRef(0);
   const act = (
     program: (
@@ -198,7 +195,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
   const inquiries = level.requests.filter(
     (request) => request.payload.kind === 'plugin',
   ).length;
-  // Previews of settled requests go: each holds two whole documents.
+  // Previews of decided requests go: each holds two whole documents.
   useEffect(() => {
     const open = new Set(level.requests.map((request) => request.requestId));
     setPreviews((held) =>

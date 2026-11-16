@@ -1,7 +1,7 @@
 /**
  * Headless CLI side of the request protocol.
  *
- * A run asks a person with `request.opened`; the fold lists it in
+ * A run asks a person with `request.opened`; the session view lists it in
  * `view.requests` until a `request.decided` answers it. This host answers
  * each request the session asks it (`SessionHost.approve`) with the prompt
  * the operator sees; the session's loop asks it once per listed request

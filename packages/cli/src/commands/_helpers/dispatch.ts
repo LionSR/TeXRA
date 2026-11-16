@@ -105,7 +105,9 @@ function collectLeadingGlobalFlags(
  * global flags. Returns `undefined` when an unknown flag, `--`, or end of args
  * is hit first.
  */
-function firstPositionalIndex(rawArgs: readonly string[]): number | undefined {
+export function firstPositionalIndex(
+  rawArgs: readonly string[],
+): number | undefined {
   const { restIndex, stoppedOnUnknownFlag } =
     collectLeadingGlobalFlags(rawArgs);
   if (stoppedOnUnknownFlag) return undefined;

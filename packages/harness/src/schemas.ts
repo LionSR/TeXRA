@@ -34,6 +34,7 @@ export { serializeFilteredConfig } from '@tools/executions/configView';
 export {
   SUBSCRIPTION_AUTH_PROVIDERS,
   SUBSCRIPTION_ROUTES,
+  isSubscriptionAuthProvider,
   type SubscriptionAuthProvider,
 } from '@shared/model/subscriptionAuth';
 // Reads of a `SessionView` for a renderer: what needs a person, how busy

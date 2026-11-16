@@ -26,11 +26,7 @@ import {
 } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { SERVICE_SUBCOMMAND } from '@texra/controllers/server/discovery';
-import {
-  canonicalizeWorkspaceRoot,
-  envFlag,
-  setLogSink,
-} from '@texra-ai/harness/node';
+import { canonicalizeWorkspaceRoot, envFlag } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import {
@@ -38,7 +34,6 @@ import {
   openProjectRoots,
 } from '@texra/controllers/session/openProjectSession';
 import { openTexraGlobalConfigStore } from '@texra/platform/defaults/nodeStores';
-import { type ServiceInfo } from '@texra/controllers/server/protocol';
 import {
   runsAtWork,
   type ServiceLoad,
@@ -51,13 +46,12 @@ import {
   probeRecordedService,
   spawnService,
   type ServiceLink,
-  type ServiceUnavailable,
   WINDOWS_UNSUPPORTED,
 } from '@texra/controllers/server/client';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 
 import { readCliEntrypointPath } from './cliContext';
-import { silentLogSink, writeTextStderr } from './logSinks';
+import { writeTextStderr } from './logSinks';
 import type { CliContext } from './cliContext';
 
 /** The service's own log channel. */
@@ -157,7 +151,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     // its exit), so a held store is another process's to answer for. The
     // session closes as the project is released, before its roots
     // (registered after them, so released first); the service's exit
-    // closes every session ahead of that (`serve`'s settle).
+    // closes every session ahead of that (`serve`'s `settle` step).
     const session = yield* openLocalSession(sessions, roots);
     // A damaged store moved aside at open is said once, in
     // the service's log and to the project's first window: the windows
@@ -228,20 +222,6 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     load,
   } satisfies Context.Service.Shape<typeof ServiceProjects>;
 });
-
-/** A client prints its own result; its process's log lines go nowhere, as
- *  a platform command's do (`CliPlatform`). The service keeps its own
- *  log. */
-const quietClient = Effect.sync(() =>
-  setLogSink(silentLogSink, { trusted: true }),
-);
-
-/** The hello of the storage root's service, or null when none answers. */
-export const probeCliService: Effect.Effect<
-  ServiceInfo | null,
-  ServiceUnavailable,
-  GlobalValues
-> = quietClient.pipe(Effect.andThen(probeRecordedService));
 
 /** `TEXRA_NO_SERVICE=1`: this process uses no background service, so a
  *  chat runs here, as where the service cannot run. */

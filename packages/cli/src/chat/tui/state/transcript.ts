@@ -32,7 +32,7 @@ import type { RunView, RunId } from '@texra-ai/harness/schemas';
 /**
  * The runs whose transcript tier this terminal keeps resident: its
  * conversation, the runs it owns, and an open reader's run. The view also
- * lists every earlier run of the workspace, hydrated from the listing;
+ * lists every earlier run of the workspace, loaded from the listing;
  * subscribing all of those loaded every past transcript into memory for the
  * life of the TUI.
  */
@@ -180,7 +180,7 @@ export function mergeLocalNotices(
   const rows = run?.transcript.rows ?? [];
   const finalRows = run?.transcript.finalRows ?? 0;
   if (runNotices.length === 0) return { rows, finalRows };
-  const settledSeq = finalRows === 0 ? 0 : rowSeq(rows[finalRows - 1]);
+  const finalSeq = finalRows === 0 ? 0 : rowSeq(rows[finalRows - 1]);
   const out: TranscriptRow[] = [];
   let next = 0;
   const flushThrough = (seq: number): void => {
@@ -200,7 +200,7 @@ export function mergeLocalNotices(
     rows: out,
     finalRows:
       finalRows +
-      runNotices.filter((notice) => notice.row.seqNo <= settledSeq).length,
+      runNotices.filter((notice) => notice.row.seqNo <= finalSeq).length,
   };
 }
 

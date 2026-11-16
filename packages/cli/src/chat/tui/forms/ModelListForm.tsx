@@ -11,21 +11,14 @@ import {
   getCliModelAccessList,
   modelSelectItemsForCli,
   type CliModelPickerItem,
-  type CliModelStores,
   type GetModelSwitchDisabledReason,
 } from '@cli/runtime/models/modelAccess';
 import { ListForm, useAsyncPickerForm } from './_shared/ListForm';
-import { CHAT_API_MODE_MODEL_RECOVERY } from '../commands/handlers/slashContext';
+import { CHAT_KEY_RECOVERY } from '../commands/handlers/slashContext';
+import { useChatProcess } from '../chatProcess';
 
 interface ModelListFormProps {
   readonly currentModel: string;
-  /**
-   * The setting slots the availability computation reads, with the runtime
-   * its read runs on (which serves `Secrets`). Ink components run no Effect
-   * themselves, so both arrive as one prop from the surface that opened the
-   * form.
-   */
-  readonly stores: CliModelStores;
   readonly availableRows?: number;
   readonly selectable: boolean;
   readonly getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;
@@ -47,16 +40,16 @@ function modelListDescription({
 }
 
 export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
+  const { roots, runtime } = useChatProcess();
   const picker = useAsyncPickerForm<readonly CliModelPickerItem[], string>({
     title: '/model',
     loadingLabel: 'Loading models...',
     load: () =>
       Effect.flatMap(
-        getCliModelAccessList({ stores: props.stores }),
+        getCliModelAccessList({ stores: { ...roots, runtime } }),
         (models) =>
           modelSelectItemsForCli(models, props.getModelSwitchDisabledReason),
       ),
-    runtime: props.stores.runtime,
     isEmpty: (items) => items.length === 0,
     closeEmptyOnEnter: true,
     items: (items) => items,
@@ -82,9 +75,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
       }
       compactDetail={<Text dimColor>Available models</Text>}
       emptyClosesOnEnter
-      emptyMessage={formatCliNoRunnableModelsMessage(
-        CHAT_API_MODE_MODEL_RECOVERY,
-      )}
+      emptyMessage={formatCliNoRunnableModelsMessage(CHAT_KEY_RECOVERY)}
       action={props.selectable ? 'select' : 'close'}
       onSelect={picker.select}
       onCancel={props.onClose}

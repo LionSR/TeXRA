@@ -18,7 +18,7 @@ import { terminalCapabilities } from '../state/terminalCapabilities';
 type NotificationKind = 'agentFinished' | 'approvalNeeded';
 
 /**
- * Write OSC sequences when capability discovery admitted OSC; the one gate
+ * Write OSC sequences when capability discovery accepted OSC; the one gate
  * for every OSC the TUI emits. Returns whether anything was written.
  */
 export function writeOsc(...sequences: readonly string[]): boolean {

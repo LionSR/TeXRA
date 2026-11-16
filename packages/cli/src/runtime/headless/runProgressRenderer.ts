@@ -73,7 +73,7 @@ export function shouldRenderRunProgress(
 export function createRunProgressRenderer(
   context: CliContext,
 ): RunProgressRenderer | undefined {
-  if (!context.renderRunProgress) return undefined;
+  if (!shouldRenderRunProgress(context)) return undefined;
   return new DefaultRunProgressRenderer({
     colorEnabled: context.stderrColorEnabled,
     getColumns: () => {

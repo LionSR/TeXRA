@@ -6,7 +6,7 @@ import {
 } from '@ui/markdown/latexPlaceholders';
 import { protectLatexMathSpansForNormalize } from '@ui/markdown/latexMathShield';
 
-// Only exact supported tag names enter the presentation grammar. Suffixes such
+// Only exact supported tag names enter the presented markup. Suffixes such
 // as `<strong-x>` remain literal transcript text.
 const KNOWN_HTML_TAG_RE =
   /<\/?(?:blockquote|strong|b|em|i|code|p|div|br|h[1-6])(?=[\s/>])/iu;

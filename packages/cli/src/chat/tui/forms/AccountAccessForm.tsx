@@ -28,8 +28,7 @@ import {
 } from '@ui/copy/onboarding';
 import { ListForm } from './_shared/ListForm';
 import { useAsyncResource } from './_shared/useAsyncListForm';
-import type { ProcessRuntime } from '@texra-ai/harness/host';
-import type { SettingsStores } from '@texra-ai/harness/plugins';
+import { useChatProcess } from '../chatProcess';
 
 export type AccountAccessFormValue =
   | { readonly kind: 'access'; readonly selection: CliModelAccessSelection }
@@ -39,15 +38,6 @@ export type AccountAccessFormValue =
 
 interface AccountAccessFormProps {
   readonly availableRows?: number;
-  /** The three setting slots the access overview reads its preferences from. */
-  readonly stores: SettingsStores;
-  /**
-   * The runtime that runs the access overview (its credentials come from
-   * the runtime's `Secrets`): the overview is a program, and Ink components
-   * own no runtime, so it arrives as a prop from the surface that opened
-   * this form.
-   */
-  readonly runtime: ProcessRuntime;
   /** No model is connected yet: the form is the chat's "Connect a model"
    *  panel rather than account management. */
   readonly connecting?: boolean;
@@ -207,9 +197,9 @@ const API_KEY_ITEM: SelectItem<AccountAccessFormValue> = {
 export function AccountAccessForm(
   props: AccountAccessFormProps,
 ): React.JSX.Element {
+  const { roots } = useChatProcess();
   const overview = useAsyncResource({
-    load: () => loadCliModelAccessOverview(props.stores),
-    runtime: props.runtime,
+    load: () => loadCliModelAccessOverview(roots),
   });
   const { data, error } = overview;
 

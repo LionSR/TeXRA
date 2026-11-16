@@ -6,43 +6,55 @@ import { Cause, Effect, Fiber } from 'effect';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 
 import { formProgress, setTransientNotice } from '../state/cliState';
-import { appendLocalNotice } from '../state/transcript';
 import {
+  appendLocalErrorTranscript,
+  appendLocalNotice,
+} from '../state/transcript';
+import {
+  type SlashCommandContext,
   type SlashCommandEffect,
   type SlashCommandOutput,
   transcriptSlashCommandOutput,
 } from './handlers/slashContext';
-import type { ProcessRuntime } from '@texra-ai/harness/host';
+import type { SlashFormProps } from './slashRegistry';
 
-export type ErrorHandler = (error: unknown) => void;
 type SelectionCompletion = 'afterAction' | 'beforeAction' | 'busy';
 
-/** Build a form selection handler with consistent completion and errors. */
-export function formSelectionHandler<T>({
-  runtime,
-  action,
-  onDone,
-  onError,
-  onPersist,
-  echoOnPersist = false,
-  completion = 'afterAction',
-  busyTitle,
-}: {
-  readonly runtime: ProcessRuntime;
-  readonly action: (value: T, output: SlashCommandOutput) => SlashCommandEffect;
-  readonly onDone: (value: T) => void;
-  readonly onError?: ErrorHandler;
-  readonly onPersist?: () => void;
-  readonly echoOnPersist?: boolean;
-  readonly completion?: SelectionCompletion;
-  readonly busyTitle?: (value: T) => string;
-}): (value: T) => void {
-  // Every host's error hook writes to its transcript and returns; reporting
-  // is a step of the failure path, not a wait inside it.
+/** A slash form's failure, said in the transcript. */
+export const reportFormError = (error: unknown): void =>
+  appendLocalErrorTranscript(toErrorMessage(error));
+
+/** A form's selection does what the command's handler does: an action over
+ *  the chat's slash context. */
+export type FormAction<T> = (
+  value: T,
+  context: SlashCommandContext,
+  output: SlashCommandOutput,
+) => SlashCommandEffect;
+
+/**
+ * Bind a slash form's selection to its action: it runs on the chat's
+ * runtime, a failure is said in the transcript, and it completes through the
+ * form's done and persistence props. A picker passes only its action and
+ * what it overrides.
+ */
+export function bindSelection<T>(
+  context: SlashCommandContext,
+  props: SlashFormProps,
+  action: FormAction<T>,
+  overrides: {
+    readonly onDone?: (value: T) => void;
+    readonly completion?: SelectionCompletion;
+    readonly busyTitle?: (value: T) => string;
+  } = {},
+): (value: T) => void {
+  const { runtime } = context;
+  const { onPersist, echoOnPersist = false } = props;
+  const onDone = overrides.onDone ?? props.onDone;
+  const { completion = 'afterAction', busyTitle } = overrides;
+  // Reporting is a step of the failure path, not a wait inside it.
   const reportError = (error: unknown): Effect.Effect<void> =>
-    Effect.sync(() => {
-      onError?.(error);
-    });
+    Effect.sync(() => reportFormError(error));
   return (value) => {
     if (completion === 'busy') {
       // The submission token is the single owner of "is this submission still
@@ -119,7 +131,7 @@ export function formSelectionHandler<T>({
       };
 
       const actionFiber = runtime.runFork(
-        Effect.suspend(() => action(value, output)).pipe(
+        Effect.suspend(() => action(value, context, output)).pipe(
           Effect.matchCauseEffect({
             onSuccess: () =>
               Effect.sync(() => {
@@ -167,7 +179,9 @@ export function formSelectionHandler<T>({
     }
 
     runtime.runFork(
-      Effect.suspend(() => action(value, transcriptSlashCommandOutput)).pipe(
+      Effect.suspend(() =>
+        action(value, context, transcriptSlashCommandOutput),
+      ).pipe(
         Effect.catchCause((cause) =>
           Effect.suspend(() => {
             if (!echoOnPersist) onPersist?.();

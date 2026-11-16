@@ -13,7 +13,7 @@ import { nextWrappingHighlightIndex } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import {
-  useSlashCommands,
+  useSlashContext,
   type SlashCommand,
   type SlashPickIntent,
 } from './slashRegistry';
@@ -124,7 +124,7 @@ function slashPaletteCommandLabelWidth(
 export function SlashPalette(
   props: SlashPaletteProps,
 ): React.JSX.Element | null {
-  const matches = useSlashCommands().match(props.query);
+  const matches = useSlashContext().commands.match(props.query);
   const [highlight, setHighlight] = useState(0);
   const matchCount = matches.length;
 

@@ -21,6 +21,7 @@ import {
   formatCliArgumentError,
   withUsageSections,
   detectUnknownCliCommand,
+  firstPositionalIndex,
   formatUnknownCliCommand,
   detectUnknownCliFlag,
   formatUnknownCliFlag,
@@ -50,19 +51,6 @@ import { skillsCommand } from './skills';
 import { tasksCommand } from './tasks';
 import { versionCommand } from './version';
 import { headlessRunCommand } from './run';
-
-/** The argv `runCli` dispatches, for the default route (citty resolves
- *  `default` with no arguments). */
-let routedArgs: readonly string[] = [];
-
-function defaultRootSubcommand(): 'chat' | 'help' {
-  const args = [...routedArgs];
-  const globalArgs = pickGlobalArgs(
-    parseArgs(args, AGENT_RUN_GLOBAL_ARGS),
-    args,
-  );
-  return isInteractiveCli(globalArgs, readCliAmbientState()) ? 'chat' : 'help';
-}
 
 export const rootCommand = withUsageSections(
   defineCommand({
@@ -106,9 +94,8 @@ export const rootCommand = withUsageSections(
       version: versionCommand,
       help: helpCommand,
     },
-    // No subcommand on bare `texra`: start an interactive chat where `texra
-    // chat` would run; fall through to synthetic `help` otherwise.
-    default: defaultRootSubcommand,
+    // `runCli` names `chat` or `help` for bare `texra` before dispatch.
+    default: 'help',
   }),
   [
     {
@@ -165,7 +152,6 @@ export async function runCli(
     normalizeRootShortcuts(argv ? [...argv] : readCliArgv()),
   );
   rawArgs = await reorderNestedGlobalFlags(rootCommand, rawArgs);
-  routedArgs = rawArgs;
 
   const unknownCommand = await detectUnknownCliCommand(rootCommand, rawArgs);
   if (unknownCommand) {
@@ -191,6 +177,19 @@ export async function runCli(
   }
 
   try {
+    // Bare `texra`, global flags at most: an interactive chat where `texra
+    // chat` would run, usage otherwise. The flags follow the name, as
+    // `reorderGlobalFlags` places them.
+    if (firstPositionalIndex(rawArgs) === undefined) {
+      const globalArgs = pickGlobalArgs(
+        parseArgs(rawArgs, AGENT_RUN_GLOBAL_ARGS),
+        rawArgs,
+      );
+      rawArgs = [
+        isInteractiveCli(globalArgs, readCliAmbientState()) ? 'chat' : 'help',
+        ...rawArgs,
+      ];
+    }
     return { exitCode: await runCommandForExitCode(rootCommand, rawArgs) };
   } catch (error) {
     if (error instanceof CliUsageError) {
