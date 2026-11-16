@@ -107,11 +107,10 @@ export const attachCliSessionProgressProjection = Effect.fn(
    *  its cursor (`to`), so a child list never precedes the row it reports. */
   const emitChildren = (view: SessionView, to: number): void => {
     if (view.cursor > to) return;
-    for (const [parentRunId, run] of view.runs) {
+    for (const [parentId, run] of view.runs) {
       // A parent whose child list emptied still owes its closing line; one that
       // never had a child owes nothing.
-      if (run.childIds.length === 0 && !writtenChildren.has(parentRunId))
-        continue;
+      if (run.childIds.length === 0 && !writtenChildren.has(parentId)) continue;
       const children = run.childIds.flatMap((childId) => {
         const child = view.runs.get(childId);
         // A live child only: the child list reports who is still going, and a
@@ -121,10 +120,10 @@ export const attachCliSessionProgressProjection = Effect.fn(
           : [];
       });
       const wire = JSON.stringify(children);
-      if (writtenChildren.get(parentRunId) === wire) continue;
-      writtenChildren.set(parentRunId, wire);
+      if (writtenChildren.get(parentId) === wire) continue;
+      writtenChildren.set(parentId, wire);
       if (view.cursor > attachedAt)
-        writeProgressRecord('run.children', { runId: parentRunId, children });
+        writeProgressRecord('run.children', { runId: parentId, children });
     }
   };
   // Seed from the session view as it stands at attach, before any fiber can see a

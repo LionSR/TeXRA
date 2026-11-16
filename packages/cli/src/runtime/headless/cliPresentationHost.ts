@@ -94,7 +94,6 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
         present('info', `${payload.message}${hint}`, {
           key: payload.key,
           ...(actions.length > 0 ? { actions } : {}),
-          showSuppress: payload.showSuppress,
         });
         return true;
       },

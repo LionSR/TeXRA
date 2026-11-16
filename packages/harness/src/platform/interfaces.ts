@@ -1,6 +1,6 @@
 /**
  * Platform port contracts — the host-neutral interfaces a host wires into
- * `processLayer()`. Formerly one file per port under `interfaces/`.
+ * `processLayer()`.
  */
 import { Context, Effect, FileSystem, Layer, Schema, Stream } from 'effect';
 import { AgentSourceSchema } from '@shared/schemas';

@@ -7,7 +7,6 @@
 import { Effect, Scope, ScopedRef, Stream } from 'effect';
 
 import {
-  qualifyAggregateId,
   type RunId,
   descendantRuns,
   type RunView,
@@ -125,7 +124,7 @@ export const attachScriptPlainOutput = Effect.fn('attachScriptPlainOutput')(
               interest,
               session.view.subscribe(
                 scriptRuns.map((run) => ({
-                  id: qualifyAggregateId('run', run.id),
+                  id: run.id,
                   fromSeq: 0,
                 })),
               ),

@@ -22,7 +22,7 @@ import {
   Stream,
 } from 'effect';
 
-import { qualifyAggregateId, type RunOutcome } from '@texra-ai/harness/schemas';
+import { type RunOutcome } from '@texra-ai/harness/schemas';
 import { fullTranscriptEntryLayout } from '@cli/chat/tui/panes/transcriptEntryLayout';
 import type { EventsFrame } from '@texra/shared/session/sessionFrames';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
@@ -85,9 +85,7 @@ export function watchTask(
   return Stream.unwrap(
     Effect.gen(function* () {
       const graph = yield* WebviewSessions.open(task.workspace);
-      const aggregates = [
-        { id: qualifyAggregateId('run', task.runId), fromSeq: 0 },
-      ];
+      const aggregates = [{ id: task.runId, fromSeq: 0 }];
       // Begin the frames and name the transcript before the first frame, as
       // a webview shell does before it posts its `Subscribe`.
       yield* graph.frames.begin(0);
@@ -140,11 +138,11 @@ export const attachTask = Effect.fn('attachTask')(function* (
   output: TaskAttachOutput,
 ): Effect.fn.Return<RunOutcome | null, TaskWatchEnded> {
   const includeDebugLogs = yield* LogLevel.isEnabled('Debug');
-  const aggregate = qualifyAggregateId('run', task.runId);
+  const aggregate = task.runId;
   let printed = 0;
   const printFinal = (run: RunView): void => {
     if (output.format !== 'text') return;
-    const { rows, settledRows: finalRows } = run.transcript;
+    const { rows, finalRows } = run.transcript;
     for (; printed < finalRows; printed += 1) {
       const { lines } = fullTranscriptEntryLayout(
         rows[printed],

@@ -7,12 +7,16 @@ import { resumeRun } from '@agent/runtime/resumeRun';
 import { RunRegistry, Runs } from '@agent/runtime/runRegistry';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { withLogChannel } from '@logger/effectLog';
-import { type ResumeRefusal, type RunId } from '@shared/schemas';
+import {
+  describeRefusal,
+  type ResumeRefusal,
+  type RunId,
+} from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { withPerKeyLane } from '@utils/core/perKeyQueue';
 import { Inbox, type InboxItem } from './Inbox';
 
-/** What a follow-up's admission and its wake read of the session. */
+/** What a follow-up's acceptance and its wake read of the session. */
 type FollowUpServices =
   | Inbox
   | Runs
@@ -22,23 +26,10 @@ type FollowUpServices =
   | Interactions;
 
 /**
- * Why a submission could not be admitted, as {@link describeFollowUpFailure}
- * words it: the kind of a resume's refusal (`ResumeRefusal`; a message to a
- * run with no loop here is admitted only as a resume would be, and
- * `notResumable` there also covers a closed input, a disposed session, or a
- * message that does not wake the run), or one of the message's alone:
- *
- * - `readFailed`: the run's rows could not be read just now (a failing
- *   store), which says nothing about the run itself.
- * - `notParent`: the sender is not the run's parent.
- */
-type FollowUpFailureReason = ResumeRefusal['kind'] | 'readFailed' | 'notParent';
-
-/**
  * Three outcomes: the input reached a running loop, it waits in the run's
  * queue for its next turn (the resume the send started, or an explicit
- * one), or it was not admitted, with the words that say why. A delivery the
- * admission boundary had already accepted is `sent`. A resume the input
+ * one), or it was not accepted, with the words that say why. A delivery the
+ * acceptance boundary had already accepted is `sent`. A resume the input
  * started that the run refused is told by the resume itself.
  */
 export type SubmitFollowUpResult =
@@ -46,13 +37,7 @@ export type SubmitFollowUpResult =
   | { status: 'queued' }
   | { status: 'failed'; message: string };
 
-/** How one input is delivered to a run. */
-export interface RunInboxSendOptions {
-  /** Only from the run's parent, by its rows (`SendOptions.fromParent`). */
-  readonly fromParent?: boolean;
-}
-
-interface SubmitFollowUpOptions extends RunInboxSendOptions {
+interface SubmitFollowUpOptions {
   /** A user's message the run reads when its current turn ends, not at the
    *  turn's next model request. */
   readonly hold?: 'turn';
@@ -65,27 +50,6 @@ interface SubmitFollowUpOptions extends RunInboxSendOptions {
   /** The keys the run resumes with if the message wakes it: the sending
    *  client's (`followUp.send`'s `apiKeys`), never another run's. */
   readonly apiKeys?: Readonly<Record<string, string>>;
-}
-
-const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
-  finished: 'This run has finished. Start a new agent task to continue.',
-  unusableCheckpoint:
-    "This run's saved state could not be loaded, so it cannot be continued. Delete it from history and start a new agent task.",
-  earlierBuild:
-    'This run was written by an earlier build, and this build cannot continue it.',
-  pluginUnavailable: 'This run needs a plugin that is not loaded here.',
-  readFailed: "This run couldn't be read right now. Try again in a moment.",
-  notResumable:
-    'This run cannot accept messages right now. Resume it, or start a new agent task.',
-  notParent:
-    'This run is not a child of the sender: it was launched by another run.',
-  blocked:
-    "This task's agent, or the plugin it comes from, is missing, off or not trusted. It can continue once that is fixed.",
-};
-
-/** The one wording of each refusal, shared by every host and tool output. */
-export function describeFollowUpFailure(reason: FollowUpFailureReason): string {
-  return FAILURE_MESSAGES[reason];
 }
 
 export function presentFollowUpResult(
@@ -141,7 +105,7 @@ const wakeRun = Effect.fn('wakeRun')(function* (
   // A run a launch here holds reads its input itself: nothing to say.
   if ('failed' in answer && (yield* Runs).get(runId) === undefined)
     yield* Effect.logWarning(
-      `Run ${runId} was not resumed for its input: ${describeFollowUpFailure(answer.failed.kind)}`,
+      `Run ${runId} was not resumed for its input: ${describeRefusal(answer.failed)}`,
     ).pipe(withLogChannel(CHANNEL));
 });
 
@@ -165,7 +129,7 @@ export const wakeIfOwed = Effect.fn('wakeIfOwed')(function* (
 });
 
 /**
- * The one admission of a message to a run: every host and tool sends
+ * The one acceptance of a message to a run: every host and tool sends
  * through here, and only here is a message refused. The send is durable
  * before anything is acknowledged or woken; when no reader here takes the
  * row, this asks the inbox whether the run owes a resume (`wakeIfOwed`,
@@ -182,7 +146,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   item: InboxItem,
   options: SubmitFollowUpOptions,
 ): Effect.fn.Return<SubmitFollowUpResult, Error, FollowUpServices> {
-  const { hold, fromParent, attach, apiKeys } = options;
+  const { hold, attach, apiKeys } = options;
   const inbox = yield* Inbox;
   const runs = yield* Runs;
   const log = yield* SessionLog;
@@ -193,7 +157,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   const sent = yield* Effect.gen(function* () {
     // A run that takes no input (a process run, a one-shot root) reads
     // none, live or resumed: nothing would read the row.
-    // Still the view's answer, and so unsettled: a run the view has not
+    // Still the view's answer, and so unfinished: a run the view has not
     // loaded skips this check. The store's answer would always refuse an
     // ended one-shot root, which a later resume does read a message for
     // (`example/10-external-plugin.ts`); which of the two is meant is open.
@@ -223,7 +187,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       if (rejection !== null)
         return {
           status: 'failed',
-          message: describeFollowUpFailure(rejection.kind),
+          message: describeRefusal(rejection),
         } as const;
     }
     // A user's message to a run that is stopping continues it after the
@@ -233,21 +197,17 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       if (facts?.stop !== null && facts?.end === null) yield* live.drained;
     }
     const media = attach === undefined ? {} : yield* attach;
-    const landed = yield* inbox.send(
-      runId,
-      { ...item, ...media },
-      { hold, fromParent },
-    );
+    const landed = yield* inbox.send(runId, { ...item, ...media }, { hold });
     return { status: 'landed', landed, live: live !== undefined } as const;
   }).pipe(withPerKeyLane(inbox.sendLanes, runId));
   if (sent.status !== 'landed') return sent;
   const { landed, live } = sent;
-  // The sender is not its parent, its input is closed (deleted, or torn
-  // down with nothing queued), or the session is disposed.
+  // Its input is closed (deleted, or torn down with nothing queued), or the
+  // session is disposed.
   if (landed.kind === 'refused')
     return {
       status: 'failed',
-      message: describeFollowUpFailure(landed.reason),
+      message: describeRefusal({ kind: 'notResumable' }),
     };
   if (landed.kind === 'duplicate') return { status: 'sent' };
   // Whether the row wakes the run is the inbox's one reading
@@ -261,14 +221,13 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
 
 /**
  * One run's input, as a plugin reaches it: what it sends the run (routed,
- * admitted and woken as {@link submitFollowUp} does), and when the run
+ * accepted and woken as {@link submitFollowUp} does), and when the run
  * takes no more.
  */
 export interface RunInbox {
   /** Deliver `item` to the run. */
   readonly send: (
     item: InboxItem,
-    options?: RunInboxSendOptions,
   ) => Effect.Effect<SubmitFollowUpResult, Error>;
   /** Hear the run take no more input, or its session's inbox close;
    *  returns the detach. */
@@ -281,8 +240,7 @@ export const runInbox = (
   runId: RunId,
   session: Context.Context<FollowUpServices>,
 ): RunInbox => ({
-  send: (item, options) =>
-    submitFollowUp(runId, item, options ?? {}).pipe(Effect.provide(session)),
+  send: (item) => submitFollowUp(runId, item, {}).pipe(Effect.provide(session)),
   onClosed: (listener) =>
     Context.get(session, Inbox).onClosed((closed) => {
       if (closed.kind === 'session' || closed.runId === runId) listener();

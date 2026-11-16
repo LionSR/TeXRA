@@ -12,7 +12,7 @@ import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   toErrorMessage,
   Rejected,
-  isTaskConfig,
+  programOf,
   fileLocationAddressPath,
   isModelOptionAvailable,
   RunIdSchema,
@@ -65,7 +65,7 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
     const compileFailures = input.rounds.flatMap(compileFailuresOf);
     // The compile-fixer planner serves document tasks only.
     const savedTaskConfig =
-      input.runConfig && isTaskConfig(input.runConfig)
+      input.runConfig && programOf(input.runConfig) !== null
         ? input.runConfig
         : undefined;
     if (!savedTaskConfig) {
@@ -130,13 +130,16 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
     return {
       ...savedTaskConfig,
       agent: 'latexFixer',
+      // The catalog's latexFixer, not the program's own empty persona.
+      agentSource: null,
+      persona: null,
       model,
       instruction: buildCompileFixerQuestion(
         compileFailures,
         targets,
         input.runId,
       ),
-      // A chat with latexFixer, not the task's recipe again.
+      // A chat with latexFixer, not the task's program again.
       script: null,
       inputFiles: targets.map((target) => target.path),
       outputFiles: [],

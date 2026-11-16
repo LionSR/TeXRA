@@ -1,4 +1,4 @@
-import { Result, Schema } from 'effect';
+import { Schema } from 'effect';
 
 /**
  * The one id a run has: minted once at launch, assigned
@@ -22,48 +22,29 @@ export function generateRunId(): RunId {
   return crypto.randomUUID().replaceAll('-', '').slice(0, 12) as RunId;
 }
 
-// The aggregate key every durable session event rides on: the kind and
-// logical id of the lifecycle it belongs to (`run` by run id, `plugin` by a
-// plugin's own key), encoded canonically as JSON so one string names it in
-// the event table.
+// The aggregate key every durable session event rides on: the lifecycle it
+// belongs to. A run's is its run id; one a plugin owns is the plugin's own
+// key behind `plugin:`, which no run id can spell.
 
-const AggregateKindSchema = Schema.Literals(['run', 'plugin']);
-/** The kind separates lifecycles even when their logical ids coincide:
- *  `run` is keyed by the run id, `plugin` (one a plugin owns) `<plugin>:<key>`. */
-export type AggregateKind = typeof AggregateKindSchema.Type;
-const AggregateKeySchema = Schema.Tuple([
-  AggregateKindSchema,
-  Schema.NonEmptyString,
-]).check(
-  Schema.makeFilter(([kind, id]) => kind !== 'run' || isRunId(id), {
-    message: 'A run aggregate is keyed by a run id',
-  }),
-);
-const AggregateKeyJsonSchema = Schema.fromJsonString(AggregateKeySchema);
-const decodeAggregateKeyJson = Schema.decodeUnknownResult(
-  AggregateKeyJsonSchema,
-);
+const PLUGIN_AGGREGATE_PREFIX = 'plugin:';
+const PluginAggregateIdSchema = Schema.String.check(
+  Schema.isPattern(/^plugin:[^]+$/),
+).pipe(Schema.brand('PluginAggregateId'));
 
-/** The canonical JSON encoding of an aggregate kind and its logical id. */
-export const AggregateIdSchema = Schema.String.check(
-  Schema.makeFilter(
-    (value) =>
-      Result.match(decodeAggregateKeyJson(value), {
-        onSuccess: (key) => JSON.stringify(key) === value,
-        onFailure: () => false,
-      }),
-    { message: 'Expected a canonical [kind, logicalId] aggregate key' },
-    true,
-  ),
-).pipe(Schema.brand('AggregateId'));
-/** The key one lifecycle's events ride on in the event table. */
+/** The key one lifecycle's events ride on in the event table: a run id, or
+ *  a plugin's key ({@link pluginAggregateId}). */
+export const AggregateIdSchema = Schema.Union([
+  RunIdSchema,
+  PluginAggregateIdSchema,
+]);
+/** {@link AggregateIdSchema}'s value. */
 export type AggregateId = typeof AggregateIdSchema.Type;
 
-/** A logical id that is not itself an already-qualified aggregate key: the
- *  brand key `Schema.brand` stamps on an `AggregateId` is refused here. */
-export type LogicalId = string & {
-  readonly '~effect/Brand'?: { readonly AggregateId?: never };
-};
+/** The aggregate a plugin owns under `key` (`<plugin>:<key>`). */
+export const pluginAggregateId = (key: string): AggregateId =>
+  Schema.decodeUnknownSync(PluginAggregateIdSchema)(
+    `${PLUGIN_AGGREGATE_PREFIX}${key}`,
+  );
 
 /**
  * A plugin fact's name, `plugin/kind`: the key of every map of a run's facts
@@ -82,32 +63,17 @@ export const factName = (fact: {
 }): FactName =>
   Schema.decodeUnknownSync(FactNameSchema)(`${fact.plugin}/${fact.kind}`);
 
-/** Qualify a logical id once. An already-qualified key is not an input. */
-export function qualifyAggregateId(kind: 'run', logicalId: RunId): AggregateId;
-export function qualifyAggregateId(
-  kind: Exclude<AggregateKind, 'run'>,
-  logicalId: LogicalId,
-): AggregateId;
-export function qualifyAggregateId(
-  kind: AggregateKind,
-  logicalId: string,
-): AggregateId {
-  return Schema.decodeUnknownSync(AggregateIdSchema)(
-    JSON.stringify([kind, logicalId]),
-  );
-}
-
-/** A decoded aggregate key: the `run` arm carries its logical id as a `RunId`. */
+/** What an aggregate key names: a run by its id, or a plugin's own key. */
 type AggregateTarget =
   | { readonly kind: 'run'; readonly id: RunId }
-  | { readonly kind: Exclude<AggregateKind, 'run'>; readonly id: string };
+  | { readonly kind: 'plugin'; readonly id: string };
 
-/** Decode a validated aggregate key at a logical-id boundary. */
+/** The kind and logical id of an aggregate key: its two columns in the
+ *  event table. */
 export function aggregateTarget(key: AggregateId): AggregateTarget {
-  const [kind, id] = Schema.decodeUnknownSync(AggregateKeyJsonSchema)(key);
-  return kind === 'run'
-    ? { kind, id: Schema.decodeUnknownSync(RunIdSchema)(id) }
-    : { kind, id };
+  return isRunId(key)
+    ? { kind: 'run', id: key }
+    : { kind: 'plugin', id: key.slice(PLUGIN_AGGREGATE_PREFIX.length) };
 }
 
 /** A content address: the sha256 of a value's canonical JSON. */

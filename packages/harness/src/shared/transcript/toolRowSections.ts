@@ -9,12 +9,14 @@ import { Option, Predicate, Result, Schema } from 'effect';
 import {
   AGENT_TOOL_NAME,
   LineChangesSchema,
+  PROGRAM_TOOL_NAME,
   McpToolOutputSchema,
   getProposalFileGroups,
   type ProposalFileGroup,
 } from '@shared/schemas';
 import {
   executionsWaitTimeoutSeconds,
+  lineRangeOf,
   TOOL_RESULT_METADATA_FIELDS,
 } from '@shared/toolUse';
 import { executionsAction } from '@shared/tools/executionsDisplay';
@@ -199,12 +201,9 @@ function buildEditSections(ctx: SectionContext): ToolSection[] {
 
 function buildReadSections(ctx: SectionContext): ToolSection[] {
   if (!ctx.filePath) return [];
-  const range =
-    Predicate.isObject(ctx.input) && Predicate.isObject(ctx.input.range)
-      ? ctx.input.range
-      : undefined;
-  const start = typeof range?.start === 'number' ? range.start : undefined;
-  const end = typeof range?.end === 'number' ? range.end : undefined;
+  const { start, end } = lineRangeOf(
+    Predicate.isObject(ctx.input) ? ctx.input.range : undefined,
+  );
   return [
     {
       kind: 'file',
@@ -313,16 +312,14 @@ function buildExecutionsSections(ctx: SectionContext): ToolSection[] {
     sections.push(textSection('SQL:', input.sql));
   }
 
-  const viewRange = input.view_range;
-  if (
-    Array.isArray(viewRange) &&
-    typeof viewRange[0] === 'number' &&
-    typeof viewRange[1] === 'number'
-  ) {
+  const viewRange = lineRangeOf(input.view_range);
+  if (viewRange.start !== undefined)
     sections.push(
-      textSection('Range:', `lines ${viewRange[0]}-${viewRange[1]}`),
+      textSection(
+        'Range:',
+        `lines ${viewRange.start}-${viewRange.end ?? 'end'}`,
+      ),
     );
-  }
   if (typeof input.offset === 'number') {
     sections.push(textSection('Offset:', String(input.offset)));
   }
@@ -336,17 +333,25 @@ function buildExecutionsSections(ctx: SectionContext): ToolSection[] {
  * The `agent` tool's input derives from a host-only schema, so each
  * displayed field is read with its own guard.
  */
+/** The tools whose call launches a child run: its card shows the launch
+ *  and the child's answer. */
+const DELEGATION_TOOLS: ReadonlySet<string> = new Set([
+  AGENT_TOOL_NAME,
+  PROGRAM_TOOL_NAME,
+]);
+
 function buildDelegationSections(ctx: SectionContext): ToolSection[] {
   const { input } = ctx;
   if (!Predicate.isObject(input)) return [];
   const sections: ToolSection[] = [];
 
-  const agent = asString(input.agentName);
+  const program = ctx.toolName === PROGRAM_TOOL_NAME;
+  const agent = asString(program ? input.name : input.agentName);
   const model = asString(input.model);
   if (agent || model) {
     sections.push({
       kind: 'identifier',
-      label: 'Agent:',
+      label: program ? 'Program:' : 'Agent:',
       value: agent ?? 'unknown',
       ...(model ? { note: model } : {}),
     });
@@ -547,7 +552,7 @@ const SECTION_BUILDERS: readonly {
   },
   {
     match: (ctx) =>
-      ctx.toolName === AGENT_TOOL_NAME && Predicate.isObject(ctx.input),
+      DELEGATION_TOOLS.has(ctx.toolName) && Predicate.isObject(ctx.input),
     build: buildDelegationSections,
   },
   { match: (ctx) => isMcpToolName(ctx.toolName), build: buildMcpSections },
@@ -574,7 +579,7 @@ export function dispatchSections(ctx: SectionContext): {
       // no diff shows, and a host may paint no diff for it at all.
       carriesOutput:
         isMcpToolName(ctx.toolName) ||
-        (ctx.toolName === AGENT_TOOL_NAME &&
+        (DELEGATION_TOOLS.has(ctx.toolName) &&
           childAnswer(ctx.parsedOutput) !== undefined) ||
         (!ctx.failed && sections.some((section) => section.kind === 'diff')),
       ...(fileLinkKind ? { fileLinkKind } : {}),

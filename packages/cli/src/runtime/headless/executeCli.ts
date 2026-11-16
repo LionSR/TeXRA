@@ -15,7 +15,7 @@ import {
   type AgentConfigPayload,
   generateRunId,
   ensureError,
-  isTaskConfig,
+  programOf,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import {
@@ -369,7 +369,7 @@ export const executeCliConfig: (
             formatInterruptedResumeHint(
               runContext,
               launchRunId,
-              isTaskConfig(request.config) ? 'task' : 'session',
+              programOf(request.config) === null ? 'session' : 'program',
               config.workingDirectory || runContext.cwd,
               recoveryProcessCwd,
             ),
@@ -377,7 +377,7 @@ export const executeCliConfig: (
         // A failed run's end reaches the host through the session's
         // presenter, which `settled` waits for: the presentation host stays
         // attached until it has.
-        yield* session.settled;
+        yield* session.drained;
         if (runResult.ok && options.afterRun)
           yield* options.afterRun(runResult.result);
       }),

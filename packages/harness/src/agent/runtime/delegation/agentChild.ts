@@ -25,7 +25,6 @@ import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import { getRunRecords, callChildRunId } from '@agent/storage/runOwnership';
 import type { RunCall, RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import {
-  qualifyAggregateId,
   RUN_OUTCOME,
   type RunEnd,
   type RunId,
@@ -81,7 +80,7 @@ export const agentChildRunId = (
   attempt = call.attempt,
 ): RunId =>
   callChildRunId({
-    parentRunId: call.run.runId,
+    parentId: call.run.runId,
     responseId: call.responseId,
     callId: call.callId,
     attempt,
@@ -127,7 +126,7 @@ const standingOf = Effect.fn('agent.childStanding')(function* (
   return { kind: 'answered', result: end };
 });
 
-/** What the child an earlier attempt of the call left settles it to. */
+/** What the child an earlier attempt of the call left finishes it to. */
 type Recovered =
   | {
       readonly kind: 'ended';
@@ -138,7 +137,7 @@ type Recovered =
   | { readonly kind: 'launch' };
 
 /**
- * Settle a call from the child an earlier attempt of it left, before
+ * Finish a call from the child an earlier attempt of it left, before
  * anything about a launch is decided again: the child was approved and
  * configured when it launched. An ended child is read back, and one cut
  * short is resumed under its id.
@@ -154,7 +153,7 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
     ) => Effect.Effect<A, Error, R>;
   },
 ): Effect.fn.Return<Recovered, Error, AgentRunServices | RunCall> {
-  const { runId: parentRunId } = call.run;
+  const { runId: parentId } = call.run;
   const earlier = yield* earlierChild(call);
   if (earlier === null) return { kind: 'launch' };
   const standing = yield* standingOf(earlier);
@@ -167,7 +166,7 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
       const { result } = yield* recovery.running(
         resumeSubagentInBand({
           runId: earlier,
-          parentRunId,
+          parentId,
           notify: recovery.notify,
         }),
       );
@@ -271,7 +270,7 @@ export const reusable = Effect.fn('agent.reusable')(function* (
   siblings.set(key, callId);
   const log = yield* SessionLog;
   const results = (yield* Effect.forEach(yield* reuseScope(call), (runId) =>
-    log.runRows(qualifyAggregateId('run', runId), 'results'),
+    log.runRows(runId, 'results'),
   )).flatMap((run) => run.results);
   const found = results.flatMap((payload) =>
     payload.result.status === 'executed' && payload.result.reuseKey === key

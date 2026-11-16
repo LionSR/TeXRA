@@ -73,7 +73,7 @@ The header provides a summary and actions for the selected stream:
 <p class="hero-caption">The status dot: green while running, yellow while waiting on you or interrupted, gray once finished or stopped, red on error.</p>
 
 - **Token and cost summary**: Displays the combined input and output token counts from all completed revisions (e.g., `r0`, `r1`, `r2`, …) along with the estimated cost.
-- **Header row**: Shows the **Tasks** button, the task's title, status and elapsed time (plus **Pass 2 of 3** for multi-pass document tasks), **Stop** while running (cancels the active request immediately where the provider supports it, or stops after the current API call finishes), **New task**, and the **Task actions** menu (`⋯`).
+- **Header row**: Shows the **Tasks** button, the task's title, status and elapsed time (plus **Pass 2 of 3** for a multi-pass program run), **Stop** while running (cancels the active request immediately where the provider supports it, or stops after the current API call finishes), **New task**, and the **Task actions** menu (`⋯`).
 - **Task actions menu (`⋯`)**:
   - **All tasks**:
     - **Rename…**: Change the task title.
@@ -82,8 +82,8 @@ The header provides a summary and actions for the selected stream:
     - **Export conversation…**: Save the transcript as Markdown, HTML, or PDF.
     - **Copy diagnostics**: Copy the task's title, agent, model, status, task ID, output paths, and compile failures as plain text for bug reports or follow-up tasks.
     - **Delete task**: Remove the task once stopped.
-  - **Document tasks**:
-    - **Run again…**: Pre-fill the New task form with the same agent, model, files, and instruction to start a fresh run.
+  - **Program runs**:
+    - **Run again…**: Pre-fill the New task form with the same program, model, files, and instruction to start a fresh run.
     - **Run latexdiff on the outputs**: Compare the original input `.tex` file(s) with the generated output `.tex` file(s) using `latexdiff` (read the [LaTeX Diff guide](./latex-diff.md)).
     - **Archive outputs to History**: Copy the run folder (outputs, logs, mirrored dependencies) into a timestamped folder under `History/` (read the [file management guide](./file-management.md)).
     - **Delete output files**: Remove the task's run folder.
@@ -97,9 +97,9 @@ an **Accept** action that copies the edited version into your workspace.
 ### Checking an agent's launch
 
 When an agent asks to start another agent, its card shows the agent, the
-model, the instruction and the files it would run. **Edit** (`e`) opens the
-New task form filled with that proposal. Change the files, the switches,
-the instruction, the agent or the model, then press **Approve** to start it
+model, the instruction and the files it would run; for a program run it
+names the program. **Edit** (`e`) opens the
+New task form filled with that proposal. Change the files, the instruction, the model or (for an agent) the agent, then press **Approve** to start it
 with your changes. It still runs as the asking agent's child, and its
 result goes back to that agent. **Back to …** returns to the asking task and
 leaves the proposal waiting.
@@ -125,7 +125,7 @@ A small percentage next to the token count shows how full the model's context wi
 
 ### After a workflow run
 
-To follow up on a finished document task in chat, use **Copy diagnostics** in the
+To follow up on a finished program run in chat, use **Copy diagnostics** in the
 header menu to put the task's output paths and compile failures on the
 clipboard, then start a chat from the **New** view and paste that text
 into the instruction box.

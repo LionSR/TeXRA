@@ -64,7 +64,6 @@ import {
   DatabaseWriteFailed,
   RunChanged,
 } from '@shared/session/database';
-import { factKindsOf } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { currentValues, READ_RETRY } from './currentValues';
 import { LISTED_TYPES, projectionUpkeep, usageRows } from './projections';
@@ -159,16 +158,16 @@ const DISPLAY_PAGE_END = `SELECT "commit" AS through FROM event
 
 /**
  * The one display union: the `event` rows of the types bound first, the
- * `usage` row of every priced row, and an optional further arm, narrowed by `where` over the
+ * `usage` row of every priced row, and an optional further extra, narrowed by `where` over the
  * union's columns (`"commit"`, `kind`, `logicalId`, `seq`), which SQLite
- * pushes into each arm, so a range binds once.
+ * pushes into each extra, so a range binds once.
  */
-const displayUnion = (where: string, order: string, arm?: string) =>
+const displayUnion = (where: string, order: string, extra?: string) =>
   `SELECT * FROM (
     SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
       WHERE e.type IN (SELECT value FROM json_each(?))
     UNION ALL ${USAGE_ROWS}
-    ${arm === undefined ? '' : `UNION ALL ${arm}`}
+    ${extra === undefined ? '' : `UNION ALL ${extra}`}
   ) WHERE ${where} ORDER BY ${order}`;
 /** What a display read shows of one decoded row: a display row itself, a
  *  call row's tool card, nothing of any other private row. */
@@ -287,7 +286,7 @@ export const databaseLayer = (
        *  writer is this process, so what it holds cannot change under it;
        *  the global store's other processes can be newer builds, so there
        *  the gate runs again in every value write (`transact`). */
-      const factKinds = factKindsOf((yield* ToolRegistry).entries.values());
+      const { factKinds } = yield* ToolRegistry;
       const gate = storeGate(exec, factKinds);
       const reader = rowReader(path, factKinds, exec);
       const decodedRows = (
@@ -617,7 +616,7 @@ export const databaseLayer = (
         displayRows,
         readDisplay: (fromCommit) => {
           // Pages are separate snapshots: a deletion marker seen stays in view.
-          const tombstones = new Map<number, SessionRow>();
+          const removals = new Map<number, SessionRow>();
           return Stream.paginate(fromCommit, (from) =>
             snapshot(
               Effect.gen(function* () {
@@ -633,9 +632,9 @@ export const databaseLayer = (
                 ]);
                 if (through < top)
                   for (const row of yield* decodedRows(pendingDeletions, []))
-                    tombstones.set(row.commit, row);
+                    removals.set(row.commit, row);
                 const read = new Set(rows.map((row) => row.commit));
-                const kept = [...tombstones.values()].filter(
+                const kept = [...removals.values()].filter(
                   ({ commit }) =>
                     commit > from && commit <= through && !read.has(commit),
                 );
@@ -743,21 +742,19 @@ export const databaseLayer = (
           ),
         deletions: {
           pending: () => query(decodedRows(pendingDeletions, [])),
-          collect: Effect.fn('collect')(function* (tombstone, cleanup) {
-            const columns = aggregateColumns(tombstone.aggregateId);
+          collect: Effect.fn('collect')(function* (removal, cleanup) {
+            const columns = aggregateColumns(removal.aggregateId);
             // Already collected: the open's pass and the collector can both
             // hold a marker.
             if (
               (yield* query(
-                execOne(closedBy, [...columns, tombstone.commit]),
+                execOne(closedBy, [...columns, removal.commit]),
               )) === undefined
             )
               return;
             // Filesystem promises cannot be undone by fiber interruption.
-            yield* cleanup(tombstone.runIds).pipe(Effect.uninterruptible);
-            yield* transact(
-              exec(collectClosed, [...columns, tombstone.commit]),
-            );
+            yield* cleanup(removal.runIds).pipe(Effect.uninterruptible);
+            yield* transact(exec(collectClosed, [...columns, removal.commit]));
             yield* reclaimFreePages(sql, path);
           }),
         },

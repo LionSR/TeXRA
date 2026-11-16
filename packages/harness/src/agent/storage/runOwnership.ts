@@ -23,8 +23,7 @@ import {
   addUsage,
   type CommitOrdinal,
   NO_USAGE,
-  qualifyAggregateId,
-  isTaskConfig,
+  programOf,
   sumUsageStats,
   RunWorkspaceFilesSchema,
   type RunEnd,
@@ -47,7 +46,7 @@ type RecordRead<A, R = SessionLog> = Effect.Effect<A, DatabaseReadFailed, R>;
 
 /** A run's lifecycle rows and its history, one read each. */
 const rowsOf = (runId: RunId) => {
-  const id = qualifyAggregateId('run', runId);
+  const id = runId;
   return Effect.flatMap(SessionLog, (log) =>
     Effect.map(
       Effect.all([log.runRows(id, 'lifecycle'), log.history(id)]),
@@ -63,26 +62,35 @@ const rowsOf = (runId: RunId) => {
  * from here, never from its caller, who has no parent to name for a run that
  * already started once.
  */
-export const persistedParentRunId = Effect.fn('persistedParentRunId')(
-  function* (runId: RunId) {
-    const parent = (yield* parentEdge(runId))?.id;
-    if (parent === undefined) return undefined;
-    return (yield* getRunRecords(parent).exists()) ? parent : undefined;
-  },
-);
+export const persistedParentId = Effect.fn('persistedParentId')(function* (
+  runId: RunId,
+) {
+  const parent = (yield* parentEdge(runId))?.id;
+  if (parent === undefined) return undefined;
+  return (yield* getRunRecords(parent).exists()) ? parent : undefined;
+});
 
 const parentEdge = Effect.fn('parentEdge')(function* (runId: RunId) {
   return (yield* (yield* SessionLog).facts(runId))?.parent ?? null;
 });
 
 /** The run one attempt of a parent's call launches (an `agent` child, a
- *  background script), named by its response too: call ids repeat. */
-export const callChildRunId = (call: {
-  readonly parentRunId: RunId;
+ *  background script), named by its response too: call ids repeat. The id
+ *  is a hash of these fields under these names, `parentRunId` among them:
+ *  a resumed call finds the run an earlier attempt launched by deriving
+ *  the same id, so the names are part of the stored format. */
+export const callChildRunId = ({
+  parentId,
+  responseId,
+  callId,
+  attempt,
+}: {
+  readonly parentId: RunId;
   readonly responseId: string;
   readonly callId: string;
   readonly attempt: number;
-}): RunId => deriveRunId(call);
+}): RunId =>
+  deriveRunId({ parentRunId: parentId, responseId, callId, attempt });
 
 /** The runs the attempts so far of `runId`'s open calls launched under
  *  their derived ids (they may not exist), by call: a call no attempt of
@@ -94,12 +102,12 @@ const openCallChildren = (
   const pending = state?.pendingResponse ?? null;
   const open = new Map<string, readonly RunId[]>();
   for (const [callId, { status }] of Object.entries(pending?.records ?? {}))
-    if (pending !== null && status.kind !== 'settled')
+    if (pending !== null && status.kind !== 'finished')
       open.set(
         callId,
         Array.from({ length: attemptOf(status) }, (_, index) =>
           callChildRunId({
-            parentRunId: runId,
+            parentId: runId,
             responseId: pending.responseId,
             callId,
             attempt: index + 1,
@@ -110,7 +118,7 @@ const openCallChildren = (
 };
 
 /** The open call that owns `runId`: the undetached parent call that
- *  launched it, unsettled in the parent's history; else null. */
+ *  launched it, unfinished in the parent's history; else null. */
 export const owningCall = Effect.fn('owningCall')(function* (runId: RunId) {
   const edge = yield* parentEdge(runId);
   if (edge?.call == null) return null;
@@ -120,16 +128,14 @@ export const owningCall = Effect.fn('owningCall')(function* (runId: RunId) {
   const children = openCallChildren(id, history).get(callId);
   // A later response may reuse the call id: the pending call owns the run
   // only when the run is named by it.
-  return children?.includes(runId) === true
-    ? { parentRunId: id, callId }
-    : null;
+  return children?.includes(runId) === true ? { parentId: id, callId } : null;
 });
 
 /**
  * The terminal result of the lifecycle the `lifecycles` rows end with: its
  * `run.end`'s outcome, error and output, and the usage its activation
  * spent: its `history` rows from its own `run.activate` on and its label's
- * request (a recipe's with its children's then); none with no end. An
+ * request (a program's with its children's then); none with no end. An
  * unreadable fold is logged and reads as no usage.
  */
 const runEndOf = Effect.fn('runEndOf')(function* (
@@ -154,7 +160,7 @@ const runEndOf = Effect.fn('runEndOf')(function* (
   // One read of the rows, so a resume never pairs the end with another
   // activation's totals: the state before the activation, its usage
   // zeroed, then the activation's rows.
-  const folded = Result.flatMap(
+  const loaded = Result.flatMap(
     runHistoryRows(history.filter((row) => row.seq <= end.seq)),
     (live) =>
       Result.flatMap(
@@ -169,22 +175,21 @@ const runEndOf = Effect.fn('runEndOf')(function* (
           ),
       ),
   );
-  if (Result.isFailure(folded)) {
+  if (Result.isFailure(loaded)) {
     yield* Effect.logWarning(
       'Failed to fold the run usage from its run history rows',
-    ).pipe(Effect.annotateLogs({ runId, error: folded.failure.message }));
+    ).pipe(Effect.annotateLogs({ runId, error: loaded.failure.message }));
   }
-  const turns = Result.isSuccess(folded) ? folded.success?.usage : undefined;
+  const turns = Result.isSuccess(loaded) ? loaded.success?.usage : undefined;
   const withLabel = ({ label }: RunRows) =>
-    Result.isSuccess(folded) && during(label?.commit ?? -1) && label?.usage
+    Result.isSuccess(loaded) && during(label?.commit ?? -1) && label?.usage
       ? addUsage(turns ?? NO_USAGE, label.usage)
       : turns;
   const own = withLabel(held);
-  // A document task's revisions are its children's runs, which hold
-  // what it cost: those this activation started, each as it had ended
+  // A program's work is its children's runs, which hold what it cost: those this activation started, each as it had ended
   // by this end, whatever a later resume of it spent.
   const children =
-    held.config && isTaskConfig(held.config)
+    held.config && programOf(held.config) !== null
       ? yield* Effect.forEach(
           // The view rebuilt from the log at this call, not the current
           // one, which trails it.
@@ -239,10 +244,10 @@ export function getRunRecords(runId: RunId) {
   );
   const read = <A>(select: (facts: RunRows | null) => A): RecordRead<A> =>
     Effect.map(facts, select);
-  /** The run's folded state, or null with no run history. A run whose rows
+  /** The run's loaded state, or null with no run history. A run whose rows
    *  this build cannot fold is a failed read of that run, never a refusal
    *  of the caller's own writes. */
-  const folded = RunHistory.use((history) => history.load(runId)).pipe(
+  const loaded = RunHistory.use((history) => history.load(runId)).pipe(
     Effect.catchTag('RunHistoryRefused', (refused) =>
       Effect.flatMap(SessionRoots, (roots) =>
         Effect.fail(
@@ -256,7 +261,7 @@ export function getRunRecords(runId: RunId) {
     read((held) => held?.config ?? null);
   return {
     /** The run has a `run.start` the database still lists: absent, or
-     *  closed by its tombstone, reads false. */
+     *  closed by its deletion marker, reads false. */
     exists: (): RecordRead<boolean> => read((held) => held !== null),
     readRunRecord: readRecord,
     readConfig: (): RecordRead<AgentConfig | null> =>
@@ -267,15 +272,15 @@ export function getRunRecords(runId: RunId) {
       ),
     readReport: (): RecordRead<string | null> =>
       read((held) => held?.report ?? null),
-    /** The workspace files the run edited, folded from its settled calls
+    /** The workspace files the run edited, loaded from its finished calls
      *  (`RunState.edited`). A run with no run history edited nothing here. */
     readWorkspaceFiles: (): RecordRead<readonly string[], RecordServices> =>
-      Effect.map(folded, (state) =>
+      Effect.map(loaded, (state) =>
         Schema.decodeUnknownSync(RunWorkspaceFilesSchema)(state?.edited ?? []),
       ),
     /** The skills the run's latest `tools.offered` row listed. */
     readSkills: (): RecordRead<readonly string[], RecordServices> =>
-      Effect.map(folded, (state) => state?.offeredWith.skills ?? []),
+      Effect.map(loaded, (state) => state?.offeredWith.skills ?? []),
     /** The run's terminal result ({@link runEndOf}), or null while the
      *  lifecycle it is in has not ended; `after` an activation's commit, the
      *  end of that activation, whatever later ones wrote. */
@@ -299,7 +304,7 @@ export function getRunRecords(runId: RunId) {
     /** The run's result: its producer record joined to its terminal result,
      *  the output as delivered (the subagent's reply, which only its record
      *  holds, over the run's own output). A background
-     *  command's record is its own result, and an ended recipe's run (whose
+     *  command's record is its own result, and an ended program's run (whose
      *  value is its result) needs none. Null otherwise with no record. */
     readResult: Effect.fn('runRecords.readResult')(
       function* (): Effect.fn.Return<

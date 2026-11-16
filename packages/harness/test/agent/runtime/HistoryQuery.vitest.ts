@@ -41,7 +41,7 @@ const query = (
   params: string[] = [],
 ) =>
   Effect.gen(function* () {
-    yield* Context.get(session, SessionLog).settled.pipe(Effect.orDie);
+    yield* Context.get(session, SessionLog).drained.pipe(Effect.orDie);
     return yield* Context.get(session, HistoryQuery).query(sql, params);
   });
 
@@ -107,12 +107,12 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     it.effect('fills runs from a view that reached the committed rows', () =>
       withSession((session) =>
         Effect.gen(function* () {
-          yield* Context.get(session, SessionLog).settled.pipe(Effect.orDie);
+          yield* Context.get(session, SessionLog).drained.pipe(Effect.orDie);
           const before = SubscriptionRef.getUnsafe(
             Context.get(session, SessionViewAccess).ref,
           );
           yield* publishTestRunStart(session);
-          yield* Context.get(session, SessionLog).settled.pipe(Effect.orDie);
+          yield* Context.get(session, SessionLog).drained.pipe(Effect.orDie);
           // A view whose current snapshot predates the run, and whose next
           // one has applied it.
           const lagging = {

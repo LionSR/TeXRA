@@ -30,7 +30,7 @@ const stages = [
     icon: 'sparkle',
     name: 'Development',
     purpose: 'Refine clarity and style',
-    agents: ['polish'],
+    agents: ['edit'],
   },
   {
     icon: 'file-media',
@@ -42,7 +42,7 @@ const stages = [
     icon: 'check',
     name: 'Finalization',
     purpose: 'Proofread the finished draft',
-    agents: ['correct'],
+    agents: ['edit'],
   },
 ];
 </script>

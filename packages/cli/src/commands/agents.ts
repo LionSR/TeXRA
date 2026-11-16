@@ -35,10 +35,7 @@ const listAgents = Effect.fn('listAgents')(function* (
 
   if (!context.quietLogs) {
     const catalog = yield* AgentCatalog;
-    const hiddenNotice = formatCliHiddenAgentsNotice(
-      result.hiddenCount,
-      options.tasks === true,
-    );
+    const hiddenNotice = formatCliHiddenAgentsNotice(result.hiddenCount);
     if (hiddenNotice) writeTextStderr(hiddenNotice);
     for (const issue of catalog.scanIssues()) {
       writeTextStderr(`Skipped custom agent ${issue.path}: ${issue.message}`);
@@ -55,7 +52,6 @@ const listAgents = Effect.fn('listAgents')(function* (
       'agent',
       result.agents,
       formatCliAgentList(result.agents, {
-        tasks: options.tasks === true,
         showEmptyState:
           options.includeHidden !== true &&
           !context.quietLogs &&
@@ -94,9 +90,6 @@ function emitCopyResult(result: {
   readonly action: 'customized' | 'reset' | 'kept';
   readonly name: string;
   readonly path: string;
-  /** Files the agent binds that were already beside the copy and kept
-   *  although they differ from the bundled ones. */
-  readonly keptDiffering?: readonly string[];
   readonly text: string;
 }) {
   const { text, ...copy } = result;
@@ -114,19 +107,12 @@ const customizeAgent = Effect.fn('customizeAgent')(function* (name: string) {
   const builtIn = yield* bundledAgentNamed(name);
   if (!builtIn) return refuse(`No built-in agent named ${name}.`);
   return yield* (yield* AgentCatalog).customize(builtIn, 'copy').pipe(
-    Effect.flatMap(({ path, keptDiffering }) =>
+    Effect.flatMap(({ path }) =>
       emitCopyResult({
         action: 'customized',
         name: builtIn.name,
         path,
-        ...(keptDiffering.length > 0 && { keptDiffering }),
-        text: [
-          `Created custom copy of ${builtIn.name}: ${path}`,
-          ...keptDiffering.map(
-            (file) =>
-              `Kept your existing ${file}; it differs from the built-in one.`,
-          ),
-        ].join('\n'),
+        text: `Created custom copy of ${builtIn.name}: ${path}`,
       }),
     ),
     Effect.catchTag('AgentCustomizeRefused', (refused) =>
@@ -227,16 +213,9 @@ const agentsListCommand = defineCliCommand({
       description:
         'Show every agent, including agents hidden by workspace visibility settings',
     },
-    tasks: {
-      type: 'boolean',
-      description: 'Only list the agents that are also document tasks',
-    },
   },
   run: (context, ctx) =>
-    listAgents(context, {
-      includeHidden: ctx.args.all === true,
-      tasks: ctx.args.tasks === true,
-    }),
+    listAgents(context, { includeHidden: ctx.args.all === true }),
 });
 
 const agentsShowCommand = defineCliCommand({

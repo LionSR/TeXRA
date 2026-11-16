@@ -130,13 +130,12 @@ const runHistoryExport = Effect.fn('runHistoryExport')(function* (
     Effect.catchTags({
       TraceUnavailable: ({ status }) => {
         switch (status) {
-          case 'config_missing':
+          case 'no_record':
             writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
             break;
-          case 'streamLogs_missing':
+          case 'no_rows':
             writeTextStderr(
-              `Run ${id} exists but has no replayable run-root transcript ` +
-                "(it produced no output, or only its child runs' transcripts remain).",
+              `Run ${id} exists but has no transcript to replay (it produced no output).`,
             );
             break;
           default:

@@ -94,7 +94,7 @@ const cancelOpenRequests = Effect.gen(function* () {
       })
       .pipe(Effect.ignore);
   }
-  yield* Context.get(session, SessionLog).settled;
+  yield* Context.get(session, SessionLog).drained;
   startChat();
 });
 
@@ -150,7 +150,7 @@ function ensureRun(runId: RunId) {
     started.add(runId);
     const session = yield* sessionHandle;
     yield* publishTestRunStart(session, runId, { parent: root ?? null });
-    yield* Context.get(session, SessionLog).settled.pipe(Effect.orDie);
+    yield* Context.get(session, SessionLog).drained.pipe(Effect.orDie);
     yield* holdTestRun(session, runId);
   });
 }
@@ -247,7 +247,7 @@ const untilApproval = (kind: string, data: { readonly runId: RunId }) =>
 const storedOf = (runId: RunId, type: string) =>
   Effect.gen(function* () {
     const session = yield* sessionHandle;
-    yield* Context.get(session, SessionLog).settled.pipe(Effect.orDie);
+    yield* Context.get(session, SessionLog).drained.pipe(Effect.orDie);
     const { roots } = yield* FakeHost;
     return storedRows(roots.storage)
       .filter((row) => row.run === runId && row.type === type)

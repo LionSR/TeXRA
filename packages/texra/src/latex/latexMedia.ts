@@ -1,19 +1,15 @@
 // Node imports
 import * as path from 'node:path';
 import { hasExtension, pathToLocationIn } from '@texra-ai/harness/host';
-import {
-  RunFileService,
-  type AgentTrace,
-  type WorkspaceFs,
-} from '@texra-ai/harness/plugins';
-import { absentReason } from '@texra-ai/harness/node';
+import type { RunWorkspace } from '@texra/tools/documents/runWorkspace';
+import { type AgentTrace, type WorkspaceFs } from '@texra-ai/harness/plugins';
+import { meansAbsent } from '@texra-ai/harness/node';
 
 // Third-party imports
 import { Effect, FileSystem, Predicate } from 'effect';
 
 // Local imports
 import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
-import type { DocumentTaskOptions } from '@texra/shared/plugins/documents';
 import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
 
 // Local file imports
@@ -47,7 +43,7 @@ interface MediaRun {
    * workspace every extracted or compiled path is located against.
    */
   readonly roots: WorkspaceRoots;
-  readonly fileService: RunFileService;
+  readonly fileService: RunWorkspace;
 }
 
 /**
@@ -62,7 +58,7 @@ function logSkipped(
   path: string,
   error: unknown,
 ): void {
-  (absentReason(error) ? logger.debug : logger.warn).call(logger, message, {
+  (meansAbsent(error) ? logger.debug : logger.warn).call(logger, message, {
     data: { path, error },
   });
 }
@@ -406,6 +402,16 @@ const compileTikzFigures = Effect.fn('latexMedia.compileTikzFigures')(
   },
 );
 
+/** Which media of its input files a revision attaches. */
+export interface InputMediaOptions {
+  /** The figures the LaTeX includes. */
+  readonly autoExtractFigure: boolean;
+  /** Its TikZ pictures, compiled. */
+  readonly autoExtractTikzFigure: boolean;
+  /** Each input, compiled to a PDF. */
+  readonly autoCompileInputPdf: boolean;
+}
+
 /**
  * The media of the input files the task's options ask for: their existing
  * figures, compiled TikZ pictures and compiled PDFs, in that order. Their
@@ -416,7 +422,7 @@ export const processInputFiles = Effect.fn('latexMedia.processInputFiles')(
   function* (
     run: MediaRun,
     inputFiles: readonly FileLocation[],
-    cfg: DocumentTaskOptions,
+    cfg: InputMediaOptions,
   ): Effect.fn.Return<FileLocation[], Error, MediaServices> {
     const fs = yield* FileSystem.FileSystem;
     const probed = yield* Effect.forEach(

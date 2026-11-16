@@ -44,6 +44,30 @@ const LOG_PAYLOAD_SCHEMAS = {
   [MESSAGE_TYPES.DEFAULT]: Schema.optional(Schema.Unknown),
 } satisfies Record<MessageType, Schema.Top>;
 
+/**
+ * What a trace's log methods take: a row's category (subscribers pick a
+ * render style from it) with the payload the transcript decodes for it,
+ * so a pairing is checked where it is written; or no category, a default
+ * row with any data. The row stores the payload as JSON; a `Cause` stores
+ * as the error it raised.
+ */
+export type LogOptions =
+  | { readonly messageType?: undefined; readonly data?: unknown }
+  | {
+      // A payload is required unless the type's schema accepts none.
+      [
+        K in MessageType
+      ]: undefined extends (typeof LOG_PAYLOAD_SCHEMAS)[K]['Encoded']
+        ? {
+            readonly messageType: K;
+            readonly data?: (typeof LOG_PAYLOAD_SCHEMAS)[K]['Encoded'];
+          }
+        : {
+            readonly messageType: K;
+            readonly data: (typeof LOG_PAYLOAD_SCHEMAS)[K]['Encoded'];
+          };
+    }[MessageType];
+
 /** The decoded `log` row payload for message type `K`. */
 type LogPayloadOf<K extends MessageType> = {
   readonly messageType: K;

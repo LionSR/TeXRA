@@ -61,7 +61,10 @@ import {
 } from '@tools/catalogEntries';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
-import { SCRIPT_ONLY_SETTING } from '@shared/state/stateSettings';
+import {
+  SCRIPT_ONLY_SETTING,
+  type SettingRow,
+} from '@shared/state/stateSettings';
 
 /** Whether `tool` may ask a person, so a run nobody can ask withholds it. */
 export const asksApproval = <E, R>(
@@ -98,6 +101,9 @@ export interface StepToolInputs {
   readonly injectInstalled: boolean;
   /** The loaded plugins the run holds, from its open. */
   readonly held: HeldPlugins;
+  /** The step's model is sent its tools directly (`keepsDirectToolCalls`),
+   *  so the script-only setting reads as off: read live each step. */
+  readonly directToolCalls: boolean;
 }
 
 /** A declaration's tool names, in order. */
@@ -116,10 +122,14 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   const roots = yield* SessionRoots;
   const warnings: string[] = [];
   const injected: string[] = [];
+  const settingOn = (row: SettingRow<boolean>) =>
+    row.key === SCRIPT_ONLY_SETTING.key && input.directToolCalls
+      ? Effect.succeed(false)
+      : Settings.get(roots, row);
   if (input.injectTools) {
     for (const { injectedWhen } of table.entries.values()) {
       for (const [name, setting] of Object.entries(injectedWhen ?? {})) {
-        if (setting === true || (yield* Settings.get(roots, setting)))
+        if (setting === true || (yield* settingOn(setting)))
           injected.push(name);
       }
     }
@@ -284,7 +294,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   // Which tools the requests send (`OfferedTool.sent`), recorded per tool.
   const scriptAlone =
     [...resolvedNames].some(isScript) &&
-    (yield* Settings.get(roots, SCRIPT_ONLY_SETTING));
+    (yield* settingOn(SCRIPT_ONLY_SETTING));
   // Dispatch answers only the names the model was offered.
   const offeredTools = new Map<string, ITool<Error, PluginToolServices>>();
   const offered: OfferedTool[] = [];

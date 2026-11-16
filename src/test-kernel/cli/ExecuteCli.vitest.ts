@@ -85,7 +85,10 @@ describe('executeCliConfig', { timeout: REAL_RUN_TIMEOUT }, () => {
   layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
     it.layer(
       Layer.provideMerge(
-        TestSession.layer(undefined, { persistent: true, host: {} }),
+        TestSession.layer(undefined, {
+          persistent: true,
+          answeredFromView: true,
+        }),
         validationHost('texra-run-'),
       ),
       { buildPerTest: true },

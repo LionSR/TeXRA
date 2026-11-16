@@ -23,20 +23,20 @@ serve as supporting capabilities within your research project.
 
 ## Use it
 
-| Task                                       | Workflow                                                     |
-| ------------------------------------------ | ------------------------------------------------------------ |
-| Verify proofs and derivations              | `review`, see [Built-in agents](./built-in-agents.md)        |
-| Formalize in Lean 4                        | [Lean 4 proofs](./lean.md)                                   |
-| Search literature, no fabricated citations | `assistant`, see [Research tools](./research-tools.md)       |
-| Tighten prose in a draft                   | [Polish a draft](./workflows/polish-a-draft.md)              |
-| Fix LaTeX errors and notation              | `correct` agent, see [Built-in agents](./built-in-agents.md) |
-| Build slides from a paper                  | `paper2slide`, see [Built-in agents](./built-in-agents.md)   |
-| Generate TikZ figures                      | [TikZ figures](./tikz-figures.md)                            |
+| Task                                       | Workflow                                                               |
+| ------------------------------------------ | ---------------------------------------------------------------------- |
+| Verify proofs and derivations              | `review`, see [Built-in agents](./built-in-agents.md)                  |
+| Formalize in Lean 4                        | [Lean 4 proofs](./lean.md)                                             |
+| Search literature, no fabricated citations | `assistant`, see [Research tools](./research-tools.md)                 |
+| Tighten prose in a draft                   | [Polish a draft](./workflows/polish-a-draft.md)                        |
+| Fix typos, grammar and notation            | `edit` program, see [Built-in agents](./built-in-agents.md#programs)   |
+| Build slides from a paper                  | `slides` program, see [Built-in agents](./built-in-agents.md#programs) |
+| Generate TikZ figures                      | [TikZ figures](./tikz-figures.md)                                      |
 
 ## Understand the system
 
 - [**Built-in agents**](./built-in-agents.md): the full catalog
-- [**Agent architecture**](./agent-architecture.md): document tasks vs. chats, reflection, planning
+- [**Agent architecture**](./agent-architecture.md): programs vs. chats, reflection, planning
 - [**Multi-agent workflows**](./multi-agent-workflows.md): how a team lead fans work out to specialists in parallel
 - [**Models**](./models.md): picking a model for the job
 - [**Custom agents**](./custom-agents.md): define your own in YAML
@@ -71,11 +71,11 @@ the extension's **Tasks** list, and vice versa.
 
 ```mermaid
 graph TB
-    User[User] --> |selects files + agent| Orchestrator[Agent Orchestrator]
-    Orchestrator --> WA[Document Tasks]
+    User[User] --> |asks an agent| Orchestrator[Agent Orchestrator]
+    Orchestrator --> WA[Programs]
     Orchestrator --> IA[Chat Agents]
 
-    WA --> |polish, correct, merge| Output[Versioned Output Files]
+    WA --> |edit, annotate, merge| Output[Versioned Output Files]
     Output --> Diff[Color-Coded Diff]
 
     IA --> Tools[Tool Access]
@@ -91,7 +91,7 @@ TeXRA's agents run in two ways:
 
 <AgentClasses />
 
-<p class="hero-caption">A document task runs a structured pipeline and returns a diff; a chat works conversationally with grounded tools.</p>
+<p class="hero-caption">A program runs a structured pipeline and returns a diff; a chat works conversationally with grounded tools.</p>
 
 Agents combine three mechanisms: **reflection** (critiquing and revising their
 own output), **tool use** (checking work against compilers, language servers,

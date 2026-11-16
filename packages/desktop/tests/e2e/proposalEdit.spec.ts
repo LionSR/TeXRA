@@ -1,11 +1,10 @@
-// An agent's document-task proposal, edited in the desktop app before it
-// runs (#14276). A task in the background service proposes a document task,
-// on the newer build's scripted model, and waits for the answer. The
-// proposal card's Edit opens the launch form on the proposal, and Back
-// returns to the asking task with the proposal still waiting. An edit that
-// adds a context file and rewrites the instruction approves the child with
-// both, and Run again… on the finished child opens the form on that setup
-// and launches the same task again, which the window then shows.
+// An agent's proposal of a document program, edited in the desktop app
+// before it runs (#14276). A task in the background service proposes the
+// `edit` program, on the newer build's scripted model, and waits for the
+// answer. The proposal card's Edit opens the launch form on the proposal,
+// and Back returns to the asking task with the proposal still waiting. An
+// edit that adds a context file and rewrites the instruction approves the
+// child with both; the finished child's run offers no Run again.
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -63,13 +62,13 @@ const listed = (page: Page, group: 'Input' | 'Context' | 'Media') =>
       items.map((item) => item.getAttribute('data-path')),
     );
 
-/** The launch form holds the reviser's setup: its agent and model, the
+/** The launch form holds the program's setup: its agent and model, the
  *  draft as its input, and `form`'s instruction and context files. */
 async function expectForm(
   page: Page,
   form: { readonly instruction: string; readonly context: readonly string[] },
 ): Promise<void> {
-  await expect(page.locator('#composer-agent')).toHaveText('revise_validation');
+  await expect(page.locator('#composer-agent')).toHaveText('edit');
   await expect(page.locator('#composer-model')).toHaveText(
     'GPT-6.1 Sol (high)',
   );
@@ -81,7 +80,7 @@ async function expectForm(
 
 test.skip(process.platform === 'win32', 'no service runs on Windows yet');
 
-test('a proposal edited in the app runs its child with the edits, Back leaves it waiting, and Run again relaunches the child', async ({
+test('a proposal edited in the app runs its child with the edits, and Back leaves it waiting', async ({
   profile,
   launch,
 }) => {
@@ -89,24 +88,17 @@ test('a proposal edited in the app runs its child with the edits, Back leaves it
   const { home, dataRoot, workspaceRoot: work } = profile;
   const agents = join(dataRoot, 'v1', 'global-storage', 'custom_agents');
   mkdirSync(agents, { recursive: true });
-  // The asking task: its scripted model calls `document_task` with this
-  // input. The model is one the form lists, with an effort, so Run again
-  // keeps both.
+  // The asking task: its scripted model calls `program` with this
+  // input, on a model the form lists, with an effort.
   const proposal = {
-    agentName: 'revise_validation',
+    name: 'edit',
     model: 'openai/gpt-6.1-sol@high',
     inputFiles: ['draft.tex'],
     prompt: PROPOSED,
   };
   writeFileSync(
     join(agents, 'propose-validation.yaml'),
-    `name: propose_validation\ndescription: Propose a document task over the draft.\ntools: [document_task]\n\nprompt: |\n  GOLDEN-APPROVAL document_task ${JSON.stringify(proposal)}\n`,
-  );
-  // The document task it proposes: one revision, which the scripted model
-  // answers with a document.
-  writeFileSync(
-    join(agents, 'revise-validation.yaml'),
-    'name: revise_validation\ndescription: Revise the draft as a document task.\n\nprompt: |\n  Revise the draft.\n\ntask:\n  requests:\n    - |\n      Output the revised documents.\n',
+    `name: propose_validation\ndescription: Propose a document program over the draft.\ntools: [program]\n\nprompt: |\n  GOLDEN-APPROVAL program ${JSON.stringify(proposal)}\n`,
   );
   writeFileSync(join(work, 'draft.tex'), '\\section{Draft}\nOriginal text.\n');
   writeFileSync(join(work, 'macros.tex'), '\\newcommand{\\R}{\\mathbb{R}}\n');
@@ -228,7 +220,7 @@ test('a proposal edited in the app runs its child with the edits, Back leaves it
   expect(opened.payload).toMatchObject({
     kind: 'proposal',
     data: {
-      agent: 'revise_validation',
+      agent: 'edit',
       model: 'openai/gpt-6.1-sol@high',
       instruction: PROPOSED,
       inputFiles: ['draft.tex'],
@@ -245,7 +237,7 @@ test('a proposal edited in the app runs its child with the edits, Back leaves it
   const card = page.locator('proposal-request-panel');
   await expect(
     card.getByRole('heading', {
-      name: 'Run revise_validation on GPT-6.1 Sol',
+      name: 'Run edit on GPT-6.1 Sol',
     }),
   ).toBeVisible({ timeout: 30_000 });
   const edit = card.getByRole('button', { name: 'Edit', exact: true });
@@ -255,7 +247,7 @@ test('a proposal edited in the app runs its child with the edits, Back leaves it
   await edit.click();
   await expect(
     page.getByRole('heading', {
-      name: 'Check revise_validation before it runs',
+      name: 'Check edit before it runs',
     }),
   ).toBeVisible();
   await expectForm(page, { instruction: PROPOSED, context: [] });
@@ -327,92 +319,38 @@ test('a proposal edited in the app runs its child with the edits, Back leaves it
     .toEqual(['completed']);
   const childConfig = runConfig(child);
   expect(childConfig.config).toMatchObject({
-    agent: 'revise_validation',
-    agentSource: 'custom',
+    agent: 'edit',
+    agentSource: 'inline',
     model: 'openai/gpt-6.1-sol@high',
     instruction: EDITED,
     inputFiles: ['draft.tex'],
     contextFiles: ['macros.tex'],
     mediaFiles: [],
     workingDirectory: work,
-    script: {
-      kind: 'recipe',
-      block: 'task',
-      title: 'custom:revise_validation',
-    },
+    script: { kind: 'program', name: 'edit', args: {} },
   });
   saveArtifact('child-run-config.json', childConfig);
 
   // The approval went back to the asking task, which lists the child it
-  // started and the child's revision, which the child started in turn.
-  // Once the app shows both done, the child's row comes first.
+  // started and the child's two revisions, which the child started in
+  // turn. Once the app shows them done, the child's row comes first.
   const started = page.getByRole('listitem', {
-    name: 'Open revise_validation: Completed',
+    name: 'Open edit: Completed',
   });
-  await expect(started).toHaveCount(2, { timeout: 60_000 });
+  await expect(started).toHaveCount(3, { timeout: 60_000 });
   await started.first().click();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-    'revise_validation',
-  );
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('edit');
   await expect(
     page.getByRole('navigation', { name: 'Started by' }).getByRole('button'),
   ).toHaveText(['propose_validation']);
-
-  // Run again… opens the form on the child's setup.
+  // A program is not started from the launch form, so its run offers no
+  // Run again.
   await page.getByRole('button', { name: 'Task actions', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Run again…' }).click();
-  await expect(
-    page.getByRole('heading', { name: 'What would you like to do?' }),
-  ).toBeVisible();
-  await expectForm(page, { instruction: EDITED, context: ['macros.tex'] });
-  await page.screenshot({
-    path: test.info().outputPath('run-again-form.png'),
-  });
-  await page.getByRole('button', { name: 'Start task', exact: true }).click();
-
-  // A new task runs the child's setup: the same recipe (which names the
-  // agent's exact entry) on the same model, instruction and files, in
-  // the project folder, where a form launch runs by default.
-  await expect
-    .poll(() => runsStartedBy(null), { timeout: 60_000 })
-    .toHaveLength(2);
-  const again = rowAt(
-    runsStartedBy(null).filter((id) => id !== asking.runId),
+  await expect(page.getByRole('menuitem', { name: 'Run again…' })).toHaveCount(
     0,
   );
-  // The window shows the task it started, with no click: its row is the
-  // one selected.
-  const selected = page.locator('.shell-project-runs run-tab[active]');
-  await expect(selected).toHaveCount(1);
-  await expect(selected.locator('#run-tab-select-button')).toHaveAttribute(
-    'data-run',
-    again,
-  );
-  await expect
-    .poll(() => outcomes(again), { timeout: 120_000 })
-    .toEqual(['completed']);
-  const againConfig = runConfig(again);
-  saveArtifact('run-again-config.json', againConfig);
-  const setup = ({ config }: typeof childConfig) => ({
-    agentSource: config.agentSource,
-    model: config.model,
-    instruction: config.instruction,
-    inputFiles: config.inputFiles,
-    contextFiles: config.contextFiles,
-    mediaFiles: config.mediaFiles,
-    outputFiles: config.outputFiles,
-    script: config.script,
-    workingDirectory: config.workingDirectory ?? work,
-  });
-  expect(setup(againConfig)).toEqual(setup(childConfig));
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-    'revise_validation',
-  );
-  await expect(
-    page.getByRole('navigation', { name: 'Started by' }),
-  ).toHaveCount(0);
   await page.screenshot({
-    path: test.info().outputPath('run-again-run.png'),
+    path: test.info().outputPath('program-run.png'),
   });
 
   // What the task asked for beside what the edited approval answered;

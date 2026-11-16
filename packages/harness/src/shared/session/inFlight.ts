@@ -313,11 +313,14 @@ export type ToolCallResult = Pick<
 
 /** How far one call got, as its rows say: `issued`, no body started;
  *  `started`, the `tool.intent` of `attempt` committed, so the body may
- *  have run; `settled`, its `tool.result` committed at `at`. */
+ *  have run; `finished`, its `tool.result` committed at `at`. */
 export type CallStatus =
   | { readonly kind: 'issued' }
   | { readonly kind: 'started'; readonly attempt: number }
-  | ({ readonly kind: 'settled'; readonly at: CommitOrdinal } & ToolCallResult);
+  | ({
+      readonly kind: 'finished';
+      readonly at: CommitOrdinal;
+    } & ToolCallResult);
 
 /** One call of the pending response, the same record whichever issued it:
  *  the response (`script` null) or one of its `script` calls' guests, whose
@@ -382,7 +385,7 @@ export function attemptRequests(
 export function resumedAttempt(
   state: { readonly requests: RunRowState['requests'] },
   at: Omit<CallAttempt, 'attempt'>,
-  status: Exclude<CallStatus, { kind: 'settled' }>,
+  status: Exclude<CallStatus, { kind: 'finished' }>,
 ): ResumedAttempt {
   const asked = (attempt: number) => ({
     attempt,
@@ -412,10 +415,10 @@ export type PendingResponse = {
 };
 
 /** The result of `callId` the rows committed, or null. */
-export const callSettlementOf = (
+export const callResultOf = (
   pending: PendingResponse,
   callId: string,
-): Extract<CallStatus, { kind: 'settled' }> | null => {
+): Extract<CallStatus, { kind: 'finished' }> | null => {
   const status = pending.records[callId]?.status;
-  return status?.kind === 'settled' ? status : null;
+  return status?.kind === 'finished' ? status : null;
 };

@@ -49,7 +49,7 @@ export interface LocalNotice {
 
 /** The transcript seq a row finishes at, for the notice join. */
 function rowSeq(row: TranscriptRow): number {
-  return row.settlementSeqNo ?? row.seqNo;
+  return row.finalSeqNo ?? row.seqNo;
 }
 
 export const notices = chatField('localNotices');
@@ -178,7 +178,7 @@ export function mergeLocalNotices(
   runNotices: readonly LocalNotice[],
 ): { readonly rows: readonly TranscriptRow[]; readonly finalRows: number } {
   const rows = run?.transcript.rows ?? [];
-  const finalRows = run?.transcript.settledRows ?? 0;
+  const finalRows = run?.transcript.finalRows ?? 0;
   if (runNotices.length === 0) return { rows, finalRows };
   const finalSeq = finalRows === 0 ? 0 : rowSeq(rows[finalRows - 1]);
   const out: TranscriptRow[] = [];

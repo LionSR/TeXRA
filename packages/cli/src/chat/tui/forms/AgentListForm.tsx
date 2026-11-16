@@ -1,4 +1,4 @@
-// `/agent` form. It lists the visible agents (document tasks marked) and the
+// `/agent` form. It lists the visible agents and the
 // team presets. Before the first message, an agent or a team can be chosen to
 // lead the chat.
 
@@ -15,8 +15,8 @@ import {
 import type { SelectItem } from '@cli/tui/ui/Select';
 import type { TeamOptionData } from '@texra/shared/pickerOptions';
 import { loadTeamOptions } from '@texra/agent/teams/teamLaunch';
-import type { DocumentAgentOption } from '@texra/shared/plugins/documents';
-import { agentOptionsData } from '@texra/tools/documents/documentTask';
+import type { AgentOptionData } from '@texra/shared/pickerOptions';
+import { agentOptionsData } from '@texra/controllers/session/agentOptions';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 
 import {
@@ -43,7 +43,7 @@ export type AgentPickerValue =
   | { readonly kind: 'team'; readonly teamId: string };
 
 interface AgentGroups {
-  readonly agents: readonly (DocumentAgentOption & {
+  readonly agents: readonly (AgentOptionData & {
     readonly description?: string;
   })[];
   readonly teams: readonly TeamOptionData[];
@@ -62,10 +62,7 @@ function agentPickerItems(
     ...groups.agents.map(({ description, ...agent }) => {
       return {
         value: { kind: 'agent' as const, agent: agent.value },
-        label: joinFacts([
-          agent.label,
-          agent.rounds !== undefined && 'document task',
-        ]),
+        label: agent.label,
         ...(description ? { description } : {}),
       };
     }),
@@ -78,8 +75,8 @@ function agentPickerItems(
   ];
 }
 
-type AgentIdentity = Pick<DocumentAgentOption, 'label' | 'value'>;
-type AgentDelegationFlag = Pick<DocumentAgentOption, 'isOrchestrator'>;
+type AgentIdentity = Pick<AgentOptionData, 'label' | 'value'>;
+type AgentDelegationFlag = Pick<AgentOptionData, 'isOrchestrator'>;
 
 function agentPickerPrimarySectionTitle(
   agents: readonly AgentDelegationFlag[],

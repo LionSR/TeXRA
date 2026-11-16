@@ -1,12 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { summarizeSubagentFollowup } from '@shared/subagentFollowup';
-import {
-  type FollowUpContent,
-  type FollowUpSender,
-  type RunId,
-  type RunRelation,
-} from '@shared/schemas';
+import type { FollowUpContent } from '@shared/schemas';
 import { isInstruction } from '@shared/session/runFacts';
 import type { WithBlobs } from '@shared/session/historyTurns';
 import type { QueuedFollowUp } from '@shared/session/runRows';
@@ -25,20 +20,14 @@ export function userFollowUpInstruction(
 }
 
 /** The `followup.queued` row one send writes, with the blobs its media
- *  brings: its id is the delivery id when the producer gave one, a run
- *  sender gets its relation to the recipient, a child's delivery keeps its
- *  facts typed, a notice gets its envelope's summary as its `displayText`,
+ *  brings: its id is the delivery id when the producer gave one, a child's
+ *  delivery keeps its facts typed, a notice gets its envelope's summary as its `displayText`,
  *  and a host's notification waits for the turn's end. */
 export function queuedRow(
   item: InboxItem,
   hold: QueuedFollowUp['holdUntil'],
-  relationOf: (sender: RunId) => RunRelation,
 ): WithBlobs<Omit<QueuedFollowUp, 'commit'>> {
-  const { from: input, deliveryId, control } = item;
-  const from: FollowUpSender =
-    input.kind === 'run'
-      ? { kind: 'run', runId: input.runId, relation: relationOf(input.runId) }
-      : input;
+  const { from, deliveryId, control } = item;
   const holdUntil = hold ?? (from.kind === 'notification' ? 'turn' : undefined);
   const row = {
     followUpId: deliveryId ?? randomUUID(),
@@ -63,22 +52,4 @@ export function queuedRow(
       from,
     },
   };
-}
-
-/**
- * Who a producer says a follow-up is from. Runs talk as a graph: any run may
- * message any run in the project, whatever their places in the supervision
- * tree. A run names only itself; the recipient's admission
- * (`Inbox.send`) stamps how it relates to the recipient.
- */
-export type FollowUpSenderInput =
-  | Exclude<FollowUpSender, { readonly kind: 'run' }>
-  | { readonly kind: 'run'; readonly runId: RunId };
-
-/** The sender a tool call speaks as: its run, or the user when no run
- *  calls it. */
-export function senderOf(caller: RunId | undefined): FollowUpSenderInput {
-  return caller === undefined
-    ? { kind: 'user' }
-    : { kind: 'run', runId: caller };
 }

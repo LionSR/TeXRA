@@ -37,7 +37,7 @@ CLI surfaces, and ships in nothing.
 | Directory       | What it is                                                                                                                                        |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tools/`        | TeXRA's plugins: LaTeX, papers, Lean, setup, documents, codex, claude-agent, GitHub subscriptions, external inquiry; `registry.ts` lists them     |
-| `agent/`        | The document-task recipe and output (`output/`), agent templates, export                                                                          |
+| `agent/`        | The document-task program and output (`output/`), agent templates, export                                                                         |
 | `controllers/`  | Main, progress and settings views, model access, onboarding, the service (`server/`), and the host-side session modules (`session/`)              |
 | `shared/`       | App wire contracts (`ipc.ts`, settings rows and handlers) plus the Lit controllers, Monaco and highlighting code that stayed outside `ui/`        |
 | `ui/`           | The browser UI kit all three hosts render with (`wa/`, `styles/`, `markdown/`, `copy/`); see [`ui/README.md`](../packages/texra/src/ui/README.md) |

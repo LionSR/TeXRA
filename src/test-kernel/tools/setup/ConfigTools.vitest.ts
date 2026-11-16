@@ -74,7 +74,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         );
         const runId = generateRunId();
         yield* publishTestRunStart(session, runId);
-        yield* Context.get(session, SessionLog).settled;
+        yield* Context.get(session, SessionLog).drained;
         const requests = yield* autoDecideRequests(session, () => ({
           action: 'reject',
         }));

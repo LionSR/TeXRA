@@ -22,7 +22,7 @@ import type { ToolRegistry } from '@tools/toolTable';
 import type { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import type { RunRows } from '@shared/session/runRowsShape';
 
-import { readRecipeResult } from './recipeResult';
+import { readProgramResult } from './programRun';
 import type { RunLaunch } from './run/AgentRun';
 import type { RunReport } from './runReport';
 import { scriptEndDelivery, scriptStopNotice } from './scriptRun';
@@ -103,10 +103,10 @@ export const childEndReport = Effect.fn('childEndReport')(function* (
             : runEndErrorMessage(report.failure),
       };
     case RUN_OUTCOME.COMPLETED: {
-      // A completed recipe's value reads as its block says
-      // (`AgentBlock.result`); any other run's is its reply and the files
+      // A completed program's value reads as its registration says
+      // (`Program.result`); any other run's is its reply and the files
       // its tool calls touched.
-      const recipe = yield* readRecipeResult(
+      const program = yield* readProgramResult(
         config,
         runId,
         yield* SessionRoots,
@@ -116,9 +116,9 @@ export const childEndReport = Effect.fn('childEndReport')(function* (
         ...delivery,
         attributes: [
           agent,
-          ...(recipe === undefined
+          ...(program === undefined
             ? []
-            : [{ name: 'kind', value: recipe.key }]),
+            : [{ name: 'kind', value: program.name }]),
           { name: 'status', value: report.outcome },
           // A run that reported before (resumed for a message after its
           // end) reports again: said on the envelope, so its parent tells
@@ -127,8 +127,8 @@ export const childEndReport = Effect.fn('childEndReport')(function* (
             ? []
             : [{ name: 'continued', value: true }]),
         ],
-        ...(recipe !== undefined && recipe.delivery.length > 0
-          ? { lines: [...delivery.lines, ...recipe.delivery] }
+        ...(program !== undefined && program.delivery.length > 0
+          ? { lines: [...delivery.lines, ...program.delivery] }
           : { output: { response: output.response, files: output.files } }),
       };
     }

@@ -14,7 +14,7 @@ import { layer } from '@effect/vitest';
 import { expect } from 'vitest';
 
 // Local imports
-import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
+import { type RunId } from '@texra-ai/harness/schemas';
 import { openToolUse, runToolUse } from '@agent/runtime/loop/runLoop';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
@@ -45,7 +45,7 @@ import type { ITool, ToolResult } from '@texra-ai/harness/plugins';
 /** The calls a folded state holds settled. */
 const settledIds = (state: RunState | null | undefined): string[] =>
   Object.entries(state?.pendingResponse?.records ?? {}).flatMap(([id, call]) =>
-    call.status.kind === 'settled' ? [id] : [],
+    call.status.kind === 'finished' ? [id] : [],
   );
 
 /** A tool as the step's registry holds it. */
@@ -136,9 +136,8 @@ const committedResults = (
 ) =>
   Effect.gen(function* () {
     const log = Context.get(session, SessionLog);
-    yield* log.settled;
-    return (yield* log.runRows(qualifyAggregateId('run', runId), 'results'))
-      .results;
+    yield* log.drained;
+    return (yield* log.runRows(runId, 'results')).results;
   });
 
 layer(SessionGraph.hosted, { excludeTestServices: true })(
@@ -355,7 +354,7 @@ return { columns: page.columns, count: page.rows.length,
           const barrierStarted = yield* Deferred.make<void>();
           const { session, runId } = yield* openRun;
           const recorded = recordSessionEvents(session, {
-            aggregateId: qualifyAggregateId('run', runId),
+            aggregateId: runId,
           });
 
           const loop = yield* Effect.forkChild(

@@ -23,8 +23,8 @@
  *   is refused: a one-shot parent never reads a message. Headless
  *   delegation runs in band, so every row commits in one order.
  * - two `review` runs over the same notes: the context blobs they share.
- * - a `polish` document task with `--output`: the documents plugin's output
- *   fact, its diffs included, and the recipe's `run.end` with its documents
+ * - an `edit` program run with `--output`: the theory plugin's output
+ *   fact, its diffs included, and the program's `run.end` with its documents
  *   as `output.structured`. Its documents have no `\documentclass` and no
  *   document environment, so its compile check and latexdiff run no TeX
  *   tool. The TeX tools it could run by name are stand-ins first on PATH,
@@ -227,7 +227,7 @@ function scenario(root) {
   );
   writeFileSync(
     path.join(project, 'paper.tex'),
-    '\\section{Input}\nThe golden document task polishes this file.\n',
+    '\\section{Input}\nThe golden edit program revises this file.\n',
   );
   // The Codex CLI the Codex child runs: first on PATH, with an empty global
   // npm prefix so no installed Codex is found first. Its one turn answers
@@ -255,7 +255,7 @@ process.stdin.on('end', function answer() {
 `,
     { mode: 0o755 },
   );
-  // The TeX tools the document task runs by name, also first on PATH: each
+  // The TeX tools the edit program runs by name, also first on PATH: each
   // only notes in `tex.ran`, beside the flag, that it ran, and the
   // generation fails once its runs end.
   for (const tool of ['latexmk', 'pdflatex', 'latexdiff', 'texcount'])
@@ -573,11 +573,11 @@ async function generate(root) {
       '--print',
     ]);
 
-  // A document task through `texra run --output`: the documents plugin's
-  // output fact, diffs included, and the recipe's `run.end` (`structured`).
+  // The `edit` program through `texra run --output`: the theory plugin's
+  // output fact, diffs included, and the program's `run.end` (`structured`).
   cli.run([
     'run',
-    'polish',
+    'edit',
     '--model',
     'openai/gpt-5.6-sol',
     '--input',

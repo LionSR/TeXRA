@@ -5,7 +5,7 @@ import { Effect } from 'effect';
 import {
   toErrorMessage,
   isRunId,
-  isTaskConfig,
+  programOf,
   type RunId,
   type RunOutcome,
   serializeFilteredConfig,
@@ -438,5 +438,5 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
 
 /** A document task's run, or a chat: what its launch config ran. */
 function runKindOf(config: AgentConfig): 'task' | 'chat' {
-  return isTaskConfig(config) ? 'task' : 'chat';
+  return programOf(config) !== null ? 'task' : 'chat';
 }

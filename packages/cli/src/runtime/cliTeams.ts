@@ -16,7 +16,11 @@ import {
   type TeamPreset,
 } from '@texra/shared/agentTeams';
 import { findTeamPreset, type TeamRunPlan } from '@texra/agent/teams/teamPlan';
-import type { AgentEntry, StateStore } from '@texra-ai/harness/host';
+import {
+  agentToolNames,
+  type AgentEntry,
+  type StateStore,
+} from '@texra-ai/harness/host';
 import { formatResultCount } from '@texra-ai/harness/schemas';
 
 type CliTeamRunPlan = TeamRunPlan<AgentEntry>;
@@ -134,7 +138,10 @@ export function formatCliTeamRunWarnings(
     `WARN team ${plan.preset.id} references unavailable agents: ${plan.missingAgents.join(', ')}`,
   ];
 
-  if (!plan.rootAgent || !plan.rootAgent.tools?.includes(AGENT_TOOL_NAME)) {
+  if (
+    !plan.rootAgent ||
+    !agentToolNames(plan.rootAgent).includes(AGENT_TOOL_NAME)
+  ) {
     return warnings;
   }
 

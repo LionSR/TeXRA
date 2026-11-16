@@ -12,12 +12,12 @@ import {
 } from '@texra-ai/harness/host';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import {
-  RunFileService,
+  runDirUnder,
   withLogChannel,
   type AppSignals,
 } from '@texra-ai/harness/plugins';
 import {
-  absentReason,
+  meansAbsent,
   entryTypeIn,
   readNormalizedFile,
 } from '@texra-ai/harness/node';
@@ -109,10 +109,7 @@ export class ProgressDocumentTaskFileActionsController {
   )(
     { self: this },
     function* (runId: RunId) {
-      const { runDirectory } = new RunFileService(runId, {
-        storage: this.deps.storageRoot,
-        workspace: undefined,
-      });
+      const runDirectory = runDirUnder(this.deps.storageRoot, runId);
       const fs = yield* FileSystem.FileSystem;
       if ((yield* entryTypeIn(fs, runDirectory)) === undefined) {
         yield* fs.makeDirectory(runDirectory, { recursive: true });
@@ -187,14 +184,11 @@ export class ProgressDocumentTaskFileActionsController {
       output && revisionLayout(output.round).modelCopy(output.location);
     if (output === undefined || copyPath === undefined)
       return Effect.succeed(undefined);
-    const { runDirectory } = new RunFileService(stream, {
-      storage: this.deps.storageRoot,
-      workspace: undefined,
-    });
+    const runDirectory = runDirUnder(this.deps.storageRoot, stream);
     const copy = path.join(runDirectory, copyPath);
     return Effect.gen(function* () {
       const kept = yield* readOutputFile(copy).pipe(
-        Effect.catchIf(absentReason, () => Effect.succeed(undefined)),
+        Effect.catchIf(meansAbsent, () => Effect.succeed(undefined)),
       );
       if (kept === undefined) return undefined;
       const diff = unifiedDiffText(kept, accepted);

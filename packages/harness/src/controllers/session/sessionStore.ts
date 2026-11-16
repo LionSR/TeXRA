@@ -6,7 +6,7 @@
  *  has applied every commit it made, so a caller that reads the view next
  *  sees what it wrote. The view, the presenter and the trace's text all take
  *  the publisher's batches, published from what each job wrote; nothing here
- *  reads the store back. "Settled" waits further, for the presenter to run
+ *  reads the store back. "Finished" waits further, for the presenter to run
  *  over a commit. */
 import {
   Deferred,
@@ -19,11 +19,7 @@ import {
 } from 'effect';
 import { writeLogLine } from '@logger/logSink';
 
-import {
-  qualifyAggregateId,
-  type CommitOrdinal,
-  type DisplayRow,
-} from '@shared/schemas';
+import { type CommitOrdinal, type DisplayRow } from '@shared/schemas';
 import {
   Database,
   type DatabaseAggregateClosed,
@@ -56,8 +52,8 @@ interface SessionStore {
   /** Remove a run and its dependents, as the publisher's next job. */
   readonly removeRun: SessionEventsShape['removeRun'];
   /** The committed display rows, each batch released once the view has
-   *  applied it, for the session's one presenter: `settled` waits until it
-   *  has run over a commit, so the presenter never waits on `settled`. */
+   *  applied it, for the session's one presenter: `finished` waits until it
+   *  has run over a commit, so the presenter never waits on `finished`. */
   readonly applied: Stream.Stream<DisplayRow>;
   /** Drain the publisher inside the close deadline, then shut the doors:
    *  from here on a trace row, a transcript subscription and an interrupted
@@ -129,7 +125,7 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
     const closed = () => doorsShut;
     /** The presenter ran past every job committed so far; its end fails
      *  only this. */
-    const settled = Effect.suspend(() =>
+    const drained = Effect.suspend(() =>
       reach(
         SubscriptionRef.changes(presented).pipe(
           Stream.interruptWhen(Deferred.await(presenterEnded)),
@@ -175,7 +171,7 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       publish: trace.publish,
       lost: trace.lost,
       closure: trace.closure,
-      settled,
+      drained,
       now: events.head,
       history: (id, fromSeq = 1, types = RUN_STATE_ROW_TYPES) =>
         database.readAggregate(id, fromSeq, types),
@@ -184,13 +180,11 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
           .readAggregate(id, 1, RUN_ROW_READS[read].kinds, through)
           .pipe(Effect.map((rows) => foldRunRows(read, rows))),
       blobs: database.readBlobs,
-      facts: (runId) =>
-        database.readRunRecord(qualifyAggregateId('run', runId)),
+      facts: (runId) => database.readRunRecord(runId),
       // A removed run's rows end with its deletion marker: none to show.
       display: (runId) =>
-        Effect.map(
-          database.readDisplayAggregate(qualifyAggregateId('run', runId), 1),
-          (rows) => (rows.at(-1)?.type === 'run.removed' ? [] : rows),
+        Effect.map(database.readDisplayAggregate(runId, 1), (rows) =>
+          rows.at(-1)?.type === 'run.removed' ? [] : rows,
         ),
       tail: events.all,
       listing: database.readListing,

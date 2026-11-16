@@ -11,7 +11,6 @@ import {
 import { expect } from 'vitest';
 import {
   AgentConfigSchema,
-  qualifyAggregateId,
   RunIdSchema,
   type RunId,
 } from '@texra-ai/harness/schemas';
@@ -41,7 +40,7 @@ const publishRun = (
   runId: RunId,
 ) => {
   const agent = 'polish';
-  const aggregateId = qualifyAggregateId('run', runId);
+  const aggregateId = runId;
   // One batch, so the renderer's first view of the run already holds its
   // inputs and its running phase.
   return publishTestRows(session, [
@@ -187,7 +186,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         'writes projected subagent progress records to stdout in ndjson mode',
         () =>
           Effect.gen(function* () {
-            const parentRunId = decodeRunId('a1a1a1');
+            const parentId = decodeRunId('a1a1a1');
             const childRunId = decodeRunId('b1b1b1');
             const output = yield* captureStreamWrites(process.stdout, () =>
               Effect.gen(function* () {
@@ -202,7 +201,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 yield* publishTestRows(handle, [
                   {
                     type: 'run.start',
-                    aggregateId: qualifyAggregateId('run', parentRunId),
+                    aggregateId: parentId,
                     identity: { kind: 'agent', agent: 'chat' },
                     takesFollowUps: true,
                     parent: null,
@@ -210,10 +209,10 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                   },
                   {
                     type: 'run.start',
-                    aggregateId: qualifyAggregateId('run', childRunId),
+                    aggregateId: childRunId,
                     identity: { kind: 'agent', agent: 'review' },
                     takesFollowUps: false,
-                    parent: { id: parentRunId, call: null },
+                    parent: { id: parentId, call: null },
                     provenance: null,
                   },
                 ]);
@@ -235,7 +234,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 // their own names; `ready` is the fold's phase before the
                 // activation lands.
                 payload: {
-                  runId: parentRunId,
+                  runId: parentId,
                   children: [
                     {
                       childRunId,

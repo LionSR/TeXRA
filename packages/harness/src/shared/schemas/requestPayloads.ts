@@ -149,14 +149,14 @@ export type RetryRequest = typeof RetryRequestSchema.Type;
 
 /**
  * A delegation awaiting approval: the agent and its prompt, and, for a
- * task (`task`), the files it works over and the options its plugin
- * gives it. A chat delegation has neither.
+ * program (`task`), the files it works over and its arguments (`options`).
+ * A chat delegation has no files but its media and no arguments.
  */
 export const AgentProposalSchema = BaseProposalFieldsSchema.mapFields(
   Struct.assign(TaskProposalFieldsSchema.fields),
 ).mapFields(
   Struct.assign({
-    /** Runs the agent's task over the files, not a conversation. */
+    /** Runs a registered program over the files, not a conversation. */
     task: Schema.Boolean,
     rootUserInstruction: Schema.optional(Schema.NullOr(Schema.String)),
   }),

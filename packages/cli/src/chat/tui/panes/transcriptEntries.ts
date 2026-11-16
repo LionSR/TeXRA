@@ -146,7 +146,7 @@ export function isRenderableTranscriptEntry(row: TranscriptRow): boolean {
 }
 
 /** Whether the row at `index` is inside the session view's final prefix
- *  (`transcript.settledRows`), the one rule for what append-only
+ *  (`transcript.finalRows`), the one rule for what append-only
  *  scrollback may print. */
 function isFinalizedTranscriptRow(index: number, finalRows: number): boolean {
   return index < finalRows;

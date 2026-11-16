@@ -7,7 +7,6 @@
 // single entry point for that derivation so hosts don't drift.
 
 import { Number as Num, Predicate, Result, Schema } from 'effect';
-import yaml from 'yaml';
 
 import {
   TOOL_CALL_STATUS,
@@ -16,6 +15,7 @@ import {
   type NormalizedToolUse,
   type ToolUseLog,
 } from '@shared/schemas';
+import { stringifyPayload } from '@shared/transcript/transcriptText';
 import { truncateSummary } from '@utils/text/stringUtils';
 
 function trimmedOrNull(value: unknown): string | null {
@@ -49,23 +49,11 @@ function extractOutputContent(candidate: unknown): unknown {
   );
 }
 
+/** A tool's output as text: an empty object shows no output section. */
 function formatOutputText(content: unknown): string {
-  if (typeof content === 'string') return content;
-  // yaml.stringify(null) renders the literal string "null", which would
-  // surface a spurious output section for tools that return `output: null`.
-  if (content == null) return '';
   if (Predicate.isObject(content) && Object.keys(content).length === 0)
     return '';
-  let serialized: string;
-  try {
-    serialized = yaml.stringify(content);
-  } catch {
-    // Tool output is an untyped provider/plugin payload, and YAML may reject
-    // cyclic or custom values. Only that serializer boundary is caught; this
-    // display fallback cannot hide tool execution or application logic failures.
-    return String(content);
-  }
-  return serialized.trimEnd();
+  return stringifyPayload(content).text.full;
 }
 
 /** The flat, renderer-friendly view of a decoded tool-use payload. */
@@ -177,10 +165,32 @@ export const BASH_TOOL_DEFAULT_TIMEOUT_MS = 120_000;
  */
 export const BASH_BACKGROUND_LOG_CAP_CHARS = 200_000;
 
-/** The line a projection of a process run's rows shows where a capped log
- *  left `elided` characters of a stream out. */
-export const outputGapNotice = (elided: number): string =>
-  `[${elided.toLocaleString()} characters elided]`;
+/** The note an excerpt shows where it left `elided` characters out: of a
+ *  tool result, of a command's `stream`, or where a capped process log left
+ *  part of a stream out. */
+export const elidedNote = (elided: number, stream?: string): string =>
+  `[... ${elided.toLocaleString()} characters elided${stream === undefined ? '' : ` from ${stream}`} ...]`;
+
+/**
+ * The lines a stored file-viewing call asked for (`read_file`'s `range`, the
+ * memory and executions tools' `view_range`), read from its input as the
+ * model wrote it: `{start, end}` or `[start, end]`, either end possibly
+ * absent.
+ */
+export function lineRangeOf(value: unknown): {
+  readonly start?: number;
+  readonly end?: number;
+} {
+  const [start, end] = Array.isArray(value)
+    ? [value[0], value[1]]
+    : Predicate.isObject(value)
+      ? [value.start, value.end]
+      : [];
+  return {
+    ...(typeof start === 'number' ? { start } : {}),
+    ...(typeof end === 'number' ? { end } : {}),
+  };
+}
 
 /** Default `executions wait` timeout (seconds) when the model omits `timeout`. */
 export const EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS = 300;

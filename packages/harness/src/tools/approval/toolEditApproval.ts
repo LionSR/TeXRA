@@ -68,8 +68,8 @@ function diffEdit(original: string, proposed: string): DiffHunks {
 // ============================================================================
 
 /**
- * Ask the person for an edit when `sessionPermission` (`loop/toolGuard.ts`),
- * given what the call's hooks said, asks: a `request.opened` on the run
+ * Ask the person for an edit when the session's policy, given what the
+ * call's hooks said, asks: a `request.opened` on the run
  * that names the proposal's content (the original and proposed text with
  * their diff) by its address in the session's blob store, stored with the
  * row, so every process the request reaches shows the same diff

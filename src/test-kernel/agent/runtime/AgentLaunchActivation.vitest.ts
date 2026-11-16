@@ -105,15 +105,15 @@ describe(
             Effect.gen(function* () {
               const { roots } = yield* FakeHost;
               const session = yield* persistentTestSession();
-              const parentRunId = generateRunId();
+              const parentId = generateRunId();
               yield* rootRun({
                 config: config('Parent.'),
-                runId: parentRunId,
+                runId: parentId,
                 interactive: true,
               }).pipe(Effect.provide(session), Effect.forkChild);
               yield* untilStored(
                 roots.storage,
-                waitingAfter(parentRunId, 1, roots.storage),
+                waitingAfter(parentId, 1, roots.storage),
               );
               const faults = yield* sessionStoreFaults(roots.storage);
               yield* faults.failNext('appendAll', 'run.start');
@@ -128,7 +128,7 @@ describe(
                   executeAgent(definition, runId, {
                     registration: {
                       identity: { kind: 'agent', agent: 'assistant' },
-                      parentRunId,
+                      parentId,
                     },
                   }),
                 ),

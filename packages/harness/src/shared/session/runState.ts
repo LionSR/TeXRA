@@ -19,11 +19,9 @@ import {
   NO_USAGE,
   type CommitOrdinal,
   type HookOutcomes,
-  type JsonValue,
   type DeclinableUsageRoute,
   type OfferedTool,
   type PositionAt,
-  qualifyAggregateId,
   type ModelFailure,
   type RunId,
   type TokenUsageStats,
@@ -158,7 +156,7 @@ export type RunState = Omit<RunRowState, 'at'> &
       'skills' | 'hooks' | 'modules'
     >;
     /** The run's `context.blob` rows: model-facing content by address. */
-    readonly contents: Readonly<Record<string, JsonValue>>;
+    readonly contents: Readonly<Record<string, Schema.Json>>;
     /** The `hook.outcome` rows by point: a recorded point never runs again. */
     readonly hookOutcomes: HookOutcomes;
   };
@@ -234,7 +232,7 @@ export const cancelRequestRows = (
         ? [
             {
               type: 'request.decided' as const,
-              aggregateId: qualifyAggregateId('run', runId),
+              aggregateId: runId,
               requestId,
               decision: { action: 'cancel' as const, cause },
             },

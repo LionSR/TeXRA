@@ -19,6 +19,9 @@ export { processLayer } from './effect/processLayer.js';
 // for a session whose runs run elsewhere (a window over the background
 // service).
 export { replayTrace } from '@controllers/session/runTrace';
+// What launches a registered program as a run of its own: the config a
+// host or an app's command starts it with.
+export { programLaunch, ProgramNotRegistered } from '@agent/runtime/programRun';
 export {
   activationView,
   type ActivationViewSource,
@@ -28,7 +31,6 @@ export {
   formatConversationMessage,
   type ConversationFormatOptions,
 } from '@agent/storage/conversationFormat';
-export type { AssembleTraceResult } from '@transcript/traceAssembler';
 // What `SessionHost.emit` takes and answers: the notices a session's runs
 // ask a host to present.
 export type {
@@ -41,7 +43,7 @@ export type {
 export type { ProcessLayerOptions } from './effect/processLayer.js';
 export type { ProcessServicesOptions } from '@controllers/session/sessionLayer';
 // A project's `.env` over the process environment, for a one-project host.
-export { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
+export { workspaceEnvironmentLayer } from '@platform/defaults/nodeServices';
 export {
   withProcessServices,
   type ProcessRuntime,
@@ -63,7 +65,7 @@ export {
   type WorkspaceAgents,
   type WorkspaceAgentsStores,
 } from '@agent/index/agentCatalog';
-export type { AgentEntry } from '@agent/index/agentEntry';
+export { agentToolNames, type AgentEntry } from '@agent/index/agentEntry';
 export {
   InvalidAgentTeamError,
   type WorkspaceAgentsController,
@@ -150,7 +152,7 @@ export {
   MODEL_SELECTION_KEY,
   readModelOptions,
   setModelEnabled,
-  type ModelOption,
+  type ModelVerdict,
 } from '@model/computeModelOptions';
 export {
   decideRunModel,

@@ -85,12 +85,9 @@ export class AgentSelectionPanel extends LitElement {
       key,
       name: agent.name,
       group: sourceMeta(agent.source).displayName,
-      description:
-        agent.description ||
-        (agent.hasTask ? 'Chat and document tasks' : 'Chat agent'),
+      description: agent.description || 'Chat agent',
       searchText: agent.tools?.join(' '),
-      badges: html`${agent.hasTask ? waIcon('file-lines', { label: 'Document task' }) : nothing}
-      ${agent.newerBuiltIn ? waIcon('arrow-up', { label: 'Newer built-in version available' }) : nothing}`,
+      badges: html`${agent.newerBuiltIn ? waIcon('arrow-up', { label: 'Newer built-in version available' }) : nothing}`,
       control: renderIconActionButton({
         id: `agent-visible-${encodeURIComponent(key)}`,
         className: 'catalog-row-toggle',
@@ -215,16 +212,6 @@ export class AgentSelectionPanel extends LitElement {
           <wa-tag variant="neutral" size="s" title="${displayName} agent"
             >${badge ? html`${waIcon(badge.icon)} ` : nothing}${displayName}</wa-tag
           >
-          ${
-            agent.hasTask
-              ? html`<wa-tag
-                  variant="neutral"
-                  size="s"
-                  title="Can also revise selected files as a document task"
-                  >${waIcon('file-lines')} document task</wa-tag
-                >`
-              : nothing
-          }
         </div>
 
         <div class="catalog-detail-actions">

@@ -183,13 +183,13 @@ const updateKeyedCliModelAccess = Effect.fn(
           new ModelAccessPreferenceFailed({
             member: 'setEnabled',
             subscription: plan.id,
-            message: `${plan.preferenceLabel} could not be disabled: ${toErrorMessage(cause)}`,
+            message: `${plan.preference.title} could not be disabled: ${toErrorMessage(cause)}`,
             cause,
           }),
       ),
     );
     return {
-      message: `${plan.preferenceLabel} disabled for ${plan.modelFamily}.`,
+      message: `${plan.preference.title} disabled for ${plan.modelFamily}.`,
     } satisfies CliModelAccessSelectionResult;
   }
 
@@ -208,13 +208,13 @@ const updateKeyedCliModelAccess = Effect.fn(
         new ModelAccessPreferenceFailed({
           member: 'setEnabled',
           subscription: plan.id,
-          message: `${plan.preferenceLabel} could not be enabled: ${toErrorMessage(cause)}`,
+          message: `${plan.preference.title} could not be enabled: ${toErrorMessage(cause)}`,
           cause,
         }),
     ),
   );
   return {
-    message: `${plan.preferenceLabel} enabled for ${plan.modelFamily} · other models still use ${OWN_API_KEYS.inline}.`,
+    message: `${plan.preference.title} enabled for ${plan.modelFamily} · other models still use ${OWN_API_KEYS.inline}.`,
   } satisfies CliModelAccessSelectionResult;
 });
 

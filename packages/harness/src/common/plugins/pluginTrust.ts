@@ -366,7 +366,7 @@ export const readInstalledPluginLoad: (
             change = `its version changed (${record.trust.version ?? 'none'} -> ${key.version ?? 'none'}) since you trusted it`;
           withhold(
             record.name,
-            `Plugin ${record.name} is not loaded: ${change}. Enable it again to review it (Settings > Plugins, \`/plugins\`, or \`texra plugin enable ${record.name}\`).`,
+            `Plugin ${record.name} is not loaded: ${change}. Enable it again to review it.`,
           );
           continue;
         }

@@ -333,8 +333,7 @@ export function App(props: AppProps): React.JSX.Element {
   // A bare Esc waiting out the chord window: the run it navigates from, and
   // the timer as a fiber in the App's mount scope, which the next key clears.
   const pendingEscapeInterrupt = useRef<
-    | { readonly parentRunId: RunId | undefined; readonly runId: RunId }
-    | undefined
+    { readonly parentId: RunId | undefined; readonly runId: RunId } | undefined
   >(undefined);
   const mountScope = useMountScope(runtime);
   const [escapeTimer] = useState(() =>
@@ -400,13 +399,13 @@ export function App(props: AppProps): React.JSX.Element {
 
   const handlePendingBareEscape = (
     runId: RunId,
-    parentRunId: RunId | undefined,
-  ): boolean => parentIdOf(runId) === parentRunId && handleBareEscape(runId);
+    parentId: RunId | undefined,
+  ): boolean => parentIdOf(runId) === parentId && handleBareEscape(runId);
 
   const scheduleBareEscape = (runId: RunId) => {
     clearPendingEscapeInterrupt();
-    const parentRunId = parentIdOf(runId);
-    pendingEscapeInterrupt.current = { parentRunId, runId };
+    const parentId = parentIdOf(runId);
+    pendingEscapeInterrupt.current = { parentId, runId };
     runtime.runFork(
       FiberHandle.run(
         escapeTimer,
@@ -414,7 +413,7 @@ export function App(props: AppProps): React.JSX.Element {
           Effect.andThen(
             Effect.sync(() => {
               pendingEscapeInterrupt.current = undefined;
-              handlePendingBareEscape(runId, parentRunId);
+              handlePendingBareEscape(runId, parentId);
             }),
           ),
         ),
@@ -448,7 +447,7 @@ export function App(props: AppProps): React.JSX.Element {
         const previousRunId = selectedRunIdSignal.get();
         const handledPendingEscape = handlePendingBareEscape(
           pendingEscape.runId,
-          pendingEscape.parentRunId,
+          pendingEscape.parentId,
         );
         const currentRunId = selectedRunIdSignal.get();
         if (
@@ -472,7 +471,7 @@ export function App(props: AppProps): React.JSX.Element {
         const inputWasDisabled = inputDisabled;
         const handled = handlePendingBareEscape(
           pendingEscape.runId,
-          pendingEscape.parentRunId,
+          pendingEscape.parentId,
         );
         // The draft held the key back: it goes to whichever draft now shows.
         if (chordTextInput(input, key) && (handled || !inputWasDisabled)) {

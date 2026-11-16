@@ -10,7 +10,7 @@ import { JsonObjectSchema, type TurnRequest } from '@texra-ai/llm';
 // Local imports - agent runtime
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
-import { convertToolSchema } from '@agent/core/tools/toolSchema';
+import { convertToolSchema, mapSubschemas } from '@agent/core/tools/toolSchema';
 import type { OfferedTool, ToolDefinition } from '@shared/schemas';
 import { sha256 } from '@utils/core/idHash';
 
@@ -99,36 +99,6 @@ export interface HeldPlugins {
   readonly entries: ReadonlyMap<string, ToolEntry>;
 }
 
-/** Keywords whose value is one schema, or an array of schemas. */
-const SUBSCHEMA_KEYWORDS: ReadonlySet<string> = new Set([
-  'items',
-  'prefixItems',
-  'additionalProperties',
-  'additionalItems',
-  'unevaluatedProperties',
-  'unevaluatedItems',
-  'contains',
-  'contentSchema',
-  'propertyNames',
-  'not',
-  'if',
-  'then',
-  'else',
-  'anyOf',
-  'oneOf',
-  'allOf',
-]);
-
-/** Keywords whose value maps a name to a schema: keys are data, kept as is. */
-const SCHEMA_MAP_KEYWORDS: ReadonlySet<string> = new Set([
-  'properties',
-  '$defs',
-  'definitions',
-  'patternProperties',
-  'dependentSchemas',
-  'dependencies',
-]);
-
 /**
  * A JSON Schema node with `description` dropped at every schema position:
  * its identity apart from its wording, which a tool's digest covers. It
@@ -136,25 +106,9 @@ const SCHEMA_MAP_KEYWORDS: ReadonlySet<string> = new Set([
  * `enum`/`const`/`default` values are data and are not entered.
  */
 function withoutSchemaDescriptions(node: unknown): unknown {
-  if (Array.isArray(node)) return node.map(withoutSchemaDescriptions);
   if (!Predicate.isObject(node)) return node;
-  const out: Record<string, unknown> = {};
-  for (const [keyword, value] of Object.entries(node)) {
-    if (keyword === 'description') continue;
-    if (SUBSCHEMA_KEYWORDS.has(keyword)) {
-      out[keyword] = withoutSchemaDescriptions(value);
-    } else if (SCHEMA_MAP_KEYWORDS.has(keyword) && Predicate.isObject(value)) {
-      out[keyword] = Object.fromEntries(
-        Object.entries(value).map(([name, schema]) => [
-          name,
-          withoutSchemaDescriptions(schema),
-        ]),
-      );
-    } else {
-      out[keyword] = value;
-    }
-  }
-  return out;
+  const { description: _dropped, ...rest } = node;
+  return mapSubschemas(rest, withoutSchemaDescriptions);
 }
 
 /**

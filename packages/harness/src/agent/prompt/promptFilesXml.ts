@@ -1,10 +1,10 @@
 import { Effect, FileSystem, Predicate } from 'effect';
 
 import { ensureError } from '@utils/errors/errorMessage';
-import { getPromptFileName } from '@utils/prompt';
+import { getPromptFileName } from '@agent/prompt/promptRender';
 
-import { readNormalizedFile } from './fsDurability';
-import { workspaceAbsolutePath } from './workspaceFS';
+import { readNormalizedFile } from '@utils/files/fsDurability';
+import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 
 /** A file successfully read for the `${varName}_FILE`/`${varName}_CONTENT` variable pair. */
 interface FileVarValue {
@@ -21,7 +21,7 @@ interface XmlFormatFromFilesResult {
   readonly readable: FileVarValue[];
   /**
    * Files dropped from the prompt because they could not be read. Order is
-   * unspecified — the reads settle concurrently — so do not build on it; each
+   * unspecified — the reads finish concurrently — so do not build on it; each
    * entry names its own file.
    */
   readonly skipped: ReadonlyArray<{ file: string; reason: string }>;

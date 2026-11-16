@@ -61,30 +61,36 @@ texra clone <project> ./project
 
 ## Running agents
 
-Run an agent's document task from a project directory:
+`texra run` takes a program or an agent. A [program](./built-in-agents.md#programs)
+(`edit`, `annotate`, `enhance`, `apply`, `merge`, `transcribe`, `slides`,
+`poster`) revises or creates documents from `--input` files. Run one from a
+project directory:
 
 ```bash
-texra run polish --input paper.tex --output paper.polished.tex --print
+texra run edit --input paper.tex --instruction "Polish the prose" --output paper.polished.tex --print
 ```
 
 <CliRunHero
-  command="texra run polish --input paper.tex --output paper.polished.tex --print"
+  command="texra run edit --input paper.tex --instruction 'Polish the prose' --output paper.polished.tex --print"
   :rounds="[
     { label: 'Revision 1: draft', state: 'done' },
-    { label: 'Revision 2: critique and revise', state: 'done' },
+    { label: 'Revision 2: review and correct', state: 'done' },
   ]"
   :outputs="['paper.polished.tex']"
 />
 
 <p class="hero-caption">Command in, revisions stream as progress, and the printed path is the success signal: the copied <code>--output</code> destination, or the generated file in run storage when no copy was requested.</p>
 
-Document tasks that take an instruction, such as `polish`, accept it with
-`--instruction <text>` or `--instruction-file <file>`. When both are set, the
-file contents are passed first:
+The instruction says what the program should do: how far `edit` goes (with no
+instruction it proofreads), which point of view `annotate` reads from, what
+`enhance` looks at. Pass it with `--instruction <text>` or
+`--instruction-file <file>`. When both are set, the file contents are passed
+first:
 
 ```bash
-texra run polish --input paper.tex --instruction "Tighten the proof of Lemma 2"
-texra run polish --input paper.tex --instruction-file notes.md
+texra run edit --input paper.tex --instruction "Tighten the proof of Lemma 2"
+texra run annotate --input paper.tex --instruction "Read as a first-time reader"
+texra run edit --input paper.tex --instruction-file notes.md
 ```
 
 Supported media files passed with `--input` are attached to the model instead
@@ -92,19 +98,19 @@ of being read as text. Audio transcription requires a model with native audio
 support:
 
 ```bash
-texra run transcribe_audio --input recording.m4a --output transcript.tex --model google/gemini-4-argon --print
+texra run transcribe --input recording.m4a --output transcript.tex --model google/gemini-4-argon --print
 ```
 
 Text inputs retain their usual behavior. You can combine text and media with
 repeated `--input` flags; `--context` supplies read-only text context.
-For editing tasks, media attachments do not count as output documents.
+For programs that edit their inputs, media attachments do not count as output documents.
 
-Pass read-only context files with repeated `--context` flags. The agent can
-read these files through `{{ ALL_CONTEXTS }}`, but it only emits revised
-documents for the selected inputs:
+Pass read-only context files with repeated `--context` flags. The program
+reads these files, but it only emits revised documents for the selected
+inputs:
 
 ```bash
-texra run correct --input appendices.tex --context Draft0.tex --context refs.bib
+texra run edit --input appendices.tex --context Draft0.tex --context refs.bib
 ```
 
 Pass multiple inputs with repeated `--input` flags, a directory, or a glob.
@@ -113,22 +119,11 @@ their generated artifacts to a directory with `--output-dir`; relative document
 paths are preserved under that directory:
 
 ```bash
-texra run polish --input Draft0.tex --input appendices.tex --output-dir polished
-texra run correct --input 'sections/**/*.tex' --output-dir corrected
+texra run edit --input Draft0.tex --input appendices.tex --instruction "Polish the prose" --output-dir polished
+texra run edit --input 'sections/**/*.tex' --output-dir corrected
 ```
 
-Add `--reflect` to have the bundled `critic` agent review each revision but the
-last; the next revision reads its critique. The revision count is unchanged:
-
-```bash
-texra run polish --input paper.tex --output paper.polished.tex --reflect
-```
-
-The launch form's other task switches are flags of the same names:
-`--attachTeXCount`, `--autoExtractFigure`, `--autoExtractTikzFigure` and
-`--autoCompileInputPdf`.
-
-Document tasks always write generated files into the run's run-storage
+Programs always write generated files into the run's run-storage
 directory first. In text mode, TeXRA prints a filesystem path: the copied path
 when `--output` or `--output-dir` is used, otherwise the final generated file in
 run storage.
@@ -191,7 +186,7 @@ provider you want to use (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
 
 ```bash
 export ANTHROPIC_API_KEY=sk-…
-texra run polish --input paper.tex
+texra run edit --input paper.tex
 ```
 
 A Claude Max or Team plan includes [monthly API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers) that an
@@ -279,10 +274,10 @@ Slash commands inside the session:
 - `/help`: list every slash command, including `/agent`, `/models`, `/key`, `/status`, `/plan`, `/memory`, `/plugins`, `/compact`, `/fork`, `/clear`, and `/exit`.
 - `/tasks`: list tasks running in the [background service](#background-service) across every project. Picking one attaches to it live: Enter sends a follow-up, approval requests appear inline, and Esc detaches while the task keeps running.
 
-`texra chat` requires an interactive terminal. For scripts and CI, use `texra run <agent>` with `--print` or `--output-format json|ndjson`:
+`texra chat` requires an interactive terminal. For scripts and CI, use `texra run <program | agent>` with `--print` or `--output-format json|ndjson`:
 
-- An agent **without** a document task accepts `--input` and `--context` files plus a required instruction (`--instruction`, `--instruction-file`, or both).
-- An agent **with** a document task runs that pipeline over `--input` files, accepts `--output` / `--output-dir`, and writes versioned document outputs. List document-task agents with `texra agents list --tasks`.
+- An **agent** accepts `--input` and `--context` files plus a required instruction (`--instruction`, `--instruction-file`, or both).
+- A **program** runs over `--input` files (required), accepts `--output` / `--output-dir`, and writes versioned document outputs. A name that is neither a program nor an agent prints the program names.
 - A bare agent name picks the highest-priority match (`custom`, then `builtIn`, then `plugin`); pass a qualified key such as `texra run builtIn:assistant` to target a specific source.
 
 ## Teams
@@ -328,7 +323,7 @@ what's available, and pull in extra skill folders for any agent run:
 
 ```bash
 texra skills list
-texra run polish --input paper.tex --source ~/my-skills
+texra run edit --input paper.tex --source ~/my-skills
 ```
 
 `--source` (alias `-s`) adds an additional skill root and may be repeated.
@@ -438,11 +433,11 @@ texra --resume <id>
 
 A chat reopens in the interactive chat and waits for your next
 message, so without a terminal it exits with a usage error that points
-scripting at `texra run`. A task `texra run` started for an agent without a
-document task runs once and takes no messages: once it has ended, `texra resume`
+scripting at `texra run`. A task `texra run` started for an agent
+runs once and takes no messages: once it has ended, `texra resume`
 exits with code 2 and points you to `texra history show <id>` or
 `texra resume <id> --fork`; one stopped mid-turn resumes in the chat to finish
-that turn. A document task run resumes headless under its original
+that turn. A program run resumes headless under its original
 execution id and honors the headless globals (`--print`, `--output-format`,
 `--no-input`). A resumed task keeps the approval policy it was launched with:
 an `--approval-policy` you pass is reported as not applying (a chat's new
@@ -462,7 +457,7 @@ Inside the chat, `/fork` continues a new task holding the conversation
 
 A fork holds the conversation as it stood at the end of its last turn and
 leaves the original task unchanged. Forking continues in an interactive chat,
-so it needs a terminal, and a document task cannot be forked.
+so it needs a terminal, and a program run cannot be forked.
 
 When `texra chat` opens, nothing resumes on its own: the tasks a closed or
 crashed TeXRA stopped mid-way sit in the agent list (Tab) as interrupted.
@@ -597,7 +592,7 @@ texra config agents                               # inspect the effective agents
 texra config agents --agents all                  # make every agent visible in this folder
 texra config agents --agents team:lean-project    # use a named team
 texra config agents --agents inherit              # follow the user default
-texra config agents --agents correct,polish,assistant,review
+texra config agents --agents assistant,research,review
 texra config agents --default-team physicist      # or `none` to clear it
 texra config agents --default-agent builtIn:assistant   # or `none` for the automatic default
 ```

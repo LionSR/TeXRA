@@ -4,7 +4,7 @@
  * (`@agent/codeSandbox/codeSandbox`); every call it issues goes through the
  * run loop's per-call program, reached through the door on the call's
  * `RunCall` (`scriptCalls`), which commits its rows and, on a resume, hands
- * back what they already settled. This tool names no other tool and writes
+ * back what they already finished. This tool names no other tool and writes
  * no row.
  */
 import * as NodeWorker from '@effect/platform-node/NodeWorker';
@@ -13,7 +13,7 @@ import { Duration, Effect, Layer, Predicate, Result, Schema } from 'effect';
 import {
   CodeSandbox,
   type ScriptOp,
-  type ScriptSettlement,
+  type ScriptOpResult,
 } from '@agent/codeSandbox/codeSandbox';
 import { RUN_LOG_MAX_LINES } from '@agent/codeSandbox/limits';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
@@ -23,8 +23,7 @@ import {
   type ScriptDoor,
 } from '@agent/runtime/RunCall';
 import {
-  JsonValueSchema,
-  SettledToolResultSchema,
+  FinishedToolResultSchema,
   ToolError,
   type ToolFileAttachment,
   type ToolResultPayload,
@@ -85,10 +84,10 @@ const SearchArgsSchema = Schema.Tuple([
 ]);
 const DescribeArgsSchema = Schema.Tuple([Schema.NonEmptyString]);
 
-/** What one host-function op answers, as a settled call. */
+/** What one host-function op answers, as a finished call. */
 const answerOf = (
   op: ScriptOp,
-  catalog: ScriptDoor['catalog'],
+  { catalog, modules }: Pick<ScriptDoor, 'catalog' | 'modules'>,
 ): ToolResultPayload['result'] => {
   const failed = (error: string) => ({ status: 'error' as const, error });
   if (op.name === `${SEARCH_TOOLS}()`) {
@@ -109,27 +108,33 @@ const answerOf = (
   const args = Schema.decodeUnknownResult(DescribeArgsSchema)(op.input);
   if (!Result.isSuccess(args)) return failed(args.failure.message);
   const [name] = args.success;
-  const declaration = describeTool(catalog, name);
+  // A tool's declaration, or the source of a module the script may import
+  // (a program's included), by its specifier or its bare name.
+  const declaration =
+    describeTool(catalog, name) ??
+    modules[name] ??
+    modules[`builtIn:${name}`] ??
+    null;
   return declaration === null
     ? failed(
-        `No tool named "${name}" is offered to this script; searchTools(query) finds the ones that are.`,
+        `No tool or module named "${name}" is offered to this script; searchTools(query) finds the tools that are.`,
       )
     : { status: 'executed', output: declaration, summary: name };
 };
 
 /** A call's result ended the turn: the script ends with it. */
 class EndedTurn extends Schema.TaggedError<EndedTurn>()('EndedTurn', {
-  // The executed member of a settled result: only an executed result ends
+  // The executed member of a finished result: only an executed result ends
   // the turn.
-  result: SettledToolResultSchema.members[0],
+  result: FinishedToolResultSchema.members[0],
 }) {}
 
-/** What the guest's `await` gets from a settled call: `{ output, summary }`
+/** What the guest's `await` gets from a finished call: `{ output, summary }`
  *  of a tool, the list `searchTools` found, the text `describeTool` wrote. */
-const settlementOf = (
+const guestAnswerOf = (
   result: ToolResultPayload['result'],
   op?: ScriptOp,
-): Effect.Effect<ScriptSettlement, EndedTurn> => {
+): Effect.Effect<ScriptOpResult, EndedTurn> => {
   if (result.status === 'error')
     return Effect.succeed({
       _tag: 'Failure',
@@ -199,8 +204,8 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
   // they reach the model on the script's own result.
   const files: ToolFileAttachment[] = [];
   const issue = (op: ScriptOp) =>
-    Effect.flatMap(scriptCalls.call(op, script), (settled) => {
-      for (const attached of settled.attachments)
+    Effect.flatMap(scriptCalls.call(op, script), (finished) => {
+      for (const attached of finished.attachments)
         if (attached.content.kind === 'stored')
           files.push({
             path: attached.path,
@@ -210,7 +215,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
             }),
             digest: attached.content.digest,
           });
-      return settlementOf(settled.result);
+      return guestAnswerOf(finished.result);
     });
   // The tools that are also globals, by the op name a global issues.
   const globals = new Map(
@@ -234,7 +239,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
           // the call is the tool's, recorded as the tool's.
           const [first, rest] = Array.isArray(op.input) ? op.input : [];
           if (rest != null && !Predicate.isObject(rest))
-            return Effect.succeed<ScriptSettlement>({
+            return Effect.succeed<ScriptOpResult>({
               _tag: 'Failure',
               name: 'TypeError',
               message: `${global.tool}() takes an options object as its second argument.`,
@@ -247,10 +252,8 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
         }
         return op.name.endsWith('()')
           ? Effect.flatMap(
-              scriptCalls.answer(op, script, () =>
-                answerOf(op, scriptCalls.catalog),
-              ),
-              (result) => settlementOf(result, op),
+              scriptCalls.answer(op, script, () => answerOf(op, scriptCalls)),
+              (result) => guestAnswerOf(result, op),
             )
           : issue(op);
       },
@@ -274,14 +277,17 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
           failed([
             [
               `The script threw ${fault.name}: ${fault.message}`,
-              // The guest's own frames: the realm's bridge and natives
-              // locate nothing in the script.
+              // The guest's own frames, in the script or in a module it
+              // imported: the realm's bridge and natives locate nothing.
               ...(fault.stack ?? '')
                 .split('\n')
                 .map((line) => line.trim())
                 .filter(
                   (line) =>
-                    line.startsWith('at ') && line.includes('script.js'),
+                    line.startsWith('at ') &&
+                    ['script.js', ...Object.keys(scriptCalls.modules)].some(
+                      (file) => line.includes(file),
+                    ),
                 )
                 .slice(0, FAULT_FRAMES),
             ].join('\n    '),
@@ -293,7 +299,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
     );
   if (outcome._tag === 'EndedTurn') return outcome.result;
   const { value } = outcome.result;
-  const returned = Schema.decodeUnknownResult(JsonValueSchema)(value);
+  const returned = Schema.decodeUnknownResult(Schema.Json)(value);
   const log = logTail();
   const foreground =
     input.run_in_background === true
@@ -310,8 +316,8 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
         : `Script finished: ${input.title}`,
     ),
     ...(files.length > 0 && { files }),
-    // Its return as data: what a script's run ends with (a task's
-    // documents), journaled with the call.
+    // Its return as data: what a script's run ends with (a program's
+    // value), journaled with the call.
     ...(Result.isSuccess(returned) && { value: returned.success }),
   };
 });
@@ -323,7 +329,7 @@ const SURFACE = [
     'Globals:',
     '- `tools.<name>(args)` calls a tool you are offered, other than `script`, with the arguments of a direct call, and resolves to `{ output, summary }`. A failed call rejects with an Error named `ToolFailed`. Use `Promise.all` to run calls together and try/catch to recover.',
     '- `searchTools(query, { limit })` ranks every tool you can call, those not declared below included (MCP and plugin tools), and resolves to the best `limit` (default 8, at most 50) as `{ name, line }[]`.',
-    "- `describeTool(name)` resolves to a tool's full declaration, with the description of each field.",
+    "- `describeTool(name)` resolves to a tool's full declaration, with the description of each field, or to the source of a module or program named `name`.",
     '- A tool declared below as a function is also a global: its first argument is one field of its arguments, its second an object of the rest. A tool that resolves to more than `{ output, summary }` declares what, and its description names the errors it rejects with other than `ToolFailed`.',
     '- `self(prompt, { fork, schema, label })` runs you again on `prompt` and resolves to its `{ response, structured?, cost, spent, … }`: forked (the default) from this conversation as it stood when the script started, or with `fork: false` with no earlier conversation; either way it is told `prompt` is its one part of the work. A loop of `self()` calls that checks each reply is how a goal runs until it is met.',
     '- `section(title)` labels the calls that follow; `console.log` lines stream to the card and the last 80 return with the result.',
@@ -335,10 +341,10 @@ const SURFACE = [
 export const ScriptTool = defineTool({
   name: SCRIPT_TOOL_NAME,
   // A resume runs the script again from the top against its recorded calls:
-  // each settled call is handed back from its row, never run twice.
+  // each finished call is handed back from its row, never run twice.
   replay: 'safe',
   description: SURFACE,
-  describe: (declared, modules) =>
+  describe: (declared, modules, programs) =>
     [
       SURFACE,
       // A module no tool's description names is found only here.
@@ -346,6 +352,16 @@ export const ScriptTool = defineTool({
         ? []
         : [
             `The modules you may import: ${modules.map((specifier) => `\`${specifier}\``).join(', ')}.`,
+          ]),
+      ...(programs.length === 0
+        ? []
+        : [
+            [
+              'The programs `program(name, opts)` starts:',
+              ...programs.map(
+                ({ name, description }) => `- \`${name}\`: ${description}`,
+              ),
+            ].join('\n'),
           ]),
       'The tools you declared, as TypeScript (more are callable: `searchTools` finds them):',
       [

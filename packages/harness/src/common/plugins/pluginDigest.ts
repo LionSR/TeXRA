@@ -23,7 +23,7 @@ import stableStringify from 'safe-stable-stringify';
 // Local imports - utilities
 import { sha256Hex } from '@utils/core/idHash';
 import { isPathWithin } from '@utils/core/pathCore';
-import { absentReason } from '@utils/files/fsEntryExists';
+import { meansAbsent } from '@utils/files/fsEntryExists';
 import { CommandDirs, whichOnExtendedPath } from '@utils/system/platformPaths';
 
 // Local imports - plugin reading
@@ -151,7 +151,7 @@ export const externalFiles = Effect.fn('pluginDigest.externalFiles')(
         // An argument that names nothing is not a file; any other failure is.
         const real = yield* fs
           .realPath(candidate)
-          .pipe(Effect.catchIf(absentReason, () => Effect.void));
+          .pipe(Effect.catchIf(meansAbsent, () => Effect.void));
         if (real === undefined || isPathWithin(realRoot, real)) return [];
         const info = yield* fs.stat(real);
         return info.type === 'File'

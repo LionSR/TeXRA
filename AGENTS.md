@@ -198,7 +198,7 @@ providers in `packages/extension/src/progressView/` and in
   holds. When agnostic code needs a host-only capability, add a typed port
   served by that runtime, not an import or a field on a `Platform` object.
 - Use the Effect `FileSystem` (`stat(...).type`), not `vscode.FileType`, and
-  `absentReason` (`packages/harness/src/utils/files/fsEntryExists.ts`, the one
+  `meansAbsent` (`packages/harness/src/utils/files/fsEntryExists.ts`, the one
   reading of "nothing is there"), not `vscode.FileSystemError`.
 - Return errors to the caller; the command or frontend layer shows the message.
 - Carry the workspace root as data from its holder (a run's `session.roots`, a
@@ -228,10 +228,10 @@ points, and the event and card channels: `packages/harness/AGENTS.md`.
 
 Agents are flat persona YAML (`name`, `description`, `prompt`, `tools`,
 `temperature`) in `packages/extension/resources/agents/`, created with the
-built-in `creator` agent or the settings view's Agents tab. A plugin may own
-one block of an agent file (`Plugin.agentBlock`); the documents plugin's
-`task:` block (`packages/texra/src/tools/documents/documentTask.ts`) makes an
-agent a document task, run by `packages/texra/src/agent/output/documentRecipe.ts`.
+built-in `creator` agent or the settings view's Agents tab. A plugin registers
+programs (`Plugin.programs`): script modules started by name, each a run
+opened on `script.kind: 'program'`. The `theory` plugin's programs are in
+`packages/texra/src/tools/theory/programs.ts`.
 
 **Prompts** (bundled agents, plugin agents, templates, skills,
 `.github/prompts/`) use general behavioral rubrics: never an identifiable

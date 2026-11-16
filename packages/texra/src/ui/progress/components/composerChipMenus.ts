@@ -15,12 +15,11 @@ import {
   isModelOptionAvailable,
 } from '@texra-ai/harness/schemas';
 import { modelRefOf } from '@texra-ai/llm';
-import type { DocumentAgentOption } from '@texra/shared/plugins/documents';
+import type { AgentOptionData } from '@texra/shared/pickerOptions';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { IconName } from '@ui/wa/iconNames';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
 import {
   approvalPolicyLabel,
   formatApprovalPolicy,
@@ -47,10 +46,10 @@ type Launch = Surface['launch'];
  *  stays exact. A selection naming no option (an agent hidden or removed
  *  since it was chosen) is no agent, and the host's launch keeps to the same
  *  options (`buildLaunchConfig`): it refuses an agent hidden since. */
-export function launchAgentOption(
+function launchAgentOption(
   launch: Launch,
   host: HostSnapshot,
-): DocumentAgentOption | undefined {
+): AgentOptionData | undefined {
   const name = agentName(launch.agent);
   return host.agentOptions.find(
     (option) =>
@@ -129,8 +128,6 @@ export function launcherChipMenus(
         ${repeat(
           host.agentOptions,
           (option) => option.value,
-          // An agent with a document task launches one over files; the
-          // agent library marks it the same way.
           (option) =>
             html`<wa-dropdown-item
               value=${`agent:${option.value}`}
@@ -139,16 +136,7 @@ export function launcherChipMenus(
                 launch.launchTarget === 'agent' &&
                   option.value === agent?.value,
               )}
-              >${option.label}${
-                option.rounds === undefined
-                  ? nothing
-                  : html`<span slot="details"
-                      >${waIcon('file-lines', {
-                        label: 'Document task: runs on files',
-                        title: 'Document task: runs on files',
-                      })}</span
-                    >`
-              }</wa-dropdown-item
+              >${option.label}</wa-dropdown-item
             >`,
         )}
         ${

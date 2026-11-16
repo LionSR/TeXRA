@@ -41,7 +41,6 @@ import {
   defineTool,
 } from '@texra-ai/harness/plugins';
 import {
-  qualifyAggregateId,
   runEndErrorMessage,
   RunIdSchema,
   type RunId,
@@ -459,7 +458,7 @@ const crashResume = (dir: string) =>
       // the run's own latest script counts: the model may try the functions
       // out in earlier ones, its calls run one script at a time, and a
       // round's child may run scripts of its own.
-      const own = qualifyAggregateId('run', runId);
+      const own = runId;
       let script: string | null = null;
       const selfCards = new Set<string>();
       let selfEnded = 0;

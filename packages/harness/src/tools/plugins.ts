@@ -11,24 +11,23 @@
  * Rules: an id is persisted (the disabled-tools key, and the plugin a run's
  * offered tool records), so it never changes and is never reused; every
  * tool belongs to exactly one plugin (checked when the table is built). No
- * hooks or second event channels; one agent-file block at most. A plugin
+ * hooks or second event channels. A program
+ * (`programs`) is one of its script modules, started by name. A plugin
  * holds state only in its process or session layer and writes rows only of
  * its own kinds (`factKinds`), through the one publisher.
  */
 
 // Third-party imports
-import { Cause, Effect, type Layer, Result, Schema } from 'effect';
+import { Cause, Effect, type Layer, Schema } from 'effect';
 
 // Local imports
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { withLogChannel } from '@logger/effectLog';
 import { type AppSignals, emitAppSignal } from '@platform/appSignals';
-import { StateReadFailed, type StateStore } from '@shared/config/settings';
 import {
   aggregateTarget,
-  qualifyAggregateId,
-  type JsonValue,
+  pluginAggregateId,
   type RunId,
   type SessionRow,
   type SessionRowDraft,
@@ -38,17 +37,13 @@ import {
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import type { Alongside } from '@shared/session/sessionEvents';
-import {
-  decodeDisabledTools,
-  DISABLED_TOOLS_KEY,
-} from '@shared/state/disabledTools';
 import type { SessionLogShape } from '@shared/session/sessionLog';
 import type { SettingRow } from '@shared/state/stateSettings';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
 import type {
-  AgentBlock,
   PluginHold,
   ProcessPluginLayer,
+  Program,
   PromptSection,
   RequestDecisionHook,
   SessionPluginLayer,
@@ -56,8 +51,8 @@ import type {
 
 /** One stored row of a plugin's kind, as its fact kind's transition rule reads
  *  it: the row's decoded value and the run it is parented to, if any. */
-export interface PluginRow {
-  readonly value: JsonValue;
+export interface PluginFactRow {
+  readonly value: Schema.Json;
   readonly parent: RunId | null;
 }
 
@@ -87,18 +82,18 @@ export interface FactKind {
    *  of the kind (none before the first): the rejection's reason, or null
    *  to accept. */
   readonly accepts?: (
-    previous: PluginRow | undefined,
-    next: PluginRow,
+    previous: PluginFactRow | undefined,
+    next: PluginFactRow,
   ) => string | null;
   /** Whether the aggregate's `latest` row already says more than `next`
    *  (a call's fact that lagged behind a later writer): the call's batch
    *  then leaves `next` out instead of failing on `accepts`. */
-  readonly supersedes?: (latest: PluginRow, next: PluginRow) => boolean;
+  readonly supersedes?: (latest: PluginFactRow, next: PluginFactRow) => boolean;
   /** The workspace files a row of the kind says its run wrote past the
    *  editor's own write path: every process that folds the run announces
    *  them (`workspaceFilesWritten`), a window hearing a service task's
    *  write as it hears its own. */
-  readonly writes?: (value: JsonValue) => readonly string[];
+  readonly writes?: (value: Schema.Json) => readonly string[];
 }
 
 /**
@@ -129,7 +124,7 @@ export interface Plugin {
    *  while the plugin is on and a boolean catalog setting is on: tool name to
    *  setting row, or `true` for no setting but the plugin's own switch. An
    *  injected tool still passes the host and approval gates; a script's
-   *  run (a task's recipe) and a text-only persona get none. */
+   *  run (a program) and a text-only persona get none. */
   readonly injectedWhen?: Readonly<Record<string, SettingRow<boolean> | true>>;
   /** Its section of each request's system text, pinned while it is on. */
   readonly prompt?: PromptSection;
@@ -144,10 +139,11 @@ export interface Plugin {
   readonly decision?: RequestDecisionHook;
   /** The row kinds it owns (`plugin.fact`), on or off: rows outlive it. */
   readonly factKinds?: readonly FactKind[];
-  /** The agent-file block it owns (`AgentBlock`), on or off. */
-  readonly agentBlock?: AgentBlock;
   /** Script module sources by name, imported as `builtIn:<name>`. */
   readonly scriptModules?: Readonly<Record<string, string>>;
+  /** Those of its `scriptModules` a person or a model starts by name
+   *  (`Program`), each under its module's name. */
+  readonly programs?: Readonly<Record<string, Program>>;
   /** The plugins it runs on, by id; a list lacking one is rejected. */
   readonly requires?: readonly string[];
 }
@@ -181,31 +177,12 @@ export const definePlugin = <ROut = never>(
   // cast: `ROut` is checked by the parameter type and erased here.
   plugin as unknown as Plugin;
 
-/** {@link decodeDisabledTools}, failing as the state read it is. */
-export function storedDisabledTools(
-  stored: unknown,
-): Result.Result<ReadonlySet<string> | undefined, StateReadFailed> {
-  return Result.mapError(
-    decodeDisabledTools(stored),
-    (failure) => new StateReadFailed(failure),
-  );
-}
-
-/** The plugin ids the user switched off in `store`'s record; none while it
- *  is absent. */
-export function readDisabledTools(store: StateStore) {
-  return store.get(DISABLED_TOOLS_KEY.key).pipe(
-    Effect.flatMap((stored) => Effect.fromResult(storedDisabledTools(stored))),
-    Effect.map((ids): ReadonlySet<string> => ids ?? new Set()),
-  );
-}
-
 /**
  * Announce the workspace files a committed row says its run wrote past the
  * editor's own write path (a fact kind's `writes`): a run records such a change
  * as a fact on its own rows, and every process that reads the run's rows
  * announces it (`workspaceFilesWritten`), so a window hears a background
- * service task's change as it hears its own. Run over the session's folded
+ * service task's change as it hears its own. Run over the session's applied
  * tail, so each row is announced once, in commit order, and the history a
  * reopened session replays never as news; a plugin's own aggregate
  * announces nothing.
@@ -258,24 +235,6 @@ export const announceWrites = (
 export type FactKinds = Readonly<Record<FactName, FactKind>>;
 
 /**
- * The fact kinds `plugins` contribute, by `plugin/kind`. A fact kind of another
- * plugin's id, or a kind contributed twice, is a defect of the plugin list.
- */
-export function factKindsOf(plugins: Iterable<Plugin>): FactKinds {
-  const factKinds = new Map<FactName, FactKind>();
-  for (const { id, factKinds: own = [] } of plugins)
-    for (const factKind of own) {
-      const name = factName(factKind);
-      if (factKind.plugin !== id || factKinds.has(name))
-        throw new Error(
-          `The plugin list is not valid: plugin ${id} contributes the row kind ${name}, which is not its own or is contributed twice.`,
-        );
-      factKinds.set(name, factKind);
-    }
-  return Object.fromEntries(factKinds);
-}
-
-/**
  * Throw unless every fact a call of `plugin`'s tool states is a row of one of
  * that plugin's own fact kinds, at the kind's version, with a value its
  * schema accepts: the dispatch turns the throw into the call's error result, so a
@@ -320,13 +279,13 @@ export const factRow = (
     ? {
         type: 'plugin.fact',
         ...fact,
-        aggregateId: qualifyAggregateId('run', runId),
+        aggregateId: runId,
         parent: null,
       }
     : {
         type: 'plugin.fact',
         ...fact,
-        aggregateId: qualifyAggregateId('plugin', aggregate),
+        aggregateId: pluginAggregateId(aggregate),
         parent: runId,
       };
 
@@ -356,7 +315,7 @@ export const ownFactsChecked = Effect.fn('ownFactsChecked')(function* (
   plugin: Plugin | undefined,
   log: Pick<SessionLogShape, 'runRows' | 'facts'>,
 ) {
-  const written = new Map<string, PluginRow>();
+  const written = new Map<string, PluginFactRow>();
   const kept: FactRow[] = [];
   const rejected: PluginFactRejected[] = [];
   for (const draft of drafts) {

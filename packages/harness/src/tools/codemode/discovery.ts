@@ -7,7 +7,7 @@
  * needs.
  */
 import { Predicate } from 'effect';
-import { inputSchema } from '@agent/core/tools/toolSchema';
+import { inputSchema, mapSubschemas } from '@agent/core/tools/toolSchema';
 import { type ScriptDoor } from '@agent/runtime/RunCall';
 
 import { declarationOf, firstSentence } from './declarations';
@@ -18,7 +18,7 @@ const STOP_WORDS = new Set(
   ),
 );
 
-/** A plural folded to its singular: `entries` to `entry`, `files` to `file`. */
+/** A plural applied to its singular: `entries` to `entry`, `files` to `file`. */
 const singular = (term: string): string => {
   if (term.length > 4 && term.endsWith('ies')) return `${term.slice(0, -3)}y`;
   if (term.length > 3 && term.endsWith('s') && !term.endsWith('ss'))
@@ -27,7 +27,7 @@ const singular = (term: string): string => {
 };
 
 /** Lowercase terms, split at camelCase humps and every non-alphanumeric
- *  (`read_file`, `mcp__server__tool`), stop words dropped, plurals folded. */
+ *  (`read_file`, `mcp__server__tool`), stop words dropped, plurals applied. */
 const tokenize = (text: string): string[] =>
   text
     .replaceAll(/([a-z0-9])([A-Z])/g, '$1 $2')
@@ -37,19 +37,17 @@ const tokenize = (text: string): string[] =>
     .filter((term) => term !== '' && !STOP_WORDS.has(term))
     .map(singular);
 
-/** Property names and descriptions, through nested objects and unions. */
+/** Property names and descriptions, at every subschema. */
 const schemaText = (schema: unknown): string[] => {
   if (!Predicate.isObject(schema)) return [];
-  return [
-    ...(typeof schema.description === 'string' ? [schema.description] : []),
-    ...Object.entries(
-      Predicate.isObject(schema.properties) ? schema.properties : {},
-    ).flatMap(([name, property]) => [name, ...schemaText(property)]),
-    ...schemaText(schema.items),
-    ...[schema.anyOf, schema.oneOf, schema.allOf].flatMap((variants) =>
-      Array.isArray(variants) ? variants.flatMap(schemaText) : [],
-    ),
-  ];
+  const text =
+    typeof schema.description === 'string' ? [schema.description] : [];
+  mapSubschemas(schema, (child, keyword, name) => {
+    if (keyword === 'properties' && name !== undefined) text.push(name);
+    text.push(...schemaText(child));
+    return child;
+  });
+  return text;
 };
 
 /** The tools of `catalog` that match `query`, best first; ties keep catalog

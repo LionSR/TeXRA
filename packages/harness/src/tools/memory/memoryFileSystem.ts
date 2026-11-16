@@ -41,7 +41,7 @@ import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
 import { StorageFs } from '@platform/rootedFs';
 import type { MemoryViewItem } from '@shared/tools/memoryView';
-import { absentReason, pathExists } from '@utils/files/fsEntryExists';
+import { meansAbsent, pathExists } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { splitContentLines } from '@utils/text/stringUtils';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -59,17 +59,19 @@ interface MemoryWalkOptions {
   includeDirs?: boolean;
 }
 
-/** One filesystem entry discovered while walking the memory tree. */
-interface MemoryWalkEntry {
+/** One filesystem entry discovered while walking the memory tree: a
+ *  directory, or a file with its frontmatter metadata (null when it has
+ *  none). */
+type MemoryWalkEntry = {
   /** Path relative to the walk root. */
-  relativePath: string;
-  storagePath: string;
-  size: number;
-  mtime: number;
-  isDir: boolean;
-  /** Frontmatter metadata for files; always null for directories. */
-  meta: MemoryFileMeta | null;
-}
+  readonly relativePath: string;
+  readonly storagePath: string;
+  readonly size: number;
+  readonly mtime: number;
+} & (
+  | { readonly isDir: true; readonly meta: null }
+  | { readonly isDir: false; readonly meta: MemoryFileMeta | null }
+);
 
 /**
  * Does a memory path exist? The one existence probe every caller shares.
@@ -183,7 +185,7 @@ const readMemoryMeta = Effect.fn('memoryFileSystem.readMemoryMeta')(
         }),
       ),
       Effect.catch((cause) =>
-        (absentReason(cause) ? Effect.logDebug : Effect.logWarning)(
+        (meansAbsent(cause) ? Effect.logDebug : Effect.logWarning)(
           `Skipping attribution for unreadable memory file ${storagePath}`,
         ).pipe(
           withLogChannel(CHANNEL),

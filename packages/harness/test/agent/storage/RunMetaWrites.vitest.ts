@@ -1,7 +1,7 @@
 import { layer } from '@effect/vitest';
 import { Effect, Context, Schema } from 'effect';
 import { expect } from 'vitest';
-import { RunIdSchema, qualifyAggregateId } from '@texra-ai/harness/schemas';
+import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { endRunRows } from '@agent/storage/runLifecycle';
 import { Inbox } from '@agent/followUp/Inbox';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
@@ -18,7 +18,7 @@ const id = Schema.decodeUnknownSync(RunIdSchema)('bbb001');
 const startedSession = Effect.gen(function* () {
   const session = yield* isolatedTestSession();
   yield* publishTestRunStart(session, id);
-  yield* Context.get(session, SessionLog).settled;
+  yield* Context.get(session, SessionLog).drained;
   return session;
 });
 
@@ -39,7 +39,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                   {
                     type: 'run.description',
                     by: 'model',
-                    aggregateId: qualifyAggregateId('run', id),
+                    aggregateId: id,
                     description: 'A described session',
                   },
                 ]),

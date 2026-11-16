@@ -70,7 +70,7 @@ const categories = [
       'memory',
       'plan',
       'agent',
-      'document_task',
+      'program',
       'script',
       'executions',
       'accept_run_files',

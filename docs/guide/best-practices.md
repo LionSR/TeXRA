@@ -24,7 +24,7 @@ Explicitly protect macros, labels, theorem numbering, and settled sections:
 
 ### Separate content derivations from prose polishing
 
-Run derivation, proof, or literature tasks (`research`, `devise`, `prover`, `lean`, or the Orchestrator) first. Once the technical claims and equations are settled, run `polish` or `correct` on the finished `.tex` file.
+Run derivation, proof, or literature tasks (`research`, `prover`, `lean`, or the Orchestrator) first. Once the technical claims and equations are settled, ask for a polish or a proofread of the finished `.tex` file (the `edit` program).
 
 ## Model selection
 
@@ -49,7 +49,7 @@ project/
 ```
 
 - **Keep an `AGENTS.md` at the workspace root**: record project-wide notation conventions, custom macros, compilation commands, and forbidden edits so every agent session inherits them automatically.
-- **Attach only the files a document task needs**: put the target `.tex` file in **Input** and shared preamble or `.bib` files in **Context**.
+- **Give a program only the files it needs**: the target `.tex` file as input and shared preamble or `.bib` files as context.
 - **Format before running `latexdiff`**: run `latexindent` or `tex-fmt` before comparing revisions so line-wrapping differences do not obscure prose edits.
 - **Archive milestone revisions**: use **Archive outputs to History** in the ProgressBoard menu to copy key revisions into `History/`, and delete stale run folders when no longer needed.
 

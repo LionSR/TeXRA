@@ -9,13 +9,12 @@
  */
 import { Effect } from 'effect';
 
-import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { checkpointRefusal } from '@agent/storage/resumability';
 import { endRunRows } from '@agent/storage/runLifecycle';
 import { owningCall } from '@agent/storage/runOwnership';
 import { logFailure } from '@logger/effectLog';
 import { DELIVERY_FAMILY } from '@shared/deliveryTags';
-import { RUN_OUTCOME } from '@shared/schemas';
+import { describeRefusal, RUN_OUTCOME } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
 import { SessionViewAccess, SessionLog } from '@shared/session/runHistory';
 
@@ -72,7 +71,7 @@ const closeLeftoverRun = Effect.fn('closeLeftoverRun')(function* (
   const facts = yield* (yield* SessionLog).facts(run.id);
   if (facts === null || facts.end !== null) return;
   if ((yield* owningCall(run.id)) !== null) return;
-  const parentRunId = parent.runId;
+  const parentId = parent.runId;
   const report = (why: string) => reportInterrupted(run, why);
   const rejection = yield* checkpointRefusal(run.id);
   if (rejection !== null) return yield* report(rejection.kind);
@@ -83,12 +82,12 @@ const closeLeftoverRun = Effect.fn('closeLeftoverRun')(function* (
     logFailure(
       CHANNEL,
       `Child run ${run.id} ${what}`,
-    )({ parent: parentRunId, error });
+    )({ parent: parentId, error });
   yield* Effect.forkScoped(
     Effect.matchEffect(resumeRun(run.id, {}), {
       onSuccess: (answer) =>
         'failed' in answer && answer.failed.kind !== 'blocked'
-          ? report(describeFollowUpFailure(answer.failed.kind))
+          ? report(describeRefusal(answer.failed))
           : Effect.void,
       onFailure: told('was not resumed'),
     }).pipe(Effect.catch(told('was not reported interrupted'))),
@@ -101,7 +100,7 @@ export const resumeLeftoverChildren = Effect.fn('resumeLeftoverChildren')(
     const parent = yield* AgentRun;
     // The listing with this run's activation applied: a child is started
     // under a run the view reads as running, not as stopped.
-    yield* (yield* SessionLog).settled;
+    yield* (yield* SessionLog).drained;
     const { runs } = yield* (yield* SessionViewAccess).read([]);
     for (const child of runs.values())
       if (child.parentId === parent.runId)

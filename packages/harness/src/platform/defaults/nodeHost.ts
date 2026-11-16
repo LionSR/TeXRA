@@ -6,7 +6,7 @@
  * root and opens its config stores where it reads them. A plugin's language
  * server adapter is not here: each Node root hands its layer to
  * `processLayer`. The SDK's default platform writes its in-memory roots
- * itself (`sdkPlatform.ts`).
+ * itself (`nodePlatform.ts`).
  */
 
 // Third-party imports

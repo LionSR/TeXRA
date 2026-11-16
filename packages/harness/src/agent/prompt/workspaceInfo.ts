@@ -8,13 +8,14 @@ import { DateTime, Effect } from 'effect';
 // Local imports
 import { escapeTextStrict } from '@shared/utils/xmlEscape';
 import { listExternalRoots } from '@utils/files/externalRoots';
-import { executeCommand } from '@utils/system/execUtils';
+import {
+  currentBranch,
+  isGitRepository,
+  workTreeDirty,
+} from '@utils/system/git';
 import { envVar } from '@utils/system/envFlags';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import { runsInWsl } from '@utils/system/wslDetect';
-
-/** Timeout for git commands in milliseconds. */
-const GIT_TIMEOUT_MS = 3000;
 
 interface GitInfo {
   branch: string | null;
@@ -54,42 +55,20 @@ function getPlatformLabel(): string {
 }
 
 /**
- * Gather git repository information for the workspace.
- * Returns null if the workspace is not a git repo or git is unavailable.
+ * Gather git repository information for the workspace: null when it is not
+ * a work tree, or when git cannot say whether it is dirty (a timeout must not
+ * read as clean).
  */
 const getGitInfo = Effect.fn(function* (workspaceRoot: string) {
-  const opts = { cwd: workspaceRoot, timeout: GIT_TIMEOUT_MS };
-  const runGit = (...args: string[]) => executeCommand(['git', ...args], opts);
-
-  // Deliberately not isGitRepository(): that also requires stdout === 'true',
-  // which excludes bare repos and paths inside .git, where `git rev-parse`
-  // exits 0 but prints false. Those still have a usable branch and history, so
-  // gate on exit status only and let the branch/status calls below decide.
-  // All three run at once; the branch and status answers are dropped when
-  // rev-parse failed.
-  const [insideWorkTree, branchResult, statusResult] = yield* Effect.all(
+  const [inside, branch, dirty] = yield* Effect.all(
     [
-      runGit('rev-parse', '--is-inside-work-tree'),
-      runGit('symbolic-ref', '--short', 'HEAD'),
-      runGit('status', '--porcelain'),
+      isGitRepository(workspaceRoot),
+      currentBranch(workspaceRoot),
+      workTreeDirty(workspaceRoot),
     ],
     { concurrency: 'unbounded' },
   );
-  if (!insideWorkTree.success) return null;
-
-  // Unlike a non-zero exit (e.g. detached HEAD), a timeout means we couldn't
-  // determine dirty/branch state at all — report unknown (null) rather than
-  // silently defaulting `dirty` to false, which would misreport a repo as
-  // clean when `git status` merely timed out.
-  if (branchResult.timedOut || statusResult.timedOut) return null;
-
-  const branch = branchResult.success ? branchResult.stdout : null;
-  // execUtils normalizes empty/whitespace-only output to the empty string
-  // (see the ExecResult.stdout contract in packages/harness/src/shared/schemas/opResults.ts),
-  // so a clean `git status --porcelain` yields an empty string and that
-  // test is what distinguishes clean from dirty.
-  const dirty = statusResult.success && statusResult.stdout !== '';
-
+  if (!inside || dirty === null) return null;
   return { branch, dirty } satisfies GitInfo;
 });
 
@@ -130,7 +109,7 @@ export const buildWorkspaceInfoBlock = Effect.fn(function* (
     lines.push(parts.join(', '));
   } else if (wsPath) {
     lines.push(
-      'Git: no repository detected or git could not be checked for this workspace; avoid git history/status checks unless you first confirm a repository exists.',
+      'Git: this workspace is not a git work tree, or git could not be checked; confirm a repository exists before running git history or status checks.',
     );
   }
 
