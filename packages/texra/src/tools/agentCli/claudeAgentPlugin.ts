@@ -17,8 +17,10 @@ import {
   claudeAgentSessionsLayer,
 } from './agentCliSessionStores';
 import {
+  installCommandLines,
   preferredInstallCommand,
   probeSdkBinaryStatus,
+  type InstallCommands,
 } from './availabilityProbes';
 import { ClaudeAgentTool } from './claudeAgent';
 import {
@@ -28,6 +30,14 @@ import {
 import type { TexraPlugin } from '../registry';
 
 const anthropicApiKeyEnv = apiKeyEnvName('anthropic');
+
+/** A global npm install leaves Windows only shims TeXRA cannot spawn, so
+ *  Windows gets winget's native binary. */
+const CLAUDE_CODE_INSTALL: InstallCommands = {
+  brew: 'brew install --cask claude-code',
+  win32: 'winget install Anthropic.ClaudeCode',
+  default: 'npm install -g @anthropic-ai/claude-code',
+};
 
 export const claudeAgent: TexraPlugin = {
   ...definePlugin<ClaudeAgentSessions>({
@@ -45,9 +55,8 @@ export const claudeAgent: TexraPlugin = {
           importSdk: importClaudeAgentSdk,
           findBinary: findClaudeBinaryPath,
           importFailedLabel: 'Claude Code SDK import failed',
-          binaryNotFoundMessage:
-            'Claude Code SDK loaded but native `claude` binary not found. ' +
-            'Install via: npm install -g @anthropic-ai/claude-code',
+          binaryLabel: 'Claude Code SDK loaded but native `claude` binary',
+          install: CLAUDE_CODE_INSTALL,
         });
         if (!status.ok)
           return { available: false, statusDetail: status.message };
@@ -106,7 +115,7 @@ export const claudeAgent: TexraPlugin = {
   // Anthropic's native text-editor tool, which the delegated agent can
   // report even though TeXRA registers no tool of that name.
   icons: { str_replace_editor: 'pencil' },
-  card: {
+  dashboard: {
     name: 'Claude Code CLI',
     description:
       'Spin off a Claude Code CLI agent that works in your workspace. It can read files, run commands, edit code, and search the web on your behalf. Use it to delegate focused exploration or implementation while another agent stays in charge.',
@@ -114,9 +123,7 @@ export const claudeAgent: TexraPlugin = {
     setup: {
       installGuide:
         'Install the Claude Code CLI (choose one):\n\n' +
-        '  npm install -g @anthropic-ai/claude-code\n' +
-        '  brew install --cask claude-code     (macOS)\n' +
-        '  winget install Anthropic.ClaudeCode (Windows)\n\n' +
+        `${installCommandLines(CLAUDE_CODE_INSTALL)}\n\n` +
         'Or use the native installer from https://claude.com/code (recommended).\n' +
         'See: https://code.claude.com/docs/en/setup\n\n' +
         'Authentication (choose one):\n' +
@@ -126,15 +133,10 @@ export const claudeAgent: TexraPlugin = {
         '  • ANTHROPIC_API_KEY    : environment variable with Console API key',
       installUrl: 'https://code.claude.com/docs/en/setup',
       get installCommand(): string {
-        return preferredInstallCommand({
-          brew: 'brew install --cask claude-code',
-          win32: 'winget install Anthropic.ClaudeCode',
-          default: 'npm install -g @anthropic-ai/claude-code',
-        });
+        return preferredInstallCommand(CLAUDE_CODE_INSTALL);
       },
       authCommand: 'claude login',
-      configNotes:
-        'Requires the native `claude` binary. Supports OAuth (`claude login`), long-lived tokens (`claude setup-token` → CLAUDE_CODE_OAUTH_TOKEN), or ANTHROPIC_API_KEY (resolved from TeXRA Settings → API Keys or the environment).',
+      configNotes: 'Requires the native `claude` binary.',
       authNote: 'OAuth, OAuth token, or API key',
     },
   },
