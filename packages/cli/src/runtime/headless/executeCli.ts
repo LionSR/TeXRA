@@ -319,8 +319,16 @@ export const executeCliConfig: (
       shutdownStatusScope,
       shutdownStatus.pipe(
         // The step's one deadline: the same budget a session close spends,
-        // so a run that never unwinds cannot hold SIGTERM open.
-        Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
+        // so a run that never unwinds cannot hold SIGTERM open. Running out
+        // of it skips the resume command, so the expiry is said instead.
+        Effect.timeoutOrElse({
+          duration: SESSION_CLOSE_DEADLINE_MS,
+          orElse: () =>
+            sayShutdownFailure(
+              `The run did not finish stopping within ${SESSION_CLOSE_DEADLINE_MS} ms`,
+              `run ${launchRunId} is left as its rows stand; \`${runContext.commandName} history show ${launchRunId}\` says whether it can be resumed`,
+            ),
+        }),
         Effect.catchCause((cause) =>
           sayShutdownFailure(
             "The run's shutdown step failed; the exit does not wait for its finalization",
