@@ -94,8 +94,6 @@ interface Window {
   readonly capabilities: ReadonlySet<HostCapability>;
   focusedAt: number;
   readonly frames: Queue.Queue<HostAttachFrame>;
-  /** The calls it has not answered yet, by call id. */
-  readonly pending: Map<string, Deferred.Deferred<unknown, WindowCallFailed>>;
 }
 
 /** The project folder a session holds, or its store for a session with
@@ -105,8 +103,15 @@ const projectOf = (session: Session): string =>
 
 const make = Effect.fn('make')(function* (editors: EditorHostShape) {
   const windows = new Set<Window>();
-  /** Every unanswered call's window, by call id. */
-  const calls = new Map<string, Window>();
+  /** Every unanswered call, by call id: the window asked and what its
+   *  answer completes. */
+  const calls = new Map<
+    string,
+    {
+      readonly window: Window;
+      readonly answered: Deferred.Deferred<unknown, WindowCallFailed>;
+    }
+  >();
 
   /** The window a call of `key`'s project goes to. */
   const target = (key: string, capability: HostCapability) => {
@@ -153,8 +158,7 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
             }),
           );
         const id = randomUUID();
-        window.pending.set(id, answered);
-        calls.set(id, window);
+        calls.set(id, { window, answered });
         return Effect.succeed({ window, id });
       }),
       ({ window, id }) =>
@@ -178,11 +182,7 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
             ),
           ),
         ),
-      ({ window, id }) =>
-        Effect.sync(() => {
-          window.pending.delete(id);
-          calls.delete(id);
-        }),
+      ({ id }) => Effect.sync(() => calls.delete(id)),
     );
     const parsed = Schema.decodeUnknownResult(result)(value);
     if (!Result.isSuccess(parsed))
@@ -197,17 +197,17 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
    *  when no window of it is left. */
   const detach = Effect.fn('detach')(function* (window: Window) {
     windows.delete(window);
-    for (const [id, pending] of window.pending) {
+    for (const [id, call] of calls) {
+      if (call.window !== window) continue;
       calls.delete(id);
       yield* Deferred.fail(
-        pending,
+        call.answered,
         new WindowCallFailed({
           reason: 'detached',
           message: 'The TeXRA window closed before it answered.',
         }),
       );
     }
-    window.pending.clear();
     if (![...windows].some((other) => other.key === window.key))
       yield* Effect.logWarning(
         `No TeXRA window of ${window.project} is attached: its tasks run without diagnostics, inline criticism or PDF opening until one attaches.`,
@@ -228,7 +228,7 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
       },
     };
   };
-  /** What `session`'s project's windows offer its runs' editor tools,
+  /** What `key`'s project's windows offer its runs' editor tools,
    *  routed to the window focused last that offers each. */
   const editorOf = (key: string): EditorCapabilities => ({
     get readDiagnostics(): EditorCapabilities['readDiagnostics'] {
@@ -292,7 +292,6 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
           capabilities: new Set(capabilities),
           focusedAt: yield* Clock.currentTimeMillis,
           frames: yield* Queue.unbounded<HostAttachFrame>(),
-          pending: new Map(),
         };
         windows.add(window);
         yield* Effect.addFinalizer(() => detach(window));
@@ -310,7 +309,7 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
     );
   const answer = (id: string, reply: HostAnswer) =>
     Effect.suspend(() => {
-      const pending = calls.get(id)?.pending.get(id);
+      const pending = calls.get(id)?.answered;
       if (pending !== undefined)
         return (
           reply.ok
