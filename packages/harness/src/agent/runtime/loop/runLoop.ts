@@ -151,7 +151,7 @@ const foreignProtocol = (
  * already holds history state is refused.
  * The caller opens a cell whose state has no position.
  */
-export const openRun = Effect.fn('toolUse.openRun')(function* (
+const openRun = Effect.fn('toolUse.openRun')(function* (
   runId: RunId,
   resume: boolean,
 ): Effect.fn.Return<
@@ -207,7 +207,7 @@ export const openRun = Effect.fn('toolUse.openRun')(function* (
 });
 
 /** What a run program, and each of its turns, returns. */
-export type RunExit = {
+type RunExit = {
   readonly state: RunState;
   readonly outcome: RunOutcome;
 };
@@ -218,7 +218,7 @@ export type RunExit = {
  * it commits with the run's `run.end` (`endRunRows`), so no reader ever
  * sees a stopped run without its end.
  */
-export const settleRun =
+const settleRun =
   (
     cell: RunCell,
     /** The run's own input lease. */
