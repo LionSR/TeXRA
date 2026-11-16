@@ -14,7 +14,7 @@
 | Entry                                  | Environment  | Exports                                                                                                                                                                                                         |
 | -------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **[`@texra-ai/llm`](./llm/)**          | Browser-safe | `Model`, `TurnRequest`, `ResolvedTurn`, `TurnEvent`, `TurnResult`, `completedTurn`, `ModelError`, `selectModel`, `MODEL_PROVIDER_PLUGINS`, `decideModelRoute`, `chooseReasoning`, `turnCost`, `CredentialStore` |
-| **[`@texra-ai/llm/node`](./llm/node)** | Node.js      | `bindModel(spec)`, `BindSpec`, `Binding`, `ModelCredential`, ChatGPT (`codex`) and Grok (`xai`) OAuth sign-in flows and `SubscriptionCoordinator`s                                                              |
+| **[`@texra-ai/llm/node`](./llm/node)** | Node.js      | `bindModel(spec)`, `BindSpec`, `Binding`, and `SubscriptionAccounts`: the ChatGPT and Grok accounts, each running its own browser (and Grok's device-code) sign-in                                              |
 
 `bindModel` loads its protocol module on demand (`import('./api/<protocol>.js')`), so a process only loads the SDK of the provider it binds, and the published `.d.ts` files never expose vendor SDK types.
 
@@ -45,10 +45,7 @@ const program = Effect.gen(function* () {
   const binding = yield* bindModel({
     model: selected.config,
     route,
-    credential: {
-      kind: 'api-key',
-      apiKey: process.env.ANTHROPIC_API_KEY ?? '',
-    },
+    bearer: process.env.ANTHROPIC_API_KEY ?? '',
   });
 
   const turn = yield* binding.model.prepareTurn({

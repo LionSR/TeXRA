@@ -299,98 +299,91 @@ interface AnsweredCall {
   readonly result: ToolMessage['results'][number];
 }
 
-/**
- * Each tool message of `messages` with its results paired to the calls they
- * answer: the local calls of the assistant message before it, by
- * `callOrdinal`, the pairing `checkPreparedHistory` requires. Keyed by the
- * tool message itself, which `replayableHistory` passes through, so a
- * lowerer reads it for the message it lowers. A tool message whose results
- * answer no call there is absent.
- */
-export function answeredCalls(
-  messages: readonly HistoryMessage[],
-): ReadonlyMap<ToolMessage, readonly AnsweredCall[]> {
-  const answered = new Map<ToolMessage, readonly AnsweredCall[]>();
-  for (const [index, message] of messages.entries()) {
-    if (message.role !== 'tool') continue;
-    const previous = messages[index - 1];
-    const calls =
-      previous?.role === 'assistant'
-        ? previous.content.flatMap((part) =>
-            part.kind === 'local-call' ? [part] : [],
-          )
-        : [];
-    const pairs = message.results.flatMap((result) => {
-      const call = calls.at(result.callOrdinal);
-      return call === undefined || result.callOrdinal < 0
-        ? []
-        : [{ call, result }];
-    });
-    if (pairs.length === message.results.length) answered.set(message, pairs);
-  }
-  return answered;
-}
+/** A history entry as a codec lowers it: a tool entry carries each result
+ *  with the call it answers. */
+type LowerableMessage =
+  | Exclude<HistoryMessage, ToolMessage>
+  | { readonly role: 'tool'; readonly answered: readonly AnsweredCall[] };
 
-/** The pairs of tool message `message`, or the refusal of a history whose
- *  results answer no call (one `checkPreparedHistory` refuses). */
-export function callsAnsweredBy(
-  answered: ReadonlyMap<ToolMessage, readonly AnsweredCall[]>,
-  message: ToolMessage,
-): Effect.Effect<readonly AnsweredCall[], ModelError> {
-  const pairs = answered.get(message);
-  return pairs === undefined
-    ? Effect.fail(
-        new ModelError({
-          kind: 'invalid-request',
-          message:
-            'A tool result answers no local call of the assistant message before it.',
-        }),
-      )
-    : Effect.succeed(pairs);
+/** The content of what another model of the turn's protocol wrote, as the
+ *  turn's model can take it: no reasoning, item ids or refusal marking. */
+function plainContent(
+  message: Extract<HistoryMessage, { readonly role: 'assistant' }>,
+): typeof message.content {
+  return message.content.flatMap((part): (typeof message.content)[number][] => {
+    if (part.kind === 'reasoning') return [];
+    const { evidence: _, ...plain } = part;
+    if (plain.kind === 'local-call') return [plain];
+    return [
+      {
+        ...plain,
+        content: plain.content.map(({ text }) => ({
+          kind: 'text' as const,
+          text,
+        })),
+      },
+    ];
+  });
 }
 
 /**
- * The history every codec lowers for a turn bound to `turn`: what another
- * model of the turn's own protocol wrote (a mid-run model switch) replays as
- * plain content, without that model's reasoning, item ids or refusal
- * marking, none of which the new model can take. An assistant entry that
- * leaves nothing is dropped, and the user entries it separated are joined.
- * Another protocol's evidence passes through for the codec to refuse. Below
- * the resolved turn, so the recorded request is not what changes.
+ * The history every codec lowers for a turn bound to `turn`, from entry
+ * `from` on (the entries before it are a stored continuation's):
+ *
+ * - each tool entry's results are paired with the calls they answer, the
+ *   local calls of the assistant entry before it by `callOrdinal` (the
+ *   pairing `checkPreparedHistory` requires); a result that answers no call
+ *   is an invalid request;
+ * - what another model of the turn's own protocol wrote (a mid-run model
+ *   switch) replays as plain content, without that model's reasoning, item
+ *   ids or refusal marking, none of which the new model can take. An
+ *   assistant entry that leaves nothing is dropped, and the user entries it
+ *   separated are joined. Another protocol's evidence passes through for the
+ *   codec to refuse.
+ *
+ * Below the resolved turn, so the recorded request is not what changes.
  */
-export function replayableHistory(
+export const replayableHistory = Effect.fn('llm.replayableHistory')(function* (
   messages: readonly HistoryMessage[],
   turn: ModelOrigin,
-): readonly HistoryMessage[] {
-  const out: HistoryMessage[] = [];
+  from = 0,
+): Effect.fn.Return<readonly LowerableMessage[], ModelError> {
+  const out: LowerableMessage[] = [];
   let dropped = false;
-  for (const message of messages) {
-    let next = message;
-    if (
+  for (const [index, message] of messages.entries()) {
+    if (index < from) continue;
+    let next: LowerableMessage;
+    if (message.role === 'tool') {
+      const previous = messages[index - 1];
+      const calls =
+        previous?.role === 'assistant'
+          ? previous.content.flatMap((part) =>
+              part.kind === 'local-call' ? [part] : [],
+            )
+          : [];
+      const answered: AnsweredCall[] = [];
+      for (const result of message.results) {
+        const call =
+          result.callOrdinal < 0 ? undefined : calls.at(result.callOrdinal);
+        if (call === undefined)
+          return yield* new ModelError({
+            kind: 'invalid-request',
+            message:
+              'A tool result answers no local call of the assistant message before it.',
+          });
+        answered.push({ call, result });
+      }
+      next = { role: 'tool', answered };
+    } else if (
       message.role === 'assistant' &&
       message.origin?.protocol === turn.protocol &&
       !sameModelOrigin(message.origin, turn)
     ) {
-      const content = message.content.flatMap(
-        (part): (typeof message.content)[number][] => {
-          if (part.kind === 'reasoning') return [];
-          const { evidence: _, ...plain } = part;
-          if (plain.kind === 'local-call') return [plain];
-          return [
-            {
-              ...plain,
-              content: plain.content.map(({ text }) => ({
-                kind: 'text' as const,
-                text,
-              })),
-            },
-          ];
-        },
-      );
+      const content = plainContent(message);
       dropped = content.length === 0;
       if (dropped) continue;
       next = { ...message, content };
-    }
+    } else next = message;
     const previous = out.at(-1);
     if (dropped && next.role === 'user' && previous?.role === 'user') {
       dropped = false;
@@ -404,7 +397,7 @@ export function replayableHistory(
     out.push(next);
   }
   return out;
-}
+});
 const PrefixSchema = Schema.Struct({
   coveredMessages: Schema.Int.check(Schema.isGreaterThan(0)),
   prefixFingerprint: Schema.String.check(Schema.isPattern(/^[a-f0-9]{64}$/)),
@@ -433,13 +426,7 @@ export const ResponsesContinuationSchema = PrefixSchema.mapFields(
         protocol: Schema.Literal('openai-responses'),
       }),
     ),
-    // Only a stored anchor is durable: a connection-scoped one dies with its
-    // socket, so a persisted value must not be able to carry one.
-    anchor: ResponsesAnchorSchema.mapFields(
-      Struct.assign({
-        kind: Schema.Literal('stored'),
-      }),
-    ),
+    anchor: ResponsesAnchorSchema,
   }),
 );
 /** Provider acceleration of an exact prefix, never the conversation authority. */
