@@ -11,8 +11,8 @@ import type { Plugin } from '@tools/plugins';
 import type { PromptSection } from '@tools/toolTable';
 
 // Local imports - utilities
-import { renderPrompt } from '@utils/prompt';
-import { loadAgentsMd } from '@utils/files/agentsMd';
+import { renderPrompt } from '@agent/prompt/promptRender';
+import { loadAgentsMd } from '@agent/prompt/agentsMd';
 import { buildWorkspaceInfoBlock } from './workspaceInfo';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

@@ -198,7 +198,7 @@ export type { StepRoot } from '@utils/files/externalRoots';
 export type { ToolRun } from '@agent/core/tools/ToolTypes';
 export type { ToolPolicy } from '@agent/runtime/run/AgentRun';
 // Renders a prompt template (Nunjucks) with its variables.
-export { renderPrompt } from '@utils/prompt';
+export { renderPrompt } from '@agent/prompt/promptRender';
 export {
   TEMPLATE_INPUT_NAMES,
   type TemplateInputs,
