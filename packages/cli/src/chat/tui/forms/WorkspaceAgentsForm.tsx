@@ -11,7 +11,6 @@ import {
   agentKeyOf,
   formatResultCount,
   type WorkspaceAgentsSelection,
-  joinFacts,
 } from '@texra-ai/harness/schemas';
 import {
   readCliWorkspaceAgents,

@@ -42,7 +42,6 @@ import {
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import { defineTool, type DefinedTool } from '@tools/core/definition';
 import { errorResult, executed } from '@tools/core/result';
-import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { sha256 } from '@utils/core/idHash';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -305,17 +304,9 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     launch.workingDirectory ?? undefined,
   );
   if (unusable) return unusable;
-  const schema = launch.program === null ? launch.schema : null;
-  const outputSchema =
-    schema == null
-      ? undefined
-      : yield* Effect.try({
-          try: () => normalizeStructuredOutputSchema(schema).jsonSchema,
-          catch: (error) =>
-            new ToolError(
-              `\`schema\` is not a supported object-root JSON Schema: ${toErrorMessage(error)}`,
-            ),
-        });
+  const outputSchema = yield* childOutputSchema(
+    launch.program === null ? launch.schema : null,
+  );
   // The call's files: a run-storage file must be this run's own or a declared
   // output of a completed child of it; a program's files pass as named.
   const trusted = programOf(run.config) !== null;
