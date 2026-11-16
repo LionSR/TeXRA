@@ -693,6 +693,14 @@ interface FactKind {
 }
 ```
 
+## FactKinds
+
+The plugin fact kinds a store reads, by `plugin/kind`.
+
+```ts
+type FactKinds = Readonly<Record<FactName, FactKind>>;
+```
+
 ## fileList
 
 A list of file paths, empty when the call names none.

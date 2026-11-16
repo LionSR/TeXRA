@@ -49,6 +49,7 @@ export { AGENT_TOOL_NAME } from '@shared/schemas';
 export {
   definePlugin,
   type FactKind,
+  type FactKinds,
   type Plugin,
   type PluginDefinition,
   type PluginRow,

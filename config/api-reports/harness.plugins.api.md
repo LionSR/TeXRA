@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/plugins.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 134
+Exports: 135
 
 - `AGENT_TOOL_NAME` — `const AGENT_TOOL_NAME: "agent"`
 - `AgentBlock` — `interface AgentBlock<A = unknown, R = unknown> { readonly key: string; readonly schema: Schema.Codec<A, unknown>; readonly result?: AgentBlockResult<R>; files?(block: A): readonly string[]; }`
@@ -36,6 +36,7 @@ Exports: 134
 - `errorResult` — `function errorResult: (error: string, extra?: Omit<{ readonly attachmentSummary?: string | undefined; readonly error: string; readonly name?: string | undefined; readonly status: "error"; readonly summary?: string | undefined; readonly userInstruction?: string | undefined; }, "error" | "status"> | undefined) => { readonly attachmentSummary?: string | undefined; readonly error: string; readonly name?: string | undefined; readonly status: "error"; readonly summary?: string | undefined; readonly userInstruction?: string | undefined; }`
 - `executed` — `function executed: (output: string, summary?: string | undefined) => { readonly attachmentSummary?: string | undefined; readonly consumedFollowUps?: readonly string[] | undefined; readonly edits?: readonly { readonly lineChanges?: undefined | { readonly added: number; readonly removed: number; }; readonly path: string; readonly startLine?: number | undefined; }[] | undefined; readonly endTurn?: boolean | undefined; readonly facts?: readonly { readonly aggregate?: string | undefined; readonly kind: string; readonly plugin: string; readonly value: Json; readonly version: number; }[] | undefined; readonly files?: readonly { readonly [x: string]: unknown; readonly base64Data?: string | undefined; readonly bytes?: Uint8Array<ArrayBuffer> | undefined; readonly description?: string | undefined; readonly digest?: string | undefined; readonly mimeType: string; readonly path: string; }[] | undefined; readonly output?: string | undefined; readonly reads?: readonly string[] | undefined; readonly reuseKey?: string | undefined; readonly reusedFrom?: string | undefined; readonly status: "executed"; readonly summary?: string | undefined; readonly userInstruction?: string | undefined; readonly value?: Json | undefined; }`
 - `FactKind` — `interface FactKind { readonly plugin: string; readonly kind: string; readonly version: number; readonly schema: Schema.Codec<unknown, unknown>; readonly fork: 'copy' | 'drop'; readonly accepts?: (previous: PluginRow | undefined, next: PluginRow) => string | null; readonly supersedes?: (latest: PluginRow, next: PluginRow) => boolean; readonly writes?: (value: JsonValue) => readonly string[]; }`
+- `FactKinds` — `type FactKinds = Readonly<Record<FactName, FactKind>>; ≡ Readonly<Record<string & Brand<"FactName">, FactKind>>`
 - `fileList` — `const fileList: (description: string) => decodeTo<toType<$Array<String>>, optional<NullOr<$Array<String>>>, never, never>`
 - `fileOps` — `const fileOps: (options?: { readonly writeFilter?: WriteFilter | undefined; }) => Plugin`
 - `FollowUpSenderInput` — `type FollowUpSenderInput = Exclude<FollowUpSender, { readonly kind: 'run'; }> | { readonly kind: 'run'; readonly runId: RunId; }; ≡ FollowUpSenderInput`
