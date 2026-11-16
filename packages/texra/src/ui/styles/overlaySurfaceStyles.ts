@@ -1,25 +1,27 @@
 import { css, type CSSResult } from 'lit';
 
 /**
- * Chrome shared by a full-bleed overlay surface — a bottom sheet or a side
- * drawer: the host fills its container, a `.scrim` dims everything behind
- * it, and `.overlay-header`/`.overlay-title` lay out the title-plus-close
- * row. `ToolsSheet` and `SessionDrawer` each defined this independently
- * (`.sheet-header`/`.drawer-header` were byte-for-byte identical); this is
- * the one definition. Each surface still sets its own `:host` z-index and
- * `.scrim` tint, and its own panel geometry (bottom sheet vs. side panel) —
- * those aren't shared because they differ by design, not by drift.
+ * Chrome shared by the two `wa-drawer` overlays (the Tasks drawer and the
+ * Tools sheet). The drawer owns the backdrop, Escape, light dismiss and the
+ * focus trap; these rules hand its body to the surface's own column and lay
+ * out the title-plus-close row each surface draws in place of the drawer's
+ * header. Each surface still sets the drawer's `--size`.
  */
 export const overlaySurfaceStyles: CSSResult = css`
+  /* The drawer renders in the top layer; the host takes no room. */
   :host {
-    position: absolute;
-    inset: 0;
-    display: block;
+    display: contents;
   }
 
-  .scrim {
-    position: absolute;
-    inset: 0;
+  wa-drawer {
+    --spacing: 0;
+  }
+
+  wa-drawer::part(body) {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .overlay-header {
