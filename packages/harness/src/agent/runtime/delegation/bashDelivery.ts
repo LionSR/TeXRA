@@ -28,7 +28,7 @@ const OUTPUT_PREVIEW_LINES = 20;
  * preview. The gap between head and tail is stated so the model doesn't
  * mistake the excerpt for the complete stream.
  */
-export const BACKGROUND_OUTPUT = { head: 1_000, tail: 12_000 } as const;
+export const BACKGROUND_OUTPUT = Object.freeze({ head: 1_000, tail: 12_000 });
 
 /** The call a background command came from: what it runs, and the
  *  model's short description of it, which names it in the transcript. */

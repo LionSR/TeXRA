@@ -17,7 +17,10 @@ const MAX_TOOL_RESULT_TEXT_LENGTH = 200_000;
  * it wholesale. Head is small (just enough to name the invoked engine/file);
  * tail is large because build errors cluster at the end of long logs.
  */
-export const TOOL_RESULT_TRUNCATION = { head: 4_000, tail: 50_000 } as const;
+export const TOOL_RESULT_TRUNCATION = Object.freeze({
+  head: 4_000,
+  tail: 50_000,
+});
 
 /**
  * The summary of an attachment set the model must read back itself: the list
