@@ -565,12 +565,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   public readonly showProgressView = Effect.fn(
     'ProgressViewProvider.showProgressView',
-  )({ self: this }, function* (options?: { inPlace?: boolean }) {
+  )({ self: this }, function* () {
     if (this.surfaces.editor) {
       this.surfaces.editor.view.reveal(vscode.ViewColumn.One);
       return;
     }
-    if (!options?.inPlace) yield* this.showInSidebar();
+    yield* this.showInSidebar();
     // Each surface decides from its own selection: one on the New-task
     // state opens the newest session, one showing a session keeps it.
     const newest = this.runSession.view.current().order.at(0);

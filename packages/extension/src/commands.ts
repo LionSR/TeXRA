@@ -195,17 +195,7 @@ export function registerCommands(
     'texra.compileTikzFigures': () => handleCompileTikzFigures(roots),
     'texra.cloneOverleafProject': () => cloneOverleafProject(),
     'texra.removeApiKey': () => removeApiKey(roots),
-    'texra.showProgressView': definedHandler(
-      Schema.Tuple([
-        Schema.optional(
-          Schema.Struct({ inPlace: Schema.optional(Schema.Boolean) }),
-        ),
-      ]),
-      (_, options?: { inPlace?: boolean }) =>
-        progressViewProvider.showProgressView({
-          inPlace: options?.inPlace ?? false,
-        }),
-    ),
+    'texra.showProgressView': () => progressViewProvider.showProgressView(),
     'texra.setApiKey': setApiKeyHandler(roots),
     // Without a configuration the command is the composer's accelerator
     // (Cmd+Alt+E): its Send, in the view the user is in. With one, it starts
