@@ -59,8 +59,8 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
   function* (input: { config: AgentConfig }) {
     const fullConfig = input.config;
     const roots = yield* SessionRoots;
-    // A persona the config carries (its schema admitted it) is the agent;
-    // a named one resolves over a settled catalog, and a miss says why: a
+    // A persona the config carries (its schema accepted it) is the agent;
+    // a named one resolves over a finished catalog, and a miss says why: a
     // plugin agent's by its plugin's install record (a launch may record
     // the source-qualified spelling, `plugin:acme:x`).
     const agentEntry =

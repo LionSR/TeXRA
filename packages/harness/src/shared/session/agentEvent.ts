@@ -8,7 +8,7 @@
  * the session event schema (the trace cases are spliced in there). Every case below is that
  * declaration minus the aggregate qualification: the aggregate is the run,
  * and `runEventDraft` adds it back at publication. The one arm the session
- * plane does not carry is the transient `stream.chunk` (never a session row;
+ * layer does not carry is the transient `stream.chunk` (never a session row;
  * text travels through the session graph). The terminal `run.end` row is
  * not a trace arm: the storage finalizer writes it once, and the in-memory
  * `ResultEvent` below is that row named by its run.
@@ -21,7 +21,7 @@ import type { RunId, SessionRowDraft, TRACE_ROW_TYPES } from '@shared/schemas';
 
 /** One session arm as the trace carries it, distributive over `T`: an
  *  {@link AgentEvent} arm, or the `run.end` a {@link ResultEvent} names. A
- *  row the run's state is folded from is never one: the trace is the
+ *  row the run's state is applied from is never one: the trace is the
  *  display door, and those rows commit through the run's cell
  *  (`runEventDraft`, typed to an unfolded draft, refuses any other). */
 export type TraceRow<T extends (typeof TRACE_ROW_TYPES)[number] | 'run.end'> =

@@ -1,6 +1,6 @@
 /**
  * Fork: a new root run whose history is another run's model view at a
- * settled position. The new run's `run.start` names where its history came
+ * finished position. The new run's `run.start` names where its history came
  * from (`provenance: { kind: 'fork', from, at }`), and its first run history
  * row is the `context.edit` that seeds that view, followed by the loop state
  * a resume restores and a `waiting` position: the fork is a conversation
@@ -56,11 +56,11 @@ const isQuiet = (state: RunState): boolean =>
   );
 
 /**
- * Whether the run stands at a settled position: at a turn boundary,
+ * Whether the run stands at a finished position: at a turn boundary,
  * with no invocation (nor its retry), response (nor its calls) or undecided
  * request. A cut anywhere else would carry a result nobody produced.
  */
-const isSettled = (state: RunState): boolean =>
+const isAtTurnBoundary = (state: RunState): boolean =>
   // Input taken for a turn that has not run (`turn.ready`) is inside it.
   (state.at === 'waiting' || state.at === 'turn.end') && isQuiet(state);
 
@@ -106,35 +106,37 @@ const cutOf = Effect.fn('forkRun.cut')(function* (
     return yield* refused(`The ${noun} ${from} has no recorded start.`);
   }
   // The cut is a position row: a turn boundary of the source, not any seq.
-  const parks = (yield* log.runRows(aggregate, 'positions')).positions.filter(
-    (row) =>
-      before === undefined
-        ? row.payload.at === 'waiting'
-        : row.commit < before &&
-          ['waiting', 'turn.begin'].includes(row.payload.at),
+  const boundaries = (yield* log.runRows(
+    aggregate,
+    'positions',
+  )).positions.filter((row) =>
+    before === undefined
+      ? row.payload.at === 'waiting'
+      : row.commit < before &&
+        ['waiting', 'turn.begin'].includes(row.payload.at),
   );
-  const settledAt = (seq: number) =>
+  const cutAt = (seq: number) =>
     Effect.map(runHistory.load(from, seq), (state) =>
       state !== null &&
       state.at !== null &&
-      (before === undefined ? isSettled(state) : isQuiet(state))
+      (before === undefined ? isAtTurnBoundary(state) : isQuiet(state))
         ? { seq, state }
         : null,
     );
-  let found: Effect.Success<ReturnType<typeof settledAt>> = null;
+  let found: Effect.Success<ReturnType<typeof cutAt>> = null;
   if (at !== null) {
-    if (parks.some((park) => park.seq === at)) found = yield* settledAt(at);
+    if (boundaries.some((row) => row.seq === at)) found = yield* cutAt(at);
   } else {
-    // The latest turn boundary whose state is settled: the last park of a
+    // The latest turn boundary whose state is quiet: the last wait of a
     // conversation, or the one before the turn it is in now.
-    for (const park of parks.toReversed()) {
-      found = yield* settledAt(park.seq);
+    for (const boundary of boundaries.toReversed()) {
+      found = yield* cutAt(boundary.seq);
       if (found !== null) break;
     }
   }
   if (found === null) {
     return yield* refused(
-      'A fork starts at a settled point of a conversation: the end of one of its turns.',
+      'A fork starts at a quiet point of a conversation: the end of one of its turns.',
     );
   }
   // A child's fork is a root: the task its ancestors were given, and the

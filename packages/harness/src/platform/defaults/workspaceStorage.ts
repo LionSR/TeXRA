@@ -28,7 +28,7 @@ function sanitizeWorkspaceBasename(workspaceRoot: string): string {
  * filesystem holds; the JS realpath keeps the typed case, so on a
  * case-insensitive volume one folder would key two stores. On Windows the
  * JS realpath stays (the native one rewrites a mapped drive to UNC, see
- * `canonicalizePath`) and the key is case-folded. A root that does not
+ * `canonicalizePath`) and the key is case-applied. A root that does not
  * resolve (missing, unreadable) keys by its canonical spelling.
  */
 function storageIdentity(workspaceRoot: string): string {

@@ -147,7 +147,7 @@ export function normalizeStructuredOutputSchema(
  * The guarantee is the tool layer's own guarantee: `defineTool` validates
  * the model's call before `execute` runs, and an invalid call surfaces a
  * `SchemaError` the model self-corrects. `execute` then enforces the persisted
- * JSON-value contract and returns it as the result's `value`: the settled
+ * JSON-value contract and returns it as the result's `value`: the finished
  * result is the run's structured output (`RunState.structured`).
  */
 export function buildTerminalTool(

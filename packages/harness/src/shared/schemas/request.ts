@@ -197,7 +197,7 @@ type AnswerSource =
 
 /** The decisions a request of kind `K` takes: its own actions and the three
  *  refusals. A plugin's request declares its actions on its row, so its
- *  type admits any decision. */
+ *  type accepts any decision. */
 export type DecisionOf<K extends RequestPayload['kind']> =
   | Extract<
       RequestDecision,

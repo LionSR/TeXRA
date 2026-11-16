@@ -127,7 +127,7 @@ export interface RequestDecisionRecord {
    *  and checked in the transaction: one its kind refuses is logged and
    *  left out. */
   readonly facts: readonly (ToolFact & { readonly aggregate: string })[];
-  /** The input the plugin sends a run of the session, admitted in the
+  /** The input the plugin sends a run of the session, accepted in the
    *  transaction (one the run's closed input refuses is logged), the run
    *  woken for it once that commits. */
   readonly followUp?: { readonly runId: RunId; readonly item: InboxItem };

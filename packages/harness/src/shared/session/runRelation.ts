@@ -1,6 +1,6 @@
 /**
  * The one reading of where two runs stand in the supervision tree, for
- * every surface that says it: admission stamping a message's sender, the
+ * every surface that says it: acceptance stamping a message's sender, the
  * `/executions` listing. A job that stamps reads parentage off the rows
  * (`run.start`); a listing reads the view's `parentId`, their projection.
  */

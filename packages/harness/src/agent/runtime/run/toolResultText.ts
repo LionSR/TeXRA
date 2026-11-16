@@ -1,8 +1,8 @@
 /**
- * The model-visible text of one tool settlement: the actionable fields of a
+ * The model-visible text of one tool result: the actionable fields of a
  * `ToolResult` as plain text (no JSON envelope), truncated head+tail past the
  * size cap, with the attachment summary a model that cannot take the bytes
- * still needs. Built from settlement evidence, never from the runtime's whole
+ * still needs. Built from result evidence, never from the runtime's whole
  * mutation vocabulary.
  */
 import type { ToolResult } from '@shared/schemas';

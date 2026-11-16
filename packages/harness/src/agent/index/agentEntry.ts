@@ -10,7 +10,7 @@ import type { FileSystem } from 'effect';
  * The services an agent catalog load reads: the global and filesystem views
  * the local agent directories are scanned through, the app state the
  * disabled-plugin switch is read from, and the plugin table whose agent-file
- * blocks a scan admits.
+ * blocks a scan accepts.
  */
 export type AgentCatalogServices =
   | GlobalStorageFs

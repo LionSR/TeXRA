@@ -76,7 +76,7 @@ export const RETIRED_ROW_KINDS: ReadonlyMap<string, 'display' | 'execution'> =
     ['run.fact', 'execution'],
     // The loop state a resume continued from.
     ['run.snapshot', 'execution'],
-    // A child's turns, parks and result manifest, which its resume and its
+    // A child's turns, waits and result manifest, which its resume and its
     // parent's call read: a child is a run that ends, its `run.end` the
     // result.
     ['child.turn', 'execution'],

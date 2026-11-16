@@ -16,7 +16,7 @@ import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { withPerKeyLane } from '@utils/core/perKeyQueue';
 import { Inbox, type InboxItem } from './Inbox';
 
-/** What a follow-up's admission and its wake read of the session. */
+/** What a follow-up's acceptance and its wake read of the session. */
 type FollowUpServices =
   | Inbox
   | Runs
@@ -28,8 +28,8 @@ type FollowUpServices =
 /**
  * Three outcomes: the input reached a running loop, it waits in the run's
  * queue for its next turn (the resume the send started, or an explicit
- * one), or it was not admitted, with the words that say why. A delivery the
- * admission boundary had already accepted is `sent`. A resume the input
+ * one), or it was not accepted, with the words that say why. A delivery the
+ * acceptance boundary had already accepted is `sent`. A resume the input
  * started that the run refused is told by the resume itself.
  */
 export type SubmitFollowUpResult =
@@ -135,7 +135,7 @@ export const wakeIfOwed = Effect.fn('wakeIfOwed')(function* (
 });
 
 /**
- * The one admission of a message to a run: every host and tool sends
+ * The one acceptance of a message to a run: every host and tool sends
  * through here, and only here is a message refused. The send is durable
  * before anything is acknowledged or woken; when no reader here takes the
  * row, this asks the inbox whether the run owes a resume (`wakeIfOwed`,
@@ -163,7 +163,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   const sent = yield* Effect.gen(function* () {
     // A run that takes no input (a process run, a one-shot root) reads
     // none, live or resumed: nothing would read the row.
-    // Still the view's answer, and so unsettled: a run the view has not
+    // Still the view's answer, and so unfinished: a run the view has not
     // loaded skips this check. The store's answer would always refuse an
     // ended one-shot root, which a later resume does read a message for
     // (`example/10-external-plugin.ts`); which of the two is meant is open.
@@ -234,7 +234,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
 
 /**
  * One run's input, as a plugin reaches it: what it sends the run (routed,
- * admitted and woken as {@link submitFollowUp} does), and when the run
+ * accepted and woken as {@link submitFollowUp} does), and when the run
  * takes no more.
  */
 export interface RunInbox {

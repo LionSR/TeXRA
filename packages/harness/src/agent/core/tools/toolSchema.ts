@@ -30,7 +30,7 @@ export interface JSONSchemaObject {
   [key: string]: unknown;
 }
 
-/** The one value a schema admits (`const`, a one-member `enum`), read
+/** The one value a schema accepts (`const`, a one-member `enum`), read
  *  through the `anyOf` a nullable optional field wraps it in: a branch's
  *  discriminator that takes a default is `Schema.optional(Schema.NullOr(L))`. */
 function schemaLiteralValue(schema: JSONSchemaObject): unknown {
@@ -42,7 +42,7 @@ function schemaLiteralValue(schema: JSONSchemaObject): unknown {
   return members?.length === 1 ? schemaLiteralValue(members[0]) : undefined;
 }
 
-/** A field's description, its value schema and whether it admits `null`:
+/** A field's description, its value schema and whether it accepts `null`:
  *  the schema with its description and its `null` member taken off, which is
  *  what one field's copies on different branches are compared by. */
 function splitField(schema: JSONSchemaObject): {
@@ -52,7 +52,7 @@ function splitField(schema: JSONSchemaObject): {
 } {
   const { description, anyOf, ...rest } = schema;
   const members = anyOf?.filter((member) => member.type !== 'null');
-  const admitsNull = anyOf?.some((member) => member.type === 'null') ?? false;
+  const acceptsNull = anyOf?.some((member) => member.type === 'null') ?? false;
   if (members === undefined || members.length === 0) {
     return {
       description,
@@ -64,21 +64,21 @@ function splitField(schema: JSONSchemaObject): {
     return {
       description,
       shape: { ...rest, anyOf: members },
-      nullable: admitsNull,
+      nullable: acceptsNull,
     };
   }
   const { description: inner, ...member } = members[0];
   return {
     description: description ?? inner,
     shape: { ...rest, ...member },
-    nullable: admitsNull,
+    nullable: acceptsNull,
   };
 }
 
 /** "a", "a or b", "a, b, or c": the discriminator values a field is used with. */
 const DISJUNCTION = new Intl.ListFormat('en', { type: 'disjunction' });
 
-/** `schema` that also admits `null`. */
+/** `schema` that also accepts `null`. */
 const nullable = (schema: JSONSchemaObject): JSONSchemaObject => ({
   anyOf: [
     ...(Object.keys(schema).length === 1 && schema.anyOf

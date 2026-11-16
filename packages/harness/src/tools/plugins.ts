@@ -180,7 +180,7 @@ export const definePlugin = <ROut = never>(
  * editor's own write path (a fact kind's `writes`): a run records such a change
  * as a fact on its own rows, and every process that reads the run's rows
  * announces it (`workspaceFilesWritten`), so a window hears a background
- * service task's change as it hears its own. Run over the session's folded
+ * service task's change as it hears its own. Run over the session's applied
  * tail, so each row is announced once, in commit order, and the history a
  * reopened session replays never as news; a plugin's own aggregate
  * announces nothing.

@@ -215,7 +215,7 @@ export const agentRunLayer = (
       // Unforced structured-output floor: when the config declares an output
       // schema, a synthetic `submit_output` terminal tool joins the run's own
       // tools. The model finishes by calling it; its own input schema
-      // validates the call, and its settled result is the run's structured
+      // validates the call, and its finished result is the run's structured
       // output (`RunState.structured`).
       const outputSchema = config.outputSchema ?? undefined;
       const terminalTool = outputSchema
@@ -240,7 +240,7 @@ export const agentRunLayer = (
       // A resumed run rebinds what its rows fold to (its model is its
       // newest config's); a fresh run binds the launch model under today's
       // default route.
-      const folded = yield* runHistory.load(runId);
+      const loaded = yield* runHistory.load(runId);
       // A run is offered what its own definition and launch declare, under
       // the session's gates; its launcher's tools do not bound it. A script
       // run offers its script; an inheriting plugin agent, beside the
@@ -283,7 +283,7 @@ export const agentRunLayer = (
       };
       // A fork binds as its source was bound at the cut (its seed's binding).
       const fromSeed = launch.entry.seed?.binding ?? null;
-      const persisted = folded?.backend != null ? folded : fromSeed;
+      const persisted = loaded?.backend != null ? loaded : fromSeed;
       const backend = persisted?.backend ?? undefined;
       const modelId = config.model;
       const { modelConfig } = input;

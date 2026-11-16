@@ -21,7 +21,7 @@ interface XmlFormatFromFilesResult {
   readonly readable: FileVarValue[];
   /**
    * Files dropped from the prompt because they could not be read. Order is
-   * unspecified — the reads settle concurrently — so do not build on it; each
+   * unspecified — the reads finish concurrently — so do not build on it; each
    * entry names its own file.
    */
   readonly skipped: ReadonlyArray<{ file: string; reason: string }>;

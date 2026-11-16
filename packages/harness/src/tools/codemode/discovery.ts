@@ -18,7 +18,7 @@ const STOP_WORDS = new Set(
   ),
 );
 
-/** A plural folded to its singular: `entries` to `entry`, `files` to `file`. */
+/** A plural applied to its singular: `entries` to `entry`, `files` to `file`. */
 const singular = (term: string): string => {
   if (term.length > 4 && term.endsWith('ies')) return `${term.slice(0, -3)}y`;
   if (term.length > 3 && term.endsWith('s') && !term.endsWith('ss'))
@@ -27,7 +27,7 @@ const singular = (term: string): string => {
 };
 
 /** Lowercase terms, split at camelCase humps and every non-alphanumeric
- *  (`read_file`, `mcp__server__tool`), stop words dropped, plurals folded. */
+ *  (`read_file`, `mcp__server__tool`), stop words dropped, plurals applied. */
 const tokenize = (text: string): string[] =>
   text
     .replaceAll(/([a-z0-9])([A-Z])/g, '$1 $2')

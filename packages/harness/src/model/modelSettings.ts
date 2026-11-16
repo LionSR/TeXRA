@@ -1,6 +1,6 @@
 /**
  * Every setting model access reads, read once into one value. A binding, a
- * model switch's admission, the helper model and the picker's route facts
+ * model switch's acceptance, the helper model and the picker's route facts
  * take a {@link ModelSettings}; nothing beneath them reads a store.
  */
 import { Effect, Struct } from 'effect';

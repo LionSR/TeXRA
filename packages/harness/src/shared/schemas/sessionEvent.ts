@@ -158,7 +158,7 @@ export type RunParent = typeof RunParentSchema.Type;
 
 /**
  * Where a run's history came from, when not from its own launch: a fork
- * copies the model view of run `from` at its settled `seq` `at`. Resume is
+ * copies the model view of run `from` at its finished `seq` `at`. Resume is
  * not a provenance; it is the same run.
  */
 const RunProvenanceSchema = Schema.Union([
@@ -305,7 +305,7 @@ const DisplayRowDraftSchema = Schema.Union([
   /**
    * The loop's position: `at`, and its coordinates. The one run-history
    * row renderers read: the fold derives the live phase from it (`waiting`
-   * parks the run, any other position is running) and `RunView.position`
+   * waits the run, any other position is running) and `RunView.position`
    * carries its coordinates; its five siblings below are run-history-private.
    */
   durable('run.position', { payload: RunPositionPayloadSchema }),

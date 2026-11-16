@@ -26,7 +26,7 @@ import { expect } from 'vitest';
 import {
   CodeSandbox,
   type ScriptOp,
-  type ScriptSettlement,
+  type ScriptOpResult,
 } from '@agent/codeSandbox/codeSandbox';
 
 const SandboxLayer = CodeSandbox.layer.pipe(
@@ -48,7 +48,7 @@ const [l, r] = await Promise.all([left, right]);
 return { l: l.v, r: r.v, caught };
 `;
 
-const answer = (op: ScriptOp): ScriptSettlement =>
+const answer = (op: ScriptOp): ScriptOpResult =>
   op.name === 'fail'
     ? { _tag: 'Failure', name: 'ToolFailed', message: 'nope' }
     : { _tag: 'Value', value: op.input };
@@ -61,7 +61,7 @@ const runInOrder = (releaseOrder: ReadonlyArray<number>) =>
   Effect.gen(function* () {
     const sandbox = yield* CodeSandbox;
     const issued = new Map<number, Deferred.Deferred<ScriptOp>>();
-    const answers = new Map<number, Deferred.Deferred<ScriptSettlement>>();
+    const answers = new Map<number, Deferred.Deferred<ScriptOpResult>>();
     const slot = <A>(slots: Map<number, Deferred.Deferred<A>>, seq: number) => {
       const existing = slots.get(seq);
       if (existing) return existing;

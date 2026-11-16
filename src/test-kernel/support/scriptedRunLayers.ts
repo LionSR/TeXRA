@@ -244,7 +244,7 @@ export const scriptedInvokerLayer = modelInvokerLayer().pipe(
           return {
             bind: () =>
               Effect.map(ScopedRef.get(run.model), (bound) => ({ ...bound })),
-            admit: () =>
+            switchRejection: () =>
               Effect.die(new Error('A scripted run switches no model.')),
           };
         }),

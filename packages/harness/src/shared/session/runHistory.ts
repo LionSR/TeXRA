@@ -4,7 +4,7 @@
  * through one run's {@link RunCell} (`load` reads, `open` hands out the cell
  * the run's writes go through; a request's decision is appended by the
  * session's requests, `runStateAppend`); the
- * session log it commits through; the view folded from that log; and the
+ * session log it commits through; the view applied from that log; and the
  * history query, the model's SQL over the session's display rows. Beside
  * them, the session's approvals, which every run's gated call reads.
  *

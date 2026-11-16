@@ -23,15 +23,15 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * this process holds (working, waiting, or spawned and not started yet) can
  * be stopped; an agent's run takes approval grants, and a conversation (not
  * a task's recipe) its compaction, unless it is still starting (no loop
- * step and no settled point yet). Nothing that rewrites or
+ * step and no finished point yet). Nothing that rewrites or
  * removes a run's files or history is offered while it is live. Any run this
  * process can act on can be renamed, and a conversation whose first turn has
- * ended forked (at its latest settled point, before any turn it is in now). After, a
+ * ended forked (at its latest finished point, before any turn it is in now). After, a
  * run can be deleted and its files worked on (`run.files`); a plain
  * agent's run again. Resume is offered where it is the way to
  * continue: on any loop-driven run that was interrupted, and on a background
- * script that did not complete. A settled task runs again; a
- * settled conversation continues through its composer. Whether a resume can
+ * script that did not complete. A finished task runs again; a
+ * finished conversation continues through its composer. Whether a resume can
  * proceed is `deriveResumability`'s.
  */
 export function runActions(
@@ -80,7 +80,7 @@ export function runActions(
 /**
  * Whether a run continues from its own rows: a loop-driven run (born with
  * its opening) does, whatever its outcome, unless it is a task that
- * ended (its recipe's result is settled, so it runs again). The one standing
+ * ended (its recipe's result is finished, so it runs again). The one standing
  * `deriveResumability` reads from a run's records and `runActions` from its
  * view, so the two never decide apart.
  */
@@ -88,7 +88,7 @@ export const continuesFromRows = (
   run: Pick<RunView, 'identity' | 'recipe'> & { readonly ended: boolean },
 ): boolean => isLoopDriven(run.identity) && !(run.ended && run.recipe);
 
-/** A conversation with a settled point to cut at: a plain agent's run, not
+/** A conversation with a finished point to cut at: a plain agent's run, not
  *  a task's recipe, whose first turn has ended. */
 const forkable = (
   run: Pick<RunView, 'identity' | 'recipe' | 'forkPoint'>,

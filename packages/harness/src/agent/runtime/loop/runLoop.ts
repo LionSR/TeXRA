@@ -8,14 +8,14 @@
  * The write points, in order: the opening batch of a fresh run (its message
  * and input, its `run.config` binding, `turn.ready`); `turn.begin`; per round
  * the invoker's `attempt` / `response` rows; per barrier call
- * its `tool.intent`; per settled call its `tool.result` with its card; the
+ * its `tool.intent`; per finished call its `tool.result` with its card; the
  * delivering `append` with the complete tool group; a follow-up consumed at a
  * request or a nudge, each an `append`; `turn.end` and `waiting`; the
  * follow-up consumption; and the `run.end` at every exit that ends the
  * run. Every branch reads the fold: a run `waiting` re-enters the wait (a
  * batch consumed at `turn.ready` runs its turn), an unanswered open attempt
  * invokes again under its gate, a pending response dispatches what is
- * unsettled, a committed text response runs its policy, and a run whose turn
+ * unfinished, a committed text response runs its policy, and a run whose turn
  * ended (`turn.end`) launched again waits for its input.
  *
  * A run opened on a script (`AgentConfig.script`: a background script, a
@@ -219,7 +219,7 @@ type RunExit = {
  * it commits with the run's `run.end` (`endRunRows`), so no reader ever
  * sees a stopped run without its end.
  */
-const settleRun =
+const finishRun =
   (
     cell: RunCell,
     /** The run's own input lease. */
@@ -390,7 +390,7 @@ export const openToolUse = Effect.fn('toolUse.open')(function* (
     ...(misses.length > 0 && { memoryMisses: misses }),
   };
   // The opening (registration, held trace), then the entry once it
-  // settled: a stop lands before the opening or after both.
+  // finished: a stop lands before the opening or after both.
   const rows = [
     appendRow(runId, [{ role: 'user', content }], { input }),
     ...offered,
@@ -448,7 +448,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     cell: RunCell,
   ): Effect.fn.Return<RunExit, Error, TurnServices> {
     let state = yield* cell.current;
-    // A turn begins at a settled boundary; a resumed one where its rows left.
+    // A turn begins at a finished boundary; a resumed one where its rows left.
     const begins =
       state.at === 'turn.ready' ||
       state.at === 'waiting' ||
@@ -556,11 +556,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     if (start.resume) yield* resumeLeftoverChildren();
     for (;;) {
       let state = yield* cell.current;
-      const parked = state.at === 'waiting' || state.at === 'turn.end';
+      const waiting = state.at === 'waiting' || state.at === 'turn.end';
       // The invoker commits the run's failure fact and the input that
       // recovers the run clears it, so the fold is the one place to read it.
       const afterError = state.lastError !== null;
-      if (parked) {
+      if (waiting) {
         if (state.handedDown !== null) return completeTurn(state);
         // A native child waits in this same run scope, just like its root:
         // its loop has already delivered the turn offered at the boundary.
@@ -664,10 +664,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   });
 
   // The controls detach as the run's scope closes, after the bracket below
-  // settles the cell; `cell.append` protects each commit from interruption.
+  // finishes the cell; `cell.append` protects each commit from interruption.
   yield* (yield* RunRegistry).attachControls(runId, controls);
   return yield* loopBody(cell).pipe(
-    Effect.onExit(settleRun(cell, followUps)),
+    Effect.onExit(finishRun(cell, followUps)),
     Effect.map((loop) => result(loop.outcome, loop.state)),
   );
 }, Effect.scoped);

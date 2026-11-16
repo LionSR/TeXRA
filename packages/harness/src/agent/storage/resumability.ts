@@ -25,7 +25,7 @@ type ResumabilityDecision =
  * The one answer to "can this run resume?". An opened run continues whatever its outcome: rows live
  * until deletion, so a failed or cancelled run continues from where they
  * left it. A task that ended does not: its recipe's result is
- * settled, so it runs again instead. One holding a fact of a plugin this
+ * finished, so it runs again instead. One holding a fact of a plugin this
  * process does not load waits for it: the plugin's state is part of where
  * it continues from.
  */

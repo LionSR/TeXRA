@@ -108,7 +108,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   const { runId, logger } = run;
   const inbox = yield* Inbox;
   const log = yield* SessionLog;
-  // Ended with the scope; the run's settleRun ends it first, saying
+  // Ended with the scope; the run's finishRun ends it first, saying
   // whether the run takes more input.
   const reader = yield* inbox.open(runId);
 

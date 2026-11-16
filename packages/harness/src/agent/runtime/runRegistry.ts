@@ -94,7 +94,7 @@ type AnyFiber = Fiber.Fiber<unknown, unknown>;
 /** A launch's opening commits in its caller's fiber
  *  ({@link SessionRunRegistry.start}): a second launch is refused, a stop
  *  asked meanwhile is kept for the launch to apply once the opening
- *  answered, and `settled` resolves once the launch forked the run or
+ *  answered, and `launched` resolves once the launch forked the run or
  *  failed. */
 interface Opening {
   readonly kind: 'opening';
@@ -102,7 +102,7 @@ interface Opening {
   /** Whether the stop asked reaches the runs under this one: a stop under
    *  an ancestor's cascade does not, the ancestor's covering them. */
   cascade: boolean;
-  readonly settled: Deferred.Deferred<void>;
+  readonly launched: Deferred.Deferred<void>;
 }
 
 /** The fiber driving the run here, from that fiber's first step until it
@@ -249,7 +249,7 @@ export class SessionRunRegistry implements RunsShape {
     // It drains once its launch answered and the fiber that launch forked,
     // if any, exited.
     const drained = Effect.flatMap(
-      Deferred.await(entry.settled),
+      Deferred.await(entry.launched),
       () => this.liveRun(runId)?.drained ?? Effect.succeed(undefined),
     );
     return { runId, controls: undefined, drained };
@@ -404,7 +404,7 @@ export class SessionRunRegistry implements RunsShape {
   openingOf(runId: RunId): Effect.Effect<void> | undefined {
     const entry = this.entries.get(runId);
     return entry?.kind === 'opening'
-      ? Deferred.await(entry.settled)
+      ? Deferred.await(entry.launched)
       : undefined;
   }
 
@@ -480,7 +480,7 @@ export class SessionRunRegistry implements RunsShape {
                 this.entries.delete(runId);
                 this.publishHeld();
               }
-              Deferred.doneUnsafe(entered.opening.settled, Effect.void);
+              Deferred.doneUnsafe(entered.opening.launched, Effect.void);
             })
           : Effect.void,
     );
@@ -511,7 +511,7 @@ export class SessionRunRegistry implements RunsShape {
       kind: 'opening',
       stop: entry?.reason ?? null,
       cascade: entry !== undefined,
-      settled: Deferred.makeUnsafe<void>(),
+      launched: Deferred.makeUnsafe<void>(),
     };
     this.entries.set(runId, opening);
     this.publishHeld();
@@ -688,7 +688,7 @@ export class SessionRunRegistry implements RunsShape {
 
   /**
    * One stop of one run: what it does is decided and marked on the run in
-   * one step (`claimStop`), carried out, and the mark settled on every
+   * one step (`claimStop`), carried out, and the mark finished on every
    * exit. `cascade` is whether it reaches the runs under it and ends a run
    * no fiber here drives; a stop under an ancestor's cascade does neither,
    * the ancestor's covering the whole tree. Answers whether a fiber here

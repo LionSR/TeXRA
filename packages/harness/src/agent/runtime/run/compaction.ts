@@ -26,7 +26,7 @@ import type { ModelInvoker } from '../ModelInvoker';
 import type { ModelCallResult } from './modelCall';
 import { MODEL_COMPACTION_THRESHOLD_SETTING } from '@shared/state/stateSettings';
 
-/** Prepended to a summary folded back into the conversation as a user
+/** Prepended to a summary applied back into the conversation as a user
  *  message: the same marker for every provider. */
 const COMPACTION_SUMMARY_PREFIX = '[Previous conversation summary]\n\n';
 

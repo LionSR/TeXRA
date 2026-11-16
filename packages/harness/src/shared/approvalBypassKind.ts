@@ -99,7 +99,7 @@ export function runPolicy(
   return limit === undefined ? project : stricterPolicy(project, limit);
 }
 
-/** `source` holding a run it has not folded yet with the parent edge and
+/** `source` holding a run it has not applied yet with the parent edge and
  *  grants its `run.start` names: what the run is born with, read before
  *  that row commits. A run `source` holds is read as it holds it. */
 export function withUnborn(

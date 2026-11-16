@@ -29,7 +29,7 @@ import {
 } from './limits';
 import {
   type ScriptEnd,
-  type SettleMessage,
+  type ResultMessage,
   StepReportSchema,
   type WorkerInput,
 } from './protocol';
@@ -42,7 +42,7 @@ class ScriptSyntaxError extends Schema.TaggedError<ScriptSyntaxError>()(
   },
 ) {}
 
-/** The script threw, or awaits a promise nothing will settle. */
+/** The script threw, or awaits a promise nothing will finish. */
 class ScriptFault extends Schema.TaggedError<ScriptFault>()('ScriptFault', {
   name: Schema.String,
   message: Schema.String,
@@ -84,8 +84,8 @@ export interface ScriptOp {
   readonly section: string | null;
 }
 
-/** How a call settles: a JSON value, or an error the guest's `await` throws. */
-export type ScriptSettlement =
+/** How a call finishes: a JSON value, or an error the guest's `await` throws. */
+export type ScriptOpResult =
   | { readonly _tag: 'Value'; readonly value: unknown }
   | {
       readonly _tag: 'Failure';
@@ -103,7 +103,7 @@ interface ScriptRequest<E, R> {
   /**
    * The host functions the realm installs as globals: `name(...args)` issues
    * an op named `name()`, which no tool name can be, with the argument list
-   * as its input, and settles as a tool call does.
+   * as its input, and finishes as a tool call does.
    */
   readonly globals?: ReadonlyArray<string>;
   /** The modules the script may `import()`, JavaScript module source by
@@ -112,12 +112,12 @@ interface ScriptRequest<E, R> {
   /**
    * Resolves one issued call. Each runs on its own fiber, and is interrupted
    * if the script ends first (the caller then records it as stopped, once
-   * `run` has returned). Settlements reach the realm one at a time, in
+   * `run` has returned). Results reach the realm one at a time, in
    * the order these effects complete: a caller that completes each at its
    * run history commit makes the realm's delivery order the commit order. A
    * failure is not the guest's to catch: it ends the script with it.
    */
-  readonly call: (op: ScriptOp) => Effect.Effect<ScriptSettlement, E, R>;
+  readonly call: (op: ScriptOp) => Effect.Effect<ScriptOpResult, E, R>;
   /**
    * Each step's newly logged lines, each collapsed to one line of at most
    * 500 characters, and how many lines past the worker's per-step bound the
@@ -128,8 +128,8 @@ interface ScriptRequest<E, R> {
     dropped: number,
   ) => Effect.Effect<void>;
   /**
-   * Runs once each settlement has reached the realm, before the next is
-   * taken: a caller replaying recorded settlements in their recorded order
+   * Runs once each result has reached the realm, before the next is
+   * taken: a caller replaying recorded results in their recorded order
    * completes the next one only after the one before it was delivered.
    */
   readonly onDelivered?: (seq: number) => Effect.Effect<void>;
@@ -176,23 +176,20 @@ const endToResult = (
   }
 };
 
-const toSettleMessage = (
-  seq: number,
-  settlement: ScriptSettlement,
-): SettleMessage =>
-  settlement._tag === 'Value'
+const toResultMessage = (seq: number, result: ScriptOpResult): ResultMessage =>
+  result._tag === 'Value'
     ? {
         seq,
         ok: true,
-        ...(settlement.value === undefined
+        ...(result.value === undefined
           ? {}
-          : { json: JSON.stringify(settlement.value) }),
+          : { json: JSON.stringify(result.value) }),
       }
     : {
         seq,
         ok: false,
-        name: settlement.name,
-        message: settlement.message,
+        name: result.name,
+        message: result.message,
       };
 
 const make = Effect.gen(function* () {
@@ -227,14 +224,14 @@ const make = Effect.gen(function* () {
         wasm,
         interrupt,
       };
-      // The worker reports once at the start and once per settlement it is
+      // The worker reports once at the start and once per result it is
       // sent, and the loop takes each report before it sends the next, so
       // one report at most is ever waiting.
       const reports = yield* Queue.bounded<
         typeof StepReportSchema.Type,
         SandboxUnavailable
       >(1);
-      const worker = yield* platform.spawn<unknown, SettleMessage>(0).pipe(
+      const worker = yield* platform.spawn<unknown, ResultMessage>(0).pipe(
         Effect.provideService(
           Worker.Spawner,
           () =>
@@ -270,9 +267,9 @@ const make = Effect.gen(function* () {
         Effect.sync(() => Atomics.store(new Int32Array(interrupt), 0, 1)),
       );
       const calls = yield* FiberSet.make<void, never>();
-      // Each call settles once and the worker caps the calls outstanding at
+      // Each call finishes once and the worker caps the calls outstanding at
       // `MAX_FANOUT`, so no offer here ever waits.
-      const settled = yield* Queue.bounded<SettleMessage, E>(MAX_FANOUT);
+      const results = yield* Queue.bounded<ResultMessage, E>(MAX_FANOUT);
 
       let open = 0;
       let report = yield* Queue.take(reports);
@@ -287,8 +284,8 @@ const make = Effect.gen(function* () {
           yield* FiberSet.run(
             calls,
             request.call(op).pipe(
-              Effect.flatMap((settlement) =>
-                Queue.offer(settled, toSettleMessage(op.seq, settlement)),
+              Effect.flatMap((result) =>
+                Queue.offer(results, toResultMessage(op.seq, result)),
               ),
               // A call that fails, or dies (its value will not serialize,
               // say), fails the queue the loop takes from, so the run ends
@@ -296,7 +293,7 @@ const make = Effect.gen(function* () {
               Effect.catchCause((cause) =>
                 Cause.hasInterruptsOnly(cause)
                   ? Effect.void
-                  : Queue.failCause(settled, cause),
+                  : Queue.failCause(results, cause),
               ),
               Effect.asVoid,
             ),
@@ -307,10 +304,10 @@ const make = Effect.gen(function* () {
           return yield* new ScriptFault({
             name: 'ScriptStalled',
             message:
-              'The script awaits a promise that no tool call will settle.',
+              'The script awaits a promise that no tool call will resolve.',
           });
         }
-        const next = yield* Queue.take(settled);
+        const next = yield* Queue.take(results);
         open -= 1;
         yield* worker
           .send(next)
@@ -341,7 +338,7 @@ const make = Effect.gen(function* () {
  * the host as `await tools.<name>(args)`, logs with `console.log`, loads
  * the modules it is given with `await import(specifier)`, and `return`s its
  * result. It has no timers, `Date.now()` or `Math.random()`, so
- * the same settlements in the same order replay it exactly.
+ * the same results in the same order replay it exactly.
  */
 export class CodeSandbox extends Context.Service<
   CodeSandbox,

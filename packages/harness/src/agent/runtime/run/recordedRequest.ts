@@ -11,7 +11,7 @@
  * What is recorded is the turn the bound model prepared, the provider's own
  * input, so no adapter normalization falls between the record and the wire.
  * `recordedTurn` is the one reading of that record: a resumed background
- * observation rebuilds the turn it admitted from it, never from what
+ * observation rebuilds the turn it resolved from it, never from what
  * current code would render, and in development and CI the invoker checks,
  * before a request leaves the process, that the rows it just committed,
  * read back from the store, rebuild that turn exactly.
@@ -255,13 +255,13 @@ export interface InvokeRequest {
 }
 
 /**
- * The background turn the open attempt admitted, rebuilt from its rows on
+ * The background turn the open attempt resolved, rebuilt from its rows on
  * the binding origin it recorded, never prepared again: what current code or
  * settings would render plays no part, so the observed completion anchors
  * the next round exactly as a live submission does. Dies on a record that
  * cannot rebuild one.
  */
-export const admittedTurn = (
+export const acceptedTurn = (
   state: RunState,
   blobs: ReadBlobs,
 ): Effect.Effect<
@@ -270,14 +270,14 @@ export const admittedTurn = (
 > =>
   Effect.map(providerMessages(state.messages, blobs), (messages) => {
     const { origin, turn } = recordedTurn(state);
-    const admitted = Schema.decodeUnknownSync(ResolvedTurnSchema)({
+    const resolved = Schema.decodeUnknownSync(ResolvedTurnSchema)({
       ...origin,
       ...turn,
       messages,
     });
-    if (admitted.mode !== 'background')
-      throw new Error('the open attempt admitted no background turn');
-    return admitted;
+    if (resolved.mode !== 'background')
+      throw new Error('the open attempt resolved to no background turn');
+    return resolved;
   });
 
 /** Why the rows at `state` do not rebuild `sent`, or null when they do. */

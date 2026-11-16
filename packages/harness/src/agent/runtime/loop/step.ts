@@ -251,7 +251,7 @@ const openStep = Effect.fn('Step.open')(function* (
     const contributing = pinned.plugins.filter(
       ({ prompt }) => prompt !== undefined,
     );
-    // Only the plugins this step uses hold services: a parked run keeps up
+    // Only the plugins this step uses hold services: a waiting run keeps up
     // nothing it does not offer.
     const used = new Set([
       ...tools.offered.map(({ plugin }) => plugin),

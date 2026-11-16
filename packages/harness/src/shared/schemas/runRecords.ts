@@ -184,7 +184,7 @@ export const AgentRunListingEntrySchema = Schema.Struct({
    *  `run.config`'s. */
   model: Schema.optional(Schema.String),
   /** `deriveResumability` finds a point to continue from. Ownership and
-   *  loadability are settled when the run is opened. */
+   *  loadability are finished when the run is opened. */
   resumable: Schema.Boolean,
   /** Why the run cannot resume in this build although it may have rows to
    *  continue from: they could not be read, an earlier build wrote them, or

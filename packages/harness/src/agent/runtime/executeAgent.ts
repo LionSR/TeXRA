@@ -82,7 +82,7 @@ export interface PreparedRun {
  * How a launch enters its run (`LaunchEntry`), its trace held until then:
  * the opening's batch carries it up to its first stream (the prompt line and
  * the run's stage commit with the opening), the rest is published once that
- * settled. One that never enters drops it. A run that exists is refused.
+ * finished. One that never enters drops it. A run that exists is refused.
  */
 const enterRun = Effect.fn('enterRun')(function* (
   definition: PreparedAgentDefinition,
@@ -160,8 +160,8 @@ const enterRun = Effect.fn('enterRun')(function* (
 });
 
 /**
- * Resolve the context of a run admitted for launch: a fresh one, which its
- * opening registers, or a resume. Interruptible: every acquisition settles
+ * Resolve the context of a run accepted for launch: a fresh one, which its
+ * opening registers, or a resume. Interruptible: every acquisition finishes
  * atomically inside its own `acquireRelease`, so an interruption lands
  * between steps and the scope's finalizers release whatever was acquired.
  */

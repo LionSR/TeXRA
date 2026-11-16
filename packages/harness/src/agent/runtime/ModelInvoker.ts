@@ -82,7 +82,7 @@ import { observeBackground, submitAndObserve } from './run/backgroundTurn';
 import { contextTokens, outputBudget } from './run/contextTokens';
 import { priceTurnUsage, reportUsage } from './run/pricing';
 import {
-  admittedTurn,
+  acceptedTurn,
   attemptRows,
   chainedContinuation,
   checkRecordedRequest,
@@ -419,7 +419,7 @@ export const modelInvokerLayer = (): Layer.Layer<
               details: 'tooluse',
             },
           );
-        // The request an attempt admits: the folded history with its media
+        // The request an attempt accepts: the applied history with its media
         // resolved (the one read of media bytes), the caller's system and
         // tools, the run as its cache key, and the last response's
         // continuation while the binding matches its whole origin. A resume
@@ -483,7 +483,7 @@ export const modelInvokerLayer = (): Layer.Layer<
                 'The run resumed onto a model that cannot observe its accepted background operation.',
             });
           }
-          const resolved = yield* admittedTurn(yield* cell.current, log.blobs);
+          const resolved = yield* acceptedTurn(yield* cell.current, log.blobs);
           return yield* consume(
             cell,
             invocation,
@@ -526,7 +526,7 @@ export const modelInvokerLayer = (): Layer.Layer<
               .bind({
                 modelId: failed.modelId,
                 // A personal-key retry drops the route's overlay (window,
-                // prices, PDF admission, Kimi endpoint) for the catalog's.
+                // prices, PDF acceptance, Kimi endpoint) for the catalog's.
                 config: credentials === 'personal' ? undefined : failed.config,
                 backend: failed.backend,
                 declinedRoutes,
@@ -551,7 +551,7 @@ export const modelInvokerLayer = (): Layer.Layer<
        * Commit the batch that ends attempt `ref` as `failed` with `error`.
        * One that asks opens its retry request at the request door
        * (`openRequest`), its `failed` row beside it, with the credential
-       * move a used-up `quota` offers and, where the policy answers at once,
+       * step a used-up `quota` offers and, where the policy answers at once,
        * that answer, so no surface lists it pending.
        */
       const commitFailed = Effect.fn('ModelInvoker.commitFailed')(function* (
@@ -596,7 +596,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         );
       });
 
-      /** Record the failure of attempt `ref` and the move after it. */
+      /** Record the failure of attempt `ref` and the step after it. */
       const recordFailure = Effect.fn('ModelInvoker.failed')(function* (
         cell: RunCell,
         ref: InvocationRef,
@@ -642,7 +642,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         yield* commitFailed(cell, ref, failure, next, bound, usage);
       });
 
-      /** The move after `failure` of attempt `ref`, read off the attempts
+      /** The step after `failure` of attempt `ref`, read off the attempts
        *  before it, llm's verdict and the budget. */
       const moveAfter = (
         cell: RunCell,
@@ -681,7 +681,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         );
 
       /**
-       * Make the attempt `move` names on `bound`: a send under the process's
+       * Make the attempt `step` names on `bound`: a send under the process's
        * route gate, so every run on one credential shares cooling, or an
        * observation, unbilled, outside it. An interruption stays the run's
        * and a refused write its own; anything else is a defect.
@@ -689,7 +689,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       const tryAttempt = (
         cell: RunCell,
         request: InvokeRequest,
-        move: Extract<NextAttempt, { kind: 'send' | 'observe' }>,
+        step: Extract<NextAttempt, { kind: 'send' | 'observe' }>,
         ref: InvocationRef,
         bound: BoundModel,
       ): Effect.Effect<
@@ -698,11 +698,11 @@ export const modelInvokerLayer = (): Layer.Layer<
         AttemptServices
       > =>
         Effect.exit(
-          move.kind === 'send'
+          step.kind === 'send'
             ? gate.withRoutes(bound.routes)(
                 attemptOnce(cell, ref, request, bound),
               )
-            : observeAccepted(cell, ref, bound, move.attempt.accepted),
+            : observeAccepted(cell, ref, bound, step.attempt.accepted),
         ).pipe(
           Effect.flatMap(
             (
@@ -748,7 +748,7 @@ export const modelInvokerLayer = (): Layer.Layer<
 
       /**
        * Drive one turn's invocation to its response or its end: read the
-       * next move off its rows, make it, and, when an attempt fails, record
+       * next step off its rows, make it, and, when an attempt fails, record
        * why and what follows.
        */
       const invoke = Effect.fn('ModelInvoker.invoke')(function* (
@@ -758,30 +758,30 @@ export const modelInvokerLayer = (): Layer.Layer<
         const retries = (yield* ScopedRef.get(run.model)).automaticRetries;
         for (;;) {
           const { invocation, requests, activatedAt } = yield* cell.current;
-          const move = nextAttempt(invocation, requests, activatedAt);
-          if (move.kind === 'fail') return yield* endedAs(cell, 'failed');
-          if (move.kind === 'cancel') return yield* endedAs(cell, 'cancelled');
-          if (move.kind === 'await') {
+          const step = nextAttempt(invocation, requests, activatedAt);
+          if (step.kind === 'fail') return yield* endedAs(cell, 'failed');
+          if (step.kind === 'cancel') return yield* endedAs(cell, 'cancelled');
+          if (step.kind === 'await') {
             // The open retry request's answer, the row the decide command
-            // lands, which the next move reads off the run's rows.
+            // lands, which the next step reads off the run's rows.
             logger.debug('Waiting for manual retry');
             yield* decisionOf(
               runId,
-              move.requestId,
+              step.requestId,
               (yield* cell.current).commit,
             ).pipe(Effect.provideService(SessionLog, log));
             yield* cell.refresh;
             continue;
           }
           const ref =
-            move.kind === 'observe' ? move.attempt.ref : nextRef(invocation);
-          if (move.kind === 'send' && move.retry !== null) {
+            step.kind === 'observe' ? step.attempt.ref : nextRef(invocation);
+          if (step.kind === 'send' && step.retry !== null) {
             // Rebind before sending `ref` on a person's retry answer. A
             // failed rebind is `ref`'s failure, recorded unsent, so nothing
             // goes out on the binding it meant to leave.
             const bound = yield* ScopedRef.get(run.model);
             const rebound = yield* Effect.result(
-              rebind(cell, move.retry, bound),
+              rebind(cell, step.retry, bound),
             );
             if (Result.isFailure(rebound)) {
               const failure = { error: rebound.failure, unsent: true };
@@ -801,14 +801,14 @@ export const modelInvokerLayer = (): Layer.Layer<
               ]);
           }
           const bound = yield* ScopedRef.get(run.model);
-          const tried = yield* tryAttempt(cell, request, move, ref, bound);
+          const tried = yield* tryAttempt(cell, request, step, ref, bound);
           if ('ok' in tried) return tried.ok;
           const failure = tried;
           const next = yield* moveAfter(
             cell,
             failure,
             ref,
-            move.kind === 'observe',
+            step.kind === 'observe',
             retries,
           );
           yield* recordFailure(cell, ref, failure, next, bound);

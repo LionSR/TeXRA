@@ -1,5 +1,5 @@
 /**
- * The runtime event plane: the publisher, what it publishes as each job
+ * The runtime event layer: the publisher, what it publishes as each job
  * commits, and the exhaustive event readers, including the NDJSON
  * projection. Renderers read SessionInputs, which orders this log against
  * the transient text and local levels.
@@ -110,7 +110,7 @@ export class SessionEvents extends Context.Service<
       E | DatabaseWriteFailed
     >;
     /** Run one job synchronously and return: the door for a producer with
-     *  no fiber to wait on (a trace sink, a follow-up's admission). The job
+     *  no fiber to wait on (a trace sink, a follow-up's acceptance). The job
      *  has committed, or failed, when the call returns. A refused append is
      *  never retried: the job hears it, `failed` hears the job's own
      *  failure (a run's trace keeps either for the run's end,
@@ -135,7 +135,7 @@ export class SessionEvents extends Context.Service<
       readonly SessionRow[],
       DatabaseAggregateClosed | RunChanged | DatabaseWriteFailed
     >;
-    /** Close the plane: no publication is taken after it. Nothing is left
+    /** Close the session events: no publication is taken after it. Nothing is left
      *  to wait for, every job having finished in its own call. Idempotent;
      *  the publisher's scope closes it too. */
     readonly close: Effect.Effect<void>;
@@ -165,7 +165,7 @@ export class SessionEvents extends Context.Service<
      *  read it.
      *  `drained`, when given, receives the commit each read or batch
      *  covered, rows it could not materialize included, once every row of
-     *  it has reached the reader; the transport plane never sets it. */
+     *  it has reached the reader; the transport layer never sets it. */
     readonly all: (
       fromCommit: CommitOrdinal,
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,

@@ -123,7 +123,7 @@ export class Sessions extends Context.Service<
       roots: WorkspaceRoots,
     ) => Effect.Effect<SessionCloseReport>;
     /** A process shutdown's close: drain what the plugins' pollers
-     *  admitted, then close every open session at once, under one
+     *  accepted, then close every open session at once, under one
      *  deadline. */
     readonly closeAll: Effect.Effect<readonly SessionCloseReport[]>;
     readonly list: Effect.Effect<readonly LocalSession[]>;

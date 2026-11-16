@@ -97,9 +97,9 @@ const inputRefused = (cause: Schema.SchemaError): LaunchRefused =>
  * The refusal the package states from the caller's own input, before
  * anything of the process is touched: on a session nobody answers, a tool
  * that requires approval cannot run whatever the agent turns out to be.
- * {@link admitInput} states it in its own order, before the agent scan.
+ * {@link acceptInput} states it in its own order, before the agent scan.
  */
-function admitTools(
+function acceptTools(
   tools: readonly ITool[],
   session: Context.Context<SessionServices>,
 ): Effect.Effect<void, ToolsRefused> {
@@ -121,12 +121,12 @@ function admitTools(
  *  work: the three the package states. A host's whole configuration is the
  *  config; a named agent is looked up; an inline persona is the agent,
  *  recorded on the config and validated by its schema there. */
-const admitInput = Effect.fn('admitInput')(function* (
+const acceptInput = Effect.fn('acceptInput')(function* (
   input: StartInput,
   session: Context.Context<SessionServices>,
   catalog: Catalog,
 ): Effect.fn.Return<typeof AgentConfigSchema.Type, LaunchError> {
-  yield* admitTools(input.tools ?? [], session);
+  yield* acceptTools(input.tools ?? [], session);
   // A host's whole configuration: its launch resolves the agent itself.
   if ('config' in input) return input.config;
   const { agent } = input;
@@ -167,7 +167,7 @@ const start = Effect.fn('start')(function* (
   catalog: Catalog,
   input: StartInput,
 ): Effect.fn.Return<Run, LaunchError | RunFailure> {
-  const config = yield* admitInput(input, session, catalog);
+  const config = yield* acceptInput(input, session, catalog);
   const runId = input.runId ?? generateRunId();
   // A supplied id already in the session is refused here; one a launch
   // still opens, its activation refuses (`RunLive`).
@@ -224,7 +224,7 @@ function resume(
 ): Effect.Effect<Run, ResumeError> {
   const { tools, interactive, apiKeys } = input;
   return Effect.gen(function* () {
-    yield* admitTools(tools ?? [], session);
+    yield* acceptTools(tools ?? [], session);
     const resumed = yield* resumeRun(runId, {
       stopAfterCycle: interactive !== true,
       tools,

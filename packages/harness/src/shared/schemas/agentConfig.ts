@@ -80,7 +80,7 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.mapFields(
     /**
      * The `script` call this run makes instead of asking its model: it opens
      * with that call as its one response, offers exactly `tools`, and ends when
-     * the call settles. A script a parent sent to the background, or a
+     * the call finishes. A script a parent sent to the background, or a
      * task's recipe. Absent for every other run.
      */
     script: Schema.optional(

@@ -53,7 +53,7 @@ export interface AppSignalPayloads {
   githubTokenInvalid: { message: string };
 
   /**
-   * A write or removal of one secret-store entry settled. Emitted by the
+   * A write or removal of one secret-store entry finished. Emitted by the
    * store itself, so every writer is covered — the settings controllers, the
    * setup agent's `unset_api_key`, the GitHub token forms — without any of
    * them remembering to. The one file store emits from its own commit
