@@ -3,9 +3,9 @@ import { Effect, Layer } from 'effect';
 import type { RunId } from '@shared/schemas';
 import {
   loadDatabaseFixture,
-  stopServices,
   type DatabaseFixture,
 } from '../../../../scripts/desktop-package-smoke-environment.mjs';
+import { stopServices } from '../../../../scripts/texra-services.mjs';
 
 import {
   box,
@@ -131,7 +131,7 @@ async function processId(launched: LaunchedApp): Promise<number> {
  * stopped first.
  */
 async function seedCanonicalRuns(profile: Profile) {
-  await stopServices(profile.dataRoot);
+  stopServices(profile.dataRoot, { timeoutMs: 30_000 });
   const storagePath = await findWorkspaceStoragePath(profile);
   const fixture = await loadDatabaseFixture();
   const persisted = await writeCanonicalRunFixtures(fixture, storagePath);

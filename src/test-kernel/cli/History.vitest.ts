@@ -24,9 +24,9 @@ import {
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-import { createFakeHost } from '@test/support/setupPlatform';
+import { createFakeHost } from '@test/support/fakeHost';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
+import { asDocumentTask } from '@test/support/documentTasks';
 import { seedEditedFiles, seedRunRecord } from '@test/support/runRecordSeeds';
 import {
   FakeHost,
@@ -98,13 +98,8 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     // the process session over that store.
     it.layer(
       FakeHost.layer(async () => {
-        const historyStoragePath = await makeTempDir(
-          'texra-history-storage-',
-          tempDirs,
-        );
         return createFakeHost({
-          storagePath: historyStoragePath,
-          globalStoragePath: historyStoragePath,
+          storageRoot: await makeTempDir('texra-history-storage-', tempDirs),
         });
       }),
       { buildPerTest: true },

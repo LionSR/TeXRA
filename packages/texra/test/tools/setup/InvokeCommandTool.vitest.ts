@@ -22,24 +22,18 @@ interface InvokeRecord {
  *  test's scope, and a tool call made over that host. */
 const recordingHost = Effect.gen(function* () {
   const invocations: InvokeRecord[] = [];
-  const host = yield* Layer.build(
-    FakeHost.layer(
-      {},
-      {
-        setup: createFakeSetupPlatform({
-          commands: {
-            invoke: (command, ...args) =>
-              Effect.sync(() => {
-                invocations.push({ command, args });
-              }),
-          },
+  const setup = createFakeSetupPlatform({
+    commands: {
+      invoke: (command, ...args) =>
+        Effect.sync(() => {
+          invocations.push({ command, args });
         }),
-      },
-    ),
-  );
+    },
+  });
+  const host = yield* Layer.build(FakeHost.layer());
   const invoke = (input: unknown) =>
     InvokeCommandTool.call(input).pipe(
-      Effect.provide(withSetup(nativeToolTestLayer())),
+      Effect.provide(withSetup(nativeToolTestLayer(), setup)),
       Effect.provide(host),
     );
   return { invocations, invoke };

@@ -4,7 +4,6 @@ import { Effect, Fiber } from 'effect';
 import { assert, expect } from 'vitest';
 
 // Local imports
-import { waitForCondition } from '@test/support/asyncTestUtils';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { wolfram } from '@texra/tools/wolframPlugin';
@@ -43,7 +42,11 @@ layer(seeded, { buildPerTest: true })('seedDisabledToolDefaults', (it) => {
 layer(SessionGraph.hosted)('external tool availability probes', (it) => {
   it.effect('an interrupted version probe stops the process it spawned', () =>
     Effect.gen(function* () {
-      const spawner = scriptedSpawnerLayer(() => 'hang');
+      const spawned = Promise.withResolvers<void>();
+      const spawner = scriptedSpawnerLayer(() => {
+        spawned.resolve();
+        return 'hang';
+      });
       const { roots } = yield* FakeHost;
       const { availability } = wolfram;
       assert.exists(availability);
@@ -51,9 +54,7 @@ layer(SessionGraph.hosted)('external tool availability probes', (it) => {
         availability.check(roots).pipe(Effect.provide(spawner.layer)),
       );
 
-      yield* Effect.promise(() =>
-        waitForCondition(() => spawner.calls.length > 0),
-      );
+      yield* Effect.promise(() => spawned.promise);
       yield* Fiber.interrupt(fiber);
 
       expect(spawner.killed).toEqual(spawner.calls);

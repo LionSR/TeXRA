@@ -15,7 +15,7 @@
  *   `appendAll` or `job` holds the session's one publisher, as a slow commit
  *   does. Every operation runs the real store's code unless a fault is
  *   armed, and the faults go with the caller's scope.
- * - {@link parkedRunAfterCrash} is a process killed with a run parked: the
+ * - {@link waitingRunAfterCrash} is a process killed with a run waiting: the
  *   committed store copied to a fresh root, and a fresh session opened
  *   over it.
  * - {@link validationHost} is the host those sessions run on, one per test:
@@ -82,7 +82,7 @@ import {
 
 import { generateRunId } from '@shared/schemas';
 import type { TestApp } from './FakePlatform';
-import { REPO_ROOT } from './repoScan';
+import { REPO_ROOT } from './repoRoot';
 import { createTempDirPlatform } from './tempDirPlatform';
 import { FakeHost, sessionHandleOf, TestSession } from './testKernel';
 import type { Sessions } from '@texra-ai/harness';
@@ -209,7 +209,7 @@ export const sessionStoreFaults = (
       Effect.sync(() => Object.assign(database, faulty)),
       () => Effect.sync(() => Object.assign(database, originals)),
     );
-    // A case that fails while a call is held leaves the publisher parked:
+    // A case that fails while a call is held leaves the publisher blocked:
     // the scope lets every hold run, so closing the session never hangs.
     const holds = yield* Ref.make<readonly Deferred.Deferred<boolean>[]>([]);
     yield* Effect.addFinalizer(() =>
@@ -538,9 +538,9 @@ export const answersOf = (storage: string, runId: RunId): string[] =>
     return text === null ? [] : [text];
   });
 
-/** Whether `runId`'s newest position is parked waiting for input, after
+/** Whether `runId`'s newest position is waiting for input, after
  *  `answers` responses. */
-export const parkedAfter =
+export const waitingAfter =
   (runId: RunId, answers: number, storage: string) =>
   (rows: readonly StoredRow[]): boolean => {
     const last = rows.findLast(
@@ -556,10 +556,10 @@ export const parkedAfter =
 /**
  * Launch a root run of the bundled `assistant` with `instruction` on
  * `session`, a persistent session, and wait until it
- * answered and parked waiting for input. The launch lives in the caller's
+ * answered and waiting for input. The launch lives in the caller's
  * scope.
  */
-export const parkedRoot = (
+export const waitingRoot = (
   session: Context.Context<SessionServices>,
   instruction = 'Start here.',
 ): Effect.Effect<RunId, Cause.TimeoutError, SessionOwner | Scope.Scope> =>
@@ -575,11 +575,11 @@ export const parkedRoot = (
       runId,
       interactive: true,
     }).pipe(Effect.provide(session), Effect.forkScoped);
-    yield* untilStored(storage, parkedAfter(runId, 1, storage));
+    yield* untilStored(storage, waitingAfter(runId, 1, storage));
     return runId;
   });
 
-/** A root run parked in a store whose process crashed, and the session
+/** A root run waiting in a store whose process crashed, and the session
  *  opened over that store since. */
 interface CrashedRun {
   readonly session: Context.Context<SessionServices>;
@@ -589,11 +589,11 @@ interface CrashedRun {
 
 /**
  * Launch a root run of the bundled `assistant` with `instruction`, let it
- * answer and park waiting for input, then crash: the store's committed
+ * answer and wait for input, then crash: the store's committed
  * state is copied as a killed process leaves it, and a session over the
  * copy opens for the caller's scope (`interactions` attached as its host).
  */
-export const parkedRunAfterCrash = (
+export const waitingRunAfterCrash = (
   options: {
     readonly instruction?: string;
     readonly interactions?: HostInteractions;
@@ -610,7 +610,7 @@ export const parkedRunAfterCrash = (
     const { runId, storage } = yield* Effect.scoped(
       Effect.gen(function* () {
         const session = yield* persistentTestSession(roots);
-        const runId = yield* parkedRoot(session, options.instruction);
+        const runId = yield* waitingRoot(session, options.instruction);
         return { runId, storage: crashedCopy(roots.storage) };
       }),
     );

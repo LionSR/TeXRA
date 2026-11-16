@@ -7,24 +7,21 @@ import { expect } from 'vitest';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { getChatGptSubscriptionStatus } from '@texra/tools/setup/ProbeEnvironmentTool';
 
-/** The process over a host that passes a setup platform and holds a
- *  ChatGPT session naming its account. */
+/** The process over a host that holds a ChatGPT session naming its
+ *  account. */
 const perTest = Layer.provideMerge(
   SessionGraph.layer,
-  FakeHost.layer(
-    {
-      secrets: {
-        'auth.chatgpt': JSON.stringify({
-          accessToken: 'access-token',
-          refreshToken: 'refresh-token',
-          expiresAtMs: 0,
-          email: 'researcher@example.com',
-          accountId: 'account-private-id',
-        }),
-      },
+  FakeHost.layer({
+    secrets: {
+      'auth.chatgpt': JSON.stringify({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        expiresAtMs: 0,
+        email: 'researcher@example.com',
+        accountId: 'account-private-id',
+      }),
     },
-    { setup: {} },
-  ),
+  }),
 );
 
 layer(perTest, { buildPerTest: true })('shared setup capabilities', (it) => {

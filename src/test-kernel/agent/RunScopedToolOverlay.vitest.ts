@@ -61,7 +61,7 @@ function validationLaunch(
 ): RunLaunch {
   return testLaunch(runId, {
     config: { ...config, instruction: 'Do the thing.' },
-    // Headless: the turn ends the run instead of parking for input.
+    // Headless: the turn ends the run instead of waiting for input.
     toolPolicy: { stopAfterCycle: true },
   });
 }
