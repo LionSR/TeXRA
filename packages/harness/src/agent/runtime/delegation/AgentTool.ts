@@ -337,7 +337,8 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   );
   if (Result.isFailure(resolved))
     return errorResult(toErrorMessage(resolved.failure));
-  const [inputs = [], contexts = [], media = []] = resolved.success;
+  const [inputs = [], contexts = [], media = [], ...fileArgFiles] =
+    resolved.success;
   const contextFiles = contexts.map(({ file }) => file);
 
   // Awaited in a script unless sent to the background, and always in a
@@ -367,7 +368,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
           workingDirectory: launch.workingDirectory ?? null,
           id: launch.id ?? null,
           files: yield* fingerprint(
-            [inputs, contexts, media].map((group) =>
+            [inputs, contexts, media, ...fileArgFiles].map((group) =>
               group.map(({ absolutePath }) => absolutePath),
             ),
           ),
