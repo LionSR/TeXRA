@@ -52,8 +52,7 @@ export class SessionDrawer extends LitElement {
         flex-direction: column;
         background: var(--wa-color-surface-default);
         color: var(--wa-color-text-normal);
-        border-inline-end: var(--border-thin) solid
-          var(--wa-color-surface-border);
+        border-inline-end: var(--border-thin) solid var(--color-border);
         box-shadow: var(--wa-shadow-l);
       }
 
@@ -67,7 +66,7 @@ export class SessionDrawer extends LitElement {
       .drawer-search {
         flex: 0 0 auto;
         padding: var(--wa-space-2xs) var(--wa-space-xs);
-        border-bottom: var(--border-thin) solid var(--wa-color-surface-border);
+        border-bottom: var(--border-thin) solid var(--color-border);
       }
 
       .drawer-body {
@@ -81,7 +80,7 @@ export class SessionDrawer extends LitElement {
 
       .drawer-footer {
         flex: 0 0 auto;
-        border-top: var(--border-thin) solid var(--wa-color-surface-border);
+        border-top: var(--border-thin) solid var(--color-border);
       }
 
       .drawer-footer wa-button {

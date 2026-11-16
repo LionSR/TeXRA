@@ -22,10 +22,10 @@
   );
   --dv-activegroup-visiblepanel-tab-color: var(--wa-color-text-normal);
   --dv-inactivegroup-visiblepanel-tab-color: var(--wa-color-text-normal);
-  --dv-activegroup-hiddenpanel-tab-color: var(--wa-color-text-quiet);
-  --dv-inactivegroup-hiddenpanel-tab-color: var(--wa-color-text-quiet);
-  --dv-tab-divider-color: var(--wa-color-surface-border);
-  --dv-separator-border: var(--wa-color-surface-border);
+  --dv-activegroup-hiddenpanel-tab-color: var(--color-text-muted);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--color-text-muted);
+  --dv-tab-divider-color: var(--color-border);
+  --dv-separator-border: var(--color-border);
   --dv-active-sash-color: var(--wa-color-focus);
   --dv-sash-color: transparent;
   --dv-drag-over-background-color: color-mix(
@@ -35,8 +35,8 @@
   );
   --dv-drag-over-border: var(--border-thin) solid var(--wa-color-focus);
   --dv-icon-hover-background-color: var(--wa-color-neutral-fill-quiet);
-  --dv-tabs-container-scrollbar-color: var(--wa-color-surface-border);
-  --dv-scrollbar-background-color: var(--wa-color-surface-border);
+  --dv-tabs-container-scrollbar-color: var(--color-border);
+  --dv-scrollbar-background-color: var(--color-border);
   --dv-border-radius: var(--field-radius);
   --dv-tab-margin: 0;
   --dv-tab-border-radius: 0;
@@ -47,12 +47,12 @@
   height: 100%;
   min-width: 0;
   min-height: 0;
-  background: var(--wa-color-surface-border);
-  font-family: var(--wa-font-family-body);
+  background: var(--color-border);
+  font-family: var(--font-family);
   color: var(--wa-color-text-normal);
 }
 .shell-dock .dv-tabs-and-actions-container {
-  border-bottom: var(--border-thin) solid var(--wa-color-surface-border);
+  border-bottom: var(--border-thin) solid var(--color-border);
   box-sizing: border-box;
 }
 .shell-dock .dv-tab {
@@ -134,7 +134,7 @@
   place-content: center;
   height: 100%;
   padding: var(--wa-space-m);
-  color: var(--wa-color-text-quiet);
+  color: var(--color-text-muted);
   box-sizing: border-box;
   gap: var(--wa-space-s);
   min-width: 0;

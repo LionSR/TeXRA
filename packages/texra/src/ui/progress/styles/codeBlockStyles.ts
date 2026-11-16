@@ -8,7 +8,7 @@ import { css } from 'lit';
 export const codeBlockStyles = css`
   .code-block {
     position: relative;
-    border: var(--border-thin) solid var(--wa-color-surface-border);
+    border: var(--border-thin) solid var(--color-border);
     border-radius: var(--border-radius-medium);
     overflow: hidden;
     max-width: 100%;
@@ -20,13 +20,13 @@ export const codeBlockStyles = css`
     align-items: center;
     justify-content: space-between;
     padding: var(--wa-space-3xs) var(--wa-space-2xs);
-    background-color: var(--wa-color-surface-lowered);
+    background-color: var(--color-bg-secondary);
     border-bottom: var(--border-thin) solid var(--color-border);
     font-size: var(--font-size-xs);
   }
 
   .code-block-language {
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     text-transform: uppercase;
     letter-spacing: var(--letter-spacing-caps);
     font-weight: var(--font-weight-medium);
@@ -70,7 +70,7 @@ export const codeBlockStyles = css`
     padding: var(--wa-space-2xs) var(--wa-space-xs);
     border: none;
     background: transparent;
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     border-radius: var(--border-radius-small);
   }
 
@@ -106,7 +106,7 @@ export const codeBlockStyles = css`
 
   .hljs-comment,
   .hljs-quote {
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     font-style: italic;
   }
 
@@ -162,7 +162,7 @@ export const codeBlockStyles = css`
   .hljs-section,
   .hljs-selector-class,
   .hljs-selector-id {
-    color: var(--wa-color-text-link);
+    color: var(--color-text-link);
   }
 
   .hljs-meta,
@@ -195,7 +195,7 @@ export const codeBlockStyles = css`
   }
 
   .hljs-link {
-    color: var(--wa-color-text-link);
+    color: var(--color-text-link);
     text-decoration: underline;
   }
 `;

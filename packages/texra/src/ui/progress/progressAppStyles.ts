@@ -108,7 +108,7 @@ export const progressAppStyles = css`
     height: 100%;
     padding: 0 var(--wa-space-2xs) 0 var(--wa-space-xs);
     border-inline-end: var(--border-thin) solid var(--color-border);
-    background: var(--wa-color-surface-lowered);
+    background: var(--color-bg-secondary);
   }
 
   .header-main {
@@ -160,7 +160,7 @@ export const progressAppStyles = css`
     flex: 0 0 300px;
     min-height: 0;
     border-inline-end: var(--border-thin) solid var(--color-border);
-    background: var(--wa-color-surface-lowered);
+    background: var(--color-bg-secondary);
   }
 
   .dock-search {

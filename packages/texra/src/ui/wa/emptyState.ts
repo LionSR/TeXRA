@@ -21,7 +21,7 @@ export const placeholderStyles: CSSResult = css`
     box-sizing: border-box;
     min-width: 0;
     padding: var(--wa-space-l);
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
     text-align: center;
   }
@@ -60,7 +60,7 @@ export const placeholderStyles: CSSResult = css`
   .empty-message {
     margin: 0;
     padding: var(--wa-space-xs) var(--wa-space-s);
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
     text-align: center;
   }
@@ -71,7 +71,7 @@ export const placeholderStyles: CSSResult = css`
     justify-content: center;
     gap: var(--wa-space-xs);
     padding: var(--wa-space-l);
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
   }
 `;
 

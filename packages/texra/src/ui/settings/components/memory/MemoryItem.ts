@@ -47,7 +47,7 @@ export class MemoryItem extends LitElement {
         font-family: var(--wa-font-family-mono), monospace;
         font-size: var(--font-size);
         font-weight: var(--font-weight-medium);
-        color: var(--wa-color-text-link);
+        color: var(--color-text-link);
         overflow-wrap: anywhere;
       }
 

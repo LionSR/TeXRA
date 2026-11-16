@@ -47,10 +47,10 @@ export class LaunchAttachments extends LitElement {
         gap: var(--wa-space-3xs);
         max-width: 100%;
         padding: 0 0 0 var(--wa-space-2xs);
-        border: var(--border-thin) solid var(--wa-color-surface-border);
+        border: var(--border-thin) solid var(--color-border);
         border-radius: var(--wa-border-radius-pill);
         font-size: var(--font-size-sm);
-        color: var(--wa-color-text-quiet);
+        color: var(--color-text-secondary);
       }
       .name {
         overflow: hidden;

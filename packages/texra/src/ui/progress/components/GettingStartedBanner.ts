@@ -47,7 +47,7 @@ export class GettingStartedBanner extends LitElement {
 
       .getting-started-copy {
         margin: 0;
-        color: var(--wa-color-text-quiet);
+        color: var(--color-text-secondary);
         line-height: var(--line-height-normal);
       }
 

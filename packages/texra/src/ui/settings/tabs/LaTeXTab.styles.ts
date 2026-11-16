@@ -53,7 +53,7 @@ export const latexTabStyles: CSSResult = css`
 
   .dependency-guide {
     padding: var(--wa-space-xs);
-    background: var(--wa-color-surface-lowered);
+    background: var(--color-bg-secondary);
     border-radius: var(--border-radius);
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-normal);
@@ -79,7 +79,7 @@ export const latexTabStyles: CSSResult = css`
     flex: 1;
     min-width: 0;
     padding: var(--wa-space-2xs) var(--wa-space-xs);
-    background: var(--wa-color-surface-lowered);
+    background: var(--color-bg-secondary);
     border-radius: var(--border-radius-small);
     font-family: var(--wa-font-family-mono), monospace;
     font-size: var(--font-size-sm);
@@ -109,7 +109,7 @@ export const latexTabStyles: CSSResult = css`
   .setting-value {
     font-family: var(--wa-font-family-mono), monospace;
     font-size: var(--font-size-sm);
-    color: var(--wa-color-text-link);
+    color: var(--color-text-link);
   }
 
   /* Wide enough for the catalog's "value — description" option text. */

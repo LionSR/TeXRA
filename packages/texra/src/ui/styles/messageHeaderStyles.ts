@@ -34,7 +34,7 @@ export const messageHeaderStyles = css`
     line-height: var(--line-height-tight);
     font-size: var(--font-size-xs);
     font-variant-numeric: tabular-nums;
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     white-space: nowrap;
   }
   .message-actions {
@@ -57,7 +57,7 @@ export const messageHeaderStyles = css`
     border-radius: var(--field-radius);
     font-size: var(--font-size-xs);
     font-weight: var(--font-weight-normal);
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
   }
   .message-copy.copy-success::part(base) {
     color: var(--color-success);
@@ -87,7 +87,7 @@ export const messageDisclosureStyles = css`
     height: var(--control-size-s);
     margin: 0;
     font-size: var(--font-size-xs);
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     border-radius: var(--field-radius);
   }
   wa-details.message-disclosure:hover::part(icon),

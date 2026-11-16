@@ -17,7 +17,7 @@
  */
 
 :root {
-  font-family: var(--wa-font-family-body);
+  font-family: var(--font-family);
   color: var(--wa-color-text-normal);
 }
 
@@ -153,7 +153,7 @@ wa-dialog.desktop-settings-overlay .desktop-settings-body {
 wa-dialog.desktop-settings-overlay .desktop-settings-header {
   flex: none;
   padding: var(--wa-space-xs) var(--wa-space-m);
-  border-bottom: var(--border-thin) solid var(--wa-color-surface-border);
+  border-bottom: var(--border-thin) solid var(--color-border);
 }
 
 wa-dialog.desktop-settings-overlay .desktop-settings-title {
@@ -230,7 +230,7 @@ wa-dialog.desktop-command-palette::part(body) {
   width: 1em;
   height: 1em;
   place-items: center;
-  color: var(--wa-color-text-quiet);
+  color: var(--color-text-muted);
   font-size: var(--font-size-icon);
 }
 
@@ -268,7 +268,7 @@ wa-input.desktop-command-palette-input::part(input) {
   border-radius: var(--border-radius);
   background: var(--wa-color-surface-raised);
   box-shadow: inset 0 -1px 0 var(--border-hairline);
-  color: var(--wa-color-text-quiet);
+  color: var(--color-text-muted);
   font-family: var(--wa-font-family-mono);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
@@ -354,7 +354,7 @@ wa-input.desktop-command-palette-input::part(input) {
   width: var(--control-size-s);
   height: var(--control-size-s);
   place-items: center;
-  color: var(--wa-color-text-quiet);
+  color: var(--color-text-muted);
   font-size: var(--font-size-icon-sm);
 }
 
@@ -398,14 +398,14 @@ wa-input.desktop-command-palette-input::part(input) {
   min-height: 32px;
   padding: var(--wa-space-2xs) var(--wa-space-s);
   border-top: var(--border-thin) solid var(--border-hairline);
-  background: var(--wa-color-surface-lowered);
+  background: var(--color-bg-secondary);
 }
 
 .desktop-command-palette-help {
   display: flex;
   align-items: center;
   gap: var(--wa-space-s);
-  color: var(--wa-color-text-quiet);
+  color: var(--color-text-muted);
   font-size: var(--font-size-xs);
 }
 
@@ -439,9 +439,9 @@ wa-input.desktop-command-palette-input::part(input) {
 .desktop-empty-workspace-panel {
   max-width: 560px;
   padding: var(--wa-space-2xl) var(--wa-space-xl);
-  border: var(--border-thin) solid var(--wa-color-surface-border);
+  border: var(--border-thin) solid var(--color-border);
   border-radius: var(--wa-border-radius-xl);
-  background: var(--wa-color-surface-lowered);
+  background: var(--color-bg-secondary);
   text-align: center;
 }
 
@@ -455,7 +455,7 @@ wa-input.desktop-command-palette-input::part(input) {
 
 .desktop-empty-workspace-panel p {
   margin: 0 0 var(--wa-space-m);
-  color: var(--wa-color-text-quiet);
+  color: var(--color-text-muted);
   font-size: var(--font-size-lg);
   line-height: var(--line-height-relaxed);
 }
@@ -470,7 +470,7 @@ wa-input.desktop-command-palette-input::part(input) {
   max-width: 440px;
   margin: 0 auto var(--wa-space-l);
   padding: 0;
-  color: var(--wa-color-text-quiet);
+  color: var(--color-text-muted);
   font-size: var(--font-size);
   line-height: var(--line-height-normal);
   list-style: none;
@@ -524,7 +524,7 @@ wa-input.desktop-command-palette-input::part(input) {
   align-items: flex-start;
   min-width: 0;
   padding-bottom: var(--wa-space-s);
-  border-bottom: var(--border-thin) solid var(--wa-color-surface-border);
+  border-bottom: var(--border-thin) solid var(--color-border);
 }
 
 .desktop-log-viewer-header > div:first-child {
@@ -542,7 +542,7 @@ wa-input.desktop-command-palette-input::part(input) {
 .desktop-log-viewer-header p {
   margin: 0;
   overflow: hidden;
-  color: var(--wa-color-text-quiet);
+  color: var(--color-text-muted);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
   text-overflow: ellipsis;
@@ -590,7 +590,7 @@ wa-input.desktop-command-palette-input::part(input) {
   min-height: 0;
   padding: var(--wa-space-2xs);
   overflow: auto;
-  border: var(--border-thin) solid var(--wa-color-surface-border);
+  border: var(--border-thin) solid var(--color-border);
   border-radius: var(--border-radius-large);
   background: var(--wa-form-control-background-color);
   overscroll-behavior: contain;
@@ -624,7 +624,7 @@ wa-input.desktop-command-palette-input::part(input) {
 }
 
 .desktop-log-entry::part(icon) {
-  color: var(--wa-color-text-quiet);
+  color: var(--color-text-muted);
 }
 
 .desktop-log-entry-summary {
@@ -644,7 +644,7 @@ wa-input.desktop-command-palette-input::part(input) {
   height: var(--control-size-s);
   border-radius: var(--border-radius);
   background: var(--control-fill);
-  color: var(--wa-color-text-quiet);
+  color: var(--color-text-muted);
 }
 
 .desktop-log-entry-level-icon wa-icon {
@@ -662,12 +662,12 @@ wa-input.desktop-command-palette-input::part(input) {
 
 .desktop-log-entry[data-level='error'] .desktop-log-entry-level-icon {
   background: var(--wa-color-danger-fill-quiet);
-  color: var(--wa-color-danger-on-quiet);
+  color: var(--color-error);
 }
 
 .desktop-log-entry[data-level='warn'] .desktop-log-entry-level-icon {
   background: var(--wa-color-warning-fill-quiet);
-  color: var(--wa-color-warning-on-quiet);
+  color: var(--color-warning);
 }
 
 .desktop-log-entry[data-level='info'] .desktop-log-entry-level-icon {
@@ -681,7 +681,7 @@ wa-input.desktop-command-palette-input::part(input) {
 }
 
 .desktop-log-entry-time {
-  color: var(--wa-color-text-quiet);
+  color: var(--color-text-muted);
   font-family: var(--wa-font-family-mono);
   font-size: var(--font-size-xs);
   white-space: nowrap;
@@ -690,7 +690,7 @@ wa-input.desktop-command-palette-input::part(input) {
 .desktop-log-entry-preview {
   min-width: 0;
   overflow: hidden;
-  color: var(--wa-color-text-quiet);
+  color: var(--color-text-muted);
   font-size: var(--font-size-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -701,8 +701,8 @@ wa-input.desktop-command-palette-input::part(input) {
   padding: var(--wa-space-s);
   overflow: auto;
   border-radius: var(--border-radius-medium);
-  background: var(--wa-color-surface-lowered);
-  color: var(--wa-color-text-quiet);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-muted);
   font-family: var(--wa-font-family-mono);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-relaxed);
@@ -773,7 +773,7 @@ wa-input.desktop-command-palette-input::part(input) {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--wa-color-surface-lowered);
+  background: var(--color-bg-secondary);
 }
 
 .desktop-editor-tree-header {
@@ -783,7 +783,7 @@ wa-input.desktop-command-palette-input::part(input) {
   min-height: 28px;
   padding: 0 var(--wa-space-2xs);
   box-sizing: border-box;
-  color: var(--wa-color-text-quiet);
+  color: var(--color-text-muted);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
 }
@@ -803,19 +803,15 @@ wa-input.desktop-command-palette-input::part(input) {
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
-  scrollbar-color: color-mix(
-      in srgb,
-      var(--wa-color-text-quiet) 24%,
-      transparent
-    )
+  scrollbar-color: color-mix(in srgb, var(--color-text-muted) 24%, transparent)
     transparent;
 }
 
 .desktop-editor-tree-row {
   display: block;
   width: 100%;
-  color: var(--wa-color-text-quiet);
-  font-family: var(--wa-font-family-body);
+  color: var(--color-text-muted);
+  font-family: var(--font-family);
   font-size: var(--font-size-sm);
 }
 
@@ -874,8 +870,8 @@ wa-input.desktop-command-palette-input::part(input) {
 }
 
 .desktop-editor-tree-status {
-  color: var(--wa-color-text-quiet);
-  font-family: var(--wa-font-family-body);
+  color: var(--color-text-muted);
+  font-family: var(--font-family);
   font-size: var(--font-size-xs);
 }
 
@@ -885,7 +881,7 @@ wa-input.desktop-command-palette-input::part(input) {
 }
 
 .desktop-editor-tree-status.is-error {
-  color: var(--wa-color-danger-on-quiet);
+  color: var(--color-error);
 }
 
 /* Each row renders one path segment. Preserve its reading direction and

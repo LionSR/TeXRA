@@ -139,7 +139,7 @@ export const modelSelectionListStyles: CSSResult = css`
 
   .deprecated-models {
     border-top: var(--border-thin) solid var(--color-border);
-    background: var(--wa-color-surface-lowered);
+    background: var(--color-bg-secondary);
   }
 
   /* Unavailable model rows (no usable credential) */
@@ -161,10 +161,7 @@ export const modelSelectionListStyles: CSSResult = css`
   }
 
   .model-row-icon--warning {
-    --_icon-color: var(
-      --wa-color-list-warning-fg,
-      var(--wa-color-warning-on-quiet)
-    );
+    --_icon-color: var(--wa-color-list-warning-fg, var(--color-warning));
   }
 
   @container settings (max-width: 520px) {

@@ -249,7 +249,7 @@ export const logEntryStyles = css`
   .details-summary {
     gap: var(--wa-space-xs);
     min-width: 0;
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
   }
 
@@ -260,7 +260,7 @@ export const logEntryStyles = css`
   .error-timestamp {
     flex: 0 0 auto;
     margin-inline-start: auto;
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     font-size: var(--font-size-xs);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -284,7 +284,7 @@ export const logEntryStyles = css`
       var(--wa-color-neutral-fill-quiet) 72%,
       transparent
     );
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
   }
 
   /* Raw streamed text has no <p>/<br> tags to carry line breaks (unlike the

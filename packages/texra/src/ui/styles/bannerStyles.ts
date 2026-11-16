@@ -29,7 +29,7 @@ const bannerFrameStyles: CSSResult = css`
     font-size: var(--font-size-sm);
     /* Full-sentence reading text, so it takes the ≥4.5:1 token rather than
        the 3:1 non-text --color-text-muted. */
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     line-height: var(--line-height-relaxed);
   }
 

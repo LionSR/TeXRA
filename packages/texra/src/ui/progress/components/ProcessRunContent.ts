@@ -24,7 +24,7 @@ export class ProcessRunContent extends BaseRunContent {
         margin: 0;
         background: var(--wa-color-terminal-background);
         color: var(--wa-color-terminal-foreground);
-        border: var(--border-thin) solid var(--wa-color-surface-border);
+        border: var(--border-thin) solid var(--color-border);
         border-radius: var(--border-radius-large);
         font-family: var(--wa-font-family-mono);
         font-size: var(--wa-editor-font-size);

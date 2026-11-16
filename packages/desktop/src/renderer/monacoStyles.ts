@@ -9,14 +9,14 @@ export const monacoStyles = css`
   .monaco-component {
     --vscode-menu-background: var(--wa-color-menu-background);
     --vscode-menu-foreground: var(--wa-color-text-normal);
-    --vscode-menu-border: var(--wa-color-surface-border);
+    --vscode-menu-border: var(--color-border);
     --vscode-menu-selectionBackground: var(--wa-color-brand-fill-quiet);
     --vscode-menu-selectionForeground: var(--wa-color-text-normal);
-    --vscode-menu-separatorBackground: var(--wa-color-surface-border);
+    --vscode-menu-separatorBackground: var(--color-border);
     --vscode-widget-shadow: var(--wa-color-surface-shadow);
     --vscode-editorHoverWidget-background: var(--wa-color-menu-background);
     --vscode-editorHoverWidget-foreground: var(--wa-color-text-normal);
-    --vscode-editorHoverWidget-border: var(--wa-color-surface-border);
+    --vscode-editorHoverWidget-border: var(--color-border);
     /* Monaco also paints its outer context view and scroll wrapper. Without
        its geometry tokens those surfaces keep square corners around our menu. */
     --vscode-cornerRadius-small: var(--border-radius-small);
@@ -29,7 +29,7 @@ export const monacoStyles = css`
   .context-view.monaco-menu-container:has(.monaco-menu) {
     background: var(--wa-color-menu-background);
     color: var(--wa-color-text-normal);
-    border: var(--border-thin) solid var(--wa-color-surface-border);
+    border: var(--border-thin) solid var(--color-border);
     border-radius: var(--border-radius-medium);
     box-shadow: var(--wa-shadow-m);
     overflow: hidden;
@@ -49,7 +49,7 @@ export const monacoStyles = css`
   }
 
   .monaco-editor .margin-view-overlays .line-numbers {
-    font-family: var(--wa-font-family-body);
+    font-family: var(--font-family);
     font-size: var(--font-size-xs);
     font-variant-numeric: tabular-nums;
   }
@@ -62,13 +62,13 @@ export const monacoStyles = css`
   .monaco-editor .suggest-widget,
   .monaco-hover,
   .monaco-menu-container {
-    font-family: var(--wa-font-family-body);
+    font-family: var(--font-family);
     font-size: var(--font-size-sm);
     border-radius: var(--border-radius-medium);
   }
 
   .quick-input-widget {
-    border: var(--border-thin) solid var(--wa-color-surface-border);
+    border: var(--border-thin) solid var(--color-border);
     box-shadow: 0 8px 24px var(--wa-color-surface-shadow);
     max-width: calc(100vw - var(--wa-space-l));
     overflow: auto;
@@ -87,10 +87,10 @@ export const monacoStyles = css`
   .texra-command-description {
     box-sizing: border-box;
     padding: var(--wa-space-xs);
-    border-block-start: var(--border-thin) solid var(--wa-color-surface-border);
+    border-block-start: var(--border-thin) solid var(--color-border);
     font: inherit;
     line-height: var(--line-height-normal);
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-muted);
     overflow-wrap: anywhere;
     max-height: 5lh;
     overflow: auto;
@@ -120,7 +120,7 @@ export const monacoStyles = css`
   }
 
   .quick-input-widget .monaco-keybinding-key {
-    font-family: var(--wa-font-family-body);
+    font-family: var(--font-family);
     font-size: var(--font-size-xs);
     border-radius: var(--border-radius-small);
     box-shadow: none;
@@ -128,6 +128,6 @@ export const monacoStyles = css`
 
   .monaco-editor .find-widget {
     border-radius: var(--field-radius);
-    font-family: var(--wa-font-family-body);
+    font-family: var(--font-family);
   }
 `;

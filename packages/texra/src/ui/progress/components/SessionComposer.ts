@@ -146,12 +146,12 @@ export class SessionComposer extends LitElement {
         overflow-y: auto;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
-        font-family: var(--wa-font-family-body);
+        font-family: var(--font-family);
         font-size: var(--font-size-reading);
         line-height: var(--line-height-normal);
       }
       textarea::placeholder {
-        color: var(--wa-color-text-quiet);
+        color: var(--color-text-secondary);
       }
       .composer:not(.is-compact) textarea {
         --textarea-min-height: calc(3lh + 2 * var(--wa-space-2xs));
@@ -210,7 +210,7 @@ export class SessionComposer extends LitElement {
       .menu-choice small {
         font-size: var(--font-size-xs);
         line-height: var(--line-height-normal);
-        color: var(--wa-color-text-quiet);
+        color: var(--color-text-secondary);
       }
       .chip-label {
         display: block;
@@ -225,7 +225,7 @@ export class SessionComposer extends LitElement {
       }
 
       .recording::part(base) {
-        color: var(--wa-color-danger-on-quiet);
+        color: var(--color-error);
       }
       queued-follow-ups {
         display: block;

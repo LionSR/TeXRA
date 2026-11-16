@@ -4,7 +4,7 @@ import { css, type CSSResult } from 'lit';
 
 export const proposalRequestPanelStyles: CSSResult = css`
   .request-card__actions {
-    border-block-start: var(--border-thin) solid var(--wa-color-surface-border);
+    border-block-start: var(--border-thin) solid var(--color-border);
   }
 
   /* The model menu sits in the ask's sentence, in the ask's type. */
@@ -51,7 +51,7 @@ export const proposalRequestPanelStyles: CSSResult = css`
     overflow-y: auto;
     line-height: var(--line-height-normal);
     padding: var(--wa-space-2xs) 0;
-    border-bottom: var(--border-thin) solid var(--wa-color-surface-border);
+    border-bottom: var(--border-thin) solid var(--color-border);
   }
 
   .workflow-proposal__instruction pre {
@@ -100,13 +100,13 @@ export const proposalRequestPanelStyles: CSSResult = css`
 
   .workflow-proposal__file-name {
     font-family: var(--wa-font-family-mono);
-    color: var(--wa-color-text-link);
+    color: var(--color-text-link);
     cursor: pointer;
   }
 
   .workflow-proposal__file-name:hover {
     text-decoration: underline;
-    color: var(--wa-color-text-link-active);
+    color: var(--color-text-link-active);
   }
 
   /* Radius only — the ring comes from focusRingStyles. */
@@ -133,6 +133,6 @@ export const proposalRequestPanelStyles: CSSResult = css`
   }
 
   .workflow-proposal__output-files .workflow-proposal__file-label {
-    color: var(--wa-color-text-link);
+    color: var(--color-text-link);
   }
 `;

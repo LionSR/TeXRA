@@ -258,7 +258,7 @@ export const buttonStyles: CSSResult = css`
     border: var(--border-thin) solid transparent;
     border-radius: var(--row-radius);
     background: transparent;
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     transition:
       background-color var(--transition-fast),
       border-color var(--transition-fast),
@@ -344,7 +344,7 @@ export const buttonStyles: CSSResult = css`
       .action-icon-button
     )[disabled]::part(base):is(:hover, :active) {
     background: transparent;
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
   }
 
   .btn-ghost.is-link::part(base),
@@ -435,7 +435,7 @@ export const iconSurfaceStyles: CSSResult = css`
     border: var(--border-thin) solid var(--border-hairline);
     border-radius: var(--row-radius);
     background: var(--control-fill);
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
   }
 
   .icon-surface wa-icon {
@@ -526,7 +526,7 @@ export const formControlStyles: CSSResult = css`
     min-height: var(--row-height);
     padding: var(--wa-space-2xs) var(--wa-space-xs);
     border-radius: var(--row-radius);
-    font-family: var(--wa-font-family-body);
+    font-family: var(--font-family);
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
   }
@@ -639,7 +639,7 @@ export const settingsRowStyles: CSSResult = css`
 
   .settings-row-help {
     font-size: var(--font-size-sm);
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     line-height: var(--line-height-relaxed);
   }
 

@@ -76,7 +76,7 @@ export const requestPanelSharedStyles: CSSResult = css`
     padding: var(--wa-space-2xs) var(--wa-space-xs);
     border-radius: var(--border-radius-small);
     background: var(--panel-background);
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
   }
@@ -96,7 +96,7 @@ export const requestPanelSharedStyles: CSSResult = css`
     z-index: var(--layer-sticky);
     margin-block-start: auto;
     padding-block-start: var(--wa-space-2xs);
-    background: var(--wa-color-surface-lowered);
+    background: var(--color-bg-secondary);
   }
 
   .request-card__actions > * {
@@ -113,7 +113,7 @@ export const requestPanelSharedStyles: CSSResult = css`
   }
 
   .request-card__actions wa-button[data-action='note']::part(base) {
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
   }
 
   /* Prose note, same sizing contract as the progress composer: rest at two
@@ -145,7 +145,7 @@ export const requestPanelSharedStyles: CSSResult = css`
     overflow-y: auto;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    font-family: var(--wa-font-family-body);
+    font-family: var(--font-family);
     font-size: var(--font-size);
     line-height: var(--line-height-relaxed);
   }

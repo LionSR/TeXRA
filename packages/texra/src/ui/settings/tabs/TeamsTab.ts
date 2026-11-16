@@ -157,7 +157,7 @@ export class TeamsTab extends LitElement {
       }
 
       .preset-delete-btn::part(base):hover {
-        color: var(--wa-color-danger-on-quiet);
+        color: var(--color-error);
       }
 
       /* Part-piercing: a shadow-scoped :focus-visible cannot reach wa-button's

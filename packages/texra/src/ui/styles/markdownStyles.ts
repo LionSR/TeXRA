@@ -100,7 +100,7 @@ export const markdownStyles: CSSResult = css`
   }
 
   .markdown-content code {
-    background-color: var(--wa-color-surface-lowered);
+    background-color: var(--color-bg-secondary);
     padding: var(--wa-space-3xs) var(--wa-space-2xs);
     border-radius: var(--border-radius);
     /* Mono so paths/flags/identifiers stay distinct from prose; 0.9em
@@ -113,7 +113,7 @@ export const markdownStyles: CSSResult = css`
     padding: var(--wa-space-xs) var(--wa-space-s);
     margin: 0.5em 0;
     border-radius: var(--border-radius);
-    background-color: var(--wa-color-surface-lowered);
+    background-color: var(--color-bg-secondary);
     overflow-x: auto;
   }
 

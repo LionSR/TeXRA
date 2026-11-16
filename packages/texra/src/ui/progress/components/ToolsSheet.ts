@@ -50,7 +50,7 @@ export class ToolsSheet extends LitElement {
         flex-direction: column;
         background: var(--wa-color-surface-default);
         color: var(--wa-color-text-normal);
-        border-top: var(--border-thin) solid var(--wa-color-surface-border);
+        border-top: var(--border-thin) solid var(--color-border);
         box-shadow: var(--wa-shadow-l);
       }
 
