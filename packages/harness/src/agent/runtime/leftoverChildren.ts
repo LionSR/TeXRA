@@ -71,7 +71,7 @@ const closeLeftoverRun = Effect.fn('closeLeftoverRun')(function* (
   const facts = yield* (yield* SessionLog).facts(run.id);
   if (facts === null || facts.end !== null) return;
   if ((yield* owningCall(run.id)) !== null) return;
-  const parentRunId = parent.runId;
+  const parentId = parent.runId;
   const report = (why: string) => reportInterrupted(run, why);
   const rejection = yield* checkpointRefusal(run.id);
   if (rejection !== null) return yield* report(rejection.kind);
@@ -82,7 +82,7 @@ const closeLeftoverRun = Effect.fn('closeLeftoverRun')(function* (
     logFailure(
       CHANNEL,
       `Child run ${run.id} ${what}`,
-    )({ parent: parentRunId, error });
+    )({ parent: parentId, error });
   yield* Effect.forkScoped(
     Effect.matchEffect(resumeRun(run.id, {}), {
       onSuccess: (answer) =>

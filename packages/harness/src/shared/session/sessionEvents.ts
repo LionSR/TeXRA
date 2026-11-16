@@ -17,6 +17,7 @@ import {
 import type {
   AggregateId,
   CommitOrdinal,
+  RunId,
   SessionRow,
   DisplayRow,
   SessionRowDraft,
@@ -129,7 +130,7 @@ export class SessionEvents extends Context.Service<
      *  job like any other, so what this publisher tracks forgets every run
      *  it names. */
     readonly removeRun: (
-      id: AggregateId,
+      id: RunId,
       expectedStartCommit: CommitOrdinal,
     ) => Effect.Effect<
       readonly SessionRow[],

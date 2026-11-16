@@ -178,7 +178,7 @@ export const endRun = Effect.fn('endRun')(function* (
             : classified;
         })();
   // Read once as the run entered.
-  const parentRunId = ctx.entry.parent;
+  const parentId = ctx.entry.parent;
   if (thrown !== undefined && error !== undefined) {
     if (verdict.outcome === RUN_OUTCOME.CANCELLED)
       // A stop that met a failure (a finalizer that died or failed as the
@@ -193,14 +193,14 @@ export const endRun = Effect.fn('endRun')(function* (
       });
     // A root's failure is logged here; a child's is delivered to its
     // orchestrator, so a second wrapper error would blame the parent.
-    if (parentRunId === null)
+    if (parentId === null)
       yield* logSdkError(ctx.logger, runEndErrorMessage(error), thrown, {
         operation: `execute ${agentIdentifier}`,
       });
   }
   // A child's failure rides its result, the error its delivery reports.
   const childResult: RunReport | undefined =
-    parentRunId === null
+    parentId === null
       ? carried
       : {
           ...(carried ?? emptyReport(ctx, verdict.outcome)),
@@ -251,7 +251,7 @@ export const endRun = Effect.fn('endRun')(function* (
             );
           }),
   );
-  if (parentRunId === null && thrown !== undefined && error !== undefined)
+  if (parentId === null && thrown !== undefined && error !== undefined)
     // A root run's failure. Once its `run.end` row committed, the
     // session's presenter shows that row (`presentTerminalResult`); a run
     // that never opened has no row, so its launch's caller presents this.

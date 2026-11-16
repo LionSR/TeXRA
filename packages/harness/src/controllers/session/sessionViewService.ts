@@ -29,10 +29,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import {
-  qualifyAggregateId,
-  type TranscriptSubscription,
-} from '@shared/schemas';
+import { type TranscriptSubscription } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
@@ -199,7 +196,7 @@ export const makeSessionViewAccess = Effect.fn(
       inputs
         .read(
           runIds.map((id) => ({
-            id: qualifyAggregateId('run', id),
+            id: id,
             fromSeq: 0,
           })),
           0,

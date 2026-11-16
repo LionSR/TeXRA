@@ -10,6 +10,7 @@
  * recorded effect is used instead.
  */
 import { callKey } from '@shared/session/runFacts';
+import { ancestorIds } from '@shared/session/runRelation';
 import * as path from 'node:path';
 
 import {
@@ -38,7 +39,6 @@ import { pluginDataDir, runHook } from '@common/plugins/pluginHooks';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { SessionRoots } from '@platform/rootedFs';
 import {
-  qualifyAggregateId,
   type HookOutcomePayload,
   type ToolDefinition,
   type ToolResult,
@@ -203,7 +203,7 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
     outcomes,
     outcomes.map((payload): RunHistoryDraft => ({
       type: 'hook.outcome',
-      aggregateId: qualifyAggregateId('run', run.runId),
+      aggregateId: run.runId,
       payload,
     })),
   );
@@ -217,17 +217,19 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
 const inputBase = Effect.fn('inputBase')(function* (run: AgentRunShape) {
   const { parent } = run.entry;
   const log = yield* SessionLog;
-  let root = parent ?? run.runId;
-  if (parent !== null) {
-    // Parentage is a tree; the visited check only stops a corrupt cycle.
-    const seen = new Set([root]);
-    for (;;) {
-      const up = (yield* Effect.orDie(log.facts(root)))?.parent?.id;
-      if (up == null || seen.has(up)) break;
-      seen.add(up);
-      root = up;
-    }
-  }
+  // The top of the line its rows record: a removed run at the top still
+  // names the session.
+  const above =
+    parent === null
+      ? []
+      : yield* ancestorIds(
+          (id) =>
+            Effect.orDie(
+              Effect.map(log.facts(id), (facts) => facts?.parent?.id ?? null),
+            ),
+          parent,
+        );
+  const root = above.at(-1) ?? parent ?? run.runId;
   return {
     session_id: root,
     cwd: run.workingDirectory ?? (yield* SessionRoots).workspace ?? '',

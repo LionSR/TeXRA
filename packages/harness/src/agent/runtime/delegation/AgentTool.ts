@@ -269,7 +269,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
 ) {
   const { run } = call;
   const script = call.script ?? undefined;
-  const { runId: parentRunId } = run;
+  const { runId: parentId } = run;
   const { program } = launch;
   // A name no plugin registers fails before anyone is asked to approve it.
   if (program !== null) {
@@ -320,7 +320,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       ).map(([label, list]) =>
         trusted
           ? Effect.succeed(list.map((file) => ({ file, absolutePath: file })))
-          : resolveInvocationFileList(parentRunId, label, list),
+          : resolveInvocationFileList(parentId, label, list),
       ),
       { concurrency: 'unbounded' },
     ),
@@ -491,7 +491,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     running(
       executeSubagentInBand({
         runId: agentChildRunId(call),
-        parentRunId,
+        parentId,
         configPayload,
         parentCall: { callId: call.callId, card: call.logId },
         grants,

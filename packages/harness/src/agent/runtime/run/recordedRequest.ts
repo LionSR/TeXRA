@@ -30,7 +30,6 @@ import {
 import { contextUpdate } from '@agent/prompt/PromptBuilder';
 import { delegationSection } from '@agent/runtime/delegation/delegationAvailability';
 import {
-  qualifyAggregateId,
   PromptSectionsSchema,
   Sha256Schema,
   type PromptSections,
@@ -94,7 +93,7 @@ export function blobRows(
     return [
       {
         type: 'context.blob',
-        aggregateId: qualifyAggregateId('run', runId),
+        aggregateId: runId,
         payload: { digest, value: JSON.parse(stableStringify(value) ?? '') },
       },
     ];
@@ -143,7 +142,7 @@ export function attemptRows(
     ]),
     {
       type: 'model.message',
-      aggregateId: qualifyAggregateId('run', run.runId),
+      aggregateId: run.runId,
       payload: {
         kind: 'attempt',
         invocation,

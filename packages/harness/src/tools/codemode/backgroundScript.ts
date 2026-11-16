@@ -56,7 +56,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
   grants?: ApprovalGrants,
 ) {
   const { run } = call;
-  const { runId: parentRunId } = run;
+  const { runId: parentId } = run;
   const earlier = yield* earlierChild(call);
   if (earlier !== null) return receipt(title, earlier, true);
   const bound = yield* ScopedRef.get(run.model);
@@ -98,7 +98,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
   // that fails before it fails this call.
   yield* startChildRun(runId, definition, {
     identity: { kind: 'script', title },
-    parentRunId,
+    parentId,
     parentCall: { callId: call.callId, card: call.logId, awaited: false },
     description: title,
     ...(grants !== undefined && { grants }),

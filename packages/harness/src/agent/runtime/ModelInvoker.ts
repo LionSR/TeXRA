@@ -46,7 +46,6 @@ import { SessionRoots } from '@platform/rootedFs';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
   MESSAGE_TYPES,
-  qualifyAggregateId,
   type StepAfterFailure,
   type InvocationRef,
   type ModelFailure,
@@ -203,7 +202,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       const { runId, logger } = run;
       const log = yield* SessionLog;
       const roots = yield* SessionRoots;
-      const aggregateId = qualifyAggregateId('run', runId);
+      const aggregateId = runId;
       const usageLog = yield* UsageLog;
       /** When each attempt was sent, by its reference, for pricing a failure
        *  the provider billed by the time it took. */

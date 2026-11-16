@@ -5,7 +5,6 @@ import { expect } from 'vitest';
 import {
   RunIdSchema,
   AgentConfigSchema,
-  qualifyAggregateId,
   RUN_OUTCOME,
   type RunId,
 } from '@texra-ai/harness/schemas';
@@ -47,7 +46,7 @@ const fail = (session: Session, runId: RunId) =>
   Context.get(session, SessionLog).transact([
     {
       type: 'run.end',
-      aggregateId: qualifyAggregateId('run', runId),
+      aggregateId: runId,
       outcome: RUN_OUTCOME.FAILED,
       output: emptyRunEndOutput(),
     },
@@ -85,7 +84,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             yield* seedRows(Context.get(session, SessionLog))([
               {
                 type: 'run.config',
-                aggregateId: qualifyAggregateId('run', runId),
+                aggregateId: runId,
                 config: Schema.decodeUnknownSync(AgentConfigSchema)(
                   asDocumentTask({ model: 'test-model' }),
                 ),

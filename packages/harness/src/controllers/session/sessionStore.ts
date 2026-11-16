@@ -19,11 +19,7 @@ import {
 } from 'effect';
 import { writeLogLine } from '@logger/logSink';
 
-import {
-  qualifyAggregateId,
-  type CommitOrdinal,
-  type DisplayRow,
-} from '@shared/schemas';
+import { type CommitOrdinal, type DisplayRow } from '@shared/schemas';
 import {
   Database,
   type DatabaseAggregateClosed,
@@ -184,13 +180,11 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
           .readAggregate(id, 1, RUN_ROW_READS[read].kinds, through)
           .pipe(Effect.map((rows) => foldRunRows(read, rows))),
       blobs: database.readBlobs,
-      facts: (runId) =>
-        database.readRunRecord(qualifyAggregateId('run', runId)),
+      facts: (runId) => database.readRunRecord(runId),
       // A removed run's rows end with its deletion marker: none to show.
       display: (runId) =>
-        Effect.map(
-          database.readDisplayAggregate(qualifyAggregateId('run', runId), 1),
-          (rows) => (rows.at(-1)?.type === 'run.removed' ? [] : rows),
+        Effect.map(database.readDisplayAggregate(runId, 1), (rows) =>
+          rows.at(-1)?.type === 'run.removed' ? [] : rows,
         ),
       tail: events.all,
       listing: database.readListing,

@@ -7,11 +7,7 @@ import { Effect, Schema, Context, Deferred, Fiber } from 'effect';
 
 import { expect } from 'vitest';
 import { Sessions } from '@texra-ai/harness';
-import {
-  qualifyAggregateId,
-  RUN_OUTCOME,
-  RunIdSchema,
-} from '@texra-ai/harness/schemas';
+import { RUN_OUTCOME, RunIdSchema } from '@texra-ai/harness/schemas';
 import { endRunRows } from '@agent/storage/runLifecycle';
 
 import { RunRegistry } from '@agent/runtime/runRegistry';
@@ -126,7 +122,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             yield* publishTestRows(session, [
               {
                 type: 'stage.start',
-                aggregateId: qualifyAggregateId('run', runId),
+                aggregateId: runId,
                 id: `stage:${runId}`,
                 label: 'Running stage',
               },
@@ -166,10 +162,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             const ends = (runId: string) =>
               Effect.map(
                 Context.get(reopened, SessionLog).runRows(
-                  qualifyAggregateId(
-                    'run',
-                    Schema.decodeUnknownSync(RunIdSchema)(runId),
-                  ),
+                  Schema.decodeUnknownSync(RunIdSchema)(runId),
                   'lifecycle',
                 ),
                 (rows) =>

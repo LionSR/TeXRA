@@ -22,7 +22,6 @@ import {
 
 import { logFailure } from '@logger/effectLog';
 import {
-  qualifyAggregateId,
   referencedAggregates,
   replayInputs,
   type AggregateId,
@@ -219,7 +218,7 @@ export const sessionInputsLayer = Layer.effect(
                   // the marker names.
                   const closed = rows.flatMap((row) =>
                     row.type === 'run.removed'
-                      ? row.runIds.map((id) => qualifyAggregateId('run', id))
+                      ? row.runIds.map((id) => id)
                       : [],
                   );
                   const existence: ExistenceReconciliation = {

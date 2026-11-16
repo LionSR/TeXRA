@@ -1,41 +1,33 @@
 /**
- * The one reading of where two runs stand in the supervision tree, for
- * every surface that says it: acceptance stamping a message's sender, the
- * `/executions` listing. A job that stamps reads parentage off the rows
- * (`run.start`); a listing reads the view's `parentId`, their projection.
+ * A run's line of launchers as the store records it, for code that must
+ * not trail the log (a job that writes, a stop's cascade): its ids
+ * ({@link ancestorIds}) or its rows ({@link ancestryRows}). The session
+ * view states the same lines on each run (`parentId`, `ancestors`,
+ * `childIds`), and every reader that only shows them reads the view.
  */
 import { Effect } from 'effect';
 
-import type { RunId, RunRelation } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
-type ParentOf = (runId: RunId) => RunId | null | undefined;
-
-/** `runId`'s ancestors, nearest first. Parentage is a tree by construction;
- *  the visited check only keeps a corrupt cycle from spinning. */
-function ancestry(runId: RunId, parentOf: ParentOf): RunId[] {
+/**
+ * The runs above `runId`, nearest first, as `parentOf` answers each edge.
+ * A run an edge names is on the line whatever else is known of it (one
+ * since removed still is). Parentage is a tree; a run already on the line
+ * only ends a corrupt cycle.
+ */
+export const ancestorIds = Effect.fnUntraced(function* <E>(
+  parentOf: (runId: RunId) => Effect.Effect<RunId | null, E>,
+  runId: RunId,
+): Effect.fn.Return<RunId[], E> {
   const line: RunId[] = [];
-  for (let up = parentOf(runId); up != null; up = parentOf(up)) {
-    if (line.includes(up)) break;
-    line.push(up);
-  }
+  for (
+    let id = yield* parentOf(runId);
+    id !== null && !line.includes(id);
+    id = yield* parentOf(id)
+  )
+    line.push(id);
   return line;
-}
-
-/** What run `a` is to run `b`. */
-export function runRelation(
-  a: RunId,
-  b: RunId,
-  parentOf: ParentOf,
-): RunRelation {
-  const aLine = ancestry(a, parentOf);
-  const bLine = ancestry(b, parentOf);
-  if (bLine[0] === a) return 'parent';
-  if (aLine[0] === b) return 'child';
-  if (bLine.includes(a)) return 'ancestor';
-  if (aLine.includes(b)) return 'descendant';
-  if (aLine[0] !== undefined && aLine[0] === bLine[0]) return 'sibling';
-  return 'peer';
-}
+});
 
 /**
  * The rows of each run from the `starts` up to their roots, by run: what a

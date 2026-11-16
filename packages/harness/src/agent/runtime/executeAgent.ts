@@ -59,7 +59,7 @@ export interface ExecuteAgentOptions {
   readonly registration?: RegisterRunOptions;
   /** A resumed run's parent, as its rows hold it, read once by the resume;
    *  a fresh run's is its registration's. */
-  readonly parentRunId?: RunId;
+  readonly parentId?: RunId;
   /** Run-scoped tools added to the agent without mutating the default registry. */
   readonly tools?: readonly ITool<Error, PluginToolServices>[];
   /** Fires on meaningful progress: plan changes and tool call milestones. */
@@ -91,8 +91,7 @@ const enterRun = Effect.fn('enterRun')(function* (
 ) {
   const log = yield* SessionLog;
   const { config } = definition;
-  const parent =
-    options.registration?.parentRunId ?? options.parentRunId ?? null;
+  const parent = options.registration?.parentId ?? options.parentId ?? null;
   // A resumed run's facts, read once: whether its parent's call awaits it,
   // and whether its launch let it take input.
   const facts =

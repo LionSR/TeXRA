@@ -22,7 +22,6 @@ import {
   type DeclinableUsageRoute,
   type OfferedTool,
   type PositionAt,
-  qualifyAggregateId,
   type ModelFailure,
   type RunId,
   type TokenUsageStats,
@@ -233,7 +232,7 @@ export const cancelRequestRows = (
         ? [
             {
               type: 'request.decided' as const,
-              aggregateId: qualifyAggregateId('run', runId),
+              aggregateId: runId,
               requestId,
               decision: { action: 'cancel' as const, cause },
             },

@@ -18,7 +18,6 @@ import { render, type Instance as InkInstance } from 'ink';
 import { AgentCatalog } from '@texra-ai/harness/host';
 import {
   type RuntimeCommand,
-  qualifyAggregateId,
   type RunId,
   type AgentConfig,
   type ApprovalPolicy,
@@ -451,7 +450,7 @@ export async function runChat(
         Stream.runDrain(
           runSession.view.watch(
             ids.map((id) => ({
-              id: qualifyAggregateId('run', id),
+              id: id,
               fromSeq: 0,
             })),
             { cursor: view.cursor, debug: view.debug },

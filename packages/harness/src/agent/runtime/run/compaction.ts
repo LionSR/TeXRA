@@ -16,7 +16,7 @@ import { startCompactionActivity } from '@agent/trace/traceLogs';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { Settings, type SettingsStores } from '@shared/config/settings';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
-import { qualifyAggregateId, type RunId } from '@shared/schemas';
+import { type RunId } from '@shared/schemas';
 import type { RunCell } from '@shared/session/runHistory';
 import { turnText } from '@shared/session/runFacts';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
@@ -218,7 +218,7 @@ const land = Effect.fn('compaction.land')(function* (
     ...answers,
     {
       type: 'context.edit',
-      aggregateId: qualifyAggregateId('run', input.runId),
+      aggregateId: input.runId,
       payload: {
         cause: 'compaction',
         trigger,

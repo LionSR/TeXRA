@@ -22,10 +22,10 @@ import { normalizeFilePath } from '@utils/core/pathBasics';
 import { getRunRecords } from './runOwnership';
 
 /** Fail unless `reference` names a declared output of a completed direct
- *  child of `parentRunId`. */
+ *  child of `parentId`. */
 const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
   function* (
-    parentRunId: RunId,
+    parentId: RunId,
     reference: Pick<
       RunStorageFileLocation,
       'runId' | 'relativePath' | 'absolutePath'
@@ -39,10 +39,10 @@ const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
     // The store's edge, not the view's: the view trails the log, and a
     // child it has not applied yet would be refused as no child at all.
     const facts = yield* (yield* SessionLog).facts(reference.runId);
-    if (facts?.parent?.id !== parentRunId) {
+    if (facts?.parent?.id !== parentId) {
       return yield* Effect.fail(
         new Error(
-          `Run ${reference.runId} is not a direct child of ${parentRunId}.`,
+          `Run ${reference.runId} is not a direct child of ${parentId}.`,
         ),
       );
     }
@@ -80,7 +80,7 @@ const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
  */
 export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
   function* (
-    parentRunId: RunId,
+    parentId: RunId,
     absolutePath: string,
   ): Effect.fn.Return<
     RunStorageFileLocation | undefined,
@@ -102,8 +102,8 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
     }
 
     // The calling run's own storage needs no manifest: it is its own.
-    if (reference.runId !== parentRunId)
-      yield* checkDeclaredChildOutput(parentRunId, reference);
+    if (reference.runId !== parentId)
+      yield* checkDeclaredChildOutput(parentId, reference);
 
     const entry = yield* runEntryUnder(
       storageRoot,

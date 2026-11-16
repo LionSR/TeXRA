@@ -133,7 +133,7 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
     },
   ) {
     const { runId, grants } = launch;
-    const { runId: parentRunId } = parent.run;
+    const { runId: parentId } = parent.run;
     const agentName = childConfigPayload.agent;
     // Like every child, it ends with its reply, and a follow-up to it is
     // a resume with a message.
@@ -144,7 +144,7 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
     // The child registers with its opening, which commits here.
     yield* startChildRun(runId, definition, {
       identity: { kind: 'agent', agent: config.agent },
-      parentRunId,
+      parentId,
       parentCall: { callId: parent.callId, card: parent.logId, awaited: false },
       grants,
     });

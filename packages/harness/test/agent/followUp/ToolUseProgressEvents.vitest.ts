@@ -5,11 +5,7 @@ import { describe, expect } from 'vitest';
 import { ModelError } from '@texra-ai/llm';
 
 // Local imports
-import {
-  MESSAGE_TYPES,
-  qualifyAggregateId,
-  RUN_OUTCOME,
-} from '@texra-ai/harness/schemas';
+import { MESSAGE_TYPES, RUN_OUTCOME } from '@texra-ai/harness/schemas';
 import { TraceEmitter } from '@agent/trace/TraceEmitter';
 import type { AgentEvent } from '@shared/session/agentEvent';
 import { openToolUse, runToolUse } from '@agent/runtime/loop/runLoop';
@@ -203,7 +199,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             output: { response: 'The check passed.' },
           });
           const edits = yield* Context.get(session, SessionLog).history(
-            qualifyAggregateId('run', runId),
+            runId,
             undefined,
             ['context.edit'],
           );
@@ -227,7 +223,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           });
           expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
           const finalized = yield* Context.get(session, SessionLog).history(
-            qualifyAggregateId('run', runId),
+            runId,
             undefined,
             ['response.finalized'],
           );

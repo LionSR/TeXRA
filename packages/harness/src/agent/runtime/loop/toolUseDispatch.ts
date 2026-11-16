@@ -58,10 +58,8 @@ import {
 } from '@agent/runtime/RunCall';
 import { SessionRoots } from '@platform/rootedFs';
 import {
-  qualifyAggregateId,
   FinishedToolResultSchema,
   toJsonValue,
-  type AggregateId,
   type DispatchFacts,
   type ScriptCallPayload,
   type StoredMediaPart,
@@ -124,7 +122,6 @@ interface Dispatch {
   readonly cell: RunCell;
   readonly step: StepTools;
   readonly responseId: string;
-  readonly aggregateId: AggregateId;
   /** The user instruction the response answers. */
   readonly instruction: string | undefined;
   /** The response was pending when the cell opened and has a model to
@@ -255,7 +252,7 @@ const commit = (
       ? [
           {
             type: 'script.call',
-            aggregateId: dispatch.aggregateId,
+            aggregateId: dispatch.run.runId,
             payload: script,
           },
           ...rows,
@@ -273,7 +270,7 @@ const resultRow = (
   blobs: readonly DraftBlob[] = [],
 ): RunHistoryDraft => ({
   type: 'tool.result',
-  aggregateId: dispatch.aggregateId,
+  aggregateId: dispatch.run.runId,
   ...(card && stage !== null && { stageId: stage }),
   payload: {
     responseId: dispatch.responseId,
@@ -439,7 +436,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
         yield* commit(call, [
           {
             type: 'tool.intent',
-            aggregateId: dispatch.aggregateId,
+            aggregateId: dispatch.run.runId,
             ...staged,
             payload: {
               origin:
@@ -551,7 +548,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     : [
         {
           type: 'tool.start',
-          aggregateId: dispatch.aggregateId,
+          aggregateId: dispatch.run.runId,
           ...staged,
           ...cardOver(input),
           ...(attempt > 1 ? { attempt } : {}),
@@ -949,7 +946,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   step: StepTools,
 ): Effect.fn.Return<DispatchOutcome, InvokeError, AgentRun | AgentRunServices> {
   const run = yield* AgentRun;
-  const { runId, logger } = run;
+  const { logger } = run;
   const initial = yield* cell.current;
   const pending = initial.pendingResponse;
   if (pending === null) return { state: initial, endTurn: false };
@@ -961,7 +958,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     cell,
     step,
     responseId,
-    aggregateId: qualifyAggregateId('run', runId),
     instruction:
       run.config.rootUserInstruction ??
       (at ? stored(initial, at, Schema.String) : run.config.instruction),

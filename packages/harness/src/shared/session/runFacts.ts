@@ -24,7 +24,6 @@ import {
   type FollowUpContent,
   type FollowUpDisposition,
   type FollowUpMessage,
-  qualifyAggregateId,
   type RunEnd,
   type RunEndOutput,
   type RunBinding,
@@ -176,15 +175,13 @@ function outputOf(
   return tool === STRUCTURED_OUTPUT_TOOL_NAME ? 'submitted' : null;
 }
 
-/** Input that asks the run to do something: its user's and its parent's
- *  messages. A child's report, another run's message and a host notice only
- *  inform it. */
+/** Input that asks the run to do something: a message from its user or
+ *  from any run. A run's report at its end and a host notice only inform
+ *  it. */
 export const isInstruction = (
   content: FollowUpContent,
 ): content is FollowUpMessage =>
-  !('delivery' in content) &&
-  (content.from.kind === 'user' ||
-    (content.from.kind === 'run' && content.from.relation === 'parent'));
+  !('delivery' in content) && content.from.kind !== 'notification';
 
 /** The row that consumes one follow-up, committed beside the rows that took
  *  it; its writer states why (`disposition`). */
@@ -194,7 +191,7 @@ export const consumedRow = (
   disposition: FollowUpDisposition,
 ): Extract<RunInputDraft, { readonly type: 'followup.consumed' }> => ({
   type: 'followup.consumed',
-  aggregateId: qualifyAggregateId('run', runId),
+  aggregateId: runId,
   followUpId,
   disposition,
 });
@@ -206,13 +203,13 @@ export const boundsLifecycle = (
   row: Pick<SessionRow, 'aggregateId' | 'type'>,
   runId: RunId,
 ): boolean =>
-  row.aggregateId === qualifyAggregateId('run', runId) &&
+  row.aggregateId === runId &&
   (row.type === 'run.activate' || row.type === 'run.end');
 
 /** What a run is registered with: the facts its `run.start` carries. */
 export interface RegisterRunOptions {
   /** The launching run: the whole parent edge, stamped on `run.start`. */
-  readonly parentRunId?: RunId;
+  readonly parentId?: RunId;
   /** The parent's call that launched it, which owns this run until it
    *  detaches, and that call's tool card. */
   readonly parentCall?: NonNullable<RunParent['call']>;
@@ -257,7 +254,7 @@ export const descriptionRow = (
   by: 'model' | 'user',
 ): Extract<SessionRowDraft, { type: 'run.description' }> => ({
   type: 'run.description',
-  aggregateId: qualifyAggregateId('run', runId),
+  aggregateId: runId,
   description: truncateWithEllipsis(description, 80),
   by,
 });
@@ -272,7 +269,7 @@ export function registrationDrafts(
   options: RegisterRunOptions,
   ended: readonly SessionRowDraft[] | null,
 ): Registration {
-  const target = qualifyAggregateId('run', runId);
+  const target = runId;
   const worktree = config.workingDirectory?.trim();
   const start: NonNullable<Registration['start']> = {
     type: 'run.start',
@@ -281,9 +278,9 @@ export function registrationDrafts(
     takesFollowUps: options.takesFollowUps ?? false,
     worktree: worktree ? { workingDirectory: worktree } : undefined,
     parent:
-      options.parentRunId === undefined
+      options.parentId === undefined
         ? null
-        : { id: options.parentRunId, call: options.parentCall ?? null },
+        : { id: options.parentId, call: options.parentCall ?? null },
     provenance: options.provenance ?? null,
     approvalPolicy: options.grants ?? NO_APPROVAL_GRANTS,
   };
@@ -308,7 +305,7 @@ export function activationDrafts(
   ended: readonly SessionRowDraft[],
   config: RunConfigRow['config'] | null,
 ): SessionRowDraft[] {
-  const target = qualifyAggregateId('run', runId);
+  const target = runId;
   const changed: RunConfigRow[] =
     config === null
       ? []
@@ -329,7 +326,7 @@ export function runEndDraft(
   const { outcome, error } = end;
   return {
     type: 'run.end',
-    aggregateId: qualifyAggregateId('run', runId),
+    aggregateId: runId,
     outcome,
     ...(error && { error }),
     output: end.output ?? emptyRunEndOutput(),

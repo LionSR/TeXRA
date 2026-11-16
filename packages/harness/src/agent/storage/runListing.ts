@@ -4,7 +4,7 @@ import { Effect, Predicate } from 'effect';
 
 import { isAgentRunRecord } from '@agent/core/definition/RunRecord';
 import { withLogChannel } from '@logger/effectLog';
-import { qualifyAggregateId, type AgentRunListingEntry } from '@shared/schemas';
+import { type AgentRunListingEntry } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -40,7 +40,7 @@ export const listRuns = Effect.fn('listRuns')(function* (): Effect.fn.Return<
         SessionLog
       > {
         const { id, identity } = run;
-        const own = rows.get(qualifyAggregateId('run', id)) ?? [];
+        const own = rows.get(id) ?? [];
         const record = own.findLast((row) => row.type === 'run.config')?.config;
         // Registration commits `run.config` in the `run.start` batch, so an
         // agent run without an AgentConfig is corrupt: skipped loudly below.

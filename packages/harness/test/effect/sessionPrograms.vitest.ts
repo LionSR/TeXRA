@@ -18,11 +18,7 @@ import { layer } from '@effect/vitest';
 import { Context, Effect, Exit, Fiber, Schema, Scope, Stream } from 'effect';
 import { assert, describe, expect } from 'vitest';
 
-import {
-  generateRunId,
-  qualifyAggregateId,
-  type RunId,
-} from '@texra-ai/harness/schemas';
+import { generateRunId, type RunId } from '@texra-ai/harness/schemas';
 import { Sessions, type LocalSession } from '@texra-ai/harness';
 import { AgentCatalog } from '@agent/index/agentCatalog';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
@@ -84,9 +80,7 @@ const subscribed = (session: LocalSession) => [
 
 /** Wait until the session view keeps transcripts for exactly `ids`. */
 const untilSubscribed = (session: LocalSession, ids: readonly RunId[]) => {
-  const wanted = JSON.stringify(
-    ids.map((id) => qualifyAggregateId('run', id)).toSorted(),
-  );
+  const wanted = JSON.stringify(ids.map((id) => id).toSorted());
   const matches = (keys: readonly string[]) =>
     JSON.stringify(keys.toSorted()) === wanted;
   return matches(subscribed(session))
@@ -162,7 +156,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
             // The embedder's own listener on the child, attached first.
             const listener = yield* Scope.make();
             yield* sdk.view
-              .subscribe([{ id: qualifyAggregateId('run', child), fromSeq: 0 }])
+              .subscribe([{ id: child, fromSeq: 0 }])
               .pipe(Scope.provide(listener));
             const run = yield* sdk.resume(child);
             expect(run.runId).toBe(parent);

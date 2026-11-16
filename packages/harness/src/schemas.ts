@@ -81,7 +81,6 @@ export type {
   AgentConfigInput,
   AgentProposal,
   AgentSource,
-  AggregateKind,
   AttachedMemoryMiss,
   CompactionActivityData,
   CompactionActivityOutcome,
@@ -98,7 +97,6 @@ export type {
   HarnessInstructionKey,
   LoadedMediaMetadata,
   LocalRuntimeState,
-  LogicalId,
   LogLevel,
   MediaAttachmentKind,
   MessageType,
@@ -361,7 +359,6 @@ export {
   // Who answers a request: a person, or the run grant that answers it.
   type AnsweredBy,
   type ProposalFileFields,
-  qualifyAggregateId,
   factName,
   type FactName,
   referencedAggregates,

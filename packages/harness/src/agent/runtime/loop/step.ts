@@ -56,7 +56,6 @@ import { Settings } from '@shared/config/settings';
 import {
   PROGRAM_TOOL_NAME,
   programOf,
-  qualifyAggregateId,
   SKILL_CATALOG_MAX_SKILLS,
   type OfferedTool,
   SCRIPT_TOOL_NAME,
@@ -504,7 +503,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
           ]),
           {
             type: 'tools.offered',
-            aggregateId: qualifyAggregateId('run', run.runId),
+            aggregateId: run.runId,
             payload: {
               tools: tools.offered,
               skills,

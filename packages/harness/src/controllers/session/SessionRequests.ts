@@ -23,7 +23,6 @@ import { GlobalValues } from '@platform/processRuntime';
 import { SessionRoots } from '@platform/rootedFs';
 import {
   answerMismatch,
-  qualifyAggregateId,
   blocksCaller,
   readToolEditContent,
   type RunAction,
@@ -111,7 +110,7 @@ const storedState = (
   deps: SessionRequestsInit,
   runId: RunId,
 ): Effect.Effect<AggregateState | undefined> =>
-  deps.log.aggregateState([qualifyAggregateId('run', runId)]).pipe(
+  deps.log.aggregateState([runId]).pipe(
     Effect.orDie,
     Effect.map((rows) => rows[0]),
   );
@@ -225,7 +224,7 @@ const decideSurfaceRequest = (
       );
       if (accepted.sent.kind === 'refused')
         yield* Effect.logWarning(
-          `Run ${followUp.runId} refused what plugin "${payload.plugin}" sent it with the answer to request ${req.requestId} (${accepted.sent.reason}).`,
+          `Run ${followUp.runId} refused what plugin "${payload.plugin}" sent it with the answer to request ${req.requestId}: its input is closed.`,
         );
       return [...facts, ...accepted.rows];
     }).pipe(Effect.scoped);
