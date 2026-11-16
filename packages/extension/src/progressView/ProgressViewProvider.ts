@@ -9,7 +9,6 @@ import {
   Exit,
   FileSystem,
   Queue,
-  Schema,
   Scope,
   Stream,
 } from 'effect';
@@ -18,7 +17,6 @@ import { scopedFork } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   ensureError,
-  toErrorMessage,
   type FileLocation,
   type RunId,
 } from '@texra-ai/harness/schemas';
@@ -30,6 +28,8 @@ import {
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
+import { hostFailed } from '@texra/controllers/session/hostCallFailure';
+import type { HostFailed } from '@texra/hosts/uiHosts';
 import { setOnboardingDeclined } from '@texra/controllers/onboarding/onboardingFunnel';
 import {
   EXTENSION_CATEGORIES,
@@ -73,33 +73,13 @@ const CHANNEL = 'ProgressViewProvider';
 
 type ProgressRunRevealResult = 'revealed' | 'missing';
 
-/**
- * A placement the window refused: the sidebar focus command, or a tab
- * attaching to a bridge that has closed. Tagged because these reach the
- * request channel, whose failures are tags without exception.
- */
-class SurfacePlacementFailed extends Schema.TaggedError<SurfacePlacementFailed>()(
-  'SurfacePlacementFailed',
-  {
-    member: Schema.String,
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
-
 /** Focus the sidebar view. */
-const showInSidebar: Effect.Effect<void, SurfacePlacementFailed> =
-  executeVscodeCommand('texra.mainView.focus').pipe(
-    Effect.asVoid,
-    Effect.mapError(
-      (cause) =>
-        new SurfacePlacementFailed({
-          member: 'showInSidebar',
-          message: cause.message,
-          cause,
-        }),
-    ),
-  );
+const showInSidebar: Effect.Effect<void, HostFailed> = executeVscodeCommand(
+  'texra.mainView.focus',
+).pipe(
+  Effect.asVoid,
+  Effect.mapError((cause) => hostFailed('showInSidebar', cause)),
+);
 
 /** One surface: a VS Code webview attached to the bridge as a port. */
 interface Surface<View extends vscode.WebviewView | vscode.WebviewPanel> {
@@ -434,7 +414,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     function* (
       id: keyof Surfaces,
       view: vscode.WebviewView | vscode.WebviewPanel,
-    ): Effect.fn.Return<void, SurfacePlacementFailed, FileSystem.FileSystem> {
+    ): Effect.fn.Return<void, HostFailed, FileSystem.FileSystem> {
       this.closeSurface(this.surfaces[id]);
       // The post starts synchronously inside the fork, so sends keep their
       // order.
@@ -460,16 +440,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           ),
         );
       };
-      const attached = yield* this.bridge.attach({ id, send }).pipe(
-        Effect.mapError(
-          (cause) =>
-            new SurfacePlacementFailed({
-              member: 'attach',
-              message: toErrorMessage(cause),
-              cause,
-            }),
-        ),
-      );
+      const attached = yield* this.bridge
+        .attach({ id, send })
+        .pipe(Effect.mapError((cause) => hostFailed('attach', cause)));
       const surface = { view, attached, scope: yield* Scope.fork(this.scope) };
       // cast: each caller passes the view its placement holds (the sidebar's
       // `WebviewView`, the tab's `WebviewPanel`).
@@ -580,7 +553,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     return sidebar?.view.visible === true || editor?.view.visible === true;
   }
 
-  public showInSidebar(): Effect.Effect<void, SurfacePlacementFailed> {
+  public showInSidebar(): Effect.Effect<void, HostFailed> {
     return showInSidebar;
   }
 
@@ -625,7 +598,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     { self: this },
     function* (
       runId: RunId,
-    ): Effect.fn.Return<ProgressRunRevealResult, SurfacePlacementFailed> {
+    ): Effect.fn.Return<ProgressRunRevealResult, HostFailed> {
       const view = this.runSession.view.current();
       if (!view.runs.has(runId)) return 'missing' as const;
       yield* this.showProgressView();

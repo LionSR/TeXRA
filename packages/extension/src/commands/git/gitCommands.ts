@@ -8,7 +8,8 @@ import { type RootedFileSystem } from '@texra-ai/harness/host';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { type HostPromptFailed, inputBox } from '@frontend/ui/dialogs';
+import { inputBox } from '@frontend/ui/dialogs';
+import type { HostFailed } from '@texra/hosts/uiHosts';
 import { announce, showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import {
@@ -54,7 +55,7 @@ const promptInput = Effect.fn('promptInput')(function* (
   title: string,
   prompt: string,
   password = false,
-): Effect.fn.Return<string | null, HostPromptFailed> {
+): Effect.fn.Return<string | null, HostFailed> {
   const val = yield* inputBox({
     title,
     prompt,

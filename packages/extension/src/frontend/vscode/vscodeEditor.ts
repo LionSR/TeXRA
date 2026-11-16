@@ -4,21 +4,11 @@
  * Provides common helpers for opening and manipulating files in VS Code editors.
  */
 
-import { Effect, Schema } from 'effect';
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-
-/** VS Code would not read the document, or would not show it; the message
- *  says which. */
-class EditorOpenFailed extends Schema.TaggedError<EditorOpenFailed>()(
-  'EditorOpenFailed',
-  {
-    message: Schema.String,
-    absolutePath: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
+import { HostFailed } from '@texra/hosts/uiHosts';
 
 /**
  * Clamp a 1-based line number to a 0-based VS Code line index. Floors first
@@ -55,13 +45,13 @@ function showTextDocument(
   uri: vscode.Uri,
   document: vscode.TextDocument,
   options: vscode.TextDocumentShowOptions,
-): Effect.Effect<vscode.TextEditor, EditorOpenFailed> {
+): Effect.Effect<vscode.TextEditor, HostFailed> {
   return Effect.tryPromise({
     try: () => vscode.window.showTextDocument(document, options),
     catch: (cause) =>
-      new EditorOpenFailed({
+      new HostFailed({
+        member: 'openFileInEditor',
         message: `Could not show ${uri.fsPath} in an editor: ${toErrorMessage(cause)}`,
-        absolutePath: uri.fsPath,
         cause,
       }),
   });
@@ -76,7 +66,7 @@ function showDocument(
   existingEditor: vscode.TextEditor | undefined,
   preserveFocus: boolean,
   preview: boolean,
-): Effect.Effect<vscode.TextEditor, EditorOpenFailed> {
+): Effect.Effect<vscode.TextEditor, HostFailed> {
   if (existingEditor) {
     return showTextDocument(uri, existingEditor.document, {
       viewColumn: existingEditor.viewColumn,
@@ -87,9 +77,9 @@ function showDocument(
     const document = yield* Effect.tryPromise({
       try: () => vscode.workspace.openTextDocument(uri),
       catch: (cause) =>
-        new EditorOpenFailed({
+        new HostFailed({
+          member: 'openFileInEditor',
           message: `Could not open ${uri.fsPath}: ${toErrorMessage(cause)}`,
-          absolutePath: uri.fsPath,
           cause,
         }),
     });
@@ -104,7 +94,7 @@ function showDocument(
  * Open a file in a VS Code editor, optionally positioning the cursor at a
  * line.
  *
- * A refusal is the typed `EditorOpenFailed`, so every caller decides for
+ * A failure is the typed `HostFailed`, so every caller decides for
  * itself what an unopenable file means instead of reading back an absent
  * editor that was warn-logged somewhere else.
  */
@@ -118,7 +108,7 @@ export const openFileInEditor = Effect.fn('openFileInEditor')(function* (
   } = {},
 ): Effect.fn.Return<
   { editor: vscode.TextEditor; absolutePath: string },
-  EditorOpenFailed
+  HostFailed
 > {
   const { line } = options;
   const uri = vscode.Uri.file(absolutePath);
