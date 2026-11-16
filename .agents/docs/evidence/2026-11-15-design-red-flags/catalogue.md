@@ -28,6 +28,8 @@ the files it changes; it may touch others. The yardstick is the root
 - **held**: needs a decision only the repo owner can make. The decision is
   written under "Held for the owner".
 - **merged into X**: the same problem as row X, built and counted there.
+- A row built except for a part the owner refused counts as **landed**; its
+  status names the refused part and its record.
 
 The counts below are updated after each merge wave in a docs PR; the newest
 "Status at main" section is on top of the "Waves" log at the end.
