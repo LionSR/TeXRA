@@ -49,14 +49,11 @@ import {
   type ApprovalBypassKind,
 } from '@shared/approvalBypassKind';
 import {
-  approvalPolicyDenialMessage,
   decideHumanInputRequest,
   decideRetryApproval,
   decideApproval,
-  isApprovalDenied,
-  humanInputDenialMessage,
-  retryDenialMessage,
-  type ApprovalPolicyDecision,
+  UNPRESENTABLE,
+  type ApprovalAnswer,
   type ApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
@@ -111,7 +108,7 @@ const decideExecutable = (
   // A run whose delegated work is bypassed (an Auto-approve launch) is
   // asked nothing: every approval it would open is granted.
   scopedBypass = owners.approvals.bypass(runId, 'superYolo') !== null,
-): ApprovalPolicyDecision =>
+): ApprovalAnswer =>
   decideApproval({
     policy,
     scopedBypass,
@@ -184,11 +181,11 @@ const permissionOf = (
     ),
     canPresent,
   });
-  const denied = isApprovalDenied(decision)
-    ? decision
-    : hook === 'ask' && !canPresent && 'deny-unpresentable';
-  if (denied)
-    return { action: 'deny', reason: approvalPolicyDenialMessage(denied) };
+  const denied =
+    typeof decision === 'object'
+      ? decision
+      : hook === 'ask' && !canPresent && UNPRESENTABLE;
+  if (denied) return { action: 'deny', reason: denied.deny };
   return hook ?? (decision === 'allow' ? 'allow' : 'ask');
 };
 
@@ -236,10 +233,7 @@ function answerFor(
         canPresent: canPresent(owners),
       });
       if (decision === 'present') return undefined;
-      return {
-        action: 'deny',
-        reason: humanInputDenialMessage(decision.deny),
-      };
+      return { action: 'deny', reason: decision.deny };
     }
     case 'retry': {
       const decision = decideRetryApproval({
@@ -248,7 +242,7 @@ function answerFor(
         isCredentialFailure: payload.data.credentialSwitch != null,
       });
       if (decision === 'present') return undefined;
-      return { action: 'deny', reason: retryDenialMessage(decision.deny) };
+      return { action: 'deny', reason: decision.deny };
     }
     case 'plugin':
       return undefined;
@@ -281,9 +275,8 @@ export const liveToolGates = Effect.fn('liveToolGates')(function* ({
   const policy = runPolicy(owners.approvals.policy(), source, runId);
   const bypassed = resolveBypass(source, runId, 'superYolo') !== null;
   return {
-    approvalPromptsUnavailable: isApprovalDenied(
-      decideExecutable(owners, runId, policy, bypassed),
-    ),
+    approvalPromptsUnavailable:
+      typeof decideExecutable(owners, runId, policy, bypassed) === 'object',
     policy,
   };
 });

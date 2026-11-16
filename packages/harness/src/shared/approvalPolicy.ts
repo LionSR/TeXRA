@@ -30,117 +30,65 @@ export const APPROVAL_POLICY_DEFAULT: ApprovalPolicy = 'ask';
  * Changing that requires changing headless discipline, not just this constant.
  */
 export const APPROVAL_POLICY_NO_INPUT_DEFAULT: ApprovalPolicy = 'never';
-const APPROVAL_POLICY_DENIED_MESSAGE = 'Denied by the approval policy.';
-const APPROVAL_UNPRESENTABLE_MESSAGE =
-  'Interactive approval requires a prompt; this run cannot present one.';
 
 export function parseApprovalPolicy(input: string): ApprovalPolicy | undefined {
   const parsed = Schema.decodeUnknownResult(ApprovalPolicyInputSchema)(input);
   return Result.isSuccess(parsed) ? parsed.success : undefined;
 }
 
-export type ApprovalPolicyDecision =
-  | 'allow'
-  | 'present'
-  | 'deny-policy'
-  | 'deny-unpresentable';
+/**
+ * A decider's answer for one request: run it unasked, present it to the
+ * person, or deny it with the message the person reads (nothing branches
+ * on why, so the reason is that message).
+ */
+export type ApprovalAnswer = 'allow' | 'present' | { readonly deny: string };
 
-export function isApprovalDenied(
-  decision: ApprovalPolicyDecision,
-): decision is 'deny-policy' | 'deny-unpresentable' {
-  return decision === 'deny-policy' || decision === 'deny-unpresentable';
-}
-
-export function approvalPolicyDenialMessage(
-  decision: 'deny-policy' | 'deny-unpresentable',
-): string {
-  return decision === 'deny-policy'
-    ? APPROVAL_POLICY_DENIED_MESSAGE
-    : APPROVAL_UNPRESENTABLE_MESSAGE;
-}
+const DENIED_BY_POLICY = { deny: 'Denied by the approval policy.' } as const;
+/** The denial of a request nobody here can be asked. */
+export const UNPRESENTABLE = {
+  deny: 'Interactive approval requires a prompt; this run cannot present one.',
+} as const;
 
 /** Decide one guarded operation under the policy from request-time facts. */
 export function decideApproval(input: {
   readonly policy: ApprovalPolicy;
   readonly scopedBypass: boolean;
   readonly canPresent: boolean;
-}): ApprovalPolicyDecision {
-  if (input.policy === 'never') return 'deny-policy';
+}): ApprovalAnswer {
+  if (input.policy === 'never') return DENIED_BY_POLICY;
   if (input.policy === 'yolo' || input.scopedBypass) return 'allow';
-  return input.canPresent ? 'present' : 'deny-unpresentable';
+  return input.canPresent ? 'present' : UNPRESENTABLE;
 }
 
-const APPROVAL_YOLO_RETRY_MESSAGE =
-  'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.';
-const APPROVAL_CREDENTIAL_RETRY_MESSAGE =
-  'Retry skipped: credential exhausted or unauthorized.';
-const APPROVAL_YOLO_NO_HUMAN_MESSAGE =
-  'User question requires human input; yolo mode cannot synthesize an answer.';
-
-type RetryApprovalDecision =
-  | 'present'
-  | {
-      readonly deny: 'yolo-retry' | 'credential' | 'policy' | 'unpresentable';
-    };
-
-/** Decide whether a retry request may prompt or must settle as denied. */
+/** Decide whether a retry request may prompt or must finish denied. */
 export function decideRetryApproval(input: {
   readonly policy: ApprovalPolicy;
   readonly canPresent: boolean;
   readonly isCredentialFailure: boolean;
-}): RetryApprovalDecision {
+}): Exclude<ApprovalAnswer, 'allow'> {
   if (input.isCredentialFailure) {
     // Ask + interactive can still surface the retry panel; every other case
-    // settles with the credential message (including `never` and `yolo`).
+    // is denied with the credential message (including `never` and `yolo`).
     if (input.policy === 'ask' && input.canPresent) return 'present';
-    return { deny: 'credential' };
+    return { deny: 'Retry skipped: credential exhausted or unauthorized.' };
   }
-  if (input.policy === 'yolo') return { deny: 'yolo-retry' };
-  if (input.policy === 'never') return { deny: 'policy' };
-  return input.canPresent ? 'present' : { deny: 'unpresentable' };
-}
-
-export function retryDenialMessage(
-  deny: Exclude<RetryApprovalDecision, 'present'>['deny'],
-): string {
-  switch (deny) {
-    case 'yolo-retry':
-      return APPROVAL_YOLO_RETRY_MESSAGE;
-    case 'credential':
-      return APPROVAL_CREDENTIAL_RETRY_MESSAGE;
-    case 'policy':
-      return APPROVAL_POLICY_DENIED_MESSAGE;
-    case 'unpresentable':
-      return APPROVAL_UNPRESENTABLE_MESSAGE;
-  }
-}
-
-/** Whether a human-input request may be shown, or why it settles denied. */
-type HumanInputDecision =
-  | 'present'
-  | {
-      readonly deny: 'yolo-no-human' | 'policy' | 'unpresentable';
+  if (input.policy === 'yolo')
+    return {
+      deny: 'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
     };
+  if (input.policy === 'never') return DENIED_BY_POLICY;
+  return input.canPresent ? 'present' : UNPRESENTABLE;
+}
 
-/** Decide whether a human-input request may prompt or must settle as denied. */
+/** Decide whether a human-input request may prompt or must finish denied. */
 export function decideHumanInputRequest(input: {
   readonly policy: ApprovalPolicy;
   readonly canPresent: boolean;
-}): HumanInputDecision {
-  if (input.policy === 'yolo') return { deny: 'yolo-no-human' };
-  if (input.policy === 'never') return { deny: 'policy' };
-  return input.canPresent ? 'present' : { deny: 'unpresentable' };
-}
-
-export function humanInputDenialMessage(
-  deny: Exclude<HumanInputDecision, 'present'>['deny'],
-): string {
-  switch (deny) {
-    case 'yolo-no-human':
-      return APPROVAL_YOLO_NO_HUMAN_MESSAGE;
-    case 'policy':
-      return APPROVAL_POLICY_DENIED_MESSAGE;
-    case 'unpresentable':
-      return APPROVAL_UNPRESENTABLE_MESSAGE;
-  }
+}): Exclude<ApprovalAnswer, 'allow'> {
+  if (input.policy === 'yolo')
+    return {
+      deny: 'User question requires human input; yolo mode cannot synthesize an answer.',
+    };
+  if (input.policy === 'never') return DENIED_BY_POLICY;
+  return input.canPresent ? 'present' : UNPRESENTABLE;
 }

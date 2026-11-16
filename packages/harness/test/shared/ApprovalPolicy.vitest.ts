@@ -8,13 +8,13 @@ import {
 
 describe('TeXRA approval policy', () => {
   it.each([
-    ['never', true, true, 'deny-policy'],
-    ['ask', false, false, 'deny-unpresentable'],
+    ['never', true, true, { deny: 'Denied by the approval policy.' }],
+    ['ask', false, false, { deny: expect.stringContaining('a prompt') }],
     ['ask', true, false, 'allow'],
   ] as const)(
-    'decides %s with bypass=%s, canPresent=%s as %s',
+    'decides %s with bypass=%s, canPresent=%s as %j',
     (policy, scopedBypass, canPresent, expected) => {
-      expect(decideApproval({ policy, scopedBypass, canPresent })).toBe(
+      expect(decideApproval({ policy, scopedBypass, canPresent })).toEqual(
         expected,
       );
     },
@@ -23,24 +23,28 @@ describe('TeXRA approval policy', () => {
   it.each([
     [
       { policy: 'yolo', canPresent: true, isCredentialFailure: false },
-      { deny: 'yolo-retry' },
+      'automatic attempts',
     ],
     [
       { policy: 'yolo', canPresent: true, isCredentialFailure: true },
-      { deny: 'credential' },
+      'credential',
     ],
     [
       { policy: 'ask', canPresent: false, isCredentialFailure: false },
-      { deny: 'unpresentable' },
+      'a prompt',
     ],
-  ] as const)('decideRetryApproval(%j) → %j', (input, expected) => {
-    expect(decideRetryApproval(input)).toEqual(expected);
+  ] as const)('decideRetryApproval(%j) denies: %s', (input, message) => {
+    expect(decideRetryApproval(input)).toEqual({
+      deny: expect.stringContaining(message),
+    });
   });
 
   it.each([
-    [{ policy: 'yolo', canPresent: true }, { deny: 'yolo-no-human' }],
-    [{ policy: 'ask', canPresent: false }, { deny: 'unpresentable' }],
-  ] as const)('decideHumanInputRequest(%j) → %j', (input, expected) => {
-    expect(decideHumanInputRequest(input)).toEqual(expected);
+    [{ policy: 'yolo', canPresent: true }, 'yolo mode'],
+    [{ policy: 'ask', canPresent: false }, 'a prompt'],
+  ] as const)('decideHumanInputRequest(%j) denies: %s', (input, message) => {
+    expect(decideHumanInputRequest(input)).toEqual({
+      deny: expect.stringContaining(message),
+    });
   });
 });
