@@ -149,7 +149,7 @@ export class TeamsTab extends LitElement {
         position: absolute;
         inset-block-start: var(--wa-space-2xs);
         inset-inline-end: var(--wa-space-2xs);
-        z-index: 10;
+        z-index: 1;
       }
 
       .preset-delete-btn::part(base) {
