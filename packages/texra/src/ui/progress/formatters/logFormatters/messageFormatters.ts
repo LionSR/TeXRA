@@ -23,9 +23,9 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
 import { formatDisplayTimestamp } from '../timestampUtils';
-import { ICON_BY_LEVEL } from '../constants';
 import { buildCopyButton } from '../htmlBuilders';
 import type { LogLevel } from '@texra-ai/harness/schemas';
+import type { IconName } from '@ui/wa/iconNames';
 import type {
   ErrorRow,
   LogRow,
@@ -33,6 +33,17 @@ import type {
   UserRow,
 } from '@texra-ai/harness/transcript';
 import type { FormatResult } from '../baseLogFormatter';
+
+/**
+ * Icon per log level, rendered via `waIcon`; the per-level color comes from
+ * the `log-level-icon--{level}` classes in logEntryStyles.
+ */
+const ICON_BY_LEVEL: Record<LogLevel, IconName> = {
+  error: 'circle-exclamation',
+  warn: 'triangle-exclamation',
+  info: 'circle-info',
+  debug: 'magnifying-glass',
+};
 
 /** Level-decorated icon shared by the progress-status and default formatters. */
 function buildLevelIcon(level: LogLevel): TemplateResult {

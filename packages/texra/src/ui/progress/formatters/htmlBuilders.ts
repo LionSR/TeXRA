@@ -25,12 +25,21 @@ import { fileLoadTone, statusGlyph } from '@ui/copy/runStatus';
 import '@ui/progress/components/CopyButton';
 
 // Local imports - formatter helpers
-import {
-  DIFF_DETECTION_LINE_LIMIT,
-  DIFF_MARKER_THRESHOLD,
-  INLINE_DIFF_TIMEOUT_MS,
-} from './constants';
 import type { FileListRow } from '@texra-ai/harness/transcript';
+
+// Threshold constants for diff detection heuristics
+const DIFF_DETECTION_LINE_LIMIT = 20;
+const DIFF_MARKER_THRESHOLD = 2;
+
+/**
+ * Upper bound on the inline word diff, which runs synchronously inside Lit's
+ * render on the webview's main thread over LLM-authored edit text.
+ *
+ * Deliberately far below `unifiedDiff`'s 5s Node-side bound rather than shared
+ * with it: this budget is the frame the user is waiting on, so the two are
+ * different policies for different threads, not one value written twice.
+ */
+const INLINE_DIFF_TIMEOUT_MS = 250;
 
 /** Build a tool-use section template. Empty label omits the label element. */
 export function buildToolUseSection(
