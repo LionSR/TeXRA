@@ -6,7 +6,6 @@ import { Effect, Ref, Result, Schema, Stream } from 'effect';
 import { anchoredPrefix, coveredPrefix } from './continuation.js';
 import {
   completedTurn,
-  TurnResultSchema,
   type GoogleInteractionsConfiguration,
   type Model,
   type ResolvedTurn,
@@ -537,14 +536,15 @@ const googleContinuation = Effect.fn('llm.google.continuation')(function* (
   const coveredSteps = yield* lowerMessages(prefix, origin);
   // With no output step, the next input joins the last user_input step.
   if (coveredSteps.at(-1)?.type === 'user_input') return undefined;
-  return {
-    origin,
+  const continuation: TurnResult['continuation'] = {
+    origin: { ...origin, protocol: turn.protocol },
     ...covered,
     anchor: {
       interactionId: result.providerResponseId,
       coveredSteps: coveredSteps.length,
     },
   };
+  return continuation;
 });
 
 /** Direct Gemini Interactions protocol; it owns neither history nor local tools. */
@@ -683,12 +683,7 @@ export const googleInteractionsModel = Effect.fn('llm.google.model')(function* (
   ) =>
     googleContinuation(turn, result, origin).pipe(
       Effect.map((continuation) =>
-        continuation
-          ? Schema.decodeUnknownSync(TurnResultSchema)({
-              ...result,
-              continuation,
-            })
-          : result,
+        continuation ? { ...result, continuation } : result,
       ),
     );
   const lifecycle = backgroundLifecycle({
