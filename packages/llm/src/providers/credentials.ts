@@ -9,7 +9,8 @@
  */
 import { Config, Effect, Option, Schema } from 'effect';
 
-/** Which member of a store failed. */
+/** Which member of a store failed: this port's, or `listStoredKeys` of a
+ *  host's store that also lists its keys. */
 const SecretsOperationSchema = Schema.Literals([
   'get',
   'set',
@@ -20,10 +21,9 @@ const SecretsOperationSchema = Schema.Literals([
 export type SecretsOperation = typeof SecretsOperationSchema.Type;
 
 /**
- * The one failure of a credential store. Callers match on `reason` rather
- * than on a message: a surface that wants to distinguish "nothing can be
- * stored here" from "the store is broken" reads the tag, and a caller that
- * wants neither still sees a typed error instead of `unknown`.
+ * The one failure of a credential store, so a caller sees a typed error
+ * instead of `unknown`. Its `message` is the text to show; `operation`
+ * names the member that failed.
  */
 export class SecretsFailed extends Schema.TaggedError<SecretsFailed>()(
   'SecretsFailed',
