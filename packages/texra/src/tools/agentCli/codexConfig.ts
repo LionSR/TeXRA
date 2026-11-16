@@ -194,7 +194,10 @@ const probeRouteEfforts = Effect.fn('codexConfig.probeRouteEfforts')(function* (
     // A capability probe of the binary itself, from any directory.
     { quiet: true, timeout: 5_000, cwd: process.cwd() },
   );
-  if (result.timedOut || result.exitCode === 127) {
+  if (
+    result.end._tag === 'TimedOut' ||
+    (result.end._tag === 'NoExit' && result.end.why === 'spawn')
+  ) {
     yield* Effect.logWarning(
       'Codex reasoning-level probe failed; not caching the result',
     ).pipe(
@@ -202,8 +205,7 @@ const probeRouteEfforts = Effect.fn('codexConfig.probeRouteEfforts')(function* (
         data: {
           binaryPath,
           slug,
-          timedOut: result.timedOut,
-          exitCode: result.exitCode,
+          end: result.end,
           stderr: result.stderr,
         },
       }),

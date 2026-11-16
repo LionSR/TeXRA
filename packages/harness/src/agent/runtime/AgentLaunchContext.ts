@@ -3,19 +3,28 @@
  * persona the config carries, or a catalog entry, with its plugin's trust
  * checked), the tools it declares against this build, and its model. A
  * miss is refused here, so no run is registered for a launch that cannot
- * run; an unknown agent or model is a `LaunchRefused` with the notice its
- * caller shows. The run program takes the result (`executeAgent`).
+ * run: an agent this process cannot run is `AgentUnavailable` (a launch
+ * reports it as its refusal, a resume refuses with it), and an unknown model
+ * is a `LaunchRefused` with the notice its caller shows. The run program takes the result (`executeAgent`).
  */
 import { Effect } from 'effect';
 
 import { selectModel } from '@texra-ai/llm';
-import { AgentCatalog, missingAgentRefusal } from '@agent/index/agentCatalog';
+import { AgentCatalog } from '@agent/index/agentCatalog';
 import { agentEntryOf } from '@agent/index/agentYamlScanner';
-import { requirePluginAgentLoads } from '@agent/index/pluginAgents';
-import { AgentError, LaunchRefused } from '@common/errors/agentErrors';
-import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
+import { requirePluginLoads } from '@agent/index/pluginAgents';
+import {
+  AgentError,
+  AgentUnavailable,
+  LaunchRefused,
+} from '@common/errors/agentErrors';
 import { SessionRoots } from '@platform/rootedFs';
-import { HARNESS_INSTRUCTION_KEY, type AgentConfig } from '@shared/schemas';
+import {
+  agentName,
+  HARNESS_INSTRUCTION_KEY,
+  programOf,
+  type AgentConfig,
+} from '@shared/schemas';
 import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import { ToolRegistry } from '@tools/toolTable';
 
@@ -36,7 +45,6 @@ const validateModelExists = Effect.fn('AgentLaunchContext.validateModelExists')(
         payload: {
           key: HARNESS_INSTRUCTION_KEY.MODEL_NOT_RECOGNIZED,
           message,
-          showSuppress: false,
         },
       },
     });
@@ -47,19 +55,24 @@ const validateModelExists = Effect.fn('AgentLaunchContext.validateModelExists')(
  * Resolve what a launch runs: the agent entry (an inline persona, or the
  * catalog's over this session's roots), its declared tools against this
  * build's table, and its model, each refused before any run is registered.
- * `stopAfterCycle` is decided once: a launch that ends the run after one
- * cycle, or a script that is its only turn.
  */
 export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
-  function* (input: {
-    config: AgentConfig;
-    /** The launch ends the run after one cycle (an awaited child). */
-    stopAfterCycle?: boolean;
-  }) {
+  function* (input: { config: AgentConfig }) {
     const fullConfig = input.config;
     const roots = yield* SessionRoots;
-    // A persona the config carries (its schema admitted it) is the agent;
-    // a named one resolves over a settled catalog, and a miss says why.
+    const table = yield* ToolRegistry;
+    // A program's run is its program: one no plugin registers here (another
+    // build's, or a plugin this process does not list) cannot run.
+    const program = programOf(fullConfig);
+    if (program !== null && !table.programs.has(program))
+      return yield* new AgentUnavailable({
+        blocked: { kind: 'blocked', blocker: 'agentMissing', name: program },
+        message: `No plugin registers a program named '${program}'.`,
+      });
+    // A persona the config carries (its schema accepted it) is the agent;
+    // a named one resolves over a finished catalog, and a miss says why: a
+    // plugin agent's by its plugin's install record (a launch may record
+    // the source-qualified spelling, `plugin:acme:x`).
     const agentEntry =
       fullConfig.persona != null
         ? agentEntryOf(fullConfig.persona, { source: 'inline', path: '' })
@@ -68,19 +81,29 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
             .forLaunch(fullConfig.agent, fullConfig.agentSource)
             .pipe(
               Effect.catchTag('AgentNotFound', (miss) =>
-                Effect.fail(missingAgentRefusal(miss)),
+                Effect.gen(function* () {
+                  if (fullConfig.agentSource === 'plugin')
+                    yield* requirePluginLoads(
+                      agentName(fullConfig.agent),
+                      roots,
+                    );
+                  return yield* new AgentUnavailable({
+                    blocked: {
+                      kind: 'blocked',
+                      blocker: 'agentMissing',
+                      name: miss.agent,
+                    },
+                    message: miss.message,
+                  });
+                }),
               ),
             );
     if (agentEntry.source === 'plugin')
-      yield* requirePluginAgentLoads(
-        agentEntry,
-        yield* readInstalledPluginLoad(roots),
-      );
+      yield* requirePluginLoads(agentEntry.name, roots);
     const { persona } = agentEntry;
 
     // A declared tool nothing could serve is a configuration error: the run
     // is refused (a plugin switched off withholds its tools at the step).
-    const table = yield* ToolRegistry;
     const unknown = declaredToolNames(persona.tools).filter(
       (name) => !table.get(name) && mcpServerOfToolName(name) === undefined,
     );
@@ -99,12 +122,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       ...fullConfig,
       agentSource: agentEntry.source,
     };
-    // Whether the run takes follow-ups, decided once: a run whose launch
-    // ends it after one cycle, or whose script is its only turn, does not,
-    // and registers as such.
-    const stopAfterCycle =
-      input.stopAfterCycle === true || config.script != null;
-    return { config, persona, agentEntry, modelConfig, stopAfterCycle };
+    return { config, persona, agentEntry, modelConfig };
   },
 );
 

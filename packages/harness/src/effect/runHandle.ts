@@ -21,7 +21,7 @@ import {
 import { boundsLifecycle } from '@shared/session/runFacts';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { descendantRuns } from '@shared/session/sessionView';
-import type { SessionView } from '@shared/session/readonlyViews';
+import type { SessionView } from '@shared/session/sessionView';
 import type { TranscriptInterest } from '@shared/session/sessionViewAccess';
 
 import { RunFailure } from './errors.js';
@@ -130,7 +130,7 @@ export function runView(
   // A run with no end failed on what its fiber did (an end the store
   // refused): the result says so, not only that the end is missing.
   const result = over.pipe(
-    Effect.tap(() => log.settled),
+    Effect.tap(() => log.drained),
     Effect.flatMap((unsaved) =>
       Effect.map(
         getRunRecords(runId)

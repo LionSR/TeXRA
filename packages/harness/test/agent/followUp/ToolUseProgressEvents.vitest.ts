@@ -5,7 +5,13 @@ import { describe, expect } from 'vitest';
 import { ModelError } from '@texra-ai/llm';
 
 // Local imports
-import { qualifyAggregateId, RUN_OUTCOME } from '@texra-ai/harness/schemas';
+import {
+  MESSAGE_TYPES,
+  qualifyAggregateId,
+  RUN_OUTCOME,
+} from '@texra-ai/harness/schemas';
+import { TraceEmitter } from '@agent/trace/TraceEmitter';
+import type { AgentEvent } from '@shared/session/agentEvent';
 import { openToolUse, runToolUse } from '@agent/runtime/loop/runLoop';
 import { RunHistory, SessionLog } from '@shared/session/runHistory';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -67,6 +73,55 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
   'tool-use progress events',
   (it) => {
     describe('the tool-use turn', () => {
+      // Failure mode: a script run (a task's recipe) launched with media on
+      // a vision model opened with no user message, since its launch left
+      // the echo to a loop branch the script path never reached.
+      it.effect(
+        'opens a script run launched with media with its instruction',
+        () =>
+          Effect.gen(function* () {
+            const session = yield* quietSession();
+            const runId = yield* startedRun(session);
+            const events: AgentEvent[] = [];
+            yield* openToolUse({ resume: false }).pipe(
+              Effect.provide(
+                Layer.mergeAll(
+                  scriptedInvokerLayer,
+                  nativeToolTestLayer({
+                    run: { runId, session, toolPolicy: {} },
+                  }),
+                ).pipe(
+                  Layer.provideMerge(
+                    agentRunTestLayer({
+                      runId,
+                      session,
+                      model: scriptedModel([]).model,
+                      logger: new TraceEmitter((event) => events.push(event)),
+                      mediaFiles: ['figure.png'],
+                      scriptCall: {
+                        code: 'return 1;',
+                        title: 'draft',
+                        tools: [],
+                        kind: 'background',
+                      },
+                    }),
+                  ),
+                  Layer.provideMerge(
+                    Layer.succeed(RunHistory)(Context.get(session, RunHistory)),
+                  ),
+                ),
+              ),
+            );
+            expect(
+              events.filter(
+                (event) =>
+                  event.type === 'log' &&
+                  event.messageType === MESSAGE_TYPES.USER_MESSAGE,
+              ),
+            ).toMatchObject([{ message: 'Do the thing.' }]);
+          }),
+      );
+
       it.effect(
         'keeps the text of an earlier turn when a later model turn fails',
         () =>

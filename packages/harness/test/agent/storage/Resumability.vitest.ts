@@ -30,7 +30,7 @@ const processSession = Effect.flatMap(TestSession.open(), sessionHandleOf);
 
 const start = (session: Session, runId: RunId) =>
   publishTestRunStart(session, runId).pipe(
-    Effect.andThen(Context.get(session, SessionLog).settled),
+    Effect.andThen(Context.get(session, SessionLog).drained),
   );
 
 /** Open the run aggregate the way the loop does: its activation, then

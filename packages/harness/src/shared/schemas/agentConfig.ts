@@ -4,7 +4,6 @@ import { Effect, Schema, Struct } from 'effect';
 import { AgentSourceSchema, InlinePersonaSchema } from './agent';
 import { AgentDelegationScopeSchema } from './workspaceAgents';
 import { NullableFileFieldsSchema } from './fileFields';
-import { JsonValueSchema } from './jsonValue';
 
 /** A run's launch configuration, as its `run.config` row records it. */
 const AgentConfigObjectSchema = NullableFileFieldsSchema.mapFields(
@@ -50,7 +49,7 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.mapFields(
      * owner decodes its own keys.
      */
     launch: Schema.optional(
-      Schema.NullOr(Schema.Record(Schema.String, JsonValueSchema)),
+      Schema.NullOr(Schema.Record(Schema.String, Schema.Json)),
     ),
     /** Run-scoped delegation agent list used by team runs and their children. */
     delegationAgentScope: Schema.optional(
@@ -94,7 +93,7 @@ const AgentConfigObjectSchema = NullableFileFieldsSchema.mapFields(
           Schema.Struct({
             kind: Schema.Literal('program'),
             name: Schema.NonEmptyString,
-            args: Schema.Record(Schema.String, JsonValueSchema),
+            args: Schema.Record(Schema.String, Schema.Json),
           }),
         ]),
       ),

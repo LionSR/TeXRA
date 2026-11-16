@@ -2,7 +2,7 @@
 import { join } from 'node:path';
 import { normalizeFilePath } from '@texra-ai/harness/schemas';
 import {
-  absentReason,
+  meansAbsent,
   readDirectoryTypedTolerant,
 } from '@texra-ai/harness/node';
 
@@ -42,7 +42,7 @@ export const listWorkspaceFiles = Effect.fn(
   const results = filters.map((): string[] => []);
 
   // A link's target type, or undefined when it does not resolve. Absent
-  // (`absentReason`: NotFound / ENOTDIR), the rest of BadResource (`ELOOP`),
+  // (`meansAbsent`: NotFound / ENOTDIR), the rest of BadResource (`ELOOP`),
   // and PermissionDenied skip the entry; any other failure is real. glob.ts
   // drops NotFound and BadResource the same way.
   const followLink = (absolutePath: string) =>
@@ -50,7 +50,7 @@ export const listWorkspaceFiles = Effect.fn(
       Effect.map((info) => info.type),
       Effect.catchIf(
         (error) =>
-          absentReason(error) ||
+          meansAbsent(error) ||
           error.reason._tag === 'BadResource' ||
           error.reason._tag === 'PermissionDenied',
         () => Effect.succeed(undefined),
@@ -84,7 +84,7 @@ export const listWorkspaceFiles = Effect.fn(
           );
           if (visiting.length > 0) {
             yield* visit(absolutePath, relativePath, visiting).pipe(
-              Effect.catchIf(absentReason, () => Effect.void),
+              Effect.catchIf(meansAbsent, () => Effect.void),
             );
           }
         } else if (type === 'File') {

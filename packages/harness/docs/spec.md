@@ -167,8 +167,8 @@ database-only: what must follow its commit runs after the transaction
 returns, and a body that awaited would let another job run inside its
 transaction (`agent/runtime/sessionEventsLayer.ts#commit`). An awaited job
 given after close is a defect; a detached one is logged and dropped
-(`agent/runtime/sessionEventsLayer.ts#'Session publication after the plane closed'`,
-`#'Session publication dropped: the plane has closed'`).
+(`agent/runtime/sessionEventsLayer.ts#'Session publication after the session events closed'`,
+`#'Session publication dropped: the session events have closed'`).
 
 Once a job's transaction commits, the publisher SHALL publish what the job
 wrote, from memory, to the session's subscribers, one batch per job in commit
@@ -195,7 +195,7 @@ its own: a display read shows the call's `tool.intent` and `tool.result` as it
 (`controllers/session/rowReader.ts#callCard`). `SessionLog.settled` returns
 once the terminal-result presenter has run over the view's rows past every
 commit made so far
-(`controllers/session/sessionStore.ts#settled`).
+(`controllers/session/sessionStore.ts#drained`).
 
 ### 2.4 Row versions and the store gate
 
@@ -339,7 +339,7 @@ The `model.message` arms:
 `run.end`), `process.exit` how a process run's command exited, and
 `followup.closed` marks its input closed until the run's next `run.activate`
 reopens it (`shared/schemas/sessionEvent.ts#RunRecordEventDraftSchema`,
-`shared/session/runRowReads.ts#recordAfter`, `agent/followUp/Inbox.ts#admission`).
+`shared/session/runRowReads.ts#recordAfter`, `agent/followUp/Inbox.ts#acceptance`).
 A run's record (`SessionLog.facts`) is stored nowhere: it is the newest row of
 each record kind, which the listing projection already indexes, applied in
 commit order by the one statement of the record's rules
@@ -566,7 +566,7 @@ a turn from the two rows no position restates: a `response` puts it at
 `results.ready` (`shared/session/runState.ts#LoopAt`,
 `shared/session/turnRowHandlers.ts#'results.ready'`). Between turns it stands
 at `turn.ready`, `waiting` or `turn.end`, and a run is waiting for input at
-`waiting` or `turn.end` (`agent/runtime/loop/runLoop.ts#parked`).
+`waiting` or `turn.end` (`agent/runtime/loop/runLoop.ts#waiting`).
 
 There is no halted position: a `run.end` is the halt, and a resume continues
 from where the loop stood (`shared/session/runState.ts#RunState`).
@@ -604,9 +604,9 @@ a fresh launch, `executeAgent` without a registration
 (`agent/runtime/resumeRun.ts#resumeRun`).
 
 A resume MUST be refused when the rows hold no opened run
-(`agent/runtime/loop/runProgram.ts#NOT_RESUMABLE_MESSAGE`). A fresh launch MUST
+(`agent/runtime/loop/runLoop.ts#NOT_RESUMABLE_MESSAGE`). A fresh launch MUST
 be refused when the run already holds history state
-(`agent/runtime/loop/runProgram.ts#already has run history state`).
+(`agent/runtime/loop/runLoop.ts#already has run history state`).
 
 ## 6. Retry
 
@@ -678,7 +678,7 @@ from 1,000 ms with each failure the route owns (up to five minutes, and never
 less than the provider's `retryAfterMs`); the probe's end opens the route
 unless it failed the same way, and a success admitted while the route was
 healthy ends the failure count
-(`agent/runtime/ModelRetryGate.ts#through`, `#settle`). Before a `retry` or
+(`agent/runtime/ModelRetryGate.ts#through`, `#recordExit`). Before a `retry` or
 `unchain` that follows a recorded failure the loop pauses as long as the
 provider asked (`retryAfterMs`), else 1,000 ms, and not at all after a failure
 llm scoped to a route, which the gate cools and waits out
@@ -762,7 +762,7 @@ run's next append, with nothing written
 refusal fails the dispatch instead of settling
 (`agent/runtime/loop/toolUseDispatch.ts#readCause`). A request on a
 run a launch here holds that would need the run stopped first is refused as
-`RunActive` (`controllers/session/deletionCleanup.ts#deleteAdmittedRun`).
+`RunActive` (`controllers/session/deletionCleanup.ts#deleteAcceptedRun`).
 
 ## 8. Requests
 
@@ -832,7 +832,7 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   block its caller is not cancelled: it
   stays open until its `request.decided` commits, or until `run.removed`
   closes the run, which retires it with no decision row
-  (`controllers/session/SessionRequests.ts#admit`). Its plugin's decision
+  (`controllers/session/SessionRequests.ts#accept`). Its plugin's decision
   hook records an answer outside the store first, idempotently; the decision,
   the facts the hook returns and the input it sends a run (the external
   inquiry's follow-up) then commit in one checked transaction, after which

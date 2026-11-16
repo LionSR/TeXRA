@@ -168,6 +168,8 @@ export type HookRun =
       readonly exitCode: number | null;
       readonly stdout: string;
       readonly stderr: string;
+      /** The runner stopped reading before the output ended. */
+      readonly cut: boolean;
     }
   | { readonly kind: 'timeout' }
   | { readonly kind: 'unstartable'; readonly message: string };
@@ -198,6 +200,12 @@ const DEPRECATED_DECISIONS = { approve: 'allow', block: 'deny' } as const;
 /** The answer of a hook that said nothing about a call. */
 const NO_ANSWER: Pick<HookVerdict, 'decision' | 'reason' | 'updatedInput'> =
   Object.freeze({ decision: null, reason: null, updatedInput: null });
+
+/** The reference's cap on what one hook adds to the model's context. */
+const CONTEXT_MAX = 10_000;
+
+const capped = (context: string | null) =>
+  context === null ? null : context.slice(0, CONTEXT_MAX);
 
 const firstLine = (text: string) => text.trim().split('\n')[0] ?? '';
 
@@ -347,9 +355,10 @@ const ignoredWarning = (event: HookEvent, ignored: readonly string[]) =>
  * by exit 2 or `decision: "block"`, is the instruction the run continues
  * with, once (`stopBlock`); another non-zero exit with valid JSON lets the
  * JSON decide, and without it is a non-blocking failure; plain stdout is
- * context on `SessionStart` and `UserPromptSubmit` only. Malformed output, a
- * timeout and a process that never started have no effect and always carry
- * a warning.
+ * context on `SessionStart` and `UserPromptSubmit` only. Context is cut to
+ * `CONTEXT_MAX` characters. Malformed output (also output the runner did not
+ * read to its end), a timeout and a process that never started have no
+ * effect and always carry a warning.
  */
 export function interpretHookRun(asked: HookAsked, run: HookRun): HookVerdict {
   const event = asked.hook_event_name;
@@ -370,6 +379,12 @@ export function interpretHookRun(asked: HookAsked, run: HookRun): HookVerdict {
       ...none,
       status: 'timeout',
       warning: `A ${event} hook timed out and was killed; its output was discarded.`,
+    };
+  if (run.cut)
+    return {
+      ...none,
+      status: 'malformed',
+      warning: `A ${event} hook had no effect: its output was not read to its end.`,
     };
   const text = run.stdout.trim();
   const stderr = run.stderr.trim();
@@ -421,7 +436,7 @@ export function interpretHookRun(asked: HookAsked, run: HookRun): HookVerdict {
         ? { decision: 'deny' as const, reason }
         : NO_ANSWER),
       updatedInput: effect?.updatedInput ?? null,
-      context,
+      context: capped(context),
       ignored,
       systemMessage: effect?.systemMessage ?? null,
       warning: warnings.length === 0 ? null : warnings.join(' '),
@@ -436,6 +451,7 @@ export function interpretHookRun(asked: HookAsked, run: HookRun): HookVerdict {
   if (effect !== null)
     return {
       ...effect,
+      context: capped(effect.context),
       status: 'ok',
       warning: ignoredWarning(event, effect.ignored),
     };
@@ -450,7 +466,7 @@ export function interpretHookRun(asked: HookAsked, run: HookRun): HookVerdict {
     status: 'ok',
     context:
       (event === 'SessionStart' || event === 'UserPromptSubmit') && text !== ''
-        ? text
+        ? capped(text)
         : null,
     warning: null,
   };

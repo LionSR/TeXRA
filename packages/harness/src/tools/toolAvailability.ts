@@ -34,7 +34,6 @@ import {
   Predicate,
   PubSub,
   RcMap,
-  Result,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -46,7 +45,7 @@ import { withLogChannel } from '@logger/effectLog';
 import { subscribeAppSignal, type AppSignals } from '@platform/appSignals';
 import { Secrets } from '@platform/secrets';
 import type { StateStore } from '@shared/config/settings';
-import { storedDisabledTools, type Plugin } from '@tools/plugins';
+import type { Plugin } from '@tools/plugins';
 import type {
   ToolAvailabilityChecks,
   ToolProbeInputs,
@@ -60,7 +59,7 @@ import {
 import { ToolCatalog, type ToolCatalogShape } from '@tools/liveTools';
 import { ToolRegistry } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { DISABLED_TOOLS_KEY } from '@shared/state/disabledTools';
+import { seedDisabledTools } from '@shared/state/disabledTools';
 
 const CHANNEL = 'toolAvailability';
 
@@ -80,12 +79,8 @@ const GROUP_PROBE_TIMEOUT_MS = 20_000;
 
 /**
  * Seed the disabled-tool list for first-time users only, on every host and
- * in the agent package: every plugin of `plugins` whose switch starts `off`.
- * DISABLED_TOOLS is its own fresh-install signal: only this seed writes it
- * before the user does, so an absent value means the list was never set, and
- * a present one (an empty list included) holds the user's choices, which a
- * re-seed would silently undo. The read and the seed are one `modify`, so a
- * switch another process records between them is kept. A recorded id that
+ * in the agent package: every plugin of `plugins` whose switch starts `off`
+ * (`seedDisabledTools` writes only an absent record). A recorded id that
  * names no plugin of `plugins` is kept: one composition's list is not every
  * list that shares the store, and an id no plugin has switches nothing.
  */
@@ -94,14 +89,7 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
     const defaults = plugins
       .filter((plugin) => plugin.toggle === 'off')
       .map((plugin) => plugin.id);
-    const { key } = DISABLED_TOOLS_KEY;
-    const seeded = yield* state.modify([key], (stored) =>
-      Result.map(storedDisabledTools(stored[key]), (recorded) =>
-        recorded === undefined
-          ? ([true, { [key]: defaults }] as const)
-          : ([false] as const),
-      ),
-    );
+    const seeded = yield* seedDisabledTools(state, defaults);
     if (!seeded) return;
     // Debug: the seed runs while a host's runtime builds, before the CLI's
     // platform silences its stderr diagnostics.

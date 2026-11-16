@@ -11,14 +11,14 @@ import {
   type AttachedMemoryMiss,
 } from '@shared/schemas';
 import { activatedSkillNames } from '@skills/runtimeSkills';
-import { getListOfFiles, getPromptFileName } from '@utils/prompt';
+import { getListOfFiles, getPromptFileName } from '@agent/prompt/promptRender';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   listExternalRoots,
   type ExternalRootKind,
 } from '@utils/files/externalRoots';
 import { readNormalizedFile } from '@utils/files/fsDurability';
-import { readFilesAsPromptXml } from '@utils/files/promptFilesXml';
+import { readFilesAsPromptXml } from '@agent/prompt/promptFilesXml';
 
 /**
  * The fixed template vocabulary {@link buildTemplateInputs} produces to

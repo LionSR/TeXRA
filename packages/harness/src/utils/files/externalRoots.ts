@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { Predicate } from 'effect';
 
 import { isPathWithin } from '@utils/core/pathCore';
-import { absentReason } from '@utils/files/fsEntryExists';
+import { meansAbsent } from '@utils/files/fsEntryExists';
 
 /**
  * Allowlist of external filesystem roots that tools may read or write.
@@ -29,7 +29,7 @@ import { absentReason } from '@utils/files/fsEntryExists';
  *   not cause silent matching failures. Canonicalisation is tolerant of
  *   non-existent trailing segments (essential for writes that create new
  *   files) and fails closed on permission errors (any EACCES/EPERM makes
- *   `findExternalRoot` return null rather than admit an un-verifiable path).
+ *   `findExternalRoot` return null rather than accept an un-verifiable path).
  * - A symlink inside a writable root that resolves outside the root (e.g.
  *   at `/etc/passwd`) is NOT matched and tools reject it.
  * - Containment is tested via `path.relative`, which works correctly even
@@ -71,7 +71,7 @@ interface ExternalRootOptions {
   readonly label: string;
 }
 
-/** A read-only directory one step admits for its own calls, beside the
+/** A read-only directory one step accepts for its own calls, beside the
  *  registered roots: a skill it lists or its user activated, canonical as
  *  its catalog entry records it (`canonicalizePath`). */
 export interface StepRoot {
@@ -96,7 +96,7 @@ const roots = new Map<ExternalRootKind, ExternalRoot>();
  * write through it lands.
  *
  * Throws on permission errors (EACCES/EPERM) or any unexpected error so
- * callers can fail closed: a path we cannot verify must never be admitted
+ * callers can fail closed: a path we cannot verify must never be accepted
  * to the allowlist. `canonicalizeWorkspaceRoot` is the one tolerant caller.
  *
  * Uses the JS `realpathSync`, not `.native`: on Windows the native call
@@ -112,7 +112,7 @@ function canonicalizeFollowingLinks(p: string, linkHops: number): string {
   try {
     return fs.realpathSync(resolved);
   } catch (err) {
-    if (!absentReason(err)) throw err;
+    if (!meansAbsent(err)) throw err;
     // realpath fails the same way on a dangling link and on a missing entry;
     // readlink tells them apart. The hop bound matches the kernel's ELOOP.
     const target = linkHops < 32 ? readLinkOrUndefined(resolved) : undefined;
@@ -141,7 +141,7 @@ function readLinkOrUndefined(entry: string): string | undefined {
     // path that cannot be verified fails closed.
     const notALink =
       Predicate.hasProperty(err, 'code') && err.code === 'EINVAL';
-    if (notALink || absentReason(err)) return undefined;
+    if (notALink || meansAbsent(err)) return undefined;
     throw err;
   }
 }
@@ -164,7 +164,7 @@ export function registerExternalRoot(
   // same space. canonicalizePath tolerates non-existent trailing segments itself
   // and only throws on permission errors or unexpected failures; per the
   // fail-closed contract in its JSDoc, let those propagate so an
-  // un-verifiable path is never admitted to the allowlist. Registration is
+  // un-verifiable path is never accepted to the allowlist. Registration is
   // setup-time and the caller already has a try/catch that surfaces a
   // meaningful error.
   const canonicalPath = canonicalizePath(absolutePath);
@@ -185,7 +185,7 @@ export function registerExternalRoot(
 /**
  * Return the registered root that contains `absolutePath`, or null when no
  * registered root matches or the path cannot be canonicalised (fail closed).
- * `stepRoots` are the read-only roots the asking call's step admits; a call
+ * `stepRoots` are the read-only roots the asking call's step accepts; a call
  * outside a run has none.
  * Uses `path.relative` for containment so filesystem-root registrations
  * (e.g. `/` on POSIX) behave correctly, and picks the most-specific
@@ -207,7 +207,7 @@ export function findExternalRoot(
   try {
     resolved = canonicalizePath(absolutePath);
   } catch {
-    // Permission error or unexpected failure — refuse to admit the path
+    // Permission error or unexpected failure — refuse to accept the path
     // rather than approve something we cannot verify.
     return null;
   }

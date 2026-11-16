@@ -18,18 +18,16 @@
  */
 
 // Third-party imports
-import { Cause, Effect, type Layer, Result, Schema } from 'effect';
+import { Cause, Effect, type Layer, Schema } from 'effect';
 
 // Local imports
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { withLogChannel } from '@logger/effectLog';
 import { type AppSignals, emitAppSignal } from '@platform/appSignals';
-import { StateReadFailed, type StateStore } from '@shared/config/settings';
 import {
   aggregateTarget,
   qualifyAggregateId,
-  type JsonValue,
   type RunId,
   type SessionRow,
   type SessionRowDraft,
@@ -39,10 +37,6 @@ import {
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import type { Alongside } from '@shared/session/sessionEvents';
-import {
-  decodeDisabledTools,
-  DISABLED_TOOLS_KEY,
-} from '@shared/state/disabledTools';
 import type { SessionLogShape } from '@shared/session/sessionLog';
 import type { SettingRow } from '@shared/state/stateSettings';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
@@ -57,8 +51,8 @@ import type {
 
 /** One stored row of a plugin's kind, as its fact kind's transition rule reads
  *  it: the row's decoded value and the run it is parented to, if any. */
-export interface PluginRow {
-  readonly value: JsonValue;
+export interface PluginFactRow {
+  readonly value: Schema.Json;
   readonly parent: RunId | null;
 }
 
@@ -88,18 +82,18 @@ export interface FactKind {
    *  of the kind (none before the first): the rejection's reason, or null
    *  to accept. */
   readonly accepts?: (
-    previous: PluginRow | undefined,
-    next: PluginRow,
+    previous: PluginFactRow | undefined,
+    next: PluginFactRow,
   ) => string | null;
   /** Whether the aggregate's `latest` row already says more than `next`
    *  (a call's fact that lagged behind a later writer): the call's batch
    *  then leaves `next` out instead of failing on `accepts`. */
-  readonly supersedes?: (latest: PluginRow, next: PluginRow) => boolean;
+  readonly supersedes?: (latest: PluginFactRow, next: PluginFactRow) => boolean;
   /** The workspace files a row of the kind says its run wrote past the
    *  editor's own write path: every process that folds the run announces
    *  them (`workspaceFilesWritten`), a window hearing a service task's
    *  write as it hears its own. */
-  readonly writes?: (value: JsonValue) => readonly string[];
+  readonly writes?: (value: Schema.Json) => readonly string[];
 }
 
 /**
@@ -183,31 +177,12 @@ export const definePlugin = <ROut = never>(
   // cast: `ROut` is checked by the parameter type and erased here.
   plugin as unknown as Plugin;
 
-/** {@link decodeDisabledTools}, failing as the state read it is. */
-export function storedDisabledTools(
-  stored: unknown,
-): Result.Result<ReadonlySet<string> | undefined, StateReadFailed> {
-  return Result.mapError(
-    decodeDisabledTools(stored),
-    (failure) => new StateReadFailed(failure),
-  );
-}
-
-/** The plugin ids the user switched off in `store`'s record; none while it
- *  is absent. */
-export function readDisabledTools(store: StateStore) {
-  return store.get(DISABLED_TOOLS_KEY.key).pipe(
-    Effect.flatMap((stored) => Effect.fromResult(storedDisabledTools(stored))),
-    Effect.map((ids): ReadonlySet<string> => ids ?? new Set()),
-  );
-}
-
 /**
  * Announce the workspace files a committed row says its run wrote past the
  * editor's own write path (a fact kind's `writes`): a run records such a change
  * as a fact on its own rows, and every process that reads the run's rows
  * announces it (`workspaceFilesWritten`), so a window hears a background
- * service task's change as it hears its own. Run over the session's folded
+ * service task's change as it hears its own. Run over the session's applied
  * tail, so each row is announced once, in commit order, and the history a
  * reopened session replays never as news; a plugin's own aggregate
  * announces nothing.
@@ -258,24 +233,6 @@ export const announceWrites = (
 
 /** The plugin fact kinds a store reads, by `plugin/kind`. */
 export type FactKinds = Readonly<Record<FactName, FactKind>>;
-
-/**
- * The fact kinds `plugins` contribute, by `plugin/kind`. A fact kind of another
- * plugin's id, or a kind contributed twice, is a defect of the plugin list.
- */
-export function factKindsOf(plugins: Iterable<Plugin>): FactKinds {
-  const factKinds = new Map<FactName, FactKind>();
-  for (const { id, factKinds: own = [] } of plugins)
-    for (const factKind of own) {
-      const name = factName(factKind);
-      if (factKind.plugin !== id || factKinds.has(name))
-        throw new Error(
-          `The plugin list is not valid: plugin ${id} contributes the row kind ${name}, which is not its own or is contributed twice.`,
-        );
-      factKinds.set(name, factKind);
-    }
-  return Object.fromEntries(factKinds);
-}
 
 /**
  * Throw unless every fact a call of `plugin`'s tool states is a row of one of
@@ -358,7 +315,7 @@ export const ownFactsChecked = Effect.fn('ownFactsChecked')(function* (
   plugin: Plugin | undefined,
   log: Pick<SessionLogShape, 'runRows' | 'facts'>,
 ) {
-  const written = new Map<string, PluginRow>();
+  const written = new Map<string, PluginFactRow>();
   const kept: FactRow[] = [];
   const rejected: PluginFactRejected[] = [];
   for (const draft of drafts) {

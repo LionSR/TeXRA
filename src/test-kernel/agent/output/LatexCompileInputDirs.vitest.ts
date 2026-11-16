@@ -11,7 +11,7 @@ import {
   RunIdSchema,
   fileLocationDisplayPath,
 } from '@texra-ai/harness/schemas';
-import { RunFileService } from '@texra-ai/harness/plugins';
+import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { FakeHost } from '@test/support/testKernel';
 import { TEXRA_APP } from '@test/support/texraApp';
@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => ({
       stdout:
         '\\documentclass{article}\n\\begin{document}\nchanged\n\\end{document}\n',
       stderr: '',
+      end: { _tag: 'Exited', code: 0 },
     }),
   ),
 }));
@@ -106,7 +107,7 @@ layer(
         {
           run: {
             logger: spiedTrace(),
-            fileService: new RunFileService(runId, roots),
+            fileService: new RunWorkspace(runId, roots),
           },
           roots,
         },

@@ -34,10 +34,7 @@ import {
   type RequestDecision,
 } from '@shared/schemas';
 import { Unavailable } from '@shared/session/runtimeRequest';
-import type {
-  PendingRequest,
-  SessionView,
-} from '@shared/session/readonlyViews';
+import type { PendingRequest, SessionView } from '@shared/session/sessionView';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { ApprovalHandler, SessionHost } from './sessions.js';

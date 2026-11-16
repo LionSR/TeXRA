@@ -26,10 +26,12 @@ import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
 import { toolCatalogLayer } from '@tools/liveTools';
 import { mcpPlugin, mcpPluginLoader } from '@tools/mcp/mcpConfig';
-import { readDisabledTools } from '@tools/plugins';
 import type { ToolTable } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { DISABLED_TOOLS_KEY } from '@shared/state/disabledTools';
+import {
+  DISABLED_TOOLS_KEY,
+  readDisabledTools,
+} from '@shared/state/disabledTools';
 
 /** A switch apply's backoff: 200 ms doubling, over six retries. */
 const SWITCH_READ = Schedule.exponential('200 millis');

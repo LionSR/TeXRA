@@ -114,7 +114,7 @@ function launchBackgroundRun(
     yield* Fiber.join(published);
 
     yield* Deferred.await(outputRead);
-    yield* Context.get(session, SessionLog).settled;
+    yield* Context.get(session, SessionLog).drained;
     const reported = /Run ID: (\S+)/.exec(outputOf(launched) ?? '')?.[1];
     assert.ok(reported, 'Background launch should report its run ID');
     const runId = Schema.decodeUnknownSync(RunIdSchema)(reported);
@@ -140,7 +140,7 @@ function readOutput(
   viewRange?: [number, number],
 ) {
   return Effect.gen(function* () {
-    yield* Context.get(session, SessionLog).settled;
+    yield* Context.get(session, SessionLog).drained;
     return yield* ExecutionsTool.call({
       path: `/executions/${runId}/output`,
       ...(viewRange ? { view_range: viewRange } : {}),
@@ -154,7 +154,7 @@ const sessionHandle = Effect.flatMap(TestSession, sessionHandleOf);
 /** A fresh host per test, and a session over its roots whose requests a
  *  person answers from the view. */
 const perTest = Layer.provideMerge(
-  TestSession.layer(undefined, { host: {} }),
+  TestSession.layer(undefined, { answeredFromView: true }),
   FakeHost.layer({
     workspaceRoot: '/workspace',
     config: { [APPROVAL_POLICY_SETTING.key]: 'yolo' },
@@ -216,7 +216,7 @@ layer(
           const childId = yield* publishTestRunStart(session, undefined, {
             parent: PARENT_RUN_ID,
           });
-          yield* Context.get(session, SessionLog).settled;
+          yield* Context.get(session, SessionLog).drained;
           // Launched and admitted, its program not yet past its setup: the
           // window between `start` and the child's loop being under way.
           const launch = yield* Effect.forkChild(

@@ -16,7 +16,7 @@ import {
 
 // Local file imports
 import { nullishWithDefault } from '../core/inputSchema';
-import { ViewRangeSchema } from '../formatting';
+import { LineRangeSchema } from '../formatting';
 
 /** Virtual path: /executions, /executions/{id}, /executions/{id}/files, /executions/{id}/workspace-files/{path} */
 const PathFieldSchema = Schema.String.annotate({
@@ -36,10 +36,9 @@ const ViewActionSchema = Schema.Struct({
     'Read run data (returns immediately). Default action.',
   ),
 
-  /** Optional line range [start, end] for large outputs. */
-  view_range: Schema.optional(Schema.NullOr(ViewRangeSchema)).annotate({
+  view_range: Schema.optional(Schema.NullOr(LineRangeSchema)).annotate({
     description:
-      'Line range [start, end] for paginating file and background-command output. Conversation pagination uses offset and limit.',
+      'Line range for paginating file and background-command output. Conversation pagination uses offset and limit.',
   }),
 
   /** Zero-based offset for list or conversation pagination. */

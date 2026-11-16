@@ -394,7 +394,7 @@ export const executeCliConfig: (
         // A failed run's end reaches the host through the session's
         // presenter, which `settled` waits for: the presentation host stays
         // attached until it has.
-        yield* session.settled;
+        yield* session.drained;
         if (runResult.ok && options.afterRun)
           yield* options.afterRun(runResult.result);
       }),

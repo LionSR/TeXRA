@@ -1,12 +1,9 @@
 // Node imports
 import * as path from 'node:path';
 import { hasExtension, pathToLocationIn } from '@texra-ai/harness/host';
-import {
-  RunFileService,
-  type AgentTrace,
-  type WorkspaceFs,
-} from '@texra-ai/harness/plugins';
-import { absentReason } from '@texra-ai/harness/node';
+import type { RunWorkspace } from '@texra/tools/documents/runWorkspace';
+import { type AgentTrace, type WorkspaceFs } from '@texra-ai/harness/plugins';
+import { meansAbsent } from '@texra-ai/harness/node';
 
 // Third-party imports
 import { Effect, FileSystem, Predicate } from 'effect';
@@ -46,7 +43,7 @@ interface MediaRun {
    * workspace every extracted or compiled path is located against.
    */
   readonly roots: WorkspaceRoots;
-  readonly fileService: RunFileService;
+  readonly fileService: RunWorkspace;
 }
 
 /**
@@ -61,7 +58,7 @@ function logSkipped(
   path: string,
   error: unknown,
 ): void {
-  (absentReason(error) ? logger.debug : logger.warn).call(logger, message, {
+  (meansAbsent(error) ? logger.debug : logger.warn).call(logger, message, {
     data: { path, error },
   });
 }

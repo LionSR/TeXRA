@@ -12,7 +12,11 @@ import { callKey } from '@shared/session/runFacts';
 import { Effect, Result, Schema, SubscriptionRef } from 'effect';
 
 // Local imports
-import { inRunSession, type RunToolCall } from '@agent/runtime/RunCall';
+import {
+  inRunSession,
+  noLaterTurn,
+  type RunToolCall,
+} from '@agent/runtime/RunCall';
 import { goalGrant } from '@agent/runtime/runApprovalQueue';
 import { Runs } from '@agent/runtime/runRegistry';
 import { withLogChannel } from '@logger/effectLog';
@@ -101,12 +105,10 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
   plan: Plan,
   armed: 'commands' | 'allAgentWork',
 ) {
-  // A goal forks a conversation and reports to its later turns: a one-shot
-  // run has no later turn, and a script's run is no conversation to fork.
-  if (
-    call.run.toolPolicy.stopAfterCycle === true ||
-    call.run.config.script != null
-  )
+  // A goal forks a conversation and reports to its later turns: a run no
+  // later turn reaches has none, and a script's run is no conversation to
+  // fork.
+  if (noLaterTurn(call.run) || call.run.config.script != null)
     return executed(
       'A goal runs from a conversation, forks it and reports to its later turns; this run is not one: work on the approved plan in this run instead.',
       'Plan approved: no goal outside a conversation',

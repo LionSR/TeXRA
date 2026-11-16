@@ -148,7 +148,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           ]);
           const settledA = state.pendingResponse?.records['call-a']?.status;
           const file =
-            settledA?.kind === 'settled' &&
+            settledA?.kind === 'finished' &&
             settledA.result.status === 'executed'
               ? settledA.result.files?.[0]
               : undefined;

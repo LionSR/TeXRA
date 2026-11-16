@@ -252,12 +252,10 @@ export function agentEntryOf(
 ): AgentEntry {
   const { name, description, basedOn, ...fields } = definition;
   const persona = Schema.decodeUnknownSync(PersonaSchema)(fields);
-  const tools = persona.tools.map((tool) => tool.name);
   return {
     name,
     ...at,
     description,
-    tools: tools.length ? tools : undefined,
     basedOn,
     persona,
   };

@@ -14,16 +14,20 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Schema, type PlatformError } from 'effect';
 
 // Local imports
-import { absentReason } from '@texra-ai/harness/node';
+import { meansAbsent } from '@texra-ai/harness/node';
 import type { Session } from '@texra-ai/harness';
-import type { AssembleTraceResult } from '@texra-ai/harness/host';
-import type { RunId, TraceDocument } from '@texra-ai/harness/schemas';
+import {
+  TraceMissingSchema,
+  type AssembleTraceResult,
+  type RunId,
+  type TraceDocument,
+} from '@texra-ai/harness/schemas';
 
-/** The run has no trace to show: no saved configuration, or no replayable
- *  run-root transcript. Each host words the status its own way. */
+/** The run has no trace to show (`TraceMissingSchema` says why). Each host
+ *  words the status its own way. */
 export class TraceUnavailable extends Schema.TaggedError<TraceUnavailable>()(
   'TraceUnavailable',
-  { status: Schema.Literals(['config_missing', 'streamLogs_missing']) },
+  { status: TraceMissingSchema },
 ) {}
 
 /** The host's install has no trace-viewer bundle at `path` (a checkout where
@@ -89,7 +93,7 @@ export const traceHtml = Effect.fn('traceHtml')(function* (
   const template = yield* fs
     .readFileString(templatePath)
     .pipe(
-      Effect.catchIf(absentReason, () =>
+      Effect.catchIf(meansAbsent, () =>
         Effect.fail(new TraceViewerMissing({ path: templatePath })),
       ),
     );

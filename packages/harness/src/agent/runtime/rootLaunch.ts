@@ -79,9 +79,9 @@ export class SessionOwner extends Context.Service<
     /** Close a storage root's session: refuse new runs, stop its own ones
      *  and wait inside `SESSION_CLOSE_DEADLINE_MS`, report those still
      *  live abandoned, flush, release. A root with no open session reports
-     *  `settled`. Never touches another root's session. */
+     *  `finished`. Never touches another root's session. */
     readonly close: (root: string) => Effect.Effect<SessionCloseReport>;
-    /** A process shutdown's close: drain what the plugins' pollers admitted,
+    /** A process shutdown's close: drain what the plugins' pollers accepted,
      *  then close every held session at once, under one deadline. */
     readonly closeAll: Effect.Effect<readonly SessionCloseReport[]>;
   }
@@ -142,11 +142,9 @@ export const rootRun = Effect.fn('rootRun')(function* (
       const config = launch.helperModel
         ? yield* applyHelperModelPreference(launch.config, yield* SessionRoots)
         : launch.config;
-      const definition = yield* prepareAgentDefinition({
-        config,
-        stopAfterCycle: launch.interactive !== true,
-      });
+      const definition = yield* prepareAgentDefinition({ config });
       return yield* executeAgent(definition, runId, {
+        stopAfterCycle: launch.interactive !== true,
         tools: launch.tools,
         registration: {
           identity: { kind: 'agent', agent: definition.config.agent },

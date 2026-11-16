@@ -334,7 +334,7 @@ Left, with the reason:
   host-neutral `Dialogs` port; a scope there is module state or a run
   function threaded through all of them, and the fiber holds only a
   toast's promise); `HostInteractions.ts`, `ToolUseFollowUp.ts` (row 6),
-  `hostRunActions.ts`, `openGuiWindow.ts`, `nodePlatform.ts`, and the TUI's
+  `hostRunActions.ts`, `openGuiWindow.ts`, `nodeServices.ts`, and the TUI's
   `sessionCommands.ts`.
 - Row 20: `settingsViewBody.ts`'s inputs (each page filters after the
   `PubSub`, so a dropped input only one page follows is a page that never

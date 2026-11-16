@@ -23,7 +23,6 @@ import {
   type ApprovalBypassKind,
 } from '@shared/approvalBypassKind';
 import { RunIdSchema } from './identifiers';
-import { JsonValueSchema } from './jsonValue';
 import {
   AgentProposalRequestSchema,
   BashRequestSchema,
@@ -125,7 +124,7 @@ const PluginRequestSchema = Schema.Struct({
   answers: Schema.Array(AnswerActionSchema),
   data: Schema.StructWithRest(
     Schema.Struct({ requestId: Schema.String, runId: RunIdSchema }),
-    [Schema.Record(Schema.String, JsonValueSchema)],
+    [Schema.Record(Schema.String, Schema.Json)],
   ),
 });
 /** A request a plugin opens (`RequestPayload`'s plugin case). */
@@ -195,7 +194,7 @@ type AnswerSource =
 
 /** The decisions a request of kind `K` takes: its own actions and the three
  *  refusals. A plugin's request declares its actions on its row, so its
- *  type admits any decision. */
+ *  type accepts any decision. */
 export type DecisionOf<K extends RequestPayload['kind']> =
   | Extract<
       RequestDecision,

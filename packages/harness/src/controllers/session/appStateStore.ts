@@ -9,7 +9,6 @@ import { withLogChannel } from '@logger/effectLog';
 import { GlobalValues, StateStores } from '@platform/processRuntime';
 import { AppState, type AppStateStore } from '@platform/interfaces';
 import { StateReadFailed, StateWriteFailed } from '@shared/config/settings';
-import { JsonValueSchema, type JsonValue } from '@shared/schemas';
 import type { SettingsCatalog } from '@shared/state/stateSettings';
 import {
   DatabaseWriteFailed,
@@ -24,7 +23,7 @@ import {
 } from '@shared/session/valueFamily';
 import { normalizeFilePath } from '@utils/core/pathBasics';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { executeCommand } from '@utils/system/execUtils';
+import { gitDirAndTopLevel } from '@utils/system/git';
 
 /**
  * A settings store over one family of a root's current values, captured from
@@ -53,7 +52,7 @@ function appStateStoreFromDatabase(
     value === undefined
       ? Result.succeed(undefined)
       : Result.mapError(
-          Schema.decodeUnknownResult(JsonValueSchema)(value),
+          Schema.decodeUnknownResult(Schema.Json)(value),
           (cause) =>
             refused(
               key,
@@ -78,7 +77,7 @@ function appStateStoreFromDatabase(
         (
           current,
         ): Result.Result<
-          readonly [A] | readonly [A, Record<string, JsonValue | undefined>],
+          readonly [A] | readonly [A, Record<string, Schema.Json | undefined>],
           E | StateWriteFailed
         > => {
           const result = change(
@@ -91,7 +90,7 @@ function appStateStoreFromDatabase(
           if (result.success.length === 1)
             return Result.succeed([result.success[0]]);
           const [answer, next] = result.success;
-          const rows: Record<string, JsonValue | undefined> = {};
+          const rows: Record<string, Schema.Json | undefined> = {};
           for (const key of keys) {
             const json = encode(key, next[key]);
             if (Result.isFailure(json)) return Result.fail(json.failure);
@@ -190,33 +189,12 @@ const openRepoStateStore = Effect.fn('appStateStore.openRepoStateStore')(
         repoRoot: normalizeFilePath(repoRoot),
       });
     if (workspaceRoot === undefined) return store(storage);
-    const result = yield* executeCommand(
-      [
-        'git',
-        'rev-parse',
-        '--path-format=absolute',
-        '--git-dir',
-        '--show-toplevel',
-      ],
-      { cwd: workspaceRoot, timeout: 5_000, quiet: true },
-    );
-    if (!result.success) {
-      if (
-        !/not a git repository|must be run in a work tree/i.test(result.stderr)
-      ) {
-        yield* Effect.logWarning(
-          `Cannot resolve the git repository of ${workspaceRoot}; its repository settings are its own. Cause: ${result.stderr}`,
-        ).pipe(withLogChannel('platform'));
-      }
-      return store(workspaceRoot);
-    }
-    const [gitDirLine = '', topLevelLine = ''] = result.stdout
-      .trim()
-      .split(/\r?\n/);
-    const worktreesDir = path.dirname(path.normalize(gitDirLine.trim()));
+    const dirs = yield* gitDirAndTopLevel(workspaceRoot);
+    if (dirs === null) return store(workspaceRoot);
+    const worktreesDir = path.dirname(path.normalize(dirs.gitDir));
     const worktreesParent = path.dirname(worktreesDir);
     if (path.basename(worktreesDir) !== 'worktrees') {
-      return store(path.normalize(topLevelLine.trim()));
+      return store(path.normalize(dirs.topLevel));
     }
     return store(
       path.basename(worktreesParent) === '.git'

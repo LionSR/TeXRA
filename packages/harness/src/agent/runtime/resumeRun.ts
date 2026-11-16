@@ -10,10 +10,7 @@
  */
 import { Effect, Result, Schema } from 'effect';
 
-import {
-  describeFollowUpFailure,
-  REFUSED,
-} from '@agent/followUp/ToolUseFollowUp';
+import { REFUSED } from '@agent/followUp/ToolUseFollowUp';
 import { Inbox } from '@agent/followUp/Inbox';
 import { checkpointRefusal } from '@agent/storage/resumability';
 import {
@@ -31,7 +28,6 @@ import {
 } from '@shared/schemas';
 import { runReadRefusal, SessionLog } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { resumeBlocker } from './resumeBlocker';
 
 import {
   executeAgent,
@@ -50,30 +46,12 @@ type ResumeHandOff =
   | { readonly ownedBy: RunId };
 
 /** What a resume's caller supplies: the run's extra tools, its progress
- *  callback, and whether it stops after one cycle. It resumes in the
+ *  callback, and whether a root stops after one cycle. It resumes in the
  *  caller's session, with the caller's `LaunchKeys`. */
-export interface ResumeRunOptions extends Pick<
+export type ResumeRunOptions = Pick<
   ExecuteAgentOptions,
-  'tools' | 'onProgress'
-> {
-  /** Stop the run after one model/tool cycle instead of waiting for
-   *  follow-up input. */
-  readonly stopAfterCycle?: boolean;
-}
-
-/** A resume refusal's wording: a blocked one names the agent or plugin it
- *  waits for; every other reads as its kind. */
-export function describeResumeRefusal(reason: ResumeRefusal): string {
-  if (reason.kind !== 'blocked') return describeFollowUpFailure(reason.kind);
-  switch (reason.blocker) {
-    case 'agentMissing':
-      return `This task's agent, ${reason.name}, is not installed. It can continue once the agent is back.`;
-    case 'pluginOff':
-      return `This task's agent comes from the ${reason.name} plugin, which is off. It can continue once the plugin is on.`;
-    case 'pluginUntrusted':
-      return `This task's agent comes from the ${reason.name} plugin, which is not trusted as it is now. It can continue once the plugin is reviewed.`;
-  }
-}
+  'tools' | 'onProgress' | 'stopAfterCycle'
+>;
 
 const CHANNEL = 'ResumeRun';
 
@@ -84,11 +62,11 @@ type ResumeRefusalAnswer = Exclude<
   { activation: CommitOrdinal }
 >;
 
-/** A resume refused as it opens: told as the opening's failure, so the
- *  registry's launch ends with no fiber behind it, and answered as the
- *  refusal it carries. */
-class ResumeRefused extends Schema.TaggedError<ResumeRefused>()(
-  'ResumeRefused',
+/** A resume that did not open: told as the opening's failure, so the
+ *  registry's launch ends with no fiber behind it, and answered as what it
+ *  carries (the refusal, or the parent that owns the run). */
+class ResumeNotOpened extends Schema.TaggedError<ResumeNotOpened>()(
+  'ResumeNotOpened',
   {
     answer: Schema.Union([
       Schema.Struct({ failed: ResumeRefusalSchema }),
@@ -148,8 +126,8 @@ export const resumeRun = (
         Effect.map(({ opened }): ResumeHandOff => ({
           activation: opened.activation,
         })),
-        Effect.catchTag('ResumeRefused', (refused) =>
-          Effect.succeed<ResumeHandOff>(refused.answer),
+        Effect.catchTag('ResumeNotOpened', (notOpened) =>
+          Effect.succeed<ResumeHandOff>(notOpened.answer),
         ),
         Effect.catch((error) =>
           error instanceof RunLive
@@ -177,10 +155,10 @@ const joinOpening = (
   runId: RunId,
 ): Effect.Effect<ResumeHandOff | null> =>
   Effect.suspend(() =>
+    // Once the opening has finished, whichever way: one that failed left no
+    // run here, which reads below as not resumable, and its launch reports
+    // the failure.
     (runs.openingOf(runId) ?? Effect.void).pipe(
-      // An opening that failed leaves no run here, which reads below as
-      // not resumable; its launch reports the failure.
-      Effect.ignore,
       Effect.andThen(
         runs.inSession(
           Effect.gen(function* () {
@@ -216,9 +194,9 @@ export const openResume = Effect.fn('resumeRun.open')(function* (
   runId: RunId,
   options: ResumeRunOptions,
   owner?: RunId,
-): Effect.fn.Return<PreparedRun, Error | ResumeRefused, AgentRunServices> {
+): Effect.fn.Return<PreparedRun, Error | ResumeNotOpened, AgentRunServices> {
   const refuse = (answer: ResumeRefusalAnswer) =>
-    Effect.fail(new ResumeRefused({ answer }));
+    Effect.fail(new ResumeNotOpened({ answer }));
   const inbox = yield* Inbox;
   const store = getRunRecords(runId);
   const records = yield* Effect.result(
@@ -242,28 +220,21 @@ export const openResume = Effect.fn('resumeRun.open')(function* (
   // Nothing to continue from, or rows this build cannot use.
   const rejected = yield* checkpointRefusal(runId);
   if (rejected !== null) return yield* refuse({ failed: rejected });
-  // An agent or plugin this process cannot run now refuses the resume with
-  // the reason; the run stays interrupted, never failed, and nothing is
-  // launched.
-  const blocker = yield* resumeBlocker(config);
-  if (blocker !== null) return yield* refuse({ failed: blocker });
-  // Its parent, read once: the run's edge for this activation; and whether
-  // its launch let it take input (`run.start.takesFollowUps`).
+  // Its parent, read once: the run's edge for this activation.
   const parentRunId = yield* persistedParentRunId(runId);
-  const takesInput =
-    (yield* (yield* SessionLog).facts(runId))?.start?.takesFollowUps !== false;
   // A stop asked while those reads ran: the registry ends the run on its
   // rows as this opening fails; there is nothing to activate.
   if (runs.stopAsked(runId) !== null) return yield* refuse(REFUSED);
-  // A child runs one cycle and ends with its report, and so does a root
-  // launched to run once, which no message may reach, whoever resumes it;
-  // any other root as its caller asks.
-  const definition = yield* prepareAgentDefinition({
-    config,
-    stopAfterCycle:
-      options.stopAfterCycle || parentRunId !== undefined || !takesInput,
-  });
+  const definition = yield* prepareAgentDefinition({ config }).pipe(
+    // An agent or plugin this process cannot run now refuses the resume
+    // with the reason; the run stays interrupted, never failed, and
+    // nothing is launched.
+    Effect.catchTag('AgentUnavailable', ({ blocked }) =>
+      refuse({ failed: blocked }),
+    ),
+  );
   return yield* executeAgent(definition, runId, {
+    stopAfterCycle: options.stopAfterCycle,
     tools: options.tools,
     onProgress: options.onProgress,
     parentRunId,

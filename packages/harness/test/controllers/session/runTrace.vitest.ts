@@ -61,7 +61,7 @@ it.effect("reads the usage row projected from a model's priced title", () =>
       replayTrace(
         {
           view: { inputs: () => Stream.make(history, live) },
-          log: { settled: Effect.void, now: () => 3 },
+          log: { drained: Effect.void, now: () => 3 },
         },
         runId,
         1,

@@ -198,7 +198,7 @@ providers in `packages/extension/src/progressView/` and in
   holds. When agnostic code needs a host-only capability, add a typed port
   served by that runtime, not an import or a field on a `Platform` object.
 - Use the Effect `FileSystem` (`stat(...).type`), not `vscode.FileType`, and
-  `absentReason` (`packages/harness/src/utils/files/fsEntryExists.ts`, the one
+  `meansAbsent` (`packages/harness/src/utils/files/fsEntryExists.ts`, the one
   reading of "nothing is there"), not `vscode.FileSystemError`.
 - Return errors to the caller; the command or frontend layer shows the message.
 - Carry the workspace root as data from its holder (a run's `session.roots`, a

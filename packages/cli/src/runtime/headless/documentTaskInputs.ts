@@ -10,7 +10,7 @@ import { glob, hasMagic } from 'glob';
 import { Effect, FileSystem, Scope } from 'effect';
 
 import { ensureError } from '@texra-ai/harness/schemas';
-import { absentReason } from '@texra-ai/harness/node';
+import { meansAbsent } from '@texra-ai/harness/node';
 import { CliUsageError } from '@cli/runtime/platform/cliContext';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 
@@ -154,7 +154,7 @@ const expandDocumentTaskInputSpec = Effect.fn('expandDocumentTaskInputSpec')(
     const fs = yield* FileSystem.FileSystem;
     const stats = yield* fs
       .stat(absolutePath)
-      .pipe(Effect.catchIf(absentReason, () => Effect.succeed(null)));
+      .pipe(Effect.catchIf(meansAbsent, () => Effect.succeed(null)));
 
     const globOptions = {
       magicalBraces: true,

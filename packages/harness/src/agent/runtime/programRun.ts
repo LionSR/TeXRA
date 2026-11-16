@@ -13,7 +13,6 @@ import {
   AGENT_SOURCE,
   factName,
   type AgentConfig,
-  type JsonValue,
   type RunId,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
@@ -28,7 +27,7 @@ import { ToolRegistry, type ProgramChange } from '@tools/toolTable';
  */
 const programScript = (
   name: string,
-  args: Readonly<Record<string, JsonValue>>,
+  args: Readonly<Record<string, Schema.Json>>,
 ): string =>
   `const { default: program } = await import(${JSON.stringify(`builtIn:${name}`)});
 return await program(${JSON.stringify(args)});`;
@@ -75,7 +74,7 @@ const registeredProgram = Effect.fn('registeredProgram')(function* (
  */
 export const programLaunch = Effect.fn('programLaunch')(function* (
   name: string,
-  args: Readonly<Record<string, JsonValue>>,
+  args: Readonly<Record<string, Schema.Json>>,
   files: Pick<AgentConfig, 'inputFiles' | 'outputFiles'>,
 ) {
   const program = yield* registeredProgram(name);

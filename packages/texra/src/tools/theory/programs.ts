@@ -99,7 +99,8 @@ const without = (text, macro) => {
 /**
  * A check that a revision only added macro{...} annotations (and the
  * lines of allowed, the annotation's definition): what it removed must be
- * what it added once the annotations are taken out, whitespace aside. A
+ * what it added once the annotations are taken out of both, whitespace
+ * aside. A
  * diff too long to be shown whole is not checked.
  */
 export const addsOnly = (macro, allowed = '') => (diffs) => {
@@ -114,7 +115,7 @@ export const addsOnly = (macro, allowed = '') => (diffs) => {
       if (line.startsWith('-')) removed += line.slice(1);
       else if (line.startsWith('+') && !definition.includes(line.slice(1))) added += line.slice(1);
     }
-    if (squash(removed) !== squash(without(added, macro))) changed.push(path);
+    if (squash(without(removed, macro)) !== squash(without(added, macro))) changed.push(path);
   }
   return changed.length === 0
     ? null

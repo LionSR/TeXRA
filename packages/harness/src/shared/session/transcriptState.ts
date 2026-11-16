@@ -86,10 +86,10 @@ export interface TranscriptIndexes {
   /** The compaction projection's working state. */
   readonly compactionState: CompactionActivityProjection;
   readonly slots: Map<string, RowState>;
-  /** Slots opened so far and slots settled so far: the last `seqNo` (first
-   *  appearance) and `settlementSeqNo` (became printable) handed out. */
+  /** Slots opened so far and slots finished so far: the last `seqNo` (first
+   *  appearance) and `finalSeqNo` (became printable) handed out. */
   appended: number;
-  settled: number;
+  finalized: number;
   /** This turn's model-response stream, which `response.finalized` closes. */
   pendingModelResponseId: string | undefined;
   /** The run is waiting or ended: cards and streams stay closed until it
@@ -122,7 +122,7 @@ export function emptyTranscriptIndexes(): TranscriptIndexes {
     },
     slots: new Map(),
     appended: 0,
-    settled: 0,
+    finalized: 0,
     pendingModelResponseId: undefined,
     closed: false,
     live: new Map(),
@@ -134,7 +134,7 @@ export function emptyTranscriptIndexes(): TranscriptIndexes {
 
 /** A transcript with no rows. */
 export function emptyTranscript(): TranscriptView {
-  return { rows: [], stages: [], settledRows: 0 };
+  return { rows: [], stages: [], finalRows: 0 };
 }
 
 /** A transcript one update call is building: a fresh envelope over the
@@ -236,7 +236,7 @@ export function upsertCompactionRows(
 // ---------------------------------------------------------------------------
 
 /** One event's working copy: the next value and the slots it wrote. */
-export interface Draft extends TranscriptWork {
+export interface TranscriptUpdate extends TranscriptWork {
   readonly next: TranscriptDraft;
   readonly ctx: TranscriptContext;
   readonly at: number;
@@ -247,13 +247,13 @@ export interface Draft extends TranscriptWork {
 }
 
 /** A new slot's envelope: the next first-appearance position, and the next
- *  settlement position when it is printable on arrival. */
+ *  result position when it is printable on arrival. */
 export function open(
-  d: Draft,
+  d: TranscriptUpdate,
   id: string,
   stageId: string | undefined,
   messageType: MessageType,
-  settled: boolean,
+  final: boolean,
   level: LogLevel = 'info',
 ): TranscriptRowBase {
   d.ix.appended += 1;
@@ -264,19 +264,19 @@ export function open(
     level,
     verbose: d.ctx.debug,
     messageType,
-    ...(settled ? { settlementSeqNo: (d.ix.settled += 1) } : {}),
+    ...(final ? { finalSeqNo: (d.ix.finalized += 1) } : {}),
     ...(stageId !== undefined ? { stageId } : {}),
   };
 }
 
-/** The envelope once the row became printable; settles once. */
-export function settle(ix: TranscriptIndexes, base: TranscriptRowBase) {
-  return base.settlementSeqNo === undefined
-    ? { ...base, settlementSeqNo: (ix.settled += 1) }
+/** The envelope once the row became printable; finishes once. */
+export function markFinal(ix: TranscriptIndexes, base: TranscriptRowBase) {
+  return base.finalSeqNo === undefined
+    ? { ...base, finalSeqNo: (ix.finalized += 1) }
     : base;
 }
 
-export function write(d: Draft, slot: RowState): void {
+export function write(d: TranscriptUpdate, slot: RowState): void {
   d.ix.slots.set(slot.base.id, slot);
   d.written.push(slot);
   d.touched = true;
@@ -324,7 +324,7 @@ export function slotRow(
  * fields with that text, which may have arrived first; a finalizing row
  * drops it.
  */
-export function paint(d: Draft, slot: RowState): void {
+export function paint(d: TranscriptUpdate, slot: RowState): void {
   const { ix, next } = d;
   const id = slot.base.id;
   const takesLive = takesLiveText(slot);

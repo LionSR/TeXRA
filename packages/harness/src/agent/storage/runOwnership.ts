@@ -94,7 +94,7 @@ const openCallChildren = (
   const pending = state?.pendingResponse ?? null;
   const open = new Map<string, readonly RunId[]>();
   for (const [callId, { status }] of Object.entries(pending?.records ?? {}))
-    if (pending !== null && status.kind !== 'settled')
+    if (pending !== null && status.kind !== 'finished')
       open.set(
         callId,
         Array.from({ length: attemptOf(status) }, (_, index) =>
@@ -110,7 +110,7 @@ const openCallChildren = (
 };
 
 /** The open call that owns `runId`: the undetached parent call that
- *  launched it, unsettled in the parent's history; else null. */
+ *  launched it, unfinished in the parent's history; else null. */
 export const owningCall = Effect.fn('owningCall')(function* (runId: RunId) {
   const edge = yield* parentEdge(runId);
   if (edge?.call == null) return null;
@@ -154,7 +154,7 @@ const runEndOf = Effect.fn('runEndOf')(function* (
   // One read of the rows, so a resume never pairs the end with another
   // activation's totals: the state before the activation, its usage
   // zeroed, then the activation's rows.
-  const folded = Result.flatMap(
+  const loaded = Result.flatMap(
     runHistoryRows(history.filter((row) => row.seq <= end.seq)),
     (live) =>
       Result.flatMap(
@@ -169,14 +169,14 @@ const runEndOf = Effect.fn('runEndOf')(function* (
           ),
       ),
   );
-  if (Result.isFailure(folded)) {
+  if (Result.isFailure(loaded)) {
     yield* Effect.logWarning(
       'Failed to fold the run usage from its run history rows',
-    ).pipe(Effect.annotateLogs({ runId, error: folded.failure.message }));
+    ).pipe(Effect.annotateLogs({ runId, error: loaded.failure.message }));
   }
-  const turns = Result.isSuccess(folded) ? folded.success?.usage : undefined;
+  const turns = Result.isSuccess(loaded) ? loaded.success?.usage : undefined;
   const withLabel = ({ label }: RunRows) =>
-    Result.isSuccess(folded) && during(label?.commit ?? -1) && label?.usage
+    Result.isSuccess(loaded) && during(label?.commit ?? -1) && label?.usage
       ? addUsage(turns ?? NO_USAGE, label.usage)
       : turns;
   const own = withLabel(held);
@@ -238,10 +238,10 @@ export function getRunRecords(runId: RunId) {
   );
   const read = <A>(select: (facts: RunRows | null) => A): RecordRead<A> =>
     Effect.map(facts, select);
-  /** The run's folded state, or null with no run history. A run whose rows
+  /** The run's loaded state, or null with no run history. A run whose rows
    *  this build cannot fold is a failed read of that run, never a refusal
    *  of the caller's own writes. */
-  const folded = RunHistory.use((history) => history.load(runId)).pipe(
+  const loaded = RunHistory.use((history) => history.load(runId)).pipe(
     Effect.catchTag('RunHistoryRefused', (refused) =>
       Effect.flatMap(SessionRoots, (roots) =>
         Effect.fail(
@@ -255,7 +255,7 @@ export function getRunRecords(runId: RunId) {
     read((held) => held?.config ?? null);
   return {
     /** The run has a `run.start` the database still lists: absent, or
-     *  closed by its tombstone, reads false. */
+     *  closed by its deletion marker, reads false. */
     exists: (): RecordRead<boolean> => read((held) => held !== null),
     readRunRecord: readRecord,
     readConfig: (): RecordRead<AgentConfig | null> =>
@@ -266,15 +266,15 @@ export function getRunRecords(runId: RunId) {
       ),
     readReport: (): RecordRead<string | null> =>
       read((held) => held?.report ?? null),
-    /** The workspace files the run edited, folded from its settled calls
+    /** The workspace files the run edited, loaded from its finished calls
      *  (`RunState.edited`). A run with no run history edited nothing here. */
     readWorkspaceFiles: (): RecordRead<readonly string[], RecordServices> =>
-      Effect.map(folded, (state) =>
+      Effect.map(loaded, (state) =>
         Schema.decodeUnknownSync(RunWorkspaceFilesSchema)(state?.edited ?? []),
       ),
     /** The skills the run's latest `tools.offered` row listed. */
     readSkills: (): RecordRead<readonly string[], RecordServices> =>
-      Effect.map(folded, (state) => state?.offeredWith.skills ?? []),
+      Effect.map(loaded, (state) => state?.offeredWith.skills ?? []),
     /** The run's terminal result ({@link runEndOf}), or null while the
      *  lifecycle it is in has not ended; `after` an activation's commit, the
      *  end of that activation, whatever later ones wrote. */

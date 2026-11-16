@@ -16,7 +16,12 @@ import { basename, dirname, join } from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, ScopedRef } from 'effect';
 
-import { ChildRuns, type ToolRun, ToolError } from '@texra-ai/harness/plugins';
+import {
+  ChildRuns,
+  type ToolRun,
+  ToolError,
+  sourceLocationUnder,
+} from '@texra-ai/harness/plugins';
 import {
   toErrorMessage,
   fileLocationDisplayPath,
@@ -45,13 +50,14 @@ import {
   appendCompileFailureRoundContext,
   failureContextFromLogs,
 } from '@texra/agent/output/compileFailureRoundContext';
+import { runWorkspaceOf } from '@texra/tools/documents/runWorkspace';
 import type { CallRequests, ToolEnv } from '@texra-ai/harness/plugins';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 /** What the documents read of the run their tool call serves. */
 type DocumentRun = Pick<
   ToolRun,
-  'config' | 'logger' | 'fileService' | 'runId' | 'opening' | 'model'
+  'config' | 'logger' | 'scope' | 'runId' | 'opening' | 'model'
 >;
 
 /** The tool call the documents are opened for: its roots and run, and
@@ -122,7 +128,8 @@ export const openDocuments = Effect.fn('documents.open')(function* (
   { env: { roots, run }, requests }: DocumentCall,
   described?: DocumentTaskSpec,
 ) {
-  const { config, logger, fileService, runId } = run;
+  const { config, logger, runId } = run;
+  const fileService = runWorkspaceOf(run, roots);
   const output = yield* (yield* ChildRuns).fact(runId, DOCUMENTS_OUTPUT_KIND);
   const task = output?.task ?? described;
   if (task === undefined)
@@ -132,7 +139,9 @@ export const openDocuments = Effect.fn('documents.open')(function* (
       ),
     );
   const expected = expectedDocuments(config);
-  const sources = expected.names.map((file) => fileService.locateSource(file));
+  const sources = expected.names.map((file) =>
+    sourceLocationUnder(roots, file),
+  );
   const deps: OutputDependencies = {
     config,
     expected,

@@ -26,7 +26,6 @@ import {
   qualifyAggregateId,
   type AggregateId,
 } from './identifiers';
-import { JsonValueSchema } from './jsonValue';
 import { listingTypeOf } from './rowVersions';
 import {
   RunEndRowSchema,
@@ -159,7 +158,7 @@ export type RunParent = typeof RunParentSchema.Type;
 
 /**
  * Where a run's history came from, when not from its own launch: a fork
- * copies the model view of run `from` at its settled `seq` `at`. Resume is
+ * copies the model view of run `from` at its finished `seq` `at`. Resume is
  * not a provenance; it is the same run.
  */
 const RunProvenanceSchema = Schema.Union([
@@ -226,7 +225,7 @@ export const PluginFactDraftSchema = durable('plugin.fact', {
   /** The arm's version `value` was written at: a plugin evolves its
    *  kinds without a core row version. */
   version: Schema.Int.check(Schema.isGreaterThan(0)),
-  value: JsonValueSchema,
+  value: Schema.Json,
   parent: Schema.NullOr(RunIdSchema),
 }).mapFields(Struct.assign({ aggregateId: AggregateIdSchema }));
 
@@ -306,7 +305,7 @@ const DisplayRowDraftSchema = Schema.Union([
   /**
    * The loop's position: `at`, and its coordinates. The one run-history
    * row renderers read: the fold derives the live phase from it (`waiting`
-   * parks the run, any other position is running) and `RunView.position`
+   * waits the run, any other position is running) and `RunView.position`
    * carries its coordinates; its five siblings below are run-history-private.
    */
   durable('run.position', { payload: RunPositionPayloadSchema }),

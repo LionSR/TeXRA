@@ -3,7 +3,7 @@
  * chunks, finishing open compactions, and the activity flags.
  */
 import { type TextChunk } from '@shared/schemas';
-import { settleCompactionActivities } from '@shared/runs/compactionActivityProjection';
+import { finalizeCompactionActivities } from '@shared/runs/compactionActivityProjection';
 import type { RunLabels } from '@shared/tools/executionsDisplay';
 
 import {
@@ -82,7 +82,7 @@ export function finishOpenCompactions(
   work: TranscriptWork,
   finishedAt: number,
 ): TranscriptView {
-  const changed = settleCompactionActivities(
+  const changed = finalizeCompactionActivities(
     work.ix.compactionState,
     finishedAt,
   );

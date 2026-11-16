@@ -31,7 +31,6 @@ export {
   formatConversationMessage,
   type ConversationFormatOptions,
 } from '@agent/storage/conversationFormat';
-export type { AssembleTraceResult } from '@transcript/traceAssembler';
 // What `SessionHost.emit` takes and answers: the notices a session's runs
 // ask a host to present.
 export type {
@@ -44,7 +43,7 @@ export type {
 export type { ProcessLayerOptions } from './effect/processLayer.js';
 export type { ProcessServicesOptions } from '@controllers/session/sessionLayer';
 // A project's `.env` over the process environment, for a one-project host.
-export { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
+export { workspaceEnvironmentLayer } from '@platform/defaults/nodeServices';
 export {
   withProcessServices,
   type ProcessRuntime,
@@ -66,7 +65,7 @@ export {
   type WorkspaceAgents,
   type WorkspaceAgentsStores,
 } from '@agent/index/agentCatalog';
-export type { AgentEntry } from '@agent/index/agentEntry';
+export { agentToolNames, type AgentEntry } from '@agent/index/agentEntry';
 export {
   InvalidAgentTeamError,
   type WorkspaceAgentsController,
@@ -153,7 +152,7 @@ export {
   MODEL_SELECTION_KEY,
   readModelOptions,
   setModelEnabled,
-  type ModelOption,
+  type ModelVerdict,
 } from '@model/computeModelOptions';
 export {
   decideRunModel,

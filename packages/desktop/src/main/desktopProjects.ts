@@ -24,10 +24,7 @@ import {
   type PerKeyLane,
   StateStores,
 } from '@texra-ai/harness/host';
-import {
-  absentReason,
-  canonicalizeWorkspaceRoot,
-} from '@texra-ai/harness/node';
+import { meansAbsent, canonicalizeWorkspaceRoot } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
@@ -178,7 +175,7 @@ const partitionFolders = Effect.fn('desktopProjects.partitionFolders')(
         } else {
           missing.push(root);
         }
-      } else if (absentReason(stat.failure)) {
+      } else if (meansAbsent(stat.failure)) {
         missing.push(root);
       } else {
         const reason = toErrorMessage(

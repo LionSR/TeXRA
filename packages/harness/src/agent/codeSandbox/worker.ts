@@ -5,10 +5,10 @@
 // `scripts/code-sandbox-worker.mjs`), so no host resolves a worker path.
 //
 // The realm advances only inside a step: the first evaluates the script, and
-// each later one delivers one settlement. A step then drains QuickJS's job
+// each later one delivers one result. A step then drains QuickJS's job
 // queue to quiescence and reports the ops the guest issued meanwhile, so the
-// same settlements in the same order always issue the same ops in the same
-// order. There are no timers: nothing settles except a host delivery.
+// same results in the same order always issue the same ops in the same
+// order. There are no timers: nothing finishes except a host delivery.
 
 import { workerData } from 'node:worker_threads';
 
@@ -36,7 +36,7 @@ import {
 } from './limits';
 import { BRIDGE_PRELUDE, DETERMINISM_PRELUDE } from './prelude';
 import {
-  SettleMessageSchema,
+  ResultMessageSchema,
   type StepReportWire,
   type WorkerInput,
   WorkerInputSchema,
@@ -97,8 +97,8 @@ function isOutOfMemory(thrown: { name: string; message: string }): boolean {
 interface Realm {
   /** Evaluate the script and run it to its first wait. */
   readonly begin: () => StepReportWire;
-  /** Deliver one settlement and run the realm to its next wait. */
-  readonly settle: (message: typeof SettleMessageSchema.Type) => StepReportWire;
+  /** Deliver one result and run the realm to its next wait. */
+  readonly settle: (message: typeof ResultMessageSchema.Type) => StepReportWire;
 }
 
 const openRealm = Effect.fn('worker.openRealm')(function* (
@@ -358,7 +358,7 @@ const program = Effect.gen(function* () {
   yield* runner.send(0, realm.begin());
   yield* Effect.raceFirst(
     runner.run((_port, raw) => {
-      const message = Schema.decodeUnknownResult(SettleMessageSchema)(raw);
+      const message = Schema.decodeUnknownResult(ResultMessageSchema)(raw);
       return Result.isSuccess(message)
         ? runner.send(0, realm.settle(message.success))
         : Deferred.fail(

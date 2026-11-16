@@ -11,7 +11,7 @@ import { MEMORY_DISPLAY_ROOT } from '@agent/memory/memoryLayout';
 
 // Local file imports
 import { nullishWithDefault } from '../core/inputSchema';
-import { ViewRangeSchema } from '../formatting';
+import { LineRangeSchema } from '../formatting';
 import { NonNegativeIntSchema } from '@shared/schemas';
 
 const MEMORY_PATH_DESCRIPTION = `Path under ${MEMORY_DISPLAY_ROOT} (e.g. ${MEMORY_DISPLAY_ROOT}/notes.md).`;
@@ -35,7 +35,7 @@ export const MemoryToolInputSchema = Schema.Union([
     path: Schema.optional(Schema.NullOr(Schema.String)).annotate({
       description: `${MEMORY_PATH_DESCRIPTION} Defaults to the ${MEMORY_DISPLAY_ROOT} root directory listing when omitted.`,
     }),
-    view_range: Schema.optional(Schema.NullOr(ViewRangeSchema)),
+    view_range: Schema.optional(Schema.NullOr(LineRangeSchema)),
     /** Zero-based offset for paginating directory listings (path points to a directory). */
     offset: nullishWithDefault(
       NonNegativeIntSchema,

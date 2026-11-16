@@ -5,7 +5,7 @@ import { normalizeFilePath } from '@utils/core/pathBasics';
 
 import { AgentConfigSchema } from './agentConfig';
 import { RunIdSchema } from './identifiers';
-import { JsonValueSchema } from './jsonValue';
+import type { ExecEnd } from './opResults';
 import { ModelFailureSchema, modelFailureMessage } from './errors';
 import { RunOutcomeSchema } from './run';
 import { RunIdentitySchema } from './runIdentity';
@@ -86,7 +86,7 @@ const RunEndOutputSchema = Schema.Struct({
   files: Schema.Array(Schema.String),
   /** Value captured by the `submit_output` terminal tool, or the value a
    *  program's script returned. */
-  structured: Schema.optional(JsonValueSchema),
+  structured: Schema.optional(Schema.Json),
 });
 export type RunEndOutput = typeof RunEndOutputSchema.Type;
 
@@ -118,16 +118,23 @@ export type RunEnd = typeof RunEndSchema.Type;
 export const RunEndRowSchema = RunEndSchema.mapFields(Struct.omit(['usage']));
 
 /**
- * How a process run's command exited (the `process.exit` row): its code
- * (null when it had none: it could not start, or died by a signal) and
- * whether the run's own timeout ended it. A run a stop interrupted has
- * none: the interruption is the fact.
+ * How a process run's command exited (the `process.exit` row, and a
+ * background command's delivery to its parent): its code, null when it had
+ * none (it timed out, could not start, or died by a signal), and whether the
+ * run's own timeout ended it. A run a stop interrupted has none: the
+ * interruption is the fact.
  */
 export const ProcessExitSchema = Schema.Struct({
   code: Schema.NullOr(Schema.Int),
   timedOut: Schema.Boolean,
 });
 export type ProcessExit = typeof ProcessExitSchema.Type;
+
+/** How a command's `end` is recorded: only an exit has a code. */
+export const processExit = (end: ExecEnd): ProcessExit => ({
+  code: end._tag === 'Exited' ? end.code : null,
+  timedOut: end._tag === 'TimedOut',
+});
 
 /**
  * One run's result as `readResult` answers it: its terminal fact, the
@@ -170,7 +177,7 @@ export const AgentRunListingEntrySchema = Schema.Struct({
    *  `run.config`'s. */
   model: Schema.optional(Schema.String),
   /** `deriveResumability` finds a point to continue from. Ownership and
-   *  loadability are settled when the run is opened. */
+   *  loadability are finished when the run is opened. */
   resumable: Schema.Boolean,
   /** Why the run cannot resume in this build although it may have rows to
    *  continue from: they could not be read, an earlier build wrote them, or

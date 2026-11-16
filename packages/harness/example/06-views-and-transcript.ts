@@ -78,7 +78,7 @@ const program = Effect.gen(function* () {
   });
 
   yield* run.result;
-  yield* session.settled;
+  yield* session.drained;
 
   const view = session.view.current();
   const runView = view.runs.get(run.runId);

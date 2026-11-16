@@ -1,10 +1,10 @@
 import * as path from 'node:path';
-import { RunFileService } from '@texra-ai/harness/plugins';
+import { runDirUnder } from '@texra-ai/harness/plugins';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe here since these paths come from getSafeDocumentRelativePath /
 // path.relative on the workflow's own generated outputs, never user input.
 import { toPosixPath } from '@texra-ai/harness/host';
-import { absentReason, isNotADirectoryError } from '@texra-ai/harness/node';
+import { meansAbsent, isNotADirectoryError } from '@texra-ai/harness/node';
 
 import { Effect, FileSystem, Path, PlatformError, Schema } from 'effect';
 
@@ -76,7 +76,7 @@ function outputPathError(
       message: `${flagLabel} is not writable (permission denied): ${target}`,
     });
   }
-  if (absentReason(error)) {
+  if (meansAbsent(error)) {
     return new CliUsageError({
       message:
         flagLabel === '--output-dir'
@@ -112,7 +112,7 @@ const probeOutputPath = Effect.fn('probeOutputPath')(
       flagLabel === '--output-dir' ? target : pathService.dirname(target);
     const stats = yield* fs
       .stat(target)
-      .pipe(Effect.catchIf(absentReason, () => Effect.succeed(null)));
+      .pipe(Effect.catchIf(meansAbsent, () => Effect.succeed(null)));
     if (stats === null) {
       yield* fs.makeDirectory(requiredDirectory, { recursive: true });
     }
@@ -308,10 +308,7 @@ export const resolveDocumentTaskOutput = Effect.fn('resolveDocumentTaskOutput')(
       compileFailures: [],
       diffs: [],
     };
-    const { runDirectory } = new RunFileService(result.runId, {
-      storage: options.storageRoot,
-      workspace: undefined,
-    });
+    const runDirectory = runDirUnder(options.storageRoot, result.runId);
     const baseResult = {
       ...result,
       output: { ...output, documents },

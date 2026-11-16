@@ -5,19 +5,19 @@
  */
 
 /** Allowed values for the `latexdiff` math-markup mode. */
-export const LATEXDIFF_MATH_MARKUP_VALUES = [
+export const LATEXDIFF_MATH_MARKUP_VALUES = Object.freeze([
   'off',
   'whole',
   'coarse',
   'fine',
-] as const;
+] as const);
 export type LatexdiffMathMarkupValue =
   (typeof LATEXDIFF_MATH_MARKUP_VALUES)[number];
 
 /** Allowed values for the LaTeX formatter selector. */
-export const LATEX_FORMATTER_VALUES = [
+export const LATEX_FORMATTER_VALUES = Object.freeze([
   'latexindent',
   'tex-fmt',
   'none',
-] as const;
+] as const);
 export type LatexFormatterValue = (typeof LATEX_FORMATTER_VALUES)[number];

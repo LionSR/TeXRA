@@ -127,7 +127,7 @@ const standingOf = Effect.fn('agent.childStanding')(function* (
   return { kind: 'answered', result: end };
 });
 
-/** What the child an earlier attempt of the call left settles it to. */
+/** What the child an earlier attempt of the call left finishes it to. */
 type Recovered =
   | {
       readonly kind: 'ended';
@@ -138,7 +138,7 @@ type Recovered =
   | { readonly kind: 'launch' };
 
 /**
- * Settle a call from the child an earlier attempt of it left, before
+ * Finish a call from the child an earlier attempt of it left, before
  * anything about a launch is decided again: the child was approved and
  * configured when it launched. An ended child is read back, and one cut
  * short is resumed under its id.

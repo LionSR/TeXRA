@@ -31,7 +31,6 @@ import {
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { CLAUDE_COUNTERPART_TOOLS } from '@common/plugins/hookConfig';
-import { RunFileService } from '@common/storage/runStorage';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import { SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
@@ -67,8 +66,7 @@ const sessionModelAccess = Layer.unwrap(
  * How a launch enters its run's cell: a fresh run's `registration` rides
  * its opening batch (null: a resume, whose cell activates the run), on the
  * history a fork is born with when it has a `seed`, and `enter` commits
- * that batch with the trace held until then. `initialUserMessage`: a fresh
- * run's instruction, logged once its opening inserted the launch's media.
+ * that batch with the trace held until then.
  */
 interface LaunchEntry {
   /** The parent this activation runs under, read once as it starts (a
@@ -87,7 +85,6 @@ interface LaunchEntry {
   readonly enter: <A, E, R>(
     commit: (alongside: Alongside) => Effect.Effect<A, E, R>,
   ) => Effect.Effect<A, E, R>;
-  readonly initialUserMessage: string | undefined;
 }
 
 /**
@@ -130,7 +127,6 @@ export interface RunLaunch {
 }
 
 export interface AgentRunShape extends RunLaunch {
-  readonly fileService: RunFileService;
   /** What each step resolves its tools from (`loop/step.ts`). */
   readonly toolInputs: Omit<
     StepToolInputs,
@@ -222,7 +218,7 @@ export const agentRunLayer = (
       // Unforced structured-output floor: when the config declares an output
       // schema, a synthetic `submit_output` terminal tool joins the run's own
       // tools. The model finishes by calling it; its own input schema
-      // validates the call, and its settled result is the run's structured
+      // validates the call, and its finished result is the run's structured
       // output (`RunState.structured`).
       const outputSchema = config.outputSchema ?? undefined;
       const terminalTool = outputSchema
@@ -247,7 +243,7 @@ export const agentRunLayer = (
       // A resumed run rebinds what its rows fold to (its model is its
       // newest config's); a fresh run binds the launch model under today's
       // default route.
-      const folded = yield* runHistory.load(runId);
+      const loaded = yield* runHistory.load(runId);
       // A run is offered what its own definition and launch declare, under
       // the session's gates; its launcher's tools do not bound it. A script
       // run offers its script; an inheriting plugin agent, beside the
@@ -290,7 +286,7 @@ export const agentRunLayer = (
       };
       // A fork binds as its source was bound at the cut (its seed's binding).
       const fromSeed = launch.entry.seed?.binding ?? null;
-      const persisted = folded?.backend != null ? folded : fromSeed;
+      const persisted = loaded?.backend != null ? loaded : fromSeed;
       const backend = persisted?.backend ?? undefined;
       const modelId = config.model;
       const { modelConfig } = input;
@@ -316,7 +312,6 @@ export const agentRunLayer = (
 
       return {
         ...launch,
-        fileService: new RunFileService(runId, roots),
         toolInputs,
         steps: yield* Ref.make<OpenStep | null>(null),
         finalToolName,

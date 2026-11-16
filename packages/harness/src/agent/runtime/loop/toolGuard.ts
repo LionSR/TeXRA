@@ -21,12 +21,16 @@ import {
   type ITool,
 } from '@agent/core/tools/ToolTypes';
 import {
+  type DecisionOf,
   type HookOutcomePayload,
+  type RefusalDecision,
   type RequestPayload,
   RequestPayloadSchema,
+  type RunId,
   toJsonValue,
   type ToolResult,
 } from '@shared/schemas';
+import { refusalCopy } from '@shared/session/approvalDecision';
 import {
   callRequestId,
   type AttemptRequests,
@@ -34,18 +38,82 @@ import {
 } from '@shared/session/inFlight';
 import { Approvals, type CellError } from '@shared/session/runHistory';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
-import type { HookAnswer } from '@shared/session/sessionApprovals';
+import type {
+  ApprovalOperation,
+  HookAnswer,
+} from '@shared/session/sessionApprovals';
 import { assertWritable, resolveToolPath } from '@tools/pathResolution';
+import { errorResult } from '@tools/core/result';
 import { ensureError } from '@utils/errors/errorMessage';
+import { previewLabel } from '@utils/text/stringUtils';
 
 import { Interactions } from '../HostInteractions';
 import { decisionOf, openRequest, recordedDecision } from '../requests';
 import { RunCall } from '../RunCall';
-import { askCommandApproval, commandRejectedResult } from './commandApproval';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { SessionServices } from '../rootLaunch';
 import type { PluginToolServices } from '../ToolServices';
 import type { StepHooks } from './hooks';
+
+const DEFAULT_BASH_REJECTION_GUIDANCE =
+  'Do not retry this rejected command or another approval-gated shell command for the same check. ' +
+  'Continue without running it, use a non-shell method, or explain what approval would be needed.';
+
+/**
+ * Ask the person about `command`: a `request.opened` on the run, answered
+ * by a surface's `request.decide`, or by the grant that answers it turned
+ * on meanwhile, which answers every open request it covers. `operation`
+ * says which grant that is: the shell's command grant (`'bash'`), or, for
+ * another tool's call, the delegated-work grant; a `PreToolUse` hook that
+ * asked leaves it to a person.
+ */
+const askCommandApproval = Effect.fn('askCommandApproval')(function* (
+  runId: RunId,
+  requests: CallRequests,
+  ask: {
+    readonly command: string;
+    readonly cwd: string | undefined;
+    readonly operation: Extract<ApprovalOperation, 'bash' | 'call'>;
+  },
+): Effect.fn.Return<DecisionOf<'bash'>, Error> {
+  // The payload every host lists: a blank directory is dropped, so no
+  // renderer decides what an empty `cwd` means.
+  const cwd = ask.cwd?.trim();
+  const { decision } = yield* requests.open(
+    {
+      kind: 'bash',
+      data: {
+        requestId: requests.nextId(),
+        command: ask.command,
+        ...(cwd && { cwd }),
+        runId,
+      },
+    },
+    { operation: ask.operation },
+  );
+  return decision;
+});
+
+/** What the model is told when the person refuses `command`. */
+function commandRejectedResult(
+  command: string,
+  refusal: RefusalDecision,
+): ToolResult {
+  const preview = previewLabel(command);
+  const copy = refusalCopy('Command', refusal);
+  const message =
+    refusal.action === 'reject'
+      ? `User rejected command: ${preview}`
+      : `${copy.summary}: ${preview}`;
+  const guidance =
+    refusal.action === 'reject' ? DEFAULT_BASH_REJECTION_GUIDANCE : copy.detail;
+  const feedback = copy.feedback;
+  const error = feedback || !guidance ? message : `${message}\n\n${guidance}`;
+  return errorResult(error, {
+    summary: message,
+    ...(feedback && { userInstruction: feedback }),
+  });
+}
 
 const JSON_OBJECT_ARGUMENTS = Schema.Record(Schema.String, Schema.Unknown);
 

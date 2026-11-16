@@ -149,8 +149,8 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
     path.fsPath,
   ];
 
-  // `executeCommand` reports every failure in its result (`success`,
-  // `exitCode`, `timedOut`, `outputLimitExceeded`) and never fails, so the
+  // `executeCommand` reports how the command ended in its result (`end`: an
+  // exit, a timeout, the output limit, or no exit) and never fails, so the
   // spawn has no error channel of its own. The region is interruptible, and
   // interrupting the tool tears the `rg` process down instead of abandoning
   // it — parallel batches must be able to stop large-repo searches.
@@ -161,7 +161,7 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
     maxBuffer: GREP_MAX_BUFFER_CHARS,
   });
 
-  if (result.outputLimitExceeded) {
+  if (result.end._tag === 'LimitExceeded') {
     return yield* Effect.fail(
       new ToolError(
         `Search output exceeded the ${GREP_MAX_BUFFER_CHARS.toLocaleString()}-character retained-output ceiling.\n` +
@@ -171,17 +171,21 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
     );
   }
 
-  // ripgrep exit codes: 0 = matches found, 1 = no matches, 2 = error.
-  // 127 is executeCommand's spawn failure, which rg never returns itself.
-  const exitCode = result.exitCode;
-  if (exitCode === 127) {
+  if (result.end._tag === 'NoExit' && result.end.why === 'spawn') {
     return yield* Effect.fail(
       new ToolError(
-        `ripgrep could not start: ${result.stderr || `exit code ${exitCode}`}.\n` +
+        `ripgrep could not start: ${result.stderr}.\n` +
           `Check that rg is installed and the search path exists.`,
       ),
     );
   }
+  if (result.end._tag !== 'Exited') {
+    return yield* Effect.fail(
+      new ToolError(`ripgrep did not finish: ${result.stderr}`),
+    );
+  }
+  // ripgrep exit codes: 0 = matches found, 1 = no matches, 2 = error.
+  const exitCode = result.end.code;
   if (exitCode >= 2) {
     return yield* Effect.fail(
       new ToolError(

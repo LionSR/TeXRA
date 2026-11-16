@@ -82,7 +82,7 @@ export type WorkspaceAgentsStores = Pick<
  */
 export interface WorkspaceAgents extends WorkspaceAgentsController<AgentEntry> {
   /**
-   * The agent a launch runs, over a settled catalog: the entry an explicit
+   * The agent a launch runs, over a finished catalog: the entry an explicit
    * `source` pins, else a visible one, else any. A miss reloads once, then
    * fails with {@link AgentNotFound}, saying what the load said.
    */
@@ -127,7 +127,7 @@ export interface AgentCatalogShape {
     entry: Pick<AgentEntry, 'name' | 'source' | 'basedOn'>,
   ) => AgentEntry | undefined;
   /**
-   * Rescan every source, after every older load has settled, and publish
+   * Rescan every source, after every older load has finished, and publish
    * the catalog rebuilt from empty. The last published catalog keeps
    * serving until then, including when the rescan fails.
    */
@@ -253,7 +253,7 @@ const scanInto = Effect.fn('agentCatalog.scanInto')(function* (
   ).pipe(withLogChannel(CHANNEL));
 });
 
-/** No agent answers to `agent` in the settled catalog, rescanned once:
+/** No agent answers to `agent` in the finished catalog, rescanned once:
  *  the catalog's own answer, which a launch turns into its refusal
  *  ({@link missingAgentRefusal}) and every other reader reads as "not found". */
 export class AgentNotFound extends Schema.TaggedError<AgentNotFound>()(

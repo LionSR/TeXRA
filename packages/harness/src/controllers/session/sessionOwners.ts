@@ -60,7 +60,7 @@ import {
 } from '@shared/session/runHistory';
 import type { SessionEvents } from '@shared/session/sessionEvents';
 import { ToolCatalogOwner } from '@tools/liveTools';
-import { announceWrites, factKindsOf } from '@tools/plugins';
+import { announceWrites } from '@tools/plugins';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
 import { deletionCollector } from './deletionCleanup';
@@ -95,7 +95,7 @@ export const stopSessionRuns = (
         Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
       );
     const abandoned = runs.get().map((run) => run.runId);
-    return { settled: abandoned.length === 0, abandoned };
+    return { abandoned };
   });
 
 /**
@@ -125,7 +125,7 @@ export const sessionOwnersLayer = (
     Effect.gen(function* () {
       const { roots } = open;
       // The readers' scope, closed last so the teardown publishes and
-      // settles while the tails and the view live.
+      // finishes while the tails and the view live.
       const consumers = yield* Effect.acquireRelease(
         Scope.make(),
         (scope, exit) => Scope.close(scope, exit),
@@ -229,7 +229,7 @@ export const sessionOwnersLayer = (
 
       // The runs: their fork captures the context built so far, over every
       // service a run reads, one fiber per run under its id. Disposed
-      // first, so no run is admitted over a session that is unwinding.
+      // first, so no run is accepted over a session that is unwinding.
       // The context the runs' forks capture: the process's services and
       // every service built so far.
       const services: Context.Context<
@@ -282,9 +282,9 @@ export const sessionOwnersLayer = (
       const plugins = yield* ToolRegistry;
       // The one reader of the rows the view has applied: a fact that wrote
       // workspace files is announced, and a run's end is presented to the
-      // host, each once the view holds the row. `log.settled` waits for
+      // host, each once the view holds the row. `log.drained` waits for
       // this reader.
-      const announce = announceWrites(factKindsOf(plugins.entries.values()));
+      const announce = announceWrites(plugins.factKinds);
       yield* Stream.runForEach(
         store.applied,
         Effect.fnUntraced(function* (event) {

@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, FileSystem, Schema, SchemaGetter } from 'effect';
+import { Effect, FileSystem, Schema } from 'effect';
 
 // Local imports
 import { ToolContext } from '@agent/core/tools/ToolTypes';
@@ -13,7 +13,7 @@ import {
   buildBytesAttachment,
   buildFileAttachment,
 } from '@tools/attachments';
-import { formatFileView } from '@tools/formatting';
+import { formatFileView, LineRangeSchema } from '@tools/formatting';
 import { parseEml, type EmlImageAttachment } from '@tools/emlParser';
 import { splitContentLines } from '@utils/text/stringUtils';
 import { hasExtension, getExtensionLowercase } from '@utils/core/pathCore';
@@ -27,48 +27,11 @@ import {
 // Local file imports
 import { defineTool } from './core/definition';
 
-const LineNumberSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1));
-
-const RangeObjectSchema = Schema.Struct({
-  start: LineNumberSchema.annotate({
-    description: 'First line to read, 1-indexed.',
-  }),
-  end: Schema.optional(Schema.NullOr(LineNumberSchema)).annotate({
-    description: 'Last line to read, inclusive and 1-indexed.',
-  }),
-}).check(
-  Schema.makeFilter(
-    (value) =>
-      value.end == null ||
-      value.end >= value.start || {
-        path: ['end'],
-        issue: 'range.end must be greater than or equal to range.start',
-      },
-  ),
-);
-
-/**
- * The range parameter: `{start, end}`, or the `[start, end]` array some
- * models (e.g. DeepSeek) send instead, decoded to the same object.
- */
-const RangeSchema = Schema.Union([
-  RangeObjectSchema,
-  Schema.Tuple([
-    LineNumberSchema,
-    Schema.optionalKey(Schema.NullOr(LineNumberSchema)),
-  ]).pipe(
-    Schema.decodeTo(RangeObjectSchema, {
-      decode: SchemaGetter.transform(([start, end]) => ({ start, end })),
-      encode: SchemaGetter.transform(({ start, end }) => [start, end]),
-    }),
-  ),
-]);
-
 const ReadInputSchema = Schema.Struct({
   path: Schema.String.annotate({
     description: 'Workspace-relative or absolute file path to read.',
   }),
-  range: Schema.optional(Schema.NullOr(RangeSchema)).annotate({
+  range: Schema.optional(Schema.NullOr(LineRangeSchema)).annotate({
     description: 'Optional inclusive line range to read.',
   }),
 });
@@ -165,24 +128,10 @@ const read = Effect.fn('ReadFileTool.execute')(function* (
     );
   }
 
-  const range = input.range;
-  const totalLines = lines.length;
-  const startLine = range?.start ?? 1;
-  // Pass an omitted `end` through as EOF. formatFileView owns the visible
-  // line limit and needs the full requested range to report truncation.
-  const endLine = range?.end ?? totalLines;
-
-  // Append a range-exceeded warning when the caller asked beyond EOF
-  const suffix =
-    range?.end != null && range.end > totalLines
-      ? ` (requested end ${range.end} exceeds file length ${totalLines})`
-      : '';
-
   const result = formatFileView({
     path: displayPath,
     lines,
-    viewRange: range ? [startLine, endLine] : null,
-    summarySuffix: suffix,
+    range: input.range,
   });
 
   if (emlImages.length > 0) {

@@ -25,7 +25,7 @@ import {
 } from '@shared/schemas';
 import {
   applyCompactionActivityEvent,
-  settleCompactionActivities,
+  finalizeCompactionActivities,
 } from '@shared/runs/compactionActivityProjection';
 import { decodeToolUseLog } from '@shared/toolUse';
 
@@ -39,11 +39,11 @@ import {
   emptyTranscriptIndexes,
   open,
   paint,
-  settle,
+  markFinal,
   upsertCompactionRows,
   writableArray,
   write,
-  type Draft,
+  type TranscriptUpdate,
   type RowState,
   type TranscriptContext,
   type TranscriptWork,
@@ -54,7 +54,7 @@ import type { TranscriptView } from './sessionView';
 /** A plugin's section: its start opens the stage whole; its end closes the
  *  stage its start opened and writes nothing for one no start opened. */
 function applyStage(
-  d: Draft,
+  d: TranscriptUpdate,
   event: Extract<TraceRowFields, { type: 'stage.start' | 'stage.end' }>,
 ): void {
   const at = d.ix.stageIndex.get(event.id);
@@ -88,7 +88,7 @@ function applyStage(
  * resume starts a call again; the script card's own close closes it on its
  * result.
  */
-function openCardStage(d: Draft, card: string): void {
+function openCardStage(d: TranscriptUpdate, card: string): void {
   const heading = d.ix.slots.get(card);
   if (heading?.kind !== 'tool') return;
   const at = d.ix.stageIndex.get(card);
@@ -117,7 +117,11 @@ function openCardStage(d: Draft, card: string): void {
   d.touched = true;
 }
 
-function closeCardStage(d: Draft, card: string, status: ToolCallStatus): void {
+function closeCardStage(
+  d: TranscriptUpdate,
+  card: string,
+  status: ToolCallStatus,
+): void {
   const at = d.ix.stageIndex.get(card);
   if (at === undefined) return;
   const stages = writableArray(d, d.next, 'stages');
@@ -143,7 +147,7 @@ function closeCardStage(d: Draft, card: string, status: ToolCallStatus): void {
 const isOpenCard = (slot: Extract<RowState, { kind: 'tool' }>): boolean =>
   slot.log.status === TOOL_CALL_STATUS.IN_PROGRESS;
 
-function record(d: Draft, event: TraceRowFields): void {
+function record(d: TranscriptUpdate, event: TraceRowFields): void {
   const { ix } = d;
   switch (event.type) {
     case 'log':
@@ -228,7 +232,7 @@ function record(d: Draft, event: TraceRowFields): void {
       const { cutByRunEnd: _cut, ...call } = slot.call;
       slot.call = call;
       if (!inProgress) {
-        slot.base = settle(ix, slot.base);
+        slot.base = markFinal(ix, slot.base);
         closeCardStage(d, event.logId, event.status);
       }
       write(d, slot);
@@ -304,11 +308,11 @@ function record(d: Draft, event: TraceRowFields): void {
 
 /** Close a text row, now printable, with its final text when one is given. */
 function closeText(
-  d: Draft,
+  d: TranscriptUpdate,
   slot: Extract<RowState, { kind: 'text' }>,
   finalText: string | undefined,
 ): void {
-  slot.base = settle(d.ix, slot.base);
+  slot.base = markFinal(d.ix, slot.base);
   if (finalText !== undefined) slot.text = finalText;
   slot.running = false;
   write(d, slot);
@@ -320,7 +324,10 @@ function closeText(
  *  and finishes every open compaction as interrupted; an ended one also
  *  closes every open stage on its outcome, as the drain that ends a
  *  run no driver holds does. */
-function applyStandingToTranscript(d: Draft, standing: RunStanding): void {
+function applyStandingToTranscript(
+  d: TranscriptUpdate,
+  standing: RunStanding,
+): void {
   const { ix } = d;
   if (standing.position === 'running') {
     ix.closed = false;
@@ -331,12 +338,12 @@ function applyStandingToTranscript(d: Draft, standing: RunStanding): void {
   for (const slot of ix.slots.values()) {
     if (slot.kind === 'text' && slot.running) closeText(d, slot, undefined);
     if (slot.kind !== 'tool' || !isOpenCard(slot)) continue;
-    slot.base = settle(ix, slot.base);
+    slot.base = markFinal(ix, slot.base);
     slot.log = { ...slot.log, status: TOOL_CALL_STATUS.FAILED };
     slot.call = { ...slot.call, cutByRunEnd: true };
     write(d, slot);
   }
-  const compactions = settleCompactionActivities(ix.compactionState, d.at);
+  const compactions = finalizeCompactionActivities(ix.compactionState, d.at);
   if (compactions.length > 0) {
     upsertCompactionRows(d, d.next, compactions);
     d.touched = true;
@@ -362,7 +369,7 @@ export function applyTranscriptEvent(
   event: SessionRow,
   ctx: TranscriptContext,
 ): TranscriptView {
-  const d: Draft = {
+  const d: TranscriptUpdate = {
     ...work,
     next: { ...transcript },
     ctx,
@@ -410,8 +417,8 @@ export function applyTranscriptEvent(
  * One aggregate's transcript, built cold from its committed rows by the same
  * reducer the session view runs: where no view holds the run (export, a
  * waiting run's closure, host exit). Empty when the run has no rows.
- * `settledRows` stays 0: only the session view advances that prefix, so a
- * cold read uses `rows` and `openWork`, never `settledRows`.
+ * `finalRows` stays 0: only the session view advances that prefix, so a
+ * cold read uses `rows` and `openWork`, never `finalRows`.
  */
 export function buildRunTranscript(
   events: readonly SessionRow[],

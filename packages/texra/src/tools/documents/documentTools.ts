@@ -21,6 +21,7 @@ import {
   defineTool,
   Settings,
   type AgentTrace,
+  sourceLocationUnder,
 } from '@texra-ai/harness/plugins';
 import { hasExtension } from '@texra-ai/harness/host';
 import {
@@ -164,7 +165,8 @@ const openTask = Effect.fn('documents.openTask')(function* (
   docs: Documents,
   logger: AgentTrace,
 ) {
-  const { config, fileService } = docs.run;
+  const { config } = docs.run;
+  const { roots } = docs.deps;
   const fs = yield* FileSystem.FileSystem;
   // A file is loaded when it reads: a directory or an unreadable path is
   // not, though it exists. Why it did not read is kept for the refusal. The
@@ -173,7 +175,7 @@ const openTask = Effect.fn('documents.openTask')(function* (
     Effect.forEach(
       files.filter(Boolean),
       (file) => {
-        const absolutePath = fileService.locateSource(file).absolutePath;
+        const absolutePath = sourceLocationUnder(roots, file).absolutePath;
         return fs.stat(absolutePath).pipe(
           Effect.flatMap((info) =>
             info.type === 'File'
@@ -355,8 +357,8 @@ export const DocumentExtractTool = defineTool({
       return yield* Effect.fail(
         new ToolError(`Run ${run} gave no reply to take documents from.`),
       );
-    const { logger, fileService } = docs.run;
-    const { roots } = docs.deps;
+    const { logger } = docs.run;
+    const { roots, fileService } = docs.deps;
     const location = yield* keepReply(docs, revision, reply);
     // A broken structure costs the repair, not the revision: reported, and
     // extraction reads the reply as it is.
@@ -580,7 +582,7 @@ export const DocumentDiffTool = defineTool({
         value: { diffs: [], failed: [], notRun: null },
       };
     const { artifacts, entries, notRun } = yield* revisionLatexdiffs(
-      { run: docs.run, roots: docs.deps.roots },
+      { run: docs.deps, roots: docs.deps.roots },
       revision,
       outputs,
       roundOf(docs.rounds, revision - 1)?.outputs ?? [],

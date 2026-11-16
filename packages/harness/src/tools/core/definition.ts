@@ -47,8 +47,8 @@ export type DefineToolOptions<T, R = never> = Required<
     schema: Schema.Codec<T, unknown>;
     /**
      * What the run loop checks before this tool's body runs: the paths the
-     * call writes and the command it must get approved. Declared here,
-     * applied once in `agent/runtime/loop/toolGuard.ts`.
+     * call writes and the command it must get approved. Declared here; the
+     * loop applies it once, so the body never re-checks it.
      *
      * `NoInfer<R>`: the guard is checked against the requirement channel the
      * tool already has, it never sets it.

@@ -6,8 +6,8 @@ import { Effect, FileSystem } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { readNormalizedFile } from './fsDurability';
-import { absentReason, entryExists } from './fsEntryExists';
+import { readNormalizedFile } from '@utils/files/fsDurability';
+import { meansAbsent, entryExists } from '@utils/files/fsEntryExists';
 
 const CHANNEL = 'agentsMd';
 
@@ -45,7 +45,7 @@ export const loadAgentsMd = Effect.fn('agentsMd.loadAgentsMd')(function* (
       if (!(yield* entryExists(fs, file))) return '';
       return yield* readNormalizedFile(fs, file);
     }).pipe(
-      Effect.catchIf(absentReason, () => Effect.succeed('')),
+      Effect.catchIf(meansAbsent, () => Effect.succeed('')),
       Effect.mapError(
         (error) =>
           new Error(`Failed to load ${file}: ${toErrorMessage(error)}`, {

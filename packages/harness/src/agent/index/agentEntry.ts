@@ -29,7 +29,6 @@ export interface AgentEntry {
   source: AgentSource;
   path: string; // absolute path to the definition file
   description?: string;
-  tools?: string[]; // tool names, for display
   /** Digest of the definition file; absent on a plugin agent. */
   digest?: string;
   /** A customized copy's `basedOn`: the bundled file's digest it began from. */
@@ -37,3 +36,8 @@ export interface AgentEntry {
   /** The model agent the entry names. */
   persona: Persona;
 }
+
+/** The names of the tools `entry`'s persona is offered. */
+export const agentToolNames = (
+  entry: Pick<AgentEntry, 'persona'>,
+): readonly string[] => entry.persona.tools.map((tool) => tool.name);

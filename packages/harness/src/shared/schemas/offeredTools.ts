@@ -7,7 +7,6 @@
 import { Schema } from 'effect';
 
 import { Sha256Schema } from './identifiers';
-import { JsonValueSchema } from './jsonValue';
 
 /* ---------------------------------------------------------- tools.offered */
 
@@ -101,7 +100,7 @@ export type PromptSections = typeof PromptSectionsSchema.Type;
  */
 export const ContextBlobSchema = Schema.Struct({
   digest: Sha256Schema,
-  value: JsonValueSchema,
+  value: Schema.Json,
 });
 
 /** Whether two offered tools are the same tool: a call made to one may run

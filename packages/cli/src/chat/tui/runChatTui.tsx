@@ -677,7 +677,7 @@ export async function runChat(
     // process's; the service's publisher is its own.
     flushArtifacts: (runsElsewhere
       ? Effect.void
-      : Effect.flatMap(services.session, (local) => local.settled)
+      : Effect.flatMap(services.session, (local) => local.drained)
     ).pipe(
       Effect.timeout(SESSION_CLOSE_DEADLINE_MS),
       Effect.mapError(

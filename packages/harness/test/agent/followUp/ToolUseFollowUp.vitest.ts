@@ -33,7 +33,7 @@ import {
 const queuedTexts = (session: Context.Context<SessionServices>, runId: RunId) =>
   Effect.gen(function* () {
     const log = Context.get(session, SessionLog);
-    yield* log.settled;
+    yield* log.drained;
     const rows = yield* log.history(
       qualifyAggregateId('run', runId),
       undefined,
@@ -158,7 +158,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('run input', (it) => {
           const closed = yield* startedRun(session);
           const open = yield* startedRun(session);
           yield* inbox.closeInput(closed);
-          yield* Context.get(session, SessionLog).settled;
+          yield* Context.get(session, SessionLog).drained;
 
           expect(yield* inbox.send(closed, user('still closed'))).toEqual({
             kind: 'refused',

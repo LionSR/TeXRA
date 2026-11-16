@@ -68,7 +68,7 @@ export function queuedRow(
 /**
  * Who a producer says a follow-up is from. Runs talk as a graph: any run may
  * message any run in the project, whatever their places in the supervision
- * tree. A run names only itself; the recipient's admission
+ * tree. A run names only itself; the recipient's acceptance
  * (`Inbox.send`) stamps how it relates to the recipient.
  */
 export type FollowUpSenderInput =

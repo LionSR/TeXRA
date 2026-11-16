@@ -9,7 +9,9 @@ import {
   type AgentSource,
 } from '@texra-ai/harness/schemas';
 import {
+  agentToolNames,
   StateReadFailed,
+  type AgentEntry,
   type StateStore,
   type WorkspaceAgentsController,
 } from '@texra-ai/harness/host';
@@ -21,12 +23,11 @@ import {
   type AgentModePreset,
 } from '@texra/shared/agentTeams';
 
-interface SettingsAgentCatalogEntry {
+interface SettingsAgentCatalogEntry extends Pick<AgentEntry, 'persona'> {
   name: string;
   source: AgentSource;
   description?: string;
   path?: string;
-  tools?: string[];
   basedOn?: string;
 }
 
@@ -67,7 +68,8 @@ export class SettingsAgentCatalogController {
   getOrchestratorAgentNames(): string[] {
     const names = new Set<string>(BUILTIN_TEAM_ROOT_AGENT_NAMES);
     for (const agent of this.deps.getAgents()) {
-      if (agent.tools?.includes(AGENT_TOOL_NAME)) names.add(agent.name);
+      if (agentToolNames(agent).includes(AGENT_TOOL_NAME))
+        names.add(agent.name);
     }
     return [...names].toSorted();
   }
@@ -148,7 +150,7 @@ export class SettingsAgentCatalogController {
       source: entry.source,
       description: entry.description,
       filePath: entry.path || undefined,
-      tools: entry.tools,
+      tools: [...agentToolNames(entry)],
       newerBuiltIn: this.deps.newerBuiltInOf(entry),
       // A stored list holds resolved `source:name` keys, but older workspaces
       // persisted bare names, which `agentMatchesIdentifier` still matches.
