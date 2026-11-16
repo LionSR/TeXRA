@@ -790,6 +790,19 @@
           "signature": "function notRetryable(reply: Reply, overflow: boolean): false | undefined {…}"
         }
       ]
+    },
+    {
+      "id": "HARNESS-approval-denial-kinds-already-collapsed",
+      "candidate": "The approval policy's seven named denial reasons collapsed into the denial's message, with one decider and one answer type (HS-3 of the 2026-11-15 design red-flag audit)",
+      "why": "Already built on main by #14963 before the row was taken up: decideApproval (packages/harness/src/shared/approvalPolicy.ts) is the one decider, and it returns { action: 'deny', reason } where reason is the message itself; the named reason kinds and their per-kind message functions are gone. Rebuilding the row would only restate that change.",
+      "ruling": ".agents/docs/evidence/2026-11-15-design-red-flags/HS-harness-store.md#hs-3-the-approval-policy-names-seven-denial-reasons-that-nothing-branches-on-each-mapped-back-to-its-message-by-its-own-function",
+      "symbols": [
+        {
+          "file": "packages/harness/src/shared/approvalPolicy.ts",
+          "symbol": "decideApproval",
+          "signature": "export function decideApproval(input: { readonly policy: ApprovalPolicy; readonly canPresent: boolean; readonly ask: ApprovalAsk; }): ApprovalDecision {…}"
+        }
+      ]
     }
   ]
 }
