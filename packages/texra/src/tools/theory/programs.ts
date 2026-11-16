@@ -19,7 +19,7 @@ import { DOCUMENT_TASK_RESULT } from '@texra/tools/documents/documentResult';
 
 /** What every program's run is offered: the child agent and the document
  *  tools `revise` calls. */
-const TOOLS = [
+const TOOLS = Object.freeze([
   'agent',
   'document_context',
   'document_extract',
@@ -27,7 +27,7 @@ const TOOLS = [
   'document_diff',
   'document_review',
   'document_propose',
-] as const;
+] as const);
 
 /**
  * The module `builtIn:revise`.
@@ -286,15 +286,16 @@ export default (args) =>
 const program = (
   description: string,
   outputs?: readonly string[],
-): Program<DocumentsOutput> => ({
-  description,
-  tools: TOOLS,
-  result: DOCUMENT_TASK_RESULT,
-  ...(outputs !== undefined && { outputs }),
-});
+): Program<DocumentsOutput> =>
+  Object.freeze({
+    description,
+    tools: TOOLS,
+    result: DOCUMENT_TASK_RESULT,
+    ...(outputs !== undefined && { outputs: Object.freeze(outputs) }),
+  });
 
 /** The theory plugin's script modules, by name. */
-export const THEORY_MODULES = {
+export const THEORY_MODULES = Object.freeze({
   revise: REVISE_MODULE,
   edit: EDIT_MODULE,
   annotate: ANNOTATE_MODULE,
@@ -304,14 +305,14 @@ export const THEORY_MODULES = {
   transcribe: TRANSCRIBE_MODULE,
   slides: SLIDES_MODULE,
   poster: POSTER_MODULE,
-};
+});
 
 /**
  * The modules that are programs, each over `inputFiles` with an optional
  * instruction. A point of view (the argument's logic, the notation, a first
  * reader) is a sentence of the instruction, not a program.
  */
-export const THEORY_PROGRAMS = {
+export const THEORY_PROGRAMS = Object.freeze({
   edit: program(
     'Rewrite the documents as the instruction asks, from a proofread to new content; with no instruction, proofread.',
   ),
@@ -339,4 +340,4 @@ export const THEORY_PROGRAMS = {
     'Turn a paper into a Beamer poster on the bundled template.',
     ['poster.tex'],
   ),
-} satisfies Record<string, Program<DocumentsOutput>>;
+} satisfies Record<string, Program<DocumentsOutput>>);
