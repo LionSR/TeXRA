@@ -101,7 +101,7 @@ An availability `check(inputs)` returns `{ available, statusLabel?, statusDetail
 Inside `execute`, yield services from [`@texra-ai/harness/plugins`](./harness/plugins):
 
 - **[`ToolContext`](./harness/plugins#toolcontext)** (`requireRun`, `callerRun`): the calling run's identity, workspace roots (`env.roots`), working directory, and `CallRequests`.
-- **[`ChildRuns`](./harness/plugins#childruns)**: launch awaited or detached child runs (`ChildRuns.launch`, `ChildRuns.launchProcess`).
+- **[`ChildRuns`](./harness/plugins#childruns)**: launch an external process as a child run (`ChildRuns.launchProcess`) and reach a run of the session by id.
 - **[`resolveToolPath`](./harness/plugins#resolvetoolpath)**: resolve a path against the call's workspace root and reject parent-traversal escapes.
 - **[`requestToolEditApproval`](./harness/plugins#requesttooleditapproval)** and **[`approvedWriteConflict`](./harness/plugins#approvedwriteconflict)**: open a `toolEdit` diff-approval request, await the user's decision (including manual edits in the diff view), and detect three-way write conflicts.
 
