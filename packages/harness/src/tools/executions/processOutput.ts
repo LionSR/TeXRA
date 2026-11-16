@@ -18,6 +18,7 @@ import {
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { BASH_BACKGROUND_LOG_CAP_CHARS, elidedNote } from '@shared/toolUse';
 import { executed } from '@tools/core/result';
+import type { LineRange } from '@tools/formatting';
 import { describeRunNotice, formatRunStatus } from '../executionFormatters';
 
 /** Lines returned by /executions/{id}/output when no view_range is given. */
@@ -119,7 +120,7 @@ function projectProcessOutput(
  */
 export const showOutput = Effect.fn('ExecutionsTool.showOutput')(function* (
   runId: RunId,
-  viewRange?: readonly [number, number],
+  viewRange?: LineRange,
 ) {
   // The run as the log holds it at this call: the current view trails the
   // log, and would not know a command launched a moment ago.
@@ -164,8 +165,8 @@ export const showOutput = Effect.fn('ExecutionsTool.showOutput')(function* (
   // Default to the tail, where a live build's news is; a view_range window
   // is clamped so a wide request still can't return an unbounded log.
   const first =
-    viewRange?.[0] ?? Math.max(lines.length - OUTPUT_TAIL_LINES, 0) + 1;
-  const requestedLast = Math.min(viewRange?.[1] ?? lines.length, lines.length);
+    viewRange?.start ?? Math.max(lines.length - OUTPUT_TAIL_LINES, 0) + 1;
+  const requestedLast = Math.min(viewRange?.end ?? lines.length, lines.length);
   const last = Math.min(requestedLast, first + OUTPUT_MAX_LINES - 1);
 
   if (first > last) {

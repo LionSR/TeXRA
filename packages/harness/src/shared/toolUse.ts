@@ -183,6 +183,27 @@ export const BASH_BACKGROUND_LOG_CAP_CHARS = 200_000;
 export const elidedNote = (elided: number, stream?: string): string =>
   `[... ${elided.toLocaleString()} characters elided${stream === undefined ? '' : ` from ${stream}`} ...]`;
 
+/**
+ * The lines a stored file-viewing call asked for (`read_file`'s `range`, the
+ * memory and executions tools' `view_range`), read from its input as the
+ * model wrote it: `{start, end}` or `[start, end]`, either end possibly
+ * absent.
+ */
+export function lineRangeOf(value: unknown): {
+  readonly start?: number;
+  readonly end?: number;
+} {
+  const [start, end] = Array.isArray(value)
+    ? [value[0], value[1]]
+    : Predicate.isObject(value)
+      ? [value.start, value.end]
+      : [];
+  return {
+    ...(typeof start === 'number' ? { start } : {}),
+    ...(typeof end === 'number' ? { end } : {}),
+  };
+}
+
 /** Default `executions wait` timeout (seconds) when the model omits `timeout`. */
 export const EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS = 300;
 

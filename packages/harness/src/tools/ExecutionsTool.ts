@@ -53,7 +53,7 @@ import {
   type RunDisplayCategory,
 } from './executionFormatters';
 import { defineTool } from './core/definition';
-import { formatFileView } from './formatting';
+import { formatFileView, type LineRange } from './formatting';
 import { serializeFilteredConfig } from './executions/configView';
 import { formatConversation } from './executions/conversationFormat';
 import { orchestratorKillDenial } from './executions/killPolicy';
@@ -607,7 +607,7 @@ const readFile = Effect.fn('ExecutionsTool.readFile')(function* (
   context: RunToolContext,
   runId: RunId,
   filePath: string,
-  viewRange?: readonly [number, number],
+  viewRange?: LineRange,
 ) {
   const displayPath = `/executions/${runId}/files/${filePath}`;
   yield* assertNoParentTraversal(filePath);
@@ -658,7 +658,7 @@ const readWorkspaceFile = Effect.fn('ExecutionsTool.readWorkspaceFile')(
     context: RunToolContext,
     runId: RunId,
     filePath: string,
-    viewRange?: readonly [number, number],
+    viewRange?: LineRange,
   ) {
     const [record, paths] = yield* readRecordAndWorkspaceFiles(runId);
     const recordedPaths = new Set(
@@ -748,7 +748,7 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
   }: {
     directoryErrorPath: string;
     resultPath: string;
-    viewRange: readonly [number, number] | undefined;
+    viewRange: LineRange | undefined;
   },
 ) {
   // A recorded file the user since deleted is an outcome the model reads, not
@@ -774,7 +774,7 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
   return formatFileView({
     path: resultPath,
     lines: splitContentLines(content),
-    viewRange,
+    range: viewRange,
     maxLines: Infinity,
   });
 });

@@ -314,7 +314,7 @@ export function mapSubschemas(
  * OpenAI rejects an array schema without an `items` schema, strict mode or
  * not (HTTP 400: `array schema missing items`), and takes neither
  * `prefixItems` nor the legacy array form of `items`. Effect Schema emits a
- * tuple (`view_range`) as `prefixItems` with `minItems`/`maxItems`, and
+ * tuple (a line range's array form) as `prefixItems` with `minItems`/`maxItems`, and
  * `Schema.Array(Schema.Unknown)` as a bare `{ type: 'array' }`. Every array
  * therefore names one `items` schema: a tuple's element schemas (one, or
  * `anyOf` the distinct ones) with its length as the bounds it does not
