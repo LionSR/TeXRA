@@ -5,7 +5,7 @@
 }
 .desktop-app {
   display: grid;
-  grid-template-rows: 44px minmax(0, 1fr);
+  grid-template-rows: var(--height-header) minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
 }
@@ -16,7 +16,7 @@
   min-width: 0;
   padding: 0 var(--wa-space-s);
   background: var(--wa-color-surface-lowered);
-  border-bottom: 1px solid var(--wa-color-surface-border);
+  border-bottom: var(--border-thin) solid var(--wa-color-surface-border);
   -webkit-app-region: drag;
 }
 body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
@@ -131,8 +131,8 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   text-align: start;
 }
 .shell-sidebar-action-icon {
-  width: 14px;
-  height: 14px;
+  width: var(--font-size-icon-sm);
+  height: var(--font-size-icon-sm);
   font-size: var(--font-size-icon-sm);
 }
 .shell-sidebar-scroll {
@@ -163,7 +163,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 }
 .shell-project-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 24px 24px;
+  grid-template-columns: minmax(0, 1fr) repeat(2, var(--height-control-compact));
   gap: var(--wa-space-2xs);
   align-items: center;
   min-height: 34px;
@@ -219,8 +219,8 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 .shell-project-menu {
   display: block;
   grid-column: 3;
-  width: 24px;
-  height: 24px;
+  width: var(--height-control-compact);
+  height: var(--height-control-compact);
   color: var(--wa-color-text-quiet);
 }
 .shell-project-rename {
@@ -239,7 +239,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   --run-tab-radius: 6px;
   --run-tab-meta-display: none;
   --run-tab-detail-display: none;
-  --run-tab-status-width: 24px;
+  --run-tab-status-width: var(--height-control-compact);
   --run-tab-status-label-display: none;
 }
 .shell-sidebar-sessions > run-tabs {
@@ -295,7 +295,7 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   align-items: center;
   gap: var(--wa-space-xs);
   padding: 0 var(--wa-space-s);
-  border-top: 1px solid var(--wa-color-surface-border);
+  border-top: var(--border-thin) solid var(--wa-color-surface-border);
   background: var(--wa-color-surface-lowered);
   min-width: 0;
 }
@@ -309,8 +309,8 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   font-size: var(--font-size-xs);
 }
 .shell-editor-toolbar .action-button::part(base) {
-  min-height: 24px;
-  height: 24px;
+  min-height: var(--height-control-compact);
+  height: var(--height-control-compact);
   font-size: var(--font-size-xs);
 }
 .shell-workbench-pdf-frame {

@@ -201,7 +201,7 @@ wa-dialog.desktop-command-palette::part(dialog) {
   max-height: min(720px, 76vh);
   margin-block-start: 10vh;
   overflow: hidden;
-  border: 1px solid var(--wa-color-menu-border);
+  border: var(--border-thin) solid var(--wa-color-menu-border);
   border-radius: var(--wa-border-radius-l);
   background: var(--wa-color-menu-background);
   box-shadow: var(--desktop-shadow-lg), var(--desktop-edge-highlight);
@@ -439,7 +439,7 @@ wa-input.desktop-command-palette-input::part(input) {
 .desktop-empty-workspace-panel {
   max-width: 560px;
   padding: var(--wa-space-2xl) var(--wa-space-xl);
-  border: 1px solid var(--wa-color-surface-border);
+  border: var(--border-thin) solid var(--wa-color-surface-border);
   border-radius: var(--wa-border-radius-xl);
   background: var(--wa-color-surface-lowered);
   text-align: center;

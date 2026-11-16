@@ -112,7 +112,7 @@ export const conversationContentStyles: CSSResult = css`
     gap: var(--wa-space-s);
     min-height: var(--height-button);
     padding: var(--wa-space-s) 0 0;
-    border-top: 1px solid var(--wa-color-surface-border);
+    border-top: var(--border-thin) solid var(--wa-color-surface-border);
     color: var(--color-text-muted);
     font-size: var(--wa-font-size-s);
   }
