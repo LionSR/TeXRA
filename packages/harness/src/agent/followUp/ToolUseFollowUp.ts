@@ -26,13 +26,11 @@ type FollowUpServices =
  * words it: the kind of a resume's refusal (`ResumeRefusal`; a message to a
  * run with no loop here is admitted only as a resume would be, and
  * `notResumable` there also covers a closed input, a disposed session, or a
- * message that does not wake the run), or one of the message's alone:
- *
- * - `readFailed`: the run's rows could not be read just now (a failing
- *   store), which says nothing about the run itself.
- * - `notParent`: the sender is not the run's parent.
+ * message that does not wake the run), or `readFailed`: the run's rows
+ * could not be read just now (a failing store), which says nothing about
+ * the run itself.
  */
-type FollowUpFailureReason = ResumeRefusal['kind'] | 'readFailed' | 'notParent';
+type FollowUpFailureReason = ResumeRefusal['kind'] | 'readFailed';
 
 /**
  * Three outcomes: the input reached a running loop, it waits in the run's
@@ -46,13 +44,7 @@ export type SubmitFollowUpResult =
   | { status: 'queued' }
   | { status: 'failed'; message: string };
 
-/** How one input is delivered to a run. */
-export interface RunInboxSendOptions {
-  /** Only from the run's parent, by its rows (`SendOptions.fromParent`). */
-  readonly fromParent?: boolean;
-}
-
-interface SubmitFollowUpOptions extends RunInboxSendOptions {
+interface SubmitFollowUpOptions {
   /** A user's message the run reads when its current turn ends, not at the
    *  turn's next model request. */
   readonly hold?: 'turn';
@@ -77,8 +69,6 @@ const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
   readFailed: "This run couldn't be read right now. Try again in a moment.",
   notResumable:
     'This run cannot accept messages right now. Resume it, or start a new agent task.',
-  notParent:
-    'This run is not a child of the sender: it was launched by another run.',
   blocked:
     "This task's agent, or the plugin it comes from, is missing, off or not trusted. It can continue once that is fixed.",
 };
@@ -182,7 +172,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   item: InboxItem,
   options: SubmitFollowUpOptions,
 ): Effect.fn.Return<SubmitFollowUpResult, Error, FollowUpServices> {
-  const { hold, fromParent, attach, apiKeys } = options;
+  const { hold, attach, apiKeys } = options;
   const inbox = yield* Inbox;
   const runs = yield* Runs;
   const log = yield* SessionLog;
@@ -233,17 +223,13 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       if (facts?.stop !== null && facts?.end === null) yield* live.drained;
     }
     const media = attach === undefined ? {} : yield* attach;
-    const landed = yield* inbox.send(
-      runId,
-      { ...item, ...media },
-      { hold, fromParent },
-    );
+    const landed = yield* inbox.send(runId, { ...item, ...media }, { hold });
     return { status: 'landed', landed, live: live !== undefined } as const;
   }).pipe(withPerKeyLane(inbox.sendLanes, runId));
   if (sent.status !== 'landed') return sent;
   const { landed, live } = sent;
-  // The sender is not its parent, its input is closed (deleted, or torn
-  // down with nothing queued), or the session is disposed.
+  // Its input is closed (deleted, or torn down with nothing queued), or the
+  // session is disposed.
   if (landed.kind === 'refused')
     return {
       status: 'failed',
@@ -268,7 +254,6 @@ export interface RunInbox {
   /** Deliver `item` to the run. */
   readonly send: (
     item: InboxItem,
-    options?: RunInboxSendOptions,
   ) => Effect.Effect<SubmitFollowUpResult, Error>;
   /** Hear the run take no more input, or its session's inbox close;
    *  returns the detach. */
@@ -281,8 +266,7 @@ export const runInbox = (
   runId: RunId,
   session: Context.Context<FollowUpServices>,
 ): RunInbox => ({
-  send: (item, options) =>
-    submitFollowUp(runId, item, options ?? {}).pipe(Effect.provide(session)),
+  send: (item) => submitFollowUp(runId, item, {}).pipe(Effect.provide(session)),
   onClosed: (listener) =>
     Context.get(session, Inbox).onClosed((closed) => {
       if (closed.kind === 'session' || closed.runId === runId) listener();
