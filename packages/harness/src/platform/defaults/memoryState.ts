@@ -18,27 +18,38 @@ export class MemoryStateStore implements StateStore {
 
   /** A map write cannot fail, so the port's error channel stays empty. */
   update(key: string, value: unknown): Effect.Effect<void, StateWriteFailed> {
-    return Effect.sync(() => {
-      if (value === undefined) {
-        this.values.delete(key);
-        return;
-      }
-      this.values.set(key, value);
-    });
+    return this.modify([key], () =>
+      Result.succeed([undefined, { [key]: value }]),
+    );
   }
 
   /** Synchronous, so no other change can land between the read and the
    *  write. */
-  modify<T, E>(
-    key: string,
-    change: (current: unknown) => Result.Result<T, E>,
-  ): Effect.Effect<T, E | StateWriteFailed> {
+  modify<K extends string, A, E>(
+    keys: readonly K[],
+    change: (
+      current: Readonly<Record<K, unknown>>,
+    ) => Result.Result<
+      readonly [A] | readonly [A, Readonly<Record<K, unknown>>],
+      E
+    >,
+  ): Effect.Effect<A, E | StateWriteFailed> {
     return Effect.suspend(() => {
-      const result = change(this.values.get(key));
+      const result = change(
+        // cast: one entry for each of `keys`.
+        Object.fromEntries(
+          keys.map((key) => [key, this.values.get(key)]),
+        ) as Readonly<Record<K, unknown>>,
+      );
       if (Result.isFailure(result)) return Effect.fail(result.failure);
-      if (result.success === undefined) this.values.delete(key);
-      else this.values.set(key, result.success);
-      return Effect.succeed(result.success);
+      const [answer, next] = result.success;
+      if (next !== undefined) {
+        for (const key of keys) {
+          if (next[key] === undefined) this.values.delete(key);
+          else this.values.set(key, next[key]);
+        }
+      }
+      return Effect.succeed(answer);
     });
   }
 }

@@ -335,47 +335,52 @@ export const serviceHandlers = TexraRpcs.toLayer(
           ),
         ),
       // The project's state store, the service's own: a window opens none.
-      'state.get': ({ workspace, key }) =>
+      'state.get': ({ workspace, keys }) =>
         Effect.scoped(
           Effect.flatMap(projects.open(workspace), ({ session }) =>
-            session.roots.workspaceState.get(key),
-          ).pipe(
-            // The store answers what it holds, which is JSON.
-            Effect.flatMap((value) =>
-              value === undefined
-                ? Effect.succeed({})
-                : Effect.map(
-                    Schema.decodeUnknownEffect(Schema.Json)(value),
-                    (json) => ({ value: json }),
-                  ),
+            Effect.forEach(keys, (key) =>
+              session.roots.workspaceState.get(key).pipe(
+                // The store answers what it holds, which is JSON.
+                Effect.flatMap((value) =>
+                  value === undefined
+                    ? Effect.succeed([key, {}] as const)
+                    : Effect.map(
+                        Schema.decodeUnknownEffect(Schema.Json)(value),
+                        (json) => [key, { value: json }] as const,
+                      ),
+                ),
+              ),
             ),
+          ).pipe(
+            Effect.map((entries) => Object.fromEntries(entries)),
             Effect.mapError(
               (error) => new ProjectStateFailed({ message: error.message }),
             ),
           ),
         ),
-      'state.set': ({ workspace, key, next, ifCurrent }) =>
+      'state.set': ({ workspace, next, ifCurrent }) =>
         Effect.scoped(
           Effect.flatMap(projects.open(workspace), ({ session }) => {
-            const state = session.roots.workspaceState;
-            if (ifCurrent === null)
-              return Effect.as(state.update(key, next.value), true);
-            // Written only while the stored value is the one the window
-            // read: the window's read-modify-write, as one step here.
-            const expected = JSON.stringify(ifCurrent.value);
-            return state
-              .modify(key, (current) =>
-                JSON.stringify(current) === expected
-                  ? Result.succeed(next.value)
-                  : Result.fail('changed' as const),
-              )
-              .pipe(
-                Effect.as(true),
-                Effect.catchIf(
-                  (error) => error === 'changed',
-                  () => Effect.succeed(false),
-                ),
-              );
+            const keys = Object.keys(next);
+            // With `ifCurrent`, written only while the stored values are the
+            // ones the window read: its read-modify-write, as one step here.
+            return session.roots.workspaceState.modify(keys, (current) =>
+              Result.succeed(
+                ifCurrent === null ||
+                  keys.every(
+                    (key) =>
+                      JSON.stringify(current[key]) ===
+                      JSON.stringify(ifCurrent[key]?.value),
+                  )
+                  ? ([
+                      true,
+                      Object.fromEntries(
+                        keys.map((key) => [key, next[key]?.value]),
+                      ),
+                    ] as const)
+                  : ([false] as const),
+              ),
+            );
           }).pipe(
             Effect.mapError(
               (error) => new ProjectStateFailed({ message: error.message }),

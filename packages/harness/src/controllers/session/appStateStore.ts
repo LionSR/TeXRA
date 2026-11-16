@@ -49,10 +49,7 @@ function appStateStoreFromDatabase(
       message: `The settings store at ${storage} refused the write of "${key}": ${toErrorMessage(cause)}`,
       cause,
     });
-  const encode = (
-    key: string,
-    value: unknown,
-  ): Result.Result<JsonValue | undefined, StateWriteFailed> =>
+  const encode = (key: string, value: unknown) =>
     value === undefined
       ? Result.succeed(undefined)
       : Result.mapError(
@@ -65,19 +62,49 @@ function appStateStoreFromDatabase(
               }),
             ),
         );
-  const modify = <T, E>(
-    key: string,
-    change: (current: unknown) => Result.Result<T, E>,
-  ): Effect.Effect<T, E | StateWriteFailed> =>
+  const modify = <K extends string, A, E>(
+    keys: readonly K[],
+    change: (
+      current: Readonly<Record<K, unknown>>,
+    ) => Result.Result<
+      readonly [A] | readonly [A, Readonly<Record<K, unknown>>],
+      E
+    >,
+  ): Effect.Effect<A, E | StateWriteFailed> =>
     values
-      .modify(family, rowKey(key), (current) =>
-        Result.flatMap(change(current), (next: T) =>
-          Result.map(encode(key, next), (json) => [next, json] as const),
-        ),
+      .modify(
+        family,
+        keys.map(rowKey),
+        (
+          current,
+        ): Result.Result<
+          readonly [A] | readonly [A, Record<string, JsonValue | undefined>],
+          E | StateWriteFailed
+        > => {
+          const result = change(
+            // cast: one entry for each of `keys`.
+            Object.fromEntries(
+              keys.map((key) => [key, current[rowKey(key)]]),
+            ) as Readonly<Record<K, unknown>>,
+          );
+          if (Result.isFailure(result)) return Result.fail(result.failure);
+          if (result.success.length === 1)
+            return Result.succeed([result.success[0]]);
+          const [answer, next] = result.success;
+          const rows: Record<string, JsonValue | undefined> = {};
+          for (const key of keys) {
+            const json = encode(key, next[key]);
+            if (Result.isFailure(json)) return Result.fail(json.failure);
+            rows[rowKey(key)] = json.success;
+          }
+          return Result.succeed([answer, rows]);
+        },
       )
       .pipe(
         Effect.mapError((error) =>
-          error instanceof DatabaseWriteFailed ? refused(key, error) : error,
+          error instanceof DatabaseWriteFailed
+            ? refused(keys.join(', '), error)
+            : error,
         ),
       );
   return {
@@ -94,7 +121,7 @@ function appStateStoreFromDatabase(
         ),
       ),
     update: (key, value) =>
-      Effect.asVoid(modify(key, () => Result.succeed(value))),
+      modify([key], () => Result.succeed([undefined, { [key]: value }])),
     modify,
   };
 }
@@ -118,9 +145,13 @@ const openProjectStateStore = Effect.fn('appStateStore.openProjectStateStore')(
   ) {
     const database = yield* RcMap.get(projects, storage);
     if (workspaceRoot !== undefined) {
+      const id = path.basename(storage);
       yield* values
-        .modify(WORKSPACE_STORES, path.basename(storage), () =>
-          Result.succeed([undefined, { root: workspaceRoot }] as const),
+        .modify(WORKSPACE_STORES, [id], () =>
+          Result.succeed([
+            undefined,
+            { [id]: { root: workspaceRoot } },
+          ] as const),
         )
         .pipe(
           Effect.catch((error) =>

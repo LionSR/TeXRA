@@ -22,6 +22,7 @@ ruling and argues against it explicitly.
 | The session store and the durable protocol, as built                    | [the durable protocol](../../packages/harness/docs/spec.md)                                                                          |
 | Storage format: the 1.0 decisions and their reasons                     | [storage v1 design](./implemented/architecture/2026-09-28-storage-v1-design.md)                                                      |
 | Plugins and their contributions                                         | [plugin architecture](./implemented/architecture/2026-09-24-plugin-architecture.md)                                                  |
+| Programs in plugins; the agent catalog, teams and skills they replace   | [programs, not agents](./proposed/architecture/2026-11-06-programs-not-agents.md)                                                    |
 | Code plugins and hooks                                                  | [code plugins and hooks](./implemented/architecture/2026-09-28-code-plugins-hooks-v1.md)                                             |
 | Code as tool (`script`, `agent()`)                                      | [codemode everywhere](./implemented/architecture/2026-10-01-codemode-everywhere.md)                                                  |
 | The run model: one run, one run history                                 | [one run model](./implemented/architecture/2026-09-10-one-run-model.md)                                                              |

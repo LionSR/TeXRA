@@ -90,11 +90,13 @@ export class SettingsAgentCatalogController {
       agents,
     };
 
-    return yield* this.deps.repoState
-      .modify(CUSTOM_TEAMS_KEY, (stored) =>
-        Result.map(presetRecords(stored), (records) => [...records, preset]),
-      )
-      .pipe(Effect.as(preset));
+    return yield* this.deps.repoState.modify([CUSTOM_TEAMS_KEY], (stored) =>
+      Result.map(
+        presetRecords(stored[CUSTOM_TEAMS_KEY]),
+        (records) =>
+          [preset, { [CUSTOM_TEAMS_KEY]: [...records, preset] }] as const,
+      ),
+    );
   });
 
   readonly deleteCustomPreset = Effect.fn(
@@ -102,23 +104,21 @@ export class SettingsAgentCatalogController {
   )({ self: this }, function* (presetId: string) {
     if (!(yield* this.getCustomPreset(presetId))) return;
 
-    yield* this.deps.workspaceAgents.removeTeamPreset(presetId, () =>
-      this.deps.repoState
-        .modify(CUSTOM_TEAMS_KEY, (stored) =>
-          Result.map(presetRecords(stored), (records) =>
-            records.filter(
-              (record) => !Predicate.isObject(record) || record.id !== presetId,
-            ),
+    yield* this.deps.workspaceAgents.removeTeamPreset(presetId, {
+      key: CUSTOM_TEAMS_KEY,
+      remove: (stored) =>
+        Result.map(presetRecords(stored), (records) =>
+          records.filter(
+            (record) => !Predicate.isObject(record) || record.id !== presetId,
           ),
-        )
-        .pipe(Effect.asVoid),
-    );
+        ),
+    });
   });
 
   /**
-   * Enable or disable every agent from one source, in the workspace agents'
-   * write lane, so a single toggle landing meanwhile is not lost. Nothing is
-   * written when the list would not change.
+   * Enable or disable every agent from one source, as one store step, so a
+   * single toggle landing meanwhile is not lost. Nothing is written when the
+   * list would not change.
    */
   setAllAgentsEnabled(input: { source: AgentSource; enabled: boolean }) {
     return this.deps.workspaceAgents.setAgentEnabled({

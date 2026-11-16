@@ -155,17 +155,20 @@ export interface CurrentValues {
     key: string,
   ) => Effect.Effect<T | undefined, DatabaseReadFailed>;
   /**
-   * Change one value from the one read under the write lock: `change`
-   * answers with its result and the next value, with its result alone to
-   * write nothing, or refuses and nothing is written. A next value of
-   * `undefined` deletes the row.
+   * Change the values of `keys` from the ones read under the write lock:
+   * `change` answers with its result and the next value of every key, with
+   * its result alone to write nothing, or refuses and nothing is written. A
+   * next value of `undefined` deletes the row.
    */
-  readonly modify: <T, A, E = never>(
+  readonly modify: <T, K extends string, A, E = never>(
     family: ValueFamily<T>,
-    key: string,
+    keys: readonly K[],
     change: (
-      current: T | undefined,
-    ) => Result.Result<readonly [A] | readonly [A, T | undefined], E>,
+      current: Readonly<Record<K, T | undefined>>,
+    ) => Result.Result<
+      readonly [A] | readonly [A, Readonly<Record<K, T | undefined>>],
+      E
+    >,
   ) => Effect.Effect<A, E | DatabaseWriteFailed>;
   /** Every row of a family, latest write first. */
   readonly list: <T>(
