@@ -8,8 +8,13 @@ All notable changes to this project will be documented in this file.
 
 - **`texra version` follows the configured output format.** It reads
   `--output-format`, `TEXRA_OUTPUT_FORMAT` and the `outputFormat` setting
-  like every other command, and warns about an invalid value. SDK: new
-  `APPROVAL_POLICY_ENV` in `@texra-ai/harness/node`.
+  like every other command, and warns about an invalid value. It builds
+  the same context as every other command to do so: `--cwd` naming a
+  folder that does not exist is now a usage error (exit 2) where it was
+  ignored, and an invalid environment variable or config key warns on
+  stderr before the version prints. The version itself still prints with
+  a missing home folder, an unreadable config file or missing bundled
+  resources. SDK: new `APPROVAL_POLICY_ENV` in `@texra-ai/harness/node`.
 
 - **SDK: a store an earlier build wrote is refused, never moved aside.**
   Opening a session store stamped with another build's schema fails and
