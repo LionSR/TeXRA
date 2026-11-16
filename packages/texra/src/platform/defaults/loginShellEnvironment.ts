@@ -6,6 +6,7 @@
  * window and its service run with the same environment.
  */
 import { homedir, userInfo } from 'node:os';
+import { delimiter } from 'node:path';
 
 import { Effect, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
@@ -127,8 +128,10 @@ function loginShellEnvironment(): Effect.Effect<
 /**
  * Add the login shell's variables to this process's environment, keeping
  * every variable the process already has (the home directory and the
- * `TEXRA_*` settings its starter passed). Children this process spawns
- * inherit the result. Says once which PATH it runs with.
+ * `TEXRA_*` settings its starter passed), except PATH: a Dock-launched app
+ * already has a minimal one, so the login shell's entries come first and
+ * the process's own follow where the shell's lack them. Children this
+ * process spawns inherit the result. Says once which PATH it runs with.
  */
 export function adoptLoginShellEnvironment(): Effect.Effect<
   void,
@@ -140,6 +143,14 @@ export function adoptLoginShellEnvironment(): Effect.Effect<
       Effect.suspend(() => {
         for (const [name, value] of Object.entries(login))
           if (process.env[name] === undefined) process.env[name] = value;
+        if (login.PATH !== undefined) {
+          const entries = login.PATH.split(delimiter);
+          const own = (process.env.PATH ?? '').split(delimiter);
+          process.env.PATH = [
+            ...entries,
+            ...own.filter((entry) => entry && !entries.includes(entry)),
+          ].join(delimiter);
+        }
         return Effect.logInfo(
           `Using the login shell's environment (PATH=${process.env.PATH ?? ''})`,
         );
