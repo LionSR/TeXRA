@@ -233,7 +233,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   if (landed.kind === 'refused')
     return {
       status: 'failed',
-      message: describeFollowUpFailure(landed.reason),
+      message: describeFollowUpFailure('notResumable'),
     };
   if (landed.kind === 'duplicate') return { status: 'sent' };
   // Whether the row wakes the run is the inbox's one reading

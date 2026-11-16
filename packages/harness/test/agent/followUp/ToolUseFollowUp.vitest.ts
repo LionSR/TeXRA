@@ -162,7 +162,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('run input', (it) => {
 
           expect(yield* inbox.send(closed, user('still closed'))).toEqual({
             kind: 'refused',
-            reason: 'notResumable',
           });
           expect(yield* queuedTexts(session, closed)).toEqual([]);
           expect(yield* inbox.send(open, user('never closed'))).toMatchObject({

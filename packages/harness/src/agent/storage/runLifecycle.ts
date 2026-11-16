@@ -245,9 +245,7 @@ const replyDelivery = Effect.fn('replyDelivery')(function* (
         admitted.failure,
       );
     else if (admitted.success.sent.kind === 'refused')
-      yield* undelivered(
-        `run ${recipient} is unavailable (${admitted.success.sent.reason})`,
-      );
+      yield* undelivered(`the input of run ${recipient} is closed`);
     else rows.push(...admitted.success.rows);
   }
   return rows;

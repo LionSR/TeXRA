@@ -1,11 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { summarizeSubagentFollowup } from '@shared/subagentFollowup';
-import {
-  type FollowUpContent,
-  type FollowUpSender,
-  type RunId,
-} from '@shared/schemas';
+import type { FollowUpContent } from '@shared/schemas';
 import { isInstruction } from '@shared/session/runFacts';
 import type { WithBlobs } from '@shared/session/historyTurns';
 import type { QueuedFollowUp } from '@shared/session/runRows';
@@ -56,12 +52,4 @@ export function queuedRow(
       from,
     },
   };
-}
-
-/** The sender a tool call speaks as: its run, or the user when no run
- *  calls it. */
-export function senderOf(caller: RunId | undefined): FollowUpSender {
-  return caller === undefined
-    ? { kind: 'user' }
-    : { kind: 'run', runId: caller };
 }

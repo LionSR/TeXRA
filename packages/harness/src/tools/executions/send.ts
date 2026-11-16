@@ -15,7 +15,6 @@ import {
   presentFollowUpResult,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import { senderOf } from '@agent/followUp/followUpMessages';
 import { Runs } from '@agent/runtime/runRegistry';
 import { SessionViewAccess } from '@shared/session/runHistory';
 import { ToolError, type RunId } from '@shared/schemas';
@@ -80,7 +79,10 @@ export const sendToRun = Effect.fn('ExecutionsTool.send')(function* (
     {
       text,
       displayText: `Message from ${sender}: ${previewLabel(message)}`,
-      from: senderOf(caller),
+      from:
+        caller === undefined
+          ? { kind: 'user' }
+          : { kind: 'run', runId: caller },
     },
     {},
   );

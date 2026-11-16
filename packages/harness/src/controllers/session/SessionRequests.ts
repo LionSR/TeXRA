@@ -225,7 +225,7 @@ const decideSurfaceRequest = (
       );
       if (admitted.sent.kind === 'refused')
         yield* Effect.logWarning(
-          `Run ${followUp.runId} refused what plugin "${payload.plugin}" sent it with the answer to request ${req.requestId} (${admitted.sent.reason}).`,
+          `Run ${followUp.runId} refused what plugin "${payload.plugin}" sent it with the answer to request ${req.requestId}: its input is closed.`,
         );
       return [...facts, ...admitted.rows];
     }).pipe(Effect.scoped);

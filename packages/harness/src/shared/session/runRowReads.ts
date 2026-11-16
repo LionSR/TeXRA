@@ -108,7 +108,7 @@ function askedBy(
 
 /**
  * The reads of a run's rows, by what each answers: its input (`Inbox.read`)
- * with the parent edge and lifecycle that bound it and who it works for, its requests, its
+ * with the lifecycle that bounds it and the runs it works for, its requests, its
  * lifecycle rows, the plugin facts of an aggregate (a run's, or a plugin's
  * own), its calls' results, a script's calls with their results, and its
  * positions. A store reads one through its type index and folds it
@@ -119,7 +119,6 @@ export const RUN_ROW_READS = {
     [
       'followup.queued',
       'followup.consumed',
-      'run.start',
       'run.activate',
       'run.stop',
       'run.end',
@@ -128,10 +127,7 @@ export const RUN_ROW_READS = {
     ],
     (rows) => {
       const { followUps, taken } = sharedRowsFrom(rows.filter(isSharedRunRow));
-      const { parent, end, stop, inputClosed } = rows.reduce(
-        recordAfter,
-        NO_RUN_ROWS,
-      );
+      const { end, stop, inputClosed } = rows.reduce(recordAfter, NO_RUN_ROWS);
       const asked = askedBy(
         rows.filter(
           (row) =>
@@ -140,7 +136,7 @@ export const RUN_ROW_READS = {
             row.type === 'run.end',
         ),
       );
-      return { parent, end, stop, inputClosed, followUps, taken, asked };
+      return { end, stop, inputClosed, followUps, taken, asked };
     },
   ),
   requests: rowRead(['request.opened', 'request.decided'], (rows) => ({

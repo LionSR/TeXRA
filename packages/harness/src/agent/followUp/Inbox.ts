@@ -33,10 +33,7 @@ import { queuedRow } from './followUpMessages';
 
 const CHANNEL = 'Inbox';
 
-const CLOSED = Object.freeze({
-  kind: 'refused',
-  reason: 'notResumable',
-} as const);
+const CLOSED = Object.freeze({ kind: 'refused' } as const);
 /** The session doors the inbox works through (the session layer wires them). */
 interface InboxPort {
   /** The session's log: a send is one transaction. */
@@ -70,13 +67,12 @@ export type InboxItem = (
 };
 
 /** How a send landed: queued for the run (a reader here takes it, or its
- *  resume does), a replay of a row already queued, or refused. */
+ *  resume does), a replay of a row already queued, or refused, writing
+ *  nothing: the run's input is closed. */
 export type Sent =
   | { readonly kind: 'duplicate' }
   | { readonly kind: 'queued' }
-  | { readonly kind: 'refused'; readonly reason: Refusal };
-/** Why a send wrote nothing: a closed input. */
-type Refusal = 'notResumable';
+  | { readonly kind: 'refused' };
 
 /** What a send asks of the row and of the run. */
 interface SendOptions {
