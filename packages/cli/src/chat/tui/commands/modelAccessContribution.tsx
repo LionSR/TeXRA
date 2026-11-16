@@ -6,17 +6,8 @@ import { Effect } from 'effect';
 
 import { apiKeyOrigins } from '@texra-ai/llm';
 
-import {
-  type ProcessRuntime,
-  type ProcessServices,
-} from '@texra-ai/harness/host';
-import { Secrets, type SettingsStores } from '@texra-ai/harness/plugins';
-import type { CliModelAccessSelection } from '@cli/runtime/models/modelAccessRoute';
-import {
-  type CliLogoutTarget,
-  type LoginFormValue,
-  parseChatLoginSlashArgs,
-} from '@cli/runtime/models/loginOptions';
+import { Secrets } from '@texra-ai/harness/plugins';
+import { parseChatLoginSlashArgs } from '@cli/runtime/models/loginOptions';
 
 import {
   AccountAccessForm,
@@ -28,6 +19,7 @@ import { modelConnectionNeeded } from '../modelConnection';
 import { setTransientNotice } from '../state/cliState';
 import { appendLocalNotice } from '../state/transcript';
 import {
+  applyCliModelAccessSelection,
   applyCliProviderApiKey,
   showCliAccountStatus,
 } from './handlers/modelAccessCommands';
@@ -36,75 +28,38 @@ import {
   loginStartMessage,
   logoutFromChat,
 } from './handlers/loginCommands';
+import { bindSelection, reportFormError } from './formSelection';
 import { openRegisteredCliSlashForm } from './slashForms';
-import type { ApiKeyProviderId } from '@texra-ai/llm';
-import type {
-  SlashCommandEffect,
-  SlashCommandOutput,
-} from './handlers/slashContext';
-import type { ErrorHandler, formSelectionHandler } from './formSelection';
-import type {
-  SlashCommand,
-  SlashCommandContribution,
-  SlashFormProps,
+import {
+  useSlashContext,
+  type SlashCommand,
+  type SlashCommandContribution,
+  type SlashFormProps,
 } from './slashRegistry';
-
-/** Selection handler that reports progress while the form shows a busy frame. */
-export type FormActionHandler<T> = (
-  value: T,
-  output: SlashCommandOutput,
-) => SlashCommandEffect;
-/** The key write as a program; the form that collects the key runs it. */
-type ApiKeySaveHandler = (
-  provider: ApiKeyProviderId,
-  key: string,
-) => Effect.Effect<string | void, Error, Secrets>;
-
-/** `builtinSlashCommands`' picker binding, shared with this plugin. */
-type BindSelection = <T>(
-  props: SlashFormProps,
-  action: (value: T, output: SlashCommandOutput) => SlashCommandEffect,
-  overrides?: Partial<
-    Pick<
-      Parameters<typeof formSelectionHandler<T>>[0],
-      'onDone' | 'completion' | 'busyTitle'
-    >
-  >,
-) => (value: T) => void;
 
 type AccountAction = Exclude<AccountAccessFormValue, { kind: 'key' }>;
 
-export function modelAccessContribution(deps: {
-  readonly stores: SettingsStores;
-  readonly runtime: ProcessRuntime;
-  readonly bindSelection: BindSelection;
-  readonly onModelAccessSelect: FormActionHandler<CliModelAccessSelection>;
-  readonly onLoginSelect: FormActionHandler<LoginFormValue>;
-  /** After a sign-in, sign-out, preference, or key save finishes: the chat
-   *  re-checks whether a model can answer now. */
-  readonly onAccountChanged: () => Effect.Effect<void, never, ProcessServices>;
-  /** Reports a failed key-status read; the rows then read "Status unavailable". */
-  readonly onError: ErrorHandler;
-}): SlashCommandContribution & { readonly login: SlashCommand } {
-  const { stores, runtime, bindSelection, onModelAccessSelect, onLoginSelect } =
-    deps;
-  const onApiKeySave: ApiKeySaveHandler = (provider, key) =>
-    applyCliProviderApiKey(stores, provider, key);
-  const onLogoutSelect: FormActionHandler<CliLogoutTarget> = (value, output) =>
-    logoutFromChat(value, stores, output);
-  const recheck = deps.onAccountChanged;
-
+export function modelAccessContribution(): SlashCommandContribution & {
+  readonly login: SlashCommand;
+} {
   function AccountAccessFormAdapter(props: SlashFormProps): React.JSX.Element {
+    const context = useSlashContext();
+    const { stores, runtime } = context;
     const bound = bindSelection<AccountAction>(
+      context,
       props,
-      (value, output) => {
+      (value, _context, output) => {
         switch (value.kind) {
           case 'access':
-            return onModelAccessSelect(value.selection, output);
+            return applyCliModelAccessSelection(
+              value.selection,
+              context,
+              output,
+            );
           case 'login':
-            return onLoginSelect(value.target, output);
+            return loginFromChat(value.target, context, output);
           case 'logout':
-            return onLogoutSelect(value.target, output);
+            return logoutFromChat(value.target, stores, output);
           default:
             return value satisfies never;
         }
@@ -112,7 +67,7 @@ export function modelAccessContribution(deps: {
       {
         onDone: (value) => {
           props.onDone(value);
-          runtime.runFork(recheck());
+          runtime.runFork(context.onAccountChanged());
         },
         completion: 'busy',
         busyTitle: (value) => {
@@ -153,10 +108,14 @@ export function modelAccessContribution(deps: {
   }
 
   function ProviderApiKeyFormAdapter(props: SlashFormProps): React.JSX.Element {
+    const context = useSlashContext();
+    const { runtime } = context;
+    // A failed status read is said in the transcript; the rows then read
+    // "Status unavailable".
     const apiKeys = useAsyncResource({
       load: () => Effect.flatMap(Secrets, apiKeyOrigins),
       runtime,
-      onError: deps.onError,
+      onError: (error) => reportFormError(error),
     });
     return (
       <ProviderApiKeyForm
@@ -167,13 +126,15 @@ export function modelAccessContribution(deps: {
           error: apiKeys.error !== undefined,
         }}
         runtime={runtime}
-        onSave={onApiKeySave}
+        onSave={(provider, apiKey) =>
+          applyCliProviderApiKey(context.stores, provider, apiKey)
+        }
         onDone={(provider, modelNotice) => {
           // The shared key controller posts the "key has been set" notice on
           // every host; only the coding-plan tip is this surface's to write.
           if (modelNotice) appendLocalNotice(modelNotice);
           props.onDone(provider);
-          runtime.runFork(recheck());
+          runtime.runFork(context.onAccountChanged());
         }}
         onCancel={() => props.onDone(undefined)}
       />
@@ -210,9 +171,9 @@ export function modelAccessContribution(deps: {
     echo: 'never',
     handler: (remainder, context) =>
       remainder.trim().toLowerCase() === 'status'
-        ? showCliAccountStatus(stores)
-        : loginFromChat(remainder, stores, context.cliContext).pipe(
-            Effect.andThen(recheck),
+        ? showCliAccountStatus(context.stores)
+        : loginFromChat(remainder, context).pipe(
+            Effect.andThen(context.onAccountChanged()),
           ),
     formComponent: AccountAccessFormAdapter,
   };

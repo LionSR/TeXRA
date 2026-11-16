@@ -45,14 +45,13 @@ export const applyCliProviderApiKey = Effect.fn('applyCliProviderApiKey')(
 export const applyCliModelAccessSelection = Effect.fn(
   'applyCliModelAccessSelection',
 )(function* (
-  stores: SettingsStores,
   selection: CliModelAccessSelection,
-  context: SlashCommandContext | undefined,
-  output: SlashCommandOutput = transcriptSlashCommandOutput,
+  context: SlashCommandContext,
+  output: SlashCommandOutput,
 ) {
   const access = yield* updateCliModelAccess(
-    stores,
-    context?.cliContext,
+    context.stores,
+    context.cliContext,
     selection,
     { writeProgress: output.writeProgress },
   );

@@ -36,7 +36,7 @@ import {
 import { SlashPalette, slashPaletteOwnsArrows } from '../commands/SlashPalette';
 import {
   parseSlashInput,
-  useSlashCommands,
+  useSlashContext,
   type SlashCommand,
   type SlashPickIntent,
 } from '../commands/slashRegistry';
@@ -125,7 +125,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   const value = useSubscriptionRef(runtime, draftRef).text;
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
   const { columns } = useWindowSize();
-  const commands = useSlashCommands();
+  const commands = useSlashContext().commands;
   // Reads and writes go to the ref at once, so a keystroke chunk handled
   // before the next render sees the one before it.
   const readDraft = useCallback(

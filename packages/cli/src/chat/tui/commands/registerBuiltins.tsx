@@ -1,15 +1,11 @@
-// The built-in slash commands, built once per chat from what the chat's
-// surface does with each choice.
+// The built-in slash commands, built once per chat. A command's form and its
+// handler both act over the chat's slash context.
 
 import { Effect, Result } from 'effect';
 
 import { type RunId, runBypasses } from '@texra-ai/harness/schemas';
-import { type WorkspaceRoots } from '@texra-ai/harness';
 import { InstalledPlugins } from '@texra-ai/harness/host';
-import type { GetModelSwitchDisabledReason } from '@cli/runtime/models/modelAccess';
 import { parseCliHistoryId } from '@cli/runtime/history';
-import type { CliModelAccessSelection } from '@cli/runtime/models/modelAccessRoute';
-import type { LoginFormValue } from '@cli/runtime/models/loginOptions';
 import type { ConnectService } from '../state/attachedTask';
 import { RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { PLUGINS_TUI } from '@ui/copy/plugins';
@@ -32,6 +28,7 @@ import { currentView, runViewOf } from '../state/sessionView';
 import { appendLocalNotice } from '../state/transcript';
 import {
   applyCliModelSelection,
+  applyCliTeamSelection,
   applyInitialCliAgentSelection,
 } from './handlers/agentModelCommands';
 import {
@@ -41,7 +38,6 @@ import {
 import {
   type SlashCommandContext,
   type SlashCommandEffect,
-  type SlashCommandOutput,
 } from './handlers/slashContext';
 import {
   showCliMemoryList,
@@ -54,24 +50,20 @@ import {
   showCliSlashCommandHelp,
   showCliWorkPlan,
 } from './handlers/sessionCommands';
-import { type ErrorHandler, formSelectionHandler } from './formSelection';
+import {
+  bindSelection,
+  reportFormError,
+  type FormAction,
+} from './formSelection';
 import {
   slashCommands,
+  useSlashContext,
   type SlashCommand,
   type SlashCommands,
   type SlashFormProps,
 } from './slashRegistry';
 import { openRegisteredCliSlashForm } from './slashForms';
-import {
-  type FormActionHandler,
-  modelAccessContribution,
-} from './modelAccessContribution';
-import type { Session } from '@texra-ai/harness';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
-import type { SettingsStores } from '@texra-ai/harness/plugins';
-import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
-
-type SelectHandler<T> = (value: T) => SlashCommandEffect;
+import { modelAccessContribution } from './modelAccessContribution';
 
 /** The built-in slash commands, with the two forms the chat opens itself:
  *  `/login` (the "Connect a model" panel) and `/agent` (a first run's
@@ -81,105 +73,32 @@ export interface BuiltinSlashCommands extends SlashCommands {
   readonly agent: SlashCommand;
 }
 
-/** Build the built-in slash commands over what the chat's surface does with
- *  each choice. */
+/** Build the built-in slash commands. Each form reads the chat's slash
+ *  context, as each handler is given it. */
 export function builtinSlashCommands(options: {
-  /**
-   * The setting stores the built-in forms and handlers read: they run
-   * outside Effect, so the stores arrive from the surface that registers the
-   * commands.
-   */
-  stores: SettingsStores;
-  /** The process runtime the account commands and the `/resume` listing run
-   *  their programs on, from the same surface. */
-  runtime: ProcessRuntime;
-  /** The project's stored runs `/resume` lists, where they are held. */
-  /** Where the commands' run requests and resumes land: the chat's session,
-   *  here or in the service. */
-  runSession: Session;
-  onAgentSelect: SelectHandler<string>;
-  /** `/agent` → a team preset, by id. */
-  onTeamSelect: SelectHandler<string>;
-  /** After a sign-in, sign-out, preference, or key save finishes: the chat
-   *  re-checks whether a model can answer now. */
-  onAccountChanged: () => Effect.Effect<void, never, ProcessServices>;
-  canSelectAgent: () => boolean;
-  getApprovalPolicy: () => ApprovalPolicy;
-  /** `/approval`'s choice: the chat's own launch policy, finished once the
-   *  chat's run has recorded it. */
-  onApprovalPolicySelect: (policy: ApprovalPolicy) => Effect.Effect<void>;
-  /** The project's policy `/config` wrote. Stays a plain callback: the
-   *  shared write path takes it as a void-returning port. */
-  onProjectApprovalPolicyChanged: (policy: ApprovalPolicy) => void;
-  onModelSelect: SelectHandler<string>;
-  canSelectModel: () => boolean;
-  getModelSwitchDisabledReason: GetModelSwitchDisabledReason;
-  onModelAccessSelect: FormActionHandler<CliModelAccessSelection>;
-  onLoginSelect: FormActionHandler<LoginFormValue>;
-  onMemorySelect: SelectHandler<string>;
-  onResumeSelect: SelectHandler<RunId>;
-  onSkillSelect: SelectHandler<SkillActivation>;
   /** The TeXRA service's client (`/tasks`), through the chat's link; absent
    *  where the chat holds none, and `/tasks` with it. */
-  connectService?: ConnectService;
-  /** The project roots `/config` reads and writes. */
-  configRoots: WorkspaceRoots;
-  onError: ErrorHandler;
+  readonly connectService?: ConnectService;
 }): BuiltinSlashCommands {
-  const {
-    stores,
-    runtime,
-    runSession,
-    onAgentSelect,
-    onModelSelect,
-    onTeamSelect,
-    canSelectAgent,
-    canSelectModel,
-  } = options;
-  const modelStores = { ...stores, runtime };
-
-  // Every picker's selection runs on this surface's runtime and error hook and
-  // completes through its slash form's done and persistence props; a picker
-  // passes only its action and what it overrides.
-  function bindSelection<T>(
-    props: SlashFormProps,
-    action: (value: T, output: SlashCommandOutput) => SlashCommandEffect,
-    overrides?: Partial<
-      Pick<
-        Parameters<typeof formSelectionHandler<T>>[0],
-        'onDone' | 'completion' | 'busyTitle'
-      >
-    >,
-  ): (value: T) => void {
-    return formSelectionHandler<T>({
-      runtime,
-      action,
-      onDone: props.onDone,
-      onError: options.onError,
-      onPersist: props.onPersist,
-      echoOnPersist: props.echoOnPersist,
-      ...overrides,
-    });
-  }
-
   function AgentListFormAdapter(props: SlashFormProps): React.JSX.Element {
+    const context = useSlashContext();
     const meta = sessionMeta.get();
-    const selectable = canSelectAgent();
-    const onPick: SelectHandler<AgentPickerValue> = (value) =>
+    const selectable = context.session.canStartRootRun();
+    const onPick: FormAction<AgentPickerValue> = (value) =>
       value.kind === 'agent'
-        ? onAgentSelect(value.agent)
-        : onTeamSelect(value.teamId);
+        ? applyInitialCliAgentSelection(value.agent, context)
+        : applyCliTeamSelection(value.teamId, context);
     return (
       <AgentListForm
-        runtime={runtime}
-        stores={stores}
+        runtime={context.runtime}
+        stores={context.stores}
         currentAgent={meta.agent}
         {...(meta.cliTeamId !== undefined
           ? { currentTeamId: meta.cliTeamId }
           : {})}
         availableRows={props.availableRows}
         selectable={selectable}
-        onSelect={bindSelection(props, onPick, {
+        onSelect={bindSelection(context, props, onPick, {
           // Picking the root agent and the root model is a single up-front
           // choice before the first message, so chain straight into the model
           // picker instead of closing — but only while still choosing the root
@@ -187,7 +106,7 @@ export function builtinSlashCommands(options: {
           // `takeActiveForm` requeues what it displaces, and a finished pick
           // must not come back when the model picker closes.
           onDone:
-            selectable && canSelectModel()
+            selectable && context.session.canSelectModel()
               ? (value) => {
                   props.onDone(value);
                   openRegisteredCliSlashForm(model);
@@ -200,7 +119,8 @@ export function builtinSlashCommands(options: {
   }
 
   function ApprovalPolicyFormAdapter(props: SlashFormProps): React.JSX.Element {
-    const current = options.getApprovalPolicy();
+    const context = useSlashContext();
+    const current = context.getApprovalPolicy();
     // The grants of the run the status bar describes, offered for revoking
     // only while that run's `actions` takes a grant (the gate `policy.set`
     // is refused by).
@@ -215,6 +135,7 @@ export function builtinSlashCommands(options: {
         currentPolicy={current}
         grants={grants}
         onSelect={bindSelection<ApprovalFormValue>(
+          context,
           props,
           (value) => {
             switch (value) {
@@ -223,11 +144,11 @@ export function builtinSlashCommands(options: {
               case 'superYolo':
                 return runId === undefined
                   ? Effect.void
-                  : revokeCliRunGrant(runSession, runId, value);
+                  : revokeCliRunGrant(context.runSession, runId, value);
               case 'ask':
               case 'never':
               case 'yolo':
-                return options.onApprovalPolicySelect(value);
+                return applyCliApprovalPolicySelection(value, context);
               default:
                 return value satisfies never;
             }
@@ -240,16 +161,15 @@ export function builtinSlashCommands(options: {
   }
 
   function ModelListFormAdapter(props: SlashFormProps): React.JSX.Element {
-    const current = sessionMeta.get().model;
-    const selectable = canSelectModel();
+    const context = useSlashContext();
     return (
       <ModelListForm
-        currentModel={current}
-        stores={modelStores}
+        currentModel={sessionMeta.get().model}
+        stores={{ ...context.stores, runtime: context.runtime }}
         availableRows={props.availableRows}
-        selectable={selectable}
-        getModelSwitchDisabledReason={options.getModelSwitchDisabledReason}
-        onSelect={bindSelection(props, onModelSelect)}
+        selectable={context.session.canSelectModel()}
+        getModelSwitchDisabledReason={context.getModelSwitchDisabledReason}
+        onSelect={bindSelection(context, props, applyCliModelSelection)}
         onClose={() => props.onDone(undefined)}
       />
     );
@@ -259,86 +179,96 @@ export function builtinSlashCommands(options: {
   // action.
   function makeSelectFormAdapter<T>(
     Form: React.ComponentType<{
+      readonly context: SlashCommandContext;
       readonly availableRows?: number;
       readonly onSelect: (value: T) => void;
       readonly onClose: () => void;
     }>,
-    action: (value: T) => SlashCommandEffect,
+    action: FormAction<T>,
   ): React.ComponentType<SlashFormProps> {
-    return (props) => (
-      <Form
-        availableRows={props.availableRows}
-        onSelect={bindSelection(props, action, {
-          completion: 'beforeAction',
-        })}
-        onClose={() => props.onDone(undefined)}
-      />
-    );
+    return (props) => {
+      const context = useSlashContext();
+      return (
+        <Form
+          context={context}
+          availableRows={props.availableRows}
+          onSelect={bindSelection(context, props, action, {
+            completion: 'beforeAction',
+          })}
+          onClose={() => props.onDone(undefined)}
+        />
+      );
+    };
   }
 
   const MemoryListFormAdapter = makeSelectFormAdapter<string>(
-    (formProps) => (
+    ({ context, ...formProps }) => (
       <MemoryListForm
-        runtime={runtime}
-        roots={options.runSession.roots}
+        runtime={context.runtime}
+        roots={context.runSession.roots}
         {...formProps}
       />
     ),
-    options.onMemorySelect,
+    (storagePath, context) =>
+      showCliMemoryPreview(context.runSession.roots, storagePath),
   );
-  // `/resume` lists the project's stored runs; bind the session here so the
-  // command still uses the one plain-picker adapter.
   const ResumeListFormAdapter = makeSelectFormAdapter<RunId>(
-    (formProps) => (
+    ({ context, ...formProps }) => (
       <ResumeListForm
-        runtime={runtime}
-        session={options.runSession}
+        runtime={context.runtime}
+        session={context.runSession}
         {...formProps}
       />
     ),
-    options.onResumeSelect,
+    (id, context) => context.resumeRun(id),
   );
   const connectService = options.connectService;
   const TasksFormAdapter = connectService
     ? (props: SlashFormProps): React.JSX.Element => (
         <TasksForm
-          runtime={runtime}
+          runtime={useSlashContext().runtime}
           connect={connectService}
           availableRows={props.availableRows}
           onClose={() => props.onDone(undefined)}
         />
       )
     : undefined;
-  const SkillsListFormAdapter = makeSelectFormAdapter(
-    (formProps) => (
+  const SkillsListFormAdapter = makeSelectFormAdapter<SkillActivation>(
+    ({ context, ...formProps }) => (
       <SkillsListForm
-        runtime={runtime}
-        roots={options.runSession.roots}
+        runtime={context.runtime}
+        roots={context.runSession.roots}
         {...formProps}
       />
     ),
-    options.onSkillSelect,
+    (selection, context) => Effect.sync(() => context.activateSkill(selection)),
   );
 
   const EnabledModelsFormAdapter = (
     props: SlashFormProps,
-  ): React.JSX.Element => (
-    <EnabledModelsForm
-      stores={stores}
-      runtime={runtime}
-      availableRows={props.availableRows}
-      onClose={() => props.onDone(undefined)}
-    />
-  );
+  ): React.JSX.Element => {
+    const context = useSlashContext();
+    return (
+      <EnabledModelsForm
+        stores={context.stores}
+        runtime={context.runtime}
+        availableRows={props.availableRows}
+        onClose={() => props.onDone(undefined)}
+      />
+    );
+  };
 
-  const PluginsListFormAdapter = (props: SlashFormProps): React.JSX.Element => (
-    <PluginsListForm
-      roots={options.runSession.roots}
-      runtime={runtime}
-      availableRows={props.availableRows}
-      onClose={() => props.onDone(undefined)}
-    />
-  );
+  const PluginsListFormAdapter = (props: SlashFormProps): React.JSX.Element => {
+    const context = useSlashContext();
+    return (
+      <PluginsListForm
+        roots={context.runSession.roots}
+        runtime={context.runtime}
+        availableRows={props.availableRows}
+        onClose={() => props.onDone(undefined)}
+      />
+    );
+  };
 
   /** `/plugins add <source>`: the install `texra plugin install` runs; the
    *  plugin stays off until it is switched on and trusted in `/plugins`. */
@@ -356,7 +286,7 @@ export function builtinSlashCommands(options: {
       /^(.+?)(?:\s+--plugin\s+(\S+))?$/.exec(rest ?? '') ?? [];
     if (verb?.toLowerCase() !== 'add' || !source)
       return yield* Effect.fail(new Error(PLUGINS_TUI.addUsage));
-    const { roots } = options.runSession;
+    const { roots } = context.runSession;
     const origin = InstalledPlugins.origin(
       source,
       roots.workspace ?? context.cliContext.cwd,
@@ -371,21 +301,22 @@ export function builtinSlashCommands(options: {
     appendLocalNotice(PLUGINS_TUI.added(added.map(({ name }) => name)));
   });
 
-  const ConfigFormAdapter = (props: SlashFormProps): React.JSX.Element => (
-    <CliConfigForm
-      roots={options.configRoots}
-      runtime={runtime}
-      availableRows={props.availableRows}
-      // The project's policy, written: the status bar follows it, and
-      // the chat's own `/approval` choice stays as it was.
-      onApprovalPolicyChanged={options.onProjectApprovalPolicyChanged}
-      onClose={() => props.onDone(undefined)}
-      onError={async (error) => {
-        props.onPersist?.();
-        await options.onError(error);
-      }}
-    />
-  );
+  const ConfigFormAdapter = (props: SlashFormProps): React.JSX.Element => {
+    const context = useSlashContext();
+    return (
+      <CliConfigForm
+        roots={context.runSession.roots}
+        runtime={context.runtime}
+        availableRows={props.availableRows}
+        onApprovalPolicyChanged={context.onProjectApprovalPolicyChanged}
+        onClose={() => props.onDone(undefined)}
+        onError={(error) => {
+          props.onPersist?.();
+          reportFormError(error);
+        }}
+      />
+    );
+  };
 
   const agent: SlashCommand = {
     name: 'agent',
@@ -404,15 +335,7 @@ export function builtinSlashCommands(options: {
     handler: applyCliModelSelection,
     formComponent: ModelListFormAdapter,
   };
-  const modelAccess = modelAccessContribution({
-    stores,
-    runtime,
-    bindSelection,
-    onModelAccessSelect: options.onModelAccessSelect,
-    onLoginSelect: options.onLoginSelect,
-    onAccountChanged: options.onAccountChanged,
-    onError: options.onError,
-  });
+  const modelAccess = modelAccessContribution();
 
   // The contributions' order is the palette's and `/help`'s order.
   const commands = slashCommands([
@@ -525,9 +448,9 @@ export function builtinSlashCommands(options: {
           description: 'List stored memories',
           category: 'configuration',
           echo: 'ifPersists',
-          handler: (remainder) =>
+          handler: (remainder, context) =>
             Effect.suspend(() => {
-              const roots = options.runSession.roots;
+              const roots = context.runSession.roots;
               return remainder.toLowerCase() === 'list'
                 ? showCliMemoryList(roots)
                 : showCliMemoryPreview(roots, remainder);
@@ -566,7 +489,7 @@ export function builtinSlashCommands(options: {
         },
       ],
     },
-    ...sessionContributions(runSession),
+    ...sessionContributions(),
   ]);
   return { ...commands, login: modelAccess.login, agent };
 }

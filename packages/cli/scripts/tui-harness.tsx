@@ -117,23 +117,20 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { App } from '../src/chat/tui/App';
 import { builtinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
-import { loginFromChat } from '../src/chat/tui/commands/handlers/loginCommands';
+import type { SlashCommandContext } from '../src/chat/tui/commands/handlers/slashContext';
 import { showCliWorkPlan } from '../src/chat/tui/commands/handlers/sessionCommands';
 import { formatSlashCommandHelp } from '../src/chat/tui/commands/helpText';
 import {
   parseSlashInput,
-  SlashCommandsProvider,
+  SlashContextProvider,
 } from '../src/chat/tui/commands/slashRegistry';
 import { openRegisteredCliSlashForm } from '../src/chat/tui/commands/slashForms';
 import {
   focusRun,
   rootRunId,
-  patchSessionMeta,
   startChat,
   selectedRunId,
   sessionMeta,
-  setCliSessionModelOverride,
-  setTransientNotice,
 } from '../src/chat/tui/state/cliState';
 import {
   bindSessionView,
@@ -163,7 +160,6 @@ import {
 } from '../src/chat/tui/state/transcript';
 import { clearTerminalScrollback } from '../src/tui/terminalCleanup';
 import { defaultShortcutModifierLabel } from '../src/runtime/terminal/shortcutLabels';
-import { updateCliModelAccess } from '../src/runtime/models/modelAccessSelection';
 import { makeCliProcessRuntime } from '../src/runtime/platform/cliProcessRuntime';
 import { cliPlatform } from '../src/runtime/platform/initPlatform';
 import { CliExitCode } from '../src/runtime/platform/exitCodes';
@@ -1811,88 +1807,55 @@ function handleHarnessSlashCommand(line: string): boolean {
   }
 }
 
-/** The harness's root-run claim, held the way `texra chat` holds its own. */
-const harnessSession = new TuiSession();
+/** The harness's root-run claim, held the way `texra chat` holds its own;
+ *  whether `/model` may switch is the scenario's to say. */
+class HarnessTuiSession extends TuiSession {
+  override canSelectModel(): boolean {
+    return CAN_SELECT_MODEL;
+  }
+}
+const harnessSession = new HarnessTuiSession();
 
-const harnessCommands = builtinSlashCommands({
-  stores: HARNESS_PLATFORM_SERVICES,
-  runtime: HARNESS_PLATFORM_SERVICES.runtime,
+const harnessCommands = builtinSlashCommands({});
+// The handlers and forms act over this context, as in `texra chat`; what
+// the harness fakes is the chat's own state: its policy, its resumes, its
+// skills and its account re-check.
+const harnessSlashContext: SlashCommandContext = {
+  commands: harnessCommands,
+  cliContext: HARNESS_CLI_CONTEXT,
+  session: harnessSession,
   runSession: harnessRunSession,
-  onAgentSelect: (agent) => Effect.sync(() => patchSessionMeta({ agent })),
-  onTeamSelect: () =>
-    Effect.sync(() =>
-      setTransientNotice('Teams can only be chosen in `texra chat`.'),
+  stores: HARNESS_PLATFORM_SERVICES,
+  runtime: harnessRuntime,
+  requestInputExit: () => void exitHarness(0),
+  getApprovalPolicy: harnessApprovalPolicy,
+  setApprovalPolicy: (policy) =>
+    Effect.sync(() => setHarnessApprovalPolicy(policy)),
+  resetSession: () => {
+    resetHarnessForClear();
+    return true;
+  },
+  resumeRun: (id) =>
+    Effect.sync(() => {
+      appendHarnessAssistantTranscript(`Harness resume selected: ${id}.`);
+    }),
+  resumeTask: () => Effect.void,
+  activateSkill: (selection) =>
+    appendHarnessAssistantTranscript(
+      `Harness skill selected: ${selection.name}.`,
     ),
-  onAccountChanged: () => Effect.void,
-  onLoginSelect: (value, output) =>
-    loginFromChat(value, HARNESS_PLATFORM_SERVICES, undefined, output),
-  // Mirror `texra chat`: agent selection is open exactly while no root run
-  // is pending.
-  canSelectAgent: () => harnessSession.canStartRootRun(),
-  canSelectModel: () => CAN_SELECT_MODEL,
+  onProjectApprovalPolicyChanged: (policy) =>
+    appendHarnessAssistantTranscript(
+      `Project approval policy: ${formatApprovalPolicy(policy)}`,
+    ),
   getModelSwitchDisabledReason: (model) =>
     Effect.succeed(
       DISABLED_MODEL_SWITCHES.has(model)
         ? DISABLED_MODEL_SWITCH_REASON
         : undefined,
     ),
-  getApprovalPolicy: harnessApprovalPolicy,
-  onApprovalPolicySelect: (policy) =>
-    Effect.sync(() => setHarnessApprovalPolicy(policy)),
-  onProjectApprovalPolicyChanged: (policy) =>
-    appendHarnessAssistantTranscript(
-      `Project approval policy: ${formatApprovalPolicy(policy)}`,
-    ),
-  onModelSelect: (model) =>
-    Effect.sync(() => {
-      setCliSessionModelOverride(model);
-      appendHarnessAssistantTranscript(
-        `Harness model selected. Future turns: ${model}.`,
-      );
-    }),
-  onModelAccessSelect: (selection) =>
-    selection.provider === 'kimiCode' && selection.state === 'on'
-      ? updateCliModelAccess(
-          HARNESS_PLATFORM_SERVICES,
-          HARNESS_CLI_CONTEXT,
-          selection,
-          {
-            writeProgress: (message) =>
-              appendHarnessAssistantTranscript(message),
-          },
-        ).pipe(
-          Effect.map((access) => {
-            appendHarnessAssistantTranscript(access.message);
-          }),
-        )
-      : Effect.sync(() => {
-          appendHarnessAssistantTranscript(
-            `${selection.provider} preference set to ${selection.state}.`,
-          );
-        }),
-  onMemorySelect: (storagePath) =>
-    Effect.sync(() => {
-      appendHarnessAssistantTranscript(
-        `Harness memory selected: ${storagePath}.`,
-      );
-    }),
-  onSkillSelect: (selection) =>
-    Effect.sync(() => {
-      appendHarnessAssistantTranscript(
-        `Harness skill selected: ${selection.name}.`,
-      );
-    }),
-  onResumeSelect: (id) =>
-    Effect.sync(() => {
-      appendHarnessAssistantTranscript(`Harness resume selected: ${id}.`);
-    }),
-  configRoots: session().roots,
-  onError: (error) => {
-    appendHarnessAssistantTranscript(
-      `Slash command failed: ${toErrorMessage(error)}`,
-    );
-  },
-});
+  onAccountChanged: () => Effect.void,
+};
 // An interruptible harness run is a root launch on its way to the session,
 // ended when the harness is interrupted, so the status bar derives the
 // Ctrl-C stop hint exactly as `texra chat` does.
@@ -1912,7 +1875,7 @@ function handleHarnessCtrlC(): void {
 
 function renderHarnessApp(): React.JSX.Element {
   return (
-    <SlashCommandsProvider value={harnessCommands}>
+    <SlashContextProvider value={harnessSlashContext}>
       <App
         stores={HARNESS_PLATFORM_SERVICES}
         runtime={harnessRuntime}
@@ -1923,7 +1886,7 @@ function renderHarnessApp(): React.JSX.Element {
         onCtrlC={handleHarnessCtrlC}
         performHost={harnessInteractions.performHost}
       />
-    </SlashCommandsProvider>
+    </SlashContextProvider>
   );
 }
 

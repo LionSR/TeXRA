@@ -45,11 +45,7 @@ import { createHostRunActions } from '@texra/controllers/session/hostRunActions'
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { RequestRefusal } from '@texra/controllers/session/hostCallFailure';
 import { requestErrorText } from '@ui/copy/requestErrors';
-import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
-import {
-  selectChatModel,
-  type SlashCommandContext,
-} from './tui/commands/handlers/slashContext';
+import { selectChatModel } from './tui/commands/handlers/slashContext';
 import {
   selectedRunId as selectedRunIdSignal,
   focusRun,
@@ -142,8 +138,8 @@ export interface ChatSessionController {
   stop(): void;
 
   /**
-   * The composer's submit path: a slash command, the first
-   * instruction of a fresh root run, or a `followUp.send` request onto the
+   * A message the composer submits (a slash command is the chat's to
+   * dispatch first): the first instruction of a fresh root run, or a `followUp.send` request onto the
    * focused run or the conversation's root, which the session continues if
    * the user stopped it.
    */
@@ -188,7 +184,6 @@ interface ChatSessionControllerInit {
   readonly shutdownScope: Scope.Scope;
 
   readonly cwd: string;
-  readonly getSlashCommandContext: () => SlashCommandContext;
   /**
    * The three setting slots a retry's credential work reads, threaded from
    * the `CliPlatformServices` the chat entry point already holds rather than
@@ -251,7 +246,6 @@ export function createChatSessionController(
     chatScope,
     shutdownScope,
     cwd,
-    getSlashCommandContext,
     stores,
     runtime,
     draft,
@@ -932,7 +926,6 @@ export function createChatSessionController(
   ) {
     const line = expandText(submitted).trim();
     if (line.length === 0) return;
-    if (yield* handleTuiSlashCommand(line, getSlashCommandContext())) return;
     yield* submitChatMessage(submitted, line, holdUntil);
   });
 

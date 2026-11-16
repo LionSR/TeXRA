@@ -61,18 +61,12 @@ import {
   type ChatSessionController,
 } from '../chatSessionController';
 import { App } from './App';
-import {
-  applyCliModelSelection,
-  applyCliTeamSelection,
-  applyInitialCliAgentSelection,
-  resolveChatToolUseAgent,
-} from './commands/handlers/agentModelCommands';
-import { applyCliModelAccessSelection } from './commands/handlers/modelAccessCommands';
-import { showCliMemoryPreview } from './commands/handlers/memoryCommands';
-import { loginFromChat } from './commands/handlers/loginCommands';
+import { resolveChatToolUseAgent } from './commands/handlers/agentModelCommands';
 import { type SlashCommandContext } from './commands/handlers/slashContext';
 import { builtinSlashCommands } from './commands/registerBuiltins';
-import { SlashCommandsProvider } from './commands/slashRegistry';
+import { handleTuiSlashCommand } from './commands/handleSlashCommand';
+import { expandText } from './input/draftAttachments';
+import { SlashContextProvider } from './commands/slashRegistry';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
 import { announceForegroundApprovals } from './state/subscribeApprovals';
@@ -95,7 +89,6 @@ import {
 } from './state/sessionView';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
 import {
-  appendLocalErrorTranscript,
   appendLocalNotice,
   appendLocalRequestRefusal,
   paintedRunIds,
@@ -353,25 +346,6 @@ export async function runChat(
       { discard: true },
     );
   };
-  // The slash-command context is identical at every call site; build it once
-  // lazily so the closures it captures (resetSessionForClear,
-  // chatController.resume, commands) are all defined before the first use.
-  const slashCommandContext = (): SlashCommandContext => ({
-    commands,
-    cliContext: context,
-    session,
-    runSession,
-    stores: services,
-    runtime: services.runtime,
-    processCwd: process.cwd(),
-    requestInputExit: exitController.exit,
-    getApprovalPolicy,
-    setApprovalPolicy,
-    resetSession: resetSessionForClear,
-    resumeRun: chatController.resume,
-    resumeTask: chatController.resumeTask,
-  });
-
   // From here on `chatScope` owns everything the session holds: what is
   // added below closes before the service hold above, last in first out,
   // and the exit drain awaits that close.
@@ -475,6 +449,14 @@ export async function runChat(
   // The Ink layer never directly mutates session run-state fields, every
   // state transition flows through one of the controller's narrow commands.
   const draft = runtime.runSync(SubscriptionRef.make(EMPTY_DRAFT));
+  // The chat's slash commands; their handlers and forms act over the slash
+  // context built below.
+  const commands = builtinSlashCommands({
+    ...(link !== undefined && {
+      connectService: () =>
+        Effect.map(linkedClient(link), (client) => ({ client })),
+    }),
+  });
   const modelConnection = makeModelConnection(() =>
     openRegisteredCliSlashForm(commands.login),
   );
@@ -486,7 +468,6 @@ export async function runChat(
     chatScope,
     shutdownScope: services.shutdownScope,
     cwd: context.cwd,
-    getSlashCommandContext: slashCommandContext,
     stores: services,
     runtime,
     approvalPolicy: () => chatPolicy,
@@ -523,38 +504,23 @@ export async function runChat(
     return true;
   };
 
-  // The chat's slash commands, over the controller they drive.
-  const commands = builtinSlashCommands({
+  // What every slash command, its handler or its form, acts over.
+  const slashContext: SlashCommandContext = {
+    commands,
+    cliContext: context,
+    session,
     runSession,
-    ...(link !== undefined && {
-      connectService: () =>
-        Effect.map(linkedClient(link), (client) => ({ client })),
-    }),
-    onAccountChanged: () =>
-      connectChatModel(
-        slashCommandContext(),
-        {
-          modelSource: defaults.modelSource,
-          firstRunSetupAgent: startup.firstRunSetupAgent,
-        },
-        modelConnection,
-      ),
     stores: services,
     runtime,
-    canSelectAgent: () => session.canStartRootRun(),
-    onAgentSelect: (nextAgent) =>
-      applyInitialCliAgentSelection(nextAgent, slashCommandContext()),
-    onTeamSelect: (teamId) =>
-      applyCliTeamSelection(teamId, slashCommandContext()),
+    processCwd: process.cwd(),
+    // The exit controller is built after Ink mounts; `/exit` runs later.
+    requestInputExit: () => void exitController.exit(),
     getApprovalPolicy,
-    onApprovalPolicySelect: (policy) =>
-      setApprovalPolicy(policy).pipe(
-        Effect.andThen(
-          Effect.sync(() =>
-            appendLocalNotice(`Approval mode: ${formatApprovalPolicy(policy)}`),
-          ),
-        ),
-      ),
+    setApprovalPolicy,
+    resetSession: resetSessionForClear,
+    resumeRun: chatController.resume,
+    resumeTask: chatController.resumeTask,
+    activateSkill: chatController.activateSkill,
     onProjectApprovalPolicyChanged: (policy) => {
       patchSessionMeta({
         approvalPolicy: effectiveApprovalPolicy(chatPolicy, policy),
@@ -563,41 +529,33 @@ export async function runChat(
         `Project approval policy: ${formatApprovalPolicy(policy)}`,
       );
     },
-    canSelectModel: () => session.canSelectModel(),
     getModelSwitchDisabledReason,
-    onModelSelect: (nextModel) =>
-      applyCliModelSelection(nextModel, slashCommandContext()),
-    onModelAccessSelect: (route, output) =>
-      applyCliModelAccessSelection(
-        services,
-        route,
-        slashCommandContext(),
-        output,
+    onAccountChanged: () =>
+      connectChatModel(
+        slashContext,
+        {
+          modelSource: defaults.modelSource,
+          firstRunSetupAgent: startup.firstRunSetupAgent,
+        },
+        modelConnection,
       ),
-    // `/key` and sign-out use the registry's own handlers. Only `/login`
-    // needs an override, to carry this session's CliContext.
-    onLoginSelect: (value, output) =>
-      loginFromChat(value, services, context, output),
-    onMemorySelect: (storagePath) =>
-      showCliMemoryPreview(services.roots, storagePath),
-    onSkillSelect: (selection) =>
-      Effect.sync(() => chatController.activateSkill(selection)),
-    onResumeSelect: chatController.resume,
-    configRoots: services.roots,
-    onError: (error) => {
-      appendLocalErrorTranscript(toErrorMessage(error));
-    },
-  });
+  };
 
   const ink = render(
-    <SlashCommandsProvider value={commands}>
+    <SlashContextProvider value={slashContext}>
       <App
         stores={services}
         runtime={runtime}
         session={runSession}
         draft={draft}
         onSubmit={(message, holdUntil) => {
-          runtime.runFork(chatController.submit(message, holdUntil));
+          runtime.runFork(
+            Effect.gen(function* () {
+              const line = expandText(message).trim();
+              if (yield* handleTuiSlashCommand(line, slashContext)) return;
+              yield* chatController.submit(message, holdUntil);
+            }),
+          );
         }}
         commandName={context.commandName}
         scrollback={scrollback}
@@ -606,7 +564,7 @@ export async function runChat(
         history={inputHistory}
         performHost={chatController.performHost}
       />
-    </SlashCommandsProvider>,
+    </SlashContextProvider>,
     {
       stdout: tuiOutputStreamForColor(
         process.stdout,

@@ -273,9 +273,7 @@ const forkCliTask: (context: SlashCommandContext) => SlashCommandEffect =
 /** The task commands: compacting the focused agent's context, and leaving.
  *  The agent list (Tab) lists and focuses the task's agents; typing to a
  *  focused agent messages it. */
-export function sessionContributions(
-  runSession: Session,
-): SlashCommandContribution[] {
+export function sessionContributions(): SlashCommandContribution[] {
   return [
     {
       pluginId: 'session-lifecycle',
@@ -285,7 +283,8 @@ export function sessionContributions(
           description: 'Request context compaction',
           category: 'session',
           echo: 'ifPersists',
-          handler: () => requestCliSessionCompaction(runSession),
+          handler: (_remainder, context) =>
+            requestCliSessionCompaction(context.runSession),
         },
         {
           name: 'fork',
@@ -300,7 +299,8 @@ export function sessionContributions(
           description: 'Give the focused task a title of your own',
           category: 'session',
           echo: 'ifPersists',
-          handler: (remainder) => renameCliTask(runSession, remainder),
+          handler: (remainder, context) =>
+            renameCliTask(context.runSession, remainder),
         },
         {
           name: 'exit',
