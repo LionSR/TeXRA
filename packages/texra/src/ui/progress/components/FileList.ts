@@ -1,5 +1,4 @@
 // Third-party imports
-import { Schema } from 'effect';
 import {
   getBasename,
   normalizeFilePath,
@@ -11,7 +10,6 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Side-effect imports - register WA icon component
-import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
@@ -26,13 +24,16 @@ import {
   type OutputFileInfo,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
-import { FileActionSchema } from '@texra/shared/session/hostRequest';
+import type { FileActionSchema } from '@texra/shared/session/hostRequest';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
-import type { IconName } from '@ui/wa/iconNames';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { lineChangeStatsStyles } from '@ui/styles/surfaceStyles';
-import { renderIconActionButton } from '@ui/wa/actionButtons';
+import {
+  renderIconActionButton,
+  renderLabeledActionButton,
+  type IconActionButtonOptions,
+} from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { buildLineChangeStats } from '@ui/progress/formatters/htmlBuilders';
 import { delegateKeyActivation, getComposedPathElement } from './composedPath';
@@ -42,52 +43,25 @@ import { fileListStyles } from './FileList.styles';
 
 import './LatexdiffResults';
 
-/** The `data-command` of a file name: open it in the editor. */
-const OPEN_FILE = 'openFile';
-/** A file verb a button carries in its `data-command`. */
-const isFileAction = Schema.is(FileActionSchema);
+/**
+ * One icon button in a file's toolbar. The id is unique within the shadow
+ * root (round, file index, verb), even when one path shows up in several
+ * rounds, and sanitized so the tooltip can anchor to it with `for`.
+ */
+function fileActionButton(
+  idPrefix: string,
+  verb: string,
+  options: Omit<IconActionButtonOptions, 'id'> & { readonly tooltip: string },
+): TemplateResult {
+  const id = `${idPrefix}-${verb}`.replaceAll(/[^a-zA-Z0-9_-]/g, '-');
+  return renderIconActionButton({ ...options, id });
+}
+
+/** A file name that opens the file it names. */
+const OPEN_FILE_TARGET = '.file-path[data-file]';
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';
-
-interface FileActionOptions {
-  readonly icon: IconName;
-  readonly label: string;
-  readonly title: string;
-  readonly className: string;
-  readonly command: typeof FileActionSchema.Type | typeof OPEN_FILE;
-  readonly file: string;
-  // Unique per (round, file-index); see renderFileActionButton for the id contract.
-  readonly idPrefix: string;
-}
-
-function renderFileActionButton(opts: FileActionOptions): TemplateResult {
-  // idPrefix is unique per (round, file-index); command is unique per button
-  // within a file, so the pair never collides — even when the same path shows
-  // up across rounds in one shadow root. Sanitize to a valid id the
-  // <wa-tooltip> anchors to via `for`. These buttons live in a flex
-  // `.file-actions` row (not a wa-button-group), so the sibling tooltip is safe.
-  const buttonId = `${opts.idPrefix}-${opts.command}`.replaceAll(
-    /[^a-zA-Z0-9_-]/g,
-    '-',
-  );
-  return html`
-    <wa-button
-      id=${buttonId}
-      class="action-icon-button ${opts.className}"
-      appearance="plain"
-      variant="neutral"
-      size="s"
-      type="button"
-      aria-label=${opts.label}
-      data-command=${opts.command}
-      data-file=${opts.file}
-    >
-      ${waIcon(opts.icon)}
-    </wa-button>
-    <wa-tooltip for=${buttonId}>${opts.title}</wa-tooltip>
-  `;
-}
 
 /** Parse a path into directory and basename components */
 function parsePath(path: string): { dir: string; basename: string } {
@@ -142,15 +116,12 @@ export class FileList extends LitElement {
           this.rounds.some((round) => compileFailuresOf(round).length > 0)
             ? html`
                 <div class="compile-actions">
-                  <wa-button
-                    appearance="filled"
-                    variant="brand"
-                    size="s"
-                    @click=${this.runLatexFixer}
-                  >
-                    ${waIcon('screwdriver-wrench', { slot: 'start' })} Fix
-                    compile errors
-                  </wa-button>
+                  ${renderLabeledActionButton({
+                    icon: 'screwdriver-wrench',
+                    text: 'Fix compile errors',
+                    kind: 'primary',
+                    onClick: () => this.runLatexFixer(),
+                  })}
                 </div>
               `
             : nothing
@@ -218,7 +189,6 @@ export class FileList extends LitElement {
                 ${waIcon('file-code')}
                 <span
                   class="file-path clickable-link"
-                  data-command=${OPEN_FILE}
                   data-file=${reply.absolutePath}
                   role="button"
                   tabindex="0"
@@ -285,7 +255,6 @@ export class FileList extends LitElement {
           <span
             id="${idPrefix}-path"
             class="file-path clickable-link"
-            data-command=${OPEN_FILE}
             data-file=${filePath}
             role="button"
             tabindex="0"
@@ -299,14 +268,11 @@ export class FileList extends LitElement {
         <div class="file-actions">
           ${
             failure
-              ? renderFileActionButton({
+              ? fileActionButton(idPrefix, 'openFile', {
                   icon: 'terminal',
                   label: `Open compile log for ${tooltipPath}`,
-                  title: `Open compile log (${failure.logRelativePath})`,
-                  className: '',
-                  command: OPEN_FILE,
-                  file: failure.log.absolutePath,
-                  idPrefix,
+                  tooltip: `Open compile log (${failure.logRelativePath})`,
+                  onClick: () => this.openFile(failure.log.absolutePath),
                 })
               : nothing
           }
@@ -316,48 +282,34 @@ export class FileList extends LitElement {
     `;
   }
 
-  /**
-   * Event delegation handler for file actions.
-   * All data is stored directly on command elements for unified delegation.
-   */
+  /** A click on a file name opens it; its buttons carry their own handlers. */
   private handleFileClick(event: MouseEvent): void {
-    const actionEl = getComposedPathElement(
-      event,
-      '[data-command]',
-      HTMLElement,
-    );
-    if (!actionEl) return;
-    this.dispatchFileAction(actionEl);
+    const pathEl = getComposedPathElement(event, OPEN_FILE_TARGET, HTMLElement);
+    if (pathEl?.dataset.file) this.openFile(pathEl.dataset.file);
   }
 
-  // Keyboard activation parity for the clickable file rows (Enter/Space), so
-  // the generated-files list is reachable without a mouse — mirrors the click
-  // delegation for file-path spans without intercepting native wa-button keys.
+  // Keyboard activation parity for the clickable file names (Enter/Space), so
+  // the generated-files list is reachable without a mouse.
   private handleFileKey(event: KeyboardEvent): void {
-    delegateKeyActivation(event, '.file-path[data-command]', (actionEl) =>
-      this.dispatchFileAction(actionEl),
+    delegateKeyActivation(event, OPEN_FILE_TARGET, (pathEl) => {
+      if (pathEl.dataset.file) this.openFile(pathEl.dataset.file);
+    });
+  }
+
+  private openFile(path: string): void {
+    if (this.runId === null) return;
+    this.dispatchEvent(
+      SessionUiEvents.host({ kind: 'openFile', path, line: null }),
     );
   }
 
-  private dispatchFileAction(actionEl: HTMLElement): void {
-    const { command, file } = actionEl.dataset;
+  private fileAction(action: typeof FileActionSchema.Type, file: string): void {
     const runId = this.runId;
-    if (!command || !file || runId === null) return;
-    if (command === OPEN_FILE) {
-      this.dispatchEvent(
-        SessionUiEvents.host({ kind: 'openFile', path: file, line: null }),
-      );
-      return;
-    }
-    // The buttons below write every verb; another one is a binding bug.
-    if (!isFileAction(command)) {
-      console.warn(`Unknown file action: ${command}`);
-      return;
-    }
+    if (runId === null) return;
     this.dispatchEvent(
       SessionUiEvents.host({
         kind: 'fileAction',
-        action: command,
+        action,
         file,
         base: { kind: 'runOutput', runId },
       }),
@@ -388,42 +340,32 @@ export class FileList extends LitElement {
     displayPath: string,
     idPrefix: string,
   ): TemplateResult {
+    const act = (action: typeof FileActionSchema.Type) => () =>
+      this.fileAction(action, filePath);
     return html`
-      ${renderFileActionButton({
+      ${fileActionButton(idPrefix, 'compare', {
         icon: 'code-compare',
         label: `Compare ${displayPath} with base`,
-        title: 'Compare with base in a side-by-side diff',
-        className: 'compare-btn',
-        command: 'compare',
-        file: filePath,
-        idPrefix,
+        tooltip: 'Compare with base in a side-by-side diff',
+        onClick: act('compare'),
       })}
-      ${renderFileActionButton({
+      ${fileActionButton(idPrefix, 'latexdiff', {
         icon: 'plus-minus',
         label: `Run latexdiff for ${displayPath}`,
-        title: 'Run latexdiff against the base file',
-        className: 'latexdiff-btn',
-        command: 'latexdiff',
-        file: filePath,
-        idPrefix,
+        tooltip: 'Run latexdiff against the base file',
+        onClick: act('latexdiff'),
       })}
-      ${renderFileActionButton({
+      ${fileActionButton(idPrefix, 'accept', {
         icon: 'check',
         label: `Accept edits for ${displayPath}`,
-        title: 'Accept edits into the workspace file',
-        className: 'accept-btn',
-        command: 'accept',
-        file: filePath,
-        idPrefix,
+        tooltip: 'Accept edits into the workspace file',
+        onClick: act('accept'),
       })}
-      ${renderFileActionButton({
+      ${fileActionButton(idPrefix, 'merge', {
         icon: 'code-merge',
         label: `Merge edits for ${displayPath}`,
-        title: 'Merge edits into the workspace file',
-        className: 'merge-btn',
-        command: 'merge',
-        file: filePath,
-        idPrefix,
+        tooltip: 'Merge edits into the workspace file',
+        onClick: act('merge'),
       })}
     `;
   }

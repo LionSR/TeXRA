@@ -28,8 +28,13 @@ import {
   scriptStageSummary,
 } from '@ui/copy/scriptStage';
 import { designTokens } from '@ui/styles';
+import { buttonStyles, formControlStyles } from '@ui/styles/controlStyles';
 import { toneStyles } from '@ui/styles/toneStyles';
 import { isActivationKey } from '@ui/wa/keyActivation';
+import {
+  renderIconActionButton,
+  renderLabeledActionButton,
+} from '@ui/wa/actionButtons';
 import { actionMenu } from '@ui/wa/actionMenu';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type {
@@ -39,7 +44,6 @@ import type {
 import type { SessionView, RunId } from '@texra-ai/harness/schemas';
 
 // Side-effect imports - register Web Awesome components
-import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -162,7 +166,13 @@ const scriptStageStyles = css`
 
 @customElement('script-stage')
 export class ScriptStage extends LitElement {
-  static override styles = [designTokens, toneStyles, scriptStageStyles];
+  static override styles = [
+    designTokens,
+    buttonStyles,
+    formControlStyles,
+    toneStyles,
+    scriptStageStyles,
+  ];
 
   @property({ attribute: false }) stage!: ScriptStageView;
   @property({ attribute: false }) view!: SessionView;
@@ -187,15 +197,14 @@ export class ScriptStage extends LitElement {
     if (call.askingRunId !== undefined) {
       const asking = call.askingRunId;
       return html`<span class="row-actions"
-        ><wa-button
-          size="s"
-          variant="brand"
-          @click=${(event: Event) => {
+        >${renderLabeledActionButton({
+          text: 'Review',
+          kind: 'primary',
+          onClick: (event) => {
             event.stopPropagation();
             this.select(asking);
-          }}
-          >Review</wa-button
-        ></span
+          },
+        })}</span
       >`;
     }
     const child =
@@ -215,14 +224,11 @@ export class ScriptStage extends LitElement {
       placement="bottom-end"
       @click=${(event: Event) => event.stopPropagation()}
       @wa-select=${menu.onSelect}
-      ><wa-button
-        slot="trigger"
-        size="s"
-        appearance="plain"
-        variant="neutral"
-        aria-label="More"
-        >${waIcon('ellipsis')}</wa-button
-      >${menu.items}</wa-dropdown
+      >${renderIconActionButton({
+        icon: 'ellipsis',
+        slot: 'trigger',
+        label: 'More',
+      })}${menu.items}</wa-dropdown
     >`;
   }
 
@@ -335,16 +341,12 @@ export class ScriptStage extends LitElement {
         )}
       </div>
       <div class="log">
-        <wa-button
-          size="s"
-          appearance="plain"
-          variant="neutral"
-          aria-expanded=${this.logOpen ? 'true' : 'false'}
-          @click=${() => this.toggleLog()}
-          >${waIcon(this.logOpen ? 'chevron-down' : 'chevron-right', {
-            slot: 'start',
-          })}Log</wa-button
-        >
+        ${renderLabeledActionButton({
+          icon: this.logOpen ? 'chevron-down' : 'chevron-right',
+          text: 'Log',
+          expanded: this.logOpen,
+          onClick: () => this.toggleLog(),
+        })}
       </div>`;
   }
 }

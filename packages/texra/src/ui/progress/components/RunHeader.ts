@@ -27,7 +27,6 @@ import { actionMenu, type ActionMenuItem } from '@ui/wa/actionMenu';
 import { inlineRenameField } from '@ui/wa/inlineRename';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import '@ui/progress/components/ToolTimer';
-import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
@@ -449,23 +448,16 @@ export class RunHeader extends LitElement {
     const menu = actionMenu(items);
     return html`
       <wa-dropdown placement="bottom-end" @wa-select=${menu.onSelect}>
-        <wa-button
-          slot="trigger"
-          id=${ELEMENT_IDS.HEADER_MORE_BTN}
-          class="action-icon-button"
-          appearance="plain"
-          variant="neutral"
-          size="s"
-          type="button"
-          aria-label="Task actions"
-          >${waIcon('ellipsis')}<span class="action-button-label"
-            >Task actions</span
-          ></wa-button
-        >
+        ${renderIconActionButton({
+          id: ELEMENT_IDS.HEADER_MORE_BTN,
+          icon: 'ellipsis',
+          slot: 'trigger',
+          label: 'Task actions',
+          tooltip: 'Task actions',
+        })}
         <div class="menu-status">${joinFacts([statusLabel, passLabel])}</div>
         ${menu.items}
       </wa-dropdown>
-      <wa-tooltip for=${ELEMENT_IDS.HEADER_MORE_BTN}>Task actions</wa-tooltip>
     `;
   }
 

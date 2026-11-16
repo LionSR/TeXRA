@@ -83,15 +83,12 @@ export function dockGroupActions(
     render(
       html`
         <wa-dropdown placement="bottom-end" @wa-select=${menu.onSelect}>
-          <wa-button
-            slot="trigger"
-            appearance="plain"
-            size="s"
-            class="icon-button btn-ghost is-compact"
-            aria-label="Group actions"
-          >
-            ${waIcon('plus')}
-          </wa-button>
+          ${renderIconActionButton({
+            icon: 'plus',
+            label: 'Group actions',
+            slot: 'trigger',
+            size: 'm',
+          })}
           ${menu.items}
         </wa-dropdown>
       `,

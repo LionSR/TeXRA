@@ -60,6 +60,8 @@ interface ActionButtonCommon {
   readonly disabled?: boolean;
   /** Selected state for toggle buttons. Reflected as `aria-pressed`. */
   readonly pressed?: boolean;
+  /** Open state for a disclosure toggle. Reflected as `aria-expanded`. */
+  readonly expanded?: boolean;
   readonly onClick?: (event: MouseEvent) => void;
 }
 
@@ -86,6 +88,8 @@ export type LabeledActionButtonOptions = ActionButtonCommon &
     readonly label?: string;
     /** Let a containing Web Awesome primitive own the button's native chrome. */
     readonly nativeChrome?: boolean;
+    /** A trailing caret: the button opens a menu (a dropdown trigger). */
+    readonly caret?: boolean;
   };
 
 type ActionButtonBaseOptions = ActionButtonCommon &
@@ -96,6 +100,7 @@ type ActionButtonBaseOptions = ActionButtonCommon &
     readonly size?: ActionButtonSize;
     readonly busy?: boolean;
     readonly nativeChrome?: boolean;
+    readonly caret?: boolean;
   };
 
 /** The button and its (optional) sibling `<wa-tooltip>`, kept apart so a
@@ -123,9 +128,11 @@ function renderActionButtonParts({
   size,
   disabled,
   pressed,
+  expanded,
   busy,
   tooltip,
   nativeChrome,
+  caret,
   onClick,
 }: ActionButtonBaseOptions): ActionButtonParts {
   let baseClass: string | undefined;
@@ -173,6 +180,10 @@ function renderActionButtonParts({
       aria-pressed=${ifDefined(
         pressed === undefined ? undefined : String(pressed),
       )}
+      aria-expanded=${ifDefined(
+        expanded === undefined ? undefined : String(expanded),
+      )}
+      ?with-caret=${caret}
       title=${ifDefined(tooltip === undefined ? nativeTitle : undefined)}
       data-action=${ifDefined(action)}
       ?disabled=${disabled || busy}

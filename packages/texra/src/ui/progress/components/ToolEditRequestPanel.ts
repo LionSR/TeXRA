@@ -16,7 +16,6 @@ import { buildLineChangeStats } from '@ui/progress/formatters/htmlBuilders';
 // Local imports - shared helpers
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { actionMenu } from '@ui/wa/actionMenu';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - base class
 import { BaseRequestPanel } from './BaseRequestPanel';
@@ -113,17 +112,13 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
         placement="bottom-start"
         @wa-select=${menu.onSelect}
       >
-        <wa-button
-          slot="trigger"
-          class="action-button"
-          appearance="plain"
-          variant="neutral"
-          size="s"
-          type="button"
-          with-caret
-          data-action="previewMenu"
-          >${waIcon('file-pdf', { slot: 'start' })}Preview PDF</wa-button
-        >
+        ${renderLabeledActionButton({
+          icon: 'file-pdf',
+          text: 'Preview PDF',
+          slot: 'trigger',
+          action: 'previewMenu',
+          caret: true,
+        })}
         ${menu.items}
       </wa-dropdown>
     `;

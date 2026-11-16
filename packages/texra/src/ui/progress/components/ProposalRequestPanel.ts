@@ -14,7 +14,6 @@ import { repeat } from 'lit/directives/repeat.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Side-effect imports - register WA components
-import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -118,17 +117,14 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
         this.writeDraft({ ...this.draft, model: value.slice(6) });
       }}
     >
-      <wa-button
-        slot="trigger"
-        id="proposal-model-trigger"
-        class="proposal-model__trigger btn-ghost is-compact"
-        appearance="plain"
-        variant="neutral"
-        size="s"
-        type="button"
-        with-caret
-        >${menu.label}</wa-button
-      >
+      ${renderLabeledActionButton({
+        id: 'proposal-model-trigger',
+        text: menu.label,
+        kind: 'ghost',
+        className: 'proposal-model__trigger is-compact',
+        slot: 'trigger',
+        caret: true,
+      })}
       ${menu.items}
     </wa-dropdown>`;
   }

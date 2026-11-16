@@ -36,11 +36,11 @@ import { stageStatus } from '@ui/copy/runStatus';
 import { designTokens } from '@ui/styles';
 
 // Side-effect imports - register Web Awesome components
-import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 import { renderEmptyMessage } from '@ui/wa/emptyState';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - progress view constants
@@ -245,15 +245,13 @@ export class StageList extends LitElement {
     const suffix = pluralize(revealCount, options.label);
     return html`
       <div class="log-reveal-row">
-        <wa-button
-          appearance="outlined"
-          size="s"
-          @click=${(event: Event) =>
-            this.revealOlder(event, options.kind, options.scope)}
-          aria-label=${`Show ${revealCount} older ${suffix}`}
-          >${waIcon('chevron-up', { slot: 'start' })} Show ${revealCount} older
-          ${suffix}</wa-button
-        >
+        ${renderLabeledActionButton({
+          icon: 'chevron-up',
+          text: `Show ${revealCount} older ${suffix}`,
+          kind: 'secondary',
+          onClick: (event) =>
+            this.revealOlder(event, options.kind, options.scope),
+        })}
       </div>
     `;
   }

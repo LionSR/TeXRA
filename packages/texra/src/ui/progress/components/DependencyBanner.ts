@@ -1,4 +1,3 @@
-import '@awesome.me/webawesome/dist/components/button/button.js';
 import { html, css, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
@@ -6,8 +5,10 @@ import type { MissingTool } from '@texra/shared/session/hostSnapshot';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { designTokens, commonViewStyles, bannerStyles } from '@ui/styles';
 import { focusRingStyles } from '@ui/styles/controlStyles';
-import { renderIconActionButton } from '@ui/wa/actionButtons';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
+import {
+  renderIconActionButton,
+  renderLabeledActionButton,
+} from '@ui/wa/actionButtons';
 import { renderWarningBanner } from '@ui/wa/bannerFrame';
 
 /** Joins what TeXRA can't do: "a", "a or b", "a, b or c". */
@@ -93,24 +94,22 @@ export class DependencyBanner extends LitElement {
         <div class="actions">
           ${
             single
-              ? html`<wa-button
-                  appearance="plain"
-                  size="s"
-                  @click=${() => this.install()}
-                  >${waIcon('book', { slot: 'start' })}Install guide</wa-button
-                >`
+              ? renderLabeledActionButton({
+                  icon: 'book',
+                  text: 'Install guide',
+                  onClick: () => this.install(),
+                })
               : nothing
           }
-          <wa-button
-            id="dependencyRecheckButton"
-            appearance="plain"
-            size="s"
-            @click=${() =>
+          ${renderLabeledActionButton({
+            id: 'dependencyRecheckButton',
+            icon: 'rotate-right',
+            text: 'Check again',
+            onClick: () =>
               this.dispatchEvent(
                 SessionUiEvents.host({ kind: 'recheckDependencies' }),
-              )}
-            >${waIcon('rotate-right', { slot: 'start' })}Check again</wa-button
-          >
+              ),
+          })}
           ${renderIconActionButton({
             id: 'dependencyDismissButton',
             icon: 'xmark',

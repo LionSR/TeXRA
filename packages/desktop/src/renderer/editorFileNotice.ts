@@ -5,10 +5,10 @@
 // cost them work.
 
 import { getBasename, extractErrorMessage } from '@texra-ai/harness/schemas';
-import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import { html, nothing, render } from 'lit';
 
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 interface Notice {
@@ -37,21 +37,17 @@ export function createEditorFileNotice(options: {
         : html`<wa-callout variant="danger" size="s" role="alert">
             ${waIcon('triangle-exclamation', { slot: 'icon' })}
             <span class="desktop-editor-notice-text">${notice.message}</span>
-            ${notice.actions.map(
-              (action) =>
-                html`<wa-button
-                  size="s"
-                  appearance="outlined"
-                  @click=${action.run}
-                  >${action.label}</wa-button
-                >`,
+            ${notice.actions.map((action) =>
+              renderLabeledActionButton({
+                text: action.label,
+                kind: 'secondary',
+                onClick: () => action.run(),
+              }),
             )}
-            <wa-button
-              size="s"
-              appearance="plain"
-              @click=${() => show(undefined)}
-              >Dismiss</wa-button
-            >
+            ${renderLabeledActionButton({
+              text: 'Dismiss',
+              onClick: () => show(undefined),
+            })}
           </wa-callout>`,
       element,
     );

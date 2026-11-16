@@ -1,4 +1,3 @@
-import '@awesome.me/webawesome/dist/components/button/button.js';
 import { html, css, LitElement, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
@@ -6,9 +5,11 @@ import type { GettingStartedAction } from '@texra/shared/session/hostRequest';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { GETTING_STARTED_ACTION_PRESENTATION } from '@ui/copy/onboarding';
 import { designTokens, commonViewStyles, bannerStyles } from '@ui/styles';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
 
-import { renderIconActionButton } from '@ui/wa/actionButtons';
+import {
+  renderIconActionButton,
+  renderLabeledActionButton,
+} from '@ui/wa/actionButtons';
 import { renderBannerFrame } from '@ui/wa/bannerFrame';
 
 /** The New-task hero while the folder has no LaTeX files: start a project.
@@ -80,20 +81,15 @@ export class GettingStartedBanner extends LitElement {
 
   private renderAction(
     action: GettingStartedAction,
-    appearance: 'filled' | 'outlined',
+    kind: 'secondary' | 'ghost',
   ): TemplateResult {
     const { icon, label } = GETTING_STARTED_ACTION_PRESENTATION[action];
-    return html`
-      <wa-button
-        class=${appearance === 'filled' ? 'btn-secondary' : 'btn-ghost'}
-        variant="neutral"
-        appearance=${appearance}
-        size="s"
-        @click=${() => this.handleAction(action)}
-      >
-        ${waIcon(icon, { slot: 'start' })} ${label}
-      </wa-button>
-    `;
+    return renderLabeledActionButton({
+      icon,
+      text: label,
+      kind,
+      onClick: () => this.handleAction(action),
+    });
   }
 
   override render(): TemplateResult {
@@ -116,9 +112,9 @@ export class GettingStartedBanner extends LitElement {
               role="group"
               aria-label="Getting started actions"
             >
-              ${this.renderAction('createSampleProject', 'filled')}
-              ${this.renderAction('cloneOverleaf', 'outlined')}
-              ${this.renderAction('downloadArxiv', 'outlined')}
+              ${this.renderAction('createSampleProject', 'secondary')}
+              ${this.renderAction('cloneOverleaf', 'ghost')}
+              ${this.renderAction('downloadArxiv', 'ghost')}
             </div>
           </div>
           ${renderIconActionButton({
