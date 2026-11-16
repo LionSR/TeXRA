@@ -122,7 +122,7 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
   ): Effect.fn.Return<RequestDecisionRecord, Error, InquiryRecords> {
     const records = yield* InquiryRecords;
     const { threadId } = permission;
-    const turnIndex = permission.transcript?.at(-1)?.turnIndex ?? 1;
+    const { turnIndex } = permission.turn;
     let outcome: InquiryTurnOutcome;
     let event: 'answered' | 'dropped';
     if (decision.action === 'answer') {
