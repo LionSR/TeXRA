@@ -119,8 +119,8 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
  * is). The catalog that listed it may predate a change another host made,
  * and lists a plugin's agents only while the plugin loads, so a launch asks
  * the install record, and fails with {@link AgentUnavailable} naming the
- * plugin and why it does not load. An enabled plugin the load holds back is
- * not trusted as it is now; any other is off or gone.
+ * plugin and why it does not load: an enabled plugin the load holds back
+ * carries the load's reason; any other is off or gone.
  */
 export const requirePluginLoads = Effect.fn('requirePluginLoads')(function* (
   agent: string,
@@ -131,11 +131,15 @@ export const requirePluginLoads = Effect.fn('requirePluginLoads')(function* (
   if (load.loadable.some(({ record }) => record.name === plugin)) return;
   const withheld = load.withheld.find((held) => held.plugin === plugin);
   return yield* new AgentUnavailable({
-    blocked: {
-      kind: 'blocked',
-      blocker: withheld === undefined ? 'pluginOff' : 'pluginUntrusted',
-      name: plugin,
-    },
+    blocked:
+      withheld === undefined
+        ? { kind: 'blocked', blocker: 'pluginOff', name: plugin }
+        : {
+            kind: 'blocked',
+            blocker: 'pluginWithheld',
+            name: plugin,
+            reason: withheld.reason,
+          },
     message: `Agent ${agent} does not run: ${
       withheld?.reason ?? `plugin ${plugin} is not installed or not enabled.`
     }`,

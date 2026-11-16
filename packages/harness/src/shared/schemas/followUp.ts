@@ -186,13 +186,25 @@ export const FollowUpDispositionSchema = Schema.Union([
 export type FollowUpDisposition = typeof FollowUpDispositionSchema.Type;
 
 /** A run this process cannot continue until its agent, or its agent's
- *  plugin, is back: a fact about this build's catalog, never a row's. */
-export const ResumeBlockedSchema = Schema.Struct({
-  kind: Schema.Literal('blocked'),
-  blocker: Schema.Literals(['agentMissing', 'pluginOff', 'pluginUntrusted']),
-  /** The agent or plugin it names. */
-  name: Schema.NonEmptyString,
-});
+ *  plugin, is back: a fact about this build's catalog, never a row's. The
+ *  agent is missing, its plugin is off, or its enabled plugin does not load
+ *  (`reason`: unreadable, shipping code, or changed since it was trusted). */
+export const ResumeBlockedSchema = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal('blocked'),
+    blocker: Schema.Literals(['agentMissing', 'pluginOff']),
+    /** The agent or plugin it names. */
+    name: Schema.NonEmptyString,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('blocked'),
+    blocker: Schema.Literal('pluginWithheld'),
+    /** The plugin it names. */
+    name: Schema.NonEmptyString,
+    /** Why the plugin's load holds it back, as the load words it. */
+    reason: Schema.String,
+  }),
+]);
 /** What a blocked resume waits for ({@link ResumeBlockedSchema}). */
 export type ResumeBlocked = typeof ResumeBlockedSchema.Type;
 
@@ -250,8 +262,8 @@ export function describeRefusal(
           return `This task's agent, ${reason.name}, is not installed. It can continue once the agent is back.`;
         case 'pluginOff':
           return `This task's agent comes from the ${reason.name} plugin, which is off. It can continue once the plugin is on.`;
-        case 'pluginUntrusted':
-          return `This task's agent comes from the ${reason.name} plugin, which is not trusted as it is now. It can continue once the plugin is reviewed.`;
+        case 'pluginWithheld':
+          return `This task's agent comes from the ${reason.name} plugin. ${reason.reason} It can continue once the plugin loads.`;
       }
   }
 }

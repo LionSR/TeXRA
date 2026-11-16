@@ -1930,7 +1930,7 @@ not load, `cause` the fact's reason: it continues once a process loads
 it), or `notResumable` (it was deleted, or its input is closed).
 
 ```ts
-const ResumeRefusalSchema: Union<readonly [Struct<{ readonly kind: Literal<"finished">; }>, Struct<{ readonly kind: Literal<"blocked">; readonly blocker: Literals<readonly ["agentMissing", "pluginOff", "pluginUntrusted"]>; readonly name: NonEmptyString; }>, Struct<{ readonly kind: Literal<"unusableCheckpoint">; }>, Struct<{ readonly kind: Literal<"earlierBuild">; readonly cause: String; }>, Struct<{ readonly kind: Literal<"pluginUnavailable">; readonly plugin: String; readonly cause: String; }>, Struct<{ readonly kind: Literal<"notResumable">; }>]>
+const ResumeRefusalSchema: Union<readonly [Struct<{ readonly kind: Literal<"finished">; }>, Union<readonly [Struct<{ readonly kind: Literal<"blocked">; readonly blocker: Literals<readonly ["agentMissing", "pluginOff"]>; readonly name: NonEmptyString; }>, Struct<{ readonly kind: Literal<"blocked">; readonly blocker: Literal<"pluginWithheld">; readonly name: NonEmptyString; readonly reason: String; }>]>, Struct<{ readonly kind: Literal<"unusableCheckpoint">; }>, Struct<{ readonly kind: Literal<"earlierBuild">; readonly cause: String; }>, Struct<{ readonly kind: Literal<"pluginUnavailable">; readonly plugin: String; readonly cause: String; }>, Struct<{ readonly kind: Literal<"notResumable">; }>]>
 ```
 
 ## RetryRequest
