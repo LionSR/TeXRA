@@ -7,13 +7,13 @@
  * agent is told only that, so a note box here would collect words nobody
  * reads.
  *
- * The answer draft lives in the surface's `inquiryDrafts`, keyed by
- * `draftKey`, so it survives a re-mount.
+ * The answer draft lives in the surface's `requestDrafts` under the
+ * inquiry's turn, so it survives a re-mount.
  */
 
 import { Schema } from 'effect';
 import { html, nothing, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
 
@@ -28,9 +28,6 @@ import {
   type InquiryRequest,
   type InquiryThreadRecord,
 } from '@texra/shared/plugins/externalInquiry';
-import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
-import type { Surface } from '@texra/shared/session/surface';
-import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { CopyButtonController } from '@ui/litControllers/CopyButtonController';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderDotMeta } from '@ui/wa/metaStrip';
@@ -43,12 +40,6 @@ const EMPTY_DRAFT: InquiryDraft = Object.freeze({
   answer: '',
   sessionLinks: '',
 });
-
-/** `Surface.inquiryDrafts` is keyed by inquiry turn, never by stream
- * : the thread and the number of turns already answered. */
-function draftKey({ threadId, transcript }: InquiryRequest): string {
-  return `${threadId}#${transcript?.length ?? 0}`;
-}
 
 interface ValidatableTextarea extends HTMLElement {
   setCustomValidity(message: string): void;
@@ -69,9 +60,6 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
     externalInquiryPanelStyles,
   ];
 
-  /** The surface whose `inquiryDrafts` holds this inquiry's answer in progress. */
-  @property({ attribute: false }) surface: Surface | null = null;
-
   /** The last decoded request data and the inquiry it holds. */
   private decoded: { data: unknown; inquiry: InquiryRequest } | undefined;
   private copyController = new CopyButtonController(this);
@@ -88,48 +76,37 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
     return this.decoded.inquiry;
   }
 
-  /** The answer in progress, as the surface holds it. */
-  private get draft(): InquiryDraft {
-    return (
-      this.surface?.inquiryDrafts.get(draftKey(this.inquiry)) ?? EMPTY_DRAFT
-    );
+  /** An answer is kept per inquiry turn, never per request or run: the
+   *  thread and the number of turns already answered. */
+  protected override get draftKey(): string {
+    const { threadId, transcript } = this.inquiry;
+    return `${threadId}#${transcript?.length ?? 0}`;
   }
 
-  private writeDraft(draft: InquiryDraft | null): void {
-    this.dispatchEvent(
-      SessionUiEvents.surface({
-        kind: 'inquiryDraft',
-        key: draftKey(this.inquiry),
-        draft,
-      }),
-    );
+  /** The answer in progress, as the surface holds it. */
+  private get answer(): InquiryDraft {
+    return this.draft.inquiry ?? EMPTY_DRAFT;
   }
 
   /** Store one field's edit; a draft with both fields empty is none. */
   private editDraft(patch: Partial<InquiryDraft>): void {
-    // Read-only trace-viewer export: nothing owns a draft.
-    if (this.readOnly) return;
-    const next = { ...this.draft, ...patch };
-    this.writeDraft(next.answer || next.sessionLinks ? next : null);
-  }
-
-  /** A decision resolves the inquiry: its draft goes with it. */
-  protected override emitAction(decision: SurfaceDecision): void {
-    if (this.readOnly) return;
-    this.writeDraft(null);
-    super.emitAction(decision);
+    const next = { ...this.answer, ...patch };
+    const { inquiry: _previous, ...rest } = this.draft;
+    this.writeDraft(
+      next.answer || next.sessionLinks ? { ...rest, inquiry: next } : rest,
+    );
   }
 
   // ── Render ──
 
   private get hasAnswer(): boolean {
-    return this.draft.answer.trim().length > 0;
+    return this.answer.answer.trim().length > 0;
   }
 
   private get normalizedSessionLinks(): string[] {
     return [
       ...new Set(
-        this.draft.sessionLinks
+        this.answer.sessionLinks
           .split('\n')
           .map((value) => value.trim())
           .filter((value) => value.length > 0),
@@ -318,7 +295,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
           required
           autocomplete="off"
           spellcheck="true"
-          .value=${live(this.draft.answer)}
+          .value=${live(this.answer.answer)}
           @input=${this.handleAnswerInput}
           @keydown=${this.handleKeyDown}
         >
@@ -359,7 +336,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
         autocapitalize="none"
         spellcheck="false"
         inputmode="url"
-        .value=${live(this.draft.sessionLinks)}
+        .value=${live(this.answer.sessionLinks)}
         @input=${this.handleSessionLinksInput}
       >
         <span
@@ -449,7 +426,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
       return;
     }
 
-    const answer = this.draft.answer.trim();
+    const answer = this.answer.answer.trim();
 
     this.emitAction({
       action: 'answer',
