@@ -225,7 +225,6 @@ export {
   type RunStorageEntry,
   sourceLocationUnder,
 } from '@common/storage/storageLayout';
-export { RunFileService } from '@common/storage/runStorage';
 export { HostCapabilities } from '@agent/runtime/agentToolResolution';
 // The harness's retry policy: which HTTP statuses are worth retrying, the
 // randomized exponential backoff `Schedule` its fetches retry on, and the

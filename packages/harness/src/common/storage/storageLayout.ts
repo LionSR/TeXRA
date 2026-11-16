@@ -28,7 +28,6 @@ import { createRunStorageLocation, pathToLocationIn } from './fileLocation';
 export const WORKSPACE_STORAGE_LAYOUT = Object.freeze({
   memory: 'memories',
   runs: 'executions',
-  original: 'original',
 } as const);
 
 /** Where a tool plugin's bundled `kind` ships under a host's packaged
@@ -44,20 +43,6 @@ export function bundledPluginDir(
 
 /** Global (non-workspace-scoped) storage directory names, shared across hosts. */
 export const CUSTOM_AGENTS_STORAGE_DIR = 'custom_agents';
-
-/**
- * Workspace-relative directories that should never be moved into run storage.
- *
- * History folders contain prior run data that is managed separately,
- * so keep them in place even when run-storage isolation is enabled.
- */
-const IGNORED_WORKSPACE_ROOTS = new Set(['History', 'history']);
-
-/** Whether a workspace-relative path stays out of run storage. */
-export function shouldSkipRelocation(relativePath: string): boolean {
-  const segments = getPathSegments(relativePath);
-  return segments.length > 0 && IGNORED_WORKSPACE_ROOTS.has(segments[0]);
-}
 
 /** A storage-relative (POSIX) path under the runs directory. */
 function resolveRunStoragePath(...segments: string[]): string {

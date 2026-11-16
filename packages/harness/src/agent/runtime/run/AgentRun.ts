@@ -31,7 +31,6 @@ import {
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { CLAUDE_COUNTERPART_TOOLS } from '@common/plugins/hookConfig';
-import { RunFileService } from '@common/storage/runStorage';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import { SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
@@ -128,7 +127,6 @@ export interface RunLaunch {
 }
 
 export interface AgentRunShape extends RunLaunch {
-  readonly fileService: RunFileService;
   /** What each step resolves its tools from (`loop/step.ts`). */
   readonly toolInputs: Omit<
     StepToolInputs,
@@ -313,7 +311,6 @@ export const agentRunLayer = (
 
       return {
         ...launch,
-        fileService: new RunFileService(runId, roots),
         toolInputs,
         steps: yield* Ref.make<OpenStep | null>(null),
         finalToolName,

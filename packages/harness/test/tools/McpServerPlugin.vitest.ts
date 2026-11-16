@@ -133,7 +133,6 @@ const openFixtureStep = (session: Context.Context<SessionServices>) =>
     const run = testAgentRun(
       {
         runId: Schema.decodeSync(RunIdSchema)(crypto.randomUUID()),
-        session,
         logger: { ...noopTrace, warn: (message) => warnings.push(message) },
         model: yield* ScopedRef.make(() =>
           testBinding(scriptedModel([textTurn('')]).model),
