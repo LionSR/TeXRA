@@ -27,8 +27,9 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
 ## Files
 
 - **Compilation**: `texTools.ts` (kpathsea search path, `compileLatex2Pdf`);
-  `latexToolchain.ts` (the `texra doctor` probe over the tools the
-  `@texra/shared/constants/latexToolchain` catalog lists); `latexLogging.ts` (the shared channel for
+  `latexToolchain.ts` (the one probe over the tools the
+  `@texra/shared/constants/latexToolchain` catalog lists, and the tools the
+  dependency banner names as missing); `latexLogging.ts` (the shared channel for
   `texcount.ts`, `formatter/` and the GUI hosts' latexdiff verbs; other
   `latexdiff` callers name their own with `withLogChannel`).
 - **Extraction**: `extractFigure.ts` (figure paths); `extractBibliography.ts`

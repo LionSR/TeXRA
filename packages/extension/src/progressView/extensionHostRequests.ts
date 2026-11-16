@@ -341,7 +341,6 @@ export const createExtensionHostRequests = Effect.fn(
         ),
     // The banner refresh probes the dependencies again; the banner shows
     // what is missing.
-    recheckDependencies: snapshot.refreshHostBanners,
     // Every dependency the banner lists installs from the one guide page.
     openInstallGuide: runHandler('openDoc', openGuidePage('installation')),
     onboarding: {
@@ -415,6 +414,7 @@ export const createExtensionHostRequests = Effect.fn(
     runs: {
       revealProgress: options.revealProgress,
       openFinalOutput: previewFinalOutput,
+      showRunView: options.showProgressView,
     },
     // Each command is named, so a failure carries a tag, never a rejection.
     files: {

@@ -137,6 +137,16 @@ should translate when it builds the log, and the classifier keep only the
 canonical names. The `str_replace` / `text_editor` branch has no producer in
 the repo.
 
+Checked on 2026-11-16 and left: translating in `buildClaudeToolUseLog`
+changes more than the classifier. `Read`, `Write` and `Bash` rows would gain
+the harness's file and shell treatments, the row header would read the
+harness name (`edit_file`) where it reads Claude's (`Edit`), and the
+translation (`CLAUDE_TOOLS`' `back` in `hookConfig.ts`) would become a
+public export of the plugins entry. The `claude-agent` plugin still
+registers an icon for `str_replace_editor`, so that branch's producer is a
+question for the plugin, not dead code yet. Needs the decision on how a
+delegated Claude Code call is labelled.
+
 ## Checked and left alone
 
 - What a setup launch's outcomes do per GUI host, the settings view's run

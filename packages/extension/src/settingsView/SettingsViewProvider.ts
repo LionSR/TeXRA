@@ -137,12 +137,9 @@ export class SettingsViewProvider {
               selectFolder({ title, openLabel: 'Select Folder' }),
               (selected) => selected ?? undefined,
             ),
-          selectLauncherAgent: (agent) =>
-            progressView.selectLauncherAgent(agent),
+          ...progressView.settingsRuns,
           signInSubscription: (providerId) =>
             signInWithSubscription(roots, providerId),
-          revealRun: (runId) => progressView.revealRun(runId),
-          runLabel: (runId) => progressView.runLabel(runId),
           runInTerminal: (name, command) =>
             Effect.sync(() => {
               const terminal = vscode.window.createTerminal({ name });

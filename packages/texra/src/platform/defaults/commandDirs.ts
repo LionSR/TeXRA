@@ -184,7 +184,7 @@ export function commandDirs(): readonly string[] {
     // TeX Live for Windows bundles its own Perl (tlperl) instead of putting one
     // on PATH. latexindent/latexdiff still work there because they resolve to
     // the .exe wrappers under texlive/*/bin/*, which use tlperl internally --
-    // but a bare `perl` does not exist, so checkCoreDependencies() reported
+    // but a bare `perl` does not exist, so the dependency banner reported
     // Perl missing and told TeX Live users to install Strawberry Perl they do
     // not need. Probed after the entries above so a user-installed Perl still
     // wins; tlperl is the fallback, and it carries the modules latexindent
