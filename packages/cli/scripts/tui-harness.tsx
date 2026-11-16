@@ -167,6 +167,7 @@ import { holdSignals } from '../src/runtime/platform/processSignals';
 import { resolveCliResourcesPath } from '../src/runtime/platform/cliContext';
 import { setCliToolEnabled } from '../src/runtime/tools';
 import type { CliContext } from '../src/runtime/platform/cliContext';
+import { ChatProcessProvider } from '../src/chat/tui/chatProcess';
 
 const harnessRunId = Schema.decodeUnknownSync(RunIdSchema);
 const HARNESS_RUN_ID = harnessRunId('aaaa0001f10e');
@@ -1876,16 +1877,21 @@ function handleHarnessCtrlC(): void {
 function renderHarnessApp(): React.JSX.Element {
   return (
     <SlashContextProvider value={harnessSlashContext}>
-      <App
-        stores={HARNESS_PLATFORM_SERVICES}
-        runtime={harnessRuntime}
-        session={harnessRunSession}
-        draft={harnessDraft}
-        onSubmit={(draft) => handleHarnessSubmit(expandText(draft).trim())}
-        scrollback={scrollback}
-        onCtrlC={handleHarnessCtrlC}
-        performHost={harnessInteractions.performHost}
-      />
+      <ChatProcessProvider
+        value={{
+          runtime: harnessRuntime,
+          roots: HARNESS_PLATFORM_SERVICES.roots,
+        }}
+      >
+        <App
+          session={harnessRunSession}
+          draft={harnessDraft}
+          onSubmit={(draft) => handleHarnessSubmit(expandText(draft).trim())}
+          scrollback={scrollback}
+          onCtrlC={handleHarnessCtrlC}
+          performHost={harnessInteractions.performHost}
+        />
+      </ChatProcessProvider>
     </SlashContextProvider>
   );
 }

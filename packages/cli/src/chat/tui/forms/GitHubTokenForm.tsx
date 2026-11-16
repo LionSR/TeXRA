@@ -13,9 +13,9 @@ import { ListForm } from './_shared/ListForm';
 import { TextEntryForm } from './_shared/TextEntryForm';
 import { runFormWrite } from './_shared/useAsyncListForm';
 import type { CredentialOrigin } from '@texra-ai/llm';
-import type { ProcessRuntime } from '@texra-ai/harness/host';
 import type { Secrets } from '@texra-ai/harness/plugins';
 import type { Effect } from 'effect';
+import { useChatProcess } from '../chatProcess';
 
 /** Which source backs the GitHub token, as `resolveGitHubTokenSource`
  *  reports it. */
@@ -79,9 +79,6 @@ interface GitHubTokenFormProps {
   /** The credential writes as programs; this form owns their one run. */
   readonly onSave: (token: string) => Effect.Effect<void, Error, Secrets>;
   readonly onRemove: () => Effect.Effect<void, Error, Secrets>;
-  /** The runtime those programs run on, from the surface that mounted this
-   *  form — Ink components run no Effect of their own. */
-  readonly runtime: ProcessRuntime;
   readonly onDone: () => void;
   readonly onCancel: () => void;
 }
@@ -90,6 +87,7 @@ interface GitHubTokenFormProps {
 export function GitHubTokenForm(
   props: GitHubTokenFormProps,
 ): React.JSX.Element {
+  const { runtime } = useChatProcess();
   const [entering, setEntering] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
@@ -98,7 +96,7 @@ export function GitHubTokenForm(
     action: () => Effect.Effect<void, Error, Secrets>,
   ): void => {
     setSaving(true);
-    runFormWrite(props.runtime, action, {
+    runFormWrite(runtime, action, {
       onSuccess: props.onDone,
       onError: (cause) => {
         setSaving(false);
@@ -159,18 +157,14 @@ export function GitHubTokenForm(
           runAction(() => props.onRemove());
           return;
         }
-        runFormWrite(
-          props.runtime,
-          () => tryOpenBrowser(GITHUB_TOKEN_CREATE_URL),
-          {
-            onSuccess: (opened) => {
-              if (!opened) {
-                setError(`Open ${GITHUB_TOKEN_CREATE_URL} to create a token.`);
-              }
-            },
-            onError: (cause) => setError(toErrorMessage(cause)),
+        runFormWrite(runtime, () => tryOpenBrowser(GITHUB_TOKEN_CREATE_URL), {
+          onSuccess: (opened) => {
+            if (!opened) {
+              setError(`Open ${GITHUB_TOKEN_CREATE_URL} to create a token.`);
+            }
           },
-        );
+          onError: (cause) => setError(toErrorMessage(cause)),
+        });
       }}
       onCancel={props.onCancel}
     />

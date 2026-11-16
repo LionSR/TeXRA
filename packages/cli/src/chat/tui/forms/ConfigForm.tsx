@@ -29,8 +29,9 @@ import { FormFrame } from './_shared/FormFrame';
 import { ListForm } from './_shared/ListForm';
 import { TextEntryForm } from './_shared/TextEntryForm';
 import { runFormWrite } from './_shared/useAsyncListForm';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/harness/host';
 import type { Effect } from 'effect';
+import { useChatProcess } from '../chatProcess';
 
 const RESET_HINTS = [{ key: 'Ctrl-R', action: 'reset' }];
 
@@ -158,9 +159,6 @@ interface ConfigFormProps {
   readonly resetValue: (
     entry: TexraSettingRow,
   ) => Effect.Effect<void, Error, ProcessServices>;
-  /** The runtime the writes above run on, from the surface that mounted
-   *  this form — Ink components run no Effect of their own. */
-  readonly runtime: ProcessRuntime;
   readonly formLinks?: readonly {
     readonly name: string;
     readonly label: string;
@@ -191,6 +189,7 @@ type ConfigFormMode =
     };
 
 export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
+  const { runtime } = useChatProcess();
   const [mode, setMode] = useState<ConfigFormMode>({ kind: 'categories' });
   // Optimistic overrides: a write is async, so without these a rapid second
   // toggle would recompute from a stale `readValue`. The override is set
@@ -213,7 +212,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   ): void => {
     const previous = effective(entry);
     setOverrides((current) => ({ ...current, [entry.key]: optimisticValue }));
-    runFormWrite(props.runtime, action, {
+    runFormWrite(runtime, action, {
       onError: (cause) => {
         setOverrides((current) => ({ ...current, [entry.key]: previous }));
         props.onError?.(cause);

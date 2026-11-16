@@ -90,8 +90,6 @@ export function builtinSlashCommands(options: {
         : applyCliTeamSelection(value.teamId, context);
     return (
       <AgentListForm
-        runtime={context.runtime}
-        stores={context.stores}
         currentAgent={meta.agent}
         {...(meta.cliTeamId !== undefined
           ? { currentTeamId: meta.cliTeamId }
@@ -165,7 +163,6 @@ export function builtinSlashCommands(options: {
     return (
       <ModelListForm
         currentModel={sessionMeta.get().model}
-        stores={{ ...context.stores, runtime: context.runtime }}
         availableRows={props.availableRows}
         selectable={context.session.canSelectModel()}
         getModelSwitchDisabledReason={context.getModelSwitchDisabledReason}
@@ -202,23 +199,13 @@ export function builtinSlashCommands(options: {
   }
 
   const MemoryListFormAdapter = makeSelectFormAdapter<string>(
-    ({ context, ...formProps }) => (
-      <MemoryListForm
-        runtime={context.runtime}
-        roots={context.runSession.roots}
-        {...formProps}
-      />
-    ),
+    ({ context, ...formProps }) => <MemoryListForm {...formProps} />,
     (storagePath, context) =>
       showCliMemoryPreview(context.runSession.roots, storagePath),
   );
   const ResumeListFormAdapter = makeSelectFormAdapter<RunId>(
     ({ context, ...formProps }) => (
-      <ResumeListForm
-        runtime={context.runtime}
-        session={context.runSession}
-        {...formProps}
-      />
+      <ResumeListForm session={context.runSession} {...formProps} />
     ),
     (id, context) => context.resumeRun(id),
   );
@@ -226,7 +213,6 @@ export function builtinSlashCommands(options: {
   const TasksFormAdapter = connectService
     ? (props: SlashFormProps): React.JSX.Element => (
         <TasksForm
-          runtime={useSlashContext().runtime}
           connect={connectService}
           availableRows={props.availableRows}
           onClose={() => props.onDone(undefined)}
@@ -234,41 +220,25 @@ export function builtinSlashCommands(options: {
       )
     : undefined;
   const SkillsListFormAdapter = makeSelectFormAdapter<SkillActivation>(
-    ({ context, ...formProps }) => (
-      <SkillsListForm
-        runtime={context.runtime}
-        roots={context.runSession.roots}
-        {...formProps}
-      />
-    ),
+    ({ context, ...formProps }) => <SkillsListForm {...formProps} />,
     (selection, context) => Effect.sync(() => context.activateSkill(selection)),
   );
 
   const EnabledModelsFormAdapter = (
     props: SlashFormProps,
-  ): React.JSX.Element => {
-    const context = useSlashContext();
-    return (
-      <EnabledModelsForm
-        stores={context.stores}
-        runtime={context.runtime}
-        availableRows={props.availableRows}
-        onClose={() => props.onDone(undefined)}
-      />
-    );
-  };
+  ): React.JSX.Element => (
+    <EnabledModelsForm
+      availableRows={props.availableRows}
+      onClose={() => props.onDone(undefined)}
+    />
+  );
 
-  const PluginsListFormAdapter = (props: SlashFormProps): React.JSX.Element => {
-    const context = useSlashContext();
-    return (
-      <PluginsListForm
-        roots={context.runSession.roots}
-        runtime={context.runtime}
-        availableRows={props.availableRows}
-        onClose={() => props.onDone(undefined)}
-      />
-    );
-  };
+  const PluginsListFormAdapter = (props: SlashFormProps): React.JSX.Element => (
+    <PluginsListForm
+      availableRows={props.availableRows}
+      onClose={() => props.onDone(undefined)}
+    />
+  );
 
   /** `/plugins add <source>`: the install `texra plugin install` runs; the
    *  plugin stays off until it is switched on and trusted in `/plugins`. */
@@ -305,8 +275,6 @@ export function builtinSlashCommands(options: {
     const context = useSlashContext();
     return (
       <CliConfigForm
-        roots={context.runSession.roots}
-        runtime={context.runtime}
         availableRows={props.availableRows}
         onApprovalPolicyChanged={context.onProjectApprovalPolicyChanged}
         onClose={() => props.onDone(undefined)}

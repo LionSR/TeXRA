@@ -104,6 +104,7 @@ import {
 import { installTerminalTitleUpdates } from './terminalTitle';
 import { TuiSession } from './state/sessionRunState';
 import { createSessionExitController } from './sessionExitController';
+import { ChatProcessProvider } from './chatProcess';
 
 interface ChatResult {
   exitCode: number;
@@ -547,27 +548,27 @@ export async function runChat(
   setLogSink(silentLogSink, { trusted: true });
   const ink = render(
     <SlashContextProvider value={slashContext}>
-      <App
-        stores={services}
-        runtime={runtime}
-        session={runSession}
-        draft={draft}
-        onSubmit={(message, holdUntil) => {
-          runtime.runFork(
-            Effect.gen(function* () {
-              const line = expandText(message).trim();
-              if (yield* handleTuiSlashCommand(line, slashContext)) return;
-              yield* chatController.submit(message, holdUntil);
-            }),
-          );
-        }}
-        commandName={context.commandName}
-        scrollback={scrollback}
-        onCtrlC={() => exitController.handleSigint()}
-        onSuspend={() => exitController.handleSigtstp()}
-        history={inputHistory}
-        performHost={chatController.performHost}
-      />
+      <ChatProcessProvider value={{ runtime, roots: services.roots }}>
+        <App
+          session={runSession}
+          draft={draft}
+          onSubmit={(message, holdUntil) => {
+            runtime.runFork(
+              Effect.gen(function* () {
+                const line = expandText(message).trim();
+                if (yield* handleTuiSlashCommand(line, slashContext)) return;
+                yield* chatController.submit(message, holdUntil);
+              }),
+            );
+          }}
+          commandName={context.commandName}
+          scrollback={scrollback}
+          onCtrlC={() => exitController.handleSigint()}
+          onSuspend={() => exitController.handleSigtstp()}
+          history={inputHistory}
+          performHost={chatController.performHost}
+        />
+      </ChatProcessProvider>
     </SlashContextProvider>,
     {
       stdout: tuiOutputStreamForColor(

@@ -88,8 +88,6 @@ export function modelAccessContribution(): SlashCommandContribution & {
     );
     return (
       <AccountAccessForm
-        stores={stores}
-        runtime={runtime}
         availableRows={props.availableRows}
         connecting={modelConnectionNeeded.get()}
         onSelect={(value) => {
@@ -114,7 +112,6 @@ export function modelAccessContribution(): SlashCommandContribution & {
     // "Status unavailable".
     const apiKeys = useAsyncResource({
       load: () => Effect.flatMap(Secrets, apiKeyOrigins),
-      runtime,
       onError: (error) => reportFormError(error),
     });
     return (
@@ -125,7 +122,6 @@ export function modelAccessContribution(): SlashCommandContribution & {
           loading: apiKeys.loading,
           error: apiKeys.error !== undefined,
         }}
-        runtime={runtime}
         onSave={(provider, apiKey) =>
           applyCliProviderApiKey(context.stores, provider, apiKey)
         }

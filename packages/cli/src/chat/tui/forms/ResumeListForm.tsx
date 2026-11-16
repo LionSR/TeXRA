@@ -19,7 +19,6 @@ import { formatShortDateTime } from '@ui/formatting/dateTimeFormat';
 import { rootRunId } from '../state/cliState';
 import { AsyncListForm } from './_shared/ListForm';
 import type { Session } from '@texra-ai/harness';
-import type { ProcessRuntime } from '@texra-ai/harness/host';
 import {
   collapseWhitespace,
   type RunId,
@@ -27,13 +26,9 @@ import {
 } from '@texra-ai/harness/schemas';
 
 interface ResumeListFormProps {
-  /**
-   * The session whose stored runs the listing reads. Ink components run no
-   * Effect, so it arrives as a prop from the surface that opened the form.
-   */
+  /** The session whose stored runs the listing reads: the chat's, here or
+   *  in the service. */
   readonly session: Session;
-  /** The process runtime the listing runs on, from the same surface. */
-  readonly runtime: ProcessRuntime;
   readonly availableRows?: number;
   readonly onSelect: (value: RunId) => void;
   readonly onClose: () => void;
@@ -74,7 +69,6 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
           );
         })
       }
-      runtime={props.runtime}
       items={(entries) =>
         entries.map((entry) => ({
           value: entry.id,

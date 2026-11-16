@@ -83,11 +83,10 @@ import {
 } from './state/sessionView';
 import { useSignal } from './state/useSignal';
 import type { Session } from '@texra-ai/harness';
-import type { ProcessRuntime } from '@texra-ai/harness/host';
-import type { SettingsStores } from '@texra-ai/harness/plugins';
 import type { RuntimeCommand } from '@texra-ai/harness/schemas';
 import type { InputHistory } from './history/inputHistory';
 import { EMPTY_DRAFT, type Draft } from './input/draftAttachments';
+import { useChatProcess } from './chatProcess';
 
 // Jump-to-waiting: surface the newly focused run's pending approval right
 // away instead of leaving it queued behind other runs' items.
@@ -97,13 +96,6 @@ function focusRunAndPromoteApprovals(runId: RunId): void {
 }
 
 interface AppProps {
-  /** The session's three setting slots, for the status bar's route probe. */
-  readonly stores: SettingsStores;
-  /**
-   * The process runtime the input bar's history write, image paste and run
-   * requests run on, threaded from the same chat surface.
-   */
-  readonly runtime: ProcessRuntime;
   /** The chat's session, here or in the service: approval decisions and
    *  run requests land on it and the work-plan reader renders from it,
    *  threaded from the chat surface that opened it. */
@@ -127,6 +119,7 @@ interface AppProps {
 }
 
 export function App(props: AppProps): React.JSX.Element {
+  const { runtime } = useChatProcess();
   const requests = props.session;
   const view = useSignal(sessionView());
   const pending = useSignal(currentApproval);
@@ -200,7 +193,7 @@ export function App(props: AppProps): React.JSX.Element {
     activeRun?.transcript.rows.some(isScriptCall) ?? false;
   // Kill, skip and retry; a refusal (a finished call) reads into the transcript.
   const request = (req: RuntimeCommand): void => {
-    props.runtime.runFork(
+    runtime.runFork(
       Effect.catch(requests.request(req), (error) =>
         Effect.sync(() => appendLocalRequestRefusal(error)),
       ),
@@ -317,7 +310,7 @@ export function App(props: AppProps): React.JSX.Element {
               pending.decide(
                 {
                   requests,
-                  runtime: props.runtime,
+                  runtime: runtime,
                   performHost: props.performHost,
                 },
                 decision,
@@ -343,9 +336,9 @@ export function App(props: AppProps): React.JSX.Element {
     | { readonly parentRunId: RunId | undefined; readonly runId: RunId }
     | undefined
   >(undefined);
-  const mountScope = useMountScope(props.runtime);
+  const mountScope = useMountScope(runtime);
   const [escapeTimer] = useState(() =>
-    props.runtime.runSync(
+    runtime.runSync(
       FiberHandle.make<void>().pipe(
         Effect.provideService(Scope.Scope, mountScope),
       ),
@@ -372,7 +365,7 @@ export function App(props: AppProps): React.JSX.Element {
   const clearPendingEscapeInterrupt = () => {
     if (pendingEscapeInterrupt.current === undefined) return;
     pendingEscapeInterrupt.current = undefined;
-    props.runtime.runSync(FiberHandle.clear(escapeTimer));
+    runtime.runSync(FiberHandle.clear(escapeTimer));
   };
 
   const handleMetaShortcut = (value: string): boolean => {
@@ -414,7 +407,7 @@ export function App(props: AppProps): React.JSX.Element {
     clearPendingEscapeInterrupt();
     const parentRunId = parentIdOf(runId);
     pendingEscapeInterrupt.current = { parentRunId, runId };
-    props.runtime.runFork(
+    runtime.runFork(
       FiberHandle.run(
         escapeTimer,
         Effect.sleep(ESC_META_CHORD_INTERRUPT_DELAY_MS).pipe(
@@ -566,8 +559,6 @@ export function App(props: AppProps): React.JSX.Element {
         renderFooterChrome={() => (
           <>
             <InputBar
-              runtime={props.runtime}
-              roots={props.session.roots}
               controlRef={inputBarRef}
               holdsKeystroke={holdsKeystroke}
               draft={props.draft}
@@ -579,8 +570,6 @@ export function App(props: AppProps): React.JSX.Element {
               keyboardActive={!childListFocused}
             />
             <StatusBar
-              stores={props.stores}
-              runtime={props.runtime}
               chatInputAvailable={
                 !childInputHidden && unavailableDetail === undefined
               }
