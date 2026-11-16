@@ -1144,6 +1144,14 @@ Whether a string is a run id, as {@link RunIdSchema} reads it.
 const isRunId: <I>(input: I) => input is I & string & Brand<"RunId">
 ```
 
+## isSubscriptionAuthProvider
+
+Whether `id` names one of {@link SUBSCRIPTION_AUTH_PROVIDERS}.
+
+```ts
+const isSubscriptionAuthProvider: (id: string) => id is "chatgpt" | "grok"
+```
+
 ## isTaskConfig
 
 Whether the run is a task (an agent carrying a plugin's block, run on

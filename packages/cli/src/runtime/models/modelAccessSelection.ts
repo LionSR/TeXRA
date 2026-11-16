@@ -6,6 +6,7 @@ import { Secrets, type SettingsStores } from '@texra-ai/harness/plugins';
 import {
   toErrorMessage,
   SUBSCRIPTION_AUTH_PROVIDERS,
+  isSubscriptionAuthProvider,
 } from '@texra-ai/harness/schemas';
 import {
   codingPlanSubscriptionRuntimes,
@@ -236,7 +237,7 @@ export const updateCliModelAccess = Effect.fn(
   if (codingPlan) {
     return yield* updateKeyedCliModelAccess(stores, selection, codingPlan);
   }
-  if (selection.provider === 'grok' || selection.provider === 'chatgpt') {
+  if (isSubscriptionAuthProvider(selection.provider)) {
     return yield* updateSubscriptionCliModelAccess(
       stores,
       context,
