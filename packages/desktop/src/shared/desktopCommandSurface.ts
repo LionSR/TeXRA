@@ -7,6 +7,7 @@ import {
   type SettingsTabCommandId,
 } from '@texra/shared/commands/catalog';
 import type { IconName } from '@ui/wa/iconNames';
+import { SETTINGS_NAV_ENTRIES } from '@settingsView/frontend/settingsNav';
 import { texraGuideUrl } from '@ui/copy/guide';
 import { toElectronAccelerator } from './accelerators';
 import type { OsPlatform } from '@texra/shared/osPlatform';
@@ -83,13 +84,28 @@ const DESKTOP_COMMAND_ICONS = {
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: 'terminal',
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: 'folder-tree',
   [DESKTOP_LOCAL_COMMANDS.SHOW_BROWSER]: 'globe',
-  'texra.showMemory': 'database',
-  'texra.showModels': 'server',
-  'texra.showAgents': 'robot',
-  'texra.showTools': 'cube',
-  'texra.showGitSettings': 'code-branch',
   [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: 'book',
-} as const satisfies Record<DesktopCommandId, IconName>;
+} as const satisfies Record<
+  Exclude<DesktopCommandId, SettingsTabCommandId>,
+  IconName
+>;
+
+/** A settings command's icon is its page's, as the settings nav shows it;
+ *  one that opens a section the nav draws no icon for names its own. */
+const SETTINGS_SECTION_ICONS: Partial<Record<SettingsTabCommandId, IconName>> =
+  { 'texra.showGitSettings': 'code-branch' };
+
+const settingsPageIcons = new Map<string, IconName>(
+  SETTINGS_NAV_ENTRIES.map(({ panel, icon }) => [panel, icon]),
+);
+
+function commandIcon(id: DesktopCommandId): IconName {
+  if (!isSettingsCommand(id)) return DESKTOP_COMMAND_ICONS[id];
+  const page = settingsTabByCommand[id].split('/')[0] ?? '';
+  const icon = SETTINGS_SECTION_ICONS[id] ?? settingsPageIcons.get(page);
+  if (!icon) throw new Error(`No settings page icon for ${id}`);
+  return icon;
+}
 
 export interface DesktopPaletteEntry {
   id: DesktopCommandId;
@@ -130,7 +146,7 @@ export function paletteEntries(platform: OsPlatform): DesktopPaletteEntry[] {
       id,
       label: entry.shortTitle ?? entry.title,
       category: entry.category,
-      icon: DESKTOP_COMMAND_ICONS[id],
+      icon: commandIcon(id),
       ...(accelerator && { accelerator }),
     };
   });
