@@ -21,7 +21,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { parseArgs } from 'node:util';
 import { runTests } from '@vscode/test-electron';
 
-import { isolatedHomeEnv } from './isolated-home.mjs';
+import { testLaunchEnv } from './isolated-home.mjs';
 import { walkFiles } from './walkFiles.mjs';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
@@ -111,9 +111,8 @@ try {
       'scripts/vscode-host-e2e-suite.cjs',
     ),
     extensionTestsEnv: {
-      ...isolatedHomeEnv(home),
+      ...testLaunchEnv(home),
       TEXRA_E2E_REAL_HOME: homedir(),
-      TEXRA_NO_TELEMETRY: '1',
     },
     launchArgs: [
       workspace,

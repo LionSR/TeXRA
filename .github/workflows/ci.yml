@@ -415,8 +415,6 @@ jobs:
         run: pnpm --filter @texra/desktop exec node -e "require('electron')"
 
       - name: Run desktop e2e suite
-        env:
-          TEXRA_NO_UPDATE_CHECK: '1'
         run: pnpm --filter @texra/desktop test:e2e
 
       - name: Upload desktop e2e results

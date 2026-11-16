@@ -15,7 +15,7 @@ import {
   servicePids,
   stopServices,
 } from '../../../../scripts/desktop-package-smoke-environment.mjs';
-import { isolatedHomeEnv } from '../../../../scripts/isolated-home.mjs';
+import { testLaunchEnv } from '../../../../scripts/isolated-home.mjs';
 import { cleanupDirectory } from './workspaceStorageFixture.js';
 import type { ElectronApplication, Locator, Page } from '@playwright/test';
 
@@ -197,9 +197,7 @@ export async function launchTexraApp(
     cwd: PACKAGE_ROOT,
     env: {
       ...process.env,
-      ...isolatedHomeEnv(profile.home),
-      // Test runs never report usage (and never raise the first-run notice).
-      TEXRA_NO_TELEMETRY: '1',
+      ...testLaunchEnv(profile.home),
       NODE_ENV: 'production',
       ...env,
       // Electron's offscreen renderer keeps native windows, Dock and focus

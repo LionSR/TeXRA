@@ -118,7 +118,10 @@ import {
   VALIDATION_SWITCH,
 } from '../src/runtime/models/validationSwitch.ts';
 import { bundleFixture } from '../../../scripts/bundle-fixture.mjs';
-import { isolateProcessHome } from '../../../scripts/isolated-home.mjs';
+import {
+  isolateProcessHome,
+  testLaunchEnv,
+} from '../../../scripts/isolated-home.mjs';
 
 // Beside each scenario's own home: nothing this script starts, the build
 // included, resolves the user's `~/.texra`.
@@ -319,21 +322,12 @@ process.stdin.on('end', function answer() {
     DEEPSEEK_API_KEY: FAKE_KEY,
     PATH: [bin, process.env.PATH].join(path.delimiter),
     npm_config_prefix: path.join(root, 'npm'),
-    HOME: home,
-    USERPROFILE: home,
-    APPDATA: path.join(home, 'AppData/Roaming'),
-    LOCALAPPDATA: path.join(home, 'AppData/Local'),
-    XDG_CONFIG_HOME: path.join(home, '.config'),
-    XDG_DATA_HOME: path.join(home, '.local/share'),
-    XDG_STATE_HOME: path.join(home, '.local/state'),
-    XDG_CACHE_HOME: path.join(home, '.cache'),
+    ...testLaunchEnv(home),
     // The system prompt names the shell (normalized away, but named on
     // every machine) and dates in this zone.
     SHELL: '/bin/sh',
     TZ: 'UTC',
     LANG: 'C',
-    TEXRA_NO_UPDATE_CHECK: '1',
-    TEXRA_NO_TELEMETRY: '1',
     // Each chat is its runs' one writer, in the generator's order; a
     // service would outlive the generation.
     TEXRA_NO_SERVICE: '1',

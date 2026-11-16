@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { Effect, Layer } from 'effect';
 
 import { bundleFixture } from './bundle-fixture.mjs';
+import { testLaunchEnv } from './isolated-home.mjs';
 
 const PASSTHROUGH_ENV_NAMES = new Set([
   'COLORTERM',
@@ -64,15 +65,9 @@ export function buildDesktopSmokeEnvironment(sourceEnvironment, paths) {
 
   return {
     ...environment,
-    APPDATA: join(paths.profile, 'AppData', 'Roaming'),
+    ...testLaunchEnv(paths.profile),
     ELECTRON_ENABLE_LOGGING: '1',
-    HOME: paths.profile,
-    LOCALAPPDATA: join(paths.profile, 'AppData', 'Local'),
     NODE_ENV: 'production',
-    TEXRA_NO_UPDATE_CHECK: '1',
-    USERPROFILE: paths.profile,
-    XDG_CACHE_HOME: join(paths.profile, '.cache'),
-    XDG_CONFIG_HOME: join(paths.profile, '.config'),
   };
 }
 

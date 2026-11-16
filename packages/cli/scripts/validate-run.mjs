@@ -29,7 +29,10 @@ import {
   VALIDATION_SCENARIOS,
   VALIDATION_SWITCH,
 } from '../src/runtime/models/validationSwitch.ts';
-import { isolateProcessHome } from '../../../scripts/isolated-home.mjs';
+import {
+  isolateProcessHome,
+  testLaunchEnv,
+} from '../../../scripts/isolated-home.mjs';
 
 // Every `texra` this script starts resolves `~/.texra` in a temporary home.
 isolateProcessHome();
@@ -86,12 +89,7 @@ function isolatedCliHomeEnv(home, overrides = {}) {
     ...Object.fromEntries(
       validationProviderApiKeyEnv.map((name) => [name, '']),
     ),
-    HOME: home,
-    XDG_CONFIG_HOME: path.join(home, '.config'),
-    XDG_DATA_HOME: path.join(home, '.local/share'),
-    XDG_STATE_HOME: path.join(home, '.local/state'),
-    XDG_CACHE_HOME: path.join(home, '.cache'),
-    TEXRA_NO_UPDATE_CHECK: '1',
+    ...testLaunchEnv(home),
     ...overrides,
   };
 }
@@ -989,7 +987,6 @@ prompt: |
     );
   const env = isolatedCliHomeEnv(home, {
     [VALIDATION_SCENARIOS.echo]: '1',
-    TEXRA_NO_TELEMETRY: '1',
   });
   const ptyEnv = {
     ...env,
@@ -1712,7 +1709,6 @@ prompt: |
         env: {
           ...project.ptyEnv,
           TEXRA_NO_SERVICE: '1',
-          TEXRA_NO_TELEMETRY: '1',
           [VALIDATION_SCENARIOS.golden]: '1',
         },
         onData: (_data, pty) => {
@@ -1888,7 +1884,7 @@ async function validateThresholdCompaction() {
 async function validateServiceChatsSeeEachOther() {
   const cwd = makeScratch('texra-cli-service-chats-');
   const project = echoProject(cwd);
-  const env = { ...project.ptyEnv, TEXRA_NO_TELEMETRY: '1' };
+  const env = project.ptyEnv;
   const chatArgs = [
     'chat',
     '--agent',
@@ -2016,7 +2012,6 @@ prompt: |
   );
   const env = {
     ...project.ptyEnv,
-    TEXRA_NO_TELEMETRY: '1',
     [VALIDATION_SCENARIOS.golden]: '1',
   };
   const texraWith = (binary, args, label) => {
@@ -2175,7 +2170,6 @@ prompt: |
   );
   const env = {
     ...project.ptyEnv,
-    TEXRA_NO_TELEMETRY: '1',
     [VALIDATION_SCENARIOS.golden]: '1',
   };
   const texra = (args, label) => {
@@ -2305,7 +2299,7 @@ async function validateServiceSessionIdle() {
   const other = path.join(cwd, 'other');
   mkdirSync(other, { recursive: true });
   const storageRoot = path.join(cwd, 'home', '.texra');
-  const env = { ...project.ptyEnv, TEXRA_NO_TELEMETRY: '1' };
+  const env = project.ptyEnv;
   const texra = (args, label) => {
     const result = run(
       process.execPath,
@@ -2442,7 +2436,6 @@ prompt: |
   );
   const env = {
     ...project.ptyEnv,
-    TEXRA_NO_TELEMETRY: '1',
     [VALIDATION_SCENARIOS.golden]: '1',
     OPENAI_API_KEY: 'sk-terminal-only',
   };
@@ -2618,7 +2611,6 @@ prompt: |
     );
   const env = {
     ...alpha.ptyEnv,
-    TEXRA_NO_TELEMETRY: '1',
     [VALIDATION_SCENARIOS.golden]: '1',
   };
   const start = (dir, agent, instruction) =>
@@ -2745,7 +2737,6 @@ prompt: |
   );
   const env = {
     ...project.ptyEnv,
-    TEXRA_NO_TELEMETRY: '1',
     [VALIDATION_SCENARIOS.golden]: '1',
   };
   const texra = (args, label) => {
@@ -2968,7 +2959,6 @@ prompt: |
   );
   const env = {
     ...project.ptyEnv,
-    TEXRA_NO_TELEMETRY: '1',
     [VALIDATION_SCENARIOS.golden]: '1',
   };
   const texra = (args, label) => {
@@ -3099,7 +3089,7 @@ prompt: |
 async function validateServiceSharedTask() {
   const cwd = makeScratch('texra-cli-service-');
   const project = echoProject(cwd);
-  const env = { ...project.ptyEnv, TEXRA_NO_TELEMETRY: '1' };
+  const env = project.ptyEnv;
   const texra = (args, label, extraEnv = {}) => {
     const result = run(
       process.execPath,
