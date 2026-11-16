@@ -25,7 +25,7 @@ import {
 } from '@shared/schemas';
 import {
   applyCompactionActivityEvent,
-  settleCompactionActivities,
+  finalizeCompactionActivities,
 } from '@shared/runs/compactionActivityProjection';
 import { decodeToolUseLog } from '@shared/toolUse';
 
@@ -39,7 +39,7 @@ import {
   emptyTranscriptIndexes,
   open,
   paint,
-  settle,
+  markFinal,
   upsertCompactionRows,
   writableArray,
   write,
@@ -232,7 +232,7 @@ function record(d: TranscriptUpdate, event: TraceRowFields): void {
       const { cutByRunEnd: _cut, ...call } = slot.call;
       slot.call = call;
       if (!inProgress) {
-        slot.base = settle(ix, slot.base);
+        slot.base = markFinal(ix, slot.base);
         closeCardStage(d, event.logId, event.status);
       }
       write(d, slot);
@@ -312,7 +312,7 @@ function closeText(
   slot: Extract<RowState, { kind: 'text' }>,
   finalText: string | undefined,
 ): void {
-  slot.base = settle(d.ix, slot.base);
+  slot.base = markFinal(d.ix, slot.base);
   if (finalText !== undefined) slot.text = finalText;
   slot.running = false;
   write(d, slot);
@@ -338,12 +338,12 @@ function applyStandingToTranscript(
   for (const slot of ix.slots.values()) {
     if (slot.kind === 'text' && slot.running) closeText(d, slot, undefined);
     if (slot.kind !== 'tool' || !isOpenCard(slot)) continue;
-    slot.base = settle(ix, slot.base);
+    slot.base = markFinal(ix, slot.base);
     slot.log = { ...slot.log, status: TOOL_CALL_STATUS.FAILED };
     slot.call = { ...slot.call, cutByRunEnd: true };
     write(d, slot);
   }
-  const compactions = settleCompactionActivities(ix.compactionState, d.at);
+  const compactions = finalizeCompactionActivities(ix.compactionState, d.at);
   if (compactions.length > 0) {
     upsertCompactionRows(d, d.next, compactions);
     d.touched = true;
@@ -417,8 +417,8 @@ export function applyTranscriptEvent(
  * One aggregate's transcript, built cold from its committed rows by the same
  * reducer the session view runs: where no view holds the run (export, a
  * waiting run's closure, host exit). Empty when the run has no rows.
- * `settledRows` stays 0: only the session view advances that prefix, so a
- * cold read uses `rows` and `openWork`, never `settledRows`.
+ * `finalRows` stays 0: only the session view advances that prefix, so a
+ * cold read uses `rows` and `openWork`, never `finalRows`.
  */
 export function buildRunTranscript(
   events: readonly SessionRow[],

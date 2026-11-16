@@ -251,7 +251,7 @@ describe('MCP server plugins', () => {
             // session's approval authority opens, answered here.
             const runId = Schema.decodeSync(RunIdSchema)('a99f0000c0d1');
             yield* publishTestRunStart(session, runId);
-            yield* Context.get(session, SessionLog).settled;
+            yield* Context.get(session, SessionLog).drained;
             const requestOpened = yield* Deferred.make<void>();
             const requests = yield* autoDecideRequests(session, () => {
               Deferred.doneUnsafe(requestOpened, Effect.void);

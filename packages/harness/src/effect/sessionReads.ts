@@ -54,7 +54,7 @@ export interface RunRecords {
   /** Its result as delivered: the terminal fact with the output its
    *  delivery reported, or a background command's own record. */
   readonly readResult: Effect.Effect<RunResult | null, Error>;
-  /** The workspace files its settled calls edited that are still there,
+  /** The workspace files its finished calls edited that are still there,
    *  under its working directory, by path. */
   readonly readWorkspaceFiles: Effect.Effect<
     readonly RunWorkspaceFile[],
@@ -119,7 +119,7 @@ function heldRuns(runs: Runs['Service']): LocalSession['held'] {
 /**
  * Delete what `target` names among the runs the store lists, each by its
  * `run.delete` request: a run held here is left as is, and the removal's
- * transaction refuses one whose start changed since its admission.
+ * transaction refuses one whose start changed since its acceptance.
  */
 const deleteRuns =
   (session: Context.Context<SessionServices>): LocalSession['deleteRuns'] =>
@@ -165,7 +165,7 @@ export function sessionReads(
   | 'held'
   | 'deleteRuns'
   | 'emit'
-  | 'settled'
+  | 'drained'
 > {
   const view = Context.get(session, SessionViewAccess);
   const log = Context.get(session, SessionLog);
@@ -228,6 +228,6 @@ export function sessionReads(
     held: heldRuns(Context.get(session, Runs)),
     deleteRuns: deleteRuns(session),
     emit: interactions.emit,
-    settled: log.settled,
+    drained: log.drained,
   };
 }

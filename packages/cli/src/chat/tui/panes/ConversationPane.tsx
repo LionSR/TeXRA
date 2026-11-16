@@ -48,7 +48,7 @@ export function ConversationPane(
   const merged = mergeLocalNotices(stream, noticesFor(allNotices, activeRunId));
   const displayEntries = pendingTranscriptEntries(
     merged.rows,
-    merged.settledRows,
+    merged.finalRows,
     stream != null && isWorking(stream),
   );
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;

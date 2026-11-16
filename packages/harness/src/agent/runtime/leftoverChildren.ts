@@ -100,7 +100,7 @@ export const resumeLeftoverChildren = Effect.fn('resumeLeftoverChildren')(
     const parent = yield* AgentRun;
     // The listing with this run's activation applied: a child is started
     // under a run the view reads as running, not as stopped.
-    yield* (yield* SessionLog).settled;
+    yield* (yield* SessionLog).drained;
     const { runs } = yield* (yield* SessionViewAccess).read([]);
     for (const child of runs.values())
       if (child.parentId === parent.runId)

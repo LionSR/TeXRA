@@ -536,7 +536,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
             inputs: (set, cursor, debug) => watch(set, { cursor, debug }),
           },
           log: {
-            settled: Effect.exit(answer).pipe(
+            drained: Effect.exit(answer).pipe(
               Effect.map((exit) => {
                 if (Exit.isSuccess(exit)) answeredAt = exit.value.at;
               }),

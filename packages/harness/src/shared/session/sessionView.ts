@@ -63,7 +63,7 @@ const TranscriptViewSchema = Schema.Struct({
   stages: Schema.Array(StageSchema),
   /** The contiguous leading prefix of rows whose finalizing event has been
    *  applied: what an append-only scrollback may print. */
-  settledRows: Count,
+  finalRows: Count,
 });
 /** A stream's transcript slice: what hosts paint. */
 export type TranscriptView = ReadonlyDeep<typeof TranscriptViewSchema.Type>;
@@ -141,7 +141,7 @@ const RunViewSchema = Schema.Struct({
   launch: Schema.NullOr(
     Schema.Struct({ id: RunIdSchema, card: Schema.NullOr(Schema.String) }),
   ),
-  /** The task this one was forked from and the settled point it was cut at
+  /** The task this one was forked from and the finished point it was cut at
    *  (`run.start.provenance`); null for a run its own launch began. */
   forkedFrom: Schema.NullOr(Schema.Struct({ id: RunIdSchema, at: Positive })),
   /** The `seq` of the run's newest wait (a `run.position` at `waiting`):
@@ -178,7 +178,7 @@ const RunViewSchema = Schema.Struct({
   /** A context compaction is in progress. */
   compactingActive: Schema.Boolean,
   /** The run's latest line: a script run's newest operational summary,
-   *  any other run's newest user instruction or settled model reply. */
+   *  any other run's newest user instruction or finished model reply. */
   latestLine: Schema.NullOr(Schema.String),
   transcript: TranscriptViewSchema,
   /** A task's run: the key of the plugin block whose recipe it opened on

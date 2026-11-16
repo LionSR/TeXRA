@@ -78,7 +78,7 @@ interface CompactionActivityBlock {
   /** Whether the block may move into finalized transcript output. */
   readonly finalized: boolean;
   /** Source-log boundary that finalized an otherwise unmatched start. */
-  readonly settledThroughSeqNo?: number;
+  readonly finalThroughSeqNo?: number;
   readonly startPosition: number;
   readonly startedAt: number;
   readonly finishedAt?: number;
@@ -510,7 +510,7 @@ interface StreamingTextRow extends TranscriptRowBase {
   /** True while the producer is still appending to `text`. */
   readonly streaming: boolean;
   /** True while the text hides an embedded subagent block that has opened but
-   *  not closed. Blocks settlement: the visible text is still going to move. */
+   *  not closed. Blocks result: the visible text is still going to move. */
   readonly pendingEmbeddedFollowup?: boolean;
   /** The limit that ended an assistant's answer early, from its
    *  `response.finalized` row; each reader words it. */
@@ -832,8 +832,8 @@ interface TranscriptRowBase {
    *  fold's slot counter. A host-local row carries the position it was
    *  written after (0: before every row), which places it in the merge. */
   readonly seqNo: number;
-  /** Order in which the source row became printable, when it has settled. */
-  readonly settlementSeqNo?: number;
+  /** Order in which the source row became printable, when it has finished. */
+  readonly finalSeqNo?: number;
   readonly timestamp: number;
   readonly level: LogLevel;
   /** True when the row belongs to the verbose tier of its host's chrome. */
@@ -928,7 +928,7 @@ interface UserRow extends TranscriptRowBase {
   /** What a follow-up attached, by address, which "Fork from here" carries;
    *  empty when it attached nothing. */
   readonly media: readonly StoredMedia[];
-  /** The settled point "Fork from here" cuts at: the `seq` of the park the
+  /** The finished point "Fork from here" cuts at: the `seq` of the park the
    *  run stood at before it took this message. Absent on the first message,
    *  which no park precedes. */
   readonly forkAt?: number;

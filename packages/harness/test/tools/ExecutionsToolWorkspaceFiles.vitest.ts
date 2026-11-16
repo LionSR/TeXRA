@@ -82,7 +82,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               // only `review.md`.
               const runId = Schema.decodeSync(RunIdSchema)('abc123');
               yield* publishTestRunStart(session, runId);
-              yield* Context.get(session, SessionLog).settled;
+              yield* Context.get(session, SessionLog).drained;
               yield* seedRunRecord(
                 session,
                 runId,

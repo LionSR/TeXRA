@@ -68,7 +68,7 @@ export interface SessionLogShape {
   closure(runId: RunId): StreamClosure[];
   /** The view applied every row committed so far, and the terminal-result
    *  presenter read the view's tail past it. */
-  readonly settled: Effect.Effect<void>;
+  readonly drained: Effect.Effect<void>;
   /** The current commit ordinal: where a new reader starts its {@link tail}. */
   now(): CommitOrdinal;
   /** A run's history rows, the kinds its state reads, in seq order; with

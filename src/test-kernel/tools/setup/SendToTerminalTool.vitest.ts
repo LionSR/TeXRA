@@ -53,7 +53,7 @@ const setupTool = Effect.gen(function* () {
     sessionHandleOf,
   );
   const runId = yield* publishTestRunStart(session);
-  yield* Context.get(session, SessionLog).settled;
+  yield* Context.get(session, SessionLog).drained;
   const callTool = (input: unknown) =>
     SendToTerminalTool.call(input).pipe(
       Effect.provide(

@@ -173,7 +173,7 @@ async function ensureRunStart(
 ): Promise<void> {
   // A start already queued has yet to reach the view, and a second one is
   // refused by the substrate.
-  await Effect.runPromise(Context.get(session, SessionLog).settled);
+  await Effect.runPromise(Context.get(session, SessionLog).drained);
   if (Context.get(session, SessionViewAccess).run(runId) !== undefined) return;
   await Effect.runPromise(publishTestRunStart(session, runId));
 }

@@ -116,7 +116,7 @@ const review = Effect.gen(function* () {
     // A request row is only ever appended to a run the history knows.
     const runId = Schema.decodeSync(RunIdSchema)('a40000');
     yield* publishTestRunStart(session, runId);
-    yield* Context.get(session, SessionLog).settled;
+    yield* Context.get(session, SessionLog).drained;
     yield* holdTestRun(session, runId);
     return yield* Effect.forkScoped(
       requestToolEditApproval({

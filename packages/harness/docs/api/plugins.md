@@ -473,11 +473,11 @@ interface ChildRunsShape {
     readonly exists: Effect.Effect<boolean, Error>;
     readonly end: Effect.Effect<RunEnd | null, Error>;
   };
-  /** The latest value of `arm`'s kind among the run's own facts, decoded
-   *  by the arm's schema; undefined while the run recorded none. */
+  /** The latest value of `factKind` among the run's own facts, decoded
+   *  by its schema; undefined while the run recorded none. */
   readonly fact: <A>(
     runId: RunId,
-    arm: {
+    factKind: {
       readonly plugin: string;
       readonly kind: string;
       readonly schema: Schema.Codec<A, unknown>;
@@ -513,7 +513,7 @@ const codemode: Plugin
 
 The decisions a request of kind `K` takes: its own actions and the three
 refusals. A plugin's request declares its actions on its row, so its
-type admits any decision.
+type accepts any decision.
 
 ```ts
 type DecisionOf<K extends RequestPayload['kind']> =
@@ -722,7 +722,7 @@ const fileOps: (options?: { readonly writeFilter?: WriteFilter | undefined; }) =
 
 Who a producer says a follow-up is from. Runs talk as a graph: any run may
 message any run in the project, whatever their places in the supervision
-tree. A run names only itself; the recipient's admission
+tree. A run names only itself; the recipient's acceptance
 (`Inbox.send`) stamps how it relates to the recipient.
 
 ```ts
@@ -887,7 +887,7 @@ interface ITool<E = Error, R = never> {
    *   read-only tool that prompts for approval is not parallel: it needs an
    *   approval round-trip first, so it stays a barrier.
    * - `'barrier'`: waits for every call issued before it and holds back
-   *   every call after it until it settles.
+   *   every call after it until it finishes.
    * - `'own'`: in a script, its calls neither wait for the calls issued
    *   before them nor block the ones after, and take no place in the
    *   parallel window: the tool bounds how many of its own calls run at
@@ -1060,7 +1060,20 @@ as the error it raised.
 ```ts
 type LogOptions =
   | { readonly messageType?: undefined; readonly data?: unknown }
-  | { [K in MessageType]: LogWriteOf<K> }[MessageType];
+  | {
+      // A payload is required unless the type's schema accepts none.
+      [
+        K in MessageType
+      ]: undefined extends (typeof LOG_PAYLOAD_SCHEMAS)[K]['Encoded']
+        ? {
+            readonly messageType: K;
+            readonly data?: (typeof LOG_PAYLOAD_SCHEMAS)[K]['Encoded'];
+          }
+        : {
+            readonly messageType: K;
+            readonly data: (typeof LOG_PAYLOAD_SCHEMAS)[K]['Encoded'];
+          };
+    }[MessageType];
 ```
 
 ## makeJsonRpcConnection
@@ -1518,7 +1531,7 @@ interface RequestDecisionRecord {
    *  and checked in the transaction: one its kind refuses is logged and
    *  left out. */
   readonly facts: readonly (ToolFact & { readonly aggregate: string })[];
-  /** The input the plugin sends a run of the session, admitted in the
+  /** The input the plugin sends a run of the session, accepted in the
    *  transaction (one the run's closed input refuses is logged), the run
    *  woken for it once that commits. */
   readonly followUp?: { readonly runId: RunId; readonly item: InboxItem };
@@ -1545,7 +1558,7 @@ const requestToolEditApproval: (request: ToolEditProposal) => Effect<ToolEditApp
 Resolve a tool path, relative or absolute, against the call's working
 directory when the run has one and its workspace folder otherwise.
 
-A path that escapes that root is admitted only inside a registered external
+A path that escapes that root is accepted only inside a registered external
 root or with path protection switched off; otherwise it fails with a
 `ToolError` the tool runner reports to the model. With no folder open and
 no working directory, only an absolute path can resolve (the agent
@@ -1699,7 +1712,7 @@ class RunHistoryRefused extends Schema.TaggedError<RunHistoryRefused>()(
 ## RunInbox
 
 One run's input, as a plugin reaches it: what it sends the run (routed,
-admitted and woken as {@link submitFollowUp} does), and when the run
+accepted and woken as {@link submitFollowUp} does), and when the run
 takes no more.
 
 ```ts
@@ -1839,7 +1852,7 @@ function sourceLocationUnder(
 
 ## StepRoot
 
-A read-only directory one step admits for its own calls, beside the
+A read-only directory one step accepts for its own calls, beside the
 registered roots: a skill it lists or its user activated, canonical as
 its catalog entry records it (`canonicalizePath`).
 
@@ -1881,8 +1894,8 @@ interface StreamHandle {
 
 Three outcomes: the input reached a running loop, it waits in the run's
 queue for its next turn (the resume the send started, or an explicit
-one), or it was not admitted, with the words that say why. A delivery the
-admission boundary had already accepted is `sent`. A resume the input
+one), or it was not accepted, with the words that say why. A delivery the
+acceptance boundary had already accepted is `sent`. A resume the input
 started that the run refused is told by the resume itself.
 
 ```ts
@@ -2063,7 +2076,7 @@ interface ToolEditProposal {
 
 Where a call works: the session's roots (its workspace folder, the
 setting slots and its storage), the run's working directory, and the
-read-only roots the call's step admits (the skills it lists or its user
+read-only roots the call's step accepts (the skills it lists or its user
 activated). A tool's paths resolve against it.
 `workingDirectory` is already absolute or absent: the run decides it once
 where it is launched (`buildAgentLaunchContext`).
@@ -2140,7 +2153,7 @@ interface ToolGuard<T> {
 The call fields a tool path resolves against: the session's roots (its
 workspace folder and the setting slots containment policy is read from),
 the run's working directory, and the read-only roots the call's step
-admits (the skills it lists or its user activated; none outside a run).
+accepts (the skills it lists or its user activated; none outside a run).
 A tool's `ToolContext.env` satisfies it structurally.
 `workingDirectory` is already absolute or absent: the run decides it once
 where it is launched (`buildAgentLaunchContext`).

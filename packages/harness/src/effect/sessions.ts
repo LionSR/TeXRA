@@ -283,5 +283,5 @@ export interface LocalSession extends Session {
   /** Wait until everything already sent to the session is written, shown
    *  in the view, and handled: for example, a failed run's end has been
    *  shown to the attached host (or queued for the next one). */
-  readonly settled: Effect.Effect<void>;
+  readonly drained: Effect.Effect<void>;
 }

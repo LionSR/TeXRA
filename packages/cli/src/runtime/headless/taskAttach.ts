@@ -144,8 +144,8 @@ export const attachTask = Effect.fn('attachTask')(function* (
   let printed = 0;
   const printSettled = (run: RunView): void => {
     if (output.format !== 'text') return;
-    const { rows, settledRows } = run.transcript;
-    for (; printed < settledRows; printed += 1) {
+    const { rows, finalRows } = run.transcript;
+    for (; printed < finalRows; printed += 1) {
       const { lines } = fullTranscriptEntryLayout(
         rows[printed],
         output.columns,

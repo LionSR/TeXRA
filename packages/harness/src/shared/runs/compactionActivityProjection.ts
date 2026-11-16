@@ -20,7 +20,7 @@ export interface CompactionActivityBlock {
   /** Whether the block may move into finalized transcript output. */
   readonly finalized: boolean;
   /** Source-log boundary that finalized an otherwise unmatched start. */
-  readonly settledThroughSeqNo?: number;
+  readonly finalThroughSeqNo?: number;
   readonly startPosition: number;
   readonly startedAt: number;
   readonly finishedAt?: number;
@@ -120,19 +120,18 @@ export function applyCompactionActivityEvent(
   }
 
   // A terminal event without its start is ambiguous and must not create a
-  // phantom transcript row. An outcome queued before settlement may still
+  // phantom transcript row. An outcome queued before result may still
   // replace its provisional interruption; one appended afterward may not.
   if (existingIndex === undefined) return [];
   const block = projection.blocks[existingIndex];
-  const withinSettlementBoundary =
+  const withinFinalBoundary =
     block.status === 'interrupted' &&
-    block.settledThroughSeqNo !== undefined &&
-    position <= block.settledThroughSeqNo;
-  if (block.finalized && !withinSettlementBoundary) return [];
-  const { settledThroughSeqNo: _settledThroughSeqNo, ...unsettledBlock } =
-    block;
+    block.finalThroughSeqNo !== undefined &&
+    position <= block.finalThroughSeqNo;
+  if (block.finalized && !withinFinalBoundary) return [];
+  const { finalThroughSeqNo: _finalThroughSeqNo, ...openBlock } = block;
   projection.blocks[existingIndex] = {
-    ...unsettledBlock,
+    ...openBlock,
     status: state,
     finalized: true,
     finishedAt: at,
@@ -144,10 +143,10 @@ export function applyCompactionActivityEvent(
 }
 
 /**
- * Finalize every start the projection has seen, at the settlement boundary the
+ * Finalize every start the projection has seen, at the result boundary the
  * events themselves drew: `maxAppliedSeqNo`, the newest row position applied.
  */
-export function settleCompactionActivities(
+export function finalizeCompactionActivities(
   projection: CompactionActivityProjection,
   finishedAt: number,
 ): readonly number[] {
@@ -159,7 +158,7 @@ export function settleCompactionActivities(
       ...block,
       status: 'interrupted',
       finalized: true,
-      settledThroughSeqNo: throughSeqNo,
+      finalThroughSeqNo: throughSeqNo,
       ...(block.finishedAt === undefined ? { finishedAt } : {}),
     };
     changedIndices.push(index);

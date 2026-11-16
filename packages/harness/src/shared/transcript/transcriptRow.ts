@@ -52,8 +52,8 @@ export interface TranscriptRowBase {
    *  fold's slot counter. A host-local row carries the position it was
    *  written after (0: before every row), which places it in the merge. */
   readonly seqNo: number;
-  /** Order in which the source row became printable, when it has settled. */
-  readonly settlementSeqNo?: number;
+  /** Order in which the source row became printable, when it has finished. */
+  readonly finalSeqNo?: number;
   readonly timestamp: number;
   readonly level: LogLevel;
   /** True when the row belongs to the verbose tier of its host's chrome. */
@@ -82,7 +82,7 @@ export interface StreamingTextRow extends TranscriptRowBase {
   /** True while the producer is still appending to `text`. */
   readonly streaming: boolean;
   /** True while the text hides an embedded subagent block that has opened but
-   *  not closed. Blocks settlement: the visible text is still going to move. */
+   *  not closed. Blocks result: the visible text is still going to move. */
   readonly pendingEmbeddedFollowup?: boolean;
   /** The limit that ended an assistant's answer early, from its
    *  `response.finalized` row; each reader words it. */
@@ -102,7 +102,7 @@ export interface UserRow extends TranscriptRowBase {
   /** What a follow-up attached, by address, which "Fork from here" carries;
    *  empty when it attached nothing. */
   readonly media: readonly StoredMedia[];
-  /** The settled point "Fork from here" cuts at: the `seq` of the park the
+  /** The finished point "Fork from here" cuts at: the `seq` of the park the
    *  run stood at before it took this message. Absent on the first message,
    *  which no park precedes. */
   readonly forkAt?: number;
@@ -231,16 +231,16 @@ export type TranscriptRow =
 export type TranscriptRowKind = TranscriptRow['kind'];
 
 // ---------------------------------------------------------------------------
-// Settlement
+// Result
 // ---------------------------------------------------------------------------
 
 /**
  * Kinds whose content is complete the moment the row appears. A tool call or a
  * script stage is deliberately absent: it does reach a typed terminal state,
- * but only in a position the producer chose, so it settles through
- * {@link isSettledRow} rather than on its own.
+ * but only in a position the producer chose, so it finishes through
+ * {@link isFinalRow} rather than on its own.
  */
-const IMMEDIATELY_SETTLED_ROW_KINDS = new Set<TranscriptRowKind>([
+const IMMEDIATELY_FINAL_ROW_KINDS = new Set<TranscriptRowKind>([
   'user',
   'error',
   'fileList',
@@ -250,19 +250,19 @@ const IMMEDIATELY_SETTLED_ROW_KINDS = new Set<TranscriptRowKind>([
 
 /**
  * Whether a row's content is fixed the moment it appears, independent of
- * anything around it — the recorder assigned it a durable settlement order,
+ * anything around it — the recorder assigned it a durable result order,
  * the host synthesized it so no producer is still writing to it, a compaction
  * block reached a terminal state, or the kind is complete on arrival.
  *
- * This is the position-independent half of {@link isSettledRow}, which a host
+ * This is the position-independent half of {@link isFinalRow}, which a host
  * with an append-only surface asks about a row it holds no position for.
  */
-function isSelfSettledRow(row: TranscriptRow): boolean {
+function isSelfFinalRow(row: TranscriptRow): boolean {
   if (row.kind === 'compactionActivity') return row.block.finalized;
   return (
-    row.settlementSeqNo !== undefined ||
+    row.finalSeqNo !== undefined ||
     row.origin === 'local' ||
-    IMMEDIATELY_SETTLED_ROW_KINDS.has(row.kind)
+    IMMEDIATELY_FINAL_ROW_KINDS.has(row.kind)
   );
 }
 
@@ -270,21 +270,18 @@ function isSelfSettledRow(row: TranscriptRow): boolean {
  * Whether a row's content can no longer change, so it is safe to print once
  * into append-only scrollback.
  *
- * Opens with {@link isSelfSettledRow}: a row that is settled independent of
- * position is settled full stop, without consulting `hasLaterRow` or the
+ * Opens with {@link isSelfFinalRow}: a row that is finished independent of
+ * position is finished full stop, without consulting `hasLaterRow` or the
  * kind-specific terminal-state tests below. That containment
- * (`isSettledRow` ⊇ `isSelfSettledRow`) is load-bearing — the promotion loop
+ * (`isFinalRow` ⊇ `isSelfFinalRow`) is load-bearing — the promotion loop
  * relies on it to treat both halves as one predicate.
  *
  * `hasLaterRow` is the one positional fact the projector cannot answer: a
  * streaming text block is frozen when the producer has moved on to something
  * else. Hosts with no append-only surface may pass `true`.
  */
-export function isSettledRow(
-  row: TranscriptRow,
-  hasLaterRow: boolean,
-): boolean {
-  if (isSelfSettledRow(row)) return true;
+export function isFinalRow(row: TranscriptRow, hasLaterRow: boolean): boolean {
+  if (isSelfFinalRow(row)) return true;
   switch (row.kind) {
     case 'assistant':
       return !row.pendingEmbeddedFollowup && hasLaterRow;

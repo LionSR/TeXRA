@@ -101,7 +101,7 @@ layer(texraHosted, { excludeTestServices: true })(
               }),
             );
             yield* publishTestRunStart(session, runId);
-            yield* Context.get(session, SessionLog).settled;
+            yield* Context.get(session, SessionLog).drained;
             yield* seedRunRecord(session, runId, config);
             yield* publishTestRows(session, [
               {
@@ -117,7 +117,7 @@ layer(texraHosted, { excludeTestServices: true })(
                 text: 'First proof.',
               },
             ]);
-            yield* Context.get(session, SessionLog).settled;
+            yield* Context.get(session, SessionLog).drained;
 
             // The one fact a resume reads: the run's opening `run.position`.
             yield* seedRows(Context.get(session, SessionLog))([
@@ -143,7 +143,7 @@ layer(texraHosted, { excludeTestServices: true })(
                 text: 'Second proof.',
               },
             ]);
-            yield* Context.get(session, SessionLog).settled;
+            yield* Context.get(session, SessionLog).drained;
 
             // The resumed launch stops before it enters the run (no provider key
             // binds its model): it writes nothing.

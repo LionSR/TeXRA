@@ -162,7 +162,7 @@ const isOutcomeOf: <K extends RuntimeCommand["kind"]>(kind: K, outcome: { readon
 ## LaunchError
 
 What a launch refuses before any model work: the two an embedder
-branches on. A run that fails after admission fails with
+branches on. A run that fails after acceptance fails with
 {@link RunFailure} instead.
 
 ```ts
@@ -240,7 +240,7 @@ interface LocalSession extends Session {
   /** Wait until everything already sent to the session is written, shown
    *  in the view, and handled: for example, a failed run's end has been
    *  shown to the attached host (or queued for the next one). */
-  readonly settled: Effect.Effect<void>;
+  readonly drained: Effect.Effect<void>;
 }
 ```
 
@@ -488,7 +488,7 @@ interface RunRecords {
   /** Its result as delivered: the terminal fact with the output its
    *  delivery reported, or a background command's own record. */
   readonly readResult: Effect.Effect<RunResult | null, Error>;
-  /** The workspace files its settled calls edited that are still there,
+  /** The workspace files its finished calls edited that are still there,
    *  under its working directory, by path. */
   readonly readWorkspaceFiles: Effect.Effect<
     readonly RunWorkspaceFile[],
@@ -655,7 +655,7 @@ class Sessions extends Context.Service<
       roots: WorkspaceRoots,
     ) => Effect.Effect<SessionCloseReport>;
     /** A process shutdown's close: drain what the plugins' pollers
-     *  admitted, then close every open session at once, under one
+     *  accepted, then close every open session at once, under one
      *  deadline. */
     readonly closeAll: Effect.Effect<readonly SessionCloseReport[]>;
     readonly list: Effect.Effect<readonly LocalSession[]>;
