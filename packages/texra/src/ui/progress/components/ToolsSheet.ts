@@ -10,7 +10,8 @@
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
 
-import WaDrawer from '@awesome.me/webawesome/dist/components/drawer/drawer.js';
+import '@awesome.me/webawesome/dist/components/drawer/drawer.js';
+import type WaDrawer from '@awesome.me/webawesome/dist/components/drawer/drawer.js';
 
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';

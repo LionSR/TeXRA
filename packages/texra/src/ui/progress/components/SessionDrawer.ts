@@ -13,7 +13,8 @@ import { LitElement, css, html, type TemplateResult } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
 
-import WaDrawer from '@awesome.me/webawesome/dist/components/drawer/drawer.js';
+import '@awesome.me/webawesome/dist/components/drawer/drawer.js';
+import type WaDrawer from '@awesome.me/webawesome/dist/components/drawer/drawer.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
