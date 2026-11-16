@@ -9,27 +9,22 @@ import { DELIVERY_FAMILY } from '@shared/deliveryTags';
 import type { ChildRunDelivery, DisplayRow, ExecResult } from '@shared/schemas';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { appendHead, appendTail } from '@utils/text/appendTail';
+import { appendTail, headTail } from '@utils/text/appendTail';
 import { splitContentLines } from '@utils/text/stringUtils';
 
 /** Last N lines of output for the delivery preview. */
 const OUTPUT_PREVIEW_LINES = 20;
 /**
- * The trailing window of each stream the preview is cut from, and what the
- * writer keeps of a stream past the log cap: its rows end with this window.
+ * Each stream's excerpt: `tail` is the trailing window the preview is cut
+ * from, and what the writer keeps of a stream past the log cap (its rows end
+ * with this window); `head` is shown beside it once a stream outgrows it, at
+ * roughly the foreground head:tail ratio, since a long background build's
+ * first fatal error tends to sit near the top of the log. The head is emitted
+ * as-is and may end mid-line: a char-capped excerpt, not a line-bounded
+ * preview. The gap between head and tail is stated so the model doesn't
+ * mistake the excerpt for the complete stream.
  */
-export const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
-/**
- * Small head budget shown beside the tail once a stream outgrows it, at
- * roughly the foreground head:tail ratio. A long background build's first
- * fatal error tends to sit near the top of the log, well before the tail's
- * trailing window. The head is emitted as-is and may end mid-line: a
- * char-capped excerpt, not a line-bounded preview. The gap between head and
- * tail is stated (mirroring the foreground `checkToolResultTextLimit`'s
- * "[... N characters elided ...]" note) so the model doesn't mistake the
- * excerpt for the complete stream.
- */
-export const BACKGROUND_OUTPUT_HEAD_CHARS = 1_000;
+export const BACKGROUND_OUTPUT = { head: 1_000, tail: 12_000 } as const;
 
 /** The call a background command came from: what it runs, and the
  *  model's short description of it, which names it in the transcript. */
@@ -69,36 +64,29 @@ export function bashResultDelivery(
     const chunks = rows.flatMap((row) =>
       row.type === 'process.output' && row.stream === stream ? [row] : [],
     );
-    const gap = chunks.findIndex((chunk) => chunk.elided !== undefined);
-    const textOf = (from: number, to?: number) =>
-      chunks
-        .slice(from, to)
-        .map((chunk) => chunk.text)
-        .join('');
-    const text = textOf(0);
-    const missing = gap < 0 ? 0 : (chunks[gap]?.elided ?? 0);
-    // Past the cap the head is cut from the rows before the gap, and the
-    // tail is the window the gap's row starts.
-    const [before, tail] =
-      gap < 0
-        ? [text, appendTail('', text, BACKGROUND_OUTPUT_TAIL_CHARS)]
-        : [textOf(0, gap), textOf(gap)];
-    // A head only when the tail dropped earlier text: otherwise the tail
+    // Past the cap, the row marking the gap starts the stream's last window.
+    const window = headTail(BACKGROUND_OUTPUT);
+    for (const chunk of chunks) {
+      if (chunk.elided !== undefined) window.skip(chunk.elided);
+      window.append(chunk.text);
+    }
+    const { head, tail, elided } = window.read();
+    const shown = appendTail('', head + tail, BACKGROUND_OUTPUT.tail);
+    // A head only when the tail window dropped earlier text: otherwise it
     // holds the whole stream and a head would repeat it.
-    if (missing > 0 || text.length > tail.length) {
-      const head = appendHead('', before, BACKGROUND_OUTPUT_HEAD_CHARS);
+    if (elided > 0 || shown.length < head.length + tail.length) {
       if (head) lines.push(`<${name}-head>${escapeText(head)}</${name}-head>`);
-      const elidedChars = text.length - head.length - tail.length + missing;
-      if (elidedChars > 0) {
+      if (elided > 0) {
         lines.push(
-          `<${name}-elided>${elidedChars.toLocaleString()} characters elided</${name}-elided>`,
+          `<${name}-elided>${elided.toLocaleString()} characters elided</${name}-elided>`,
         );
       }
     }
-    const tailLines = splitContentLines(tail);
+    const excerpt = elided > 0 ? tail : shown;
+    const tailLines = splitContentLines(excerpt);
     const preview =
       tailLines.length <= OUTPUT_PREVIEW_LINES
-        ? tail
+        ? excerpt
         : tailLines.slice(-OUTPUT_PREVIEW_LINES).join('\n');
     if (preview) {
       lines.push(`<${name}-preview>${escapeText(preview)}</${name}-preview>`);

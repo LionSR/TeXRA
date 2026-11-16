@@ -16,10 +16,7 @@ import {
   type SessionRow,
 } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
-import {
-  BASH_BACKGROUND_LOG_CAP_CHARS,
-  outputGapNotice,
-} from '@shared/toolUse';
+import { BASH_BACKGROUND_LOG_CAP_CHARS, elidedNote } from '@shared/toolUse';
 import { executed } from '@tools/core/result';
 import { describeRunNotice, formatRunStatus } from '../executionFormatters';
 
@@ -83,7 +80,7 @@ function projectProcessOutput(
     if (event.type === 'process.output') {
       if (event.elided !== undefined) {
         flushPending();
-        lines.push(outputGapNotice(event.elided));
+        lines.push(elidedNote(event.elided));
       }
       if (!event.text) continue;
       chars += event.text.length;

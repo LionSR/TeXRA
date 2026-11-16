@@ -177,10 +177,11 @@ export const BASH_TOOL_DEFAULT_TIMEOUT_MS = 120_000;
  */
 export const BASH_BACKGROUND_LOG_CAP_CHARS = 200_000;
 
-/** The line a projection of a process run's rows shows where a capped log
- *  left `elided` characters of a stream out. */
-export const outputGapNotice = (elided: number): string =>
-  `[${elided.toLocaleString()} characters elided]`;
+/** The note an excerpt shows where it left `elided` characters out: of a
+ *  tool result, of a command's `stream`, or where a capped process log left
+ *  part of a stream out. */
+export const elidedNote = (elided: number, stream?: string): string =>
+  `[... ${elided.toLocaleString()} characters elided${stream === undefined ? '' : ` from ${stream}`} ...]`;
 
 /** Default `executions wait` timeout (seconds) when the model omits `timeout`. */
 export const EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS = 300;
