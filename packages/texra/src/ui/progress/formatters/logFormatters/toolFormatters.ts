@@ -84,10 +84,7 @@ export function formatToolUseTemplate(
     ? `${model.headerLabel}: ${headerPreview}`
     : model.headerLabel;
 
-  const sections: TemplateResult[] = renderToolSections(
-    model.sections,
-    toolName,
-  );
+  const sections: TemplateResult[] = renderToolSections(model.sections);
 
   // Output is shown unless the model suppressed it (empty, already said by
   // the header, the error, or the sections above).
@@ -97,7 +94,6 @@ export function formatToolUseTemplate(
         tools.terminalOutput.includes(normalizedToolName)
         ? buildTerminalSection('', model.output.full)
         : buildToolSection('', model.output.full, {
-            toolName,
             extraClass: 'tool-output-full',
           }),
     );

@@ -8,8 +8,8 @@ import type {
 /**
  * What each run-scoped grant approves, one noun per approval kind: edits,
  * commands, agent work. The approval cards' Approve ▾ menu, the header's
- * grant chips and the CLI's `/status` name the same grant with the same
- * noun. Declared in the one order grants are listed in on every surface.
+ * grant chips and the CLI's `/status` and status bar name the same grant
+ * with the same noun. Declared in the one order grants are listed in on every surface.
  */
 export const RUN_GRANT_NOUN = Object.freeze({
   toolEdit: 'edits',

@@ -22,7 +22,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postMessage } from '@texra/shared/hostBridge';
+import { postToHost } from '@ui/settings/messageDispatcher';
 import { toolDependencyStatusLabel } from '@texra/shared/tools/toolDependencyStatusLabels';
 import type { PluginActionMessage } from '@texra/shared/settingsView/pluginMessages';
 import type {
@@ -168,7 +168,8 @@ export class PluginCard extends LitElement {
   }
 
   private runCommand(item: ToolDashboardItem, kind: ToolCommandKind): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND, {
+    postToHost({
+      command: SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND,
       toolId: item.id,
       kind,
     });
@@ -176,7 +177,8 @@ export class PluginCard extends LitElement {
 
   private pluginAction(action: PluginActionMessage['action']): void {
     if (this.row.kind !== 'installed') return;
-    postMessage(SETTINGS_VIEW_COMMANDS.PLUGIN_ACTION, {
+    postToHost({
+      command: SETTINGS_VIEW_COMMANDS.PLUGIN_ACTION,
       action,
       name: this.row.plugin.name,
     });
@@ -230,7 +232,8 @@ export class PluginCard extends LitElement {
             variant="brand"
             size="s"
             @click=${() =>
-              postMessage(SETTINGS_VIEW_COMMANDS.INSTALL_EXTENSION, {
+              postToHost({
+                command: SETTINGS_VIEW_COMMANDS.INSTALL_EXTENSION,
                 extensionId: action.extensionId,
               })}
           >
@@ -245,7 +248,8 @@ export class PluginCard extends LitElement {
             variant=${secondaryVariant}
             size="s"
             @click=${() =>
-              postMessage(SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL, {
+              postToHost({
+                command: SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL,
                 url: action.url,
               })}
           >
@@ -368,7 +372,8 @@ export class PluginCard extends LitElement {
       const { id } = row.item;
       checked = row.item.enabled !== false;
       onChange = (enabled) =>
-        postMessage(SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL, {
+        postToHost({
+          command: SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL,
           toolId: id,
           enabled,
         });

@@ -30,18 +30,12 @@ import { applyTeam } from '@texra/agent/teams/teamPlan';
 const TEAM_CHOICES = [STARTER_AGENT_MODE_PRESET, ...AGENT_MODE_PRESETS];
 const TEAM_IDS = TEAM_CHOICES.map((preset) => preset.id);
 
-function describeTeams(): string {
-  return TEAM_CHOICES.map(
-    (preset) => `- \`${preset.id}\`: ${preset.name}: ${preset.description}`,
-  ).join('\n');
-}
-
 const ApplyTeamInputSchema = Schema.Struct({
-  teamId: Schema.String.check(
-    Schema.makeFilter((value) => TEAM_IDS.includes(value), {
-      message: `Expected one of: ${TEAM_IDS.join(', ')}`,
-    }),
-  ).annotate({ description: `Team to apply. One of:\n${describeTeams()}` }),
+  teamId: Schema.Literals(TEAM_IDS).annotate({
+    description: `Team to apply. One of:\n${TEAM_CHOICES.map(
+      (preset) => `- \`${preset.id}\`: ${preset.name}: ${preset.description}`,
+    ).join('\n')}`,
+  }),
 });
 
 type ApplyTeamInput = typeof ApplyTeamInputSchema.Type;
@@ -108,10 +102,7 @@ export const ApplyTeamTool = defineTool({
   name: 'apply_team',
   description: `Apply an agent team (one per discipline) to this workspace and record it as the user's default team.
 
-Sets which agents appear in this workspace's pickers, and saves the choice user-wide so future projects start with the same team. Use \`starter\` when the user skips the discipline question. The choice is reversible: Settings → Agents shows every agent and lets the user re-check anything.
-
-Teams:
-${describeTeams()}`,
+Sets which agents appear in this workspace's pickers, and saves the choice user-wide so future projects start with the same team. Use \`starter\` when the user skips the discipline question. The choice is reversible: Settings → Agents shows every agent and lets the user re-check anything.`,
   schema: ApplyTeamInputSchema,
   execute,
 });

@@ -24,7 +24,7 @@ import {
   pluralize,
 } from '@texra-ai/harness/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postMessage } from '@texra/shared/hostBridge';
+import { postToHost } from '@ui/settings/messageDispatcher';
 import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import type { SettingsSectionName } from '@texra/shared/settingsView/settingsTarget';
 import {
@@ -103,19 +103,19 @@ export class AgentsTab extends SignalWatcher(LitElement) {
     'library';
 
   private handleOpenFolder(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER);
+    postToHost({ command: SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER });
   }
 
   private handleCreateAgent(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.CREATE_AGENT);
+    postToHost({ command: SETTINGS_VIEW_COMMANDS.CREATE_AGENT });
   }
 
   private handleChangeCustomDir(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR);
+    postToHost({ command: SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR });
   }
 
   private handleResetCustomDir(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR);
+    postToHost({ command: SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR });
   }
 
   private renderCustomAgentIssues(): TemplateResult | typeof nothing {

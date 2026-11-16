@@ -16,6 +16,7 @@ import {
   WORKBENCH_KIND_META,
   closeWorkbenchTab,
   openWorkbenchTab,
+  workbenchTabId,
   type DesktopShellState,
   type WorkbenchKind,
   type WorkbenchTab,
@@ -276,7 +277,7 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
         break;
     }
     return {
-      referencePanel: dock.getPanel('workbench:files') ?? fallback,
+      referencePanel: dock.getPanel(workbenchTabId('files')) ?? fallback,
       direction: 'right',
     };
   }
@@ -484,10 +485,10 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
               (other) => other.id !== tab.id && zoneOf(other.id) === 'document',
             )
           ) {
-            dock.getPanel('workbench:agent')?.api.setSize({
+            dock.getPanel(workbenchTabId('agent'))?.api.setSize({
               width: Math.min(380, element.clientWidth * 0.35),
             });
-            dock.getPanel('workbench:files')?.api.setSize({
+            dock.getPanel(workbenchTabId('files'))?.api.setSize({
               width: Math.min(220, element.clientWidth * 0.2),
             });
           }

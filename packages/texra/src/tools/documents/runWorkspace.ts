@@ -34,16 +34,6 @@ const CHANNEL = 'runStorage';
 /** The directory under a run's storage that holds its pre-run snapshots. */
 const ORIGINAL_DIR = 'original';
 
-/**
- * Workspace-relative directories never moved into run storage: `History`
- * folders hold prior run data that is managed separately.
- */
-const IGNORED_WORKSPACE_ROOTS = new Set(['History', 'history']);
-
-/** Whether a workspace-relative path stays out of run storage. */
-const skipsRelocation = (relativePath: string): boolean =>
-  IGNORED_WORKSPACE_ROOTS.has(relativePath.split(/[\\/]/)[0] ?? '');
-
 /** `createSymlink`'s refusal to replace an entry that is not a link. */
 const isStanding = (error: PlatformError.PlatformError): boolean =>
   error.reason._tag === 'AlreadyExists';
@@ -149,14 +139,13 @@ export class RunWorkspace {
    * target itself.
    * Round-dir symlinks point here rather than the live workspace so an agent
    * write at `r<N>/<relPath>` can never reach the user's working copy.
-   * Idempotent; skips non-workspace, ignored-root, non-regular, and missing sources.
+   * Idempotent; skips non-workspace, non-regular, and missing sources.
    */
   private captureOriginalSnapshot(
     target: FileLocation,
   ): Effect.Effect<FileLocation, Error, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       if (target.kind !== 'workspace') return target;
-      if (skipsRelocation(target.relativePath)) return target;
 
       const snapshotAbsolute = this.originalSnapshotPath(target.relativePath);
       const snapshot = createRunStorageLocation(
@@ -241,12 +230,7 @@ export class RunWorkspace {
       location: FileLocation,
       options: { snapshot?: boolean } = {},
     ): Effect.fn.Return<FileLocation, Error, FileSystem.FileSystem> {
-      if (
-        location.kind !== 'workspace' ||
-        skipsRelocation(location.relativePath)
-      ) {
-        return location;
-      }
+      if (location.kind !== 'workspace') return location;
 
       yield* this.ensureRunDirectory;
       const runAbsolute = this.inRunDirectory(location.relativePath);

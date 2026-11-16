@@ -4,7 +4,6 @@ import {
   LoopbackTransportUnavailableError,
   type SubscriptionDeviceCodePrompt,
 } from '@texra-ai/llm/node';
-import { Skills } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { onAppSignal } from '@texra-ai/harness/host';
 import type { HostFailed } from '@texra/hosts/uiHosts';
@@ -16,7 +15,6 @@ import {
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
-import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness/host';
@@ -45,8 +43,6 @@ export interface DesktopSettingsIpcOptions {
   /** The roots of the project this settings surface serves. The desktop has
    *  no process-default roots, so they must be passed. */
   readonly roots: WorkspaceRoots;
-  /** Root of the packaged resources tree, which holds the agent templates. */
-  readonly resourcesPath: string;
   /** Runs this surface's background work on fibers of the scope it opens in. */
   readonly spawn: DesktopSpawn;
 }
@@ -151,9 +147,6 @@ export function createDesktopSettingsIpc(
       // The approval policy is the project's persisted setting: the write
       // is the change, which this session and the service both read.
       roots: options.roots,
-      resourcesPath: options.resourcesPath,
-      skillDisplay: Skills.display(options.roots),
-      accountCopy: ACCOUNT_OUTCOME,
       bindings: {
         ...bindings,
         signInSubscription,

@@ -11,7 +11,7 @@ import {
 } from '@ui/styles/surfaceStyles';
 
 /**
- * Tool-use section styles for scratchpad, tool calls, diffs, etc.
+ * Tool-use section styles for tool calls, diffs, etc.
  */
 export const toolUseStyles = css`
   ${messageHeaderStyles}

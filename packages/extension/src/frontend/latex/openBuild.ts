@@ -23,7 +23,7 @@ import { withLogChannel } from '@texra-ai/harness/plugins';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
-import { compileForDisplay } from '@texra/tools/latex/latexPreview';
+import { compileForDisplay } from '@texra/controllers/approval/latexPreview';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 
 // Local imports - utilities

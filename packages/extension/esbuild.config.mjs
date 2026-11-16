@@ -27,7 +27,6 @@ const extensionConfig = {
     'vscode', // VS Code API - provided at runtime
     'fsevents', // macOS native module
   ],
-  loader: { ...base.loader, '.tex': 'text' },
   logLevel: 'info',
   // Polyfill import.meta.url for ESM-only dependencies (e.g. @openai/codex-sdk)
   // bundled into CJS. Without this, esbuild replaces import.meta with {} and

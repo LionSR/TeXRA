@@ -24,8 +24,7 @@ import { DateTime, Effect, Schema } from 'effect';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
 import type { Session } from '@texra-ai/harness';
-import type { ExportNode } from '@texra-ai/harness/host';
-import type { RunView, RunId, AgentConfig } from '@texra-ai/harness/schemas';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /**
  * A stored run's export input could not be read: the run record read or the
@@ -38,33 +37,20 @@ import type { RunView, RunId, AgentConfig } from '@texra-ai/harness/schemas';
 export class ChatExportInputUnreadable extends Schema.TaggedError<ChatExportInputUnreadable>()(
   'ChatExportInputUnreadable',
   {
-    part: Schema.Literals(['config', 'conversation', 'view']),
     message: Schema.String,
     cause: Schema.Defect(),
   },
 ) {}
 
-/**
- * Facts read from the run store and the session's view, plus the assembled
- * {@link ChatExportInput} when both `config` and a non-empty `conversation`
- * are present. `exportInput` is `null` whenever there is nothing (or not
- * enough) to export; callers distinguish "nothing at all" from "something is
- * missing" using `run`/`config`/`conversation` themselves.
- */
-export interface ChatExportLoadResult {
-  readonly run: RunView | null;
-  readonly config: AgentConfig | null;
-  /** Empty when the run holds no conversation. */
-  readonly conversation: readonly ExportNode[];
-  readonly exportInput: ChatExportInput | null;
-}
+/** Whether a stored run can be exported: its {@link ChatExportInput}, or
+ *  which part an export needs the run does not hold. */
+type ChatExportLoad =
+  | { readonly _tag: 'ready'; readonly input: ChatExportInput }
+  | { readonly _tag: 'noConfig' }
+  | { readonly _tag: 'noConversation' };
 
-function unreadable(
-  part: 'config' | 'conversation' | 'view',
-  cause: unknown,
-): ChatExportInputUnreadable {
+function unreadable(cause: unknown): ChatExportInputUnreadable {
   return new ChatExportInputUnreadable({
-    part,
     message: toErrorMessage(cause),
     cause,
   });
@@ -73,46 +59,24 @@ function unreadable(
 export const loadChatExportInput = Effect.fn('loadChatExportInput')(function* (
   id: RunId,
   session: Session,
-): Effect.fn.Return<ChatExportLoadResult, ChatExportInputUnreadable> {
+): Effect.fn.Return<ChatExportLoad, ChatExportInputUnreadable> {
   const records = session.records(id);
   const [config, conversation, view] = yield* Effect.all(
-    [
-      records.readConfig.pipe(
-        Effect.mapError((cause) => unreadable('config', cause)),
-      ),
-      records.readConversation.pipe(
-        Effect.mapError((cause) => unreadable('conversation', cause)),
-      ),
-      session.view
-        .read([])
-        .pipe(Effect.mapError((cause) => unreadable('view', cause))),
-    ],
+    [records.readConfig, records.readConversation, session.view.read([])],
     { concurrency: 3 },
-  );
-  const run = view.runs.get(id) ?? null;
+  ).pipe(Effect.mapError(unreadable));
+  if (!config) return { _tag: 'noConfig' };
+  if (conversation.length === 0) return { _tag: 'noConversation' };
 
-  if (!config || conversation.length === 0) {
-    return { run, config, conversation, exportInput: null };
-  }
-
+  const run = view.runs.get(id);
   return {
-    run,
-    config,
-    conversation,
-    exportInput: {
+    _tag: 'ready',
+    input: {
       timestamp: run
         ? new Date(run.launchedAt).toISOString()
         : DateTime.formatIso(yield* DateTime.now),
       description: run?.description ?? undefined,
-      config: {
-        agent: config.agent,
-        model: config.model,
-        instruction: config.instruction,
-        inputFiles: config.inputFiles,
-        mediaFiles: config.mediaFiles,
-        contextFiles: config.contextFiles,
-        outputFiles: config.outputFiles,
-      },
+      config,
       nodes: conversation,
     },
   };

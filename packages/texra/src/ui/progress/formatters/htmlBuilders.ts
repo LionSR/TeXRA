@@ -6,7 +6,7 @@
 // Third-party imports
 import { formatResultCount, getBasename } from '@texra-ai/harness/schemas';
 import { html, nothing, type TemplateResult } from 'lit';
-import { classMap } from 'lit/directives/class-map.js';
+import { classMap, type ClassInfo } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { diffWordsWithSpace } from 'diff';
@@ -25,12 +25,21 @@ import { fileLoadTone, statusGlyph } from '@ui/copy/runStatus';
 import '@ui/progress/components/CopyButton';
 
 // Local imports - formatter helpers
-import {
-  DIFF_DETECTION_LINE_LIMIT,
-  DIFF_MARKER_THRESHOLD,
-  INLINE_DIFF_TIMEOUT_MS,
-} from './constants';
 import type { FileListRow } from '@texra-ai/harness/transcript';
+
+// Threshold constants for diff detection heuristics
+const DIFF_DETECTION_LINE_LIMIT = 20;
+const DIFF_MARKER_THRESHOLD = 2;
+
+/**
+ * Upper bound on the inline word diff, which runs synchronously inside Lit's
+ * render on the webview's main thread over LLM-authored edit text.
+ *
+ * Deliberately far below `unifiedDiff`'s 5s Node-side bound rather than shared
+ * with it: this budget is the frame the user is waiting on, so the two are
+ * different policies for different threads, not one value written twice.
+ */
+const INLINE_DIFF_TIMEOUT_MS = 250;
 
 /** Build a tool-use section template. Empty label omits the label element. */
 export function buildToolUseSection(
@@ -135,14 +144,9 @@ interface DetailsSummaryOptions {
   extraContent?: TemplateResult;
 }
 
-/**
- * Build a `<wa-details>` summary-slot header with icon, label, and optional
- * extras. The caller must render it inside a `<wa-details>` and rely on its
- * built-in toggle icon.
- */
-export function buildDetailsSummary(
-  options: DetailsSummaryOptions,
-): TemplateResult {
+/** The summary-slot header of {@link buildDetailsCard}: icon, label, and
+ *  optional extras. */
+function buildDetailsSummary(options: DetailsSummaryOptions): TemplateResult {
   const {
     iconName,
     running = false,
@@ -166,6 +170,22 @@ export function buildDetailsSummary(
   const extraTemplate = extraContent ?? nothing;
   // prettier-ignore
   return html`<div slot="summary" class="details-summary">${iconTemplate} <span class=${labelClass} dir="auto">${label}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</div>`;
+}
+
+/**
+ * A collapsible transcript card: a plain `<wa-details>` with its toggle
+ * icon at the start, the summary header, and `body` below it. Every
+ * card of the transcript draws its disclosure through this one shell.
+ */
+export function buildDetailsCard(opts: {
+  summary: DetailsSummaryOptions;
+  body: TemplateResult;
+  open?: boolean;
+  classes?: ClassInfo;
+}): TemplateResult {
+  const classes = { 'banner-details': true, ...opts.classes };
+  // prettier-ignore
+  return html`<wa-details appearance="plain" icon-placement="start" class=${classMap(classes)} ?open=${opts.open ?? false}>${buildDetailsSummary(opts.summary)}${opts.body}</wa-details>`;
 }
 
 /**

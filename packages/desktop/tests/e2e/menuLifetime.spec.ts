@@ -78,10 +78,10 @@ test('application menu releases a closed window and binds once to its replacemen
   await windowB.evaluate(() => {
     document.body.dataset.menuWorkbenchMessageCount = '0';
     window.addEventListener('message', (event) => {
-      const message = event.data as { command?: unknown; kind?: unknown };
+      const message = event.data as { command?: unknown; id?: unknown };
       if (
-        message.command !== 'desktop:openWorkbench' ||
-        message.kind !== 'logs'
+        message.command !== 'desktop:runCommand' ||
+        message.id !== 'texra.desktop.showLogs'
       ) {
         return;
       }

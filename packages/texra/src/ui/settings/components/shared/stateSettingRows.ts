@@ -23,7 +23,7 @@ import {
   settingNumberBounds,
 } from '@texra/shared/settingsView/settingRows';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postMessage } from '@texra/shared/hostBridge';
+import { postToHost } from '@ui/settings/messageDispatcher';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import type { StateSettingValue } from '@texra/shared/settingsView/settingsViewMessages';
 import type { SettingRow } from '@texra-ai/harness/schemas';
@@ -45,7 +45,11 @@ import '@awesome.me/webawesome/dist/components/option/option.js';
  * schema performs the narrower per-row validation backend-side).
  */
 export function postStateSetting(key: string, value: StateSettingValue): void {
-  postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, { key, value });
+  postToHost({
+    command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+    key,
+    value,
+  });
 }
 
 /**

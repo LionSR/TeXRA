@@ -28,7 +28,10 @@ import {
 } from '@ui/wa/actionButtons';
 import { fileSelectLayoutStyles } from '../fileSelectStyles';
 
-type LatexDiffsAction = Extract<HostCommand, { kind: 'latexdiffs' }>['action'];
+/** A verb over the base and edited files, or over the base and a commit. */
+type DiffAction =
+  | Extract<HostCommand, { kind: 'fileAction' }>['action']
+  | Extract<HostCommand, { kind: 'latexdiffCommit' }>['action'];
 
 /** A labeled diff operation button rendered inside a wa-button-group. */
 interface DiffActionSpec {
@@ -36,7 +39,7 @@ interface DiffActionSpec {
   readonly icon: IconName;
   readonly label: string;
   readonly tooltip: string;
-  readonly action: LatexDiffsAction;
+  readonly action: DiffAction;
 }
 
 /** Review the base ↔ edited pair without touching either file. */
@@ -196,6 +199,31 @@ export class LatexDiffsSection extends LitElement {
     this.dispatchEvent(SessionUiEvents.host({ kind: 'refreshCommits' }));
   }
 
+  /** What a button asks the host for, over the files and commit selected. */
+  private request(action: DiffAction): HostCommand {
+    switch (action) {
+      case 'latexdiffvc':
+      case 'packLatexdiffvc':
+      case 'cleanLatexdiffvc':
+        return {
+          kind: 'latexdiffCommit',
+          action,
+          baseFile: this.baseFile,
+          commit: this.commit,
+        };
+      case 'compare':
+      case 'latexdiff':
+      case 'accept':
+      case 'merge':
+        return {
+          kind: 'fileAction',
+          action,
+          file: this.editedFile,
+          base: { kind: 'file', path: this.baseFile },
+        };
+    }
+  }
+
   /**
    * A cluster of labeled operation buttons. Tooltips render after the group:
    * wa-button-group fuses corners via CSS :first/:last-child on its slotted
@@ -216,15 +244,7 @@ export class LatexDiffsSection extends LitElement {
         tooltip: action.tooltip,
         appearance: 'outlined',
         onClick: () =>
-          this.dispatchEvent(
-            SessionUiEvents.host({
-              kind: 'latexdiffs',
-              action: action.action,
-              baseFile: this.baseFile,
-              editedFile: this.editedFile || null,
-              commit: this.commit,
-            }),
-          ),
+          this.dispatchEvent(SessionUiEvents.host(this.request(action.action))),
       }),
     }));
     return html`

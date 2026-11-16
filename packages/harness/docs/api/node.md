@@ -687,7 +687,7 @@ The listing comes from `readdir(..., { withFileTypes: true })`, so each
 entry brings its own type and needs no second syscall. That is also what
 keeps a directory that is readable but not searchable (`r--` on Unix)
 listed: a probe would fail `EACCES` on every entry, and the tree would
-render empty where the pre-migration listing showed it. Only an entry whose
+render empty though its names are readable. Only an entry whose
 dirent type the platform left `Unknown` is probed, and only that probe's
 failure costs a row. The strict form stays with the containment and
 deletion walkers, where a refused answer is the safe one.
@@ -812,6 +812,14 @@ function whichOnExtendedPath(
   name: string,
   appDirs: readonly string[],
 ): string | null
+```
+
+## withCommandDirs
+
+`env` on the PATH extended with the app's {@link CommandDirs}.
+
+```ts
+const withCommandDirs: <T extends NodeJS.ProcessEnv>(env: T) => Effect<T, never, never>
 ```
 
 ## withExtendedPath

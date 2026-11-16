@@ -15,7 +15,7 @@ import {
   pluralize,
 } from '@texra-ai/harness/schemas';
 import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
-import { postMessage } from '@texra/shared/hostBridge';
+import { postToHost } from '@ui/settings/messageDispatcher';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
@@ -95,7 +95,8 @@ export class SkillsTab extends SignalWatcher(LitElement) {
     item: string,
     enabled: boolean,
   ): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_SKILL_ENABLED, {
+    postToHost({
+      command: SETTINGS_VIEW_COMMANDS.SET_SKILL_ENABLED,
       key,
       item,
       enabled,

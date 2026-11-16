@@ -3,7 +3,7 @@
 // lands off screen.
 
 import { attentionOf } from '@texra-ai/harness/schemas';
-import { postMessage } from '@texra/shared/hostBridge';
+import { postToMain } from './messageRoutes';
 import { shownRun } from '@texra/shared/session/surface';
 import type { createSessionSurfaces } from '@ui/progress/sessionSurfaces';
 
@@ -26,7 +26,7 @@ export function createProjectRail(deps: {
 
   function selectProject(key: string): void {
     if (key !== deps.shell().active)
-      postMessage(DESKTOP_PROJECT_COMMANDS.SELECT_PROJECT, { key });
+      postToMain({ command: DESKTOP_PROJECT_COMMANDS.SELECT_PROJECT, key });
   }
 
   /**
@@ -47,7 +47,8 @@ export function createProjectRail(deps: {
       const project = workbenches.get(key);
       switch (action) {
         case 'close':
-          postMessage(DESKTOP_PROJECT_COMMANDS.CLOSE_PROJECT, {
+          postToMain({
+            command: DESKTOP_PROJECT_COMMANDS.CLOSE_PROJECT,
             key,
             hasUnsavedChanges: project?.hasUnsavedChanges() ?? false,
           });

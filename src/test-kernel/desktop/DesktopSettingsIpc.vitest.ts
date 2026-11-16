@@ -86,7 +86,6 @@ const createSettingsFixture = (config: ConfigProvider) =>
         presentSubscriptionSignInUrl: () => Effect.void,
         presentSubscriptionDeviceCode: () => Effect.void,
       },
-      resourcesPath: '/resources',
       roots: session.roots,
     });
     return {

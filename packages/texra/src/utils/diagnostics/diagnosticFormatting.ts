@@ -1,3 +1,5 @@
+import { Schema } from 'effect';
+
 import { formatResultCount } from '@texra-ai/harness/schemas';
 /**
  * Platform-agnostic diagnostic formatting utilities.
@@ -7,24 +9,25 @@ import { formatResultCount } from '@texra-ai/harness/schemas';
  * and Lean tool diagnostics satisfy this interface.
  */
 
-/**
- * Severity levels, matching `vscode.DiagnosticSeverity` values
- * (Error=0, Warning=1, Information=2, Hint=3).
- */
-export type DiagnosticSeverity = 0 | 1 | 2 | 3;
+const PositionSchema = Schema.Struct({
+  line: Schema.Int,
+  character: Schema.Int,
+});
 
 /**
- * Minimal diagnostic shape required by the formatting functions.
- * Compatible with `vscode.Diagnostic` and `LeanDiagnostic`.
+ * Minimal diagnostic shape required by the formatting functions, and what a
+ * service window answers a diagnostics call with. Compatible with
+ * `vscode.Diagnostic` and `LeanDiagnostic`. Severity levels match
+ * `vscode.DiagnosticSeverity` values (Error=0, Warning=1, Information=2,
+ * Hint=3).
  */
-export interface GenericDiagnostic {
-  severity: DiagnosticSeverity;
-  message: string;
-  range: {
-    start: { line: number; character: number };
-    end: { line: number; character: number };
-  };
-}
+export const GenericDiagnosticSchema = Schema.Struct({
+  severity: Schema.Literals([0, 1, 2, 3]),
+  message: Schema.String,
+  range: Schema.Struct({ start: PositionSchema, end: PositionSchema }),
+});
+export type GenericDiagnostic = typeof GenericDiagnosticSchema.Type;
+export type DiagnosticSeverity = GenericDiagnostic['severity'];
 
 /** Counts of diagnostics by severity level */
 interface SeverityCounts {

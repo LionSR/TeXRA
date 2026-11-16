@@ -2,7 +2,7 @@
 import { html, nothing, type TemplateResult } from 'lit';
 
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postMessage } from '@texra/shared/hostBridge';
+import { postToHost } from '@ui/settings/messageDispatcher';
 import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsBanner } from '@ui/wa/settingsBanner';
@@ -30,7 +30,8 @@ export function renderNewerBuiltInNotice(
         title: 'View the new built-in definition (read-only)',
         kind: 'ghost',
         onClick: () =>
-          postMessage(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML, {
+          postToHost({
+            command: SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML,
             agentName,
             agentSource: builtInSource,
           }),
@@ -41,7 +42,8 @@ export function renderNewerBuiltInNotice(
         title: 'Delete your copy so the new built-in version is used',
         kind: 'ghost',
         onClick: () =>
-          postMessage(SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT, {
+          postToHost({
+            command: SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT,
             agentName,
           }),
       }),
@@ -51,7 +53,10 @@ export function renderNewerBuiltInNotice(
         title: 'Keep your copy and dismiss this notice',
         kind: 'ghost',
         onClick: () =>
-          postMessage(SETTINGS_VIEW_COMMANDS.KEEP_CUSTOM_AGENT, { agentName }),
+          postToHost({
+            command: SETTINGS_VIEW_COMMANDS.KEEP_CUSTOM_AGENT,
+            agentName,
+          }),
       }),
     ]}`,
   });

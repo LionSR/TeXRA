@@ -94,6 +94,22 @@ export function outputDisplayName(file: OutputFileInfo): string {
 }
 
 /**
+ * The file an output is compared with and accepted into: the workspace
+ * document it revises, so the diff opens the user's real, editable file and
+ * the accept writes it, rather than the run's snapshot. An output that is
+ * that document (an in-place revision) would compare with itself, so it
+ * takes the snapshot. None for an output that revises nothing.
+ */
+export function compareTarget(output: OutputFileInfo): string | undefined {
+  if (output.lineage === null) return undefined;
+  const { base, document } = output.lineage;
+  return document !== null &&
+    document.absolutePath !== output.location.absolutePath
+    ? document.absolutePath
+    : base.absolutePath;
+}
+
+/**
  * The +/- counts an artifact's diff chip shows, or `null` when there is no
  * chip to show. `DiffStats` is partial because a brand-new file is recorded as
  * `{ added }` with nothing removed, so a present-but-absent side reads as

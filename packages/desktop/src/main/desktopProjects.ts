@@ -6,7 +6,6 @@
 // the process; the window switches which project it shows.
 
 import {
-  Context,
   Effect,
   Exit,
   FileSystem,
@@ -40,7 +39,7 @@ import {
 } from '@texra/controllers/session/openProjectSession';
 import type { GuiSession } from '@texra/controllers/session/openGuiWindow';
 import { DesktopProjectRecords } from './desktopProjectRecords.js';
-import { showDesktopWarningDialog } from './platform/warningDialog.js';
+import { noticeIn } from './desktopDialogs.js';
 import type { ConfigStore } from '@texra-ai/harness/node';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -55,7 +54,7 @@ interface DesktopProjectFacts {
    *  for it, derived once from `key` and `root`. */
   readonly display: ProjectDisplay;
   readonly roots: WorkspaceRoots;
-  /** Release the session from its owner; settles once its entry has unwound. */
+  /** Release the session from its owner; finishes once its entry has unwound. */
   dispose(): Effect.Effect<void>;
 }
 
@@ -128,7 +127,7 @@ export interface DesktopProjectRegistry {
   /**
    * Close an open project: forget it for the next launch (it joins the
    * recent list), close its session in its own scope (its runs stopped and
-   * settled under the shutdown deadline), and show the most recently shown remaining
+   * finished under the shutdown deadline), and show the most recently shown remaining
    * project if it was the active one. The other projects' runs are untouched.
    */
   close(root: string): Effect.Effect<void, Error>;
@@ -138,13 +137,6 @@ export interface DesktopProjectRegistry {
    *  no-workspace session. */
   dispose(): Effect.Effect<void>;
 }
-
-/** The open projects, served to the surfaces that follow them (the dock
- *  badge and notifications) by the startup program that opened them. */
-export class DesktopProjects extends Context.Service<
-  DesktopProjects,
-  DesktopProjectRegistry
->()('@texra/desktop/DesktopProjects') {}
 
 /** The folder paths among `candidates`, deduplicated by canonical root, split
  *  three ways: still folders, gone (or no longer a folder), and unreadable
@@ -236,23 +228,6 @@ export const readRememberedDesktopProjects = Effect.fn(
   } satisfies RememberedDesktopProjects;
 });
 
-/** Show `message` in a warning dialog without waiting on the user, on a
- *  fiber of `scope`, the process's: a dialog that cannot be shown is logged,
- *  with the message it carried, and once that scope has closed a warning
- *  starts nothing. */
-const warnInDialog =
-  (scope: Scope.Scope) =>
-  (message: string): Effect.Effect<void> =>
-    showDesktopWarningDialog(message).pipe(
-      Effect.catch((error) =>
-        Effect.logWarning(
-          `A warning dialog could not be shown (${toErrorMessage(error)}): ${message}`,
-        ).pipe(withLogChannel('desktop')),
-      ),
-      Effect.forkIn(scope),
-      Effect.asVoid,
-    );
-
 /**
  * Open one session over `roots`. Every fact this project's services answer
  * with comes from `roots` as data — the approval policy below — so a
@@ -298,7 +273,8 @@ export const openDesktopProjectRegistry: (
     const sessions = yield* Sessions;
     const hosts = yield* HostWindows;
     // A project's warnings outlive its open and end with the process.
-    const warn = warnInDialog(options.processScope);
+    const notice = noticeIn(options.processScope);
+    const warn = (message: string) => notice('warning', message);
     const openProject = (
       root: string | undefined,
       roots: WorkspaceRoots,
@@ -340,12 +316,6 @@ export const openDesktopProjectRegistry: (
       current().projects.find(
         (project) => project.key === current().activeKey,
       ) ?? fallback;
-    // On the selection lane, as every other write of `recent`: a read taken
-    // before another's write must not land after it.
-    const syncRecent = Effect.gen(function* () {
-      const recent = yield* records.readRecent;
-      yield* SubscriptionRef.update(state, (s) => ({ ...s, recent }));
-    }).pipe(selectionLane.withPermit);
     const activate = Effect.fn('activate')(function* (
       root: string | undefined,
     ) {
@@ -362,7 +332,6 @@ export const openDesktopProjectRegistry: (
         return Effect.gen(function* () {
           const existing = byRoot(root);
           if (existing) return existing;
-          yield* records.remember(root);
           const projectScope = yield* Scope.make();
           return yield* Effect.gen(function* () {
             const { roots, warnings } = yield* openProjectRoots(
@@ -380,13 +349,14 @@ export const openDesktopProjectRegistry: (
               yield* Effect.logWarning(message).pipe(withLogChannel('desktop'));
               yield* warn(message);
             }
-            // Acquire the session and install its registry owner before
-            // interruption can leave this operation.
+            // Acquire the session, remember it for the next launch and
+            // install its registry owner before interruption can leave this
+            // operation; a failed write closes the session again.
             return yield* Effect.uninterruptible(
               openProject(root, roots, projectScope, options.service).pipe(
                 Effect.tap(
                   Effect.fnUntraced(function* (project) {
-                    const recent = yield* records.readRecent;
+                    const { recent } = yield* records.remember(root);
                     yield* SubscriptionRef.update(state, (s) => ({
                       ...s,
                       projects: [...s.projects, project],
@@ -426,8 +396,10 @@ export const openDesktopProjectRegistry: (
                 current().projects.findLast(
                   (candidate) => candidate.root !== root,
                 )?.root;
-              yield* records.forget(root, wasActive ? next : undefined);
-              const recent = yield* records.readRecent;
+              const { recent } = yield* records.forget(
+                root,
+                wasActive ? next : undefined,
+              );
               yield* SubscriptionRef.update(state, (s) => ({
                 projects: s.projects.filter(
                   (candidate) => candidate !== project,
@@ -446,9 +418,13 @@ export const openDesktopProjectRegistry: (
         }).pipe(withPerKeyLane(lanes, root), Effect.mapError(ensureError));
       },
       clearRecent: () =>
-        records
-          .replaceRecent([])
-          .pipe(Effect.andThen(syncRecent), Effect.mapError(ensureError)),
+        records.replaceRecent([]).pipe(
+          Effect.flatMap(({ recent }) =>
+            SubscriptionRef.update(state, (s) => ({ ...s, recent })),
+          ),
+          selectionLane.withPermit,
+          Effect.mapError(ensureError),
+        ),
       dispose: () =>
         Effect.suspend(() =>
           current()

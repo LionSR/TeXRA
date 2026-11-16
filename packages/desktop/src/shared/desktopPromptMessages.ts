@@ -2,14 +2,8 @@ import { Schema } from 'effect';
 
 export const DESKTOP_PROMPT_COMMANDS = {
   SHOW: 'desktop:showPrompt',
-  SETTLE: 'desktop:settlePrompt',
+  ANSWER: 'desktop:settlePrompt',
 } as const;
-
-// These schemas deliberately ignore undeclared keys (a `Schema.Struct` does) for parity
-// with every other desktop IPC schema: all of them validate the same
-// renderer<->main channel, and unknown-key drift is dev-caught by
-// `DesktopOutboundMessageSchema`'s discriminated union plus the route table,
-// not by per-surface strictness. See the header of desktopOutboundMessages.ts.
 
 export const DesktopShowPromptMessageSchema = Schema.Struct({
   command: Schema.Literal(DESKTOP_PROMPT_COMMANDS.SHOW),
@@ -22,11 +16,11 @@ export const DesktopShowPromptMessageSchema = Schema.Struct({
 export type DesktopShowPromptMessage =
   (typeof DesktopShowPromptMessageSchema)['Type'];
 
-export const DesktopSettlePromptMessageSchema = Schema.Struct({
-  command: Schema.Literal(DESKTOP_PROMPT_COMMANDS.SETTLE),
+export const DesktopAnswerPromptMessageSchema = Schema.Struct({
+  command: Schema.Literal(DESKTOP_PROMPT_COMMANDS.ANSWER),
   requestId: Schema.String.check(Schema.isUUID()),
   value: Schema.NullOr(Schema.String),
 });
 
-export type DesktopSettlePromptMessage =
-  (typeof DesktopSettlePromptMessageSchema)['Type'];
+export type DesktopAnswerPromptMessage =
+  (typeof DesktopAnswerPromptMessageSchema)['Type'];

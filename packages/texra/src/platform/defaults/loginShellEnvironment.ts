@@ -1,12 +1,12 @@
 /**
  * The user's login-shell environment, read once by a process that must not
- * depend on how it was started. The background service is started by
- * whichever window comes first: a desktop app opened from the Dock has a
- * minimal PATH, so without this a VS Code user would inherit a service that
- * cannot find latexmk or git. The service asks the user's own login shell
- * instead, so every window gets the same environment.
+ * depend on how it was started: the background service, which whichever
+ * window comes first starts, and the desktop app, which the Dock or Finder
+ * starts with a minimal PATH. Each asks the user's own login shell, so a
+ * window and its service run with the same environment.
  */
 import { homedir, userInfo } from 'node:os';
+import { delimiter } from 'node:path';
 
 import { Effect, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
@@ -27,7 +27,7 @@ const TIMEOUT_MS = 10_000;
  * the reason when the shell does not answer, so the caller can say why it
  * runs without them.
  */
-export function loginShellEnvironment(): Effect.Effect<
+function loginShellEnvironment(): Effect.Effect<
   Readonly<Record<string, string>>,
   Error,
   ChildProcessSpawner
@@ -123,4 +123,38 @@ export function loginShellEnvironment(): Effect.Effect<
           ),
       ),
     );
+}
+
+/**
+ * Add the login shell's variables to this process's environment, keeping
+ * every variable the process already has (the home directory and the
+ * `TEXRA_*` settings its starter passed), except PATH: a Dock-launched app
+ * already has a minimal one, so the login shell's entries come first and
+ * the process's own follow where the shell's lack them. Children this
+ * process spawns inherit the result. Says once which PATH it runs with.
+ */
+export function adoptLoginShellEnvironment(): Effect.Effect<
+  void,
+  Error,
+  ChildProcessSpawner
+> {
+  return loginShellEnvironment().pipe(
+    Effect.flatMap((login) =>
+      Effect.suspend(() => {
+        for (const [name, value] of Object.entries(login))
+          if (process.env[name] === undefined) process.env[name] = value;
+        if (login.PATH !== undefined) {
+          const entries = login.PATH.split(delimiter);
+          const own = (process.env.PATH ?? '').split(delimiter);
+          process.env.PATH = [
+            ...entries,
+            ...own.filter((entry) => entry && !entries.includes(entry)),
+          ].join(delimiter);
+        }
+        return Effect.logInfo(
+          `Using the login shell's environment (PATH=${process.env.PATH ?? ''})`,
+        );
+      }),
+    ),
+  );
 }

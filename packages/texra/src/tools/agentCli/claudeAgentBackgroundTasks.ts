@@ -41,7 +41,7 @@ export class ClaudeBackgroundTaskTracker {
   replace(tasks: BackgroundTasks): void {
     const log = buildBackgroundTaskLog(tasks);
     if (tasks.length === 0) {
-      this.settle(log, 'No Claude background tasks remain');
+      this.complete(log, 'No Claude background tasks remain');
       return;
     }
 
@@ -53,10 +53,10 @@ export class ClaudeBackgroundTaskTracker {
   /** Close the card because every query starts with an empty background set. */
   finish(): void {
     if (!this.active) return;
-    this.settle(this.active.log, 'Claude session ended');
+    this.complete(this.active.log, 'Claude session ended');
   }
 
-  private settle(log: ToolUseLog, summary: string): void {
+  private complete(log: ToolUseLog, summary: string): void {
     if (!this.active) return;
     this.active.update({ ...log, summary, status: 'completed' });
     this.active = undefined;

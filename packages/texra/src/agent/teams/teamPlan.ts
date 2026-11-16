@@ -2,7 +2,7 @@
  * Team planning: finding a team in the workspace's catalog, which members
  * resolve against the agent catalog and which of them leads, and applying a
  * team to a workspace. The harness stores only the team reference a workspace
- * runs (`WorkspaceAgentsController.setTeam`) and reads its members back
+ * runs (`WorkspaceAgentsController.setDefaultTeam`) and reads its members back
  * through `AgentDirectoriesPort.teamMembers`; what a team is, is TeXRA's.
  */
 
@@ -66,13 +66,6 @@ export interface TeamRunOptions<T extends TeamCatalogAgent> {
    * production): a bare name matches by name, a `source:name` key exactly.
    */
   readonly resolveAgent: (identifier: string) => T | undefined;
-  /**
-   * The agents a built-in team runs as its root, in preference order: the
-   * first one among the team's delegating members leads it, and a built-in
-   * team with none of them has no root. A custom team is led by its first
-   * delegating member.
-   */
-  readonly rootAgentNames: readonly string[];
   readonly agentOverride?: string;
 }
 
@@ -88,8 +81,7 @@ export function planTeamRun<T extends TeamCatalogAgent>(
     ? options.resolveAgent(overrideQuery)
     : undefined;
   const rootAgent =
-    overrideAgent ??
-    selectTeamRootAgent(members, preset.source, options.rootAgentNames);
+    overrideAgent ?? selectTeamRootAgent(members, preset.source);
   // A preset-chosen root is one of the resolved members; only an override
   // root can sit outside the list, and it joins the delegation scope.
   const keys = members.map(agentKeyOf);
@@ -108,18 +100,19 @@ export function planTeamRun<T extends TeamCatalogAgent>(
   };
 }
 
-/** The root a team's resolved `members` (in preset order) run under, as
- *  {@link TeamRunOptions.rootAgentNames} describes. */
+/** The root a team's resolved `members` (in preset order) run under. A
+ *  built-in team is led by the first of `BUILTIN_TEAM_ROOT_AGENT_NAMES`
+ *  among its delegating members, and has no root when none of them is one;
+ *  a custom team is led by its first delegating member. */
 function selectTeamRootAgent<T extends TeamCatalogAgent>(
   members: readonly T[],
   source: TeamPreset['source'],
-  rootAgentNames: readonly string[],
 ): T | undefined {
   const delegatingAgents = members.filter((agent) =>
     agentToolNames(agent).includes(AGENT_TOOL_NAME),
   );
   if (source === 'custom') return delegatingAgents[0];
-  for (const identifier of rootAgentNames) {
+  for (const identifier of BUILTIN_TEAM_ROOT_AGENT_NAMES) {
     const root = delegatingAgents.find((agent) =>
       agentMatchesIdentifier(agent, identifier),
     );
@@ -153,9 +146,6 @@ export const applyTeam = Effect.fn('applyTeam')(function* <
   yield* workspace.workspaceAgents.select({ kind: 'team', teamId: preset.id });
   return {
     status: 'applied' as const,
-    plan: planTeamRun(preset, {
-      resolveAgent: workspace.resolveAgent,
-      rootAgentNames: BUILTIN_TEAM_ROOT_AGENT_NAMES,
-    }),
+    plan: planTeamRun(preset, { resolveAgent: workspace.resolveAgent }),
   };
 });

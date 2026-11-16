@@ -65,6 +65,7 @@ export {
   existsAtAbsolute,
   homeDirectory,
   whichOnExtendedPath,
+  withCommandDirs,
   withExtendedPath,
 } from '@utils/system/platformPaths';
 export { runsInWsl } from '@utils/system/wslDetect';

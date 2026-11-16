@@ -1,11 +1,12 @@
 // Third-party imports
-import { Cause, Effect, Schema, type Scope } from 'effect';
+import { Cause, Effect, Result, Schema, type Scope } from 'effect';
 
 // Local imports
 import type { ITool, ToolGuard } from '@agent/core/tools/ToolTypes';
 import { withLogChannel } from '@logger/effectLog';
 import {
   ToolError,
+  type ToolCard,
   type ToolDefinition,
   type ToolResult,
 } from '@shared/schemas';
@@ -33,7 +34,7 @@ export type DefinedTool<T, R = never, Name extends string = string> = Omit<
 export type DefineToolOptions<T, R = never> = Required<
   Pick<ToolDefinition, 'name' | 'description'>
 > &
-  Pick<ToolDefinition, 'scriptReturns' | 'card'> &
+  Pick<ToolDefinition, 'scriptReturns'> &
   Pick<
     ITool,
     | 'hostCapability'
@@ -54,6 +55,9 @@ export type DefineToolOptions<T, R = never> = Required<
      * tool already has, it never sets it.
      */
     guard?: ToolGuard<T>;
+    /** The card a call states from its decoded input (`ToolUseLog.card`).
+     *  A call whose input does not decode gets none. */
+    card?: (input: T) => ToolCard | undefined;
     /** The run body. Succeed with the text the model reads back, or with a
      *  whole `ToolResult` for a summary, attachments or facts; fail with
      *  an `Error` and the model reads its message as the tool's error. */
@@ -98,7 +102,12 @@ export function defineTool<T, R = never, const Name extends string = string>(
       // provider converters derive JSON Schema from it per request.
       schema,
       ...(scriptReturns !== undefined && { scriptReturns }),
-      ...(card !== undefined && { card }),
+      ...(card !== undefined && {
+        card: (rawInput: unknown) => {
+          const input = Schema.decodeUnknownResult(schema)(rawInput);
+          return Result.isSuccess(input) ? card(input.success) : undefined;
+        },
+      }),
     },
     // Validate lazily in the caller's fiber; interruption never becomes a
     // tool result.

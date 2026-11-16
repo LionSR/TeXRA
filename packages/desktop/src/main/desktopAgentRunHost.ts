@@ -1,7 +1,7 @@
 import type { Dialogs, DiffViewHost } from '@texra/hosts/uiHosts';
 import type { TranscriptExportFormat } from '@texra/controllers/progressView/exportTranscript';
 import type { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
-import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
+import type { BuildDisplayFn } from '@texra/controllers/approval/latexPreview';
 import type { InstructionAction } from '@ui/copy/instructionActions';
 import type { Effect } from 'effect';
 
@@ -16,14 +16,14 @@ export interface DesktopAgentRunHost {
    * dialog: each token in `actions` becomes a button — dispatched to the
    * matching main-process action (open Settings, open a doc) — plus a
    * defaulted "Dismiss", instead of degrading to inert trailing hint text.
-   * A program, as `openPath` is: the presentation plane forks it.
+   * A program, as `openPath` is: the session's presenter forks it.
    */
   showInstructionDialog(
     message: string,
     actions: readonly InstructionAction[],
   ): Effect.Effect<void>;
   /**
-   * Presents a failure dialog. A `docsPage` (from a refusing request's
+   * Presents a failure dialog. A `docsPage` (from a rejected request's
    * `Rejected`) adds a guide button opening the matching docs page — the
    * native form of the link the extension's request-error callout renders.
    * A dialog that could not be shown is reported by the implementation, as

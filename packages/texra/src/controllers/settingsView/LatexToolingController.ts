@@ -2,6 +2,7 @@ import { Cause, Effect } from 'effect';
 
 // Local imports - shared constants
 import { withLogChannel } from '@texra-ai/harness/plugins';
+import { CommandDirs } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { probeLatexTools } from '@latex/latexToolchain';
 import {
@@ -77,7 +78,7 @@ export function detectLatexSettingsStatus(
       texcountPath: pathOf('texcount'),
       ghostscriptPath: pathOf('gs'),
       graphicsmagickPath: pathOf('gm') ?? pathOf('magick'),
-      packageManager: detectPackageManager(),
+      packageManager: detectPackageManager((yield* CommandDirs)()),
     } satisfies LatexSettingsStatus;
   }).pipe(
     // Every tool then reports as not installed, so the failure must not be

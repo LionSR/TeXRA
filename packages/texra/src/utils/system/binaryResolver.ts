@@ -6,11 +6,11 @@ import { LRUCache } from 'lru-cache';
 import { hasExtension } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
+  CommandDirs,
   executeCommand,
   existsAtAbsolute,
   whichOnExtendedPath,
 } from '@texra-ai/harness/node';
-import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const IS_WINDOWS = process.platform === 'win32';
@@ -75,7 +75,8 @@ const findToolUncached = Effect.fnUntraced(function* (tool: string) {
     return null;
   }
   const candidates = toolCandidates(tool);
-  for (const dir of commandDirs()) {
+  const appDirs = (yield* CommandDirs)();
+  for (const dir of appDirs) {
     for (const name of candidates) {
       const candidate = path.join(dir, name);
       if (existsAtAbsolute(candidate)) return candidate;
@@ -98,7 +99,7 @@ const findToolUncached = Effect.fnUntraced(function* (tool: string) {
     if (result.success && result.stdout) return result.stdout;
   }
   for (const name of candidates) {
-    const found = whichOnExtendedPath(name, commandDirs());
+    const found = whichOnExtendedPath(name, appDirs);
     if (found) return found;
   }
   return null;

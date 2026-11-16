@@ -22,7 +22,7 @@ import {
   xaiAccountLabel,
 } from '@texra/shared/model/subscriptionAuthStatus';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { postMessage } from '@texra/shared/hostBridge';
+import { postToHost } from '@ui/settings/messageDispatcher';
 import {
   ACCOUNT_OUTCOME,
   CHATGPT_AUTH,
@@ -91,7 +91,8 @@ export class SubscriptionSection extends SignalWatcher(LitElement) {
   private readonly handlePreferSubscriptionChange = (event: Event): void => {
     if (!(event.target instanceof WaSwitch)) return;
     const enabled = event.target.checked;
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_SUBSCRIPTION_PREFERENCE, {
+    postToHost({
+      command: SETTINGS_VIEW_COMMANDS.SET_SUBSCRIPTION_PREFERENCE,
       provider: this.provider.providerId,
       enabled,
     });
@@ -159,12 +160,10 @@ export class SubscriptionSection extends SignalWatcher(LitElement) {
                       kind: 'secondary',
                       appearance: 'outlined',
                       onClick: () =>
-                        postMessage(
-                          SETTINGS_VIEW_COMMANDS.SIGN_OUT_SUBSCRIPTION,
-                          {
-                            provider: provider.providerId,
-                          },
-                        ),
+                        postToHost({
+                          command: SETTINGS_VIEW_COMMANDS.SIGN_OUT_SUBSCRIPTION,
+                          provider: provider.providerId,
+                        }),
                     })
                   : renderLabeledActionButton({
                       icon: 'right-to-bracket',
@@ -172,12 +171,10 @@ export class SubscriptionSection extends SignalWatcher(LitElement) {
                       kind: 'primary',
                       appearance: 'filled',
                       onClick: () =>
-                        postMessage(
-                          SETTINGS_VIEW_COMMANDS.SIGN_IN_SUBSCRIPTION,
-                          {
-                            provider: provider.providerId,
-                          },
-                        ),
+                        postToHost({
+                          command: SETTINGS_VIEW_COMMANDS.SIGN_IN_SUBSCRIPTION,
+                          provider: provider.providerId,
+                        }),
                     })
               }
             </div>

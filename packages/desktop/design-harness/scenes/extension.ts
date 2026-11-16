@@ -190,7 +190,7 @@ function desktopColumn(
       .view=${view}
       .surface=${surfaceRecord}
       .host=${host()}
-      placement="desktop"
+      placement="embedded"
     ></progress-app>
   </div>`;
 }

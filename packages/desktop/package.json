@@ -40,7 +40,6 @@
     "electron": "^45.2.3",
     "electron-builder": "^26.18.0",
     "esbuild": "^0.28.2",
-    "fix-path": "^5.0.0",
     "lit": "^3.3.3",
     "signal-polyfill": "^0.2.2",
     "typescript": "npm:@typescript/typescript6@^6.0.2",

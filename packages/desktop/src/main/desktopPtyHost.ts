@@ -17,8 +17,7 @@ import { platform as osPlatform } from 'node:os';
 import { dirname, join } from 'node:path';
 import { Effect } from 'effect';
 import { ensureError } from '@texra-ai/harness/schemas';
-import { withExtendedPath } from '@texra-ai/harness/node';
-import { commandDirs } from '@texra/platform/defaults/commandDirs';
+import { withCommandDirs } from '@texra-ai/harness/node';
 
 /**
  * The subset of node-pty this host depends on: node-pty's own module type
@@ -98,7 +97,7 @@ function defaultShell(): string {
  * processes into thinking they are the Electron app rather than a plain shell,
  * so they are stripped.
  */
-function ptyEnvironment(): Record<string, string> {
+function ptyEnvironment(): Effect.Effect<Record<string, string>> {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
     if (value == null) continue;
@@ -114,9 +113,9 @@ function ptyEnvironment(): Record<string, string> {
   // through the shared PATH extension, so without it here the terminal cannot
   // run the very commands the app tells the user to run — the Integrations
   // card would offer `brew install ...` to a shell that then reports
-  // `brew: command not found`. `withExtendedPath` also owns the Windows
-  // `Path`-vs-`PATH` rule this used to hand-roll.
-  return withExtendedPath(env, commandDirs());
+  // `brew: command not found`. The extension also writes the Windows
+  // `Path`-vs-`PATH` spelling once.
+  return withCommandDirs(env);
 }
 
 /**
@@ -226,17 +225,19 @@ export function createDesktopPtyHost(
           Effect.flatMap((pty) => {
             ensureSpawnHelperExecutable();
             if (disposed) return Effect.succeed(undefined);
-            return Effect.try({
-              try: () =>
-                pty.spawn(defaultShell(), [], {
-                  name: 'xterm-256color',
-                  cols: size.cols,
-                  rows: size.rows,
-                  cwd: options.cwd,
-                  env: ptyEnvironment(),
-                }),
-              catch: ensureError,
-            });
+            return Effect.flatMap(ptyEnvironment(), (env) =>
+              Effect.try({
+                try: () =>
+                  pty.spawn(defaultShell(), [], {
+                    name: 'xterm-256color',
+                    cols: size.cols,
+                    rows: size.rows,
+                    cwd: options.cwd,
+                    env,
+                  }),
+                catch: ensureError,
+              }),
+            );
           }),
           Effect.map((spawned) => {
             if (!spawned) return undefined;

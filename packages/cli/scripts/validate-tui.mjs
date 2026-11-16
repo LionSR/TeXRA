@@ -963,7 +963,7 @@ const SCENARIOS = [
     bootExpect: ' Ctrl-C ',
     keys: ['a', '/approval', '\r', '4'],
     expect: ['Auto-approving commands: off'],
-    unexpect: ['AUTO-BASH', 'Run command?'],
+    unexpect: ['Auto: commands', 'Run command?'],
   },
   {
     name: 'approval-policy-status-bar',
@@ -1608,7 +1608,7 @@ const SCENARIOS = [
     bootExpect: ' Ctrl-C ',
     keys: ['a'],
     frame: 'viewport',
-    expect: ['AUTO-BASH', '/ commands'],
+    expect: ['Auto: commands', '/ commands'],
     unexpect: ['AUTO-APPROVE', 'Run command?', '1 approval'],
   },
   {
@@ -1634,7 +1634,7 @@ const SCENARIOS = [
     expect: [
       'approval: Ask before shell commands and file edits.',
       'auto-approvals: commands',
-      'AUTO-BASH',
+      'Auto: commands',
     ],
     unexpect: ['Run command?', '1 approval'],
   },
@@ -1663,7 +1663,7 @@ const SCENARIOS = [
     bootExpect: ' Ctrl-C ',
     keys: ['a', '/status', '\r'],
     frame: 'viewport',
-    expect: ['team: Physicist', 'auto-approvals: commands', 'AUTO-BASH'],
+    expect: ['team: Physicist', 'auto-approvals: commands', 'Auto: commands'],
     unexpect: ['Run command?', '1 approval', 's subagents'],
   },
   {

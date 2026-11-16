@@ -5,7 +5,7 @@ import { expect } from 'vitest';
 
 // Local imports
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
-import { getChatGptSubscriptionStatus } from '@texra/tools/setup/platform';
+import { getChatGptSubscriptionStatus } from '@texra/tools/setup/ProbeEnvironmentTool';
 
 /** The process over a host that holds a ChatGPT session naming its
  *  account. */

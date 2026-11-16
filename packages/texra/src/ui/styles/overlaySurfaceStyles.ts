@@ -27,7 +27,7 @@ export const overlaySurfaceStyles: CSSResult = css`
     align-items: center;
     gap: var(--wa-space-3xs);
     flex: 0 0 auto;
-    min-height: var(--height-header, 38px);
+    min-height: var(--height-header);
     padding: 0 var(--wa-space-2xs) 0 var(--wa-space-xs);
     border-bottom: var(--border-thin) solid var(--wa-color-surface-border);
   }

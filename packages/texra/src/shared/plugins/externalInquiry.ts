@@ -77,22 +77,15 @@ const InquiryTurnRecordSchema = Schema.Union([
 ]);
 
 /**
- * What an inquiry's request holds (its `data`): the question and the thread
- * it continues. First and follow-up turns carry one field set, told apart
- * by `transcript` (the thread's turns so far, the last one this question).
+ * What an inquiry's request holds (its `data`): the turn it opens and the
+ * thread's answered turns before it, empty for a thread's first turn.
  */
 export const InquiryRequestSchema = Schema.Struct({
   requestId: Schema.String,
   runId: RunIdSchema,
-  question: Schema.String,
   threadId: InquiryThreadIdSchema,
-  context: Schema.optional(Schema.NullOr(Schema.String)),
-  suggestSearch: Schema.optional(Schema.NullOr(Schema.Boolean)),
-  attachFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
-  sessionLinks: Schema.optional(Schema.NullOr(InquirySessionLinksSchema)),
-  transcript: Schema.optional(
-    Schema.NullOr(Schema.Array(InquiryTurnRecordSchema)),
-  ),
+  turn: OpenInquiryTurnSchema,
+  earlierTurns: Schema.Array(AnsweredInquiryTurnSchema),
 });
 export type InquiryRequest = typeof InquiryRequestSchema.Type;
 

@@ -79,12 +79,6 @@ declare module 'markdown-it-texmath' {
   export = texmath;
 }
 
-/** LaTeX template imports — loaded as text by esbuild's text loader. */
-declare module '*.tex' {
-  const content: string;
-  export default content;
-}
-
 /**
  * Monaco's ESM entry points. TypeScript's legacy Node resolver cannot follow the
  * package export map, so each subpath we import needs an ambient declaration.

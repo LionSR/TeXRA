@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
-import type { FileOpResult } from '@texra/shared/session/hostRequest';
 
 import { versionControlDiffStem } from '@latex/latexdiff/diffFileNameManager';
 
@@ -14,18 +13,14 @@ import {
   fileNameTimestamp,
 } from './artifactFiles';
 
-/**
- * Reuses FileOpResult's `noFiles` and `success` shapes for the outcomes this
- * shares with the housekeeping pack/clean commands (opResults.ts) instead of
- * a parallel status enum, and adds only the two outcomes unique to routing
- * pack and clean through one function: a clean-only run, and a pack run that
- * found nothing but temp files to discard.
- */
+/** What a latexdiff-vc pack or clean did: found no diff files, packed them
+ *  into `outputFolder`, deleted them (a clean), or found only build files
+ *  and deleted those. */
 type LatexdiffPackResult =
-  | Extract<FileOpResult, { status: 'noFiles' }>
-  | (Extract<FileOpResult, { status: 'success' }> & { outputFolder: string })
-  | { status: 'cleaned' }
-  | { status: 'processed' };
+  | { readonly status: 'noFiles' }
+  | { readonly status: 'success'; readonly outputFolder: string }
+  | { readonly status: 'cleaned' }
+  | { readonly status: 'processed' };
 
 /** What a host tells the user after a pack or clean run; nothing when the
  *  run only processed files in place. Both hosts read it from here. */

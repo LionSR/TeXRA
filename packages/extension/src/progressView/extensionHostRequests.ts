@@ -45,7 +45,6 @@ import { quickPick } from '@frontend/ui/dialogs';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { previewFinalOutput } from '@frontend/agents/finalOutputOpener';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
-import latexPreamble from '@resources/templates/chatExport.tex';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
@@ -73,7 +72,7 @@ import {
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import type {
   GuiWindowHost,
-  OwnHostArms,
+  OwnHostHandlers,
   SharedHostCommandBindings,
 } from '@texra/controllers/session/openGuiWindow';
 import type { SessionBridge } from '@texra/controllers/session/SessionBridge';
@@ -377,7 +376,7 @@ export const createExtensionHostRequests = Effect.fn(
    * commands run as the programs behind them, so no handler re-enters the
    * runtime between here and the bridge that runs this program.
    */
-  const own: OwnHostArms = {
+  const own: OwnHostHandlers = {
     popOut: () => Effect.as(options.popOutToEditor(), done),
     popBack: () => Effect.as(options.showInSidebar(), done),
     useCurrentFile: (request) => useCurrentFile(request),
@@ -445,8 +444,6 @@ export const createExtensionHostRequests = Effect.fn(
         ),
       ),
       openPath: openExportPath,
-      latexPreamble,
-      resourcesPath: path.join(options.extensionPath, 'resources'),
     },
   };
 });

@@ -313,6 +313,7 @@ export {
   agentKeyOf,
   agentMatchesIdentifier,
   agentName,
+  AgentNameSchema,
   type AgentProposalRequest,
   type AgentScanIssue,
   AgentScanIssueSchema,

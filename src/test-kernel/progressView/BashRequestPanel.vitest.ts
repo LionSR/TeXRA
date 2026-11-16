@@ -2,6 +2,11 @@
 import { assert, describe, expect, it } from 'vitest';
 
 // Local imports
+import {
+  applySurfaceAction,
+  emptySurface,
+  type SurfaceAction,
+} from '@texra/shared/session/surface';
 import type { BashRequestPanel } from '@ui/progress/components/BashRequestPanel';
 import {
   mountComponent,
@@ -29,8 +34,19 @@ describe('bash-request-panel', () => {
     };
     const element = await mountComponent<BashRequestPanel>(
       'bash-request-panel',
-      { permission: { kind: 'bash', data: permission } },
+      {
+        permission: { kind: 'bash', data: permission },
+        surface: emptySurface('session-1'),
+      },
     );
+    // The note is the card's draft on the surface, which the root applies.
+    element.addEventListener('surface-action', (event) => {
+      const { surface } = element;
+      assert.exists(surface);
+      // cast: the panel dispatches `surface-action` as a CustomEvent of an action.
+      const action = (event as CustomEvent<SurfaceAction>).detail;
+      element.surface = applySurfaceAction(surface, action);
+    });
     // The panel answers through the shell's `runtime-request` event.
     const actions: RuntimeCommand[] = [];
     element.addEventListener('runtime-request', (event) => {
@@ -48,6 +64,8 @@ describe('bash-request-panel', () => {
     >('[data-note-input]');
     assert.exists(note);
     note.value = '  use latexmk instead  ';
+    note.dispatchEvent(new Event('input'));
+    await element.updateComplete;
     // With the note open, "a" must not grant, and Escape closes the note only.
     expect(element.handleKeyboardShortcut('a')).toBe(false);
     expect(actions).toEqual([]);

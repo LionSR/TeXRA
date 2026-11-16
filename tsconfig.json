@@ -73,11 +73,6 @@
         "./packages/extension/src/commands/*.ts",
         "./packages/extension/src/commands/*/index.ts"
       ],
-      "@resources/*": [
-        "./packages/extension/resources/*",
-        "./packages/extension/resources/*.ts",
-        "./packages/extension/resources/*/index.ts"
-      ],
       "@model/*": [
         "./packages/harness/src/model/*",
         "./packages/harness/src/model/*.ts",

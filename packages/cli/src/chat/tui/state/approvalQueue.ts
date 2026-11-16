@@ -5,7 +5,7 @@
 // what the session view cannot: the presentation a host stages beside the fact (a
 // tool edit's before and after text), the "decided here, not yet applied
 // there" gap, and the jump-to-waiting order.
-// A decision leaves as the case `approvalDecisionArm` names: the run's
+// A decision leaves as the case `approvalDecisionDelivery` names: the run's
 // `request.decide` (with the bypass a session-wide approval grants), or the
 // host capability a retry on the user's own key needs.
 
@@ -22,7 +22,7 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import {
-  approvalDecisionArm,
+  approvalDecisionDelivery,
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
@@ -362,11 +362,11 @@ function decideRequest(
 ): void {
   markDecided(request.requestId);
   const { runId } = request;
-  const arm = approvalDecisionArm(
+  const delivery = approvalDecisionDelivery(
     { payload, answeredBy: request.answeredBy },
     decision,
   );
-  if ('runtime' in arm)
-    issue(requests, runtime, runId, request.requestId, arm.runtime);
-  else performHost(arm.host);
+  if ('runtime' in delivery)
+    issue(requests, runtime, runId, request.requestId, delivery.runtime);
+  else performHost(delivery.host);
 }

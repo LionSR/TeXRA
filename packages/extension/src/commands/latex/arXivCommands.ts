@@ -14,11 +14,11 @@ import { withVSCodeProgress } from '@frontend/ui/progress';
 import { tokenCancelled } from '@frontend/vscode/vscodeEvents';
 import {
   downloadArxivSource,
+  indentsDestination,
   getArxivPaperDirName,
   validateArxivId,
   type ArxivDownloadDestination,
 } from '@latex/arxivProcessor';
-import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { LatexProgress } from '@latex/progress';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness/host';
@@ -79,9 +79,9 @@ export const downloadArXivSource: (
 
     const destination = destinationPick.value;
 
-    // Auto-indent is not supported for root destination (would reformat all workspace files)
-    const autoIndent =
-      destination !== 'root' &&
+    // Asked only where the download is indented at all.
+    const indent =
+      indentsDestination(destination) &&
       (yield* quickPick(['Indent files', 'Skip'], {
         placeHolder: 'Auto-indent LaTeX files after download?',
         canPickMany: false,
@@ -97,12 +97,9 @@ export const downloadArXivSource: (
         Effect.raceFirst(
           Effect.gen(function* () {
             const downloadResult = yield* downloadArxivSource(arxivId, {
-              workspaceRoot: roots.workspace ?? '',
-              formatter: autoIndent
-                ? yield* resolveLatexFormatter(roots)
-                : null,
-              autoIndent,
+              roots,
               destination,
+              indent,
             }).pipe(
               Effect.provideService(LatexProgress, (message, increment) =>
                 progress.report({ message, increment }),
@@ -127,7 +124,7 @@ export const downloadArXivSource: (
     const result = yield* vscodeUi.ask(
       'info',
       `arXiv source downloaded to ${path.basename(extractedPath.value)}${
-        autoIndent ? ' with LaTeX files indented' : ''
+        indent ? ' with LaTeX files indented' : ''
       }`,
       { items: ['Open Folder'] },
     );

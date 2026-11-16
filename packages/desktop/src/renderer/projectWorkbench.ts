@@ -7,7 +7,7 @@ import { html, render } from 'lit';
 import { isPackagedAgentSource } from '@texra-ai/harness/schemas';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
-import { postMessage } from '@texra/shared/hostBridge';
+import { postToMain } from './messageRoutes';
 import type { Theme } from '@texra/shared/ipc';
 import type { SessionSurfaces } from '@ui/progress/sessionSurfaces';
 import type { ProgressApp } from '@ui/progress/ProgressApp';
@@ -18,6 +18,7 @@ import {
   DesktopShellStateSchema,
   initialDesktopShellState,
   openWorkbenchTab,
+  workbenchTabId,
   setWorkbenchTabDirty,
   type DesktopShellState,
   type WorkbenchKind,
@@ -92,7 +93,7 @@ export function createProjectWorkbench(options: {
     options.onLayoutChanged(session, previous, next);
   }
   const send = (message: DesktopWorkspaceRequest) =>
-    postMessage(message.command, { ...message, session });
+    postToMain({ ...message, session });
   // The editor's file I/O is a host request answered to the pane, its
   // refusal worded as the progress view words one; closing the pane
   // interrupts whatever is still pending.
@@ -151,7 +152,7 @@ export function createProjectWorkbench(options: {
     onRequestOpen: openDocument,
     onDirtyChange: (path, dirty) =>
       updateState(
-        setWorkbenchTabDirty(getState(), `workbench:editor:${path}`, dirty),
+        setWorkbenchTabDirty(getState(), workbenchTabId('editor', path), dirty),
       ),
     onError: (error) => {
       // Closing a project rejects its pending I/O as part of disposal.
@@ -171,7 +172,7 @@ export function createProjectWorkbench(options: {
     return editor;
   }
   function openDocument(target: string): void {
-    const id = `workbench:editor:${target}`;
+    const id = workbenchTabId('editor', target);
     // An already active tab emits no activation event. Explicitly reopening it
     // still checks disk, while preserving unsaved edits through the pane's guard.
     if (workbench.activeTabId() === id) void editors.get(id)?.open(target);

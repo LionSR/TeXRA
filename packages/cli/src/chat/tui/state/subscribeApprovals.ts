@@ -149,16 +149,16 @@ export function createTuiHostInteractions(
     );
   };
 
-  const performHost = (arm: HostCommand): void => {
-    if (arm.kind === 'useOwnApiKey') {
-      useOwnApiKey(arm);
+  const performHost = (command: HostCommand): void => {
+    if (command.kind === 'useOwnApiKey') {
+      useOwnApiKey(command);
       return;
     }
     // Every other capability belongs to a windowed host's surfaces; no TUI
     // action names one, so reaching here is a defect.
     stores.runtime.runFork(
       Effect.logWarning(
-        `The TUI does not perform the ${arm.kind} host capability.`,
+        `The TUI does not perform the ${command.kind} host capability.`,
       ).pipe(withLogChannel('cli.tui')),
     );
   };

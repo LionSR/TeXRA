@@ -145,7 +145,7 @@ export interface PluginCard {
  *  from the UI toolkit's set (`@ui/wa/iconNames`). A call with no icon, or
  *  with a name the toolkit does not draw, gets the generic one. */
 export type TexraPlugin = Plugin & {
-  readonly card?: PluginCard;
+  readonly dashboard?: PluginCard;
   readonly icons?: Readonly<Record<string, string>>;
   /** The tools, by normalized tool name, whose output the transcript paints
    *  as a terminal session, as it paints `bash`'s. */
@@ -162,10 +162,12 @@ const texWriteFilter: WriteFilter = (path, content, config) => {
   );
 };
 
-/** The host capabilities (`ITool.hostCapability`) a plugin serves, read
- *  each time a step asks. */
-const serves = (capabilities: () => readonly string[]) =>
-  Layer.succeed(HostCapabilities)({ of: () => new Set(capabilities()) });
+/** The host capabilities (`ITool.hostCapability`) a plugin serves to a
+ *  session's storage root, read each time a step asks. */
+const serves = (capabilities: (storage: string) => Iterable<string>) =>
+  Layer.succeed(HostCapabilities)({
+    of: (storage) => new Set(capabilities(storage)),
+  });
 
 const latexExtract: TexraPlugin = {
   id: 'latex-extract',
@@ -179,7 +181,7 @@ const latexExtract: TexraPlugin = {
     extract_tikz_figures: 'image',
     extract_bib_entries: 'book',
   },
-  card: {
+  dashboard: {
     name: 'LaTeX Extraction',
     description:
       'Extract figures, TikZ diagrams, and bibliography entries from LaTeX documents.',
@@ -201,7 +203,7 @@ const latexDiagnostics = (editors: EditorRegistry): TexraPlugin => ({
     },
   }),
   icons: { diagnostics: 'list-check' },
-  card: {
+  dashboard: {
     name: 'LaTeX Diagnostics',
     description:
       'Report LaTeX compilation errors and warnings from the VS Code Problems panel.',
@@ -211,9 +213,10 @@ const latexDiagnostics = (editors: EditorRegistry): TexraPlugin => ({
 const TEX_INSTRUCTIONS = `Find the project's TeX sources with relative paths (e.g., \`find . -name "*.tex"\`).\nFor math in responses, use $...$ or \\(...\\) for inline and $$...$$ or \\[...\\] for display math. Wrap LaTeX environments like align or gather inside $$...$$ (e.g., $$\\begin{align}...\\end{align}$$) so they render correctly.`;
 
 /**
- * Tools every host offers without setup that no dashboard card lists:
- * review annotations, the PDF viewer, the user-question dialog, and Loogle
- * search (network only, so not gated on the Lean 4 plugin's probe). Its
+ * Tools that need no setup and that no dashboard card lists: review
+ * annotations and the PDF viewer (each offered where the host serves it),
+ * the user-question dialog, and Loogle search (network only, so not gated
+ * on the Lean 4 plugin's probe). Its
  * prompt section, at every step that offers a tool, finds the TeX sources, says how
  * replies write math, and names the configured default bibliography.
  */
@@ -239,19 +242,21 @@ const core = (
         ? `${TEX_INSTRUCTIONS}\nThe default bibliography file is ${bibPath}. You can grep or read this file to search for citations and references.`
         : TEX_INSTRUCTIONS;
     },
-    // The editor's PDF viewer; the host's Comments UI, for the one host
-    // that has one, where `inline_comment` is offered.
+    // The editor's PDF viewer, where `open_pdf` is offered while one is
+    // attached; the host's Comments UI, for the one host that has one,
+    // where `inline_comment` is offered.
     processLayer: {
       layer: Layer.mergeAll(
         Layer.succeed(EditorHost)(editors),
         ...(provider === undefined
           ? []
-          : [
-              Layer.succeed(InlineComments)(provider),
-              serves(() => [
-                'inline-comments' satisfies InlineCommentCapability,
-              ]),
-            ]),
+          : [Layer.succeed(InlineComments)(provider)]),
+        serves((storage) => [
+          ...editors.of(storage),
+          ...(provider === undefined
+            ? []
+            : ['inline-comments' satisfies InlineCommentCapability]),
+        ]),
       ),
     },
   }),
@@ -372,7 +377,7 @@ export const texraPlugins = (host: {
         glob: 'magnifying-glass',
         grep: 'magnifying-glass',
       },
-      card: {
+      dashboard: {
         name: 'File & Shell Operations',
         description:
           'Read, write, edit files and run shell commands. Includes glob/grep search.',
@@ -384,7 +389,7 @@ export const texraPlugins = (host: {
     {
       ...web,
       icons: { web_search: 'globe', web_fetch: 'globe' },
-      card: {
+      dashboard: {
         name: 'Web Search & Fetch',
         description:
           'Search the web with DuckDuckGo Instant Answers and fetch or extract content from URLs.',
@@ -393,7 +398,7 @@ export const texraPlugins = (host: {
     {
       ...memoryWorkflow,
       icons: { memory: 'database', executions: 'clock-rotate-left' },
-      card: {
+      dashboard: {
         name: 'Memory & Executions',
         description:
           'Persistent memory across sessions and the executions view of the runs an agent launched.',
@@ -401,7 +406,7 @@ export const texraPlugins = (host: {
     },
     {
       ...goal,
-      card: {
+      dashboard: {
         name: 'Goal Mode',
         description:
           'Propose a plan for approval and, when you run it as a goal, let the agent keep working turn after turn until the objective is done or it needs you.',
@@ -417,7 +422,7 @@ export const texraPlugins = (host: {
     {
       ...multiAgent,
       icons: { agent: 'circle-user' },
-      card: {
+      dashboard: {
         name: 'Multi-Agent Workflow',
         description:
           'Run named agents as children of a run: one at a time, or fanned out and joined from a script, resuming safely after interruption. An agent only gets the agent tool if its own configuration names it: this switch is an additional kill switch on top of that per-agent opt-in.',

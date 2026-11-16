@@ -24,7 +24,7 @@ interface DesktopFileSelectionOptions {
 
 /**
  * The file lists and pickers of one project: the `host` snapshot's file
- * catalogs and the `pickFiles` arm of `host.request` (8.3).
+ * catalogs and the `pickFiles` case of `host.request`.
  */
 export interface DesktopFileSelection {
   /** The launcher's single-slot catalogs: base candidates, edited

@@ -222,7 +222,7 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
 
 /**
  * The provider API-key variables a launch brought, by variable name
- * (`StartOptions.apiKeys`), provided where the session starts or resumes
+ * (`StartInput.apiKeys`), provided where the session starts or resumes
  * the run. A run reads them as it opens and carries them on its own fiber,
  * so a child it starts or resumes from its tool calls, and a leftover child
  * it resumes, opens with them; a sweep with no launch behind it has none.
