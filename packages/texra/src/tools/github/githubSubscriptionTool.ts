@@ -35,6 +35,7 @@ import type { RunId } from '@texra-ai/harness/schemas';
 
 import {
   DEFAULT_CHECK_ANNOTATION_LEVEL,
+  GitHubCheckAnnotationLevelSchema,
   type GitHubCheckAnnotationLevel,
 } from './checkAnnotationLevels';
 import { getGitHubToken } from './githubAuth';
@@ -97,7 +98,7 @@ const GitHubSubscriptionInputSchema = Schema.Union([
      * warnings, or "notice" to include every annotation GitHub reports.
      */
     min_annotation_level: nullishWithDefault(
-      Schema.Literals(['failure', 'warning', 'notice']),
+      GitHubCheckAnnotationLevelSchema,
       DEFAULT_CHECK_ANNOTATION_LEVEL,
       `Lowest inline check-annotation level for PR subscriptions. Defaults to ${DEFAULT_ANNOTATION_LEVEL_DESCRIPTION}; "warning" includes warnings, "notice" includes every annotation.`,
     ),
