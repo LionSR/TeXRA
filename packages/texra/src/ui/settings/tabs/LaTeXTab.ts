@@ -5,7 +5,6 @@ import { Predicate, Struct } from 'effect';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import '@awesome.me/webawesome/dist/components/copy-button/copy-button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
-import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { SignalWatcher } from '@lit-labs/signals';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
@@ -199,21 +198,16 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
     if (installed) {
       actionSlot = nothing;
     } else if (workshop) {
-      actionSlot = html`
-        <wa-button
-          appearance="outlined"
-          variant="neutral"
-          size="s"
-          title="Install"
-          @click=${() =>
-            postToHost({
-              command: SETTINGS_VIEW_COMMANDS.INSTALL_EXTENSION,
-              extensionId: LATEX_WORKSHOP_EXT_ID,
-            })}
-        >
-          ${waIcon('cloud-arrow-down', { slot: 'start' })} Install
-        </wa-button>
-      `;
+      actionSlot = renderLabeledActionButton({
+        icon: 'cloud-arrow-down',
+        text: 'Install',
+        kind: 'secondary',
+        onClick: () =>
+          postToHost({
+            command: SETTINGS_VIEW_COMMANDS.INSTALL_EXTENSION,
+            extensionId: LATEX_WORKSHOP_EXT_ID,
+          }),
+      });
     } else {
       actionSlot = html`<wa-tag class="setting-badge" variant="neutral" size="s"
         >Not found</wa-tag
@@ -248,15 +242,13 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
                     value=${installCmd.command}
                     copy-label="Copy install command"
                   ></wa-copy-button>
-                  <wa-button
-                    appearance="outlined"
-                    variant="neutral"
-                    size="s"
-                    title="Run: ${installCmd.command}"
-                    @click=${() => this.handleRunInTerminal(installCmd.command)}
-                  >
-                    ${waIcon('terminal', { slot: 'start' })} Run in Terminal
-                  </wa-button>
+                  ${renderLabeledActionButton({
+                    icon: 'terminal',
+                    text: 'Run in Terminal',
+                    title: `Run: ${installCmd.command}`,
+                    kind: 'secondary',
+                    onClick: () => this.handleRunInTerminal(installCmd.command),
+                  })}
                 </div>
               `
             : nothing

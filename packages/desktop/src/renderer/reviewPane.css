@@ -122,30 +122,9 @@
 }
 
 .desktop-review-file {
-  display: block;
-  width: 100%;
   padding-inline-start: calc(
     var(--wa-space-xs) + var(--tree-depth, 0) * var(--wa-space-s)
   );
-}
-
-.desktop-review-file::part(base) {
-  width: 100%;
-  min-height: var(--height-control-compact);
-  justify-content: flex-start;
-  border-radius: var(--wa-border-radius-s);
-}
-
-.desktop-review-file::part(label) {
-  min-width: 0;
-  overflow: hidden;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.desktop-review-file[data-active='true']::part(base) {
-  background: var(--surface-selected);
 }
 
 .desktop-review-empty {

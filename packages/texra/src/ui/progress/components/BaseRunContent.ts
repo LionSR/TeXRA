@@ -13,13 +13,13 @@ import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { runNoticeText, runStatus } from '@ui/copy/runStatus';
 import { runNoun, TASK_ACTIONS } from '@ui/copy/nestedRuns';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type {
   PendingRequest,
   RunView,
   SessionView,
 } from '@texra-ai/harness/schemas';
-import '@awesome.me/webawesome/dist/components/button/button.js';
 import type { ForkFromHere } from './UserMessage';
 import './RequestPanels';
 import './LogList';
@@ -114,30 +114,27 @@ export abstract class BaseRunContent extends LitElement {
         // The task's one Resume (an interrupted task, a workflow from its
         // saved outputs, a stopped background script: `runActions`).
         run.actions.includes('resume')
-          ? html`<wa-button
-              id="resumeRunBtn"
-              variant="brand"
-              size="s"
-              @click=${request('resume')}
-              >${waIcon('forward-step', { slot: 'start' })}Resume</wa-button
-            >`
+          ? renderLabeledActionButton({
+              id: 'resumeRunBtn',
+              icon: 'forward-step',
+              text: 'Resume',
+              kind: 'primary',
+              onClick: request('resume'),
+            })
           : nothing
       }
       ${
         run.actions.includes('fork')
-          ? html`<wa-button
-              id="forkTaskBtn"
-              appearance="outlined"
-              variant="neutral"
-              size="s"
-              @click=${() =>
+          ? renderLabeledActionButton({
+              id: 'forkTaskBtn',
+              icon: 'code-branch',
+              text: TASK_ACTIONS.fork,
+              kind: 'secondary',
+              onClick: () =>
                 this.dispatchEvent(
                   SessionUiEvents.host({ kind: 'fork', runId: run.id }),
-                )}
-              >${waIcon('code-branch', { slot: 'start' })}${
-                TASK_ACTIONS.fork
-              }</wa-button
-            >`
+                ),
+            })
           : nothing
       }
     </div>`;

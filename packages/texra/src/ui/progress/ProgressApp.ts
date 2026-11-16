@@ -25,7 +25,6 @@ import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/divider/divider.js';
@@ -33,7 +32,6 @@ import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
-import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared webview
 import '@ui/wa/spinner';
@@ -50,6 +48,7 @@ import { texraGuideUrl } from '@ui/copy/guide';
 import {
   renderIconActionButton,
   renderIconActionButtonParts,
+  renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 import { ONBOARDING_SETUP_HANDOFF } from '@ui/copy/onboarding';
@@ -286,22 +285,18 @@ export class ProgressApp extends LitElement {
     const items = this.windowItems();
     if (items.length === 0) return nothing;
     const menu = actionMenu(items);
+    const more = renderIconActionButtonParts({
+      id: 'shell-more',
+      icon: 'ellipsis',
+      slot: 'trigger',
+      label: 'More',
+      tooltip: 'More',
+    });
     return html`
       <wa-dropdown placement="bottom-end" @wa-select=${menu.onSelect}>
-        <wa-button
-          slot="trigger"
-          id="shell-more"
-          class="action-icon-button"
-          appearance="plain"
-          variant="neutral"
-          size="s"
-          type="button"
-          aria-label="More"
-          >${waIcon('ellipsis')}</wa-button
-        >
-        ${menu.items}
+        ${more.button} ${menu.items}
       </wa-dropdown>
-      <wa-tooltip for="shell-more">More</wa-tooltip>
+      ${more.tooltip}
     `;
   }
 
@@ -348,21 +343,18 @@ export class ProgressApp extends LitElement {
         <h1 id="shell-hero-title">Set up ${host.project.name}</h1>
         <p>${ONBOARDING_SETUP_HANDOFF}</p>
         <div class="hero-actions">
-          <wa-button
-            id="onboardingRunSetupButton"
-            variant="brand"
-            size="s"
-            @click=${() => this.onboarding('runSetup')}
-            >${waIcon('rocket', { slot: 'start' })}Run setup
-            assistant</wa-button
-          >
-          <wa-button
-            id="onboardingSkipSetupButton"
-            appearance="plain"
-            size="s"
-            @click=${() => this.onboarding('skipSetup')}
-            >Skip setup</wa-button
-          >
+          ${renderLabeledActionButton({
+            id: 'onboardingRunSetupButton',
+            icon: 'rocket',
+            text: 'Run setup assistant',
+            kind: 'primary',
+            onClick: () => this.onboarding('runSetup'),
+          })}
+          ${renderLabeledActionButton({
+            id: 'onboardingSkipSetupButton',
+            text: 'Skip setup',
+            onClick: () => this.onboarding('skipSetup'),
+          })}
         </div>
       </section>`;
     }
@@ -395,16 +387,15 @@ export class ProgressApp extends LitElement {
         to start it with your changes.
       </p>
       <div class="hero-actions">
-        <wa-button
-          id="editingBackButton"
-          appearance="plain"
-          size="s"
-          @click=${() =>
+        ${renderLabeledActionButton({
+          id: 'editingBackButton',
+          icon: 'reply',
+          text: `Back to ${asking}`,
+          onClick: () =>
             this.dispatchEvent(
               SessionUiEvents.surface({ kind: 'select', runId: data.runId }),
-            )}
-          >${waIcon('reply', { slot: 'start' })}Back to ${asking}</wa-button
-        >
+            ),
+        })}
       </div>
     </section>`;
   }

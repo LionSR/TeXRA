@@ -83,15 +83,12 @@ export function dockGroupActions(
     render(
       html`
         <wa-dropdown placement="bottom-end" @wa-select=${menu.onSelect}>
-          <wa-button
-            slot="trigger"
-            appearance="plain"
-            size="s"
-            class="icon-button btn-ghost is-compact"
-            aria-label="Group actions"
-          >
-            ${waIcon('plus')}
-          </wa-button>
+          ${renderIconActionButton({
+            icon: 'plus',
+            label: 'Group actions',
+            slot: 'trigger',
+            size: 'm',
+          })}
           ${menu.items}
         </wa-dropdown>
       `,
@@ -133,7 +130,7 @@ export function dockTab(id: string, actions: DockActions): ITabRenderer {
         <span class="shell-dock-tab-label" title=${tab.target ?? tab.title}
           >${tab.title}</span
         >
-        ${tab.dirty ? html`<span class="shell-dock-dirty" aria-label="Unsaved changes">•</span>` : nothing}
+        ${tab.dirty ? html`<span class="status-dot shell-dock-dirty" role="img" aria-label="Unsaved changes"></span>` : nothing}
         <span
           class="shell-dock-tab-close"
           @pointerdown=${(event: Event) => event.stopPropagation()}

@@ -25,7 +25,7 @@ export { designTokens } from './litStyles';
 //   rendered markdown compose it, so it stays a direct import.
 // - './statusIndicatorStyles' — single-purpose 8px status dot with one
 //   consumer (the progress-view stream header).
-// - './overlaySurfaceStyles' — shared chrome for the two full-bleed overlay
+// - './overlaySurfaceStyles' — shared chrome for the two wa-drawer overlay
 //   surfaces (ToolsSheet, SessionDrawer); a direct import names its callers
 //   plainly enough that the barrel would add nothing.
 

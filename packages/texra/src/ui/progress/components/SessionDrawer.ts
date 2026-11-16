@@ -1,6 +1,7 @@
 /**
- * The Sessions drawer: a slide-over with a scrim, headed by the
- * project name with search and close, the real `<run-tabs>` in group
+ * The Sessions drawer: a `wa-drawer` from the start edge, headed by the
+ * project name with close (Escape and a click outside close it too), then
+ * search, the real `<run-tabs>` in group
  * sections as its body, and "Open tasks in editor" as its footer. New
  * task has one home, the shell header; the drawer carries no second one.
  *
@@ -9,20 +10,23 @@
  * tab is the same body inside `<progress-app>`, never this element.
  */
 import { LitElement, css, html, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, query } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
 
-import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/drawer/drawer.js';
+import type WaDrawer from '@awesome.me/webawesome/dist/components/drawer/drawer.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
-import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { overlaySurfaceStyles } from '@ui/styles/overlaySurfaceStyles';
 import { designTokens, commonViewStyles } from '@ui/styles';
-import { renderIconActionButton } from '@ui/wa/actionButtons';
+import {
+  renderIconActionButton,
+  renderLabeledActionButton,
+} from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type { SessionView } from '@texra-ai/harness/schemas';
 import './RunTabs';
@@ -34,27 +38,8 @@ export class SessionDrawer extends LitElement {
     commonViewStyles,
     overlaySurfaceStyles,
     css`
-      :host {
-        z-index: 4;
-      }
-
-      .scrim {
-        background: var(--wa-color-overlay-modal);
-      }
-
-      .panel {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        inset-inline-start: 0;
-        width: min(320px, 100% - 40px);
-        display: flex;
-        flex-direction: column;
-        background: var(--wa-color-surface-default);
-        color: var(--wa-color-text-normal);
-        border-inline-end: var(--border-thin) solid
-          var(--wa-color-surface-border);
-        box-shadow: var(--wa-shadow-l);
+      wa-drawer {
+        --size: 320px;
       }
 
       .overlay-title {
@@ -83,18 +68,6 @@ export class SessionDrawer extends LitElement {
         flex: 0 0 auto;
         border-top: var(--border-thin) solid var(--wa-color-surface-border);
       }
-
-      .drawer-footer wa-button {
-        width: 100%;
-      }
-
-      .drawer-footer wa-button::part(base) {
-        justify-content: flex-start;
-        gap: var(--wa-space-2xs);
-        padding-inline: var(--wa-space-xs);
-        font-size: var(--font-size-xs);
-        color: var(--color-text-secondary);
-      }
     `,
   ];
 
@@ -104,7 +77,18 @@ export class SessionDrawer extends LitElement {
   /** The desktop renders no drawer. */
   @property() placement: 'sidebar' | 'editor' = 'sidebar';
 
-  private close = (): void => {
+  @query('wa-drawer') private drawer!: WaDrawer;
+
+  /** Opening after the first render lets the drawer animate in and note the
+   *  focus it returns to on close. */
+  override firstUpdated(): void {
+    this.drawer.open = true;
+  }
+
+  /** Every way out (the button, Escape, a click outside) runs the drawer's
+   *  close; the surface forgets it once that has finished. */
+  private handleAfterHide = (event: Event): void => {
+    if (event.target !== event.currentTarget) return;
     this.dispatchEvent(
       SessionUiEvents.surface({ kind: 'drawer', open: false }),
     );
@@ -129,8 +113,13 @@ export class SessionDrawer extends LitElement {
     const search = this.surface?.search ?? '';
     const inEditor = this.placement === 'editor';
     return html`
-      <div class="scrim" @click=${this.close}></div>
-      <div class="panel" role="dialog" aria-label="Tasks">
+      <wa-drawer
+        label="Tasks"
+        placement="start"
+        without-header
+        light-dismiss
+        @wa-after-hide=${this.handleAfterHide}
+      >
         <div class="overlay-header">
           <span class="overlay-title">${this.host?.project.name ?? ''}</span>
           ${renderIconActionButton({
@@ -138,7 +127,9 @@ export class SessionDrawer extends LitElement {
             icon: 'xmark',
             label: 'Close',
             tooltip: 'Close',
-            onClick: this.close,
+            onClick: () => {
+              this.drawer.open = false;
+            },
           })}
         </div>
         <div class="drawer-search">
@@ -160,19 +151,15 @@ export class SessionDrawer extends LitElement {
           ></run-tabs>
         </div>
         <div class="drawer-footer">
-          <wa-button
-            appearance="plain"
-            variant="neutral"
-            size="s"
-            type="button"
-            @click=${this.openInEditor}
-            >${waIcon(inEditor ? 'backward-step' : 'picture-in-picture', {
-              slot: 'start',
-            })}
-            ${inEditor ? 'Back to sidebar' : 'Open tasks in editor'}</wa-button
-          >
+          ${renderLabeledActionButton({
+            icon: inEditor ? 'backward-step' : 'picture-in-picture',
+            text: inEditor ? 'Back to sidebar' : 'Open tasks in editor',
+            kind: 'ghost',
+            className: 'is-row',
+            onClick: this.openInEditor,
+          })}
         </div>
-      </div>
+      </wa-drawer>
     `;
   }
 }

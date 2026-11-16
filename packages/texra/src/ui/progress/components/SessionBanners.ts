@@ -13,17 +13,23 @@
 import { css, html, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
+import type { HostCommand } from '@texra/shared/session/hostRequest';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
-import { bannerStyles, designTokens } from '@ui/styles';
+import {
+  CREDENTIAL_LOST_NOTICE,
+  ONBOARDING_CHOICE_CHATGPT,
+} from '@ui/copy/onboarding';
+import { SessionUiEvents } from '@ui/progress/uiEvents';
+import { bannerStyles, commonViewStyles, designTokens } from '@ui/styles';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderWarningBanner } from '@ui/wa/bannerFrame';
-import './AgentConfigBanner';
-import './ApiKeyBanner';
 import './DependencyBanner';
 
 @customElement('session-banners')
 export class SessionBanners extends LitElement {
   static override styles = [
     designTokens,
+    commonViewStyles,
     bannerStyles,
     css`
       :host {
@@ -37,6 +43,95 @@ export class SessionBanners extends LitElement {
   ];
 
   @property({ attribute: false }) banners!: HostSnapshot['banners'];
+
+  private send(command: HostCommand): void {
+    this.dispatchEvent(SessionUiEvents.host(command));
+  }
+
+  /** Shown only once a credential that worked stops working (the host raises
+   *  it after a first task has finished). Until then the "Connect a model"
+   *  card is the one prompt, so the banner never repeats it on a first
+   *  install. Its first action is the card's first choice, so reconnecting
+   *  offers both ways to connect, not only one. */
+  private apiKeyBanner(): TemplateResult {
+    return renderWarningBanner({
+      id: 'apiKeyBanner',
+      role: 'alert',
+      body: html`
+        <span>${CREDENTIAL_LOST_NOTICE}</span>
+        <div class="actions">
+          ${renderLabeledActionButton({
+            id: 'apiKeyBannerChatGptButton',
+            icon: 'right-to-bracket',
+            text: ONBOARDING_CHOICE_CHATGPT.label,
+            onClick: () =>
+              this.send({ kind: 'onboarding', action: 'signInChatGpt' }),
+          })}
+          ${renderLabeledActionButton({
+            id: 'apiKeyBannerButton',
+            icon: 'key',
+            text: 'Set API key',
+            onClick: () => this.send({ kind: 'apiKeyBanner', action: 'set' }),
+          })}
+          ${renderLabeledActionButton({
+            id: 'apiKeyGuideButton',
+            icon: 'book',
+            text: 'Open key guide',
+            onClick: () => this.send({ kind: 'apiKeyBanner', action: 'guide' }),
+          })}
+        </div>
+        <span class="hint">
+          A ChatGPT subscription covers OpenAI models. Other chat subscriptions
+          don't include API access; for those models, use a provider key.
+        </span>
+      `,
+    });
+  }
+
+  private agentConfigBanner(
+    state: NonNullable<HostSnapshot['banners']['agentConfig']>,
+  ): TemplateResult {
+    const send = (action: 'edit' | 'dir' | 'docs') =>
+      this.send({
+        kind: 'agentConfigBanner',
+        action,
+        customDirSet: state.customDirSet,
+      });
+    // prettier-ignore
+    const message = state.agentName
+      ? html`Agent file for “<bdi dir="auto">${state.agentName}</bdi>” is missing.`
+      : 'Agent configuration is missing.';
+    return renderWarningBanner({
+      id: 'agentConfigBanner',
+      role: 'status',
+      body: html`
+        <span>${message}</span>
+        <div class="actions">
+          ${renderLabeledActionButton({
+            id: 'agentConfigEditButton',
+            icon: 'pencil',
+            text: 'Edit agents',
+            onClick: () => send('edit'),
+          })}
+          ${renderLabeledActionButton({
+            id: 'agentConfigDirButton',
+            icon: 'folder',
+            text: state.customDirSet
+              ? 'Open agent directory'
+              : 'Set agent directory',
+            onClick: () => send('dir'),
+          })}
+          ${renderLabeledActionButton({
+            id: 'agentConfigDocButton',
+            icon: 'book',
+            text: 'Read agent docs',
+            onClick: () => send('docs'),
+          })}
+        </div>
+      `,
+    });
+  }
+
   override render(): TemplateResult | typeof nothing {
     const { apiKey, agentConfig, dependency, service } = this.banners;
     let warning: TemplateResult;
@@ -47,11 +142,9 @@ export class SessionBanners extends LitElement {
         body: html`<span>${service.reason}</span>`,
       });
     } else if (apiKey) {
-      warning = html`<api-key-banner></api-key-banner>`;
+      warning = this.apiKeyBanner();
     } else if (agentConfig !== null) {
-      warning = html`<agent-config-banner
-        .state=${agentConfig}
-      ></agent-config-banner>`;
+      warning = this.agentConfigBanner(agentConfig);
     } else if (dependency !== null) {
       warning = html`<dependency-banner
         .missingTools=${dependency}

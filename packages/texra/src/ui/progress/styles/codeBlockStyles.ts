@@ -63,34 +63,6 @@ export const codeBlockStyles = css`
     word-break: inherit;
   }
 
-  .code-block-copy::part(base) {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--wa-space-2xs) var(--wa-space-xs);
-    border: none;
-    background: transparent;
-    color: var(--wa-color-text-quiet);
-    border-radius: var(--border-radius-small);
-  }
-
-  .code-block-copy::part(base):hover {
-    color: var(--wa-color-text-normal);
-  }
-
-  .code-block-copy.copy-success::part(base) {
-    color: var(--wa-color-git-added);
-  }
-
-  /* Kept rather than deleted like the others: the focus-visible rule in
-     focusRingStyles cannot reach inside wa-button's shadow root, so this
-     part-piercing rule is the only ring this control gets. Widened to the
-     shared tokens. */
-  .code-block-copy:focus-visible::part(base) {
-    outline: var(--focus-ring-width) solid var(--wa-color-focus);
-    outline-offset: var(--focus-ring-offset);
-  }
-
   /* Syntax highlighted code blocks */
   pre.hljs code {
     background: transparent;

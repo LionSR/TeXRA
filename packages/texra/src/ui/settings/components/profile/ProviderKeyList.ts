@@ -23,7 +23,10 @@ import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
 import { TickerController } from '@ui/litControllers/TickerController';
 import { planCreditsHint, type PlanCredits } from '@ui/copy/modelAccess';
 import { commonViewStyles, designTokens } from '@ui/styles';
-import { renderIconActionButton } from '@ui/wa/actionButtons';
+import {
+  renderIconActionButton,
+  renderLabeledActionButton,
+} from '@ui/wa/actionButtons';
 import {
   renderDisclosureToggle,
   renderSettingsSectionHeading,
@@ -167,18 +170,16 @@ export class ProviderKeyList extends LitElement {
     const { warningUrl } = setting;
     const warningLink =
       warningUrl && setting.warningUrlLabel
-        ? html` <wa-button
-            class="provider-setting-link btn-ghost is-link"
-            appearance="plain"
-            size="s"
-            @click=${() =>
+        ? html` ${renderLabeledActionButton({
+            text: setting.warningUrlLabel,
+            kind: 'link',
+            className: 'provider-setting-link',
+            onClick: () =>
               postToHost({
                 command: SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL,
                 url: warningUrl,
-              })}
-          >
-            ${setting.warningUrlLabel}
-          </wa-button>`
+              }),
+          })}`
         : nothing;
 
     const warning = setting.warning
@@ -271,18 +272,16 @@ export class ProviderKeyList extends LitElement {
 function renderPlanCreditsHint(credits: PlanCredits): TemplateResult {
   return html`<p class="provider-row-hint">
     ${credits.hint}
-    <wa-button
-      class="provider-setting-link btn-ghost is-link"
-      appearance="plain"
-      size="s"
-      @click=${() =>
+    ${renderLabeledActionButton({
+      text: credits.docLabel,
+      kind: 'link',
+      className: 'provider-setting-link',
+      onClick: () =>
         postToHost({
           command: SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL,
           url: credits.docUrl,
-        })}
-    >
-      ${credits.docLabel}
-    </wa-button>
+        }),
+    })}
   </p>`;
 }
 
