@@ -62,14 +62,20 @@ function sharedRowsFrom(rows: readonly SharedRunRow[]): SharedRunRows {
   return shared;
 }
 
-/** The runs a run works for, as its input rows say. */
-interface AskedBy {
+/** The runs a run has taken work from, at one point of its rows. */
+interface Asking {
   /** The runs whose messages it took as work since its last end. */
   readonly since: readonly RunId[];
   /** The run whose message it last took as work, ever. */
   readonly last: RunId | null;
   /** Whether it has ended before. */
   readonly ended: boolean;
+}
+
+/** {@link Asking} now, and as it stood when the run last ended (null
+ *  before its first end): who that end's report was for. */
+interface AskedBy extends Asking {
+  readonly atEnd: Asking | null;
 }
 
 /**
@@ -85,8 +91,10 @@ function askedBy(
   let since: RunId[] = [];
   let last: RunId | null = null;
   let ended = false;
+  let atEnd: Asking | null = null;
   for (const row of rows) {
     if (row.type === 'run.end') {
+      atEnd = { since, last, ended };
       ended = true;
       since = [];
     } else if (row.type === 'followup.queued') {
@@ -103,7 +111,33 @@ function askedBy(
       if (!since.includes(sender)) since.push(sender);
     }
   }
-  return { since, last, ended };
+  return { since, last, ended, atEnd };
+}
+
+/**
+ * The runs a run's end reports to, from who it worked for as that end
+ * commits (`asking`) and its launch (`parent`): the runs whose messages it
+ * took as work since its last end, and, until its first end, the run that
+ * launched it. A launcher whose call still awaits the run reads the report
+ * from the call, so it is on neither list. A run nobody asked since (a
+ * person continued it, or a report woke it) reports to the run that asked
+ * last, else to its launcher.
+ */
+export function reportRecipients(
+  asking: Asking,
+  parent: RunRows['parent'],
+): readonly RunId[] {
+  const awaiting = parent?.call?.awaited === true;
+  const launcher = parent === null || awaiting ? [] : [parent.id];
+  const reads = !asking.ended && awaiting ? parent.id : null;
+  const asked = new Set([
+    ...(asking.ended ? [] : launcher),
+    ...asking.since.filter((id) => id !== reads),
+  ]);
+  if (asked.size > 0) return [...asked];
+  return asking.last === null || asking.last === reads
+    ? launcher
+    : [asking.last];
 }
 
 /**

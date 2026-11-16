@@ -187,7 +187,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v7: a background command's `exit` has no code when it timed out or had
   // none of its own, and no `noExitCode` (a v6 row's conventional code would
   // read as the command's own).
-  'followup.queued': { version: 7, listing: 'followup' },
+  // v8: a run sender carries no `relation`: any run's message instructs and
+  // wakes its recipient (a v7 peer's or sibling's message, stored as
+  // information only, would read as an instruction).
+  'followup.queued': { version: 8, listing: 'followup' },
   // v2: `disposition` says why the follow-up left the queue; a v1 row lacks
   // it and fails to decode.
   // v3: no `stale` reason: nothing drops a notice of an ended child (a v2

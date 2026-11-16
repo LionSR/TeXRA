@@ -36,6 +36,7 @@ import {
   registrationDrafts,
   runEndDraft,
 } from '@shared/session/runFacts';
+import { reportRecipients } from '@shared/session/runRowReads';
 import type { RunRows } from '@shared/session/runRowsShape';
 import {
   cancelRequestRows,
@@ -196,11 +197,7 @@ export const deliveryId = (runId: RunId, facts: RunRows): string =>
 /**
  * A run's report queued on the input of each run it works for, decided in
  * the job committing its end, under the lifecycle's {@link deliveryId}:
- * the runs whose messages it took as work since its last end, and, until
- * its first end, the run that launched it, unless that launch's call
- * awaits it and reads the report itself. A run nobody asked since (a
- * person continued it, or a report woke it) reports to the run that asked
- * last, else to its launcher. A closed, deleted or unreadable recipient
+ * the runs {@link reportRecipients} names. A closed, deleted or unreadable recipient
  * refuses it, with a warning once the job commits; the run's own rows
  * still commit.
  */
@@ -220,13 +217,7 @@ const replyDelivery = Effect.fn('replyDelivery')(function* (
   const input = yield* Effect.result(inbox.read(runId));
   if (Result.isFailure(input))
     return yield* undelivered('its own input cannot be read', input.failure);
-  const { since, last, ended } = input.success.asked;
-  const { parent } = facts;
-  const launcher =
-    parent === null || parent.call?.awaited === true ? [] : [parent.id];
-  const asking = new Set([...(ended ? [] : launcher), ...since]);
-  const recipients =
-    asking.size > 0 ? [...asking] : last === null ? launcher : [last];
+  const recipients = reportRecipients(input.success.asked, facts.parent);
   const item = {
     delivery,
     from: { kind: 'run', runId } as const,
@@ -248,6 +239,20 @@ const replyDelivery = Effect.fn('replyDelivery')(function* (
   }
   return rows;
 });
+
+/**
+ * The runs `runId`'s last end reported to: whose input holds that report,
+ * and who is woken for it once the run's fiber is gone. None before its
+ * first end.
+ */
+export const lastReportRecipients = Effect.fn('lastReportRecipients')(
+  function* (runId: RunId) {
+    const { atEnd } = (yield* (yield* Inbox).read(runId)).asked;
+    if (atEnd === null) return [];
+    const facts = yield* (yield* SessionLog).facts(runId);
+    return reportRecipients(atEnd, facts?.parent ?? null);
+  },
+);
 
 /**
  * A run's end in `tx`'s job, decided from what it reads under the lock:
