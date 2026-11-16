@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -15,10 +16,7 @@ import {
   configureElectronTestStub,
   resetElectronTestStub,
 } from '@test/desktop/electronTestStub.ts';
-import {
-  desktopSourcePath,
-  moduleFileUrl,
-} from '@test/desktop/desktopTestPaths.ts';
+import { desktopSourcePath } from '@test/desktop/desktopTestPaths.ts';
 
 interface DesktopAppLogModule {
   readDesktopLogSnapshot(options: { workspaceRoot?: string | undefined }): {
@@ -32,7 +30,7 @@ async function loadDesktopAppLogModule(): Promise<DesktopAppLogModule> {
   const cacheKey = randomUUID();
   // cast: a computed import is untyped; the URL names desktopAppLog.ts.
   return import(
-    `${moduleFileUrl(desktopSourcePath('main', 'desktopAppLog.ts'))}?${cacheKey}`
+    `${pathToFileURL(desktopSourcePath('main', 'desktopAppLog.ts')).href}?${cacheKey}`
   ) as Promise<DesktopAppLogModule>;
 }
 

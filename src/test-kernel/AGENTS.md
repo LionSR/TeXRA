@@ -75,7 +75,7 @@ the home-isolation setup files, so no suite sees the developer's home:
 Membership is computed from the suite's source, not declared: a suite that
 needs its own registry is `isolated`; otherwise a suite under a `pure`
 directory is `pure` unless its imports, followed through `@test/*` and
-relative paths, reach the kernel's host (`support/setupPlatform.ts`), and
+relative paths, reach the kernel's host (`support/fakeHost.ts`), and
 every other suite is `kernel`. There is no list of exempt suites or
 modules. A shared worker runs file after file, so process-wide state a
 source scan cannot see (the environment chalk takes its color level from, a

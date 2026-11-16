@@ -18,8 +18,8 @@ const QUICKJS_WASM_VIRTUAL_ID = '\0texra-quickjs-wasm';
 const quickJsWasmPath = require.resolve(QUICKJS_WASM_ID);
 // Full Windows shards intermittently exceed 10s in unrelated suites; retain the
 // tighter timeout elsewhere so genuine local/Linux hangs fail fast. Windows CI
-// is opt-in (see the `test` job in .github/workflows/ci.yml), so this branch
-// still applies to on-demand runs and to local runs on Windows.
+// runs nightly and on dispatch (the `test` job in .github/workflows/ci.yml),
+// and this branch also applies to local runs on Windows.
 const kernelTimeoutMs = process.platform === 'win32' ? 20_000 : 10_000;
 
 // Suites are tiered by what they reach, and pay only for that.
@@ -48,7 +48,7 @@ const kernelTimeoutMs = process.platform === 'win32' ? 20_000 : 10_000;
 // (`NEEDS_OWN_REGISTRY`): add a `vi.mock` and it moves there on its own,
 // remove it and the suite moves back. Otherwise a suite under one of these directories is
 // `pure` unless it reaches a host (its imports, followed through `@test/*`
-// and relative paths, reach the kernel's host, `support/setupPlatform.ts`),
+// and relative paths, reach the kernel's host, `support/fakeHost.ts`),
 // and every other suite is `kernel`. A directory earns a place in this list
 // by holding suites of host-free modules; the scan decides file by file.
 const PURE_DIRS = [
@@ -74,7 +74,7 @@ const PURE_DIRS = [
   'transcript',
   'utils',
 ];
-const HOST = resolve(rootDir, 'src/test-kernel/support/setupPlatform.ts');
+const HOST = resolve(rootDir, 'src/test-kernel/support/fakeHost.ts');
 const TEST_ROOT = resolve(rootDir, 'src/test-kernel');
 const SPECIFIER = /(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g;
 /** Whether `file` or a module its imports reach through `@test/*` and

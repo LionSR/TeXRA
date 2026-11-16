@@ -39,7 +39,10 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { parseArgs } from 'node:util';
 
-import { isolateProcessHome } from '../../../scripts/isolated-home.mjs';
+import {
+  isolateProcessHome,
+  testLaunchEnv,
+} from '../../../scripts/isolated-home.mjs';
 
 // Every `texra` this script starts resolves `~/.texra` in a temporary home.
 isolateProcessHome();
@@ -249,12 +252,7 @@ function runJourney(name, model, outDir, { scriptOnly, attempt }) {
         // provider key and nothing else from the runner's environment.
         env: {
           PATH: process.env.PATH,
-          HOME: home,
-          XDG_CONFIG_HOME: path.join(home, '.config'),
-          XDG_DATA_HOME: path.join(home, '.local/share'),
-          XDG_STATE_HOME: path.join(home, '.local/state'),
-          XDG_CACHE_HOME: path.join(home, '.cache'),
-          TEXRA_NO_UPDATE_CHECK: '1',
+          ...testLaunchEnv(home),
           CI: '1',
           [keyEnv]: process.env[keyEnv],
         },

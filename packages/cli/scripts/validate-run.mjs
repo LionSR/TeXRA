@@ -29,7 +29,15 @@ import {
   VALIDATION_SCENARIOS,
   VALIDATION_SWITCH,
 } from '../src/runtime/models/validationSwitch.ts';
-import { isolateProcessHome } from '../../../scripts/isolated-home.mjs';
+import {
+  isolateProcessHome,
+  testLaunchEnv,
+} from '../../../scripts/isolated-home.mjs';
+import {
+  serviceAnnouncements,
+  serviceLogPath,
+  stopServices,
+} from '../../../scripts/texra-services.mjs';
 
 // Every `texra` this script starts resolves `~/.texra` in a temporary home.
 isolateProcessHome();
@@ -86,12 +94,7 @@ function isolatedCliHomeEnv(home, overrides = {}) {
     ...Object.fromEntries(
       validationProviderApiKeyEnv.map((name) => [name, '']),
     ),
-    HOME: home,
-    XDG_CONFIG_HOME: path.join(home, '.config'),
-    XDG_DATA_HOME: path.join(home, '.local/share'),
-    XDG_STATE_HOME: path.join(home, '.local/state'),
-    XDG_CACHE_HOME: path.join(home, '.cache'),
-    TEXRA_NO_UPDATE_CHECK: '1',
+    ...testLaunchEnv(home),
     ...overrides,
   };
 }
@@ -989,7 +992,6 @@ prompt: |
     );
   const env = isolatedCliHomeEnv(home, {
     [VALIDATION_SCENARIOS.echo]: '1',
-    TEXRA_NO_TELEMETRY: '1',
   });
   const ptyEnv = {
     ...env,
@@ -1150,65 +1152,27 @@ for (const [signal, code] of [
  */
 function removeScratch(dir) {
   liveScratch.delete(dir);
-  // Every service home under `dir`, by the sockets its services name in
-  // `run/serve.log`, where each detached service logs the socket it listens
-  // on: the current one and a retired one still draining each have their
-  // own `serve-<pid>.sock`, which a long home keeps outside `dir`, under
-  // `/tmp`. The client opens the log before it starts the service, so a
-  // service still starting is waited for briefly.
-  const logs = spawnSync(
-    'find',
-    [dir, '-type', 'f', '-path', '*/.texra/run/serve.log'],
-    { encoding: 'utf8' },
-  );
+  // Every service home under `dir`, by the log each detached service writes:
+  // the current one and a retired one still draining each name their own
+  // `serve-<pid>.sock`, which a long home keeps outside `dir`, under `/tmp`.
+  // The client opens the log before it starts the service, so a service
+  // still starting is waited for briefly.
+  const logs = spawnSync('find', [dir, '-type', 'f', '-name', 'serve.log'], {
+    encoding: 'utf8',
+  });
   for (const log of logs.stdout.split('\n').filter(Boolean)) {
-    const sockets = () =>
-      [
-        ...readFileSync(log, 'utf8').matchAll(
-          / listening on (\S*serve-(\d+)\.sock)$/gm,
-        ),
-      ].map(([, socket, pid]) => ({ socket, pid: Number(pid) }));
-    const pause = () =>
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    const dataRoot = path.dirname(path.dirname(log));
+    if (serviceLogPath(dataRoot) !== log) continue;
     for (
       let waited = 0;
-      sockets().length === 0 && waited < 3_000;
+      serviceAnnouncements(log).length === 0 && waited < 3_000;
       waited += 100
     )
-      pause();
-    const signal = (pid, name) => {
-      try {
-        process.kill(pid, name);
-        return true;
-      } catch {
-        // Gone already: nothing left to stop.
-        return false;
-      }
-    };
-    // A logged pid is signalled only while it is still a running
-    // `texra … serve`: one that exited long ago may have had its pid reused.
-    // A zombie (a service this script spawned, which this blocked loop has
-    // not reaped yet) has exited.
-    const running = (pid) => {
-      const [stat = '', ...command] = spawnSync(
-        'ps',
-        ['-o', 'stat=', '-o', 'command=', '-p', String(pid)],
-        { encoding: 'utf8' },
-      )
-        .stdout.trim()
-        .split(/\s+/);
-      return !stat.startsWith('Z') && command.includes('serve');
-    };
-    const pids = [...new Set(sockets().map(({ pid }) => pid))].filter(
-      (pid) => running(pid) && signal(pid, 'SIGTERM'),
-    );
-    // Gone before the scratch is: one still running past the wait is killed.
-    for (let waited = 0; pids.some(running) && waited < 10_000; waited += 100)
-      pause();
-    for (const pid of pids.filter(running)) signal(pid, 'SIGKILL');
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    stopServices(dataRoot);
     // A long home's socket directory is outside `dir`.
     for (const socketDir of new Set(
-      sockets().map(({ socket }) => path.dirname(socket)),
+      serviceAnnouncements(log).map(({ socket }) => path.dirname(socket)),
     ))
       if (!socketDir.startsWith(`${dir}${path.sep}`))
         rmSync(socketDir, { recursive: true, force: true });
@@ -1712,7 +1676,6 @@ prompt: |
         env: {
           ...project.ptyEnv,
           TEXRA_NO_SERVICE: '1',
-          TEXRA_NO_TELEMETRY: '1',
           [VALIDATION_SCENARIOS.golden]: '1',
         },
         onData: (_data, pty) => {
@@ -1888,7 +1851,7 @@ async function validateThresholdCompaction() {
 async function validateServiceChatsSeeEachOther() {
   const cwd = makeScratch('texra-cli-service-chats-');
   const project = echoProject(cwd);
-  const env = { ...project.ptyEnv, TEXRA_NO_TELEMETRY: '1' };
+  const env = project.ptyEnv;
   const chatArgs = [
     'chat',
     '--agent',
@@ -2016,7 +1979,6 @@ prompt: |
   );
   const env = {
     ...project.ptyEnv,
-    TEXRA_NO_TELEMETRY: '1',
     [VALIDATION_SCENARIOS.golden]: '1',
   };
   const texraWith = (binary, args, label) => {
@@ -2175,7 +2137,6 @@ prompt: |
   );
   const env = {
     ...project.ptyEnv,
-    TEXRA_NO_TELEMETRY: '1',
     [VALIDATION_SCENARIOS.golden]: '1',
   };
   const texra = (args, label) => {
@@ -2305,7 +2266,7 @@ async function validateServiceSessionIdle() {
   const other = path.join(cwd, 'other');
   mkdirSync(other, { recursive: true });
   const storageRoot = path.join(cwd, 'home', '.texra');
-  const env = { ...project.ptyEnv, TEXRA_NO_TELEMETRY: '1' };
+  const env = project.ptyEnv;
   const texra = (args, label) => {
     const result = run(
       process.execPath,
@@ -2442,7 +2403,6 @@ prompt: |
   );
   const env = {
     ...project.ptyEnv,
-    TEXRA_NO_TELEMETRY: '1',
     [VALIDATION_SCENARIOS.golden]: '1',
     OPENAI_API_KEY: 'sk-terminal-only',
   };
@@ -2618,7 +2578,6 @@ prompt: |
     );
   const env = {
     ...alpha.ptyEnv,
-    TEXRA_NO_TELEMETRY: '1',
     [VALIDATION_SCENARIOS.golden]: '1',
   };
   const start = (dir, agent, instruction) =>
@@ -2745,7 +2704,6 @@ prompt: |
   );
   const env = {
     ...project.ptyEnv,
-    TEXRA_NO_TELEMETRY: '1',
     [VALIDATION_SCENARIOS.golden]: '1',
   };
   const texra = (args, label) => {
@@ -2968,7 +2926,6 @@ prompt: |
   );
   const env = {
     ...project.ptyEnv,
-    TEXRA_NO_TELEMETRY: '1',
     [VALIDATION_SCENARIOS.golden]: '1',
   };
   const texra = (args, label) => {
@@ -3099,7 +3056,7 @@ prompt: |
 async function validateServiceSharedTask() {
   const cwd = makeScratch('texra-cli-service-');
   const project = echoProject(cwd);
-  const env = { ...project.ptyEnv, TEXRA_NO_TELEMETRY: '1' };
+  const env = project.ptyEnv;
   const texra = (args, label, extraEnv = {}) => {
     const result = run(
       process.execPath,

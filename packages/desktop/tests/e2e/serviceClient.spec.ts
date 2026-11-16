@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-import { alive } from '../../../../scripts/desktop-package-smoke-environment.mjs';
+import { serviceRunning } from '../../../../scripts/texra-services.mjs';
 import {
   closeTexraApp,
   dismissOnboarding,
@@ -109,9 +109,9 @@ test('the desktop app shares the service with a CLI of its build, reaches the on
       expect(next.version).toBe(NEXT_BUILD);
       expect(next.pid).not.toBe(started.pid);
       await expect
-        .poll(() => alive(started.pid), { timeout: 30_000 })
+        .poll(() => serviceRunning(started.pid), { timeout: 30_000 })
         .toBe(false);
-      const retired = !alive(started.pid);
+      const retired = !serviceRunning(started.pid);
       // The app reaches the newer service (its link and this status call)
       // and lists the task it runs.
       await expect

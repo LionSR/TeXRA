@@ -14,6 +14,7 @@ import {
   VALIDATION_SCENARIOS,
   VALIDATION_SWITCH,
 } from '../../../cli/src/runtime/models/validationSwitch';
+import { testLaunchEnv } from '../../../../scripts/isolated-home.mjs';
 
 const HERE = import.meta.dirname;
 const REPO_ROOT = resolve(HERE, '..', '..', '..', '..');
@@ -76,9 +77,8 @@ export function cli(
   const result = spawnSync(process.execPath, [binary, ...args], {
     env: {
       ...process.env,
-      HOME: home,
+      ...testLaunchEnv(home),
       CI: '1',
-      TEXRA_NO_TELEMETRY: '1',
       ...env,
     },
     encoding: 'utf8',
