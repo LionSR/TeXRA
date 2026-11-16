@@ -132,7 +132,6 @@ const ROW_KIND_IS_WIDGET = {
   contextManagement: true,
   fileList: true,
   progressStatus: true,
-  scratchpad: true,
   thinking: true,
   tool: true,
   webSearch: true,

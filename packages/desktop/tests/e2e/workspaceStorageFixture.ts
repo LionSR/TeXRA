@@ -13,9 +13,9 @@ export function cleanupDirectory(path: string): void {
 
 /**
  * `use` over a copy of the project store at `storagePath` (its `texra.db`
- * and write-ahead log): the process that holds a project store admits no
+ * and write-ahead log): the process that holds a project store accepts no
  * other, so a test reads what it has committed from the files. The copy
- * is removed once `use` returns, or once the promise it returns settles.
+ * is removed once `use` returns, or once the promise it returns finishes.
  */
 export function withStoreCopy<A>(
   storagePath: string,
@@ -34,7 +34,7 @@ export function withStoreCopy<A>(
     remove();
     throw error;
   }
-  // cast: a promise's settled copy is the same `A` the caller returned.
+  // cast: a promise's finished copy is the same `A` the caller returned.
   if (result instanceof Promise) return result.finally(remove) as A;
   remove();
   return result;

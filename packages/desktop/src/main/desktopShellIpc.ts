@@ -1,28 +1,21 @@
 import { Effect, type FileSystem, type Path } from 'effect';
 
-import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
-import {
-  DESKTOP_SHELL_COMMANDS,
-  type DesktopLayoutPanel,
-  type DesktopWorkbenchKind,
-} from '../shared/desktopShellMessages.js';
 import {
   DESKTOP_DOCS_URL,
-  DESKTOP_SHELL_IPC_COMMANDS,
-  dispatchDesktopCommand,
-  postDesktopSettingsView,
-  type DesktopCommandActions,
+  DESKTOP_LOCAL_COMMANDS,
+  DESKTOP_MAIN_COMMANDS,
+  type DesktopCommandId,
+  type DesktopMainCommandId,
 } from '../shared/desktopCommandSurface.js';
+import { DESKTOP_SHELL_COMMANDS } from '../shared/desktopShellMessages.js';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import type {
-  DesktopCommandRoutes,
-  DesktopRenderer,
-} from './desktopIpcTypes.js';
+import type { DesktopCommandRoutes } from './desktopIpcTypes.js';
+import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
 import type { DesktopSpawn } from './desktopWindows.js';
 
-interface DesktopShellActionFactoryOptions {
+interface DesktopShellCommandOptions {
   openExternalUrl(url: string): Effect.Effect<void, HostFailed>;
   openLogFolder(): Effect.Effect<void, PreviewUnavailable>;
   openWorkspaceFolder(): Effect.Effect<
@@ -30,98 +23,57 @@ interface DesktopShellActionFactoryOptions {
     Error,
     FileSystem.FileSystem | Path.Path | ChildProcessSpawner
   >;
-  /** The shown project's surfaces take the New-task state. */
-  showLauncher(): void;
   onAsyncError: (error: unknown) => void;
-  /** Every shell action's program runs on a fiber of the window's scope. */
+  /** Every command's program runs on a fiber of the window's scope. */
   spawn: DesktopSpawn;
 }
 
 /**
- * The window's shell actions: what the native menu and the command palette
- * reach the shell through.
+ * The window's desktop commands as the main process sees them: the three it
+ * runs itself, routed from the renderer by id, and `run`, which the native
+ * menu calls for any command and which hands every other one to the renderer.
  */
-export function createDesktopShellActions(
-  renderer: DesktopRenderer,
-  options: DesktopShellActionFactoryOptions,
-): DesktopCommandActions {
-  const reportAsyncError = options.onAsyncError;
-
-  /**
-   * Shell actions are fire-and-forget: the program runs on its own fiber and
-   * whatever it fails with reaches the window's async-error reporter as is.
-   */
-  function runShellAction(
-    program: Effect.Effect<
+export function createDesktopShellCommands(
+  post: (message: DesktopPush) => void,
+  options: DesktopShellCommandOptions,
+): {
+  run(id: DesktopCommandId): void;
+  routes: DesktopCommandRoutes;
+} {
+  // Fire-and-forget: the program runs on its own fiber and whatever it fails
+  // with reaches the window's async-error reporter.
+  const programs: Record<
+    DesktopMainCommandId,
+    () => Effect.Effect<
       void,
       Error,
       FileSystem.FileSystem | Path.Path | ChildProcessSpawner
-    >,
-  ): void {
+    >
+  > = {
+    [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: () =>
+      options.openExternalUrl(DESKTOP_DOCS_URL),
+    [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: options.openLogFolder,
+    [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: options.openWorkspaceFolder,
+  };
+  const runHere = (id: DesktopMainCommandId): void => {
     options.spawn(
-      program.pipe(
-        Effect.catch((error) => Effect.sync(() => reportAsyncError(error))),
+      programs[id]().pipe(
+        Effect.catch((error) => Effect.sync(() => options.onAsyncError(error))),
       ),
     );
-  }
-
-  function openWorkbench(kind: DesktopWorkbenchKind) {
-    renderer.postToRenderer({
-      command: DESKTOP_SHELL_COMMANDS.OPEN_WORKBENCH,
-      kind,
-    });
-  }
-
-  function showSettings(tab?: SettingsTarget) {
-    postDesktopSettingsView((message) => renderer.postToRenderer(message), tab);
-  }
-
-  function toggleLayout(panel: DesktopLayoutPanel) {
-    renderer.postToRenderer({
-      command: DESKTOP_SHELL_COMMANDS.TOGGLE_LAYOUT,
-      panel,
-    });
-  }
-
-  return {
-    openDesktopDocs: () =>
-      runShellAction(options.openExternalUrl(DESKTOP_DOCS_URL)),
-    openLogFolder: () => runShellAction(options.openLogFolder()),
-    openWorkspaceFolder: () => runShellAction(options.openWorkspaceFolder()),
-    saveFile: () => {
-      renderer.postToRenderer({
-        command: DESKTOP_SHELL_COMMANDS.SAVE_FILE,
-      });
-    },
-    // New Task, the header's "+": the New-task state with the
-    // launcher's selections as they are, a surface action as the extension
-    // sends it.
-    showLauncher: options.showLauncher,
-    openWorkbench,
-    showSettings,
-    toggleBottomBar: () => toggleLayout('bottomBar'),
-    toggleSidePanel: () => toggleLayout('sidePanel'),
   };
-}
-
-/**
- * The desktop-local commands the renderer posts by id (open log folder, the
- * docs): they originate from the native menu's registry,
- * not from a session, so they dispatch through the one command registry the
- * menu also uses.
- */
-export function createDesktopShellIpc(
-  actions: DesktopCommandActions,
-): DesktopCommandRoutes {
-  // Every registry handler runs its action synchronously; an action that
-  // forks host work reports its own failure.
-  return Object.fromEntries(
-    DESKTOP_SHELL_IPC_COMMANDS.map((id) => [
-      id,
-      () =>
-        Effect.sync(() => {
-          void dispatchDesktopCommand(id, actions);
-        }),
-    ]),
-  );
+  const isMainCommand = (id: DesktopCommandId): id is DesktopMainCommandId =>
+    (DESKTOP_MAIN_COMMANDS as readonly DesktopCommandId[]).includes(id);
+  return {
+    run: (id) => {
+      if (isMainCommand(id)) runHere(id);
+      else post({ command: DESKTOP_SHELL_COMMANDS.RUN_COMMAND, id });
+    },
+    routes: Object.fromEntries(
+      DESKTOP_MAIN_COMMANDS.map((id) => [
+        id,
+        () => Effect.sync(() => runHere(id)),
+      ]),
+    ),
+  };
 }

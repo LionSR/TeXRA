@@ -7,10 +7,6 @@ interface EventSource {
   ): unknown;
 }
 
-interface DisposableRendererResources {
-  disposeRendererResources(): void;
-}
-
 interface MainWindow {
   close(): void;
   isDestroyed(): boolean;
@@ -27,7 +23,8 @@ interface BeforeQuitApp {
 
 interface DesktopWindowLifecycleWiring {
   webContents: EventSource;
-  workspaceIpc: DisposableRendererResources;
+  /** The document reloaded: whatever it held is released. */
+  onDocumentReloaded(): void;
   showDiscardDialog(): number;
   isFatalShutdownRequested(): boolean;
   clearContinueQuitAfterWindowClose(): void;
@@ -53,9 +50,9 @@ export function bootstrapDesktopWindowLifecycle(
       initialRendererNavigationComplete = true;
       return;
     }
-    // A real document reload releases its resources. Switching projects
-    // changes visibility and never navigates the document.
-    options.workspaceIpc.disposeRendererResources();
+    // Switching projects changes visibility and never navigates the
+    // document, so this is a real reload.
+    options.onDocumentReloaded();
   });
 }
 

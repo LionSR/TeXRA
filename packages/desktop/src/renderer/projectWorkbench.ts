@@ -18,6 +18,7 @@ import {
   DesktopShellStateSchema,
   initialDesktopShellState,
   openWorkbenchTab,
+  workbenchTabId,
   setWorkbenchTabDirty,
   type DesktopShellState,
   type WorkbenchKind,
@@ -151,7 +152,7 @@ export function createProjectWorkbench(options: {
     onRequestOpen: openDocument,
     onDirtyChange: (path, dirty) =>
       updateState(
-        setWorkbenchTabDirty(getState(), `workbench:editor:${path}`, dirty),
+        setWorkbenchTabDirty(getState(), workbenchTabId('editor', path), dirty),
       ),
     onError: (error) => {
       // Closing a project rejects its pending I/O as part of disposal.
@@ -171,7 +172,7 @@ export function createProjectWorkbench(options: {
     return editor;
   }
   function openDocument(target: string): void {
-    const id = `workbench:editor:${target}`;
+    const id = workbenchTabId('editor', target);
     // An already active tab emits no activation event. Explicitly reopening it
     // still checks disk, while preserving unsaved edits through the pane's guard.
     if (workbench.activeTabId() === id) void editors.get(id)?.open(target);

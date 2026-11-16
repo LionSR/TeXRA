@@ -52,7 +52,7 @@ export function plainLogRow(
   return { ...base, kind: 'log', text: measured };
 }
 
-/** Model text, thinking, or scratchpad; no row while the text is blank. */
+/** Model text or thinking; no row while the text is blank. */
 export function streamingTextRow(
   base: TranscriptRowBase,
   kind: StreamingTextRow['kind'],
@@ -224,7 +224,6 @@ export type LogRowPayload = Exclude<
     messageType:
       | typeof MESSAGE_TYPES.MODEL_RESPONSE
       | typeof MESSAGE_TYPES.THINKING
-      | typeof MESSAGE_TYPES.SCRATCHPAD
       | typeof MESSAGE_TYPES.TOOL_USE;
   }
 >;

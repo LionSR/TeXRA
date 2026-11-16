@@ -165,7 +165,7 @@ test('macOS window close detaches and activation reopens in the same process', a
   expect(await processId(launched)).toBe(initialPid);
 });
 
-test('a new desktop process hydrates waiting and orphaned histories without rewriting them', async ({
+test('a new desktop process loads waiting and orphaned histories without rewriting them', async ({
   profile,
   launch,
 }) => {

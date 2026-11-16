@@ -13,7 +13,8 @@ if (app.requestSingleInstanceLock()) {
   installDesktopAppLog();
   const removeFatalStartupHandlers = installFatalStartupHandlers();
   try {
-    await import('./index.js');
+    const { startDesktop } = await import('./index.js');
+    startDesktop(import.meta.dirname);
     removeFatalStartupHandlers();
     installPostStartupRejectionHandler();
   } catch (error) {

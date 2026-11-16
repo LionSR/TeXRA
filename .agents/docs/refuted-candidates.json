@@ -810,6 +810,29 @@
       "why": "The default model is not always off in a kernel worker. validationHost (src/test-kernel/support/storeFaults.ts) and the golden store's killed-run block (src/test-kernel/controllers/session/goldenStore.vitest.ts, 'the golden run killed after its effect') stub VALIDATION_SWITCH and the flag file per test and run over the block's default process (SessionGraph.hosted or texraHosted), whose validationModelLayer then answers. Those blocks build one process per block and a host per test, so the model cannot move into the host; dropping the default would make every validationHost suite (the crash conformance shards, resumeRun, ExecuteCli, ResumeCommand, HeadlessRunCommand, chatSessionController, the run-loop hooks and session programs suites, about fifteen, several of them harness suites) name the CLI's layer itself, which spreads the @cli import the change meant to remove. What did hold landed instead: SessionGraph.with takes named options with the validation model as its default, so the two harness suites that imported the CLI module only to fill its positional model slot (BashTool, ExecutionsToolOutput) no longer do."
     },
     {
+      "id": "HARNESS-line-range-one-field-name",
+      "candidate": "The three file-viewing tools name their line range one way: read_file's range and the memory and executions tools' view_range renamed to one field name (the held part of HT-7 of the 2026-11-15 design red-flag audit)",
+      "why": "The repo owner kept both names (2026-11-16). The shape is already one: every tool decodes LineRangeSchema (packages/harness/src/tools/formatting.ts), and lineRangeOf reads a stored call's range for the transcript and for hooks. Only the field name differs, and each name has its own reason. view_range on the memory tool (packages/harness/src/tools/memory/memoryInput.ts) mirrors the provider memory tool that models are trained to call with that name, and the executions tool takes the same name for the same paginated view. range is read_file's established name (packages/harness/src/tools/ReadTool.ts). A rename is a model-facing change that would cost first-call accuracy on the memory tool and change tool digests for no gain in structure.",
+      "ruling": ".agents/docs/evidence/2026-11-15-design-red-flags/HT-harness-tools.md#ht-7-the-three-file-viewing-tools-take-a-line-range-in-two-shapes-under-two-names-the-view-formatter-takes-a-third-and-the-transcript-reads-each-by-hand",
+      "symbols": [
+        {
+          "file": "packages/harness/src/tools/memory/memoryInput.ts",
+          "symbol": "view_range",
+          "signature": "view_range: Schema.optional(Schema.NullOr(LineRangeSchema)),"
+        },
+        {
+          "file": "packages/harness/src/tools/ReadTool.ts",
+          "symbol": "range",
+          "signature": "range: Schema.optional(Schema.NullOr(LineRangeSchema))"
+        },
+        {
+          "file": "packages/harness/src/tools/executions/toolInput.ts",
+          "symbol": "view_range",
+          "signature": "view_range: Schema.optional(Schema.NullOr(LineRangeSchema))"
+        }
+      ]
+    },
+    {
       "id": "RF-TT-11-locate-tool-module",
       "candidate": "Move locateTool into ProbeEnvironmentTool.ts and delete tools/setup/toolProbing.ts (TT-11 item 4, second half, of the 2026-11-15 design red-flag audit)",
       "why": "toolProbing.ts is the vi.mock target of src/test-kernel/tools/setup/CredentialReporting.vitest.ts, its only stub for locateTool. Folding the function into the tool would make that suite mock lower modules (toolChecks, binaryResolver) instead, a larger and more brittle change than the one-export file it deletes. The other half of the item (the subscription probe beside its one reader) landed.",

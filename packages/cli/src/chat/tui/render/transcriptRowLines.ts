@@ -95,7 +95,6 @@ export function transcriptRowBodyLines(
   const lines = ((): readonly string[] => {
     switch (row.kind) {
       case 'thinking':
-      case 'scratchpad':
         return elidedTextLines(row.text, elide);
       case 'error':
         return elidedTextLines(errorRowText(row).detailText, elide);

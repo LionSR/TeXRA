@@ -22,7 +22,7 @@ import {
 
 interface DesktopBrowserViewsOptions {
   getWindow(): BaseWindow | undefined;
-  /** Opens a URL outside the app (used for schemes we refuse to embed); a
+  /** Opens a URL outside the app (used for schemes we do not embed); a
    *  failure is the caller's to report. */
   openExternalUrl(url: string): void;
   /** Reports the page title so the renderer can rename the browser tab. */
@@ -45,7 +45,7 @@ export interface DesktopBrowserViews {
 
 /**
  * Only http(s) is embeddable. Anything else — `file:` (local disk read),
- * `javascript:` (script injection), custom schemes — is refused rather than
+ * `javascript:` (script injection), custom schemes — is rejected rather than
  * loaded into a view that renders inside TeXRA's own window.
  */
 function isEmbeddableUrl(rawUrl: string): boolean {

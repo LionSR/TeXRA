@@ -40,7 +40,7 @@ export function createReviewPane(): ReviewPaneController {
 
   // Keyed by `previewId`, the diff a close names, in the order they opened:
   // two pending edits of one file (parallel subagents) are two reviews, and
-  // settling one never drops the other. The tree shows each path's newest.
+  // answering one never drops the other. The tree shows each path's newest.
   const entries = new Map<string, DesktopShowDiffMessage>();
   let selectedId: string | undefined;
   let filter = '';

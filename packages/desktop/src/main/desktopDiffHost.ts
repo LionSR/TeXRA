@@ -12,18 +12,15 @@ import {
 import type { DiffLabel, DiffSource, DiffViewHost } from '@texra/hosts/uiHosts';
 import { monacoLanguageForPath } from '../shared/monacoLanguage';
 
-import {
-  DESKTOP_DIFF_COMMANDS,
-  type DesktopCloseDiffMessage,
-  type DesktopShowDiffMessage,
-} from '../shared/desktopDiffMessages.js';
-import type { DesktopRenderer } from './desktopIpcTypes.js';
+import { DESKTOP_DIFF_COMMANDS } from '../shared/desktopDiffMessages.js';
+import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
-interface DesktopDiffHostOptions extends DesktopRenderer {
+interface DesktopDiffHostOptions {
+  postToRenderer(message: DesktopPush): void;
   /** The process runtime the window was handed. The members below are
    *  programs the caller runs, so this only supplies the filesystem they
-   *  read and write through — nothing settles here. */
+   *  read and write through; nothing runs on it here. */
   runtime: ProcessRuntime;
 }
 
@@ -109,7 +106,7 @@ export function createDesktopDiffHost(
           additions: added,
           deletions: removed,
           language: monacoLanguageForPath(proposed.filePath),
-        } satisfies DesktopShowDiffMessage);
+        });
       }),
     );
   }
@@ -124,7 +121,7 @@ export function createDesktopDiffHost(
         command: DESKTOP_DIFF_COMMANDS.CLOSE_DIFF,
         session: reviewSession,
         previewId,
-      } satisfies DesktopCloseDiffMessage),
+      }),
     );
   }
 

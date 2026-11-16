@@ -14,8 +14,9 @@ import { ServiceProjects } from '@texra/controllers/server/service';
 import { serve } from '@texra/controllers/server/serve';
 import { PROTOCOL, type ServiceInfo } from '@texra/controllers/server/protocol';
 
+import { adoptLoginShellEnvironment } from '@texra/platform/defaults/loginShellEnvironment';
+
 import {
-  adoptLoginShellEnvironment,
   CliInvocation,
   CliUsageError,
   type CliContext,

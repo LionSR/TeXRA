@@ -93,7 +93,7 @@ export interface DesktopWindows {
    *  shutdown resumes there. */
   continueQuitAfterClose(continueQuit: () => void): void;
   /** The shutdown: interrupt a reopen in flight (its window releases what it
-   *  built) and refuse later ones, then wait for the open or closing window
+   *  built) and reject later ones, then wait for the open or closing window
    *  to release everything it held. */
   readonly released: Effect.Effect<void>;
 }

@@ -71,11 +71,24 @@ export function initialDesktopShellState(): DesktopShellState {
     projectName: '',
     sidebarCollapsed: false,
     sidebarWidth: 256,
-    workbenchTabs: [{ id: 'workbench:agent', kind: 'agent', title: 'Agent' }],
-    activeTabId: 'workbench:agent',
+    workbenchTabs: [
+      { id: workbenchTabId('agent'), kind: 'agent', title: 'Agent' },
+    ],
+    activeTabId: workbenchTabId('agent'),
     dockLayout: null,
     nextTerminalSerial: 1,
   };
+}
+
+/** A workbench tab's id, which the shell's stored layout keeps: the kind,
+ *  and for a kind with several tabs, its target (a terminal's serial). */
+export function workbenchTabId(
+  kind: WorkbenchKind,
+  target?: string | number,
+): string {
+  return target === undefined
+    ? `workbench:${kind}`
+    : `workbench:${kind}:${target}`;
 }
 
 export function openWorkbenchTab(
@@ -89,9 +102,10 @@ export function openWorkbenchTab(
 ): DesktopShellState {
   const { kind, target, build } = request;
   const meta = WORKBENCH_KIND_META[kind];
-  let id = `workbench:${kind}`;
-  if (kind === 'terminal') id += `:${state.nextTerminalSerial}`;
-  else if (!meta.singleton && target) id += `:${target}`;
+  const id =
+    kind === 'terminal'
+      ? workbenchTabId(kind, state.nextTerminalSerial)
+      : workbenchTabId(kind, meta.singleton || !target ? undefined : target);
   const existing = state.workbenchTabs.find((tab) => tab.id === id);
   if (existing) {
     return {
