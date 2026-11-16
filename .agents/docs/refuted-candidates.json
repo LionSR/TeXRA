@@ -292,7 +292,7 @@
         {
           "file": "packages/llm/src/turn.ts",
           "symbol": "completedTurn",
-          "signature": "export const completedTurn = Effect.fn('llm.generateTurn')(function* ( events: Stream.Stream<TurnEvent, ModelError>, ) {…});"
+          "signature": "export const completedTurn = Effect.fn('llm.completedTurn')(function* ( events: Stream.Stream<TurnEvent, ModelError>, ) {…});"
         }
       ]
     },
@@ -775,6 +775,19 @@
           "file": "scripts/walkFiles.mjs",
           "symbol": "walkFiles",
           "signature": "export function walkFiles(startDir, { include } = {}) {…}"
+        }
+      ]
+    },
+    {
+      "id": "LLM-verdict-not-retryable-is-the-default",
+      "candidate": "judgeFailure's notRetryable rule deleted as a restatement of the ModelError constructor's retryableByDefault, keeping only the overflow half (LM-8 b of the 2026-11-15 design red-flag audit)",
+      "why": "The two rules read different statuses. retryableByDefault reads the status the error was built with; notRetryable reads the reply's, which readReply (packages/llm/src/api/failureReply.ts) takes from the body's error type or code when the error carries no HTTP status of 400 or above (statusFromBody: invalid_request_error is 400), and judgeFailure keeps the producer's kind. The `transport` default is retryable, so the rules agree only while no producer pairs `transport` with a body whose type names a non-retryable status. No producer is shown to do so today, but nothing holds it either: sdkModelError (packages/llm/src/errors.ts) classifies any SDK failure without HTTP facts as `transport`, and the Responses WebSocket wraps any cause that is not a ModelError as `transport`, which readReply reads as the body when it is a plain object. Deleting the rule moves a guarantee the verdict makes in one place onto every producer, the opposite of one owner per decision.",
+      "ruling": ".agents/docs/evidence/2026-11-15-design-red-flags/LM-llm.md#lm-8-small-instances-batched-a-binder-that-throws-and-catches-its-own-errors-a-verdict-rule-that-restates-the-errors-default-and-three-hand-written-helpers",
+      "symbols": [
+        {
+          "file": "packages/llm/src/api/verdict.ts",
+          "symbol": "notRetryable",
+          "signature": "function notRetryable(reply: Reply, overflow: boolean): false | undefined {…}"
         }
       ]
     }

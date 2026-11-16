@@ -29,12 +29,7 @@ const listSkills = Effect.fn('listSkills')(function* (
   const services = yield* cliPlatform;
   const roots = services.roots;
   const result = yield* Skills.enabled(roots, options);
-  const exitCode = result.issues.some(
-    (issue) =>
-      issue.code === 'missing_source' ||
-      issue.code === 'invalid_source' ||
-      issue.code === 'source_read_error',
-  )
+  const exitCode = result.issues.some((issue) => issue.code === 'source_error')
     ? CliExitCode.Usage
     : CliExitCode.Success;
 

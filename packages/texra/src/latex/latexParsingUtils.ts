@@ -94,6 +94,49 @@ export function stripLatexComments(content: string): string {
   );
 }
 
+/** `\input{…}` or `\include{…}`: the command, then the file it names. */
+const TEX_INPUT = String.raw`\\(input|include)\s*\{([^}]+)\}`;
+
+/** A comment (kept whole, so nothing in it counts) or a file input. */
+const TEX_INPUT_OR_COMMENT_PATTERN = new RegExp(
+  `${COMMENT_PATTERN.source}|${TEX_INPUT}`,
+  'gm',
+);
+
+/**
+ * The file arguments of the `\input` and `\include` commands in `content`,
+ * in document order, skipping commented-out ones.
+ */
+export function texInputPaths(content: string): string[] {
+  return [...content.matchAll(TEX_INPUT_OR_COMMENT_PATTERN)].flatMap((match) =>
+    match[3] === undefined ? [] : [match[3]],
+  );
+}
+
+/**
+ * `content` with the file argument of each `\input` and `\include` replaced
+ * by what `rewrite` answers for it; an argument it answers `undefined` for,
+ * and every commented-out command, stays as written.
+ */
+export function rewriteTexInputs(
+  content: string,
+  rewrite: (rawPath: string) => string | undefined,
+): string {
+  return content.replaceAll(
+    TEX_INPUT_OR_COMMENT_PATTERN,
+    (
+      match,
+      _url: string | undefined,
+      command: string | undefined,
+      rawPath: string | undefined,
+    ) => {
+      if (command === undefined || rawPath === undefined) return match;
+      const replacement = rewrite(rawPath);
+      return replacement === undefined ? match : `\\${command}{${replacement}}`;
+    },
+  );
+}
+
 /**
  * Matches both \bibliography{...} and \addbibresource[...]{...}.
  * matchAll clones the regex, so a single module-level instance is safe.

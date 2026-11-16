@@ -120,7 +120,7 @@ export function scriptedModel(
           const completed: TurnEvent = { kind: 'completed', result: attempt };
           // A provider that names its response says so before it finishes.
           const events: TurnEvent[] =
-            attempt.kind === 'http' && attempt.providerResponseId !== null
+            attempt.providerResponseId !== null
               ? [
                   {
                     kind: 'identified',
@@ -180,18 +180,16 @@ export function testBinding(
   };
 }
 
-type HttpContent = Extract<TurnResult, { kind: 'http' }>['content'];
+type HttpContent = TurnResult['content'];
 
 const httpTurn = (
   content: HttpContent,
   finishReason: 'stop' | 'length' | 'tool-calls',
   providerResponseId: string = randomUUID(),
 ): TurnResult => ({
-  kind: 'http',
   providerResponseId,
   requestedOrigin: TEST_ORIGIN,
   returnedModel: null,
-  modelFingerprint: null,
   content,
   finishReason,
   usage: null,
@@ -357,7 +355,7 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
       const model = yield* ScopedRef.make(() =>
         testBinding(init.model, init.bound),
       );
-      const logger = init.logger ?? new TraceEmitter();
+      const logger = init.logger ?? new TraceEmitter(() => {});
       const scope: Scope.Scope = yield* Effect.scope;
       const tools = init.tools ?? {};
       return testAgentRun(

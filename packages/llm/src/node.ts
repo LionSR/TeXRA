@@ -9,20 +9,17 @@
  * ### Key exports by role
  *
  * - **Protocol binding**: [`bindModel`](#bindmodel), [`BindSpec`](#bindspec),
- *   [`Binding`](#binding), and [`ModelCredential`](#modelcredential) dynamically
- *   load only the requested protocol (`anthropic-messages`, `openai-responses`,
- *   `google-interactions`), manage scoped connections and file uploads in the
- *   caller's `Scope`, and classify provider failures into `ModelError`.
+ *   [`Binding`](#binding) dynamically load only the requested protocol
+ *   (`anthropic-messages`, `openai-responses`, `google-interactions`), manage
+ *   scoped connections and file uploads in the caller's `Scope`, and classify
+ *   provider failures into `ModelError`.
  * - **Subscription sign-in (`chatgpt`, `xai`)**: each subscription's
  *   account, keyed by its route
- *   ([`SubscriptionAccounts`](#subscriptionaccounts)), and the ChatGPT
- *   ([`chatgptLoginWithLoopback`](#chatgptloginwithloopback)) and Grok
- *   ([`xaiLoginWithLoopback`](#xailoginwithloopback),
- *   [`xaiLoginWithDeviceCode`](#xailoginwithdevicecode)) OAuth flows.
+ *   ([`SubscriptionAccounts`](#subscriptionaccounts)), which runs its own
+ *   browser and (Grok's) device-code sign-in.
  */
 import { Effect, type Scope } from 'effect';
 import { ModelError, type BillingRoute } from './errors.js';
-import { toErrorMessage } from './oauth/support.js';
 import { originOf, type ModelOrigin } from './protocol.js';
 import type { ModelConfig } from 'llm-zoo';
 
@@ -43,16 +40,6 @@ export interface SessionToken {
 }
 
 /**
- * The credential a binding sends: an API key (or any bearer token the
- * endpoint takes as one), or a ChatGPT plan's access token, which the
- * Responses protocol alone serves, under that plan's request rules. Either
- * is a fixed string or a {@link SessionToken}.
- */
-export type ModelCredential =
-  | { readonly kind: 'api-key'; readonly apiKey: string | SessionToken }
-  | { readonly kind: 'chatgpt'; readonly accessToken: string | SessionToken };
-
-/**
  * One model on one decided route, and what the caller asks of it. The
  * protocol is the model's provider's, and the route fixes the config it runs
  * (`routeConfig`), the endpoint it sends to, the credential scope stamped on
@@ -62,7 +49,12 @@ export interface BindSpec {
   /** The llm-zoo entry, before its route's overrides. */
   readonly model: ModelConfig;
   readonly route: CredentialRoute;
-  readonly credential: ModelCredential;
+  /**
+   * The token the binding sends: an API key (or any bearer token the
+   * endpoint takes as one), or a subscription plan's session token. Which
+   * plan's request rules apply is the route's `plan`.
+   */
+  readonly bearer: string | SessionToken;
   /** Each option has a default; the booleans default to `false`. */
   readonly options?: {
     /** The output ceiling, before the model's own rules; the catalog's by default. */
@@ -104,24 +96,10 @@ export interface Binding {
   readonly forcedToolChoice: boolean;
 }
 
-/** A synchronous factory's refusal, kept as the `ModelError` it is. */
-const constructed = <A>(make: () => A) =>
-  Effect.try({
-    try: make,
-    catch: (cause) =>
-      cause instanceof ModelError
-        ? cause
-        : new ModelError({
-            kind: 'invalid-request',
-            message: toErrorMessage(cause),
-            cause,
-          }),
-  });
-
-/** The bearer of a non-Responses protocol: only a fixed API key serves one. */
-const bearer = (credential: ModelCredential, protocol: string) =>
-  credential.kind === 'api-key' && typeof credential.apiKey === 'string'
-    ? Effect.succeed(credential.apiKey)
+/** The key of a non-Responses protocol: only a fixed API key serves one. */
+const fixedKey = (bearer: string | SessionToken, protocol: string) =>
+  typeof bearer === 'string'
+    ? Effect.succeed(bearer)
     : Effect.fail(
         new ModelError({
           kind: 'invalid-request',
@@ -132,45 +110,36 @@ const bearer = (credential: ModelCredential, protocol: string) =>
 /** The model one configuration builds, over its protocol's module. */
 const construct = Effect.fn('llm.construct')(function* (
   configuration: ModelConfiguration,
-  credential: ModelCredential,
+  bearer: string | SessionToken,
   webSocket: boolean,
   fetch: typeof globalThis.fetch | undefined,
 ): Effect.fn.Return<Model, ModelError, Scope.Scope> {
   switch (configuration.protocol) {
     case 'anthropic-messages': {
-      const apiKey = yield* bearer(credential, configuration.protocol);
+      const apiKey = yield* fixedKey(bearer, configuration.protocol);
       const { anthropicMessagesModel } = yield* Effect.promise(
         () => import('./api/anthropicMessages.js'),
       );
       return yield* anthropicMessagesModel(configuration, { apiKey, fetch });
     }
     case 'google-interactions': {
-      const apiKey = yield* bearer(credential, configuration.protocol);
+      const apiKey = yield* fixedKey(bearer, configuration.protocol);
       const { googleInteractionsModel } = yield* Effect.promise(
         () => import('./api/googleInteractions.js'),
       );
-      return yield* constructed(() =>
-        googleInteractionsModel(configuration, { apiKey, fetch }),
-      );
+      return yield* googleInteractionsModel(configuration, { apiKey, fetch });
     }
     case 'openai-responses': {
-      const authentication = credential;
       if (webSocket) {
         const { openaiResponsesWebSocketModel } = yield* Effect.promise(
           () => import('./api/openaiResponsesWebSocket.js'),
         );
-        return yield* openaiResponsesWebSocketModel(
-          configuration,
-          authentication,
-        );
+        return yield* openaiResponsesWebSocketModel(configuration, bearer);
       }
       const { openaiResponsesModel } = yield* Effect.promise(
         () => import('./api/openaiResponses.js'),
       );
-      return yield* openaiResponsesModel(configuration, {
-        authentication,
-        fetch,
-      });
+      return yield* openaiResponsesModel(configuration, { bearer, fetch });
     }
   }
 });
@@ -187,18 +156,13 @@ export const bindModel = Effect.fn('llm.bindModel')(function* (
   const [wire, { judgedModel }] = yield* Effect.promise(() =>
     Promise.all([import('./api/configuration.js'), import('./api/verdict.js')]),
   );
-  const { config, options, configuration } = yield* constructed(() =>
+  const { config, options, configuration } = yield* Effect.fromResult(
     wire.configurationFor(spec),
   );
-  // A ChatGPT plan's token is served over HTTP: OpenAI documents the
-  // token-sharing route's requests as HTTP streams.
-  const webSocket =
-    spec.credential.kind === 'api-key' &&
-    wire.servesWebSocket(options, configuration);
   const model = yield* construct(
     configuration,
-    spec.credential,
-    webSocket,
+    spec.bearer,
+    wire.servesWebSocket(options, configuration),
     options.fetch,
   );
   const { route } = spec;
@@ -219,27 +183,13 @@ export const bindModel = Effect.fn('llm.bindModel')(function* (
 });
 
 export { SubscriptionOAuthError } from './oauth/subscriptionOAuthError.js';
-export type {
-  DeviceLoginOptions,
-  SubscriptionDeviceCodePrompt,
-} from './oauth/deviceAuthorization.js';
+export type { SubscriptionDeviceCodePrompt } from './oauth/deviceAuthorization.js';
 export { LoopbackTransportUnavailableError } from './oauth/loopbackLogin.js';
-export type { LoopbackLoginOptions } from './oauth/loopbackLogin.js';
 export type {
-  SubscriptionAuthorizeRequest,
-  SubscriptionCallback,
   SubscriptionCoordinator,
   SubscriptionSession,
   SubscriptionSessionStatus,
-  SubscriptionTokenResponse,
 } from './oauth/subscriptionCoordinator.js';
-export {
-  chatgptLoginWithLoopback,
-  type ChatgptSession,
-} from './oauth/chatgpt/chatgptProvider.js';
-export {
-  xaiLoginWithLoopback,
-  type XaiSession,
-} from './oauth/xai/xaiProvider.js';
+export type { ChatgptSession } from './oauth/chatgpt/chatgptProvider.js';
+export type { XaiSession } from './oauth/xai/xaiProvider.js';
 export { SubscriptionAccounts } from './oauth/subscriptionAccounts.js';
-export { xaiLoginWithDeviceCode } from './oauth/xai/xaiDeviceLogin.js';

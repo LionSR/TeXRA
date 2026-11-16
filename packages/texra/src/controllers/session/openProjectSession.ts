@@ -14,15 +14,63 @@ import {
   Sessions,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
+import { AppState, StateStores } from '@texra-ai/harness/host';
+import {
+  type ConfigStore,
+  openNodeWorkspaceRoots,
+} from '@texra-ai/harness/node';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
-import { serviceSession } from '@texra/controllers/server/serviceSession';
+import {
+  serviceProjectState,
+  serviceSession,
+} from '@texra/controllers/server/serviceSession';
+import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import type { ServiceLink } from '@texra/controllers/server/client';
 import type { GuiSession } from './openGuiWindow';
 
 const CHANNEL = 'openProjectSession';
+
+/**
+ * Open the roots of the project at `workspaceRoot` (undefined: a window with
+ * no folder) for the caller's scope: its project and local config stores
+ * over the process's `globalConfig`, and its state. A project whose host
+ * reached the background service (`service`) keeps its state there, so this
+ * process opens no store of it. `warnings` is what the config open found,
+ * for the host to show in its own place. The one open of a project's roots
+ * the windows and the service make.
+ */
+export const openProjectRoots = Effect.fn('openProjectRoots')(function* (
+  storageRoot: string,
+  workspaceRoot: string | undefined,
+  globalConfig: ConfigStore,
+  service: ServiceLink | undefined,
+) {
+  const { warnings, ...configs } = yield* openTexraWorkspaceConfigStores(
+    TEXRA_SETTINGS.catalog,
+    storageRoot,
+    workspaceRoot,
+  );
+  const roots = yield* openNodeWorkspaceRoots({
+    workspaceRoot,
+    storageRoot,
+    config: {
+      ...configs,
+      global: globalConfig,
+      catalog: TEXRA_SETTINGS.catalog,
+    },
+    ...(service !== undefined &&
+      workspaceRoot !== undefined && {
+        workspaceState: serviceProjectState(service, workspaceRoot),
+      }),
+    stateStores: yield* StateStores,
+    globalState: yield* AppState,
+  });
+  return { roots, warnings };
+});
 
 /**
  * Open the session of the project at `roots`. `reached` is the host's one
