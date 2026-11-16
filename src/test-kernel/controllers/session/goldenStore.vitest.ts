@@ -83,7 +83,7 @@ import { Database } from '@shared/session/database';
 import { SessionViewAccess } from '@shared/session/runHistory';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { REPO_ROOT } from '@test/support/repoScan';
+import { REPO_ROOT } from '@test/support/repoRoot';
 import { storePluginsLayer } from '@test/support/texraApp';
 import {
   persistentTestSession,
@@ -693,7 +693,7 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
         },
       })),
     ).pipe(Layer.provide(validationModelLayer));
-    return { sent, process: SessionGraph.with([], model) };
+    return { sent, process: SessionGraph.with({ model }) };
   };
   /** The commit of the chat's last model response, read from the store: a
    *  literal would name another row after the next regeneration. */

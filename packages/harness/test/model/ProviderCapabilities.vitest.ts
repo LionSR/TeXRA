@@ -13,7 +13,7 @@ import {
 import { Secrets } from '@texra-ai/harness/plugins';
 import { readModelSettings, routeFactsFor } from '@model/modelSettings';
 import { FakeHost } from '@test/support/testKernel';
-import type { FakeHost as HostRecord } from '@test/support/setupPlatform';
+import type { HostRecord } from '@test/support/fakeHost';
 
 /** The input window the Codex backend grants the fixture model. */
 const CODEX_INPUT_LIMIT = 272_000;

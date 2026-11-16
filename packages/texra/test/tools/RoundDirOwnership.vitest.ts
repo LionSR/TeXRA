@@ -6,15 +6,11 @@ import { describe, expect, it } from 'vitest';
 
 import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { runDirUnder } from '@texra-ai/harness/plugins';
-import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@texra-ai/harness/node';
 import { createWorkspaceLocation } from '@texra-ai/harness/host';
 import { RunWorkspace } from '@texra/tools/documents/runWorkspace';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { createFakeHost } from '@test/support/setupPlatform';
+import { createFakeHost } from '@test/support/fakeHost';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const tempDirs = useTempDirs();
@@ -38,8 +34,7 @@ describe('round-dir ownership', () => {
     const { roots } = createFakeHost(
       {
         workspaceRoot: workspaceDir,
-        storagePath: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
-        globalStoragePath: resolveGlobalStoragePath(storageRoot),
+        storageRoot,
       },
       {
         globalState: new MemoryStateStore(),

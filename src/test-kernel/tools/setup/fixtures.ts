@@ -2,7 +2,6 @@
 import { Effect, Layer } from 'effect';
 
 // Local imports
-import { FakeHost } from '@test/support/testKernel';
 import type { TerminalRunResult } from '@texra/hosts/uiHosts';
 import {
   SetupHost,
@@ -10,19 +9,17 @@ import {
   type SetupPlatformShape,
 } from '@texra/tools/setup/platform';
 
-/** `layer` with the setup plugin's services over the fake host's setup
- *  platform (none of its members when it has none), named `host`, for a
- *  setup tool called outside a run's step. */
+/** `layer` with the setup plugin's services over `platform` (none of its
+ *  members unless named), named `host`, for a setup tool called outside a
+ *  run's step. */
 export const withSetup = <A, E, R>(
   layer: Layer.Layer<A, E, R>,
+  platform: SetupPlatformShape = {},
   host: SetupHost['Service'] = 'vscode',
-): Layer.Layer<A | SetupPlatform | SetupHost, E, R | FakeHost> =>
+): Layer.Layer<A | SetupPlatform | SetupHost, E, R> =>
   Layer.mergeAll(
     layer,
-    Layer.effect(
-      SetupPlatform,
-      FakeHost.useSync((fake) => fake.setup ?? {}),
-    ),
+    Layer.succeed(SetupPlatform)(platform),
     Layer.succeed(SetupHost)(host),
   );
 

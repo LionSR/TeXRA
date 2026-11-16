@@ -26,7 +26,7 @@ import { INQUIRY_THREADS } from '@texra/shared/plugins/externalInquiry';
 import { UPDATE_CHECKS } from '@texra/utils/system/updateCheck';
 import { texraPlugins } from '@texra/tools/registry';
 import { toolTable } from '@tools/toolTable';
-import { REPO_ROOT } from '../support/repoScan';
+import { REPO_ROOT } from '../support/repoRoot';
 
 /**
  * The release watermark of the session store:

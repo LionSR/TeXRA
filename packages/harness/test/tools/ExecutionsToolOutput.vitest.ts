@@ -25,7 +25,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { validationModelLayer } from '@cli/runtime/models/validationModel';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { SessionLog } from '@shared/session/runHistory';
 import { outputOf } from '@test/support/toolResultFields';
@@ -164,11 +163,9 @@ const perTest = Layer.provideMerge(
 
 // Live clock: the background run settles on real turns.
 layer(
-  SessionGraph.with(
-    [],
-    validationModelLayer,
-    Layer.provideMerge(scripted.layer, nodeFileServices),
-  ).pipe(Layer.provideMerge(FakeHost.layer())),
+  SessionGraph.with({
+    platform: Layer.provideMerge(scripted.layer, nodeFileServices),
+  }).pipe(Layer.provideMerge(FakeHost.layer())),
   { excludeTestServices: true },
 )('ExecutionsTool /executions/{id}/output', (it) => {
   afterEach(() => {

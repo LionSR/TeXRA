@@ -129,7 +129,7 @@ export const decideRequest = (
  * Answer every request a session opens from this call on, until the calling
  * scope closes. `decide` sees the `request.opened` row and returns the
  * decision, or null to leave the request pending — which is how a test
- * exercises a run parked on an unanswered request. `opened` lists every
+ * exercises a run blocked on an unanswered request. `opened` lists every
  * request the session opened meanwhile.
  */
 export const autoDecideRequests = (

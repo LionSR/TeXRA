@@ -15,7 +15,7 @@ import { positionRow } from '@agent/runtime/loop/rows';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionLog, RunHistory } from '@shared/session/runHistory';
 import { publishTestRunStart, seedRows } from '@test/support/sessionTestUtils';
-import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
+import { asDocumentTask } from '@test/support/documentTasks';
 import {
   FakeHost,
   SessionGraph,
