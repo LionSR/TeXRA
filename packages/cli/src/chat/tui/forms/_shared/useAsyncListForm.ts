@@ -14,6 +14,7 @@ import {
 } from '@cli/tui/inputKeys';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { useMountScope } from '@cli/chat/tui/state/useMountScope';
+import { useChatProcess } from '@cli/chat/tui/chatProcess';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 
 interface AsyncResource<T, R = ProcessServices> {
@@ -48,8 +49,6 @@ interface AsyncListFormState<T> extends AsyncResource<T> {
 interface UseAsyncListFormOptions<T> {
   /** Loads the form's data once on mount, as a program the hook runs. */
   readonly load: () => Effect.Effect<T, Error, ProcessServices>;
-  /** The runtime the load and every write run on. */
-  readonly runtime: ProcessRuntime;
   /** Close handler invoked when `Esc` is pressed in a non-actionable state. */
   readonly onClose: () => void;
   /**
@@ -109,7 +108,7 @@ function shouldBufferAsyncListFormInput(args: {
 }
 
 /**
- * Run a form's write program on the surface's runtime. Every form write runs
+ * Run a form's write program on the Ink root's runtime. Every form write runs
  * through here as a `runFork`, not a fire-and-forget `runPromise`: shutdown
  * interrupts a write still in flight, and the process runtime's fork reporting
  * keeps that interrupts-only exit silent where a dropped promise would reject
@@ -143,7 +142,6 @@ export function runFormWrite<A>(
  */
 export function useAsyncResource<T, R extends ProcessServices>(options: {
   readonly load: () => Effect.Effect<T, Error, R>;
-  readonly runtime: ProcessRuntime;
   /** Invoked alongside the error state whenever a read or a reported error
    *  fails, so the host can log/notify outside the form frame. */
   readonly onError?: (error: unknown) => void;
@@ -153,7 +151,7 @@ export function useAsyncResource<T, R extends ProcessServices>(options: {
   const [error, setError] = useState<string | undefined>(undefined);
   const latest = useRef(options);
   latest.current = options;
-  const { runtime } = options;
+  const { runtime } = useChatProcess();
   const scope = useMountScope(runtime);
   const [reads] = useState(() =>
     runtime.runSync(
@@ -240,8 +238,9 @@ export function useAsyncListForm<T>(
     }
   });
 
+  const { runtime } = useChatProcess();
   const update = (write: Effect.Effect<void, Error, ProcessServices>): void =>
-    runFormWrite(options.runtime, () => write, {
+    runFormWrite(runtime, () => write, {
       onSuccess: resource.reload,
       onError: (err) => setTransientNotice(toErrorMessage(err)),
     });

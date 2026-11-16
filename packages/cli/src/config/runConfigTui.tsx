@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import { useApp, useWindowSize } from 'ink';
 
 import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
+import { ChatProcessProvider, type ChatProcess } from '../chat/tui/chatProcess';
 import {
   CliConfigForm,
   type CliConfigFormProps,
@@ -21,13 +22,23 @@ function ConfigApp(props: ConfigAppProps) {
 
 export function runConfigTui({
   colorEnabled,
+  runtime,
+  roots,
   ...props
-}: ConfigAppProps & { readonly colorEnabled?: boolean }): Effect.Effect<void> {
+}: ConfigAppProps &
+  ChatProcess & { readonly colorEnabled?: boolean }): Effect.Effect<void> {
   return Effect.asVoid(
-    renderCliPrompt(() => <ConfigApp {...props} />, {
-      stdout: process.stdout,
-      stderr: process.stderr,
-      colorEnabled,
-    }),
+    renderCliPrompt(
+      () => (
+        <ChatProcessProvider value={{ runtime, roots }}>
+          <ConfigApp {...props} />
+        </ChatProcessProvider>
+      ),
+      {
+        stdout: process.stdout,
+        stderr: process.stderr,
+        colorEnabled,
+      },
+    ),
   );
 }

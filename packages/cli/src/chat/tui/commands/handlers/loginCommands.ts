@@ -18,7 +18,6 @@ import {
   type CliSubscriptionLoginTransportInit,
 } from '@cli/runtime/models/subscriptionLogin';
 import { loadCliModelAccessOverview } from '@cli/runtime/models/apiStatus';
-import { type CliContext } from '@cli/runtime/platform/cliContext';
 import {
   hasLoginTransportConflict,
   LOGIN_TRANSPORT_CONFLICT_MESSAGE,
@@ -33,6 +32,7 @@ import {
 import { ACCOUNT_OUTCOME, SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 
 import {
+  type SlashCommandContext,
   type SlashCommandOutput,
   transcriptSlashCommandOutput,
 } from './slashContext';
@@ -76,8 +76,7 @@ const loginToSubscription = Effect.fn('loginToSubscription')(function* (
 
 export const loginFromChat = Effect.fn('loginFromChat')(function* (
   input: string,
-  stores: SettingsStores,
-  context?: CliContext,
+  context: SlashCommandContext,
   output: SlashCommandOutput = transcriptSlashCommandOutput,
 ) {
   const args = parseChatLoginSlashArgs(input);
@@ -93,11 +92,17 @@ export const loginFromChat = Effect.fn('loginFromChat')(function* (
     return;
   }
 
-  const loginArgs = context
-    ? { ...args, device: shouldUseSubscriptionDeviceCode(context, args) }
-    : args;
+  const loginArgs = {
+    ...args,
+    device: shouldUseSubscriptionDeviceCode(context.cliContext, args),
+  };
   output.writeProgress(loginStartMessage(loginArgs));
-  yield* loginToSubscription(stores, loginArgs.target, loginArgs, output);
+  yield* loginToSubscription(
+    context.stores,
+    loginArgs.target,
+    loginArgs,
+    output,
+  );
 });
 
 /**

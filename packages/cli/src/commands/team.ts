@@ -21,29 +21,25 @@ import {
 import { writeTextStderr } from '../runtime/platform/logSinks';
 import {
   cliTeamListRecord,
-  cliTeamNdjsonRecords,
   formatCliTeamLaunchBlockMessage,
   formatCliTeamInspection,
   formatCliTeamList,
   formatCliTeamRunWarnings,
   readCliTeams,
 } from '../runtime/cliTeams';
-import {
-  buildHeadlessRunContext,
-  selectCliRunModel,
-} from '../runtime/models/runModel';
+import { selectCliRunModel } from '../runtime/models/runModel';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
 import { formatTeamRunInstruction } from './_helpers/runInstructions';
-import { emitCliResult } from './_helpers/output';
+import { cliResult, emitCliResult } from './_helpers/output';
 import {
   SKILL_SOURCE_ARGS,
   collectCommonAgentRunFlags,
   optString,
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
-import { executeCliToolUseConfig } from '../runtime/headless/executeCli';
+import { executeCliConfig } from '../runtime/headless/executeCli';
 import { toolUseResultText } from '../runtime/headless/terminalStatus';
 import { withExpandedRunInputs } from '../runtime/headless/documentTaskInputs';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
@@ -98,11 +94,9 @@ const runTeamList = Effect.fn('runTeamList')(function* (
     resolveAgent: (yield* AgentCatalog).get,
   });
 
-  yield* emitCliResult({
-    json: plans.map(cliTeamListRecord),
-    ndjson: cliTeamNdjsonRecords(plans),
-    text: formatCliTeamList(plans),
-  });
+  yield* emitCliResult(
+    cliResult('team', plans.map(cliTeamListRecord), formatCliTeamList(plans)),
+  );
 });
 
 const runTeamShow = Effect.fn('runTeamShow')(function* (
@@ -111,11 +105,9 @@ const runTeamShow = Effect.fn('runTeamShow')(function* (
 ) {
   const plan = yield* loadTeamRunPlan({ team: teamIdOrName }, services);
 
-  yield* emitCliResult({
-    json: plan,
-    ndjson: { kind: 'team-inspection', plan },
-    text: formatCliTeamInspection(plan),
-  });
+  yield* emitCliResult(
+    cliResult('team-inspection', plan, formatCliTeamInspection(plan)),
+  );
 });
 
 const runTeam = Effect.fn('runTeam')(function* (
@@ -168,11 +160,10 @@ const runTeam = Effect.fn('runTeam')(function* (
   // config rather than `run` (document tasks). Resolve the
   // model after agent validation so usage errors stay focused on bad agents.
   const model = yield* selectCliRunModel(context, init.model, 'chat', services);
-  const runContext = buildHeadlessRunContext(context);
   return yield* withExpandedRunInputs(
     init.inputFiles,
     init.contextFiles,
-    runContext.cwd,
+    context.cwd,
     {
       allowEmptyInput: hasInstruction,
       requireWorkspaceFiles: true,
@@ -183,7 +174,7 @@ const runTeam = Effect.fn('runTeam')(function* (
       contextFiles,
       stdinInputPath,
     }) {
-      if (runContext.approvalPolicy === 'never') {
+      if (context.approvalPolicy === 'never') {
         writeTextStderr(
           `WARN team ${plan.preset.id} may run without subagents because approval policy "never" denies approval-gated tools, the agent tool included. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
         );
@@ -213,16 +204,16 @@ const runTeam = Effect.fn('runTeam')(function* (
           inputFiles,
           contextFiles,
           instruction,
-          approvalContext: runContext,
-          workingDirectory: runContext.cwd,
+          approvalContext: context,
+          workingDirectory: context.cwd,
         }),
         displayInstruction,
-        workingDirectory: runContext.cwd,
+        workingDirectory: context.cwd,
         launch: { teamId: plan.preset.id },
         delegationAgentScope: [...plan.agentKeys],
       };
 
-      const run = yield* executeCliToolUseConfig(config, runContext, {
+      const run = yield* executeCliConfig(config, context, {
         services,
         recoveryInputIsDurable: stdinInputPath === undefined,
       });

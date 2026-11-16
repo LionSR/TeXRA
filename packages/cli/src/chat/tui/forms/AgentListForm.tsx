@@ -5,11 +5,7 @@
 import { Box, Text } from 'ink';
 import { Effect } from 'effect';
 
-import {
-  AgentCatalog,
-  type ProcessRuntime,
-  type WorkspaceAgentsStores,
-} from '@texra-ai/harness/host';
+import { AgentCatalog } from '@texra-ai/harness/host';
 import { agentName, joinFacts } from '@texra-ai/harness/schemas';
 import { Select } from '@cli/tui/ui/Select';
 import {
@@ -32,14 +28,9 @@ import {
   PickerKeyHints,
 } from './_shared/FormFrame';
 import { useAsyncPickerForm } from './_shared/ListForm';
+import { useChatProcess } from '../chatProcess';
 
 interface AgentListFormProps {
-  /** The process runtime the catalog read runs on, from the surface that
-   *  registered this form. */
-  readonly runtime: ProcessRuntime;
-  /** The workspace agents slots of this chat's project, from the surface that registered
-   *  this form: the list shows that project's visible agents. */
-  readonly stores: WorkspaceAgentsStores;
   readonly currentAgent: string;
   /** The team leading this chat, when one was chosen. */
   readonly currentTeamId?: string;
@@ -120,21 +111,21 @@ function hiddenCurrentAgentHint(
 }
 
 export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
+  const { roots } = useChatProcess();
   const picker = useAsyncPickerForm<AgentGroups, AgentPickerValue>({
     title: '/agent',
     loadingLabel: 'Loading agents...',
     load: Effect.fn('load')(function* () {
       const catalog = yield* AgentCatalog;
-      const agents = (yield* agentOptionsData(props.stores)).map((agent) => ({
+      const agents = (yield* agentOptionsData(roots)).map((agent) => ({
         ...agent,
         description: catalog.get(agent.value)?.description,
       }));
       const teams = loadTeamOptions(
-        yield* createTeamCatalogPorts(props.stores.repoState),
+        yield* createTeamCatalogPorts(roots.repoState),
       );
       return { agents, teams };
     }),
-    runtime: props.runtime,
     isEmpty: (groups) => groups.agents.length === 0,
     closeEmptyOnEnter: true,
     items: agentPickerItems,

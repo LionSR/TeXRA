@@ -56,7 +56,7 @@ function FormBusyFrame(props: {
 }): React.JSX.Element {
   const { progress } = props;
   const { columns } = useWindowSize();
-  const settled = progress.status !== 'running';
+  const finished = progress.status !== 'running';
   const [copied, setCopied] = useState(false);
   // Once archived, the message has been written to scrollback and is no
   // longer "live" for display/sizing purposes, even though the raw value is
@@ -71,7 +71,7 @@ function FormBusyFrame(props: {
       setCopied(true);
       return;
     }
-    if (settled) {
+    if (finished) {
       progress.dismiss();
       return;
     }
@@ -87,7 +87,7 @@ function FormBusyFrame(props: {
     ...(liveCopyable
       ? [{ key: 'c', action: copied ? 'copied' : 'copy link' }]
       : []),
-    settled
+    finished
       ? { key: 'any key', action: 'close' }
       : { key: 'Esc', action: 'cancel' },
   ];

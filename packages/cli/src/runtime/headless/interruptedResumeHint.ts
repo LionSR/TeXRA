@@ -20,7 +20,7 @@ export function tryReadCliCwd(): string | undefined {
 export function formatInterruptedResumeHint(
   context: CliContext,
   runId: RunId,
-  subject: 'session' | 'workflow',
+  subject: 'session' | 'program',
   workingDirectory: string,
   processCwd: string | undefined,
 ): string {
@@ -28,8 +28,8 @@ export function formatInterruptedResumeHint(
     cwd: workingDirectory,
     processCwd,
     approvalPolicy: context.approvalPolicy,
-    outputFormat: subject === 'workflow' ? context.outputFormat : undefined,
-    print: subject === 'workflow' && context.mode === 'headless',
+    outputFormat: subject === 'program' ? context.outputFormat : undefined,
+    print: subject === 'program' && context.mode === 'headless',
     skillSourcePaths: context.skillSourceOptions.additionalPaths,
   });
   return `${TASK_ACTIONS.resumeHint} ${resumeCommand}`;

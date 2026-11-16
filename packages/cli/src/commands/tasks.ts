@@ -45,7 +45,7 @@ import { runOutcomeExitCode } from '../runtime/headless/terminalStatus';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { optString } from './_helpers/globalArgs';
-import { emitCliResult } from './_helpers/output';
+import { cliResult, emitCliResult } from './_helpers/output';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
 import type { RuntimeCommand } from '@texra-ai/harness/schemas';
 
@@ -127,13 +127,15 @@ const listCommand = defineCliCommand({
   run: Effect.fn('run')(function* () {
     const client = yield* serviceClient;
     const tasks = yield* client['tasks.list']({ all: false });
-    yield* emitCliResult({
-      json: tasks,
-      ndjson: tasks.map((task) => ({ kind: 'task' as const, task })),
-      text: tasks.length
-        ? tasks.map(taskLine).join('\n')
-        : 'No tasks yet. `texra tasks start <agent> --instruction …` starts one.',
-    });
+    yield* emitCliResult(
+      cliResult(
+        'task',
+        tasks,
+        tasks.length
+          ? tasks.map(taskLine).join('\n')
+          : 'No tasks yet. `texra tasks start <agent> --instruction …` starts one.',
+      ),
+    );
   }, Effect.scoped),
 });
 
@@ -243,11 +245,9 @@ const startCommand = defineCliCommand({
         },
       }),
     ).pipe(Effect.mapError(ensureError));
-    yield* emitCliResult({
-      json: { runId, workspace: context.cwd },
-      ndjson: { kind: 'task', task: { runId, workspace: context.cwd } },
-      text: runId,
-    });
+    yield* emitCliResult(
+      cliResult('task', { runId, workspace: context.cwd }, runId),
+    );
   }),
 });
 
@@ -271,11 +271,13 @@ const sendCommand = defineCliCommand({
     })).pipe(
       Effect.flatMap(({ task, outcome }) => {
         const { status } = outcome;
-        return emitCliResult({
-          json: { runId: task.runId, status },
-          ndjson: { kind: 'task', task: { runId: task.runId, status } },
-          text: `Follow-up ${status} to ${task.runId}.`,
-        });
+        return emitCliResult(
+          cliResult(
+            'task',
+            { runId: task.runId, status },
+            `Follow-up ${status} to ${task.runId}.`,
+          ),
+        );
       }),
     ),
 });
@@ -295,11 +297,13 @@ const stopCommand = defineCliCommand({
       reason: 'user',
     })).pipe(
       Effect.flatMap(({ task }) =>
-        emitCliResult({
-          json: { runId: task.runId, stopped: true },
-          ndjson: { kind: 'task', task: { runId: task.runId, stopped: true } },
-          text: `Stopped ${task.runId}.`,
-        }),
+        emitCliResult(
+          cliResult(
+            'task',
+            { runId: task.runId, stopped: true },
+            `Stopped ${task.runId}.`,
+          ),
+        ),
       ),
     ),
 });

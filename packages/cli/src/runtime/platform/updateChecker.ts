@@ -18,7 +18,7 @@ import {
 } from './cliContext';
 import { CliExitCode } from './exitCodes';
 import { runForegroundCommand } from './foregroundCommand';
-import { askCliQuestion, writeTextStderr } from './logSinks';
+import { confirmCliQuestion, writeTextStderr } from './logSinks';
 import { createCliStyle } from '../terminal/style';
 import type { ProcessServices } from '@texra-ai/harness/host';
 import type { HttpClient } from 'effect/http';
@@ -303,12 +303,10 @@ export function notifyCliUpdate(
             writeTextStderr(
               `A new version of texra is available: ${context.version} → ${style.emphasis(style.success(found.latest))}`,
             );
-            const answer = yield* askCliQuestion(
-              `Update now with \`${style.command(updateCmd)}\`? [Y/n] `,
+            confirmed = yield* confirmCliQuestion(
+              `Update now with \`${style.command(updateCmd)}\`?`,
+              { default: true },
             );
-            const normalized = answer.trim().toLowerCase();
-            confirmed =
-              normalized === '' || normalized === 'y' || normalized === 'yes';
           }
           // The check runs before a command, which a check time it cannot
           // save must not fail, nor cost the update the person just agreed

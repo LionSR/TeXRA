@@ -144,7 +144,7 @@ export function isRenderableTranscriptEntry(row: TranscriptRow): boolean {
   );
 }
 
-/** Whether the row at `index` is inside the session view's settled prefix
+/** Whether the row at `index` is inside the session view's final prefix
  *  (`transcript.finalRows`), the one rule for what append-only
  *  scrollback may print. */
 function isFinalizedTranscriptRow(index: number, finalRows: number): boolean {
@@ -172,10 +172,10 @@ function userPromptAwaitsLiveContinuation(
 }
 
 /**
- * The settled rows from `from` on that scrollback prints, in the session
+ * The final rows from `from` on that scrollback prints, in the session
  * view's own order (its `finalRows` prefix is print order), and how far the
  * walk got: past every row printed or passed over, stopping at the end of the
- * settled prefix or at a user prompt still waiting for its live continuation,
+ * final prefix or at a user prompt still waiting for its live continuation,
  * which the next walk starts from.
  */
 export function printableFinalRows(
@@ -203,7 +203,7 @@ export function printableFinalRows(
  * finalization until the stream itself finalizes — promoting them earlier
  * would let a fast tool jump ahead of still-streaming assistant text in
  * `<Static>` scrollback, where insertion order is fixed. The complement (the
- * settled prefix) is {@link printableFinalRows}.
+ * final prefix) is {@link printableFinalRows}.
  */
 export function pendingTranscriptEntries(
   entries: readonly TranscriptRow[],
@@ -218,8 +218,8 @@ export function pendingTranscriptEntries(
       pending.push(entry);
       continue;
     }
-    // The settled prefix is scrollback's; everything past it is live, and a
-    // row behind an unsettled one stays visible here rather than vanishing
+    // The final prefix is scrollback's; everything past it is live, and a
+    // row behind an unfinished one stays visible here rather than vanishing
     // between the two panes.
     if (isFinalizedTranscriptRow(index, finalRows)) continue;
     if (

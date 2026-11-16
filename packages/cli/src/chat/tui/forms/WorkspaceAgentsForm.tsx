@@ -26,8 +26,8 @@ import { workspaceTeams, type TeamPreset } from '@texra/shared/agentTeams';
 import { renderAsyncListFormTransient } from './_shared/FormFrame';
 import { ListForm } from './_shared/ListForm';
 import { runFormWrite, useAsyncListForm } from './_shared/useAsyncListForm';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
-import type { SettingsStores } from '@texra-ai/harness/plugins';
+import type { ProcessServices } from '@texra-ai/harness/host';
+import { useChatProcess } from '../chatProcess';
 
 type WorkspaceAgentsFormMode =
   | 'overview'
@@ -47,12 +47,6 @@ const workspaceAgentsOf = (roots: WorkspaceAgentsStores) =>
   Effect.map(AgentCatalog, (catalog) => catalog.workspaceAgents(roots));
 
 interface WorkspaceAgentsFormProps {
-  /** The process runtime the workspace agents read and the default-agent write run on,
-   *  from the config form that owns this one. */
-  readonly runtime: ProcessRuntime;
-  /** The settings slots the workspace agents read and every workspace agents write target, from
-   *  the config form that owns this one. */
-  readonly stores: SettingsStores;
   /** The project the process opened, shown beside the workspace agents. */
   readonly workspaceRoot: string | undefined;
   readonly availableRows?: number;
@@ -101,7 +95,7 @@ export function WorkspaceAgentsForm(
   const [mode, setMode] = useState<WorkspaceAgentsFormMode>('overview');
   // The workspace agents read, every workspace agents write and the default chat-agent write
   // below all target the slots this form was handed.
-  const roots = props.stores;
+  const { roots, runtime } = useChatProcess();
   const { data, error, reload, reportError } =
     useAsyncListForm<WorkspaceAgentsData>({
       // The workspace agents read loads the local agent catalog the lists read.
@@ -118,7 +112,6 @@ export function WorkspaceAgentsForm(
             agents: [...catalog.list()],
           }),
         ),
-      runtime: props.runtime,
       onClose: props.onClose,
       onError: props.onError,
     });
@@ -127,7 +120,7 @@ export function WorkspaceAgentsForm(
     action: () => Effect.Effect<void, Error, ProcessServices>,
     nextMode = mode,
   ): void =>
-    runFormWrite(props.runtime, action, {
+    runFormWrite(runtime, action, {
       onSuccess: () => {
         setMode(nextMode);
         reload();

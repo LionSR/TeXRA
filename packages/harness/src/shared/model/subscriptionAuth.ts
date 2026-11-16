@@ -11,6 +11,12 @@ export const SUBSCRIPTION_AUTH_PROVIDERS = ['chatgpt', 'grok'] as const;
 export type SubscriptionAuthProvider =
   (typeof SUBSCRIPTION_AUTH_PROVIDERS)[number];
 
+/** Whether `id` names one of {@link SUBSCRIPTION_AUTH_PROVIDERS}. */
+export const isSubscriptionAuthProvider = (
+  id: string,
+): id is SubscriptionAuthProvider =>
+  SUBSCRIPTION_AUTH_PROVIDERS.some((provider) => provider === id);
+
 /**
  * The route each provider's session bills, which names its account
  * (`SubscriptionAccounts`). The ids are stable.

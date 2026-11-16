@@ -34,8 +34,6 @@ import { assert, describe, expect } from 'vitest';
 import type { LocalSession } from '@texra-ai/harness';
 import { RunIdSchema, type RunId } from '@texra-ai/harness/schemas';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
-import type { SlashCommandContext } from '@cli/chat/tui/commands/handlers/slashContext';
-import { slashCommands } from '@cli/chat/tui/commands/slashRegistry';
 import { createChatSessionController } from '@cli/chat/chatSessionController';
 import { EMPTY_DRAFT } from '@cli/chat/tui/input/draftAttachments';
 import {
@@ -51,7 +49,6 @@ import {
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { notices } from '@cli/chat/tui/state/transcript';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import {
   answerOf,
   waitingRoot,
@@ -169,19 +166,10 @@ const openChat = (
       session: tui,
       runSession: session,
       served: options.served ?? false,
-      sessionContext: createTestCliContext({
-        mode: 'interactive',
-        approvalPolicy: 'ask',
-        quietLogs: true,
-        commandName: 'chat',
-      }),
+      commandName: 'chat',
       chatScope: yield* scope(),
       shutdownScope: yield* scope(),
       cwd: roots.workspace ?? roots.storage,
-      // cast: these plain messages match no slash command, so only the
-      // empty table is read.
-      getSlashCommandContext: () =>
-        ({ commands: slashCommands([]) }) as SlashCommandContext,
       stores: roots,
       runtime,
       approvalPolicy: () => undefined,

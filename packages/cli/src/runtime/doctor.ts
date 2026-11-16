@@ -29,11 +29,8 @@ import {
 
 // Local file imports
 import { CliExitCode } from './platform/exitCodes';
-import {
-  writeNdjsonStdout,
-  writeTextStderr,
-  writeTextStdout,
-} from './platform/logSinks';
+import { writeCliResult } from '../commands/_helpers/output';
+import { writeTextStderr } from './platform/logSinks';
 import { createCliStyle } from './terminal/style';
 import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from './terminal/terminalRequirements';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -466,14 +463,12 @@ function formatDoctorText(
 }
 
 function doctorNdjsonRecords(report: DoctorReport): readonly CliNdjsonRecord[] {
-  const ts = new Date().toISOString();
   return [
     ...report.checks.map((check): CliNdjsonRecord => ({
       kind: 'doctor-check',
-      ts,
       ...check,
     })),
-    { kind: 'doctor-summary', ts, ok: report.ok } satisfies CliNdjsonRecord,
+    { kind: 'doctor-summary', ok: report.ok },
   ];
 }
 
@@ -481,26 +476,18 @@ export function writeDoctorReport(
   context: CliContext,
   report: DoctorReport,
 ): void {
-  if (context.outputFormat === 'json') {
-    writeTextStdout(JSON.stringify(report, null, 2));
+  // A failing report's text goes to stderr (clig.dev); each stream's own
+  // color gate. One stderr-keyed gate leaked ANSI into `doctor | cat` and
+  // stripped color from `doctor 2>/dev/null`.
+  if (context.outputFormat === 'text' && !report.ok) {
+    writeTextStderr(
+      formatDoctorText(report, createCliStyle(context.stderrColorEnabled)),
+    );
     return;
   }
-  if (context.outputFormat === 'ndjson') {
-    for (const record of doctorNdjsonRecords(report)) {
-      writeNdjsonStdout(record);
-    }
-    return;
-  }
-  // Gate color on the stream the report is written to: a passing report goes
-  // to stdout, a failing one to stderr (clig.dev). One stderr-keyed gate leaked
-  // ANSI into `doctor | cat` and stripped color from `doctor 2>/dev/null`.
-  const colorEnabled = report.ok
-    ? context.stdoutColorEnabled
-    : context.stderrColorEnabled;
-  const text = formatDoctorText(report, createCliStyle(colorEnabled));
-  if (report.ok) {
-    writeTextStdout(text);
-  } else {
-    writeTextStderr(text);
-  }
+  writeCliResult(context.outputFormat, {
+    json: report,
+    ndjson: doctorNdjsonRecords(report),
+    text: formatDoctorText(report, createCliStyle(context.stdoutColorEnabled)),
+  });
 }

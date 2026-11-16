@@ -9,11 +9,6 @@ import { Effect, Latch, Result } from 'effect';
 import { type RunModelDecisionReason } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import {
-  formatCliNoAvailableModelsRecovery,
-  selectCliRunnableModel,
-  type CliNoAvailableModelsRecoveryOptions,
-} from '@cli/runtime/models/modelAccess';
 import type { CliPlatformServices } from '@cli/runtime/platform/initPlatform';
 import { SETUP_AGENT_HANDOFF_NOTICE } from '@cli/onboarding/setupContinuation';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
@@ -29,7 +24,10 @@ import {
   appendLocalErrorTranscript,
   appendLocalNotice,
 } from './state/transcript';
-import type { SlashCommandContext } from './commands/handlers/slashContext';
+import {
+  selectChatModel,
+  type SlashCommandContext,
+} from './commands/handlers/slashContext';
 
 /**
  * No model route is usable yet: the chat opened without a credential, so the
@@ -110,7 +108,6 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
   context: SlashCommandContext,
   options: {
     readonly modelSource: RunModelDecisionReason;
-    readonly recovery: CliNoAvailableModelsRecoveryOptions;
     readonly firstRunSetupAgent: string | undefined;
   },
   connection: ModelConnection,
@@ -132,15 +129,10 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
     // A typed failure is said here; a defect goes to the reporting below, and
     // an interruption (the chat closing) goes on unreported.
     const selection = yield* Effect.result(
-      selectCliRunnableModel(
-        [{ model: sessionMeta.get().model, reason: options.modelSource }],
-        {
-          stores: { ...stores, runtime },
-          noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-            options.recovery,
-          ),
-        },
-      ),
+      selectChatModel(stores, runtime, {
+        model: sessionMeta.get().model,
+        reason: options.modelSource,
+      }),
     );
     if (Result.isFailure(selection)) {
       appendLocalErrorTranscript(toErrorMessage(selection.failure));

@@ -238,8 +238,8 @@ function attachTo(
     );
   }).pipe(
     Effect.matchCauseEffect({
-      // The service stopped or restarted: the window goes on with its
-      // own process's capabilities.
+      // The service stopped or restarted: the attachment ended, and the
+      // window waits for the link's next client to attach it again.
       onSuccess: () =>
         Effect.logWarning(
           `The TeXRA service ended this window's attachment to ${workspace}`,

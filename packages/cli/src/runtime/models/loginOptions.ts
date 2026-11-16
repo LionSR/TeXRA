@@ -1,3 +1,4 @@
+import { isSubscriptionAuthProvider } from '@texra-ai/harness/schemas';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 
 /** A `/login` request: one subscription provider and its sign-in transport. */
@@ -44,7 +45,7 @@ export function parseChatLoginSlashArgs(
   }
   if (positionals.length !== 1) return undefined;
   const [name] = positionals;
-  return name === 'chatgpt' || name === 'grok'
+  return isSubscriptionAuthProvider(name)
     ? { target: name, noBrowser, device }
     : undefined;
 }

@@ -25,8 +25,7 @@ import type {
   CliPlatformOptions,
 } from '@cli/runtime/platform/initPlatform';
 import {
-  prePlatformDiagnosticSink,
-  silentLogSink,
+  stderrDiagnosticSink,
   writeErrorStderr,
 } from '@cli/runtime/platform/logSinks';
 import type { RunChatInit } from '@cli/chat/tui/runChatTui';
@@ -208,17 +207,13 @@ export function defineCliCommand<const A extends ArgsDef, E>(
       const program = options
         .run(context, ctx)
         .pipe(provideCliInvocation(context));
-      // The sink that covers the runtime build below, chosen now that the
-      // context has answered `--quiet`. The runtime logs while its layers
-      // build (`UsageLogService started …`), and a command's platform sets
-      // its own sink only once the program asks for it. `bin/texra.ts`
-      // already put those lines on stderr; this is where `--quiet` can
-      // still silence them, and for a command with no platform it is the
-      // one sink it ever gets.
-      setLogSink(
-        context.quietLogs ? silentLogSink : prePlatformDiagnosticSink,
-        { trusted: true },
-      );
+      // The command's diagnostic sink for its whole life, at the level the
+      // context decided from argv (`--quiet`, `--verbose`): the runtime
+      // build below, the platform and the command's work all log through
+      // it. Only the chat replaces it, while Ink owns the terminal.
+      setLogSink(stderrDiagnosticSink(context.minimumLogLevel), {
+        trusted: true,
+      });
       // The command runs on its runtime from plain async code, never from
       // inside a default-runtime fiber: started from one, a headless run's
       // Ctrl-C shutdown drain never finished. A runtime that cannot be

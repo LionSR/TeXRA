@@ -33,28 +33,8 @@ function createContext(
   services: Effect.Success<typeof processServices>,
 ): SlashCommandContext {
   let approvalPolicy: ApprovalPolicy = 'ask';
-  const select = () => Effect.void;
   return {
-    commands: builtinSlashCommands({
-      ...services,
-      onAgentSelect: select,
-      onTeamSelect: select,
-      onAccountChanged: () => Effect.void,
-      canSelectAgent: () => true,
-      getApprovalPolicy: () => approvalPolicy,
-      onApprovalPolicySelect: select,
-      onProjectApprovalPolicyChanged: vi.fn(),
-      onModelSelect: select,
-      canSelectModel: () => true,
-      getModelSwitchDisabledReason: () => Effect.succeed(undefined),
-      onModelAccessSelect: select,
-      onLoginSelect: select,
-      onMemorySelect: select,
-      onResumeSelect: select,
-      onSkillSelect: select,
-      configRoots: services.runSession.roots,
-      onError: vi.fn(),
-    }),
+    commands: builtinSlashCommands({}),
     cliContext: createTestCliContext({
       cwd: '/tmp/workspace',
       mode: 'interactive',
@@ -74,6 +54,10 @@ function createContext(
     resetSession: vi.fn(),
     resumeRun: (_id: RunId) => Effect.void,
     resumeTask: (_id: RunId) => Effect.void,
+    activateSkill: vi.fn(),
+    onProjectApprovalPolicyChanged: vi.fn(),
+    getModelSwitchDisabledReason: () => Effect.succeed(undefined),
+    onAccountChanged: () => Effect.void,
   };
 }
 

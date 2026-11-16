@@ -15,9 +15,9 @@ import { ApiKeyEntryForm } from './ApiKeyEntryForm';
 import { formatStatusViewSummary } from './_shared/formatStatusViewSummary';
 import { ListForm } from './_shared/ListForm';
 import { runFormWrite } from './_shared/useAsyncListForm';
-import type { ProcessRuntime } from '@texra-ai/harness/host';
 import type { Secrets } from '@texra-ai/harness/plugins';
 import type { Effect } from 'effect';
+import { useChatProcess } from '../chatProcess';
 
 type ProviderApiKeyStatuses = Partial<
   Readonly<Record<ApiKeyProviderId, CredentialOrigin>>
@@ -90,9 +90,6 @@ interface ProviderApiKeyFormProps {
     provider: ApiKeyProviderId,
     key: string,
   ) => Effect.Effect<string | void, Error, Secrets>;
-  /** The runtime that program runs on, from the surface that mounted this
-   *  form — Ink components run no Effect of their own. */
-  readonly runtime: ProcessRuntime;
   readonly onDone: (provider: ApiKeyProviderId, modelNotice?: string) => void;
   readonly onCancel: () => void;
 }
@@ -101,6 +98,7 @@ interface ProviderApiKeyFormProps {
 export function ProviderApiKeyForm(
   props: ProviderApiKeyFormProps,
 ): React.JSX.Element {
+  const { runtime } = useChatProcess();
   const [provider, setProvider] = useState<ApiKeyProviderId>();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
@@ -136,7 +134,7 @@ export function ProviderApiKeyForm(
       }}
       onSubmit={(key) => {
         setSaving(true);
-        runFormWrite(props.runtime, () => props.onSave(provider, key), {
+        runFormWrite(runtime, () => props.onSave(provider, key), {
           onSuccess: (modelNotice) =>
             props.onDone(provider, modelNotice || undefined),
           onError: (cause) => {

@@ -13,7 +13,7 @@ import {
 } from '../runtime/memory';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { emitCliResult } from './_helpers/output';
+import { cliResult, emitCliResult } from './_helpers/output';
 
 const runMemoryList = Effect.fn('runMemoryList')(function* () {
   const services = yield* cliPlatform;
@@ -22,11 +22,7 @@ const runMemoryList = Effect.fn('runMemoryList')(function* () {
   // consumers should see every memory, not a capped slice.
   const items = yield* withSessionFs(services.roots, MemoryStore.list);
 
-  yield* emitCliResult({
-    json: items,
-    ndjson: items.map((memory) => ({ kind: 'memory', memory })),
-    text: formatCliMemoryList(items),
-  });
+  yield* emitCliResult(cliResult('memory', items, formatCliMemoryList(items)));
 });
 
 const runMemoryShow = Effect.fn('runMemoryShow')(function* (inputPath: string) {
