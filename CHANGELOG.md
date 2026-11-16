@@ -31,8 +31,9 @@ All notable changes to this project will be documented in this file.
   its report goes to every agent whose message it took up since it last
   finished, and the first time also to the agent that launched it. It used
   to go only to the launcher, so an agent that asked another's subagent
-  for something never heard back. Continuing an agent yourself changes
-  nothing about where it reports.
+  for something never heard back. An agent that finishes a round nobody
+  asked for (you continued it, or a report woke it) reports to the agent
+  that launched it.
 
 - **SDK: a store an earlier build wrote is refused, never moved aside.**
   Opening a session store stamped with another build's schema fails and

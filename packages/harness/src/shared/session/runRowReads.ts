@@ -66,8 +66,6 @@ function sharedRowsFrom(rows: readonly SharedRunRow[]): SharedRunRows {
 interface Asking {
   /** The runs whose messages it took as work since its last end. */
   readonly since: readonly RunId[];
-  /** The run whose message it last took as work, ever. */
-  readonly last: RunId | null;
   /** Whether it has ended before. */
   readonly ended: boolean;
 }
@@ -89,12 +87,11 @@ function askedBy(
 ): AskedBy {
   const senders = new Map<string, RunId>();
   let since: RunId[] = [];
-  let last: RunId | null = null;
   let ended = false;
   let atEnd: Asking | null = null;
   for (const row of rows) {
     if (row.type === 'run.end') {
-      atEnd = { since, last, ended };
+      atEnd = { since, ended };
       ended = true;
       since = [];
     } else if (row.type === 'followup.queued') {
@@ -106,38 +103,33 @@ function askedBy(
       row.disposition.kind === 'answered'
     ) {
       const sender = senders.get(row.followUpId);
-      if (sender === undefined) continue;
-      last = sender;
-      if (!since.includes(sender)) since.push(sender);
+      if (sender !== undefined && !since.includes(sender)) since.push(sender);
     }
   }
-  return { since, last, ended, atEnd };
+  return { since, ended, atEnd };
 }
 
 /**
  * The runs a run's end reports to, from who it worked for as that end
  * commits (`asking`) and its launch (`parent`): the runs whose messages it
  * took as work since its last end, and, until its first end, the run that
- * launched it. A launcher whose call still awaits the run reads the report
- * from the call, so it is on neither list. A run nobody asked since (a
- * person continued it, or a report woke it) reports to the run that asked
- * last, else to its launcher.
+ * launched it. Until that first end a launcher whose call awaits the run
+ * reads the report from the call, so it is sent none. A run nobody asked
+ * since (a person continued it, or a report woke it) reports to its
+ * launcher: a report nobody asked for only ever goes up the line of
+ * launchers, so two runs that worked for each other cannot wake each
+ * other with reports forever.
  */
 export function reportRecipients(
   asking: Asking,
   parent: RunRows['parent'],
 ): readonly RunId[] {
-  const awaiting = parent?.call?.awaited === true;
-  const launcher = parent === null || awaiting ? [] : [parent.id];
-  const reads = !asking.ended && awaiting ? parent.id : null;
-  const asked = new Set([
-    ...(asking.ended ? [] : launcher),
-    ...asking.since.filter((id) => id !== reads),
-  ]);
-  if (asked.size > 0) return [...asked];
-  return asking.last === null || asking.last === reads
-    ? launcher
-    : [asking.last];
+  if (parent === null) return asking.since;
+  const awaited = !asking.ended && parent.call?.awaited === true;
+  const asked = asking.since.filter((id) => !awaited || id !== parent.id);
+  if (awaited) return asked;
+  if (asking.ended) return asked.length > 0 ? asked : [parent.id];
+  return [...new Set([parent.id, ...asked])];
 }
 
 /**

@@ -516,8 +516,9 @@ its process, ended with its exit (`agent/runtime/processRun.ts`). A child's
 end queues its report in the same transaction, under
 `${runId}:${activation}`, on the input of each run it works for
 (`agent/storage/runLifecycle.ts#replyDelivery`): the runs whose messages it
-took as work since its last end, and until its first end its parent,
-unless the parent's call awaits it.
+took as work since its last end; until its first end also its parent,
+unless the parent's call awaits it; and after that its parent when no run
+asked (`shared/session/runRowReads.ts#reportRecipients`).
 
 **W6.** Every failed attempt of a turn that reaches failure recording MUST
 commit a `failed` row whose `next` is the move after it; a call off the rows
