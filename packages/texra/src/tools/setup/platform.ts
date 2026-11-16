@@ -12,15 +12,11 @@
 import { Context, Effect, Schema } from 'effect';
 
 // Local imports
-import { SubscriptionAccounts } from '@texra-ai/llm/node';
-import { readModelOptions } from '@texra-ai/harness/host';
-import { Secrets, type SettingsStores } from '@texra-ai/harness/plugins';
 import type {
   TerminalRunFailed,
   TerminalRunRequest,
   TerminalRunResult,
 } from '@texra/hosts/uiHosts';
-import { CHATGPT_SETUP_MODEL } from '@texra/model/setupModelDefaults';
 
 /**
  * A host command that was dispatched and rejected (the VS Code host's own
@@ -88,53 +84,3 @@ export class SetupHost extends Context.Service<
   SetupHost,
   'vscode' | 'desktop' | 'cli'
 >()('@texra-ai/texra/tools/SetupHost') {}
-
-/**
- * The ChatGPT subscription routing probe could not answer. It reads the
- * routing built from the stored OAuth session; it never reports "no
- * subscription" this way, which is a value.
- */
-class SubscriptionProbeFailed extends Schema.TaggedError<SubscriptionProbeFailed>()(
-  'SubscriptionProbeFailed',
-  {
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
-
-/** Subscription access reported separately from provider API keys. */
-export const getChatGptSubscriptionStatus = Effect.fn(
-  'getChatGptSubscriptionStatus',
-)(function* (
-  stores: SettingsStores,
-): Effect.fn.Return<
-  { signedIn: boolean; enabled: boolean },
-  SubscriptionProbeFailed,
-  Secrets | SubscriptionAccounts
-> {
-  const accounts = yield* SubscriptionAccounts;
-  const status = yield* accounts['chatgpt-subscription'].getStatus().pipe(
-    Effect.mapError(
-      (cause) =>
-        new SubscriptionProbeFailed({
-          message: 'The ChatGPT subscription session could not be read.',
-          cause,
-        }),
-    ),
-  );
-  // Routing is only consulted for a signed-in account, as the `&&` did.
-  if (!status.signedIn) return { signedIn: false, enabled: false };
-  const [option] = yield* readModelOptions(stores, [CHATGPT_SETUP_MODEL]).pipe(
-    Effect.mapError(
-      (cause) =>
-        new SubscriptionProbeFailed({
-          message: 'ChatGPT subscription routing could not be resolved.',
-          cause,
-        }),
-    ),
-  );
-  return {
-    signedIn: true,
-    enabled: option?.usageRoute === 'chatgpt-subscription',
-  };
-});
