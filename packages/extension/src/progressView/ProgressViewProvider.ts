@@ -553,9 +553,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   );
 
   /**
-   * Bring a surface forward: the tab while it is attached, else a resolved
-   * sidebar, else the focus command, the only way to open a sidebar VS Code
-   * never resolved. A reveal the user asked for takes focus; one the window
+   * Bring a surface forward: the tab while it is attached, else the
+   * sidebar. A reveal the user asked for takes focus; one the window
    * makes on its own (`preserveFocus`) leaves it where the user is typing,
    * so a focused card's single-key answers do not catch keystrokes meant
    * for the editor.
@@ -569,7 +568,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       });
     if (editor)
       return host('reveal', () => editor.view.reveal(undefined, preserveFocus));
-    if (sidebar) return host('reveal', () => sidebar.view.show(preserveFocus));
+    // A quiet reveal shows a resolved sidebar in place; one that takes focus
+    // runs the focus command, which also opens a collapsed container.
+    if (sidebar && preserveFocus)
+      return host('reveal', () => sidebar.view.show(true));
     return showInSidebar;
   }
 
