@@ -18,6 +18,7 @@ import { Cause, Effect, Exit, FileSystem, ScopedRef } from 'effect';
 
 import {
   ChildRuns,
+  ToolRegistry,
   type ToolRun,
   ToolError,
   sourceLocationUnder,
@@ -37,6 +38,7 @@ import {
 } from '@texra/shared/constants/revisionLayout';
 import {
   DOCUMENTS_OUTPUT_KIND,
+  MERGE_EDITED_FILE,
   type DocumentTaskSpec,
 } from '@texra/shared/plugins/documents';
 import {
@@ -187,9 +189,6 @@ export const openDocuments = Effect.fn('documents.open')(function* (
 export interface RevisionRequest extends InputMediaOptions {
   /** Whether the prompt carries the documents' TeXCount statistics. */
   readonly attachTeXCount: boolean;
-  /** A partial edit of the input the revision merges back into it; null
-   *  for a program that merges nothing. */
-  readonly editedFile: string | null;
 }
 
 /** Where the plugin's template files ship, under the host's packaged
@@ -258,6 +257,18 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
   const { task, run, deps } = docs;
   const { config } = run;
   const workspace = deps.roots.workspace;
+  // A partial edit of the input, which a merge puts back into it: the file
+  // argument its launch named, read only from a program that registers it
+  // as one (`Program.fileArgs`), so the launch checked it where it was
+  // accepted.
+  const { script } = config;
+  const editedFile =
+    script?.kind === 'program' &&
+    (yield* ToolRegistry).programs
+      .get(script.name)
+      ?.fileArgs?.includes(MERGE_EDITED_FILE) === true
+      ? script.args[MERGE_EDITED_FILE]
+      : undefined;
   // The launch's files as they read now; one that does not read changes
   // what the model sees, so it is reported on the run's own channel.
   const [contexts, inputs, edited] = yield* Effect.all(
@@ -266,7 +277,7 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
       readFilesAsPromptXml(workspace, config.inputFiles),
       readFilesAsPromptXml(
         workspace,
-        asked.editedFile === null ? [] : [asked.editedFile],
+        typeof editedFile === 'string' ? [editedFile] : [],
       ),
     ],
     { concurrency: 'unbounded' },

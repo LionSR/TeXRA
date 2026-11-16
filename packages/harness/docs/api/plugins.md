@@ -1294,6 +1294,11 @@ interface Program<R = unknown> {
    *  that creates documents (a deck, a transcript) and does not rewrite
    *  its inputs. */
   readonly outputs?: readonly string[];
+  /** The `args` keys whose string values name a file the program reads. A
+   *  launch a model asks for resolves each as it resolves the launch's
+   *  file lists: a run-storage file must be the caller's own or a declared
+   *  output of a completed child of it. */
+  readonly fileArgs?: readonly string[];
 }
 ```
 

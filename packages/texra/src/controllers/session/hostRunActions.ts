@@ -44,6 +44,7 @@ import { modelFileName } from '@texra/utils/files/outputFileUtils';
 import {
   documentRoundsOf,
   isDocumentTaskRun,
+  MERGE_EDITED_FILE,
 } from '@texra/shared/plugins/documents';
 import type { Dialogs, HostFailed } from '@texra/hosts/uiHosts';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
@@ -388,7 +389,7 @@ export const createHostRunActions = Effect.fn(
       const inputFiles = [baseFile];
       const launch = yield* programLaunch(
         'merge',
-        { editedFile },
+        { [MERGE_EDITED_FILE]: editedFile },
         { inputFiles, outputFiles: [] },
       ).pipe(
         // No merge program is registered: said beside the merge docs, and

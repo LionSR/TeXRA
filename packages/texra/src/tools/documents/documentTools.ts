@@ -236,7 +236,7 @@ const optionalFlag = (description: string) =>
 export const DocumentContextTool = defineTool({
   name: 'document_context',
   description:
-    "A document program's revision prompt: `intro`, the launch's documents and the `templates`, the `editedFile` to merge in, the instruction, every earlier request of `requests` with the reply it got, and this revision's request with the compile failures that rejected the last one and the `critique` of it, if any. The call for revision 0 records `intro`, `requests` and `templates` as the run's task, with whether its program writes new documents (the program declares its outputs); a later call's are not read. Resolves to `{ prompt, mediaFiles, memories }`, for the revision's `agent()` call; `memories` are the launch's.",
+    "A document program's revision prompt: `intro`, the launch's documents and the `templates`, the partial edit a merge launch names, the instruction, every earlier request of `requests` with the reply it got, and this revision's request with the compile failures that rejected the last one and the `critique` of it, if any. The call for revision 0 records `intro`, `requests` and `templates` as the run's task, with whether its program writes new documents (the program declares its outputs); a later call's are not read. Resolves to `{ prompt, mediaFiles, memories }`, for the revision's `agent()` call; `memories` are the launch's.",
   scriptReturns: '{ prompt: string; mediaFiles: string[]; memories: string[] }',
   replay: 'safe',
   schema: Schema.Struct({
@@ -258,10 +258,6 @@ export const DocumentContextTool = defineTool({
     ).annotate({
       description:
         "TeXRA's template files the revisions read as documents, by file name.",
-    }),
-    editedFile: Schema.optional(Schema.NullOr(Schema.String)).annotate({
-      description:
-        'A partial edit of the input, which the revision merges back into it: the `args.editedFile` of the `merge` program.',
     }),
     attachTeXCount: optionalFlag(
       "Add each document's texcount statistics to the prompt.",
@@ -302,7 +298,6 @@ export const DocumentContextTool = defineTool({
       autoExtractFigure: input.autoExtractFigure ?? false,
       autoExtractTikzFigure: input.autoExtractTikzFigure ?? false,
       autoCompileInputPdf: input.autoCompileInputPdf ?? false,
-      editedFile: input.editedFile ?? null,
     };
     // The first revision's checks and file cards nest under a stage that
     // closes with the call, on the call's own outcome.

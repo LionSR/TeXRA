@@ -69,7 +69,7 @@ Exports: 124
 - `ProcessPluginLayer` — `interface ProcessPluginLayer<ROut = never> { readonly layer: Layer.Layer<ROut, never, PluginLayerServices>; readonly drain?: Effect.Effect<void, never, ROut>; }`
 - `ProcessReport` — `interface ProcessReport { readonly report: ChildRunDelivery; readonly exit?: ProcessExit; readonly failure?: string; }`
 - `ProcessTurn` — `interface ProcessTurn { readonly run: Effect.Effect<ProcessReport, Error, PlatformServices>; readonly reportError: (error: Error) => ChildRunDelivery; }`
-- `Program` — `interface Program<R = unknown> { readonly description: string; readonly tools: readonly string[]; readonly result?: ProgramResult<R>; readonly outputs?: readonly string[]; }`
+- `Program` — `interface Program<R = unknown> { readonly description: string; readonly tools: readonly string[]; readonly result?: ProgramResult<R>; readonly outputs?: readonly string[]; readonly fileArgs?: readonly string[]; }`
 - `ProgramChange` — `interface ProgramChange { readonly path: string; readonly absolutePath: string; readonly base: string | null; readonly added: number | null; readonly removed: number | null; }`
 - `ProgramResult` — `interface ProgramResult<R = unknown> { readonly fact: { readonly plugin: string; readonly kind: string; readonly schema: Schema.Codec<R, unknown>; }; delivery(value: R, runId: RunId): readonly string[]; changes(value: R, roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>): readonly ProgramChange[]; }`
 - `PromptSection` — `type PromptSection = (ctx: { readonly offered: readonly string[]; readonly isChild: boolean; readonly config: ConfigProvider; }) => string; ≡ PromptSection`

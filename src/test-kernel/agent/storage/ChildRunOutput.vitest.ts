@@ -31,6 +31,10 @@ import {
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
 import { toolTable } from '@tools/toolTable';
+import { programTool } from '@agent/runtime/delegation/ProgramTool';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { errorOf } from '@test/support/toolResultFields';
+import { autoDecideRequests } from '../progressTestUtils';
 
 const parentRunId = Schema.decodeUnknownSync(RunIdSchema)('aaaaaa111111');
 const childRunId = Schema.decodeUnknownSync(RunIdSchema)('bbbbbb222222');
@@ -157,6 +161,37 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           );
           expect(error.message).toContain('is not a direct child');
         }),
+      );
+
+      // A model names the merge program's edited file in its `args`; that
+      // file is read into the revision prompt, so it takes the rule the
+      // launch's file lists take.
+      it.effect(
+        "rejects a model's merge launch whose edited file is another run tree's output",
+        () =>
+          Effect.gen(function* () {
+            const session = yield* processSession;
+            const forbidden = yield* persistCompletedChild(
+              session,
+              otherParentRunId,
+            );
+            yield* publishTestRunStart(session, parentRunId);
+            // A launch past the check is refused, so the case ends either way.
+            yield* autoDecideRequests(session, () => ({ action: 'reject' }));
+
+            const result = yield* programTool()
+              .call({ name: 'merge', args: { editedFile: forbidden } })
+              .pipe(
+                Effect.provide(
+                  nativeToolTestLayer({
+                    run: { runId: parentRunId, toolPolicy: {}, session },
+                  }),
+                ),
+                Effect.provide(resolveLayer),
+                Effect.provide(session),
+              );
+            expect(errorOf(result)).toContain('is not a direct child');
+          }),
       );
 
       it.effect('rejects paths outside run storage', () =>

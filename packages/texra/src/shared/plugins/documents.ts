@@ -25,6 +25,11 @@ import type { RunView } from '@texra-ai/harness/schemas';
  *  their rows. */
 const THEORY_PLUGIN = 'theory';
 
+/** The `merge` program's argument naming the partial edit it merges back
+ *  into its input: a file argument (`Program.fileArgs`), which the
+ *  documents tools read from the run's program arguments. */
+export const MERGE_EDITED_FILE = 'editedFile';
+
 /** What a document program told its first `document_context` call about
  *  itself, which its later steps read back. */
 const DocumentTaskSpecSchema = Schema.Struct({
