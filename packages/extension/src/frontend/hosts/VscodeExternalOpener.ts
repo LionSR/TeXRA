@@ -12,7 +12,7 @@ import { texraGuideUrl } from '@ui/copy/guide';
  * cancellation channel, so an interrupted fiber detaches from the wait. It
  * holds no state, so every surface shares this one value.
  */
-export const vscodeOpener: ExternalOpener = {
+export const vscodeOpener: ExternalOpener = Object.freeze({
   openExternal(url: string): Effect.Effect<void, HostFailed> {
     return Effect.tryPromise({
       try: () => vscode.env.openExternal(vscode.Uri.parse(url)),
@@ -40,7 +40,7 @@ export const vscodeOpener: ExternalOpener = {
       Effect.asVoid,
     );
   },
-};
+});
 
 /** A page of the TeXRA guide on texra.ai, in the default browser: what
  *  every docs button in this host opens. */
