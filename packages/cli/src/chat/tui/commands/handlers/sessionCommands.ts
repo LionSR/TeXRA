@@ -115,7 +115,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
         approvalPolicy: context.getApprovalPolicy(),
         queuedFollowUpMessages: (activeRunId === undefined
           ? []
-          : (view.queuedFollowUps.get(activeRunId) ?? [])
+          : (view.runs.get(activeRunId)?.queuedFollowUps ?? [])
         ).map((followUp) => followUp.text),
         cost: taskCostStatus(view, run),
       }),

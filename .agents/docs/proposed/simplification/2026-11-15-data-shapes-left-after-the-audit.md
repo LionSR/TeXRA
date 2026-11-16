@@ -31,6 +31,12 @@ computed, which reorders the one function every session row passes through.
 That deserves its own PR with the session-view suites as the check. About 15
 reader sites across the harness, the CLI and the progress view.
 
+Landed 2026-11-16: `RunView.grants` and `RunView.queuedFollowUps` (empty when
+none), and `ApprovalGrantSource = { runs: ReadonlyMap<RunId, { parentId;
+grants }> }`. The held-back ordering does not hold: no field `applyEvent`
+derives reads the grants, so they are written with the run's other columns.
+`SessionViewSchema` changes on the service wire.
+
 ## 2. `RunView.turnStartedAt` is the updater's working state
 
 Its own comment calls it the updater's input to `runStartedAt`; no host reads
@@ -39,6 +45,9 @@ it. It belongs in the per-run working record this audit added (`RunWork`).
 Held back: `applyStanding` and the `run.activate` case of `applyRunEvent` are
 pure functions over the run that write it. Moving it makes them write the
 working record. Take it with finding 1, which reworks the same functions.
+
+Landed 2026-11-16 with finding 1: `RunWork.turnStartedAt`, written where
+`applyEvent` puts the run at its standing; `applyStanding` is gone.
 
 ## 3. LaTeX settings status: seven `*Path` fields beside `installed`
 

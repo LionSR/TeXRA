@@ -109,10 +109,11 @@ export function withUnborn(
   grants: ApprovalGrants | null | undefined,
 ): ApprovalGrantSource {
   if (source.runs.has(runId)) return source;
-  const runs = new Map<RunId, { readonly parentId: RunId | null }>(source.runs);
   return {
-    runs: runs.set(runId, { parentId }),
-    policy: new Map(source.policy).set(runId, grants ?? NO_APPROVAL_GRANTS),
+    runs: new Map(source.runs).set(runId, {
+      parentId,
+      grants: grants ?? NO_APPROVAL_GRANTS,
+    }),
   };
 }
 
@@ -144,18 +145,20 @@ function* ancestry(
     current = source.runs.get(current)?.parentId
   ) {
     seen.add(current);
-    yield source.policy.get(current);
+    yield source.runs.get(current)?.grants;
   }
 }
 
 /** No grants of its own: every kind defers to the run's ancestry. */
 export const NO_APPROVAL_GRANTS: ApprovalGrants = { own: {}, goal: [] };
 
-/** The rows a bypass is read from: each run's parent edge and grants, as
- *  the session view folds them. */
+/** The rows a bypass is read from: each run's parent edge and its own
+ *  grants, as the session view folds them. */
 export interface ApprovalGrantSource {
-  readonly runs: ReadonlyMap<RunId, { readonly parentId: RunId | null }>;
-  readonly policy: ReadonlyMap<RunId, ApprovalGrants>;
+  readonly runs: ReadonlyMap<
+    RunId,
+    { readonly parentId: RunId | null; readonly grants: ApprovalGrants }
+  >;
 }
 
 /**
@@ -223,11 +226,14 @@ export function grantSource(
     }
   >,
 ): ApprovalGrantSource {
-  const runs = new Map<RunId, { parentId: RunId | null }>();
-  const policy = new Map<RunId, ApprovalGrants>();
-  for (const [id, own] of rows) {
-    runs.set(id, { parentId: own.parent?.id ?? null });
-    policy.set(id, own.grants ?? NO_APPROVAL_GRANTS);
-  }
-  return { runs, policy };
+  const runs = new Map<
+    RunId,
+    { parentId: RunId | null; grants: ApprovalGrants }
+  >();
+  for (const [id, own] of rows)
+    runs.set(id, {
+      parentId: own.parent?.id ?? null,
+      grants: own.grants ?? NO_APPROVAL_GRANTS,
+    });
+  return { runs };
 }

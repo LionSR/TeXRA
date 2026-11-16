@@ -96,7 +96,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               toolEdit: true,
               superYolo: false,
             });
-            expect(view.policy.get(EXECUTION_ID)).toEqual({
+            expect(view.runs.get(EXECUTION_ID)?.grants).toEqual({
               own: { toolEdit: 'on' },
               goal: [],
             });

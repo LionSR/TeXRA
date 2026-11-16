@@ -68,6 +68,12 @@ const TranscriptViewSchema = Schema.Struct({
 /** A stream's transcript slice: what hosts paint. */
 export type TranscriptView = ReadonlyDeep<typeof TranscriptViewSchema.Type>;
 
+/** A run's queued follow-ups as a composer lists them (`followUpDisplay`):
+ *  a set keyed by `followUpId`, queued, unconsumed, in order. */
+const QueuedFollowUpsSchema = Schema.Array(
+  Schema.Struct({ followUpId: Schema.String, text: Schema.String }),
+);
+
 /** One run as every renderer reads it; `SessionView.runs` holds them. */
 const RunViewSchema = Schema.Struct({
   /** The run id: the aggregate's logical id, minted once at launch. */
@@ -115,9 +121,6 @@ const RunViewSchema = Schema.Struct({
   /** Wall-clock time of `run.start`, ms since the epoch: the launch time a
    *  host prints. `createdAt` orders; this never does. */
   launchedAt: Positive,
-  /** The current turn's start as the rows record it: the fold's input to
-   *  `runStartedAt`, kept while the run's holder is not yet known. */
-  turnStartedAt: Schema.NullOr(Positive),
   /** The clock a host shows: the turn's start while the run is busy on it;
    *  null while it waits on a person, is interrupted, paused or between turns. */
   runStartedAt: Schema.NullOr(Positive),
@@ -129,6 +132,11 @@ const RunViewSchema = Schema.Struct({
   turn: Schema.NullOr(Count),
   /** `run.start.takesFollowUps`. */
   takesFollowUps: Schema.Boolean,
+  /** Its untaken messages (not its own requests); empty when none. */
+  queuedFollowUps: QueuedFollowUpsSchema,
+  /** Its own approval grants (`RunRows.grants`): what it decided, never
+   *  what it inherits (`resolveBypass` reads the ancestry). */
+  grants: ApprovalPolicySnapshotSchema,
   /** Latest `context.state`. */
   context: Schema.NullOr(ContextStateDataSchema),
   /** The run it is listed under: its launcher, while the view lists
@@ -293,13 +301,7 @@ const PendingRequestSchema = Schema.Struct({
   answeredBy: AnsweredBySchema,
 });
 
-/** A run's queued follow-ups as a composer lists them (`followUpDisplay`):
- *  a set keyed by `followUpId`, queued, unconsumed, in order. */
-const QueuedFollowUpsSchema = Schema.Array(
-  Schema.Struct({ followUpId: Schema.String, text: Schema.String }),
-);
-
-/** One session's view at one moment: its runs, requests and grants. */
+/** One session's view at one moment: its runs and requests. */
 export const SessionViewSchema = Schema.Struct({
   key: SessionKeySchema,
   runs: Schema.ReadonlyMap(RunIdSchema, RunViewSchema),
@@ -323,10 +325,7 @@ export const SessionViewSchema = Schema.Struct({
   /** Project-level aggregate; a rail badge reads it and derives nothing. */
   rollup: Schema.Struct({ running: Count, waiting: Count, interrupted: Count }),
   requests: Schema.Array(PendingRequestSchema),
-  /** Latest snapshot per run. */
-  policy: Schema.ReadonlyMap(RunIdSchema, ApprovalPolicySnapshotSchema),
   pluginFacts: Schema.Array(PluginFactDraftSchema),
-  queuedFollowUps: Schema.ReadonlyMap(RunIdSchema, QueuedFollowUpsSchema),
 });
 /** One published level of the session's fold: an immutable value. */
 export type SessionView = ReadonlyDeep<typeof SessionViewSchema.Type>;
@@ -417,9 +416,7 @@ export function emptySessionView(key: string, debug = false): SessionView {
     transcriptSeq: new Map(),
     rollup: { running: 0, waiting: 0, interrupted: 0 },
     requests: [],
-    policy: new Map(),
     pluginFacts: [],
-    queuedFollowUps: new Map(),
   };
 }
 
