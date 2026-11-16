@@ -1,5 +1,5 @@
 import { defineCommand } from 'citty';
-import { Cause, Effect, Exit } from 'effect';
+import { Effect } from 'effect';
 
 import { MODELS } from '@texra-ai/llm';
 
@@ -34,11 +34,10 @@ import {
 import type { CliContext } from '../runtime/platform/cliContext';
 
 /**
- * The report every model command gives when its platform cannot come up: one
- * stderr line and `ModelOrNetworkError`. Each command hands it to
- * `defineCliCommand` as its `catchExitCode`, so a failure of the process
- * runtime build — which happens before any program below can handle it —
- * reads the same way an init failure inside one does. Opening the platform
+ * The report every model command gives when its runtime, platform or model
+ * read fails: one stderr line and `ModelOrNetworkError`. Each command hands
+ * it to `defineCliCommand` as its `catchExitCode`, which receives every
+ * failure of the runtime build and of the program. Opening the platform
  * and reading the model options touch only local stores, so no failure here
  * is a network one.
  */
@@ -51,19 +50,11 @@ const listModels = Effect.fn('listModels')(function* (
   context: CliContext,
   options: CliModelListOptions,
 ) {
-  const outcome = yield* Effect.exit(
-    Effect.gen(function* () {
-      const services = yield* cliPlatform;
-      return yield* getCliModelAccessList({
-        stores: services,
-        models: options.includeUnavailable === true ? MODELS : undefined,
-      });
-    }),
-  );
-  if (Exit.isFailure(outcome)) {
-    return reportModelPlatformFailure(Cause.squash(outcome.cause));
-  }
-  const models: readonly CliModelAccess[] = outcome.value;
+  const services = yield* cliPlatform;
+  const models: readonly CliModelAccess[] = yield* getCliModelAccessList({
+    stores: services,
+    models: options.includeUnavailable === true ? MODELS : undefined,
+  });
 
   const listedModels = listableModelAccessEntries(models, options);
   if (context.outputFormat === 'text' && listedModels.length === 0) {
@@ -82,16 +73,10 @@ const listModels = Effect.fn('listModels')(function* (
 });
 
 const showModel = Effect.fn('showModel')(function* (id: string) {
-  const outcome = yield* Effect.exit(
-    Effect.gen(function* () {
-      const services = yield* cliPlatform;
-      return yield* loadCliModelAccessEntry(id, { stores: services });
-    }),
-  );
-  if (Exit.isFailure(outcome)) {
-    return reportModelPlatformFailure(Cause.squash(outcome.cause));
-  }
-  const entry: CliModelAccess | undefined = outcome.value;
+  const services = yield* cliPlatform;
+  const entry: CliModelAccess | undefined = yield* loadCliModelAccessEntry(id, {
+    stores: services,
+  });
 
   if (!entry) {
     writeTextStderr(`Model not found: ${id}`);
@@ -130,23 +115,8 @@ const modelsShowCommand = defineCliCommand({
   catchExitCode: reportModelPlatformFailure,
 });
 
-/**
- * Shared by `enabled`/`enable`/`disable`: init the platform and hand back the
- * services it wired, or report the failure as an exit code. Any cause counts,
- * defects and interruption included, exactly as the rejection this replaces
- * reached the caller.
- */
-const initModelCommandPlatform = cliPlatform.pipe(
-  Effect.catchCause((cause) =>
-    Effect.sync(() => ({
-      exitCode: reportModelPlatformFailure(Cause.squash(cause)),
-    })),
-  ),
-);
-
 const listEnabledModels = Effect.fn('listEnabledModels')(function* () {
-  const services = yield* initModelCommandPlatform;
-  if ('exitCode' in services) return services.exitCode;
+  const services = yield* cliPlatform;
   const catalog = yield* listCliEnabledModelCatalog(services);
   const enabled = yield* getEnabledModels(services);
   yield* emitPagedCliResult({
@@ -171,8 +141,7 @@ const setModelEnabled = Effect.fn('setModelEnabled')(function* (
   id: string,
   enabled: boolean,
 ) {
-  const services = yield* initModelCommandPlatform;
-  if ('exitCode' in services) return services.exitCode;
+  const services = yield* cliPlatform;
   return yield* setCliModelEnabled(services, id, enabled).pipe(
     Effect.flatMap((result) =>
       emitCliResult({
