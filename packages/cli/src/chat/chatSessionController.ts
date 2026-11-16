@@ -1,4 +1,4 @@
-// Chat-session controller: owns run start/resume/stop state-transition
+// Chat-session controller: owns run start/resume/stop state-change
 // orchestration and the composer's submit path for the CLI chat session.
 // Host-neutral (no Ink/TUI rendering dependencies): the Ink component
 // consumes narrow commands exposed here.
@@ -97,8 +97,8 @@ import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
  * from a host call and a throw from the imperative body alike reach
  * `recover` with the original value, which is exactly what the `try`/`catch`
  * around these bodies did before they became programs. Interruption is not
- * folded in: a fiber the runtime is tearing down is not a run failure to
- * report, and the caller's own settlement still sees it.
+ * taken in: a fiber the runtime is tearing down is not a run failure to
+ * report, and the caller's own result still sees it.
  */
 const recoverRun = <A, E, R>(
   program: Effect.Effect<A, E, R>,
@@ -122,7 +122,7 @@ export interface ChatSessionController {
    * Resume a suspended tool-use session by run id.
    *
    * Fire-and-forget from the Ink perspective, the returned program completes
-   * when the resume resolution and rehydration are complete, but the
+   * when the resume resolution and the transcript's reload are complete, but the
    * continued run itself stays pending until the agent finishes or suspends.
    */
   resume(id: RunId): Effect.Effect<void, Error, ProcessServices>;
@@ -252,7 +252,7 @@ export function createChatSessionController(
     modelConnection,
   } = init;
   const requests: SessionRequests = runSession;
-  // The fold the chat's runs appear in: the service's, or this session's.
+  // The view the chat's runs appear in: the service's, or this session's.
   const viewChanges: Stream.Stream<SessionView> = runSession.view.changes;
   /** Issue one request to the session's runtime and read its Effect result
    *  as the response: the refusal text, or undefined on success. */

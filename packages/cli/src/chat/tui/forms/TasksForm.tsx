@@ -154,7 +154,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
 
   /** Run one action on the service, saying so when it fails. The notice
    *  is about the latest attempt: a new one clears it, and an older attempt
-   *  that settles later says nothing. */
+   *  that finishes later says nothing. */
   const attempt = useRef(0);
   const act = (
     program: (
@@ -195,7 +195,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
   const inquiries = level.requests.filter(
     (request) => request.payload.kind === 'plugin',
   ).length;
-  // Previews of settled requests go: each holds two whole documents.
+  // Previews of decided requests go: each holds two whole documents.
   useEffect(() => {
     const open = new Set(level.requests.map((request) => request.requestId));
     setPreviews((held) =>
@@ -242,8 +242,8 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
 
   const decide = (decision: SurfaceDecision): void => {
     if (!pending) return;
-    const arm = approvalDecisionArm(pending, decision);
-    if ('host' in arm) {
+    const outcome = approvalDecisionArm(pending, decision);
+    if ('host' in outcome) {
       setNotice(
         'That choice needs the window running the task; approve or reject here instead.',
       );
@@ -252,7 +252,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     const { requestId } = pending;
     setDecided((held) => new Set(held).add(requestId));
     act(
-      (ready) => ready.request(arm.runtime),
+      (ready) => ready.request(outcome.runtime),
       // Refused: the request is still open, so it comes back.
       () =>
         setDecided((held) => {

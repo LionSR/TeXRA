@@ -97,7 +97,7 @@ export const attachScriptPlainOutput = Effect.fn('attachScriptPlainOutput')(
           for (const runId of [...previous.keys()]) {
             if (!view.runs.has(runId)) previous.delete(runId);
           }
-          // The view also holds every earlier run hydrated from the
+          // The view also holds every earlier run loaded from the
           // transcript summary; only the launched run's own subtree is this
           // run's output.
           if (view.runs.has(options.runId)) rootRunId ??= options.runId;

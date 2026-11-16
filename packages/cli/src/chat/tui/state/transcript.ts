@@ -32,7 +32,7 @@ import type { RunView, RunId } from '@texra-ai/harness/schemas';
 /**
  * The runs whose transcript tier this terminal keeps resident: its
  * conversation, the runs it owns, and an open reader's run. The view also
- * lists every earlier run of the workspace, hydrated from the listing;
+ * lists every earlier run of the workspace, loaded from the listing;
  * subscribing all of those loaded every past transcript into memory for the
  * life of the TUI.
  */
@@ -169,18 +169,18 @@ export function noticesFor(
  * The run's rows with its notices inserted after the last row whose seq is at
  * or below their own `seqNo`, in notice order: the merged index is the print
  * order. A notice written before the run's first row goes ahead of it. The
- * merged `settledRows` is the finished prefix plus every notice anchored
+ * merged `finalRows` is the finished prefix plus every notice anchored
  * inside it (a notice is immutable the moment it is written, and keeps its
  * identity across merges).
  */
 export function mergeLocalNotices(
   run: RunView | undefined,
   runNotices: readonly LocalNotice[],
-): { readonly rows: readonly TranscriptRow[]; readonly settledRows: number } {
+): { readonly rows: readonly TranscriptRow[]; readonly finalRows: number } {
   const rows = run?.transcript.rows ?? [];
-  const settledRows = run?.transcript.settledRows ?? 0;
-  if (runNotices.length === 0) return { rows, settledRows };
-  const settledSeq = settledRows === 0 ? 0 : rowSeq(rows[settledRows - 1]);
+  const finalRows = run?.transcript.settledRows ?? 0;
+  if (runNotices.length === 0) return { rows, finalRows };
+  const finalSeq = finalRows === 0 ? 0 : rowSeq(rows[finalRows - 1]);
   const out: TranscriptRow[] = [];
   let next = 0;
   const flushThrough = (seq: number): void => {
@@ -198,9 +198,9 @@ export function mergeLocalNotices(
   for (; next < rows.length; next += 1) out.push(rows[next]);
   return {
     rows: out,
-    settledRows:
-      settledRows +
-      runNotices.filter((notice) => notice.row.seqNo <= settledSeq).length,
+    finalRows:
+      finalRows +
+      runNotices.filter((notice) => notice.row.seqNo <= finalSeq).length,
   };
 }
 

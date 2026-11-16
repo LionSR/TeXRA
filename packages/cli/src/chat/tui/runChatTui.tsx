@@ -449,7 +449,7 @@ export async function runChat(
   };
   // Chat-session controller: owns run start/resume/stop orchestration.
   // The Ink layer never directly mutates session run-state fields, every
-  // state transition flows through one of the controller's narrow commands.
+  // state change flows through one of the controller's narrow commands.
   const draft = runtime.runSync(SubscriptionRef.make(EMPTY_DRAFT));
   // The chat's slash commands; their handlers and forms act over the slash
   // context built below.
@@ -634,7 +634,7 @@ export async function runChat(
       Effect.mapError(
         () =>
           new Error(
-            `the session's rows did not settle within ${SESSION_CLOSE_DEADLINE_MS} ms`,
+            `the session's rows were not all written within ${SESSION_CLOSE_DEADLINE_MS} ms`,
           ),
       ),
     ),
@@ -643,7 +643,7 @@ export async function runChat(
   });
 
   // Interactive resume: kick off the continued tool-use run now that Ink is
-  // mounted (so the rehydrated transcript + streamed continuation render) and
+  // mounted (so the reloaded transcript + streamed continuation render) and
   // the signal handlers are armed. Fire-and-forget, the resume claims the
   // root launch, and the normal first-input path stays available so the
   // user can keep chatting (follow-ups target the root run as usual).

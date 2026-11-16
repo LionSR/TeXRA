@@ -142,10 +142,10 @@ export const attachTask = Effect.fn('attachTask')(function* (
   const includeDebugLogs = yield* LogLevel.isEnabled('Debug');
   const aggregate = qualifyAggregateId('run', task.runId);
   let printed = 0;
-  const printSettled = (run: RunView): void => {
+  const printFinal = (run: RunView): void => {
     if (output.format !== 'text') return;
-    const { rows, settledRows } = run.transcript;
-    for (; printed < settledRows; printed += 1) {
+    const { rows, settledRows: finalRows } = run.transcript;
+    for (; printed < finalRows; printed += 1) {
       const { lines } = fullTranscriptEntryLayout(
         rows[printed],
         output.columns,
@@ -163,7 +163,7 @@ export const attachTask = Effect.fn('attachTask')(function* (
     Stream.map((view) => view.runs.get(task.runId)),
     Stream.filter(Predicate.isNotUndefined),
     Stream.takeUntil((run) => run.outcome !== null),
-    Stream.tap((run) => Effect.sync(() => printSettled(run))),
+    Stream.tap((run) => Effect.sync(() => printFinal(run))),
     Stream.runLast,
   );
   return Option.match(last, {

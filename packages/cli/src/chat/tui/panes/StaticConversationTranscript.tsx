@@ -197,7 +197,7 @@ export function StaticConversationTranscript({
         stream === undefined && runNotices.length === 0
           ? undefined
           : merged.rows,
-      settledRows: merged.settledRows,
+      finalRows: merged.finalRows,
       working: stream != null && isWorking(stream),
       waitingForChildIdentity:
         stream !== undefined &&

@@ -49,13 +49,13 @@ function openDialog<T>(
     // The form is re-rendered on every frame, so its answer callback is
     // latched: a second keypress landing between the answer and the
     // unmount must not resume this fiber twice.
-    let settled = false;
+    let answered = false;
     const form = openActiveForm({
       commandName,
       render: (onDone: () => void, availableRows: number) =>
         render((value) => {
-          if (settled) return;
-          settled = true;
+          if (answered) return;
+          answered = true;
           onDone();
           resume(Effect.succeed(value));
         }, availableRows),

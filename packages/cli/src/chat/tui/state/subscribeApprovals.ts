@@ -1,6 +1,6 @@
 // TUI side of the request protocol.
 //
-// A run asks a person with `request.opened`; the fold lists it in
+// A run asks a person with `request.opened`; the session view lists it in
 // `view.requests` until a `request.decided` answers it, and the modal reads
 // that list (`approvalQueue.ts`). This module owns only what a request needs
 // before it can be shown or answered on this host: a tool edit's preview and
@@ -171,23 +171,23 @@ export function createTuiHostInteractions(
     );
   };
 
-  const performHost = (arm: HostCommand): void => {
-    if (arm.kind === 'useOwnApiKey') {
-      useOwnApiKey(arm);
+  const performHost = (command: HostCommand): void => {
+    if (command.kind === 'useOwnApiKey') {
+      useOwnApiKey(command);
       return;
     }
     // Every other capability belongs to a windowed host's surfaces; no TUI
     // action names one, so reaching here is a defect.
     stores.runtime.runFork(
       Effect.logWarning(
-        `The TUI does not perform the ${arm.kind} host capability.`,
+        `The TUI does not perform the ${command.kind} host capability.`,
       ).pipe(withLogChannel('cli.tui')),
     );
   };
 
   /**
    * Stage each listed tool edit's card with its preview until the view
-   * drops it. The session decided everything its policy settles before the
+   * drops it. The session decided everything its policy decides before the
    * request was listed, so what is listed waits for a person. A preview
    * that could not be read is said on the card itself.
    */
@@ -230,7 +230,7 @@ export function announceForegroundApprovals(): () => void {
   const check = (): void => {
     const pending = currentApproval.get();
     if (!pending) return;
-    // A settled request is never presented again, so its entry leaves too.
+    // A decided request is never presented again, so its entry leaves too.
     pruneToLive(
       new Set(attentionRequests.get().map((request) => request.requestId)),
       announced,

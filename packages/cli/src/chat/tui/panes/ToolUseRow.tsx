@@ -113,7 +113,7 @@ function toolDisplayViewport(
 
 // Memoized: tool-use objects stay reference-identical across stream-sync
 // ticks unless their status/result changed, so streaming text deltas skip
-// re-rendering every settled tool row in the live region.
+// re-rendering every finished tool row in the live region.
 export const ToolUseRow = memo(function ToolUseRow({
   maxRows,
   toolRow,

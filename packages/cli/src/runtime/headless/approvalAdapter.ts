@@ -1,7 +1,7 @@
 /**
  * Headless CLI side of the request protocol (one run model, 3.7).
  *
- * A run asks a person with `request.opened`; the fold lists it in
+ * A run asks a person with `request.opened`; the session view lists it in
  * `view.requests` until a `request.decided` answers it. This host answers
  * each request the session asks it (`SessionHost.approve`) with the prompt
  * the operator sees; the session's loop asks it once per listed request
@@ -68,7 +68,7 @@ const askHeadlessUserQuestion = Effect.fn(
         // The two helpers parse caller content, so either can throw. Left as
         // bare calls their throw is a defect, which `Effect.result` does not
         // capture — the fallback below would be skipped and the whole
-        // session would abort on what used to settle as a rejection.
+        // session would abort on what used to end as a rejection.
         // `Effect.try` puts them back in the failure channel, where
         // interruption still passes through.
         const formatted = yield* Effect.try({

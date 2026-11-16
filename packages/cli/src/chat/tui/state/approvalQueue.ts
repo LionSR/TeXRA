@@ -362,11 +362,11 @@ function decideRequest(
 ): void {
   markDecided(request.requestId);
   const { runId } = request;
-  const arm = approvalDecisionArm(
+  const outcome = approvalDecisionArm(
     { payload, answeredBy: request.answeredBy },
     decision,
   );
-  if ('runtime' in arm)
-    issue(requests, runtime, runId, request.requestId, arm.runtime);
-  else performHost(arm.host);
+  if ('runtime' in outcome)
+    issue(requests, runtime, runId, request.requestId, outcome.runtime);
+  else performHost(outcome.host);
 }

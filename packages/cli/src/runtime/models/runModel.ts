@@ -54,7 +54,7 @@ export const selectCliRunModel = Effect.fn('selectCliRunModel')(function* (
   role: 'chat' | 'run',
   stores: CliModelStores,
 ) {
-  // One failure plane for the whole resolution: the candidate list's own
+  // One failure channel for the whole resolution: the candidate list's own
   // usage error and the selection's unavailable-model error both reach the
   // caller as the `CliUsageError` the command surfaces, exactly as the
   // former try/catch around the await did.

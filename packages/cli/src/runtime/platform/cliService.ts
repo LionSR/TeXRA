@@ -170,7 +170,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     // its exit), so a held store is another process's to answer for. The
     // session closes as the project is released, before its roots
     // (registered after them, so released first); the service's exit
-    // closes every session ahead of that (`serve`'s settle).
+    // closes every session ahead of that (`serve`'s `settle` step).
     const session = yield* openLocalSession(sessions, roots);
     // A damaged store moved aside at open is said once, in
     // the service's log and to the project's first window: the windows
