@@ -38,5 +38,3 @@ export const DesktopShowPdfMessageSchema = Schema.Struct({
   ),
   build: Schema.Number,
 });
-
-export type DesktopShowPdfMessage = typeof DesktopShowPdfMessageSchema.Type;

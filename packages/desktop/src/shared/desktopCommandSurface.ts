@@ -15,9 +15,9 @@ import { toElectronAccelerator } from './accelerators';
 import type { OsPlatform } from '@texra/shared/osPlatform';
 import {
   DESKTOP_SHELL_COMMANDS,
-  type DesktopOpenSettingsMessageSchema,
   type DesktopWorkbenchKind,
 } from './desktopShellMessages.js';
+import type { DesktopPush } from './desktopOutboundMessages.js';
 
 export const DESKTOP_LOCAL_COMMANDS = {
   SHOW_LOGS: 'texra.desktop.showLogs',
@@ -233,12 +233,11 @@ export function dispatchDesktopCommand(
  * dialog selects the tab, as it does for its own openings.
  */
 export function postDesktopSettingsView(
-  postToRenderer: (message: unknown) => void,
+  postToRenderer: (message: DesktopPush) => void,
   tab?: SettingsTarget,
 ): void {
-  const message: typeof DesktopOpenSettingsMessageSchema.Type = {
+  postToRenderer({
     command: DESKTOP_SHELL_COMMANDS.OPEN_SETTINGS,
     ...(tab && { tab }),
-  };
-  postToRenderer(message);
+  });
 }

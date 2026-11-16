@@ -244,7 +244,7 @@ const resolveWorkspaceWritePath = Effect.fn(
 });
 
 export function createDesktopWorkspaceIpc(
-  renderer: { postToRenderer(message: DesktopWorkspaceReply): void },
+  post: (message: DesktopWorkspaceReply) => void,
   options: DesktopWorkspaceIpcOptions,
 ): DesktopWorkspaceIpc {
   // Accepted run outputs and accepted LaTeX diffs write straight to disk, past
@@ -258,7 +258,7 @@ export function createDesktopWorkspaceIpc(
       const root = options.getWorkspacePath();
       if (!root) return;
       if (!absolutePaths.some((path) => isPathWithin(root, path))) return;
-      renderer.postToRenderer({
+      post({
         command: DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED,
       });
     },
@@ -407,7 +407,7 @@ export function createDesktopWorkspaceIpc(
       Effect.catch((error: HostFailed) =>
         Effect.andThen(
           Effect.sync(() =>
-            renderer.postToRenderer({
+            post({
               command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_ERROR,
               sessionId,
               message: `Could not start a terminal: ${toErrorMessage(error)}`,

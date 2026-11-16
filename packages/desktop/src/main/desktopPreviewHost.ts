@@ -19,11 +19,8 @@ import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { HostFailed } from '@texra/hosts/uiHosts';
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 
-import {
-  DESKTOP_PDF_COMMANDS,
-  type DesktopShowPdfMessage,
-} from '../shared/desktopPdfMessages.js';
-import type { DesktopRenderer } from './desktopIpcTypes.js';
+import { DESKTOP_PDF_COMMANDS } from '../shared/desktopPdfMessages.js';
+import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
 import type { FileLocation } from '@texra-ai/harness/schemas';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -56,7 +53,8 @@ interface DesktopPreviewHost {
   openBuildDisplayIn(roots: WorkspaceRoots): BuildDisplayFn;
 }
 
-interface DesktopPreviewHostOptions extends DesktopRenderer {
+interface DesktopPreviewHostOptions {
+  postToRenderer(message: DesktopPush): void;
   shell: DesktopShellAdapter;
   /** The process runtime the window was handed. It only supplies the
    *  filesystem `openPath` probes through; nothing settles on it. */
@@ -162,7 +160,7 @@ export function createDesktopPreviewHost(
       title: path.basename(pdfPath),
       pdfUrl: pathToFileURL(pdfPath).href,
       build: ++builds,
-    } satisfies DesktopShowPdfMessage);
+    });
   });
 
   return {

@@ -36,7 +36,3 @@ export function parsedRoute<T>(
         ).pipe(withLogChannel('desktop'));
   };
 }
-
-export interface DesktopRenderer {
-  postToRenderer(message: unknown): void;
-}

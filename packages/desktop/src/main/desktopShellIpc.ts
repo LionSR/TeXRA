@@ -14,10 +14,8 @@ import {
   type DesktopCommandActions,
 } from '../shared/desktopCommandSurface.js';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import type {
-  DesktopCommandRoutes,
-  DesktopRenderer,
-} from './desktopIpcTypes.js';
+import type { DesktopCommandRoutes } from './desktopIpcTypes.js';
+import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
 import type { DesktopSpawn } from './desktopWindows.js';
@@ -42,7 +40,7 @@ interface DesktopShellActionFactoryOptions {
  * reach the shell through.
  */
 export function createDesktopShellActions(
-  renderer: DesktopRenderer,
+  post: (message: DesktopPush) => void,
   options: DesktopShellActionFactoryOptions,
 ): DesktopCommandActions {
   const reportAsyncError = options.onAsyncError;
@@ -66,18 +64,18 @@ export function createDesktopShellActions(
   }
 
   function openWorkbench(kind: DesktopWorkbenchKind) {
-    renderer.postToRenderer({
+    post({
       command: DESKTOP_SHELL_COMMANDS.OPEN_WORKBENCH,
       kind,
     });
   }
 
   function showSettings(tab?: SettingsTarget) {
-    postDesktopSettingsView((message) => renderer.postToRenderer(message), tab);
+    postDesktopSettingsView(post, tab);
   }
 
   function toggleLayout(panel: DesktopLayoutPanel) {
-    renderer.postToRenderer({
+    post({
       command: DESKTOP_SHELL_COMMANDS.TOGGLE_LAYOUT,
       panel,
     });
@@ -89,7 +87,7 @@ export function createDesktopShellActions(
     openLogFolder: () => runShellAction(options.openLogFolder()),
     openWorkspaceFolder: () => runShellAction(options.openWorkspaceFolder()),
     saveFile: () => {
-      renderer.postToRenderer({
+      post({
         command: DESKTOP_SHELL_COMMANDS.SAVE_FILE,
       });
     },

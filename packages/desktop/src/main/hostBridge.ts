@@ -2,6 +2,7 @@ import { Effect, type Scope } from 'effect';
 import { ipcMain, type BrowserWindow, type IpcMainEvent } from 'electron';
 
 import type { DownWire } from '@texra/shared/session/sessionFrames';
+import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
 import {
   ELECTRON_SESSION_MESSAGE_CHANNEL,
   ELECTRON_SESSION_PUSH_CHANNEL,
@@ -18,7 +19,7 @@ interface DesktopHostBridgeOptions {
 
 export interface DesktopHostBridge {
   /** A `desktop:*` or settings-view command push. */
-  postToRenderer(message: unknown): void;
+  postToRenderer(message: DesktopPush): void;
   postSession(message: DownWire): void;
 }
 

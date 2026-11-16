@@ -28,6 +28,7 @@ import type {
   DesktopProjectRegistry,
 } from './desktopProjects.js';
 import type { DesktopWindowHost } from './desktopWindowHost.js';
+import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
 
 export interface ProjectSurface {
   /** The settings surface of the project the window is bound to. */
@@ -72,7 +73,7 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
     ): DesktopSettingsIpcOptions['bindings'] => {
       const documentBinding = bindings.get(project.key);
       const { dialogs, previewHost } = host;
-      const postForActiveProject = (message: unknown): void => {
+      const postForActiveProject = (message: DesktopPush): void => {
         if (surfaceScope === owner) host.post(message);
       };
       /** Open the agent definition at `filePath` as a document, or, when

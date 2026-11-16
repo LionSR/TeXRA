@@ -5,13 +5,9 @@ import { Effect } from 'effect';
 import {
   DESKTOP_PROMPT_COMMANDS,
   DesktopSettlePromptMessageSchema,
-  type DesktopShowPromptMessage,
 } from '../shared/desktopPromptMessages.js';
-import {
-  parsedRoute,
-  type DesktopCommandRoutes,
-  type DesktopRenderer,
-} from './desktopIpcTypes.js';
+import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
+import { parsedRoute, type DesktopCommandRoutes } from './desktopIpcTypes.js';
 
 interface DesktopPromptInput {
   title: string;
@@ -37,9 +33,9 @@ export class DesktopPromptController {
     ),
   };
 
-  private readonly renderer: DesktopRenderer;
-  constructor(renderer: DesktopRenderer) {
-    this.renderer = renderer;
+  private readonly post: (message: DesktopPush) => void;
+  constructor(post: (message: DesktopPush) => void) {
+    this.post = post;
   }
 
   /**
@@ -53,13 +49,13 @@ export class DesktopPromptController {
     return Effect.callback<string | undefined>((resume) => {
       const requestId = randomUUID();
       this.pending.set(requestId, (value) => resume(Effect.succeed(value)));
-      this.renderer.postToRenderer({
+      this.post({
         command: DESKTOP_PROMPT_COMMANDS.SHOW,
         requestId,
         title: input.title,
         prompt: input.prompt,
         password: input.password ?? false,
-      } satisfies DesktopShowPromptMessage);
+      });
       return Effect.sync(() => {
         this.pending.delete(requestId);
       });

@@ -169,25 +169,22 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         onError: host.reportAsyncError,
         onBlockedExternalUrl: host.reportBackgroundError,
       });
-      const workspace = createDesktopWorkspaceIpc(
-        { postToRenderer: post },
-        {
-          ptyHost,
-          browserViews,
-          toWindowBounds: (bounds) => {
-            const zoom = host.window.isDestroyed()
-              ? 1
-              : host.window.webContents.getZoomFactor();
-            return {
-              x: Math.round(bounds.x * zoom),
-              y: Math.round(bounds.y * zoom),
-              width: Math.round(bounds.width * zoom),
-              height: Math.round(bounds.height * zoom),
-            };
-          },
-          getWorkspacePath: () => project.root,
+      const workspace = createDesktopWorkspaceIpc(post, {
+        ptyHost,
+        browserViews,
+        toWindowBounds: (bounds) => {
+          const zoom = host.window.isDestroyed()
+            ? 1
+            : host.window.webContents.getZoomFactor();
+          return {
+            x: Math.round(bounds.x * zoom),
+            y: Math.round(bounds.y * zoom),
+            width: Math.round(bounds.width * zoom),
+            height: Math.round(bounds.height * zoom),
+          };
         },
-      );
+        getWorkspacePath: () => project.root,
+      });
       return {
         workspace,
         browserViews,

@@ -160,9 +160,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   const host = createDesktopWindowHost({ window, runtime, spawn, bridge });
   const { previewHost } = host;
   const promptController = yield* Effect.acquireRelease(
-    Effect.sync(
-      () => new DesktopPromptController({ postToRenderer: host.post }),
-    ),
+    Effect.sync(() => new DesktopPromptController(host.post)),
     (controller) => Effect.sync(() => controller.dispose()),
   );
   attachRendererConsoleLog(window.webContents);
@@ -189,21 +187,18 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
 
   const onboarding = yield* openWindowOnboarding(runtime);
 
-  const shellActions = createDesktopShellActions(
-    { postToRenderer: host.post },
-    {
-      openExternalUrl: previewHost.openExternal,
-      openLogFolder: () => previewHost.openPath(getDesktopLogDirectory()),
-      openWorkspaceFolder: () => navigation.openFolder(),
-      showLauncher: () => {
-        const attached = surface.attached();
-        if (!attached) return;
-        bindings.get(attached.key)?.bridge.surfaceAction({ kind: 'selectNew' });
-      },
-      onAsyncError: host.reportAsyncError,
-      spawn,
+  const shellActions = createDesktopShellActions(host.post, {
+    openExternalUrl: previewHost.openExternal,
+    openLogFolder: () => previewHost.openPath(getDesktopLogDirectory()),
+    openWorkspaceFolder: () => navigation.openFolder(),
+    showLauncher: () => {
+      const attached = surface.attached();
+      if (!attached) return;
+      bindings.get(attached.key)?.bridge.surfaceAction({ kind: 'selectNew' });
     },
-  );
+    onAsyncError: host.reportAsyncError,
+    spawn,
+  });
 
   const bindings: ProjectBindings = yield* openProjectBindings({
     host,
@@ -354,18 +349,15 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
               ),
       ),
     },
-    createDesktopLogIpc(
-      { postToRenderer: host.post },
-      {
-        readLog: () =>
-          readDesktopLogSnapshot({ workspaceRoot: projects.active().root }),
-        logFile: getDesktopLogFilePath,
-        following: logFollowing,
-        copyLog: (text) => clipboard.writeText(text),
-        showSaveDialog: (dialogOptions) =>
-          dialog.showSaveDialog(window, dialogOptions),
-      },
-    ),
+    createDesktopLogIpc(host.post, {
+      readLog: () =>
+        readDesktopLogSnapshot({ workspaceRoot: projects.active().root }),
+      logFile: getDesktopLogFilePath,
+      following: logFollowing,
+      copyLog: (text) => clipboard.writeText(text),
+      showSaveDialog: (dialogOptions) =>
+        dialog.showSaveDialog(window, dialogOptions),
+    }),
     createDesktopShellIpc(shellActions),
   ]) {
     for (const [command, route] of Object.entries(routes)) {

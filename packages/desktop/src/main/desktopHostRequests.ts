@@ -27,6 +27,7 @@ import {
   DESKTOP_DOCS_URL,
   postDesktopSettingsView,
 } from '../shared/desktopCommandSurface.js';
+import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
 import type { WindowOnboarding } from './desktopWindowOnboarding.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
@@ -39,7 +40,7 @@ interface DesktopHostRequestsOptions {
   workspaceFile: ReturnType<typeof createDesktopWorkspaceIpc>['file'];
   /** Packaged app resources root (`…/resources`), for export templates. */
   resourcesPath: string;
-  postToRenderer(message: unknown): void;
+  postToRenderer(message: DesktopPush): void;
   onboarding: WindowOnboarding;
   /** The window's settings surface, absent while the window switches
    *  projects; the onboarding card's sign-in goes through it. */

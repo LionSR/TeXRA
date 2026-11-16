@@ -8,13 +8,13 @@
 // request/response pair are deliberately excluded: they never cross this
 // channel in the outbound direction.
 //
-// Parity note: every per-surface schema here is a `Schema.Struct`, which
-// ignores undeclared keys. Unknown-key drift on this channel is caught by this union
-// (a `command` that matches no member fails the whole parse) and by the
-// renderer's route table, which is typed over it, so no surface opts into stricter unknown-key handling. Keep it that
-// way for new members.
+// A push whose `command` matches no member fails the renderer's parse; extra
+// keys are ignored, as every member is a `Schema.Struct`. A misspelled field
+// is caught at compile time instead: every main-process sender takes
+// `DesktopPush`.
 
 import { Schema } from 'effect';
+import type { SettingsViewOutboundMessage } from '@texra/shared/settingsView/settingsViewMessages';
 
 import {
   DesktopCloseDiffMessageSchema,
@@ -65,3 +65,9 @@ export const DesktopOutboundMessageSchema = Schema.Union([
   // Projects
   DesktopProjectsMessageSchema,
 ]);
+
+/** What the main process may push on the renderer's one webview channel:
+ *  a desktop surface's message or the settings view's. */
+export type DesktopPush =
+  | typeof DesktopOutboundMessageSchema.Type
+  | SettingsViewOutboundMessage;
