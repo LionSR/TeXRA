@@ -26,7 +26,7 @@ const RELEASE_DEADLINE = '10 seconds';
 /** What one upload left on the provider: its id and, in epoch
  *  milliseconds, when the provider will drop it (`null` for never). Each
  *  files endpoint's own response schema decodes to this shape. */
-export const UploadedSchema = Schema.Struct({
+const UploadedSchema = Schema.Struct({
   fileId: Schema.String,
   expiresAtMs: Schema.NullOr(Schema.Number),
 });
