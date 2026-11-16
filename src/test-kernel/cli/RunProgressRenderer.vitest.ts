@@ -128,7 +128,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                       createTestCliContext({
                         mode: 'interactive',
                         outputFormat: 'json',
-                        renderRunProgress: true,
                         stderrIsTty: true,
                         stdoutColorEnabled: true,
                         stderrColorEnabled: false,

@@ -41,6 +41,7 @@ import {
 import { attachScriptPlainOutput } from './scriptPlainOutput';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
 import { createCliRuntimeHost } from './cliPresentationHost';
+import { shouldRenderRunProgress } from './runProgressRenderer';
 import { CliExitCode } from '../platform/exitCodes';
 import { writeTextStderr, writeTextStderrAndWait } from '../platform/logSinks';
 import { readCliPluginPins, runOutcomeExitCode } from './terminalStatus';
@@ -213,7 +214,7 @@ export const executeCliConfig: (
     yield* Scope.addFinalizer(presentationScope, presentationHost.close());
     let failurePresented = false;
     const renderPlainProgress =
-      runContext.outputFormat === 'text' && runContext.renderRunProgress;
+      runContext.outputFormat === 'text' && shouldRenderRunProgress(runContext);
     yield* presentationHost
       .attachRunProgressRenderer(session, request.runId)
       .pipe(Scope.provide(presentationScope));
@@ -263,16 +264,12 @@ export const executeCliConfig: (
     }
     const launchRunId = request.runId;
     // A shutdown step that fails changes what the exit waits for, so it is
-    // said on stderr: the log sink is silent for every CLI command, and
-    // `runContext.quietLogs` is forced on for every headless run
-    // (`buildHeadlessRunContext`). Only the user's own `--quiet` keeps it
-    // unsaid: the log level it set from argv, which that derivation keeps.
-    const userQuiet = runContext.minimumLogLevel === 'None';
+    // said on stderr unless the user passed `--quiet`.
     const sayShutdownFailure = (
       what: string,
       cause: string,
     ): Effect.Effect<void> =>
-      userQuiet
+      runContext.quietLogs
         ? Effect.void
         : writeTextStderrAndWait(`[warn] [cli.shutdown] ${what}: ${cause}`);
     // Whether a shutdown reached this run: its finalization then reads

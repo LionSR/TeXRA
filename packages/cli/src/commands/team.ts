@@ -29,10 +29,7 @@ import {
   formatCliTeamRunWarnings,
   readCliTeams,
 } from '../runtime/cliTeams';
-import {
-  buildHeadlessRunContext,
-  selectCliRunModel,
-} from '../runtime/models/runModel';
+import { selectCliRunModel } from '../runtime/models/runModel';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
@@ -171,11 +168,10 @@ const runTeam = Effect.fn('runTeam')(function* (
   // config rather than `run` (document tasks). Resolve the
   // model after agent validation so usage errors stay focused on bad agents.
   const model = yield* selectCliRunModel(context, init.model, 'chat', services);
-  const runContext = buildHeadlessRunContext(context);
   return yield* withExpandedRunInputs(
     init.inputFiles,
     init.contextFiles,
-    runContext.cwd,
+    context.cwd,
     {
       allowEmptyInput: hasInstruction,
       requireWorkspaceFiles: true,
@@ -186,7 +182,7 @@ const runTeam = Effect.fn('runTeam')(function* (
       contextFiles,
       stdinInputPath,
     }) {
-      if (runContext.approvalPolicy === 'never') {
+      if (context.approvalPolicy === 'never') {
         writeTextStderr(
           `WARN team ${plan.preset.id} may run without subagents because approval policy "never" denies approval-gated tools, the agent tool included. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
         );
@@ -216,16 +212,16 @@ const runTeam = Effect.fn('runTeam')(function* (
           inputFiles,
           contextFiles,
           instruction,
-          approvalContext: runContext,
-          workingDirectory: runContext.cwd,
+          approvalContext: context,
+          workingDirectory: context.cwd,
         }),
         displayInstruction,
-        workingDirectory: runContext.cwd,
+        workingDirectory: context.cwd,
         launch: { teamId: plan.preset.id },
         delegationAgentScope: [...plan.agentKeys],
       };
 
-      const run = yield* executeCliToolUseConfig(config, runContext, {
+      const run = yield* executeCliToolUseConfig(config, context, {
         services,
         recoveryInputIsDurable: stdinInputPath === undefined,
       });

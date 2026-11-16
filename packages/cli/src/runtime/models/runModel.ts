@@ -10,7 +10,6 @@ import {
 import { CliUsageError, type CliContext } from '../platform/cliContext';
 import { writeTextStderr } from '../platform/logSinks';
 import { selectCliRunnableModel, type CliModelStores } from './modelAccess';
-import { shouldRenderRunProgress } from '../headless/runProgressRenderer';
 import type { RunModelCandidate } from '@texra-ai/harness/host';
 
 /** Trim `-m`; throw a Usage error for unknown ids; undefined when absent. */
@@ -75,12 +74,3 @@ export const selectCliRunModel = Effect.fn('selectCliRunModel')(function* (
   }
   return resolution.model;
 });
-
-/** Derive the headless run context shared by every CLI runner. */
-export function buildHeadlessRunContext(context: CliContext): CliContext {
-  return {
-    ...context,
-    quietLogs: true,
-    renderRunProgress: shouldRenderRunProgress(context),
-  };
-}

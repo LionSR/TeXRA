@@ -23,7 +23,6 @@ import { isLinked } from '../runtime/platform/cliService';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import { cliErrorMessage, writeTextStderr } from '../runtime/platform/logSinks';
-import { buildHeadlessRunContext } from '../runtime/models/runModel';
 import { resolveCliRunAgent } from '../runtime/agents';
 import {
   assertOutputDirAvailable,
@@ -232,7 +231,7 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
         yield* documentTaskRecoveryInputsAreDurable(config, context.cwd);
       // The run continues through the session's resume, inside the
       // headless run skeleton the fresh launch uses.
-      return yield* executeCliRun(config, buildHeadlessRunContext(context), {
+      return yield* executeCliRun(config, context, {
         services: stores,
         runId: id,
         recoveryInputIsDurable,

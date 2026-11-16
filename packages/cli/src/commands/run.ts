@@ -31,10 +31,7 @@ import {
   writeTextStderr,
   writeTextStderrAndWait,
 } from '../runtime/platform/logSinks';
-import {
-  buildHeadlessRunContext,
-  selectCliRunModel,
-} from '../runtime/models/runModel';
+import { selectCliRunModel } from '../runtime/models/runModel';
 import {
   LAUNCHABLE_AGENT_NAME_DESCRIPTION,
   resolveCliRunAgent,
@@ -194,7 +191,6 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         'run',
         services,
       );
-      const runContext = buildHeadlessRunContext(context);
       // Only the input-derived names: the task's declared outputs are
       // stamped on the config below, from the entry resolved above, and
       // read back from the recorded config at finalization.
@@ -204,10 +200,10 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
       // Persist CLI destinations absolutely so resumption has one path
       // representation and never reconstructs output locations.
       const cliOutputFile = init.output
-        ? path.resolve(runContext.cwd, init.output)
+        ? path.resolve(context.cwd, init.output)
         : undefined;
       const cliOutputDirectory = init.outputDir
-        ? path.resolve(runContext.cwd, init.outputDir)
+        ? path.resolve(context.cwd, init.outputDir)
         : undefined;
       const launch = {
         agent: init.agent,
@@ -233,7 +229,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
             }
           : {}),
         instruction,
-        workingDirectory: runContext.cwd,
+        workingDirectory: context.cwd,
       };
       // The entry resolved above has a task, so the patch is never null.
       const config: AgentConfigPayload = {
@@ -241,7 +237,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         ...documentTaskPatch(launch, agent, init.options),
       };
 
-      return yield* executeCliRun(config, runContext, {
+      return yield* executeCliRun(config, context, {
         services,
         recoveryInputIsDurable: stdinInputPath === undefined,
       });
@@ -279,12 +275,11 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
   }
 
   const model = yield* selectCliRunModel(context, init.model, 'chat', services);
-  const runContext = buildHeadlessRunContext(context);
 
   return yield* withExpandedRunInputs(
     init.inputFiles,
     init.contextFiles,
-    runContext.cwd,
+    context.cwd,
     {
       allowEmptyInput: true,
       requireWorkspaceFiles: true,
@@ -308,10 +303,10 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
           instruction,
         }),
         displayInstruction: instruction,
-        workingDirectory: runContext.cwd,
+        workingDirectory: context.cwd,
       };
 
-      const run = yield* executeCliToolUseConfig(config, runContext, {
+      const run = yield* executeCliToolUseConfig(config, context, {
         services,
         recoveryInputIsDurable: stdinInputPath === undefined,
       });
