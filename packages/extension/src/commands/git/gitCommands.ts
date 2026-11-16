@@ -38,7 +38,7 @@ import {
 
 const CHANNEL = 'gitCommands';
 
-/** Hand a URL to the browser; a refusal is logged, not raised, because the
+/** Hand a URL to the browser; a failure is logged, not raised, because the
  *  dialogs that offer it have nothing further to do about one. */
 const openUrl = (url: string) =>
   vscodeOpener

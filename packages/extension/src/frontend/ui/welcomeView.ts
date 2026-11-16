@@ -153,7 +153,7 @@ export function registerWelcomeView(
     ),
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       if (vscode.workspace.workspaceFolders?.length === 1) {
-        // A refused reload leaves the window as it is: say so in the log,
+        // A failed reload leaves the window as it is: say so in the log,
         // where a user asking why the panel did not open would look.
         fork(
           executeVscodeCommand('workbench.action.reloadWindow').pipe(

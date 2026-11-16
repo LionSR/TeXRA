@@ -407,7 +407,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     };
     webviewView.badge = this.badge;
     // The slot is VS Code's own synchronous entry: it hands back a resolved
-    // view, so the attachment settles here.
+    // view, so the attachment finishes here.
     this.runtime.runSync(this.attach('sidebar', webviewView));
   }
 

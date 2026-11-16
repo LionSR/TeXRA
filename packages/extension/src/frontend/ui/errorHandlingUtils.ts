@@ -16,7 +16,7 @@ type DocId = 'custom-agents' | 'latex-diff';
  *
  * Their contract is "log this line and tell the user"; VS Code's message
  * machinery refusing the toast is a fault worth its own log line, not a
- * reason for every call site to grow an error arm for something it could
+ * reason for every call site to grow an error case for something it could
  * only log anyway.
  *
  * None of these helpers names a log channel: their lines take the channel
@@ -24,13 +24,13 @@ type DocId = 'custom-agents' | 'latex-diff';
  */
 export function announce<A>(
   notice: Effect.Effect<A, { readonly message: string }>,
-  whenRefused: A,
+  whenNotShown: A,
 ): Effect.Effect<A> {
   return notice.pipe(
     Effect.catch((failure) =>
       Effect.logError(
         `Could not show the notification: ${failure.message}`,
-      ).pipe(Effect.as(whenRefused)),
+      ).pipe(Effect.as(whenNotShown)),
     ),
   );
 }

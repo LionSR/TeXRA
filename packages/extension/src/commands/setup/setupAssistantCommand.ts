@@ -18,7 +18,7 @@ const CHANNEL = 'SetupAssistant';
  * The launch program the command surface runs on the process runtime: a
  * live setup run is shown, a missing model brings the "Connect a model" card
  * into view, and every other failure (a failed host call, a failed model
- * resolution) is one error report. A refused launch is reported by the
+ * resolution) is one error report. A rejected launch is reported by the
  * window's launcher. An interrupted launch is not a failure: the cause is
  * re-raised so a runtime disposal stays a cancellation instead of a
  * launch-failure notice.

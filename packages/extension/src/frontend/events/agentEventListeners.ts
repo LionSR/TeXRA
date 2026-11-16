@@ -6,7 +6,7 @@
  * presentation host `ProgressViewProvider` attaches to the session; this
  * module performs the actual UI operations for each event. Every handler
  * answers with the program that presents its event: the session's
- * presentation plane forks it and reports its failure, so nothing here runs
+ * presentation layer forks it and reports its failure, so nothing here runs
  * a fiber of its own.
  */
 import { Effect } from 'effect';
@@ -74,7 +74,7 @@ function handleRequestShowError(
   failure: RequestShowErrorPayload,
 ): Effect.Effect<void, Error> {
   const { docsPage } = failure;
-  // The notice settles only on dismissal, which no caller waits on: the
+  // The notice finishes only on dismissal, which no caller waits on: the
   // session forks this program, so the handoff and a post-handoff rejection
   // (the extension host tearing down) are reported there rather than
   // becoming an unhandled rejection. A docs page is offered as a button.
@@ -111,7 +111,7 @@ function handleRequestShowInstruction(
     };
   });
 
-  // Settles once VS Code has accepted the dialog, not once the user
+  // Finishes once VS Code has accepted the dialog, not once the user
   // dismisses it. The "never remind again" path returns without rendering:
   // the user opted out of this notice.
   return showInstructionWithSuppress(

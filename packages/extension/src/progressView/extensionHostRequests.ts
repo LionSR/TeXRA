@@ -1,11 +1,11 @@
 /**
  * The extension's half of its window (`openGuiWindow`): the verbs this host
  * performs, bound onto VS Code's commands, editors, pickers, and dialogs,
- * plus the few arms the extension answers its own way -- its file pickers,
+ * plus the few requests the extension answers its own way -- its file pickers,
  * its editor's current file, its tab pop-out, its getting-started commands.
  * Everything else is the one shared body, which decides the order, the
- * guards, and the refusal wording for both GUI hosts. Each arm answers
- * exactly once with an outcome or a request error; an arm the extension
+ * guards, and the rejection wording for both GUI hosts. Each handler answers
+ * exactly once with an outcome or a request error; a request the extension
  * does not perform is `Rejected` with its reason, never dropped.
  */
 import * as path from 'node:path';
@@ -108,8 +108,8 @@ export interface ExtensionHostRequestsOptions {
   readonly extensionPath: string;
   /** The extension's id, which names its getting-started walkthrough. */
   readonly extensionId: string;
-  /** The process runtime the extension root holds; every request arm that
-   *  settles an Effect runs it here. */
+  /** The process runtime the extension root holds; every request handler
+   *  that runs an Effect runs it here. */
   readonly runtime: ProcessRuntime;
   /** The settings view at a target (`texra.showDashboard`). */
   openSettings(
@@ -136,7 +136,7 @@ export interface ExtensionHostRequestsOptions {
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
 
 /** One of this extension's own command handlers, or a VS Code command, run
- *  in the arm's fiber: a typed failure or a defect is named and logged. */
+ *  in the handler's fiber: a typed failure or a defect is named and logged. */
 function runHandler<A, E, R>(
   command: string,
   handler: Effect.Effect<A, E, R>,
@@ -373,10 +373,10 @@ export const createExtensionHostRequests = Effect.fn(
   };
 
   /**
-   * The arms this host performs its own way. The capabilities that still
+   * The requests this host performs its own way. The capabilities that still
    * answer with a promise - VS Code commands, the editor APIs - are lifted
    * once (`executeVscodeCommand`), and this extension's own
-   * commands run as the programs behind them, so no arm re-enters the
+   * commands run as the programs behind them, so no handler re-enters the
    * runtime between here and the bridge that runs this program.
    */
   const own: OwnHostArms = {

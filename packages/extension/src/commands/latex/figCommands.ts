@@ -39,7 +39,7 @@ export function handleCompileTikzFigures(
       );
 
       // The notification lives for exactly as long as the body below, which
-      // is a step of this program rather than a nested settle.
+      // is a step of this program rather than a nested run.
       yield* withVSCodeProgress(
         {
           location: vscode.ProgressLocation.Notification,

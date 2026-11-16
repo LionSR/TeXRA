@@ -7,8 +7,9 @@ import { eventStream } from '@frontend/vscode/vscodeEvents';
 
 const CHANNEL = 'DiffView';
 
-/** How long a burst of view-column changes settles before one refresh. */
-const REFRESH_SETTLE_MS = 200;
+/** How long a burst of view-column changes must go quiet before one
+ *  refresh. */
+const REFRESH_QUIET_MS = 200;
 
 /**
  * Keep a comparison in place while editors move: re-show the diff after
@@ -28,7 +29,7 @@ export function refreshDiffOnLayoutChange(
     // milliseconds, and a leading throttle that dropped the later ones
     // left the diff where the first event found it. The last event
     // always refreshes.
-    Stream.debounce(REFRESH_SETTLE_MS),
+    Stream.debounce(REFRESH_QUIET_MS),
     Stream.runForEach(() =>
       executeVscodeCommand('vscode.diff', left, right, title, {
         preserveFocus: true,

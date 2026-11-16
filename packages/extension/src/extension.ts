@@ -410,7 +410,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
     },
   );
   // The host entry holds the process runtime in a local and threads it to the
-  // surfaces registered below, so code under `activate` settles its Effects on
+  // surfaces registered below, so code under `activate` runs its Effects on
   // the runtime it was handed instead of reading the global back.
   // The activation scope carries the shutdown: the workspace activation
   // registers its own finalizers there.
@@ -498,7 +498,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     withLogChannel(EXTENSION_CHANNEL),
   );
   // Registered last, so the first thing the activation scope's close runs:
-  // every session stops and settles its runs before the view and the host
+  // every session stops and finishes its runs before the view and the host
   // resources registered above tear down around them.
   yield* Effect.addFinalizer(() =>
     Effect.asVoid(Effect.flatMap(Sessions, (sessions) => sessions.closeAll)),
