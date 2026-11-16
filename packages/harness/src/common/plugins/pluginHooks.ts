@@ -239,8 +239,9 @@ export const pinHook = Effect.fn('pluginHooks.pin')(
 
 // ----------------------------------------------------------------------- run
 
-/** The reference's cap on what a hook adds to the model's context. */
-const OUTPUT_MAX = 10_000;
+/** How much of each stream the runner keeps: a memory bound well above the
+ *  context cap, so an answer is cut only when it is not one to read. */
+const READ_MAX = 1_000_000;
 
 /** How long a killed hook's process group has before SIGKILL. */
 const FORCE_KILL_AFTER = '2 seconds';
@@ -303,16 +304,18 @@ export const runHook = Effect.fn('pluginHooks.run')(function* (
       detached: true,
       forceKillAfter: FORCE_KILL_AFTER,
     });
-    // The first `OUTPUT_MAX` characters of each stream; the rest drains, so
-    // a chatty hook never blocks on a full pipe.
+    // The first `READ_MAX` characters of each stream; the rest drains, so
+    // a chatty hook never blocks on a full pipe, and the run says it was cut.
     const out = { stdout: '', stderr: '' };
+    let cut = false;
     const read = (stream: typeof handle.stdout, key: keyof typeof out) =>
       stream.pipe(
         Stream.decodeText(),
         Stream.runForEach((chunk) =>
           Effect.sync(() => {
-            if (out[key].length < OUTPUT_MAX)
-              out[key] = (out[key] + chunk).slice(0, OUTPUT_MAX);
+            if (out[key].length + chunk.length > READ_MAX) cut = true;
+            if (out[key].length < READ_MAX)
+              out[key] = (out[key] + chunk).slice(0, READ_MAX);
           }),
         ),
       );
@@ -333,15 +336,17 @@ export const runHook = Effect.fn('pluginHooks.run')(function* (
         () => Effect.succeed(null),
       ),
     );
-    yield* Fiber.join(readers).pipe(
+    // A reader that failed or outlasted the grace leaves the output cut.
+    const drained = yield* Fiber.join(readers).pipe(
       Effect.timeoutOption(STDIO_GRACE),
-      Effect.ignore({
-        log: 'Warn',
-        message:
-          "A hook's output could not be read to its end; the result keeps what was read",
-      }),
+      Effect.catch((error) =>
+        Effect.logWarning(
+          `A hook's output could not be read: ${toErrorMessage(error)}`,
+        ).pipe(Effect.as(Option.none())),
+      ),
     );
-    return { kind: 'exited' as const, exitCode, ...out };
+    if (Option.isNone(drained)) cut = true;
+    return { kind: 'exited' as const, exitCode, ...out, cut };
   }).pipe(
     Effect.scoped,
     Effect.timeoutOrElse({
