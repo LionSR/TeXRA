@@ -20,13 +20,12 @@ import { normalizeProviderError } from '@texra-ai/harness/host';
 import { withLogChannel, Settings } from '@texra-ai/harness/plugins';
 import {
   inheritedEnv,
-  withExtendedPath,
+  withCommandDirs,
   absentReason,
   pathExists,
 } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { SOX_PATH_SETTING } from '@texra/shared/settings/texraSettings';
-import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import {
   findCommand,
   type FoundCommand,
@@ -180,7 +179,7 @@ export const startRecording = Effect.fn('startRecording')(function* (
     soxCommand.command,
     [...soxCommand.args, ...soxArgs],
     {
-      env: withExtendedPath(yield* inheritedEnv(), commandDirs()),
+      env: yield* withCommandDirs(yield* inheritedEnv()),
       extendEnv: false,
       stdin: 'ignore',
       stdout: 'ignore',

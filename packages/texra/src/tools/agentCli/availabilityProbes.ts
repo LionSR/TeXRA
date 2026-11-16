@@ -12,6 +12,7 @@ import { runsInWsl } from '@texra-ai/harness/node';
 import { toErrorMessage, causeChain } from '@texra-ai/harness/schemas';
 import { ToolProbeFailed } from '@texra-ai/harness/plugins';
 import { hasPackageManager } from '@texra/utils/system/toolChecks';
+import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import {
   SYSTEM_PACKAGE_MANAGERS,
   type SystemPackageManager,
@@ -113,9 +114,11 @@ export function preferredInstallCommand(
 ): string {
   if (commands.win32 != null && process.platform === 'win32')
     return commands.win32;
+  // A getter holds no runtime to read `CommandDirs` from.
+  const appDirs = commandDirs();
   for (const manager of SYSTEM_PACKAGE_MANAGERS) {
     const command = commands[manager];
-    if (command != null && hasPackageManager(manager)) return command;
+    if (command != null && hasPackageManager(manager, appDirs)) return command;
   }
   return commands.default;
 }
