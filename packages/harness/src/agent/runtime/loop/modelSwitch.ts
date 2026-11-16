@@ -99,11 +99,10 @@ export function modelSwitchPort(
     );
   return {
     modelSwitchDisabledReason: (model: string) =>
-      Effect.map(switchRejection(model), (refused) => refused?.reason),
+      Effect.map(switchRejection(model), (refused) => refused ?? undefined),
     switchModel: Effect.fn('toolUse.switchModel')(function* (model: string) {
       const refused = yield* switchRejection(model);
-      if (refused !== null)
-        return yield* Effect.fail(new Error(refused.message));
+      if (refused !== null) return yield* Effect.fail(new Error(refused));
       // Queued on the run's input, durable at once; the loop binds and
       // records it at its next model boundary, which consumes it. A switch
       // back to the current model is queued too: the latest request wins.
