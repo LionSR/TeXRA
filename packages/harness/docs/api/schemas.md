@@ -1001,10 +1001,11 @@ The instruction keys the harness itself emits as
 {@link RequestShowInstructionPayload.key}. A key names the notice for the
 host's "never remind again" state; an embedder decides what each of these
 offers beside the message (TeXRA: the buttons that set a key or open a
-guide). An embedder's own notices use keys of their own.
+guide, and whether it can be silenced). An embedder's own notices use keys
+of their own.
 
 ```ts
-const HARNESS_INSTRUCTION_KEY: { readonly MISSING_API_KEY: "missingApiKey"; readonly MODEL_NOT_RECOGNIZED: "modelNotRecognized"; readonly RESUME_REFUSED: "resumeRefused"; }
+const HARNESS_INSTRUCTION_KEY: { readonly MISSING_API_KEY: "missingApiKey"; readonly MODEL_NOT_RECOGNIZED: "modelNotRecognized"; }
 ```
 
 ## HarnessInstructionKey
@@ -1207,7 +1208,7 @@ or the agent the launch named that the catalog does not hold. The launch
 shows nothing itself; the caller shows this where it shows the failure.
 
 ```ts
-const LaunchNoticeSchema: Union<readonly [Struct<{ readonly event: Literal<"requestShowInstruction">; readonly payload: Struct<{ readonly key: String; readonly message: String; readonly showSuppress: optional<Boolean>; }>; }>, Struct<{ readonly event: Literal<"agentNotFound">; readonly payload: Struct<{ readonly agentName: String; }>; }>]>
+const LaunchNoticeSchema: Union<readonly [Struct<{ readonly event: Literal<"requestShowInstruction">; readonly payload: Struct<{ readonly key: String; readonly message: String; }>; }>, Struct<{ readonly event: Literal<"agentNotFound">; readonly payload: Struct<{ readonly agentName: String; }>; }>]>
 ```
 
 ## launchPolicy
@@ -1857,7 +1858,7 @@ const RequestShowErrorPayloadSchema: Struct<{ readonly message: String; readonly
 
 ## RequestShowInstructionPayload
 
-Show a suppressible instruction message.
+Show an instruction message.
 
 ```ts
 interface RequestShowInstructionPayload {
@@ -1865,7 +1866,6 @@ interface RequestShowInstructionPayload {
    *  offers beside it ({@link HARNESS_INSTRUCTION_KEY} for the harness's). */
   key: string;
   message: string;
-  showSuppress?: boolean;
 }
 ```
 
