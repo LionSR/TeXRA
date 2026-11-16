@@ -41,11 +41,7 @@ import { resolveChatDefaults } from '@cli/runtime/models/chatDefaults';
 import type { CliProcessRuntime } from '@cli/runtime/platform/cliProcessRuntime';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { cliPlatform } from '@cli/runtime/platform/initPlatform';
-import {
-  formatCliNoAvailableModelsRecovery,
-  selectCliRunnableModel,
-  type CliNoAvailableModelsRecoveryOptions,
-} from '@cli/runtime/models/modelAccess';
+import { selectCliRunnableModel } from '@cli/runtime/models/modelAccess';
 import { writeTextStderr } from '@cli/runtime/platform/logSinks';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
@@ -139,10 +135,6 @@ export interface RunChatInit {
   };
 }
 
-const CHAT_STARTUP_MODEL_RECOVERY = {
-  configureKeyAction: 'add a provider API key with `texra setup`',
-} satisfies CliNoAvailableModelsRecoveryOptions;
-
 /** `runtime` is the one the command entry built and ran its program on;
  *  platform signals hand off before Ink mounts. */
 export async function runChat(
@@ -226,12 +218,7 @@ export async function runChat(
         credential.ready
           ? selectCliRunnableModel(
               [{ model: defaults.model, reason: defaults.modelSource }],
-              {
-                stores: services,
-                noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-                  CHAT_STARTUP_MODEL_RECOVERY,
-                ),
-              },
+              { stores: services },
             )
           : Effect.succeed({ model: defaults.model, notice: undefined }),
       );
@@ -548,7 +535,6 @@ export async function runChat(
         slashCommandContext(),
         {
           modelSource: defaults.modelSource,
-          recovery: CHAT_STARTUP_MODEL_RECOVERY,
           firstRunSetupAgent: startup.firstRunSetupAgent,
         },
         modelConnection,

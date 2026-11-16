@@ -1,12 +1,16 @@
 import { type CliContext } from '@cli/runtime/platform/cliContext';
-import { type CliNoAvailableModelsRecoveryOptions } from '@cli/runtime/models/modelAccess';
+import { selectCliRunnableModel } from '@cli/runtime/models/modelAccess';
 import { type CliSignInProgress } from '@cli/runtime/models/signInUrl';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalNotice } from '@cli/chat/tui/state/transcript';
 import type { RunId, ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type { Session } from '@texra-ai/harness';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
+import type {
+  ProcessRuntime,
+  ProcessServices,
+  RunModelCandidate,
+} from '@texra-ai/harness/host';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
 import type { Effect } from 'effect';
 import type { RequestRefusal } from '@texra/controllers/session/hostCallFailure';
@@ -79,6 +83,16 @@ export const transcriptSlashCommandOutput: SlashCommandOutput = {
       : setTransientNotice(message),
 };
 
-export const CHAT_API_MODE_MODEL_RECOVERY = {
-  configureKeyAction: 'add a provider API key with `/key`',
-} satisfies CliNoAvailableModelsRecoveryOptions;
+/** What a chat says to do when no model can run: its own `/key`. */
+export const CHAT_KEY_RECOVERY = 'Add a provider API key with `/key`.';
+
+/** The model a chat run takes, worded in the chat's terms when none can. */
+export const selectChatModel = (
+  stores: SettingsStores,
+  runtime: ProcessRuntime,
+  candidate: RunModelCandidate,
+) =>
+  selectCliRunnableModel([candidate], {
+    stores: { ...stores, runtime },
+    recovery: CHAT_KEY_RECOVERY,
+  });

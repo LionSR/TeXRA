@@ -15,7 +15,7 @@ import {
   type GetModelSwitchDisabledReason,
 } from '@cli/runtime/models/modelAccess';
 import { ListForm, useAsyncPickerForm } from './_shared/ListForm';
-import { CHAT_API_MODE_MODEL_RECOVERY } from '../commands/handlers/slashContext';
+import { CHAT_KEY_RECOVERY } from '../commands/handlers/slashContext';
 
 interface ModelListFormProps {
   readonly currentModel: string;
@@ -82,9 +82,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
       }
       compactDetail={<Text dimColor>Available models</Text>}
       emptyClosesOnEnter
-      emptyMessage={formatCliNoRunnableModelsMessage(
-        CHAT_API_MODE_MODEL_RECOVERY,
-      )}
+      emptyMessage={formatCliNoRunnableModelsMessage(CHAT_KEY_RECOVERY)}
       action={props.selectable ? 'select' : 'close'}
       onSelect={picker.select}
       onCancel={props.onClose}

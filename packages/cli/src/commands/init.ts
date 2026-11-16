@@ -21,7 +21,7 @@ import {
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import { writeTextStderr } from '../runtime/platform/logSinks';
 import {
-  formatCliNoAvailableModelsRecovery,
+  CLI_SETUP_RECOVERY,
   getCliModelAccessList,
   type CliModelAccess,
 } from '../runtime/models/modelAccess';
@@ -70,7 +70,7 @@ function initWarning(
   return {
     model: answers.model,
     message: `"${answers.model}" is not currently usable.`,
-    recovery: `${formatCliNoAvailableModelsRecovery()} Run \`texra models list --all\` to inspect access.`,
+    recovery: `${CLI_SETUP_RECOVERY} Run \`texra models list --all\` to inspect access.`,
   };
 }
 

@@ -37,10 +37,6 @@ import {
   acceptsFollowUp,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import {
-  formatCliNoAvailableModelsRecovery,
-  selectCliRunnableModel,
-} from '@cli/runtime/models/modelAccess';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { launchApproval } from '@cli/runtime/platform/cliContext';
@@ -51,7 +47,7 @@ import type { RequestRefusal } from '@texra/controllers/session/hostCallFailure'
 import { requestErrorText } from '@ui/copy/requestErrors';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
 import {
-  CHAT_API_MODE_MODEL_RECOVERY,
+  selectChatModel,
   type SlashCommandContext,
 } from './tui/commands/handlers/slashContext';
 import {
@@ -718,15 +714,10 @@ export function createChatSessionController(
     launchRootRun(
       Effect.gen(function* () {
         const meta = sessionMetaSignal.get();
-        const selection = yield* selectCliRunnableModel(
-          [{ model: meta.model, reason: meta.modelSource }],
-          {
-            stores: { ...stores, runtime },
-            noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-              CHAT_API_MODE_MODEL_RECOVERY,
-            ),
-          },
-        );
+        const selection = yield* selectChatModel(stores, runtime, {
+          model: meta.model,
+          reason: meta.modelSource,
+        });
         return {
           agent: meta.agent,
           agentSource: meta.agentSource,
