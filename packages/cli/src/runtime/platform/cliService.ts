@@ -26,10 +26,7 @@ import {
 } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { SERVICE_SUBCOMMAND } from '@texra/controllers/server/discovery';
-import {
-  canonicalizeWorkspaceRoot,
-  envFlag,
-} from '@texra-ai/harness/node';
+import { canonicalizeWorkspaceRoot, envFlag } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import {
