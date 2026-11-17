@@ -13,6 +13,10 @@ import {
   hostFailed,
   hostFailure,
 } from '@texra/controllers/session/hostCallFailure';
+import {
+  pickLauncherFiles,
+  type OpenFilesDialog,
+} from '@texra/controllers/session/launcherFilePicker';
 import type {
   GuiWindowHost,
   OwnHostHandlers,
@@ -26,12 +30,13 @@ import {
 import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
-import type { DesktopFileSelection } from './desktopFileSelection.js';
 import type { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 
 interface DesktopHostRequestsOptions {
   host: DesktopAgentRunHost;
-  files: DesktopFileSelection;
+  /** The project's folder; undefined for the window with no folder. */
+  workspaceRoot: string | undefined;
+  openFiles: OpenFilesDialog;
   workspaceFile: ReturnType<typeof createDesktopWorkspaceIpc>['file'];
   postToRenderer(message: DesktopPush): void;
   /** The window's settings surface, absent while the window switches
@@ -61,11 +66,7 @@ export const createDesktopHostRequests = (
     const bindings: SharedHostCommandBindings = {
       openPath: (file, line) => host.openPath(file, line),
       pickFiles: (fileType) =>
-        options.files
-          .pickFiles(fileType)
-          .pipe(
-            Effect.mapError((cause) => hostFailure('files.pickFiles', cause)),
-          ),
+        pickLauncherFiles(options.workspaceRoot, fileType, options.openFiles),
       latexdiff: {
         // Each diff opens in the PDF tab through the build display, as a
         // run's outputs do.

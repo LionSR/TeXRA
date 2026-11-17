@@ -8,6 +8,7 @@ import { Cause, Effect } from 'effect';
 
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { HostFailed } from '@texra/hosts/uiHosts';
+import type { OpenFilesDialog } from '@texra/controllers/session/launcherFilePicker';
 import { windowNotices } from '@texra/controllers/session/windowNotices';
 import { texraGuideUrl } from '@ui/copy/guide';
 import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
@@ -160,25 +161,23 @@ export function createDesktopWindowHost(options: {
         },
         catch: ensureError,
       }),
-    /** The files the user picked (one or several), or undefined when they
-     *  cancelled. */
-    openFileDialog: (dialogOptions: {
-      title: string;
-      defaultPath?: string;
-      filters: Array<{ name: string; extensions: string[] }>;
-    }) =>
+    /** The native dialog that opens several files. */
+    openFileDialog: ((dialogOptions) =>
       Effect.tryPromise({
         try: async () => {
           const result = await dialog.showOpenDialog(window, {
             title: dialogOptions.title,
             defaultPath: dialogOptions.defaultPath,
-            filters: dialogOptions.filters,
+            filters: dialogOptions.filters.map(({ name, extensions }) => ({
+              name,
+              extensions: [...extensions],
+            })),
             properties: ['openFile', 'multiSelections'],
           });
           return result.canceled ? undefined : result.filePaths;
         },
         catch: ensureError,
-      }),
+      })) satisfies OpenFilesDialog,
     /**
      * What one project's runs present through: its dialogs name that project,
      * and its diff and build views are addressed by its own storage root,
