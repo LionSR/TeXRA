@@ -174,14 +174,6 @@ const groupedTools = (
         },
       ];
 
-/** OpenAI's abort signature: the raw abort reason, or the SDK's wrapper around it. */
-export const openaiAbortMatch = (
-  cause: unknown,
-  signal: AbortSignal,
-): boolean =>
-  cause === signal.reason ||
-  (cause instanceof OpenAI.APIUserAbortError && cause.cause === signal.reason);
-
 /** A bearer token, as a header value takes one. */
 const BearerTokenSchema = Schema.String.check(Schema.isMinLength(1)).check(
   Schema.isPattern(/^[^\r\n]+$/),
