@@ -357,7 +357,7 @@ const SCENARIOS = [
     keys: ['/status', '\r'],
     frame: 'viewport',
     expect: [
-      'queued follow-ups: 1',
+      'queued messages: 1',
       '1. ✓ reviewer completed All good <ok>',
       'Queued message (1)',
     ],
@@ -531,7 +531,7 @@ const SCENARIOS = [
       'model: harness-model',
       'model access: your own API keys',
       'status: not started',
-      'queued follow-ups: 0',
+      'queued messages: 0',
     ],
     unexpect: [
       '/clear is registered but has no harness action.',

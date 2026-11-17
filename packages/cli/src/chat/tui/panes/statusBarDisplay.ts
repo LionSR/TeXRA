@@ -330,7 +330,7 @@ const STATUS_BAR_PRIORITY = {
   bypassBadge: 85,
   // A notice must not hide the only indication that an active run is alive.
   liveness: 88,
-  // Exiting drops queued follow-ups silently: the warning outlasts the rest.
+  // Exiting drops queued messages silently: the warning outlasts the rest.
   discardWarning: 95,
   // The diamond and the run's status word.
   chrome: 100,
@@ -690,10 +690,10 @@ export function buildStatusBarDisplay(
       policy: 'truncate',
     });
     if (input.transientNotice.kind === 'exit' && queuedCount > 0) {
-      // Exiting drops queued follow-ups silently — warn before the user
+      // Exiting drops queued messages silently — warn before the user
       // confirms with the second Ctrl-C.
       left.push({
-        text: `${formatResultCount(queuedCount, 'queued follow-up')} will be discarded`,
+        text: `${formatResultCount(queuedCount, 'queued message')} will be discarded`,
         color: TONE_PAINT.danger.color,
         priority: STATUS_BAR_PRIORITY.discardWarning,
         policy: 'truncate',
