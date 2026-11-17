@@ -18,7 +18,7 @@ import type {
 } from '@texra-ai/harness/schemas';
 import type { BypassState } from './panes/statusBarDisplay';
 
-const QUEUED_FOLLOW_UP_STATUS_LENGTH = 160;
+const QUEUED_MESSAGE_STATUS_LENGTH = 160;
 
 interface CliSessionStatusInput {
   readonly agent: string;
@@ -89,16 +89,16 @@ function costStatusLines(cost: CliSessionCostStatus | undefined): string[] {
   ];
 }
 
-function queuedFollowUpStatusLines(messages: readonly string[]): string[] {
-  if (messages.length === 0) return ['queued follow-ups: 0'];
+function queuedMessageStatusLines(messages: readonly string[]): string[] {
+  if (messages.length === 0) return ['queued messages: 0'];
 
   return [
-    `queued follow-ups: ${messages.length}`,
+    `queued messages: ${messages.length}`,
     ...messages.map(
       (message, index) =>
         `${index + 1}. ${truncateSummary(
           message,
-          QUEUED_FOLLOW_UP_STATUS_LENGTH,
+          QUEUED_MESSAGE_STATUS_LENGTH,
         )}`,
     ),
   ];
@@ -148,6 +148,6 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
           )}`,
         ]
       : []),
-    ...queuedFollowUpStatusLines(input.queuedFollowUpMessages),
+    ...queuedMessageStatusLines(input.queuedFollowUpMessages),
   ].join('\n');
 }

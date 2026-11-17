@@ -12,7 +12,6 @@ import { randomUUID } from 'node:crypto';
 
 import { Effect, Ref } from 'effect';
 
-import type { RunRecord } from '@agent/core/definition/RunRecord';
 import {
   type FollowUpDisposition,
   type PositionAt,
@@ -21,6 +20,7 @@ import {
   type RunInput,
   type RunOutcome,
   SCRIPT_TOOL_NAME,
+  type RunRecord,
 } from '@shared/schemas';
 import { consumedRow } from '@shared/session/runFacts';
 import type { QueuedFollowUp } from '@shared/session/runRows';

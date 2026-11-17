@@ -37,7 +37,7 @@ import {
   compareTarget,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
-import type { latexdiffVerbs } from '@texra/latex/latexdiff/latexdiffVerbs';
+import type { latexdiffVerbs } from '@texra/controllers/session/latexdiffVerbs';
 import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
 
 const CHANNEL = 'ProgressDocumentTaskFileActions';

@@ -57,9 +57,10 @@ export {
 // The home directory, logged at warn where none resolves.
 export {
   executeCommand,
+  type ExecEnd,
+  type ExecResult,
   type ExecuteCommandBaseOptions,
 } from '@utils/system/execUtils';
-export type { ExecEnd, ExecResult } from '@shared/schemas';
 export {
   CommandDirs,
   existsAtAbsolute,

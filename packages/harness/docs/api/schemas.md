@@ -587,6 +587,15 @@ function descendantRuns(
 ): readonly RunId[]
 ```
 
+## DETAIL_SEPARATOR
+
+What stands between a label and the detail that explains it
+(`Retry — the model timed out`), in every host.
+
+```ts
+const DETAIL_SEPARATOR: " — "
+```
+
 ## DiffStats
 
 ```ts
@@ -883,7 +892,7 @@ interface FormattedIssue {
 
 Mint a run id: 12 lowercase hex chars (48 bits of entropy), the first
 digits of a random UUID, every one of which is random. One of the two
-minting sites (`deriveRunId` is the other), so the brand is applied here
+minting sites (`callChildRunId` is the other), so the brand is applied here
 and nowhere downstream. Any other random id is `crypto.randomUUID()`.
 
 ```ts
@@ -2243,10 +2252,11 @@ type ScriptDeliverySummary = typeof ScriptDeliverySummarySchema.Type;
 
 ## serializeFilteredConfig
 
-Serialize a run record to pretty JSON, dropping agent-config fields
-irrelevant to the resolved display category so the serialized config the
-orchestrator reads stays relevant. Records without an agent execution mode
-are honest by construction and serialize unchanged.
+Serialize a run record to pretty JSON for `/executions/{id}/config`,
+dropping agent-config fields irrelevant to the resolved display category
+so the serialized config the orchestrator reads stays relevant. Records
+without an agent execution mode are honest by construction and serialize
+unchanged.
 
 ```ts
 function serializeFilteredConfig(

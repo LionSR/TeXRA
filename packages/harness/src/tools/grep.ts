@@ -3,7 +3,7 @@ import * as nodePath from 'node:path';
 
 // Third-party imports
 import { Effect, FileSystem, Schema } from 'effect';
-import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { ToolContext } from '@tools/core/ToolTypes';
 
 // Local imports - tools
 import {

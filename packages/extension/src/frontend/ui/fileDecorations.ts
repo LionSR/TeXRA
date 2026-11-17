@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 import { onAppSignal } from '@texra-ai/harness/host';
 import type { AppSignals } from '@texra-ai/harness/plugins';
-import { outputFilesProduced } from '@frontend/events/runFactSubscriptions';
+import { outputFilesProduced } from '@texra/controllers/session/outputFilesProduced';
 import type { Session } from '@texra-ai/harness';
 
 // Session-scoped: the touched set is not persisted across window reloads so

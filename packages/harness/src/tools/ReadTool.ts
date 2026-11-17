@@ -2,7 +2,7 @@
 import { Effect, FileSystem, Schema } from 'effect';
 
 // Local imports
-import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { ToolContext } from '@tools/core/ToolTypes';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import {
   resolveToolPath,

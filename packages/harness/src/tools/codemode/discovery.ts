@@ -7,7 +7,7 @@
  * needs.
  */
 import { Predicate } from 'effect';
-import { inputSchema, mapSubschemas } from '@agent/core/tools/toolSchema';
+import { inputSchema, mapSubschemas } from '@tools/core/toolSchema';
 import { type ScriptDoor } from '@agent/runtime/RunCall';
 
 import { declarationOf, firstSentence } from './declarations';

@@ -108,23 +108,27 @@ export class RunHeader extends LitElement {
         font-weight: var(--font-weight-semibold);
       }
 
-      .forked-from {
+      /* A quiet chip that goes to a related run: the fork source, or one
+         ancestor in the path. */
+      .run-chip {
         flex: 0 1 auto;
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
         padding: var(--wa-space-3xs) var(--wa-space-2xs);
         border: none;
         border-radius: var(--border-radius-small);
         background: var(--wa-color-neutral-fill-quiet);
         font: inherit;
-        font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
         cursor: pointer;
       }
-      .forked-from:hover {
+      .run-chip:hover {
         color: var(--color-text-link);
+      }
+      .forked-from {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: var(--font-size-xs);
       }
 
       .status-label,
@@ -174,28 +178,13 @@ export class RunHeader extends LitElement {
         display: inline-flex;
         align-items: center;
         gap: var(--wa-space-3xs);
-        flex: 0 1 auto;
-        min-width: 0;
-        padding: var(--wa-space-3xs) var(--wa-space-2xs);
-        background: var(--wa-color-neutral-fill-quiet);
-        border: none;
-        border-radius: var(--border-radius-small);
-        font: inherit;
         font-size: var(--font-size-sm);
-        color: var(--color-text-secondary);
-        cursor: pointer;
       }
       .ancestor-label {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
         min-width: 0;
-      }
-      .ancestor:hover {
-        color: var(--color-text-link);
-      }
-      .ancestor:focus-visible {
-        border-radius: var(--border-radius-small);
       }
       .ancestor-separator {
         flex: 0 0 auto;
@@ -283,7 +272,7 @@ export class RunHeader extends LitElement {
     const label = TASK_ACTIONS.forkedFromRun(from);
     return html`<button
       type="button"
-      class="forked-from"
+      class="run-chip forked-from"
       title=${label}
       ?disabled=${from === undefined}
       @click=${() => this.navigateTo(source.id)}
@@ -501,7 +490,7 @@ export class RunHeader extends LitElement {
             >
             <button
               type="button"
-              class="ancestor"
+              class="run-chip ancestor"
               id=${`ancestor-${index}`}
               aria-label=${`Go to ${ancestor.label}`}
               @click=${() => this.navigateTo(ancestor.id)}

@@ -11,38 +11,36 @@ import { useEffect, useRef } from 'react';
  * same registry instead of running a private setInterval.
  */
 type PollSubscriber = () => void;
-const pollSubscribers = new Map<number, Set<PollSubscriber>>();
-const pollTimers = new Map<number, ReturnType<typeof setInterval>>();
+interface Poll {
+  readonly subscribers: Set<PollSubscriber>;
+  readonly timer: ReturnType<typeof setInterval>;
+}
+const polls = new Map<number, Poll>();
 
 export function subscribeToPolling(
   intervalMs: number,
   subscriber: PollSubscriber,
 ): () => void {
-  let subscribers = pollSubscribers.get(intervalMs);
-  if (subscribers === undefined) {
-    subscribers = new Set();
-    pollSubscribers.set(intervalMs, subscribers);
-  }
-  subscribers.add(subscriber);
-  if (!pollTimers.has(intervalMs)) {
+  let poll = polls.get(intervalMs);
+  if (poll === undefined) {
+    const subscribers = new Set<PollSubscriber>();
     const timer = setInterval(() => {
-      for (const sub of pollSubscribers.get(intervalMs) ?? []) sub();
+      for (const sub of subscribers) sub();
     }, intervalMs);
     timer.unref?.();
-    pollTimers.set(intervalMs, timer);
+    poll = { subscribers, timer };
+    polls.set(intervalMs, poll);
   }
+  const subscribed = poll;
+  subscribed.subscribers.add(subscriber);
   return () => {
-    // Re-read the live entry rather than the Set captured at subscribe time:
-    // a stale disposer called twice must not clear a later generation's timer
-    // out from under its subscribers.
-    const live = pollSubscribers.get(intervalMs);
-    if (live === undefined) return;
-    live.delete(subscriber);
-    if (live.size > 0) return;
-    const timer = pollTimers.get(intervalMs);
-    if (timer !== undefined) clearInterval(timer);
-    pollTimers.delete(intervalMs);
-    pollSubscribers.delete(intervalMs);
+    // A stale disposer called twice must not touch a later generation's
+    // poll at the same cadence.
+    if (polls.get(intervalMs) !== subscribed) return;
+    subscribed.subscribers.delete(subscriber);
+    if (subscribed.subscribers.size > 0) return;
+    clearInterval(subscribed.timer);
+    polls.delete(intervalMs);
   };
 }
 

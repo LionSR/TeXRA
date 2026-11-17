@@ -2,7 +2,7 @@
  * The persistence substrate: the connection, its transactions, the run
  * history's one write path, the aggregate lifecycle, deletion and
  * collection, and the reads. One database per session root
- * (`WorkspaceRoots`), never a process singleton; a project store is held
+ * (`SessionWorkspace`), never a process singleton; a project store is held
  * exclusively by the one process that opened it (`locking_mode =
  * EXCLUSIVE`), the global store is shared across processes; an ephemeral
  * session runs the same schema in SQLite memory, and a failed file open is an
@@ -31,7 +31,7 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { SessionWorkspace } from '@shared/session/sessionWorkspace';
 import { logFailure } from '@logger/effectLog';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
@@ -196,12 +196,12 @@ export const databaseLayer = (
 ): Layer.Layer<
   Database,
   DatabaseOpenFailed,
-  WorkspaceRoots | FileSystem.FileSystem | ToolRegistry
+  SessionWorkspace | FileSystem.FileSystem | ToolRegistry
 > =>
   Layer.effect(
     Database,
     Effect.gen(function* () {
-      const roots = yield* WorkspaceRoots;
+      const roots = yield* SessionWorkspace;
       const path =
         mode === 'ephemeral'
           ? IN_MEMORY_STORE
@@ -815,7 +815,7 @@ export const globalDatabaseLayer = (
   Layer.effect(GlobalDatabase, Database).pipe(
     Layer.provide(
       databaseLayer('global').pipe(
-        Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
+        Layer.provide(Layer.succeed(SessionWorkspace)({ storage })),
         Layer.provide(Layer.succeed(ToolRegistry)(toolTable([]))),
       ),
     ),

@@ -24,6 +24,7 @@ import {
 // Local imports - TUI input and presentation
 import { COLOR_HINT } from './colors';
 import { POINTER, TICK } from './glyphs';
+import { DETAIL_SEPARATOR } from '@texra-ai/harness/schemas';
 
 /** `index` held to a valid index of a `length`-item list (0 when empty). */
 function clampIndex(index: number, length: number): number {
@@ -472,7 +473,9 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
                 </Box>
                 {showInlineOverflow ? (
                   <Box flexShrink={0}>
-                    <Text dimColor>{` — ${inlineOverflowText}`}</Text>
+                    <Text
+                      dimColor
+                    >{`${DETAIL_SEPARATOR}${inlineOverflowText}`}</Text>
                   </Box>
                 ) : null}
                 {item.description && !showInlineOverflow ? (
@@ -480,7 +483,7 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
                     <Text
                       dimColor
                       wrap="truncate-end"
-                    >{` — ${item.description}`}</Text>
+                    >{`${DETAIL_SEPARATOR}${item.description}`}</Text>
                   </Box>
                 ) : null}
               </>

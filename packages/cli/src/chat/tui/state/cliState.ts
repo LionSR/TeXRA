@@ -35,6 +35,7 @@ import type {
   AgentDelegationScope,
 } from '@texra-ai/harness/host';
 import type { RunView } from '@texra-ai/harness/schemas';
+import type { CliTeam } from '@cli/runtime/cliTeams';
 
 // ---------------------------------------------------------------------------
 // types
@@ -52,8 +53,8 @@ export interface SessionMeta {
   readonly modelSource: RunModelDecisionReason;
   readonly cwd: string;
   readonly approvalPolicy: ApprovalPolicy;
-  readonly teamName?: string;
-  readonly cliTeamId?: string;
+  /** The team the root agent leads, when a team was launched. */
+  readonly team?: CliTeam;
   readonly delegationAgentScope?: AgentDelegationScope;
   readonly version: string;
 }

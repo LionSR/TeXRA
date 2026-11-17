@@ -38,6 +38,7 @@ import type {
   UserQuestionRequest,
   UserQuestionPrompt,
 } from '@texra-ai/harness/schemas';
+import { DETAIL_SEPARATOR } from '@texra-ai/harness/schemas';
 
 interface UserQuestionProps {
   readonly availableRows?: number;
@@ -171,12 +172,14 @@ function userQuestionFreeTextSuggestionLine({
 }): string {
   const prefix = `${optionIndex + 1}. ${option.label}`;
   if (overflowText) {
-    const suffix = ` — ${overflowText}`;
+    const suffix = `${DETAIL_SEPARATOR}${overflowText}`;
     const prefixWidth = width - textDisplayWidth(suffix);
     if (prefixWidth <= 0) return clipToWidth(suffix, width);
     return `${clipToWidth(prefix, prefixWidth).trimEnd()}${suffix}`;
   }
-  const suffix = option.description ? ` — ${option.description}` : '';
+  const suffix = option.description
+    ? `${DETAIL_SEPARATOR}${option.description}`
+    : '';
   return clipToWidth(`${prefix}${suffix}`, width);
 }
 

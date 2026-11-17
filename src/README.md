@@ -16,21 +16,20 @@ CLI surfaces, and ships in nothing.
 
 ## The harness: `packages/harness/src` (`@texra-ai/harness`)
 
-| Directory      | What it is                                                                                                                                                                                |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `agent/`       | The agent domain model (`core/`), the run loop and run services (`runtime/`), prompts, traces, storage. Start with [`agent/core/README.md`](../packages/harness/src/agent/core/README.md) |
-| `effect/`      | The SDK boundary: `processLayer`, `Sessions` and the typed session reads hosts hold                                                                                                       |
-| `controllers/` | The session layer the hosts and the app call into instead of driving `agent/` directly                                                                                                    |
-| `tools/`       | The tool engine and built-in plugins (bash and file tools, web, memory, goal, multi-agent, codemode, MCP)                                                                                 |
-| `shared/`      | Wire contracts and message types (Effect schemas) and the host-neutral logic over them, including the transcript row model (`shared/transcript/`)                                         |
-| `platform/`    | Host port contracts (config, state, lifecycle, agent directories, secrets, rooted fs, workspace roots) and the process services, `AppSignals` among them                                  |
-| `model/`       | Binding a run's model choice to the session's settings: route facts, picker options, reasoning levels. The catalog, routes and sign-in are `packages/llm`                                 |
-| `common/`      | Cross-cutting logic that is not a wire contract, notably `common/errors/`                                                                                                                 |
-| `utils/`       | Host-agnostic leaf helpers; not browser-safe unless in a browser entry's closure                                                                                                          |
-| `transcript/`  | Trace and transcript document schemas and stream logging                                                                                                                                  |
-| `skills/`      | Skill schema and loading                                                                                                                                                                  |
-| `logger/`      | Channel-keyed logging                                                                                                                                                                     |
-| `types/`       | Ambient declarations for untyped third-party packages                                                                                                                                     |
+| Directory      | What it is                                                                                                                                                    |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agent/`       | The run loop and run services (`runtime/`), prompts, traces, storage. Start with [`agent/runtime/README.md`](../packages/harness/src/agent/runtime/README.md) |
+| `effect/`      | The SDK boundary: `processLayer`, `Sessions` and the typed session reads hosts hold                                                                           |
+| `controllers/` | The session layer the hosts and the app call into instead of driving `agent/` directly                                                                        |
+| `tools/`       | The tool engine and built-in plugins (bash and file tools, web, memory, goal, multi-agent, codemode, MCP)                                                     |
+| `shared/`      | Wire contracts and message types (Effect schemas) and the host-neutral logic over them, including the transcript row model (`shared/transcript/`)             |
+| `platform/`    | Host port contracts (config, state, lifecycle, agent directories, secrets, rooted fs, workspace roots) and the process services, `AppSignals` among them      |
+| `model/`       | Binding a run's model choice to the session's settings: route facts, picker options, reasoning levels. The catalog, routes and sign-in are `packages/llm`     |
+| `common/`      | Cross-cutting logic that is not a wire contract, notably `common/errors/`                                                                                     |
+| `utils/`       | Host-agnostic leaf helpers; not browser-safe unless in a browser entry's closure                                                                              |
+| `skills/`      | Skill schema and loading                                                                                                                                      |
+| `logger/`      | Channel-keyed logging                                                                                                                                         |
+| `types/`       | Ambient declarations for untyped third-party packages                                                                                                         |
 
 ## The app: `packages/texra/src` (`@texra-ai/texra`)
 

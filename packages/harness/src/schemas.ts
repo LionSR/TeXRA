@@ -28,8 +28,10 @@ export type {
 } from '@shared/schemas/agentConfig';
 // A run's saved record: an agent's config or a task's,
 // and its JSON with the fields its category hides dropped.
-export type { RunRecord } from '@agent/core/definition/RunRecord';
-export { serializeFilteredConfig } from '@tools/executions/configView';
+export {
+  serializeFilteredConfig,
+  type RunRecord,
+} from '@shared/schemas/runRecords';
 // The subscriptions a model call can route through, by provider id.
 export {
   SUBSCRIPTION_AUTH_PROVIDERS,
@@ -197,7 +199,7 @@ export {
   type AssembleTraceResult,
   type TraceDocument,
   type TraceFactKind,
-} from '@transcript/traceDocumentSchema';
+} from '@shared/schemas/traceDocument';
 // Path basics that hold in a browser: forward slashes, a path's base name,
 // and its base name without the extension.
 export {
@@ -271,6 +273,7 @@ export {
 export {
   collapseWhitespace,
   countLines,
+  DETAIL_SEPARATOR,
   FACT_SEPARATOR,
   formatClippedList,
   formatCompactDuration,

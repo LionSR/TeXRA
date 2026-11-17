@@ -91,9 +91,7 @@ export function builtinSlashCommands(options: {
     return (
       <AgentListForm
         currentAgent={meta.agent}
-        {...(meta.cliTeamId !== undefined
-          ? { currentTeamId: meta.cliTeamId }
-          : {})}
+        {...(meta.team !== undefined ? { currentTeamId: meta.team.id } : {})}
         availableRows={props.availableRows}
         selectable={selectable}
         onSelect={bindSelection(context, props, onPick, {

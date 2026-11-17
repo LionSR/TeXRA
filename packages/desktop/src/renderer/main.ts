@@ -241,33 +241,30 @@ const rendererPlatform = ((): OsPlatform => {
 })();
 document.body.dataset.desktopPlatform = rendererPlatform;
 const desktopPaletteEntries = paletteEntries(rendererPlatform);
-const shortcutAcceleratorsById = new Map<string, string | undefined>(
-  desktopPaletteEntries.map((entry) => [entry.id, entry.accelerator]),
-);
 // One name per action: chrome labels and tooltips quote the command catalog
 // verbatim (the same source the palette reads) instead of paraphrasing it in
 // sentence case.
-const commandLabelsById = new Map<string, string>(
-  desktopPaletteEntries.map((entry) => [entry.id, entry.label]),
+const commandsById = new Map<
+  string,
+  { readonly label: string; readonly accelerator?: string | undefined }
+>(
+  [
+    ...desktopPaletteEntries,
+    desktopCommandPaletteShortcut(rendererPlatform),
+  ].map((entry) => [entry.id, entry]),
 );
-const commandPaletteShortcut = desktopCommandPaletteShortcut(rendererPlatform);
-shortcutAcceleratorsById.set(
-  commandPaletteShortcut.id,
-  commandPaletteShortcut.accelerator,
-);
-commandLabelsById.set(commandPaletteShortcut.id, commandPaletteShortcut.label);
 
 function commandLabel(
   commandId: DesktopCommandId | typeof DESKTOP_COMMAND_PALETTE_ID,
 ): string {
-  return commandLabelsById.get(commandId) ?? commandId;
+  return commandsById.get(commandId)?.label ?? commandId;
 }
 
 function commandTitle(
   commandId: DesktopCommandId | typeof DESKTOP_COMMAND_PALETTE_ID,
 ): string {
   const shortcut = formatDesktopAccelerator(
-    shortcutAcceleratorsById.get(commandId),
+    commandsById.get(commandId)?.accelerator,
     rendererPlatform,
   );
   const label = commandLabel(commandId);

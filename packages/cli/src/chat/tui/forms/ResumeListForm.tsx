@@ -59,7 +59,7 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
   return (
     <AsyncListForm<readonly CliHistoryEntry[], RunId>
       title="/resume"
-      loadingLabel="Loading history..."
+      loadingLabel="Loading history…"
       load={() =>
         Effect.map(listCliHistoryEntries(props.session), (entries) => {
           // The conversation this chat is on is already open here.

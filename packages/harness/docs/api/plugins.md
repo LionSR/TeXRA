@@ -265,6 +265,26 @@ interface CallRequests {
     },
     DatabaseAggregateClosed | CellError
   >;
+  /**
+   * Open a plugin's request the call does not wait on, under its
+   * `data.requestId`: its `request.opened` commits on the run's history
+   * through the one door every request opens at, with `data` stored as
+   * the JSON it writes, and the plugin's decision hook takes each answer
+   * when it lands (`Plugin.decision`). A person answers it. A failed
+   * commit is not proof that nothing landed: the run's rows decide.
+   */
+  readonly post: (
+    request: Omit<PluginRequest, 'blocksCaller' | 'data'> & {
+      readonly blocksCaller: false;
+      readonly data: Pick<PluginRequest['data'], 'requestId' | 'runId'>;
+    },
+  ) => Effect.Effect<void, CellError>;
+  /** Show the person something on the session's host (a file opened
+   *  beside what they are looking at, a notice), answered by nothing. */
+  readonly present: <K extends RuntimePresentationEvent>(
+    event: K,
+    payload: RuntimePresentationEventPayloads[K],
+  ) => Effect.Effect<void>;
 }
 ```
 
@@ -1092,7 +1112,7 @@ interface Plugin {
   /** Its section of each request's system text, pinned while it is on. */
   readonly prompt?: PromptSection;
   /** Process-lifetime services, up while the plugin is switched on or a step
-   *  pins it. A host-supplied one (VS Code's Lean services) is passed with
+   *  pins it. A host-supplied one (VS Code's setup commands) is passed with
    *  the host's plugin value. */
   readonly processLayer?: ProcessPluginLayer;
   /** Session-lifetime services, one per open session, up while the plugin
@@ -2107,12 +2127,29 @@ type ToolResult = typeof ToolResultSchema.Type;
 ## ToolRun
 
 What a tool reads of the run its call works for, read from the run rather
-than copied onto the call. It names the run's id; the runtime adds the
-rest.
+than copied onto the call: exactly the fields the app's tools read. Its
+id, policy, configuration (which holds its delegation scope), model,
+scope (a tool that starts something the run should stop registers that
+stop there) and trace (what a plugin's own stages nest under). Never its
+session: a plugin reaches the session's runs through `ChildRuns`, and
+shows the person something through its call's `requests.present`.
+What only the harness's built-in tools read stays internal.
 
 ```ts
 interface ToolRun {
   readonly runId: RunId;
+  readonly toolPolicy: ToolPolicy;
+  /** The parent this activation runs under (null for a root), and
+   *  whether the parent's call awaits it: with the policy, what
+   *  `noLaterTurn` reads. */
+  readonly entry: {
+    readonly parent: RunId | null;
+    readonly awaited: boolean;
+  };
+  readonly config: AgentConfig;
+  readonly model: ScopedRef.ScopedRef<BoundModel>;
+  readonly scope: Scope.Scope;
+  readonly logger: AgentTrace;
 }
 ```
 

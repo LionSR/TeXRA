@@ -13,66 +13,23 @@ resolver; no inline SVG, codicon class or `fa-` class is left), inline
 TUI's bordered boxes (the two that bypass `BorderedPanel` are a top rule and
 the input box, neither a panel). Those are clean.
 
-What follows is open. Each item changes what the user sees, so it needs a
-look at the rendered surface in the hosts it touches before it lands.
+Items 1 to 3 have landed: #14957 added `renderEmptyMessage` and moved most
+one-line placeholders onto it, and the 2026-11-17 audit finished the rest.
+That run moved the memory card's three lines, the key list's loading line and
+the desktop's empty task history onto `renderEmptyMessage`; made
+`.clickable-link` (`packages/texra/src/ui/styles/commonViewStyles.ts`) the one
+look for a text link, native button included, in place of the dependency
+banner's `.tool-link`, the proposal panel's file names, the log's
+`.file-link` copy and the inquiry panel's anchors; gave the run header's fork
+and ancestor chips one `.run-chip` rule; and added `DETAIL_SEPARATOR` beside
+`FACT_SEPARATOR` for every " — " between a label and its detail.
 
-## 1. One-line placeholders have a class per component
+Left on purpose: GitTab's "Started by an agent that is no longer active." is
+a status sentence inside an owner row, not an empty list, and keeps its
+left-aligned class. The run header's two chips stay local: no other surface
+draws a chip that navigates.
 
-`renderEmptyState` (`packages/texra/src/ui/wa/emptyState.ts`) is a hero: icon,
-heading, body. `renderLoadingState` (`packages/texra/src/ui/wa/loadingState.ts`)
-is a centred, padded block with a spinner. Neither fits a single muted line
-inside a list or a card, so each such line has its own markup and class:
-
-| Site                                                                   | Markup                                               |
-| ---------------------------------------------------------------------- | ---------------------------------------------------- |
-| `packages/texra/src/ui/progress/components/FileSelectGroup.ts`         | `.file-list-placeholder`                             |
-| `packages/texra/src/ui/progress/components/StageList.ts`               | `.log-placeholder`                                   |
-| `packages/texra/src/ui/settings/components/shared/SettingsCatalog.ts`  | `.catalog-empty`, twice                              |
-| `packages/texra/src/ui/settings/tabs/GitTab.ts`                        | `.subscription-owner-placeholder`                    |
-| `packages/texra/src/ui/settings/components/profile/ProviderKeyList.ts` | `<em class="text-secondary">`, loading               |
-| `packages/texra/src/ui/settings/components/memory/MemoryItem.ts`       | `<em class="text-secondary">`, loading, error, empty |
-| `packages/desktop/src/renderer/desktopCommandPalette.ts`               | `.desktop-command-palette-empty`                     |
-| `packages/desktop/src/renderer/desktopShell.ts`                        | `.shell-history-empty`                               |
-| `packages/desktop/src/renderer/reviewPane.ts`                          | `.desktop-review-no-results`                         |
-
-The two loading lines also differ from every other loading state: no spinner
-and no `role="status"`.
-
-Decide first: either one inline skin in
-`packages/texra/src/ui/styles/commonViewStyles.ts` (a muted line, with a
-`role="status"` variant that takes `waSpinner()`), with the nine classes
-deleted, or a `compact` form of the two existing helpers. The first is the
-smaller interface. Swapping the two loading lines to `renderLoadingState` as
-it stands was tried on paper and refused: its padding and centring would
-move the layout of a key list and a memory card.
-
-## 2. Hand-written `<button>` where a skin exists
-
-Seven templates write a bare `<button>` with their own class. Four are rows
-or tabs whose box is the component's layout and are fine as they are
-(`RunTab.ts`, `BackgroundTasksPanel.ts`, `SettingsCatalog.ts`, `TeamsTab.ts`).
-Three are text-weight actions that `controlStyles.ts` already has skins for:
-
-- `packages/texra/src/ui/progress/components/DependencyBanner.ts`:
-  `.tool-link` is prose weight and underlined, which is `.is-link`.
-- `packages/texra/src/ui/progress/components/RunHeader.ts`: `.forked-from`
-  and `.ancestor` are quiet inline actions, which is `.btn-ghost` with
-  `.is-row-content` or `.is-link`.
-
-Each has local hover and focus rules to delete with the swap.
-
-## 3. The " — " before a detail
-
-A description or detail after a label is joined with " — " in the TUI's
-`Select` and `UserQuestion` rows, the script-call line
-(`packages/texra/src/ui/copy/scriptStage.ts`), the script request summary
-(`packages/texra/src/ui/copy/scriptRequest.ts`), the document-task details
-and the headless progress line
-(`packages/cli/src/runtime/headless/runProgressRenderer.ts`, which also
-measures its width). It is the same kind of fact as `FACT_SEPARATOR` and
-would sit beside it in `packages/harness/src/utils/text/stringUtils.ts`.
-Left out of this PR because half the sites are JSX spans with their own
-dimming, and a helper has to serve both the string and the span form.
+What follows is open.
 
 ## 4. Fixed wording that keeps its own dot
 

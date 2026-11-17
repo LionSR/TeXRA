@@ -4,7 +4,7 @@ Generated from `packages/llm/src/node.ts` by `npm run docgen`; do not edit. A di
 
 Exports: 13
 
-- `Binding` — `interface Binding { readonly model: Model; readonly origin: ModelOrigin; readonly config: ModelConfig; readonly billing: BillingRoute; readonly maxOutputTokens: number | null; readonly background: boolean; readonly serviceTier: 'fast' | null; readonly forcedToolChoice: boolean; }`
+- `Binding` — `interface Binding { readonly model: Model; readonly origin: ModelOrigin; readonly config: ModelConfig; readonly billing: BillingRoute; readonly maxOutputTokens: number | null; readonly serviceTier: 'fast' | null; readonly forcedToolChoice: boolean; }`
 - `bindModel` — `const bindModel: (spec: BindSpec) => Effect<Binding, ModelError, Scope>`
 - `BindSpec` — `interface BindSpec { readonly model: ModelConfig; readonly route: CredentialRoute; readonly bearer: string | SessionToken; readonly options?: { readonly maxOutputTokens?: number; readonly temperature?: number; readonly reasoning?: ReasoningChoice; readonly serverState?: boolean; readonly fastTier?: boolean; readonly webSocket?: boolean; readonly background?: boolean; readonly fetch?: typeof fetch; }; }`
 - `ChatgptSession` — `type ChatgptSession = typeof ChatgptSessionSchema.Type; ≡ { readonly accessToken: string; readonly accountId?: string | undefined; readonly clientId?: string | undefined; readonly email?: string | undefined; readonly expiresAtMs: number; readonly idToken?: string | undefined; readonly planType?: string | undefined; readonly refreshToken: string; }`

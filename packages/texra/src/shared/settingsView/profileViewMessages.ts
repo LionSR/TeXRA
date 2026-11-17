@@ -30,11 +30,9 @@ const ProviderKeyStatusSchema = Schema.Struct({
   provider: Schema.String,
   displayName: Schema.String,
   status: CredentialOriginSchema,
-  customEndpoint: Schema.String.pipe(
-    Schema.withDecodingDefault(Effect.succeed('')),
-  ),
-  supportsCustomEndpoint: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
+  /** The provider's endpoint setting; null when it has none to set. */
+  customEndpoint: Schema.NullOr(Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
   ),
   providerSettings: Schema.Array(ProviderSettingSchema).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),

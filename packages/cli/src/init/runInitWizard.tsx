@@ -4,12 +4,11 @@
 // the user backs out. Pure config logic lives in runtime/initConfig.
 
 import { Effect } from 'effect';
-import { Text, useApp } from 'ink';
+import { Box, Text, useApp } from 'ink';
 import { useState } from 'react';
 
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
-import { WizardStepShell } from '@cli/tui/ui/WizardStepShell';
 import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
 import {
   CLI_OUTPUT_FORMATS,
@@ -18,7 +17,7 @@ import {
 import { pickDefaultToolUseAgent } from '../runtime/defaultAgents';
 import type { InitAnswers } from '../runtime/platform/initConfig';
 import type { CliModelAccess } from '../runtime/models/modelAccess';
-import { NAVIGATE_HINT } from '@cli/tui/ui/KeyHints';
+import { CANCEL_HINT, KeyHints, NAVIGATE_HINT } from '@cli/tui/ui/KeyHints';
 
 interface InitWizardAgentOption {
   readonly name: string;
@@ -197,21 +196,27 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
   }
 
   return (
-    <WizardStepShell
-      title={
-        <Text bold color={COLOR_HINT}>
-          texra init
-        </Text>
-      }
-      subtitle={`Step ${index + 1}/${stepCount} · ${STEP_TITLES[step]}`}
-      keyHints={[
-        NAVIGATE_HINT,
-        { key: 'Enter', action: 'select' },
-        { key: 'Esc', action: 'cancel' },
-      ]}
-    >
-      {picker}
-    </WizardStepShell>
+    <Box flexDirection="column" paddingX={1}>
+      <Text bold color={COLOR_HINT}>
+        texra init
+      </Text>
+      <Text
+        dimColor
+      >{`Step ${index + 1}/${stepCount} · ${STEP_TITLES[step]}`}</Text>
+      <Box marginTop={1} flexDirection="column">
+        {picker}
+      </Box>
+      <Box marginTop={1}>
+        <KeyHints
+          hints={[
+            NAVIGATE_HINT,
+            { key: 'Enter', action: 'select' },
+            CANCEL_HINT,
+          ]}
+          confirmCancel={false}
+        />
+      </Box>
+    </Box>
   );
 }
 

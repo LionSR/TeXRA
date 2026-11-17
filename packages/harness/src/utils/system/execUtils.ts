@@ -5,7 +5,6 @@ import * as ChildProcess from 'effect/process/ChildProcess';
 import * as CommandLine from 'effect/process/CommandLine';
 
 import { withLogChannel } from '@logger/effectLog';
-import type { ExecEnd, ExecResult } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { inheritedEnv } from '@utils/system/envFlags';
 import { IS_WINDOWS, withCommandDirs } from '@utils/system/platformPaths';
@@ -15,6 +14,26 @@ import type {
   ChildProcessSpawner,
 } from 'effect/process/ChildProcessSpawner';
 import type { PlatformError } from 'effect/PlatformError';
+
+/** How a command ended. */
+export type ExecEnd =
+  | { readonly _tag: 'Exited'; readonly code: number }
+  | { readonly _tag: 'TimedOut' }
+  | { readonly _tag: 'LimitExceeded'; readonly stream: 'stdout' | 'stderr' }
+  /** It has no exit code of its own: it could not start, died by a signal,
+   *  or its output could not be read. */
+  | { readonly _tag: 'NoExit'; readonly why: 'spawn' | 'signal' | 'read' };
+
+/** What `executeCommand` answers. */
+export interface ExecResult {
+  /** It exited with code 0. */
+  readonly success: boolean;
+  /** Empty or whitespace-only output is normalized to the empty string. */
+  readonly stdout: string;
+  /** Normalized as `stdout` is. */
+  readonly stderr: string;
+  readonly end: ExecEnd;
+}
 
 const CHANNEL = 'execUtils';
 

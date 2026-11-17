@@ -34,7 +34,7 @@ import {
   type SessionServices,
 } from '@agent/runtime/rootLaunch';
 import { RunRegistry, Runs } from '@agent/runtime/runRegistry';
-import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { ITool } from '@tools/core/ToolTypes';
 import { AgentUnavailable, LaunchRefused } from '@common/errors/agentErrors';
 import { asksApproval } from '@agent/runtime/agentToolResolution';
 
