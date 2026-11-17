@@ -155,14 +155,14 @@ export function createProjectWorkbench(options: {
       // Closing a project rejects its pending I/O as part of disposal.
       if (!disposed) console.error('TeXRA editor pane', error);
     },
-  } satisfies Parameters<typeof createEditorPane>[0];
-  const fileTree = createEditorPane(editorCallbacks);
+  } satisfies Parameters<typeof createEditorPane>[1];
+  const fileTree = createEditorPane(surfaces.runtime, editorCallbacks);
   const editors = new Map<string, ReturnType<typeof createEditorPane>>();
   let currentTheme: Theme | undefined;
   function editorFor(tabId: string) {
     let editor = editors.get(tabId);
     if (!editor) {
-      editor = createEditorPane(editorCallbacks);
+      editor = createEditorPane(surfaces.runtime, editorCallbacks);
       if (currentTheme) editor.setTheme(currentTheme);
       editors.set(tabId, editor);
     }

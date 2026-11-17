@@ -306,6 +306,11 @@ Done, on the branch after PR 14927:
   messages, and the tool-edit host's report and warning). A request a
   surface sent outlives that surface and ends with the view. A callback
   after deactivation starts nothing.
+- Row 13, the desktop editor pane: `editorPane.ts` enters Effect through
+  the webview runtime its workbench hands it (`SessionSurfaces.runtime`)
+  and starts its fibers with a `FiberSet.makeRuntime` of the pane's scope;
+  its six bare `Effect.run*` calls are gone, and a defect in one of its
+  fibers reaches the pane's log.
 - Row 14, the scoped forks: the desktop window's notice waits on the
   window's fibers, a project's warning dialog on the process scope, and
   the CLI's resume of a document task on the shutdown scope beside the
