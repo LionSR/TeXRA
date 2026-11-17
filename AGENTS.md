@@ -255,12 +255,20 @@ in `node_modules/effect` instead of guessing a pattern.
   `withPerKeyLane` in `packages/harness/src/utils/core/perKeyQueue.ts` for one
   at a time per key), never a hand-written promise chain. Release resources on
   success, failure and interruption.
-- **No `unknown` error channel.** Type
-  it with the tagged error the path raises, or `Error` for a port whose hosts
-  fail differently. Turn a foreign rejection into an `Error` at its boundary
-  with `ensureError` (`@utils/errors/errorMessage`), never a `(e) => e`
-  pass-through and never the thunk form `Effect.try(() => …)` /
+- **A failure is a tagged error, never `unknown` and never a plain `Error`.**
+  An untagged `Error` merges with every other one in the channel, so no
+  caller can recover it with `Effect.catchTag`. Inside a tool, fail with
+  `ToolError`; elsewhere use the tagged error the subsystem already has, or
+  add one `Schema.TaggedError` for the subsystem (`message`, and
+  `cause: Schema.optional(Schema.Defect())`), never one per call site: a
+  kind nothing branches on is still only a message. Only
+  the declared type of a port whose hosts fail differently stays `Error`; its
+  implementations still raise tagged errors. Turn a foreign rejection into
+  the tagged error in the `catch` of `Effect.try` / `Effect.tryPromise`
+  (`toErrorMessage(cause)` as the message, the original as `cause`), never a
+  `(e) => e` pass-through and never the thunk form `Effect.try(() => …)` /
   `Effect.tryPromise(() => …)`, whose `UnknownError` hides the message.
+  `yield*` a tagged error directly; `Effect.fail` is for outside a generator.
 - **Errors**: surface each once and let it propagate to that handler.
   `@common/errors/*` classifies (`classifyAgentError`, the `sdkError/` leaves,
   `errorPredicates`; no barrel); `@utils/errors/errorMessage` narrows `unknown`
