@@ -18,7 +18,7 @@ the repository already states; a lean written here is not a ruling.
 ## What is left
 
 About 230 items: about 143 that are code work, about 77 the notes say wait
-on a decision, and about 11 on hold. Some are counted twice (see
+on a decision, and about 10 on hold. Some are counted twice (see
 "Overlaps").
 
 | Note                                                                                                                                 | Work | Waits on a decision | On hold |
