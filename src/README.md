@@ -27,7 +27,6 @@ CLI surfaces, and ships in nothing.
 | `model/`       | Binding a run's model choice to the session's settings: route facts, picker options, reasoning levels. The catalog, routes and sign-in are `packages/llm`     |
 | `common/`      | Cross-cutting logic that is not a wire contract, notably `common/errors/`                                                                                     |
 | `utils/`       | Host-agnostic leaf helpers; not browser-safe unless in a browser entry's closure                                                                              |
-| `transcript/`  | Trace and transcript document schemas and stream logging                                                                                                      |
 | `skills/`      | Skill schema and loading                                                                                                                                      |
 | `logger/`      | Channel-keyed logging                                                                                                                                         |
 | `types/`       | Ambient declarations for untyped third-party packages                                                                                                         |

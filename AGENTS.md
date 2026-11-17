@@ -206,8 +206,8 @@ providers in `packages/extension/src/progressView/` and
 
 ## Agent system
 
-The harness's `packages/harness/src/agent/` holds the domain model (`core/`,
-see its README) and the runtime. A run is one Effect program
+The harness's `packages/harness/src/agent/` holds the runtime; the tool
+contract is `packages/harness/src/tools/core/`. A run is one Effect program
 (`runtime/loop/runLoop.ts`) that appends rows to the run history and continues
 from the `RunState` each append returns; resume is the same function over the
 same rows. There is no flow engine: do not add a node, a cursor, a services
