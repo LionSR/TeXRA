@@ -26,7 +26,7 @@ import {
   storeOpenElsewhere,
 } from './databaseLayer';
 import { asideCopies } from './storeAside';
-import { WorkspaceRoots } from './WorkspaceRoots';
+import { SessionWorkspace } from '@shared/session/sessionWorkspace';
 
 /** No idle retention or explicit invalidation: the project owns its state
  *  borrow and the session graph owns its borrow until their scopes unwind. */
@@ -36,7 +36,7 @@ export const projectDatabaseLayer = Layer.effect(
     lookup: (storage: string) =>
       Layer.build(
         databaseLayer('persistent').pipe(
-          Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
+          Layer.provide(Layer.succeed(SessionWorkspace)({ storage })),
         ),
       ).pipe(Effect.map((context) => Context.get(context, Database))),
   }),

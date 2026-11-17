@@ -13,7 +13,7 @@ A session holds two projections of a run's facts.
   parent, position, end, stop, config, grants), `aggregateState`, and
   `view.read(runIds)`, the view rebuilt from the log as of the call.
 - **The in-memory `SessionView`**, which an update fiber applies after the
-  commit (`packages/harness/src/controllers/session/sessionViewService.ts`).
+  commit (`packages/harness/src/shared/session/sessionViewService.ts`).
   `view.run(runId)` reads it. It trails the log inside one process, and a
   service window's own feed can be ahead of the service's view.
 

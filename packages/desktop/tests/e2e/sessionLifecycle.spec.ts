@@ -52,7 +52,7 @@ function inEventDatabase<A, E>(
         fixture.databaseLayer('persistent').pipe(
           Layer.provide(
             Layer.mergeAll(
-              Layer.succeed(fixture.WorkspaceRoots)({ storage: storagePath }),
+              Layer.succeed(fixture.SessionWorkspace)({ storage: storagePath }),
               fixture.nodePlatformServices,
               // The canonical runs write no plugin rows.
               Layer.succeed(fixture.ToolRegistry)(fixture.toolTable([])),
