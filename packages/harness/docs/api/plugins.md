@@ -366,10 +366,9 @@ interface ChildRunsShape {
 ## codemode
 
 Code mode: the `script` tool, a program that calls the run's other tools,
-and `self()`, the function a script runs this agent again with. An agent
-gets them if its configuration names `script`, or, while script-only
-tools are on, as every chat run does; its session layer is the code
-sandbox the scripts run in.
+and `self()`, the function a script runs this agent again with. Every
+agent with tools gets them, and its requests send `script` and the run's
+own tools alone; its session layer is the code sandbox the scripts run in.
 
 ```ts
 const codemode: Plugin

@@ -2240,21 +2240,6 @@ const RunWorkspaceFileSchema: Struct<{ readonly path: String; readonly size: Int
 const SAVE_MODEL_IO_SETTING: { readonly key: "debug.saveModelIO"; readonly slot: "config"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Save model requests and responses"; readonly description: "Save what is sent to and received from the model: the request messages and raw responses as JSON, plus the final input prompt as XML."; }
 ```
 
-## SCRIPT_ONLY_SETTING
-
-Code mode's "only" stage: every chat run gets `script`, and the model sees
-no other tool; the rest are callable from scripts alone. The codemode
-plugin's `injectedWhen` reads the row to inject `script`; the step reads it
-to send the model `script` and the run's own tools alone, recorded per tool
-on its `tools.offered` row. Both read it as off for a model that keeps
-direct tool calls (`keepsDirectToolCalls`). Off here, so an embedder's
-agent is sent the tools it declares; an app turns it on with
-`settingsCatalog`'s `defaults`.
-
-```ts
-const SCRIPT_ONLY_SETTING: { readonly key: "codeMode.scriptOnly"; readonly slot: "globalState"; readonly schema: withDecodingDefault<Boolean, never>; readonly title: "Script-only tools"; readonly description: "Send chat agents the script tool and their own tools alone: every other tool is called from inside a script. Turn off to send every tool directly."; }
-```
-
 ## ScriptDeliverySummary
 
 ```ts

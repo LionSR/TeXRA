@@ -20,7 +20,6 @@ import {
   GIT_AUTHOR_EMAIL_SETTING,
   GIT_AUTHOR_NAME_SETTING,
   HELPER_MODEL_SETTING,
-  SCRIPT_ONLY_SETTING,
   settingsCatalog,
   type SettingRow,
   type SettingsCatalog,
@@ -362,8 +361,6 @@ const catalog: SettingsCatalog = settingsCatalog({
     [HELPER_MODEL_SETTING.key]: DEFAULT_HELPER_MODEL,
     [GIT_AUTHOR_NAME_SETTING.key]: 'texra-ai',
     [GIT_AUTHOR_EMAIL_SETTING.key]: 'texra-ai@users.noreply.github.com',
-    // Code mode is on in TeXRA; the harness leaves it off for embedders.
-    [SCRIPT_ONLY_SETTING.key]: true,
   },
   curatedModels: CURATED_MODELS,
 });
