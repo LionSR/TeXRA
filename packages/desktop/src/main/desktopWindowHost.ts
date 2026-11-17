@@ -8,10 +8,8 @@ import { Cause, Effect } from 'effect';
 
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { HostFailed } from '@texra/hosts/uiHosts';
-import {
-  INSTRUCTION_ACTION,
-  type InstructionAction,
-} from '@ui/copy/instructionActions';
+import type { OpenFilesDialog } from '@texra/controllers/session/launcherFilePicker';
+import { windowNotices } from '@texra/controllers/session/windowNotices';
 import { texraGuideUrl } from '@ui/copy/guide';
 import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
 import { choose, createDesktopDialogs } from './desktopDialogs.js';
@@ -36,10 +34,7 @@ export function createDesktopWindowHost(options: {
   const { window, runtime, spawn, bridge } = options;
   const post = bridge.postToRenderer;
 
-  const dialogs = createDesktopDialogs(window, spawn, {
-    openGuide: (docsPage) => openExternalInBackground(texraGuideUrl(docsPage)),
-    dispatchInstructionAction: (action) => dispatchInstructionAction(action),
-  });
+  const dialogs = createDesktopDialogs(window, spawn);
   const { notify } = dialogs;
 
   const reportBackgroundError = (error: unknown) => {
@@ -106,34 +101,6 @@ export function createDesktopWindowHost(options: {
       ),
     );
   };
-  const dispatchInstructionAction = (action: InstructionAction): void => {
-    switch (action) {
-      case INSTRUCTION_ACTION.SET_API_KEY:
-        postDesktopSettingsView(post, 'models/keys');
-        return;
-      case INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE:
-        openExternalInBackground(texraGuideUrl('configuration'));
-        return;
-      case INSTRUCTION_ACTION.OPEN_MODELS_DOC:
-        openExternalInBackground(texraGuideUrl('models'));
-        return;
-    }
-  };
-
-  /**
-   * Await a host dialog the caller has already started, reporting rather than
-   * raising its failure: a dialog that could not be shown must not fail the
-   * run behind it. The caller still awaits the dialog, as it did before.
-   */
-  const awaitOrReport = (
-    started: Effect.Effect<void, HostFailed>,
-  ): Effect.Effect<void> =>
-    started.pipe(
-      Effect.catchTag('HostFailed', (error) =>
-        Effect.sync(() => reportBackgroundError(error)),
-      ),
-    );
-
   return {
     window,
     post,
@@ -194,25 +161,23 @@ export function createDesktopWindowHost(options: {
         },
         catch: ensureError,
       }),
-    /** The files the user picked (one or several), or undefined when they
-     *  cancelled. */
-    openFileDialog: (dialogOptions: {
-      title: string;
-      defaultPath?: string;
-      filters: Array<{ name: string; extensions: string[] }>;
-    }) =>
+    /** The native dialog that opens several files. */
+    openFileDialog: ((dialogOptions) =>
       Effect.tryPromise({
         try: async () => {
           const result = await dialog.showOpenDialog(window, {
             title: dialogOptions.title,
             defaultPath: dialogOptions.defaultPath,
-            filters: dialogOptions.filters,
+            filters: dialogOptions.filters.map(({ name, extensions }) => ({
+              name,
+              extensions: [...extensions],
+            })),
             properties: ['openFile', 'multiSelections'],
           });
           return result.canceled ? undefined : result.filePaths;
         },
         catch: ensureError,
-      }),
+      })) satisfies OpenFilesDialog,
     /**
      * What one project's runs present through: its dialogs name that project,
      * and its diff and build views are addressed by its own storage root,
@@ -231,13 +196,17 @@ export function createDesktopWindowHost(options: {
         openPath: (filePath) => presented(previewHost.openPath(filePath)),
         confirm: (question) => dialogs.confirm(question, name),
         notify: (level, message) => notify(level, message, name),
-        // Presentation failures are reported, never raised: a run must not
-        // fail because a dialog could not be shown. The caller still awaits
-        // the dialog, as it did before.
-        showErrorDialog: (message, docsPage) =>
-          awaitOrReport(dialogs.showErrorDialog(message, docsPage, name)),
-        showInstructionDialog: (message, actions) =>
-          awaitOrReport(dialogs.showInstructionDialog(message, actions, name)),
+        notices: windowNotices({
+          ask: (level, message, labels) =>
+            dialogs.ask(level, message, labels, name),
+          setApiKey: Effect.sync(() =>
+            postDesktopSettingsView(post, 'models/keys'),
+          ),
+          // A guide that does not open is shown in the window.
+          openGuide: (page) =>
+            presented(previewHost.openExternal(texraGuideUrl(page))),
+          globalState: roots.globalState,
+        }),
         pickTranscriptExportFormat: () =>
           dialogs.pickTranscriptExportFormat(name),
       };
