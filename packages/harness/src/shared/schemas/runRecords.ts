@@ -2,10 +2,10 @@
 import { Schema, SchemaGetter, Struct } from 'effect';
 
 import { normalizeFilePath } from '@utils/core/pathBasics';
+import type { ExecEnd } from '@utils/system/execUtils';
 
 import { AgentConfigSchema, type AgentConfig } from './agentConfig';
 import { RunIdSchema } from './identifiers';
-import type { ExecEnd } from './opResults';
 import { ModelFailureSchema, modelFailureMessage } from './errors';
 import { RunOutcomeSchema } from './run';
 import { RunIdentitySchema } from './runIdentity';

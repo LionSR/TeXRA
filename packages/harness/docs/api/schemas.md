@@ -883,7 +883,7 @@ interface FormattedIssue {
 
 Mint a run id: 12 lowercase hex chars (48 bits of entropy), the first
 digits of a random UUID, every one of which is random. One of the two
-minting sites (`deriveRunId` is the other), so the brand is applied here
+minting sites (`callChildRunId` is the other), so the brand is applied here
 and nowhere downstream. Any other random id is `crypto.randomUUID()`.
 
 ```ts
