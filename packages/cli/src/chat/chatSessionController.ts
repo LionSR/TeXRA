@@ -37,7 +37,6 @@ import {
   acceptsFollowUp,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { readCliTeam } from '@cli/runtime/cliTeams';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { launchApproval } from '@cli/runtime/platform/cliContext';
 import { resumeRun } from '@texra/controllers/session/runActionPolicy';
@@ -58,7 +57,6 @@ import type { TuiSession } from './tui/state/sessionRunState';
 import { oneShotResumeNotice } from './tui/state/resumeHint';
 import { currentView, runViewOf, sessionView } from './tui/state/sessionView';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { launchTeamId } from '@texra/agent/teams/teamLaunch';
 import {
   createTuiHostInteractions,
   presentInTranscript,
@@ -265,26 +263,16 @@ export function createChatSessionController(
     );
 
   /** Publish the configuration of the conversation the TUI adopts. */
-  const adoptRunConfig = Effect.fn('adoptRunConfig')(function* (
-    config: Pick<
-      AgentConfig,
-      'agent' | 'agentSource' | 'model' | 'launch' | 'delegationAgentScope'
-    >,
+  const adoptRunConfig = (
+    config: Pick<AgentConfig, 'agent' | 'agentSource' | 'model'>,
     modelSource?: 'history',
-  ) {
-    const team = yield* readCliTeam(
-      runSession.roots.repoState,
-      launchTeamId(config),
-    );
+  ): void =>
     patchSessionMeta({
       agent: config.agent,
       agentSource: config.agentSource ?? undefined,
       model: config.model,
       ...(modelSource ? { modelSource } : {}),
-      team,
-      delegationAgentScope: config.delegationAgentScope ?? undefined,
     });
-  });
 
   // -----------------------------------------------------------------------
   // Internal helpers
@@ -421,7 +409,7 @@ export function createChatSessionController(
         const prepared = Effect.gen(function* () {
           const config = yield* resolveConfig;
           resolved = true;
-          yield* adoptRunConfig(config);
+          adoptRunConfig(config);
           return yield* decodeLaunchConfig(config);
         }).pipe(
           Effect.tapError((error) =>
@@ -565,7 +553,7 @@ export function createChatSessionController(
             return yield* Effect.fail(
               new Error(`Run ${run.runId} has no configuration to resume`),
             );
-          yield* adoptRunConfig(adoptedConfig, 'history');
+          adoptRunConfig(adoptedConfig, 'history');
           clearLocalTranscript();
           // The transcript and the work plan are the view's: the TUI
           // subscribes the run's aggregate and renders `transcript.rows`, and
@@ -609,7 +597,7 @@ export function createChatSessionController(
       const config = yield* init.runSession.records(runId).readConfig;
       if (!config)
         return yield* Effect.fail(new Error('it has no stored configuration'));
-      yield* adoptRunConfig(config, 'history');
+      adoptRunConfig(config, 'history');
     }).pipe(
       Effect.catch((error) =>
         Effect.sync(() =>
@@ -718,10 +706,6 @@ export function createChatSessionController(
           ...(displayInstruction !== undefined ? { displayInstruction } : {}),
           workingDirectory: cwd,
           ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
-          ...(meta.team ? { launch: { teamId: meta.team.id } } : {}),
-          ...(meta.delegationAgentScope
-            ? { delegationAgentScope: meta.delegationAgentScope }
-            : {}),
         } satisfies AgentConfigPayload;
       }),
       displayInstruction ?? instruction,

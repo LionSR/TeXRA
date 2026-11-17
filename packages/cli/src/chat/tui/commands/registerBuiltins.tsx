@@ -10,7 +10,7 @@ import type { ConnectService } from '../state/attachedTask';
 import { RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { PLUGINS_TUI } from '@ui/copy/plugins';
 
-import { AgentListForm, type AgentPickerValue } from '../forms/AgentListForm';
+import { AgentListForm } from '../forms/AgentListForm';
 import {
   ApprovalPolicyForm,
   type ApprovalFormValue,
@@ -28,7 +28,6 @@ import { currentView, runViewOf } from '../state/sessionView';
 import { appendLocalNotice } from '../state/transcript';
 import {
   applyCliModelSelection,
-  applyCliTeamSelection,
   applyInitialCliAgentSelection,
 } from './handlers/agentModelCommands';
 import {
@@ -84,14 +83,11 @@ export function builtinSlashCommands(options: {
     const context = useSlashContext();
     const meta = sessionMeta.get();
     const selectable = context.session.canStartRootRun();
-    const onPick: FormAction<AgentPickerValue> = (value) =>
-      value.kind === 'agent'
-        ? applyInitialCliAgentSelection(value.agent, context)
-        : applyCliTeamSelection(value.teamId, context);
+    const onPick: FormAction<string> = (agent) =>
+      applyInitialCliAgentSelection(agent, context);
     return (
       <AgentListForm
         currentAgent={meta.agent}
-        {...(meta.team !== undefined ? { currentTeamId: meta.team.id } : {})}
         availableRows={props.availableRows}
         selectable={selectable}
         onSelect={bindSelection(context, props, onPick, {
@@ -286,7 +282,7 @@ export function builtinSlashCommands(options: {
 
   const agent: SlashCommand = {
     name: 'agent',
-    description: 'Choose an agent, or a team it leads',
+    description: 'Choose the agent for this chat',
     aliases: ['agents'],
     category: 'configuration',
     echo: 'ifPersists',

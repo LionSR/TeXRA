@@ -102,7 +102,7 @@ export const checkModelConnection = Effect.fn('checkModelConnection')(
  * Re-check after an account change. When a model can answer now: clear the
  * state, resolve the chat's model the way startup does, hand a first run to
  * the setup agent, then let the waiting messages go — or, with none waiting
- * on a first run, open `/agent` so a newcomer sees the agents and teams.
+ * on a first run, open `/agent` so a newcomer sees the agents.
  */
 export const connectChatModel = Effect.fn('connectChatModel')(function* (
   context: SlashCommandContext,

@@ -108,20 +108,16 @@ export interface AppSignalPayloads {
 
   /**
    * The workspace agents changed. Keyless on purpose: every listener
-   * re-reads the agent list, so which team or agent moved carries no
-   * information.
+   * re-reads the agent list, so which agent moved carries no information.
    *
-   * Emitted, in every process sharing the global store, when the default
-   * team changes (`apply_team`, which the setup agent runs mid-conversation,
-   * even in a background service task), and when the agent catalog is
-   * reloaded after a tool switch, a plugin install or an agent file's edit:
-   * `agentCatalogFollower` emits both, in this process or another. The
-   * settings views' agent and team writes emit it themselves.
+   * Emitted, in every process sharing the global store, when the agent
+   * catalog is reloaded after a tool switch, a plugin install or an agent
+   * file's edit (`agentCatalogFollower`, in this process or another). The
+   * settings views' agent writes emit it themselves.
    *
    * Consumed by: extension and desktop settings views, both re-reading the
-   * agent list and team presets, and their launchers. Not the CLI: it reads
-   * the agent list per command and has no persistent panel that could go
-   * stale.
+   * agent list, and their launchers. Not the CLI: it reads the agent list
+   * per command and has no persistent panel that could go stale.
    */
   workspaceAgentsChanged: undefined;
 

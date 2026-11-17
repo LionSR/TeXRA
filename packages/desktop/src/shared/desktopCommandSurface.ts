@@ -42,8 +42,7 @@ const DESKTOP_PALETTE_COMMANDS = [
   DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
   DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
   DESKTOP_LOCAL_COMMANDS.SHOW_BROWSER,
-  // One row per settings page that has a command, in nav order. Teams are a
-  // section of Agents, so texra.showTeamSettings gets no row of its own.
+  // One row per settings page that has a command, in nav order.
   'texra.showModels',
   'texra.showAgents',
   'texra.showTools',

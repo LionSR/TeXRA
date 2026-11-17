@@ -22,8 +22,7 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
  * State 0 "Connect a model" card, the one
  * credential prompt in the extension and the desktop — a port of the CLI
  * first-run picker, not a new design: ChatGPT subscription first, the API-key
- * alternative, and a quiet "Skip for now" link last. The setup assistant
- * that follows picks the agent team.
+ * alternative, and a quiet "Skip for now" link last.
  * Stateless: renders the shared onboarding copy verbatim and emits the
  * `onboarding` host actions (`signInChatGpt`, `setApiKey`, `skip`, and
  * getting-started navigation); the host owns the funnel state.

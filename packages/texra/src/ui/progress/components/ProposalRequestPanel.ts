@@ -1,4 +1,4 @@
-/** Agent proposal card: "Delegate a task to reviewer" / "Start a team run: …". */
+/** Agent proposal card: "Delegate a task to reviewer". */
 
 // Third-party imports
 import {

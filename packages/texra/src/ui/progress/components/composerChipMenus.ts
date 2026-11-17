@@ -5,7 +5,7 @@
  * Open on a proposal, the form approves another run's launch, so it offers
  * agent and model only: that run's approval and directory apply.
  */
-import { html, nothing, type TemplateResult } from 'lit';
+import { html, type TemplateResult } from 'lit';
 import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
 
@@ -106,20 +106,13 @@ export function launcherChipMenus(
   },
   editing: boolean,
 ): ChipMenu[] {
-  const team = host.teamOptions.find(
-    (option) => option.value === launch.selectedTeamId,
-  );
   const agent = launchAgentOption(launch, host);
-  const agentLabel =
-    launch.launchTarget === 'team' && team
-      ? team.label
-      : (agent?.label ?? UNLISTED_AGENT_LABEL);
   const model = modelMenu(launch.model, host);
   const menus: ChipMenu[] = [
     {
       id: 'composer-agent',
       icon: 'robot',
-      label: agentLabel,
+      label: agent?.label ?? UNLISTED_AGENT_LABEL,
       title: 'Agent',
       items: html`
         ${repeat(
@@ -129,35 +122,10 @@ export function launcherChipMenus(
             html`<wa-dropdown-item
               value=${`agent:${option.value}`}
               type="checkbox"
-              .checked=${live(
-                launch.launchTarget === 'agent' &&
-                  option.value === agent?.value,
-              )}
+              .checked=${live(option.value === agent?.value)}
               >${option.label}</wa-dropdown-item
             >`,
         )}
-        ${
-          host.teamOptions.length > 0
-            ? html`<div class="menu-heading">Teams</div>
-                ${repeat(
-                  host.teamOptions,
-                  (option) => option.value,
-                  (option) =>
-                    html`<wa-dropdown-item
-                      value=${`team:${option.value}`}
-                      type="checkbox"
-                      .checked=${live(
-                        launch.launchTarget === 'team' &&
-                          option.value === launch.selectedTeamId,
-                      )}
-                      >${option.label}</wa-dropdown-item
-                    >`,
-                )}
-                <wa-dropdown-item value="settings:teams"
-                  >Manage teams…</wa-dropdown-item
-                >`
-            : nothing
-        }
         <wa-dropdown-item value="settings:agents"
           >Browse all agents…</wa-dropdown-item
         >
@@ -165,14 +133,6 @@ export function launcherChipMenus(
       onSelect: (value) => {
         if (value.startsWith('agent:')) {
           actions.setLaunch({ agent: value.slice(6) });
-        } else if (value.startsWith('team:')) {
-          // A team runs its lead as a chat.
-          actions.setLaunch({
-            launchTarget: 'team',
-            selectedTeamId: value.slice(5),
-          });
-        } else if (value === 'settings:teams') {
-          actions.openSettings('agents/teams');
         } else if (value === 'settings:agents') {
           actions.openSettings('agents/library');
         }

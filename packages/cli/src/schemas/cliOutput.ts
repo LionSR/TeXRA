@@ -100,8 +100,6 @@ export const CLI_RESULT_FIELD = Object.freeze({
   'history-entry': 'entry',
   'history-detail': 'detail',
   'history-delete': 'result',
-  team: 'preset',
-  'team-inspection': 'plan',
   skill: 'skill',
   'skill-issue': 'issue',
   plugin: 'plugin',
@@ -117,7 +115,6 @@ type CliSpreadKind =
   | 'chatgpt-auth-status'
   | 'grok-auth'
   | 'grok-auth-status'
-  | 'team-result'
   | 'doctor-check'
   | 'doctor-summary'
   | 'progress'

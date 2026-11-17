@@ -11,10 +11,7 @@ import {
   listResumableCliHistoryEntries,
   type CliHistoryEntry,
 } from '@cli/runtime/history';
-import {
-  formatCliHistoryAgentLabel,
-  formatCliHistorySubject,
-} from '@cli/runtime/historyLabels';
+import { formatCliHistorySubject } from '@cli/runtime/historyLabels';
 import { formatShortDateTime } from '@ui/formatting/dateTimeFormat';
 import { rootRunId } from '../state/cliState';
 import { AsyncListForm } from './_shared/ListForm';
@@ -38,9 +35,7 @@ interface ResumeListFormProps {
  *  about; the id stays for `texra resume <id>` and never labels a row. */
 function resumeEntryLabel(entry: CliHistoryEntry): string {
   const title = entry.description && collapseWhitespace(entry.description);
-  return (
-    title || formatCliHistorySubject(entry, formatCliHistoryAgentLabel(entry))
-  );
+  return title || formatCliHistorySubject(entry, entry.agent);
 }
 
 function resumeEntryDescription(entry: CliHistoryEntry): string {
@@ -48,7 +43,7 @@ function resumeEntryDescription(entry: CliHistoryEntry): string {
   return joinFacts([
     when,
     historyStanding(entry),
-    formatCliHistoryAgentLabel(entry),
+    entry.agent,
     !entry.resumable &&
       entry.resumeBlocked !== undefined &&
       `cannot resume: ${entry.resumeBlocked}`,

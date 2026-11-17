@@ -40,15 +40,16 @@ const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
     /** Working directory override for subagent tool calls (e.g. a git worktree). */
     workingDirectory: Schema.optional(Schema.NullOr(Schema.String)),
     /**
-     * What the launching app records about its own launch (a team it ran,
-     * where a command line copies the output) and reads back on resume. The
-     * harness never reads it, and a child run does not inherit it; each
-     * owner decodes its own keys.
+     * What the launching app records about its own launch (where a command
+     * line copies the output) and reads back on resume. The harness never
+     * reads it, and a child run does not inherit it; each owner decodes its
+     * own keys.
      */
     launch: Schema.optional(
       Schema.NullOr(Schema.Record(Schema.String, Schema.Json)),
     ),
-    /** Run-scoped delegation agent list used by team runs and their children. */
+    /** The agents this run and its children may delegate to, pinned at its
+     *  launch; absent, the workspace's visible agents. */
     delegationAgentScope: Schema.optional(
       Schema.NullOr(AgentDelegationScopeSchema),
     ),

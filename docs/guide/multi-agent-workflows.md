@@ -1,10 +1,10 @@
 # Multi-agent workflows
 
 <script setup>
-import CliTeamHero from '../.vitepress/components/CliTeamHero.vue';
+import CliSubagentsHero from '../.vitepress/components/CliSubagentsHero.vue';
 </script>
 
-When a task is too large for a single agent pass—checking every derivation in a long calculation, testing a conjecture from several angles, or auditing and reconciling a multi-file paper—a team lead such as `orchestrator` delegates the pieces to specialist agents.
+When a task is too large for a single agent pass—checking every derivation in a long calculation, testing a conjecture from several angles, or auditing and reconciling a multi-file paper—a lead agent such as `orchestrator` delegates the pieces to specialist agents.
 
 Normally the lead calls specialists one turn at a time, reads what comes back, and decides what to run next. When the full fan-out and join are known up front, the lead can instead write a short JavaScript script that runs independent specialists in parallel and combines their outputs. TeXRA records every call the script makes, so an interrupted script resumes without repeating finished work.
 
@@ -97,9 +97,9 @@ The lead reads the bundled `multi-agent-orchestration` skill for how to shape th
 4. **Skip a call.** Stopping a child run skips its call: the call rejects with `Skipped` in the script, which then carries on or stops depending on how it handles failures. A skipped call is not retried for you; ask the lead if you want it redone.
 5. **A result when it finishes.** The lead receives the script's return value and its last log lines. A program's outputs land in run storage like any other delegated run; the lead reviews them and uses `accept_run_files` to bring them into the workspace.
 
-<CliTeamHero />
+<CliSubagentsHero />
 
-<p class="hero-caption">A team session in the CLI. The calls a script makes appear in this same subagent panel, each as a focusable stream with its own transcript.</p>
+<p class="hero-caption">A lead agent's chat in the CLI. The calls a script makes appear in this same subagent panel, each as a focusable stream with its own transcript.</p>
 
 ## Background scripts
 
@@ -123,7 +123,7 @@ In the CLI, `texra resume <id>` continues a stopped run, a background script run
 
 ## Where it is available
 
-**Agents.** A tool is only offered to agents whose configuration names it. The `orchestrator` lead (the Physicist, Mathematician, and Computer Scientist teams), `leanOrchestrator` (the Lean Project team), and the `engineer` lead (the Software Engineer team) name `agent`, `program` and `script`; `assistant` names all three too, `setup` names `agent` and `program`, and `creator` names `agent`. A [custom agent](./custom-agents.md) can list them in its tools.
+**Agents.** A tool is only offered to agents whose configuration names it. The three [lead agents](./built-in-agents.md#lead-agents), `orchestrator`, `leanOrchestrator` and `engineer`, name `agent`, `program` and `script`; `assistant` names all three too, `setup` names `agent` and `program`, and `creator` names `agent`. A [custom agent](./custom-agents.md) can list them in its tools.
 
 **The global switch.** The **Multi-Agent Workflow** switch on **Settings → Plugins** gates `agent` and `program` together: when it is off, both are removed from every agent's tool list, whatever the agent's configuration says. It is on by default; in the terminal client, the same switch is the **Multi-Agent Workflow** row in `/plugins`.
 
@@ -143,8 +143,8 @@ In the CLI, `texra resume <id>` continues a stopped run, a background script run
 
 ## Next steps
 
-- [Built-in agents](./built-in-agents.md#built-in-teams): the teams whose leads run scripts
-- [TeXRA CLI](./texra-cli.md#teams): running a team from the terminal
+- [Built-in agents](./built-in-agents.md#lead-agents): the lead agents that run scripts
+- [TeXRA CLI](./texra-cli.md#lead-agents): running a lead agent from the terminal
 - [Programs: how they work](./agent-architecture.md): what a single `program` call does
 - [Agent integrations](./agent-integrations.md): the Plugins page and approval settings
 - [Custom agents](./custom-agents.md): give your own lead agent these tools

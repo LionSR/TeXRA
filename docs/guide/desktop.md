@@ -65,8 +65,8 @@ shares:
 - history and execution records; and
 - project files, custom instructions, and checked-in agent definitions.
 
-TeXRA's own stored state (enabled agents, the default team, disabled tools,
-model selection and similar choices) also lives under `~/.texra`, in stores
+TeXRA's own stored state (enabled agents, disabled tools, model selection
+and similar choices) also lives under `~/.texra`, in stores
 every host reads, so it carries over too. Provider API keys and sign-ins are
 shared: every TeXRA app keeps them in one folder, `~/.texra/secrets/`,
 readable by your user alone.

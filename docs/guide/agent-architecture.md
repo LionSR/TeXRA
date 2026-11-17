@@ -10,7 +10,7 @@ A program takes your input files, context references, and instruction, has a mod
 ::: tip When to run a program
 Programs are built for **deep, single-shot thinking**: deriving or checking equations step by step, rewriting a whole section, converting a paper to slides, or merging edits. Each revision produces a full XML-wrapped output, and most programs review it in a second revision, so runs with frontier reasoning models can take **10–30 minutes** to finish.
 
-If you want a faster turnaround (quick polishes, small corrections), pick a **smaller or faster model**: output quality drops somewhat, but wall-clock time drops a lot. For short, conversational edits or read-only questions, chat with an agent (`assistant`, `research`, `review`) instead: a chat streams back in seconds and skips the document pipeline. For a problem too big for one run, a team lead can start several programs at once; read [Multi-agent workflows](./multi-agent-workflows.md).
+If you want a faster turnaround (quick polishes, small corrections), pick a **smaller or faster model**: output quality drops somewhat, but wall-clock time drops a lot. For short, conversational edits or read-only questions, chat with an agent (`assistant`, `research`, `review`) instead: a chat streams back in seconds and skips the document pipeline. For a problem too big for one run, a lead agent can start several programs at once; read [Multi-agent workflows](./multi-agent-workflows.md).
 :::
 
 ## Agents and programs

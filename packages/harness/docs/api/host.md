@@ -251,16 +251,6 @@ interface AgentDirectoriesPort {
   >;
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
   /**
-   * The member names of the workspace's team `teamId`, read from its
-   * repository state; `undefined` for a team the workspace has none of. The
-   * app owns what a team is; the harness only stores a selection naming one
-   * by id. Absent, the app has no teams.
-   */
-  readonly teamMembers?: (
-    repoState: StateStore,
-    teamId: string,
-  ) => Effect.Effect<readonly string[] | undefined, StateReadFailed>;
-  /**
    * The packaged resources root a host ships its bundled agents under,
    * the tool plugins' agent directories among them. Absent where none ships:
    * an embedder's own directories.
@@ -289,8 +279,6 @@ interface AgentDirectoryServiceOptions {
   resourcesPath: string;
   /** Where the configured custom agent directory is read from. */
   state: Pick<StateStore, 'get'>;
-  /** The app's team membership read (`AgentDirectoriesPort.teamMembers`). */
-  teamMembers?: AgentDirectoriesPort['teamMembers'];
   /** Defaults to logging the issue at `warn`; hosts with an interactive
    * notification surface (e.g. the VS Code extension) can override it. */
   issueReporter?: {
@@ -515,20 +503,16 @@ interface AppSignalPayloads {
 
   /**
    * The workspace agents changed. Keyless on purpose: every listener
-   * re-reads the agent list, so which team or agent moved carries no
-   * information.
+   * re-reads the agent list, so which agent moved carries no information.
    *
-   * Emitted, in every process sharing the global store, when the default
-   * team changes (`apply_team`, which the setup agent runs mid-conversation,
-   * even in a background service task), and when the agent catalog is
-   * reloaded after a tool switch, a plugin install or an agent file's edit:
-   * `agentCatalogFollower` emits both, in this process or another. The
-   * settings views' agent and team writes emit it themselves.
+   * Emitted, in every process sharing the global store, when the agent
+   * catalog is reloaded after a tool switch, a plugin install or an agent
+   * file's edit (`agentCatalogFollower`, in this process or another). The
+   * settings views' agent writes emit it themselves.
    *
    * Consumed by: extension and desktop settings views, both re-reading the
-   * agent list and team presets, and their launchers. Not the CLI: it reads
-   * the agent list per command and has no persistent panel that could go
-   * stale.
+   * agent list, and their launchers. Not the CLI: it reads the agent list
+   * per command and has no persistent panel that could go stale.
    */
   workspaceAgentsChanged: undefined;
 
@@ -1186,15 +1170,6 @@ process opened.
 
 ```ts
 const InstalledPlugins: Readonly<{ readonly unloadedComponents: readonly ("LSP servers" | "output styles" | "apps")[]; readonly origin: (input: string, cwd: string, ref: string | undefined) => Result<PluginOrigin, PluginRequestError>; readonly install: (origin: PluginOrigin, only: readonly string[], env: PluginEnv) => Effect<{ readonly name: string; readonly path: string; readonly source: string; readonly skills: readonly string[]; readonly enabled: boolean; readonly description?: string | undefined; readonly commit?: string | undefined; readonly version?: string | undefined; readonly ref?: string | undefined; readonly trust?: { readonly version: string | null; readonly digest: string; } | undefined; }[], Error, FileSystem | ChildProcessSpawner>; readonly update: (names: readonly string[], env: PluginEnv) => Effect<PluginUpdate[], PluginError | PluginRequestError, FileSystem | ChildProcessSpawner>; readonly remove: (name: string, env: PluginEnv) => Effect<{ name: string; path: string; local: boolean; leftover: boolean; }, PluginError | PluginRequestError, FileSystem>; readonly list: (env: PluginEnv) => Effect<PluginListing[], PluginError, FileSystem>; readonly enable: <E, R>(name: string, env: PluginEnv, confirm: (review: PluginReview) => Effect<boolean, E, R>) => Effect<"enabled" | "declined", PluginError | PluginRequestError | E, FileSystem | R>; readonly disable: (name: string, env: PluginEnv) => Effect<undefined, PluginError | PluginRequestError, never>; readonly loaded: (env: Pick<PluginEnv, "globalState">) => Effect<{ readonly name: string; readonly path: string; readonly source: string; readonly skills: readonly string[]; readonly enabled: boolean; readonly description?: string | undefined; readonly commit?: string | undefined; readonly version?: string | undefined; readonly ref?: string | undefined; readonly trust?: { readonly version: string | null; readonly digest: string; } | undefined; }[], never, FileSystem>; readonly describeHook: (hook: ConfiguredHook) => Effect<string, never, never>; }>
-```
-
-## InvalidAgentTeamError
-
-```ts
-class InvalidAgentTeamError extends Schema.TaggedError<InvalidAgentTeamError>()(
-  'InvalidAgentTeamError',
-  { message: Schema.String },
-)
 ```
 
 ## isModuleNotFoundError
@@ -2728,9 +2703,6 @@ interface WorkspaceAgentsControllerDeps<
   Entry extends WorkspaceAgentsEntry = WorkspaceAgentsEntry,
 > {
   readonly repoState: StateStore;
-  readonly globalState: StateStore;
-  /** The app's team membership read (`AgentDirectoriesPort.teamMembers`). */
-  readonly teamMembers: AgentDirectoriesPort['teamMembers'];
   readonly getAgents: () => Entry[];
   /**
    * Resolve one stored identifier without collapsing exact source identity.
@@ -2754,17 +2726,13 @@ interface WorkspaceAgentsEntry {
 
 ## WorkspaceAgentsStores
 
-The two state slots a workspace's agent list resolves against: the
-repository's selection and the cross-workspace defaults. Every read is
-answered for the workspace whose slots the caller hands over, so a process
-holding several sessions never answers one project's question with another's
-agent list.
+The state slot a workspace's agent list resolves against: the repository's
+selection. Every read is answered for the workspace whose slot the caller
+hands over, so a process holding several sessions never answers one
+project's question with another's agent list.
 
 ```ts
-type WorkspaceAgentsStores = Pick<
-  WorkspaceRoots,
-  'repoState' | 'globalState'
->;
+type WorkspaceAgentsStores = Pick<WorkspaceRoots, 'repoState'>;
 ```
 
 ## workspaceEnvironmentLayer

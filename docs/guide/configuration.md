@@ -19,8 +19,8 @@ The page remembers the sub-tab you last opened while Settings stays open.
 - **Models**: **API keys** (including Kimi Code and the GLM Coding Plan),
   **Subscriptions** (ChatGPT and Grok sign-in), and
   **Models** (which models appear, and the helper model).
-- **Agents**: the agent **Library**, **Teams**, **Skills**, and **Advanced**
-  (compaction, retries, script-only tools, and team coordination).
+- **Agents**: the agent **Library**, **Skills**, and **Advanced**
+  (compaction, retries, script-only tools, and multi-agent coordination).
 - **Memory**: the notes TeXRA keeps across tasks.
 - **Plugins**: everything that adds tools or agents: TeXRA's plugins (such as
   Codex, Claude Code, Zotero, and GitHub), installed Claude Code and Codex
@@ -32,7 +32,7 @@ The page remembers the sub-tab you last opened while Settings stays open.
   policy, working-directory protection, and the goal spend cap), **Privacy**
   (telemetry), and **Git** (the GitHub token and Git commit attribution).
 
-Commands such as **TeXRA: Agent Team Settings** or **TeXRA: Git Settings**
+Commands such as **TeXRA: Agent Settings** or **TeXRA: Git Settings**
 open their page on the matching sub-tab.
 
 Settings that benefit from an ordinary control appear directly in these views.
@@ -215,7 +215,7 @@ TeXRA's native configuration.
 
 Per-run controls in the task composer affect only the task being launched: the
 agent, the model, the approval policy and attached media.
-Persistent agent visibility and team selection belong in Settings instead.
+Persistent agent visibility belongs in Settings instead.
 
 ## Debugging
 

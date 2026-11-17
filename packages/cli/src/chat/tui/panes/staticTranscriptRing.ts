@@ -129,13 +129,7 @@ function sessionHeaderIdentityLine(
     ]);
   }
   const model = getModelLabel(meta.model || '-');
-  const agent = meta.agent || 'chat';
-  return joinFacts([
-    ...(meta.team
-      ? [`team: ${meta.team.name}`, `root: ${agent}`]
-      : [`agent: ${agent}`]),
-    `model: ${model}`,
-  ]);
+  return joinFacts([`agent: ${meta.agent || 'chat'}`, `model: ${model}`]);
 }
 
 // Dedupe `<Static>` rows by the entry's own id (a random id from the

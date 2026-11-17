@@ -54,10 +54,9 @@ const SETTINGS_TAB_METADATA: {
     group: 'AI',
     icon: 'robot',
     label: 'Agents',
-    description: 'Choose the agents, teams, and skills your tasks can use.',
+    description: 'Choose the agents and skills your tasks can use.',
     sections: {
       library: 'Library',
-      teams: 'Teams',
       skills: 'Skills',
       advanced: 'Advanced',
     },

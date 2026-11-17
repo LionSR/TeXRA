@@ -35,12 +35,8 @@ import type { RootLaunch } from './sessionRunState';
 import type { LocalNotice } from './transcript';
 import type { FormSlot } from './formSlot';
 import type { ApprovalSurface } from './approvalQueue';
-import type {
-  RunModelDecisionReason,
-  AgentDelegationScope,
-} from '@texra-ai/harness/host';
+import type { RunModelDecisionReason } from '@texra-ai/harness/host';
 import type { RunView } from '@texra-ai/harness/schemas';
-import type { CliTeam } from '@cli/runtime/cliTeams';
 
 // ---------------------------------------------------------------------------
 // types
@@ -58,9 +54,6 @@ export interface SessionMeta {
   readonly modelSource: RunModelDecisionReason;
   readonly cwd: string;
   readonly approvalPolicy: ApprovalPolicy;
-  /** The team the root agent leads, when a team was launched. */
-  readonly team?: CliTeam;
-  readonly delegationAgentScope?: AgentDelegationScope;
   readonly version: string;
 }
 

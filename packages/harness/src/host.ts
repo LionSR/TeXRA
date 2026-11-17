@@ -66,11 +66,10 @@ export {
   type WorkspaceAgentsStores,
 } from '@agent/index/agentCatalog';
 export { agentToolNames, type AgentEntry } from '@agent/index/agentEntry';
-export {
-  InvalidAgentTeamError,
-  type WorkspaceAgentsController,
-  type WorkspaceAgentsControllerDeps,
-  type WorkspaceAgentsEntry,
+export type {
+  WorkspaceAgentsController,
+  WorkspaceAgentsControllerDeps,
+  WorkspaceAgentsEntry,
 } from '@agent/workspaceAgents/WorkspaceAgentsController';
 export type { AgentDelegationScope } from '@shared/schemas';
 export {

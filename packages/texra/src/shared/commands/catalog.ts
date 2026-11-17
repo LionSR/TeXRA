@@ -151,13 +151,6 @@ const commandCatalog = [
     settingsTab: 'general/approval',
   },
   {
-    id: 'texra.showTeamSettings',
-    palette: false,
-    title: 'Agent Team Settings',
-    icon: '$(organization)',
-    settingsTab: 'agents/teams',
-  },
-  {
     id: 'texra.showGitSettings',
     palette: false,
     title: 'Git Settings',

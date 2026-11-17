@@ -3,9 +3,8 @@
  * new-task launcher: the instruction, chips for agent and model (and the
  * working directory, only with two or more roots), and the polish,
  * dictation, attach, and send controls. The agent menu lists each agent
- * once, then the teams: the agent picked decides the launch mode. Open on
- * an agent's proposal (a proposal card's Edit), its send approves that
- * proposal with the form's changes. The follow-up keeps a two-line writing area and a separate action
+ * once. Open on an agent's proposal (a proposal card's Edit), its send
+ * approves that proposal with the form's changes. The follow-up keeps a two-line writing area and a separate action
  * row, under a line that offers the parent instead when there is one.
  *
  * It reads `Surface` (the draft or the launch selections) and the `host`
@@ -43,7 +42,6 @@ import {
 } from '@texra/shared/utils/clipboardImages';
 import { generatePastedImageName } from '@texra/shared/utils/pastedImageName';
 import { designTokens, commonViewStyles } from '@ui/styles';
-import { overlineDeclarations } from '@ui/styles/commonViewStyles';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
@@ -222,11 +220,6 @@ export class SessionComposer extends LitElement {
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      .menu-heading {
-        padding: var(--wa-space-3xs) var(--wa-space-xs);
-        ${overlineDeclarations}
-      }
-
       .recording::part(base) {
         color: var(--color-error);
       }

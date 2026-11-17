@@ -76,7 +76,8 @@ the name read where it is shown (two readers). Small; held back only for
 size.
 
 Landed 2026-11-17: `SessionMeta.team: { id, name }`, read by `readCliTeam`;
-a team whose preset is gone shows by its id.
+a team whose preset is gone shows by its id. The field went the same day,
+with teams themselves.
 
 ## 5. `Surface.workbench` is stored untyped and decoded on every read
 

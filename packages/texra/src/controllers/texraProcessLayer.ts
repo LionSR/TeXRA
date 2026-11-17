@@ -5,8 +5,7 @@
  * part is the settings catalog, the command directories, its plugins over
  * one editor registry the host's windows attach to (`HostWindows`), the one
  * credential store under the storage root, the project folder its skills
- * are read from, the agent directories with their team membership, and the
- * usage log.
+ * are read from, the agent directories, and the usage log.
  */
 
 // Third-party imports
@@ -35,7 +34,6 @@ import {
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import { TEXRA_STORAGE_DIR_NAME } from '@texra/platform/defaults/nodeStorage';
-import { teamMembers } from '@texra/shared/agentTeams';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { makeEditorHost } from '@texra/tools/editorHost';
 import { texraPlugins } from '@texra/tools/registry';
@@ -106,7 +104,6 @@ export const texraProcessLayer = ({
           new AgentDirectoryService({
             resourcesPath,
             state,
-            teamMembers,
             ...(agentIssues && { issueReporter: { report: agentIssues } }),
           }),
       ),

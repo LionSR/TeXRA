@@ -34,9 +34,6 @@ import { markShownRunSeen } from './unseenRuns';
 import type { CommitOrdinal } from '@texra-ai/harness/transcript';
 import type { HostSnapshot } from './hostSnapshot';
 
-/** Who runs a main-view request: a single agent or a team. */
-const LaunchTargetSchema = Schema.Literals(['agent', 'team']);
-
 /** The launcher's file lists; an absent or null `editedFile` reads ''. */
 const UIFileFieldsSchema = FileFieldsSchema.mapFields(
   Struct.assign({
@@ -53,14 +50,12 @@ const UIFileFieldsSchema = FileFieldsSchema.mapFields(
 );
 
 /**
- * The new-task composer's selections, separate from host-derived state.
- * One agent and one instruction, or a team: each chats. The file lists are
- * what a program's proposal, opened in the form, is edited with.
+ * The new-task composer's selections, separate from host-derived state:
+ * one agent and one instruction, which chats. The file lists are what a
+ * program's proposal, opened in the form, is edited with.
  */
 export const LaunchSurfaceSchema = UIFileFieldsSchema.mapFields(
   Struct.assign({
-    launchTarget: decodingDefault(LaunchTargetSchema, 'agent'),
-    selectedTeamId: decodingDefault(Schema.String, ''),
     workingDirectory: decodingDefault(Schema.String, ''),
     agent: decodingDefault(Schema.String, 'orchestrator'),
     model: decodingDefault(Schema.String, DEFAULT_AGENT_MODEL),
@@ -595,7 +590,7 @@ export function applySurfaceAction(
         arriving: null,
         drawerOpen: false,
         requestError: null,
-        launch: { ...surface.launch, ...action.patch, launchTarget: 'agent' },
+        launch: { ...surface.launch, ...action.patch },
       };
     case 'toggleDrawer':
       return { ...surface, drawerOpen: !surface.drawerOpen };
@@ -612,17 +607,8 @@ export function applySurfaceAction(
         ...run,
         draft: { ...run.draft, ...action.patch },
       }));
-    case 'launch': {
-      const launch = { ...surface.launch, ...action.patch };
-      // Naming an agent targets it.
-      return {
-        ...surface,
-        launch:
-          action.patch.agent === undefined
-            ? launch
-            : { ...launch, launchTarget: 'agent' },
-      };
-    }
+    case 'launch':
+      return { ...surface, launch: { ...surface.launch, ...action.patch } };
     case 'requestDraft':
       return {
         ...surface,
