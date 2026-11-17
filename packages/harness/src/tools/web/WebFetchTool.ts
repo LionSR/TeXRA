@@ -19,7 +19,7 @@ import {
 } from '@tools/timeouts';
 import { defineTool } from '@tools/core/definition';
 import { executed } from '@tools/core/result';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { createHtmlToMarkdown } from '@utils/text/htmlToMarkdown';
 import type { LookupFunction } from 'node:net';
 
@@ -132,7 +132,9 @@ function assertPublicLiteral(url: URL) {
  * of a transport failure, as a permanent `ToolError` instead of a transient
  * failure the retry would repeat.
  */
-function refusalOf(error: HttpClientError.HttpClientError): Error {
+function refusalOf(
+  error: HttpClientError.HttpClientError,
+): HttpClientError.HttpClientError | ToolError {
   const { reason } = error;
   return reason._tag === 'TransportError' &&
     reason.cause instanceof Error &&
@@ -209,6 +211,11 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
         !charset ||
         Result.isSuccess(Result.try(() => new TextDecoder(charset)));
       const decoder = new TextDecoder(supported ? charset || 'utf-8' : 'utf-8');
+      // What the classification below words any other failure as.
+      const undecoded = (cause: unknown) =>
+        new ToolError(`Failed to fetch ${url}: ${toErrorMessage(cause)}`, {
+          cause,
+        });
       let total = 0;
       const parts = yield* response.stream.pipe(
         // A response without a body reads as empty text.
@@ -229,7 +236,7 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
           }
           return Effect.try({
             try: () => decoder.decode(chunk, { stream: true }),
-            catch: ensureError,
+            catch: undecoded,
           });
         }),
         Stream.runCollect,
@@ -239,7 +246,7 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
       parts.push(
         yield* Effect.try({
           try: () => decoder.decode(),
-          catch: ensureError,
+          catch: undecoded,
         }),
       );
       return {

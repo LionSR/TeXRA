@@ -1371,6 +1371,18 @@ interface ProgramResult<R = unknown> {
 }
 ```
 
+## PromptRenderFailed
+
+A prompt that did not render: the template's own error, or `nunjucks`
+failing to load.
+
+```ts
+class PromptRenderFailed extends Schema.TaggedError<PromptRenderFailed>()(
+  'PromptRenderFailed',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+)
+```
+
 ## PromptSection
 
 A plugin's section of each request's system text, rendered from the tool
@@ -1410,10 +1422,10 @@ Render a prompt string using nunjucks templating.
 
 - `@param` prompt The prompt template string
 - `@param` variables Variables to use in template rendering
-- `@returns` The rendered prompt; a template error fails with that `Error`
+- `@returns` The rendered prompt; a template error fails with its message
 
 ```ts
-const renderPrompt: (prompt: string, variables: Record<string, unknown>) => Effect<string, Error, never>
+const renderPrompt: (prompt: string, variables: Record<string, unknown>) => Effect<string, PromptRenderFailed, never>
 ```
 
 ## RequestDecisionHook

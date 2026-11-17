@@ -20,6 +20,7 @@ import {
   type FileSystem,
   Option,
   type PlatformError,
+  Schema,
   Semaphore,
   Stream,
 } from 'effect';
@@ -44,7 +45,7 @@ import type { MemoryViewItem } from '@shared/tools/memoryView';
 import { meansAbsent, pathExists } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { splitContentLines } from '@utils/text/stringUtils';
-import { ensureError } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 const FRONTMATTER_SCAN_BYTES = 16 * 1024;
@@ -175,13 +176,20 @@ const readStoragePrefix = Effect.fn('memoryFileSystem.readStoragePrefix')(
  */
 const CHANNEL = 'memory';
 
+/** A memory file's frontmatter head does not parse. */
+class MemoryHeadUnparsed extends Schema.TaggedError<MemoryHeadUnparsed>()(
+  'MemoryHeadUnparsed',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
+
 const readMemoryMeta = Effect.fn('memoryFileSystem.readMemoryMeta')(
   (storagePath: string, stats: { size: number }) =>
     readStoragePrefix(storagePath, FRONTMATTER_SCAN_BYTES, stats).pipe(
       Effect.flatMap(({ text }) =>
         Effect.try({
           try: () => parseFrontmatter(text).meta,
-          catch: ensureError,
+          catch: (cause) =>
+            new MemoryHeadUnparsed({ message: toErrorMessage(cause), cause }),
         }),
       ),
       Effect.catch((cause) =>

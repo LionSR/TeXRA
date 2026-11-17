@@ -91,9 +91,7 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
   });
 
   const fs = yield* FileSystem.FileSystem;
-  const statMatch = Effect.fn('GlobTool.statMatch')(function* (
-    match: string,
-  ): Effect.fn.Return<GlobMatchInfo | null, Error> {
+  const statMatch = Effect.fn('GlobTool.statMatch')(function* (match: string) {
     const resolved = yield* resolveToolPath(
       call,
       // posix.join, not path.join: the base and the match are both

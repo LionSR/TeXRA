@@ -41,12 +41,13 @@ import {
   Layer,
   Schedule,
   Stream,
+  Schema,
 } from 'effect';
 
 import { AgentCatalog } from '@agent/index/agentCatalog';
 import { emitAppSignal } from '@platform/appSignals';
 import { AgentDirectories, AppState } from '@platform/interfaces';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
 import { fileWatchRetrySchedule } from '@utils/files/fsEntryExists';
 import { AGENT_FILE_EXTENSION } from '@shared/schemas';
@@ -54,6 +55,12 @@ import { DISABLED_TOOLS_KEY } from '@shared/state/disabledTools';
 import { CUSTOM_AGENT_DIR_KEY } from '@agent/index/AgentDirectoryService';
 import { ACTIVE_TEAM_ID_KEY } from '@agent/workspaceAgents/WorkspaceAgentsController';
 import { INSTALLED_PLUGINS_KEY } from '@common/plugins/installRecord';
+
+/** An agent directory was not accepted as a root the file tools may reach. */
+class RootNotRegistered extends Schema.TaggedError<RootNotRegistered>()(
+  'RootNotRegistered',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
 
 /** Register one agent directory root; a failure (an unreadable directory
  *  setting, a relative path, a path that cannot be canonicalised) is logged
@@ -66,7 +73,8 @@ const registerRoot = <E, R>(
     Effect.flatMap((absolutePath) =>
       Effect.try({
         try: () => registerExternalRoot(absolutePath, options),
-        catch: ensureError,
+        catch: (cause) =>
+          new RootNotRegistered({ message: toErrorMessage(cause), cause }),
       }),
     ),
     Effect.catch((error) =>

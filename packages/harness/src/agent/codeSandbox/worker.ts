@@ -24,7 +24,7 @@ import {
   newVariant,
 } from 'quickjs-emscripten-core';
 
-import { ensureError } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateSummary } from '@utils/text/stringUtils';
 
 import {
@@ -49,6 +49,17 @@ const ThrownSchema = Schema.Struct({
   message: Schema.String,
   stack: Schema.optional(Schema.String),
 });
+
+/** The worker cannot run its script: QuickJS did not start, or the host
+ *  sent a message that fails its decode. */
+class SandboxWorkerFailed extends Schema.TaggedError<SandboxWorkerFailed>()(
+  'SandboxWorkerFailed',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
+
+/** A QuickJS throw while the realm opens, carrying its own message. */
+const realmFailure = (cause: unknown): SandboxWorkerFailed =>
+  new SandboxWorkerFailed({ message: toErrorMessage(cause), cause });
 
 /** What the script's source is wrapped in; it shares the first line. */
 const SCRIPT_PREFIX = '(async () => {';
@@ -103,13 +114,13 @@ interface Realm {
 
 const openRealm = Effect.fn('worker.openRealm')(function* (
   input: WorkerInput,
-): Effect.fn.Return<Realm, Error, Scope.Scope> {
+): Effect.fn.Return<Realm, SandboxWorkerFailed, Scope.Scope> {
   const quickJs = yield* Effect.tryPromise({
     try: () =>
       newQuickJSWASMModuleFromVariant(
         newVariant(quickJsReleaseVariant, { wasmModule: input.wasm }),
       ),
-    catch: ensureError,
+    catch: realmFailure,
   });
   const interrupt = new Int32Array(input.interrupt);
   let cpuUsedMs = 0;
@@ -130,7 +141,7 @@ const openRealm = Effect.fn('worker.openRealm')(function* (
             return cpuExhausted;
           },
         }),
-      catch: ensureError,
+      catch: realmFailure,
     }),
     (runtime) => Effect.sync(() => runtime.dispose()),
   );
@@ -156,7 +167,7 @@ const openRealm = Effect.fn('worker.openRealm')(function* (
     (_importer, specifier) => specifier,
   );
   const context = yield* Effect.acquireRelease(
-    Effect.try({ try: () => runtime.newContext(), catch: ensureError }),
+    Effect.try({ try: () => runtime.newContext(), catch: realmFailure }),
     (context) => Effect.sync(() => context.dispose()),
   );
 
@@ -212,7 +223,7 @@ const openRealm = Effect.fn('worker.openRealm')(function* (
       context.setProp(context.global, '__csConfig', config);
       config.dispose();
     },
-    catch: ensureError,
+    catch: realmFailure,
   });
   const bridge = yield* Effect.acquireRelease(
     Effect.try({
@@ -221,7 +232,7 @@ const openRealm = Effect.fn('worker.openRealm')(function* (
         evaluate(context, DETERMINISM_PRELUDE, 'sandbox-prelude.js').dispose();
         return handle;
       },
-      catch: ensureError,
+      catch: realmFailure,
     }),
     (handle) => Effect.sync(() => handle.dispose()),
   );
@@ -354,7 +365,7 @@ const program = Effect.gen(function* () {
   >();
   // A host message that fails its decode ends the worker, which the host
   // sees as the sandbox going away.
-  const fatal = yield* Deferred.make<never, Error>();
+  const fatal = yield* Deferred.make<never, SandboxWorkerFailed>();
   yield* runner.send(0, realm.begin());
   yield* Effect.raceFirst(
     runner.run((_port, raw) => {
@@ -363,9 +374,9 @@ const program = Effect.gen(function* () {
         ? runner.send(0, realm.settle(message.success))
         : Deferred.fail(
             fatal,
-            new Error(
-              `Code sandbox worker received a malformed message: ${message.failure.message}`,
-            ),
+            new SandboxWorkerFailed({
+              message: `Code sandbox worker received a malformed message: ${message.failure.message}`,
+            }),
           );
     }),
     Deferred.await(fatal),

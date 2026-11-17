@@ -13,6 +13,7 @@ import {
   FileSystem,
   Path,
   type PlatformError,
+  Schema,
   type Scope,
 } from 'effect';
 
@@ -51,6 +52,13 @@ import { isPathWithin } from '@utils/core/pathCore';
 
 const CHANNEL = 'DeletionCleanup';
 
+/** A run's generated files were left in place: the storage root no longer
+ *  resolves to the directory the deletion was accepted against. */
+class CleanupRejected extends Schema.TaggedError<CleanupRejected>()(
+  'CleanupRejected',
+  { message: Schema.String },
+) {}
+
 /**
  * Remove each run's run directory under the storage root it was
  * accepted against.
@@ -73,44 +81,41 @@ const removeRunDirectories: (
   fs: FileSystem.FileSystem,
   storage: string,
   runIds: readonly RunId[],
-) => Effect.Effect<void, PlatformError.PlatformError | Error> = Effect.fn(
-  'removeRunDirectories',
-)(
-  function* (
-    fs: FileSystem.FileSystem,
-    storage: string,
-    runIds: readonly RunId[],
-  ) {
-    const runs = path.join(
-      yield* fs.realPath(storage),
-      WORKSPACE_STORAGE_LAYOUT.runs,
-    );
-    // Fails NotFound when the runs directory is absent, which the catch
-    // below reads as "nothing generated to remove".
-    if ((yield* fs.realPath(runs)) !== runs) {
-      return yield* Effect.fail(
-        new Error(
-          `Refusing generated-file cleanup: ${runs} does not resolve to itself`,
-        ),
+) => Effect.Effect<void, PlatformError.PlatformError | CleanupRejected> =
+  Effect.fn('removeRunDirectories')(
+    function* (
+      fs: FileSystem.FileSystem,
+      storage: string,
+      runIds: readonly RunId[],
+    ) {
+      const runs = path.join(
+        yield* fs.realPath(storage),
+        WORKSPACE_STORAGE_LAYOUT.runs,
       );
-    }
-    yield* Effect.forEach(
-      runIds,
-      (runId) => {
-        const target = path.join(runs, runId);
-        if (!isPathWithin(runs, target)) {
-          return Effect.logWarning(
-            `Refusing to remove ${target}: outside the accepted storage root`,
-          ).pipe(withLogChannel(CHANNEL));
-        }
-        return fs.remove(target, { recursive: true, force: true });
-      },
-      { concurrency: 8, discard: true },
-    );
-  },
-  Effect.uninterruptible,
-  Effect.catchIf(meansAbsent, () => Effect.void),
-);
+      // Fails NotFound when the runs directory is absent, which the catch
+      // below reads as "nothing generated to remove".
+      if ((yield* fs.realPath(runs)) !== runs) {
+        return yield* new CleanupRejected({
+          message: `Refusing generated-file cleanup: ${runs} does not resolve to itself`,
+        });
+      }
+      yield* Effect.forEach(
+        runIds,
+        (runId) => {
+          const target = path.join(runs, runId);
+          if (!isPathWithin(runs, target)) {
+            return Effect.logWarning(
+              `Refusing to remove ${target}: outside the accepted storage root`,
+            ).pipe(withLogChannel(CHANNEL));
+          }
+          return fs.remove(target, { recursive: true, force: true });
+        },
+        { concurrency: 8, discard: true },
+      );
+    },
+    Effect.uninterruptible,
+    Effect.catchIf(meansAbsent, () => Effect.void),
+  );
 
 /** A run's deletion marker. */
 type RemovalMarker = Extract<SessionRow, { type: 'run.removed' }>;

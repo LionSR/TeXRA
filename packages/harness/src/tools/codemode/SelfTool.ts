@@ -80,7 +80,7 @@ const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
     `self() needs the conversation the script ${run.runId} launched from, and the call that launched it.`,
   );
   const edge = start?.parent;
-  if (edge?.call == null) return yield* Effect.fail(missing);
+  if (edge?.call == null) return yield* missing;
   const { id: parent } = edge;
   const { card } = edge.call;
   const config = yield* getRunRecords(parent).readConfig();
@@ -93,8 +93,7 @@ const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
   const issued = Object.values(conversation?.calls ?? {}).find(
     ({ logId }) => logId === card,
   );
-  if (config === null || issued === undefined)
-    return yield* Effect.fail(missing);
+  if (config === null || issued === undefined) return yield* missing;
   return {
     config,
     source: parent,

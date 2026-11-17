@@ -420,9 +420,7 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
 
   // An open run is in the view; one launched here may not have opened yet.
   if (!run)
-    return yield* Effect.fail(
-      missingRun(context.runs, runId, `Run not found: ${runId}`),
-    );
+    return yield* missingRun(context.runs, runId, `Run not found: ${runId}`);
 
   // The report is a private record row, never part of the display fold.
   const report = yield* getRunRecords(runId).readReport();

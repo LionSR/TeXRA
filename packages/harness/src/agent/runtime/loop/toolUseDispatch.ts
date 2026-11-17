@@ -33,6 +33,7 @@ import {
   Exit,
   Fiber,
   FiberMap,
+  Result,
   Schema,
   ScopedRef,
   Semaphore,
@@ -86,7 +87,7 @@ import {
 import { checkOwnFacts, factRows } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 import { getBasename } from '@utils/core/pathBasics';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
 import { captureAttachments, storedMediaPart } from '../run/mediaInput';
@@ -518,23 +519,21 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     pluginId === undefined
       ? undefined
       : (yield* ToolRegistry).entries.get(pluginId);
-  const extracted = yield* Effect.try({
+  const checked = Result.try({
     try: () =>
       extractToolAttachments(result, (facts) =>
         checkOwnFacts(fact.toolName, plugin, facts),
       ),
-    catch: ensureError,
-  }).pipe(
-    Effect.catch((error) =>
-      Effect.sync(() => {
-        result = {
-          status: 'error',
-          error: `${fact.toolName}: Tool returned an invalid result (${toErrorMessage(error)})`,
-        };
-        return extractToolAttachments(result);
-      }),
-    ),
-  );
+    catch: toErrorMessage,
+  });
+  if (Result.isFailure(checked))
+    result = {
+      status: 'error',
+      error: `${fact.toolName}: Tool returned an invalid result (${checked.failure})`,
+    };
+  const extracted = Result.isSuccess(checked)
+    ? checked.success
+    : extractToolAttachments(result);
   const { attachments, blobs } = yield* captureAttachments(
     extracted.attachments,
     roots.workspace,

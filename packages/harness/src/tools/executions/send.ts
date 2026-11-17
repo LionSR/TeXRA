@@ -56,12 +56,10 @@ export const sendToRun = Effect.fn('ExecutionsTool.send')(function* (
   const view = yield* (yield* SessionViewAccess).read([]);
   const recipient = view.runs.get(target);
   if (!recipient)
-    return yield* Effect.fail(
-      missingRun(
-        yield* Runs,
-        target,
-        `Run '${target}' not found. Use the executions tool to list runs.`,
-      ),
+    return yield* missingRun(
+      yield* Runs,
+      target,
+      `Run '${target}' not found. Use the executions tool to list runs.`,
     );
   const sender =
     caller === undefined

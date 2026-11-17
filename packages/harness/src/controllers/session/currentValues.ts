@@ -31,6 +31,7 @@ import {
 } from '@shared/session/database';
 import type { ValueFamily } from '@shared/session/valueFamily';
 import type { SqlRow } from './rowCodec';
+import { StoreCheckFailed } from './storeAside';
 import type { SqlError } from 'effect/sql/SqlError';
 
 /** Replace one current value in place. The version values are written at
@@ -72,16 +73,16 @@ const decodeHistoryRecord = Schema.decodeUnknownSync(InputHistoryRecordSchema);
 function decodeValue<T>(
   family: ValueFamily<T>,
   row: SqlRow,
-): Effect.Effect<T, Error> {
+): Effect.Effect<T, StoreCheckFailed> {
   const parsed = Schema.decodeUnknownResult(
     Schema.fromJsonString(family.schema),
   )(decodeString(row.value));
   return Result.isSuccess(parsed)
     ? Effect.succeed(parsed.success)
     : Effect.fail(
-        new Error(
-          `Stored ${family.name} value ${String(row.key)} does not match its schema: ${parsed.failure.message}`,
-        ),
+        new StoreCheckFailed({
+          message: `Stored ${family.name} value ${String(row.key)} does not match its schema: ${parsed.failure.message}`,
+        }),
       );
 }
 

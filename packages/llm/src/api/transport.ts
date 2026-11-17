@@ -71,6 +71,8 @@ export const sdkStream = Effect.fn('llm.sdkStream')(function* <E>(
     (iterator) => {
       source.controller.abort();
       const returnIterator = iterator.return?.bind(iterator);
+      // The rejection is raised as a defect on the next line, whatever it is.
+      // @effect-diagnostics unknownInEffectCatch:off
       return returnIterator
         ? Effect.tryPromise({
             try: () => returnIterator(),
@@ -79,6 +81,7 @@ export const sdkStream = Effect.fn('llm.sdkStream')(function* <E>(
         : Effect.void;
     },
   );
+  // @effect-diagnostics unknownInEffectCatch:warning
   return pullStream(() => iterator.next(), onError);
 });
 
@@ -169,6 +172,9 @@ export const decodeWireOrFail = <A>(
  * recognizes it; anything else is an independent defect, raised through
  * `cleanupFailure`, which makes the primary failure a defect too.
  */
+// The raw rejection is compared by identity with the primary failure's
+// cause and otherwise raised as a defect, so it must not be wrapped.
+// @effect-diagnostics unknownInEffectCatch:off
 export const rejoin = (
   pending: PromiseLike<unknown>,
   exit: Exit.Exit<unknown, unknown>,
@@ -190,6 +196,7 @@ export const rejoin = (
     ),
     Effect.asVoid,
   );
+// @effect-diagnostics unknownInEffectCatch:warning
 
 /**
  * The request signal for a streamed body, with the body reader cancelled at

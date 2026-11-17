@@ -23,7 +23,7 @@
  * instead of asked of its model; `RunState.handedDown` ends the turn.
  */
 
-import { Context, Effect, Exit, type Scope, ScopedRef } from 'effect';
+import { Context, Effect, Exit, Schema, type Scope, ScopedRef } from 'effect';
 
 import { buildOpeningSystemPrompt } from '@agent/prompt/PromptBuilder';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
@@ -110,6 +110,13 @@ const turnResponse = (at: RunState): string =>
 /** What a resume's activation rows read of the session. */
 type ActivationServices = SessionLog | SessionRoots | Approvals;
 
+/** A run that cannot open: a resume with no state to continue from, a
+ *  fresh launch onto a run that has some, or a conversation with no task. */
+class RunOpenRejected extends Schema.TaggedError<RunOpenRejected>()(
+  'RunOpenRejected',
+  { message: Schema.String },
+) {}
+
 /** Why a run its rows never opened cannot be continued. */
 const NOT_RESUMABLE_MESSAGE =
   'This run stopped before it recorded any state to resume from. Start a new run instead.';
@@ -177,7 +184,9 @@ const openRun = Effect.fn('toolUse.openRun')(function* (
             state: RunState | null,
           ) {
             if (state?.at == null)
-              return yield* Effect.fail(new Error(NOT_RESUMABLE_MESSAGE));
+              return yield* new RunOpenRejected({
+                message: NOT_RESUMABLE_MESSAGE,
+              });
             const refused = foreignProtocol(
               runId,
               state,
@@ -200,11 +209,9 @@ const openRun = Effect.fn('toolUse.openRun')(function* (
     ? run.entry.enter(() => opened)
     : Effect.uninterruptible(opened);
   if (!resume && (yield* cell.current).at !== null)
-    return yield* Effect.fail(
-      new Error(
-        `Run ${runId} already has run history state; resume it instead.`,
-      ),
-    );
+    return yield* new RunOpenRejected({
+      message: `Run ${runId} already has run history state; resume it instead.`,
+    });
   return cell;
 });
 
@@ -362,9 +369,9 @@ export const openToolUse = Effect.fn('toolUse.open')(function* (
       // The user's task is the user message.
       const userRequest = run.config.instruction.trim();
       if (!userRequest)
-        return yield* Effect.fail(
-          new Error('A conversation requires a non-empty task.'),
-        );
+        return yield* new RunOpenRejected({
+          message: 'A conversation requires a non-empty task.',
+        });
       const content: InputPart[] = [];
       const media = yield* Effect.exit(
         run.config.mediaFiles.length

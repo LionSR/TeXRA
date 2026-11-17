@@ -5,8 +5,8 @@ import { Effect, Result } from 'effect';
 // Local imports
 import { ToolError } from '@shared/schemas';
 import { Settings } from '@shared/config/settings';
-import type { SettingsStores } from '@shared/config/settings';
-import { ensureError } from '@utils/errors/errorMessage';
+import type { SettingsStores, StateReadFailed } from '@shared/config/settings';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeFilePath } from '@utils/core/pathBasics';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import {
@@ -113,7 +113,7 @@ export const assertNoParentTraversal = (
 export const resolveToolPath = Effect.fn('resolveToolPath')(function* (
   call: ToolPathCall,
   targetPath?: string,
-): Effect.fn.Return<ToolPathResolution, Error> {
+): Effect.fn.Return<ToolPathResolution, ToolError | StateReadFailed> {
   const settings = call.roots;
   const root = call.workingDirectory ?? call.roots.workspace;
   const scope = call.workingDirectory ? 'working directory' : 'workspace';
@@ -170,7 +170,10 @@ export const resolveToolPath = Effect.fn('resolveToolPath')(function* (
         call.stepRoots,
       );
     },
-    catch: ensureError,
+    catch: (cause) =>
+      cause instanceof ToolError
+        ? cause
+        : new ToolError(toErrorMessage(cause), { cause }),
   });
 
   if (!('kind' in resolution)) {

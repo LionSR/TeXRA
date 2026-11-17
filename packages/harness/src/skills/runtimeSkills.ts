@@ -20,7 +20,7 @@ import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
 import { isPathWithin } from '@utils/core/pathCore';
 import { canonicalizePath } from '@utils/files/externalRoots';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { homeDirectory } from '@utils/system/platformPaths';
 
 import { issue } from './skillLoader';
@@ -287,6 +287,12 @@ export const Skills = Object.freeze({
   }),
 } as const);
 
+/** A skill's directory could not be resolved to its canonical place. */
+class SkillDirectoryUnverified extends Schema.TaggedError<SkillDirectoryUnverified>()(
+  'SkillDirectoryUnverified',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
+
 /**
  * One discovered skill as a step lists it: its plugin, name and listing
  * text, and the directory tools may read while the step lists or activated
@@ -300,7 +306,8 @@ const catalogEntry = (
 ): Effect.Effect<SkillCatalogEntry> =>
   Effect.try({
     try: () => canonicalizePath(skill.baseDir),
-    catch: ensureError,
+    catch: (cause) =>
+      new SkillDirectoryUnverified({ message: toErrorMessage(cause), cause }),
   }).pipe(
     Effect.map((real) =>
       workspaceRoot !== undefined && isPathWithin(workspaceRoot, real)

@@ -55,6 +55,13 @@ function pinRunWorkingDirectory(record: RunRecord, root?: string): RunRecord {
   return workingDirectory ? { ...record, workingDirectory } : record;
 }
 
+/** A child that cannot register under its parent: the parent is gone, or
+ *  was stopped. */
+class ParentRunClosed extends Schema.TaggedError<ParentRunClosed>()(
+  'ParentRunClosed',
+  { message: Schema.String },
+) {}
+
 /** A defect is the path's failure, as a refusal is: its caller words it. */
 const defectAsFailure = Effect.catchDefect((d) => Effect.fail(ensureError(d)));
 
@@ -121,15 +128,13 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
       const log = yield* SessionLog;
       const parent = yield* log.facts(options.parentId);
       if (parent === null)
-        return yield* Effect.fail(
-          new Error(`Parent run ${options.parentId} is unavailable.`),
-        );
+        return yield* new ParentRunClosed({
+          message: `Parent run ${options.parentId} is unavailable.`,
+        });
       if (parent.stop !== null || parent.end !== null)
-        return yield* Effect.fail(
-          new Error(
-            `Cannot launch child run ${runId} under run ${options.parentId}: that run was stopped.`,
-          ),
-        );
+        return yield* new ParentRunClosed({
+          message: `Cannot launch child run ${runId} under run ${options.parentId}: that run was stopped.`,
+        });
     }
     const config = yield* Schema.decodeUnknownEffect(RunRecordFieldsSchema)(
       pinRunWorkingDirectory(record, (yield* SessionRoots).workspace),

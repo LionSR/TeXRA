@@ -81,11 +81,12 @@ function findTask(client: ServiceClient, id: string) {
 
 /** The service's client, through the platform's link; a command that
  *  holds none fails with why. */
-const serviceClient = Effect.flatMap(cliPlatform, ({ service }) =>
-  isLinked(service)
-    ? linkedClient(service)
-    : Effect.fail(new CliServiceFailed({ message: service.none })),
-);
+const serviceClient = Effect.gen(function* () {
+  const { service } = yield* cliPlatform;
+  if (!isLinked(service))
+    return yield* new CliServiceFailed({ message: service.none });
+  return yield* linkedClient(service);
+});
 
 /** One request to the task `id` names, refused as a usage error. */
 function requestTask<R extends RuntimeCommand>(

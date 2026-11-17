@@ -9,22 +9,33 @@ import {
   Path,
   type PlatformError,
   Predicate,
+  Schema,
 } from 'effect';
 
 // Local imports
 import { writeLogLine } from '@logger/logSink';
-import { ensureError } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { withFileWriteLane } from '@utils/files/fileWriteLane';
 import { nodeFileServices, writeFileAtomic } from '@utils/files/fsDurability';
 import { meansAbsent } from '@utils/files/fsEntryExists';
 
 type JsonRecord = Record<string, unknown>;
 
+/** The store's file could not be probed, read as a JSON object, or
+ *  written; `cause` is the reason (`SyntaxError`, `TypeError`, or the Node
+ *  filesystem error) and `message` is its text. */
+class JsonFileFailed extends Schema.TaggedError<JsonFileFailed>()(
+  'JsonFileFailed',
+  { message: Schema.String, cause: Schema.Defect() },
+) {}
+
+const fileFailed = (cause: unknown) =>
+  new JsonFileFailed({ message: toErrorMessage(cause), cause });
+
 /** The Node error under a filesystem service failure, whose message names
  *  the file and the reason without the service's wrapping. */
-function storageError(error: PlatformError.PlatformError): Error {
-  return ensureError(error.reason.cause ?? error);
-}
+const storageError = (error: PlatformError.PlatformError) =>
+  fileFailed(error.reason.cause ?? error);
 
 /** The file's version as a read compares it: absent, or its identity. */
 function fileVersion(filePath: string): string {
@@ -36,8 +47,8 @@ function fileVersion(filePath: string): string {
 
 /** {@link fileVersion} as an effect: a file that cannot be probed (an
  *  untraversable directory, a symlink loop) fails it rather than dying. */
-const probeVersion = (filePath: string): Effect.Effect<string, Error> =>
-  Effect.try({ try: () => fileVersion(filePath), catch: ensureError });
+const probeVersion = (filePath: string) =>
+  Effect.try({ try: () => fileVersion(filePath), catch: fileFailed });
 
 /**
  * The store file's record, read synchronously so a plain `get` can follow
@@ -60,7 +71,7 @@ function readJsonRecordSync(filePath: string): JsonRecord | undefined {
 
 /** {@link readJsonRecordSync} as an effect, failing with the reason. */
 const readJsonRecord = (filePath: string) =>
-  Effect.try({ try: () => readJsonRecordSync(filePath), catch: ensureError });
+  Effect.try({ try: () => readJsonRecordSync(filePath), catch: fileFailed });
 
 /**
  * Persist one mutation as a read-modify-write: prepare the directory, re-read
@@ -173,7 +184,8 @@ export class JsonStore {
    */
   static readonly open = Effect.fn('JsonStore.open')(function* (
     filePath: string,
-  ) {
+    // `Error`, as `set` fails: the reason's class is not part of the surface.
+  ): Effect.fn.Return<JsonStore, Error, Path.Path> {
     const path = yield* Path.Path;
     const storePath = path.resolve(filePath);
     // The version is taken before the read, so a write landing during it

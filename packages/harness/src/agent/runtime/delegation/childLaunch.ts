@@ -32,6 +32,7 @@ import {
   runEndErrorMessage,
   AgentConfigSchema,
   RUN_OUTCOME,
+  ToolError,
   type CommitOrdinal,
   type RunEnd,
   type RunId,
@@ -100,7 +101,7 @@ const resumeOwnedChild = Effect.fn('resumeOwnedChild')(function* (
     open: openResume(runs, runId, options, parentId).pipe(
       Effect.catchTag('ResumeNotOpened', ({ answer }) =>
         Effect.fail(
-          new Error(
+          new ToolError(
             'failed' in answer
               ? `Subagent ${runId} cannot be resumed here (${answer.failed.kind}).`
               : `Subagent ${runId} belongs to an open call of ${answer.ownedBy}.`,
@@ -160,21 +161,17 @@ const childRunEnd = Effect.fn('childRunEnd')(function* (
     ));
   const result = yield* getRunRecords(runId).readRunEnd();
   if (result === null)
-    return yield* Effect.fail(
-      unsaved === undefined
-        ? new Error(`Subagent ${runId} ended without a recorded end.`)
-        : new Error(
-            `Subagent ${runId} ended without a recorded end: ${unsaved.message}`,
-            { cause: unsaved },
-          ),
-    );
+    return yield* unsaved === undefined
+      ? new ToolError(`Subagent ${runId} ended without a recorded end.`)
+      : new ToolError(
+          `Subagent ${runId} ended without a recorded end: ${unsaved.message}`,
+          { cause: unsaved },
+        );
   if (result.outcome === RUN_OUTCOME.FAILED)
-    return yield* Effect.fail(
-      new Error(
-        result.error === undefined
-          ? `Subagent ${runId} ended with failed outcome.`
-          : runEndErrorMessage(result.error),
-      ),
+    return yield* new ToolError(
+      result.error === undefined
+        ? `Subagent ${runId} ended with failed outcome.`
+        : runEndErrorMessage(result.error),
     );
   return { runId, result };
 });

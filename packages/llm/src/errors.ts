@@ -173,6 +173,9 @@ export class ModelError extends Schema.TaggedError<ModelError>()('ModelError', {
   ...ModelErrorFieldsSchema.fields,
   cause: Schema.optional(Schema.Defect()),
 }) {
+  // The constructor fills `retryable` and `scope` from the status. Decoding a
+  // stored ModelError passes the same fields through it, which is intended.
+  // @effect-diagnostics-next-line overriddenSchemaConstructor:off
   constructor(
     fields: Omit<ModelErrorFields, 'retryable'> & {
       readonly retryable?: boolean;
