@@ -1,45 +1,13 @@
 /**
- * The CLI's side of the TeXRA service: the composition `texra serve` runs
- * (one session per project, opened on demand over that project's own roots,
- * as the desktop opens its folders), the detached start a client asks for
- * when no service answers, and the connection the chat TUI holds.
+ * The CLI's side of the TeXRA service: the detached start a client asks for
+ * when no service answers, and the link every command that runs or lists
+ * tasks holds. `texra serve` itself is `serve` (`@texra/controllers/server`).
  */
-import {
-  Context,
-  Duration,
-  Effect,
-  Exit,
-  FileSystem,
-  Path,
-  RcMap,
-  Result,
-  Scope,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Effect, Result, type Scope } from 'effect';
 
-import { type LocalSession, type Sessions } from '@texra-ai/harness';
-import {
-  AppState,
-  type GlobalValues,
-  StateStores,
-} from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
+import { type GlobalValues } from '@texra-ai/harness/host';
 import { SERVICE_SUBCOMMAND } from '@texra/controllers/server/discovery';
-import { canonicalizeWorkspaceRoot, envFlag } from '@texra-ai/harness/node';
-import { ensureError } from '@texra-ai/harness/schemas';
-import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import {
-  openLocalSession,
-  openProjectRoots,
-} from '@texra/controllers/session/openProjectSession';
-import { openTexraGlobalConfigStore } from '@texra/platform/defaults/nodeStores';
-import {
-  runsAtWork,
-  type ServiceLoad,
-  type ServiceProject,
-  type ServiceProjects,
-} from '@texra/controllers/server/service';
+import { envFlag } from '@texra-ai/harness/node';
 import {
   isOlder,
   linkService,
@@ -48,180 +16,9 @@ import {
   type ServiceLink,
   WINDOWS_UNSUPPORTED,
 } from '@texra/controllers/server/client';
-import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 
 import { readCliEntrypointPath } from './cliContext';
 import { writeTextStderr } from './logSinks';
-import type { CliContext } from './cliContext';
-
-/** The service's own log channel. */
-const CHANNEL = 'cliService';
-
-/**
- * The service's projects over the CLI's node roots, opened in `scope` and
- * closed with it. A project is its session, opened on first use and
- * released once nothing has held it for `idleAfter` (`RcMap`): a client's
- * lease is its scope on `open`, and a run at work holds a lease of the
- * project's own, taken as the view shows one and let go as none is left,
- * so a project with a task running never idles out.
- */
-export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
-  context: Pick<CliContext, 'storageRoot'>,
-  scope: Scope.Scope,
-  /** The process's sessions, which each project's session is also opened
-   *  through. */
-  sessions: Context.Service.Shape<typeof Sessions>,
-  idleAfter: Duration.Input,
-) {
-  const { storageRoot } = context;
-  // The windows and the CLI write these files while the service runs: a
-  // store's read serves what they hold now, so a setting changed in any
-  // client reaches the next task and the next turn.
-  const globalConfig = yield* openTexraGlobalConfigStore(storageRoot);
-  // What opening a project reads, captured once: `open` is the port's,
-  // called from handlers that hold no process context of their own. Exactly
-  // these services, never the build's scope with them: provided over a
-  // handler's lease, that scope would hold the lease's release until the
-  // service exits, so no project would ever go idle.
-  const services = Context.pick(
-    AppState,
-    ChildProcessSpawner,
-    FileSystem.FileSystem,
-    Path.Path,
-    StateStores,
-  )(
-    yield* Effect.context<
-      | AppState
-      | ChildProcessSpawner
-      | FileSystem.FileSystem
-      | Path.Path
-      | StateStores
-    >(),
-  );
-  // The sessions open now, by storage root, and the load they carry (a
-  // project counts as open from its lookup's first read): what the task
-  // list reads and the service's lifetime follows.
-  const open = new Map<string, LocalSession>();
-  const load = yield* SubscriptionRef.make<ServiceLoad>({
-    open: 0,
-    working: 0,
-  });
-  const count = (opened: number, working: number) =>
-    SubscriptionRef.update(load, (now) => ({
-      open: now.open + opened,
-      working: now.working + working,
-    }));
-  // Each project's approval policy is its persisted setting, which the
-  // session reads at every decision through these following config stores:
-  // a change any client writes applies to the next request, and nothing a
-  // window holds can replace it.
-  const lookup = Effect.fn('cliServiceProjects.lookup')(function* (
-    root: string,
-  ): Effect.fn.Return<
-    ServiceProject,
-    Error,
-    | Scope.Scope
-    | AppState
-    | ChildProcessSpawner
-    | FileSystem.FileSystem
-    | Path.Path
-    | StateStores
-  > {
-    const projectScope = yield* Effect.scope;
-    // Counted as open from the first read of the lookup, not from the
-    // session's open: the idle decision reads this count, and a project
-    // still opening when the idle deadline passes is one the service
-    // serves, not one it may leave. A failed lookup gives the count back
-    // with its scope.
-    yield* Effect.acquireRelease(count(1, 0), () => count(-1, 0));
-    // The service is the process that holds each project's state.
-    const { roots, warnings } = yield* openProjectRoots(
-      storageRoot,
-      root,
-      globalConfig,
-      undefined,
-    ).pipe(Scope.provide(projectScope));
-    yield* Effect.forEach(
-      warnings,
-      (message) => Effect.logWarning(message).pipe(withLogChannel(CHANNEL)),
-      { discard: true },
-    );
-    // A project store is held by one process, and one service serves a
-    // storage root at a time (the client that replaces a service waits for
-    // its exit), so a held store is another process's to answer for. The
-    // session closes as the project is released, before its roots
-    // (registered after them, so released first); the service's exit
-    // closes every session ahead of that (`serve`'s `settle` step).
-    const session = yield* openLocalSession(sessions, roots);
-    // A damaged store moved aside at open is said once, in
-    // the service's log and to the project's first window: the windows
-    // open no store of their own to notice it.
-    const moved = session.storeMovedAside;
-    if (moved) {
-      const message = sessionStoreMovedAsideMessage(moved);
-      yield* Effect.logWarning(message).pipe(withLogChannel(CHANNEL));
-      yield* session.emit('requestShowInstruction', {
-        key: `store-moved-aside-${moved.aside}`,
-        message,
-      });
-    }
-    yield* Effect.acquireRelease(
-      Effect.sync(() => open.set(session.roots.storage, session)),
-      () => Effect.sync(() => open.delete(session.roots.storage)),
-    );
-    // A run at work holds the project through a lease of the project's
-    // own (not one waiting for its next message, which the service's close
-    // stops, resumable).
-    let hold: Scope.Closeable | null = null;
-    const follow = (busy: boolean) =>
-      Effect.gen(function* () {
-        if (busy === (hold !== null)) return;
-        if (busy) {
-          hold = yield* Scope.make();
-          // The entry exists: this runs inside its own lookup's scope.
-          yield* RcMap.get(projects, root).pipe(
-            Scope.provide(hold),
-            Effect.orDie,
-          );
-          yield* count(0, 1);
-          return;
-        }
-        const held = hold;
-        hold = null;
-        if (held !== null) yield* Scope.close(held, Exit.void);
-        yield* count(0, -1);
-      });
-    yield* Effect.forkScoped(
-      Stream.runForEach(
-        session.view.changes.pipe(
-          Stream.map(() => runsAtWork(session) > 0),
-          Stream.changes,
-        ),
-        follow,
-      ).pipe(Effect.ensuring(follow(false))),
-    );
-    return { session };
-  });
-  const projects: RcMap.RcMap<string, ServiceProject, Error> =
-    yield* RcMap.make({
-      lookup: (root: string) => lookup(root).pipe(Effect.mapError(ensureError)),
-      idleTimeToLive: idleAfter,
-    }).pipe(Scope.provide(scope));
-  return {
-    storageRoot,
-    // A lookup that failed (a store another process still holds) is not
-    // kept for the idle time: the next open tries again.
-    open: (workspace) => {
-      const key = canonicalizeWorkspaceRoot(workspace);
-      return RcMap.get(projects, key).pipe(
-        Effect.tapError(() => RcMap.invalidate(projects, key)),
-        Effect.provideContext(services),
-      );
-    },
-    opened: Effect.sync(() => new Map(open)),
-    load,
-  } satisfies Context.Service.Shape<typeof ServiceProjects>;
-});
 
 /** `TEXRA_NO_SERVICE=1`: this process uses no background service, so a
  *  chat runs here, as where the service cannot run. */
