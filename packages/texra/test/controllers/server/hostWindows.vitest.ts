@@ -19,18 +19,18 @@ import { assert, expect } from 'vitest';
 
 // Local imports
 import type { Session } from '@texra-ai/harness';
-import { HostWindows } from '@texra/controllers/server/hostWindows';
-import type { HostAttachFrame } from '@texra/controllers/server/hostCalls';
 import {
-  makeEditorHost,
-  type DiagnosticsReadFailed,
-} from '@texra/tools/editorHost';
+  HostWindows,
+  makeWindowTable,
+} from '@texra/controllers/server/hostWindows';
+import type { HostAttachFrame } from '@texra/controllers/server/hostCalls';
+import type { DiagnosticsReadFailed } from '@texra/tools/editorHost';
 import type { GenericDiagnostic } from '@texra/utils/diagnostics/diagnosticFormatting';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 
 it.effect('releases cancelled calls before accepting a late answer', () => {
   const messages: string[] = [];
-  const editor = makeEditorHost();
+  const table = makeWindowTable();
   // This host-call boundary needs only the session's identity and attachment;
   // no run or database is opened by the synthetic session.
   const unused = (): never => {
@@ -56,7 +56,7 @@ it.effect('releases cancelled calls before accepting a late answer', () => {
   };
   return Effect.gen(function* () {
     const hosts = Context.get(
-      yield* Layer.build(HostWindows.layer(editor)),
+      yield* Layer.build(HostWindows.layer(table)),
       HostWindows,
     );
     // Vary the preceding work so normal scheduler yields can land between
@@ -83,7 +83,7 @@ it.effect('releases cancelled calls before accepting a late answer', () => {
           );
           const attached = yield* Queue.take(frames);
           expect(attached.kind).toBe('attached');
-          const read = editor.at(session.roots.storage).readDiagnostics;
+          const read = table.editors.at(session.roots.storage).readDiagnostics;
           assert(read !== undefined);
           requester = yield* Effect.forkScoped(
             Effect.gen(function* () {

@@ -42,8 +42,8 @@ import {
 import {
   DiagnosticsReadFailed,
   PdfOpenFailed,
+  editorRegistry,
   type EditorCapabilities,
-  type EditorHostShape,
 } from '@texra/tools/editorHost';
 
 import {
@@ -102,7 +102,13 @@ interface Window {
 const projectOf = (session: Session): string =>
   session.roots.workspace ?? session.roots.storage;
 
-const make = Effect.fn('make')(function* (editors: EditorHostShape) {
+/**
+ * The windows attached to this process, the calls they owe an answer, and
+ * what each project's windows offer its runs' editor tools (`editors`): the
+ * one record of the attachments. A composition makes it before its plugins,
+ * which read `editors`, and serves {@link HostWindows} over it.
+ */
+export const makeWindowTable = () => {
   const windows = new Set<Window>();
   /** Every unanswered call, by call id: the window asked and what its
    *  answer completes. */
@@ -258,16 +264,67 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
         );
     },
   });
-  // Each session's surface, held while a window of it is attached: the
-  // session's one host, and its project's editor capabilities. A session
-  // is a key by identity: a project reopened after an idle close is a new
-  // session, given its own.
-  const surfaces = yield* RcMap.make({
-    lookup: (session: Session) =>
-      Effect.andThen(
-        session.attach(interactionsOf(session)),
-        editors.attach(session.roots.storage, editorOf(session.roots.storage)),
+  const answer = (id: string, reply: HostAnswer) =>
+    Effect.suspend(() => {
+      const pending = calls.get(id)?.answered;
+      if (pending !== undefined)
+        return (
+          reply.ok
+            ? Deferred.succeed(pending, reply.value)
+            : Deferred.fail(
+                pending,
+                new WindowCallFailed({
+                  reason: 'failed',
+                  message: reply.message,
+                }),
+              )
+        ).pipe(Effect.asVoid);
+      // Only an asked call has an id to answer, so an unknown one is late:
+      // its run gave up, or its window went.
+      return Effect.logWarning(
+        `A TeXRA window answered host call ${id} after its wait ended${reply.ok ? '' : `: ${reply.message}`}`,
+      );
+    });
+  const focus = (attachment: string) =>
+    Effect.map(Clock.currentTimeMillis, (now) => {
+      for (const window of windows)
+        if (window.id === attachment) window.focusedAt = now;
+    });
+  return {
+    windows,
+    detach,
+    interactionsOf,
+    answer,
+    focus,
+    /** Files a task wrote past the editor's own write path, as this
+     *  process's announcer heard them from the task's rows: every window
+     *  whose project holds one hears it, so its file tree and decorations
+     *  follow the service's tasks. */
+    filesWritten: (absolutePaths: readonly string[]) =>
+      Effect.forEach(
+        [...windows].filter(
+          (window) =>
+            window.capabilities.has('filesWritten') &&
+            absolutePaths.some((path) => isPathWithin(window.project, path)),
+        ),
+        (window) => tell(window, { kind: 'filesWritten', absolutePaths }),
+        { discard: true },
       ),
+    /** What a session's project's windows offer its runs' editor tools, by
+     *  the session's storage root: read live, so a capability is offered
+     *  exactly while a window of the project offers it. */
+    editors: editorRegistry(editorOf),
+  };
+};
+type WindowTable = ReturnType<typeof makeWindowTable>;
+
+const make = Effect.fn('make')(function* (table: WindowTable) {
+  const { windows, detach, interactionsOf, answer, focus } = table;
+  // Each session's presentation surface, held while a window of it is
+  // attached. A session is a key by identity: a project reopened after an
+  // idle close is a new session, given its own.
+  const surfaces = yield* RcMap.make({
+    lookup: (session: Session) => session.attach(interactionsOf(session)),
   });
 
   /** Attach a window of `session`'s project offering `capabilities`: its
@@ -300,48 +357,9 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
         );
       }),
     );
-  const answer = (id: string, reply: HostAnswer) =>
-    Effect.suspend(() => {
-      const pending = calls.get(id)?.answered;
-      if (pending !== undefined)
-        return (
-          reply.ok
-            ? Deferred.succeed(pending, reply.value)
-            : Deferred.fail(
-                pending,
-                new WindowCallFailed({
-                  reason: 'failed',
-                  message: reply.message,
-                }),
-              )
-        ).pipe(Effect.asVoid);
-      // Only an asked call has an id to answer, so an unknown one is late:
-      // its run gave up, or its window went.
-      return Effect.logWarning(
-        `A TeXRA window answered host call ${id} after its wait ended${reply.ok ? '' : `: ${reply.message}`}`,
-      );
-    });
-  const focus = (attachment: string) =>
-    Effect.map(Clock.currentTimeMillis, (now) => {
-      for (const window of windows)
-        if (window.id === attachment) window.focusedAt = now;
-    });
   return {
     attach,
-    /** Files a task wrote past the editor's own write path, as this
-     *  process's announcer heard them from the task's rows: every window
-     *  whose project holds one hears it, so its file tree and decorations
-     *  follow the service's tasks. */
-    filesWritten: (absolutePaths: readonly string[]) =>
-      Effect.forEach(
-        [...windows].filter(
-          (window) =>
-            window.capabilities.has('filesWritten') &&
-            absolutePaths.some((path) => isPathWithin(window.project, path)),
-        ),
-        (window) => tell(window, { kind: 'filesWritten', absolutePaths }),
-        { discard: true },
-      ),
+    filesWritten: table.filesWritten,
     /** A window was focused: its project's calls go to it first. */
     focus,
     /** A window's answer to one call. */
@@ -364,11 +382,11 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
 });
 
 /** The windows attached to this process, served on every host's process
- *  runtime over the editor registry its plugins read. */
+ *  runtime over the window table its plugins' editor tools read. */
 export class HostWindows extends Context.Service<
   HostWindows,
   Effect.Success<ReturnType<typeof make>>
 >()('@texra-ai/texra/server/HostWindows') {
-  static readonly layer = (editors: EditorHostShape) =>
-    Layer.effect(HostWindows, make(editors));
+  static readonly layer = (table: WindowTable) =>
+    Layer.effect(HostWindows, make(table));
 }

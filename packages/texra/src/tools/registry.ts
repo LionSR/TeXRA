@@ -44,7 +44,7 @@ import {
   type InlineCommentProvider,
 } from './comment/InlineCommentTool';
 import { DiagnosticsTool } from './DiagnosticsTool';
-import { EditorHost, makeEditorHost, type EditorRegistry } from './editorHost';
+import { EditorHost, editorRegistry, type EditorRegistry } from './editorHost';
 import {
   DocumentCompileTool,
   DocumentContextTool,
@@ -353,14 +353,14 @@ export const texraPlugins = (host: {
   readonly setup?: SetupPlatformShape;
   /** The host's code editor (VS Code); none elsewhere. */
   readonly editor?: EditorIntegrationShape;
-  /** The composition's editor registry its hosts attach to
-   *  (`makeEditorHost`); none attached when absent. */
+  /** What the composition's windows offer the editor tools (its window
+   *  table's `editors`); none offered when absent. */
   readonly editors?: EditorRegistry;
   /** The host shows external inquiries (VS Code, desktop): the `inquiry`
    *  tool is offered only there. */
   readonly inquiryPanel?: true;
 }): readonly TexraPlugin[] => {
-  const editors = host.editors ?? makeEditorHost();
+  const editors = host.editors ?? editorRegistry(() => ({}));
   return [
     {
       ...fileOps({ writeFilter: texWriteFilter }),
