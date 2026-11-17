@@ -45,6 +45,8 @@ import { anthropicMessagesModel } from '../src/api/anthropicMessages.js';
 import { configurationFor } from '../src/api/configuration.js';
 import { googleInteractionsModel } from '../src/api/googleInteractions.js';
 import { openaiResponsesModel } from '../src/api/openaiResponses.js';
+import { onOpenAiEndpoint } from '../src/api/responsesConfiguration.js';
+import { openaiResponsesWebSocketModel } from '../src/api/openaiResponsesWebSocket.js';
 import {
   decideModelRoute,
   OWN_KEY_ROUTE_FACTS,
@@ -242,6 +244,8 @@ function followUp(result: TurnResult, continuation: Continuation): TurnRequest {
 interface BindOptions {
   /** Deliver turns as background work, where the route can. */
   readonly background?: boolean;
+  /** Serve Responses over its WebSocket, where the route does. */
+  readonly webSocket?: boolean;
 }
 
 /** `route`'s configuration as a run builds it, with a short output. */
@@ -298,13 +302,32 @@ const towards =
     });
   };
 
-/** `configuration`'s model, its HTTP requests sent to `server`. */
+/**
+ * `configuration`'s model, its HTTP requests sent to `server`. A socket
+ * takes no `fetch`, so its binding's endpoint is the server, the path kept.
+ */
 const bindAt = (
   configuration: ModelConfiguration,
   key: string,
   server: string,
+  webSocket = false,
 ): Effect.Effect<Model, never, Scope.Scope> => {
   const fetch = towards(server);
+  if (webSocket && configuration.protocol === 'openai-responses') {
+    const { pathname } = new URL(configuration.deployment.endpoint);
+    return Effect.orDie(
+      openaiResponsesWebSocketModel(
+        {
+          ...configuration,
+          deployment: {
+            ...configuration.deployment,
+            endpoint: new URL(pathname, server).href,
+          },
+        },
+        key,
+      ),
+    );
+  }
   switch (configuration.protocol) {
     case 'anthropic-messages':
       return Effect.orDie(
@@ -530,6 +553,27 @@ const CASES: ReadonlyArray<WireCase> = [
     }),
   },
   {
+    id: 'websocket',
+    describe: 'turns over the Responses WebSocket',
+    it: 'carries one turn after another on one connection',
+    applies: (route) => {
+      const configuration = configure(route, REJECTED_KEY);
+      return (
+        configuration.protocol === 'openai-responses' &&
+        onOpenAiEndpoint(configuration)
+      );
+    },
+    run: Effect.fnUntraced(function* ({ bind, received }) {
+      const model = yield* bind({ webSocket: true });
+      for (const _turn of [1, 2]) {
+        const result = yield* completeTurn(model, TEXT_REQUEST);
+        expect(result.finishReason).toBe('stop');
+        expect(assistantText(result).length).toBeGreaterThan(0);
+      }
+      expect(yield* received).toHaveLength(1);
+    }),
+  },
+  {
     id: 'upload-release',
     describe: 'an uploaded document',
     it: 'is sent by its file id, then deleted when the binding closes',
@@ -644,7 +688,13 @@ const runAt = (
   server: { readonly url: string; readonly received: CaseContext['received'] },
 ) =>
   wireCase.run({
-    bind: (options) => bindAt(configure(route, key, options), key, server.url),
+    bind: (options) =>
+      bindAt(
+        configure(route, key, options),
+        key,
+        server.url,
+        options?.webSocket,
+      ),
     bindRejected: bindAt(
       configure(route, REJECTED_KEY),
       REJECTED_KEY,
@@ -664,7 +714,11 @@ export const replayCase = Effect.fn('replayCase')(function* (
 ) {
   const replayed = yield* replay(cassette);
   const server = yield* wireServer(replayed.respond);
-  yield* runAt(ROUTES[name], wireCase, 'synthetic-replay-key', server);
+  // The case's bindings close before the server does: an open socket would
+  // hold the server's shutdown.
+  yield* Effect.scoped(
+    runAt(ROUTES[name], wireCase, 'synthetic-replay-key', server),
+  );
   expect(yield* replayed.unused).toEqual([]);
 });
 

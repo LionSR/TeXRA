@@ -4,7 +4,8 @@
  *
  * A cassette is one live case's HTTP exchanges in the order the binding sent
  * them: the method and path of each request and the provider's status,
- * allowlisted headers and body. Request headers and request bodies are never
+ * allowlisted headers and body, or for a WebSocket the provider's frames.
+ * Request headers, request bodies and the frames a client sends are never
  * recorded, so no credential or prompt reaches a file. Response bodies are
  * scrubbed before they are written: every identifier is renumbered, model
  * text, reasoning, signatures and tool arguments become fixed placeholders,
@@ -24,9 +25,10 @@ import { createServer } from 'node:http';
 import { dirname } from 'node:path';
 
 // Third-party imports
-import { NodeHttpServer } from '@effect/platform-node';
+import { NodeHttpServer, NodeSocket } from '@effect/platform-node';
 import { Deferred, Effect, Ref, Schema, type Scope, Stream } from 'effect';
 import { HttpServer, HttpServerRequest, HttpServerResponse } from 'effect/http';
+import { Socket } from 'effect/socket';
 
 /** One recorded request and the provider's answer to it. */
 const ExchangeSchema = Schema.Struct({
@@ -37,6 +39,12 @@ const ExchangeSchema = Schema.Struct({
   /** Only {@link RESPONSE_HEADERS}. */
   headers: Schema.Record(Schema.String, Schema.String),
   body: Schema.String,
+  /**
+   * A WebSocket's frames (status 101): the provider's frames after each
+   * frame the client sent, by the client frame's position. What the client
+   * sent is never kept.
+   */
+  replies: Schema.optional(Schema.Array(Schema.Array(Schema.String))),
 });
 export type Exchange = typeof ExchangeSchema.Type;
 
@@ -228,7 +236,15 @@ export function scrubbed(raw: ReadonlyArray<Exchange>): Cassette {
   return {
     exchanges: raw.map((exchange) => {
       const body = scrub.body(exchange.body);
-      return { ...exchange, path: scrub.path(exchange.path), body };
+      const replies = exchange.replies?.map((frames) =>
+        frames.map((frame) => scrub.body(frame)),
+      );
+      return {
+        ...exchange,
+        path: scrub.path(exchange.path),
+        body,
+        ...(replies === undefined ? {} : { replies }),
+      };
     }),
   };
 }
@@ -259,7 +275,8 @@ export interface WireServer {
 /**
  * A local HTTP server on a free loopback port for the caller's scope, which
  * answers each request with `respond`. A raw request still reaches
- * `respond`, so a test can upgrade it to a WebSocket.
+ * `respond`, so a test can upgrade it to a WebSocket. Close the clients
+ * first: a socket still open holds the server's shutdown.
  */
 export const wireServer = Effect.fn('wire.server')(function* (
   respond: Respond,
@@ -284,6 +301,48 @@ export const wireServer = Effect.fn('wire.server')(function* (
   };
 });
 
+/** Whether `raw` asks to become a WebSocket. */
+const upgrading = (raw: HttpServerRequest.HttpServerRequest): boolean =>
+  raw.headers.upgrade?.toLowerCase() === 'websocket';
+
+const frameText = new TextDecoder();
+
+/**
+ * Hands each frame `socket` reads to `onFrame`, in order, until the peer
+ * closes it.
+ */
+const eachFrame = (
+  reader: Socket.Reader,
+  onFrame: (frame: string) => Effect.Effect<void, Socket.SocketError>,
+): Effect.Effect<void, Socket.SocketError> =>
+  Effect.forever(
+    Effect.flatMap(reader.pull, (frames) =>
+      Effect.forEach(
+        frames,
+        (frame) =>
+          onFrame(typeof frame === 'string' ? frame : frameText.decode(frame)),
+        { discard: true },
+      ),
+    ),
+  ).pipe(
+    Effect.catchTag('SocketError', (error) =>
+      error.reason._tag === 'SocketCloseError'
+        ? Effect.void
+        : Effect.fail(error),
+    ),
+  );
+
+/** The two ends of an accepted WebSocket. */
+const accepted = Effect.fnUntraced(function* (
+  raw: HttpServerRequest.HttpServerRequest,
+) {
+  const socket = yield* Effect.orDie(raw.upgrade);
+  return {
+    reader: yield* Effect.orDie(socket.reader),
+    writer: yield* socket.writer,
+  };
+});
+
 const answer = (exchange: Omit<Exchange, 'method' | 'path'>) =>
   HttpServerResponse.text(exchange.body, {
     status: exchange.status,
@@ -298,26 +357,46 @@ const answer = (exchange: Omit<Exchange, 'method' | 'path'>) =>
  */
 export const replay = Effect.fn('wire.replay')(function* (cassette: Cassette) {
   const pending = yield* Ref.make(cassette.exchanges);
-  const respond: Respond = (request) =>
-    Ref.modify(pending, ([next, ...rest]) =>
-      next !== undefined &&
-      next.method === request.method &&
-      next.path === request.path
-        ? [answer(next), rest]
-        : [
-            answer({
-              status: 599,
-              headers: { 'content-type': 'text/plain' },
-              body: `The cassette expected ${next === undefined ? 'no further request' : `${next.method} ${next.path}`}, not ${request.method} ${request.path}.`,
-            }),
-            [],
-          ],
-    );
+  /** Socket replies not yet sent, by the exchange that holds them. */
+  const unsent = yield* Ref.make<ReadonlyArray<string>>([]);
+  const respond: Respond = (request, raw) =>
+    Effect.gen(function* () {
+      const next = yield* Ref.modify(pending, ([first, ...rest]) =>
+        first !== undefined &&
+        first.method === request.method &&
+        first.path === request.path
+          ? [first, rest]
+          : [undefined, []],
+      );
+      if (next === undefined)
+        return answer({
+          status: 599,
+          headers: { 'content-type': 'text/plain' },
+          body: `The cassette does not hold ${request.method} ${request.path} here.`,
+        });
+      if (next.replies === undefined || !upgrading(raw)) return answer(next);
+      const label = `${next.method} ${next.path} (socket)`;
+      yield* Ref.update(unsent, (all) => [...all, label]);
+      const { reader, writer } = yield* accepted(raw);
+      let sent = 0;
+      yield* eachFrame(reader, () => {
+        const frames = next.replies?.[sent] ?? [];
+        sent += 1;
+        if (sent === next.replies?.length)
+          return Effect.andThen(
+            Effect.forEach(frames, writer.write, { discard: true }),
+            Ref.update(unsent, (all) => all.filter((each) => each !== label)),
+          );
+        return Effect.forEach(frames, writer.write, { discard: true });
+      }).pipe(Effect.orDie);
+      return HttpServerResponse.empty();
+    }).pipe(Effect.scoped);
   return {
     respond,
-    unused: Effect.map(Ref.get(pending), (rest) =>
-      rest.map((exchange) => `${exchange.method} ${exchange.path}`),
-    ),
+    unused: Effect.zipWith(Ref.get(pending), Ref.get(unsent), (rest, open) => [
+      ...rest.map((exchange) => `${exchange.method} ${exchange.path}`),
+      ...open,
+    ]),
   };
 });
 
@@ -329,7 +408,60 @@ const HOP_HEADERS = new Set([
   'transfer-encoding',
   'accept-encoding',
   'keep-alive',
+  'upgrade',
+  'sec-websocket-key',
+  'sec-websocket-version',
+  'sec-websocket-extensions',
 ]);
+
+/**
+ * One WebSocket relayed to `upstream` frame by frame, both ways, until
+ * either side closes; `recorded` then holds the provider's frames grouped
+ * by the client frame they followed.
+ */
+const relaySocket = (
+  upstream: string,
+  request: ReceivedRequest,
+  headers: ReadonlyArray<readonly [string, string]>,
+  raw: HttpServerRequest.HttpServerRequest,
+  recorded: Deferred.Deferred<Exchange>,
+) =>
+  Effect.gen(function* () {
+    const target = new URL(request.path, upstream);
+    target.protocol = target.protocol === 'https:' ? 'wss:' : 'ws:';
+    const provider = yield* Socket.makeWebSocket(target.href, {
+      headers: Object.fromEntries(headers),
+    }).pipe(Effect.provide(NodeSocket.layerWebSocketConstructor));
+    const fromProvider = yield* Effect.orDie(provider.reader);
+    const toProvider = yield* provider.writer;
+    const client = yield* accepted(raw);
+    const replies: Array<Array<string>> = [];
+    yield* Effect.raceFirst(
+      eachFrame(client.reader, (frame) => {
+        replies.push([]);
+        return toProvider.write(frame);
+      }),
+      eachFrame(fromProvider, (frame) => {
+        replies.at(-1)?.push(frame);
+        return client.writer.write(frame);
+      }),
+    ).pipe(
+      Effect.orDie,
+      Effect.ensuring(
+        Effect.suspend(() =>
+          Deferred.succeed(recorded, {
+            method: request.method,
+            path: request.path,
+            status: 101,
+            headers: {},
+            body: '',
+            replies,
+          }),
+        ),
+      ),
+    );
+    return HttpServerResponse.empty();
+  }).pipe(Effect.scoped);
 
 /**
  * Forwards each request to `upstream` (the provider's origin) and streams
@@ -349,6 +481,8 @@ export const relay = Effect.fn('wire.relay')(function* (upstream: string) {
       const headers = Object.entries(raw.headers).filter(
         ([name]) => !HOP_HEADERS.has(name),
       );
+      if (upgrading(raw))
+        return yield* relaySocket(upstream, request, headers, raw, recorded);
       const reply = yield* Effect.tryPromise({
         try: (signal) =>
           fetch(new URL(request.path, upstream), {

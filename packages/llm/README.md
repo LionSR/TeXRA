@@ -265,12 +265,13 @@ runs on every route. It is deliberately not part of `npm test`: reach it by
 name (`npm run test:live`) or through the labelled job in
 `.github/workflows/live-llm.yml`.
 
-A live case reaches its provider through a local relay. Run with
+A live case reaches its provider through a local relay, over HTTP or the
+Responses WebSocket. Run with
 `LLM_RECORD=1`, each passing case's exchanges are written to
 `test-live/cassettes/<route>/<case>.json`, and
 `test/api/WireContract.vitest.ts` replays every cassette there in `npm test`,
-with no key and no network. A cassette never holds a request header or a
-request body; its response headers are allowlisted, and its bodies are
+with no key and no network. A cassette never holds a request header, a
+request body or a frame the client sent; its response headers are allowlisted, and its bodies are
 scrubbed before they are written: identifiers renumbered, model text,
 reasoning, signatures and tool arguments replaced by fixed placeholders,
 account fields blanked. The scrubbed copy is replayed through its case before
