@@ -41,7 +41,7 @@ import { HttpClient } from 'effect/http';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // Local imports
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure, withLogChannel } from '@logger/effectLog';
 import { subscribeAppSignal, type AppSignals } from '@platform/appSignals';
 import { Secrets } from '@platform/secrets';
 import type { StateStore } from '@shared/config/settings';
@@ -284,9 +284,10 @@ const probeToolGroup = (
   ownServices: ReturnType<ToolCatalogShape['processServices']>,
 ): Effect.Effect<ExternalToolCheckResult, never, ToolProbeServices> => {
   const unknown = (error: unknown) =>
-    Effect.logWarning(`Availability probe failed for plugin ${plugin.id}`).pipe(
-      Effect.annotateLogs({ data: error }),
-      withLogChannel(CHANNEL),
+    logFailure(
+      CHANNEL,
+      `Availability probe failed for plugin ${plugin.id}`,
+    )(error).pipe(
       Effect.as({
         id: plugin.id,
         tools: (plugin.tools ?? []).map((tool) => tool.definition.name),

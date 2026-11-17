@@ -65,11 +65,10 @@ const decisionOf = (
     Effect.catchCause((cause) =>
       Cause.hasInterruptsOnly(cause)
         ? Effect.interrupt
-        : Effect.logWarning(
+        : logFailure(
+            CHANNEL,
             `The approval handler gave no usable decision on request ${pending.requestId}; it is denied`,
-          ).pipe(
-            Effect.annotateLogs({ data: cause }),
-            withLogChannel(CHANNEL),
+          )(cause).pipe(
             Effect.as<RequestDecision>({
               action: 'deny',
               reason: `The approval handler gave no usable decision: ${toErrorMessage(cause)}`,
