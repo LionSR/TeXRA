@@ -1,122 +1,46 @@
 // Third-party imports
-import { Effect, Schema } from 'effect';
-import {
-  decodingDefault,
-  ensureError,
-  type StateKey,
-} from '@texra-ai/harness/schemas';
-import * as vscode from 'vscode';
+import { Effect } from 'effect';
 
 // Local imports
-import { withLogChannel, Settings } from '@texra-ai/harness/plugins';
+import { askUnlessSilenced } from '@texra/controllers/session/windowNotices';
+import { askNotice } from '@frontend/hosts/VscodeUiHost';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
-import type {
-  StateStore,
-  StateReadFailed,
-  StateWriteFailed,
-} from '@texra-ai/harness/host';
+import type { StateStore } from '@texra-ai/harness/host';
 
-const NEVER_REMIND = 'Never remind again';
-const CHANNEL = 'instruction';
-
-/** Prefix of each instruction's suppression flag in global state. */
-const INSTRUCTION_PREFIX = 'instruction.';
-
-/** A suppression flag is off until the user dismisses its instruction. */
-const SuppressedSchema = decodingDefault(Schema.Boolean, false);
-
-/** Show an instruction message that can be permanently dismissed. */
-export const showInstructionWithSuppress = Effect.fn(
-  'showInstructionWithSuppress',
-)(function* (
-  store: StateStore,
-  key: string,
-  message: string,
-  actions: { title: string; callback: () => Effect.Effect<void> }[] = [],
-  showSuppress = true,
-  options: { deferDismissal?: boolean } = {},
-): Effect.fn.Return<void, StateReadFailed | StateWriteFailed> {
-  const suppressed = {
-    key: `${INSTRUCTION_PREFIX}${key}`,
-    slot: 'globalState',
-    schema: SuppressedSchema,
-  } as const satisfies StateKey<boolean>;
-
-  if (showSuppress && (yield* Settings.state(store, suppressed))) {
-    return;
-  }
-
-  const buttons = actions.map((a) => a.title);
-  if (showSuppress) buttons.push(NEVER_REMIND);
-
-  // Shown here, before the answer is awaited below: a deferred caller returns once
-  // VS Code has accepted the dialog, not once the user dismisses it.
-  const prompt = vscode.window.showInformationMessage(message, ...buttons);
-  const showAndAnswer = Effect.tryPromise({
-    try: () => Promise.resolve(prompt),
-    catch: ensureError,
-  }).pipe(
-    // A prompt VS Code would not show is a logged non-answer.
-    Effect.catch((error) =>
-      Effect.logWarning(`Instruction "${key}" was not shown`).pipe(
-        Effect.annotateLogs({ data: error }),
-        withLogChannel(CHANNEL),
-        Effect.as(undefined),
-      ),
-    ),
-    Effect.flatMap((choice): Effect.Effect<void, StateWriteFailed> => {
-      if (!choice) return Effect.void;
-      // The dismissal write is the caller's own program: this prompt runs
-      // on whichever runtime runs the Effect, so there is no runtime to
-      // look up and no unpersistable choice to report.
-      if (showSuppress && choice === NEVER_REMIND) {
-        return store.update(suppressed.key, true);
-      }
-      const action = actions.find((a) => a.title === choice);
-      return action === undefined ? Effect.void : action.callback();
-    }),
-  );
-
-  if (!options.deferDismissal) return yield* showAndAnswer;
-  return yield* showAndAnswer.pipe(
-    Effect.catchCause((cause) =>
-      Effect.logWarning(
-        `Failed to handle the answer to instruction "${key}"`,
-      ).pipe(Effect.annotateLogs({ data: cause }), withLogChannel(CHANNEL)),
-    ),
-    Effect.forkDetach,
-    Effect.asVoid,
-  );
-});
+const INSTALL = 'Install';
 
 /**
  * Prompt the user to install a VS Code extension, with a suppressible
  * "Never remind again" option. Fires the install command on confirm and
  * reports a refused install once, on the caller's log channel.
  */
-export function promptExtensionInstall(
-  store: StateStore,
-  opts: {
-    suppressKey: string;
-    message: string;
-    extensionId: string;
-  },
-): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
-  return showInstructionWithSuppress(store, opts.suppressKey, opts.message, [
-    {
-      title: 'Install',
-      callback: () =>
-        vscodeEditorIntegration
-          .install(opts.extensionId)
-          .pipe(
-            Effect.catch((err) =>
-              showLoggedErrorMessage(
-                `Error installing extension ${opts.extensionId}`,
-                err,
-              ).pipe(Effect.asVoid),
-            ),
-          ),
+export const promptExtensionInstall = Effect.fn('promptExtensionInstall')(
+  function* (
+    store: StateStore,
+    opts: {
+      suppressKey: string;
+      message: string;
+      extensionId: string;
     },
-  ]);
-}
+  ) {
+    const choice = yield* askUnlessSilenced(
+      askNotice,
+      store,
+      opts.suppressKey,
+      opts.message,
+      [INSTALL],
+    );
+    if (choice !== INSTALL) return;
+    yield* vscodeEditorIntegration
+      .install(opts.extensionId)
+      .pipe(
+        Effect.catch((err) =>
+          showLoggedErrorMessage(
+            `Error installing extension ${opts.extensionId}`,
+            err,
+          ).pipe(Effect.asVoid),
+        ),
+      );
+  },
+);

@@ -17,10 +17,7 @@ import {
   type SessionView,
 } from '@texra-ai/harness/schemas';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
-import {
-  createAgentPresentationHost,
-  warnOnFailure,
-} from '@frontend/events/agentEventListeners';
+import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { openBuilt, type ShowBuilt } from '@frontend/latex/openBuild';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
@@ -639,9 +636,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     if (this.visibleSurface() !== undefined) return;
     // A failed reveal is a diagnostic, not non-delivery: fall through to the
     // visibility re-check and the toast (#10554).
-    yield* warnOnFailure(
-      this.showProgressView(),
-      'Failed to reveal the progress view',
+    yield* this.showProgressView().pipe(
+      Effect.ignore({
+        log: 'Warn',
+        message: 'Failed to reveal the progress view',
+      }),
     );
     // Delivery is the reveal actually becoming visible, not the reveal
     // command resolving.
@@ -655,9 +654,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       items: ['Show Tasks'],
     });
     if (!selection) return;
-    yield* warnOnFailure(
-      this.showProgressView(),
-      'Failed to retry the progress-view reveal',
+    yield* this.showProgressView().pipe(
+      Effect.ignore({
+        log: 'Warn',
+        message: 'Failed to retry the progress-view reveal',
+      }),
     );
   });
 
