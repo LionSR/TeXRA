@@ -27,6 +27,7 @@ import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
+import { renderEmptyMessage } from '@ui/wa/emptyState';
 import {
   renderDisclosureToggle,
   renderSettingsSectionHeading,
@@ -251,7 +252,7 @@ export class ProviderKeyList extends LitElement {
         })}
         ${
           this.providerKeyStatuses === null
-            ? html`<em class="text-secondary">Loading key status…</em>`
+            ? renderEmptyMessage('Loading key status…')
             : html`<div
                 class="settings-disclosure-list"
                 role="list"
