@@ -2,7 +2,6 @@ import { Effect, Schema } from 'effect';
 
 import { agentName, type AgentConfig } from '@texra-ai/harness/schemas';
 import type { Notices } from '@texra-ai/harness/host';
-import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
@@ -65,12 +64,16 @@ export const launchSetup = Effect.fn('launchSetup')(function* <E, R>(options: {
       message:
         'No model is available for your current credentials. Sign in with ChatGPT or add a provider or coding-plan API key in Models, then try setup again.',
     });
-  // An Error, as every host words a failed setup launch by its message.
-  const config = yield* decodeLaunchConfig({
+  const config: AgentConfig = {
+    inputFiles: [],
+    contextFiles: [],
+    mediaFiles: [],
+    outputFiles: [],
     agent: SETUP_AGENT_NAME,
     model,
     instruction: SETUP_INSTRUCTION,
-  }).pipe(Effect.mapError(({ reason }) => new Error(reason)));
+    memories: [],
+  };
   yield* options.start(config).pipe(
     Effect.flatMap((run) =>
       run.result.pipe(

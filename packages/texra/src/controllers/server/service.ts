@@ -1,7 +1,7 @@
 /**
  * The service's procedures over the sessions it holds. Each handler answers
  * from the session of the project it names, opened on first use through
- * {@link ServiceProjects}; a task it starts or resumes runs in the service's
+ * the service's {@link ServiceProjects}; a task it starts or resumes runs in the service's
  * own fiber set, so a client that disconnects never stops it. The feed a
  * client watches is the session bridge's framer over that session, one port
  * per watch, and a request is the session's one request handler.
@@ -10,7 +10,6 @@ import { randomUUID } from 'node:crypto';
 
 import {
   Cause,
-  Context,
   Effect,
   Exit,
   Fiber,
@@ -50,11 +49,6 @@ import { HostWindows } from './hostWindows';
 import { listTasks } from './taskList';
 import { Internal } from '@texra/shared/session/bridgeErrors';
 
-/** A project the service serves: its session, as every host drives it. */
-export interface ServiceProject {
-  readonly session: LocalSession;
-}
-
 /** What the service's projects carry: how many are open, and how many have
  *  a run at work (not one waiting for its next message). */
 export interface ServiceLoad {
@@ -63,24 +57,19 @@ export interface ServiceLoad {
 }
 
 /** The projects the service serves: one session per folder, opened on
- *  demand and released once nothing has held it for a while. The host that
- *  composes the service builds each project's roots, so this is its port. */
-export class ServiceProjects extends Context.Service<
-  ServiceProjects,
-  {
-    /** The storage root every project's store sits under. */
-    readonly storageRoot: string;
-    /** The session of `workspace`, opened on first use and leased for the
-     *  caller's scope: a leased session is never released. */
-    readonly open: (
-      workspace: string,
-    ) => Effect.Effect<ServiceProject, Error, Scope.Scope>;
-    /** The sessions open now, by storage root. */
-    readonly opened: Effect.Effect<ReadonlyMap<string, LocalSession>>;
-    /** The load the projects carry now, as it changes. */
-    readonly load: SubscriptionRef.SubscriptionRef<ServiceLoad>;
-  }
->()('@texra-ai/texra/server/ServiceProjects') {}
+ *  demand and released once nothing has held it for a while (`serve`
+ *  opens them). */
+export interface ServiceProjects {
+  /** The session of `workspace`, opened on first use and leased for the
+   *  caller's scope: a leased session is never released. */
+  readonly open: (
+    workspace: string,
+  ) => Effect.Effect<LocalSession, Error, Scope.Scope>;
+  /** The sessions open now, by storage root. */
+  readonly opened: Effect.Effect<ReadonlyMap<string, LocalSession>>;
+  /** The load the projects carry now, as it changes. */
+  readonly load: SubscriptionRef.SubscriptionRef<ServiceLoad>;
+}
 
 /** The service's own state, kept by the transport that serves it. */
 export interface ServiceControl {
@@ -115,7 +104,7 @@ export const runsAtWork = (session: LocalSession): number => {
  *  its registries hold live, or with `atWork` only those at work
  *  ({@link runsAtWork}). */
 export const runningTasks = Effect.fn('server.runningTasks')(function* (
-  projects: Context.Service.Shape<typeof ServiceProjects>,
+  projects: ServiceProjects,
   atWork = false,
 ): Effect.fn.Return<number> {
   let running = 0;
@@ -185,12 +174,14 @@ function startDetached<A, E extends { readonly message: string }>(
   );
 }
 
-/** The handlers of {@link TexraRpcs}, over the projects and the transport's
- *  `control`. */
-export const serviceHandlers = (control: ServiceControl) =>
+/** The handlers of {@link TexraRpcs}, over the `projects` and the
+ *  transport's `control`. */
+export const serviceHandlers = (
+  projects: ServiceProjects,
+  control: ServiceControl,
+) =>
   TexraRpcs.toLayer(
     Effect.gen(function* () {
-      const projects = yield* ServiceProjects;
       // A task's start and resume are its session's, as every host's are.
       const runs = yield* FiberSet.make();
       // The start is held until the handler's scope ends, by when the
@@ -227,7 +218,7 @@ export const serviceHandlers = (control: ServiceControl) =>
         ): Effect.Effect<A, E> =>
           Effect.scoped(
             projects.open(workspace).pipe(
-              Effect.flatMap(({ session }) => read(session)),
+              Effect.flatMap(read),
               Effect.mapError((error) => failed(error.message)),
             ),
           );
@@ -271,7 +262,7 @@ export const serviceHandlers = (control: ServiceControl) =>
                 SubscriptionRef.update(control.watching, (n) => n + 1),
                 () => SubscriptionRef.update(control.watching, (n) => n - 1),
               );
-              const { session } = yield* open(workspace);
+              const session = yield* open(workspace);
               // The frames name the session as the service keys it.
               const key = session.roots.storage;
               return frameSubscription(
@@ -288,7 +279,7 @@ export const serviceHandlers = (control: ServiceControl) =>
         'task.result': ({ workspace, runId, activation }) =>
           Effect.scoped(
             Effect.gen(function* () {
-              const { session } = yield* open(workspace);
+              const session = yield* open(workspace);
               const end = yield* session
                 .run(runId, activation)
                 .result.pipe(
@@ -313,7 +304,7 @@ export const serviceHandlers = (control: ServiceControl) =>
               Effect.mapError(
                 (error) => new Rejected({ reason: error.message }),
               ),
-              Effect.flatMap(({ session }) => session.request(request)),
+              Effect.flatMap((session) => session.request(request)),
               Effect.catchDefect((defect) =>
                 internal(Cause.die(defect)).pipe(Effect.flatMap(Effect.fail)),
               ),
@@ -323,7 +314,7 @@ export const serviceHandlers = (control: ServiceControl) =>
           Effect.scoped(
             Effect.gen(function* () {
               yield* refuseWhileDraining;
-              const { session } = yield* open(workspace);
+              const session = yield* open(workspace);
               const run = yield* startDetached(
                 runs,
                 // A service task stays open for its windows' follow-ups.
@@ -335,14 +326,14 @@ export const serviceHandlers = (control: ServiceControl) =>
         'host.attach': ({ workspace, capabilities }) =>
           // The window's stream leases its project's session while it runs.
           Stream.unwrap(
-            Effect.map(open(workspace), ({ session }) =>
+            Effect.map(open(workspace), (session) =>
               hosts.attach(session, capabilities),
             ),
           ),
         // The project's state store, the service's own: a window opens none.
         'state.get': ({ workspace, keys }) =>
           Effect.scoped(
-            Effect.flatMap(projects.open(workspace), ({ session }) =>
+            Effect.flatMap(projects.open(workspace), (session) =>
               Effect.forEach(keys, (key) =>
                 session.roots.workspaceState.get(key).pipe(
                   // The store answers what it holds, which is JSON.
@@ -365,7 +356,7 @@ export const serviceHandlers = (control: ServiceControl) =>
           ),
         'state.set': ({ workspace, next, ifCurrent }) =>
           Effect.scoped(
-            Effect.flatMap(projects.open(workspace), ({ session }) => {
+            Effect.flatMap(projects.open(workspace), (session) => {
               const keys = Object.keys(next);
               // With `ifCurrent`, written only while the stored values are the
               // ones the window read: its read-modify-write, as one step here.
@@ -398,7 +389,7 @@ export const serviceHandlers = (control: ServiceControl) =>
           Effect.scoped(
             Effect.gen(function* () {
               yield* refuseWhileDraining;
-              const { session } = yield* open(workspace);
+              const session = yield* open(workspace);
               // A run this service is running is answered as it runs: the
               // client takes up the conversation it belongs to (a chat left
               // it waiting here), which the session names.

@@ -4,11 +4,11 @@ import { glob } from 'glob';
 
 // Internal imports
 import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
+import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
 
 // Local file imports
-import { CHANNEL } from '@housekeeping/constants';
-import { GlobFailed } from '@housekeeping/artifactFiles';
-import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
+import { CHANNEL } from './constants';
+import { GlobFailed } from './artifactFiles';
 
 /**
  * Every `build/` directory under the session's workspace, relative to its
