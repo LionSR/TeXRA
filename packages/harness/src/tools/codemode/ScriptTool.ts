@@ -328,7 +328,7 @@ const SURFACE = [
   [
     'Globals:',
     '- `tools.<name>(args)` calls a tool you are offered, other than `script`, with the arguments of a direct call, and resolves to `{ output, summary }`. A failed call rejects with an Error named `ToolFailed`; use try/catch to recover.',
-    '- Calls start in the order the script issues them. A call to a tool that only reads or searches (named after the declarations below) and a child run (`agent()`, `self()`, `program()`) run alongside the calls around them; every other call (a command, an edit, an MCP or plugin tool) first waits for every call issued before it to finish, and the calls issued after it wait for it. So `Promise.all` runs reads, searches and child runs together, and commands and edits one after another.',
+    '- Calls start in the order the script issues them. A call to a tool that runs alongside others (the reading and searching tools, and child runs: `agent()`, `self()`, `program()`; the declared ones are named after the declarations below) runs together with the calls around it; every other call (a command, an edit, most MCP and plugin tools) first waits for every call issued before it to finish, and the calls issued after it wait for it. So `Promise.all` runs reads, searches and child runs together, and commands and edits one after another.',
     '- `searchTools(query, { limit })` ranks every tool you can call, those not declared below included (MCP and plugin tools), and resolves to the best `limit` (default 8, at most 50) as `{ name, line }[]`.',
     "- `describeTool(name)` resolves to a tool's full declaration, with the description of each field, or to the source of a module or program named `name`.",
     '- A tool declared below as a function is also a global: its first argument is one field of its arguments, its second an object of the rest. A tool that resolves to more than `{ output, summary }` declares what, and its description names the errors it rejects with other than `ToolFailed`.',
@@ -346,9 +346,10 @@ export const ScriptTool = defineTool({
   replay: 'safe',
   description: SURFACE,
   describe: (declared, modules, programs) => {
-    // The declared tools whose calls run together: the rest wait their turn.
+    // The declared tools whose calls run alongside others: the rest wait
+    // their turn.
     const together = declared.flatMap(({ definition, lane }) =>
-      lane === 'parallel' ? [`\`${definition.name}\``] : [],
+      lane === 'parallel' || lane === 'own' ? [`\`${definition.name}\``] : [],
     );
     return [
       SURFACE,
@@ -386,7 +387,9 @@ export const ScriptTool = defineTool({
       ].join('\n'),
       ...(together.length === 0
         ? []
-        : [`Of these, calls to ${together.join(', ')} only read or search.`]),
+        : [
+            `Of these, calls to ${together.join(', ')} run alongside the calls around them.`,
+          ]),
     ].join('\n\n');
   },
   schema: ScriptInputSchema,
