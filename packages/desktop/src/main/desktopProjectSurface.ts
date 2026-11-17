@@ -16,10 +16,8 @@ import {
 import { desktopSignInPresenters } from './desktopSignInPresenters.js';
 import { installDesktopWindowTitle } from './desktopWindowTitle.js';
 import { desktopSpawner } from './desktopWindows.js';
-import {
-  agentDocumentForPath,
-  AgentDocumentUnavailable,
-} from './desktopAgentDocuments.js';
+import { agentDocumentForPath } from './desktopAgentDocuments.js';
+import { DesktopCommandFailed } from './desktopIpcTypes.js';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 import type { ProjectBindings } from './desktopProjectBindings.js';
 import type { DesktopPromptController } from './desktopPromptController.js';
@@ -130,7 +128,7 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
           openAgentDocument(
             filePath,
             Effect.fail(
-              new AgentDocumentUnavailable({
+              new DesktopCommandFailed({
                 message:
                   'This agent definition is no longer in the catalog. Refresh Settings and try again.',
               }),

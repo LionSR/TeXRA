@@ -1,4 +1,4 @@
-import { Effect, Schema } from 'effect';
+import { Effect } from 'effect';
 import {
   AGENT_SOURCE,
   agentKey,
@@ -9,13 +9,7 @@ import {
   agentDocumentIdentity,
   agentDocumentTarget,
 } from '../shared/desktopAgentDocument.js';
-
-export class AgentDocumentUnavailable extends Schema.TaggedError<AgentDocumentUnavailable>()(
-  'AgentDocumentUnavailable',
-  {
-    message: Schema.String,
-  },
-) {}
+import { DesktopCommandFailed } from './desktopIpcTypes.js';
 
 /** Resolve each read/save afresh, including after a renderer or app restart.
  * A removed definition cannot keep an old file grant alive. */
@@ -26,13 +20,13 @@ export const resolveAgentDocument = Effect.fn('resolveAgentDocument')(
       identity &&
       (yield* AgentCatalog).get(agentKey(identity.source, identity.name));
     if (!entry?.path) {
-      return yield* new AgentDocumentUnavailable({
+      return yield* new DesktopCommandFailed({
         message:
           'This agent definition is no longer available. Open its current definition from Settings.',
       });
     }
     if (write && isPackagedAgentSource(entry.source)) {
-      return yield* new AgentDocumentUnavailable({
+      return yield* new DesktopCommandFailed({
         message:
           'Built-in and plugin definitions are read-only. Customize the agent to edit a copy.',
       });
