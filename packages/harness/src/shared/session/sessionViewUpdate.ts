@@ -481,7 +481,7 @@ function withAggregates(u: Update, run: RunView): RunView {
   const next = withDerived(run, {
     holder,
     approval,
-    actions: runActions({ ...run, holder, approval }, unreadable !== undefined),
+    actions: runActions({ ...run, holder }, unreadable !== undefined),
     runStartedAt:
       holder === 'here' && run.position === 'running' && !waiting
         ? work.turnStartedAt

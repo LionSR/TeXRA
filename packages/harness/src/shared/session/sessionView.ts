@@ -221,15 +221,15 @@ export function rollupOf(
 }
 
 /** Whether the run waits between turns with nothing of its own asked of
- *  the user: its turn is delivered and its next message continues it. It
- *  counts as finished in a rollup and offers no stop (a stop would end a
- *  conversation that is only waiting). */
-export const isIdle = (run: Pick<RunView, 'position' | 'approval'>): boolean =>
+ *  the user: its turn is delivered and its next message continues it, so it
+ *  counts as finished in a rollup. */
+const isIdle = (run: Pick<RunView, 'position' | 'approval'>): boolean =>
   run.position === 'waiting' && run.approval !== 'own';
 
-/** Whether this process drives the run and it is not idle (`isIdle`):
- *  working a turn, or waiting on the user inside one. The one reading of a
- *  live child every count of running children uses. */
+/** Whether this process holds the run and it is not idle (`isIdle`):
+ *  working a turn, waiting on the user inside one, or held before its first
+ *  activation. The one reading of a live child every count of running
+ *  children uses. */
 export const isLive = (
   run: Pick<RunView, 'holder' | 'position' | 'approval'>,
 ): boolean => run.holder === 'here' && !isIdle(run);
