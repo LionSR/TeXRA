@@ -964,7 +964,7 @@ The memory tree's host-facing reads and edits, over the caller's
 `StorageFs`.
 
 ```ts
-const MemoryStore: { folder: "memories"; storagePath: (input: string) => Effect<string, Error, never>; displayPath: (storagePath: string) => string; list: Effect<{ readonly displayPath: string; readonly storagePath: string; readonly size: number; readonly mtime: string; readonly preview?: string | undefined; readonly lineCount?: number | undefined; readonly previewError?: boolean | undefined; readonly modifiedBy?: string | undefined; readonly pinned?: boolean | undefined; }[], PlatformError, StorageFs>; preview: (input: string) => Effect<MemoryPreview, Error | PlatformError, StorageFs>; delete: (input: string) => Effect<void, Error | PlatformError, StorageFs>; pin: (input: string) => Effect<MemoryPinResult, Error | PlatformError, StorageFs>; unpin: (input: string) => Effect<void, Error | PlatformError, StorageFs>; }
+const MemoryStore: { folder: "memories"; storagePath: (input: string) => Effect<string, ToolError, never>; displayPath: (storagePath: string) => string; list: Effect<{ readonly displayPath: string; readonly storagePath: string; readonly size: number; readonly mtime: string; readonly preview?: string | undefined; readonly lineCount?: number | undefined; readonly previewError?: boolean | undefined; readonly modifiedBy?: string | undefined; readonly pinned?: boolean | undefined; }[], PlatformError, StorageFs>; preview: (input: string) => Effect<MemoryPreview, ToolError | PlatformError, StorageFs>; delete: (input: string) => Effect<void, ToolError | PlatformError, StorageFs>; pin: (input: string) => Effect<MemoryPinResult, ToolError | PlatformError, StorageFs>; unpin: (input: string) => Effect<void, ToolError | PlatformError, StorageFs>; }
 ```
 
 ## memoryWorkflow
@@ -1497,7 +1497,7 @@ directories are registered external roots).
 outside path.
 
 ```ts
-const resolveToolPath: (call: ToolPathCall, targetPath?: string | undefined) => Effect<ToolPathResolution, Error, never>
+const resolveToolPath: (call: ToolPathCall, targetPath?: string | undefined) => Effect<ToolPathResolution, ToolError | StateReadFailed, never>
 ```
 
 ## retryTransientFetch
