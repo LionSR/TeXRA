@@ -405,7 +405,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v5: the result names the card it closes (`logId`), which a display read
   // shows as the call's `tool.end`; the run loop stores no card row beside
   // it (an earlier build's row would close no card).
-  'tool.result': { version: 5, listing: 'none' },
+  // v6: no `attachmentSummary`, which nothing wrote or read: the summary of
+  // a call's attachments is composed where its text is (an earlier build's
+  // row holding one would have it silently dropped).
+  'tool.result': { version: 6, listing: 'none' },
   // v2: no `continuation`: goal mode is a script, and a waiting run never
   // continues itself (an earlier build's row names a plugin continuation this
   // build has none of).
