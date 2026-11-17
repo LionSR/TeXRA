@@ -168,7 +168,9 @@ and `ChooseReasoningOptions.strict` are gone; `summary` is `'auto'` alone.
 Corrections: `routeEfforts` has a producer (the installed Codex CLI's
 levels, `packages/texra/src/tools/agentCli/codexConfig.ts`) and stays; the
 two id-prefix tests stay until llm-zoo carries a background capability, and
-the GPT-5 summary test with its key above._
+the GPT-5 summary test with its key above. At `c78e9f9` the GPT-5 test is
+gone with that key; the one left is the background test
+(`packages/llm/src/api/responsesConfiguration.ts:120`)._
 
 ## 3. One approval decision
 
@@ -276,12 +278,13 @@ argument; `compactIfNeeded` folded into it); `RegisterRunOptions.descriptionBy`
 is gone (the fork appends its copied title row to its registration rows);
 `ProcessLayerOptions.seedToolSwitches` and `labelRuns` are gone (a store the
 process builds is seeded, a handed-in one left alone, `Sessions.layer` seeds
-the embedder's; `processLayer` provides `RunLabels` to every host);
+the embedder's; `processLayer` provides `LabelsRootRuns` to every host);
 `AgentRuntimeEmitOptions.replayWhenAttached` is gone (replay is the
 behaviour). Kept: `resume.stopAfterCycle` (a host resume is a second
-producer with a varying value). Split off: the `ChildLaunch` union on `task`
-(chat: `schema` + `mediaFiles`; task: `files`): `AgentTool.ts` sits two lines
-under its size cap, so it lands with a trim of that file._
+producer with a varying value). The `ChildLaunch` union is in place at
+`c78e9f9`, now on `program` instead of `task` (a chat: `schema` +
+`mediaFiles`; a program's child: `files` + `args`;
+`packages/harness/src/agent/runtime/delegation/AgentTool.ts:118-147`)._
 
 ## 5. The document task's options: one table, one name, every surface
 
@@ -414,9 +417,11 @@ collected once, and `--instruction-file` is the one identical pair._
 
 - **`websocket.openai`.** The owner ruled to keep the experimental WebSocket
   transport behind its flag (#12869, closed as not planned: "should not be
-  re-proposed"). It stays. Its description still promises the ChatGPT backend
-  may use the socket while `packages/llm/src/node.ts:193` requires an API key;
-  fix the copy, not the flag.
+  re-proposed"). It stays. Its description promised the ChatGPT backend
+  may use the socket while `packages/llm/src/node.ts` required an API key;
+  fix the copy, not the flag. At `c78e9f9` the copy holds: the socket model
+  is built over the bind's bearer, an API key or a session token
+  (`packages/llm/src/node.ts:131-136`).
 - **Per-provider `useChina` toggles and `endpoint.*` overrides.** Four
   booleans over one generic read (`modelSettings.ts:141-146`) look like §1, but
   the region is a fact only the user knows. Keep; the `endpoint.glm` over

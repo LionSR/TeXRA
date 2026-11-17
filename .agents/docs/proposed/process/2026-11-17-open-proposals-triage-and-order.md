@@ -9,51 +9,53 @@ which areas a later step deletes, and the order that follows. It is a
 snapshot for planning. The notes stay the owners of their items; when one of
 them and this note disagree, fix this note or delete it.
 
-How it was made: each note was read in full and its open items were checked
-by searching the tree for the names the note says go or arrive. That check
-finds a deleted name; it is not a review of the design, and an item that is
-"partly done" counts as open. The buckets under "Who decides" apply rules
+How it was made: each note was read in full, and every item it listed as
+open was checked against the tree with a whole-word search and a read of
+the code it cites. The notes themselves were corrected in the same change,
+so the numbers below are the notes' own. An item that is "partly done"
+counts as open, and the notes say which items could not be established. The buckets under "Who decides" apply rules
 the repository already states; a lean written here is not a ruling.
 
 ## What is left
 
-About 230 items: about 143 that are code work, about 77 the notes say wait
-on a decision, and about 10 on hold. Some are counted twice (see
+About 192 items: about 103 that are code work, about 64 that wait on a
+decision, and about 25 on hold. A first count from the notes' text alone,
+before they were corrected, gave about 230. Some are counted twice (see
 "Overlaps").
 
 | Note                                                                                                                                 | Work | Waits on a decision | On hold |
 | ------------------------------------------------------------------------------------------------------------------------------------ | ---- | ------------------- | ------- |
-| [harness general-package design](../architecture/2026-10-21-harness-general-package-design.md)                                       | 5    | 2                   |         |
-| [tech-debt target designs](../architecture/2026-10-27-tech-debt-target-designs.md)                                                   | 5    | 1                   |         |
-| [harness 1.0 release PRD](../architecture/2026-10-28-harness-1-release-prd.md)                                                       | 6    | 3                   |         |
+| [harness general-package design](../architecture/2026-10-21-harness-general-package-design.md)                                       | 6    |                     | 2       |
+| [tech-debt target designs](../architecture/2026-10-27-tech-debt-target-designs.md)                                                   | 3    | 1                   |         |
+| [harness 1.0 release PRD](../architecture/2026-10-28-harness-1-release-prd.md)                                                       | 6    | 2                   | 1       |
 | [one fact, one representation](../architecture/2026-11-03-one-fact-one-representation.md)                                            | 4    | 1                   |         |
-| [session store review](../architecture/2026-11-03-session-store-review.md)                                                           | 8    | 2                   |         |
+| [session store review](../architecture/2026-11-03-session-store-review.md)                                                           | 6    | 2                   | 1       |
 | [root designs, Effect-native](../architecture/2026-11-05-root-designs-effect-native.md)                                              | 6    |                     |         |
 | [CLI service root causes](../architecture/2026-11-06-cli-service-root-causes.md)                                                     | 4    |                     |         |
-| [root designs, PR-1 compromises](../architecture/2026-11-06-root-designs-pr1-compromises.md)                                         | 7    |                     | 1       |
-| [programs, not agents](../architecture/2026-11-06-programs-not-agents.md)                                                            | 3    | 1                   |         |
-| [red flags round 2 and the order](../architecture/2026-11-07-red-flags-round-2-and-order.md)                                         | 19   | 1                   |         |
-| [red flags round 3, the plan](../architecture/2026-11-07-red-flags-round-3-plan.md)                                                  | 10   | 13                  |         |
-| [agent data: one row per fact](../architecture/2026-11-09-agent-data-one-row-per-fact.md)                                            | 1    | 2                   |         |
-| [decisions read the log, not the view](../architecture/2026-11-09-decisions-read-the-log-not-the-view.md)                            | 3    | 1                   |         |
-| [harness against the peers, round 3](../architecture/2026-11-11-harness-against-pi-durable-and-deepseek-round-3.md)                  | 6    | 3                   |         |
-| [nothing held across a wait](../architecture/2026-11-14-nothing-held-across-a-wait.md)                                               | 6    | 6                   |         |
-| [desktop and extension UX roadmap](../feature/2026-09-26-desktop-and-extension-ux-roadmap.md)                                        | 6    |                     |         |
+| [root designs, PR-1 compromises](../architecture/2026-11-06-root-designs-pr1-compromises.md)                                         | 3    | 1                   |         |
+| [programs, not agents](../architecture/2026-11-06-programs-not-agents.md)                                                            | 4    | 2                   |         |
+| [red flags round 2 and the order](../architecture/2026-11-07-red-flags-round-2-and-order.md)                                         | 1    | 2                   | 1       |
+| [red flags round 3, the plan](../architecture/2026-11-07-red-flags-round-3-plan.md)                                                  | 4    | 1                   | 11      |
+| [agent data: one row per fact](../architecture/2026-11-09-agent-data-one-row-per-fact.md)                                            |      | 2                   |         |
+| [decisions read the log, not the view](../architecture/2026-11-09-decisions-read-the-log-not-the-view.md)                            | 2    |                     |         |
+| [harness against the peers, round 3](../architecture/2026-11-11-harness-against-pi-durable-and-deepseek-round-3.md)                  | 6    | 1                   |         |
+| [nothing held across a wait](../architecture/2026-11-14-nothing-held-across-a-wait.md)                                               | 7    | 5                   |         |
+| [desktop and extension UX roadmap](../feature/2026-09-26-desktop-and-extension-ux-roadmap.md)                                        | 6    | 1                   |         |
 | [orchestrator over projects](../feature/2026-09-26-orchestrator-over-projects.md)                                                    |      |                     | 5       |
 | [Claude Agent model route](../feature/2026-10-31-claude-agent-model-route.md)                                                        |      | 4                   |         |
 | [runtime performance measurement record](./2026-09-21-runtime-performance-measurement-record.md)                                     |      |                     | 3       |
 | [SDK npm publishing](./2026-11-05-sdk-npm-publishing.md)                                                                             |      | 4                   |         |
-| [fewer processing options](../simplification/2026-11-03-fewer-processing-options.md)                                                 | 3    | 2                   |         |
-| [storage, errors and stop paths](../simplification/2026-11-03-storage-errors-and-stop-paths.md)                                      | 20   |                     |         |
-| [store and test-support debts](../simplification/2026-11-04-store-and-test-support-debts.md)                                         | 4    | 7                   |         |
+| [fewer processing options](../simplification/2026-11-03-fewer-processing-options.md)                                                 | 1    | 1                   |         |
+| [storage, errors and stop paths](../simplification/2026-11-03-storage-errors-and-stop-paths.md)                                      | 12   |                     |         |
+| [store and test-support debts](../simplification/2026-11-04-store-and-test-support-debts.md)                                         | 6    | 8                   |         |
 | [session surfaces, ad hoc](../simplification/2026-11-10-session-surfaces-ad-hoc.md)                                                  |      | 5                   |         |
-| [llm history lowering and reply-document recovery](../simplification/2026-11-14-llm-history-lowering-and-reply-document-recovery.md) | 2    | 3                   | 1       |
-| [reading a failed cause](../simplification/2026-11-14-reading-a-failed-cause.md)                                                     |      | 2                   |         |
-| [tool card result and delivery shapes](../simplification/2026-11-14-tool-card-result-and-delivery-shapes.md)                         |      | 2                   |         |
-| [unified-latex for LaTeX extraction](../simplification/2026-11-14-unified-latex-for-latex-extraction.md)                             | 1    | 1                   |         |
+| [llm history lowering and reply-document recovery](../simplification/2026-11-14-llm-history-lowering-and-reply-document-recovery.md) |      | 2                   | 1       |
+| [reading a failed cause](../simplification/2026-11-14-reading-a-failed-cause.md)                                                     |      | 3                   |         |
+| [tool card result and delivery shapes](../simplification/2026-11-14-tool-card-result-and-delivery-shapes.md)                         | 1    | 2                   |         |
+| [unified-latex for LaTeX extraction](../simplification/2026-11-14-unified-latex-for-latex-extraction.md)                             |      | 1                   |         |
 | [data shapes left after the audit](../simplification/2026-11-15-data-shapes-left-after-the-audit.md)                                 |      | 3                   |         |
 | [global store, values only](../simplification/2026-11-15-global-store-values-only.md)                                                | 4    |                     |         |
-| [host rules and app facts with two owners](../simplification/2026-11-15-host-rules-and-app-facts-with-two-owners.md)                 | 2    | 1                   |         |
+| [host rules and app facts with two owners](../simplification/2026-11-15-host-rules-and-app-facts-with-two-owners.md)                 | 3    | 3                   |         |
 | [layer misplacements left open](../simplification/2026-11-15-layer-misplacements-left-open.md)                                       | 4    | 4                   |         |
 | [run-end audit left open](../simplification/2026-11-15-run-end-audit-left-open.md)                                                   | 2    |                     |         |
 | [llm provider wire boundary](../simplification/2026-11-16-llm-provider-wire-boundary.md)                                             |      | 1                   |         |
@@ -69,10 +71,9 @@ the source of a ruling.
 
 ### Overlaps
 
-- Red flags round 2 and round 3 describe one body of work; the catalogue
-  under `.agents/docs/evidence/2026-11-15-design-red-flags/` records every
-  row as final. Round 2's remaining steps should be read against it before
-  any is started.
+- Red flags round 2 is nearly finished: each of its lane steps now names
+  the catalogue row that records it, and one item of code work is left
+  (`childEndReport` switching on the child's kind). Round 3 holds the rest.
 - The dispatcher split is in the tech-debt note (T1) and the PRD (row 10).
 - The global store split is in the storage-errors note (§1) and its own
   note.
@@ -121,7 +122,7 @@ programs question 2 (tools as command-line programs); who owns the view;
 whether a second window on Windows is rejected for now; whether the freeze
 waits for programs phase 5.
 
-**1. The five defects.**
+**1. The five defects.** Three are in flight (see "In flight").
 
 **2. Two lines in parallel.** They touch different packages.
 
@@ -152,13 +153,31 @@ regenerate the golden store, remove the duplicated test support,
 **After the freeze.** The UX roadmap, the full TUI validation in CI, the
 packaged smoke launcher.
 
-Work with no place in the order, safe at any time: GS4;
-store-debts A6 and A8; `RunCell.commit` applying a batch once; deriving
+Work with no place in the order, safe at any time: store-debts A6 and A8; `RunCell.commit` applying a batch once; deriving
 `referencedAggregates`; one string for the tool-edit diff title;
 `KEY_PAGES` in one module; the shared wording of the rejected-token
 notice; the one symbol table; the media classifier; tooltip ids carried by
 the data; prompt items I-C4 and I-C16; the `ScriptTool` description; the
 spec wording R6-T7 b; deleting `model.useGoogleBackgroundResponses`.
+
+## In flight
+
+Started from this note on 2026-11-17, one pull request each:
+
+- #15018: a full store reads as disk-full; a run's deletion takes its
+  children (defects 3 and 4).
+- #15019: the decided items left in the fewer-processing-options note.
+- #15020: programs phase 3, the `lean4` plugin's two programs.
+- Not yet a pull request: the turn end the run state forgets with the
+  smaller items of peers round 3 (defect 1); the desktop terminal's early
+  input with UX roadmap items 3, 5 and 6 (defect 2); §3 and §4 of the
+  storage-errors note; the llm cassettes (tech-debt M6 to M8).
+
+Not started because each needs a word from the owner first: the global
+store split and the row-version changes (what happens to the old file);
+§5 and §6 of the storage-errors note (after §3 and §4 merge, same files);
+a limit on a service that crashes at every start (no design); programs
+phases 4 and 5 (question 1).
 
 ## Who decides
 
