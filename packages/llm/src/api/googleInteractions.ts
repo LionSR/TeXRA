@@ -397,12 +397,6 @@ const interactionEnd = (
     finish: {
       finishReason:
         interaction.status === 'requires_action' ? 'tool-calls' : 'stop',
-      // Google reports status but no terminal reason.
-      finishEvidence: {
-        kind: 'google-interactions',
-        status: interaction.status,
-        terminalReason: null,
-      },
     },
   },
 ];

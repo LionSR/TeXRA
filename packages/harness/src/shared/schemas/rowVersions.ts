@@ -365,7 +365,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v20: a completed turn has no `kind` or `modelFingerprint`, and a
   // Responses anchor no `kind` (an earlier build reads this build's turn as
   // damaged without them).
-  'model.message': { version: 20, listing: 'none' },
+  // v21: a completed turn has no `finishEvidence` or `refusalEvidence`,
+  // which nothing read (an earlier build's would be silently stripped).
+  'model.message': { version: 21, listing: 'none' },
   // v2: the causes are `compaction` and `fork` alone (an earlier build's edit
   // of another cause would fail its run as damaged rather than read as that
   // build's).
