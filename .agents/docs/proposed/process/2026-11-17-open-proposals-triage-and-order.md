@@ -152,7 +152,7 @@ regenerate the golden store, remove the duplicated test support,
 **After the freeze.** The UX roadmap, the full TUI validation in CI, the
 packaged smoke launcher.
 
-Work with no place in the order, safe at any time: `readRejection`; GS4;
+Work with no place in the order, safe at any time: GS4;
 store-debts A6 and A8; `RunCell.commit` applying a batch once; deriving
 `referencedAggregates`; one string for the tool-edit diff title;
 `KEY_PAGES` in one module; the shared wording of the rejected-token

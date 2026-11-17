@@ -14,7 +14,8 @@ below was not rewritten.
   `takesFollowUps` check, was ruled in #14986: it keeps reading the view,
   because the store's answer would reject every ended one-shot root that a
   later resume does read a message for.
-- `readRejection` is still exported with no caller.
+- `readRejection` is gone: no source file names it, so the smaller item
+  about it is done.
 
 ## The problem
 
