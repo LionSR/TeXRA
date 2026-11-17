@@ -25,18 +25,6 @@ place to look. It reports only what no earlier round, open note or
 catalogue row records, or what the catalogue marks landed while the tree
 says otherwise; finding 2 is of the second kind.
 
-## Checked against `main` on 2026-11-17
-
-Read at `c78e9f9` by searching the tree for the names this note says go or
-arrive. It finds a deleted name; it is not a review of the design. The body
-below was not rewritten.
-
-- F2's open rule (`takesFollowUps`) was ruled in #14986: keep reading the
-  view. F2-A should be re-read against that ruling before it is built.
-- F5a looks done: the follow-up schema has no `'instruction'` literal.
-- Still present: `requestAnswerability` (F1b). F4, F1c, F2-B, F3 and F5b
-  were not checked.
-
 ## Summary
 
 The core stays sound: every resumable fact is a row, the model
@@ -54,7 +42,10 @@ a message reaches a run.
 | 5   | Smaller: one dead schema value, one false comment                                                                          | dead code, a comment that says what the code does not                       | `holdUntil: 'instruction'`, `endIn`'s comment                                                                                            |
 
 Findings 1 and 4 are defects traced through the code, not reproduced;
-findings 1, 2 and 3 each carry an owner decision named in their section.
+findings 1, 2 and 3 each carried an owner decision named in their section.
+At `c78e9f9` (2026-11-17) only finding 3's is still to make: finding 1's
+cancel rule is in the code and finding 2's `takesFollowUps` rule was ruled
+in #14986 (see "Since this note's base").
 
 ## Since this note's base
 
@@ -74,6 +65,44 @@ caused.
 **On `main` since `2f63e5a4`.** #14936 deleted `openOwnedChildren`, which
 the first version of finding 5 listed. #14926 fixed one more case of
 finding 1's cause. No other finding changed; their lines are updated.
+
+**On `main` at `c78e9f9` (2026-11-17).** Each item of "Order" was read
+again in the tree. The line references below are still those of
+`d173e42d`; where a name moved, this paragraph gives the new one.
+
+- **Finding 1's cancel rule is in the code.** `cancelledRequests` and
+  `unboundRequests` have no references. One function, `cancelRequestRows`
+  (`shared/session/runState.ts`), writes the cancellations for a run's end
+  (`agent/storage/runLifecycle.ts`) and for a resume's activation
+  (`agent/runtime/makeRunHistory.ts`), and it leaves a request that does not
+  block its caller open. No suite holds the regression test the order asks
+  for: the one test with a `blocksCaller: false` request
+  (`src/test-kernel/controllers/session/sessionEvents.vitest.ts`) covers a
+  missing plugin, not a clean close.
+- **Finding 2's first case is gone.** #14969 rewrote `needsWake`
+  (`agent/followUp/FollowUpReader.ts`): any run's message now wakes a run
+  that ended, except after a user's stop. The second case stands: a run's
+  message to a run the user stopped is still answered `queued`.
+  `admission` is now `Inbox.acceptance` (`agent/followUp/Inbox.ts`), and it
+  still reads only `inputClosed` and the in-memory readers.
+- **Finding 2's `takesFollowUps` rule is ruled** (#14986): a message keeps
+  reading the view in `submitFollowUp`, and the comment there says why (the
+  store's answer would reject every ended one-shot root, which a later
+  resume does read). So the view check stays and leaves "What goes".
+- **`holdUntil: 'instruction'` is gone.** The field is
+  `Schema.optional(Schema.Literal('turn'))` (`shared/schemas/followUp.ts`).
+- **Still as written:** the decide door's rejection
+  (`controllers/session/SessionRequests.ts`) and `requestAnswerability` (8
+  references); the script request's own run reload (`AgentTool.ts`);
+  `readers`, `disposed` and the two answer shapes; the `Promise.all`
+  sentence, the barrier state (`places`, `barrier`, `since`) and the
+  in-memory launch count (`countLaunch`, `agentChild.ts`); the live-only
+  `endTurn`; `endIn`'s comment.
+- **Design B's receipt half is gone.** `followUpReceipt` has no references,
+  and "has this message been taken" is read only through `applyRunRow`
+  (`sharedRowsFrom`, `shared/session/runRowReads.ts`);
+  `followUpMessages.ts` no longer has a read-then-tail. What is left of B is
+  reading the input once per loop step.
 
 ## What picks the targets
 
@@ -333,18 +362,19 @@ whether it wakes), `replay` (a caller id already sent) or `refused`
 it; `sentBefore` still runs first, as the receipt rule requires
 (`packages/harness/AGENTS.md`, "Run loop architecture"). The answer is
 then `sent | queued | refused`, and a message nothing would read is
-refused with its reason. This forces the `takesFollowUps` question #14893
-left open: whichever rule the owner picks is the verdict's, in one place.
+refused with its reason. The `takesFollowUps` question #14893 left open was
+ruled in #14986: a message keeps reading the view, so that rule is not the
+verdict's.
 
 **B. One input reading for the reader and the receipt.** The reader reads
 the input once per loop step and answers `{ readable, controls }`; a
 receipt's `wait` applies each new row to what it holds instead of
 reading again. `followUpReceipt`'s separate scan goes.
 
-**What goes:** the view check in `submitFollowUp` (`ToolUseFollowUp.ts:197-208`),
-`owesResume`'s own rule, the scattered `disposed` checks, two of the
-three rejection wordings, the `'instruction'` hold, and the repeated full
-reads. The area pass estimates A at about 60 lines out and 45 in, and B
+**What goes:** `owesResume`'s own rule, the scattered `disposed` checks, two of the
+three rejection wordings, and the repeated full reads (the view check in
+`submitFollowUp` stays, by #14986, and the `'instruction'` hold is already
+deleted). The area pass estimates A at about 60 lines out and 45 in, and B
 at 150 out and 80 in; round 2 found such estimates undercount what
 replaces the code, so read them as such.
 
@@ -446,7 +476,8 @@ other cases stand.
 
 - `openOwnedChildren`, exported with no caller at `2f63e5a4` (#14769
   removed the last one), was deleted by #14936.
-- `holdUntil: 'instruction'` and `endIn`'s comment (finding 2).
+- `holdUntil: 'instruction'` (deleted since) and `endIn`'s comment (finding
+  2; still there).
 - A deadline restarts at each resume: a script's `timeoutMs`
   (`tools/codemode/ScriptTool.ts:231`), a hook's timeout, and a retry's
   backoff. pi stores `until`. Recorded, not proposed: whether a process's
@@ -459,8 +490,8 @@ other cases stand.
   [the session surfaces audit](../simplification/2026-11-10-session-surfaces-ad-hoc.md).
 - Two answers to one inquiry at once can leave the thread's record and the
   decided row naming different answers.
-- The `takesFollowUps` question: finding 2's design A decides it in one
-  place.
+- The `takesFollowUps` question: ruled in #14986 (a message keeps reading
+  the view), so finding 2's design A no longer decides it.
 - The `endTurn` defect: finding 4, now traced through the code.
 
 ## What the peers do that is still not taken
@@ -487,15 +518,22 @@ other cases stand.
 ## Order
 
 0. **Finding 4**, with its regression test. No owner decision.
-1. **Finding 1's cancel rule**, once the owner picks it, with one
-   regression test (a non-blocking request across a clean close).
+1. **Finding 1's cancel rule**: in the code (`cancelRequestRows` leaves a
+   non-blocking request open at a run's end and at an activation). Its one
+   regression test (a non-blocking request across a clean close) is still
+   to write.
 2. **Finding 1's decision as a wake and one request switch.** No stored
    change in the first variant.
-3. **Finding 2's design A**, with the owner's `takesFollowUps` rule; then
-   design B.
+3. **Finding 2's design A**, less the `takesFollowUps` rule, which #14986
+   ruled stays a read of the view in `submitFollowUp`: what is left is the
+   one verdict the sending job, `owesResume` and `openResume` read, the
+   rejection of a run's message after a user's stop, one answer shape, and
+   `readers` and `disposed`. Then design B, whose receipt half is gone:
+   one input reading per loop step.
 4. **Finding 3**: the description now; the guest's order if the owner
    wants it; the launch count from rows.
-5. **Finding 5's deletions** at any time.
+5. **Finding 5's deletions** at any time. `holdUntil: 'instruction'` is
+   deleted; `endIn`'s comment is left.
 
 ## Verified
 

@@ -6,11 +6,13 @@ status: proposed
 # Publishing the SDK pair from a tagged release
 
 `@texra-ai/llm` and `@texra-ai/harness` have never been published. The
-`releasing` skill has the owner publish them by hand, one at a time, with an
+`releasing` skill had the owner publish them by hand, one at a time, with an
 OTP. This note proposes publishing them the way `@texra-ai/cli` already is:
 the owner cuts an `sdk-vX.Y.Z` GitHub release and CI publishes both packages
 over npm Trusted Publishing, at one shared version. The implementation is on
-branch `claude/sdk-publish-ci` (commit `b717f21`), not yet in a PR.
+`main` (checked 2026-11-17: the script, the `publish-sdk` job, the shared
+action and the skill's text are all there). What is left is the owner's:
+the one-time setup below and question 3.
 
 This contradicts one clause of the rulings ledger. D11
 ([ledger](../../implemented/architecture/2026-08-01-architecture-rulings-ledger.md),
@@ -18,19 +20,6 @@ This contradicts one clause of the rulings ledger. D11
 npm-releasable, and publishing is the owner's manual step." The argument for
 changing it is below; the owner keeps the decision to publish (the tag and the
 release are still cut by hand), and only the upload moves to CI.
-
-## Checked against `main` on 2026-11-17
-
-Read at `c78e9f9` by searching the tree for the names this note says go or
-arrive. It finds a deleted name; it is not a review of the design. The body
-below was not rewritten.
-
-- The design is on `main`, not on a branch: `packages/harness/scripts/publish-npm.mjs`,
-  the `publish-sdk` job and the `.github/actions/release-channel` action all
-  exist. Questions 1 and 2 are answered by that.
-- What remains is the owner's: the first manual publish, the Trusted
-  Publisher for both packages, the wording of the rulings-ledger entry, and
-  question 3 (a changelog for the SDK).
 
 ## Today
 
@@ -114,17 +103,18 @@ care about churn without changes.
 
 ## The design
 
-On the branch:
+On `main`:
 
-- **`packages/harness/scripts/publish-npm.mjs`** (`--tag latest|preview`,
-  `--dry-run`). Reads both manifests and fails unless the versions match. Packs
+- **`packages/harness/scripts/publish-npm.mjs`** (`--dry-run`; the dist-tag
+  comes from the version's form, `latest` for `X.Y.Z` and `preview` for
+  `X.Y.Z-preview.N`). Reads both manifests and fails unless the versions match. Packs
   both with `corepack pnpm --filter <pkg> pack` before uploading either, so a
   pack failure publishes nothing. Fails if a packed `package.json` still names
   `workspace:` or `catalog:`. For llm, then harness: skips the package if
   `npm view name@version` finds it, otherwise
   `npm publish <tarball> --access public --tag <tag>`. Uploading a tarball runs
   no package script, so the `prepack` guard against npm does not apply.
-- **`.github/actions/npm-dist-tag`**, a composite action taking `manifest` and
+- **`.github/actions/release-channel`**, a composite action taking `manifest` and
   `tag-prefix`. It holds the check that was inline in `publish-cli`: the tag is
   `<prefix><version>`, the version is `X.Y.Z` or `X.Y.Z-preview.N`, and the
   GitHub pre-release flag agrees. `publish-cli` and `publish-sdk` both call
@@ -145,14 +135,18 @@ by hand is a smaller surface than a second release script.
 
 ## One-time setup (owner)
 
-1. After the branch lands: `npm login`, then
-   `node packages/harness/scripts/publish-npm.mjs --tag latest` from a clean
+1. `npm login`, then
+   `node packages/harness/scripts/publish-npm.mjs` from a clean
    checkout of `main` (publishes `0.1.0`, asks for the OTP).
 2. On npmjs.com, for each of `@texra-ai/llm` and `@texra-ai/harness`: add a
    Trusted Publisher (GitHub Actions, this repository, workflow `release.yml`),
    as configured for `@texra-ai/cli`.
 3. Update D11's parenthetical in the rulings ledger to say the pair publishes
    from an `sdk-v` release the owner cuts.
+
+None of the three is finished as of 2026-11-17: `npm view` still answers 404
+for both names, both manifests are still `0.1.0`, and the ledger still says
+"publishing is the owner's manual step".
 
 ## Risks
 
@@ -170,8 +164,11 @@ by hand is a smaller surface than a second release script.
 ## Open questions for the owner
 
 1. Accept the change to D11 (CI uploads; the owner still decides by cutting
-   the release)?
-2. Accept one version for both packages?
+   the release)? Answered in effect: the `publish-sdk` job is on `main` and
+   root `AGENTS.md` states the `sdk-v` release. Only the ledger's wording
+   (setup step 3) is left.
+2. Accept one version for both packages? Answered in effect: the script on
+   `main` refuses two versions, and the skill says "One version for both".
 3. Should the SDK get its own changelog section (or file) for the `sdk-v`
    release notes, or are the release notes written by hand each time?
 
@@ -181,7 +178,8 @@ by hand is a smaller surface than a second release script.
   (2026-11-05).
 - pi-mono files read at `55a5c69`; the description above is from those files,
   not from memory.
-- On the branch, locally: `publish-npm.mjs --tag latest --dry-run` packed both
+- On the branch, before it merged and while the script still took `--tag`,
+  locally: `publish-npm.mjs --tag latest --dry-run` packed both
   packages and dry-ran `+ @texra-ai/llm@0.1.0` then `+ @texra-ai/harness@0.1.0`;
   `--tag foo` printed the usage error; with llm at `0.1.1` it refused
   ("The SDK packages share one version"). `oxlint`, `format:check` and

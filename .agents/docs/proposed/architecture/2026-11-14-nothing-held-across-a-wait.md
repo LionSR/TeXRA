@@ -238,11 +238,13 @@ open requests with the same decision a person's cancel writes. That work
 also read `effect/workflow`, `effect/eventlog` and the `effect/sql` models
 against the run loop and the store and refused each with evidence
 (`EFF-ADOPT-workflow-run-loop`, `EFF-ADOPT-eventlog-session-store`,
-`EFF-ADOPT-sql-schema-resolver-model`, on its own branch).
+`EFF-ADOPT-sql-schema-resolver-model`, now entries of
+`.agents/docs/refuted-candidates.json`).
 
 ## Progress
 
-Done, on the branch after PR 14927:
+Done, on `main` after PR 14927 (checked 2026-11-17: `withFileWriteLane`,
+`runsAtWork`, `RouteAnswered` and `scopedFork` are all in the tree):
 
 - Row 4 and row 6: the registry's launch, hold and stop are one
   `acquireUseRelease` each, the three stop paths are one, and a stop asked
