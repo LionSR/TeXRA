@@ -1,6 +1,6 @@
 // Per-project document metadata. Dockview owns group positions, sizes and tabs.
-import { Effect, Number as Num, Schema } from 'effect';
-import { getBasename } from '@texra-ai/harness/schemas';
+import { Number as Num, Schema } from 'effect';
+import { decodingDefaultType, getBasename } from '@texra-ai/harness/schemas';
 
 import type { IconName } from '@ui/wa/iconNames';
 import type { SerializedDockview } from 'dockview';
@@ -46,22 +46,15 @@ const DockLayoutSchema = Schema.declare<SerializedDockview>(
     'panels' in value,
 );
 export const DesktopShellStateSchema = Schema.Struct({
-  projectName: Schema.String.pipe(
-    Schema.withDecodingDefaultType(Effect.succeed('')),
-  ),
-  sidebarCollapsed: Schema.Boolean.pipe(
-    Schema.withDecodingDefaultType(Effect.succeed(false)),
-  ),
-  sidebarWidth: Schema.Number.pipe(
-    Schema.withDecodingDefaultType(Effect.succeed(256)),
-  ),
+  projectName: decodingDefaultType(Schema.String, ''),
+  sidebarCollapsed: decodingDefaultType(Schema.Boolean, false),
+  sidebarWidth: decodingDefaultType(Schema.Number, 256),
   workbenchTabs: Schema.Array(WorkbenchTabSchema),
   activeTabId: Schema.optional(Schema.String),
-  dockLayout: Schema.NullOr(DockLayoutSchema).pipe(
-    Schema.withDecodingDefaultType(Effect.succeed(null)),
-  ),
-  nextTerminalSerial: Schema.Int.check(Schema.isGreaterThan(0)).pipe(
-    Schema.withDecodingDefaultType(Effect.succeed(1)),
+  dockLayout: decodingDefaultType(Schema.NullOr(DockLayoutSchema), null),
+  nextTerminalSerial: decodingDefaultType(
+    Schema.Int.check(Schema.isGreaterThan(0)),
+    1,
   ),
 });
 export type DesktopShellState = typeof DesktopShellStateSchema.Type;

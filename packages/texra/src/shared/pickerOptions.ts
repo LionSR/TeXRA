@@ -3,9 +3,9 @@
  * views. Kept free of any IPC message wrappers so the message modules can
  * compose these without circular dependencies.
  */
-import { Effect, Schema, Struct } from 'effect';
-
+import { Schema, Struct } from 'effect';
 import {
+  decodingDefault,
   agentName,
   AgentSourceSchema,
   DeclinableUsageRouteSchema,
@@ -87,13 +87,9 @@ export const TeamOptionDataSchema = PickerOptionBaseSchema.mapFields(
     /** The team's icon, a name the host's icon set draws. */
     icon: Schema.String,
     /** Preset description, surfaced as the option `title`. */
-    description: Schema.String.pipe(
-      Schema.withDecodingDefault(Effect.succeed('')),
-    ),
+    description: decodingDefault(Schema.String, ''),
     /** Catalog members that did not resolve; empty means fully runnable. */
-    unavailableMembers: Schema.Array(Schema.String).pipe(
-      Schema.withDecodingDefault(Effect.succeed([])),
-    ),
+    unavailableMembers: decodingDefault(Schema.Array(Schema.String), []),
     /** Why the team cannot be launched (no runnable team lead); absent for
      *  one that can. */
     disabledReason: Schema.optional(Schema.NullOr(Schema.String)),

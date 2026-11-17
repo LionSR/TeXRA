@@ -33,7 +33,7 @@ import {
   effectDiagnosticsLayer,
   setLogSink,
 } from '@texra-ai/harness/node';
-import type { StateKey } from '@texra-ai/harness/schemas';
+import { decodingDefault, type StateKey } from '@texra-ai/harness/schemas';
 import { appSignalStream } from '@texra-ai/harness/host';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
@@ -99,9 +99,7 @@ const EXTENSION_CHANNEL = 'extension';
 const WELCOME_SHOWN_KEY = {
   key: 'welcomeShown',
   slot: 'globalState',
-  schema: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
+  schema: decodingDefault(Schema.Boolean, false),
 } as const satisfies StateKey<boolean>;
 
 // VS Code invokes activation and deactivation separately. Only this entry

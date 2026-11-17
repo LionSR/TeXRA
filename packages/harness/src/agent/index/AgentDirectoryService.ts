@@ -3,6 +3,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { Effect, FileSystem, Schema } from 'effect';
+import { decodingDefault } from '@shared/schemas';
 
 // Local imports
 import { CUSTOM_AGENTS_STORAGE_DIR } from '@common/storage/storageLayout';
@@ -38,7 +39,7 @@ import type { AgentEntry } from './agentEntry';
 export const CUSTOM_AGENT_DIR_KEY = {
   key: 'customAgentDir',
   slot: 'globalState',
-  schema: Schema.Trim.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
+  schema: decodingDefault(Schema.Trim, ''),
 } as const satisfies StateKey<string>;
 
 /** {@link CUSTOM_AGENT_DIR_KEY}, read. */

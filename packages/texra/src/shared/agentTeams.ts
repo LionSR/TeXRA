@@ -8,6 +8,7 @@
  */
 
 import { Effect, Result, Schema } from 'effect';
+import { decodingDefault } from '@texra-ai/harness/schemas';
 
 /** Schema for a single agent team: its members, by name. */
 export const AgentModePresetSchema = Schema.Struct({
@@ -33,9 +34,7 @@ export const CUSTOM_TEAMS_KEY = 'customTeams';
 
 export function parseAgentModePresets(raw: unknown): AgentModePreset[] {
   const parsedRecords = Schema.decodeUnknownResult(
-    Schema.Array(Schema.Unknown).pipe(
-      Schema.withDecodingDefault(Effect.succeed([])),
-    ),
+    decodingDefault(Schema.Array(Schema.Unknown), []),
   )(raw);
   if (!Result.isSuccess(parsedRecords)) {
     console.warn(

@@ -6,7 +6,8 @@
  */
 
 // Third-party imports
-import { Effect, Schema } from 'effect';
+import { Schema } from 'effect';
+import { decodingDefault } from '@texra-ai/harness/schemas';
 
 // Local imports
 import { LATEXDIFF_MATH_MARKUP_VALUES } from '@texra/shared/constants/latexConfig';
@@ -14,7 +15,7 @@ import type { TexraSettingRow } from '@texra/shared/settings/settingSurfaces';
 
 export const DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING = {
   key: 'documents.compileAfterOutput',
-  schema: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  schema: decodingDefault(Schema.Boolean, true),
   title: 'Auto-compile outputs',
   description:
     'Compile the LaTeX project automatically after a document task writes its output.',
@@ -25,8 +26,9 @@ export const DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING = {
 
 export const DOCUMENTS_COMPILE_TIMEOUT_SETTING = {
   key: 'documents.compileTimeoutMs',
-  schema: Schema.Int.check(Schema.isGreaterThanOrEqualTo(10_000)).pipe(
-    Schema.withDecodingDefault(Effect.succeed(120_000)),
+  schema: decodingDefault(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(10_000)),
+    120_000,
   ),
   title: 'Auto-compile timeout',
   description:
@@ -38,7 +40,7 @@ export const DOCUMENTS_COMPILE_TIMEOUT_SETTING = {
 
 export const DOCUMENTS_OPEN_PDF_SETTING = {
   key: 'documents.openPdf',
-  schema: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  schema: decodingDefault(Schema.Boolean, true),
   title: 'Open the compiled PDF',
   description:
     'After auto-compile, open the PDF when it succeeds or the LaTeX log when it fails.',
@@ -51,7 +53,7 @@ export const DOCUMENTS_OPEN_PDF_SETTING = {
 
 export const DOCUMENTS_REJECT_ON_COMPILE_FAILURE_SETTING = {
   key: 'documents.rejectOnCompileFailure',
-  schema: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  schema: decodingDefault(Schema.Boolean, true),
   title: 'Repair failed compiles',
   description:
     'When the automatic compile fails, spend the next revision repairing the output from the compile log.',
@@ -66,9 +68,7 @@ export const DOCUMENTS_REJECT_ON_COMPILE_FAILURE_SETTING = {
 
 export const LATEXDIFF_BETWEEN_ROUNDS_SETTING = {
   key: 'latexdiff.generateBetweenRoundDiffs',
-  schema: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
+  schema: decodingDefault(Schema.Boolean, false),
   title: 'Diff consecutive revisions',
   description:
     'Also diff each revision against the previous one, not only against your original input.',
@@ -79,9 +79,10 @@ export const LATEXDIFF_BETWEEN_ROUNDS_SETTING = {
 
 export const LATEXDIFF_TIMEOUT_SETTING = {
   key: 'latexdiff.timeoutMs',
-  schema: Schema.Int.check(
-    Schema.isBetween({ minimum: 1000, maximum: 80_000 }),
-  ).pipe(Schema.withDecodingDefault(Effect.succeed(10_000))),
+  schema: decodingDefault(
+    Schema.Int.check(Schema.isBetween({ minimum: 1000, maximum: 80_000 })),
+    10_000,
+  ),
   title: 'latexdiff timeout',
   description:
     'Maximum time (in milliseconds) to allow a single latexdiff invocation to run.',
@@ -92,8 +93,9 @@ export const LATEXDIFF_TIMEOUT_SETTING = {
 
 export const LATEXDIFF_MATH_MARKUP_SETTING = {
   key: 'latexdiff.mathMarkup',
-  schema: Schema.Literals(LATEXDIFF_MATH_MARKUP_VALUES).pipe(
-    Schema.withDecodingDefault(Effect.succeed('coarse')),
+  schema: decodingDefault(
+    Schema.Literals(LATEXDIFF_MATH_MARKUP_VALUES),
+    'coarse',
   ),
   title: 'Math markup in diffs',
   description: 'How latexdiff marks up changes inside math environments.',
@@ -112,7 +114,7 @@ export const LATEXDIFF_MATH_MARKUP_SETTING = {
 
 export const LATEXDIFF_CHANGES_ONLY_SETTING = {
   key: 'latexdiff.changesOnly',
-  schema: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  schema: decodingDefault(Schema.Boolean, true),
   title: 'Only changed pages in diff PDFs',
   description:
     'Compile diff PDFs with only the pages that contain edits, instead of the full document.',

@@ -10,7 +10,8 @@
  */
 
 // Third-party imports
-import { Effect, Schema } from 'effect';
+import { Schema } from 'effect';
+import { decodingDefault } from '@shared/schemas';
 import { providerDisplayName } from '@texra-ai/llm';
 
 // Local imports
@@ -18,14 +19,14 @@ import type { SettingRow } from '@shared/state/stateSettings';
 
 /** The schema of a boolean setting: `value` when the key is absent. */
 export const booleanWithDefault = (value: boolean) =>
-  Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(value)));
+  decodingDefault(Schema.Boolean, value);
 
 /** A provider's custom-endpoint row, stored as `<namespace>.endpoint.<id>`. */
 const endpointRow = <const Id extends string>(id: Id) =>
   ({
     id,
     key: `endpoint.${id}` as const,
-    schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
+    schema: decodingDefault(Schema.String, ''),
     title: `${providerDisplayName(id)} endpoint`,
     description: `Custom base URL for ${providerDisplayName(id)} API requests. Leave empty to use the default endpoint.`,
     slot: 'globalState',
