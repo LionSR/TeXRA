@@ -22,15 +22,25 @@ import { ToolRegistry, type ProgramChange } from '@tools/toolTable';
 
 /**
  * The script a program's run makes: import the module registered under
- * `name` and call its default export with `args`. What that resolves to is
- * the script's return, so the run ends with it as its structured output.
+ * `name` and call its default export with its own `args` and the launch's
+ * instruction and files. What that resolves to is the script's return, so
+ * the run ends with it as its output.
  */
 const programScript = (
   name: string,
   args: Readonly<Record<string, Schema.Json>>,
+  launch: Pick<
+    AgentConfig,
+    'instruction' | 'inputFiles' | 'contextFiles' | 'mediaFiles'
+  >,
 ): string =>
   `const { default: program } = await import(${JSON.stringify(`builtIn:${name}`)});
-return await program(${JSON.stringify(args)});`;
+return await program(${JSON.stringify(args)}, ${JSON.stringify({
+    instruction: launch.instruction,
+    inputFiles: launch.inputFiles,
+    contextFiles: launch.contextFiles,
+    mediaFiles: launch.mediaFiles,
+  })});`;
 
 /** The `script` call a run opened on `script` makes, and the tools its run
  *  offers that call. */
@@ -100,7 +110,7 @@ export const scriptCallOf = Effect.fn('scriptCallOf')(function* (
   if (script.kind === 'background') return script;
   const program = yield* registeredProgram(script.name);
   return {
-    code: programScript(script.name, script.args),
+    code: programScript(script.name, script.args, config),
     title: script.name,
     tools: program.tools,
   };
