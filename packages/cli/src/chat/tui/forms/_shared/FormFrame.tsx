@@ -4,13 +4,7 @@
 
 import { Text, useWindowSize } from 'ink';
 
-import {
-  CLOSE_HINTS,
-  ENTER_OR_ESC_CLOSE_HINTS,
-  KeyHints,
-  type KeyHint,
-  NAVIGATE_HINT,
-} from '@cli/tui/ui/KeyHints';
+import { CLOSE_HINTS, KeyHints } from '@cli/tui/ui/KeyHints';
 import {
   BORDERED_PANEL_CHROME_COLUMNS,
   BorderedPanel,
@@ -101,60 +95,4 @@ export function renderAsyncListFormTransient(props: {
     );
   }
   return null;
-}
-
-export function CompactFormKeyHints(props: {
-  readonly primary: KeyHint;
-  readonly escapeAction?: string;
-}): React.JSX.Element {
-  return (
-    <KeyHints
-      hints={[
-        NAVIGATE_HINT,
-        props.primary,
-        { key: 'Esc', action: props.escapeAction ?? 'close' },
-      ]}
-      confirmCancel={false}
-    />
-  );
-}
-
-/**
- * Footer vocabulary for the pickers that render their own layout (`/agent`,
- * `/model`): a selectable list advertises hotkey selection, a read-only or
- * empty one advertises only how to close.
- */
-export function PickerKeyHints(props: {
-  readonly selectable: boolean;
-  readonly hasItems: boolean;
-}): React.JSX.Element {
-  if (props.selectable && props.hasItems) {
-    return (
-      <KeyHints hints={[NAVIGATE_HINT, { key: '1-9/a-z', action: 'select' }]} />
-    );
-  }
-  return (
-    <KeyHints
-      hints={[
-        ...(props.hasItems ? [NAVIGATE_HINT] : []),
-        ...ENTER_OR_ESC_CLOSE_HINTS,
-      ]}
-      confirmCancel={false}
-    />
-  );
-}
-
-/** The same vocabulary in a compact frame, where one row must carry it all. */
-export function CompactPickerKeyHints(props: {
-  readonly selectable: boolean;
-}): React.JSX.Element {
-  return (
-    <CompactFormKeyHints
-      primary={
-        props.selectable
-          ? { key: '1-9/a-z/Enter', action: 'select' }
-          : { key: 'Enter', action: 'close' }
-      }
-    />
-  );
 }

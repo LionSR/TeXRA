@@ -683,7 +683,8 @@ const SCENARIOS = [
       'latexFixer',
       'Current: chat (hidden from picker)',
       'Choose an agent, or a team it leads, for this chat.',
-      'Esc cancel',
+      '1-9/a-z/Enter select',
+      'Esc close',
     ],
     unexpect: [
       'Platform not initialized',
@@ -717,7 +718,8 @@ const SCENARIOS = [
       'latexFixer',
       'Current: chat (hidden from picker)',
       'Choose an agent, or a team it leads, for this chat.',
-      'Esc cancel',
+      '1-9/a-z/Enter select',
+      'Esc close',
     ],
     unexpect: [
       'Platform not initialized',

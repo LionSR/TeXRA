@@ -13,41 +13,52 @@ import {
   selectIndexForHotkeyInput,
   type SelectItem,
 } from '@cli/tui/ui/Select';
+import { isCompactRows } from '@cli/tui/ui/theme';
 
-import {
-  computeSelectWindowSize,
-  isCompactFormRows,
-  type SelectWindowSize,
-} from '@cli/tui/selectWindow';
-import {
-  CompactFormKeyHints,
-  FormFrame,
-  renderAsyncListFormTransient,
-} from './FormFrame';
+import { FormFrame, renderAsyncListFormTransient } from './FormFrame';
 import { useAsyncListForm } from './useAsyncListForm';
 import type { ProcessServices } from '@texra-ai/harness/host';
 import type { Effect } from 'effect';
 
 const LIST_FORM_FRAME_ROWS = 3;
 const LIST_FORM_FOOTER_ROWS = 2;
+/** At or below this many rows a form drops to its one-row compact layout. */
+const COMPACT_FORM_MAX_ROWS = 9;
 
+/**
+ * How many list rows the form's `Select` may show and whether to spend rows
+ * on overflow markers. With no row budget it shows everything. Otherwise the
+ * frame, footer, description and detail rows come off the budget first; on a
+ * very short terminal (fewer than 3 list rows) the active choice stays
+ * visible instead of the whole budget going to overflow markers.
+ */
 function listFormSelectWindow(args: {
   readonly availableRows: number | undefined;
   readonly itemCount: number;
   readonly hasDescription?: boolean;
   readonly detailRows?: number;
   readonly selectMarginTop?: number;
-}): SelectWindowSize {
-  return computeSelectWindowSize({
-    availableRows: args.availableRows,
-    itemCount: args.itemCount,
-    chromeRows:
-      LIST_FORM_FRAME_ROWS +
-      LIST_FORM_FOOTER_ROWS +
-      (args.hasDescription ? 1 : 0) +
-      Math.max(0, args.detailRows ?? 0) +
-      Math.max(0, args.selectMarginTop ?? 0),
-  });
+}): {
+  readonly maxVisibleItems: number | undefined;
+  readonly showOverflow: boolean;
+} {
+  if (args.availableRows == null) {
+    return { maxVisibleItems: undefined, showOverflow: false };
+  }
+  const chromeRows =
+    LIST_FORM_FRAME_ROWS +
+    LIST_FORM_FOOTER_ROWS +
+    (args.hasDescription ? 1 : 0) +
+    Math.max(0, args.detailRows ?? 0) +
+    Math.max(0, args.selectMarginTop ?? 0);
+  const selectRows = Math.max(1, args.availableRows - chromeRows);
+  if (args.itemCount <= selectRows) {
+    return { maxVisibleItems: args.itemCount, showOverflow: false };
+  }
+  if (selectRows < 3) {
+    return { maxVisibleItems: selectRows, showOverflow: false };
+  }
+  return { maxVisibleItems: selectRows - 2, showOverflow: true };
 }
 
 interface ListFormProps<T> {
@@ -94,9 +105,13 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
     );
   }
 
-  const shortcut = listFormShortcutLabel(props.items.length);
+  const primary = {
+    key: listFormShortcutLabel(props.items.length),
+    action: props.action,
+  };
+  const escape = { key: 'Esc', action: props.escapeAction ?? 'close' };
 
-  if (isCompactFormRows(props.availableRows)) {
+  if (isCompactRows(props.availableRows, COMPACT_FORM_MAX_ROWS)) {
     return (
       <FormFrame
         title={props.compactTitle ?? props.title}
@@ -114,9 +129,9 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
           onSelect={props.onSelect}
           onCancel={props.onCancel}
         />
-        <CompactFormKeyHints
-          primary={{ key: shortcut, action: props.action }}
-          escapeAction={props.escapeAction}
+        <KeyHints
+          hints={[NAVIGATE_HINT, primary, escape]}
+          confirmCancel={false}
         />
       </FormFrame>
     );
@@ -148,12 +163,7 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
       </Box>
       <Box marginTop={1}>
         <KeyHints
-          hints={[
-            NAVIGATE_HINT,
-            { key: shortcut, action: props.action },
-            ...(props.extraHints ?? []),
-            { key: 'Esc', action: props.escapeAction ?? 'close' },
-          ]}
+          hints={[NAVIGATE_HINT, primary, ...(props.extraHints ?? []), escape]}
           confirmCancel={false}
         />
       </Box>

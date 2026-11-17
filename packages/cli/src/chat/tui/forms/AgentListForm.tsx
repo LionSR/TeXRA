@@ -7,11 +7,6 @@ import { Effect } from 'effect';
 
 import { AgentCatalog } from '@texra-ai/harness/host';
 import { agentName, joinFacts } from '@texra-ai/harness/schemas';
-import { Select } from '@cli/tui/ui/Select';
-import {
-  computeSelectWindowSize,
-  isCompactFormRows,
-} from '@cli/tui/selectWindow';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import {
   isAgentOption,
@@ -22,12 +17,7 @@ import type { AgentOptionData } from '@texra/shared/pickerOptions';
 import { agentOptionsData } from '@texra/controllers/session/agentOptions';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 
-import {
-  CompactPickerKeyHints,
-  FormFrame,
-  PickerKeyHints,
-} from './_shared/FormFrame';
-import { useAsyncPickerForm } from './_shared/ListForm';
+import { ListForm, useAsyncPickerForm } from './_shared/ListForm';
 import { useChatProcess } from '../chatProcess';
 
 interface AgentListFormProps {
@@ -134,6 +124,8 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     onClose: props.onClose,
   });
 
+  if (picker.transient) return picker.transient;
+
   const agents: AgentGroups = picker.data ?? { agents: [], teams: [] };
   const primarySectionTitle = `${agentPickerPrimarySectionTitle(agents.agents)}${
     agents.teams.length > 0 ? ', then teams' : ''
@@ -153,64 +145,48 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     agents.agents,
     props.currentAgent,
   );
-  // Border, title, description, section heading, and key hints are the fixed
-  // chrome around the selectable list.
-  const selectWindow = computeSelectWindowSize({
-    availableRows: props.availableRows,
-    itemCount: items.length,
-    chromeRows: 8 + (currentAgentHint ? 1 : 0),
-  });
-  if (picker.transient) return picker.transient;
-
   const currentAgentHintRow = currentAgentHint ? (
     <Text dimColor wrap="truncate-end">
       {currentAgentHint}
     </Text>
   ) : null;
 
-  if (isCompactFormRows(props.availableRows) && items.length > 0) {
-    return (
-      <FormFrame title="/agent" showCloseHint={false}>
-        {currentAgentHintRow}
-        <Text bold>{primarySectionTitle}</Text>
-        <Select
-          items={items}
-          activeValue={activeValue}
-          maxVisibleItems={1}
-          showOverflow={false}
-          onSelect={picker.select}
-          onCancel={props.onClose}
-        />
-        <CompactPickerKeyHints selectable={props.selectable} />
-      </FormFrame>
-    );
-  }
-
   return (
-    <FormFrame title="/agent" showCloseHint={false}>
-      <Text dimColor wrap="truncate-end">
-        {props.selectable
-          ? 'Choose an agent, or a team it leads, for this chat.'
-          : 'Viewing agents. Use texra chat --agent <name> to switch in a new chat.'}
-      </Text>
-      {currentAgentHintRow}
-      <Box marginTop={1} flexDirection="column">
-        <Text bold>{primarySectionTitle}</Text>
-        <Select
-          items={items}
-          activeValue={activeValue}
-          maxVisibleItems={selectWindow.maxVisibleItems}
-          showOverflow={selectWindow.showOverflow}
-          onSelect={picker.select}
-          onCancel={props.onClose}
-        />
-      </Box>
-      <Box marginTop={1}>
-        <PickerKeyHints
-          selectable={props.selectable}
-          hasItems={items.length > 0}
-        />
-      </Box>
-    </FormFrame>
+    <ListForm
+      title="/agent"
+      availableRows={props.availableRows}
+      items={items}
+      activeValue={activeValue}
+      description={
+        <Text dimColor wrap="truncate-end">
+          {props.selectable
+            ? 'Choose an agent, or a team it leads, for this chat.'
+            : 'Viewing agents. Use texra chat --agent <name> to switch in a new chat.'}
+        </Text>
+      }
+      detail={
+        <>
+          {currentAgentHintRow}
+          {items.length > 0 ? (
+            <Box marginTop={1}>
+              <Text bold>{primarySectionTitle}</Text>
+            </Box>
+          ) : null}
+        </>
+      }
+      // The hint row, then the section heading behind its blank row.
+      detailRows={(currentAgentHint ? 1 : 0) + 2}
+      compactDetail={
+        <>
+          {currentAgentHintRow}
+          <Text bold>{primarySectionTitle}</Text>
+        </>
+      }
+      emptyClosesOnEnter
+      emptyMessage="No agents are available in this workspace."
+      action={props.selectable ? 'select' : 'close'}
+      onSelect={picker.select}
+      onCancel={props.onClose}
+    />
   );
 }
