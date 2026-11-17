@@ -107,6 +107,9 @@ const leanUnavailableResult = (
   summary: string,
 ): ToolResult => errorResult(`${failed}: ${failure.message}`, { summary });
 
+/** What Lean reports on a declaration that a `sorry` stands in for. */
+const SORRY = "declaration uses 'sorry'";
+
 const NO_DIAGNOSTICS_HELP = `No errors, warnings, or hints for this file.
 
 If you expected errors:
@@ -162,14 +165,26 @@ const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
           { summary: 'Failed to open file' },
         );
   }
-  const result = fetched.success;
-  const diagnostics = result.diagnostics;
+  const { complete, diagnostics } = fetched.success;
+  const counts = countBySeverity(diagnostics);
+  const output = (text: string, summary: string): ToolResult => ({
+    ...executed(text, summary),
+    // A script reads the verdict, not the prose.
+    value: {
+      output: text,
+      summary,
+      complete,
+      errors: counts.errors,
+      sorries: diagnostics.filter(({ message }) => message.includes(SORRY))
+        .length,
+    },
+  });
 
-  if (!result.complete) {
+  if (!complete) {
     // Diagnostics so far are not the file's verdict: an empty list must not
     // read as a clean file, nor a partial one as all its errors.
     const pending = `Lean has not finished elaborating ${file} yet (${formatResultCount(diagnostics.length, 'diagnostic')} so far); call again to get the complete result.`;
-    return executed(
+    return output(
       command === 'list' && diagnostics.length > 0
         ? `${pending}\n\n${formatGroupedSections(diagnostics)}`
         : pending,
@@ -177,31 +192,23 @@ const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
     );
   }
 
-  const counts = countBySeverity(diagnostics);
+  if (diagnostics.length === 0)
+    return output(NO_DIAGNOSTICS_HELP, '✓ No diagnostics');
+
   const countsStr = formatCounts(counts);
-
-  if (diagnostics.length === 0) {
-    return executed(NO_DIAGNOSTICS_HELP, '✓ No diagnostics');
-  }
-
-  if (command === 'count') {
-    return {
-      status: 'executed',
-      summary: countsStr,
-      output: `${file}: ${countsStr}`,
-    } satisfies ToolResult;
-  }
-
-  return {
-    status: 'executed',
-    summary: countsStr,
-    output: formatGroupedSections(diagnostics),
-  } satisfies ToolResult;
+  return output(
+    command === 'count'
+      ? `${file}: ${countsStr}`
+      : formatGroupedSections(diagnostics),
+    countsStr,
+  );
 });
 
 export const LeanDiagnosticsTool = defineTool({
   name: 'lean_diagnostics',
   replay: 'safe',
+  scriptReturns:
+    '{ output: string; summary: string; complete: boolean; errors: number; sorries: number }',
   description: `Get diagnostic messages (errors, warnings, info) for a Lean 4 file.
 
 Commands:
