@@ -98,7 +98,7 @@ function FormBusyFrame(props: {
   const requiredRows = (copyableMessage: string): number =>
     borderedPanelChromeRows(hints, innerWidth) +
     wrappedRows(title) +
-    wrappedRows(progress.message ?? 'working...') +
+    wrappedRows(progress.message ?? 'working…') +
     (copyableMessage === progress.message
       ? 0
       : 1 + wrappedRows(copyableMessage));
@@ -120,7 +120,7 @@ function FormBusyFrame(props: {
       showCloseHint={false}
     >
       {progress.status === 'running' && !spinnerFrozen ? (
-        <LoadingIndicator label={displayMessage ?? 'working...'} />
+        <LoadingIndicator label={displayMessage ?? 'working…'} />
       ) : (
         displayMessage && <Text>{displayMessage}</Text>
       )}

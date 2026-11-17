@@ -147,7 +147,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
     loading: settings.data === undefined && settings.loading,
     error: settings.error,
     title: '/config',
-    loadingLabel: 'Loading settings...',
+    loadingLabel: 'Loading settings…',
   });
   if (transient) return transient;
 

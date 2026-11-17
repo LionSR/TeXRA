@@ -31,7 +31,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
   return (
     <AsyncListForm<readonly CliModelPickerItem[], string>
       title="/model"
-      loadingLabel="Loading models..."
+      loadingLabel="Loading models…"
       load={() =>
         Effect.flatMap(
           getCliModelAccessList({ stores: { ...roots, runtime } }),

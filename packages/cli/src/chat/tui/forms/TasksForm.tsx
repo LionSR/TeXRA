@@ -71,7 +71,7 @@ export function TasksForm(props: TasksFormProps): React.JSX.Element {
   return (
     <AsyncListForm<readonly TaskSummary[], RunId>
       title="/tasks"
-      loadingLabel="Reaching the TeXRA service..."
+      loadingLabel="Reaching the TeXRA service…"
       load={() =>
         Effect.scoped(
           Effect.flatMap(props.connect(), ({ client }) =>

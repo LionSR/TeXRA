@@ -668,14 +668,14 @@ export function buildStatusBarDisplay(
   // announces auto-approval bypasses and quota exhaustion.
   if (run?.compactingActive === true) {
     left.push({
-      text: 'compacting...',
+      text: 'compacting…',
       dim: true,
       priority: STATUS_BAR_PRIORITY.compacting,
       policy: 'drop',
     });
   } else if (run?.thinkingActive === true) {
     left.push({
-      text: 'thinking...',
+      text: 'thinking…',
       dim: true,
       priority: STATUS_BAR_PRIORITY.thinking,
       policy: 'drop',

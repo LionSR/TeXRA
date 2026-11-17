@@ -117,7 +117,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   return (
     <AsyncListForm<AgentGroups, AgentPickerValue>
       title="/agent"
-      loadingLabel="Loading agents..."
+      loadingLabel="Loading agents…"
       load={Effect.fn('load')(function* () {
         const catalog = yield* AgentCatalog;
         const agents = (yield* agentOptionsData(roots)).map((agent) => ({

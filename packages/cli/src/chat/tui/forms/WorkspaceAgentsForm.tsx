@@ -132,7 +132,7 @@ export function WorkspaceAgentsForm(
       loading: error === undefined,
       error,
       title: '/config · Agents',
-      loadingLabel: 'Loading agents...',
+      loadingLabel: 'Loading agents…',
     });
   }
 
