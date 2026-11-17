@@ -45,11 +45,13 @@ export function causeChain(err: unknown): unknown[] {
  * A `PlatformError` over a system error: its message only restates that
  * error's (the Node error already names the path and the reason) behind the
  * service's tag and method, so the message keeps the error and drops the
- * wrapper. One without a cause keeps its own words.
+ * wrapper. One without a cause keeps its own words, and so does a
+ * `BadArgument`, whose description is the caller's own.
  */
 const restatesItsCause = (node: unknown): boolean =>
   Predicate.isTagged(node, 'PlatformError') &&
   Predicate.hasProperty(node, 'reason') &&
+  !Predicate.isTagged(node.reason, 'BadArgument') &&
   Predicate.hasProperty(node.reason, 'cause') &&
   node.reason.cause instanceof Error;
 
