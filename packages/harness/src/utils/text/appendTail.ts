@@ -54,7 +54,7 @@ export function appendHead(
 /** A {@link headTail} window as read: the stream's first characters, the
  *  last ones after them, and how many fell between the two. With nothing
  *  elided, `head + tail` is the whole stream. */
-export interface HeadTailText {
+interface HeadTailText {
   readonly head: string;
   readonly tail: string;
   readonly elided: number;

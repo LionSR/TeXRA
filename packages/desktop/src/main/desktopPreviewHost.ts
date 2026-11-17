@@ -1,13 +1,7 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import {
-  Effect,
-  FileSystem,
-  type Path,
-  type PlatformError,
-  Schema,
-} from 'effect';
+import { Effect, FileSystem, type Path, type PlatformError } from 'effect';
 
 import {
   type ProcessRuntime,
@@ -21,6 +15,7 @@ import type { BuildDisplayFn } from '@texra/controllers/approval/latexPreview';
 
 import { DESKTOP_PDF_COMMANDS } from '../shared/desktopPdfMessages.js';
 import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
+import { DesktopCommandFailed } from './desktopIpcTypes.js';
 import type { FileLocation } from '@texra-ai/harness/schemas';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -44,7 +39,7 @@ interface DesktopPreviewHost {
    *  {@link HostFailed}; the caller presents it. */
   openExternal(url: string): Effect.Effect<void, HostFailed>;
   /** Open a workspace file in the OS default application. */
-  openPath(filePath: string): Effect.Effect<void, PreviewUnavailable>;
+  openPath(filePath: string): Effect.Effect<void, DesktopCommandFailed>;
   /**
    * The build-and-show preview of one open project: a LaTeX source compiles
    * against `roots` (its workspace, its LaTeX settings) and its PDF opens in
@@ -61,28 +56,17 @@ interface DesktopPreviewHostOptions {
   runtime: ProcessRuntime;
 }
 
-/**
- * A preview step that could not run, which its caller presents. The message
- * is the whole sentence the user reads, never a prefix over another one.
- */
-export class PreviewUnavailable extends Schema.TaggedError<PreviewUnavailable>()(
-  'PreviewUnavailable',
-  {
-    message: Schema.String,
-  },
-) {}
-
 export function createDesktopPreviewHost(
   options: DesktopPreviewHostOptions,
 ): DesktopPreviewHost {
   /** The builds this host has shown: each tab reload names the newest. */
   let builds = 0;
-  const fail = (message: string): Effect.Effect<never, PreviewUnavailable> =>
-    Effect.fail(new PreviewUnavailable({ message }));
+  const fail = (message: string): Effect.Effect<never, DesktopCommandFailed> =>
+    Effect.fail(new DesktopCommandFailed({ message }));
 
   function ensurePathExists(
     filePath: string,
-  ): Effect.Effect<void, PreviewUnavailable, FileSystem.FileSystem> {
+  ): Effect.Effect<void, DesktopCommandFailed, FileSystem.FileSystem> {
     return FileSystem.FileSystem.use((fs) => fs.access(filePath)).pipe(
       Effect.catch((error: PlatformError.PlatformError) =>
         fail(
@@ -96,7 +80,7 @@ export function createDesktopPreviewHost(
 
   const openPathProgram = Effect.fn('openPathProgram')(function* (
     filePath: string,
-  ): Effect.fn.Return<void, PreviewUnavailable, FileSystem.FileSystem> {
+  ): Effect.fn.Return<void, DesktopCommandFailed, FileSystem.FileSystem> {
     yield* ensurePathExists(filePath);
 
     const shellError = yield* Effect.tryPromise({
@@ -125,7 +109,7 @@ export function createDesktopPreviewHost(
     fileLocation: FileLocation,
   ): Effect.fn.Return<
     void,
-    PreviewUnavailable,
+    DesktopCommandFailed,
     FileSystem.FileSystem | Path.Path | ChildProcessSpawner
   > {
     const sourcePath = fileLocation.absolutePath;

@@ -75,14 +75,9 @@ type ScriptError =
   | ScriptLimitExceeded
   | SandboxUnavailable;
 
-/** One call the guest issued, numbered in issue order from 0. */
-export interface ScriptOp {
-  readonly seq: number;
-  readonly name: string;
-  readonly input: unknown;
-  /** The title of the guest's latest `section()` call, if it made one. */
-  readonly section: string | null;
-}
+/** One call the guest issued, numbered in issue order from 0, as its step
+ *  report decodes it. */
+export type ScriptOp = (typeof StepReportSchema.Type)['ops'][number];
 
 /** How a call finishes: a JSON value, or an error the guest's `await` throws. */
 export type ScriptOpResult =

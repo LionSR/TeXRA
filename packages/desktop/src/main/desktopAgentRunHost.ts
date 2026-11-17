@@ -2,34 +2,18 @@ import type { Dialogs, DiffViewHost } from '@texra/hosts/uiHosts';
 import type { TranscriptExportFormat } from '@texra/controllers/progressView/exportTranscript';
 import type { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import type { BuildDisplayFn } from '@texra/controllers/approval/latexPreview';
-import type { InstructionAction } from '@ui/copy/instructionActions';
+import type { windowNotices } from '@texra/controllers/session/windowNotices';
 import type { Effect } from 'effect';
 
-import type { PreviewUnavailable } from './desktopPreviewHost.js';
+import type { DesktopCommandFailed } from './desktopIpcTypes.js';
 
 /** Required desktop capabilities used throughout an agent run. */
 export interface DesktopAgentRunHost {
   /** A notice naming the run's project. */
   readonly notify: Dialogs['notify'];
-  /**
-   * Presents an instruction (e.g. a missing API key) as an actionable
-   * dialog: each token in `actions` becomes a button — dispatched to the
-   * matching main-process action (open Settings, open a doc) — plus a
-   * defaulted "Dismiss", instead of degrading to inert trailing hint text.
-   * A program, as `openPath` is: the session's presenter forks it.
-   */
-  showInstructionDialog(
-    message: string,
-    actions: readonly InstructionAction[],
-  ): Effect.Effect<void>;
-  /**
-   * Presents a failure dialog. A `docsPage` (from a rejected request's
-   * `Rejected`) adds a guide button opening the matching docs page — the
-   * native form of the link the extension's request-error callout renders.
-   * A dialog that could not be shown is reported by the implementation, as
-   * a notice's is: this program has no failure of its own.
-   */
-  showErrorDialog(message: string, docsPage?: string): Effect.Effect<void>;
+  /** The window's failure and instruction notices, naming the run's
+   *  project. */
+  readonly notices: ReturnType<typeof windowNotices>;
   /** The export's format dialog. The Electron dialog behind it is a
    *  promise, lifted once there; a cancelled dialog answers `undefined`. */
   pickTranscriptExportFormat(): Effect.Effect<
@@ -41,7 +25,7 @@ export interface DesktopAgentRunHost {
   openPath(
     filePath: string,
     line?: number,
-  ): Effect.Effect<void, PreviewUnavailable>;
+  ): Effect.Effect<void, DesktopCommandFailed>;
   openBuildDisplay: BuildDisplayFn;
   openDiff: DiffViewHost['openDiff'];
   confirm: Dialogs['confirm'];

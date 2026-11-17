@@ -41,9 +41,16 @@ const turns = [
   { expect: 'The script returned', text: 'Noted.' },
   {
     expect: 'Add a second note.',
-    toolCalls: [{ name: 'note_add', input: SECOND }],
+    toolCalls: [
+      {
+        name: 'script',
+        input: {
+          code: `return await tools.note_add(${JSON.stringify(SECOND)});`,
+        },
+      },
+    ],
   },
-  { expect: 'noted: Section 3 is done.', text: 'Both noted.' },
+  { expect: 'The script returned', text: 'Both noted.' },
 ];
 const withPlugin = await makeExampleWorkspace(turns, undefined, packageAgents);
 // The same workspace and store, its agent directory its own (no agents).

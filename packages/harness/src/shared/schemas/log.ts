@@ -51,7 +51,6 @@ export type LoadedMediaMetadata = typeof LoadedMediaMetadataSchema.Type;
 export const FileListEntrySchema = Schema.Struct({
   path: Schema.String,
   ok: Schema.Boolean,
-  source: Schema.optional(Schema.String),
   sourceDisplay: Schema.optional(Schema.String),
   varName: Schema.optional(Schema.String),
   /** Present only when this file was loaded through the media pipeline. */

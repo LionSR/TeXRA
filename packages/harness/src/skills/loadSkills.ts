@@ -49,7 +49,7 @@ export interface SkillSource {
  * `plugin:<name>`. An installed plugin's source may be one command file
  * (`command`), read as the skill its name names.
  */
-export type SkillSourcePlugin =
+type SkillSourcePlugin =
   | { readonly kind: 'tool'; readonly id: string }
   | {
       readonly kind: 'installed';

@@ -96,12 +96,16 @@ const PERSONA = {
   tools: ['hold_turn'],
 };
 
-/** A conversation's one turn: propose the plan, then hold. */
+/** A conversation's one turn: a script that proposes the plan, then holds. */
 const proposeAndHold = (opening: string, objective: string) => ({
   expect: opening,
   toolCalls: [
-    { name: 'plan', input: { objective } },
-    { name: 'hold_turn', input: {} },
+    {
+      name: 'script',
+      input: {
+        code: `await tools.plan(${JSON.stringify({ objective })});\nawait tools.hold_turn({});`,
+      },
+    },
   ],
 });
 

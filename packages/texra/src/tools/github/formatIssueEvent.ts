@@ -11,13 +11,17 @@ import {
   makeTruncator,
   sections,
   wrapWebhookEvent as wrap,
+  type WebhookEvent,
 } from './formatUtils';
 import { targetPath, type IssueTarget } from './subscriptionTarget';
 import type { GhIssue } from './prTypes';
 
 const truncate = makeTruncator(MAX_BODY);
 
-export function formatIssueClosed(issue: IssueTarget, data: GhIssue): string {
+export function formatIssueClosed(
+  issue: IssueTarget,
+  data: GhIssue,
+): WebhookEvent {
   const reason = data.state_reason
     ? ` (state_reason: ${data.state_reason})`
     : '';
@@ -26,7 +30,10 @@ export function formatIssueClosed(issue: IssueTarget, data: GhIssue): string {
   );
 }
 
-export function formatIssueReopened(issue: IssueTarget, data: GhIssue): string {
+export function formatIssueReopened(
+  issue: IssueTarget,
+  data: GhIssue,
+): WebhookEvent {
   return wrap(
     sections(
       `${targetPath(issue)} was reopened: "${truncate(data.title)}"`,

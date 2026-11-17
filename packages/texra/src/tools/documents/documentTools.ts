@@ -218,7 +218,6 @@ const openTask = Effect.fn('documents.openTask')(function* (
     const data = files.map(({ path, ok }) => ({
       path,
       ok,
-      source: category,
       sourceDisplay: category,
     }));
     logger.info('', { messageType: MESSAGE_TYPES.FILE_LIST, data });

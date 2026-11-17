@@ -80,13 +80,7 @@ type _EveryToolStatusIsStored = AssertNever<
 
 /** The keys whose value is provider evidence, wherever a turn or a history
  *  entry holds one. */
-const EVIDENCE = new Set([
-  'evidence',
-  'finishEvidence',
-  'refusalEvidence',
-  'providerUsage',
-  'continuation',
-]);
+const EVIDENCE = new Set(['evidence', 'providerUsage', 'continuation']);
 
 /** `value` with each provider-evidence object rewritten by `rewrite`. */
 const mapEvidence = (

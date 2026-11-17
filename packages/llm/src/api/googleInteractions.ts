@@ -221,11 +221,8 @@ function sdkFailure(cause: unknown): ModelError {
   );
 }
 
-/**
- * A Google SDK request under Effect's own abort signal, without SDK retries.
- * The SDK surfaces cancellation as a bare DOMException, so that is the abort
- * a rejoin drops.
- */
+/** A Google SDK request under Effect's own abort signal, without SDK
+ *  retries. */
 const googleRequest = <A>(
   request: (options: {
     readonly maxRetries: 0;
@@ -235,12 +232,6 @@ const googleRequest = <A>(
   ownedAbortSafeRequest(
     (signal) => request({ maxRetries: 0, fetchOptions: { signal } }),
     sdkFailure,
-    {
-      isAbortMatch: (cause, signal) =>
-        signal.aborted &&
-        cause instanceof DOMException &&
-        cause.name === 'AbortError',
-    },
   );
 
 /** The steps a turn this binding prepared sends after its continuation. */
@@ -397,12 +388,6 @@ const interactionEnd = (
     finish: {
       finishReason:
         interaction.status === 'requires_action' ? 'tool-calls' : 'stop',
-      // Google reports status but no terminal reason.
-      finishEvidence: {
-        kind: 'google-interactions',
-        status: interaction.status,
-        terminalReason: null,
-      },
     },
   },
 ];

@@ -21,7 +21,11 @@
  *      tool-use run but a plugin agent that names its tools. The script-only
  *      functions (`scriptGlobal.withScript`, `self()`) come with the script
  *      tool (the one that has `describe`), recorded as offered and never
- *      sent: the script's declarations describe them.
+ *      sent: the script's declarations describe them. When the step offers
+ *      `script`, its requests send `script` alone of these; every other tool
+ *      is called from inside a script. A model that keeps direct tool calls
+ *      (`keepsDirectToolCalls`) is not injected `script` and is sent every
+ *      tool.
  *   3. The run's own tools (caller-supplied, and the structured-output
  *      terminal tool) laid over the result: each replaces a same-named
  *      entry and wins the name in the returned registry. That registry holds
@@ -61,10 +65,6 @@ import {
 } from '@tools/catalogEntries';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
-import {
-  SCRIPT_ONLY_SETTING,
-  type SettingRow,
-} from '@shared/state/stateSettings';
 
 /** Whether `tool` may ask a person, so a run nobody can ask withholds it. */
 export const asksApproval = <E, R>(
@@ -101,8 +101,9 @@ export interface StepToolInputs {
   readonly injectInstalled: boolean;
   /** The loaded plugins the run holds, from its open. */
   readonly held: HeldPlugins;
-  /** The step's model is sent its tools directly (`keepsDirectToolCalls`),
-   *  so the script-only setting reads as off: read live each step. */
+  /** The step's model is sent its tools directly (`keepsDirectToolCalls`):
+   *  `script` is not injected and sends beside the rest. Read live each
+   *  step. */
   readonly directToolCalls: boolean;
 }
 
@@ -122,14 +123,10 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   const roots = yield* SessionRoots;
   const warnings: string[] = [];
   const injected: string[] = [];
-  const settingOn = (row: SettingRow<boolean>) =>
-    row.key === SCRIPT_ONLY_SETTING.key && input.directToolCalls
-      ? Effect.succeed(false)
-      : Settings.get(roots, row);
   if (input.injectTools) {
     for (const { injectedWhen } of table.entries.values()) {
       for (const [name, setting] of Object.entries(injectedWhen ?? {})) {
-        if (setting === true || (yield* settingOn(setting)))
+        if (setting === true || (yield* Settings.get(roots, setting)))
           injected.push(name);
       }
     }
@@ -274,7 +271,8 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     expandDeclared,
   ))
     offer(name, 'declared');
-  for (const name of injected) offer(name, 'injected');
+  for (const name of injected)
+    if (!(input.directToolCalls && isScript(name))) offer(name, 'injected');
   // A script's functions come with the script tool.
   if ([...resolvedNames].some(isScript))
     for (const name of enabled.keys())
@@ -293,8 +291,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   }
   // Which tools the requests send (`OfferedTool.sent`), recorded per tool.
   const scriptAlone =
-    [...resolvedNames].some(isScript) &&
-    (yield* settingOn(SCRIPT_ONLY_SETTING));
+    !input.directToolCalls && [...resolvedNames].some(isScript);
   // Dispatch answers only the names the model was offered.
   const offeredTools = new Map<string, ITool<Error, PluginToolServices>>();
   const offered: OfferedTool[] = [];

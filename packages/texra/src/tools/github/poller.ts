@@ -24,7 +24,7 @@ import {
 } from '@texra-ai/harness/plugins';
 import { shouldDropBotEvent } from './botFilter';
 import type { GitHubCheckAnnotationLevel } from './checkAnnotationLevels';
-import { formatSubscriptionHalted } from './formatUtils';
+import { formatSubscriptionHalted, type WebhookEvent } from './formatUtils';
 import {
   ghGet,
   type ConditionalResponse,
@@ -41,8 +41,10 @@ import { targetPath, type SubscriptionTarget } from './subscriptionTarget';
  * run's lowest check-annotation level (`undefined`: nothing for that run).
  */
 export type PollEvent =
-  | string
-  | ((minAnnotationLevel: GitHubCheckAnnotationLevel) => string | undefined);
+  | WebhookEvent
+  | ((
+      minAnnotationLevel: GitHubCheckAnnotationLevel,
+    ) => WebhookEvent | undefined);
 
 /** What one successful poll of a target produced. */
 export interface PollResult<S> {
