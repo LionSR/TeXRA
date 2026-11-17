@@ -13,7 +13,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Effect, FiberHandle } from 'effect';
 
-import { type Session, type WorkspaceRoots } from '@texra-ai/harness';
+import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
   withProcessServices,
   type ProcessRuntime,
@@ -30,7 +30,6 @@ import {
 import { setApiKey } from '@commands/api/apiKeyCommands';
 import { cloneOverleafProject } from '@commands/git/gitCommands';
 import { downloadArXivSource } from '@commands/latex/arXivCommands';
-import { launchSetupAssistant } from '@commands/setup/setupAssistantCommand';
 import { createSampleProject } from '@commands/system/sampleProjectCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import {
@@ -89,8 +88,6 @@ import { openFile } from './openFile';
 const CHANNEL = 'ExtensionHostRequests';
 
 export interface ExtensionHostRequestsOptions {
-  /** Where this window's runs run: the session here, or the service's. */
-  readonly runSession: Session;
   readonly roots: WorkspaceRoots;
   /** "Show a built file", bound to this window's roots and the view's
    *  scope, so a close of the view cancels a PDF viewer open still
@@ -118,9 +115,6 @@ export interface ExtensionHostRequestsOptions {
   signInSubscription(
     providerId: SubscriptionProviderId,
   ): Effect.Effect<void, Error, ProcessServices>;
-  /** Bring the "Connect a model" card into view (the setup assistant's
-   *  answer when no credential is usable). */
-  showConnectModel(): Effect.Effect<void, Error, ProcessServices>;
   /** Reveal the task list (`texra.showProgressView`). */
   showProgressView(): Effect.Effect<void, Error>;
   /** Reveal the task list for a run this window just started, or name the
@@ -188,7 +182,7 @@ const openExportPath = (
 export const createExtensionHostRequests = Effect.fn(
   'createExtensionHostRequests',
 )(function* (options: ExtensionHostRequestsOptions) {
-  const { runSession, snapshot, runtime, roots } = options;
+  const { snapshot, runtime, roots } = options;
 
   /** The native picker of each multi-file launcher list. */
   const multipleFilePickers = createFileSelectionPickers(roots);
@@ -350,17 +344,6 @@ export const createExtensionHostRequests = Effect.fn(
         // card's program runs, not when this table is built.
         Effect.suspend(() => options.signInSubscription('chatgpt')),
       ),
-      runSetup: (launch) =>
-        runHandler(
-          'runSetupAssistant',
-          launchSetupAssistant(
-            roots,
-            runSession,
-            launch.runValidated,
-            options.showConnectModel(),
-            options.showProgressView(),
-          ),
-        ),
       openGettingStarted: runHandler(
         'openGettingStarted',
         openGettingStarted(options.extensionId),

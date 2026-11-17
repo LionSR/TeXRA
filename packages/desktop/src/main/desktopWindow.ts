@@ -58,7 +58,6 @@ import { SETTINGS_VIEW_INBOUND_COMMANDS } from './desktopSettingsIpc.js';
 import { createDesktopShellCommands } from './desktopShellIpc.js';
 import type { DesktopLayout } from './platform/paths.js';
 import { checkForDesktopUpdate } from './desktopUpdateChecker.js';
-import { openWindowOnboarding } from './desktopWindowOnboarding.js';
 import { createDesktopWindowHost } from './desktopWindowHost.js';
 import { bootstrapDesktopWindowLifecycle } from './desktopWindowLifecycle.js';
 import { getDesktopWindowTitle } from './desktopWindowTitle.js';
@@ -178,8 +177,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     ),
   );
 
-  const onboarding = yield* openWindowOnboarding(runtime);
-
   const shellCommands = createDesktopShellCommands(host.post, {
     openExternalUrl: previewHost.openExternal,
     openLogFolder: () => previewHost.openPath(getDesktopLogDirectory()),
@@ -193,7 +190,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     runtime,
     projects,
     draftRequests: options.draftRequests,
-    onboarding,
     // `surface` is declared below and read only when a card asks.
     settings: () => surface.settings(),
   });

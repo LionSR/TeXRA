@@ -26,7 +26,6 @@ import {
   postDesktopSettingsView,
 } from '../shared/desktopCommandSurface.js';
 import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
-import type { WindowOnboarding } from './desktopWindowOnboarding.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
@@ -37,7 +36,6 @@ interface DesktopHostRequestsOptions {
   files: DesktopFileSelection;
   workspaceFile: ReturnType<typeof createDesktopWorkspaceIpc>['file'];
   postToRenderer(message: DesktopPush): void;
-  onboarding: WindowOnboarding;
   /** The window's settings surface, absent while the window switches
    *  projects; the onboarding card's sign-in goes through it. */
   settings(): DesktopSettingsIpc | undefined;
@@ -134,8 +132,6 @@ export const createDesktopHostRequests = (
                 }),
               );
         }),
-        runSetup: (launch) =>
-          Effect.suspend(() => options.onboarding.runSetup(launch)),
         // The desktop has no walkthrough of its own: the card's "Open
         // walkthrough" opens the desktop docs.
         openGettingStarted: Effect.suspend(() =>

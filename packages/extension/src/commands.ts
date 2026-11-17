@@ -12,7 +12,6 @@ import {
 } from '@texra-ai/harness/plugins';
 import { downloadArXivSource } from '@commands/latex/arXivCommands';
 import { confirmCleanBuild } from '@commands/housekeeping/cleanCommands';
-import { launchSetupAssistant } from '@commands/setup/setupAssistantCommand';
 import { createSampleProject } from '@commands/system/sampleProjectCommands';
 import { setApiKey, removeApiKey } from '@commands/api/apiKeyCommands';
 import {
@@ -44,7 +43,7 @@ import {
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { SettingsViewProvider } from './settingsView/SettingsViewProvider';
-import type { Session, Sessions, WorkspaceRoots } from '@texra-ai/harness';
+import type { Sessions, WorkspaceRoots } from '@texra-ai/harness';
 import type {
   ProcessRuntime,
   ProcessServices,
@@ -142,8 +141,6 @@ export function registerCommands(
   /** The activation's run function for VS Code callbacks. */
   fork: ScopedFork<ProcessServices | Sessions>,
   roots: WorkspaceRoots,
-  /** Where this window's runs run. */
-  runSession: Session,
 ): SettingsViewProvider {
   const settingsViewProvider = new SettingsViewProvider(
     context,
@@ -175,14 +172,7 @@ export function registerCommands(
     'texra.cleanBuild': () => confirmCleanBuild,
     'texra.auth.chatgpt.signIn': () =>
       settingsViewProvider.signInSubscription('chatgpt'),
-    'texra.runSetupAssistant': () =>
-      launchSetupAssistant(
-        roots,
-        runSession,
-        progressViewProvider.runValidated,
-        progressViewProvider.showConnectModel(),
-        progressViewProvider.showProgressView(),
-      ),
+    'texra.runSetupAssistant': () => progressViewProvider.runSetup,
     'texra.openGettingStarted': () => openGettingStarted(context.extension.id),
     'texra.createSampleProject': () =>
       createSampleProject(context.extensionPath),

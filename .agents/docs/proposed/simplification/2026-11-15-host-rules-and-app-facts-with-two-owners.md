@@ -69,20 +69,8 @@ In order of size. Each needs the decision named.
    defines `BuildDisplayFn`, answering a PDF path or a sentence. The output
    directory stays a host fact (LaTeX Workshop's `outDir`). Decision: the
    extension starts showing the failure.
-3. **What a setup launch's outcomes do.**
-   `packages/extension/src/commands/setup/setupAssistantCommand.ts` and
-   `packages/desktop/src/main/desktopWindowOnboarding.ts` each map
-   `launchSetup`'s outcomes
-   (`packages/texra/src/controllers/onboarding/setupLaunch.ts`). Already
-   running: a toast and the task list in the extension, nothing on the
-   desktop. No usable model: the "Connect a model" card in the extension, an
-   error dialog on the desktop. The desktop holds one launch at a time with a
-   `FiberHandle`; the extension relies on the live-run check, which a
-   double-click can beat. Proposed: the `runSetup` case of
-   `packages/texra/src/controllers/session/openGuiWindow.ts` owns the
-   single launch and maps each outcome to a host verb. Decision: the desktop
-   gets the card instead of the dialog. This was listed in
-   `2026-11-14-reading-a-failed-cause.md` and is still true.
+3. **What a setup launch's outcomes do.** Landed 2026-11-17, see the end
+   of this note.
 4. **A rejected GitHub token.** The extension
    (`packages/extension/src/extension.ts`) offers "Open Git settings"; the
    desktop (`packages/desktop/src/main/desktopSettingsIpc.ts`) shows a plain
@@ -232,3 +220,33 @@ In order of size. Each needs the decision named.
   Either `KEY_PAGES` moves below both (a leaf module, or llm beside
   `providerDisplayName`), or the link follows the toggle, which changes its
   copy.
+
+## Landed in the 2026-11-17 sweep
+
+- **Host rule 3** (setup launch outcomes): `openWindowSetup` in
+  `packages/texra/src/controllers/onboarding/setupLaunch.ts` is the window's
+  one setup verb. `openGuiWindow` builds it over the window's session,
+  launcher, notices and run view, answers the setup card's Run Setup with
+  it and returns it, so VS Code's command and status pill call the same
+  verb. The extension's `launchSetupAssistant`, the desktop's
+  `openWindowOnboarding`, the `onboarding.runSetup` host binding and the
+  extension view's `showConnectModel` are deleted. Behavior changes: the
+  desktop shows the "Connect a model" card instead of an error dialog when
+  no model is usable, and a setup run already live is announced and
+  selected on both hosts (the desktop said nothing; the extension showed the
+  task list without selecting it). One launch at a time is now held per
+  project window on both hosts, with a semaphore over the start only: a
+  second Run Setup once the run is live gets the "already running" answer
+  instead of a silent no-op, and the extension's double-click race is
+  closed. A failure before the run opens is presented through the window's
+  notices on both hosts.
+- **Host rule 4** (rejected GitHub token): still open, checked on this
+  sweep. Moving the follower into the settings body needs two decisions
+  first. `Dialogs` has no non-modal notice with an action: `confirm` is
+  the only call that takes an action label, and the extension's toast with
+  "Open Git settings" would become a modal. And the body runs once per
+  project on the desktop (`createDesktopSettingsIpc`) but once per
+  activation in VS Code, so a follower in the body would raise one notice
+  for each project the desktop has open. Either `Dialogs` gains
+  `notify(level, message, action)`, or the follower stays one per process
+  and only its wording is shared.
