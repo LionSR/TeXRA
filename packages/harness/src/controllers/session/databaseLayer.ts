@@ -36,6 +36,7 @@ import { logFailure } from '@logger/effectLog';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   CURRENT_VALUE_VERSION,
+  DISPLAY_ROW_TYPES,
   edgesOf,
   isDisplayRow,
   RunIdSchema,
@@ -66,7 +67,12 @@ import {
 } from '@shared/session/database';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { currentValues, READ_RETRY } from './currentValues';
-import { LISTED_TYPES, projectionUpkeep, usageRows } from './projections';
+import {
+  LISTED_KINDS,
+  PRICED_ROW_TYPES,
+  projectionUpkeep,
+  usageRows,
+} from './projections';
 import {
   EVENT_COLUMNS,
   EVENT_FROM,
@@ -85,8 +91,7 @@ import {
 import {
   AGGREGATE,
   callCard,
-  DISPLAY_READ_TYPES,
-  USAGE_ROWS,
+  CARD_ROW_TYPES,
   READ_LISTING,
   READ_RUN_RECORD,
   rowReader,
@@ -156,30 +161,36 @@ const EventSeqSchema = NonNegativeIntSchema;
 const DISPLAY_PAGE_END = `SELECT "commit" AS through FROM event
   WHERE "commit" > ? ORDER BY "commit" LIMIT 1 OFFSET ${DISPLAY_PAGE_ROWS - 1}`;
 
+/** What a display read shows of one decoded row: a display row itself or a
+ *  call row's tool card, then the `usage` row of a priced one; nothing else
+ *  of a private row. A committed batch's display rows and every cold read
+ *  are this function over their rows. */
+const shown = (row: SessionRow): readonly DisplayRow[] => [
+  ...(isDisplayRow(row) ? [row] : callCard(row)),
+  ...usageRows(row),
+];
+/** The kinds a display read selects, as the JSON list it binds: the display
+ *  rows, and the rows {@link shown} shows something of. */
+const DISPLAY_READ_TYPES = JSON.stringify([
+  ...DISPLAY_ROW_TYPES,
+  ...CARD_ROW_TYPES,
+  ...PRICED_ROW_TYPES,
+]);
+/** The kinds a view reads of every aggregate, as the JSON list its read
+ *  binds: the listed kinds, and the priced rows whose `usage` row is one. */
+const TAIL_READ_TYPES = JSON.stringify([...LISTED_KINDS, ...PRICED_ROW_TYPES]);
 /**
- * The one display union: the `event` rows of the types bound first, the
- * `usage` row of every priced row, and an optional further extra, narrowed by `where` over the
- * union's columns (`"commit"`, `kind`, `logicalId`, `seq`), which SQLite
- * pushes into each extra, so a range binds once.
+ * The one display union: the `event` rows of the types bound first and an
+ * optional further arm, narrowed by `where` over the union's columns
+ * (`"commit"`, `kind`, `logicalId`, `seq`), which SQLite pushes into each
+ * arm, so a range binds once.
  */
 const displayUnion = (where: string, order: string, extra?: string) =>
   `SELECT * FROM (
     SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
       WHERE e.type IN (SELECT value FROM json_each(?))
-    UNION ALL ${USAGE_ROWS}
     ${extra === undefined ? '' : `UNION ALL ${extra}`}
   ) WHERE ${where} ORDER BY ${order}`;
-/** What a display read shows of one decoded row: a display row itself, a
- *  call row's tool card, nothing of any other private row. */
-const shown = (row: SessionRow): readonly DisplayRow[] =>
-  isDisplayRow(row) ? [row] : callCard(row);
-/** A committed batch's display rows, as a display read of its commits
- *  returns them: what each row shows, then the `usage` row a priced one
- *  projects. */
-const displayRows = (rows: readonly SessionRow[]) =>
-  rows
-    .flatMap((row) => [...shown(row), ...usageRows(row)])
-    .filter(isDisplayRow);
 
 /** How a store is opened: a project store, created if absent
  *  (`persistent`) or only opened (`existing`), is held exclusively by this
@@ -318,7 +329,7 @@ export const databaseLayer = (
         UPDATE event_sequence SET closed_by = ?
         WHERE id IN (SELECT id FROM dependents)
       `;
-      // The display types in a commit range, with the priced rows' usage.
+      // The rows a display read selects, in a commit range.
       const display = displayUnion(
         '"commit" > ? AND "commit" <= ?',
         '"commit"',
@@ -331,7 +342,7 @@ export const databaseLayer = (
       // A deletion marker closes its run and stays its last row until collected.
       const pendingDeletions = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
         WHERE e.type = 'run.removed' ORDER BY e."commit"`;
-      // One aggregate's display rows, its priced rows' usage among them.
+      // The rows a display read selects of one aggregate.
       const displayAggregate = displayUnion(
         'kind = ? AND logicalId = ? AND seq >= ?',
         'seq',
@@ -613,7 +624,7 @@ export const databaseLayer = (
       return {
         movedAside,
         currentCommit: query(currentCommit),
-        displayRows,
+        displayRows: (rows) => rows.flatMap(shown),
         readDisplay: (fromCommit) => {
           // Pages are separate snapshots: a deletion marker seen stays in view.
           const removals = new Map<number, SessionRow>();
@@ -704,9 +715,9 @@ export const databaseLayer = (
           snapshot(
             Effect.gen(function* () {
               const events = yield* decodedRows(inputRows, [
-                LISTED_TYPES,
+                TAIL_READ_TYPES,
                 aggregateList(ids),
-                LISTED_TYPES,
+                TAIL_READ_TYPES,
                 fromCommit,
                 throughCommit,
               ]);

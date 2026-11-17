@@ -236,10 +236,11 @@ export class Database extends Context.Service<
     readonly displayRows: (
       rows: readonly SessionRow[],
     ) => readonly DisplayRow[];
-    /** The display rows from `fromCommit`, selected in SQL (a tail decodes
-     *  no private row but the call rows it shows as tool cards), a page at a
-     *  time; each page is its own snapshot, so a deletion marker a page saw
-     *  is delivered regardless. */
+    /** The display rows from `fromCommit`, their kinds selected in SQL (a
+     *  tail decodes no private row but the ones it shows something of: a
+     *  call's rows as its tool card, a priced row as its `usage` row), a
+     *  page at a time; each page is its own snapshot, so a deletion marker
+     *  a page saw is delivered regardless. */
     readonly readDisplay: (
       fromCommit: CommitOrdinal,
     ) => Stream.Stream<DisplayRow, DatabaseReadFailed>;
