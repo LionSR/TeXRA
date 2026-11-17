@@ -301,10 +301,24 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
   ).toHaveCount(0);
 });
 
+/** The smallest PDF Chromium's viewer opens: one blank page. */
+const BLANK_PDF = [
+  '%PDF-1.4',
+  '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj',
+  '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj',
+  '3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >> endobj',
+  'trailer << /Root 1 0 R >>',
+  '%%EOF',
+].join('\n');
+
 /** The host opens compiled PDFs in the originating paper's workbench. */
 test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
-  const { page } = launched;
-  const pdfUrl = 'file:///tmp/texra-trajectory/output.pdf';
+  const { page, app } = launched;
+  const pdfDirectory = '/tmp/texra-trajectory';
+  const pdfPath = join(pdfDirectory, 'output.pdf');
+  const pdfUrl = `file://${pdfPath}`;
+  mkdirSync(pdfDirectory, { recursive: true });
+  writeFileSync(pdfPath, BLANK_PDF);
   const session = await page
     .locator('.shell-project-workbench:not([hidden])')
     .getAttribute('data-session');
@@ -334,8 +348,18 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
   await expect(pdfTab).toContainText('output.pdf');
   await expect(frame).toBeVisible();
   await expect(frame).toHaveAttribute('src', pdfUrl);
-  await expect(frame).toHaveAttribute('sandbox', 'allow-same-origin');
   await expect(frame).toHaveAttribute('title', 'output.pdf');
+  // Chromium's PDF viewer loads into the frame: its own page is a frame
+  // inside it, which a blocked frame never gets.
+  await expect
+    .poll(() =>
+      app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()
+          .flatMap((window) => window.webContents.mainFrame.framesInSubtree)
+          .some((subframe) => subframe.url.startsWith('chrome-extension://')),
+      ),
+    )
+    .toBe(true);
 
   const rejectedUrl = page.waitForEvent('console', (message) =>
     message.text().includes('Dropped a malformed desktop:showPdf push'),

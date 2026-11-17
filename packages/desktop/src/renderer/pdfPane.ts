@@ -26,9 +26,12 @@ export function createPdfPane() {
     const frame = document.createElement('iframe');
     frame.classList.add('shell-workbench-pdf-frame');
     frame.setAttribute('title', tab.title);
-    // Same-origin so the viewer's controls work; no scripts, so a malformed
-    // PDF cannot run JS into the renderer.
-    frame.setAttribute('sandbox', 'allow-same-origin');
+    // No `sandbox`: Chromium never loads its PDF viewer into a sandboxed
+    // frame (the load fails with ERR_BLOCKED_BY_CLIENT), and no sandbox token
+    // allows it. The frame only ever holds a `file:` URL of a `.pdf`
+    // (`DesktopShowPdfMessageSchema`), which Chromium hands to the viewer,
+    // whose own page runs in its own process, so no document of the PDF's
+    // reaches this renderer.
     frame.dataset.build = build;
     frame.src = tab.target ?? '';
     frames.set(tab.id, frame);
