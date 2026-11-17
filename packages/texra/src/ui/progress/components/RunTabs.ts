@@ -5,14 +5,14 @@ import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports
-import { shownRun, type Surface } from '@texra/shared/session/surface';
+import {
+  runExpanded,
+  shownRun,
+  type Surface,
+} from '@texra/shared/session/surface';
 import { unseenRuns } from '@texra/shared/session/unseenRuns';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
-import {
-  RUN_SECTION_LABELS,
-  RUN_SECTION_ORDER,
-  runStatus,
-} from '@ui/copy/runStatus';
+import { runListSections, runStatus } from '@ui/copy/runStatus';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { overlineDeclarations } from '@ui/styles/commonViewStyles';
 
@@ -29,7 +29,6 @@ import { runTabsContainerStyles } from './RunTabsContainer.styles';
 import { getComposedPathElement } from './composedPath';
 import { RunTab } from './RunTab';
 import {
-  needsUser,
   type SessionView,
   type RunView,
   type RunId,
@@ -129,8 +128,8 @@ export class RunTabs extends LitElement {
   }
 
   private isExpanded(run: RunView): boolean {
-    if (this.view !== null && needsUser(run, this.view.runs)) return true;
-    return this.surface?.runs.get(run.id)?.expanded === true;
+    if (this.view === null) return false;
+    return runExpanded(this.surface ?? { runs: new Map() }, this.view, run);
   }
 
   /** The tree under a row, at any depth. The rail (`topLevelOnly`) shows
@@ -200,15 +199,14 @@ export class RunTabs extends LitElement {
     if (!this.sections) {
       body = this.renderRows(top, selected);
     } else {
-      body = html`${RUN_SECTION_ORDER.map((group) => {
-        const rows = top.filter((run) => runStatus(run).section === group);
-        if (rows.length === 0) return nothing;
-        return html`<div class="group-heading group-${group}">
-            <span>${RUN_SECTION_LABELS[group]}</span>
-            <span class="group-count">${rows.length}</span>
-          </div>
-          ${this.renderRows(rows, selected)}`;
-      })}`;
+      body = html`${runListSections(top).map(
+        ({ section, label, runs }) =>
+          html`<div class="group-heading group-${section}">
+              <span>${label}</span>
+              <span class="group-count">${runs.length}</span>
+            </div>
+            ${this.renderRows(runs, selected)}`,
+      )}`;
     }
 
     return html`
