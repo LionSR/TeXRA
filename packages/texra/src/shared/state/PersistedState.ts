@@ -64,9 +64,7 @@ export function createWebviewStorage(hostBridge: {
  *   createWebviewStorage(hostBridge),
  *   'toggleStates',
  *   Schema.Struct({
- *     expanded: Schema.Array(Schema.String).pipe(
- *       Schema.withDecodingDefault(Effect.succeed([])),
- *     ),
+ *     expanded: decodingDefault(Schema.Array(Schema.String), []),
  *   }),
  * );
  * ui.setState({ expanded: [...ui.getState().expanded, id] });

@@ -20,6 +20,7 @@
  * the failure in its transcript.
  */
 import { Duration, Effect, Exit, Fiber, Schema, Scope, Stream } from 'effect';
+import { decodingDefault } from '@shared/schemas';
 import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
 
 import type { ITool } from '@agent/core/tools/ToolTypes';
@@ -93,12 +94,15 @@ const ListToolsResultSchema = Schema.Struct({
 });
 
 const CallToolResultSchema = Schema.Struct({
-  content: Schema.Array(
-    Schema.Struct({
-      type: Schema.String,
-      text: Schema.optional(Schema.NullOr(Schema.String)),
-    }),
-  ).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  content: decodingDefault(
+    Schema.Array(
+      Schema.Struct({
+        type: Schema.String,
+        text: Schema.optional(Schema.NullOr(Schema.String)),
+      }),
+    ),
+    [],
+  ),
   structuredContent: Schema.optional(Schema.Unknown),
   isError: Schema.optional(Schema.NullOr(Schema.Boolean)),
 });

@@ -1,8 +1,8 @@
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
-import { Effect, Hash, type LogLevel, Result, Schema } from 'effect';
-import { truncateSummary } from '@texra-ai/harness/schemas';
+import { Hash, type LogLevel, Result, Schema } from 'effect';
+import { decodingDefault, truncateSummary } from '@texra-ai/harness/schemas';
 import { postToMain } from './messageRoutes';
 import type { IconName } from '@ui/wa/iconNames';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
@@ -26,13 +26,12 @@ const DesktopLogLineSchema = Schema.Struct({
   timestamp: Schema.String,
   message: Schema.Unknown,
   cause: Schema.optional(Schema.String),
-  annotations: Schema.Record(Schema.String, Schema.Unknown).pipe(
-    Schema.withDecodingDefault(Effect.succeed({})),
+  annotations: decodingDefault(
+    Schema.Record(Schema.String, Schema.Unknown),
+    {},
   ),
-  spans: Schema.Record(Schema.String, Schema.Number).pipe(
-    Schema.withDecodingDefault(Effect.succeed({})),
-  ),
-  fiberId: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
+  spans: decodingDefault(Schema.Record(Schema.String, Schema.Number), {}),
+  fiberId: decodingDefault(Schema.String, ''),
 });
 
 type DesktopLogLine = typeof DesktopLogLineSchema.Type;

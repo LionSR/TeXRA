@@ -573,6 +573,28 @@ is rewritten and two concurrent runs cannot cancel each other's fallback.
 const DeclinableUsageRouteSchema: Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription"]>
 ```
 
+## decodingDefault
+
+Default an absent/`undefined` field to the encoded constant `value`.
+
+```ts
+function decodingDefault<S extends Schema.Top>(
+  schema: S,
+  value: S['Encoded'],
+): Schema.withDecodingDefault<S>
+```
+
+## decodingDefaultType
+
+Default an absent/`undefined` field to the decoded (`Type`) constant `value`.
+
+```ts
+function decodingDefaultType<S extends Schema.Top>(
+  schema: S,
+  value: S['Type'],
+): Schema.withDecodingDefaultType<S>
+```
+
 ## descendantRuns
 
 Every run under `rootRunId`, parents first: the topology `childIds`

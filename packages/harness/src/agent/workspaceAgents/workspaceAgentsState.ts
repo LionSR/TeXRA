@@ -13,13 +13,8 @@
  * separate step, and one the user turned off stays off under any team.
  */
 import { Effect, Result, Schema } from 'effect';
-
 import {
-  StateReadFailed,
-  type StateStore,
-  type StateWriteFailed,
-} from '@shared/config/settings';
-import {
+  decodingDefault,
   AGENT_SOURCE,
   agentKeyOf,
   agentMatchesIdentifier,
@@ -29,6 +24,12 @@ import {
   INHERITED_WORKSPACE_AGENTS,
   type WorkspaceAgentsSelection,
 } from '@shared/schemas';
+
+import {
+  StateReadFailed,
+  type StateStore,
+  type StateWriteFailed,
+} from '@shared/config/settings';
 import type { StateKey } from '@shared/state/stateSettings';
 
 /** How the workspace obtains its visible agents, per repository; absent is
@@ -36,8 +37,9 @@ import type { StateKey } from '@shared/state/stateSettings';
 export const WORKSPACE_AGENTS_KEY = {
   key: 'workspaceAgents',
   slot: 'repoState',
-  schema: WorkspaceAgentsSelectionSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(INHERITED_WORKSPACE_AGENTS)),
+  schema: decodingDefault(
+    WorkspaceAgentsSelectionSchema,
+    INHERITED_WORKSPACE_AGENTS,
   ),
 } as const satisfies StateKey<WorkspaceAgentsSelection>;
 
@@ -46,9 +48,7 @@ export const WORKSPACE_AGENTS_KEY = {
 export const HIDDEN_CUSTOM_AGENTS_KEY = {
   key: 'hiddenCustomAgents',
   slot: 'repoState',
-  schema: HiddenCustomAgentKeysSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
+  schema: decodingDefault(HiddenCustomAgentKeysSchema, []),
 } as const satisfies StateKey<readonly string[]>;
 
 interface WorkspaceAgentEntry {

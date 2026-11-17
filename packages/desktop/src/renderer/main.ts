@@ -2,7 +2,11 @@
 // registered by the time --wa-font-family-body resolves. Geist carries the UI,
 // JetBrains Mono the code/terminal/path surfaces; both are self-hosted rather
 // than fetched, since the app must render identically offline.
-import { Effect, Schema } from 'effect';
+import { Schema } from 'effect';
+import {
+  decodingDefault,
+  extractErrorMessage,
+} from '@texra-ai/harness/schemas';
 import '@fontsource-variable/geist';
 import '@fontsource-variable/jetbrains-mono';
 
@@ -19,7 +23,6 @@ import WaSplitPanel from '@awesome.me/webawesome/dist/components/split-panel/spl
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import './TexraDiffView';
-import { extractErrorMessage } from '@texra-ai/harness/schemas';
 import {
   PersistedState,
   type KeyValueStore,
@@ -130,9 +133,7 @@ const appearance = new PersistedState(
   rendererState,
   'desktop.appearance',
   Schema.Struct({
-    theme: DesktopThemePreferenceSchema.pipe(
-      Schema.withDecodingDefault(Effect.succeed('system')),
-    ),
+    theme: decodingDefault(DesktopThemePreferenceSchema, 'system'),
   }),
 );
 const darkScheme = window.matchMedia('(prefers-color-scheme: dark)');
@@ -164,9 +165,7 @@ const persistedShell = new PersistedState(
   rendererState,
   'shell',
   Schema.Struct({
-    collapsed: Schema.Array(Schema.String).pipe(
-      Schema.withDecodingDefault(Effect.succeed([])),
-    ),
+    collapsed: decodingDefault(Schema.Array(Schema.String), []),
   }),
 );
 let shell: Shell = {

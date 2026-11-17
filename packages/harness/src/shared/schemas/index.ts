@@ -1,3 +1,6 @@
+// Layer 0: Schema combinators (no dependencies on other schema files)
+export * from './schemaDefaults';
+
 // Layer 1: Base types (no dependencies on other schema files)
 export * from './identifiers';
 export * from './nonNegativeInt';

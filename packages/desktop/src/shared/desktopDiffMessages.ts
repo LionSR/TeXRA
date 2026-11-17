@@ -1,5 +1,9 @@
-import { Effect, Schema } from 'effect';
-import { NonNegativeIntSchema } from '@texra-ai/harness/schemas';
+import { Schema } from 'effect';
+import {
+  decodingDefault,
+  decodingDefaultType,
+  NonNegativeIntSchema,
+} from '@texra-ai/harness/schemas';
 
 // IPC plumbing for the in-app Review workbench: the renderer mounts
 // `<texra-diff-view>` (Monaco-backed) inside a persistent Review tab beside a
@@ -31,17 +35,11 @@ export const DesktopShowDiffMessageSchema = Schema.Struct({
   displayPath: Schema.String,
   originalText: Schema.String,
   proposedText: Schema.String,
-  additions: NonNegativeIntSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(0)),
-  ),
-  deletions: NonNegativeIntSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(0)),
-  ),
+  additions: decodingDefault(NonNegativeIntSchema, 0),
+  deletions: decodingDefault(NonNegativeIntSchema, 0),
   // Monaco language id (e.g. 'plaintext', 'typescript', 'latex'). The
   // renderer falls back to 'plaintext' on unknown values.
-  language: Schema.String.pipe(
-    Schema.withDecodingDefaultType(Effect.succeed('plaintext')),
-  ),
+  language: decodingDefaultType(Schema.String, 'plaintext'),
 });
 
 export type DesktopShowDiffMessage =

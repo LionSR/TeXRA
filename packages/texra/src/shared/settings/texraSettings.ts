@@ -14,10 +14,9 @@
  */
 
 // Third-party imports
-import { Effect, Schema } from 'effect';
-
-// Local imports
+import { Schema } from 'effect';
 import {
+  decodingDefault,
   GIT_AUTHOR_EMAIL_SETTING,
   GIT_AUTHOR_NAME_SETTING,
   HELPER_MODEL_SETTING,
@@ -26,6 +25,8 @@ import {
   type SettingRow,
   type SettingsCatalog,
 } from '@texra-ai/harness/schemas';
+
+// Local imports
 import { CliOutputFormatSchema } from '@texra/shared/cliOutputFormat';
 import { CURATED_MODELS } from '@texra/model/curatedModels';
 import { LATEX_FORMATTER_VALUES } from '@texra/shared/constants/latexConfig';
@@ -129,7 +130,7 @@ export const CLI_OUTPUT_FORMAT_SETTING = {
 export const AUTO_OPEN_FINAL_SETTING = {
   key: 'agentOutputs.autoOpenFinal',
   slot: 'config',
-  schema: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  schema: decodingDefault(Schema.Boolean, true),
   title: 'Open the final revision',
   description:
     "When a document task completes, automatically preview the final revised file in a new editor tab. Disable for batch runs when you don't want a tab to steal focus.",
@@ -138,7 +139,7 @@ export const AUTO_OPEN_FINAL_SETTING = {
 export const BIB_DEFAULT_PATH_SETTING = {
   key: 'bib.defaultPath',
   slot: 'config',
-  schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
+  schema: decodingDefault(Schema.String, ''),
   title: 'Default bibliography file',
   description:
     'Default path to bibliography file (.bib). This is used by bibliography tools when no explicit path is provided. Supports Zotero auto-exported .bib files.',
@@ -149,9 +150,10 @@ export const BIB_DEFAULT_PATH_SETTING = {
 export const ZOTERO_PORT_SETTING = {
   key: 'bib.zoteroPort',
   slot: 'config',
-  schema: Schema.Int.check(
-    Schema.isBetween({ minimum: 1, maximum: 65_535 }),
-  ).pipe(Schema.withDecodingDefault(Effect.succeed(23119))),
+  schema: decodingDefault(
+    Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65_535 })),
+    23119,
+  ),
   title: 'Zotero port',
   description:
     'Port number for Zotero integration (default: 23119). Used by both the Connector API and Better BibTeX JSON-RPC.',
@@ -160,7 +162,7 @@ export const ZOTERO_PORT_SETTING = {
 export const LATEXINDENT_CONFIG_SETTING = {
   key: 'latex.latexindentConfig',
   slot: 'config',
-  schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
+  schema: decodingDefault(Schema.String, ''),
   title: 'latexindent configuration file',
   description: 'Path to latexindent configuration file',
 } as const satisfies SettingRow<string>;
@@ -168,7 +170,7 @@ export const LATEXINDENT_CONFIG_SETTING = {
 export const TEXFMT_CONFIG_SETTING = {
   key: 'latex.texfmtConfig',
   slot: 'config',
-  schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
+  schema: decodingDefault(Schema.String, ''),
   title: 'tex-fmt configuration file',
   description: 'Path to tex-fmt configuration file',
 } as const satisfies SettingRow<string>;
@@ -176,7 +178,7 @@ export const TEXFMT_CONFIG_SETTING = {
 export const TIKZ_INPUT_DIRECTORY_SETTING = {
   key: 'latex.tikzInputDirectory',
   slot: 'config',
-  schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
+  schema: decodingDefault(Schema.String, ''),
   title: 'TikZ input directory',
   description:
     'Directory where to look for extra input files when compiling extracted TikZ figures. Absolute path is required. Sets TEXINPUTS environment variable for TikZ compilation.',
@@ -185,7 +187,7 @@ export const TIKZ_INPUT_DIRECTORY_SETTING = {
 export const INCLUDE_WORKSPACE_IN_TEXINPUTS_SETTING = {
   key: 'latex.includeWorkspaceInTexinputs',
   slot: 'config',
-  schema: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  schema: decodingDefault(Schema.Boolean, true),
   title: 'Workspace in TEXINPUTS',
   description:
     'Include the workspace root directory in TEXINPUTS when compiling TikZ figures',
@@ -194,9 +196,7 @@ export const INCLUDE_WORKSPACE_IN_TEXINPUTS_SETTING = {
 export const TIKZ_TEMPLATE_SETTING = {
   key: 'latex.tikzTemplate',
   slot: 'config',
-  schema: Schema.String.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_TIKZ_TEMPLATE)),
-  ),
+  schema: decodingDefault(Schema.String, DEFAULT_TIKZ_TEMPLATE),
   title: 'TikZ template',
   description:
     'Template used for generating standalone documents when extracting and compiling TikZ figures',
@@ -205,8 +205,9 @@ export const TIKZ_TEMPLATE_SETTING = {
 export const ENABLED_REPLACEMENTS_SETTING = {
   key: 'latex.enabledReplacements',
   slot: 'config',
-  schema: Schema.Array(Schema.Literals(NON_REGEX_REPLACEMENT_CATEGORIES)).pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_ENABLED_REPLACEMENTS)),
+  schema: decodingDefault(
+    Schema.Array(Schema.Literals(NON_REGEX_REPLACEMENT_CATEGORIES)),
+    DEFAULT_ENABLED_REPLACEMENTS,
   ),
   title: 'Cleanup replacements',
   description: 'Enabled groups of direct LaTeX cleanup replacements.',
@@ -217,10 +218,9 @@ export const ENABLED_REPLACEMENTS_SETTING = {
 export const ENABLED_REGEX_REPLACEMENTS_SETTING = {
   key: 'latex.enabledReplacementsRegex',
   slot: 'config',
-  schema: Schema.Array(Schema.Literals(REGEX_REPLACEMENT_CATEGORIES)).pipe(
-    Schema.withDecodingDefault(
-      Effect.succeed(DEFAULT_ENABLED_REGEX_REPLACEMENTS),
-    ),
+  schema: decodingDefault(
+    Schema.Array(Schema.Literals(REGEX_REPLACEMENT_CATEGORIES)),
+    DEFAULT_ENABLED_REGEX_REPLACEMENTS,
   ),
   title: 'Pattern cleanup replacements',
   description: 'Enabled groups of pattern-based LaTeX cleanup replacements.',
@@ -231,9 +231,7 @@ export const ENABLED_REGEX_REPLACEMENTS_SETTING = {
 export const CUSTOM_REGEX_REPLACEMENTS_SETTING = {
   key: 'latex.customReplacementsRegex',
   slot: 'config',
-  schema: Schema.Record(Schema.String, Schema.String).pipe(
-    Schema.withDecodingDefault(Effect.succeed({})),
-  ),
+  schema: decodingDefault(Schema.Record(Schema.String, Schema.String), {}),
   title: 'Custom pattern replacements',
   description: 'Custom regular-expression replacements.',
 } as const satisfies SettingRow<Readonly<Record<string, string>>>;
@@ -241,9 +239,7 @@ export const CUSTOM_REGEX_REPLACEMENTS_SETTING = {
 export const CUSTOM_REPLACEMENTS_SETTING = {
   key: 'latex.customReplacements',
   slot: 'config',
-  schema: Schema.Record(Schema.String, Schema.String).pipe(
-    Schema.withDecodingDefault(Effect.succeed({})),
-  ),
+  schema: decodingDefault(Schema.Record(Schema.String, Schema.String), {}),
   title: 'Custom replacements',
   description: 'Custom direct text replacements.',
 } as const satisfies SettingRow<Readonly<Record<string, string>>>;
@@ -252,7 +248,7 @@ export const CUSTOM_REPLACEMENTS_SETTING = {
 export const TELEMETRY_ENABLED_SETTING = {
   key: 'telemetry.enabled',
   slot: 'config',
-  schema: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  schema: decodingDefault(Schema.Boolean, true),
   title: 'Share usage telemetry',
   description:
     'Send anonymous model, agent, token, timing, and host metadata with a random install ID (no account). TeXRA never sends prompt text, document content, or file names. Turning this off stops all reporting.',
@@ -264,8 +260,9 @@ export const TELEMETRY_ENABLED_SETTING = {
 
 export const LATEX_FORMATTER_SETTING = {
   key: 'latex.formatter',
-  schema: Schema.Literals(LATEX_FORMATTER_VALUES).pipe(
-    Schema.withDecodingDefault(Effect.succeed('latexindent')),
+  schema: decodingDefault(
+    Schema.Literals(LATEX_FORMATTER_VALUES),
+    'latexindent',
   ),
   title: 'LaTeX formatter',
   description: 'Which formatter to run when formatting LaTeX source.',
@@ -286,9 +283,7 @@ export const LATEX_FORMATTER_SETTING = {
  */
 export const INLINE_CRITICISM_SETTING = {
   key: 'inlineCriticism.enabled',
-  schema: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
+  schema: decodingDefault(Schema.Boolean, false),
   title: 'Show criticism as editor diagnostics',
   description:
     'Show \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files as squiggles and Problems-panel entries.',
@@ -302,9 +297,10 @@ export const INLINE_CRITICISM_SETTING = {
 export const GIT_COMMITS_TO_SHOW_SETTING = {
   key: 'git.numberOfCommitsToShow',
   slot: 'config',
-  schema: Schema.Int.check(
-    Schema.isBetween({ minimum: 1, maximum: 1000 }),
-  ).pipe(Schema.withDecodingDefault(Effect.succeed(20))),
+  schema: decodingDefault(
+    Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1000 })),
+    20,
+  ),
   title: 'Commits to show',
   description:
     'Number of recent commits to show in the commit selection dropdown',
@@ -314,7 +310,7 @@ export const GIT_COMMITS_TO_SHOW_SETTING = {
 export const SOX_PATH_SETTING = {
   key: 'audio.soxPath',
   slot: 'config',
-  schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
+  schema: decodingDefault(Schema.String, ''),
   title: 'SoX path',
   description: 'Path to the SoX executable. Overrides automatic detection.',
 } as const satisfies SettingRow<string>;

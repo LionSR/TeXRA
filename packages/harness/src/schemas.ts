@@ -137,6 +137,9 @@ export type {
   WorkspaceFileLocation,
 } from '@shared/schemas';
 export { ResumeRefusalSchema } from '@shared/schemas';
+// Default a schema field to a plain constant when it decodes from an absent
+// or `undefined` value, without the `Effect.succeed` ceremony.
+export { decodingDefault, decodingDefaultType } from '@shared/schemas';
 // The approval policy: its values, defaults, schema and tolerant parse.
 export {
   APPROVAL_POLICIES,

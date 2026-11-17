@@ -1,5 +1,6 @@
 /** Shared canonical configuration schema for runtime and persisted events. */
-import { Effect, Schema, Struct } from 'effect';
+import { Schema, Struct } from 'effect';
+import { decodingDefault } from './schemaDefaults.js';
 
 import { AgentSourceSchema, InlinePersonaSchema } from './agent';
 import { AgentDelegationScopeSchema } from './workspaceAgents';
@@ -29,17 +30,13 @@ const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
      */
     asCaller: Schema.optional(Schema.NullOr(Schema.Boolean)),
     model: Schema.String,
-    instruction: Schema.String.pipe(
-      Schema.withDecodingDefault(Effect.succeed('')),
-    ),
+    instruction: decodingDefault(Schema.String, ''),
     /** Original user instruction preserved across nested tool-use delegation. */
     rootUserInstruction: Schema.optional(Schema.NullOr(Schema.String)),
     /** Optional user-facing text for logs when instruction contains hidden context. */
     displayInstruction: Schema.optional(Schema.NullOr(Schema.String)),
     /** Memory display paths attached to this delegation (e.g. /memories/conventions.md). */
-    memories: Schema.Array(Schema.String).pipe(
-      Schema.withDecodingDefault(Effect.succeed([])),
-    ),
+    memories: decodingDefault(Schema.Array(Schema.String), []),
     /** Working directory override for subagent tool calls (e.g. a git worktree). */
     workingDirectory: Schema.optional(Schema.NullOr(Schema.String)),
     /**

@@ -1,10 +1,14 @@
 // Third-party imports
 import { Effect, Schema } from 'effect';
+import {
+  decodingDefault,
+  ensureError,
+  type StateKey,
+} from '@texra-ai/harness/schemas';
 import * as vscode from 'vscode';
 
 // Local imports
 import { withLogChannel, Settings } from '@texra-ai/harness/plugins';
-import { ensureError, type StateKey } from '@texra-ai/harness/schemas';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
 import type {
@@ -20,9 +24,7 @@ const CHANNEL = 'instruction';
 const INSTRUCTION_PREFIX = 'instruction.';
 
 /** A suppression flag is off until the user dismisses its instruction. */
-const SuppressedSchema = Schema.Boolean.pipe(
-  Schema.withDecodingDefault(Effect.succeed(false)),
-);
+const SuppressedSchema = decodingDefault(Schema.Boolean, false);
 
 /** Show an instruction message that can be permanently dismissed. */
 export const showInstructionWithSuppress = Effect.fn(

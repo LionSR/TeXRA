@@ -1,15 +1,16 @@
 // Third-party imports
-import { Effect, Predicate, Schema } from 'effect';
+import { Predicate, Schema } from 'effect';
+import {
+  decodingDefault,
+  ActiveSkillSourceScopeSchema,
+  QualifiedSkillNameSchema,
+} from '@shared/schemas';
 
 // Local imports - shared constants & state keys
 import {
   APPROVAL_POLICY_DEFAULT,
   ApprovalPolicySchema,
 } from '@shared/approvalPolicy';
-import {
-  ActiveSkillSourceScopeSchema,
-  QualifiedSkillNameSchema,
-} from '@shared/schemas';
 import {
   booleanWithDefault,
   PROVIDER_ENDPOINT_SETTINGS,
@@ -119,15 +120,14 @@ export const CHILD_RUN_CONCURRENCY_BUDGET_RANGE = Object.freeze({
 export const CHILD_RUN_CONCURRENCY_BUDGET_SETTING = {
   key: 'childRunConcurrencyBudget',
   slot: 'config',
-  schema: Schema.Int.check(
-    Schema.isBetween({
-      minimum: CHILD_RUN_CONCURRENCY_BUDGET_RANGE.auto,
-      maximum: CHILD_RUN_CONCURRENCY_BUDGET_RANGE.max,
-    }),
-  ).pipe(
-    Schema.withDecodingDefault(
-      Effect.succeed(CHILD_RUN_CONCURRENCY_BUDGET_RANGE.auto),
+  schema: decodingDefault(
+    Schema.Int.check(
+      Schema.isBetween({
+        minimum: CHILD_RUN_CONCURRENCY_BUDGET_RANGE.auto,
+        maximum: CHILD_RUN_CONCURRENCY_BUDGET_RANGE.max,
+      }),
     ),
+    CHILD_RUN_CONCURRENCY_BUDGET_RANGE.auto,
   ),
   title: 'Agents at once',
   description:
@@ -142,9 +142,10 @@ export const CHILD_RUN_CONCURRENCY_BUDGET_SETTING = {
 export const GOAL_MAX_COST_SETTING = {
   key: 'goal.maxCostUsd',
   slot: 'config',
-  schema: Schema.Number.check(
-    Schema.isBetween({ minimum: 0, maximum: 10_000 }),
-  ).pipe(Schema.withDecodingDefault(Effect.succeed(5))),
+  schema: decodingDefault(
+    Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 10_000 })),
+    5,
+  ),
   configTarget: 'global',
   title: 'Goal spend cap (USD)',
   description:
@@ -161,9 +162,10 @@ export const GOAL_MAX_COST_SETTING = {
 export const GOAL_STRATEGY_SETTING = {
   key: 'goal.strategy',
   slot: 'config',
-  schema: Schema.String.check(
-    Schema.isPattern(/^builtIn:[A-Za-z0-9_-]+$/),
-  ).pipe(Schema.withDecodingDefault(Effect.succeed('builtIn:goal'))),
+  schema: decodingDefault(
+    Schema.String.check(Schema.isPattern(/^builtIn:[A-Za-z0-9_-]+$/)),
+    'builtIn:goal',
+  ),
   configTarget: 'global',
   title: 'Goal strategy',
   description:
@@ -218,9 +220,10 @@ export const OPENAI_FAST_TIER_SETTING = {
 export const MODEL_COMPACTION_THRESHOLD_SETTING = {
   key: 'model.compactionThresholdPercent',
   slot: 'config',
-  schema: Schema.Number.check(
-    Schema.isBetween({ minimum: 0, maximum: 100 }),
-  ).pipe(Schema.withDecodingDefault(Effect.succeed(75))),
+  schema: decodingDefault(
+    Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 100 })),
+    75,
+  ),
   title: 'Compaction threshold',
   description:
     "When the conversation reaches this percentage of the model's context limit, earlier messages are summarized automatically to free up space. Lower values trigger summarization sooner. Set to 0 to disable.",
@@ -230,8 +233,9 @@ export const MODEL_COMPACTION_THRESHOLD_SETTING = {
 export const MODEL_RETRY_MAX_ATTEMPTS_SETTING = {
   key: 'model.retry.maxAttempts',
   slot: 'config',
-  schema: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 5 })).pipe(
-    Schema.withDecodingDefault(Effect.succeed(2)),
+  schema: decodingDefault(
+    Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 5 })),
+    2,
   ),
   title: 'Automatic retries',
   description:
@@ -261,9 +265,12 @@ export const CHATGPT_PREFER_SUBSCRIPTION_SETTING = {
 export const CHATGPT_CODEX_CONTEXT_WINDOW_SETTING = {
   key: 'chatgptCodex.contextWindowK',
   slot: 'config',
-  schema: Schema.NullOr(
-    Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 872 })),
-  ).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  schema: decodingDefault(
+    Schema.NullOr(
+      Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 872 })),
+    ),
+    null,
+  ),
   title: 'Subscription input token budget (K tokens)',
   description:
     "Input token budget for ChatGPT-subscription (Codex) routing, in thousands of tokens, mirroring Codex CLI's model_context_window. Unset, each model takes the window the Codex backend grants it; a value overrides it for every model, up to 872 (872,000 tokens). Automatic compaction may run earlier according to the separate compaction threshold. The model's output budget is added when displaying the total context window. The OpenAI backend enforces the real per-account limit — values above what your subscription allows fail and trigger compaction recovery.",
@@ -281,9 +288,10 @@ export const XAI_PREFER_SUBSCRIPTION_SETTING = {
 export const MAX_IMAGE_DIMENSION_SETTING = {
   key: 'maxImageDimension',
   slot: 'config',
-  schema: Schema.Int.check(
-    Schema.isBetween({ minimum: 100, maximum: 10_000 }),
-  ).pipe(Schema.withDecodingDefault(Effect.succeed(2000))),
+  schema: decodingDefault(
+    Schema.Int.check(Schema.isBetween({ minimum: 100, maximum: 10_000 })),
+    2000,
+  ),
   title: 'Maximum image size (px)',
   description:
     'Maximum dimension (width or height) in pixels for images before resizing. Images larger than this will be resized to fit within this dimension while maintaining aspect ratio.',
@@ -333,9 +341,7 @@ export const AGENT_SKILLS_ENABLED_SETTING = {
 export const APPROVAL_POLICY_SETTING = {
   key: 'approvalPolicy',
   slot: 'config',
-  schema: ApprovalPolicySchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(APPROVAL_POLICY_DEFAULT)),
-  ),
+  schema: decodingDefault(ApprovalPolicySchema, APPROVAL_POLICY_DEFAULT),
   title: 'Approval policy',
   description:
     'Whether agents ask before running shell commands and editing files.',
@@ -350,9 +356,7 @@ export const APPROVAL_POLICY_SETTING = {
 export const DISABLED_SKILLS_SETTING = {
   key: 'skills.disabled',
   slot: 'config',
-  schema: Schema.Array(QualifiedSkillNameSchema).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
+  schema: decodingDefault(Schema.Array(QualifiedSkillNameSchema), []),
   title: 'Skills',
   description: 'Enable or disable individual skills in this workspace.',
 } as const satisfies SettingRow<readonly string[]>;
@@ -360,9 +364,9 @@ export const DISABLED_SKILLS_SETTING = {
 export const DISABLED_SKILL_SOURCES_SETTING = {
   key: 'skills.disabledSources',
   slot: 'config',
-  schema: Schema.Array(ActiveSkillSourceScopeSchema).pipe(
-    Schema.withDecodingDefault(Effect.succeed(['interop'])),
-  ),
+  schema: decodingDefault(Schema.Array(ActiveSkillSourceScopeSchema), [
+    'interop',
+  ]),
   title: 'Skill sources',
   description:
     'Enable or disable skill source groups in this workspace. The imported group, the `.agents`, `.claude`, `.codex` and `.gemini` skill folders beside the workspace and in the home directory, is off until enabled.',
@@ -621,9 +625,7 @@ export function settingsCatalog(options: {
     Schema.decodeUnknownSync(row.schema)(appDefaults[row.key]);
     return {
       ...row,
-      schema: row.schema.pipe(
-        Schema.withDecodingDefault(Effect.succeed(appDefaults[row.key])),
-      ),
+      schema: decodingDefault(row.schema, appDefaults[row.key]),
     };
   });
   const rows = [...harnessRows, ...options.rows];
