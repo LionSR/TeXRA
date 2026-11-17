@@ -492,6 +492,41 @@ test('restarts an exited terminal in its own tab', async () => {
   await expect(tab('terminal')).toHaveCount(before);
 });
 
+test('runs what is typed before a terminal has a shell', async () => {
+  const { page } = launched;
+  // A terminal asks for its shell once it has a layout box, so hiding the
+  // surface holds a new terminal at the moment before that.
+  const hidden = await page.addStyleTag({
+    content: '.desktop-terminal-surface { display: none !important; }',
+  });
+  const before = await tab('terminal').count();
+  await menu(groupOf(tab('agent')), 'Terminal');
+  await expect(tab('terminal')).toHaveCount(before + 1);
+  const ownTab = tab('terminal').nth(before);
+  const tabId = await ownTab.getAttribute('data-tab-id');
+  const typedPath = join(profile.workspaceRoot, 'typed-early.txt');
+  // A paste reaches the terminal as typing does, and needs no focus, which a
+  // hidden surface cannot take.
+  await page
+    .locator(
+      `.shell-dock-terminal[data-panel-id="${tabId}"] .xterm-helper-textarea`,
+    )
+    .evaluate((textarea, text) => {
+      const clipboardData = new DataTransfer();
+      clipboardData.setData('text/plain', text);
+      textarea.dispatchEvent(new ClipboardEvent('paste', { clipboardData }));
+    }, `printf typed > '${typedPath}'\n`);
+  await hidden.evaluate((style) => style.parentNode?.removeChild(style));
+  // A window resize lays the panes out again, which starts the shell.
+  await setWindowSize(1180, 800);
+  await expect
+    .poll(() => existsSync(typedPath) && readFileSync(typedPath, 'utf8'))
+    .toBe('typed');
+  await setWindowSize(1280, 860);
+  await ownTab.locator('.shell-dock-tab-close wa-button').click();
+  await expect(tab('terminal')).toHaveCount(before);
+});
+
 test('keeps browser menus above native content and close controls inside tab bounds', async () => {
   const { page, app } = launched;
   const attachedViews = () =>
