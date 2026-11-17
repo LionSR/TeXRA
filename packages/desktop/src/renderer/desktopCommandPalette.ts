@@ -78,8 +78,10 @@ interface DesktopCommandPaletteOptions {
 // the host, so the host is where the combobox semantics resolve.
 const COMMAND_PALETTE_LIST_ID = 'desktop-command-palette-list';
 
-function commandPaletteOptionId(entryId: string): string {
-  return `desktop-command-palette-option-${entryId}`;
+/** A row's DOM id, by its place in the shown list: a row's own id may be a
+ *  folder path, which is not an id other attributes can refer to. */
+function commandPaletteOptionId(index: number): string {
+  return `desktop-command-palette-option-${index}`;
 }
 
 function filterCommandPaletteEntries(
@@ -216,7 +218,7 @@ export function createDesktopCommandPalette({
             aria-autocomplete="list"
             aria-controls=${COMMAND_PALETTE_LIST_ID}
             aria-activedescendant=${
-              activeEntry ? commandPaletteOptionId(activeEntry.id) : nothing
+              activeEntry ? commandPaletteOptionId(activeIndex) : nothing
             }
             .value=${query}
             @input=${handleFilterInput}
@@ -259,7 +261,7 @@ export function createDesktopCommandPalette({
                     return html`
                       <wa-button
                         class="desktop-command-palette-item"
-                        id=${commandPaletteOptionId(entry.id)}
+                        id=${commandPaletteOptionId(index)}
                         type="button"
                         appearance="plain"
                         size="s"
