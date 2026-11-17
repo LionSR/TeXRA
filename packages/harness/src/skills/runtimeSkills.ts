@@ -20,7 +20,7 @@ import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
 import { isPathWithin } from '@utils/core/pathCore';
 import { canonicalizePath } from '@utils/files/externalRoots';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { homeDirectory } from '@utils/system/platformPaths';
 
 import { issue } from './skillLoader';
@@ -307,7 +307,10 @@ const catalogEntry = (
   Effect.try({
     try: () => canonicalizePath(skill.baseDir),
     catch: (cause) =>
-      new SkillDirectoryUnverified({ message: toErrorMessage(cause), cause }),
+      new SkillDirectoryUnverified({
+        message: ensureError(cause).message,
+        cause,
+      }),
   }).pipe(
     Effect.map((real) =>
       workspaceRoot !== undefined && isPathWithin(workspaceRoot, real)

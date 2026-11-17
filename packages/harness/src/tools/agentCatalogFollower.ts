@@ -47,7 +47,7 @@ import {
 import { AgentCatalog } from '@agent/index/agentCatalog';
 import { emitAppSignal } from '@platform/appSignals';
 import { AgentDirectories, AppState } from '@platform/interfaces';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
 import { fileWatchRetrySchedule } from '@utils/files/fsEntryExists';
 import { AGENT_FILE_EXTENSION } from '@shared/schemas';
@@ -74,7 +74,7 @@ const registerRoot = <E, R>(
       Effect.try({
         try: () => registerExternalRoot(absolutePath, options),
         catch: (cause) =>
-          new RootNotRegistered({ message: toErrorMessage(cause), cause }),
+          new RootNotRegistered({ message: ensureError(cause).message, cause }),
       }),
     ),
     Effect.catch((error) =>

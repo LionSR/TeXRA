@@ -34,7 +34,7 @@ import type { ToolRegistry } from '@tools/toolTable';
 import { nullishWithDefault, timeoutMsField } from '@tools/core/inputSchema';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { meansAbsent, entryExists } from '@utils/files/fsEntryExists';
-import { formatError, toErrorMessage } from '@utils/errors/errorMessage';
+import { formatError, ensureError } from '@utils/errors/errorMessage';
 import { escapesRoot } from '@utils/core/pathCore';
 import {
   GIT_WORKTREE_SUPPORT_SETTING,
@@ -212,7 +212,7 @@ const absoluteWorkspacePath = (
 ): Effect.Effect<string, ToolError> =>
   Effect.try({
     try: () => workspaceAbsolutePath(workspaceRoot, target),
-    catch: (cause) => new ToolError(toErrorMessage(cause), { cause }),
+    catch: (cause) => new ToolError(ensureError(cause).message, { cause }),
   });
 
 interface InputFileGroup {

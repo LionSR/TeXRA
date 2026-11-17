@@ -45,7 +45,7 @@ import type { MemoryViewItem } from '@shared/tools/memoryView';
 import { meansAbsent, pathExists } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { splitContentLines } from '@utils/text/stringUtils';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 const FRONTMATTER_SCAN_BYTES = 16 * 1024;
@@ -189,7 +189,10 @@ const readMemoryMeta = Effect.fn('memoryFileSystem.readMemoryMeta')(
         Effect.try({
           try: () => parseFrontmatter(text).meta,
           catch: (cause) =>
-            new MemoryHeadUnparsed({ message: toErrorMessage(cause), cause }),
+            new MemoryHeadUnparsed({
+              message: ensureError(cause).message,
+              cause,
+            }),
         }),
       ),
       Effect.catch((cause) =>

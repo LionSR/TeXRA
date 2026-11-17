@@ -45,7 +45,7 @@ import type {
 } from '@shared/session/sessionApprovals';
 import { assertWritable, resolveToolPath } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 import { previewLabel } from '@utils/text/stringUtils';
 
 import { Interactions } from '../HostInteractions';
@@ -219,7 +219,7 @@ const rejection = Effect.fn('toolUse.guard')(function* (
     catch: (cause) =>
       cause instanceof ToolError
         ? cause
-        : new ToolError(toErrorMessage(cause), { cause }),
+        : new ToolError(ensureError(cause).message, { cause }),
   });
   for (const target of targets) {
     const path = yield* resolveToolPath(call.env, target);

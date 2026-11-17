@@ -14,7 +14,7 @@ import {
 
 // Local imports
 import { writeLogLine } from '@logger/logSink';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 import { withFileWriteLane } from '@utils/files/fileWriteLane';
 import { nodeFileServices, writeFileAtomic } from '@utils/files/fsDurability';
 import { meansAbsent } from '@utils/files/fsEntryExists';
@@ -30,7 +30,7 @@ class JsonFileFailed extends Schema.TaggedError<JsonFileFailed>()(
 ) {}
 
 const fileFailed = (cause: unknown) =>
-  new JsonFileFailed({ message: toErrorMessage(cause), cause });
+  new JsonFileFailed({ message: ensureError(cause).message, cause });
 
 /** The Node error under a filesystem service failure, whose message names
  *  the file and the reason without the service's wrapping. */

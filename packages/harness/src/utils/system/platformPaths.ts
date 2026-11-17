@@ -9,7 +9,7 @@ import { Context, Effect, Schema } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 
 /**
  * An existence probe that asserts an absolute path and then asks `node:fs`.
@@ -55,7 +55,7 @@ class HomeDirectoryUnresolved extends Schema.TaggedError<HomeDirectoryUnresolved
 export const homeDirectory: Effect.Effect<string | undefined> = Effect.try({
   try: () => os.homedir(),
   catch: (cause) =>
-    new HomeDirectoryUnresolved({ message: toErrorMessage(cause), cause }),
+    new HomeDirectoryUnresolved({ message: ensureError(cause).message, cause }),
 }).pipe(
   Effect.filterOrFail(
     (home) => home !== '',

@@ -16,7 +16,7 @@ import { createRequire } from 'node:module';
 import { platform as osPlatform } from 'node:os';
 import { dirname, join } from 'node:path';
 import { Effect, Schema } from 'effect';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { withCommandDirs } from '@texra-ai/harness/node';
 
 /**
@@ -69,7 +69,7 @@ class PtyStartFailed extends Schema.TaggedError<PtyStartFailed>()(
 ) {}
 
 const ptyStartFailed = (cause: unknown) =>
-  new PtyStartFailed({ message: toErrorMessage(cause), cause });
+  new PtyStartFailed({ message: ensureError(cause).message, cause });
 
 export interface DesktopPtyHost {
   /**

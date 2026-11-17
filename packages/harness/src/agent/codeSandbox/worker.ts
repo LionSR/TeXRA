@@ -24,7 +24,7 @@ import {
   newVariant,
 } from 'quickjs-emscripten-core';
 
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 import { truncateSummary } from '@utils/text/stringUtils';
 
 import {
@@ -59,7 +59,7 @@ class SandboxWorkerFailed extends Schema.TaggedError<SandboxWorkerFailed>()(
 
 /** A QuickJS throw while the realm opens, carrying its own message. */
 const realmFailure = (cause: unknown): SandboxWorkerFailed =>
-  new SandboxWorkerFailed({ message: toErrorMessage(cause), cause });
+  new SandboxWorkerFailed({ message: ensureError(cause).message, cause });
 
 /** What the script's source is wrapped in; it shares the first line. */
 const SCRIPT_PREFIX = '(async () => {';

@@ -38,7 +38,7 @@ import {
   formatResultCount,
   type RuntimeCommand,
   Rejected,
-  toErrorMessage,
+  ensureError,
 } from '@texra-ai/harness/schemas';
 import { nodeFileServices } from '@texra-ai/harness/node';
 import {
@@ -288,7 +288,7 @@ class ServiceStartFailed extends Schema.TaggedError<ServiceStartFailed>()(
 ) {}
 
 const startFailed = (cause: unknown) =>
-  new ServiceStartFailed({ message: toErrorMessage(cause), cause });
+  new ServiceStartFailed({ message: ensureError(cause).message, cause });
 
 /**
  * How a host starts the service of a storage root: the root, whose

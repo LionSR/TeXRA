@@ -1,6 +1,6 @@
 import { Effect, Schema } from 'effect';
 
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 import type { Environment } from 'nunjucks';
 
 /** A prompt that did not render: the template's own error, or `nunjucks`
@@ -11,7 +11,7 @@ export class PromptRenderFailed extends Schema.TaggedError<PromptRenderFailed>()
 ) {}
 
 const renderFailure = (cause: unknown): PromptRenderFailed =>
-  new PromptRenderFailed({ message: toErrorMessage(cause), cause });
+  new PromptRenderFailed({ message: ensureError(cause).message, cause });
 
 /**
  * The prompt-rendering environment: an empty loader list, since a prompt is

@@ -6,7 +6,7 @@ import { Effect, Result } from 'effect';
 import { ToolError } from '@shared/schemas';
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores, StateReadFailed } from '@shared/config/settings';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeFilePath } from '@utils/core/pathBasics';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import {
@@ -173,7 +173,7 @@ export const resolveToolPath = Effect.fn('resolveToolPath')(function* (
     catch: (cause) =>
       cause instanceof ToolError
         ? cause
-        : new ToolError(toErrorMessage(cause), { cause }),
+        : new ToolError(ensureError(cause).message, { cause }),
   });
 
   if (!('kind' in resolution)) {

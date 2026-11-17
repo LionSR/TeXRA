@@ -94,7 +94,7 @@ import { withLogChannel } from '@logger/effectLog';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import { nodeFileServices } from '@utils/files/fsDurability';
 import { meansAbsent } from '@utils/files/fsEntryExists';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 import type * as ChildProcess from 'effect/process/ChildProcess';
 import type { PlatformError } from 'effect/PlatformError';
 
@@ -184,7 +184,7 @@ const stopWaiting: (
       try: () =>
         process.kill(leadsGroup(stage) ? -handle.pid : handle.pid, 'SIGKILL'),
       catch: (cause) =>
-        new ChildNotKilled({ message: toErrorMessage(cause), cause }),
+        new ChildNotKilled({ message: ensureError(cause).message, cause }),
     }).pipe(
       Effect.catch((error) =>
         Effect.logWarning(
