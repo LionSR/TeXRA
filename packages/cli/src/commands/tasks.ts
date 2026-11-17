@@ -13,7 +13,6 @@ import {
   AgentConfigSchema,
   type AgentConfigPayload,
   type RequestError,
-  ensureError,
 } from '@texra-ai/harness/schemas';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import {
@@ -32,7 +31,7 @@ import {
   launchApprovalNotice,
   projectApprovalPolicy,
 } from '../runtime/platform/cliContext';
-import { isLinked } from '../runtime/platform/cliService';
+import { CliServiceFailed, isLinked } from '../runtime/platform/cliService';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import {
@@ -85,7 +84,7 @@ function findTask(client: ServiceClient, id: string) {
 const serviceClient = Effect.flatMap(cliPlatform, ({ service }) =>
   isLinked(service)
     ? linkedClient(service)
-    : Effect.fail(new Error(service.none)),
+    : Effect.fail(new CliServiceFailed({ message: service.none })),
 );
 
 /** One request to the task `id` names, refused as a usage error. */
@@ -201,7 +200,7 @@ const startCommand = defineCliCommand({
       });
     const services = yield* cliPlatform;
     if (!isLinked(services.service))
-      return yield* Effect.fail(new Error(services.service.none));
+      return yield* new CliServiceFailed({ message: services.service.none });
     const link = services.service;
     // The task runs in the service under the project's persisted policy,
     // with what this command asked for riding the launch
@@ -244,7 +243,7 @@ const startCommand = defineCliCommand({
           apiKeys: environmentApiKeys(),
         },
       }),
-    ).pipe(Effect.mapError(ensureError));
+    );
     yield* emitCliResult(
       cliResult('task', { runId, workspace: context.cwd }, runId),
     );

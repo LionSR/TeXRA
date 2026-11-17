@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 
 import {
   CLI_CHEAP_START_MODEL,
@@ -58,15 +58,16 @@ export const selectCliRunModel = Effect.fn('selectCliRunModel')(function* (
   // usage error and the selection's unavailable-model error both reach the
   // caller as the `CliUsageError` the command surfaces, exactly as the
   // former try/catch around the await did.
+  const usageError = (error: unknown) =>
+    new CliUsageError({ message: toErrorMessage(error) });
   const resolution = yield* Effect.try({
     try: () => cliRunModelCandidates(stores, context, modelOverride, role),
-    catch: ensureError,
+    catch: usageError,
   }).pipe(
     Effect.flatMap((candidates) =>
-      selectCliRunnableModel(candidates, { stores }),
-    ),
-    Effect.mapError(
-      (error) => new CliUsageError({ message: toErrorMessage(error) }),
+      selectCliRunnableModel(candidates, { stores }).pipe(
+        Effect.mapError(usageError),
+      ),
     ),
   );
   if (resolution.notice && context.quietLogs !== true) {

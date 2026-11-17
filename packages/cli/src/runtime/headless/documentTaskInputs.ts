@@ -7,7 +7,7 @@ import {
 } from '@texra-ai/harness/host';
 
 import { glob, hasMagic } from 'glob';
-import { Effect, FileSystem, Scope } from 'effect';
+import { Effect, FileSystem, Schema, Scope } from 'effect';
 
 import { ensureError } from '@texra-ai/harness/schemas';
 import { meansAbsent } from '@texra-ai/harness/node';
@@ -74,10 +74,19 @@ interface PreparedDocumentTaskInputExpansion {
   readonly flagLabel: string;
 }
 
-const readProcessStdinText: Effect.Effect<string, Error> = Effect.tryPromise({
+/** A document task's inputs could not be read: stdin, or a glob's walk. */
+class DocumentTaskInputUnread extends Schema.TaggedError<DocumentTaskInputUnread>()(
+  'DocumentTaskInputUnread',
+  { message: Schema.String, cause: Schema.Defect() },
+) {
+  static readonly from = (cause: unknown) =>
+    new DocumentTaskInputUnread({ message: ensureError(cause).message, cause });
+}
+
+const readProcessStdinText = Effect.tryPromise({
   // With an encoding set the chunks are strings, so a leading BOM is kept.
   try: () => streamText(process.stdin.setEncoding('utf8')),
-  catch: ensureError,
+  catch: DocumentTaskInputUnread.from,
 });
 
 export function hasMixedStdinDocumentTaskInputSpecs(
@@ -170,7 +179,7 @@ const expandDocumentTaskInputSpec = Effect.fn('expandDocumentTaskInputSpec')(
             nodir: true,
             ...globOptions,
           }),
-        catch: ensureError,
+        catch: DocumentTaskInputUnread.from,
       });
       if (matches.length === 0) {
         return yield* new CliUsageError({
@@ -190,7 +199,7 @@ const expandDocumentTaskInputSpec = Effect.fn('expandDocumentTaskInputSpec')(
             absolute: true,
             nodir: true,
           }),
-        catch: ensureError,
+        catch: DocumentTaskInputUnread.from,
       });
       if (matches.length === 0) {
         return yield* new CliUsageError({

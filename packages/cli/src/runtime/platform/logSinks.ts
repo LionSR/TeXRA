@@ -3,7 +3,7 @@ import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
 
 // Third-party imports
-import { Effect, LogLevel, PlatformError, Predicate } from 'effect';
+import { Effect, LogLevel, PlatformError, Predicate, Schema } from 'effect';
 
 // Local imports
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
@@ -137,6 +137,12 @@ export function flush(stream: StreamKey): Effect.Effect<void> {
   return writeRawAndWait(stream, '');
 }
 
+/** A CLI entry's one run threw: `cause` is what it threw, reported as is. */
+export class CliEntryCrashed extends Schema.TaggedError<CliEntryCrashed>()(
+  'CliEntryCrashed',
+  { cause: Schema.Defect() },
+) {}
+
 /**
  * The user-facing text of a caught error. A `PlatformError`'s own message is
  * `Tag: FileSystem.method (path)`, with no errno text; its Node cause carries
@@ -160,6 +166,12 @@ export function writeErrorStderr(error: unknown): void {
   writeTextStderr(cliErrorMessage(error));
 }
 
+/** A question on stdin got no answer: the input ended, or readline failed. */
+class CliQuestionUnanswered extends Schema.TaggedError<CliQuestionUnanswered>()(
+  'CliQuestionUnanswered',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
+
 /**
  * Ask one question on stdin. The readline interface is the foreign edge and is
  * wrapped exactly once here: acquire opens it, use awaits the answer or the
@@ -173,7 +185,7 @@ export function askCliQuestion(
      *  the question is written straight to stderr instead. */
     readonly hidden?: boolean;
   } = {},
-): Effect.Effect<string, Error> {
+): Effect.Effect<string, CliQuestionUnanswered> {
   return Effect.acquireUseRelease(
     Effect.sync(() => {
       // When stdin is a file it has no `ref`.
@@ -198,13 +210,23 @@ export function askCliQuestion(
       Effect.raceFirst(
         Effect.tryPromise({
           try: () => prompt.question(options.hidden ? '' : question),
-          catch: ensureError,
+          catch: (cause) =>
+            new CliQuestionUnanswered({
+              message: ensureError(cause).message,
+              cause,
+            }),
         }),
         // readline leaves a pending question unanswered for good when its
         // input ends (Ctrl-D, a closed pipe); its `close` is the answer.
-        Effect.callback<never, Error>((resume) => {
+        Effect.callback<never, CliQuestionUnanswered>((resume) => {
           prompt.once('close', () =>
-            resume(Effect.fail(new Error('The input ended before an answer.'))),
+            resume(
+              Effect.fail(
+                new CliQuestionUnanswered({
+                  message: 'The input ended before an answer.',
+                }),
+              ),
+            ),
           );
         }),
       ),
@@ -224,7 +246,7 @@ export function askCliQuestion(
 export function confirmCliQuestion(
   question: string,
   options: { readonly default: boolean },
-): Effect.Effect<boolean, Error> {
+): Effect.Effect<boolean, CliQuestionUnanswered> {
   return askCliQuestion(
     `${question} ${options.default ? '[Y/n]' : '[y/N]'} `,
   ).pipe(

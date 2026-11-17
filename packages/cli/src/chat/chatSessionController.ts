@@ -10,6 +10,7 @@ import {
   Exit,
   Fiber,
   FiberSet,
+  Schema,
   Scope,
   Semaphore,
   Stream,
@@ -91,6 +92,12 @@ import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
 // ---------------------------------------------------------------------------
 // Controller
 // ---------------------------------------------------------------------------
+
+/** A resumed run's stored configuration is absent, so the chat cannot adopt it. */
+class RunConfigMissing extends Schema.TaggedError<RunConfigMissing>()(
+  'RunConfigMissing',
+  { message: Schema.String },
+) {}
 
 /**
  * The recovery tail every run/resume program below shares. A typed failure
@@ -562,9 +569,9 @@ export function createChatSessionController(
               ? config
               : yield* init.runSession.records(run.runId).readConfig;
           if (adoptedConfig === null)
-            return yield* Effect.fail(
-              new Error(`Run ${run.runId} has no configuration to resume`),
-            );
+            return yield* new RunConfigMissing({
+              message: `Run ${run.runId} has no configuration to resume`,
+            });
           yield* adoptRunConfig(adoptedConfig, 'history');
           clearLocalTranscript();
           // The transcript and the work plan are the view's: the TUI
@@ -608,7 +615,9 @@ export function createChatSessionController(
     Effect.gen(function* () {
       const config = yield* init.runSession.records(runId).readConfig;
       if (!config)
-        return yield* Effect.fail(new Error('it has no stored configuration'));
+        return yield* new RunConfigMissing({
+          message: 'it has no stored configuration',
+        });
       yield* adoptRunConfig(config, 'history');
     }).pipe(
       Effect.catch((error) =>

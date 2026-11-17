@@ -16,7 +16,10 @@ import {
   type CliWorkspaceAgentsRecord,
 } from '@cli/runtime/workspaceAgents';
 
-import { setWorkspaceCliChatAgent } from '@cli/runtime/platform/cliConfig';
+import {
+  CliSettingUpdateFailed,
+  setWorkspaceCliChatAgent,
+} from '@cli/runtime/platform/cliConfig';
 import { TICK } from '@cli/tui/ui/glyphs';
 import { ToneLine } from '@cli/tui/ui/ToneLine';
 import type { SelectItem } from '@cli/tui/ui/Select';
@@ -277,9 +280,10 @@ export function WorkspaceAgentsForm(
             cwd
               ? setWorkspaceCliChatAgent(roots, value || undefined)
               : Effect.fail(
-                  new Error(
-                    'Default chat-agent selection requires a workspace.',
-                  ),
+                  new CliSettingUpdateFailed({
+                    message:
+                      'Default chat-agent selection requires a workspace.',
+                  }),
                 ),
           'overview',
         );

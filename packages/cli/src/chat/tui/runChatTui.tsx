@@ -9,6 +9,7 @@ import {
   Effect,
   Exit,
   FiberHandle,
+  Schema,
   Scope,
   Stream,
   SubscriptionRef,
@@ -107,6 +108,12 @@ import { ChatProcessProvider } from './chatProcess';
 interface ChatResult {
   exitCode: number;
 }
+
+/** The session's rows were not all written before the chat's exit deadline. */
+class SessionRowsNotWritten extends Schema.TaggedError<SessionRowsNotWritten>()(
+  'SessionRowsNotWritten',
+  { message: Schema.String },
+) {}
 
 /** A change of a run's approval grants (`policy.set`). */
 type PolicyChange = Extract<RuntimeCommand, { kind: 'policy.set' }>['change'];
@@ -622,9 +629,9 @@ export async function runChat(
       Effect.timeout(SESSION_CLOSE_DEADLINE_MS),
       Effect.mapError(
         () =>
-          new Error(
-            `the session's rows were not all written within ${SESSION_CLOSE_DEADLINE_MS} ms`,
-          ),
+          new SessionRowsNotWritten({
+            message: `the session's rows were not all written within ${SESSION_CLOSE_DEADLINE_MS} ms`,
+          }),
       ),
     ),
     repaintAfterTerminalResume: scrollback.restart,

@@ -42,6 +42,12 @@ import {
  */
 export const CLI_CHEAP_START_MODEL = 'deepseek/deepseek-v4-pro';
 
+/** A setting the terminal client was asked to change was not changed. */
+export class CliSettingUpdateFailed extends Schema.TaggedError<CliSettingUpdateFailed>()(
+  'CliSettingUpdateFailed',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
+
 /** The `texra.*` command sections: `texra.chat` and `texra.run`. */
 const COMMAND_SECTIONS = {
   chat: CLI_CHAT_SETTING,
@@ -154,9 +160,9 @@ export const setWorkspaceCliChatAgent = Effect.fn(
 )(function* (stores: SettingsStores, agent: string | undefined) {
   const trimmed = agent?.trim();
   if (agent !== undefined && !trimmed) {
-    return yield* Effect.fail(
-      new Error('The default chat agent must not be empty.'),
-    );
+    return yield* new CliSettingUpdateFailed({
+      message: 'The default chat agent must not be empty.',
+    });
   }
   // The workspace file's own section, not the merged read: the write below
   // lands in the workspace target, so seeding from `workspace over user` would

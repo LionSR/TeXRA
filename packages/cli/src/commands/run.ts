@@ -60,6 +60,7 @@ import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
   cliLaunchOutput,
+  DocumentTaskOutputFailed,
   formatDocumentTaskTextResult,
   inputDerivedOutputFiles,
   resolveDocumentTaskOutput,
@@ -355,7 +356,8 @@ export const executeCliRun = Effect.fn('executeCliRun')(function* (
       if (Result.isFailure(recorded)) {
         const message = `The output of task ${ended.runId} was not copied: its recorded configuration could not be read: ${toErrorMessage(recorded.failure)}`;
         if ((output || outputDir) && ended.outcome === RUN_OUTCOME.COMPLETED)
-          documentTaskOutputError = new Error(message, {
+          documentTaskOutputError = new DocumentTaskOutputFailed({
+            message,
             cause: recorded.failure,
           });
         else writeTextStderr(`[warn] ${message}`);
@@ -373,10 +375,10 @@ export const executeCliRun = Effect.fn('executeCliRun')(function* (
         session.view.read([]).pipe(
           Effect.mapError(
             (cause) =>
-              new Error(
-                `The documents of task ${ended.runId} could not be read: ${toErrorMessage(cause)}`,
-                { cause },
-              ),
+              new DocumentTaskOutputFailed({
+                message: `The documents of task ${ended.runId} could not be read: ${toErrorMessage(cause)}`,
+                cause,
+              }),
           ),
           Effect.flatMap((stored) => {
             const run = stored.runs.get(ended.runId);
