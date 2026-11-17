@@ -21,8 +21,12 @@ import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
+import { DEFAULT_AGENT_MODEL } from '@texra/model/curatedModels';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { ProcessServices } from '@texra-ai/harness/host';
+import {
+  getHelperModelName,
+  type ProcessServices,
+} from '@texra-ai/harness/host';
 
 export function handleFixCompilation(
   roots: WorkspaceRoots,
@@ -47,12 +51,14 @@ export function handleFixCompilation(
         roots.workspace,
       );
 
-      // This is a "run latexFixer" command, so prefer the helper model.
+      // This is a "run latexFixer" command, so it runs on the helper model,
+      // the default model when none is set, as the merge action does.
       // The command finishes when the run ends. A run that does not start
       // finishes it too: the launcher has told why, so the guard's error
       // would tell it again.
       const config = yield* decodeLaunchConfig({
         agent: 'latexFixer',
+        model: (yield* getHelperModelName(roots)) ?? DEFAULT_AGENT_MODEL,
         instruction,
       });
       const run = yield* Effect.option(launch(config, { helperModel: true }));
