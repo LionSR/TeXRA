@@ -15,11 +15,10 @@ import {
   isDisplayRow,
   type RequestDecision,
   type RunId,
+  type AssembleTraceResult,
 } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
 import { isRequestDecision } from '@shared/session/runRowReads';
-
-import type { AssembleTraceResult } from './traceDocumentSchema';
 
 /**
  * A decision's action, without what the user typed or approved. The fold reads

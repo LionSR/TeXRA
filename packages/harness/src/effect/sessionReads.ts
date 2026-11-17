@@ -18,19 +18,19 @@ import { listRuns } from '@agent/storage/runListing';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { listRunWorkspaceFiles } from '@agent/storage/runWorkspaceFiles';
 import { SessionRoots } from '@platform/rootedFs';
-import {
-  type RunEnd,
-  type RunId,
-  type RunResult,
-  type RunWorkspaceFile,
-  type TranscriptSubscription,
-  type AgentConfig,
+import type {
+  RunEnd,
+  RunId,
+  RunResult,
+  RunWorkspaceFile,
+  TranscriptSubscription,
+  AgentConfig,
+  AssembleTraceResult,
 } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import type { RequestError } from '@shared/session/runtimeRequest';
 import { readCompletedRunConversation } from '@transcript/completedRunArchive';
 import { assembleTrace } from '@transcript/traceAssembler';
-import type { AssembleTraceResult } from '@transcript/traceDocumentSchema';
 
 import type { LocalSession } from './sessions.js';
 

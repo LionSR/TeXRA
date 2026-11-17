@@ -198,7 +198,7 @@ export {
   type AssembleTraceResult,
   type TraceDocument,
   type TraceFactKind,
-} from '@transcript/traceDocumentSchema';
+} from '@shared/schemas/traceDocument';
 // Path basics that hold in a browser: forward slashes, a path's base name,
 // and its base name without the extension.
 export {
