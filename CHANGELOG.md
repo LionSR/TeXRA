@@ -1354,7 +1354,8 @@ All notable changes to this project will be documented in this file.
 - **Script-only tools.** Chat agents are sent the `script` tool and their
   own tools alone, with every other tool called from inside a script. There
   is no setting: every chat agent works this way, an SDK embedder's
-  included. A run keeps the tool set it started with when it resumes.
+  included, except a plugin agent that names its own tools, which is sent
+  those directly. A run keeps the tool set it started with when it resumes.
 - **Scripts can run their agent again: `self(prompt, options)`.** It runs
   the same agent with the same tools as a child of the call, forked from
   the conversation as it stood when the script started (or from the prompt
