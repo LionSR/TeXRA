@@ -73,7 +73,7 @@ it.effect('releases cancelled calls before accepting a late answer', () => {
               hosts.attach(session, ['readDiagnostics']),
               (frame) =>
                 Effect.gen(function* () {
-                  if (frame.kind === 'call') {
+                  if (frame.kind === 'ask') {
                     assert(requester !== undefined);
                     yield* Fiber.interrupt(requester);
                   }
@@ -93,7 +93,7 @@ it.effect('releases cancelled calls before accepting a late answer', () => {
             }).pipe(Effect.provideService(Scheduler.MaxOpsBeforeYield, 32)),
           );
           const call = yield* Queue.take(frames);
-          assert(call.kind === 'call');
+          assert(call.kind === 'ask');
           const interrupted = yield* Fiber.await(requester);
           assert(Exit.isFailure(interrupted));
           expect(Cause.hasInterruptsOnly(interrupted.cause)).toBe(true);

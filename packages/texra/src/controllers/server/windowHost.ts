@@ -22,7 +22,6 @@ import type { EditorCapabilities } from '@texra/tools/editorHost';
 import { WINDOW_OUTDATED, linkOutage, type ServiceLink } from './client';
 
 import {
-  ANSWERED,
   HostCapabilitySchema,
   type HostAnswer,
   type HostCall,
@@ -181,28 +180,27 @@ function attachTo(
   const send = (id: string, answer: HostAnswer) =>
     client['host.answer']({ id, answer });
   return Effect.gen(function* () {
-    /** Carry out a call; an awaited one is answered however it ends, a
-     *  defect included, so the service never waits on a call that died
-     *  here; one nothing waits on says here when it could not be done. */
-    const answer = (id: string, call: HostCall) => {
-      const awaited = Object.hasOwn(ANSWERED, call.kind);
-      return perform(host, call).pipe(
+    /** Carry out a call; an asked one (it has an `id`) is answered however
+     *  it ends, a defect included, so the service never waits on a call
+     *  that died here; a told one says here when it could not be done. */
+    const answer = (id: string | undefined, call: HostCall) =>
+      perform(host, call).pipe(
         Effect.matchCauseEffect({
           onSuccess: (value) =>
-            awaited
-              ? send(id, { ok: true, value: toJsonValue(value) })
-              : Effect.void,
+            id === undefined
+              ? Effect.void
+              : send(id, { ok: true, value: toJsonValue(value) }),
           onFailure: (cause) =>
             Cause.hasInterruptsOnly(cause)
               ? Effect.failCause(cause)
-              : awaited
-                ? send(id, {
+              : id === undefined
+                ? Effect.logWarning(
+                    `This window could not carry out a host call (${call.kind})`,
+                  ).pipe(Effect.annotateLogs({ data: cause }))
+                : send(id, {
                     ok: false,
                     message: toErrorMessage(cause),
-                  })
-                : Effect.logWarning(
-                    `This window could not carry out a host call (${call.kind})`,
-                  ).pipe(Effect.annotateLogs({ data: cause })),
+                  }),
         }),
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
@@ -212,7 +210,6 @@ function attachTo(
               ).pipe(Effect.annotateLogs({ data: cause })),
         ),
       );
-    };
     return yield* client['host.attach']({
       workspace,
       capabilities: capabilitiesOf(host),
@@ -233,7 +230,9 @@ function attachTo(
             ),
           );
         // Each call on its own fiber: a slow build never holds the next.
-        return Effect.forkScoped(answer(frame.id, frame.call));
+        return Effect.forkScoped(
+          answer(frame.kind === 'ask' ? frame.id : undefined, frame.call),
+        );
       }),
     );
   }).pipe(

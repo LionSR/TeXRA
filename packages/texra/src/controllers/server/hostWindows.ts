@@ -49,10 +49,11 @@ import {
 import {
   ANSWERED,
   type HostAnswer,
-  type HostCall,
+  type AskedCall,
   type HostCapability,
   type HostAttachFrame,
   type Notice,
+  type ToldCall,
 } from './hostCalls';
 import { linkOver, type Linked, type ServiceLink } from './client';
 import type { WindowClient } from './windowHost';
@@ -130,18 +131,14 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
 
   /** Send a call nothing waits on: the window carries it out and says
    *  itself when it could not. */
-  const tell = (window: Window, call: HostCall) =>
-    Queue.offer(window.frames, {
-      kind: 'call',
-      id: randomUUID(),
-      call,
-    }).pipe(Effect.asVoid);
+  const tell = (window: Window, call: ToldCall) =>
+    Queue.offer(window.frames, { kind: 'tell', call }).pipe(Effect.asVoid);
 
   /** Send a call to the window `key`'s project routes it to and wait for
    *  its answer, decoded as its kind answers. */
   const ask = Effect.fn('ask')(function* <K extends keyof Answered>(
     key: string,
-    call: HostCall & { readonly kind: K },
+    call: AskedCall & { readonly kind: K },
   ): Effect.fn.Return<Answered[K]['result']['Type'], WindowCallFailed> {
     const { result, within }: Answered[K] = ANSWERED[call.kind];
     const answered = Deferred.makeUnsafe<unknown, WindowCallFailed>();
@@ -162,11 +159,7 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
         return Effect.succeed({ window, id });
       }),
       ({ window, id }) =>
-        Queue.offer(window.frames, {
-          kind: 'call',
-          id,
-          call,
-        }).pipe(
+        Queue.offer(window.frames, { kind: 'ask', id, call }).pipe(
           Effect.andThen(
             Deferred.await(answered).pipe(
               Effect.timeoutOrElse({
@@ -322,8 +315,8 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
                 }),
               )
         ).pipe(Effect.asVoid);
-      // Only an awaited call is answered: one answered after its wait ended
-      // (its run gave up, or its window went) is late, not a notice.
+      // Only an asked call has an id to answer, so an unknown one is late:
+      // its run gave up, or its window went.
       return Effect.logWarning(
         `A TeXRA window answered host call ${id} after its wait ended${reply.ok ? '' : `: ${reply.message}`}`,
       );
