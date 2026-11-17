@@ -205,8 +205,8 @@ export type ModelConfiguration =
  * Whether a configuration takes background work: a Responses route that
  * runs it, and Google, which retrieves a background result through
  * server-side state. The one answer: a protocol model carries its
- * `background` member exactly when this holds, and the binding reports that
- * member.
+ * `background` member exactly when this holds, and a turn runs in the
+ * background exactly when its bound model carries it.
  */
 export function backgroundCapable(configuration: ModelConfiguration): boolean {
   switch (configuration.protocol) {

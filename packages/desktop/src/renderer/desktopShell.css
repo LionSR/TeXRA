@@ -183,12 +183,6 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   margin-inline-start: 4px;
   width: calc(100% - 4px);
 }
-.shell-history-empty {
-  margin: 4px 8px;
-  font-size: var(--font-size-xs);
-  color: var(--wa-color-text-quiet);
-  line-height: 1.5;
-}
 .shell-project-runs {
   --run-tab-padding-inline-start: 8px;
   --run-tab-row-gap: 2px;

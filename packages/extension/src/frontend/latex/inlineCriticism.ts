@@ -29,11 +29,11 @@ import {
   withPerKeyLane,
 } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { outputFilesProduced } from '@frontend/events/runFactSubscriptions';
+import { outputFilesProduced } from '@texra/controllers/session/outputFilesProduced';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import type { ManualCriticismEntry } from '@texra/tools/editorHost';
-import { parseCriticismAnnotations } from './criticismParser';
+import { parseCriticismAnnotations } from '@latex/criticismParser';
 import type { Session } from '@texra-ai/harness';
 import {
   withLogChannel,

@@ -1,9 +1,8 @@
 /**
  * Subprocess wrappers for the `lake` commands invoked by `lean_project`.
  *
- * The VS Code Lean extension exposes these as command IDs; the direct adapter
- * has to run the real `lake` binary itself. We serialize per-workspace on an
- * in-process lane so two agents in the same TeXRA instance can't fire two
+ * The pool runs the real `lake` binary itself, serialized per workspace on
+ * an in-process lane so two agents in the same TeXRA instance can't fire two
  * concurrent `lake build` invocations against the same `.lake/build`.
  */
 

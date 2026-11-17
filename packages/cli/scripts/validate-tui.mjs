@@ -357,7 +357,7 @@ const SCENARIOS = [
     keys: ['/status', '\r'],
     frame: 'viewport',
     expect: [
-      'queued follow-ups: 1',
+      'queued messages: 1',
       '1. ✓ reviewer completed All good <ok>',
       'Queued message (1)',
     ],
@@ -531,7 +531,7 @@ const SCENARIOS = [
       'model: harness-model',
       'model access: your own API keys',
       'status: not started',
-      'queued follow-ups: 0',
+      'queued messages: 0',
     ],
     unexpect: [
       '/clear is registered but has no harness action.',
@@ -604,7 +604,7 @@ const SCENARIOS = [
     keys: ['/', `${NAK}/model\r`],
     frame: 'viewport',
     expect: ['Available models'],
-    unexpect: ['/\u0015/model', '/model - error'],
+    unexpect: ['/\u0015/model', '/model · error'],
   },
   {
     name: 'slash-palette-esc-retypes-command',
@@ -621,7 +621,7 @@ const SCENARIOS = [
       'Agents',
       'Choose an agent, or a team it leads, for this chat.',
     ],
-    unexpect: ['//agent', 'Harness received: //agent', '/agent - error'],
+    unexpect: ['//agent', 'Harness received: //agent', '/agent · error'],
   },
   {
     // The colon spelling of Shift+Return some terminals send acts exactly
@@ -683,11 +683,12 @@ const SCENARIOS = [
       'latexFixer',
       'Current: chat (hidden from picker)',
       'Choose an agent, or a team it leads, for this chat.',
-      'Esc cancel',
+      '1-9/a-z/Enter select',
+      'Esc close',
     ],
     unexpect: [
       'Platform not initialized',
-      '/agent - error',
+      '/agent · error',
       'texra --agent=<name>',
       'creator',
       'latexDiff',
@@ -717,11 +718,12 @@ const SCENARIOS = [
       'latexFixer',
       'Current: chat (hidden from picker)',
       'Choose an agent, or a team it leads, for this chat.',
-      'Esc cancel',
+      '1-9/a-z/Enter select',
+      'Esc close',
     ],
     unexpect: [
       'Platform not initialized',
-      '/agent - error',
+      '/agent · error',
       'texra --agent=<name>',
       'creator',
       'latexDiff',
@@ -751,7 +753,7 @@ const SCENARIOS = [
     ],
     unexpect: [
       'Platform not initialized',
-      '/model - error',
+      '/model · error',
       'texra chat --model=<name>',
       'texra --model=<name>',
     ],
@@ -769,7 +771,7 @@ const SCENARIOS = [
       'Available models. Finish the active response before switching models.',
       'Enter close',
     ],
-    unexpect: ['Platform not initialized', '/model - error'],
+    unexpect: ['Platform not initialized', '/model · error'],
     rawUnexpectSgr: true,
   },
   {
@@ -787,7 +789,7 @@ const SCENARIOS = [
       'Finish the active response before switching models.',
       'Enter close',
       'Platform not initialized',
-      '/model - error',
+      '/model · error',
     ],
   },
   {
@@ -813,7 +815,7 @@ const SCENARIOS = [
       'Harness model selected.',
       'Finish the active response before switching models.',
       'Platform not initialized',
-      '/model - error',
+      '/model · error',
     ],
   },
   {
@@ -832,7 +834,7 @@ const SCENARIOS = [
     unexpect: [
       'Finish the active response before switching models.',
       'Platform not initialized',
-      '/model - error',
+      '/model · error',
     ],
   },
   {
@@ -852,7 +854,7 @@ const SCENARIOS = [
     unexpect: [
       'Finish the active response before switching models.',
       'Platform not initialized',
-      '/model - error',
+      '/model · error',
     ],
   },
   {
@@ -888,7 +890,7 @@ const SCENARIOS = [
     unexpect: [
       'No configurable settings are available here yet.',
       'Platform not initialized',
-      '/config - error',
+      '/config · error',
     ],
     maxBlankLinesBetween: [
       { from: 'entry-4 chat history line', to: '/config', max: 8 },
@@ -932,7 +934,7 @@ const SCENARIOS = [
       '/config · Agents',
       'No configurable settings are available here yet.',
       'Platform not initialized',
-      '/config - error',
+      '/config · error',
     ],
   },
   {
@@ -967,7 +969,7 @@ const SCENARIOS = [
     bootExpect: ' Ctrl-C ',
     keys: ['a', '/approval', '\r', '4'],
     expect: ['Auto-approving commands: off'],
-    unexpect: ['Auto: commands', 'Run command?'],
+    unexpect: ['AUTO: COMMANDS', 'Run command?'],
   },
   {
     name: 'approval-policy-status-bar',
@@ -1006,7 +1008,7 @@ const SCENARIOS = [
       '/plugins',
       'Switch plugins on or off. Add one: /plugins add <URL or folder>',
       'always on · TeXRA plugin',
-      'Multi-Agent Workflow — on · TeXRA plugin · 1 tool',
+      'Multi-Agent Workflow — on · TeXRA plugin · 2 tools',
       'switch on/off',
     ],
     unexpect: ['[TeXRA]', 'toolUtils', '/config · Tools', 'TeXRA CLI'],
@@ -1023,7 +1025,7 @@ const SCENARIOS = [
     keys: [...PLUGINS_FORM_KEYS, 'b'],
     frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
-    expect: ['/plugins', 'Multi-Agent Workflow — on · TeXRA plugin · 1 tool'],
+    expect: ['/plugins', 'Multi-Agent Workflow — on · TeXRA plugin · 2 tools'],
     unexpect: ['Multi-Agent Workflow — off'],
   },
   {
@@ -1042,7 +1044,7 @@ const SCENARIOS = [
     ],
     unexpect: [
       'No skills found',
-      '/skills - error',
+      '/skills · error',
       'Platform not initialized',
     ],
     maxBlankLinesBetween: [
@@ -1058,7 +1060,7 @@ const SCENARIOS = [
     expect: ['Harness skill selected: proof-audit.'],
     unexpect: [
       'No skills found',
-      '/skills - error',
+      '/skills · error',
       'Platform not initialized',
     ],
   },
@@ -1071,7 +1073,7 @@ const SCENARIOS = [
     expect: ['Harness skill selected:'],
     unexpect: [
       'No skills found',
-      '/skills - error',
+      '/skills · error',
       'Platform not initialized',
     ],
   },
@@ -1091,12 +1093,12 @@ const SCENARIOS = [
       '/agent',
       'Current: chat (hidden from picker)',
       'Agents',
-      '+11 more',
+      '+9 more',
       '↑/↓ navigate',
       '1-9/a-z/Enter select',
       'Esc close',
     ],
-    unexpect: ['Platform not initialized', '/agent - error'],
+    unexpect: ['Platform not initialized', '/agent · error'],
   },
   {
     name: 'compact-model-form',
@@ -1116,7 +1118,7 @@ const SCENARIOS = [
       'Enter close',
       'Esc close',
     ],
-    unexpect: ['Platform not initialized', '/model - error'],
+    unexpect: ['Platform not initialized', '/model · error'],
   },
   {
     name: 'compact-api-form',
@@ -1149,7 +1151,7 @@ const SCENARIOS = [
       '↑/↓ navigate',
       'Esc close',
     ],
-    unexpect: ['Platform not initialized', '/key - error'],
+    unexpect: ['Platform not initialized', '/key · error'],
     // GLM's API key and its Coding Plan share one row; a row of the plan's
     // own (`GLM Coding Plan — <status>`) must not come back.
     unexpectPatterns: [/(?<!API\/)GLM Coding Plan —/],
@@ -1219,7 +1221,7 @@ const SCENARIOS = [
       '1-3/Enter preview',
       'Esc close',
     ],
-    unexpect: ['No memory files found.', '/memory - error'],
+    unexpect: ['No memory files found.', '/memory · error'],
   },
   {
     // Short terminals collapse /memory to the shared compact single-row
@@ -1245,7 +1247,7 @@ const SCENARIOS = [
     unexpect: [
       'Choose a memory to preview. Press Esc to close.',
       'No memory files found.',
-      '/memory - error',
+      '/memory · error',
     ],
     maxBlankLinesBetween: [
       { from: 'entry-4 chat history line', to: '/memory', max: 2 },
@@ -1614,7 +1616,7 @@ const SCENARIOS = [
     bootExpect: ' Ctrl-C ',
     keys: ['a'],
     frame: 'viewport',
-    expect: ['Auto: commands', '/ commands'],
+    expect: ['AUTO: COMMANDS', '/ commands'],
     unexpect: ['AUTO-APPROVE', 'Run command?', '1 approval'],
   },
   {
@@ -1640,7 +1642,7 @@ const SCENARIOS = [
     expect: [
       'approval: Ask before shell commands and file edits.',
       'auto-approvals: commands',
-      'Auto: commands',
+      'AUTO: COMMANDS',
     ],
     unexpect: ['Run command?', '1 approval'],
   },
@@ -1669,7 +1671,7 @@ const SCENARIOS = [
     bootExpect: ' Ctrl-C ',
     keys: ['a', '/status', '\r'],
     frame: 'viewport',
-    expect: ['team: Physicist', 'auto-approvals: commands', 'Auto: commands'],
+    expect: ['team: Physicist', 'auto-approvals: commands', 'AUTO: COMMANDS'],
     unexpect: ['Run command?', '1 approval', 's subagents'],
   },
   {
@@ -2518,12 +2520,18 @@ const SCENARIOS = [
       '\r',
     ],
     frame: 'viewport',
-    expect: ['◆ Stopped', 'root active', 'Esc parent'],
+    // A stopped agent with saved steps takes a follow-up, which resumes it
+    // (`acceptsFollowUp`), so the message reaches the focused child.
+    expect: [
+      '◆ Stopped',
+      'root active',
+      'Esc parent',
+      '» Harness received: can you still receive this?',
+    ],
     unexpect: [
       STOPPED_SUBAGENT_INPUT_MESSAGE_START,
       STOPPED_SELECTED_BACKGROUND_TASK_MESSAGE,
-      'Harness received: can you still receive this?',
-      'can you still receive this?',
+      'This run cannot accept messages right now.',
     ],
     unexpectPatterns: [RUNNING_STATUS_PATTERN],
   },

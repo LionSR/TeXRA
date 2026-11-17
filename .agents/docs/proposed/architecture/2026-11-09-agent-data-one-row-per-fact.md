@@ -284,7 +284,7 @@ A 和 B 的区别是统一发生在哪一层。读者要的统一形状（一次
 其余在基线上核对过、现在仍然成立的：
 
 - 37 种行、26 种展示行、11 种私有行：`shared/schemas/sessionEvent.ts` 的三个 union 和 `shared/schemas/rowVersions.ts` 的 `ROW_KINDS`。
-- 编辑过的文件可以从已存的结果推出：`SettledToolResultSchema` 保留 `edits`（`shared/schemas/toolResult.ts`），附件清洗不改它（`agent/core/tools/toolAttachmentExtraction.ts`）。
+- 编辑过的文件可以从已存的结果推出：`SettledToolResultSchema` 保留 `edits`（`shared/schemas/toolResult.ts`），附件清洗不改它（`tools/core/toolAttachmentExtraction.ts`）。
 - 读取 `tool.start`、`tool.end` 的地方都在展示事件一侧（转录、视图、`runTrace`、压缩活动投影）；会打印到卡片上的工具只有 `bash`、`script`、`self` 和 `agent`。
 - 视图的转录按 `seq` 去重；`tool.end` 找不到卡片时被忽略（`shared/session/transcriptUpdate.ts`）。
 - 版本升级次数：逐条读 `rowVersions.ts` 的注释后计数。

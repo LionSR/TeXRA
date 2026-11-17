@@ -19,6 +19,7 @@ import {
 import { entryTypeIn, readNormalizedFile } from '@texra-ai/harness/node';
 import { emitAppSignal } from '@texra-ai/harness/plugins';
 import {
+  DETAIL_SEPARATOR,
   AGENT_FILE_EXTENSION,
   AgentNameSchema,
   agentKey,
@@ -70,7 +71,7 @@ const writeTemplateAgentFile = Effect.fn('settings.writeTemplateAgentFile')(
     }
     const fileName = `${input.name}${AGENT_FILE_EXTENSION}`;
     const filePath = path.join(input.customDir, fileName);
-    const description = `${input.name} — chat agent`;
+    const description = `${input.name}${DETAIL_SEPARATOR}chat agent`;
     const fs = yield* FileSystem.FileSystem;
     if ((yield* entryTypeIn(fs, filePath)) !== undefined) {
       return {

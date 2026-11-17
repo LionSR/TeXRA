@@ -2,9 +2,8 @@
 
 import { Effect, Predicate } from 'effect';
 
-import { isAgentRunRecord } from '@agent/core/definition/RunRecord';
 import { withLogChannel } from '@logger/effectLog';
-import { type AgentRunListingEntry } from '@shared/schemas';
+import { type AgentRunListingEntry, isAgentRunRecord } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

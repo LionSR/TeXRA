@@ -160,7 +160,6 @@ export const bindRoute = Effect.fn('ModelAccess.bind')(function* (
       },
       billing: 'api-key',
       maxOutputTokens: requested.maxOutputTokens,
-      background: false,
       serviceTier: null,
       forcedToolChoice: true,
       route: { kind: 'validation' },

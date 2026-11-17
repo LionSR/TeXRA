@@ -1,6 +1,6 @@
 import { FACT_SEPARATOR } from '@texra-ai/harness/schemas';
 import { isEscapeInput, type ReturnKeyInput } from '@cli/tui/inputKeys';
-import { keyHintsText, type KeyHint } from '@cli/tui/ui/KeyHints';
+import { BACK_HINT, keyHintsText, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import {
   firstFittingCandidate,
@@ -134,10 +134,7 @@ function confirmCardKeyHints(options: ConfirmCardHintOptions): KeyHint[] {
 }
 
 export function confirmCardFeedbackHints(): KeyHint[] {
-  return [
-    { key: 'Enter', action: 'send note' },
-    { key: 'Esc', action: 'back' },
-  ];
+  return [{ key: 'Enter', action: 'send note' }, BACK_HINT];
 }
 
 const COMPACT_HINT_ACTIONS: Readonly<Record<string, string>> = {

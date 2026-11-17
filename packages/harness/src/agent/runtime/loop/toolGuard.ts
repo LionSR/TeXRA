@@ -19,7 +19,7 @@ import {
   ToolContext,
   type CallRequests,
   type ITool,
-} from '@agent/core/tools/ToolTypes';
+} from '@tools/core/ToolTypes';
 import {
   type DecisionOf,
   type HookOutcomePayload,

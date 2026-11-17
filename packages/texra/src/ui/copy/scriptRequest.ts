@@ -1,4 +1,5 @@
 import {
+  DETAIL_SEPARATOR,
   countLines,
   truncateSummary,
   type AgentProposalRequest,
@@ -48,7 +49,7 @@ export function scriptRequestFirstAgentLine(
     FIRST_AGENT_PREVIEW_CHARS,
   );
   const who = joinFacts([`First agent: ${agent}`, modelLabel]);
-  return first.length > 0 ? `${who} — "${first}"` : who;
+  return first.length > 0 ? `${who}${DETAIL_SEPARATOR}"${first}"` : who;
 }
 
 /** `read_file notes.tex`: one call the script issued before it asked. */

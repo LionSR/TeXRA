@@ -380,6 +380,15 @@ export const commonViewStyles: CSSResult = css`
     color: var(--color-text-link-active);
   }
 
+  /* A link that runs an action is a native button inside the sentence (a
+     wa-button is inline-flex and would break the line); drop its box. */
+  button.clickable-link {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+  }
+
   .detail-list {
     list-style: none;
     margin: 0;

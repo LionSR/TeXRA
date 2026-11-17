@@ -1,5 +1,5 @@
 import { Context, Effect, Schema, type Scope } from 'effect';
-import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { ToolContext } from '@tools/core/ToolTypes';
 import type { AgentCatalog } from '@agent/index/agentCatalog';
 import { runInbox, type RunInbox } from '@agent/followUp/ToolUseFollowUp';
 import { Inbox } from '@agent/followUp/Inbox';

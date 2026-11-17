@@ -240,12 +240,14 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
             Paste it into
             ${renderDotMeta([
               html`<a
+                class="clickable-link"
                 href="https://chatgpt.com/"
                 target="_blank"
                 rel="noopener noreferrer"
                 >ChatGPT</a
               >`,
               html`<a
+                class="clickable-link"
                 href="https://gemini.google.com/app"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -363,7 +365,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
 
     return html`
       <a
-        class="external-inquiry-request__session-link-item"
+        class="external-inquiry-request__session-link-item clickable-link"
         href=${href}
         target="_blank"
         rel="noopener noreferrer"

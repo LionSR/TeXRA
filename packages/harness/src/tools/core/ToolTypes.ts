@@ -2,16 +2,24 @@
  * The tool contract: a tool (`ITool`), its registry, its guard, and what
  * its body reads of its own call (`ToolContext`: its id, where it works, how
  * it asks a person, the run it works for, where its transient output goes).
- * The run's window (`ToolRun`) is declared here with its id; the runtime
- * adds the rest of it. A tool is only ever called under a run: its call
- * always carries the run and where its requests open.
+ * A tool is only ever called under a run: its call always carries the run
+ * (`ToolRun`) and where its requests open (`CallRequests`).
  */
 
-import { Context, type Effect } from 'effect';
+import { Context, type Effect, type Scope, type ScopedRef } from 'effect';
 
+import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
+import type { ToolPolicy } from '@agent/runtime/run/AgentRun';
+import type {
+  RuntimePresentationEvent,
+  RuntimePresentationEventPayloads,
+} from '@agent/runtime/runtimePresentationEvents';
+import type { AgentTrace } from '@agent/trace/AgentTrace';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
+  AgentConfig,
   DispatchFacts,
+  PluginRequest,
   RequestPayload,
   DecisionOf,
   RunId,
@@ -186,6 +194,26 @@ export interface CallRequests {
     },
     DatabaseAggregateClosed | CellError
   >;
+  /**
+   * Open a plugin's request the call does not wait on, under its
+   * `data.requestId`: its `request.opened` commits on the run's history
+   * through the one door every request opens at, with `data` stored as
+   * the JSON it writes, and the plugin's decision hook takes each answer
+   * when it lands (`Plugin.decision`). A person answers it. A failed
+   * commit is not proof that nothing landed: the run's rows decide.
+   */
+  readonly post: (
+    request: Omit<PluginRequest, 'blocksCaller' | 'data'> & {
+      readonly blocksCaller: false;
+      readonly data: Pick<PluginRequest['data'], 'requestId' | 'runId'>;
+    },
+  ) => Effect.Effect<void, CellError>;
+  /** Show the person something on the session's host (a file opened
+   *  beside what they are looking at, a notice), answered by nothing. */
+  readonly present: <K extends RuntimePresentationEvent>(
+    event: K,
+    payload: RuntimePresentationEventPayloads[K],
+  ) => Effect.Effect<void>;
 }
 
 /**
@@ -206,11 +234,28 @@ export interface ToolEnv {
 
 /**
  * What a tool reads of the run its call works for, read from the run rather
- * than copied onto the call. It names the run's id; the runtime adds the
- * rest.
+ * than copied onto the call: exactly the fields the app's tools read. Its
+ * id, policy, configuration (which holds its delegation scope), model,
+ * scope (a tool that starts something the run should stop registers that
+ * stop there) and trace (what a plugin's own stages nest under). Never its
+ * session: a plugin reaches the session's runs through `ChildRuns`, and
+ * shows the person something through its call's `requests.present`.
+ * What only the harness's built-in tools read stays internal.
  */
 export interface ToolRun {
   readonly runId: RunId;
+  readonly toolPolicy: ToolPolicy;
+  /** The parent this activation runs under (null for a root), and
+   *  whether the parent's call awaits it: with the policy, what
+   *  `noLaterTurn` reads. */
+  readonly entry: {
+    readonly parent: RunId | null;
+    readonly awaited: boolean;
+  };
+  readonly config: AgentConfig;
+  readonly model: ScopedRef.ScopedRef<BoundModel>;
+  readonly scope: Scope.Scope;
+  readonly logger: AgentTrace;
 }
 
 /** What every tool call knows of itself. */

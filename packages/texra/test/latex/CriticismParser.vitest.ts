@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseCriticismAnnotations } from '@frontend/latex/criticismParser';
+import { parseCriticismAnnotations } from '@latex/criticismParser';
 
 describe('parseCriticismAnnotations', () => {
   it('accepts whitespace before arguments and severity zero', () => {

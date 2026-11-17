@@ -30,7 +30,7 @@ import { databaseLayer } from './databaseLayer';
 import { projectStores } from './projectDatabase';
 import { cannotOpen } from './storeAside';
 import { readReplay } from './sessionInputsLayer';
-import { WorkspaceRoots } from './WorkspaceRoots';
+import { SessionWorkspace } from '@shared/session/sessionWorkspace';
 
 /** A cold read holds no run. */
 const NO_LOCAL_STATE: LocalRuntimeState = { runsHere: [] };
@@ -79,7 +79,7 @@ export const readSessionView = Effect.fn('readSessionView')(function* (
       : Context.get(
           yield* Layer.build(
             databaseLayer('existing').pipe(
-              Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
+              Layer.provide(Layer.succeed(SessionWorkspace)({ storage })),
             ),
           ),
           Database,

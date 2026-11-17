@@ -71,7 +71,7 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
   return (
     <AsyncListForm<SkillsListData, SkillActivation>
       title="/skills"
-      loadingLabel="Loading skills..."
+      loadingLabel="Loading skills…"
       load={() =>
         Effect.gen(function* () {
           const result = yield* Skills.enabled(roots);

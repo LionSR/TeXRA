@@ -7,7 +7,6 @@
  */
 import { Context, Effect, Stream, SubscriptionRef } from 'effect';
 
-import type { ExportNode } from '@agent/export/schemas';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { SessionRequests } from '@agent/runtime/requests';
 import { Runs } from '@agent/runtime/runRegistry';
@@ -18,19 +17,20 @@ import { listRuns } from '@agent/storage/runListing';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { listRunWorkspaceFiles } from '@agent/storage/runWorkspaceFiles';
 import { SessionRoots } from '@platform/rootedFs';
-import {
-  type RunEnd,
-  type RunId,
-  type RunResult,
-  type RunWorkspaceFile,
-  type TranscriptSubscription,
-  type AgentConfig,
+import type {
+  RunEnd,
+  RunId,
+  RunResult,
+  RunWorkspaceFile,
+  TranscriptSubscription,
+  AgentConfig,
+  AssembleTraceResult,
+  ExportNode,
 } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import type { RequestError } from '@shared/session/runtimeRequest';
-import { readCompletedRunConversation } from '@transcript/completedRunArchive';
-import { assembleTrace } from '@transcript/traceAssembler';
-import type { AssembleTraceResult } from '@transcript/traceDocumentSchema';
+import { readCompletedRunConversation } from '@agent/storage/completedRunArchive';
+import { assembleTrace } from '@agent/storage/traceAssembler';
 
 import type { LocalSession } from './sessions.js';
 
@@ -86,8 +86,6 @@ export interface HeldRun {
 
 /** What `Session.deleteRuns` did with the runs it was asked for. */
 export interface RunDeletion {
-  /** How many listed runs the target named. */
-  readonly listed: number;
   readonly deleted: readonly RunId[];
   /** Held by a live owner: left as is. */
   readonly active: readonly RunId[];
@@ -127,13 +125,13 @@ const deleteRuns =
     Effect.gen(function* () {
       // The listing as the cold view folds it: each run it still holds.
       const { runs } = yield* Context.get(session, SessionViewAccess).read([]);
-      const listed = [...runs.keys()].filter(
+      const named = [...runs.keys()].filter(
         (runId) => target === 'all' || runId === target,
       );
       const deleted: RunId[] = [];
       const active: RunId[] = [];
       const failed: { runId: RunId; error: RequestError }[] = [];
-      for (const runId of listed) {
+      for (const runId of named) {
         const removal = yield* Effect.result(
           Context.get(session, SessionRequests)
             .request({ kind: 'run.delete', runId })
@@ -149,7 +147,7 @@ const deleteRuns =
           active.push(runId);
         else failed.push({ runId, error: removal.failure });
       }
-      return { listed: listed.length, deleted, active, failed };
+      return { deleted, active, failed };
     });
 
 /** The members of the {@link LocalSession} over `session` (its owners'

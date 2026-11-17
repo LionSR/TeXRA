@@ -2,7 +2,7 @@
 import { Cause, Effect, Result, Schema, type Scope } from 'effect';
 
 // Local imports
-import type { ITool, ToolGuard } from '@agent/core/tools/ToolTypes';
+import type { ITool, ToolGuard } from '@tools/core/ToolTypes';
 import { logFailure } from '@logger/effectLog';
 import {
   ToolError,

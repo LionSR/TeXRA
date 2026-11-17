@@ -4,7 +4,7 @@ import * as nodePath from 'node:path';
 import { Effect, FileSystem, Result } from 'effect';
 
 // Local imports - common
-import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { ToolContext } from '@tools/core/ToolTypes';
 
 // Local imports - shared schemas
 import { requireFileReadForEdit } from '@agent/runtime/RunCall';

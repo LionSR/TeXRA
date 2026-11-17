@@ -16,7 +16,7 @@ import {
   type ScriptOpResult,
 } from '@agent/codeSandbox/codeSandbox';
 import { RUN_LOG_MAX_LINES } from '@agent/codeSandbox/limits';
-import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { ToolContext } from '@tools/core/ToolTypes';
 import {
   noLaterTurn,
   inRunSession,

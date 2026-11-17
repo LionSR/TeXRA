@@ -35,7 +35,7 @@ export function EnabledModelsForm(
     <AsyncListForm<readonly CliEnabledModelRow[], string>
       title="/models"
       compactTitle="/models · Enable models that appear in pickers."
-      loadingLabel="Loading models..."
+      loadingLabel="Loading models…"
       load={() => listCliEnabledModelCatalog(roots)}
       items={(models) =>
         models.map((model) => ({
