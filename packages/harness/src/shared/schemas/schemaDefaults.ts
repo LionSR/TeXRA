@@ -10,8 +10,8 @@
  * caller. `value` is typed as the schema's encoded (or decoded) value, so a
  * default of the wrong shape is still a type error.
  *
- * The two variants mirror the two combinators and are **not** interchangeable
- * (root `AGENTS.md`, "Defaults are not interchangeable"):
+ * The two variants mirror the two combinators and are **not**
+ * interchangeable:
  *
  * - {@link decodingDefault} gives the default on the **encoded** side, before
  *   the field's decoding transformation runs.
