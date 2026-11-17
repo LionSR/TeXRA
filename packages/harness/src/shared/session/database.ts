@@ -261,8 +261,8 @@ export class Database extends Context.Service<
     readonly readRunRecord: (
       id: AggregateId,
     ) => Effect.Effect<RunRows | null, DatabaseReadFailed>;
-    readonly inputHistory: GlobalDatabase['Service']['inputHistory'];
-    readonly values: GlobalDatabase['Service']['values'];
+    /** The project's own current values. */
+    readonly values: CurrentValues;
     /** One aggregate's rows of `types` from `fromSeq` (through `toSeq`, a
      *  fork's cut), read through the `(aggregate, type, seq)` index in seq
      *  order. A row past `toSeq` is never read. */

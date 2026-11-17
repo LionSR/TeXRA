@@ -4,9 +4,10 @@
  * `input_history`. Each family's row is replaced in place in one
  * `BEGIN IMMEDIATE`, and decodes with its family's
  * schema where it is read; a row that no longer decodes fails that read.
- * `Database` hands it the connection's statements and transaction, and the
- * counter of value writes its change feed wakes on: this module moves it
- * for its own writes, the global store's poll for another process's.
+ * Its store hands it the connection's statements and transaction
+ * (`storeConnection.ts`), and the counter of value writes its change feed
+ * wakes on: this module moves it for its own writes, the global store's
+ * poll for another process's.
  */
 import {
   Clock,
@@ -24,13 +25,13 @@ import {
   InputHistoryRecordSchema,
   INPUT_HISTORY_LIMIT,
   type CurrentValues,
-  type Database,
+  type GlobalDatabase,
   type DatabaseAggregateClosed,
   type DatabaseReadFailed,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
 import type { ValueFamily } from '@shared/session/valueFamily';
-import type { SqlRow } from './rowCodec';
+import { UPSERT_KINDS, VALUE_KINDS_WRITTEN, type SqlRow } from './rowCodec';
 import type { SqlError } from 'effect/sql/SqlError';
 
 /** Replace one current value in place. The version values are written at
@@ -108,11 +109,8 @@ export function currentValues(store: {
   readonly afterCommit: SqlClient['afterCommit'];
   /** Moved once per committed value write. */
   readonly written: SubscriptionRef.SubscriptionRef<number>;
-  /** Record for the gate that a value was written at this build's version. */
-  readonly valueWritten: Effect.Effect<void, SqlError>;
-}): Pick<Database['Service'], 'values' | 'inputHistory'> {
-  const { exec, execOne, transact, query, afterCommit, written, valueWritten } =
-    store;
+}): GlobalDatabase['Service'] {
+  const { exec, execOne, transact, query, afterCommit, written } = store;
   const notifyWritten = afterCommit(
     SubscriptionRef.update(written, (count) => count + 1),
   );
@@ -181,7 +179,9 @@ export function currentValues(store: {
             ]);
             upserted = true;
           }
-          if (upserted) yield* valueWritten;
+          // Recorded for the gate: a value was written at this build's
+          // version.
+          if (upserted) yield* exec(UPSERT_KINDS, [VALUE_KINDS_WRITTEN]);
           if (upserted || deleted) yield* notifyWritten;
           return result;
         }),

@@ -86,7 +86,7 @@ its kind is its `type` column.
 ### 2.1 One file per storage root
 
 The store is one SQLite file named `texra.db` under the storage root
-(`controllers/session/databaseLayer.ts#SESSION_DATABASE_FILE`). An ephemeral
+(`controllers/session/storeConnection.ts#SESSION_DATABASE_FILE`). An ephemeral
 session runs the same schema in memory
 (`controllers/session/storeSchema.ts#IN_MEMORY_STORE`).
 
@@ -104,7 +104,7 @@ on (`controllers/session/storeSchema.ts#prepareStore`). Every transaction the
 store runs MUST begin with `BEGIN IMMEDIATE`, so it holds the write lock from its
 first statement and never upgrades a read lock: it is the SQLite client's own
 transaction, which begins that way on a writable connection
-(`controllers/session/databaseLayer.ts#sql.withTransaction`). File maintenance
+(`controllers/session/storeConnection.ts#sql.withTransaction`). File maintenance
 runs outside these: the one-time `VACUUM` at setup and page reclaim in
 autocommit `incremental_vacuum` steps, neither of which writes a row
 (`controllers/session/storeSchema.ts#incrementalVacuum`, `#reclaimFreePages`).
@@ -144,7 +144,7 @@ is one SQLite transaction followed by the publication of its rows, and it
 SHALL run where it is called as one uninterrupted turn: the driver is
 synchronous, the job awaits nothing, and the scheduler does not take the
 fiber off between its steps (`agent/runtime/sessionEventsLayer.ts#commit`,
-`controllers/session/databaseLayer.ts#PreventSchedulerYield`). So jobs run one
+`controllers/session/storeConnection.ts#PreventSchedulerYield`). So jobs run one
 at a time, the table's commit order is the order of the calls, and a job's
 appends commit together or not at all
 (`controllers/session/databaseLayer.ts#job`).
@@ -204,7 +204,7 @@ Each row kind carries its own version
 (`shared/schemas/rowVersions.ts#ROW_KINDS`). A row MUST be written at its kind's
 current version (`controllers/session/rowCodec.ts#prepareEventDraft`). The
 `stored_kind` table records the highest version each kind was written at
-(`controllers/session/databaseLayer.ts#UPSERT_KINDS`).
+(`controllers/session/rowCodec.ts#UPSERT_KINDS`).
 
 The store gate refuses a store that names a core kind this build lacks, or a
 known kind at a version above the one this build reads
@@ -713,7 +713,7 @@ There is no daemon and no claim. A project store is held by the one process
 that opened it, for its connection's life: the open takes
 `locking_mode = EXCLUSIVE` and the first write lock, and a second opener is
 refused at once with `STORE_HELD_MESSAGE`, never waited for
-(`controllers/session/databaseLayer.ts#STORE_HELD_MESSAGE`, `#exclusive`). The
+(`controllers/session/storeConnection.ts#STORE_HELD_MESSAGE`, `#exclusive`). The
 holder is the store's one writer and one reader; a cold listing of a held
 project fails the same way (`controllers/session/readSessionView.ts`). The
 global store is shared across processes and holds values alone; a change

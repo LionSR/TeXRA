@@ -75,10 +75,8 @@ import {
   TranscriptSubscriptions,
 } from '@controllers/session/sessionSources';
 import { deletionCollector } from '@controllers/session/deletionCleanup';
-import {
-  databaseLayer,
-  STORE_HELD_MESSAGE,
-} from '@controllers/session/databaseLayer';
+import { databaseLayer } from '@controllers/session/databaseLayer';
+import { STORE_HELD_MESSAGE } from '@controllers/session/storeConnection';
 import { runStateAppend } from '@shared/session/runHistory';
 import { SessionRowSchema } from '@shared/schemas';
 import { Database } from '@shared/session/database';
