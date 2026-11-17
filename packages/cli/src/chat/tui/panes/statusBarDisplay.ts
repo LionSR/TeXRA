@@ -18,7 +18,8 @@ import {
   UP_DOWN_KEYS,
 } from '@cli/tui/ui/KeyHints';
 import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
-import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
+import { COLOR_HINT } from '@cli/tui/ui/colors';
+import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
 import {
   firstFittingCandidate,
   textDisplayWidth,
@@ -35,7 +36,7 @@ import {
 } from '@ui/copy/contextGauge';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { usageRouteBadge } from '@ui/copy/modelAccess';
-import { runStatus } from '@ui/copy/runStatus';
+import { runStatus, type RunTone } from '@ui/copy/runStatus';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { AGENT_LIST, NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { RUN_GRANT_COPY, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
@@ -90,10 +91,7 @@ export function approvalQueueStatusKind(
 
 const STATUS_BAR_HORIZONTAL_PADDING = 2;
 
-type StatusBarColor =
-  | typeof COLOR_HINT
-  | typeof COLOR_WARNING
-  | typeof COLOR_ERROR;
+type StatusBarColor = (typeof TONE_PAINT)[RunTone]['color'];
 type CtrlCAction = 'exit' | 'stop' | 'stop root';
 
 /** Choose the quota owner, preferring the route of completed usage. */
@@ -121,7 +119,7 @@ interface StatusBarSegment {
   readonly color?: StatusBarColor;
   readonly dim?: boolean;
   /** Set on a badge: its background. */
-  readonly badgeColor?: typeof COLOR_ERROR | typeof COLOR_WARNING;
+  readonly badgeColor?: StatusBarColor;
   readonly priority: number;
   readonly policy: StatusBarFitPolicy;
   /** Shorter replacement text tried (in priority order) before any segment
@@ -240,13 +238,13 @@ function subscriptionQuotaSegment(
   )[0];
   if (!limitingWindow) return undefined;
   const remaining = Math.max(0, Math.round(limitingWindow.percentRemaining));
-  let color: StatusBarColor | undefined;
-  if (remaining === 0) color = COLOR_ERROR;
-  else if (remaining <= 20) color = COLOR_WARNING;
+  let tone: RunTone | undefined;
+  if (remaining === 0) tone = 'danger';
+  else if (remaining <= 20) tone = 'warning';
   return {
     text: `${snapshot.planName} ${remaining}% left`,
     compactText: `${remaining}% left`,
-    ...(color === undefined ? { dim: true } : { color }),
+    ...(tone === undefined ? { dim: true } : { color: TONE_PAINT[tone].color }),
     priority: STATUS_BAR_PRIORITY.subscriptionQuota,
     policy: 'drop',
   };
@@ -284,9 +282,7 @@ function formatUsage(
     compactText: `${roundedContextPercent(contextState.utilizationPercent)}%`,
     // A window with room left stays dim: the bar calls attention only once
     // it is getting full, in its tone's colour.
-    ...(tone === 'success'
-      ? { dim: true }
-      : { color: tone === 'danger' ? COLOR_ERROR : COLOR_WARNING }),
+    ...(tone === 'success' ? { dim: true } : { color: TONE_PAINT[tone].color }),
   };
 }
 
@@ -334,7 +330,7 @@ const STATUS_BAR_PRIORITY = {
   bypassBadge: 85,
   // A notice must not hide the only indication that an active run is alive.
   liveness: 88,
-  // Exiting drops queued follow-ups silently: the warning outlasts the rest.
+  // Exiting drops queued messages silently: the warning outlasts the rest.
   discardWarning: 95,
   // The diamond and the run's status word.
   chrome: 100,
@@ -519,28 +515,23 @@ function childListBindingsText(
   });
 }
 
+// A policy that stops asking earns a segment: blocking is a caution,
+// approving everything a danger. `ask`, the default, shows nothing.
+const APPROVAL_POLICY_TONE: Readonly<
+  Record<ApprovalPolicy, 'warning' | 'danger' | undefined>
+> = { ask: undefined, never: 'warning', yolo: 'danger' };
+
 function approvalPolicySegment(
   policy: ApprovalPolicy | undefined,
 ): StatusBarSegment | undefined {
-  let color: StatusBarColor;
-  switch (policy) {
-    case undefined:
-    case 'ask':
-      return undefined;
-    case 'never':
-      color = COLOR_WARNING;
-      break;
-    case 'yolo':
-      color = COLOR_ERROR;
-      break;
-    default:
-      return policy satisfies never;
-  }
+  if (policy === undefined) return undefined;
+  const tone = APPROVAL_POLICY_TONE[policy];
+  if (tone === undefined) return undefined;
   // The label the /approval picker and every other surface uses for this
   // policy — the bar is how users confirm their selection took effect.
   return {
     text: approvalPolicyLabel(policy),
-    color,
+    color: TONE_PAINT[tone].color,
     priority: STATUS_BAR_PRIORITY.approvalPolicy,
     policy: 'drop',
   };
@@ -577,10 +568,10 @@ export function statusBarRunTarget({
   };
 }
 
-// A grant's badge colour: agent work approves everything below it.
-const BYPASS_BADGE_COLOR: Readonly<
-  Record<ApprovalBypassKind, typeof COLOR_ERROR | typeof COLOR_WARNING>
-> = { toolEdit: COLOR_WARNING, bash: COLOR_WARNING, superYolo: COLOR_ERROR };
+// A grant's badge tone: agent work approves everything below it.
+const BYPASS_BADGE_TONE: Readonly<
+  Record<ApprovalBypassKind, 'warning' | 'danger'>
+> = { toolEdit: 'warning', bash: 'warning', superYolo: 'danger' };
 
 // Which text occupies the bindings row is a priority order, not a single
 // condition: a resumable exit confirmation always wins, then an actual
@@ -677,14 +668,14 @@ export function buildStatusBarDisplay(
   // announces auto-approval bypasses and quota exhaustion.
   if (run?.compactingActive === true) {
     left.push({
-      text: 'compacting...',
+      text: 'compacting…',
       dim: true,
       priority: STATUS_BAR_PRIORITY.compacting,
       policy: 'drop',
     });
   } else if (run?.thinkingActive === true) {
     left.push({
-      text: 'thinking...',
+      text: 'thinking…',
       dim: true,
       priority: STATUS_BAR_PRIORITY.thinking,
       policy: 'drop',
@@ -694,16 +685,16 @@ export function buildStatusBarDisplay(
   if (input.transientNotice) {
     left.push({
       text: input.transientNotice.text,
-      color: COLOR_WARNING,
+      color: TONE_PAINT.warning.color,
       priority: STATUS_BAR_PRIORITY.notice,
       policy: 'truncate',
     });
     if (input.transientNotice.kind === 'exit' && queuedCount > 0) {
-      // Exiting drops queued follow-ups silently — warn before the user
+      // Exiting drops queued messages silently — warn before the user
       // confirms with the second Ctrl-C.
       left.push({
-        text: `${formatResultCount(queuedCount, 'queued follow-up')} will be discarded`,
-        color: COLOR_ERROR,
+        text: `${formatResultCount(queuedCount, 'queued message')} will be discarded`,
+        color: TONE_PAINT.danger.color,
         priority: STATUS_BAR_PRIORITY.discardWarning,
         policy: 'truncate',
       });
@@ -718,7 +709,7 @@ export function buildStatusBarDisplay(
         input.ctrlCAction === 'stop root' && !active
           ? {
               text: 'root active',
-              color: COLOR_WARNING,
+              color: TONE_PAINT.warning.color,
               priority: STATUS_BAR_PRIORITY.rootActive,
               policy: 'drop',
             }
@@ -727,7 +718,7 @@ export function buildStatusBarDisplay(
           ? {
               text: 'subscription status unavailable',
               compactText: 'sub unknown',
-              color: COLOR_WARNING,
+              color: TONE_PAINT.warning.color,
               priority: STATUS_BAR_PRIORITY.accessMode,
               policy: 'drop',
             }
@@ -747,7 +738,7 @@ export function buildStatusBarDisplay(
         queuedCount > 0
           ? {
               text: `queued ${queuedCount}`,
-              color: COLOR_WARNING,
+              color: TONE_PAINT.warning.color,
               priority: STATUS_BAR_PRIORITY.queuedFollowUp,
               policy: 'drop',
             }
@@ -776,7 +767,7 @@ export function buildStatusBarDisplay(
                 input.approvalDepth,
                 input.approvalKind ?? 'approval',
               ),
-              color: COLOR_WARNING,
+              color: TONE_PAINT.warning.color,
               priority: STATUS_BAR_PRIORITY.approvalDepth,
               policy: 'drop',
             }
@@ -789,7 +780,7 @@ export function buildStatusBarDisplay(
     if (bypasses?.[kind] === true) {
       left.push({
         text: RUN_GRANT_COPY.label(kind),
-        badgeColor: BYPASS_BADGE_COLOR[kind],
+        badgeColor: TONE_PAINT[BYPASS_BADGE_TONE[kind]].color,
         priority: STATUS_BAR_PRIORITY.bypassBadge,
         policy: 'keep',
       });

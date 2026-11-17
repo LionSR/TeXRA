@@ -8,7 +8,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import { presentRunFailure, type Notices } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import type { Dialogs } from '@texra/hosts/uiHosts';
@@ -75,11 +74,16 @@ export const openWindowSetup = Effect.fn('openWindowSetup')(function* <E, R>(
     // as "No model is available".
     const model = yield* resolveSetupLaunchModel(ports.roots);
     if (model === null) return yield* ports.showConnectModel;
-    const config = yield* decodeLaunchConfig({
+    const config: AgentConfig = {
+      inputFiles: [],
+      contextFiles: [],
+      mediaFiles: [],
+      outputFiles: [],
       agent: SETUP_AGENT_NAME,
       model,
       instruction: SETUP_INSTRUCTION,
-    }).pipe(Effect.mapError(({ reason }) => new Error(reason)));
+      memories: [],
+    };
     const run = yield* ports.start(config).pipe(
       // The launcher has shown its rejection already.
       Effect.catch(() => Effect.succeed(undefined)),

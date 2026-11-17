@@ -71,11 +71,11 @@ import {
   LocalRuntimeSource,
   type TextChunkSource,
   type TranscriptSubscriptions,
-} from './sessionSources';
+} from '@shared/session/sessionSources';
 import {
   makeSessionViewAccess,
   type SessionViewService,
-} from './sessionViewService';
+} from '@shared/session/sessionViewService';
 import { sweepLeftoverRuns } from './sweepLeftoverRuns';
 
 const CHANNEL = 'sessionOwners';

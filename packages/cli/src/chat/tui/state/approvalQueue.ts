@@ -15,7 +15,6 @@ import { Cause, Effect, absurd } from 'effect';
 import {
   attentionOf,
   offeredGrant,
-  type AnsweredBy,
   type ApprovalBypassKind,
   type RequestPayload,
   type RequestKind,
@@ -111,27 +110,14 @@ export const pendingApprovalKindsByRun = computed(
     new Map(
       Array.from(
         Map.groupBy(attentionRequests.get(), (request) => request.runId),
-        ([runId, requests]) => [runId, requests.map((request) => request.kind)],
+        ([runId, requests]) => [
+          runId,
+          requests.map((request) => request.payload.kind),
+        ],
       ),
     ),
 );
 
-/** One request the user's attention is on: a session view fact, read once. */
-interface AttentionRequest {
-  readonly requestId: string;
-  readonly runId: RunId;
-  readonly kind: PendingRequestKind;
-  /** The fact's payload; a staged presentation replaces it when there is one. */
-  readonly payload: PendingApprovalFact['payload'];
-  /** Who answers it, as it opened. */
-  readonly answeredBy: AnsweredBy;
-}
-
-/**
- * What a host staged for one request beside the fact: the payload it
- * presents, a tool edit with its preview, which keeps the card off the
- * screen until the preview is read.
- */
 /** This surface's part of the chat's state, which a new conversation
  *  starts empty: the pending requests themselves are the session view's,
  *  closed by the runs they belong to. */
@@ -171,35 +157,29 @@ export function pruneToLive(
  * or re-notified by a promotion. The status bar, the title, and the modal
  * all read this one list.
  */
-export const attentionRequests = computed((): readonly AttentionRequest[] => {
-  const included = sessionRunIds.get();
-  const view = sessionView().get();
-  // The session view lists every kind, including a plugin's request (an
-  // inquiry) a persisted session carries from another host; this surface
-  // renders none of those, so the narrowing is a filter rather than an
-  // assertion. It renders only
-  // what this window can answer (`attentionOf`, the rule every host reads):
-  // not a stopped run's leftover (its modal would trap the keys `/resume`
-  // needs), nor a request on a run another process holds.
-  const requests = attentionOf(view)
-    .requests.filter(
+export const attentionRequests = computed(
+  (): readonly PendingApprovalFact[] => {
+    const included = sessionRunIds.get();
+    const view = sessionView().get();
+    // The session view lists every kind, including a plugin's request (an
+    // inquiry) a persisted session carries from another host; this surface
+    // renders none of those, so the narrowing is a filter rather than an
+    // assertion. It renders only
+    // what this window can answer (`attentionOf`, the rule every host reads):
+    // not a stopped run's leftover (its modal would trap the keys `/resume`
+    // needs), nor a request on a run another process holds.
+    const requests = attentionOf(view).requests.filter(
       (request): request is PendingApprovalFact =>
         included.has(request.runId) && request.payload.kind !== 'plugin',
-    )
-    .map((pending): AttentionRequest => ({
-      requestId: pending.requestId,
-      runId: pending.runId,
-      kind: pending.payload.kind,
-      payload: pending.payload,
-      answeredBy: pending.answeredBy,
-    }));
-  return [...requests.filter(leads), ...requests.filter((r) => !leads(r))];
-});
+    );
+    return [...requests.filter(leads), ...requests.filter((r) => !leads(r))];
+  },
+);
 
 /** The payload the modal renders: the staged one when there is one, else the
  *  fact's, for the kinds that need nothing staged. */
 function presentedPayload(
-  request: AttentionRequest,
+  request: PendingApprovalFact,
   staged: ReadonlyMap<string, TuiRequest>,
 ): TuiRequest | undefined {
   const entry = staged.get(request.requestId);
@@ -232,7 +212,7 @@ export const currentApproval = computed<PendingApproval | undefined>(() => {
   const staged = stagedPresentations.get();
   const done = decided.get();
   const candidates: Array<{
-    readonly request: AttentionRequest;
+    readonly request: PendingApprovalFact;
     readonly payload: TuiRequest;
   }> = [];
   for (const request of attentionRequests.get()) {
@@ -243,7 +223,7 @@ export const currentApproval = computed<PendingApproval | undefined>(() => {
     candidates.push({ request, payload });
   }
   const order = new Map([...presentedOrder].map((id, index) => [id, index]));
-  const orderOf = (request: AttentionRequest): number =>
+  const orderOf = (request: PendingApprovalFact): number =>
     order.get(request.requestId) ?? 0;
   candidates.sort(
     (a, b) =>
@@ -356,7 +336,7 @@ function issue(
  */
 function decideRequest(
   { requests, runtime, performHost }: DecisionSurface,
-  request: AttentionRequest,
+  request: PendingApprovalFact,
   payload: RequestPayload,
   decision: SurfaceDecision,
 ): void {

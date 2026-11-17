@@ -205,7 +205,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 
   <details>
     <summary>Does it work with Lean 4?</summary>
-    <p>Yes: Loogle search, proof state inspection, diagnostics, build and cache management. In VS Code, TeXRA routes through the Lean 4 extension; in the CLI and desktop app it spawns its own Lean server, so you only need elan (<code>lake</code> on PATH) and a Lake project.</p>
+    <p>Yes: Loogle search, proof state inspection, diagnostics, build and cache management. TeXRA spawns its own Lean server in every build (VS Code, desktop and CLI), so you only need elan (<code>lake</code> on PATH) and a Lake project.</p>
   </details>
 
   <details>

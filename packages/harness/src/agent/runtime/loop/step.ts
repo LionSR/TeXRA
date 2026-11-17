@@ -47,7 +47,7 @@ import stableStringify from 'safe-stable-stringify';
 
 import { stepInstructions } from '@agent/prompt/PromptBuilder';
 import { readDelegationTargets } from '@agent/runtime/delegation/delegationAvailability';
-import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { ITool } from '@tools/core/ToolTypes';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import type { PluginContext } from '@platform/processRuntime';

@@ -27,6 +27,7 @@ import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
+import { renderEmptyMessage } from '@ui/wa/emptyState';
 import {
   renderDisclosureToggle,
   renderSettingsSectionHeading,
@@ -121,31 +122,32 @@ export class ProviderKeyList extends LitElement {
   }
 
   private renderDetails(entry: ProviderKeyStatus): TemplateResult {
-    const endpointInput = entry.supportsCustomEndpoint
-      ? html`
-          <div class="provider-setting">
-            <label for=${`endpoint-${entry.provider}`}>Custom endpoint</label>
-            <wa-input
-              id=${`endpoint-${entry.provider}`}
-              class="endpoint-input form-control-fill"
-              name=${`endpoint-${entry.provider}`}
-              type="url"
-              inputmode="url"
-              autocomplete="url"
-              spellcheck="false"
-              dir="ltr"
-              .value=${entry.customEndpoint}
-              placeholder="Leave blank for default"
-              @change=${(e: Event) => {
-                if (!(e.target instanceof WaInput)) return;
-                const value = e.target.value?.trim() ?? '';
-                const endpoint = providerEndpointSetting(entry.provider);
-                if (endpoint) postStateSetting(endpoint.key, value);
-              }}
-            ></wa-input>
-          </div>
-        `
-      : nothing;
+    const endpointInput =
+      entry.customEndpoint !== null
+        ? html`
+            <div class="provider-setting">
+              <label for=${`endpoint-${entry.provider}`}>Custom endpoint</label>
+              <wa-input
+                id=${`endpoint-${entry.provider}`}
+                class="endpoint-input form-control-fill"
+                name=${`endpoint-${entry.provider}`}
+                type="url"
+                inputmode="url"
+                autocomplete="url"
+                spellcheck="false"
+                dir="ltr"
+                .value=${entry.customEndpoint}
+                placeholder="Leave blank for default"
+                @change=${(e: Event) => {
+                  if (!(e.target instanceof WaInput)) return;
+                  const value = e.target.value?.trim() ?? '';
+                  const endpoint = providerEndpointSetting(entry.provider);
+                  if (endpoint) postStateSetting(endpoint.key, value);
+                }}
+              ></wa-input>
+            </div>
+          `
+        : nothing;
 
     return html`
       <div class="settings-disclosure-content provider-settings">
@@ -251,7 +253,7 @@ export class ProviderKeyList extends LitElement {
         })}
         ${
           this.providerKeyStatuses === null
-            ? html`<em class="text-secondary">Loading key status…</em>`
+            ? renderEmptyMessage('Loading key status…')
             : html`<div
                 class="settings-disclosure-list"
                 role="list"

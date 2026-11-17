@@ -21,7 +21,7 @@ const groups = [
   {
     label: 'Build',
     icon: 'tools',
-    cmds: ['build', 'clean', 'fetch_cache', 'fetch_file_cache'],
+    cmds: ['build', 'clean', 'fetch_cache'],
   },
 ];
 </script>

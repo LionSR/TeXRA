@@ -55,13 +55,23 @@ export function readCliTeams(repoState: StateStore) {
   return Effect.map(workspaceTeams(repoState), launchableTeams);
 }
 
-/** Resolve the current display name for a persisted team identity. */
-export const readCliTeamName = Effect.fn('readCliTeamName')(function* (
+/** A launched team: its persisted id and the name shown for it. */
+export interface CliTeam {
+  readonly id: string;
+  readonly name: string;
+}
+
+/**
+ * The team a persisted team id names, shown by its preset's current name, or
+ * by the id when no preset carries it any more.
+ */
+export const readCliTeam = Effect.fn('readCliTeam')(function* (
   repoState: StateStore,
   teamId: string | undefined,
 ) {
   if (!teamId) return undefined;
-  return findTeamPreset(yield* readCliTeams(repoState), teamId)?.name;
+  const preset = findTeamPreset(yield* readCliTeams(repoState), teamId);
+  return { id: teamId, name: preset?.name ?? teamId } satisfies CliTeam;
 });
 
 function cliTeamAvailabilityParts(plan: CliTeamRunPlan): string[] {

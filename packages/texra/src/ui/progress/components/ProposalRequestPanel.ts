@@ -339,8 +339,10 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
           (file, i) =>
             html`${i > 0 ? ', ' : ''}<span
                 id="${idPrefix}-file-${i}"
-                class="workflow-proposal__file-name${
-                  clickable ? '' : ' workflow-proposal__file-name--readonly'
+                class="workflow-proposal__file-name ${
+                  clickable
+                    ? 'clickable-link'
+                    : 'workflow-proposal__file-name--readonly'
                 }"
                 data-file=${ifDefined(clickable ? file : undefined)}
                 role=${ifDefined(clickable ? 'button' : undefined)}

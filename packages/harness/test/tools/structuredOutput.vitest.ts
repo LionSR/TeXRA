@@ -4,10 +4,7 @@ import { it } from '@effect/vitest';
 import { Effect, Schema } from 'effect';
 
 // Local imports - tools
-import {
-  ToolContext,
-  type ToolContextShape,
-} from '@agent/core/tools/ToolTypes';
+import { ToolContext, type ToolContextShape } from '@tools/core/ToolTypes';
 import { RunCall, type RunCallShape } from '@agent/runtime/RunCall';
 import {
   buildTerminalTool,

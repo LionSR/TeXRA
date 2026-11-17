@@ -8,9 +8,9 @@ import { Predicate, Schema } from 'effect';
 import { JsonObjectSchema, type TurnRequest } from '@texra-ai/llm';
 
 // Local imports - agent runtime
-import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { ITool } from '@tools/core/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
-import { convertToolSchema, mapSubschemas } from '@agent/core/tools/toolSchema';
+import { convertToolSchema, mapSubschemas } from '@tools/core/toolSchema';
 import type { OfferedTool, ToolDefinition } from '@shared/schemas';
 import { sha256 } from '@utils/core/idHash';
 

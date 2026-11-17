@@ -49,7 +49,7 @@ In order of size. Each needs the decision named.
    `packages/extension/src/extension.ts`,
    `packages/desktop/src/main/desktopProjects.ts`,
    `packages/cli/src/runtime/platform/initPlatform.ts` and (without the
-   service state) `packages/cli/src/runtime/platform/cliService.ts`.
+   service state) `packages/texra/src/controllers/server/serve.ts`.
    `openProjectSession`
    (`packages/texra/src/controllers/session/openProjectSession.ts`) then
    decides "service or local" a second time from the same result. The guards

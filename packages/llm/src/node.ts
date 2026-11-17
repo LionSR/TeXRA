@@ -89,8 +89,6 @@ export interface Binding {
   readonly billing: BillingRoute;
   /** The output limit a turn takes unless it asks for less; null where the route takes none. */
   readonly maxOutputTokens: number | null;
-  /** Turns can run as background work (submit and observe). */
-  readonly background: boolean;
   readonly serviceTier: 'fast' | null;
   /** The route takes a tool choice naming one function. */
   readonly forcedToolChoice: boolean;
@@ -173,7 +171,6 @@ export const bindModel = Effect.fn('llm.bindModel')(function* (
     config,
     billing,
     maxOutputTokens: configuration.defaults.maxOutputTokens,
-    background: model.background !== undefined,
     serviceTier:
       configuration.protocol === 'openai-responses'
         ? configuration.defaults.serviceTier

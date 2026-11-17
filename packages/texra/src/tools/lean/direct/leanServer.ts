@@ -611,7 +611,7 @@ const make = ({
       }).pipe(onFileLane(absolute));
     });
 
-    const base = { workspaceRoot: root, mode: 'direct-lsp' } as const;
+    const base = { workspaceRoot: root };
     const info = Effect.flatMap(
       Deferred.poll(ended),
       (end): Effect.Effect<LeanServerInfo> =>
@@ -639,9 +639,10 @@ const make = ({
 
 function toLeanDiagnostic(d: LspDiagnostic): LeanDiagnostic {
   return {
-    // LSP `DiagnosticSeverity` (Error=1) matches the VS Code numeric severity
-    // (Error=0) shifted by one — translate to keep formatting consistent with
-    // the extension-mediated path. Default to Error if absent.
+    // LSP `DiagnosticSeverity` (Error=1) is the VS Code numeric severity
+    // (Error=0) that `GenericDiagnostic` uses, shifted by one: translate so
+    // Lean's diagnostics format as the LaTeX ones do. Default to Error if
+    // absent.
     severity: lspSeverityToVsCode(d.severity ?? 1),
     message: d.message,
     range: {

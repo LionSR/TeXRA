@@ -9,7 +9,6 @@ import {
   Deferred,
   Effect,
   Exit,
-  Layer,
   ManagedRuntime,
   Result,
   Schema,
@@ -20,14 +19,12 @@ import {
 // Local imports
 import { Sessions, WorkspaceRoots } from '@texra-ai/harness';
 import {
-  AppState,
   type ProcessRuntime,
   type ProcessServices,
   type GlobalValues,
   type ScopedFork,
   scopedFork,
   withProcessServices,
-  ToolAvailability,
 } from '@texra-ai/harness/host';
 import { withLogChannel, Settings } from '@texra-ai/harness/plugins';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
@@ -36,7 +33,7 @@ import {
   effectDiagnosticsLayer,
   setLogSink,
 } from '@texra-ai/harness/node';
-import { toErrorMessage, type StateKey } from '@texra-ai/harness/schemas';
+import type { StateKey } from '@texra-ai/harness/schemas';
 import { appSignalStream } from '@texra-ai/harness/host';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
@@ -64,7 +61,6 @@ import {
   subscriptionProvider,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
-import { createVscodeLeanLanguageServices } from '@frontend/lean/VscodeIntegration';
 import { makeInlineCriticism } from '@frontend/latex/inlineCriticism';
 import { makeInlineComments } from '@frontend/comments/inlineComments';
 import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
@@ -86,7 +82,6 @@ import {
 import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
-import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import type { GuiSession } from '@texra/controllers/session/openGuiWindow';
 
 // Local file imports
@@ -152,14 +147,9 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         name: 'vscode',
         inquiryPanel: true,
         inlineComments,
-        // Lean through the Lean 4 extension, not a direct `lake` pool.
-        lean: Layer.effect(
-          LeanLanguageServices,
-          Effect.map(AppState, createVscodeLeanLanguageServices),
-        ),
         // The editor's commands and terminal, for the setup tools.
         setup: vscodeSetupPlatform,
-        // The editor's extensions, for the setup tools and the Lean 4 probe.
+        // The editor's extensions, for the setup tools.
         editor: vscodeEditorIntegration,
         // `~/.texra`: one history across CLI, desktop and extension.
         storageRoot: defaultNodeStorageRoot(),
@@ -517,28 +507,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   );
   yield* registerFileDecorations(context, session);
 
-  // VS Code's event emitters don't await async listeners, so we funnel
-  // fire-and-forget async work through this program, which logs a failed
-  // refresh instead of letting it become an unhandled rejection. A change
-  // VS Code reports after deactivation probes nothing.
-  const refreshToolAvailabilityLogged = (trigger: string) =>
-    Effect.flatMap(ToolAvailability, (availability) =>
-      availability.refresh(roots),
-    ).pipe(
-      Effect.catchCause((cause) =>
-        Effect.logError(
-          `Tool availability refresh failed (${trigger}): ${toErrorMessage(cause)}`,
-        ).pipe(withLogChannel(EXTENSION_CHANNEL)),
-      ),
-    );
-
-  context.subscriptions.push(
-    // Lean/LaTeX extension installed or removed → re-probe so the Tools tab
-    // reflects the new state without the user clicking Re-check.
-    vscode.extensions.onDidChange(() => {
-      fork(refreshToolAvailabilityLogged('extension change'));
-    }),
-  );
   // Activation-lifetime listeners run in the activation scope, which ends
   // them when the extension deactivates.
   // Each prompt runs in its own child fiber, so a second rejection doesn't

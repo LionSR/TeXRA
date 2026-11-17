@@ -131,8 +131,8 @@ function sessionHeaderIdentityLine(
   const model = getModelLabel(meta.model || '-');
   const agent = meta.agent || 'chat';
   return joinFacts([
-    ...(meta.teamName
-      ? [`team: ${meta.teamName}`, `root: ${agent}`]
+    ...(meta.team
+      ? [`team: ${meta.team.name}`, `root: ${agent}`]
       : [`agent: ${agent}`]),
     `model: ${model}`,
   ]);

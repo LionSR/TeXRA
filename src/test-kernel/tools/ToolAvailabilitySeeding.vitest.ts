@@ -1,13 +1,18 @@
 // Third-party imports
 import { layer } from '@effect/vitest';
 import { Effect, Fiber } from 'effect';
-import { assert, expect } from 'vitest';
+import { assert, expect, vi } from 'vitest';
 
 // Local imports
-import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { CommandDirs } from '@texra-ai/harness/node';
+import {
+  nodeSpawnerLayer,
+  scriptedSpawnerLayer,
+} from '@test/support/childProcessTestLayer';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { wolfram } from '@texra/tools/wolframPlugin';
 import { texraPlugins } from '@texra/tools/registry';
+import { FoundTools } from '@texra/utils/system/binaryResolver';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { DISABLED_TOOLS_KEY } from '@shared/state/disabledTools';
 
@@ -58,6 +63,45 @@ layer(SessionGraph.hosted)('external tool availability probes', (it) => {
       yield* Fiber.interrupt(fiber);
 
       expect(spawner.killed).toEqual(spawner.calls);
+    }),
+  );
+
+  // Every host's Lean tools run over `lake` (a VS Code window's tasks run in
+  // the background service), so an editor with the Lean 4 extension
+  // installed does not make them runnable.
+  it.effect('reports Lean unavailable without lake, extension or not', () =>
+    Effect.gen(function* () {
+      const host = yield* FakeHost;
+      // No `lake` anywhere the lookup searches: no app directories, and a
+      // PATH of one directory that does not exist.
+      yield* Effect.acquireRelease(
+        Effect.sync(() => vi.stubEnv('PATH', host.path('no-tools'))),
+        () => Effect.sync(() => vi.unstubAllEnvs()),
+      );
+      const lean = texraPlugins({
+        name: 'vscode',
+        // An editor that reports every extension installed.
+        editor: {
+          installed: () => true,
+          install: () => Effect.void,
+          recommendedSettings: () => ({
+            outDir: true,
+            autoRevealExclude: true,
+          }),
+          applyRecommended: () => Effect.void,
+        },
+      }).find(({ id }) => id === 'lean4');
+      assert.exists(lean?.availability);
+
+      const result = yield* lean.availability.check(host.roots).pipe(
+        Effect.provide(nodeSpawnerLayer),
+        Effect.provideService(CommandDirs, () => []),
+        // A fresh cache: the process-wide one may hold a `lake` an earlier
+        // suite found on this machine.
+        Effect.provideService(FoundTools, FoundTools.defaultValue()),
+      );
+
+      expect(result.available).toBe(false);
     }),
   );
 });
