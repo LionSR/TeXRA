@@ -106,7 +106,7 @@ function readFile(
       .filter((name) => name !== '');
     // A proof's \leanok says the proof is formalized, not the statement.
     if (macro === undefined) {
-      if (statement !== null) statement.leanok = true;
+      if (statement !== null && proof === null) statement.leanok = true;
     } else if (macro === 'label') {
       if (statement !== null && statement.label === null)
         statement.label = names[0] ?? null;
