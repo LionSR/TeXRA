@@ -28,8 +28,9 @@ export const buildProfilePage = Effect.fn('buildProfilePage')(function* (
           provider,
           displayName: yield* getProviderDisplayName(stores, provider),
           status: origins[provider],
-          customEndpoint: endpoint ? yield* Settings.get(stores, endpoint) : '',
-          supportsCustomEndpoint: endpoint !== undefined,
+          customEndpoint: endpoint
+            ? yield* Settings.get(stores, endpoint)
+            : null,
           providerSettings: yield* providerSettings(stores, provider),
         };
       }),

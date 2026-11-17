@@ -30,12 +30,6 @@ import {
 
 const CHANNEL = 'AcceptedFileTarget';
 
-type AcceptedFileTarget = {
-  targetLocation: FileLocation;
-  targetFileName: string;
-  isNewFile: boolean;
-};
-
 /**
  * Build a FileLocation that sits beside {@link baseLocation} but uses
  * {@link targetFileName}, preserving the base's location kind (workspace,
@@ -81,16 +75,17 @@ function getAcceptAction(isNewFile: boolean, targetExists: boolean): string {
  * hosts surface identical wording.
  */
 function buildAcceptConfirmMessage(
-  target: AcceptedFileTarget,
+  targetPath: string,
   basePath: string,
   editedPath: string,
   targetExists: boolean,
 ): string {
-  const action = getAcceptAction(target.isNewFile, targetExists);
-  const extensionNote = target.isNewFile
+  const isNewFile = targetPath !== basePath;
+  const action = getAcceptAction(isNewFile, targetExists);
+  const extensionNote = isNewFile
     ? `Extensions differ (${path.extname(basePath).toLowerCase()} vs ${path.extname(editedPath).toLowerCase()}). `
     : '';
-  return `${extensionNote}This will ${action} '${target.targetFileName}' with content from '${path.basename(editedPath)}'. Are you sure?`;
+  return `${extensionNote}This will ${action} '${path.basename(targetPath)}' with content from '${path.basename(editedPath)}'. Are you sure?`;
 }
 
 /**
@@ -150,7 +145,7 @@ interface AcceptEditedFileReplacePorts<
 const commitAcceptedFile = Effect.fn('commitAcceptedFile')(function* <E>(
   baseLocation: FileLocation,
   editedLocation: FileLocation,
-  target: { targetLocation: FileLocation; targetFileName: string },
+  targetLocation: FileLocation,
   confirmedAgainst: string | undefined,
   targetExisted: boolean,
   ports: CommitAcceptedFilePorts<E>,
@@ -160,8 +155,8 @@ const commitAcceptedFile = Effect.fn('commitAcceptedFile')(function* <E>(
   FileSystem.FileSystem | AppSignals
 > {
   const fs = yield* FileSystem.FileSystem;
-  const { targetLocation, targetFileName } = target;
   const targetPath = targetLocation.absolutePath;
+  const targetFileName = path.basename(targetPath);
   const editedPath = editedLocation.absolutePath;
 
   const editedContent = (yield* fs.readFileString(editedPath)).replaceAll(
@@ -216,7 +211,7 @@ const commitAcceptedFile = Effect.fn('commitAcceptedFile')(function* <E>(
   }
 
   // A copy or sibling write (an extension mismatch resolving to a new file
-  // via getAcceptedFileTarget, or an explicit "save as copy") leaves the base
+  // via acceptedFileTarget, or an explicit "save as copy") leaves the base
   // untouched, so the diff comparing it against `editedPath` is still
   // accurate.
   const stale =
@@ -274,15 +269,15 @@ export const acceptEditedFileReplace = Effect.fn('acceptEditedFileReplace')(
   > {
     const fs = yield* FileSystem.FileSystem;
     const editedPath = editedLocation.absolutePath;
-    const target = getAcceptedFileTarget(baseLocation, editedPath);
-    const { targetLocation, isNewFile } = target;
+    const targetLocation = acceptedFileTarget(baseLocation, editedPath);
+    const isNewFile = targetLocation !== baseLocation;
     const targetPath = targetLocation.absolutePath;
     const confirmedAgainst = yield* contentOrMissing(fs, targetPath);
     const targetExists = isNewFile && confirmedAgainst !== undefined;
 
     const confirmed = yield* ports.confirm(
       buildAcceptConfirmMessage(
-        target,
+        targetPath,
         baseLocation.absolutePath,
         editedPath,
         targetExists,
@@ -292,7 +287,7 @@ export const acceptEditedFileReplace = Effect.fn('acceptEditedFileReplace')(
     return yield* commitAcceptedFile(
       baseLocation,
       editedLocation,
-      target,
+      targetLocation,
       confirmedAgainst,
       !isNewFile || targetExists,
       ports,
@@ -363,26 +358,16 @@ export const cleanupAcceptedWorkspaceDiffFiles = Effect.fn(
   return stale.filter((_, index) => removed[index]);
 });
 
-function getAcceptedFileTarget(
+/** Where accepted content goes: over the base when the extensions match,
+ *  otherwise a new file beside it named after the edited file. */
+function acceptedFileTarget(
   baseLocation: FileLocation,
   editedPath: string,
-): AcceptedFileTarget {
-  const basePath = baseLocation.absolutePath;
-  const baseExt = path.extname(basePath).toLowerCase();
-
-  if (baseExt === path.extname(editedPath).toLowerCase()) {
-    return {
-      targetLocation: baseLocation,
-      targetFileName: path.basename(basePath),
-      isNewFile: false,
-    };
-  }
-
-  const targetFileName = path.basename(editedPath);
-
-  return {
-    targetLocation: siblingLocation(baseLocation, targetFileName),
-    targetFileName,
-    isNewFile: true,
-  };
+): FileLocation {
+  const sameExtension =
+    path.extname(baseLocation.absolutePath).toLowerCase() ===
+    path.extname(editedPath).toLowerCase();
+  return sameExtension
+    ? baseLocation
+    : siblingLocation(baseLocation, path.basename(editedPath));
 }
