@@ -1,5 +1,4 @@
 import { Number as Num } from 'effect';
-import { summarizeEmbeddedSubagentFollowups } from '@texra-ai/harness/transcript';
 import {
   MATH_SPAN_PATTERNS,
   protectByPatterns,
@@ -418,13 +417,10 @@ function protectLiteralMathSyntax(content: string): {
 export function normalizeKnownHtmlForCliMarkdown(content: string): string {
   // Normalize once so the container-aware math shield and the later renderer
   // both slice the same LF string markdown-it will parse.
-  const summarized = summarizeEmbeddedSubagentFollowups(content).replaceAll(
-    /\r\n?/g,
-    '\n',
-  );
-  if (!KNOWN_HTML_TAG_RE.test(summarized)) return summarized;
+  const lfContent = content.replaceAll(/\r\n?/g, '\n');
+  if (!KNOWN_HTML_TAG_RE.test(lfContent)) return lfContent;
 
-  const literalDollarProtection = protectLiteralMathSyntax(summarized);
+  const literalDollarProtection = protectLiteralMathSyntax(lfContent);
   // First shield inline/display math so paragraph/div wrapper removal cannot
   // touch HTML-shaped LaTeX, then remove those wrappers and convert
   // environment-containing blockquotes, then shield environments.

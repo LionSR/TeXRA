@@ -27,6 +27,7 @@ import {
   makeTruncator,
   sections,
   wrapWebhookEvent as wrap,
+  type WebhookEvent,
 } from './formatUtils';
 import { targetPath, type RepoTarget } from './subscriptionTarget';
 import type {
@@ -47,7 +48,7 @@ function pullPath(repo: RepoTarget, number: number): string {
 export function formatRepoPROpened(
   repo: RepoTarget,
   pr: GhPullsListEntry,
-): string {
+): WebhookEvent {
   return wrap(
     `New pull request ${pullPath(repo, pr.number)} opened by ${authorOf(pr.user)}: "${truncate(pr.title)}"\n${pr.html_url}`,
   );
@@ -57,7 +58,7 @@ export function formatRepoPRClosed(
   repo: RepoTarget,
   prNumber: number,
   merged: boolean,
-): string {
+): WebhookEvent {
   return wrap(
     `${pullPath(repo, prNumber)} was ${merged ? 'merged' : 'closed'}.`,
   );
@@ -67,7 +68,7 @@ export function formatRepoIssueComment(
   repo: RepoTarget,
   number: number,
   c: GhIssueComment,
-): string {
+): WebhookEvent {
   return wrap(
     `New comment on ${targetPath({ ...repo, _tag: 'issue', number })} by ${authorOf(c.user)}: "${truncate(c.body)}"\n${c.html_url}`,
   );
@@ -77,7 +78,7 @@ export function formatRepoReviewComment(
   repo: RepoTarget,
   prNumber: number,
   c: GhReviewComment,
-): string {
+): WebhookEvent {
   return wrap(
     `New ${c.in_reply_to_id != null ? 'review reply' : 'inline review comment'} on ${pullPath(repo, prNumber)} by ${authorOf(c.user)} (${c.path}): "${truncate(c.body)}"\n${c.html_url}`,
   );
@@ -92,7 +93,7 @@ export function formatRepoMergeConflictDetected(
   repo: RepoTarget,
   prNumber: number,
   prevState: string | undefined,
-): string {
+): WebhookEvent {
   return wrap(
     `Merge conflict detected on ${pullPath(repo, prNumber)}: mergeable_state="dirty"${formatPreviousStateHint(prevState)}. ` +
       `Subscribe to ${pullPath(repo, prNumber)} for detailed events, or rebase / merge the base back in to resolve.`,
@@ -108,7 +109,7 @@ export function formatRepoMergeConflictDetected(
 export function formatRepoMergeConflictSummary(
   repo: RepoTarget,
   prNumbers: readonly number[],
-): string {
+): WebhookEvent {
   return wrap(
     sections(
       `Merge conflicts detected on ${prNumbers.length} PRs in ${targetPath(repo)} (mergeable_state="dirty"). Likely caused by a recent base-branch update: subscribe per-PR for detailed events, or rebase / merge the base back in.`,

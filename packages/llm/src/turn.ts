@@ -277,35 +277,6 @@ const IdentitySchema = Schema.Struct({
   returnedModel: Schema.NullOr(Schema.NonEmptyString),
 });
 
-/*
- * Provider words a turn's evidence keeps as the provider spelled them. The
- * wire schemas decode with these same sets, so a turn and the wire it came
- * from cannot disagree; they live here, in the contract both import, so the
- * browser-safe root entry carries no wire module.
- */
-/** A Responses API response's status. */
-export const ResponsesStatusSchema = Schema.Literals([
-  'queued',
-  'in_progress',
-  'completed',
-  'failed',
-  'cancelled',
-  'incomplete',
-]);
-/** Why a Responses API response is incomplete. */
-export const ResponsesIncompleteReasonSchema = Schema.Literals([
-  'max_output_tokens',
-  'content_filter',
-]);
-/** The category of an Anthropic Messages refusal. */
-export const AnthropicRefusalCategorySchema = Schema.Literals([
-  'cyber',
-  'bio',
-  'frontier_llm',
-  'reasoning_extraction',
-  'general_harms',
-]);
-
 /** A completed provider turn, not a completed agent execution. */
 export const TurnResultSchema = Schema.Struct({
   ...IdentitySchema.fields,
@@ -319,32 +290,6 @@ export const TurnResultSchema = Schema.Struct({
     'tool-calls',
     'refusal',
   ]),
-  finishEvidence: Schema.optional(
-    Schema.Union([
-      Schema.Struct({
-        kind: Schema.Literal('google-interactions'),
-        // Preserve Google's open status vocabulary verbatim.
-        status: Schema.NonEmptyString,
-        // Google currently reports no terminal reason.
-        terminalReason: Schema.NullOr(Schema.NonEmptyString),
-      }),
-      Schema.Struct({
-        kind: Schema.Literal('openai-responses'),
-        status: ResponsesStatusSchema,
-        // Present only on an incomplete response.
-        incompleteReason: Schema.NullOr(ResponsesIncompleteReasonSchema),
-      }),
-    ]),
-  ),
-  refusalEvidence: Schema.optional(
-    Schema.NullOr(
-      Schema.Struct({
-        kind: Schema.Literal('anthropic-refusal'),
-        category: Schema.NullOr(AnthropicRefusalCategorySchema),
-        explanation: Schema.NullOr(Schema.String),
-      }),
-    ),
-  ),
   /** Unknown counts remain unknown, including within a partial receipt. */
   usage: Schema.NullOr(TurnUsageSchema),
   continuation: Schema.optional(ContinuationSchema),
@@ -355,19 +300,12 @@ export const TurnResultSchema = Schema.Struct({
       result.content,
     );
     const usageKind = result.usage?.providerUsage?.kind;
-    const finishKind = result.finishEvidence?.kind;
     if (
       (result.providerResponseId === null &&
         (result.requestedOrigin.protocol !== 'google-interactions' ||
           result.continuation !== undefined)) ||
-      (result.refusalEvidence !== undefined &&
-        result.requestedOrigin.protocol !== 'anthropic-messages') ||
-      (result.refusalEvidence != null && result.finishReason !== 'refusal') ||
       (usageKind != null &&
-        result.requestedOrigin.protocol !==
-          PROVIDER_USAGE_PROTOCOL[usageKind]) ||
-      // Finish evidence is named by the protocol that wrote it.
-      (finishKind != null && result.requestedOrigin.protocol !== finishKind)
+        result.requestedOrigin.protocol !== PROVIDER_USAGE_PROTOCOL[usageKind])
     ) {
       issues.push(
         'Provider identity and evidence require their original protocol and outcome.',

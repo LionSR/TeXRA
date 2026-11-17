@@ -136,9 +136,6 @@ export {
   transcriptTimeline,
   type TimelineEntry,
 } from '@shared/transcript/transcriptTimeline';
-// Delivery envelopes inside assistant text, collapsed to their summaries,
-// and the entity decoding their bodies take.
-export { summarizeEmbeddedSubagentFollowups } from '@shared/subagentFollowup';
 // Run lists' order, and a compaction's status.
 export { compareByNewestCreationTime } from '@shared/runs/runOrdering';
 export type {

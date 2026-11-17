@@ -12,10 +12,6 @@ import { Effect, Schema, SchemaGetter, Struct } from 'effect';
 import { CountSchema } from '../protocol.js';
 import { ResponsesUsageSchema } from './openaiResponsesUsage.js';
 import { uploadedFileSchema } from './uploadCache.js';
-import {
-  ResponsesIncompleteReasonSchema,
-  ResponsesStatusSchema,
-} from '../turn.js';
 
 const ItemStatusSchema = Schema.Literals([
   'in_progress',
@@ -93,7 +89,14 @@ export const ResponseSchema = Schema.Struct({
   id: Schema.NonEmptyString,
   object: Schema.Literal('response'),
   model: Schema.NonEmptyString,
-  status: ResponsesStatusSchema,
+  status: Schema.Literals([
+    'queued',
+    'in_progress',
+    'completed',
+    'failed',
+    'cancelled',
+    'incomplete',
+  ]),
   output: Schema.Array(OutputItemSchema),
   usage: Schema.optional(Schema.NullOr(ResponsesUsageSchema)),
   error: Schema.optional(
@@ -104,7 +107,7 @@ export const ResponseSchema = Schema.Struct({
   incomplete_details: Schema.optional(
     Schema.NullOr(
       Schema.Struct({
-        reason: ResponsesIncompleteReasonSchema,
+        reason: Schema.Literals(['max_output_tokens', 'content_filter']),
       }),
     ),
   ),

@@ -17,6 +17,7 @@ import {
   sections,
   truncate as truncateBody,
   wrapWebhookEvent as wrap,
+  type WebhookEvent,
 } from './formatUtils';
 import { targetPath, type PullTarget } from './subscriptionTarget';
 import {
@@ -89,7 +90,7 @@ const annotationBlock = (a: GhCheckAnnotation): string => {
 export function formatReviewComment(
   pr: PullTarget,
   c: GhReviewComment,
-): string {
+): WebhookEvent {
   return wrap(
     sections(
       `${reviewCommentPrefix(c)} on ${targetPath(pr)} by ${authorOf(c.user)} at ${reviewCommentLocation(c)}:`,
@@ -99,7 +100,7 @@ export function formatReviewComment(
   );
 }
 
-export function formatReview(pr: PullTarget, r: GhReview): string {
+export function formatReview(pr: PullTarget, r: GhReview): WebhookEvent {
   const verb = REVIEW_VERBS[r.state] ?? FALLBACK_REVIEW_VERB;
   return wrap(
     sections(
@@ -110,7 +111,10 @@ export function formatReview(pr: PullTarget, r: GhReview): string {
   );
 }
 
-export function formatCheckFailure(pr: PullTarget, run: GhCheckRun): string {
+export function formatCheckFailure(
+  pr: PullTarget,
+  run: GhCheckRun,
+): WebhookEvent {
   return wrap(
     sections(
       'The following CI check failed on the PR. Investigate the failure and determine what action (if any) is needed.',
@@ -122,7 +126,7 @@ export function formatCheckFailure(pr: PullTarget, run: GhCheckRun): string {
 export function formatCheckFailureSummary(
   pr: PullTarget,
   runs: GhCheckRun[],
-): string {
+): WebhookEvent {
   return wrap(
     sections(
       `${runs.length} CI checks failed on the PR. Investigate the failures and determine what action (if any) is needed.`,
@@ -141,7 +145,7 @@ export function formatCheckAnnotations(
   pr: PullTarget,
   run: GhCheckRun,
   annotations: ReadonlyArray<GhCheckAnnotation>,
-): string {
+): WebhookEvent {
   const total = run.output?.annotations_count ?? annotations.length;
   const shown = annotations.slice(0, MAX_ANNOTATIONS_PER_RUN);
   const remaining = total - shown.length;
@@ -162,7 +166,7 @@ export function formatCIPassed(
   pr: PullTarget,
   sha: string,
   runs: GhCheckRun[],
-): string {
+): WebhookEvent {
   return wrap(
     `All ${runs.length} CI checks passed on ${targetPath(pr)} (head ${sha.slice(0, 7)}).`,
   );
@@ -173,7 +177,7 @@ export function formatCIStarted(
   sha: string,
   runs: GhCheckRun[],
   totalCount: number,
-): string {
+): WebhookEvent {
   const uniqueNames = [...new Set(runs.map((r) => r.name))].toSorted();
   const shownNames = uniqueNames.slice(0, MAX_CI_STARTED_CHECK_NAMES);
   const remainingNames = uniqueNames.length - shownNames.length;
@@ -196,7 +200,7 @@ export function formatCIComplete(
   pr: PullTarget,
   sha: string,
   runs: GhCheckRun[],
-): string {
+): WebhookEvent {
   const passed = runs.filter((r) => isPassingConclusion(r.conclusion)).length;
   const failed = runs.length - passed;
   return wrap(
@@ -204,7 +208,7 @@ export function formatCIComplete(
   );
 }
 
-export function formatPRClosed(pr: PullTarget, merged: boolean): string {
+export function formatPRClosed(pr: PullTarget, merged: boolean): WebhookEvent {
   return wrap(
     `${targetPath(pr)} was ${merged ? 'merged' : 'closed'}. Subscription ended.`,
   );
@@ -220,7 +224,7 @@ export function formatPRClosed(pr: PullTarget, merged: boolean): string {
 export function formatMergeConflictDetected(
   pr: PullTarget,
   prevState: string | undefined,
-): string {
+): WebhookEvent {
   return wrap(
     `Merge conflict detected on ${targetPath(pr)}: GitHub now reports mergeable_state="dirty"${formatPreviousStateHint(prevState)}. ` +
       `The PR head no longer cleanly merges into its base: rebase or merge the base back in to resolve.`,
@@ -236,7 +240,7 @@ export function formatMergeConflictDetected(
 export function formatMergeConflictResolved(
   pr: PullTarget,
   newState: string,
-): string {
+): WebhookEvent {
   return wrap(
     `Merge conflict on ${targetPath(pr)} is resolved: mergeable_state is now "${newState}".`,
   );
