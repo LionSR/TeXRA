@@ -75,6 +75,7 @@ import { type RunHistoryDraft, type RunState } from '@shared/session/runState';
 import {
   attemptOf,
   callResultOf,
+  resultsEndTurn,
   resumedAttempt,
   type ToolCallResult,
   type CallStatus,
@@ -149,12 +150,6 @@ interface Call {
 const scriptOf = (fact: Call['fact']): ScriptCallPayload | null =>
   'scriptCallId' in fact ? fact : null;
 
-interface DispatchOutcome {
-  readonly state: RunState;
-  /** A call's result asked to end the turn. */
-  readonly endTurn: boolean;
-}
-
 /** The record of `callId` under the dispatch's response, or null. */
 const recordOf = (dispatch: Dispatch, state: RunState, callId: string) =>
   state.pendingResponse?.responseId === dispatch.responseId
@@ -188,9 +183,6 @@ const withoutEffects = (
   const { edits: _edits, files: _files, ...rest } = result;
   return rest;
 };
-
-const endsTurn = (recorded: Pick<ToolCallResult, 'result'> | null): boolean =>
-  recorded?.result.status === 'executed' && recorded.result.endTurn === true;
 
 const dispositionOf = (
   result: Pick<ToolResult, 'status'>,
@@ -851,12 +843,10 @@ const deliver = Effect.fn('toolUse.deliver')(function* (dispatch: Dispatch) {
     );
   }
   // A handed-down call has no model to answer it, so it ends the turn; else
-  // one of the response's own calls (never a script's) may, by its result.
+  // a call's result may.
   const endTurn =
     latestState.handedDown !== null ||
-    latestPending.calls.some(({ callId }) =>
-      endsTurn(callResultOf(latestPending, callId)),
-    );
+    resultsEndTurn(latestPending, latestPending.calls);
   const bound = yield* ScopedRef.get(run.model);
   const media: { readonly path: string; readonly part: StoredMediaPart }[] = [];
   const results = latestPending.calls.map((fact, ordinal) => {
@@ -931,12 +921,11 @@ const deliver = Effect.fn('toolUse.deliver')(function* (dispatch: Dispatch) {
       }),
     );
   }
-  const delivered = yield* cell.append([
+  return yield* cell.append([
     appendRow(runId, [{ role: 'tool', results }], {
       sourceResponse: responseId,
     }),
   ]);
-  return { state: delivered, endTurn } satisfies DispatchOutcome;
 });
 
 /** Dispatch the pending response's unfinished calls under `step`'s tools,
@@ -944,12 +933,12 @@ const deliver = Effect.fn('toolUse.deliver')(function* (dispatch: Dispatch) {
 export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   cell: RunCell,
   step: StepTools,
-): Effect.fn.Return<DispatchOutcome, InvokeError, AgentRun | AgentRunServices> {
+): Effect.fn.Return<RunState, InvokeError, AgentRun | AgentRunServices> {
   const run = yield* AgentRun;
   const { logger } = run;
   const initial = yield* cell.current;
   const pending = initial.pendingResponse;
-  if (pending === null) return { state: initial, endTurn: false };
+  if (pending === null) return initial;
   const { responseId } = pending;
   // The calls answer the instruction the committed state records.
   const at = initial.input.instruction;
@@ -995,10 +984,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       (fact) => finish(fact, endedBefore),
       { discard: true },
     );
-    const state = yield* cell.current;
-    ended ||= group.some(({ callId }) =>
-      endsTurn(finishedCall(dispatch, state, callId)),
-    );
+    const current = (yield* cell.current).pendingResponse;
+    ended ||=
+      current?.responseId === dispatch.responseId &&
+      resultsEndTurn(current, group);
   }
   return yield* deliver(dispatch);
 });

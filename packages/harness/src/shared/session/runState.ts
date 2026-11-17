@@ -132,6 +132,10 @@ export type RunState = Omit<RunRowState, 'at'> &
      *  `lastTurn`, whose count measures a history it no longer holds. */
     readonly countStale: boolean;
     readonly pendingResponse: PendingResponse | null;
+    /** The results the latest delivering `append` carried end the turn: a
+     *  call asked to. Read at `results.ready`, where that append leaves
+     *  the loop. */
+    readonly resultsEndTurn: boolean;
     /** The `seq` of the latest `run.activate`, when a process last took
      *  the run: a decision after it (`RequestState.decidedAt`) is one
      *  nothing waiting has seen yet. Null before the first activation. */
@@ -202,6 +206,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   lastTurn: null,
   countStale: false,
   pendingResponse: null,
+  resultsEndTurn: false,
   activatedAt: null,
   steppedAt: null,
   usage: NO_USAGE,

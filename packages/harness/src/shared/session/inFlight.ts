@@ -422,3 +422,14 @@ export const callResultOf = (
   const status = pending.records[callId]?.status;
   return status?.kind === 'finished' ? status : null;
 };
+
+/** Whether one of `calls`, the response's own (never a script's), finished
+ *  with a result that ends the turn (`submit_output`'s). */
+export const resultsEndTurn = (
+  pending: PendingResponse,
+  calls: readonly Pick<DispatchFacts, 'callId'>[],
+): boolean =>
+  calls.some(({ callId }) => {
+    const result = callResultOf(pending, callId)?.result;
+    return result?.status === 'executed' && result.endTurn === true;
+  });

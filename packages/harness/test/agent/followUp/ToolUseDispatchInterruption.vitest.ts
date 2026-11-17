@@ -182,6 +182,92 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     );
 
     /**
+     * Failure mode: a process killed after the `append` that delivers a
+     * turn-ending call's result, and before the turn's end, resumes into
+     * one more billed model request.
+     */
+    it.effect(
+      "ends the turn a crash cut after a turn-ending call's results",
+      () =>
+        Effect.gen(function* () {
+          const session = yield* isolatedTestSession({ emit: () => {} });
+          const runId = generateRunId();
+          yield* publishTestRunStart(session, runId);
+          const tools: Record<string, ITool> = {
+            finish: {
+              call: () =>
+                Effect.succeed({
+                  status: 'executed' as const,
+                  output: 'submitted',
+                  endTurn: true,
+                }),
+              definition: { name: 'finish' },
+            },
+          };
+          // The store stops taking writes at the turn's end: the batch never
+          // commits, as in a process killed before it.
+          const real = Context.get(session, RunHistory);
+          const reachedEnd = yield* Deferred.make<void>();
+          const history: RunHistory['Service'] = {
+            ...real,
+            open: (run, opening) =>
+              Effect.map(real.open(run, opening), (cell) => ({
+                ...cell,
+                append: (rows, alongside) =>
+                  Array.isArray(rows) &&
+                  rows.some(
+                    (row) =>
+                      row.type === 'run.position' &&
+                      row.payload.at === 'turn.end',
+                  )
+                    ? Deferred.succeed(reachedEnd, undefined).pipe(
+                        Effect.andThen(Effect.never),
+                      )
+                    : cell.append(rows, alongside),
+              })),
+          };
+          const run = (resume: boolean, over: Partial<HarnessInit>) =>
+            Effect.flatMap(openToolUse({ resume }), (opened) =>
+              runToolUse({ resume }, opened),
+            ).pipe(
+              Effect.provide(
+                loopLayer({
+                  runId,
+                  session,
+                  tools,
+                  turns: [toolCallTurn([{ id: 'call-f', name: 'finish' }])],
+                  stopAfterCycle: true,
+                  ...over,
+                }),
+              ),
+            );
+          const fiber = yield* Effect.forkDetach(
+            run(false, { session: Context.add(session, RunHistory, history) }),
+          );
+          yield* Deferred.await(reachedEnd).pipe(
+            Effect.timeoutOrElse({
+              duration: '3 seconds',
+              orElse: () =>
+                Effect.die(new Error('The turn never reached its end.')),
+            }),
+          );
+          yield* Fiber.interrupt(fiber);
+
+          // A model asked again answers: one more billed request.
+          const resumed = yield* run(true, {
+            turns: [textTurn('Asked again.')],
+          });
+          expect(resumed.outcome).toBe('completed');
+          const ended = yield* real.load(runId).pipe(Effect.orDie);
+          expect(ended?.messages.map((message) => message.role)).toEqual([
+            'user',
+            'assistant',
+            'tool',
+          ]);
+        }),
+    );
+
+    /**
      * Failure mode: a replay-safe call a person stopped, or an app close cut,
      * three times is refused on its fourth start, though every resume is a
      * person's act.

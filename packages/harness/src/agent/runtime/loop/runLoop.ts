@@ -460,18 +460,20 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       ]);
     }
     for (;;) {
+      // Delivered results a call ended the turn with, live or as a resume
+      // finds them.
+      if (state.at === 'results.ready' && state.resultsEndTurn)
+        return completeTurn(state);
       state = yield* applyPendingModelSwitch(
         cell,
         yield* followUps.reader.controls,
       );
       if (state.pendingResponse !== null) {
         // Input queued meanwhile is delivered at the request that follows.
-        const dispatched = yield* dispatchPendingResponse(
+        state = yield* dispatchPendingResponse(
           cell,
           yield* dispatchTools(run, state),
         );
-        state = dispatched.state;
-        if (dispatched.endTurn) return completeTurn(state);
         continue;
       }
       // A handed-down call asks no model: delivered, the turn ends.
