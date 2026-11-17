@@ -1227,6 +1227,46 @@ describe('the session event table and its one publisher', () => {
     }).pipe(Effect.provide(Layer.merge(substrate(storage), nodePlatformLayer)));
   });
 
+  it.effect(
+    "a run's removal closes its child runs and names their files",
+    () => {
+      const storage = workspace();
+      const runId = Schema.decodeUnknownSync(RunIdSchema);
+      const [parent, child, grandchild, deletedFirst] = [
+        'a1a1a1',
+        'b2b2b2',
+        'c3c3c3',
+        'd4d4d4',
+      ].map((id) => runId(id));
+      const under = (id: RunId, over: RunId) =>
+        runStart(id, { parent: { id: over, call: null } });
+      return Effect.gen(function* () {
+        const store = yield* Database;
+        const [started] = yield* store.appendAll([
+          runStart(parent),
+          under(child, parent),
+          under(grandchild, child),
+          under(deletedFirst, parent),
+        ]);
+        if (started === undefined) throw new Error('nothing appended');
+        // A child deleted on its own first, its collection still pending.
+        const [childStart] = yield* store.aggregateState([deletedFirst]);
+        if (childStart?.startCommit == null) throw new Error('no child start');
+        yield* store.runRemoval(deletedFirst, childStart.startCommit);
+        const [removed] = yield* store.runRemoval(parent, started.commit);
+        expect(removed).toMatchObject({
+          type: 'run.removed',
+          runIds: [parent, child, grandchild, deletedFirst],
+        });
+        expect(
+          (yield* store.aggregateState([child, grandchild])).map(
+            (state) => state.closed,
+          ),
+        ).toEqual([true, true]);
+      }).pipe(Effect.provide(substrate(storage)));
+    },
+  );
+
   /**
    * Two OS processes on one file: a session holds its store exclusively,
    * so a second process opening it is refused at open with the message a

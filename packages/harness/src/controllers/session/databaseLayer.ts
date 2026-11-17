@@ -307,16 +307,16 @@ export const databaseLayer = (
         SELECT child.id FROM event_sequence child
         JOIN dependents parent ON child.parent_id = parent.id
       )`;
-      const dependentStates = `${dependents} ${STATE_COLUMNS}
-        WHERE s.id IN (SELECT id FROM dependents)`;
       const deletionRuns = `${dependents}
         SELECT logical_id AS runId FROM event_sequence
         WHERE id IN (SELECT id FROM dependents) AND kind = 'run'
         ORDER BY runId
       `;
+      // A dependent an earlier deletion closed keeps that marker, which
+      // still collects it.
       const closeDependents = `${dependents}
         UPDATE event_sequence SET closed_by = ?
-        WHERE id IN (SELECT id FROM dependents)
+        WHERE id IN (SELECT id FROM dependents) AND closed_by IS NULL
       `;
       // The display types in a commit range, with the priced rows' usage.
       const display = displayUnion(
@@ -586,13 +586,14 @@ export const databaseLayer = (
             [commit, aggregate],
           );
         }
-        if (edges.reparent !== undefined) {
-          // A plugin's aggregate hangs under its `parent` run, so that
-          // run's deletion collects it, or under none.
+        // A child run hangs under its parent run, and a plugin's aggregate
+        // under its `parent` run or none, so the parent's deletion closes
+        // and collects it.
+        const hangsUnder =
+          edges.reparent === undefined ? edges.parent : edges.reparent;
+        if (edges.reparent !== undefined || hangsUnder !== null) {
           const parentColumns =
-            edges.reparent === null
-              ? [null, null]
-              : aggregateColumns(edges.reparent);
+            hangsUnder === null ? [null, null] : aggregateColumns(hangsUnder);
           yield* exec(reparent, [...parentColumns, aggregate]);
         }
         if (edges.closes) yield* exec(closeDependents, [...columns, commit]);
@@ -720,12 +721,8 @@ export const databaseLayer = (
         runRemoval: (id, expectedStartCommit) =>
           transaction(
             Effect.gen(function* () {
-              const observed = yield* states(
-                dependentStates,
-                aggregateColumns(id),
-              );
-              const target = observed.find((row) => row.aggregateId === id);
-              if (target === undefined || observed.some((row) => row.closed))
+              const [target] = yield* readState([id]);
+              if (target === undefined || target.closed)
                 return yield* new DatabaseAggregateClosed({ aggregateId: id });
               if (target.startCommit !== expectedStartCommit)
                 return yield* new RunChanged({ aggregateId: id });
