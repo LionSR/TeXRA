@@ -38,15 +38,15 @@ import {
   Semaphore,
 } from 'effect';
 
-import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
-import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
+import { normalizeToolCallError } from '@tools/core/toolCallParsing';
+import { extractToolAttachments } from '@tools/core/toolAttachmentExtraction';
 import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
 import {
   ChildRuns,
   childRuns,
   sessionServices,
 } from '@agent/runtime/ToolServices';
-import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { ToolContext } from '@tools/core/ToolTypes';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import {
   RunCall,

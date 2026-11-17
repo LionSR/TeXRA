@@ -73,7 +73,7 @@ Left, in order:
    it commits (no return change, but a collector the call writes to, which
    `packages/harness/AGENTS.md` "Event channels and cards" argues against).
 2. With the fields off the result, `extractToolAttachments`
-   (`packages/harness/src/agent/core/tools/toolAttachmentExtraction.ts`) only
+   (`packages/harness/src/tools/core/toolAttachmentExtraction.ts`) only
    strips bytes.
 
 ## 3. `ChildRunDelivery`: a union on family and outcome

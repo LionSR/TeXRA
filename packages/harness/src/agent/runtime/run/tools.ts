@@ -8,7 +8,7 @@
  */
 import { Effect, Predicate, Result, Schema } from 'effect';
 import type { ResolvedTools } from '@agent/runtime/agentToolResolution';
-import { partitionDuplicateCalls } from '@agent/core/tools/toolCallParsing';
+import { partitionDuplicateCalls } from '@tools/core/toolCallParsing';
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { DispatchFacts } from '@shared/schemas';

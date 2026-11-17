@@ -16,7 +16,7 @@
  */
 import { Effect, Exit } from 'effect';
 
-import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { ToolContext } from '@tools/core/ToolTypes';
 import type { PlatformServices } from '@platform/processRuntime';
 import { commitEnd, endVerdict } from '@agent/runtime/AgentRunLifecycle';
 import { RunRegistry, type AgentRunServices } from '@agent/runtime/runRegistry';

@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
 import { inRunSession, type RunToolCall } from '@agent/runtime/RunCall';
-import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { ToolContext } from '@tools/core/ToolTypes';
 import {
   readToolEditContent,
   type RefusalDecision,

@@ -1,7 +1,7 @@
 // Third-party imports
 import { Effect, FileSystem, Schema } from 'effect';
 import { imageSize } from 'image-size';
-import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { ToolContext } from '@tools/core/ToolTypes';
 
 // Local imports
 import { ToolError, type ToolFileAttachment } from '@shared/schemas';

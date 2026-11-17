@@ -324,7 +324,7 @@ not `Schema.optional(S)`: OpenAI-compatible APIs (DeepSeek, Kimi, …) require
 optional fields to be nullable. Test with `== null`, coalesce with
 `?? undefined`. Numbers are `Schema.Finite` or `Schema.Int`, never
 `Schema.Number` (its JSON Schema admits `"NaN"` and drops checks). The model's
-JSON Schema comes from `packages/harness/src/agent/core/tools/toolSchema.ts`.
+JSON Schema comes from `packages/harness/src/tools/core/toolSchema.ts`.
 Decode with `{ errors: 'all' }`. Union branches and defaults:
 `packages/harness/AGENTS.md` "Tool input schemas".
 

@@ -1,7 +1,7 @@
 # Agent runtime modules
 
-`agent/runtime` is the host-agnostic execution layer over `agent/core`: it
-launches, tracks, resumes and reports on runs. Its top level is flat, so this
+`agent/runtime` is the host-agnostic execution layer over the run's rows
+(`shared/session/`) and the tool contract (`tools/core/`): it launches, tracks, resumes and reports on runs. Its top level is flat, so this
 is the module map by concern. Run-loop rules are in
 `packages/harness/AGENTS.md` "Run loop architecture". Each entry links its
 file, so `npm run gate:docs` fails when one moves.

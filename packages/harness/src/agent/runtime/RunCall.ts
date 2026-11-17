@@ -9,43 +9,26 @@
  * edit's read prerequisite from the run's facts (`RunCallShape.facts`), so
  * a resumed run counts the reads its rows record.
  */
-import {
-  Context,
-  type Deferred,
-  Effect,
-  Schema,
-  type Scope,
-  type ScopedRef,
-} from 'effect';
+import { Context, type Deferred, Effect, Schema } from 'effect';
 
 import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
+import {
+  type ToolResult,
+  type ToolDefinition,
+  type ToolResultPayload,
+} from '@shared/schemas';
+import type { RunFacts } from '@shared/session/runFacts';
 import {
   ToolContext,
   type ToolContextShape,
   type ToolRun,
-} from '@agent/core/tools/ToolTypes';
-import type { AgentTrace } from '@agent/trace/AgentTrace';
-import {
-  type PluginRequest,
-  type RunId,
-  type ToolResult,
-  type ToolDefinition,
-  type ToolResultPayload,
-  type AgentConfig,
-} from '@shared/schemas';
-import type { RunFacts } from '@shared/session/runFacts';
-import type { CellError } from '@shared/session/runHistory';
+} from '@tools/core/ToolTypes';
 import { errorResult } from '@tools/core/result';
 
 import type { InvokeError } from './ModelInvoker';
 import type { SessionServices } from './rootLaunch';
 import type { PluginToolServices } from './ToolServices';
-import type { BoundModel } from './modelAccess/ModelAccess';
-import type { AgentRunShape, ToolPolicy } from './run/AgentRun';
-import type {
-  RuntimePresentationEvent,
-  RuntimePresentationEventPayloads,
-} from './runtimePresentationEvents';
+import type { AgentRunShape } from './run/AgentRun';
 
 /** A resumed script issued another call at `seq` than its rows recorded. */
 export class ScriptDiverged extends Schema.TaggedError<ScriptDiverged>()(
@@ -136,57 +119,6 @@ export interface ScriptScope extends ScriptSource {
     key: Context.Key<unknown, Deferred.Deferred<A, E>>,
     make: Effect.Effect<A, E, R>,
   ) => Effect.Effect<A, E, R>;
-}
-
-/**
- * The rest of what a plugin's tool reads of its run (`ToolRun`, whose id
- * the core declares): exactly the fields the app's tools read. Its policy,
- * configuration (which holds its delegation scope), model, scope (a tool that
- * starts something the run should stop registers that stop there),
- * trace and stage (what a plugin's own stages nest under); and its run
- * files (its storage directory, with the snapshots and mirrors it
- * prepares). Never its
- * session: a plugin reaches the session's runs through `ChildRuns`, and
- * shows the person something through its call's `requests.present`.
- * What only the built-ins read is `BuiltinRun`.
- */
-declare module '../core/tools/ToolTypes.js' {
-  interface ToolRun {
-    readonly toolPolicy: ToolPolicy;
-    /** The parent this activation runs under (null for a root), and
-     *  whether the parent's call awaits it: with the policy, what
-     *  {@link noLaterTurn} reads. */
-    readonly entry: {
-      readonly parent: RunId | null;
-      readonly awaited: boolean;
-    };
-    readonly config: AgentConfig;
-    readonly model: ScopedRef.ScopedRef<BoundModel>;
-    readonly scope: Scope.Scope;
-    readonly logger: AgentTrace;
-  }
-  interface CallRequests {
-    /**
-     * Open a plugin's request the call does not wait on, under its
-     * `data.requestId`: its `request.opened` commits on the run's history
-     * through the one door every request opens at, with `data` stored as
-     * the JSON it writes, and the plugin's decision hook takes each answer
-     * when it lands (`Plugin.decision`). A person answers it. A failed
-     * commit is not proof that nothing landed: the run's rows decide.
-     */
-    readonly post: (
-      request: Omit<PluginRequest, 'blocksCaller' | 'data'> & {
-        readonly blocksCaller: false;
-        readonly data: Pick<PluginRequest['data'], 'requestId' | 'runId'>;
-      },
-    ) => Effect.Effect<void, CellError>;
-    /** Show the person something on the session's host (a file opened
-     *  beside what they are looking at, a notice), answered by nothing. */
-    readonly present: <K extends RuntimePresentationEvent>(
-      event: K,
-      payload: RuntimePresentationEventPayloads[K],
-    ) => Effect.Effect<void>;
-  }
 }
 
 /** The run as the harness's built-in tools read it: what a plugin's tool
