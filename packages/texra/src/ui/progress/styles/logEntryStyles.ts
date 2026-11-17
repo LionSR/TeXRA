@@ -102,21 +102,6 @@ export const logEntryStyles = css`
     color: var(--tone-color);
   }
 
-  .file-link {
-    color: var(--color-text-link);
-    cursor: pointer;
-  }
-
-  .file-link:hover {
-    text-decoration: underline;
-  }
-
-  /* Radius only — the ring itself comes from focusRingStyles, which an
-     outline here would narrow to 1px. */
-  .file-link:focus-visible {
-    border-radius: var(--border-radius-small);
-  }
-
   .memory-path {
     color: var(--color-text-secondary);
   }
