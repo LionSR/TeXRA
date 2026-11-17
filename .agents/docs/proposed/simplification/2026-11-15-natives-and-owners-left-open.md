@@ -79,10 +79,6 @@ dedup, chunked `Promise.all`) found none left beyond the above.
 - **`isFields` in `packages/llm/src/api/failureReply.ts` as
   `Predicate.isObjectOrArray`**: the same test, but it narrows to `object`,
   not the local `Fields` record its eleven callers index.
-- **`raisedBy`'s two copies** (`utils/errors/errorMessage.ts`,
-  `logger/formatLogData.ts`): `errorMessage.ts` is browser-safe and the
-  logger is the bottom layer, so neither can import the other.
-
 - **A shared positive-integer schema.** `Schema.Int.check(Schema.isGreaterThan(0))`
   appears about forty times across `packages/llm`, the harness, the app and
   the desktop. One owner would be a new export crossing three packages (llm
