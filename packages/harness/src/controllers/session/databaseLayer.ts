@@ -301,22 +301,30 @@ export const databaseLayer = (
         Effect.map(commitFromRows),
       );
       yield* gate.pipe(mapDatabaseFailure(openFailed));
+      // An aggregate and its open descendants. A descendant an earlier
+      // deletion closed belongs to that deletion's marker alone, which
+      // names its files and collects it.
       const dependents = `WITH RECURSIVE dependents(id) AS (
         SELECT id FROM event_sequence WHERE kind = ? AND logical_id = ?
         UNION ALL
         SELECT child.id FROM event_sequence child
         JOIN dependents parent ON child.parent_id = parent.id
+        WHERE child.closed_by IS NULL
       )`;
       const deletionRuns = `${dependents}
         SELECT logical_id AS runId FROM event_sequence
         WHERE id IN (SELECT id FROM dependents) AND kind = 'run'
         ORDER BY runId
       `;
-      // A dependent an earlier deletion closed keeps that marker, which
-      // still collects it.
+      // Taken out from under the closing tree first, so the tree's
+      // collection does not cascade into an earlier marker's aggregate.
+      const detachClosed = `${dependents}
+        UPDATE event_sequence SET parent_id = NULL
+        WHERE closed_by IS NOT NULL AND parent_id IN (SELECT id FROM dependents)
+      `;
       const closeDependents = `${dependents}
         UPDATE event_sequence SET closed_by = ?
-        WHERE id IN (SELECT id FROM dependents) AND closed_by IS NULL
+        WHERE id IN (SELECT id FROM dependents)
       `;
       // The display types in a commit range, with the priced rows' usage.
       const display = displayUnion(
@@ -596,7 +604,10 @@ export const databaseLayer = (
             hangsUnder === null ? [null, null] : aggregateColumns(hangsUnder);
           yield* exec(reparent, [...parentColumns, aggregate]);
         }
-        if (edges.closes) yield* exec(closeDependents, [...columns, commit]);
+        if (edges.closes) {
+          yield* exec(detachClosed, columns);
+          yield* exec(closeDependents, [...columns, commit]);
+        }
         return {
           ...committedDraft,
           seq,

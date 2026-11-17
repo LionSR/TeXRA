@@ -1252,17 +1252,37 @@ describe('the session event table and its one publisher', () => {
         // A child deleted on its own first, its collection still pending.
         const [childStart] = yield* store.aggregateState([deletedFirst]);
         if (childStart?.startCommit == null) throw new Error('no child start');
-        yield* store.runRemoval(deletedFirst, childStart.startCommit);
+        const [childRemoved] = yield* store.runRemoval(
+          deletedFirst,
+          childStart.startCommit,
+        );
         const [removed] = yield* store.runRemoval(parent, started.commit);
-        expect(removed).toMatchObject({
-          type: 'run.removed',
-          runIds: [parent, child, grandchild, deletedFirst],
-        });
+        // Each marker names the files it alone cleans up.
+        expect([childRemoved, removed]).toMatchObject([
+          { type: 'run.removed', runIds: [deletedFirst] },
+          { type: 'run.removed', runIds: [parent, child, grandchild] },
+        ]);
         expect(
           (yield* store.aggregateState([child, grandchild])).map(
             (state) => state.closed,
           ),
         ).toEqual([true, true]);
+        if (
+          childRemoved?.type !== 'run.removed' ||
+          removed?.type !== 'run.removed'
+        )
+          throw new Error('no deletion markers');
+        // The parent's collection first leaves the earlier marker's run to
+        // that marker, which still collects it.
+        const cleaned: (readonly RunId[])[] = [];
+        const record = (ids: readonly RunId[]) =>
+          Effect.sync(() => void cleaned.push(ids));
+        yield* store.deletions.collect(removed, record);
+        yield* store.deletions.collect(childRemoved, record);
+        expect(cleaned).toEqual([[parent, child, grandchild], [deletedFirst]]);
+        expect(
+          yield* store.aggregateState([parent, child, deletedFirst]),
+        ).toEqual([]);
       }).pipe(Effect.provide(substrate(storage)));
     },
   );
