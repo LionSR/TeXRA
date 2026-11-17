@@ -399,6 +399,8 @@ export function createChatSessionController(
     const result = yield* Effect.cached(run.result);
     yield* Effect.raceFirst(shownHeld(run.runId), Effect.ignore(result));
     session.endLaunch(launched, { runId: run.runId });
+    // The cached result is handed back as an effect for the caller to await.
+    // @effect-diagnostics-next-line returnEffectInGen:off
     return result;
   });
 
