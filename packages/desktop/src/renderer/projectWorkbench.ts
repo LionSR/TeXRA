@@ -56,39 +56,26 @@ export function createProjectWorkbench(options: {
   const { session, surfaces } = options;
   const surface = surfaces.get(session);
   if (!surface) throw new Error(`No surface for project ${session}.`);
-  const layout = restoredLayout(session, surface.surface$.get().workbench);
-  surfaces.act(session, {
-    kind: 'workbench',
-    layout: {
-      ...layout,
-      workbenchTabs: layout.workbenchTabs.map((tab) => ({
-        ...tab,
-        dirty: false,
-      })),
-    },
-  });
+  // `Surface.workbench` is the persisted blob, untyped because hosts without
+  // a workbench share the record. It is decoded once, here, and from then on
+  // this workbench holds the layout and is the blob's one writer.
+  const restored = restoredLayout(session, surface.surface$.get().workbench);
+  let state: DesktopShellState = {
+    ...restored,
+    workbenchTabs: restored.workbenchTabs.map((tab) => ({
+      ...tab,
+      dirty: false,
+    })),
+  };
+  surfaces.act(session, { kind: 'workbench', layout: state });
 
   let disposed = false;
-  // `Surface.workbench` is untyped storage (`Record<string, unknown> | null`)
-  // shared with hosts that have no workbench at all; validate on every read
-  // rather than trusting a cast, but skip the reparse when the raw value is
-  // still the one `updateState` last wrote.
-  let cachedRaw: unknown = surface.surface$.get().workbench;
-  let cachedState: DesktopShellState = Schema.decodeUnknownSync(
-    DesktopShellStateSchema,
-  )(cachedRaw);
-  const getState = (): DesktopShellState => {
-    const raw = surface.surface$.get().workbench;
-    if (raw !== cachedRaw) {
-      cachedState = Schema.decodeUnknownSync(DesktopShellStateSchema)(raw);
-      cachedRaw = raw;
-    }
-    return cachedState;
-  };
+  const getState = (): DesktopShellState => state;
   function updateState(next: DesktopShellState): void {
     if (disposed) return;
-    const previous = getState();
+    const previous = state;
     if (previous === next) return;
+    state = next;
     surfaces.act(session, { kind: 'workbench', layout: next });
     options.onLayoutChanged(session, previous, next);
   }

@@ -299,7 +299,6 @@ export const TexraRpcs = RpcGroup.make(
       target: Schema.Union([RunIdSchema, Schema.Literal('all')]),
     },
     success: Schema.Struct({
-      listed: Schema.Int,
       deleted: Schema.Array(RunIdSchema),
       active: Schema.Array(RunIdSchema),
       failed: Schema.Array(

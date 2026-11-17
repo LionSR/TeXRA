@@ -43,7 +43,7 @@ import { cliPlatform } from '@cli/runtime/platform/initPlatform';
 import { selectCliRunnableModel } from '@cli/runtime/models/modelAccess';
 import { silentLogSink, writeTextStderr } from '@cli/runtime/platform/logSinks';
 import { setLogSink } from '@texra-ai/harness/node';
-import { readCliTeamName } from '@cli/runtime/cliTeams';
+import { readCliTeam } from '@cli/runtime/cliTeams';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import {
   acquireTuiTerminal,
@@ -235,11 +235,7 @@ export async function runChat(
           context.requestedApprovalPolicy,
           projectApprovalPolicy(services.roots.config),
         ),
-        teamName: yield* readCliTeamName(
-          services.roots.repoState,
-          initialPresetId,
-        ),
-        cliTeamId: initialPresetId,
+        team: yield* readCliTeam(services.roots.repoState, initialPresetId),
         delegationAgentScope:
           initialResume?.config.delegationAgentScope ?? undefined,
         version: context.version,

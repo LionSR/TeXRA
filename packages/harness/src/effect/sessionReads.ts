@@ -86,8 +86,6 @@ export interface HeldRun {
 
 /** What `Session.deleteRuns` did with the runs it was asked for. */
 export interface RunDeletion {
-  /** How many listed runs the target named. */
-  readonly listed: number;
   readonly deleted: readonly RunId[];
   /** Held by a live owner: left as is. */
   readonly active: readonly RunId[];
@@ -127,13 +125,13 @@ const deleteRuns =
     Effect.gen(function* () {
       // The listing as the cold view folds it: each run it still holds.
       const { runs } = yield* Context.get(session, SessionViewAccess).read([]);
-      const listed = [...runs.keys()].filter(
+      const named = [...runs.keys()].filter(
         (runId) => target === 'all' || runId === target,
       );
       const deleted: RunId[] = [];
       const active: RunId[] = [];
       const failed: { runId: RunId; error: RequestError }[] = [];
-      for (const runId of listed) {
+      for (const runId of named) {
         const removal = yield* Effect.result(
           Context.get(session, SessionRequests)
             .request({ kind: 'run.delete', runId })
@@ -149,7 +147,7 @@ const deleteRuns =
           active.push(runId);
         else failed.push({ runId, error: removal.failure });
       }
-      return { listed: listed.length, deleted, active, failed };
+      return { deleted, active, failed };
     });
 
 /** The members of the {@link LocalSession} over `session` (its owners'
