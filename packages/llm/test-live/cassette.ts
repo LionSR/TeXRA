@@ -140,18 +140,28 @@ function scrubber() {
     return synthetic;
   };
 
-  /** A fragment of streamed tool arguments: whole once per call, then empty. */
-  const fragment = (owner: Record<string, unknown>): string => {
-    const call = String(owner.index ?? owner.output_index ?? owner.item_id);
+  /**
+   * A fragment of one call's streamed tool arguments: the whole synthetic
+   * arguments once per call, then empty, so the fragments still join into
+   * JSON. `call` is the index the event carrying the fragment names.
+   */
+  const fragment = (call: string): string => {
     if (argumentStreams.has(call)) return '';
     argumentStreams.add(call);
     return JSON.stringify(SYNTHETIC_ARGUMENTS);
+  };
+
+  /** Whether `owner` is a streamed piece of a call's arguments. */
+  const argumentsDelta = (owner: Record<string, unknown>): boolean => {
+    const type = String(owner.type);
+    return type.includes('arguments') && type.includes('delta');
   };
 
   const value = (
     key: string,
     item: unknown,
     owner: Record<string, unknown>,
+    call: string,
   ): unknown => {
     // An empty value opens a block the deltas fill; it says nothing.
     if (typeof item === 'string' && item !== '') {
@@ -159,12 +169,15 @@ function scrubber() {
       if (MODEL_TEXT.has(key)) return 'Synthetic text.';
       if (OPAQUE.has(key)) return 'synthetic-opaque';
       if (ACCOUNT.has(key)) return 'synthetic-account';
-      if (key === 'arguments') return JSON.stringify(SYNTHETIC_ARGUMENTS);
-      if (key === 'partial_json') return fragment(owner);
-      if (key === 'delta')
-        return String(owner.type).includes('arguments')
-          ? fragment(owner)
-          : 'Synthetic text.';
+      // Anthropic's `partial_json`, OpenAI's arguments `delta` and Google's
+      // `arguments_delta` carry a fragment; a whole `arguments` is complete.
+      if (key === 'partial_json') return fragment(call);
+      if (key === 'delta' || key === 'arguments')
+        return argumentsDelta(owner)
+          ? fragment(call)
+          : key === 'delta'
+            ? 'Synthetic text.'
+            : JSON.stringify(SYNTHETIC_ARGUMENTS);
       return item;
     }
     // Google and a non-streamed Anthropic call carry arguments as an object.
@@ -174,43 +187,67 @@ function scrubber() {
       Object.keys(item).length > 0
     )
       return SYNTHETIC_ARGUMENTS;
-    return walk(item);
+    return walk(item, call);
   };
 
-  const walk = (item: unknown): unknown => {
-    if (Array.isArray(item)) return item.map(walk);
+  /** `item` scrubbed; `call` is the nearest index an enclosing event named. */
+  const walk = (item: unknown, call = ''): unknown => {
+    if (Array.isArray(item)) return item.map((inner) => walk(inner, call));
     if (!isRecord(item)) return item;
+    const own = item.index ?? item.output_index ?? item.item_id;
+    const here = own === undefined ? call : String(own);
     return Object.fromEntries(
       Object.entries(item).map(([key, inner]) => [
         key,
-        value(key, inner, item),
+        value(key, inner, item, here),
       ]),
     );
   };
 
-  const json = (text: string): string | undefined => {
+  const parsed = (text: string): { readonly value: unknown } | undefined => {
     try {
-      return JSON.stringify(walk(JSON.parse(text)));
+      return { value: JSON.parse(text) };
     } catch {
+      // Not JSON: the caller decides whether that is a stream or a refusal.
       return undefined;
     }
   };
 
+  const unscrubbable = (what: string) =>
+    new Error(
+      `A recorded body holds ${what}, which cannot be scrubbed; it is not written.`,
+    );
+
   return {
-    /** A response body: JSON, or server-sent events whose data is JSON. */
+    /**
+     * A response body: JSON, or server-sent events whose data is JSON. A
+     * stream cut off mid-event loses that event; any other payload that is
+     * not JSON is refused, never kept as it arrived.
+     */
     body(text: string): string {
       // A call's fragments all arrive in one response.
       argumentStreams.clear();
-      const whole = json(text);
-      if (whole !== undefined) return whole;
-      return text
-        .split('\n')
-        .map((line) => {
-          if (!line.startsWith('data:')) return line;
-          const scrubbed = json(line.slice('data:'.length).trim());
-          return scrubbed === undefined ? line : `data: ${scrubbed}`;
-        })
-        .join('\n');
+      if (text === '') return text;
+      const whole = parsed(text);
+      if (whole !== undefined) return JSON.stringify(walk(whole.value));
+      const events = text.split(/\n\n/);
+      // The text after the last blank line is an event the cut interrupted.
+      const complete = events.slice(0, -1);
+      if (complete.length === 0) throw unscrubbable('neither JSON nor events');
+      const scrubbedEvents = complete.map((event) =>
+        event
+          .split('\n')
+          .map((line) => {
+            if (!line.startsWith('data:')) return line;
+            const payload = line.slice('data:'.length).trim();
+            if (payload === '[DONE]') return line;
+            const data = parsed(payload);
+            if (data === undefined) throw unscrubbable('a data line not JSON');
+            return `data: ${JSON.stringify(walk(data.value))}`;
+          })
+          .join('\n'),
+      );
+      return `${scrubbedEvents.join('\n\n')}\n\n`;
     },
     /** A request path: the ids it names, renumbered; no key parameter. */
     path(path: string): string {
