@@ -102,7 +102,7 @@ The `lean_loogle` tool queries [Loogle](https://loogle.lean-lang.org/) to find l
 The diagnostics for this file look stale. Restart the Lean server for it.
 ```
 
-The `lean_file` tool runs file-scoped commands: `restart` (reload the language server for one file) and `refresh_dependencies` (a lighter refresh). Use these when results look out of date.
+The `lean_file` tool restarts the language server's state for one file: it closes the file and opens it again, so Lean re-elaborates it and re-reads its imports. Use it when results look out of date.
 
 ### <wa-icon library="texra" name="tools"></wa-icon> Manage the project
 
@@ -114,7 +114,7 @@ The `lean_project` tool runs project-wide commands without a target file, groupe
 
 <LeanProjectCommands />
 
-<p class="hero-caption">Both groups run in every build. <code>fetch_cache</code> pulls the whole project; <code>fetch_file_cache</code> covers only the current file's imports, which is faster.</p>
+<p class="hero-caption">Both groups run in every build. <code>fetch_cache</code> pulls the Mathlib build cache for the whole project.</p>
 
 ::: tip Toolchain setup
 In VS Code, the setup agent can run the Lean 4 extension's installers (install or update elan, install dependencies, select the default toolchain). In any build, you can manage your toolchain with `elan` and `lake` directly (for example `elan self update`, `elan toolchain install`, or `lake update`). Follow the [Lean install guide](https://leanprover-community.github.io/install/).
@@ -132,7 +132,7 @@ In VS Code, the setup agent can run the Lean 4 extension's installers (install o
 
 **Lean shows "Needs setup" in VS Code with the Lean 4 extension installed**: the extension is not what TeXRA's tools run on. Make sure `lake --version` works in a fresh login shell. The TeXRA service reads its `PATH` from your login shell when it starts, so after installing elan run `texra service restart` (see [the CLI guide](./texra-cli.md)) and reload the VS Code window.
 
-**Diagnostics look stale**: ask the agent to run `lean_file` with `restart`, or `lean_project` with `restart_server`. A missing Mathlib cache can also cause long stalls; run `fetch_cache`.
+**Diagnostics look stale**: ask the agent to run `lean_file` on the file, or `lean_project` with `restart_server`. A missing Mathlib cache can also cause long stalls; run `fetch_cache`.
 
 **The Lean Project agents aren't in my list**: `leanSearch`, `leanSimplifier`, `leanBlueprint`, and `leanOrchestrator` are built in, but your current team may hide them. Select the **Lean Project** team, or show them one by one from **Settings → Agents → Library**.
 

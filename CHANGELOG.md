@@ -3100,7 +3100,10 @@ All notable changes to this project will be documented in this file.
   Plugins now shows Lean as available exactly when `lake` is found, where
   it used to require the extension and ignore `lake`. The Lean tools no
   longer open the file in an editor tab or move the cursor to its first
-  error.
+  error. The two commands only the extension told apart are gone in every
+  build: `lean_project`'s `fetch_file_cache` (use `fetch_cache`), and
+  `lean_file`'s `refresh_dependencies`; `lean_file` now takes only the
+  file and restarts it.
 
 - **The Create agent with AI wizard is removed** — the Agents tab's
   **Create agent** button and the `texra.createAgentWithAI` command are gone.

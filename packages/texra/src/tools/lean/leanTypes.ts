@@ -16,76 +16,43 @@ import type { GenericDiagnostic } from '@texra/utils/diagnostics/diagnosticForma
 export const LEAN4_EXTENSION_ID = 'leanprover.lean4';
 
 /**
- * One command surfaced by a Lean tool. `description` is both the line the tool
- * prose shows for the command and the summary on its executed result; `hint` is
- * extra usage guidance carried only by the prose, where length is cheap.
+ * One `lean_project` command: `description` is both the line the tool prose
+ * shows for the command and the summary on its executed result; `group` is
+ * the prose section it lists under.
  */
-export interface LeanCommandSpec {
-  readonly description: string;
-  readonly hint?: string;
-}
-
-/** A `lean_project` command additionally names the prose section it lists under. */
-interface LeanProjectCommandSpec extends LeanCommandSpec {
+interface LeanProjectCommandSpec {
   readonly group: string;
+  readonly description: string;
 }
-
-/**
- * Freeze a command table and every spec in it. `Object.freeze` is shallow, so
- * the entries need freezing too before the table crosses a module boundary.
- */
-function freezeCommands<T extends Record<string, LeanCommandSpec>>(
-  commands: T,
-): Readonly<T> {
-  for (const spec of Object.values(commands)) Object.freeze(spec);
-  return Object.freeze(commands);
-}
-
-/**
- * Per-file commands surfaced by `lean_file`, in declaration order. Single
- * source of truth: the tool's input enum, its prose, and its result summaries
- * all derive from this table (see `LspTools.ts`).
- */
-export const LEAN_FILE_COMMANDS = freezeCommands({
-  restart: {
-    description: 'Restart Lean server for this file',
-    hint: 'use when diagnostics are stale or after editing imports',
-  },
-  refresh_dependencies: {
-    description: 'Refresh file dependencies without full restart',
-    hint: 'lighter than restart',
-  },
-});
-export type LeanFileCommand = keyof typeof LEAN_FILE_COMMANDS;
 
 /**
  * Project-scope commands surfaced by `lean_project`, in declaration order.
- * Same single-source role as {@link LEAN_FILE_COMMANDS}, plus the `group` that
- * sections the generated prose.
+ * Single source of truth: the tool's input enum, its prose, and its result
+ * summaries all derive from this table (see `LspTools.ts`). Each spec is
+ * frozen too: `Object.freeze` is shallow, and the table crosses a module
+ * boundary.
  */
-export const LEAN_PROJECT_COMMANDS = freezeCommands({
-  restart_server: {
+export const LEAN_PROJECT_COMMANDS = Object.freeze({
+  restart_server: Object.freeze({
     group: 'Server',
     description: 'Restart the entire Lean language server',
-  },
-  stop_server: {
+  }),
+  stop_server: Object.freeze({
     group: 'Server',
     description: 'Stop the Lean language server',
-  },
-  build: {
+  }),
+  build: Object.freeze({
     group: 'Project',
     description: 'Build the project (runs lake build)',
-  },
-  clean: { group: 'Project', description: 'Clean project build artifacts' },
-  fetch_cache: {
+  }),
+  clean: Object.freeze({
+    group: 'Project',
+    description: 'Clean project build artifacts',
+  }),
+  fetch_cache: Object.freeze({
     group: 'Project',
     description: 'Download Mathlib build cache for the project',
-  },
-  fetch_file_cache: {
-    group: 'Project',
-    description: "Download Mathlib cache for current file's imports only",
-    hint: 'faster',
-  },
+  }),
 } satisfies Record<string, LeanProjectCommandSpec>);
 export type LeanProjectCommand = keyof typeof LEAN_PROJECT_COMMANDS;
 

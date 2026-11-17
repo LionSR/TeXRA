@@ -63,7 +63,6 @@ const LAKE_PROJECT_ARGS = {
   build: ['build'],
   clean: ['clean'],
   fetch_cache: ['exe', 'cache', 'get'],
-  fetch_file_cache: ['exe', 'cache', 'get'],
 } satisfies Partial<Record<LeanProjectCommand, readonly string[]>>;
 
 /**
@@ -297,13 +296,10 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
           discard: true,
         });
         return;
-      // `fetch_file_cache` would need an active editor's file; there is
-      // none, so it is the project-wide fetch (same as `fetch_cache`). All
-      // four fan out one LAKE_PROJECT_ARGS set per root.
+      // All three fan out one LAKE_PROJECT_ARGS set per root.
       case 'build':
       case 'clean':
       case 'fetch_cache':
-      case 'fetch_file_cache':
         yield* runLake(
           live.map((held) => held.root),
           owner,

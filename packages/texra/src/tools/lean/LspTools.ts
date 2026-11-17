@@ -17,11 +17,8 @@ import {
   formatGroupedSections,
 } from '@texra/utils/diagnostics/diagnosticFormatting';
 import {
-  LEAN_FILE_COMMANDS,
   LEAN_PROJECT_COMMANDS,
   extractHoverText,
-  type LeanCommandSpec,
-  type LeanFileCommand,
   type LeanProjectCommand,
   type LeanUnavailable,
   type LspResult,
@@ -30,16 +27,6 @@ import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
 } from './leanLanguageServices';
-
-/** `- "name": Description (hint)` — the prose line for one command. */
-function commandLine([name, spec]: [string, LeanCommandSpec]): string {
-  return `- "${name}": ${spec.description}${spec.hint ? ` (${spec.hint})` : ''}`;
-}
-
-const FILE_COMMAND_NAMES: LeanFileCommand[] = Struct.keys(LEAN_FILE_COMMANDS);
-const FILE_COMMAND_PROSE = Object.entries(LEAN_FILE_COMMANDS)
-  .map(commandLine)
-  .join('\n');
 
 const PROJECT_COMMAND_NAMES: LeanProjectCommand[] = Struct.keys(
   LEAN_PROJECT_COMMANDS,
@@ -54,7 +41,7 @@ const PROJECT_COMMAND_GROUPS = Map.groupBy(
 const PROJECT_COMMAND_PROSE = [...PROJECT_COMMAND_GROUPS]
   .map(
     ([group, entries]) =>
-      `${group} commands:\n${entries.map(commandLine).join('\n')}`,
+      `${group} commands:\n${entries.map(([name, { description }]) => `- "${name}": ${description}`).join('\n')}`,
   )
   .join('\n\n');
 
@@ -75,10 +62,6 @@ const LeanDiagnosticsInputSchema = Schema.Struct({
 type LeanDiagnosticsInput = typeof LeanDiagnosticsInputSchema.Type;
 
 const LeanFileInputSchema = Schema.Struct({
-  /** Command to execute on the file */
-  command: Schema.Literals(FILE_COMMAND_NAMES).annotate({
-    description: `Command: ${FILE_COMMAND_NAMES.map((name) => `"${name}"`).join(' or ')}`,
-  }),
   file: Schema.String.annotate({ description: 'Path to the .lean file' }),
 });
 
@@ -129,7 +112,7 @@ const NO_DIAGNOSTICS_HELP = `No errors, warnings, or hints for this file.
 If you expected errors:
 1. Import/dependency errors may not surface as diagnostics: check imports manually
 2. Make sure the file is saved
-3. Try \`lean_file\` with command "restart" to refresh the Lean server`;
+3. Try \`lean_file\` on it to refresh the Lean server`;
 
 const catchLeanFailure = (
   message: (cause: unknown) => string,
@@ -232,7 +215,7 @@ Returns diagnostics from the Lean 4 language server including:
 - Warnings and hints
 
 Tips:
-- If diagnostics seem stale, use lean_file with command "restart" to refresh the Lean server
+- If diagnostics seem stale, use lean_file on the file to refresh the Lean server
 - Import/dependency errors may not surface as diagnostics: check imports manually`,
   schema: LeanDiagnosticsInputSchema,
   execute: executeLeanDiagnosticsTool,
@@ -240,36 +223,35 @@ Tips:
 
 export const LeanFileTool = defineTool({
   name: 'lean_file',
-  description: `Execute Lean 4 language-server commands on a specific file.
+  description: `Restart the Lean language server's state for one file: close it and open it again with its current contents, so Lean re-elaborates it and re-reads its imports.
 
-Commands:
-${FILE_COMMAND_PROSE}`,
+Use when diagnostics are stale or after editing imports.`,
   schema: LeanFileInputSchema,
   execute: (
     input: LeanFileInput,
   ): Effect.Effect<ToolResult, Error, ToolContext | LeanLanguageServices> => {
-    const { command, file } = input;
-    const { description } = LEAN_FILE_COMMANDS[command];
+    const { file } = input;
     return Effect.gen(function* () {
       const call = yield* ToolContext;
       const services = yield* LeanLanguageServices;
       return yield* forCallerRun(
         services.restartFile(yield* leanFilePath(file, call)),
       ).pipe(
-        Effect.as(executed(`Executed "${command}" on ${file}`, description)),
+        Effect.as(
+          executed(`Restarted ${file}`, 'Restarted Lean server for this file'),
+        ),
         // The pool's cause is the answer.
         Effect.catchTags({
           LeanFileCommandFailed: (failure) =>
             Effect.succeed(
-              errorResult(
-                `Could not execute "${command}" on ${file}: ${failure.message}`,
-                { summary: 'Command failed' },
-              ),
+              errorResult(`Could not restart ${file}: ${failure.message}`, {
+                summary: 'Command failed',
+              }),
             ),
           LeanUnavailable: (failure) =>
             Effect.succeed(
               leanUnavailableResult(
-                `Could not execute "${command}" on ${file}`,
+                `Could not restart ${file}`,
                 failure,
                 'Command failed',
               ),
