@@ -81,8 +81,8 @@ modules runs in a host process:
   `packages/texra/src/tools/latex/ExtractFiguresTool.ts` (the three
   extractors), which already use `node:path` and the Effect `FileSystem`;
 - `packages/texra/src/replacement/advanced.ts` and
-  `packages/extension/src/frontend/latex/criticismParser.ts` (the brace
-  scanner), the second being the extension-host frontend, not a webview.
+  `packages/texra/src/latex/criticismParser.ts` (the brace
+  scanner), neither imported by a webview.
 
 Nothing under `packages/texra/src/ui/` imports any of them. So the package
 would enter the extension host, the desktop main process and the CLI

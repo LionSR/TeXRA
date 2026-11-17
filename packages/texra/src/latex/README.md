@@ -39,7 +39,9 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
   local `.sty` files, for `latexMedia.ts` to mirror);
   `latexParsingUtils.ts` (comment stripping and bibliography-directive
   matching shared by the extractors; put new shared parsing here);
-  `labelSearch.ts` (`\label{}` lookup).
+  `labelSearch.ts` (`\label{}` lookup); `criticismParser.ts` (the
+  `\criticize` annotations and their positions, for the editor's inline
+  decorations).
 - **Output**: `texcount.ts` (word counts); `latexdiff.ts` (`latexdiff` and
   `latexdiffAgainstCommit`: one run of the tool, its `--flatten` fallback and
   the clean-up of its output, which restores bibliography directives and
