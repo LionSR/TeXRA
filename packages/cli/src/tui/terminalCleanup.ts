@@ -3,6 +3,7 @@ import { writeSync } from 'node:fs';
 import { kittyFlags } from 'ink';
 
 import { cliEnvValue } from '../runtime/platform/cliContext';
+import { osc } from '../runtime/terminal/ansiEscapes';
 
 // Undo exactly the input/display modes the TUI turns on: mouse tracking
 // (1000/1003/1006), the kitty keyboard stack (<u), bracketed paste (2004), and
@@ -13,7 +14,7 @@ import { cliEnvValue } from '../runtime/platform/cliContext';
 // was just printed at the bottom (notably the "texra resume …" hint). tmux
 // masks this by ignoring an unmatched rmcup; Ghostty/iTerm2/Terminal.app do not.
 const RESET_TERMINAL_MODES = '\x1b[?1000;1003;1006l\x1b[<u\x1b[?2004l\x1b[?25h';
-const CLEAR_ITERM_PROGRESS = '\x1b]9;4;0\x07';
+const CLEAR_ITERM_PROGRESS = osc('9;4;0');
 // Re-arm the emulator-side input modes after a SIGCONT resume: kitty
 // disambiguate push, bracketed paste, and cursor hide. The tty driver state
 // (raw mode) is restored separately — the shell only restores the termios
