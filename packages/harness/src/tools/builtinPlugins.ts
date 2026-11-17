@@ -26,10 +26,7 @@ import { ReadFileTool } from '@tools/ReadTool';
 import { WebFetchTool } from '@tools/web/WebFetchTool';
 import { WebSearchTool } from '@tools/web/WebSearchTool';
 import { writeFileTool, type WriteFilter } from '@tools/WriteTool';
-import {
-  MEMORY_ENABLED_SETTING,
-  SCRIPT_ONLY_SETTING,
-} from '@shared/state/stateSettings';
+import { MEMORY_ENABLED_SETTING } from '@shared/state/stateSettings';
 
 const fileTools = (writeFilter?: WriteFilter) =>
   [
@@ -110,14 +107,16 @@ export const multiAgent: Plugin = definePlugin({
 /**
  * Code mode: the `script` tool, a program that calls the run's other tools,
  * and `self()`, the function a script runs this agent again with. An agent
- * gets them if its configuration names `script`, or, while script-only
- * tools are on, as every chat run does; its session layer is the code
- * sandbox the scripts run in.
+ * gets them if its configuration names `script`, or as every run that takes
+ * injected tools does (not a program's run, a text-only persona, or a plugin
+ * agent that names its own tools). A step that offers `script` sends it and
+ * the run's own tools alone; its session layer is the code sandbox the
+ * scripts run in.
  */
 export const codemode = definePlugin({
   id: 'codemode',
   tools: SCRIPT_TOOLS,
-  injectedWhen: { script: SCRIPT_ONLY_SETTING },
+  injectedWhen: { script: true },
   sessionLayer: codeSandboxLayer,
 });
 

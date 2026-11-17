@@ -350,8 +350,15 @@ const SCENARIOS = [
     cols: 120,
     env: {
       HARNESS_ENTRIES: '2',
-      HARNESS_QUEUED_DELIVERIES:
-        '<subagent-result id="child-q" agent="reviewer" status="completed"><response>All good &lt;ok&gt;</response></subagent-result>',
+      HARNESS_QUEUED_DELIVERIES: JSON.stringify({
+        family: 'subagent',
+        runId: 'child-q',
+        attributes: [
+          { name: 'agent', value: 'reviewer' },
+          { name: 'status', value: 'completed' },
+        ],
+        response: 'All good <ok>',
+      }),
     },
     bootExpect: 'queued 1',
     keys: ['/status', '\r'],
@@ -368,8 +375,15 @@ const SCENARIOS = [
     cols: 140,
     env: {
       HARNESS_ENTRIES: '2',
-      HARNESS_QUEUED_DELIVERIES:
-        '<subagent-error id="child-q" agent="review" retryable="true"><message>rate limit</message></subagent-error>',
+      HARNESS_QUEUED_DELIVERIES: JSON.stringify({
+        family: 'subagent',
+        runId: 'child-q',
+        attributes: [
+          { name: 'agent', value: 'review' },
+          { name: 'retryable', value: 'true' },
+        ],
+        message: 'rate limit',
+      }),
     },
     bootExpect: 'queued 1',
     frame: 'viewport',

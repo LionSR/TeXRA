@@ -1374,14 +1374,11 @@ All notable changes to this project will be documented in this file.
   modules its run recorded, never a newer copy shipped since. SDK: a
   plugin ships modules as `Plugin.scriptModules` (module source by name,
   imported as `builtIn:<name>`).
-- **Script-only tools, on by default.** The `texra.codeMode.scriptOnly`
-  setting (Settings → Agents → Advanced, or CLI `/config`) gives chat
-  agents the `script` tool and their own tools alone, with every other tool
-  called from inside a script; turn it off to send every tool directly. A
-  run keeps the tool set it started with when it resumes, even if the
-  setting changed in between. SDK: the harness row stays off, so an
-  embedder's agent is sent the tools it declares unless its catalog's
-  `defaults` turns the row on.
+- **Script-only tools.** Chat agents are sent the `script` tool and their
+  own tools alone, with every other tool called from inside a script. There
+  is no setting: every chat agent works this way, an SDK embedder's
+  included, except a plugin agent that names its own tools, which is sent
+  those directly. A run keeps the tool set it started with when it resumes.
 - **Scripts can run their agent again: `self(prompt, options)`.** It runs
   the same agent with the same tools as a child of the call, forked from
   the conversation as it stood when the script started (or from the prompt
@@ -2135,10 +2132,9 @@ All notable changes to this project will be documented in this file.
   and the run stopped. The file now reaches the model in the turn after the
   tool results, labeled with the tool that attached it.
 - **Script-only tools: a direct call to a tool the model was not sent is
-  refused.** With `texra.codeMode.scriptOnly` on, the model is sent only
-  `script` and the run's own tools, yet a model that guessed a tool's name
-  from the script declarations (Gemini does) had its direct call run as if
-  the tool had been offered directly, so the setting leaked. Such a call now
+  refused.** The model is sent only `script` and the run's own tools, yet a
+  model that guessed a tool's name from the script declarations (Gemini
+  does) had its direct call run as if the tool had been offered directly. Such a call now
   settles as unavailable with a message naming the script form
   (`tools.bash(...)`), and the run continues.
 - **A call a script issued and never awaited to its end is settled.** When

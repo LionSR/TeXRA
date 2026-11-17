@@ -6,13 +6,20 @@
 import { Schema, Struct } from 'effect';
 
 import { CountSchema, JsonObjectSchema } from '../protocol.js';
-import { AnthropicRefusalCategorySchema } from '../turn.js';
 
 /** A count the API may leave out or send as null. */
 const ReportedCountSchema = Schema.optional(Schema.NullOr(CountSchema));
 const RefusalSchema = Schema.Struct({
   type: Schema.Literal('refusal'),
-  category: Schema.NullOr(AnthropicRefusalCategorySchema),
+  category: Schema.NullOr(
+    Schema.Literals([
+      'cyber',
+      'bio',
+      'frontier_llm',
+      'reasoning_extraction',
+      'general_harms',
+    ]),
+  ),
   explanation: Schema.NullOr(Schema.String),
 });
 /** A response's token counts, each reported, omitted or null. */

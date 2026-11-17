@@ -374,8 +374,8 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
   // attempt it started (it was waiting on a person) has it.
   let bodyStarted = status.kind === 'started' && status.attempt === attempt;
   // A tool the step offers but did not send (a script's own function, or any
-  // tool while script-only tools are on) is reached from inside a script
-  // alone: a response's call to it has no body.
+  // tool beside `script`) is reached from inside a script alone: a
+  // response's call to it has no body.
   const unsent =
     script === null &&
     step.offered.some((t) => t.name === fact.toolName && !t.sent);

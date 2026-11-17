@@ -272,7 +272,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // no context-management row has the `compaction` action (an earlier
   // build's would fail as damaged, and its activity would read with
   // nothing freed).
-  log: { version: 11, listing: 'none' },
+  // v12: a file list's entry has no `source`, which nothing read beside the
+  // `sourceDisplay` it repeated (an earlier build's would be silently
+  // stripped).
+  log: { version: 12, listing: 'none' },
   // v2: no `phase` kind and no `index`/`total` (an earlier build's script
   // phase stage would fail its run as damaged rather than read as that
   // build's).
@@ -365,7 +368,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v20: a completed turn has no `kind` or `modelFingerprint`, and a
   // Responses anchor no `kind` (an earlier build reads this build's turn as
   // damaged without them).
-  'model.message': { version: 20, listing: 'none' },
+  // v21: a completed turn has no `finishEvidence` or `refusalEvidence`,
+  // which nothing read (an earlier build's would be silently stripped).
+  'model.message': { version: 21, listing: 'none' },
   // v2: the causes are `compaction` and `fork` alone (an earlier build's edit
   // of another cause would fail its run as damaged rather than read as that
   // build's).
@@ -400,7 +405,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v5: the result names the card it closes (`logId`), which a display read
   // shows as the call's `tool.end`; the run loop stores no card row beside
   // it (an earlier build's row would close no card).
-  'tool.result': { version: 5, listing: 'none' },
+  // v6: no `attachmentSummary`, which nothing wrote or read: the summary of
+  // a call's attachments is composed where its text is (an earlier build's
+  // row holding one would have it silently dropped).
+  'tool.result': { version: 6, listing: 'none' },
   // v2: no `continuation`: goal mode is a script, and a waiting run never
   // continues itself (an earlier build's row names a plugin continuation this
   // build has none of).

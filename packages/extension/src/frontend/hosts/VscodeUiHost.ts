@@ -183,3 +183,12 @@ class VscodeUiHost implements Dialogs {
  * this rather than each constructing a copy of the same empty object.
  */
 export const vscodeUi = new VscodeUiHost();
+
+/** A notice with one button per label: the `ask` the app's window notices
+ *  take (`windowNotices`). */
+export const askNotice = (
+  level: NoticeLevel,
+  message: string,
+  labels: readonly string[],
+): Effect.Effect<string | undefined, HostFailed> =>
+  vscodeUi.ask(level, message, { items: labels });

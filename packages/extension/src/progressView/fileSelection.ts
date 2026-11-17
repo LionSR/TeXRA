@@ -3,87 +3,8 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness/plugins';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
-import {
-  showLoggedErrorMessage,
-  showLoggedInfoMessage,
-} from '@frontend/ui/errorHandlingUtils';
-import { selectFiles } from '@frontend/ui/dialogs';
-import type { DocumentFileType } from '@texra/shared/launcher/fileTypes';
-import { getFilterExtensions } from '@texra/common/files/fileTypeUtils';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-
-const CHANNEL = 'fileSelectionCommands';
-
-interface PickerOptions {
-  openLabel: string;
-  filters: () => { [name: string]: string[] };
-}
-
-/** Run a dialog, announce what was picked, and report failures once. */
-function announceSelection<E>(
-  select: Effect.Effect<string[] | null, E>,
-): Effect.Effect<string[] | null> {
-  return select.pipe(
-    // The toast resolves only when dismissed, so the picker does not wait on it.
-    Effect.tap((result) =>
-      result
-        ? showLoggedInfoMessage(`Selected files: ${result.join(', ')}`)
-        : Effect.void,
-    ),
-    Effect.catch((err) =>
-      showLoggedErrorMessage(
-        'File selection failed. See the TeXRA log for details.',
-        err,
-      ).pipe(Effect.as(null)),
-    ),
-    withLogChannel(CHANNEL),
-  );
-}
-
-function createMultiPicker(
-  roots: WorkspaceRoots,
-  options: PickerOptions,
-): () => Effect.Effect<string[] | null> {
-  return () =>
-    announceSelection(
-      selectFiles({
-        workspaceRoot: roots.workspace,
-        openLabel: options.openLabel,
-        filters: options.filters(),
-      }),
-    );
-}
-
-/**
- * The native picker of each multi-file launcher list, bound to the host's
- * session so the dialog's starting folder is that session's workspace.
- */
-export function createFileSelectionPickers(
-  roots: WorkspaceRoots,
-): Record<DocumentFileType, () => Effect.Effect<string[] | null>> {
-  return {
-    input: createMultiPicker(roots, {
-      openLabel: 'Select Files',
-      filters: () => ({
-        'Text files': getFilterExtensions('input'),
-      }),
-    }),
-    context: createMultiPicker(roots, {
-      openLabel: 'Select Context Files',
-      filters: () => ({
-        'Text files': getFilterExtensions('context'),
-      }),
-    }),
-    media: createMultiPicker(roots, {
-      openLabel: 'Select Media',
-      filters: () => ({
-        'Image files': getFilterExtensions('media'),
-      }),
-    }),
-  };
-}
 
 export function getCurrentFile(
   roots: WorkspaceRoots,
