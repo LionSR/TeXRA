@@ -3,8 +3,15 @@ import { randomBytes } from 'node:crypto';
 import { Effect, FileSystem, Schema } from 'effect';
 import * as vscode from 'vscode';
 
-import { toErrorMessage, escapeAttr } from '@texra-ai/harness/schemas';
+import {
+  toErrorMessage,
+  escapeAttr,
+  escapeText,
+} from '@texra-ai/harness/schemas';
 import { HOST_BRIDGE_API_KEY } from '@texra/shared/hostBridgeTypes';
+import { RETRY_LABEL, viewLoadFailedText } from '@ui/copy/hostViews';
+import { announce } from '@frontend/ui/errorHandlingUtils';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 
 /** A view's HTML template has no `<body>` to install the host bridge into. */
 class WebviewTemplateMissingBody extends Schema.TaggedError<WebviewTemplateMissingBody>()(
@@ -73,6 +80,8 @@ const buildWebviewHtml = Effect.fnUntraced(function* (
  */
 export class BundledViewContentProvider {
   private readonly context: vscode.ExtensionContext;
+  /** What the user calls the view ("settings"), in its log lines and its
+   *  load failure. */
   private readonly viewName: string;
   /**
    * The one folder name a view owns: `src/<viewFolder>/index.html` holds its
@@ -101,44 +110,60 @@ export class BundledViewContentProvider {
   }
 
   /**
-   * The view's page, logged on the caller's channel.
+   * Paints the view's page through `paint`, logged on the caller's channel.
    *
    * `attributes` are the view's own HTML tokens, escaped for an attribute
    * value: the progress view carries its session key as
    * `<progress-app data-session>`, which is how the bundle knows which
    * session to subscribe to before any frame arrives.
+   *
+   * A page that cannot be built is logged once with its cause, the view
+   * shows that cause, and an error notice offers Retry, which builds the
+   * page again. The caller's scope ends the wait when the view closes.
    */
-  public getHtmlContent(
+  public render(
     webview: vscode.Webview,
+    paint: (html: string) => void,
     attributes: Record<string, string> = {},
-  ): Effect.Effect<string, never, FileSystem.FileSystem> {
+  ): Effect.Effect<void, never, FileSystem.FileSystem> {
     const htmlPath = vscode.Uri.joinPath(
       this.context.extensionUri,
       'src',
       this.viewFolder,
       'index.html',
     );
-    return buildWebviewHtml(
-      webview,
-      htmlPath,
-      {
-        commonStyleUri: this.buildUri(['src', 'common', 'styles/common.css']),
-        bundleUri: this.buildUri(['dist', this.viewFolder, 'bundle.js']),
-        styleUri: this.buildUri(['dist', this.viewFolder, 'index.css']),
-      },
-      attributes,
-    ).pipe(
-      Effect.tap(() =>
-        Effect.logDebug(`Generated HTML content for ${this.viewName}`),
-      ),
-      // A view that cannot render its template still gets a page: the
-      // failure is logged here, once, with its cause.
-      Effect.catchCause((cause) =>
-        Effect.logError(
-          `Error generating HTML content for ${this.viewName}: ${toErrorMessage(cause)}`,
-        ).pipe(Effect.as('<html><body>Error loading content</body></html>')),
-      ),
-    );
+    const attempt: Effect.Effect<void, never, FileSystem.FileSystem> =
+      buildWebviewHtml(
+        webview,
+        htmlPath,
+        {
+          commonStyleUri: this.buildUri(['src', 'common', 'styles/common.css']),
+          bundleUri: this.buildUri(['dist', this.viewFolder, 'bundle.js']),
+          styleUri: this.buildUri(['dist', this.viewFolder, 'index.css']),
+        },
+        attributes,
+      ).pipe(
+        Effect.flatMap((html) => Effect.sync(() => paint(html))),
+        Effect.tap(() =>
+          Effect.logDebug(`Generated HTML content for ${this.viewName}`),
+        ),
+        Effect.catchCause((cause) => {
+          const message = viewLoadFailedText(
+            this.viewName,
+            toErrorMessage(cause),
+          );
+          return Effect.gen(function* () {
+            yield* Effect.logError(message);
+            paint(`<html><body><p>${escapeText(message)}</p></body></html>`);
+            const choice = yield* announce(
+              vscodeUi.ask('error', message, { items: [RETRY_LABEL] }),
+              undefined,
+            );
+            if (choice === RETRY_LABEL) yield* attempt;
+          });
+        }),
+      );
+    return attempt;
   }
 
   private buildUri(pathSegments: string[]): vscode.Uri {
