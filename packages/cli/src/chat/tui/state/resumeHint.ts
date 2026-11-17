@@ -12,7 +12,11 @@ import { usageCostLabel } from '@ui/copy/modelAccess';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
 import { runViewOf } from './sessionView';
-import type { ApprovalPolicy, SessionView } from '@texra-ai/harness/schemas';
+import type {
+  ApprovalPolicy,
+  RunView,
+  SessionView,
+} from '@texra-ai/harness/schemas';
 
 interface ResumeCommandOptions {
   readonly cwd?: string;
@@ -54,13 +58,17 @@ export function formatResumeCommand(
   return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${runId}${cwdArg}${policyFlag}${outputFormatFlag}${printFlag}${sourceFlags}`;
 }
 
-/** Why a run launched to run once (a headless `texra run`) that ended is
- *  not reopened as a chat: it reads no messages, so a fork, a new task
- *  holding its conversation, is how it continues. */
+/** Why `run`, when it was launched to run once (a headless `texra run`)
+ *  and has ended, is not reopened as a chat: it reads no messages, so a
+ *  fork, a new task holding its conversation, is how it continues. One
+ *  stopped mid-turn (no outcome yet) still resumes to finish it, and any
+ *  other run resumes: both read undefined. */
 export function oneShotResumeNotice(
   commandName: string | undefined,
   runId: RunId,
-): string {
+  run: Pick<RunView, 'takesFollowUps' | 'outcome'> | undefined,
+): string | undefined {
+  if (run?.takesFollowUps !== false || run.outcome === null) return undefined;
   const name = commandName || DEFAULT_RESUME_COMMAND_NAME;
   return `Task ${runId} ran once and takes no messages. See it with \`${name} history show ${runId}\`, or continue it in a new task with \`${name} resume ${runId} --fork\`.`;
 }
