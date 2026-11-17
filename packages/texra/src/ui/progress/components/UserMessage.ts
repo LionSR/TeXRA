@@ -127,8 +127,6 @@ export class UserMessage extends LitElement {
   /** Message text content */
   @property({ attribute: false }) text = '';
 
-  /** Log ID for tracking */
-
   /** Message timestamp (Unix ms) */
   @property({ attribute: false }) timestamp = 0;
 

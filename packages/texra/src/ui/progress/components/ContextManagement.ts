@@ -52,8 +52,6 @@ export class ContextManagement extends LitElement {
     contextManagementStyles,
   ];
 
-  /** Log ID for tracking */
-
   /** Action configuration (icon, label, color) — every call site supplies one. */
   @property({ attribute: false }) config!: ActionConfig;
 
