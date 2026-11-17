@@ -21,6 +21,7 @@ import {
   Option,
   Path,
   PlatformError,
+  Result,
   Schedule,
   Schema,
   Stream,
@@ -31,7 +32,7 @@ import * as tar from 'tar';
 
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import { hasExtension } from '@texra-ai/harness/host';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
 import { LatexProgress } from './progress';
 import {
@@ -289,26 +290,23 @@ function downloadFileOnce(
     const disposition = Headers.get(response.headers, 'content-disposition');
     let filename: string | undefined;
     if (Option.isSome(disposition)) {
-      filename = yield* Effect.try({
+      const parsed = Result.try({
         try: () =>
           parseContentDisposition(disposition.value).parameters.filename,
-        catch: ensureError,
-      }).pipe(
-        Effect.catch((error) =>
-          // Malformed header; the content-type fallback below handles it.
-          Effect.logDebug(
-            'Ignoring malformed Content-Disposition header from arXiv source download',
-          ).pipe(
-            Effect.annotateLogs({
-              data: {
-                header: disposition.value,
-                error: toErrorMessage(error),
-              },
-            }),
-            Effect.as(undefined),
-          ),
-        ),
-      );
+        catch: toErrorMessage,
+      });
+      if (Result.isSuccess(parsed)) {
+        filename = parsed.success;
+      } else {
+        // Malformed header; the content-type fallback below handles it.
+        yield* Effect.logDebug(
+          'Ignoring malformed Content-Disposition header from arXiv source download',
+        ).pipe(
+          Effect.annotateLogs({
+            data: { header: disposition.value, error: parsed.failure },
+          }),
+        );
+      }
     }
     if (filename) {
       // basename prevents path traversal from a crafted header value.
@@ -374,16 +372,17 @@ const extractTarFile = Effect.fn('arxivProcessor.extractTarFile')(function* (
       });
       return pending;
     },
+    // A tar failure is not retried; the handler below words it.
     catch: (error) => {
       rejected = { error };
-      return ensureError(error);
+      return new ArxivSourcePermanentError({ message: toErrorMessage(error) });
     },
   }).pipe(
     Effect.timeout(Duration.millis(EXTRACT_TIMEOUT_MS)),
     Effect.catch((cause) => {
       const error = Cause.isTimeoutError(cause)
         ? 'Extraction timed out'
-        : toErrorMessage(cause);
+        : cause.message;
       return Effect.logError(`Failed to extract tar file: ${error}`).pipe(
         Effect.andThen(
           Effect.fail(

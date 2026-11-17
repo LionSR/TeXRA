@@ -40,6 +40,7 @@ import type { ProcessServices } from '@texra-ai/harness/host';
 
 import {
   hostStatePage,
+  SettingsRequestFailed,
   type SettingsHostBindings,
   type SettingsPresentation,
 } from './settingsHostBindings';
@@ -65,9 +66,9 @@ const writeTemplateAgentFile = Effect.fn('settings.writeTemplateAgentFile')(
   function* (input: { name: string; customDir: string }) {
     const { resourcesRoot } = yield* AgentDirectories;
     if (resourcesRoot === undefined) {
-      return yield* Effect.fail(
-        new Error('This host ships no agent templates.'),
-      );
+      return yield* new SettingsRequestFailed({
+        message: 'This host ships no agent templates.',
+      });
     }
     const fileName = `${input.name}${AGENT_FILE_EXTENSION}`;
     const filePath = path.join(input.customDir, fileName);
@@ -435,10 +436,10 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
               yield* agentsChanged(rootAgent?.name).pipe(
                 Effect.mapError(
                   (cause) =>
-                    new Error(
-                      `The team was applied, but the settings view could not be refreshed: ${toErrorMessage(cause)}`,
-                      { cause },
-                    ),
+                    new SettingsRequestFailed({
+                      message: `The team was applied, but the settings view could not be refreshed: ${toErrorMessage(cause)}`,
+                      cause,
+                    }),
                 ),
               );
               const unresolvedCount = missingAgents.length;

@@ -8,17 +8,23 @@
 import { homedir, userInfo } from 'node:os';
 import { delimiter } from 'node:path';
 
-import { Effect, Stream } from 'effect';
+import { Effect, Schema, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 
 /** What the shell prints before its environment, so profile noise ahead of
  *  it is skipped. */
 const MARKER = '__TEXRA_LOGIN_ENVIRONMENT__';
 /** A login shell that takes longer than this is not waited for. */
 const TIMEOUT_MS = 10_000;
+
+/** The login shell's environment could not be read; the message says why. */
+class LoginShellUnread extends Schema.TaggedError<LoginShellUnread>()(
+  'LoginShellUnread',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
 
 /**
  * The variables the user's login shell exports, read by running it as a
@@ -29,12 +35,16 @@ const TIMEOUT_MS = 10_000;
  */
 function loginShellEnvironment(): Effect.Effect<
   Readonly<Record<string, string>>,
-  Error,
+  LoginShellUnread,
   ChildProcessSpawner
 > {
   // `userInfo` throws for an account with no passwd entry: that is this
   // read's failure, not the caller's crash.
-  return Effect.try({ try: () => userInfo(), catch: ensureError }).pipe(
+  return Effect.try({
+    try: () => userInfo(),
+    catch: (cause) =>
+      new LoginShellUnread({ message: toErrorMessage(cause), cause }),
+  }).pipe(
     Effect.flatMap(({ shell, username }) =>
       ChildProcessSpawner.use((spawner) =>
         spawner.spawn(
@@ -89,9 +99,9 @@ function loginShellEnvironment(): Effect.Effect<
           const at = stdout.indexOf(MARKER);
           return at < 0
             ? Effect.fail(
-                new Error(
-                  `the login shell ${shell} printed no environment (${status})`,
-                ),
+                new LoginShellUnread({
+                  message: `the login shell ${shell} printed no environment (${status})`,
+                }),
               )
             : Effect.succeed(stdout.slice(at + MARKER.length));
         }),
@@ -101,7 +111,11 @@ function loginShellEnvironment(): Effect.Effect<
     Effect.timeoutOrElse({
       duration: TIMEOUT_MS,
       orElse: () =>
-        Effect.fail(new Error(`it did not answer within ${TIMEOUT_MS} ms`)),
+        Effect.fail(
+          new LoginShellUnread({
+            message: `it did not answer within ${TIMEOUT_MS} ms`,
+          }),
+        ),
     }),
     Effect.map((printed) =>
       Object.fromEntries(
@@ -115,9 +129,9 @@ function loginShellEnvironment(): Effect.Effect<
     ),
     Effect.mapError(
       (cause) =>
-        new Error(
-          `The login shell's environment was not read: ${toErrorMessage(cause)}`,
-        ),
+        new LoginShellUnread({
+          message: `The login shell's environment was not read: ${toErrorMessage(cause)}`,
+        }),
     ),
   );
 }
@@ -132,7 +146,7 @@ function loginShellEnvironment(): Effect.Effect<
  */
 export function adoptLoginShellEnvironment(): Effect.Effect<
   void,
-  Error,
+  LoginShellUnread,
   ChildProcessSpawner
 > {
   return loginShellEnvironment().pipe(

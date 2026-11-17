@@ -3,7 +3,7 @@
  * (`settingsViewBody.ts`): everything the host performs its own way,
  * and nothing it decides.
  */
-import { Cause, Effect, PubSub } from 'effect';
+import { Cause, Effect, PubSub, Schema } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { formatError } from '@texra-ai/harness/schemas';
@@ -29,6 +29,13 @@ import type { RunId } from '@texra-ai/harness/schemas';
 type HostEffect<A = void> = Effect.Effect<A, Error, ProcessServices>;
 
 export const SETTINGS_LOG_CHANNEL = 'SettingsView';
+
+/** A settings page or command that could not answer. The message is the
+ *  sentence the user reads. */
+export class SettingsRequestFailed extends Schema.TaggedError<SettingsRequestFailed>()(
+  'SettingsRequestFailed',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
 
 /** What a host performs its own way behind the settings body. */
 export interface SettingsHostBindings {

@@ -55,6 +55,7 @@ import {
   linkOutage,
   linkedClient,
   requestOnService,
+  ServiceUnavailable,
   type ServiceClient,
   type ServiceLink,
 } from './client';
@@ -62,6 +63,7 @@ import {
   RUN_RECORDS,
   type ProjectStateFailed,
   type TaskFailed,
+  type TaskRecordsFailed,
 } from './protocol';
 import type {
   CommitOrdinal,
@@ -80,13 +82,13 @@ const isRpcClientError = (
  * why it holds none, and a failed transport with what it said. The
  * service's own refusals pass through as the classes it failed with.
  */
-const callService = <A, E>(
+const callService = <A, E, F>(
   link: ServiceLink,
-  failed: (message: string, cause: Error) => E,
+  failed: (message: string, cause: Error) => F,
   use: (
     client: ServiceClient,
   ) => Effect.Effect<A, E | RpcClientError.RpcClientError>,
-): Effect.Effect<A, E> =>
+): Effect.Effect<A, E | F> =>
   linkedClient(link).pipe(
     Effect.mapError((away) => failed(away.message, away)),
     Effect.flatMap(use),
@@ -97,8 +99,9 @@ const callService = <A, E>(
     ),
   );
 
-/** A failure to reach an answer, as a plain `Error`. */
-const failedCall = (message: string) => new Error(message);
+/** A failure to reach an answer: the link holds no service, or the
+ *  service did not answer. */
+const failedCall = (reason: string) => new ServiceUnavailable({ reason });
 
 /** How many times a change to project state keys is tried again while
  *  another writer moves one between its read and its write. */
@@ -261,7 +264,12 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     Effect.flatMap((reached) =>
       'client' in reached
         ? Effect.succeed(reached.client)
-        : Effect.fail(new Error(reached.refused)),
+        : Effect.fail(
+            new ServiceUnavailable({
+              reason: reached.refused,
+              failure: { kind: 'newer' },
+            }),
+          ),
     ),
   );
   const sessions = yield* Layer.build(WebviewSessions.layerNoDeps);
@@ -539,8 +547,10 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     Object.fromEntries(
       Struct.keys(RUN_RECORDS).map((member) => [
         member,
-        callService<unknown, Error>(link, failedCall, (client) =>
-          client[`records.${member}`]({ workspace, runId }),
+        callService<unknown, TaskRecordsFailed, ServiceUnavailable>(
+          link,
+          failedCall,
+          (client) => client[`records.${member}`]({ workspace, runId }),
         ),
       ]),
     ) as unknown as RunRecords;
