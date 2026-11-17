@@ -221,7 +221,9 @@ export const toErrorMessage = (error: unknown): string =>
 
 /**
  * Every provider's failure mapping treats HTTP 401/403 as `authentication`
- * and anything else the provider rejected as `provider-rejection`.
+ * and anything else the provider rejected as `provider-rejection`, except
+ * where a provider's own reply names the credential (Google answers an
+ * invalid key with a 400; `SdkHttpFailure.credentialRejected`).
  */
 export const authOrRejectionKind = (
   status: number | undefined,
@@ -262,6 +264,8 @@ interface SdkHttpFailure {
   readonly status?: number;
   readonly headers?: Headers;
   readonly requestId?: string | null;
+  /** The reply says the credential itself was refused, whatever its status. */
+  readonly credentialRejected?: boolean;
 }
 
 /**
@@ -302,6 +306,7 @@ export function sdkModelError(
   const retryAfterMs = retryAfterMsOf(http?.headers);
   let kind: ModelError['kind'] = 'transport';
   if (cause instanceof SyntaxError) kind = 'provider-rejection';
+  else if (http?.credentialRejected) kind = 'authentication';
   else if (http) kind = authOrRejectionKind(http.status);
   return new ModelError({
     kind,

@@ -209,14 +209,26 @@ const HttpFailureSchema = Schema.Struct({
   status: Schema.Int.check(Schema.isBetween({ minimum: 400, maximum: 599 })),
   // The reply's headers, so a 429's `retry-after` reaches the retry gate.
   headers: Schema.optional(Schema.instanceOf(Headers)),
+  // The raw reply the SDK keeps; it names a refused key, which is a 400.
+  body: Schema.optional(Schema.String),
 });
+
+/**
+ * Google's reason for a key it does not accept (`google.rpc.ErrorInfo`),
+ * sent with a 400 rather than a 401.
+ */
+const INVALID_KEY_REASON = '"API_KEY_INVALID"';
 
 function sdkFailure(cause: unknown): ModelError {
   // The pinned Interactions SDK does not export its HTTP error constructors.
   const decoded = Schema.decodeUnknownResult(HttpFailureSchema)(cause);
+  const http = Result.isSuccess(decoded) ? decoded.success : undefined;
   return sdkModelError(
     cause,
-    Result.isSuccess(decoded) ? decoded.success : undefined,
+    http && {
+      ...http,
+      credentialRejected: http.body?.includes(INVALID_KEY_REASON) ?? false,
+    },
     'The Google transport failed.',
   );
 }
