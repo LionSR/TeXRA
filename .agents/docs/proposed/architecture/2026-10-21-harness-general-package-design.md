@@ -138,9 +138,10 @@ cannot.
 The thirteen nouns of the core-concepts note keep their owners. The process
 owner is `processLayer` in `effect/processLayer.ts`, which stays there (the 1.0 PRD's layout recommendation A keeps the ten directories). The
 foundation order the code follows is declared in `packages/harness/AGENTS.md`
-("Layer order") and ratcheted by `src/test-kernel/architecture/subsystemEdgeRatchet.vitest.ts`:
+("Layer order"):
 `logger < utils < shared < common < platform < …`, with `controllers` and `effect`
-on top.
+on top. At `c78e9f9` (2026-11-17) no check holds that order: the edge ratchet
+(`subsystemEdgeRatchet.vitest.ts`) is gone with the other architecture tests.
 
 ### Layout
 
@@ -276,17 +277,17 @@ lanes table below keep it as the refused option.
 
 ## Deletion ledger
 
-| What goes                                         | Count                                       |
-| ------------------------------------------------- | ------------------------------------------- |
-| Root exports                                      | 246 → 59 (what public signatures need)      |
-| `export *` in `shared/schemas/index.ts`           | kept (re-check below)                       |
-| `harness-deep-import-baseline.json` and its suite | kept as a guard; every host list is empty   |
-| `architecture-edges` rows                         | 67 → ~45, harness only                      |
-| `forgotten-exports` rows                          | 277 → 0, held at zero with no baseline file |
-| Same-basename pairs                               | 6 → 0                                       |
-| TeXRA code leaving the harness                    | ~1,650 lines                                |
-| Duplicated host code                              | ~1,400 lines                                |
-| OAuth `.catch` in llm                             | 12 → 0 (done)                               |
+| What goes                                         | Count                                                                   |
+| ------------------------------------------------- | ----------------------------------------------------------------------- |
+| Root exports                                      | 246 → 59 (what public signatures need)                                  |
+| `export *` in `shared/schemas/index.ts`           | kept (re-check below)                                                   |
+| `harness-deep-import-baseline.json` and its suite | gone at `c78e9f9` with every ratchet baseline; the rule is a convention |
+| `architecture-edges` rows                         | 67 → ~45, harness only; at `c78e9f9` no edge baseline exists            |
+| `forgotten-exports` rows                          | 277 → 0, held at zero with no baseline file                             |
+| Same-basename pairs                               | 6 → 0                                                                   |
+| TeXRA code leaving the harness                    | ~1,650 lines                                                            |
+| Duplicated host code                              | ~1,400 lines                                                            |
+| OAuth `.catch` in llm                             | 12 → 0 (done)                                                           |
 
 ## Lanes
 
@@ -305,7 +306,7 @@ format batch (decided 2026-10-30): a `remind` tool adds it as
 | 4b  | Built-ins fence, measured and redesigned as one tool contract in [the tool layer note](../../implemented/architecture/2026-11-01-tool-layer-one-catalog-one-step.md) (the fence itself is its decision 4)                                                                    | S      | 0           |
 | 5   | The timed follow-up with its first consumer tool (not in the 1.0 format batch, decided 2026-10-30); `defineTool({ deferred: true })` when tool counts need it; the storage port only for a named second driver                                                               | M      | 0           |
 | 6   | Freeze: `storage:freeze` at the first release (a `releasing` step, not a lane)                                                                                                                                                                                               | S      | 0           |
-| 7   | Host dedup: the GUI hosts share one request body over `SharedHostRequestBindings` (`packages/texra/src/controllers/session/openGuiWindow.ts`), and `processLayer` builds the agent-directories layer from options; the CLI notices through `LocalSession.emit` are not built | L      | 0           |
+| 7   | Host dedup: the GUI hosts share one request body over `SharedHostCommandBindings` (`packages/texra/src/controllers/session/openGuiWindow.ts`), and `processLayer` builds the agent-directories layer from options; the CLI notices through `LocalSession.emit` are not built | L      | 0           |
 | 8   | `./promise`: not built; the 2026-09-21 ruling holds                                                                                                                                                                                                                          | S      | 0           |
 | 9   | Publish (the owner's `releasing` step); `docs/spec.md` and the numbered examples ladder are done (`packages/harness/docs/spec.md`, `packages/harness/example/`)                                                                                                              | M      | 0           |
 
@@ -474,7 +475,7 @@ both call. No shared preamble is left to fold: the bash guard decides in the loo
 
 Still open after this design: about 350 lines of duplicated lowering across the
 llm adapters; `sessionViewUpdate.ts` at 1,169
-lines; the CLI approval stack versus the webview request panels; and four
+lines (1,074 at `c78e9f9`); the CLI approval stack versus the webview request panels; and four
 CLAUDE.md rules with no check (the barrel ban, the single-caller ban, renderer
 `Date.now()`, and silent degradation outside the harness and llm).
 

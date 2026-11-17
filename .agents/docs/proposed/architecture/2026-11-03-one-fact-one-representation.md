@@ -12,24 +12,6 @@ pi-durable (its README), Codex (`codex-rs/core/src/tasks/mod.rs`); OpenCode
 from the reviewer's knowledge of its code, not a fetch. The citations the
 reviews corrected were re-read at `74eb0a85` on 2026-11-04.
 
-## Checked against `main` on 2026-11-17
-
-Read at `c78e9f9` by searching the tree for the names this note says go or
-arrive. It finds a deleted name; it is not a review of the design. The body
-below was not rewritten.
-
-- No references remain to `acquireClaims`, `DatabaseClaimRefused`,
-  `ownedElsewhere`, `ownerLiveness`, `stopEnd`, `withInactiveRunStep`,
-  `unbornParent`, `RunAttempt`, `restsWith`, `RESULT_WAITING`, `deliverHeld`,
-  `isLiveRun` or `isTerminalOutcomePhase`. Slice 3, A6, the `runsHere`
-  remainder and the child-result rows of slice 4 look done.
-- Still present: `deriveResumability` (why a resume is rejected),
-  `primaryAgentError` and `defectAsFailure` (a stop that also failed; defects
-  and failures). The same rows are §5 of
-  [storage, errors and stop paths](../simplification/2026-11-03-storage-errors-and-stop-paths.md);
-  do them once, from that note.
-- The Windows service question is unanswered.
-
 ## Summary
 
 The stop and resume path is not an over-built version of what pi, pi-durable,
@@ -126,7 +108,7 @@ changes, and decided O5 differently:
 
 - **O1:** one process per store, enforced by SQLite's own exclusive lock, not a
   lock file or a lease (the 2026-09-15 ruling against locks stands).
-  `storeOpenElsewhere` (`packages/harness/src/controllers/session/Database.ts:1013`)
+  `storeOpenElsewhere` (`packages/harness/src/controllers/session/databaseLayer.ts:786`)
   already probes it with `PRAGMA locking_mode = EXCLUSIVE`. The holder keeps
   that lock for its connection's life; a second opener gets `BUSY` and
   attaches to the holder's service endpoint; a crashed holder's lock is
@@ -140,12 +122,13 @@ changes, and decided O5 differently:
 
 ### Slice 3 design (2026-11-04; corrected 2026-11-05 after a read of the tree)
 
-What the code does today, against O1's description:
+What the code did on 2026-11-05, against O1's description (the lock and the
+claim deletions have landed since; see the end of this section):
 
 - Nobody holds a store lock. Every process opens `texra.db` in WAL mode with
-  a busy retry (`databaseLayer`, `packages/harness/src/controllers/session/Database.ts`);
+  a busy retry (`databaseLayer`, now `packages/harness/src/controllers/session/databaseLayer.ts`);
   who may run a run is the per-aggregate claim `event_sequence.owner_id`,
-  checked on every append. `storeOpenElsewhere` (`Database.ts`) is the probe
+  checked on every append. `storeOpenElsewhere` (`databaseLayer.ts`) is the probe
   of `texra doctor --prune-storage` alone (`projectDatabase.ts`). The holder's
   liveness is proved by `ownerLiveness.ts` (`proveRecorded`, `deadOwners`),
   not by the session inputs, which only carry the claims.
@@ -237,6 +220,24 @@ PR, then one resume per run with the held parks. The lock alone, before the
 CLI attached, would have refused every `texra` command beside a running
 service, since each opened the project store for its state.
 
+_In the tree at `c78e9f9` (2026-11-17): a project store is opened with
+`PRAGMA locking_mode = EXCLUSIVE` and an empty immediate transaction, and a
+second opener is rejected with the store-held message
+(`packages/harness/src/controllers/session/databaseLayer.ts:245-262`); no
+source file names `owner_id`, `acquireClaims`, `releaseClaims`, `claimOwner`,
+`claimAll`, `reclaimable`, `provingOwners`, `DeletionMode`,
+`DatabaseClaimRefused`, `heldElsewhereBy`, `claimStanding`, `NotOwner`,
+`ownerLiveness`, `leaseOwnerLiveness`, `ProcessIdentity`, `ProcessProbe`,
+`ownedHere`, `ownedElsewhere`, `holdProcessRoot`, `stopEnd` or `RunStop`;
+`DatabaseAggregateClosed` carries only the aggregate id;
+`LocalRuntimeState` is `{ runsHere }`; a stop answers a boolean. One resume
+per run is in too: `RunAttempt`, `handedOff` and `restsWith` are gone and the
+`child.park` row is retired (`rowVersions.ts`). The `not-owner` reason of
+`RunHistoryRefused` remains, for an append to a run no longer held open
+(`shared/session/runHistory.ts`). Item 3, the Windows question, is still
+unanswered: `serve` and the client both stop with the unsupported message on
+`win32` (`packages/texra/src/controllers/server/serve.ts`, `client.ts`)._
+
 ## Findings by area
 
 Each row: the fact, the representation kept, what goes, how many non-test
@@ -267,6 +268,30 @@ and a golden-store regeneration (`src/test-kernel/fixtures/storage/golden-1.0.sq
 Acceptance: changing how a run stops touches `RunRegistry.interrupt` and
 `endRun` only; `grep -rl 'Cause.hasInterrupts' packages/harness/src` returns
 under ten files; every stop/resume test asserts rows, not cause shapes.
+
+_State at `c78e9f9` (2026-11-17), row by row. Done: the stop reason (slice
+2); who may run a run (slice 3, above); a resume in flight (`RunAttempt`,
+`handedOff`, `restsWith` and `attemptOf` as a resume's are gone; the
+registry entry holds `launched` and `done`); a child's result (`child.park`
+is a retired row, and `heldFor`, `RESULT_WAITING`, `deliverHeld`,
+`deliverOne`, `clearHeld`, `onHeldResult`, `sendStopNotice`, `pauseNotice`
+and `closeLeftoverChildren` have no references; `reportInterrupted`,
+`closeLeftoverRun` and `sweepLeftoverRuns` remain); interrupted runs at open
+(slice 5). Partly: a stop of a run no process runs has lost `stopEnd`,
+`withInactiveRunStep`, `beforeEnd` and `RunStop`, but
+`SessionRunRegistry.stop` still ends such a run in the batch that records
+the stop (`runRegistry.ts`). Still open: why a resume is refused
+(`ResumeRefusalSchema` has six cases, and `deriveResumability`, `refusalFor`
+and `REFUSED` remain; `runRejection`, `earlierBuildRefusal` and
+`namesUnusableCheckpoint` are gone); a stop that also failed
+(`primaryAgentError` and compaction's `hasInterrupts → Effect.interrupt`,
+`run/compaction.ts:172-174`, remain; `runWithLaunchGuard` is gone); defects
+and failures (`defectAsFailure` in `runLifecycle.ts` and `defectsAsErrors` in
+`delegation/childLaunch.ts` remain; no `Effect.die(Cause.squash(…))` is left
+in the harness). The acceptance count is 15 files, not under ten. The open
+stop and resume rows are the same work as §5 of
+[storage, errors and stop paths](../simplification/2026-11-03-storage-errors-and-stop-paths.md)
+and are done once, from that note._
 
 ### B. Run status as hosts see it
 
@@ -307,6 +332,12 @@ leaves the run resumable. Still open: `runsHere` and the
 and the TUI's agent-finished bell's `isTranscriptSettlementPhase` read (`runChatTui.tsx:758`; `/clear` already reads `working`), which change meaning under
 slice 3 (the service holds the run) and land with it._
 
+_Those landed with slice 3 (read at `c78e9f9`, 2026-11-17): the fold's
+`runsHere` is the registry's (`sessionViewUpdate.ts`, `runRegistry.ts`), and
+`ownedHere`, `isLiveRun`, `isTerminalOutcomePhase` and
+`isTranscriptSettlementPhase` have no references; nothing under
+`packages/texra/src/controllers/server/` names `CANCELLED`._
+
 ### C. Host attachment and the CLI process lifecycle
 
 Audit verdict: a dual by ruling (the service is a client of the claim model),
@@ -314,7 +345,15 @@ and a lifecycle with no owner. Under O1 the dual collapses: a window either
 holds the store's lock or attaches to the process that does. The fallback rule
 written in `packages/desktop/src/main/desktopProjects.ts:292-297`,
 `packages/extension/src/extension.ts:461-475` and
-`packages/cli/src/runtime/cliService.ts:172` becomes one function in the app.
+`cliService.ts:172` (now `packages/cli/src/runtime/platform/cliService.ts`)
+becomes one function in the app.
+At `c78e9f9` (2026-11-17) the two GUI hosts call one function,
+`openProjectSession` (`packages/texra/src/controllers/session/openProjectSession.ts`);
+the CLI decides in `packages/cli/src/runtime/platform/initPlatform.ts`
+(linking through `cliService.ts`, opening through the same module's
+`openLocalSession`), and `serviceProjectState` keeps its eight
+attempts (`STATE_CHANGE_ATTEMPTS`, `serviceSession.ts`), so the first row
+below is open for those two.
 
 | Fact                          | Keep                                                              | Delete                                                                                                                                                                                                                                          | Files |
 | ----------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
@@ -409,7 +448,7 @@ the inbox's stamp, the activation's grants and the detach's kept grants
 compares against the stamped relation, `ChildRuns.parent` reads the rows,
 `LiveRun.parent` and `Inbox.parentOf` are gone; the registry's
 `attachedParent` stays the in-process tree a stop cascades over. `unbornParent`
-waits for O5's slice._
+waited for O5's slice and is gone at `c78e9f9` (2026-11-17, no references)._
 
 ### F. Approval grants
 
@@ -466,8 +505,14 @@ checks below green. No slice keeps two representations "for now".
 3. **A1: ownership** (O1). The lock, the deletions in the "who may run" row,
    the service as lock holder, the fallback rule in one place (C, first row).
    Amends D4 and M3.
+   _In the tree at `c78e9f9` (2026-11-17): the lock and the claim deletions
+   (see the end of "Slice 3 design"). Open: the Windows question, and C's
+   first row for the CLI and `serviceProjectState`._
 4. **A4 + A5: one resume, one refusal, children through tool results** (O5).
    Amends the session-messaging note.
+   _In the tree at `c78e9f9` (2026-11-17): one resume per run and the child's
+   result. Open: one refusal, which is §5 of
+   [storage, errors and stop paths](../simplification/2026-11-03-storage-errors-and-stop-paths.md)._
 5. **A6 + A7: no ownerless stop, list at open** (O4). Deletes the setting.
    _Landed 2026-11-05 (A7, list at open): the `resumeOnOpen` setting,
    `OpenOptions.host.interruptedTasks`, `followInterruptedTasks` and
@@ -482,6 +527,9 @@ checks below green. No slice keeps two representations "for now".
    list's one home is the task list's `interrupted` group with each task's
    Resume, and `/resume all`. The other refusal kinds wait for the lock, with
    A6 (no ownerless stop)._
+   _A6 at `c78e9f9` (2026-11-17): `stopEnd`, `withInactiveRunStep` and
+   `RunStop` are gone, but a stop of a run no fiber here drives still writes
+   its end (`SessionRunRegistry.stop`), so A6 is open._
 6. **B: the fold fields and the host deletions** (O6).
 7. **C: the CLI exit owner** (O7).
 8. **D: llm's verdict and the row fold** (O8).
@@ -515,8 +563,11 @@ moves away from its reader to satisfy a size rule.
 
 Landed 2026-11-04: `npm run check:fact-spread` (`scripts/check-fact-spread.mjs`,
 in `gate:invariants`) holds the first two against the merge base, the
-exemption is `FACT_FILES` in `scripts/core-quality-measure.mjs`, and
-`npm run report:fix-churn` prints the third. At that day's `main`:
+exemption was `FACT_FILES` in `scripts/core-quality-measure.mjs`, and
+`npm run report:fix-churn` prints the third. At `c78e9f9` (2026-11-17)
+the core-quality scripts are gone and no check caps a file's lines, so the
+exemption has nothing left to exempt from; `check:fact-spread` and
+`report:fix-churn` remain. At that day's `main`:
 `Cause.hasInterrupts` 56 files, `Cause.squash` 84, `isTerminalOutcomePhase`
 19, `isActivePhase` 9, `isLiveRun` 17, `ownedHere` 8, `readOnly` 19,
 `parentId` 51, `withPerKeyLane` 25, `toErrorMessage` 194; 26 overlapping
