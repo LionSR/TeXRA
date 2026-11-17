@@ -35,16 +35,11 @@ interface CliModelAccessSelectionResult {
   readonly message: string;
 }
 
-/**
- * A subscription preference change the stores would not carry out. The
- * three members are the session read and the two preference writes, and both
- * writes go through the same settings store every host shares.
- */
+/** A subscription preference change the stores would not carry out, worded
+ *  with the plan and the change it names. */
 class ModelAccessPreferenceFailed extends Schema.TaggedError<ModelAccessPreferenceFailed>()(
   'ModelAccessPreferenceFailed',
   {
-    member: Schema.Literals(['setPreferSubscription', 'setEnabled']),
-    subscription: Schema.String,
     message: Schema.String,
     cause: Schema.Defect(),
   },
@@ -119,8 +114,6 @@ const updateSubscriptionCliModelAccess = Effect.fn(
       Effect.mapError(
         (cause) =>
           new ModelAccessPreferenceFailed({
-            member: 'setPreferSubscription',
-            subscription: providerId,
             message: ACCOUNT_OUTCOME.subscriptionNotDisabled(
               displayName,
               toErrorMessage(cause),
@@ -143,8 +136,6 @@ const updateSubscriptionCliModelAccess = Effect.fn(
       Effect.mapError(
         (cause) =>
           new ModelAccessPreferenceFailed({
-            member: 'setPreferSubscription',
-            subscription: providerId,
             message: `${displayName} subscription could not be enabled: ${toErrorMessage(cause)}`,
             cause,
           }),
@@ -181,8 +172,6 @@ const updateKeyedCliModelAccess = Effect.fn(
       Effect.mapError(
         (cause) =>
           new ModelAccessPreferenceFailed({
-            member: 'setEnabled',
-            subscription: plan.id,
             message: `${plan.preference.title} could not be disabled: ${toErrorMessage(cause)}`,
             cause,
           }),
@@ -206,8 +195,6 @@ const updateKeyedCliModelAccess = Effect.fn(
     Effect.mapError(
       (cause) =>
         new ModelAccessPreferenceFailed({
-          member: 'setEnabled',
-          subscription: plan.id,
           message: `${plan.preference.title} could not be enabled: ${toErrorMessage(cause)}`,
           cause,
         }),
