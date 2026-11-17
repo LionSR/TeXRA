@@ -146,13 +146,7 @@ export const externalInquiryPanelStyles: CSSResult = css`
     display: block;
     font-size: var(--font-size-sm);
     font-family: var(--wa-font-family-mono);
-    color: var(--color-text-link);
-    text-decoration: none;
     word-break: break-word;
-  }
-
-  a.external-inquiry-request__session-link-item:hover {
-    text-decoration: underline;
   }
 
   /* Sizing via the canonical skin's tokens (formControlStyles, reached
@@ -162,18 +156,9 @@ export const externalInquiryPanelStyles: CSSResult = css`
     --textarea-max-height: min(12vh, 5rem);
   }
 
-  .external-inquiry-request__chat-links a {
-    color: var(--color-text-link);
-    text-decoration: none;
-  }
-
   .external-inquiry-request__chat-links {
     line-height: var(--line-height-normal);
     overflow-wrap: anywhere;
-  }
-
-  .external-inquiry-request__chat-links a:hover {
-    text-decoration: underline;
   }
 
   .external-inquiry-request__answer-input {

@@ -11,6 +11,7 @@ import { AGENT_LIST } from '@ui/copy/nestedRuns';
 import { textInputEditingHelp } from '../input/textInputBindings';
 
 import type { SlashCommand, SlashCommandCategory } from './slashRegistry';
+import { DETAIL_SEPARATOR } from '@texra-ai/harness/schemas';
 
 // Help sections in display order; `undefined` collects uncategorized
 // commands into a trailing "Other" section.
@@ -37,7 +38,7 @@ function commandListItem(command: SlashCommand): string {
   const aliases = (command.aliases ?? [])
     .map((alias) => ` (\`/${alias}\`)`)
     .join('');
-  return `- \`/${command.name}\`${aliases} — ${command.description}`;
+  return `- \`/${command.name}\`${aliases}${DETAIL_SEPARATOR}${command.description}`;
 }
 
 function commandSections(commands: readonly SlashCommand[]): string[] {

@@ -23,6 +23,7 @@ import {
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
 import { actionMenu } from '@ui/wa/actionMenu';
+import { renderEmptyMessage } from '@ui/wa/emptyState';
 import { inlineRenameField } from '@ui/wa/inlineRename';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type { Shell } from './shell';
@@ -287,9 +288,7 @@ export function shellSidebarTemplate(
                     removable
                   ></run-tabs>
                 </div>`
-              : html`<p class="shell-history-empty">
-                  Your tasks will appear here.
-                </p>`
+              : renderEmptyMessage('Your tasks will appear here.')
           }
         </section>
       </div>
