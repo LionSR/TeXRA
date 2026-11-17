@@ -259,9 +259,9 @@ export const lastReportRecipients = Effect.fn('lastReportRecipients')(
 
 /**
  * A run's end in `tx`'s job, decided from what it reads under the lock:
- * the requests it leaves open cancelled, a root's unread input dropped (a
- * child's stays: a message to a child that ended is its resume's), its
- * closure, its `run.end`, its report with the delivery to the run it
+ * the requests it leaves open cancelled, a root's pending controls dropped
+ * (its queued messages stay for its resume, and so does all of a child's
+ * input), its closure, its `run.end`, its report with the delivery to the run it
  * works for ({@link replyDelivery}), and `leading` rows ahead of them (a stop's
  * `run.stop`, a process run's exit). A run never created has nothing to
  * end; one that ended in its current lifecycle keeps that end. A run whose
