@@ -327,7 +327,8 @@ const SURFACE = [
   'Run a JavaScript program that calls your other tools. `code` is the body of an async function: use `await` at top level and `return` the result (JSON).',
   [
     'Globals:',
-    '- `tools.<name>(args)` calls a tool you are offered, other than `script`, with the arguments of a direct call, and resolves to `{ output, summary }`. A failed call rejects with an Error named `ToolFailed`. Use `Promise.all` to run calls together and try/catch to recover.',
+    '- `tools.<name>(args)` calls a tool you are offered, other than `script`, with the arguments of a direct call, and resolves to `{ output, summary }`. A failed call rejects with an Error named `ToolFailed`; use try/catch to recover.',
+    '- Calls start in the order the script issues them. Calls of tools that only read (read, grep, glob, the web and search tools), `agent()`, `self()` and `program()` run together under `Promise.all`; any other call (a command, an edit or write, most MCP and plugin tools) waits for every call issued before it, and the calls issued after it wait for it. So `Promise.all` over two commands runs them one after the other.',
     '- `searchTools(query, { limit })` ranks every tool you can call, those not declared below included (MCP and plugin tools), and resolves to the best `limit` (default 8, at most 50) as `{ name, line }[]`.',
     "- `describeTool(name)` resolves to a tool's full declaration, with the description of each field, or to the source of a module or program named `name`.",
     '- A tool declared below as a function is also a global: its first argument is one field of its arguments, its second an object of the rest. A tool that resolves to more than `{ output, summary }` declares what, and its description names the errors it rejects with other than `ToolFailed`.',
