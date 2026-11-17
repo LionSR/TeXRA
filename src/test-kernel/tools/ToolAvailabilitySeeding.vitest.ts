@@ -1,9 +1,10 @@
 // Third-party imports
 import { layer } from '@effect/vitest';
 import { Effect, Fiber } from 'effect';
-import { assert, expect } from 'vitest';
+import { assert, expect, vi } from 'vitest';
 
 // Local imports
+import { CommandDirs } from '@texra-ai/harness/node';
 import {
   nodeSpawnerLayer,
   scriptedSpawnerLayer,
@@ -11,7 +12,7 @@ import {
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { wolfram } from '@texra/tools/wolframPlugin';
 import { texraPlugins } from '@texra/tools/registry';
-import { findCommand } from '@texra/utils/system/binaryResolver';
+import { FoundTools } from '@texra/utils/system/binaryResolver';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { DISABLED_TOOLS_KEY } from '@shared/state/disabledTools';
 
@@ -68,9 +69,15 @@ layer(SessionGraph.hosted)('external tool availability probes', (it) => {
   // Every host's Lean tools run over `lake` (a VS Code window's tasks run in
   // the background service), so an editor with the Lean 4 extension
   // installed does not make them runnable.
-  it.effect('reports Lean available exactly when lake is found', () =>
+  it.effect('reports Lean unavailable without lake, extension or not', () =>
     Effect.gen(function* () {
-      const { roots } = yield* FakeHost;
+      const host = yield* FakeHost;
+      // No `lake` anywhere the lookup searches: no app directories, and a
+      // PATH of one directory that does not exist.
+      yield* Effect.acquireRelease(
+        Effect.sync(() => vi.stubEnv('PATH', host.path('no-tools'))),
+        () => Effect.sync(() => vi.unstubAllEnvs()),
+      );
       const lean = texraPlugins({
         name: 'vscode',
         // An editor that reports every extension installed.
@@ -86,14 +93,15 @@ layer(SessionGraph.hosted)('external tool availability probes', (it) => {
       }).find(({ id }) => id === 'lean4');
       assert.exists(lean?.availability);
 
-      const result = yield* lean.availability
-        .check(roots)
-        .pipe(Effect.provide(nodeSpawnerLayer));
-
-      expect(result.available).toBe(
-        (yield* findCommand('lake').pipe(Effect.provide(nodeSpawnerLayer))) !==
-          null,
+      const result = yield* lean.availability.check(host.roots).pipe(
+        Effect.provide(nodeSpawnerLayer),
+        Effect.provideService(CommandDirs, () => []),
+        // A fresh cache: the process-wide one may hold a `lake` an earlier
+        // suite found on this machine.
+        Effect.provideService(FoundTools, FoundTools.defaultValue()),
       );
+
+      expect(result.available).toBe(false);
     }),
   );
 });

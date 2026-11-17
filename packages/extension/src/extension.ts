@@ -25,7 +25,6 @@ import {
   type ScopedFork,
   scopedFork,
   withProcessServices,
-  ToolAvailability,
 } from '@texra-ai/harness/host';
 import { withLogChannel, Settings } from '@texra-ai/harness/plugins';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
@@ -34,7 +33,7 @@ import {
   effectDiagnosticsLayer,
   setLogSink,
 } from '@texra-ai/harness/node';
-import { toErrorMessage, type StateKey } from '@texra-ai/harness/schemas';
+import type { StateKey } from '@texra-ai/harness/schemas';
 import { appSignalStream } from '@texra-ai/harness/host';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
@@ -509,28 +508,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   );
   yield* registerFileDecorations(context, session);
 
-  // VS Code's event emitters don't await async listeners, so we funnel
-  // fire-and-forget async work through this program, which logs a failed
-  // refresh instead of letting it become an unhandled rejection. A change
-  // VS Code reports after deactivation probes nothing.
-  const refreshToolAvailabilityLogged = (trigger: string) =>
-    Effect.flatMap(ToolAvailability, (availability) =>
-      availability.refresh(roots),
-    ).pipe(
-      Effect.catchCause((cause) =>
-        Effect.logError(
-          `Tool availability refresh failed (${trigger}): ${toErrorMessage(cause)}`,
-        ).pipe(withLogChannel(EXTENSION_CHANNEL)),
-      ),
-    );
-
-  context.subscriptions.push(
-    // Lean/LaTeX extension installed or removed → re-probe so the Tools tab
-    // reflects the new state without the user clicking Re-check.
-    vscode.extensions.onDidChange(() => {
-      fork(refreshToolAvailabilityLogged('extension change'));
-    }),
-  );
   // Activation-lifetime listeners run in the activation scope, which ends
   // them when the extension deactivates.
   // Each prompt runs in its own child fiber, so a second rejection doesn't
