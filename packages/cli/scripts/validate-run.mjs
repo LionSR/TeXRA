@@ -736,6 +736,107 @@ function validateRunCommand() {
   }
 }
 
+/**
+ * The lean4 plugin's `blueprint` program by name: `texra run blueprint`
+ * over a blueprint whose dependency graph has two faults. The canned child
+ * changes nothing, so the program's check finds both after each of its two
+ * rounds and the run answers with them. The NDJSON the run printed is the
+ * artifact.
+ */
+function validateLeanBlueprintProgram() {
+  const cwd = makeScratch('texra-cli-blueprint-');
+  try {
+    const validationFlagPath = path.join(cwd, validationFlagName);
+    writeFileSync(validationFlagPath, validationFlagContent);
+    mkdirSync(path.join(cwd, 'blueprint', 'src'), { recursive: true });
+    writeFileSync(
+      path.join(cwd, 'blueprint', 'src', 'content.tex'),
+      String.raw`\chapter{Widgets}
+
+\begin{definition}[Widget]\label{def:widget}\lean{Widget}\leanok
+  A widget is a finite set $W$ with a marked point.
+\end{definition}
+
+\begin{lemma}\label{lem:size}\leanok
+  \uses{def:widget}
+  Every widget has at least one element.
+\end{lemma}
+\begin{proof}
+  The marked point is an element.
+\end{proof}
+
+\begin{theorem}\label{thm:main}
+  \uses{lem:size, lem:missing}
+  Every widget $W$ satisfies $|W| \leq 2^{|W|}$.
+\end{theorem}
+`,
+    );
+
+    const result = run(
+      process.execPath,
+      [
+        binaryPath,
+        'run',
+        'blueprint',
+        '--input',
+        'blueprint/src/content.tex',
+        '--instruction',
+        'Bring the blueprint up to date.',
+        '--cwd',
+        cwd,
+        '--approval-policy',
+        'never',
+        '--output-format',
+        'ndjson',
+        '--print',
+      ],
+      { cwd: repoRoot, validationModel: true, validationFlagPath },
+    );
+    const artifactDir = path.join(validationRoot, 'artifacts');
+    mkdirSync(artifactDir, { recursive: true });
+    const artifactPath = path.join(artifactDir, 'lean-blueprint-run.ndjson');
+    writeFileSync(artifactPath, result.stdout);
+    assertSuccess(result, 'texra run blueprint NDJSON');
+
+    const records = parseNdjson(result.stdout, 'blueprint run NDJSON');
+    const response = String(
+      records.find((record) => record.kind === 'result')?.result?.output
+        ?.response ?? '',
+    );
+    assert(
+      response.startsWith(
+        'The dependency graph still has problems: 3 statements, 2 marked \\leanok. 2 problems:',
+      ) &&
+        response.includes(
+          'blueprint/src/content.tex:16: "lem:missing" is not the label of any statement.',
+        ) &&
+        response.includes(
+          'blueprint/src/content.tex:7: this lemma is marked \\leanok but names no declaration with \\lean.',
+        ),
+      `the blueprint run should answer with its check's two problems (artifact: ${artifactPath})\nresponse:\n${response}`,
+    );
+    // One child per round, each defined by the program, not the catalog.
+    const rounds = records.filter(
+      (record) =>
+        record.event === 'run.config' &&
+        record.payload.config.agent === 'blueprint' &&
+        record.payload.config.script == null,
+    );
+    assert(
+      rounds.length === 2 &&
+        rounds.every(
+          ({ payload }) =>
+            payload.config.persona?.tools?.some(
+              (tool) => (tool.name ?? tool) === 'lean_blueprint',
+            ) && payload.config.instruction.includes('content.tex'),
+        ),
+      `the blueprint program should run two rounds of its own child, told the blueprint's files (artifact: ${artifactPath})`,
+    );
+  } finally {
+    removeScratch(cwd);
+  }
+}
+
 function validateToolUseAgentRunCommand() {
   const cwd = makeScratch('texra-cli-agent-run-');
   try {
@@ -3582,6 +3683,7 @@ async function validateCliRunArtifacts(options = {}) {
   validateFileFlagMissingValues();
   await validateChatOnboardingPickers();
   validateRunCommand();
+  validateLeanBlueprintProgram();
   validateToolUseAgentRunCommand();
   validateHistoryQueryRunCommand();
   validateStopHookBlock();

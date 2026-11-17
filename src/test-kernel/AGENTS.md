@@ -95,8 +95,8 @@ because it spends money and needs the network; each suite gates itself on its
 route's key, and CI runs it only on the `live-llm` label
 (`.github/workflows/live-llm.yml`). `packages/cli/scripts/validate-journeys.mjs`
 is the end-to-end sibling: the polish, latexFixer, latexdiff and citations
-journeys run through the real `texra run` NDJSON on each cheap model the script lists. It runs
-only by hand, never in CI or `npm test`, and skips a model whose key is not set.
+journeys, and the prove journey over a Lake project, run through the real `texra run` NDJSON on each cheap model the script lists. It runs
+only by hand, never in CI or `npm test`, and skips a model whose key is not set and a journey whose binary (`lake`) is missing.
 
 ## Scoping the test run
 

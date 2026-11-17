@@ -60,6 +60,24 @@ To load the full set, open **Settings → Agents → Teams** and select the **Le
 Pick any agent from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>). Check **Settings → Agents** (<wa-icon library="texra" name="sparkle"></wa-icon>) to see which tools each one has enabled.
 :::
 
+## Lean programs
+
+The Lean plugin also ships two programs: fixed procedures that check their own work with Lean's tools before they hand it back. Each runs an agent on the files you name, then checks the result; when the check fails, the agent gets another round with the findings.
+
+| Program     | What it does                                                                  | How it checks each round                                                                                                                                        |
+| ----------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prove`     | Completes the proofs in the `.lean` files you pass, keeping their statements. | Lean's diagnostics for every file: no error and no `sorry`. Up to three rounds.                                                                                 |
+| `blueprint` | Writes or brings up to date a LeanBlueprint document (its `.tex` files).      | The dependency graph: every statement has a label, every `\uses` names one, nothing depends on itself, every `\leanok` names its declaration. Up to two rounds. |
+
+The instruction narrows the job ("prove only `oddSum_eq_sq`", "add entries for the new lemmas in `Basic.lean`"). Each program answers with its check's verdict and the agent's account of what it did. A new blueprint starts from `leanblueprint new`; pass the files it creates.
+
+```bash
+texra run prove --input Proofs/Basic.lean --instruction "Prove the two lemmas about oddSum"
+texra run blueprint --input blueprint/src/content.tex
+```
+
+In the app, ask an agent for the job (for example "finish the proofs in Proofs/Basic.lean") and it proposes the program. The `lean_blueprint` tool that `blueprint` checks with is also available to any agent on its own.
+
 ## What you can do
 
 Describe the task in plain language; the agent decides which tools to call. Below are the five Lean tools the agent reaches for, as they surface in the tool-call log.

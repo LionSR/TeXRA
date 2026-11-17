@@ -5,7 +5,7 @@ import AgentModeShapes from '../.vitepress/components/AgentModeShapes.vue';
 
 # Built-in agent reference
 
-TeXRA includes built-in agents for derivations, formal proofs, literature search, LaTeX debugging, figures, and code, and eight [programs](#programs) that revise or create LaTeX documents. Pick an agent from the dropdown menu in the TeXRA panel or run it from the CLI; start a program by asking an agent for the edit, or with `texra run <program>`.
+TeXRA includes built-in agents for derivations, formal proofs, literature search, LaTeX debugging, figures, and code, and [programs](#programs): eight that revise or create LaTeX documents and two for Lean projects. Pick an agent from the dropdown menu in the TeXRA panel or run it from the CLI; start a program by asking an agent for the edit, or with `texra run <program>`.
 
 <DropdownMenu
   label="Agent"
@@ -207,6 +207,11 @@ consistent" for `enhance`. A typical loop is `annotate`, then `apply`.
 
 Programs are part of the **Multi-Agent Workflow** plugin's `program` tool, so
 an agent can start one only while that plugin is enabled.
+
+The Lean plugin adds two more: `prove` completes the proofs in `.lean` files
+until Lean reports no error and no `sorry`, and `blueprint` writes or updates
+a LeanBlueprint document until its dependency graph checks clean. Read
+[Lean 4 proofs](./lean.md#lean-programs).
 
 ### `edit`
 

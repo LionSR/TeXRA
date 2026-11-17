@@ -1,5 +1,5 @@
-/** The Lean 4 plugin: its language-server tools, its availability check,
- *  its icons and its card. */
+/** The Lean 4 plugin: its language-server tools, its programs, its
+ *  availability check, its icons and its card. */
 
 // Third-party imports
 import { Clock, Effect, Option } from 'effect';
@@ -13,6 +13,8 @@ import { directLeanLanguageServices } from './direct/leanServerPool';
 import { LeanLanguageServices } from './leanLanguageServices';
 import { isLeanServerActive, summarizeLeanServers } from './leanServerInfo';
 import { LEAN4_EXTENSION_ID } from './leanTypes';
+import { LeanBlueprintTool } from './BlueprintTool';
+import { LEAN_MODULES, LEAN_PROGRAMS } from './programs';
 import {
   LeanDiagnosticsTool,
   LeanFileTool,
@@ -23,7 +25,8 @@ import {
 /**
  * Lean 4 over the `lake env lean --server` pool, in every host; its probe
  * reports the tools runnable exactly when `lake` is found, the one thing the
- * pool needs.
+ * pool needs. Its programs, `prove` and `blueprint`, check each round of
+ * their child's work with its tools.
  */
 export const lean4: TexraPlugin = {
   ...definePlugin<LeanLanguageServices>({
@@ -33,7 +36,18 @@ export const lean4: TexraPlugin = {
       LeanFileTool,
       LeanProjectTool,
       LeanInspectTool,
+      LeanBlueprintTool,
     ],
+    // The script tool's description lists the programs; a run offered
+    // `program` without it reads them here.
+    prompt: ({ offered }) =>
+      offered.includes('program') && !offered.includes('script')
+        ? `The Lean programs \`program\` starts: ${Object.entries(LEAN_PROGRAMS)
+            .map(([name, { description }]) => `\`${name}\` (${description})`)
+            .join('; ')}.`
+        : '',
+    scriptModules: LEAN_MODULES,
+    programs: LEAN_PROGRAMS,
     availability: {
       check: Effect.fn('lean4.availability')(function* () {
         // A probe reads the plugin's servers while its layer is up; it never
@@ -69,6 +83,7 @@ export const lean4: TexraPlugin = {
     lean_file: 'file-code',
     lean_project: 'folder-tree',
     lean_inspect: 'magnifying-glass-chart',
+    lean_blueprint: 'diagram-project',
   },
   dashboard: {
     name: 'Lean 4 Proof Assistant',
