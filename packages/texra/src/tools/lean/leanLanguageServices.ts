@@ -1,21 +1,12 @@
 /**
- * Injectable language services for Lean tools.
- *
- * Provides a boundary between the platform-agnostic tool implementations
- * in `packages/texra/src/tools/lean/` and the host-specific integrations (VS Code
- * extension in `packages/extension/src/frontend/lean/`, direct LSP for
- * CLI / desktop in `packages/texra/src/tools/lean/direct/`).
- *
- * The interface speaks in abstract command names; each adapter owns the
- * mapping to its native primitives (VS Code command IDs vs `lake` /
- * LSP requests).
+ * The Lean tools' language services: the `lake env lean --server` pool in
+ * `./direct/leanServerPool`, served as the Lean 4 plugin's process layer.
  */
 
 import { Context, type Effect, type Scope } from 'effect';
 
 import type { LeanServerInfo } from './leanServerInfo';
 import type {
-  LeanFileCommand,
   LeanFileCommandFailed,
   LeanFileUnreadable,
   LeanProjectCommand,
@@ -28,29 +19,25 @@ import type {
 } from './leanTypes';
 
 /**
- * The Effect-typed port: adapters compose their
- * host or LSP primitives into these programs, and the one run of each program
- * is composed directly by the native tool dispatcher. The adapters' failure
- * channels are disjoint (the VS Code bridge fails with its editor, command
- * and extension tags, the direct pool with its own) and every consumer converts
- * a failure into a `ToolError`, so the port declares `Error` rather than a
- * union no caller switches on. The file calls, whose cause the tool reports,
- * fail with the tags in `./leanTypes` (`LeanUnavailable`, `LeanFileUnreadable`,
- * `LeanFileCommandFailed`), which each adapter maps to.
+ * The pool's operations, each run once by the native tool dispatcher. Every
+ * caller converts a failure into a `ToolError`, so a call whose cause no tool
+ * reports declares `Error`; the file calls, whose cause the tool reports, fail
+ * with the tags in `./leanTypes` (`LeanUnavailable`, `LeanFileUnreadable`,
+ * `LeanFileCommandFailed`).
  *
  * Every call requires the `Scope` the resources it starts stay held in: the
- * calling tool provides its run's scope, so a server the direct pool starts
- * for a run stays up until the run ends.
+ * calling tool provides its run's scope, so a server the pool starts for a
+ * run stays up until the run ends.
  *
  * Every file parameter is an absolute path: the calling tool resolves the
  * model's input against the run's working directory (`leanFilePath` in
- * `LspTools.ts`) before invoking the port, so an adapter never re-resolves.
+ * `LspTools.ts`) before the call, so the pool never re-resolves.
  */
 export interface LeanLanguageServicesShape {
-  /** The servers this adapter holds now, for the Tools dashboard. */
+  /** The servers the pool holds now, for the Tools dashboard. */
   readonly listServers: Effect.Effect<readonly LeanServerInfo[]>;
-  executeFileCommand(
-    command: LeanFileCommand,
+  /** Close the file at its server and open it again with fresh contents. */
+  restartFile(
     filePath: string,
   ): Effect.Effect<void, LeanFileCommandFailed | LeanUnavailable, Scope.Scope>;
   getGoalState(
@@ -81,12 +68,10 @@ export interface LeanLanguageServicesShape {
 }
 
 /**
- * The Lean 4 plugin's port, its process layer (`lean4` in
- * `./plugin`): the direct `lake env lean --server` pool, or
- * the VS Code extension's Lean 4 bridge, which that host passes with TeXRA's
- * plugins (`texraPlugins`). A Lean tool reads it with
- * `yield* LeanLanguageServices`, served by the step that pinned the plugin;
- * the plugin's availability probe reads it while the layer is up.
+ * The Lean 4 plugin's process layer (`lean4` in `./plugin`). A Lean tool
+ * reads it with `yield* LeanLanguageServices`, served by the step that
+ * pinned the plugin; the plugin's availability probe reads it while the
+ * layer is up.
  */
 export class LeanLanguageServices extends Context.Service<
   LeanLanguageServices,

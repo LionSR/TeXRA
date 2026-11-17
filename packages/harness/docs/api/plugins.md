@@ -1112,7 +1112,7 @@ interface Plugin {
   /** Its section of each request's system text, pinned while it is on. */
   readonly prompt?: PromptSection;
   /** Process-lifetime services, up while the plugin is switched on or a step
-   *  pins it. A host-supplied one (VS Code's Lean services) is passed with
+   *  pins it. A host-supplied one (VS Code's setup commands) is passed with
    *  the host's plugin value. */
   readonly processLayer?: ProcessPluginLayer;
   /** Session-lifetime services, one per open session, up while the plugin

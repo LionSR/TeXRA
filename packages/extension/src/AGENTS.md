@@ -5,7 +5,7 @@ extension host and its webviews (`progressView`, `settingsView`).
 
 ## Directory organization
 
-- `packages/extension/src/frontend/` - Extension-host adapters behind the shared UI flows: `hosts/` (the app's dialogs and the browser opener over VS Code), `approval/` (tool-edit previews and diff tabs), `editor/` and `vscode/` (editor and event helpers), `latex/` and `lean/` (LaTeX build, inline criticism, the Lean 4 extension), `comments/` (inline comment threads), `events/` (the runtime's notices), `auth/`, `statusBar/`, `system/`, `ui/`, and `agents/` (the final-output opener). Use them instead of duplicating logic in commands or webviews.
+- `packages/extension/src/frontend/` - Extension-host adapters behind the shared UI flows: `hosts/` (the app's dialogs and the browser opener over VS Code), `approval/` (tool-edit previews and diff tabs), `editor/` and `vscode/` (editor and event helpers), `latex/` (LaTeX build, inline criticism), `comments/` (inline comment threads), `events/` (the runtime's notices), `auth/`, `statusBar/`, `system/`, `ui/`, and `agents/` (the final-output opener). Use them instead of duplicating logic in commands or webviews.
 - `packages/extension/src/common/` - Extension-only helpers: the webview content provider (`webview/BundledViewContentProvider.ts`, which also builds the webview HTML) and shared styles.
 
 ## Webviews
