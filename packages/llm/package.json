@@ -67,6 +67,7 @@
     "effect": "catalog:peers"
   },
   "devDependencies": {
+    "@effect/platform-node": "catalog:",
     "@effect/vitest": "catalog:",
     "@types/ws": "8.18.2",
     "@typescript/native": "catalog:",

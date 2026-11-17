@@ -256,12 +256,27 @@ protocol family, about 1 500 lines and eight cases: they pin lowering, decoding,
 and the explicit failures they name, against fixtures. They stay hermetic and free, so no suite in them calls a provider, and they run
 in `npm test`.
 
-`test-live/` is the wire evidence: one key-gated suite per HTTP provider route,
-behind `vitest.live.config.mjs`. Each suite skips itself unless its own key is
-in the environment, so a run with one key exercises one route and skips the
-rest. It is deliberately not part of `npm test`: reach it by name
-(`npm run test:live`) or through the labelled job in
+`test-live/` is the wire evidence: one suite per HTTP provider route, behind
+`vitest.live.config.mjs`, each running the same case matrix
+(`test-live/support.ts`). A case that needs a credential skips unless the
+route's own key is in the environment, so a run with one key exercises one
+route; the rejected-credential case presents a key no provider issued and
+runs on every route. It is deliberately not part of `npm test`: reach it by
+name (`npm run test:live`) or through the labelled job in
 `.github/workflows/live-llm.yml`.
+
+A live case reaches its provider through a local relay. Run with
+`LLM_RECORD=1`, each passing case's exchanges are written to
+`test-live/cassettes/<route>/<case>.json`, and
+`test/api/WireContract.vitest.ts` replays every cassette there in `npm test`,
+with no key and no network. A cassette never holds a request header or a
+request body; its response headers are allowlisted, and its bodies are
+scrubbed before they are written: identifiers renumbered, model text,
+reasoning, signatures and tool arguments replaced by fixed placeholders,
+account fields blanked. The scrubbed copy is replayed through its case before
+it is kept, and a cassette holding a credential-shaped string (`sk-`,
+`Bearer`, `AIza`) is refused on write and on read. Review a recorded diff
+before committing it.
 
 What the live tier does not claim: SSE parsing belongs to the vendor SDKs, so
 the package makes no bounded-stream-memory claim, and cleanup joins foreign

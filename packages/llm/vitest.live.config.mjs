@@ -9,8 +9,10 @@
  * needs the network is reached only by name (`npm run test:live`) or by the
  * labelled CI job in `.github/workflows/live-llm.yml`.
  *
- * Each suite gates itself on its own key, so a run with one key exercises one
- * route and skips the others.
+ * Each suite gates its keyed cases on its own key, so a run with one key
+ * exercises one route and skips the others. `LLM_RECORD=1` also writes each
+ * passing case's scrubbed exchanges under `test-live/cassettes/`, which
+ * `test/api/WireContract.vitest.ts` replays in `npm test`.
  */
 
 // Third-party imports
