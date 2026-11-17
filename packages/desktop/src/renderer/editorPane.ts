@@ -83,11 +83,15 @@ interface TreeState {
   /** Files with edits not yet saved. */
   readonly dirty: ReadonlySet<string>;
   readonly expanded: ReadonlySet<string>;
-  /** Each listed folder's entries. */
-  readonly children: ReadonlyMap<string, readonly EditorTreeNode[]>;
-  readonly listing: ReadonlySet<string>;
-  readonly failed: ReadonlySet<string>;
+  /** Each folder the tree has asked to list, by path. */
+  readonly folders: ReadonlyMap<string, FolderListing>;
 }
+
+/** Where one folder's listing stands. */
+type FolderListing =
+  | { readonly state: 'listing' }
+  | { readonly state: 'loaded'; readonly entries: readonly EditorTreeNode[] }
+  | { readonly state: 'failed' };
 
 const FRESH_TREE: TreeState = {
   nodes: [],
@@ -96,9 +100,7 @@ const FRESH_TREE: TreeState = {
   openPath: undefined,
   dirty: new Set(),
   expanded: new Set(),
-  children: new Map(),
-  listing: new Set(),
-  failed: new Set(),
+  folders: new Map(),
 };
 
 /** `set` with `key` present or absent. */
@@ -355,36 +357,26 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     const { path } = directory;
     return Effect.suspend(() => {
       const state = SubscriptionRef.getUnsafe(tree);
-      if (state.children.has(path) || state.listing.has(path)) {
-        return Effect.void;
-      }
-      setTree((current) => ({
+      const folder = state.folders.get(path);
+      if (folder && folder.state !== 'failed') return Effect.void;
+      const withListing = (listing: FolderListing) => (current: TreeState) => ({
         ...current,
-        listing: withMember(current.listing, path, true),
-        failed: withMember(current.failed, path, false),
-      }));
+        folders: new Map(current.folders).set(path, listing),
+      });
+      setTree(withListing({ state: 'listing' }));
       return callbacks.listFiles(path).pipe(
         Effect.match({
-          onSuccess: (entries) => (current: TreeState) => ({
-            ...current,
-            children: new Map(current.children).set(
-              path,
-              buildEditorDirectoryEntries(entries),
-            ),
+          onSuccess: (entries): FolderListing => ({
+            state: 'loaded',
+            entries: buildEditorDirectoryEntries(entries),
           }),
-          onFailure: (error) => {
+          onFailure: (error): FolderListing => {
             callbacks.onError(error);
-            return (current: TreeState) => ({
-              ...current,
-              failed: withMember(current.failed, path, true),
-            });
+            return { state: 'failed' };
           },
         }),
-        Effect.flatMap((change) =>
-          SubscriptionRef.update(tree, (current) => ({
-            ...change(current),
-            listing: withMember(current.listing, path, false),
-          })),
+        Effect.flatMap((listing) =>
+          SubscriptionRef.update(tree, withListing(listing)),
         ),
       );
     });
@@ -396,10 +388,11 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   ): TemplateResult {
     if (node.kind === 'directory') {
       const expanded = state.expanded.has(node.path);
-      const loaded = state.children.has(node.path);
-      const children = state.children.get(node.path) ?? [];
-      const loading = state.listing.has(node.path);
-      const failed = state.failed.has(node.path);
+      const folder = state.folders.get(node.path);
+      const loaded = folder?.state === 'loaded';
+      const children = loaded ? folder.entries : [];
+      const loading = folder?.state === 'listing';
+      const failed = folder?.state === 'failed';
       return html`
         <wa-tree-item
           class="desktop-editor-tree-row"
@@ -664,9 +657,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         SubscriptionRef.update(tree, (state) => ({
           ...state,
           expanded: FRESH_TREE.expanded,
-          children: FRESH_TREE.children,
-          listing: FRESH_TREE.listing,
-          failed: FRESH_TREE.failed,
+          folders: FRESH_TREE.folders,
         })),
       ),
       Effect.andThen(FiberHandle.run(listing, listTree)),
