@@ -106,7 +106,7 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
             ).pipe(
               Effect.catch((error) =>
                 Effect.logWarning(
-                  `Could not remove the tool-edit preview directory ${tempDir}: ${toErrorMessage(error.reason.cause ?? error)}`,
+                  `Could not remove the tool-edit preview directory ${tempDir}: ${toErrorMessage(error)}`,
                 ),
               ),
             ),

@@ -42,6 +42,18 @@ export function causeChain(err: unknown): unknown[] {
 }
 
 /**
+ * A `PlatformError` over a system error: its message only restates that
+ * error's (the Node error already names the path and the reason) behind the
+ * service's tag and method, so the message keeps the error and drops the
+ * wrapper. One without a cause keeps its own words.
+ */
+const restatesItsCause = (node: unknown): boolean =>
+  Predicate.isTagged(node, 'PlatformError') &&
+  Predicate.hasProperty(node, 'reason') &&
+  Predicate.hasProperty(node.reason, 'cause') &&
+  node.reason.cause instanceof Error;
+
+/**
  * Normalize any thrown value into a user-friendly error message string: the
  * error's own message, then the messages down its `cause` chain (and an
  * `AggregateError`'s members), each once, joined with `: `. A wrapper
@@ -52,6 +64,7 @@ export function toErrorMessage(err: unknown): string {
   const nodes = causeChain(err);
   if (nodes.length === 0) return String(raisedBy(err));
   const messages = nodes
+    .filter((node) => !restatesItsCause(node))
     .map((node) => (node instanceof Error ? node.message : String(node)))
     .filter((message) => message.trim() !== '');
   // A message another one embeds adds nothing; of two equal ones the first

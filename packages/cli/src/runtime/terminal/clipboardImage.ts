@@ -80,16 +80,13 @@ const readPngFileWithinLimit: (
   ClipboardRead,
   ClipboardImageProbeFailed,
   FileSystem.FileSystem
-> = Effect.fn('readPngFileWithinLimit')(
-  function* (outFile: string) {
-    const fs = yield* FileSystem.FileSystem;
-    const { size } = yield* fs.stat(outFile);
-    if (Number(size) > MAX_IMAGE_BYTES) return 'too-large' as const;
-    const bytes = yield* fs.readFile(outFile);
-    return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  },
-  Effect.mapError((error) => probeFailed(error.reason.cause ?? error)),
-);
+> = Effect.fn('readPngFileWithinLimit')(function* (outFile: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const { size } = yield* fs.stat(outFile);
+  if (Number(size) > MAX_IMAGE_BYTES) return 'too-large' as const;
+  const bytes = yield* fs.readFile(outFile);
+  return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+}, Effect.mapError(probeFailed));
 
 /** Whether a platform reader ran to success and left no 'NO_IMAGE' mark. */
 function readerWrote(
