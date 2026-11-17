@@ -18,8 +18,6 @@ import type {
   OwnHostHandlers,
   SharedHostCommandBindings,
 } from '@texra/controllers/session/openGuiWindow';
-import { instructionActions } from '@ui/copy/instructionActions';
-import { shownFailureText } from '@ui/copy/modelAccess';
 
 import {
   DESKTOP_DOCS_URL,
@@ -48,25 +46,10 @@ export const createDesktopHostRequests = (
 ) =>
   Effect.sync(() => {
     const { host } = options;
-    /**
-     * Each notice answers with the program that presents it; the session
-     * forks it, so nothing here waits on a dialog on a fiber of its own.
-     * Where the failure is reported depends on the notice: the two dialog
-     * members report their own (a dialog rejects when its window is torn
-     * down beneath it, and the host binds them through `awaitOrReport`), so
-     * the programs they hand back cannot fail; `openPath` fails in its own
-     * channel and the session's fork warn-logs it.
-     */
+    /** Each notice answers with the program that presents it; the session
+     *  forks it and warn-logs its failure. */
     const notices: GuiWindowHost['notices'] = {
-      requestShowError: (failure) =>
-        host.showErrorDialog(shownFailureText(failure), failure.docsPage),
-      // An instruction is actionable guidance, not a failure, so it uses
-      // the info-style dialog with each action token as a real button.
-      requestShowInstruction: (instruction) =>
-        host.showInstructionDialog(
-          instruction.message,
-          instructionActions(instruction.key),
-        ),
+      ...host.notices,
       // Desktop has no editor integration to preview through, so the
       // resolved path goes to the preview-with-fallback host directly.
       openFile: (data) => host.openPath(data.location.absolutePath),

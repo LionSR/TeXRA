@@ -34,10 +34,9 @@ import {
   setLogSink,
 } from '@texra-ai/harness/node';
 import { decodingDefault, type StateKey } from '@texra-ai/harness/schemas';
-import { appSignalStream } from '@texra-ai/harness/host';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
-import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import { askNotice, vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
   executeVscodeCommand,
   safeExecuteCommand,
@@ -48,7 +47,6 @@ import { taskStatusBar } from '@frontend/statusBar/taskStatusBar';
 import { vscodeSetupPlatform } from '@frontend/vscodeSetupPlatform';
 import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
 import {
-  announce,
   showLoggedErrorMessage,
   showLoggedInfoMessage,
   showLoggedMessageWithDocs,
@@ -67,10 +65,7 @@ import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { openTexraGlobalConfigStore } from '@texra/platform/defaults/nodeStores';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
-import {
-  settingsTabByCommand,
-  type ExtensionCommandId,
-} from '@texra/shared/commands/catalog';
+import type { ExtensionCommandId } from '@texra/shared/commands/catalog';
 import {
   openProjectRoots,
   openProjectSession,
@@ -81,7 +76,7 @@ import {
 } from '@texra/controllers/server/client';
 import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
-import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
+import { followGitHubTokenRejections } from '@texra/controllers/session/windowNotices';
 import type { GuiSession } from '@texra/controllers/session/openGuiWindow';
 
 // Local file imports
@@ -507,37 +502,9 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
 
   // Activation-lifetime listeners run in the activation scope, which ends
   // them when the extension deactivates.
-  // Each prompt runs in its own child fiber, so a second rejection doesn't
-  // wait behind an unanswered notification, and closing the scope interrupts
-  // any prompt still open.
-  const openSettings = 'Open Git settings';
   yield* Effect.forkScoped(
-    appSignalStream('githubTokenInvalid').pipe(
-      Stream.runForEach(({ message }) =>
-        announce(
-          vscodeUi.ask('error', gitHubTokenRejectedMessage(message), {
-            items: [openSettings],
-          }),
-          undefined,
-        ).pipe(
-          Effect.flatMap((choice) =>
-            choice === openSettings
-              ? settingsViewProvider
-                  .showSettingsView(
-                    settingsTabByCommand['texra.showGitSettings'],
-                  )
-                  .pipe(
-                    Effect.ignore({
-                      log: 'Warn',
-                      message: 'Opening the Git settings',
-                    }),
-                  )
-              : Effect.void,
-          ),
-          withLogChannel(EXTENSION_CHANNEL),
-          Effect.forkChild,
-        ),
-      ),
+    followGitHubTokenRejections(askNotice, (target) =>
+      settingsViewProvider.showSettingsView(target),
     ),
     { startImmediately: true },
   );
