@@ -47,29 +47,6 @@ export function formatSubscriptionUsagePercent(percentUsed: number): string {
   return Number.isInteger(rounded) ? `${rounded}%` : `${rounded.toFixed(1)}%`;
 }
 
-/** Below this share left, a plan's quota reads as running low. */
-const QUOTA_LOW_PERCENT = 20;
-
-/** What a plan has left in the window it runs out of first, worded as the
- *  usage percentages are, and how urgent that is: `danger` once nothing is
- *  left, `warning` at or under {@link QUOTA_LOW_PERCENT}. */
-export function subscriptionQuotaLeft(
-  snapshot: SubscriptionUsageSnapshot,
-):
-  | { readonly left: string; readonly tone: 'neutral' | 'warning' | 'danger' }
-  | undefined {
-  if (snapshot.state !== 'available') return undefined;
-  const limiting = snapshot.windows.toSorted(
-    (a, b) => b.percentUsed - a.percentUsed,
-  )[0];
-  if (limiting === undefined) return undefined;
-  const remaining = limiting.percentRemaining;
-  let tone: 'neutral' | 'warning' | 'danger' = 'neutral';
-  if (remaining <= 0) tone = 'danger';
-  else if (remaining <= QUOTA_LOW_PERCENT) tone = 'warning';
-  return { left: formatSubscriptionUsagePercent(remaining), tone };
-}
-
 export function formatSubscriptionUsageReset(
   resetAt: number | undefined,
   now: number,

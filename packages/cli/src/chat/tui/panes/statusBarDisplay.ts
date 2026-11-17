@@ -35,7 +35,7 @@ import {
 } from '@ui/copy/contextGauge';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { usageRouteBadge } from '@ui/copy/modelAccess';
-import { subscriptionQuotaLeft } from '@ui/copy/subscriptionUsage';
+import { formatSubscriptionUsagePercent } from '@ui/copy/subscriptionUsage';
 import { runStatus } from '@ui/copy/runStatus';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { AGENT_LIST, NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
@@ -235,15 +235,22 @@ function accessModeSegment(
 function subscriptionQuotaSegment(
   snapshot: SubscriptionUsageSnapshot | undefined,
 ): StatusBarSegment | undefined {
-  if (snapshot === undefined) return undefined;
-  const quota = subscriptionQuotaLeft(snapshot);
-  if (quota === undefined) return undefined;
+  if (snapshot?.state !== 'available') return undefined;
+  // The window the plan runs out of first, worded as every usage
+  // percentage is, so the bar and `/status` read one number.
+  const limiting = snapshot.windows.toSorted(
+    (left, right) => right.percentUsed - left.percentUsed,
+  )[0];
+  if (!limiting) return undefined;
+  const remaining = limiting.percentRemaining;
+  const left = formatSubscriptionUsagePercent(remaining);
+  let color: StatusBarColor | undefined;
+  if (remaining <= 0) color = COLOR_ERROR;
+  else if (remaining <= 20) color = COLOR_WARNING;
   return {
-    text: `${snapshot.planName} ${quota.left} left`,
-    compactText: `${quota.left} left`,
-    ...(quota.tone === 'neutral'
-      ? { dim: true }
-      : { color: quota.tone === 'danger' ? COLOR_ERROR : COLOR_WARNING }),
+    text: `${snapshot.planName} ${left} left`,
+    compactText: `${left} left`,
+    ...(color === undefined ? { dim: true } : { color }),
     priority: STATUS_BAR_PRIORITY.subscriptionQuota,
     policy: 'drop',
   };
