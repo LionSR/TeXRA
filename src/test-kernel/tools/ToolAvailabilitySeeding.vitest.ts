@@ -4,10 +4,14 @@ import { Effect, Fiber } from 'effect';
 import { assert, expect } from 'vitest';
 
 // Local imports
-import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
+import {
+  nodeSpawnerLayer,
+  scriptedSpawnerLayer,
+} from '@test/support/childProcessTestLayer';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { wolfram } from '@texra/tools/wolframPlugin';
 import { texraPlugins } from '@texra/tools/registry';
+import { findCommand } from '@texra/utils/system/binaryResolver';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { DISABLED_TOOLS_KEY } from '@shared/state/disabledTools';
 
@@ -58,6 +62,38 @@ layer(SessionGraph.hosted)('external tool availability probes', (it) => {
       yield* Fiber.interrupt(fiber);
 
       expect(spawner.killed).toEqual(spawner.calls);
+    }),
+  );
+
+  // Every host's Lean tools run over `lake` (a VS Code window's tasks run in
+  // the background service), so an editor with the Lean 4 extension
+  // installed does not make them runnable.
+  it.effect('reports Lean available exactly when lake is found', () =>
+    Effect.gen(function* () {
+      const { roots } = yield* FakeHost;
+      const lean = texraPlugins({
+        name: 'vscode',
+        // An editor that reports every extension installed.
+        editor: {
+          installed: () => true,
+          install: () => Effect.void,
+          recommendedSettings: () => ({
+            outDir: true,
+            autoRevealExclude: true,
+          }),
+          applyRecommended: () => Effect.void,
+        },
+      }).find(({ id }) => id === 'lean4');
+      assert.exists(lean?.availability);
+
+      const result = yield* lean.availability
+        .check(roots)
+        .pipe(Effect.provide(nodeSpawnerLayer));
+
+      expect(result.available).toBe(
+        (yield* findCommand('lake').pipe(Effect.provide(nodeSpawnerLayer))) !==
+          null,
+      );
     }),
   );
 });

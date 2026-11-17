@@ -418,7 +418,7 @@ export const texraPlugins = (host: {
     },
     wolfram,
     zotero,
-    lean4({ editor: host.editor, services: host.lean }),
+    lean4({ services: host.lean }),
     {
       ...multiAgent,
       icons: { agent: 'circle-user' },
