@@ -21,7 +21,7 @@
 import { Cause, Effect, type Layer, Schema } from 'effect';
 
 // Local imports
-import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { ITool } from '@tools/core/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { logFailure, withLogChannel } from '@logger/effectLog';
 import { type AppSignals, emitAppSignal } from '@platform/appSignals';

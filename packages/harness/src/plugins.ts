@@ -77,7 +77,7 @@ export {
   type DefinedTool,
   type DefineToolOptions,
 } from '@tools/core/definition';
-export type { ITool } from '@agent/core/tools/ToolTypes';
+export type { ITool } from '@tools/core/ToolTypes';
 export type { ToolResult } from '@shared/schemas';
 // A plugin's availability check, and the one failure a probe raises.
 export {
@@ -95,7 +95,7 @@ export {
   type ToolContextShape,
   type ToolEnv,
   type ToolGuard,
-} from '@agent/core/tools/ToolTypes';
+} from '@tools/core/ToolTypes';
 export { errorResult, executed } from '@tools/core/result';
 // A listing's output text: its header over its lines, or a note for none.
 export { formatToolOutput } from '@tools/formatting';
@@ -186,7 +186,7 @@ export type { RunHistoryInconsistent } from '@shared/session/runState';
 export type { StepRoot } from '@utils/files/externalRoots';
 // The run a plugin's tool reads (`ToolRun`) and the pieces it names: its
 // policy, trace and stages, model binding and run files.
-export type { ToolRun } from '@agent/core/tools/ToolTypes';
+export type { ToolRun } from '@tools/core/ToolTypes';
 export type { ToolPolicy } from '@agent/runtime/run/AgentRun';
 // Renders a prompt template (Nunjucks) with its variables.
 export { renderPrompt } from '@agent/prompt/promptRender';

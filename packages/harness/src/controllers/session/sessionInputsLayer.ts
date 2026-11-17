@@ -50,8 +50,8 @@ import {
   TextChunkSource,
   textSince,
   type InflightText,
-} from './sessionSources';
-import { WorkspaceRoots } from './WorkspaceRoots';
+} from '@shared/session/sessionSources';
+import { SessionWorkspace } from '@shared/session/sessionWorkspace';
 import { DEBUG_MODE_SETTING } from '@shared/state/stateSettings';
 
 /**
@@ -122,7 +122,7 @@ export const sessionInputsLayer = Layer.effect(
     const events = yield* SessionEvents;
     const local = yield* LocalRuntimeSource;
     const text = yield* TextChunkSource;
-    const roots = yield* WorkspaceRoots;
+    const roots = yield* SessionWorkspace;
     return {
       read: (aggregates, fromCommit, previousDebug) =>
         Stream.unwrap(

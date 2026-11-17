@@ -15,8 +15,8 @@ import { Context } from 'effect';
 
 import type { ConfigProvider } from '@shared/config/settings';
 
-export class WorkspaceRoots extends Context.Service<
-  WorkspaceRoots,
+export class SessionWorkspace extends Context.Service<
+  SessionWorkspace,
   /** The storage root of `@platform/workspaceRoots`, as a plain string: a
    *  webview's graph must not name the host module, which reaches Node. The
    *  config provider is the process session's own; the replay wire carries
@@ -25,4 +25,4 @@ export class WorkspaceRoots extends Context.Service<
     readonly storage: string;
     readonly config?: ConfigProvider;
   }
->()('@texra-ai/harness/session/WorkspaceRoots') {}
+>()('@texra-ai/harness/session/SessionWorkspace') {}

@@ -6,7 +6,6 @@
 import { Context, Effect, Result, Schema } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 
-import type { RunRecord } from '@agent/core/definition/RunRecord';
 import { Inbox } from '@agent/followUp/Inbox';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { consumedRows } from '@agent/runtime/loop/rows';
@@ -22,6 +21,7 @@ import {
   type RunId,
   type RunOutcome,
   type RunStopReason,
+  type RunRecord,
 } from '@shared/schemas';
 import {
   Approvals,

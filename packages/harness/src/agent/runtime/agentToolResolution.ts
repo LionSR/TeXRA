@@ -42,7 +42,7 @@
 import { Context, Effect, SubscriptionRef } from 'effect';
 
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
-import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { ITool } from '@tools/core/ToolTypes';
 import { mcpPluginId } from '@common/plugins/mcpServers';
 import { isInstalledPluginId } from '@common/plugins/pluginTrust';
 import { SessionRoots } from '@platform/rootedFs';

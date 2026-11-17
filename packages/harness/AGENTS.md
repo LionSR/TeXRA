@@ -6,7 +6,7 @@ Folder-scoped addition to the root [AGENTS.md](../../AGENTS.md) for
 ## Directory organization
 
 - `packages/harness/src/common/` holds host-neutral, cross-cutting logic with domain meaning (errors, parsing, plugins, storage). Check a module's dependencies before using it from browser code.
-- `packages/harness/src/utils/` is host-agnostic, not browser-safe: an import added to a module in the closure of the `./schemas` or `./transcript` entry must stay browser-safe. `utils/core/` has the browser-safe path basics (`pathBasics.ts`) and the Node path rules (`pathCore.ts`), the backoff delays (`backoffSchedule.ts`), HTTP status reads, hashing and derived run ids (`idHash.ts`), and `withPerKeyLane` (`perKeyQueue.ts`).
+- `packages/harness/src/utils/` is host-agnostic, not browser-safe: an import added to a module in the closure of the `./schemas` or `./transcript` entry must stay browser-safe. `utils/core/` has the browser-safe path basics (`pathBasics.ts`) and the Node path rules (`pathCore.ts`), the backoff delays (`backoffSchedule.ts`), HTTP status reads, hashing (`idHash.ts`), and `withPerKeyLane` (`perKeyQueue.ts`).
 - `packages/harness/src/platform/` defines the host ports and the process runtime types. Each host's composition root builds one `ManagedRuntime` over `processLayer()` and opens and closes sessions through its `SessionOwner`.
 - Hosts and the app hold a session as the public `Session` (`packages/harness/src/effect/sessions.ts`): its view, a run's records (`records(runId)`), the run listing and deletion, its starts, resumes and requests, all typed; `Sessions.open` gives the `LocalSession` this process holds, which adds the runs it is running (`held`), a handle by activation (`run`) and its notices (`emit`). A window of the background service holds a plain `Session` the service answers (`packages/texra/src/controllers/server/serviceSession.ts`). Inside the harness a session is its owners, each its own service (`SessionServices`, `packages/harness/src/agent/runtime/rootLaunch.ts`, composed in `packages/harness/src/controllers/session/sessionOwners.ts`), which its runs, requests and the SDK read from context; a host never names them.
 
@@ -21,13 +21,13 @@ points to a strictly lower layer:
 4. `common/`: cross-cutting logic with domain meaning (errors, parsing, storage layout).
 5. `platform/`: the host ports and the process runtime types.
 6. `model/`, `skills/`: model capabilities and pricing; skill discovery.
-7. `agent/`, `tools/`, `transcript/`: the run runtime, the tool engine with the
-   built-in tools, and run-transcript persistence. They import each other.
+7. `agent/`, `tools/`: the run runtime with its storage reads, and the tool
+   engine with the built-in tools. They import each other.
 8. `controllers/`: the SQLite session stores and the session composition.
 9. `effect/`: the SDK (`Sessions`, `processLayer`).
 10. The entry files at the root (`index.ts`, `node.ts`, `plugins.ts`, `schemas.ts`, `host.ts`, `transcriptEntry.ts`).
 
-The known exceptions: two `utils/` modules import a type from `shared/`, `execUtils.ts` its `ExecResult` and `idHash.ts` the `RunId`; and `agent/`, `tools/` and `transcript/` form one cycle.
+The known exception: `agent/` and `tools/` form one cycle.
 
 ## Configuration, storage, and workspace files
 
@@ -60,7 +60,7 @@ The known exceptions: two `utils/` modules import a type from `shared/`, `execUt
 
 A run is one Effect program in `packages/harness/src/agent/runtime/loop/`, with no cursor and no graph:
 
-- **One program**: `runToolUse` (`loop/runLoop.ts`, `loop/toolUseDispatch.ts`). A plugin's program (`Plugin.programs`) runs it on a generated two-line script that imports the program's module and calls its default export (`script.kind: 'program'`, `runtime/programRun.ts`). `loop/rows.ts` builds every draft the loop appends; `core/tools/toolCallParsing.ts` parses tool calls.
+- **One program**: `runToolUse` (`loop/runLoop.ts`, `loop/toolUseDispatch.ts`). A plugin's program (`Plugin.programs`) runs it on a generated two-line script that imports the program's module and calls its default export (`script.kind: 'program'`, `runtime/programRun.ts`). `loop/rows.ts` builds every draft the loop appends; `packages/harness/src/tools/core/toolCallParsing.ts` parses tool calls.
 - **State is row data.** The loop holds no copy of the conversation: it continues from the `RunState` (`packages/harness/src/shared/session/runState.ts`) that `RunCell.append` (`shared/session/runHistory.ts`) returns, so live and resume are one function.
 - **Services come from context**: `AgentRun` (`runtime/run/AgentRun.ts`) and `ModelInvoker` (the only caller of the `packages/llm` `Model`), provided once at the `executeAgent` boundary; the session's own services (`SessionServices`: its `RunHistory`, `Runs`, log, view and the rest) from the fiber `RunRegistry.start` forks, whose context the session layer captured. No services bag.
 - **A run's input queue is its own.** A run opens its follow-up reader in its own scope (`claimFollowUps`, `runtime/FollowUps.ts`). A child's launch opens in its parent's tool-call fiber, so a queue taken from context would be the parent's.
@@ -89,6 +89,6 @@ Two repo-wide counts of how many places decide one fact are held shrink-only aga
 
 The nullable-optional rule is in root `AGENTS.md` "Effect Schema Patterns".
 
-- **A tool with commands is a `Schema.Union` of tagged structs**, each branch written for itself. `convertToolSchema` (`packages/harness/src/agent/core/tools/toolSchema.ts`) alone shows it to the model as one object: the discriminator's literals as an `enum`, each other field labelled with the commands that take it, and every field not every branch requires nullable. Dispatch decodes with the union. OpenAI-compatible providers fill other commands' fields with `null`, and a `Schema.Struct` ignores undeclared keys, so never add a check that rejects unknown keys to a branch.
+- **A tool with commands is a `Schema.Union` of tagged structs**, each branch written for itself. `convertToolSchema` (`packages/harness/src/tools/core/toolSchema.ts`) alone shows it to the model as one object: the discriminator's literals as an `enum`, each other field labelled with the commands that take it, and every field not every branch requires nullable. Dispatch decodes with the union. OpenAI-compatible providers fill other commands' fields with `null`, and a `Schema.Struct` ignores undeclared keys, so never add a check that rejects unknown keys to a branch.
 - A union-branch field with a default uses `nullishWithDefault` (`packages/harness/src/tools/core/inputSchema.ts`): `withDecodingDefault` alone lets an explicit `null` through.
 - **Design for the model's first call.** A parameter with an obvious default is optional, with the default applied at dispatch; a required parameter models routinely omit is a tool bug. When a description enumerates dispatch behavior, keep it in step with the dispatch table.

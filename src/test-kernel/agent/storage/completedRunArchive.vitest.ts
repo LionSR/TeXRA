@@ -34,7 +34,7 @@ import {
 } from '@test/support/testKernel';
 import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
-import { readCompletedRunConversation as readCompletedRunConversationEffect } from '@transcript/completedRunArchive';
+import { readCompletedRunConversation as readCompletedRunConversationEffect } from '@agent/storage/completedRunArchive';
 
 const tempDirs = useTempDirs();
 

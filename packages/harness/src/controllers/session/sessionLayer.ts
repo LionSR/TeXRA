@@ -66,11 +66,11 @@ import {
   LocalRuntimeSource,
   TextChunkSource,
   TranscriptSubscriptions,
-} from './sessionSources';
-import { SessionViewService } from './sessionViewService';
+} from '@shared/session/sessionSources';
+import { SessionViewService } from '@shared/session/sessionViewService';
 import { sessionOwnersLayer, stopSessionRuns } from './sessionOwners';
 import { sessionInputsLayer } from './sessionInputsLayer';
-import { WorkspaceRoots } from './WorkspaceRoots';
+import { SessionWorkspace } from '@shared/session/sessionWorkspace';
 
 const CHANNEL = 'sessionLayer';
 
@@ -125,7 +125,7 @@ const sessionGraphLayer = (key: SessionKey) => {
         TranscriptSubscriptions.layer,
       ),
     ),
-    Layer.provide(Layer.succeed(WorkspaceRoots)(key.open.roots)),
+    Layer.provide(Layer.succeed(SessionWorkspace)(key.open.roots)),
   );
 };
 
