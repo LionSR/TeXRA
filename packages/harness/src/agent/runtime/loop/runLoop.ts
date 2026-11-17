@@ -466,16 +466,16 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       );
       if (state.pendingResponse !== null) {
         // Input queued meanwhile is delivered at the request that follows.
-        const dispatched = yield* dispatchPendingResponse(
+        state = yield* dispatchPendingResponse(
           cell,
           yield* dispatchTools(run, state),
         );
-        state = dispatched.state;
-        if (dispatched.endTurn) return completeTurn(state);
         continue;
       }
-      // A handed-down call asks no model: delivered, the turn ends.
-      if (state.handedDown !== null) return completeTurn(state);
+      // A handed-down call asks no model, and a delivered result may end
+      // the turn: either way the turn ends, live or on a resume.
+      if (state.handedDown !== null || state.at === 'results.final')
+        return completeTurn(state);
       // A committed text-only response whose policy has not run: the
       // response this turn just received, or one a resume finds.
       const last =

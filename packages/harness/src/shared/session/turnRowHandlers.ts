@@ -23,6 +23,7 @@ import { resultFacts, turnText, withInput, callKey } from './runFacts';
 import {
   attemptOf,
   callResultOf,
+  resultsEndTurn,
   invocationAfter,
   outOfOrder,
   type PendingCall,
@@ -257,7 +258,7 @@ const MESSAGE_HANDLERS: {
     if (unreported !== null) return mismatch(unreported);
     return Result.succeed({
       ...state,
-      at: 'results.ready',
+      at: resultsEndTurn(pending) ? 'results.final' : 'results.ready',
       messages: appended(copies, state, pending.assistant, ...p.messages),
       pendingResponse: null,
     });
