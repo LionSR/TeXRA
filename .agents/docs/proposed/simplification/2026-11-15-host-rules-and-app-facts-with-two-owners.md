@@ -1,8 +1,8 @@
 # Rules decided per host and app facts with two owners
 
 Date: 2026-11-15
-Status: proposed (four findings landed with this note, and seven more in
-the follow-up sweep listed at the end; the rest are open)
+Status: proposed (four findings landed with this note, and more in the
+three sweeps listed at the end; the rest are open)
 Origin: the 2026-11-15 scheduled responsibility audit on `main` at `1dd278b`.
 Two read-only surveys (the three hosts against the shared controllers; the
 app package and `packages/llm`) and a check of each finding against the code.
@@ -103,6 +103,11 @@ In order of size. Each needs the decision named.
    and command, as the Greek letters already have. It changes what the
    replacement engine converts, so it needs the replacement suites run and a
    look at each newly converted symbol.
+   Partly done, checked 2026-11-17: `MATH_SYMBOL_SPELLINGS` in
+   `packages/texra/src/replacement/constants.ts` owns the command of each
+   symbol that has both spellings, and both tables build those rows from it.
+   Still open: the nine entity-only symbols have no character mapping, so
+   `±` in math is still left alone.
 2. **The aux files of a base name.** `collectFilesFromPatterns`
    (`packages/texra/src/housekeeping/artifactFiles.ts`) folds case on macOS
    and Windows and searches `build/`; `deleteWithAuxFiles`
@@ -150,7 +155,7 @@ In order of size. Each needs the decision named.
   `openProjectSession` still decides service or local from `reached` a
   second time.
 - **Host rule 2** (compile for display): `compileForDisplay` in
-  `packages/texra/src/tools/latex/latexPreview.ts`. The extension now shows
+  `packages/texra/src/controllers/approval/latexPreview.ts`. The extension now shows
   a failed internal compile. The "file must exist, non-LaTeX opens plainly"
   steps stay per host: the extension builds workspace files through LaTeX
   Workshop, so the order of its checks differs.

@@ -10,16 +10,6 @@ record per run in the session view; one skill source struct). The findings
 below were verified against their producers and readers and held back, each
 for the reason given. They are in the order worth taking.
 
-## Checked against `main` on 2026-11-17
-
-Read at `c78e9f9` by searching the tree for the names this note says go or
-arrive. It finds a deleted name; it is not a review of the design. The body
-below was not rewritten.
-
-- Item 7b looks done: `RouteFailureFieldsSchema` is spread into both
-  `packages/harness/src/shared/schemas/errors.ts` and
-  `packages/harness/src/common/errors/agentErrors.ts`.
-
 ## 1. `SessionView.policy` and `SessionView.queuedFollowUps` are columns of `RunView`
 
 `packages/harness/src/shared/session/sessionView.ts` keeps both as maps keyed
@@ -127,6 +117,9 @@ the readers that needed the stated texts read them from the log
   `ModelFailure` route branch
   (`packages/harness/src/shared/schemas/errors.ts`), joined by a
   field-by-field copy.
+  Landed 2026-11-16 (#14981): `RouteFailureFieldsSchema` in `errors.ts`
+  states the fields once, and `RouteUnavailable` and the `ModelFailure` route
+  branch both spread it.
 
 ## Needs the owner's decision
 

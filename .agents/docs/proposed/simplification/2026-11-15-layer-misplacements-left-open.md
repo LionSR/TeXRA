@@ -17,17 +17,6 @@ follows is what it left, in the order worth taking. Every item needs a
 decision or changes a public or stored shape, which is why it is a note and
 not a commit.
 
-## Checked against `main` on 2026-11-17
-
-Read at `c78e9f9` by searching the tree for the names this note says go or
-arrive. It finds a deleted name; it is not a review of the design. The body
-below was not rewritten.
-
-- Item 7's first bullet looks done: `getToolTimeoutMs` has no references.
-- Item 3 (the Kimi and GLM usage endpoints) is taken up by
-  [a subscription is a credential](../feature/2026-11-17-subscriptions-as-credentials.md),
-  step 2; item 1 (the transcription credential) is its open question 3.
-
 ## 1. Audio transcription calls the OpenAI SDK from the app
 
 `packages/texra/src/controllers/session/audio.ts` imports `openai`, builds its own
@@ -46,6 +35,8 @@ after   llm: transcribe(audio, credential)      // beside the other OpenAI wire 
 
 Decision needed: what the harness exposes as "the credential for
 transcription" (a route of its own, or the OpenAI own-key route by provider).
+The transcription credential is open question 3 of
+[a subscription is a credential](../feature/2026-11-17-subscriptions-as-credentials.md).
 
 ## 2. The harness asks "is this Anthropic?" to choose prompt text
 
@@ -77,7 +68,8 @@ plans. The endpoint, the region choice and the response parsing belong beside
 the plan routes in `packages/llm`; the app keeps the cache
 (`SubscriptionUsageService.ts`) and the presentation. About 470 lines move.
 The refuted `G11g-usage-region-out-of-cache-key` is about the cache key, not
-this.
+this. Still open, and taken up by step 2 of
+[a subscription is a credential](../feature/2026-11-17-subscriptions-as-credentials.md).
 
 ## 4. The merge feature's edited file is a harness launch field
 
@@ -113,12 +105,14 @@ overrides go. Decision needed: which word is right.
   `action === 'wait'` from raw input. `toolRowModel`
   (`packages/harness/src/shared/transcript/toolRowModel.ts`) already parses
   the same input into sections and can expose `timeoutMs`.
+  Done, checked 2026-11-17: `getToolTimeoutMs` is gone and the row model
+  carries `timeoutMs`, the limit of a running call.
 - "An open call on an interrupted run is not running" is computed in
   `StageList.ts` and `toolFormatters.ts`; the terminal's
   `toolRenderers.tsx` has no such case and keeps painting the call as
-  running. The row model can carry it beside `cutByRunEnd`.
+  running. The row model can carry it beside `cutByRunEnd`. Still open.
 
-Both change the transcript entry's API report.
+The second changes the transcript entry's API report.
 
 ## 8. Child counts call every descendant an agent
 
