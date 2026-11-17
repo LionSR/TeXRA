@@ -2,13 +2,12 @@
 // across tab switches like the editor and terminal surfaces, so the viewer's
 // scroll position and zoom survive a layout change.
 
-import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import { html, nothing, render } from 'lit';
 
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import type { WorkbenchTab } from '../shared/desktopShellState';
+import { renderNoticeCallout } from './editorFileNotice';
 
 interface PdfView {
   readonly element: HTMLElement;
@@ -41,12 +40,7 @@ export function createPdfPane(options: {
   function report(view: PdfView, failure: string | undefined): void {
     view.frame.hidden = failure !== undefined;
     render(
-      failure === undefined
-        ? nothing
-        : html`<wa-callout variant="danger" size="s" role="alert">
-            ${waIcon('triangle-exclamation', { slot: 'icon' })}
-            <span class="desktop-editor-notice-text">${failure}</span>
-          </wa-callout>`,
+      failure === undefined ? nothing : renderNoticeCallout(failure),
       view.notice,
     );
   }

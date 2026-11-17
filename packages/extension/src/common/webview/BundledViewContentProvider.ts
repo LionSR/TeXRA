@@ -9,7 +9,7 @@ import {
   escapeText,
 } from '@texra-ai/harness/schemas';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { announce } from '@frontend/ui/errorHandlingUtils';
+import { announce, reportingFailure } from '@frontend/ui/errorHandlingUtils';
 import { HOST_BRIDGE_API_KEY } from '@texra/shared/hostBridgeTypes';
 
 const RETRY_ACTION = 'Retry';
@@ -171,7 +171,7 @@ export class BundledViewContentProvider {
           ),
         ),
         Effect.asVoid,
-        Effect.catch((error) =>
+        reportingFailure((error) =>
           Effect.gen({ self: this }, function* () {
             const message = `Could not load ${this.viewName}: ${toErrorMessage(error)}`;
             paint(loadFailurePage(message));

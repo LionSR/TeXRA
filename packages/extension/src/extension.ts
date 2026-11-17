@@ -49,6 +49,7 @@ import { vscodeSetupPlatform } from '@frontend/vscodeSetupPlatform';
 import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
 import {
   announce,
+  reportingFailure,
   showLoggedErrorMessage,
   showLoggedInfoMessage,
   showLoggedMessageWithDocs,
@@ -260,15 +261,13 @@ const noFolderCommands = (
       ).pipe(
         // A defect is reported like a failure, as the settings body reports
         // one; an interrupt is the window closing, not a failed sign-in.
-        Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.interrupt
-            : showLoggedErrorMessage(
-                ACCOUNT_OUTCOME.signInFailed(
-                  subscriptionProvider('chatgpt').displayName,
-                ),
-                Cause.squash(cause),
-              ),
+        reportingFailure((error) =>
+          showLoggedErrorMessage(
+            ACCOUNT_OUTCOME.signInFailed(
+              subscriptionProvider('chatgpt').displayName,
+            ),
+            error,
+          ),
         ),
         withLogChannel('welcomeView'),
       ),
