@@ -604,7 +604,7 @@ const SCENARIOS = [
     keys: ['/', `${NAK}/model\r`],
     frame: 'viewport',
     expect: ['Available models'],
-    unexpect: ['/\u0015/model', '/model - error'],
+    unexpect: ['/\u0015/model', '/model · error'],
   },
   {
     name: 'slash-palette-esc-retypes-command',
@@ -621,7 +621,7 @@ const SCENARIOS = [
       'Agents',
       'Choose an agent, or a team it leads, for this chat.',
     ],
-    unexpect: ['//agent', 'Harness received: //agent', '/agent - error'],
+    unexpect: ['//agent', 'Harness received: //agent', '/agent · error'],
   },
   {
     // The colon spelling of Shift+Return some terminals send acts exactly
@@ -688,7 +688,7 @@ const SCENARIOS = [
     ],
     unexpect: [
       'Platform not initialized',
-      '/agent - error',
+      '/agent · error',
       'texra --agent=<name>',
       'creator',
       'latexDiff',
@@ -723,7 +723,7 @@ const SCENARIOS = [
     ],
     unexpect: [
       'Platform not initialized',
-      '/agent - error',
+      '/agent · error',
       'texra --agent=<name>',
       'creator',
       'latexDiff',
@@ -753,7 +753,7 @@ const SCENARIOS = [
     ],
     unexpect: [
       'Platform not initialized',
-      '/model - error',
+      '/model · error',
       'texra chat --model=<name>',
       'texra --model=<name>',
     ],
@@ -771,7 +771,7 @@ const SCENARIOS = [
       'Available models. Finish the active response before switching models.',
       'Enter close',
     ],
-    unexpect: ['Platform not initialized', '/model - error'],
+    unexpect: ['Platform not initialized', '/model · error'],
     rawUnexpectSgr: true,
   },
   {
@@ -789,7 +789,7 @@ const SCENARIOS = [
       'Finish the active response before switching models.',
       'Enter close',
       'Platform not initialized',
-      '/model - error',
+      '/model · error',
     ],
   },
   {
@@ -815,7 +815,7 @@ const SCENARIOS = [
       'Harness model selected.',
       'Finish the active response before switching models.',
       'Platform not initialized',
-      '/model - error',
+      '/model · error',
     ],
   },
   {
@@ -834,7 +834,7 @@ const SCENARIOS = [
     unexpect: [
       'Finish the active response before switching models.',
       'Platform not initialized',
-      '/model - error',
+      '/model · error',
     ],
   },
   {
@@ -854,7 +854,7 @@ const SCENARIOS = [
     unexpect: [
       'Finish the active response before switching models.',
       'Platform not initialized',
-      '/model - error',
+      '/model · error',
     ],
   },
   {
@@ -890,7 +890,7 @@ const SCENARIOS = [
     unexpect: [
       'No configurable settings are available here yet.',
       'Platform not initialized',
-      '/config - error',
+      '/config · error',
     ],
     maxBlankLinesBetween: [
       { from: 'entry-4 chat history line', to: '/config', max: 8 },
@@ -934,7 +934,7 @@ const SCENARIOS = [
       '/config · Agents',
       'No configurable settings are available here yet.',
       'Platform not initialized',
-      '/config - error',
+      '/config · error',
     ],
   },
   {
@@ -1044,7 +1044,7 @@ const SCENARIOS = [
     ],
     unexpect: [
       'No skills found',
-      '/skills - error',
+      '/skills · error',
       'Platform not initialized',
     ],
     maxBlankLinesBetween: [
@@ -1060,7 +1060,7 @@ const SCENARIOS = [
     expect: ['Harness skill selected: proof-audit.'],
     unexpect: [
       'No skills found',
-      '/skills - error',
+      '/skills · error',
       'Platform not initialized',
     ],
   },
@@ -1073,7 +1073,7 @@ const SCENARIOS = [
     expect: ['Harness skill selected:'],
     unexpect: [
       'No skills found',
-      '/skills - error',
+      '/skills · error',
       'Platform not initialized',
     ],
   },
@@ -1098,7 +1098,7 @@ const SCENARIOS = [
       '1-9/a-z/Enter select',
       'Esc close',
     ],
-    unexpect: ['Platform not initialized', '/agent - error'],
+    unexpect: ['Platform not initialized', '/agent · error'],
   },
   {
     name: 'compact-model-form',
@@ -1118,7 +1118,7 @@ const SCENARIOS = [
       'Enter close',
       'Esc close',
     ],
-    unexpect: ['Platform not initialized', '/model - error'],
+    unexpect: ['Platform not initialized', '/model · error'],
   },
   {
     name: 'compact-api-form',
@@ -1151,7 +1151,7 @@ const SCENARIOS = [
       '↑/↓ navigate',
       'Esc close',
     ],
-    unexpect: ['Platform not initialized', '/key - error'],
+    unexpect: ['Platform not initialized', '/key · error'],
     // GLM's API key and its Coding Plan share one row; a row of the plan's
     // own (`GLM Coding Plan — <status>`) must not come back.
     unexpectPatterns: [/(?<!API\/)GLM Coding Plan —/],
@@ -1221,7 +1221,7 @@ const SCENARIOS = [
       '1-3/Enter preview',
       'Esc close',
     ],
-    unexpect: ['No memory files found.', '/memory - error'],
+    unexpect: ['No memory files found.', '/memory · error'],
   },
   {
     // Short terminals collapse /memory to the shared compact single-row
@@ -1247,7 +1247,7 @@ const SCENARIOS = [
     unexpect: [
       'Choose a memory to preview. Press Esc to close.',
       'No memory files found.',
-      '/memory - error',
+      '/memory · error',
     ],
     maxBlankLinesBetween: [
       { from: 'entry-4 chat history line', to: '/memory', max: 2 },

@@ -2,6 +2,7 @@
 // empty). Replaces the per-form `XFrame` wrappers that all rendered the same
 // bordered column with a colored title and an `Esc close` footer.
 
+import { joinFacts } from '@texra-ai/harness/schemas';
 import { Text, useWindowSize } from 'ink';
 
 import { CLOSE_HINTS, KeyHints } from '@cli/tui/ui/KeyHints';
@@ -87,7 +88,7 @@ export function renderAsyncListFormTransient(props: {
     return (
       <FormFrame
         color={COLOR_ERROR}
-        title={`${props.title} - error`}
+        title={joinFacts([props.title, 'error'])}
         showCloseHint={props.showCloseHint}
       >
         <Text>{props.error}</Text>

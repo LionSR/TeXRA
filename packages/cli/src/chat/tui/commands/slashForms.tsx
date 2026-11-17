@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { platform } from 'node:os';
 import { Box, Text, useInput, useWindowSize } from 'ink';
+import { joinFacts } from '@texra-ai/harness/schemas';
 import { useLayoutEffect, useState } from 'react';
 
 import { isEscapeInput } from '@cli/tui/inputKeys';
@@ -77,10 +78,11 @@ function FormBusyFrame(props: {
     if (isEscapeInput(input, key)) progress.cancel();
   });
 
-  let titleSuffix = '';
-  if (progress.status === 'succeeded') titleSuffix = ' · complete';
-  if (progress.status === 'failed') titleSuffix = ' · error';
-  const title = `${progress.title}${titleSuffix}`;
+  const title = joinFacts([
+    progress.title,
+    progress.status === 'succeeded' && 'complete',
+    progress.status === 'failed' && 'error',
+  ]);
   const innerWidth = formFrameContentWidth(columns);
   const hints = [
     ...(liveCopyable
