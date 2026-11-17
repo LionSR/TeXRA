@@ -23,10 +23,7 @@ import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { DEFAULT_AGENT_MODEL } from '@texra/model/curatedModels';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import {
-  getHelperModelName,
-  type ProcessServices,
-} from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/harness/host';
 
 export function handleFixCompilation(
   roots: WorkspaceRoots,
@@ -51,14 +48,15 @@ export function handleFixCompilation(
         roots.workspace,
       );
 
-      // This is a "run latexFixer" command, so it runs on the helper model,
-      // the default model when none is set, as the merge action does.
+      // This is a "run latexFixer" command, so it starts on the default
+      // model and `helperModel` swaps in the helper model, which is checked
+      // there for the tool calls the fixer needs.
       // The command finishes when the run ends. A run that does not start
       // finishes it too: the launcher has told why, so the guard's error
       // would tell it again.
       const config = yield* decodeLaunchConfig({
         agent: 'latexFixer',
-        model: (yield* getHelperModelName(roots)) ?? DEFAULT_AGENT_MODEL,
+        model: DEFAULT_AGENT_MODEL,
         instruction,
       });
       const run = yield* Effect.option(launch(config, { helperModel: true }));
