@@ -72,11 +72,11 @@ import {
   LocalRuntimeSource,
   TextChunkSource,
   TranscriptSubscriptions,
-} from '@controllers/session/sessionSources';
-import { SessionViewService } from '@controllers/session/sessionViewService';
+} from '@shared/session/sessionSources';
+import { SessionViewService } from '@shared/session/sessionViewService';
 import { sessionInputsLayer } from '@controllers/session/sessionInputsLayer';
 import { makeSessionStore } from '@controllers/session/sessionStore';
-import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { SessionWorkspace } from '@shared/session/sessionWorkspace';
 import { ROW_KINDS } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import { SessionViewAccess } from '@shared/session/runHistory';
@@ -163,7 +163,7 @@ const raw = <T>(storage: string, read: (db: DatabaseSync) => T): T => {
 
 const substrate = (storage: string) =>
   databaseLayer('persistent').pipe(
-    Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
+    Layer.provide(Layer.succeed(SessionWorkspace)({ storage })),
     Layer.provide(storePluginsLayer),
     Layer.provide(nodeSpawnerLayer),
     Layer.provide(nodePlatformLayer),
@@ -186,7 +186,7 @@ const graph = (storage: string) =>
         TranscriptSubscriptions.layer,
       ),
     ),
-    Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
+    Layer.provide(Layer.succeed(SessionWorkspace)({ storage })),
     Layer.provide(nodePlatformLayer),
   );
 

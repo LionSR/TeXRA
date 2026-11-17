@@ -11,7 +11,7 @@ import {
   type Scope,
 } from 'effect';
 import { Glob } from 'glob';
-import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { ToolContext } from '@tools/core/ToolTypes';
 
 // Local imports
 import { ToolError, ToolResult } from '@shared/schemas';

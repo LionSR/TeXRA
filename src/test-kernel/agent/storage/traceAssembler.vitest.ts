@@ -22,8 +22,8 @@ import {
   sessionHandleOf,
   TestSession,
 } from '@test/support/testKernel';
-import { assembleTrace } from '@transcript/traceAssembler';
-import { parseTraceData } from '../../../packages/trace-viewer/src/traceDataSchema';
+import { assembleTrace } from '@agent/storage/traceAssembler';
+import { parseTraceData } from '../../../../packages/trace-viewer/src/traceDataSchema';
 
 const tempDirs = useTempDirs();
 

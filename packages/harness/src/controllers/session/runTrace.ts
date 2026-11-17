@@ -32,7 +32,7 @@ import type {
 } from '@shared/session/sessionLog';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import { textSince, type InflightText } from './sessionSources';
+import { textSince, type InflightText } from '@shared/session/sessionSources';
 
 /** A session's trace sink, and the hand-off of each published row. */
 interface RunTraceSink extends Pick<

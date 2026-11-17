@@ -19,7 +19,7 @@ import {
 } from 'effect';
 
 import { UsageLog } from '@texra-ai/harness/host';
-import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { ITool } from '@tools/core/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { modelInvokerLayer } from '@agent/runtime/ModelInvoker';
 import { makeRetryGate, RouteRetries } from '@agent/runtime/ModelRetryGate';

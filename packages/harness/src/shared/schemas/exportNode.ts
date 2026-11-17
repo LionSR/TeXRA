@@ -9,7 +9,7 @@
 
 import { Schema } from 'effect';
 
-import { MediaAttachmentKindSchema } from '@shared/schemas';
+import { MediaAttachmentKindSchema } from './toolCard';
 
 // ============================================================
 // Intermediate representation — format-agnostic

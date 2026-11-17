@@ -75,7 +75,7 @@ packages/harness/src/logger/             ← host diagnostics, not the trace
 ├── effectLog.ts       ← withLogChannel for Effect.log*
 └── redaction.ts       ← provider-key redaction for logged text
 
-packages/harness/src/transcript/         ← run transcripts read from rows
+packages/harness/src/agent/storage/      ← run transcripts read from rows
 ├── completedRunArchive.ts ← a run's conversation, rebuilt from its committed rows
 └── traceAssembler.ts  ← a static trace document from the run's rows
 

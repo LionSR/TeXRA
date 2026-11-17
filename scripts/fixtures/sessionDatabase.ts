@@ -8,7 +8,7 @@ export {
   databaseLayer,
   globalDatabaseLayer,
 } from '@controllers/session/databaseLayer';
-export { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+export { SessionWorkspace } from '@shared/session/sessionWorkspace';
 export { Database, GlobalDatabase } from '@shared/session/database';
 export { SessionRowSchema } from '@shared/schemas';
 export {

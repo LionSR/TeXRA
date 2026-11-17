@@ -11,7 +11,7 @@
  */
 import { Predicate } from 'effect';
 
-import { inputSchema } from '@agent/core/tools/toolSchema';
+import { inputSchema } from '@tools/core/toolSchema';
 import type { ToolDefinition } from '@shared/schemas';
 
 type Schema = Record<string, unknown>;

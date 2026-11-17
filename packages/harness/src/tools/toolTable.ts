@@ -16,7 +16,7 @@ import {
 } from 'effect';
 
 // Local imports
-import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { ITool } from '@tools/core/ToolTypes';
 import type { InboxItem } from '@agent/followUp/Inbox';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import type { AppSignals } from '@platform/appSignals';

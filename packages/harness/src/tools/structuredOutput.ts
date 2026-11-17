@@ -8,13 +8,13 @@ import {
 } from 'effect';
 
 // Internal imports
-import type { ITool, ToolContext } from '@agent/core/tools/ToolTypes';
+import type { ITool, ToolContext } from '@tools/core/ToolTypes';
 import { inRunSession } from '@agent/runtime/RunCall';
 import {
   convertToolSchema,
   mapSubschemas,
   type JSONSchemaObject,
-} from '@agent/core/tools/toolSchema';
+} from '@tools/core/toolSchema';
 import {
   ToolError,
   STRUCTURED_OUTPUT_TOOL_NAME,

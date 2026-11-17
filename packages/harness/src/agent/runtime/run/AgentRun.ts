@@ -17,7 +17,7 @@ import {
   Ref,
 } from 'effect';
 
-import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { ITool } from '@tools/core/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 import {

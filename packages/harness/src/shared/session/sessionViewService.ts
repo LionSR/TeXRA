@@ -39,7 +39,7 @@ import type {
   TranscriptInterest,
 } from '@shared/session/sessionViewAccess';
 import { TranscriptSubscriptions } from './sessionSources';
-import { WorkspaceRoots } from './WorkspaceRoots';
+import { SessionWorkspace } from './sessionWorkspace';
 
 export class SessionViewService extends Context.Service<
   SessionViewService,
@@ -59,7 +59,7 @@ export class SessionViewService extends Context.Service<
     Effect.gen(function* () {
       const inputs = yield* SessionInputs;
       const subscriptions = yield* TranscriptSubscriptions;
-      const roots = yield* WorkspaceRoots;
+      const roots = yield* SessionWorkspace;
       // Each replay begins with the process reader's sampled verbosity. The
       // transport carries that same policy to the webview's view.
       const updater = makeSessionViewUpdater(roots.storage);
@@ -159,7 +159,7 @@ export class RemoteSessionView extends Context.Service<
         Layer.provide(
           SessionViewService.layer.pipe(
             Layer.provideMerge(TranscriptSubscriptions.layer),
-            Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
+            Layer.provide(Layer.succeed(SessionWorkspace)({ storage })),
           ),
         ),
       ),
