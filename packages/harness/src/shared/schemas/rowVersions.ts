@@ -272,7 +272,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // no context-management row has the `compaction` action (an earlier
   // build's would fail as damaged, and its activity would read with
   // nothing freed).
-  log: { version: 11, listing: 'none' },
+  // v12: a file list's entry has no `source`, which nothing read beside the
+  // `sourceDisplay` it repeated (an earlier build's would be silently
+  // stripped).
+  log: { version: 12, listing: 'none' },
   // v2: no `phase` kind and no `index`/`total` (an earlier build's script
   // phase stage would fail its run as damaged rather than read as that
   // build's).
