@@ -69,7 +69,7 @@ const ReasoningEffortSchema = Schema.NullOr(ReasoningEffortLevelSchema);
 const ResponsesReasoningSchema = Schema.NullOr(
   Schema.Struct({
     effort: ReasoningEffortSchema,
-    mode: Schema.NullOr(Schema.Literals(['standard', 'pro'])),
+    mode: Schema.NullOr(Schema.Literal('pro')),
     summary: Schema.NullOr(Schema.Literal('auto')),
   }),
 );
