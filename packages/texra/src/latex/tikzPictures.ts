@@ -98,8 +98,9 @@ export const extractTikzPictures = Effect.fn('tikzPictures.extract')(function* (
 });
 
 /**
- * Extract and compile TikZ pictures from a LaTeX file
+ * Compile the TikZ pictures {@link extractTikzPictures} found in a LaTeX file
  * @param latexFile Location of the LaTeX file
+ * @param labeledTikzPictures What {@link extractTikzPictures} returned for it
  * @param roots The session's roots: the TikZ template and the compile's LaTeX
  *   settings come from its configuration, and the products are located in its
  *   workspace
@@ -107,6 +108,7 @@ export const extractTikzPictures = Effect.fn('tikzPictures.extract')(function* (
  */
 export const compileTikzPictures = Effect.fn('tikzPictures.compile')(function* (
   latexFile: FileLocation,
+  labeledTikzPictures: readonly (readonly [string, readonly string[]])[],
   roots: WorkspaceRoots,
 ) {
   const fs = yield* FileSystem.FileSystem;
@@ -118,14 +120,6 @@ export const compileTikzPictures = Effect.fn('tikzPictures.compile')(function* (
   );
 
   yield* fs.makeDirectory(buildDir, { recursive: true });
-
-  yield* Effect.logDebug(
-    `Extracting TikZ pictures from ${latexFile.absolutePath}`,
-  ).pipe(withLogChannel(CHANNEL));
-  const labeledTikzPictures = yield* extractTikzPictures(latexFile);
-  yield* Effect.logDebug(
-    `Found ${labeledTikzPictures.length} labeled TikZ pictures`,
-  ).pipe(withLogChannel(CHANNEL));
 
   const template = Settings.getConfig(roots.config, TIKZ_TEMPLATE_SETTING);
   const compiledFiles: FileLocation[] = [];

@@ -6,7 +6,7 @@ import { LaunchKeys } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { RunRegistry, Runs } from '@agent/runtime/runRegistry';
 import { Interactions } from '@agent/runtime/HostInteractions';
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure, withLogChannel } from '@logger/effectLog';
 import {
   describeRefusal,
   type ResumeRefusal,
@@ -82,11 +82,10 @@ const wakeRun = Effect.fn('wakeRun')(function* (
     .facts(runId)
     .pipe(
       Effect.catch((error) =>
-        Effect.logWarning(`Cannot read whether ${runId} still exists`).pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
-          Effect.as(null),
-        ),
+        logFailure(
+          CHANNEL,
+          `Cannot read whether ${runId} still exists`,
+        )(error).pipe(Effect.as(null)),
       ),
     );
   if (facts === null) return;
@@ -177,11 +176,10 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     if (live === undefined) {
       const rejection = yield* checkpointRefusal(runId).pipe(
         Effect.catch((error) =>
-          Effect.logWarning(`Cannot read whether ${runId} can continue`).pipe(
-            Effect.annotateLogs({ data: error }),
-            withLogChannel(CHANNEL),
-            Effect.as({ kind: 'readFailed' } as const),
-          ),
+          logFailure(
+            CHANNEL,
+            `Cannot read whether ${runId} can continue`,
+          )(error).pipe(Effect.as({ kind: 'readFailed' } as const)),
         ),
       );
       if (rejection !== null)

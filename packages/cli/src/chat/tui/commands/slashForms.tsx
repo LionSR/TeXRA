@@ -5,6 +5,7 @@ import { useLayoutEffect, useState } from 'react';
 
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { writeTerminalSequence } from '@cli/tui/terminalCleanup';
+import { osc } from '@cli/runtime/terminal/ansiEscapes';
 import { borderedPanelChromeRows } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
@@ -37,9 +38,7 @@ const CLIPBOARD_TOOL: Partial<Record<NodeJS.Platform, string>> = {
  * without OSC 52 (Terminal.app).
  */
 function copyToClipboard(text: string): void {
-  writeTerminalSequence(
-    `\u001B]52;c;${Buffer.from(text).toString('base64')}\u0007`,
-  );
+  writeTerminalSequence(osc(`52;c;${Buffer.from(text).toString('base64')}`));
   const child = execFile(
     CLIPBOARD_TOOL[platform()] ?? 'wl-copy',
     () => undefined,

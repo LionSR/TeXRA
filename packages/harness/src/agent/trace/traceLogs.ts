@@ -18,7 +18,7 @@ import {
   buildErrorLogData,
   normalizeProviderError,
 } from '@common/errors/sdkError/providerErrorFormat';
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure } from '@logger/effectLog';
 import {
   MESSAGE_TYPES,
   type CompactionActivityData,
@@ -69,10 +69,7 @@ export function logProviderError(
 function logProviderBody(message: string, body: unknown): Effect.Effect<void> {
   return body === undefined
     ? Effect.void
-    : Effect.logWarning(`${message} (provider response body)`).pipe(
-        Effect.annotateLogs({ data: body }),
-        withLogChannel('agentTrace'),
-      );
+    : logFailure('agentTrace', `${message} (provider response body)`)(body);
 }
 
 /** Emit an error log row. The vendor's raw body never rides `data`. */

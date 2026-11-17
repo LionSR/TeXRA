@@ -94,12 +94,10 @@ function presentOn<K extends RuntimePresentationEvent>(
     return Effect.forkDetach(
       presented.pipe(
         Effect.catchCause((cause) =>
-          Effect.logWarning('A host presentation notice failed').pipe(
-            Effect.annotateLogs({
-              data: { event, cause },
-            }),
-            withLogChannel(CHANNEL),
-          ),
+          logFailure(
+            CHANNEL,
+            'A host presentation notice failed',
+          )({ event, cause }),
         ),
       ),
     ).pipe(Effect.asVoid);
@@ -134,11 +132,10 @@ const noticeOf =
       Effect.catch((failure) =>
         options.fallbackMessage === undefined
           ? Effect.fail(failure)
-          : Effect.logWarning(
+          : logFailure(
+              CHANNEL,
               'Presentation emit failed; showing the generic error',
-            ).pipe(
-              Effect.annotateLogs({ data: failure.cause }),
-              withLogChannel(CHANNEL),
+            )(failure.cause).pipe(
               Effect.andThen(
                 presentOn(host, 'requestShowError', {
                   message: options.fallbackMessage,
@@ -169,10 +166,7 @@ export function presenterOn(host: HostInteractions): Notices {
             host,
             'Live presentation emit failed',
           )
-        : Effect.logWarning('A notice has no host to present it').pipe(
-            Effect.annotateLogs({ data: { event } }),
-            withLogChannel(CHANNEL),
-          ),
+        : logFailure(CHANNEL, 'A notice has no host to present it')({ event }),
   };
 }
 

@@ -12,7 +12,7 @@ import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { quickPick } from '@frontend/ui/dialogs';
 import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
-import { compileTikzPictures } from '@latex/tikzPictures';
+import { compileTikzPictures, extractTikzPictures } from '@latex/tikzPictures';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness/host';
 import {
@@ -53,8 +53,10 @@ export function handleCompileTikzFigures(
 
           // Over the session's rooted filesystems the command root
           // provided, not a view built at this depth.
+          const latexFile = pathToLocationIn(roots.workspace, filePath);
           const compiledFiles = yield* compileTikzPictures(
-            pathToLocationIn(roots.workspace, filePath),
+            latexFile,
+            yield* extractTikzPictures(latexFile),
             roots,
           );
 

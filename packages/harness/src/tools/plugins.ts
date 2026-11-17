@@ -23,7 +23,7 @@ import { Cause, Effect, type Layer, Schema } from 'effect';
 // Local imports
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure, withLogChannel } from '@logger/effectLog';
 import { type AppSignals, emitAppSignal } from '@platform/appSignals';
 import {
   aggregateTarget,
@@ -369,12 +369,10 @@ export const factRows = (
   ).pipe(
     Effect.tap(({ rejected }) =>
       Effect.forEach(rejected, (error) =>
-        Effect.logWarning(
+        logFailure(
+          'plugins',
           `A plugin fact under run ${runId} was not written`,
-        ).pipe(
-          Effect.annotateLogs({ data: error.message }),
-          withLogChannel('plugins'),
-        ),
+        )(error.message),
       ),
     ),
     Effect.map(({ kept }) => kept),

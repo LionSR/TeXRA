@@ -18,7 +18,7 @@ import {
   owningCall,
   persistedParentId,
 } from '@agent/storage/runOwnership';
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure } from '@logger/effectLog';
 import {
   type CommitOrdinal,
   type ResumeRefusal,
@@ -90,13 +90,10 @@ function refusalFor(
   const cause = toErrorMessage(error);
   if (refused === 'earlierBuild')
     return Effect.succeed({ failed: { kind: 'earlierBuild', cause } });
-  return Effect.logWarning(
+  return logFailure(
+    CHANNEL,
     `Refusing to resume ${runId}: its saved state cannot be used (${refused}): ${cause}`,
-  ).pipe(
-    Effect.annotateLogs({ data: error }),
-    withLogChannel(CHANNEL),
-    Effect.as({ failed: { kind: 'unusableCheckpoint' } } as const),
-  );
+  )(error).pipe(Effect.as({ failed: { kind: 'unusableCheckpoint' } } as const));
 }
 
 /**

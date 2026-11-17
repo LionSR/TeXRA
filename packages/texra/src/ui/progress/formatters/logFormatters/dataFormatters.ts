@@ -8,7 +8,6 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Third-party imports - Lit template utilities
 import { html } from 'lit';
-import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - shared schemas and utilities
 import { buildDetailsCard, buildFileListRender } from '../htmlBuilders';
@@ -27,7 +26,7 @@ export function formatFileListTemplate(row: FileListRow): FormatResult {
       labelClass: 'summary-text',
     },
     // prettier-ignore
-    body: html`<ul class="file-list-content" data-log-id=${ifDefined(row.id)}>${buildFileListRender(row.files)}</ul>`,
+    body: html`<ul class="file-list-content">${buildFileListRender(row.files)}</ul>`,
     classes: { 'file-list-details': true },
   });
 }

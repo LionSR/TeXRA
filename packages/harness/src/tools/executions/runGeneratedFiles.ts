@@ -14,7 +14,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem, type PlatformError } from 'effect';
 
 import { runDirUnder } from '@common/storage/storageLayout';
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure } from '@logger/effectLog';
 import type { RunId } from '@shared/schemas';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe here since the input is a storage-relative path produced by the
@@ -84,13 +84,10 @@ const walkRunStorage = Effect.fn('walkRunStorage')(function* (
     Effect.catch((error) => {
       if (meansAbsent(error)) return Effect.succeed<string[]>([]);
       if (relativePath === '') return Effect.fail(error);
-      return Effect.logWarning(
+      return logFailure(
+        CHANNEL,
         `Unreadable run directory '${fullPath}'; listing it as empty`,
-      ).pipe(
-        Effect.annotateLogs({ data: error }),
-        withLogChannel(CHANNEL),
-        Effect.as<string[]>([]),
-      );
+      )(error).pipe(Effect.as<string[]>([]));
     }),
   );
 

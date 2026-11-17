@@ -14,7 +14,6 @@ import '@ui/progress/components/UserMessage';
 
 // Third-party imports - Lit template utilities
 import { html, type TemplateResult } from 'lit';
-import { ifDefined } from 'lit/directives/if-defined.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports - shared schemas and utilities
@@ -70,21 +69,20 @@ function logLineTimestamp(
 
 /** Format user message entry as TemplateResult. */
 export function formatUserMessageTemplate(row: UserRow): FormatResult {
-  const { id, timestamp, scriptSummary, forkAt, media } = row;
+  const { timestamp, scriptSummary, forkAt, media } = row;
   // prettier-ignore
-  return html`<user-message .text=${row.text.full} .logId=${id} .timestamp=${timestamp} .scriptSummary=${scriptSummary ?? null} .forkAt=${forkAt ?? null} .media=${media}></user-message>`;
+  return html`<user-message .text=${row.text.full} .timestamp=${timestamp} .scriptSummary=${scriptSummary ?? null} .forkAt=${forkAt ?? null} .media=${media}></user-message>`;
 }
 
 /** Format progress status entry as TemplateResult. */
 export function formatProgressStatusTemplate(
   row: ProgressStatusRow,
 ): FormatResult {
-  const { level, id, timestamp } = row;
+  const { level, timestamp } = row;
   const summaryText = row.summary.full;
 
   // prettier-ignore
   return html`<div
-      data-log-id=${ifDefined(id)}
     ><div class="log-line">${logLineTimestamp(timestamp, level, true)} <span class=${`message-${level}`}>${summaryText}</span></div></div>`;
 }
 
@@ -94,7 +92,7 @@ export function formatProgressStatusTemplate(
  * (`errorRowText`).
  */
 export function formatErrorTemplate(row: ErrorRow): FormatResult {
-  const { id, timestamp } = row;
+  const { timestamp } = row;
   const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
     new Date(timestamp),
     'minute',
@@ -110,7 +108,7 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
   // The level icon supplies a non-color error cue for the static row.
   if (!hasDetails) {
     // prettier-ignore
-    return html`<div class="log-line" data-log-id=${ifDefined(id)}>${logLineTimestamp(timestamp, 'error', true)} <span class="message-error">${summaryText}</span></div>`;
+    return html`<div class="log-line">${logLineTimestamp(timestamp, 'error', true)} <span class="message-error">${summaryText}</span></div>`;
   }
 
   // Build modular template parts to avoid overly long single-line templates.
@@ -131,18 +129,17 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
   // prettier-ignore
   const summaryTemplate = html`<div slot="summary" class="details-summary message-header"><span class="message-label">${waIcon('circle-exclamation', { className: 'icon' })}${labelSpan}</span>${timestampLabel}${copyButton}</div>`;
   // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--error message-disclosure" data-log-id=${ifDefined(id)}>${summaryTemplate}${contentTemplate}</wa-details>`;
+  return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--error message-disclosure">${summaryTemplate}${contentTemplate}</wa-details>`;
 }
 
 /** Format a plain log line as TemplateResult. */
 export function formatDefaultLogMessageTemplate(row: LogRow): FormatResult {
-  const { id, level, timestamp, verbose } = row;
+  const { level, timestamp, verbose } = row;
   const text = row.text.full;
 
   // prettier-ignore
   return html`<div
       class="log-line"
-      data-log-id=${id}
     >${logLineTimestamp(timestamp, level, verbose === true)}${when(
         verbose,
         () => html` <span class=${`level-${level}`}>${level.toUpperCase().padEnd(8)}</span>`,
