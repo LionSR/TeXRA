@@ -762,6 +762,10 @@ const routeMessage = createMessageRoutes({
       }),
     );
   },
+  'desktop:pdfLoadFailed': (message) => {
+    for (const project of projectWorkbenches.values())
+      project.pdfPane.reportLoadFailure(message.pdfUrl, message.reason);
+  },
   'desktop:showPrompt': (message) => promptOverlay.open(message),
   'desktop:terminal:data': (message) =>
     projectWorkbenches
