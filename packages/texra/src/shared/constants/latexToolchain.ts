@@ -32,31 +32,35 @@ export type LatexRecommendedSetting = {
  * order. The extension's editor integration writes and inspects them; the
  * LaTeX tab renders them.
  */
-export const LATEX_RECOMMENDED_SETTINGS = {
-  outDir: {
+export const LATEX_RECOMMENDED_SETTINGS = Object.freeze({
+  outDir: Object.freeze({
     kind: 'scalar',
     key: 'latex-workshop.latex.outDir',
     value: '%DIR%/build/',
     name: 'LaTeX Output Directory',
     description:
       'Redirect compilation artifacts to a build/ subfolder, keeping your project root clean.',
-  },
-  autoRevealExclude: {
+  } as const),
+  autoRevealExclude: Object.freeze({
     kind: 'object',
     key: 'explorer.autoRevealExclude',
-    value: { '**/build/': true },
+    value: Object.freeze({ '**/build/': true } as const),
     name: 'Explorer Auto-Reveal Exclude',
     description:
       'Prevent the build/ folder from being auto-revealed in the Explorer sidebar.',
-  },
-} as const satisfies Readonly<Record<string, LatexRecommendedSetting>>;
+  } as const),
+} as const satisfies Readonly<Record<string, LatexRecommendedSetting>>);
 
 /** The key of one recommended setting. */
 export type LatexRecommendedSettingField =
   keyof typeof LATEX_RECOMMENDED_SETTINGS;
 
 /** Package managers TeXRA knows how to install dependencies with. */
-export const SYSTEM_PACKAGE_MANAGERS = ['brew', 'apt', 'scoop'] as const;
+export const SYSTEM_PACKAGE_MANAGERS = Object.freeze([
+  'brew',
+  'apt',
+  'scoop',
+] as const);
 
 export type SystemPackageManager = (typeof SYSTEM_PACKAGE_MANAGERS)[number];
 
@@ -445,10 +449,11 @@ type SupportedLatexCompiler = CompilerEntry['name'];
  * {@link CORE_DEPENDENCY_TOOLS} on purpose: setup installs a whole toolchain,
  * while the banner names only what TeXRA's own features run.
  */
-export const PROBED_LATEX_TOOLS: readonly ProbedLatexTool[] =
+export const PROBED_LATEX_TOOLS: readonly ProbedLatexTool[] = Object.freeze(
   LATEX_TOOLS.filter(
     (tool): tool is EntryWith<'required' | 'image'> => tool.probe !== 'none',
-  ).map((tool) => tool.name);
+  ).map((tool) => tool.name),
+);
 
 /**
  * The named tools the dependency banner probes, with the image tools: the
@@ -456,12 +461,16 @@ export const PROBED_LATEX_TOOLS: readonly ProbedLatexTool[] =
  * toolchain compiles the document. Derived, not restated.
  */
 export const CORE_DEPENDENCY_TOOLS: readonly CoreEntry['name'][] =
-  LATEX_TOOLS.filter((t): t is CoreEntry => 'core' in t).map((t) => t.name);
+  Object.freeze(
+    LATEX_TOOLS.filter((t): t is CoreEntry => 'core' in t).map((t) => t.name),
+  );
 
 /** The image tools; either one alone satisfies the image capability. */
-export const IMAGE_LATEX_TOOLS: readonly ImageLatexTool[] = LATEX_TOOLS.filter(
-  (tool): tool is EntryWith<'image'> => tool.probe === 'image',
-).map((tool) => tool.name);
+export const IMAGE_LATEX_TOOLS: readonly ImageLatexTool[] = Object.freeze(
+  LATEX_TOOLS.filter(
+    (tool): tool is EntryWith<'image'> => tool.probe === 'image',
+  ).map((tool) => tool.name),
+);
 
 /**
  * What the dependency banner says TeXRA cannot do without each tool it
@@ -470,13 +479,13 @@ export const IMAGE_LATEX_TOOLS: readonly ImageLatexTool[] = LATEX_TOOLS.filter(
  */
 export const DEPENDENCY_USE: Readonly<
   Record<CoreEntry['name'] | ImageLatexTool, string>
-> = {
+> = Object.freeze({
   latexindent: 'format .tex files',
   perl: 'run latexindent',
   gs: 'turn PDF figures into images',
   gm: 'turn PDF figures into images',
   magick: 'turn PDF figures into images',
-};
+});
 
 /**
  * How user-facing output names the image capability when neither candidate is
@@ -529,14 +538,17 @@ export interface DoctorLatexTool {
 }
 
 /** The dependencies `texra doctor` renders a row for, in row order. */
-export const DOCTOR_LATEX_TOOLS: readonly DoctorLatexTool[] =
+export const DOCTOR_LATEX_TOOLS: readonly DoctorLatexTool[] = Object.freeze(
   LATEX_TOOLS.filter(
     (tool): tool is DoctorEntry => tool.doctor.row !== 'none',
-  ).map((tool) => ({
-    name: tool.name,
-    required: tool.doctor.row === 'required',
-    purpose: tool.doctor.purpose,
-  }));
+  ).map((tool) =>
+    Object.freeze({
+      name: tool.name,
+      required: tool.doctor.row === 'required',
+      purpose: tool.doctor.purpose,
+    }),
+  ),
+);
 
 /**
  * The LaTeX-to-PDF compilers TeXRA can actually drive. Single source for that
@@ -544,9 +556,11 @@ export const DOCTOR_LATEX_TOOLS: readonly DoctorLatexTool[] =
  * TeX-distribution row), so none of them can disagree with the advice text.
  */
 export const SUPPORTED_LATEX_COMPILERS: readonly SupportedLatexCompiler[] =
-  LATEX_TOOLS.filter(
-    (tool): tool is CompilerEntry => 'drivesCompile' in tool,
-  ).map((tool) => tool.name);
+  Object.freeze(
+    LATEX_TOOLS.filter(
+      (tool): tool is CompilerEntry => 'drivesCompile' in tool,
+    ).map((tool) => tool.name),
+  );
 
 // ============================================================
 // Install advice
@@ -566,32 +580,38 @@ export const SCOOP_INSTALL_COMMAND =
  * every group, by any one tool of the group. `installs` is what its install
  * advice installs.
  */
-export const LATEX_DEPENDENCIES = {
-  compiler: {
+export const LATEX_DEPENDENCIES = Object.freeze({
+  compiler: Object.freeze({
     label: 'TeX Distribution',
-    needs: [SUPPORTED_LATEX_COMPILERS],
-    installs: ['pdflatex'],
-  },
-  latexdiff: {
+    needs: Object.freeze([SUPPORTED_LATEX_COMPILERS] as const),
+    installs: Object.freeze(['pdflatex'] as const),
+  } as const),
+  latexdiff: Object.freeze({
     label: 'latexdiff',
-    needs: [['latexdiff']],
-    installs: ['latexdiff'],
-  },
-  latexindent: {
+    needs: Object.freeze([Object.freeze(['latexdiff'] as const)] as const),
+    installs: Object.freeze(['latexdiff'] as const),
+  } as const),
+  latexindent: Object.freeze({
     label: 'latexindent',
-    needs: [['latexindent'], ['perl']],
-    installs: ['latexindent', 'perl'],
-  },
-  texcount: {
+    needs: Object.freeze([
+      Object.freeze(['latexindent'] as const),
+      Object.freeze(['perl'] as const),
+    ] as const),
+    installs: Object.freeze(['latexindent', 'perl'] as const),
+  } as const),
+  texcount: Object.freeze({
     label: 'TeXcount',
-    needs: [['texcount']],
-    installs: ['texcount'],
-  },
-  image: {
+    needs: Object.freeze([Object.freeze(['texcount'] as const)] as const),
+    installs: Object.freeze(['texcount'] as const),
+  } as const),
+  image: Object.freeze({
     label: 'Image Processing',
-    needs: [['gs'], IMAGE_LATEX_TOOLS],
-    installs: ['gs', 'gm'],
-  },
+    needs: Object.freeze([
+      Object.freeze(['gs'] as const),
+      IMAGE_LATEX_TOOLS,
+    ] as const),
+    installs: Object.freeze(['gs', 'gm'] as const),
+  } as const),
 } as const satisfies Readonly<
   Record<
     string,
@@ -601,7 +621,7 @@ export const LATEX_DEPENDENCIES = {
       readonly installs: readonly LatexToolName[];
     }
   >
->;
+>);
 
 /** A dependency the LaTeX tab reports. */
 export type LatexDependency = keyof typeof LATEX_DEPENDENCIES;
