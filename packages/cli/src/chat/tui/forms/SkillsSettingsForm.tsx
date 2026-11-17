@@ -50,7 +50,7 @@ export function SkillsSettingsForm(
   return (
     <AsyncListForm<SkillsSettingsData, SkillToggle>
       title="/config · Skills"
-      loadingLabel="Loading skills..."
+      loadingLabel="Loading skills…"
       load={() =>
         Effect.gen(function* () {
           const result = yield* Skills.display(roots);

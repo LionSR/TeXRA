@@ -37,7 +37,7 @@ import {
   acceptsFollowUp,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { readCliTeamName } from '@cli/runtime/cliTeams';
+import { readCliTeam } from '@cli/runtime/cliTeams';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
 import { launchApproval } from '@cli/runtime/platform/cliContext';
 import { resumeRun } from '@texra/controllers/session/runActionPolicy';
@@ -272,18 +272,16 @@ export function createChatSessionController(
     >,
     modelSource?: 'history',
   ) {
-    const cliTeamId = launchTeamId(config);
-    const teamName = yield* readCliTeamName(
+    const team = yield* readCliTeam(
       runSession.roots.repoState,
-      cliTeamId,
+      launchTeamId(config),
     );
     patchSessionMeta({
       agent: config.agent,
       agentSource: config.agentSource ?? undefined,
       model: config.model,
       ...(modelSource ? { modelSource } : {}),
-      teamName,
-      cliTeamId,
+      team,
       delegationAgentScope: config.delegationAgentScope ?? undefined,
     });
   });
@@ -720,7 +718,7 @@ export function createChatSessionController(
           ...(displayInstruction !== undefined ? { displayInstruction } : {}),
           workingDirectory: cwd,
           ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
-          ...(meta.cliTeamId ? { launch: { teamId: meta.cliTeamId } } : {}),
+          ...(meta.team ? { launch: { teamId: meta.team.id } } : {}),
           ...(meta.delegationAgentScope
             ? { delegationAgentScope: meta.delegationAgentScope }
             : {}),

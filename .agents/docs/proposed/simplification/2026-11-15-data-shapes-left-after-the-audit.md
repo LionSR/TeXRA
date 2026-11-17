@@ -75,6 +75,9 @@ cleared with it. Either one `team: { id, name }` field, or the id alone with
 the name read where it is shown (two readers). Small; held back only for
 size.
 
+Landed 2026-11-17: `SessionMeta.team: { id, name }`, read by `readCliTeam`;
+a team whose preset is gone shows by its id.
+
 ## 5. `Surface.workbench` is stored untyped and decoded on every read
 
 `packages/texra/src/shared/session/surface.ts` types it
@@ -82,6 +85,12 @@ size.
 `packages/desktop/src/renderer/projectWorkbench.ts` decodes it again on each
 `getState()` behind an identity cache. Decode once where the value returns
 from persistence and hold the decoded state.
+
+Landed 2026-11-17: the project workbench decodes the blob once when it opens
+and holds the layout; the project rail's sidebar reveal writes through the
+workbench's `updateState` instead of acting on the surface itself, so the
+workbench is the blob's one writer. The field stays untyped in the shared
+record, which hosts without a workbench also carry.
 
 ## 6. `ToolRow` carries three versions of one call
 

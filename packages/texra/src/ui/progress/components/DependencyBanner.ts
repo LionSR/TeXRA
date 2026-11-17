@@ -30,16 +30,6 @@ export class DependencyBanner extends LitElement {
       .message {
         flex: 1 1 100%;
       }
-      /* An inline link-styled button: a wa-button would break the sentence. */
-      .tool-link {
-        padding: 0;
-        border: 0;
-        background: none;
-        color: inherit;
-        font: inherit;
-        text-decoration: underline;
-        cursor: pointer;
-      }
     `,
   ];
 
@@ -76,7 +66,7 @@ export class DependencyBanner extends LitElement {
           (group, index) =>
             html`${joiner(index)}<button
                 type="button"
-                class="tool-link focus-ring"
+                class="clickable-link focus-ring"
                 aria-label=${`Open the ${group} install guide`}
                 @click=${() => this.install()}
               >

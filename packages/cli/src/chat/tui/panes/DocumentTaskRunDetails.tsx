@@ -7,6 +7,7 @@
 import { Box, Text } from 'ink';
 
 import {
+  DETAIL_SEPARATOR,
   fileLocationDisplayPath,
   type RunView,
   type Stage,
@@ -163,7 +164,7 @@ function documentTaskRunDetailGroups(
     for (const [index, entry] of record.latexdiffs.entries()) {
       lines.push({
         key: `latexdiff:${round}:${index}`,
-        text: `  ${entry.status === 'ok' ? TICK : CROSS} ${joinFacts([formatRoundLabel(round), `Latexdiff: ${safeTerminalText(latexdiffDisplayName(entry))}`])}${entry.status === 'failed' ? ` — ${safeTerminalText(entry.error)}` : ''}`,
+        text: `  ${entry.status === 'ok' ? TICK : CROSS} ${joinFacts([formatRoundLabel(round), `Latexdiff: ${safeTerminalText(latexdiffDisplayName(entry))}`])}${entry.status === 'failed' ? `${DETAIL_SEPARATOR}${safeTerminalText(entry.error)}` : ''}`,
         color: entry.status === 'ok' ? undefined : COLOR_ERROR,
         role: entry.status === 'ok' ? 'output' : 'alert',
       });

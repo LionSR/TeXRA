@@ -288,7 +288,7 @@ export const deleteCliHistory = Effect.fn('deleteCliHistory')(function* (
   session: Session,
   target: RunId | 'all',
 ) {
-  const { listed, deleted, active, failed } = yield* session.deleteRuns(target);
+  const { deleted, active, failed } = yield* session.deleteRuns(target);
   if (target === 'all')
     return {
       deleted: 'all',
@@ -307,7 +307,7 @@ export const deleteCliHistory = Effect.fn('deleteCliHistory')(function* (
   return {
     deleted: 'one',
     id: target,
-    found: listed > 0,
+    found: status !== 'not-found',
     status,
   } satisfies CliHistoryDeleteResult;
 });

@@ -10,7 +10,10 @@ import {
   showLoggedInfoMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { findBuildDirectories, removeBuildDirectories } from './clean';
+import {
+  findBuildDirectories,
+  removeBuildDirectories,
+} from '@housekeeping/buildDirectories';
 
 const CHANNEL = 'cleanCommands';
 

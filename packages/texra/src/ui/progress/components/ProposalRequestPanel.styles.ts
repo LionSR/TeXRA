@@ -100,27 +100,9 @@ export const proposalRequestPanelStyles: CSSResult = css`
 
   .workflow-proposal__file-name {
     font-family: var(--wa-font-family-mono);
-    color: var(--color-text-link);
-    cursor: pointer;
-  }
-
-  .workflow-proposal__file-name:hover {
-    text-decoration: underline;
-    color: var(--color-text-link-active);
-  }
-
-  /* Radius only — the ring comes from focusRingStyles. */
-  .workflow-proposal__file-name:focus-visible {
-    border-radius: var(--border-radius-small);
   }
 
   .workflow-proposal__file-name--readonly {
-    color: var(--color-text-secondary);
-    cursor: default;
-  }
-
-  .workflow-proposal__file-name--readonly:hover {
-    text-decoration: none;
     color: var(--color-text-secondary);
   }
 

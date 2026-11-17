@@ -38,8 +38,8 @@ import type {
 } from '@shared/session/sessionLog';
 
 import { makeRunTrace } from './runTrace';
-import { SessionViewService } from './sessionViewService';
-import { TextChunkSource } from './sessionSources';
+import { SessionViewService } from '@shared/session/sessionViewService';
+import { TextChunkSource } from '@shared/session/sessionSources';
 
 /** What the session layer composes a session from, beside the handle. The
  *  store is the one owner of the session's publisher: nothing else reaches

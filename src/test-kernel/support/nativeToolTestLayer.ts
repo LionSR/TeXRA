@@ -16,7 +16,7 @@ import {
   type ITool,
   type ToolContextShape,
   type ToolEnv,
-} from '@agent/core/tools/ToolTypes';
+} from '@tools/core/ToolTypes';
 import { RunCall, type RunCallShape } from '@agent/runtime/RunCall';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import type { AgentRunShape } from '@agent/runtime/run/AgentRun';

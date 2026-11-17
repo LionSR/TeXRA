@@ -4,11 +4,11 @@
  * follows a change and on every subscribe, so a surface never asks for a
  * catalog and never holds a stale one. Every producer is a read the host
  * already owns; nothing here is a fact about a run (`SessionView`) or a
- * choice of the user's (`Surface`). The catalogs, the recent commits and the
- * onboarding funnel are host-neutral; the host injects its file lists, its
- * missing-tool check, and which notices it shows (a VS Code window shows the
- * lost-credential banner and offers to start a project; the desktop keeps
- * the first in Settings).
+ * choice of the user's (`Surface`). The catalogs, the file lists, the recent
+ * commits and the onboarding funnel are host-neutral; the host injects its
+ * workspace-root picker and which notices it shows (a VS Code window shows
+ * the lost-credential banner and offers to start a project; the desktop
+ * keeps the first in Settings).
  *
  * The source holds one `SubscriptionRef` of its inputs. Each producer reads
  * and then writes its own fields, so the last write of a field wins and no
@@ -60,6 +60,7 @@ import type {
   ProjectDisplay,
 } from '@texra/shared/session/hostSnapshot';
 import { agentOptionsData } from '@texra/controllers/session/agentOptions';
+import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { missingDependencyTools } from '@latex/latexToolchain';
@@ -81,9 +82,9 @@ type DismissibleBanner = 'gettingStarted' | 'dependency';
 interface HostSnapshotSourceOptions {
   project: ProjectDisplay;
   tools: HostSnapshot['tools'];
-  /** The project folder the recent commits are read from and whose `.env`
-   *  the credential check reads; `undefined` for a session with no folder
-   *  open, which is never a repository. */
+  /** The project folder the launcher's file lists and the recent commits
+   *  are read from and whose `.env` the credential check reads; `undefined`
+   *  for a session with no folder open, which is never a repository. */
   root: string | undefined;
   /**
    * The owning session's three setting slots: its workspace-scoped team and
@@ -94,14 +95,6 @@ interface HostSnapshotSourceOptions {
    * to.
    */
   stores: SettingsStores;
-  /** The launcher's single-slot catalogs: base and edited candidates. The
-   *  read takes the process `FileSystem` and `Path` from context; the
-   *  refresh effects that reach it carry the requirement. */
-  fileOptions(): Effect.Effect<
-    FileOptions,
-    Error,
-    FileSystem.FileSystem | Path.Path
-  >;
   /** The launcher's root picker; empty where a session has exactly one. */
   workspaceRoots(): HostSnapshot['workspaceRoots'];
   /** The notices this host shows: the lost-credential banner, the tools
@@ -316,7 +309,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     );
     const loadFiles = yield* producer(
       'the project files',
-      Effect.flatMap(options.fileOptions(), (fileOptions) =>
+      Effect.flatMap(workspaceFileOptions(options.root), (fileOptions) =>
         write({ fileOptions }),
       ),
     );

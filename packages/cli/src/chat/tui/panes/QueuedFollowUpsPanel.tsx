@@ -70,10 +70,7 @@ function queuedFollowUpPanelDisplay({
     rows.push({
       kind: 'overflow',
       text: truncateSummaryToWidth(
-        hiddenRowsText(
-          hiddenCount,
-          pluralize(hiddenCount, 'queued message', 'queued messages'),
-        ),
+        hiddenRowsText(hiddenCount, pluralize(hiddenCount, 'queued message')),
         contentWidth,
       ),
     });

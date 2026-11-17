@@ -58,11 +58,6 @@
         "./packages/texra/src/telemetry/*.ts",
         "./packages/texra/src/telemetry/*/index.ts"
       ],
-      "@transcript/*": [
-        "./packages/harness/src/transcript/*",
-        "./packages/harness/src/transcript/*.ts",
-        "./packages/harness/src/transcript/*/index.ts"
-      ],
       "@latex/*": [
         "./packages/texra/src/latex/*",
         "./packages/texra/src/latex/*.ts",

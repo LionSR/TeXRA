@@ -62,3 +62,5 @@ export * from './sessionEvent';
 export * from './sessionViewInput';
 export * from './rowVersions';
 export * from './traceEvent';
+export * from './traceDocument';
+export * from './exportNode';

@@ -1317,7 +1317,7 @@ sessionMeta.set({
   modelSource: 'builtin-default',
   cwd: HARNESS_CWD,
   approvalPolicy: APPROVAL_POLICY_DEFAULT,
-  teamName: TEAM_NAME,
+  ...(TEAM_NAME && { team: { id: TEAM_NAME, name: TEAM_NAME } }),
   version: '0.0.0-harness',
 });
 // The harness root: minted before any fixture, like a real run's start.
@@ -1721,7 +1721,7 @@ function appendHarnessStatus(): void {
     formatCliSessionStatus({
       agent: meta.agent,
       model: meta.model,
-      teamName: meta.teamName,
+      teamName: meta.team?.name,
       modelAccess: run?.usage.usageRoute,
       approvalPolicy: harnessApprovalPolicy(),
       approvalBypasses: runBypasses(view, runId),

@@ -337,7 +337,13 @@ inside one plugin).
    the owners table and the module `WeakSet`; the roster derived from
    `RcMap.keys`; the per-file condition variable as a `SubscriptionRef` per
    file read with `Stream.takeUntil` and `Stream.debounce` under
-   `Effect.timeout`; the port without optional host hooks.
+   `Effect.timeout`; the port without optional host hooks. Landed in
+   PR 14790. Rule 3 then took the step further: the port's second
+   implementation, the VS Code Lean 4 extension bridge, served only a
+   window's local fallback once a folder window's tasks ran in the
+   background service, so it was deleted with the host's `lean` option
+   and the probe's VS Code branch ("One Lean backend", 2026-11-17); the
+   port has one implementation, the `lake` pool.
 3. **The document task's record: I5, I4, I1, then I2, I3, I7 and J9.** After
    PR 14713. The `r<N>` grammar as one
    `Schema.TemplateLiteralParser(['r', Schema.NumberFromString])` (eight sites
@@ -555,8 +561,8 @@ waits on what, and when the package is done.
   toolchain catalog as data).
 - **Files:** `packages/texra/src/tools/github/`, `tools/lean/`,
   `tools/documents/`, `agent/output/`, `latex/latexdiff/`,
-  `shared/constants/latexToolchain.ts`, and the Lean port's host halves in
-  `packages/extension/src/frontend/lean/` and the desktop.
+  `shared/constants/latexToolchain.ts`. The Lean port's VS Code half is
+  gone (lane 4, step 2): every host runs the `lake` pool.
 - **Leave to F:** `latex/arxivProcessor.ts` and `tools/arxiv/` (I8 + H10).
 - **PRs:** two. GitHub, Lean, I6 and I10 now; the document task's record
   once PR 14713 has landed.

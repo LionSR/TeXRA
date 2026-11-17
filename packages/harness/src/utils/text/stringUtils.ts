@@ -83,6 +83,10 @@ export function formatResultCount(
 /** What stands between two facts printed on one line, in every host. */
 export const FACT_SEPARATOR = ' · ';
 
+/** What stands between a label and the detail that explains it
+ *  (`Retry — the model timed out`), in every host. */
+export const DETAIL_SEPARATOR = ' — ';
+
 /**
  * Facts on one line (`3 agents · 1 needs you`), leaving out the absent and
  * empty ones, so a caller lists each fact with its condition and no filter.

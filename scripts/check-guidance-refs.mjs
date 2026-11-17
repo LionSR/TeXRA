@@ -45,7 +45,6 @@ const GUIDANCE_FILES = [
   'packages/texra/AGENTS.md',
   'packages/extension/src/AGENTS.md',
   'src/README.md',
-  'packages/harness/src/agent/core/README.md',
   'packages/harness/src/agent/runtime/README.md',
   'packages/texra/src/replacement/README.md',
   'packages/texra/src/latex/README.md',

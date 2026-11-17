@@ -7,6 +7,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
 import { providerDisplayName } from '@texra-ai/llm';
 import {
+  DETAIL_SEPARATOR,
   MODEL_AVAILABILITY_STATUS,
   HELPER_MODEL_SETTING,
   pluralize,
@@ -193,7 +194,7 @@ export class ModelSelectionList extends SignalWatcher(LitElement) {
     if (status === undefined || status.available) return nothing;
 
     const title = status.missingKey
-      ? `${status.label} — add a key in API configuration`
+      ? `${status.label}${DETAIL_SEPARATOR}add a key in API configuration`
       : status.label;
     const iconName = status.missingKey ? 'key' : 'triangle-exclamation';
     const className = status.missingKey

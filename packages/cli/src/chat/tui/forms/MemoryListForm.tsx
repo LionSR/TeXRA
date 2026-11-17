@@ -40,9 +40,7 @@ export function MemoryListForm(props: MemoryListFormProps): React.JSX.Element {
         }))
       }
       availableRows={props.availableRows}
-      description={
-        <Text dimColor>Choose a memory to preview. Press Esc to close.</Text>
-      }
+      description={<Text dimColor>Choose a memory to preview.</Text>}
       emptyMessage="No memories yet. Ask TeXRA to remember something and it will appear here."
       selectMarginTop={1}
       action="preview"

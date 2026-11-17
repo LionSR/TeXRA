@@ -1,13 +1,14 @@
 import { execFile } from 'node:child_process';
 import { platform } from 'node:os';
 import { Box, Text, useInput, useWindowSize } from 'ink';
+import { joinFacts } from '@texra-ai/harness/schemas';
 import { useLayoutEffect, useState } from 'react';
 
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { writeTerminalSequence } from '@cli/tui/terminalCleanup';
 import { osc } from '@cli/runtime/terminal/ansiEscapes';
 import { borderedPanelChromeRows } from '@cli/tui/ui/BorderedPanel';
-import { KeyHints } from '@cli/tui/ui/KeyHints';
+import { CANCEL_HINT, KeyHints } from '@cli/tui/ui/KeyHints';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { wrappedRowCount } from '@cli/tui/ansiWrap';
@@ -77,18 +78,17 @@ function FormBusyFrame(props: {
     if (isEscapeInput(input, key)) progress.cancel();
   });
 
-  let titleSuffix = '';
-  if (progress.status === 'succeeded') titleSuffix = ' · complete';
-  if (progress.status === 'failed') titleSuffix = ' · error';
-  const title = `${progress.title}${titleSuffix}`;
+  const title = joinFacts([
+    progress.title,
+    progress.status === 'succeeded' && 'complete',
+    progress.status === 'failed' && 'error',
+  ]);
   const innerWidth = formFrameContentWidth(columns);
   const hints = [
     ...(liveCopyable
       ? [{ key: 'c', action: copied ? 'copied' : 'copy link' }]
       : []),
-    finished
-      ? { key: 'any key', action: 'close' }
-      : { key: 'Esc', action: 'cancel' },
+    finished ? { key: 'any key', action: 'close' } : CANCEL_HINT,
   ];
   // Count rows the way Ink word-wraps them; character-wrap math undercounts
   // and can leave a copyable message on screen that does not fit.
@@ -98,7 +98,7 @@ function FormBusyFrame(props: {
   const requiredRows = (copyableMessage: string): number =>
     borderedPanelChromeRows(hints, innerWidth) +
     wrappedRows(title) +
-    wrappedRows(progress.message ?? 'working...') +
+    wrappedRows(progress.message ?? 'working…') +
     (copyableMessage === progress.message
       ? 0
       : 1 + wrappedRows(copyableMessage));
@@ -120,7 +120,7 @@ function FormBusyFrame(props: {
       showCloseHint={false}
     >
       {progress.status === 'running' && !spinnerFrozen ? (
-        <LoadingIndicator label={displayMessage ?? 'working...'} />
+        <LoadingIndicator label={displayMessage ?? 'working…'} />
       ) : (
         displayMessage && <Text>{displayMessage}</Text>
       )}

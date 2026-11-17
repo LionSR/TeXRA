@@ -16,9 +16,8 @@
  */
 import { Effect, Exit } from 'effect';
 
-import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { ToolContext } from '@tools/core/ToolTypes';
 import type { PlatformServices } from '@platform/processRuntime';
-import type { RunRecord } from '@agent/core/definition/RunRecord';
 import { commitEnd, endVerdict } from '@agent/runtime/AgentRunLifecycle';
 import { RunRegistry, type AgentRunServices } from '@agent/runtime/runRegistry';
 import { registerRun } from '@agent/storage/runLifecycle';
@@ -34,6 +33,7 @@ import {
   type RunEnd,
   type RunId,
   type RunIdentity,
+  type RunRecord,
 } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';

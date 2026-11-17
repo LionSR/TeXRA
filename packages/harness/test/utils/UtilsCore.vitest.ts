@@ -8,17 +8,8 @@ import { Effect, Fiber, FileSystem, Scheduler } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - harness
-import { deriveRunId } from '@utils/core/idHash';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { nodeFileServices } from '@utils/files/fsDurability';
-
-describe('deriveRunId', () => {
-  it('is stable across identity field order', () => {
-    expect(deriveRunId({ parent: 'abc', attempt: 2 })).toBe(
-      deriveRunId({ attempt: 2, parent: 'abc' }),
-    );
-  });
-});
 
 describe('withPerKeyLane', () => {
   it('frees the lane when its claimant is interrupted at any step', async () => {

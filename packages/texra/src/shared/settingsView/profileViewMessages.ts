@@ -31,8 +31,8 @@ const ProviderKeyStatusSchema = Schema.Struct({
   provider: Schema.String,
   displayName: Schema.String,
   status: CredentialOriginSchema,
-  customEndpoint: decodingDefault(Schema.String, ''),
-  supportsCustomEndpoint: decodingDefault(Schema.Boolean, false),
+  /** The provider's endpoint setting; null when it has none to set. */
+  customEndpoint: decodingDefault(Schema.NullOr(Schema.String), null),
   providerSettings: decodingDefault(Schema.Array(ProviderSettingSchema), []),
 });
 export type ProviderKeyStatus = typeof ProviderKeyStatusSchema.Type;

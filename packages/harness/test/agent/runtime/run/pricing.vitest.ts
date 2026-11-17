@@ -76,7 +76,6 @@ const boundAnthropic: BoundModel = {
   forcedToolChoice: true,
   billing: 'api-key',
   maxOutputTokens: null,
-  background: false,
   serviceTier: null,
   routes: routePolicies(['test-route'], 'test-model'),
   automaticRetries: Schema.decodeUnknownSync(
