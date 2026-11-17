@@ -476,7 +476,7 @@ export const WEBSOCKET_OPENAI_SETTING = {
   schema: booleanWithDefault(false),
   title: 'OpenAI WebSocket',
   description:
-    'EXPERIMENTAL: use the persistent WebSocket transport for OpenAI Responses requests (lower latency for tool-use loops), and let the ChatGPT-subscription Codex backend attempt WebSocket. Off by default.',
+    'EXPERIMENTAL: send OpenAI Responses requests over a persistent WebSocket (lower latency for tool-use loops). Applies only to an OpenAI API key on the default endpoint; the ChatGPT subscription and background responses keep HTTP. Off by default.',
 } as const satisfies SettingRow<boolean>;
 
 /**
