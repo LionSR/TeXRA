@@ -270,8 +270,8 @@ export const acceptEditedFileReplace = Effect.fn('acceptEditedFileReplace')(
     const fs = yield* FileSystem.FileSystem;
     const editedPath = editedLocation.absolutePath;
     const targetLocation = acceptedFileTarget(baseLocation, editedPath);
-    const isNewFile = targetLocation !== baseLocation;
     const targetPath = targetLocation.absolutePath;
+    const isNewFile = targetPath !== baseLocation.absolutePath;
     const confirmedAgainst = yield* contentOrMissing(fs, targetPath);
     const targetExists = isNewFile && confirmedAgainst !== undefined;
 
