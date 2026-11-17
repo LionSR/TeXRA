@@ -1,7 +1,6 @@
 import { defineCommand } from 'citty';
 import { Deferred, Effect, Exit, References } from 'effect';
 
-import { Sessions } from '@texra-ai/harness';
 import { formatResultCount } from '@texra-ai/harness/schemas';
 import { entryChannel, entryMessage, setLogSink } from '@texra-ai/harness/node';
 import { holdSignals } from '@cli/runtime/platform/processSignals';
@@ -10,7 +9,6 @@ import {
   SERVICE_SUBCOMMAND,
   servicePaths,
 } from '@texra/controllers/server/discovery';
-import { ServiceProjects } from '@texra/controllers/server/service';
 import { serve } from '@texra/controllers/server/serve';
 import { PROTOCOL, type ServiceInfo } from '@texra/controllers/server/protocol';
 
@@ -21,11 +19,7 @@ import {
   CliUsageError,
   type CliContext,
 } from '../runtime/platform/cliContext';
-import {
-  cliServiceProjects,
-  isLinked,
-  linkCliService,
-} from '../runtime/platform/cliService';
+import { isLinked, linkCliService } from '../runtime/platform/cliService';
 import { probeRecordedService } from '@texra/controllers/server/client';
 import { cliProcessLayer } from '../runtime/platform/cliProcessRuntime';
 import { CliExitCode } from '../runtime/platform/exitCodes';
@@ -94,25 +88,17 @@ const runServe = Effect.fn('runServe')(function* (
     ),
   );
   const shutdown = yield* Deferred.make<void>();
-  const sessions = yield* Sessions;
   const served = Effect.gen(function* () {
     const onSignal = () => Deferred.doneUnsafe(shutdown, Exit.void);
     yield* Effect.acquireRelease(
       Effect.sync(() => holdSignals({ SIGINT: onSignal, SIGTERM: onSignal })),
       (release) => Effect.sync(release),
     );
-    // The stores the projects' roots open live in this scope.
-    const projects = yield* cliServiceProjects(
-      context,
-      yield* Effect.scope,
-      sessions,
-      `${idleSeconds} seconds`,
-    );
     return yield* serve({
+      storageRoot: context.storageRoot,
       idleAfter: `${idleSeconds} seconds`,
       shutdown,
-      finishTasks: Effect.asVoid(sessions.closeAll),
-    }).pipe(Effect.provideService(ServiceProjects, projects));
+    });
   }).pipe(Effect.scoped);
   return yield* served.pipe(
     Effect.as(CliExitCode.Success),

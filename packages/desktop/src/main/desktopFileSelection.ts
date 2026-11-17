@@ -1,12 +1,10 @@
 import { resolve } from 'node:path';
 
-import { Effect, FileSystem, type Path, type PlatformError } from 'effect';
+import { Effect } from 'effect';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
 
-import type { FileOptions } from '@texra/shared/session/hostSnapshot';
 import type { ListableFileType } from '@texra/common/files/fileListingRules';
 import { getFilterExtensions } from '@texra/common/files/fileTypeUtils';
-import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
 
 interface DesktopFileSelectionDialogOptions {
   title: string;
@@ -22,18 +20,8 @@ interface DesktopFileSelectionOptions {
   ): Effect.Effect<string[] | undefined, Error>;
 }
 
-/**
- * The file lists and pickers of one project: the `host` snapshot's file
- * catalogs and the `pickFiles` case of `host.request`.
- */
+/** The file picker of one project: the `pickFiles` case of `host.request`. */
 export interface DesktopFileSelection {
-  /** The launcher's single-slot catalogs: base candidates, edited
-   *  candidates, and the commit list's fixed head. */
-  fileOptions(): Effect.Effect<
-    FileOptions,
-    PlatformError.PlatformError,
-    FileSystem.FileSystem | Path.Path
-  >;
   /**
    * The native picker for one multi-file list. Succeeds with the chosen
    * files, workspace-relative where they are inside the project, or null when
@@ -61,7 +49,6 @@ export function createDesktopFileSelection(
 ): DesktopFileSelection {
   const { workspaceRoot } = options;
   return {
-    fileOptions: () => workspaceFileOptions(workspaceRoot),
     pickFiles(fileType) {
       if (!workspaceRoot) return Effect.succeed(null);
       return options
