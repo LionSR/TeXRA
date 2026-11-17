@@ -697,6 +697,11 @@ const palette = createDesktopCommandPalette({
   document,
   actions: desktopRendererCommandActions,
   platform: rendererPlatform,
+  otherProjects: () =>
+    railProjects()
+      .filter(({ display }) => display.key !== shell.active)
+      .map(({ display }) => ({ key: display.key, name: display.name })),
+  selectProject,
 });
 document.body.append(palette.element);
 

@@ -614,7 +614,30 @@ test('preserves each project’s grid and unsaved editor when switching projects
       )
       .toBe('background');
     await expect(activeRow).toHaveAttribute('title', projectB);
-    await page.locator(`.shell-project-row[title="${projectA}"]`).click();
+    // The command palette switches to the other open project, and only to
+    // it: the one shown has no row.
+    await page.keyboard.press(
+      process.platform === 'darwin' ? 'Meta+k' : 'Control+k',
+    );
+    await page
+      .locator('.desktop-command-palette-input')
+      .locator('input')
+      .fill('switch to');
+    const switchRows = page.locator(
+      '.desktop-command-palette-group:has(h2:text-is("Projects")) .desktop-command-palette-item',
+    );
+    await expect(switchRows).toHaveCount(1);
+    await expect(switchRows).toContainText(
+      await page
+        .locator(`.shell-project-row[title="${projectA}"] .shell-project-name`)
+        .innerText(),
+    );
+    await page.screenshot({
+      path: test.info().outputPath('palette-switch-project.png'),
+      animations: 'disabled',
+    });
+    await page.keyboard.press('Enter');
+    await expect(activeRow).toHaveAttribute('title', projectA);
     await expect(
       panel('editor').filter({ hasText: 'project A draft' }),
     ).toBeVisible();

@@ -10,13 +10,13 @@ import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import type { IconName } from '@ui/wa/iconNames';
 import { renderEmptyMessage } from '@ui/wa/emptyState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { switchToProjectLabel } from '@ui/copy/hostViews';
 import { formatDesktopAccelerator } from '../shared/accelerators';
 import type { OsPlatform } from '@texra/shared/osPlatform';
 import {
   dispatchDesktopCommand,
   paletteEntries,
   type DesktopCommandActions,
-  type DesktopCommandId,
   type DesktopPaletteEntry,
 } from '../shared/desktopCommandSurface';
 
@@ -25,7 +25,9 @@ import {
 // search haystack without being displayed — useful when `meta` is reserved for
 // an accelerator but the row should still match category-name queries.
 interface CommandPaletteEntry {
-  readonly id: DesktopCommandId;
+  /** Unique among the rows; names the row's option element. */
+  readonly id: string;
+  readonly run: () => void;
   readonly label: string;
   readonly icon: IconName;
   readonly meta?: string;
@@ -37,10 +39,20 @@ interface CommandPaletteController {
   open(): void;
 }
 
+/** An open project the palette can switch to. */
+interface PaletteProject {
+  readonly key: string;
+  readonly name: string;
+}
+
 interface DesktopCommandPaletteOptions {
   document: Document;
   actions: DesktopCommandActions;
   platform: OsPlatform;
+  /** The open projects other than the one shown, read when the palette
+   *  opens; each is a row that switches to it, as its rail row does. */
+  otherProjects(): readonly PaletteProject[];
+  selectProject(key: string): void;
 }
 
 // Combobox wiring lives on the wa-input HOST, not its shadow input: ARIA
@@ -50,7 +62,7 @@ interface DesktopCommandPaletteOptions {
 const COMMAND_PALETTE_LIST_ID = 'desktop-command-palette-list';
 
 function commandPaletteOptionId(entryId: string): string {
-  return `desktop-command-palette-option-${entryId}`;
+  return `desktop-command-palette-option-${slugify(entryId)}`;
 }
 
 function filterCommandPaletteEntries(
@@ -87,9 +99,21 @@ export function createDesktopCommandPalette({
   document,
   actions,
   platform,
+  otherProjects,
+  selectProject,
 }: DesktopCommandPaletteOptions): CommandPaletteController {
-  const getEntries = (): CommandPaletteEntry[] =>
-    paletteEntries(platform).map((entry) => toPaletteEntry(entry, platform));
+  const getEntries = (): CommandPaletteEntry[] => [
+    ...paletteEntries(platform).map((entry) =>
+      toPaletteEntry(entry, actions, platform),
+    ),
+    ...otherProjects().map(({ key, name }, index): CommandPaletteEntry => ({
+      id: `project-${index}`,
+      run: () => selectProject(key),
+      label: switchToProjectLabel(name),
+      icon: 'folder',
+      category: 'Projects',
+    })),
+  ];
 
   // Reactive state: every mutation calls renderTemplate() to keep the DOM in
   // sync. wa-dialog handles modal backdrop, focus trap, escape key, and focus
@@ -108,7 +132,7 @@ export function createDesktopCommandPalette({
   const executeActiveCommand = (): void => {
     const entry = visibleEntries[activeIndex];
     if (!entry) return;
-    dispatchDesktopCommand(entry.id, actions);
+    entry.run();
     close();
   };
 
@@ -153,7 +177,7 @@ export function createDesktopCommandPalette({
   };
 
   const handleItemClick = (entry: CommandPaletteEntry) => (): void => {
-    dispatchDesktopCommand(entry.id, actions);
+    entry.run();
     close();
   };
 
@@ -302,10 +326,12 @@ export function createDesktopCommandPalette({
 
 function toPaletteEntry(
   entry: DesktopPaletteEntry,
+  actions: DesktopCommandActions,
   platform: OsPlatform,
 ): CommandPaletteEntry {
   return {
     id: entry.id,
+    run: () => dispatchDesktopCommand(entry.id, actions),
     label: entry.label,
     icon: entry.icon,
     meta: formatDesktopAccelerator(entry.accelerator, platform),
