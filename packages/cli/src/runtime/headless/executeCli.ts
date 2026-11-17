@@ -400,7 +400,7 @@ export const executeCliConfig: (
       );
     }
     if (primaryRunFailure) return yield* Effect.die(primaryRunFailure.error);
-    if (refusal) return yield* Effect.fail(refusal);
+    if (refusal) return yield* refusal;
     if (!runResult.ok) {
       return {
         ok: false as const,

@@ -86,7 +86,7 @@ export const openWindowSetup = Effect.fn('openWindowSetup')(function* <E, R>(
     };
     const run = yield* ports.start(config).pipe(
       // The launcher has shown its rejection already.
-      Effect.catch(() => Effect.succeed(undefined)),
+      Effect.catch(() => Effect.undefined),
     );
     if (run === undefined) return;
     // The result fails only when the run stored no end that can be read: no

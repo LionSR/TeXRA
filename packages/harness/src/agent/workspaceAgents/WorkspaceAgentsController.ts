@@ -119,8 +119,7 @@ export class WorkspaceAgentsController<
     teamId: string,
   ): Effect.Effect<readonly string[] | undefined, StateReadFailed> {
     return (
-      this.deps.teamMembers?.(this.deps.repoState, teamId) ??
-      Effect.succeed(undefined)
+      this.deps.teamMembers?.(this.deps.repoState, teamId) ?? Effect.undefined
     );
   }
 

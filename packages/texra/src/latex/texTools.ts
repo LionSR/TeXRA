@@ -294,7 +294,7 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
       const pdfPath = `${outputStem}.pdf`;
       const written = yield* fs
         .stat(pdfPath)
-        .pipe(Effect.catchIf(meansAbsent, () => Effect.succeed(undefined)));
+        .pipe(Effect.catchIf(meansAbsent, () => Effect.undefined));
       if (written?.type === 'File' && Number(written.size) > 0) {
         yield* Effect.logDebug(`Successfully compiled ${latexFile}`);
         return { ok: true, pdfPath } as const;

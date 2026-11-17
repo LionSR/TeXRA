@@ -42,7 +42,7 @@ const droppedWorkspaceFile = Effect.fn('droppedWorkspaceFile')(function* (
   const fs = yield* FileSystem.FileSystem;
   const info = yield* fs
     .stat(path.resolve(workspaceRoot, relative))
-    .pipe(Effect.catchIf(meansAbsent, () => Effect.succeed(undefined)));
+    .pipe(Effect.catchIf(meansAbsent, () => Effect.undefined));
   return info?.type === 'File' ? relative : null;
 });
 

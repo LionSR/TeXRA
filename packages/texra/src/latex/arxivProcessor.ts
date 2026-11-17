@@ -277,11 +277,9 @@ function downloadFileOnce(
 
     if (response.status !== StatusCodes.OK) {
       const message = `Failed to download: HTTP ${response.status}`;
-      return yield* Effect.fail(
-        isTransientHttpStatus(response.status)
-          ? new ArxivSourceTransientError({ message, cause: response.status })
-          : new ArxivSourcePermanentError({ message }),
-      );
+      return yield* isTransientHttpStatus(response.status)
+        ? new ArxivSourceTransientError({ message, cause: response.status })
+        : new ArxivSourcePermanentError({ message });
     }
 
     // Extract filename from Content-Disposition header if available.

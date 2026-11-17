@@ -195,13 +195,11 @@ export const ghGet = Effect.fn('ghGet')(function* <T>(
       const body = yield* response.json.pipe(
         Effect.orElseSucceed((): unknown => undefined),
       );
-      return yield* Effect.fail(
-        classifyFailure(
-          response.status,
-          response.headers,
-          body,
-          yield* Clock.currentTimeMillis,
-        ),
+      return yield* classifyFailure(
+        response.status,
+        response.headers,
+        body,
+        yield* Clock.currentTimeMillis,
       );
     }
     const data = yield* HttpClientResponse.schemaBodyJson(schema)(

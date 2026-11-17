@@ -456,8 +456,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
             );
     }),
   );
-  if (info !== null && isNewer(info))
-    return yield* Effect.fail(newerService(info));
+  if (info !== null && isNewer(info)) return yield* newerService(info);
   if (info !== null && (isOlder(info) || info.draining)) {
     const leaving = info;
     const tasks = formatResultCount(leaving.running, 'running task');

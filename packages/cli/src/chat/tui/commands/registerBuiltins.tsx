@@ -260,7 +260,7 @@ export function builtinSlashCommands(options: {
       roots.workspace ?? context.cliContext.cwd,
       undefined,
     );
-    if (Result.isFailure(origin)) return yield* Effect.fail(origin.failure);
+    if (Result.isFailure(origin)) return yield* origin.failure;
     const added = yield* InstalledPlugins.install(
       origin.success,
       pick === undefined ? [] : [pick],

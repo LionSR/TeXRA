@@ -53,7 +53,7 @@ export const listWorkspaceFiles = Effect.fn(
           meansAbsent(error) ||
           error.reason._tag === 'BadResource' ||
           error.reason._tag === 'PermissionDenied',
-        () => Effect.succeed(undefined),
+        () => Effect.undefined,
       ),
     );
 

@@ -364,22 +364,18 @@ export async function runChat(
   for (const notice of startupNotices) appendLocalNotice(notice);
   if (link !== undefined)
     runtime.runSync(
-      Effect.gen(function* () {
-        // The service went away (retired by a newer build, or it died) and
-        // the link reaches it again: the chat says so, rather than going
-        // quiet.
-        yield* Stream.runForEach(
-          link.client.changes.pipe(Stream.drop(1)),
-          (client) =>
-            Effect.sync(() =>
-              appendLocalNotice(
-                client === null
-                  ? 'The TeXRA service is offline; TeXRA is reconnecting. If another window runs a newer TeXRA, update this one.'
-                  : 'Reconnected to the TeXRA service.',
-              ),
-            ),
-        ).pipe(Effect.forkIn(chatScope));
-      }),
+      // The service went away (retired by a newer build, or it died) and
+      // the link reaches it again: the chat says so, rather than going
+      // quiet.
+      Stream.runForEach(link.client.changes.pipe(Stream.drop(1)), (client) =>
+        Effect.sync(() =>
+          appendLocalNotice(
+            client === null
+              ? 'The TeXRA service is offline; TeXRA is reconnecting. If another window runs a newer TeXRA, update this one.'
+              : 'Reconnected to the TeXRA service.',
+          ),
+        ),
+      ).pipe(Effect.forkIn(chatScope)),
     );
   // Cosmetic, but "texra-local" or a bare shell prompt in every tab makes a
   // multi-session workflow hard to navigate: show project and attention state.
@@ -427,17 +423,17 @@ export async function runChat(
     candidateModel: string,
   ): Effect.Effect<string | undefined, Error> => {
     if (session.canStartRootRun() || !session.canSelectModel()) {
-      return Effect.succeed(undefined);
+      return Effect.undefined;
     }
     // The run's loop answers in this process; the service checks the
     // switch against the run when it is asked.
     const runId = rootRunId.get();
-    if (runId === undefined || runsElsewhere) return Effect.succeed(undefined);
+    if (runId === undefined || runsElsewhere) return Effect.undefined;
     return Effect.flatMap(
       services.session,
       (local) =>
         local.held(runId)?.modelSwitchDisabledReason(candidateModel) ??
-        Effect.succeed(undefined),
+        Effect.undefined,
     );
   };
   // Chat-session controller: owns run start/resume/stop orchestration.

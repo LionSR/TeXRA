@@ -106,7 +106,7 @@ function listenAttempt(port: number): Effect.Effect<http.Server | undefined> {
     const onError = () => {
       server.removeListener('listening', onListening);
       server.close();
-      resume(Effect.succeed(undefined));
+      resume(Effect.undefined);
     };
     const onListening = () => {
       server.removeListener('error', onError);

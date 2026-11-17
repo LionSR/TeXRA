@@ -193,8 +193,7 @@ function readYamlDefinition(
         errors: 'all',
       }),
     );
-    if (Result.isFailure(parsed))
-      return yield* Effect.fail(scanError(parsed.failure));
+    if (Result.isFailure(parsed)) return yield* scanError(parsed.failure);
     const definition = parsed.success;
     return {
       name: definition.name,

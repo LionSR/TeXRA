@@ -224,7 +224,7 @@ export function createDesktopPtyHost(
         }).pipe(
           Effect.flatMap((pty) => {
             ensureSpawnHelperExecutable();
-            if (disposed) return Effect.succeed(undefined);
+            if (disposed) return Effect.undefined;
             return Effect.flatMap(ptyEnvironment(), (env) =>
               Effect.try({
                 try: () =>
@@ -256,7 +256,7 @@ export function createDesktopPtyHost(
           }),
           Effect.catch((error: Error) => {
             if (sessions.get(id) === handle) sessions.delete(id);
-            return disposed ? Effect.succeed(undefined) : Effect.fail(error);
+            return disposed ? Effect.undefined : Effect.fail(error);
           }),
           Effect.uninterruptible,
         );

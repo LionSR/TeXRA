@@ -94,7 +94,7 @@ export const OpenPdfTool = defineTool({
     const fs = yield* FileSystem.FileSystem;
     const info = yield* fs
       .stat(location.absolutePath)
-      .pipe(Effect.catchIf(meansAbsent, () => Effect.succeed(undefined)));
+      .pipe(Effect.catchIf(meansAbsent, () => Effect.undefined));
     if (info?.type !== 'File') {
       return yield* Effect.fail(
         new ToolError(`PDF file not found: ${displayPath}`),

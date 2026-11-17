@@ -267,7 +267,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
                     (overwrite) =>
                       overwrite
                         ? catalog.customize(entry, 'overwrite')
-                        : Effect.succeed(undefined),
+                        : Effect.undefined,
                   )
                 : Effect.as(present.alert(refused.message), undefined),
             ),

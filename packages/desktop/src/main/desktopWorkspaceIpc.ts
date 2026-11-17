@@ -198,7 +198,7 @@ const resolveWorkspaceWritePath = Effect.fn(
   const existing = yield* resolveWorkspacePath(workspaceRoot, inputPath).pipe(
     // Absent, and nothing else: a permission or I/O failure on the same call
     // is a real fault and must not read as "the file does not exist yet".
-    Effect.catchIf(meansAbsent, () => Effect.succeed(undefined)),
+    Effect.catchIf(meansAbsent, () => Effect.undefined),
   );
   if (existing !== undefined) return existing;
 

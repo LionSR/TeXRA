@@ -211,13 +211,12 @@ export class ProgressDocumentTaskFileActionsController {
     const output = this.latestOutput(stream, file);
     const copyPath =
       output && revisionLayout(output.round).modelCopy(output.location);
-    if (output === undefined || copyPath === undefined)
-      return Effect.succeed(undefined);
+    if (output === undefined || copyPath === undefined) return Effect.undefined;
     const runDirectory = runDirUnder(this.deps.storageRoot, stream);
     const copy = path.join(runDirectory, copyPath);
     return Effect.gen(function* () {
       const kept = yield* readOutputFile(copy).pipe(
-        Effect.catchIf(meansAbsent, () => Effect.succeed(undefined)),
+        Effect.catchIf(meansAbsent, () => Effect.undefined),
       );
       if (kept === undefined) return undefined;
       const diff = unifiedDiffText(kept, accepted);

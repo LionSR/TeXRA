@@ -148,7 +148,7 @@ const compilePdfs = Effect.fn('latexMedia.compilePdfs')(function* (
               `Skipping PDF compile for ${file.absolutePath}: ${toErrorMessage(error)}`,
               { data: { sourceFile: file.absolutePath, error } },
             ),
-          () => Effect.succeed(undefined),
+          () => Effect.undefined,
         ),
       ),
     { concurrency: LATEX_CONCURRENCY },
@@ -177,7 +177,7 @@ const mirrorProjectSiblings = Effect.fn('latexMedia.mirrorProjectSiblings')(
             projectDir,
             error,
           ),
-        () => Effect.succeed(undefined),
+        () => Effect.undefined,
       ),
     );
     if (!entries) return;

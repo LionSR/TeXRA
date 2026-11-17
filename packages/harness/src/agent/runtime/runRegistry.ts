@@ -251,7 +251,7 @@ export class SessionRunRegistry implements RunsShape {
     // if any, exited.
     const drained = Effect.flatMap(
       Deferred.await(entry.launched),
-      () => this.liveRun(runId)?.drained ?? Effect.succeed(undefined),
+      () => this.liveRun(runId)?.drained ?? Effect.undefined,
     );
     return { runId, controls: undefined, drained };
   }

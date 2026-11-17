@@ -385,7 +385,7 @@ export const callZoteroConnector = Effect.fn('bbtClient.callZoteroConnector')(
         // reachability/timeout classification.
         const data = yield* response.json.pipe(
           // Body is not JSON or is empty; use the generic status message.
-          Effect.catch(() => Effect.succeed(undefined)),
+          Effect.catch(() => Effect.undefined),
         );
         const error = Predicate.hasProperty(data, 'error')
           ? data.error

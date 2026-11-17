@@ -105,7 +105,7 @@ export function createDesktopPreviewHost(
     }).pipe(Effect.catch((message) => Effect.succeed(message)));
 
     if (shellError) {
-      yield* fail(`Failed to open file ${filePath}: ${shellError}`);
+      return yield* fail(`Failed to open file ${filePath}: ${shellError}`);
     }
   });
 

@@ -299,7 +299,7 @@ export function resolvePackageDir(
   }).pipe(
     Effect.catch((error) =>
       isModuleNotFoundError(error)
-        ? Effect.succeed(undefined)
+        ? Effect.undefined
         : Effect.logWarning(`Could not resolve ${pkg} from ${baseDir}`).pipe(
             Effect.annotateLogs({ data: error }),
             withLogChannel(CHANNEL),
