@@ -54,9 +54,10 @@ interface Proof {
   readonly uses: Reference[];
 }
 
-/** The macros the check reads, and the environment bounds around them. */
+/** The macros the check reads, and the environment bounds around them;
+ *  TeX allows whitespace between a command and its argument. */
 const TOKEN =
-  /\\begin\{(\w+)\}|\\end\{(\w+)\}|\\(label|uses|proves|lean)\{([^}]*)\}|\\leanok\b/g;
+  /\\begin\s*\{(\w+)\}|\\end\s*\{(\w+)\}|\\(label|uses|proves|lean)\s*\{([^}]*)\}|\\leanok\b/g;
 
 /** `text` without its comments: from an unescaped `%` to the line's end. */
 const withoutComments = (text: string): string =>
