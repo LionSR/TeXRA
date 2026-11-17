@@ -270,6 +270,11 @@ const desktopCommandCatalog = [
     keybinding: { key: 'ctrl+o', mac: 'cmd+o' },
   },
   {
+    id: 'texra.desktop.switchProject',
+    title: 'Switch Project',
+    category: 'File',
+  },
+  {
     id: 'texra.desktop.openDesktopDocs',
     title: 'Desktop Documentation',
     category: 'Help',

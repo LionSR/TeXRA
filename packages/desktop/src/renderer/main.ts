@@ -686,6 +686,13 @@ const desktopRendererCommandActions: DesktopCommandActions = {
   },
   showTerminal: showTerminalView,
   showFiles: showFilesView,
+  switchProject: () =>
+    palette.showProjects(
+      railProjects().flatMap(({ display }) =>
+        display.key === shell.active ? [] : [display],
+      ),
+      selectProject,
+    ),
 };
 const shortcuts = createDesktopShortcutRegistry({
   document,
