@@ -8,7 +8,7 @@ import { isEscapeInput } from '@cli/tui/inputKeys';
 import { writeTerminalSequence } from '@cli/tui/terminalCleanup';
 import { osc } from '@cli/runtime/terminal/ansiEscapes';
 import { borderedPanelChromeRows } from '@cli/tui/ui/BorderedPanel';
-import { KeyHints } from '@cli/tui/ui/KeyHints';
+import { CANCEL_HINT, KeyHints } from '@cli/tui/ui/KeyHints';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { wrappedRowCount } from '@cli/tui/ansiWrap';
@@ -88,9 +88,7 @@ function FormBusyFrame(props: {
     ...(liveCopyable
       ? [{ key: 'c', action: copied ? 'copied' : 'copy link' }]
       : []),
-    finished
-      ? { key: 'any key', action: 'close' }
-      : { key: 'Esc', action: 'cancel' },
+    finished ? { key: 'any key', action: 'close' } : CANCEL_HINT,
   ];
   // Count rows the way Ink word-wraps them; character-wrap math undercounts
   // and can leave a copyable message on screen that does not fit.

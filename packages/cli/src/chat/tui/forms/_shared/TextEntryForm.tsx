@@ -5,7 +5,7 @@
 import { Box, Text } from 'ink';
 import { useState, type ReactNode } from 'react';
 
-import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
+import { BACK_HINT, KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { ToneLine } from '@cli/tui/ui/ToneLine';
 
@@ -81,7 +81,7 @@ export function TextEntryForm(props: TextEntryFormProps): React.JSX.Element {
           hints={[
             { key: 'Enter', action: 'save' },
             ...(props.extraHints ?? []),
-            { key: 'Esc', action: 'back' },
+            BACK_HINT,
           ]}
           confirmCancel={false}
         />

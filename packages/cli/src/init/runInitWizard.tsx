@@ -17,7 +17,7 @@ import {
 import { pickDefaultToolUseAgent } from '../runtime/defaultAgents';
 import type { InitAnswers } from '../runtime/platform/initConfig';
 import type { CliModelAccess } from '../runtime/models/modelAccess';
-import { KeyHints, NAVIGATE_HINT } from '@cli/tui/ui/KeyHints';
+import { CANCEL_HINT, KeyHints, NAVIGATE_HINT } from '@cli/tui/ui/KeyHints';
 
 interface InitWizardAgentOption {
   readonly name: string;
@@ -211,7 +211,7 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
           hints={[
             NAVIGATE_HINT,
             { key: 'Enter', action: 'select' },
-            { key: 'Esc', action: 'cancel' },
+            CANCEL_HINT,
           ]}
           confirmCancel={false}
         />
