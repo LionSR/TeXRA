@@ -25,7 +25,8 @@ Read the nested guide before working in its subtree:
 corepack pnpm install
 npm run compile:fast      # build (esbuild + Vite); watch:fast, package:fast, build:fast
 npm run typecheck         # builds do NOT type check, see below
-npm run gate              # the static CI jobs: lint + invariants, docs, typecheck + format
+npm run gate              # the static CI jobs: lint + invariants, docs, typecheck + format,
+                          # Effect diagnostics (gate:effect, the language service)
 npm run test:watch        # while editing: reruns what a save reaches
 npm run test:changed      # before a commit: suites reachable from uncommitted edits
 npm run test:pure         # before a push (~5s): the host-free tier
@@ -273,6 +274,11 @@ in `node_modules/effect` instead of guessing a pattern.
   `@common/errors/*` classifies (`classifyAgentError`, the `sdkError/` leaves,
   `errorPredicates`; no barrel); `@utils/errors/errorMessage` narrows `unknown`
   (`toErrorMessage`, `ensureError`, `formatError`) and is browser-safe.
+- **The language service is a gate.** `npm run gate:effect` runs
+  `@effect/language-service` over every source project and fails on any
+  diagnostic, the ones the editor plugin shows. Fix the code; where a rule is
+  wrong for one line, exempt that line with
+  `// @effect-diagnostics-next-line <rule>:off` and the reason.
 - **Logging**: `Effect.log*` with `withLogChannel` (`@logger/effectLog`), and
   structured payloads as `Effect.annotateLogs({ data })` so the progress view
   renders them. Agent flows log through `AgentTrace` (`@agent/trace`); only a

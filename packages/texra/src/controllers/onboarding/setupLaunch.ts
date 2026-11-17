@@ -104,6 +104,8 @@ export const openWindowSetup = Effect.fn('openWindowSetup')(function* <E, R>(
       scope,
     );
   });
+  // The outer effect builds the launch; its caller runs what it returns.
+  // @effect-diagnostics-next-line returnEffectInGen:off
   return launch.pipe(
     starting.withPermitsIfAvailable(1),
     Effect.asVoid,

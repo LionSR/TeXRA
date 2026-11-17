@@ -259,6 +259,8 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       load: Effect.Effect<void, Error, R>,
     ) {
       const lane = yield* Semaphore.make(1);
+      // The producer is the returned effect, run once per read.
+      // @effect-diagnostics-next-line returnEffectInGen:off
       return keepOnFailure(what)(load).pipe(lane.withPermit);
     });
 
