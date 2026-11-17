@@ -11,7 +11,7 @@
 import { dirname, isAbsolute, join } from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Schema } from 'effect';
+import { Effect, FileSystem, Schema, type PlatformError } from 'effect';
 
 import {
   ChildRuns,
@@ -112,7 +112,11 @@ const rejectOversizedBibAttachments = Effect.fn(
 )(function* (
   workspaceRoot: string | undefined,
   contextFiles: readonly string[],
-): Effect.fn.Return<void, Error, FileSystem.FileSystem> {
+): Effect.fn.Return<
+  void,
+  ToolError | PlatformError.PlatformError,
+  FileSystem.FileSystem
+> {
   const fs = yield* FileSystem.FileSystem;
   const bibFiles = contextFiles
     .filter((file) => file.trim() !== '')
@@ -123,9 +127,7 @@ const rejectOversizedBibAttachments = Effect.fn(
     let absolute = bibFile;
     if (!isAbsolute(bibFile)) {
       if (!workspaceRoot) {
-        return yield* Effect.fail(
-          new Error('Workspace path is not available.'),
-        );
+        return yield* new ToolError('Workspace path is not available.');
       }
       absolute = join(workspaceRoot, bibFile);
     }

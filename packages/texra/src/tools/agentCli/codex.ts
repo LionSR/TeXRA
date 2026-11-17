@@ -21,7 +21,6 @@ import { Effect, Schema, Stream } from 'effect';
 import { type WorkspaceRoots } from '@texra-ai/harness';
 import { ChildRuns, ToolContext } from '@texra-ai/harness/plugins';
 import {
-  ensureError,
   type TokenUsageStats,
   type ToolUseLog,
   type ToolCallStatus,
@@ -41,6 +40,7 @@ import { CodexThreads } from './agentCliSessionStores';
 import {
   agentCliTool,
   StreamedToolCards,
+  asToolError,
   type AgentCliTurn,
 } from './agentCliShared';
 import {
@@ -191,7 +191,7 @@ function runStreamedTurn(
   thread: Thread,
   prompt: string,
   logger: AgentTrace,
-): Effect.Effect<AgentCliTurn, Error> {
+): Effect.Effect<AgentCliTurn, ToolError> {
   return Effect.clockWith((clock) =>
     Effect.flatMap(StreamedToolCards.make(logger), (itemCards) => {
       logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
@@ -283,12 +283,12 @@ function runStreamedTurn(
       return Effect.flatMap(Effect.abortSignal, (signal) =>
         Effect.tryPromise({
           try: () => thread.runStreamed(prompt, { signal }),
-          catch: ensureError,
+          catch: asToolError,
         }),
       ).pipe(
         Effect.flatMap(({ events }) =>
           Stream.runForEach(
-            Stream.fromAsyncIterable(events, ensureError),
+            Stream.fromAsyncIterable(events, asToolError),
             (e) => Effect.suspend(() => onEvent(e)),
           ),
         ),
@@ -332,14 +332,14 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
     ...(run.effort && { modelReasoningEffort: run.effort }),
     skipGitRepoCheck: true as const,
   };
-  // The Codex SDK's own thread constructors, which answer synchronously.
-  const thread = yield* Effect.try({
-    try: (): Thread =>
-      input.thread_id
-        ? codex.resumeThread(input.thread_id, threadOptions)
-        : codex.startThread(threadOptions),
-    catch: ensureError,
-  });
+  // The Codex SDK's own thread constructors, which answer synchronously. One
+  // that throws is a defect, as the launch reads every failure here that is
+  // not the tool's own.
+  const thread = yield* Effect.sync((): Thread =>
+    input.thread_id
+      ? codex.resumeThread(input.thread_id, threadOptions)
+      : codex.startThread(threadOptions),
+  );
   return { thread, run };
 });
 
@@ -354,7 +354,10 @@ const prepareLaunch = Effect.fn('codex.prepareLaunch')(function* (
 ) {
   // The workspace when a person approved the launch; everything when the
   // run's work is auto-approved.
-  const sandboxMode: SandboxMode = (yield* (yield* ChildRuns).autoApproved)
+  const autoApproved = yield* (yield* ChildRuns).autoApproved.pipe(
+    Effect.mapError(asToolError),
+  );
+  const sandboxMode: SandboxMode = autoApproved
     ? 'danger-full-access'
     : 'workspace-write';
   const { roots, workingDirectory } = (yield* ToolContext).env;

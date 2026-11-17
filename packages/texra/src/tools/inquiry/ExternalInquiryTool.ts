@@ -269,7 +269,7 @@ const executeAsk = Effect.fn('executeAsk')(function* (
   yield* requests.post({ ...INQUIRY_REQUEST, data: inquiry }).pipe(
     Effect.mapError(
       (error) =>
-        new Error(
+        new ToolError(
           `The inquiry request could not be opened: ${toErrorMessage(error)}`,
           { cause: error },
         ),

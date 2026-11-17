@@ -4,7 +4,7 @@ import { access } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 // Local imports
 import {
@@ -24,6 +24,12 @@ import { ensureError } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'claudeAgent';
+
+/** Whether Claude Code's credential file exists could not be determined. */
+class CredentialFileUnchecked extends Schema.TaggedError<CredentialFileUnchecked>()(
+  'CredentialFileUnchecked',
+  { message: Schema.String, cause: Schema.Defect() },
+) {}
 
 // ============================================================================
 // Auth env — pulls ANTHROPIC_API_KEY from secrets if set
@@ -62,7 +68,11 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
     const credentialFile = path.join(configDir, '.credentials.json');
     const credentialFileExists = yield* Effect.tryPromise({
       try: () => access(credentialFile),
-      catch: ensureError,
+      catch: (cause) =>
+        new CredentialFileUnchecked({
+          message: ensureError(cause).message,
+          cause,
+        }),
     }).pipe(
       Effect.as(true),
       // access(F_OK) succeeds when the file exists regardless of its read
@@ -70,7 +80,10 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
       // traversable. Neither is a usable credential, but only absence is
       // ordinary: a path that cannot be traversed says why a signed-in
       // person's session is not used.
-      Effect.catchIf(meansAbsent, () => Effect.succeed(false)),
+      Effect.catchIf(
+        ({ cause }) => meansAbsent(cause),
+        () => Effect.succeed(false),
+      ),
       Effect.catch((error) =>
         Effect.as(
           Effect.logWarning(

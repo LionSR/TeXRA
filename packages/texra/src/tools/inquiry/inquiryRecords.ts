@@ -42,20 +42,23 @@ function inquiryOperations(
         // A transition rejects a request by throwing its ToolError.
         Result.try({
           try: () => change(current, timestamp),
-          catch: ensureError,
+          catch: (cause) =>
+            cause instanceof ToolError
+              ? cause
+              : new ToolError(ensureError(cause).message, { cause }),
         }),
         (
           next,
         ): Result.Result<
           | readonly [Change]
           | readonly [Change, Record<string, InquiryThreadRecord>],
-          Error
+          ToolError
         > => {
           const change: Change = { written: next, before: current };
           if (next === null) return Result.succeed([change] as const);
           if (next.threadId !== id)
             return Result.fail(
-              new Error(
+              new ToolError(
                 'An inquiry transition cannot change its thread identity.',
               ),
             );

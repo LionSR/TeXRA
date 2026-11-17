@@ -21,6 +21,7 @@ import {
 } from '@texra-ai/harness/plugins';
 import {
   AgentConfigSchema,
+  ensureError,
   toErrorMessage,
   previewLabel,
   type RunId,
@@ -99,6 +100,12 @@ export interface AgentCliTurn {
   readonly failure?: string;
 }
 
+/** A failure that is not the tool's own (a throw from a provider's SDK, a
+ *  harness service's error) as the tool's failure, under the message it
+ *  carried. */
+export const asToolError = (cause: unknown): ToolError =>
+  new ToolError(ensureError(cause).message, { cause });
+
 /** A launch the provider prepared from the call's input. */
 interface AgentCliLaunch {
   /** The model reference the child run is labeled with. */
@@ -108,7 +115,7 @@ interface AgentCliLaunch {
   /** The turn, on the trace of the run the launch registered. A stop
    *  interrupts it: the provider hands its SDK a signal that interruption
    *  aborts. */
-  readonly turn: (logger: AgentTrace) => Effect.Effect<AgentCliTurn, Error>;
+  readonly turn: (logger: AgentTrace) => Effect.Effect<AgentCliTurn, ToolError>;
 }
 
 /** What a provider supplies to be an agent-CLI tool. */
@@ -127,7 +134,7 @@ interface AgentCliProvider<I, S, R> {
   readonly store: Context.Key<S, ClaimThread>;
   /** The thread the call continues, if any. */
   resumeId(input: I): string | undefined;
-  prepare(input: I): Effect.Effect<AgentCliLaunch, Error, R>;
+  prepare(input: I): Effect.Effect<AgentCliLaunch, ToolError, R>;
 }
 
 /**
@@ -139,7 +146,9 @@ interface AgentCliProvider<I, S, R> {
  */
 export function agentCliTool<I extends { readonly prompt: string }, S, R>(
   provider: AgentCliProvider<I, S, R>,
-): (input: I) => Effect.Effect<ToolResult, Error, R | S | PluginToolServices> {
+): (
+  input: I,
+) => Effect.Effect<ToolResult, ToolError, R | S | PluginToolServices> {
   return (input) =>
     Effect.gen(function* () {
       const { run } = (yield* ToolContext).env;
@@ -183,7 +192,7 @@ function launchTurn<I extends { readonly prompt: string }, S, R>(
   provider: AgentCliProvider<I, S, R>,
   input: I,
   claim: Scope.Closeable | undefined,
-): Effect.Effect<ToolResult, Error, R | PluginToolServices> {
+): Effect.Effect<ToolResult, ToolError, R | PluginToolServices> {
   return Effect.gen(function* () {
     const launch = yield* provider.prepare(input);
     // An external CLI drives this agent: the CLI is both the agent name and
@@ -241,7 +250,7 @@ function childTurn(params: {
   prompt: string;
   runId: RunId;
   logger: AgentTrace;
-  turn: Effect.Effect<AgentCliTurn, Error>;
+  turn: Effect.Effect<AgentCliTurn, ToolError>;
   /** The claim on the thread this turn continues, closed as it ends. */
   claim: Scope.Closeable | undefined;
 }): ProcessTurn {

@@ -15,6 +15,7 @@ import {
   executed,
   formatToolOutput,
   defineTool,
+  ToolError,
   type ToolResult,
   Settings,
   WorkspaceFs,
@@ -65,7 +66,7 @@ function formatPathList(call: ToolPathCall, filePaths: string[]) {
           ),
         )
         .join(', '),
-    catch: ensureError,
+    catch: (cause) => new ToolError(ensureError(cause).message, { cause }),
   });
 }
 

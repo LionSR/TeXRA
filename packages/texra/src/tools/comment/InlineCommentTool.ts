@@ -3,11 +3,7 @@ import { Context, Effect, Option, Schema } from 'effect';
 import { ToolContext } from '@texra-ai/harness/plugins';
 
 // Internal imports
-import {
-  ensureError,
-  toErrorMessage,
-  formatResultCount,
-} from '@texra-ai/harness/schemas';
+import { toErrorMessage, formatResultCount } from '@texra-ai/harness/schemas';
 import {
   resolveToolPath,
   executed,
@@ -224,16 +220,16 @@ const addThread = Effect.fn('InlineCommentTool.addThread')(function* (
     Effect.catch(addCommentFailure),
   );
   const provider = yield* requireProvider;
-  const result = yield* Effect.try({
-    try: () =>
-      provider.add({
-        absolutePath: resolved.absolute,
-        line,
-        endLine: endLine ?? line,
-        body,
-      }),
-    catch: ensureError,
-  }).pipe(Effect.catch(addCommentFailure));
+  // The provider is host code: one that throws fails the call, not the
+  // tool's fiber.
+  const result = yield* Effect.sync(() =>
+    provider.add({
+      absolutePath: resolved.absolute,
+      line,
+      endLine: endLine ?? line,
+      body,
+    }),
+  ).pipe(Effect.catchDefect(addCommentFailure));
   const where = result.resolvedPath || resolved.absolute;
   const summary = `Opened comment thread ${result.threadId} at ${where}:${line}`;
   return executed(
@@ -272,7 +268,13 @@ const listThreads = Effect.fn('InlineCommentTool.list')(function* (
   const absolutePath =
     input.path == null
       ? undefined
-      : (yield* resolveToolPath(call.env, input.path ?? undefined)).absolute;
+      : (yield* resolveToolPath(call.env, input.path ?? undefined).pipe(
+          Effect.mapError((error) =>
+            error instanceof ToolError
+              ? error
+              : new ToolError(error.message, { cause: error }),
+          ),
+        )).absolute;
   const threads = (yield* requireProvider).list({ absolutePath });
   if (threads.length === 0) {
     return executed(
@@ -288,7 +290,7 @@ const listThreads = Effect.fn('InlineCommentTool.list')(function* (
 
 function inlineComment(
   input: InlineCommentInput,
-): Effect.Effect<ToolResult, Error, ToolContext> {
+): Effect.Effect<ToolResult, ToolError, ToolContext> {
   switch (input.command) {
     case 'add':
       return addThread(input);
