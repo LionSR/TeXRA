@@ -27,7 +27,7 @@ import {
   DESKTOP_WORKSPACE_COMMANDS,
   type DesktopWorkspaceRequest,
 } from '../shared/desktopWorkspaceMessages';
-import { createEditorPane } from './editorPane';
+import { createEditorPane, EditorPaneError } from './editorPane';
 import { createPdfPane } from './pdfPane';
 import { createReviewPane } from './reviewPane';
 import { createTerminalPane } from './terminalPane';
@@ -86,7 +86,9 @@ export function createProjectWorkbench(options: {
   // interrupts whatever is still pending.
   const unexpected = (outcome: HostOutcome) =>
     Effect.fail(
-      new Error(`The host answered a file request with ${outcome.kind}.`),
+      new EditorPaneError({
+        message: `The host answered a file request with ${outcome.kind}.`,
+      }),
     );
   // A read or a list on a hung mount would otherwise leave the pane's refresh
   // pending until the project closes. A write is never abandoned: the host
@@ -104,7 +106,15 @@ export function createProjectWorkbench(options: {
         },
         action.kind === 'write' ? undefined : FILE_REQUEST_TIMEOUT_MS,
       )
-      .pipe(Effect.mapError((error) => new Error(requestErrorText(error))));
+      .pipe(
+        Effect.mapError(
+          (error) =>
+            new EditorPaneError({
+              message: requestErrorText(error),
+              cause: error,
+            }),
+        ),
+      );
   const editorCallbacks = {
     isReadOnly: (path: string) => {
       const identity = agentDocumentIdentity(path);

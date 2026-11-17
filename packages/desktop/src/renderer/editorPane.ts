@@ -25,6 +25,7 @@ import {
   Fiber,
   FiberHandle,
   FiberSet,
+  Schema,
   Scope,
   Semaphore,
   Stream,
@@ -54,6 +55,12 @@ import {
 
 type CodeEditor = ReturnType<MonacoModule['editor']['create']>;
 type TextModel = ReturnType<MonacoModule['editor']['createModel']>;
+
+/** Why the editor could not load, or a file request was not carried out. */
+export class EditorPaneError extends Schema.TaggedError<EditorPaneError>()(
+  'EditorPaneError',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
 
 /** Everything the pane tracks for one workspace path. */
 interface FileState {
@@ -120,15 +127,15 @@ interface EditorPaneCallbacks {
   /** Lists the direct children of one workspace directory for the tree. */
   listFiles(
     directory: string,
-  ): Effect.Effect<readonly EditorFileEntry[], Error>;
-  readFile(path: string): Effect.Effect<string, Error>;
+  ): Effect.Effect<readonly EditorFileEntry[], EditorPaneError>;
+  readFile(path: string): Effect.Effect<string, EditorPaneError>;
   /** Writes `contents` while the file still holds `base` (null: whatever
    *  it holds); `changedOnDisk` when something else rewrote it. */
   writeFile(
     path: string,
     contents: string,
     base: string | null,
-  ): Effect.Effect<'saved' | 'changedOnDisk', Error>;
+  ): Effect.Effect<'saved' | 'changedOnDisk', EditorPaneError>;
   isReadOnly?(path: string): boolean;
   /** Reports dirty state so the tab strip can show its indicator. */
   onDirtyChange(path: string, dirty: boolean): void;
@@ -454,7 +461,11 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
    *  again by the next open. */
   const [editorOnce, forgetEditor] = Effect.runSync(
     Effect.cachedInvalidateWithTTL(
-      Effect.tryPromise({ try: () => loadMonaco(), catch: ensureError }).pipe(
+      Effect.tryPromise({
+        try: () => loadMonaco(),
+        catch: (cause) =>
+          new EditorPaneError({ message: ensureError(cause).message, cause }),
+      }).pipe(
         Effect.map((loadedMonaco) => {
           monaco = loadedMonaco;
           editor = loadedMonaco.editor.create(editorHost, {
@@ -497,7 +508,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     path: string,
     file: FileState,
     loadedMonaco: MonacoModule,
-  ): Effect.Effect<TextModel, Error> {
+  ): Effect.Effect<TextModel, EditorPaneError> {
     return file.lane.withPermit(
       Effect.suspend(() => {
         const { model } = file;
@@ -527,7 +538,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     path: string,
     file: FileState,
     model: TextModel,
-  ): Effect.Effect<void, Error> {
+  ): Effect.Effect<void, EditorPaneError> {
     return Effect.suspend(() => {
       if (isDirty(path)) return Effect.void;
       const version = model.getVersionId();
