@@ -8,6 +8,7 @@ import path from 'node:path';
 import { Effect, FiberHandle, Schedule, type Scope, Stream } from 'effect';
 
 import {
+  DETAIL_SEPARATOR,
   type SessionView,
   type RunView,
   type RunId,
@@ -317,7 +318,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         0,
         columns -
           textDisplayWidth(lineWithoutDescription) -
-          textDisplayWidth(' — '),
+          textDisplayWidth(DETAIL_SEPARATOR),
       ),
     );
   }
@@ -360,7 +361,7 @@ function formatActiveChildren(
           descriptionColumns,
         )
       : '';
-  const task = safeDescription ? ` — ${safeDescription}` : '';
+  const task = safeDescription ? `${DETAIL_SEPARATOR}${safeDescription}` : '';
   return `${label}: ${first.label}${task}${suffix}`;
 }
 

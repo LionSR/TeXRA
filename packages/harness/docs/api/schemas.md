@@ -587,6 +587,15 @@ function descendantRuns(
 ): readonly RunId[]
 ```
 
+## DETAIL_SEPARATOR
+
+What stands between a label and the detail that explains it
+(`Retry — the model timed out`), in every host.
+
+```ts
+const DETAIL_SEPARATOR: " — "
+```
+
 ## DiffStats
 
 ```ts

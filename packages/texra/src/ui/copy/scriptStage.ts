@@ -9,6 +9,7 @@ import {
   type ScriptStageView,
 } from '@texra-ai/harness/transcript';
 import {
+  DETAIL_SEPARATOR,
   formatCostUsd,
   formatResultCount,
   joinFacts,
@@ -78,7 +79,9 @@ export function scriptCallSummary(call: ScriptCallView): string | undefined {
 
 /** A call's one line: `Running: drafter · gpt-5 — Wants bash: make`. */
 export function scriptCallLine(call: ScriptCallView): string {
-  const detail = call.detail ? ` — ${detailText(call.detail)}` : '';
+  const detail = call.detail
+    ? `${DETAIL_SEPARATOR}${detailText(call.detail)}`
+    : '';
   return `${SCRIPT_CALL_STATUS_LABEL[call.status]}: ${joinFacts([call.label, ...call.facts])}${detail}`;
 }
 
