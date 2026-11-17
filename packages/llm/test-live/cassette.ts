@@ -99,7 +99,14 @@ export function writeCassette(path: string, cassette: Cassette): void {
 const isIdKey = (key: string): boolean => key === 'id' || key.endsWith('_id');
 
 /** Keys whose string value is the model's own prose or reasoning. */
-const MODEL_TEXT = new Set(['text', 'thinking', 'refusal']);
+const MODEL_TEXT = new Set(['text', 'thinking', 'refusal', 'output_text']);
+
+/**
+ * Keys under which a response echoes the request's own instructions (an
+ * OpenAI snapshot's `instructions`, Google's `system_instruction`). A string
+ * is replaced; a structured echo is walked, so its `text` parts are.
+ */
+const ECHOED_PROMPT = new Set(['instructions', 'system_instruction']);
 
 /** Keys whose value is opaque provider state handed back on the next turn. */
 const OPAQUE = new Set([
@@ -167,6 +174,7 @@ function scrubber() {
     if (typeof item === 'string' && item !== '') {
       if (isIdKey(key)) return idFor(item);
       if (MODEL_TEXT.has(key)) return 'Synthetic text.';
+      if (ECHOED_PROMPT.has(key)) return 'Synthetic instructions.';
       if (OPAQUE.has(key)) return 'synthetic-opaque';
       if (ACCOUNT.has(key)) return 'synthetic-account';
       // Anthropic's `partial_json`, OpenAI's arguments `delta` and Google's
