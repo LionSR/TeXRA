@@ -59,9 +59,9 @@ export function toolDefinitionsFor(
 /**
  * The tool definitions a step's requests send, in wire form: the offered
  * tools whose record marks them `sent` (every tool but a script's own
- * function, or, under script-only tools, `script` and the run's own
- * alone). The step's record decides, so
- * a resumed step sends what it recorded whatever the setting says now.
+ * function, or, when the step offers `script`, `script` and the run's own
+ * alone). The step's record decides, so a resumed step sends what it
+ * recorded, even if today's resolution would send another set.
  */
 export const sentDefinitions = (tools: {
   readonly definitions: readonly ToolDefinition[];

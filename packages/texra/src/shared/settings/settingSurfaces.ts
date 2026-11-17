@@ -40,7 +40,6 @@ import {
   MINIMAX_REGION_SETTING,
   MOONSHOT_REGION_SETTING,
   OPENAI_FAST_TIER_SETTING,
-  SCRIPT_ONLY_SETTING,
   TOOL_PATH_PROTECTION_SETTING,
   WEBSOCKET_OPENAI_SETTING,
   CHATGPT_PREFER_SUBSCRIPTION_SETTING,
@@ -241,7 +240,6 @@ export const HARNESS_ROW_SURFACES: Readonly<
     category: 'tools',
     surfaces: { settingsView: 'memory' },
   },
-  [SCRIPT_ONLY_SETTING.key]: { category: 'agents', ...AGENTS_AND_CLI },
 
   // --- Providers --------------------------------------------------------------
   [WEBSOCKET_OPENAI_SETTING.key]: providerToggle({

@@ -20,7 +20,6 @@ import {
   type AgentScanIssue,
   ALLOW_ORCHESTRATOR_KILL_SETTING,
   GIT_WORKTREE_SUPPORT_SETTING,
-  SCRIPT_ONLY_SETTING,
   pluralize,
 } from '@texra-ai/harness/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
@@ -247,7 +246,6 @@ export class AgentsTab extends SignalWatcher(LitElement) {
           step: 1,
           revertOnEmpty: false,
         })}
-        ${renderStateSettingToggleRow(SCRIPT_ONLY_SETTING)}
         ${renderStateSettingToggleRow(ALLOW_ORCHESTRATOR_KILL_SETTING)}
         ${renderStateSettingToggleRow(GIT_WORKTREE_SUPPORT_SETTING)}
         ${renderStateSettingNumberRow(CHILD_RUN_CONCURRENCY_BUDGET_SETTING, {
