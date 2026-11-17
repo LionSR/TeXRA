@@ -210,16 +210,29 @@ export function rollupOf(
 ): RunView['rollup'] {
   const rollup = { total: 0, running: 0, finished: 0 };
   for (const child of children) {
-    const idle = child.position === 'waiting' && child.approval !== 'own';
+    const idle = isIdle(child);
     const under = below(child);
     rollup.total += 1 + under.total;
-    rollup.running +=
-      (child.holder === 'here' && !idle ? 1 : 0) + under.running;
+    rollup.running += (isLive(child) ? 1 : 0) + under.running;
     rollup.finished +=
       (child.outcome !== null || idle ? 1 : 0) + under.finished;
   }
   return rollup;
 }
+
+/** Whether the run waits between turns with nothing of its own asked of
+ *  the user: its turn is delivered and its next message continues it. It
+ *  counts as finished in a rollup and offers no stop (a stop would end a
+ *  conversation that is only waiting). */
+export const isIdle = (run: Pick<RunView, 'position' | 'approval'>): boolean =>
+  run.position === 'waiting' && run.approval !== 'own';
+
+/** Whether this process drives the run and it is not idle (`isIdle`):
+ *  working a turn, or waiting on the user inside one. The one reading of a
+ *  live child every count of running children uses. */
+export const isLive = (
+  run: Pick<RunView, 'holder' | 'position' | 'approval'>,
+): boolean => run.holder === 'here' && !isIdle(run);
 
 /** Whether the run was cut while it worked: it has not ended, nobody
  *  drives it, and it does not stand between turns. A resume continues it.

@@ -8,7 +8,7 @@ import {
   type RunAction,
 } from '@shared/schemas';
 
-import { isInterrupted, type RunView } from './sessionView';
+import { isIdle, isInterrupted, type RunView } from './sessionView';
 
 /** Opening the run's folder, exporting its conversation, copying its
  *  diagnostics: what any run offers, a fresh list per run so no two views
@@ -20,8 +20,9 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * into `RunView.actions`. One whose rows this build cannot read (`stranded`:
  * damaged, or an earlier build's) never becomes readable,
  * so it offers delete beside inspection, the one way to clear it. A run
- * this process holds (working, waiting, or spawned and not started yet) can
- * be stopped; an agent's run takes approval grants, and a conversation (not
+ * this process holds (working, waiting on the user, or spawned and not
+ * started yet) can be stopped, unless it is idle between turns (`isIdle`);
+ * an agent's run takes approval grants, and a conversation (not
  * a program) its compaction, unless it is still starting (no loop
  * step and no finished point yet). Nothing that rewrites or
  * removes a run's files or history is offered while it is live. Any run this
@@ -38,6 +39,7 @@ export function runActions(
   run: Pick<
     RunView,
     | 'holder'
+    | 'approval'
     | 'outcome'
     | 'position'
     | 'turn'
@@ -54,7 +56,7 @@ export function runActions(
     const starting = run.turn === null && run.forkPoint === null;
     const compact = agent && !run.program && !starting;
     return [
-      'stop',
+      ...(isIdle(run) ? [] : (['stop'] as const)),
       ...(agent ? (['grant'] as const) : []),
       ...(compact ? (['compact'] as const) : []),
       'rename',
