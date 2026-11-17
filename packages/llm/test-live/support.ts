@@ -555,6 +555,80 @@ const CASES: ReadonlyArray<WireCase> = [
 ];
 
 // ---------------------------------------------------------------------------
+// Mutations
+
+/**
+ * A failure mode no provider produces on request, written as a transform
+ * over a recorded case's bytes: the reply stays the provider's own, changed
+ * only where the failure lives. A mutation replays wherever the case it
+ * changes was recorded, and nowhere else; it is never run live.
+ */
+interface Mutation extends Omit<WireCase, 'applies' | 'keyless'> {
+  /** The recorded case whose cassette it changes. */
+  readonly of: string;
+  readonly mutate: (cassette: Cassette) => Cassette;
+}
+
+/** `cassette` with its last exchange changed by `change`. */
+const lastExchange = (
+  cassette: Cassette,
+  change: (
+    exchange: Cassette['exchanges'][number],
+  ) => Cassette['exchanges'][number],
+): Cassette => ({
+  exchanges: cassette.exchanges.map((exchange, index, all) =>
+    index === all.length - 1 ? change(exchange) : exchange,
+  ),
+});
+
+/**
+ * A server-sent event body without its last event: the stream a dropped
+ * connection leaves.
+ */
+const withoutLastEvent = (body: string): string => {
+  const events = body.split(/\n\n(?=\S)/);
+  return `${events.slice(0, -1).join('\n\n')}\n\n`;
+};
+
+const MUTATIONS: ReadonlyArray<Mutation> = [
+  {
+    id: 'retry-after',
+    of: 'rejected-credential',
+    describe: 'a rate-limited reply',
+    it: 'carries its retry-after wait to the failure',
+    mutate: (cassette) =>
+      lastExchange(cassette, (exchange) => ({
+        ...exchange,
+        status: 429,
+        headers: { ...exchange.headers, 'retry-after': '7' },
+      })),
+    run: Effect.fnUntraced(function* ({ bindRejected }) {
+      const error = yield* Effect.flip(
+        completeTurn(yield* bindRejected, TEXT_REQUEST),
+      );
+      expect(error).toMatchObject({ status: 429, retryAfterMs: 7000 });
+    }),
+  },
+  {
+    id: 'truncated',
+    of: 'text-turn',
+    describe: 'a stream cut before its terminal event',
+    it: 'fails the turn instead of completing it',
+    mutate: (cassette) =>
+      lastExchange(cassette, (exchange) => ({
+        ...exchange,
+        body: withoutLastEvent(exchange.body),
+      })),
+    run: Effect.fnUntraced(function* ({ bind }) {
+      const error = yield* Effect.flip(
+        completeTurn(yield* bind(), TEXT_REQUEST),
+      );
+      expect(error._tag).toBe('ModelError');
+    }),
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Running a case
 
 const RECORDING = process.env.LLM_RECORD === '1';
@@ -594,7 +668,10 @@ export const replayCase = Effect.fn('replayCase')(function* (
   expect(yield* replayed.unused).toEqual([]);
 });
 
-/** Every recorded case of every route. */
+/**
+ * Every recorded case of every route, and every mutation of one, with the
+ * cassette it replays.
+ */
 export function recordedCases(): ReadonlyArray<{
   readonly name: RouteName;
   readonly wireCase: WireCase;
@@ -602,10 +679,19 @@ export function recordedCases(): ReadonlyArray<{
 }> {
   return Object.keys(ROUTES).flatMap((key) => {
     const name = key as RouteName;
-    return CASES.flatMap((wireCase) => {
-      const cassette = readCassette(cassettePath(name, wireCase.id));
-      return cassette === undefined ? [] : [{ name, wireCase, cassette }];
-    });
+    const recorded = (id: string) => readCassette(cassettePath(name, id));
+    return [
+      ...CASES.flatMap((wireCase) => {
+        const cassette = recorded(wireCase.id);
+        return cassette === undefined ? [] : [{ name, wireCase, cassette }];
+      }),
+      ...MUTATIONS.flatMap((mutation) => {
+        const cassette = recorded(mutation.of);
+        return cassette === undefined
+          ? []
+          : [{ name, wireCase: mutation, cassette: mutation.mutate(cassette) }];
+      }),
+    ];
   });
 }
 
