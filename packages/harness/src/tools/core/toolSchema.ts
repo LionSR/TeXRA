@@ -160,19 +160,17 @@ function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
   /** The field's description: the one its copies share, else each
    *  wording under the discriminator values whose branches use it. */
   const describe = (copies: Copies): string | undefined => {
-    const byText = new Map<string, number[]>();
-    for (const { index, description } of copies) {
-      const text = description ?? '';
-      byText.set(text, [...(byText.get(text) ?? []), index]);
-    }
+    const byText = Map.groupBy(copies, ({ description }) => description ?? '');
     const texts = [...byText.keys()].filter((text) => text !== '');
     if (copies.length === branches.length && texts.length <= 1) {
       return texts[0];
     }
     if (discriminator === undefined) return texts.join(' | ') || undefined;
     return [...byText]
-      .map(([text, indexes]) => {
-        const values = DISJUNCTION.format(indexes.map(valueOf));
+      .map(([text, group]) => {
+        const values = DISJUNCTION.format(
+          group.map(({ index }) => valueOf(index)),
+        );
         return `With ${discriminator.name} ${values}${text === '' ? '.' : `: ${text}`}`;
       })
       .join(' ');
