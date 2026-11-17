@@ -54,7 +54,6 @@ import type {
   AttachedPort,
   SessionBridge,
 } from '@texra/controllers/session/SessionBridge';
-import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
 import { BundledViewContentProvider } from '../common/webview/BundledViewContentProvider';
 
 import {
@@ -227,7 +226,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         roots,
         project: projectDisplayOf(roots.storage, roots.workspace),
         snapshot: {
-          fileOptions: () => workspaceFileOptions(roots.workspace),
           workspaceRoots: () =>
             vscode.workspace.workspaceFolders?.map((folder) => ({
               label: folder.name,
