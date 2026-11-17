@@ -11,6 +11,18 @@ liveness, the held-result delivery survivors). Every `path:line` was read at
 is named. `npm run check:dead-code-ratchet` and `npm run check:fact-spread`
 pass at this commit; the finds below are what those checks do not measure.
 
+## Checked against `main` on 2026-11-17
+
+Read at `c78e9f9` by searching the tree for the names this note says go or
+arrive. It finds a deleted name; it is not a review of the design. The body
+below was not rewritten.
+
+- A7 and B3 look done: `GeneratedRootRedirected` and
+  `MultipleDocumentFileType` have no references.
+- C6's `user_version: 101` assertion is gone.
+- B6 is not done: `RunLabels` is still referenced.
+- The other rows were not checked.
+
 ## A. The store
 
 | #   | Finding                                                                                                                                                                                                                                                                                                                                                                                                                            | Fix                                                                                                                                                                                                                                                                                                    | Net LoC |

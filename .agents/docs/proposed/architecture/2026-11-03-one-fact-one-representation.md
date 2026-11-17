@@ -12,6 +12,24 @@ pi-durable (its README), Codex (`codex-rs/core/src/tasks/mod.rs`); OpenCode
 from the reviewer's knowledge of its code, not a fetch. The citations the
 reviews corrected were re-read at `74eb0a85` on 2026-11-04.
 
+## Checked against `main` on 2026-11-17
+
+Read at `c78e9f9` by searching the tree for the names this note says go or
+arrive. It finds a deleted name; it is not a review of the design. The body
+below was not rewritten.
+
+- No references remain to `acquireClaims`, `DatabaseClaimRefused`,
+  `ownedElsewhere`, `ownerLiveness`, `stopEnd`, `withInactiveRunStep`,
+  `unbornParent`, `RunAttempt`, `restsWith`, `RESULT_WAITING`, `deliverHeld`,
+  `isLiveRun` or `isTerminalOutcomePhase`. Slice 3, A6, the `runsHere`
+  remainder and the child-result rows of slice 4 look done.
+- Still present: `deriveResumability` (why a resume is rejected),
+  `primaryAgentError` and `defectAsFailure` (a stop that also failed; defects
+  and failures). The same rows are §5 of
+  [storage, errors and stop paths](../simplification/2026-11-03-storage-errors-and-stop-paths.md);
+  do them once, from that note.
+- The Windows service question is unanswered.
+
 ## Summary
 
 The stop and resume path is not an over-built version of what pi, pi-durable,

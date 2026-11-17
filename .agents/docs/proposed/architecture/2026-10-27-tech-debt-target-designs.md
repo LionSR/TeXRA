@@ -20,6 +20,16 @@ numbers point into `d8a4f66`.
    slice deletes what it replaces in the same PR. Where a slice must keep
    two for a moment, it names the next slice, which removes the old one.
 
+## Checked against `main` on 2026-11-17
+
+Read at `c78e9f9` by searching the tree for the names this note says go or
+arrive. It finds a deleted name; it is not a review of the design. The body
+below was not rewritten.
+
+- T1 is no longer blocked on the `entry-files` count: the name appears only
+  in notes, and no check of that name exists in the source or the scripts.
+- The other rows of "Still open" were not checked.
+
 ## Owner decisions this work needs
 
 | #   | Decision                                                                                                                                                                                                                                                    | Needed by                     | Recommendation                                                                                                           |

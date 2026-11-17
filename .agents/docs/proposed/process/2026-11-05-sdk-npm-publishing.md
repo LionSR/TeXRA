@@ -19,6 +19,19 @@ npm-releasable, and publishing is the owner's manual step." The argument for
 changing it is below; the owner keeps the decision to publish (the tag and the
 release are still cut by hand), and only the upload moves to CI.
 
+## Checked against `main` on 2026-11-17
+
+Read at `c78e9f9` by searching the tree for the names this note says go or
+arrive. It finds a deleted name; it is not a review of the design. The body
+below was not rewritten.
+
+- The design is on `main`, not on a branch: `packages/harness/scripts/publish-npm.mjs`,
+  the `publish-sdk` job and the `.github/actions/release-channel` action all
+  exist. Questions 1 and 2 are answered by that.
+- What remains is the owner's: the first manual publish, the Trusted
+  Publisher for both packages, the wording of the rulings-ledger entry, and
+  question 3 (a changelog for the SDK).
+
 ## Today
 
 - Versions: both manifests are `0.1.0`; npm answers 404 for both names

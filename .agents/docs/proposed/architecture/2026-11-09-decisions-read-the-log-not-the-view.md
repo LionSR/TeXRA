@@ -4,6 +4,18 @@ Status: proposed, 2026-11-09. Read at main `db09959`. Not a catalogue row:
 none of the seven rounds or the lens audits searched for it, and the three
 fixes that touched it landed with no row.
 
+## Checked against `main` on 2026-11-17
+
+Read at `c78e9f9` by searching the tree for the names this note says go or
+arrive. It finds a deleted name; it is not a review of the design. The body
+below was not rewritten.
+
+- The question this note leaves with the owner, `submitFollowUp`'s
+  `takesFollowUps` check, was ruled in #14986: it keeps reading the view,
+  because the store's answer would reject every ended one-shot root that a
+  later resume does read a message for.
+- `readRejection` is still exported with no caller.
+
 ## The problem
 
 A session holds two projections of a run's facts.

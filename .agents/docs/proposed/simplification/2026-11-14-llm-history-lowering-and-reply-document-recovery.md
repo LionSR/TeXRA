@@ -5,6 +5,17 @@ audits of 2026-11-14, read against the tree on that date. Neither is a code
 change in the audit's PR: the first needs a design choice, the second needs
 evidence that does not exist yet.
 
+## Checked against `main` on 2026-11-17
+
+Read at `c78e9f9` by searching the tree for the names this note says go or
+arrive. It finds a deleted name; it is not a review of the design. The body
+below was not rewritten.
+
+- The Google question under finding 1 is overtaken:
+  `packages/llm/src/api/googleInteractions.ts` calls `replayableHistory`.
+- The entry for choice C in `refuted-candidates.json` and stages 2 to 5 of
+  the recovery were not checked.
+
 ## 1. The history-lowering walk in `packages/llm`
 
 ### What it is

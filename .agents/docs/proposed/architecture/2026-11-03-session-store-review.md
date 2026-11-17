@@ -6,6 +6,20 @@ design (`.agents/docs/implemented/architecture/2026-09-28-storage-v1-design.md`)
 with the post-1.0 compatibility policy stated as rules and the pre-freeze
 changes those rules need. Baseline: `main` at `bc690f4` (first read at `b411a6d`, re-checked at `9062f1b`; the 2026-11-04 rulings reconciled in §5).
 
+## Checked against `main` on 2026-11-17
+
+Read at `c78e9f9` by searching the tree for the names this note says go or
+arrive. It finds a deleted name; it is not a review of the design. The body
+below was not rewritten.
+
+- S2 looks done: `blobDigests` has no references.
+- F13 looks done: `aggregate_change` has no references.
+- "S4 first, or keep `owner_id`" is overtaken: `owner_id` has no references.
+  S4 itself (the forward-step table) is not built, and `SCHEMA_VERSION` is 105.
+- Not built: S5 (`StoreConnection` does not exist), F11 (no
+  `.gitattributes`), F12 (no `quick_check`).
+- S1, S6, S7, F9 and F14 were not checked.
+
 ## Summary
 
 The store's design holds: one codec knows the stored shape, one publisher

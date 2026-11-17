@@ -15,6 +15,19 @@ and the stop and liveness rules
 (`.agents/docs/implemented/architecture/2026-10-02-durable-harness.md`,
 `.agents/docs/implemented/architecture/2026-09-20-single-owner-liveness-and-one-fold.md`).
 
+## Checked against `main` on 2026-11-17
+
+Read at `c78e9f9` by searching the tree for the names this note says go or
+arrive. It finds a deleted name; it is not a review of the design. The body
+below was not rewritten.
+
+- No references remain to `DeletionMode`, `unloadable` or
+  `earlierBuildRefusal`.
+- Not built: `valuesStoreLayer` (§1), `classifyRunRead` (§2),
+  `stopOrFailure` (§5).
+- The rows of the one-fact note that are still open are this note's §5;
+  they are done here.
+
 ## 1. Storage: modes that are booleans, branches nothing reaches
 
 | Item                              | Where                                                                                                               | Evidence                                                                                                                                                                                                                                                                                                                                                                 |

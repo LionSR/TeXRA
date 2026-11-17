@@ -6,6 +6,17 @@ read at main `4e32bb9`). Rounds 1 and 2 and their order:
 [root designs, Effect-native](./2026-11-05-root-designs-effect-native.md),
 [round 2 and the order](./2026-11-07-red-flags-round-2-and-order.md).
 
+## Checked against `main` on 2026-11-17
+
+Read at `c78e9f9` by searching the tree for the names this note says go or
+arrive. It finds a deleted name; it is not a review of the design. The body
+below was not rewritten.
+
+- Of the ids listed as open with no owner: `noRunChildRuns` (GS4),
+  `copyOrRemoveRunDir` and `absentReason` (NM10) have no references, and
+  `failOpen` (TC7) has none in the app. Those three are at least partly done.
+- The held ids and the two copy questions were not checked.
+
 ## What has landed since the round-2 order
 
 Packages B (#14791, less step 3.3), C's first half (#14790), D (#14792), E

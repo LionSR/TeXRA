@@ -25,6 +25,18 @@ place to look. It reports only what no earlier round, open note or
 catalogue row records, or what the catalogue marks landed while the tree
 says otherwise; finding 2 is of the second kind.
 
+## Checked against `main` on 2026-11-17
+
+Read at `c78e9f9` by searching the tree for the names this note says go or
+arrive. It finds a deleted name; it is not a review of the design. The body
+below was not rewritten.
+
+- F2's open rule (`takesFollowUps`) was ruled in #14986: keep reading the
+  view. F2-A should be re-read against that ruling before it is built.
+- F5a looks done: the follow-up schema has no `'instruction'` literal.
+- Still present: `requestAnswerability` (F1b). F4, F1c, F2-B, F3 and F5b
+  were not checked.
+
 ## Summary
 
 The core stays sound: every resumable fact is a row, the model

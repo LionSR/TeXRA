@@ -10,6 +10,18 @@ status: proposed
 讨论的记录；负责人的裁决集中在"决定记录"，2026-11-14 这次改写改了什么、
 无上下文审稿后又改了什么，列在"修订记录"。
 
+## 2026-11-17 对照 `main` 的核对
+
+在 `c78e9f9` 上按本文点名要删或要加的名字搜索源码得到。它只能看出一个名字
+是否还在，不是对设计的复核；下文正文没有随之改写。
+
+- 第 1、2 期已随 #14968 落地：提交说明点名这两期；`launchesTasks`、
+  `document_task`、`isTaskConfig`、`agentBlock` 在源码里已无引用，
+  `packages/texra/src/tools/theory/programs.ts` 存在。
+- 第 3 期未做：`packages/texra/src/tools/lean` 里没有 `programs`。
+- 第 5 期未做：`packages/extension/resources/agents` 仍有 19 个文件。
+- 第 4、6、7 期未核对。"分期"一节仍按全部未做来写。
+
 ## 摘要
 
 TeXRA 今天只有一种用户可创造的单位：agent 文件。于是审稿视角是 agent，

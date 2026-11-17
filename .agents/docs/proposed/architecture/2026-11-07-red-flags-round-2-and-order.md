@@ -40,6 +40,21 @@ A finding is cited as its area and number (`G1`, `N10`); the evidence, the
 deletion list with consumer counts, and what each one gives up are in the
 report.
 
+## Checked against `main` on 2026-11-17
+
+Read at `c78e9f9` by searching the tree for the names this note says go or
+arrive. It finds a deleted name; it is not a review of the design. The body
+below was not rewritten.
+
+- The catalogue under `.agents/docs/evidence/2026-11-15-design-red-flags/`
+  is the later record of this work and marks every row final. Read a step
+  against it before starting the step.
+- No references remain to `forProvider` (step 1.4), `RUN_PHASE` and
+  `cliRunStanding` (2.1), `PollHookRejected`, `pollLoopStop` and
+  `onKeysChanged` (4.1), or `registerCliStateResetHook` (part of 2.2).
+- Still present: `interruptUnsafe` (6.3), `setExitCode` (2.2).
+- The other steps were not checked.
+
 ## Where things stand on 2026-11-07
 
 | Work                                     | State                                                                                                                                |

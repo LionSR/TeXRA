@@ -17,6 +17,17 @@ follows is what it left, in the order worth taking. Every item needs a
 decision or changes a public or stored shape, which is why it is a note and
 not a commit.
 
+## Checked against `main` on 2026-11-17
+
+Read at `c78e9f9` by searching the tree for the names this note says go or
+arrive. It finds a deleted name; it is not a review of the design. The body
+below was not rewritten.
+
+- Item 7's first bullet looks done: `getToolTimeoutMs` has no references.
+- Item 3 (the Kimi and GLM usage endpoints) is taken up by
+  [a subscription is a credential](../feature/2026-11-17-subscriptions-as-credentials.md),
+  step 2; item 1 (the transcription credential) is its open question 3.
+
 ## 1. Audio transcription calls the OpenAI SDK from the app
 
 `packages/texra/src/controllers/session/audio.ts` imports `openai`, builds its own

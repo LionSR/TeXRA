@@ -15,6 +15,15 @@ attach). R10 of the root designs
 hosts' verbs and the client's three sessions; this note is the service side
 R10 does not reach, and names what in R10 this reading changes.
 
+## Checked against `main` on 2026-11-17
+
+Read at `c78e9f9` by searching the tree for the names this note says go or
+arrive. It finds a deleted name; it is not a review of the design. The body
+below was not rewritten.
+
+- Of the four leftovers, the notice round-trips look at least partly done:
+  `ANSWER_WITHIN` has no references. The other three were not checked.
+
 ## 1. What the service is today
 
 `texra serve` is one process per storage root: it listens on a socket of

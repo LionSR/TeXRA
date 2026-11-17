@@ -28,6 +28,22 @@ tree keeps breaking: `ccf15b4` ("one owner each for run liveness, …") landed
 on the day of this survey and consolidated owners inside `controllers/session/ownerLiveness.ts`,
 a file O1 deletes whole.
 
+## Checked against `main` on 2026-11-17
+
+Read at `c78e9f9` by searching the tree for the names this note says go or
+arrive. It finds a deleted name; it is not a review of the design. The body
+below was not rewritten.
+
+- R6 looks done: `RUN_PHASE`, `durableOutcome` and `HISTORY_RUN_STATUS`
+  have no references.
+- R9 looks mostly done: `InvocationDriver`, `ProviderErrorClassification`,
+  `SharedAttempt`, `subscriptionToken`, `credentialRenewal` and
+  `HelperRequest` have no references.
+- `registerCliStateResetHook` has no references.
+- Still present: `afterCommit` and `InPublisherJob` (on R1's delete list);
+  `setExitCode` with no `exitCodeOf` (R10's exit-code half); `handedDown`
+  (E4).
+
 ## Summary
 
 Ten decisions, each held in the wrong place or made several times, generate
