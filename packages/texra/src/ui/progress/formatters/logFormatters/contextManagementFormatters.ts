@@ -61,10 +61,6 @@ export function formatContextManagementTemplate(
   }));
 
   return html`
-    <context-management
-      .logId=${row.id}
-      .config=${config}
-      .items=${items}
-    ></context-management>
+    <context-management .config=${config} .items=${items}></context-management>
   `;
 }

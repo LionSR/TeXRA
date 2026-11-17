@@ -53,7 +53,6 @@ export class ContextManagement extends LitElement {
   ];
 
   /** Log ID for tracking */
-  @property({ attribute: false }) logId = '';
 
   /** Action configuration (icon, label, color) — every call site supplies one. */
   @property({ attribute: false }) config!: ActionConfig;
@@ -82,7 +81,7 @@ export class ContextManagement extends LitElement {
           label: this.config.label,
           labelClass: 'context-title',
         },
-        body: html`<div class="context-content" data-log-id=${this.logId}>
+        body: html`<div class="context-content">
           ${repeat(
             this.items,
             (item) => item.label,

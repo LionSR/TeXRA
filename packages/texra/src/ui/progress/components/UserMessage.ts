@@ -128,7 +128,6 @@ export class UserMessage extends LitElement {
   @property({ attribute: false }) text = '';
 
   /** Log ID for tracking */
-  @property({ attribute: false }) logId = '';
 
   /** Message timestamp (Unix ms) */
   @property({ attribute: false }) timestamp = 0;
@@ -251,7 +250,6 @@ export class UserMessage extends LitElement {
             isStructuredDelivery
               ? html`<div
                   class="user-message-content markdown-content"
-                  data-log-id=${this.logId}
                   tabindex="0"
                   aria-label="User message details"
                 >
@@ -263,7 +261,6 @@ export class UserMessage extends LitElement {
                 </div>`
               : html`<div
                   class="user-message-content"
-                  data-log-id=${this.logId}
                   .textContent=${this.text}
                 ></div>`
           }
