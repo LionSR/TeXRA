@@ -59,6 +59,7 @@ import {
   openProjectRoots,
 } from '@texra/controllers/session/openProjectSession';
 import { openTexraGlobalConfigStore } from '@texra/platform/defaults/nodeStores';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import {
   probeService,
@@ -145,7 +146,13 @@ const openProjects = Effect.fn('server.openProjects')(function* (
   // The windows and the CLI write these files while the service runs: a
   // store's read serves what they hold now, so a setting changed in any
   // client reaches the next task and the next turn.
-  const globalConfig = yield* openTexraGlobalConfigStore(storageRoot);
+  const { store: globalConfig, warnings: globalWarnings } =
+    yield* openTexraGlobalConfigStore(TEXRA_SETTINGS.catalog, storageRoot);
+  yield* Effect.forEach(
+    globalWarnings,
+    (message) => Effect.logWarning(message).pipe(withLogChannel(CHANNEL)),
+    { discard: true },
+  );
   // What opening a project reads, captured once: `open` is called from
   // handlers that hold no process context of their own. Exactly these
   // services, never the service's scope with them: provided over a

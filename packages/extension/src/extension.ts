@@ -64,6 +64,7 @@ import { makeInlineComments } from '@frontend/comments/inlineComments';
 import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { openTexraGlobalConfigStore } from '@texra/platform/defaults/nodeStores';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import type { ExtensionCommandId } from '@texra/shared/commands/catalog';
 import {
@@ -203,14 +204,18 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
             );
       // VS Code restarts the extension host when the first workspace folder
       // changes, so the configuration stores stay pinned for this process.
+      const global = yield* openTexraGlobalConfigStore(
+        TEXRA_SETTINGS.catalog,
+        defaultNodeStorageRoot(),
+      );
       const { roots, warnings } = yield* openProjectRoots(
         defaultNodeStorageRoot(),
         workspaceRoot,
-        yield* openTexraGlobalConfigStore(defaultNodeStorageRoot()),
+        global.store,
         Result.isSuccess(reached) ? reached.success : undefined,
       ).pipe(Scope.provide(projectScope));
       // Forked: a notification waits for the person, and activation does not.
-      for (const message of warnings) {
+      for (const message of [...global.warnings, ...warnings]) {
         fork(
           Effect.logWarning(message).pipe(
             withLogChannel(EXTENSION_CHANNEL),
