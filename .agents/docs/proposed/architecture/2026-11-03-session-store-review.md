@@ -6,20 +6,6 @@ design (`.agents/docs/implemented/architecture/2026-09-28-storage-v1-design.md`)
 with the post-1.0 compatibility policy stated as rules and the pre-freeze
 changes those rules need. Baseline: `main` at `bc690f4` (first read at `b411a6d`, re-checked at `9062f1b`; the 2026-11-04 rulings reconciled in §5).
 
-## Checked against `main` on 2026-11-17
-
-Read at `c78e9f9` by searching the tree for the names this note says go or
-arrive. It finds a deleted name; it is not a review of the design. The body
-below was not rewritten.
-
-- S2 looks done: `blobDigests` has no references.
-- F13 looks done: `aggregate_change` has no references.
-- "S4 first, or keep `owner_id`" is overtaken: `owner_id` has no references.
-  S4 itself (the forward-step table) is not built, and `SCHEMA_VERSION` is 105.
-- Not built: S5 (`StoreConnection` does not exist), F11 (no
-  `.gitattributes`), F12 (no `quick_check`).
-- S1, S6, S7, F9 and F14 were not checked.
-
 ## Summary
 
 The store's design holds: one codec knows the stored shape, one publisher
@@ -128,6 +114,57 @@ F5 lands, since every caller is touched then anyway.
 Order: S1, S2, S3, S4 land first, each regenerating the golden store; S5 and
 S6 any time; S7 is the release step. S1 to S4 are the only ones the freeze
 makes expensive to defer.
+
+State on 2026-11-17, read at `c78e9f9`. A name counts as gone when a
+whole-word search of `packages`, `src`, `scripts` and `.github` finds nothing.
+The `Database.ts` that §2 and §6 cite no longer exists: the store is
+`packages/harness/src/controllers/session/databaseLayer.ts` (838 lines), and
+its service tag is in `packages/harness/src/shared/session/database.ts`.
+
+- **S1: open, and in conflict with a later record.** `ValueFamily` is still
+  `{ name, schema }` (`packages/harness/src/shared/session/valueFamily.ts`),
+  every family is written under the one `stored_kind` entry `current_value`,
+  and `readableVersion` gates it by the shared `CURRENT_VALUE_VERSION`
+  (`packages/harness/src/controllers/session/rowCodec.ts`). But
+  `2026-11-09-agent-data-one-row-per-fact.md` §3.4 leaves "当前值的 family
+  版本" out of its scope because the PRD decided against a family-version
+  framework. This note asks for S1 before the freeze; that note records the
+  opposite as decided. The two are not reconciled; the owner decides which
+  stands.
+- **S2: in the tree.** `event_blob.inline` is a column
+  (`packages/harness/src/controllers/session/storeSchema.ts`), the reader
+  selects the inline references by `json_each`
+  (`packages/harness/src/controllers/session/rowReader.ts`), and `blobDigests`
+  has no reference.
+- **S3: no longer needed.** There is no `event.batch` column. A tool card is
+  derived from the call's own row
+  (`2026-11-09-agent-data-one-row-per-fact.md` §3.1), so a page may end at
+  any row: `DISPLAY_PAGE_END` survives as a count of rows with no `at` in it,
+  and `settleCards` has no reference.
+- **S4: open.** `checkStamps` still fails an earlier stamp ("this build keeps
+  no compatibility with it"), `ADDITIVE` holds only `CREATE … IF NOT EXISTS`
+  statements, and neither `ADD COLUMN` nor `pragma_table_info` appears.
+  `SCHEMA_VERSION` is 105.
+- **S5, S6: open.** `StoreConnection` has no reference; `currentValues` still
+  takes the connection as a record of closures (`exec`, `execOne`, `transact`,
+  `query`, `afterCommit`, `written`, `valueWritten`) and `projectionUpkeep`
+  takes `(exec, read, path)`. Of F7's three coordinates, `observedCommit` has
+  no reference.
+- **S7: waits for the release.** `config/storage/frozen/` does not exist;
+  `config/storage/` holds `row-kinds-ever.json` alone.
+- **F9: open, not measured.** `rowReader.ts` still reads `EARLIER_RUNS`.
+- **F10: gone**, as §5 expected: `OwnersUnproven`, `provingOwners` and
+  `reclaimable` have no reference.
+- **F11, F12: open.** No `.gitattributes` is tracked; `quick_check` has no
+  reference.
+- **F13: in the tree.** `aggregate_change` and `changedSince` have no
+  reference, and the `data_version` poll is forked for the global store alone
+  (`if (mode === 'global')` in `databaseLayer.ts`).
+- **F14: not established** either way.
+- **§5's "S4, or the decision to keep `owner_id`"** is overtaken: `owner_id`
+  has no reference, so the column went by a stamp bump before any forward
+  step existed. S4 itself stays open, above.
+- **D-A** still waits for the owner.
 
 ## 4. Codex CLI (Rust) and OpenCode v2, compared
 

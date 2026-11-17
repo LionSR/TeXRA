@@ -1,7 +1,8 @@
 # The CLI service and its sessions: root causes and the plan
 
 Date: 2026-11-06
-Status: open (the plan in §4 is unassigned)
+Status: open (the two PRs of §4 are in `main`; the smells at the end of §4
+are unassigned)
 Origin: the owner's remark after the review rounds of PR 14769 that the CLI
 service and the service sessions look suspicious, and the instruction to
 fix root causes, never symptoms. Read on `simplify/session-core` at
@@ -13,16 +14,11 @@ read-only reviews (lifecycle; the wire and `serviceSession.ts`; windows and
 attach). R10 of the root designs
 (`2026-11-05-root-designs-effect-native.md`, PR 14766) already covers the
 hosts' verbs and the client's three sessions; this note is the service side
-R10 does not reach, and names what in R10 this reading changes.
-
-## Checked against `main` on 2026-11-17
-
-Read at `c78e9f9` by searching the tree for the names this note says go or
-arrive. It finds a deleted name; it is not a review of the design. The body
-below was not rewritten.
-
-- Of the four leftovers, the notice round-trips look at least partly done:
-  `ANSWER_WITHIN` has no references. The other three were not checked.
+R10 does not reach, and names what in R10 this reading changes. Since that
+read the two CLI files moved to `packages/cli/src/runtime/platform/cliService.ts`
+and `packages/cli/src/runtime/platform/initPlatform.ts`, and the service's
+handlers are in `packages/texra/src/controllers/server/service.ts`
+(`handlers.ts` no longer exists).
 
 ## 1. What the service is today
 
@@ -480,13 +476,24 @@ surface selects a run this window started once its view holds the
 run's activation, which the handle names) and the window-side presenter
 instance (the session presenter over the window's own host).
 
-Left for a later PR, each a smell, none a defect:
+Left for a later PR, each a smell, none a defect (re-read on 2026-11-17 at
+`c78e9f9`):
 
-- The notice round-trips (`tell` mints an id nothing awaits; an answer
-  past `ANSWER_WITHIN` logged as a notice failure); `editorHost` keyed by
-  storage root beside `HostWindows` keyed by session; two windows on one
-  project, where service sessions always read as "can ask".
+- The notice round-trips, half ended. Still so: `tell` mints an id
+  nothing awaits (`packages/texra/src/controllers/server/hostWindows.ts`).
+  Ended: an answer to a call nothing waits for is logged as late, not as a
+  notice failure (`answer` in the same file), and `ANSWER_WITHIN` has no
+  reference; the wait per call kind is a column of `ANSWERED`
+  (`packages/texra/src/controllers/server/hostCalls.ts`).
+- Still so: `editorHost` keyed by storage root
+  (`packages/texra/src/tools/editorHost.ts`) beside `HostWindows`, whose
+  surfaces are keyed by session.
+- Not re-established: two windows on one project, where service sessions
+  always read as "can ask".
 - §3.2's smells, less the two PR 3 ended (`closeAll` run three times,
   the race loser's usage code) and the one it keeps with its reason (the
   reconnect's first failure); the record's `protocol`/`version` and the
-  `released` flag went with PR 14771.
+  `released` flag went with PR 14771. What remains is the service's
+  liveness decided three ways: `removeDeadSockets` and
+  `releaseServiceRecord` both still exist
+  (`packages/texra/src/controllers/server/discovery.ts`).

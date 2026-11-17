@@ -4,25 +4,13 @@ Status: proposed, 2026-11-09. Read at main `db09959`. Not a catalogue row:
 none of the seven rounds or the lens audits searched for it, and the three
 fixes that touched it landed with no row.
 
-## Checked against `main` on 2026-11-17
-
-Read at `c78e9f9` by searching the tree for the names this note says go or
-arrive. It finds a deleted name; it is not a review of the design. The body
-below was not rewritten.
-
-- The question this note leaves with the owner, `submitFollowUp`'s
-  `takesFollowUps` check, was ruled in #14986: it keeps reading the view,
-  because the store's answer would reject every ended one-shot root that a
-  later resume does read a message for.
-- `readRejection` is gone: no source file names it, so the smaller item
-  about it is done.
-
 ## The problem
 
 A session holds two projections of a run's facts.
 
 - **The store's**, written in the transaction that commits the rows:
-  `SessionLog.facts(runId)` (the `run_record` projection, a `RunRows`:
+  `SessionLog.facts(runId)` (a `RunRows`, folded from the
+  `listing_entry` projection since `run_record` went with #14894:
   parent, position, end, stop, config, grants), `aggregateState`, and
   `view.read(runIds)`, the view rebuilt from the log as of the call.
 - **The in-memory `SessionView`**, which an update fiber applies after the
@@ -127,8 +115,11 @@ Done, eight of the ten sites:
   no view. The wake of an ended run's parent reads the edge in the wake
   itself, where it read it in the fiber's observer before.
 
-Open, the owner's call: `submitFollowUp`'s `takesFollowUps` check still
-reads the view. Read from the store it refuses every message to an ended
+Ruled in #14986 (the red-flag catalogue's HR-5,
+`.agents/docs/evidence/2026-11-15-design-red-flags/catalogue.md`):
+`submitFollowUp`'s `takesFollowUps` check keeps reading the view, and the
+comment above it in `packages/harness/src/agent/followUp/ToolUseFollowUp.ts`
+says why. The question as it stood: Read from the store it refuses every message to an ended
 one-shot root (`run.start.takesFollowUps` is false for one), and
 `packages/harness/example/10-external-plugin.ts` sends such a run a
 message from a fresh process and resumes it to answer it. That passes on
@@ -162,9 +153,9 @@ not by a writer reading its own commit.
   `Rpc.make` in `packages/texra/src/controllers/server/protocol.ts`, a
   handler in `service.ts` and a client line in `serviceSession.ts`. The
   compiler holds the four together, so this is change amplification, not an
-  unknown unknown. `readRejection` has no caller in the repository (the SDK
-  README names it); `readRunEnd` has none outside the harness and its
-  examples.
+  unknown unknown. `readRejection` had no caller in the repository; it is
+  deleted (a whole-word search at `c78e9f9` finds nothing). `readRunEnd`
+  has none outside the harness and its examples.
 - **Fix churn, last 30 days** (`npm run report:fix-churn`): stop/resume/
   ownership 25, model/retry/route 22, desktop/windows 13, all over the
   threshold of ten. Since 2026-11-03 they are 4, 9 and 5: the rulings of
