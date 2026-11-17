@@ -3093,6 +3093,15 @@ All notable changes to this project will be documented in this file.
 
 #### Breaking Changes
 
+- **Lean tools no longer go through the Lean 4 extension.** VS Code runs
+  them the way the desktop app and the CLI do: TeXRA starts its own
+  `lake env lean --server` per Lake project, so it needs `lake` on `PATH`
+  (install elan; the Lean 4 extension can install it for you). Settings →
+  Plugins now shows Lean as available exactly when `lake` is found, where
+  it used to require the extension and ignore `lake`. The Lean tools no
+  longer open the file in an editor tab or move the cursor to its first
+  error.
+
 - **The Create agent with AI wizard is removed** — the Agents tab's
   **Create agent** button and the `texra.createAgentWithAI` command are gone.
   To have an agent drafted for you, run the built-in `creator` agent, which

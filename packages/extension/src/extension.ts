@@ -9,7 +9,6 @@ import {
   Deferred,
   Effect,
   Exit,
-  Layer,
   ManagedRuntime,
   Result,
   Schema,
@@ -20,7 +19,6 @@ import {
 // Local imports
 import { Sessions, WorkspaceRoots } from '@texra-ai/harness';
 import {
-  AppState,
   type ProcessRuntime,
   type ProcessServices,
   type GlobalValues,
@@ -64,7 +62,6 @@ import {
   subscriptionProvider,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
-import { createVscodeLeanLanguageServices } from '@frontend/lean/VscodeIntegration';
 import { makeInlineCriticism } from '@frontend/latex/inlineCriticism';
 import { makeInlineComments } from '@frontend/comments/inlineComments';
 import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
@@ -86,7 +83,6 @@ import {
 import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
-import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import type { GuiSession } from '@texra/controllers/session/openGuiWindow';
 
 // Local file imports
@@ -152,14 +148,9 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         name: 'vscode',
         inquiryPanel: true,
         inlineComments,
-        // Lean through the Lean 4 extension, not a direct `lake` pool.
-        lean: Layer.effect(
-          LeanLanguageServices,
-          Effect.map(AppState, createVscodeLeanLanguageServices),
-        ),
         // The editor's commands and terminal, for the setup tools.
         setup: vscodeSetupPlatform,
-        // The editor's extensions, for the setup tools and the Lean 4 probe.
+        // The editor's extensions, for the setup tools.
         editor: vscodeEditorIntegration,
         // `~/.texra`: one history across CLI, desktop and extension.
         storageRoot: defaultNodeStorageRoot(),

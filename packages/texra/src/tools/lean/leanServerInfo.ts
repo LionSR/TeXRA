@@ -1,13 +1,9 @@
 /**
- * What the Tools dashboard shows of one Lean language server. Each adapter
- * derives the list from what it already holds (`LeanLanguageServices.listServers`):
- * the direct pool from its map of servers by workspace root, the VS Code
- * bridge from the workspace folders it has reached the Lean 4 extension's
- * client for. So users see the same "running servers" surface across all
- * three builds.
+ * What the Tools dashboard shows of one Lean language server: the pool
+ * derives the list from its map of servers by workspace root
+ * (`LeanLanguageServices.listServers`).
  */
 
-import { LEAN_SERVER_MODE_LABELS } from './leanTypes';
 import {
   formatCompactDuration,
   formatResultCount,
@@ -15,7 +11,6 @@ import {
 
 export type LeanServerInfo = {
   readonly workspaceRoot: string;
-  readonly mode: keyof typeof LEAN_SERVER_MODE_LABELS;
 } & (
   | { readonly status: 'starting' }
   | { readonly status: 'running'; readonly startedAt: number }
@@ -48,10 +43,7 @@ export function summarizeLeanServers(
   if (list.length === 0) return 'No Lean servers registered.';
   const lines = list
     .toSorted((a, b) => a.workspaceRoot.localeCompare(b.workspaceRoot))
-    .map((info) => {
-      const modeLabel = LEAN_SERVER_MODE_LABELS[info.mode];
-      return `• ${info.workspaceRoot} (${modeLabel})${statusTail(info, now)}`;
-    });
+    .map((info) => `• ${info.workspaceRoot}${statusTail(info, now)}`);
   const header = `${formatResultCount(list.length, 'Lean server')} registered:`;
   return [header, ...lines].join('\n');
 }

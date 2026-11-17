@@ -19,7 +19,6 @@ import {
   multiAgent,
   web,
   definePlugin,
-  type ProcessPluginLayer,
   type Plugin,
 } from '@texra-ai/harness/plugins';
 
@@ -28,7 +27,6 @@ import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
 import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool';
-import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import type { PluginSettingRow } from '@texra/shared/settingsView/settingRows';
 import { THEORY_MODULES, THEORY_PROGRAMS } from './theory/programs';
 import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
@@ -348,9 +346,6 @@ const theory: TexraPlugin = {
 export const texraPlugins = (host: {
   /** Which host this is, as the setup agent's environment probe reports it. */
   readonly name: SetupHost['Service'];
-  /** The host's Lean services in place of the direct `lake` pool (VS
-   *  Code's Lean 4 extension bridge). */
-  readonly lean?: ProcessPluginLayer<LeanLanguageServices>['layer'];
   /** The host's Comments UI behind `inline_comment`. */
   readonly inlineComments?: InlineCommentProvider;
   /** The host's setup capabilities (VS Code's commands and terminal);
@@ -418,7 +413,7 @@ export const texraPlugins = (host: {
     },
     wolfram,
     zotero,
-    lean4({ services: host.lean }),
+    lean4,
     {
       ...multiAgent,
       icons: { agent: 'circle-user' },

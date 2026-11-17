@@ -1,5 +1,5 @@
 /**
- * Host-neutral contracts shared by the VS Code and direct-LSP Lean adapters.
+ * Host-neutral contracts between the Lean tools and the `lake` server pool.
  * LSP shapes stay structural so this boundary does not depend on the packaging
  * details of `vscode-languageserver-protocol`.
  */
@@ -89,12 +89,6 @@ export const LEAN_PROJECT_COMMANDS = freezeCommands({
 } satisfies Record<string, LeanProjectCommandSpec>);
 export type LeanProjectCommand = keyof typeof LEAN_PROJECT_COMMANDS;
 
-/** Human-readable label for each server mode (used in the dashboard surface). */
-export const LEAN_SERVER_MODE_LABELS = Object.freeze({
-  'vscode-extension': LEAN4_EXTENSION_ID,
-  'direct-lsp': 'direct LSP',
-} as const);
-
 // LSP contracts
 
 const LspPositionSchema = Schema.Struct({
@@ -167,7 +161,7 @@ export interface FetchDiagnosticsResult {
 
 /**
  * Lean cannot serve the call: no Lake project above the file, no usable
- * toolchain (no `lake` to start a server, no Lean 4 extension), or the
+ * toolchain (no `lake` to start a server), or the
  * server stopped under the call (a crash included). The message says which,
  * and carries the setup advice where the toolchain is the cause.
  */

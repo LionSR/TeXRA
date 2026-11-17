@@ -116,7 +116,7 @@ const LeanInspectInputSchema = Schema.Struct({
 
 type LeanInspectInput = typeof LeanInspectInputSchema.Type;
 
-/** The tool's answer when Lean cannot serve a call: the adapter's message,
+/** The tool's answer when Lean cannot serve a call: the pool's message,
  *  which carries the setup advice where the toolchain is the cause. */
 const leanUnavailableResult = (
   failed: string,
@@ -243,9 +243,7 @@ export const LeanFileTool = defineTool({
   description: `Execute Lean 4 language-server commands on a specific file.
 
 Commands:
-${FILE_COMMAND_PROSE}
-
-In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the corresponding direct operations where supported.`,
+${FILE_COMMAND_PROSE}`,
   schema: LeanFileInputSchema,
   execute: (
     input: LeanFileInput,
@@ -256,10 +254,10 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
       const call = yield* ToolContext;
       const services = yield* LeanLanguageServices;
       return yield* forCallerRun(
-        services.executeFileCommand(command, yield* leanFilePath(file, call)),
+        services.restartFile(yield* leanFilePath(file, call)),
       ).pipe(
         Effect.as(executed(`Executed "${command}" on ${file}`, description)),
-        // The adapter's cause is the answer.
+        // The pool's cause is the answer.
         Effect.catchTags({
           LeanFileCommandFailed: (failure) =>
             Effect.succeed(
@@ -291,9 +289,7 @@ export const LeanProjectTool = defineTool({
   name: 'lean_project',
   description: `Execute global Lean 4 language-server commands (no file required).
 
-${PROJECT_COMMAND_PROSE}
-
-In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the corresponding direct operations where supported.`,
+${PROJECT_COMMAND_PROSE}`,
   schema: LeanProjectInputSchema,
   execute: (
     input: LeanProjectInput,
@@ -422,9 +418,7 @@ Goal results render Lean's own proof-state text, or a "no goals" message
 when none remain (the proof may be complete, or the cursor may be outside
 a tactic block).
 
-Line and column are 1-indexed.
-
-In VS Code, this uses the Lean 4 extension. CLI and desktop provide the corresponding direct operations where supported.`,
+Line and column are 1-indexed.`,
   schema: LeanInspectInputSchema,
   execute: executeLeanInspectTool,
 });

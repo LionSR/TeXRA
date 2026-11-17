@@ -5,10 +5,7 @@
 import { Clock, Effect, Option } from 'effect';
 
 // Local imports
-import {
-  definePlugin,
-  type ProcessPluginLayer,
-} from '@texra-ai/harness/plugins';
+import { definePlugin } from '@texra-ai/harness/plugins';
 import { formatResultCount } from '@texra-ai/harness/schemas';
 import type { TexraPlugin } from '@texra/tools/registry';
 import { findCommand } from '@texra/utils/system/binaryResolver';
@@ -24,13 +21,11 @@ import {
 } from './LspTools';
 
 /**
- * Lean 4 over the direct `lake env lean --server` pool, or over a host's
- * services in its place; its probe reports the tools runnable exactly when
- * `lake` is found, the one thing the pool needs.
+ * Lean 4 over the `lake env lean --server` pool, in every host; its probe
+ * reports the tools runnable exactly when `lake` is found, the one thing the
+ * pool needs.
  */
-export const lean4 = (host: {
-  readonly services?: ProcessPluginLayer<LeanLanguageServices>['layer'];
-}): TexraPlugin => ({
+export const lean4: TexraPlugin = {
   ...definePlugin<LeanLanguageServices>({
     id: 'lean4',
     tools: [
@@ -67,9 +62,7 @@ export const lean4 = (host: {
         };
       }),
     },
-    processLayer: {
-      layer: host.services ?? directLeanLanguageServices,
-    },
+    processLayer: { layer: directLeanLanguageServices },
   }),
   icons: {
     lean_diagnostics: 'triangle-exclamation',
@@ -98,4 +91,4 @@ export const lean4 = (host: {
         'Requires `lake` on PATH in every build; each Lake project can have its own language server, which stops when the last run using it ends, surfaced below.',
     },
   },
-});
+};
