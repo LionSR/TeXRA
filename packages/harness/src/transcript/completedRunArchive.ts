@@ -1,11 +1,10 @@
 /** Completed-run display reads, keyed by run id. */
 import { Effect, absurd } from 'effect';
-import type { ExportNode } from '@agent/export/schemas';
 import { formatToolResultAsText } from '@agent/runtime/run/toolResultText';
 import { stringifyConversationValue } from '@agent/storage/conversationFormat';
 
 import { Settings, type ConfigProvider } from '@shared/config/settings';
-import type { RunId, ToolCallLog } from '@shared/schemas';
+import type { RunId, ToolCallLog, ExportNode } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
 import type { TranscriptView } from '@shared/session/sessionView';
 import { buildRunTranscript } from '@shared/session/transcriptUpdate';

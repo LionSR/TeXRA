@@ -12,7 +12,7 @@
  * truncation for the CLI). Node rendering and truncation are shared here.
  */
 import { absurd } from 'effect';
-import type { ExportNode } from '@agent/export/schemas';
+import type { ExportNode } from '@shared/schemas';
 
 const HIDDEN_PROVIDER_REASONING_MARKER = '[provider reasoning hidden]';
 

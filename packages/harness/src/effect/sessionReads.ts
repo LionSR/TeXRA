@@ -7,7 +7,6 @@
  */
 import { Context, Effect, Stream, SubscriptionRef } from 'effect';
 
-import type { ExportNode } from '@agent/export/schemas';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { SessionRequests } from '@agent/runtime/requests';
 import { Runs } from '@agent/runtime/runRegistry';
@@ -26,6 +25,7 @@ import type {
   TranscriptSubscription,
   AgentConfig,
   AssembleTraceResult,
+  ExportNode,
 } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import type { RequestError } from '@shared/session/runtimeRequest';

@@ -5,7 +5,7 @@
  * host's history previews use).
  * Pure: the caller owns storage access and paging.
  */
-import type { ExportNode } from '@agent/export/schemas';
+import type { ExportNode } from '@shared/schemas';
 import {
   formatConversationMessage,
   type ConversationFormatOptions,

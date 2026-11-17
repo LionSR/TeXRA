@@ -26,7 +26,7 @@ export {
   activationView,
   type ActivationViewSource,
 } from './effect/runHandle.js';
-export { ExportNodeSchema, type ExportNode } from '@agent/export/schemas';
+export { ExportNodeSchema, type ExportNode } from '@shared/schemas/exportNode';
 export {
   formatConversationMessage,
   type ConversationFormatOptions,
