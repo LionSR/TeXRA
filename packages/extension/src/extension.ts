@@ -73,6 +73,7 @@ import {
 } from '@texra/controllers/session/openProjectSession';
 import {
   reachBundledService,
+  ServiceUnavailable,
   type ServiceLink,
 } from '@texra/controllers/server/client';
 import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
@@ -196,7 +197,11 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     Effect.gen(function* () {
       const reached: Result.Result<ServiceLink, Error> =
         extras.service === undefined || workspaceRoot === undefined
-          ? Result.fail(new Error('a window with no folder uses no service'))
+          ? Result.fail(
+              new ServiceUnavailable({
+                reason: 'a window with no folder uses no service',
+              }),
+            )
           : // Held with the project state it serves: after the sessions
             // that read it close, before the runtime its reconnects use.
             yield* Effect.result(

@@ -5,11 +5,11 @@ import * as vscode from 'vscode';
 // Local imports - utilities
 import { type RootedFileSystem } from '@texra-ai/harness/host';
 import { CommandDirs } from '@texra-ai/harness/node';
-import { ensureError } from '@texra-ai/harness/schemas';
 import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { inputBox } from '@frontend/ui/dialogs';
 import type { HostFailed } from '@texra/hosts/uiHosts';
+import { hostFailed } from '@texra/controllers/session/hostCallFailure';
 import { announce, showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import {
@@ -100,7 +100,7 @@ const promptGitMissing = Effect.fnUntraced(function* () {
   if (selected === 'Copy Command' && command) {
     yield* Effect.tryPromise({
       try: async () => vscode.env.clipboard.writeText(command),
-      catch: ensureError,
+      catch: (cause) => hostFailed('clipboard.writeText', cause),
     }).pipe(
       Effect.catch((error) =>
         Effect.logWarning(`Could not copy the command: ${error.message}`).pipe(

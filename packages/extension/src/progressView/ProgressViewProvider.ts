@@ -9,7 +9,6 @@ import { scopedFork } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   attentionOf,
-  ensureError,
   formatResultCount,
   type AgentConfig,
   type FileLocation,
@@ -416,7 +415,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         this.fork(
           Effect.tryPromise({
             try: () => view.webview.postMessage(message),
-            catch: ensureError,
+            catch: (cause) => hostFailed('webview.postMessage', cause),
           }).pipe(
             Effect.flatMap((delivered) =>
               delivered
