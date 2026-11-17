@@ -3,16 +3,13 @@
 `agent/core` holds the host-agnostic domain model for the agent system: no
 `vscode`, no imports from other packages.
 
-| Module        | Concern                          | Contents                                                                                                                                                                                                                       |
-| ------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `definition/` | What an agent **is** (configure) | `RunRecord`. The launch configuration (`AgentConfig`) is a schema in `@shared/schemas` (`agentConfig.ts`), as is the definition format (`AgentDefinition`, `Persona`, `agent.ts`)                                              |
-| `tools/`      | Tool contracts and tool calls    | `ToolTypes` (`ITool`, `ToolContext`), `toolAttachmentExtraction`, `toolCallParsing` (duplicate-call partitioning and tool-call error normalization for the run loop), `toolSchema` (a tool's JSON Schema as the model sees it) |
-
-`definition/` and `tools/` do not depend on each other; keep it that way.
+| Module   | Concern                       | Contents                                                                                                                                                                                                                       |
+| -------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `tools/` | Tool contracts and tool calls | `ToolTypes` (`ITool`, `ToolContext`), `toolAttachmentExtraction`, `toolCallParsing` (duplicate-call partitioning and tool-call error normalization for the run loop), `toolSchema` (a tool's JSON Schema as the model sees it) |
 
 Not here:
 
-- Run facts and usage totals are schemas (`runInput.ts`, `usage.ts` in
+- A run's record (`RunRecord`, `runRecords.ts`), run facts and usage totals are schemas (`runInput.ts`, `usage.ts` in
   `@shared/schemas`); the state the loop continues from is `RunState`
   (`@shared/session/runState`), rebuilt from rows.
 - The run program, its per-run services and the model call are in
@@ -22,7 +19,7 @@ Not here:
 
 ## Importing
 
-Harness code imports the specific module (`@agent/core/definition/RunRecord`);
+Harness code imports the specific module (`@agent/core/tools/ToolTypes`);
 there is no `@agent/core` barrel. The `AgentConfigSchema` wire contract comes
 from `@shared/schemas` inside the harness and from `@texra-ai/harness/schemas`
 outside it. Decoding a launch's configuration (`decodeLaunchConfig`) is the

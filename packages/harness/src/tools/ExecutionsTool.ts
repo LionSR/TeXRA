@@ -29,6 +29,7 @@ import {
   ToolError,
   type RunId,
   type ToolResult,
+  serializeFilteredConfig,
 } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import type { SessionView } from '@shared/session/sessionView';
@@ -52,7 +53,6 @@ import {
 } from './executionFormatters';
 import { defineTool } from './core/definition';
 import { formatFileView, type LineRange } from './formatting';
-import { serializeFilteredConfig } from './executions/configView';
 import { formatConversation } from './executions/conversationFormat';
 import { orchestratorKillDenial } from './executions/killPolicy';
 import { queryHistory } from './executions/queryAction';

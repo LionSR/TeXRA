@@ -28,8 +28,10 @@ export type {
 } from '@shared/schemas/agentConfig';
 // A run's saved record: an agent's config or a task's,
 // and its JSON with the fields its category hides dropped.
-export type { RunRecord } from '@agent/core/definition/RunRecord';
-export { serializeFilteredConfig } from '@tools/executions/configView';
+export {
+  serializeFilteredConfig,
+  type RunRecord,
+} from '@shared/schemas/runRecords';
 // The subscriptions a model call can route through, by provider id.
 export {
   SUBSCRIPTION_AUTH_PROVIDERS,

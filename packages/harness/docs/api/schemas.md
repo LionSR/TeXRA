@@ -2232,10 +2232,11 @@ type ScriptDeliverySummary = typeof ScriptDeliverySummarySchema.Type;
 
 ## serializeFilteredConfig
 
-Serialize a run record to pretty JSON, dropping agent-config fields
-irrelevant to the resolved display category so the serialized config the
-orchestrator reads stays relevant. Records without an agent execution mode
-are honest by construction and serialize unchanged.
+Serialize a run record to pretty JSON for `/executions/{id}/config`,
+dropping agent-config fields irrelevant to the resolved display category
+so the serialized config the orchestrator reads stays relevant. Records
+without an agent execution mode are honest by construction and serialize
+unchanged.
 
 ```ts
 function serializeFilteredConfig(

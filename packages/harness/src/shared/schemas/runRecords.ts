@@ -3,7 +3,7 @@ import { Schema, SchemaGetter, Struct } from 'effect';
 
 import { normalizeFilePath } from '@utils/core/pathBasics';
 
-import { AgentConfigSchema } from './agentConfig';
+import { AgentConfigSchema, type AgentConfig } from './agentConfig';
 import { RunIdSchema } from './identifiers';
 import type { ExecEnd } from './opResults';
 import { ModelFailureSchema, modelFailureMessage } from './errors';
@@ -23,6 +23,64 @@ export const RunRecordFieldsSchema = Schema.Union([
   NonAgentRunRecordSchema,
   AgentConfigSchema,
 ]);
+
+/**
+ * The canonical run configuration (`RunRecordFieldsSchema`, the `run.config`
+ * row's field): a real `AgentConfig` for agent runs, the honest minimal
+ * record for everything else. The union keeps the strict non-agent arm
+ * first: the agent arm's decoding defaults would fabricate an agent config
+ * out of any object.
+ */
+export type RunRecord = typeof RunRecordFieldsSchema.Type;
+
+/** The key only an agent config carries (`agent` has a decoding default, so
+ *  every parsed agent config has it; the strict non-agent arm cannot). Typed
+ *  so a rename on either arm fails to compile instead of silently matching
+ *  none. */
+const AGENT_RECORD_KEY: Exclude<
+  keyof AgentConfig,
+  keyof typeof NonAgentRunRecordSchema.Type
+> = 'agent';
+
+/** Whether `record` is an agent run's config. */
+export function isAgentRunRecord(record: RunRecord): record is AgentConfig {
+  return AGENT_RECORD_KEY in record;
+}
+
+/**
+ * Per-category config-field exclusions: a conversation (`agent`) hides the
+ * task's file fields, a `task` hides its program's source. Unknown
+ * categories get no filtering.
+ */
+const HIDDEN_CONFIG_FIELDS_BY_CATEGORY: Readonly<
+  Record<string, ReadonlySet<string>>
+> = {
+  agent: new Set(['inputFiles', 'contextFiles', 'outputFiles']),
+  task: new Set(['script']),
+};
+
+/**
+ * Serialize a run record to pretty JSON for `/executions/{id}/config`,
+ * dropping agent-config fields irrelevant to the resolved display category
+ * so the serialized config the orchestrator reads stays relevant. Records
+ * without an agent execution mode are honest by construction and serialize
+ * unchanged.
+ */
+export function serializeFilteredConfig(
+  record: RunRecord,
+  category: string | undefined,
+): string {
+  const excludeSet = category
+    ? HIDDEN_CONFIG_FIELDS_BY_CATEGORY[category]
+    : undefined;
+  if (!excludeSet) {
+    return JSON.stringify(record, null, 2);
+  }
+  const filtered = Object.fromEntries(
+    Object.entries(record).filter(([key]) => !excludeSet.has(key)),
+  );
+  return JSON.stringify(filtered, null, 2);
+}
 
 /** The name of the registered program the run opened on (`script.name`),
  *  or null for any other run. A program's run is a script that ends: its

@@ -5,10 +5,6 @@
 import { Effect, Result, Schema } from 'effect';
 
 import { runHistoryRows } from '@agent/runtime/providerMessages';
-import {
-  isAgentRunRecord,
-  type RunRecord,
-} from '@agent/core/definition/RunRecord';
 import { SessionRoots } from '@platform/rootedFs';
 import { DatabaseReadFailed } from '@shared/session/database';
 import { attemptOf } from '@shared/session/inFlight';
@@ -31,6 +27,8 @@ import {
   type SessionRow,
   type RunId,
   type AgentConfig,
+  isAgentRunRecord,
+  type RunRecord,
 } from '@shared/schemas';
 import { deriveRunId } from '@utils/core/idHash';
 
