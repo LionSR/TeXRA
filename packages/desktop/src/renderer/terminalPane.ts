@@ -66,6 +66,11 @@ interface TerminalSession {
   readonly host: HTMLElement;
   /** Holds the Restart button while the shell has exited; empty otherwise. */
   readonly exitActions: HTMLElement;
+  /** Keystrokes typed before the pane asked for a shell, sent right after
+   *  it asks. A click can focus the terminal before a layout pass gives it
+   *  the geometry the start waits for, and the main process drops input for
+   *  a session it has not been asked to start. */
+  readonly heldInput: string[];
   started: boolean;
   exited: boolean;
 }
@@ -115,7 +120,10 @@ export function createTerminalPane(
     terminal.loadAddon(fitAddon);
     terminal.open(host);
 
-    terminal.onData((data) => callbacks.sendInput(sessionId, data));
+    terminal.onData((data) => {
+      if (session.started) callbacks.sendInput(sessionId, data);
+      else session.heldInput.push(data);
+    });
     terminal.onResize(({ cols, rows }) =>
       callbacks.resize(sessionId, cols, rows),
     );
@@ -129,6 +137,7 @@ export function createTerminalPane(
       fitAddon,
       host,
       exitActions,
+      heldInput: [],
       started: false,
       exited: false,
     };
@@ -204,6 +213,8 @@ export function createTerminalPane(
         // prompt is wrapped for the correct width.
         const { cols, rows } = session.terminal;
         callbacks.start(sessionId, Math.max(cols, 20), Math.max(rows, 5));
+        for (const data of session.heldInput.splice(0))
+          callbacks.sendInput(sessionId, data);
       }
       if (focus) session.terminal.focus();
     },
