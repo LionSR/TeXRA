@@ -17,7 +17,7 @@ import type { AgentOptionData } from '@texra/shared/pickerOptions';
 import { agentOptionsData } from '@texra/controllers/session/agentOptions';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 
-import { ListForm, useAsyncPickerForm } from './_shared/ListForm';
+import { AsyncListForm } from './_shared/ListForm';
 import { useChatProcess } from '../chatProcess';
 
 interface AgentListFormProps {
@@ -102,61 +102,52 @@ function hiddenCurrentAgentHint(
 
 export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   const { roots } = useChatProcess();
-  const picker = useAsyncPickerForm<AgentGroups, AgentPickerValue>({
-    title: '/agent',
-    loadingLabel: 'Loading agents...',
-    load: Effect.fn('load')(function* () {
-      const catalog = yield* AgentCatalog;
-      const agents = (yield* agentOptionsData(roots)).map((agent) => ({
-        ...agent,
-        description: catalog.get(agent.value)?.description,
-      }));
-      const teams = loadTeamOptions(
-        yield* createTeamCatalogPorts(roots.repoState),
-      );
-      return { agents, teams };
-    }),
-    isEmpty: (groups) => groups.agents.length === 0,
-    closeEmptyOnEnter: true,
-    items: agentPickerItems,
-    selectable: props.selectable,
-    onSelect: (value) => props.onSelect?.(value),
-    onClose: props.onClose,
-  });
-
-  if (picker.transient) return picker.transient;
-
-  const agents: AgentGroups = picker.data ?? { agents: [], teams: [] };
-  const primarySectionTitle = `${agentPickerPrimarySectionTitle(agents.agents)}${
-    agents.teams.length > 0 ? ', then teams' : ''
-  }`;
-  const items = picker.items;
-  // The current agent may be stored as a canonical key (`source:name`) or a
-  // bare name; rows are keyed by canonical value, so match Select in that same
-  // identity space when rendering the ✓ on the active row. A chosen team
-  // outranks its lead, which also appears as an agent row.
-  const activeAgent = currentVisibleAgent(agents.agents, props.currentAgent);
-  const activeValue = items.find(({ value }) =>
-    props.currentTeamId !== undefined
-      ? value.kind === 'team' && value.teamId === props.currentTeamId
-      : value.kind === 'agent' && value.agent === activeAgent?.value,
-  )?.value;
-  const currentAgentHint = hiddenCurrentAgentHint(
-    agents.agents,
-    props.currentAgent,
-  );
-  const currentAgentHintRow = currentAgentHint ? (
-    <Text dimColor wrap="truncate-end">
-      {currentAgentHint}
-    </Text>
-  ) : null;
-
+  const sectionTitle = (groups: AgentGroups): string =>
+    `${agentPickerPrimarySectionTitle(groups.agents)}${
+      groups.teams.length > 0 ? ', then teams' : ''
+    }`;
+  const hintRow = (groups: AgentGroups): React.JSX.Element | null => {
+    const hint = hiddenCurrentAgentHint(groups.agents, props.currentAgent);
+    return hint ? (
+      <Text dimColor wrap="truncate-end">
+        {hint}
+      </Text>
+    ) : null;
+  };
   return (
-    <ListForm
+    <AsyncListForm<AgentGroups, AgentPickerValue>
       title="/agent"
+      loadingLabel="Loading agents..."
+      load={Effect.fn('load')(function* () {
+        const catalog = yield* AgentCatalog;
+        const agents = (yield* agentOptionsData(roots)).map((agent) => ({
+          ...agent,
+          description: catalog.get(agent.value)?.description,
+        }));
+        const teams = loadTeamOptions(
+          yield* createTeamCatalogPorts(roots.repoState),
+        );
+        return { agents, teams };
+      })}
+      isEmpty={(groups) => groups.agents.length === 0}
+      items={agentPickerItems}
+      selectable={props.selectable}
+      // The current agent may be stored as a canonical key (`source:name`) or
+      // a bare name; rows are keyed by canonical value, so match Select in
+      // that same identity space when rendering the ✓ on the active row. A
+      // chosen team outranks its lead, which also appears as an agent row.
+      activeValueFor={(groups, items) => {
+        const activeAgent = currentVisibleAgent(
+          groups.agents,
+          props.currentAgent,
+        );
+        return items.find(({ value }) =>
+          props.currentTeamId !== undefined
+            ? value.kind === 'team' && value.teamId === props.currentTeamId
+            : value.kind === 'agent' && value.agent === activeAgent?.value,
+        )?.value;
+      }}
       availableRows={props.availableRows}
-      items={items}
-      activeValue={activeValue}
       description={
         <Text dimColor wrap="truncate-end">
           {props.selectable
@@ -164,28 +155,28 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
             : 'Viewing agents. Use texra chat --agent <name> to switch in a new chat.'}
         </Text>
       }
-      detail={
+      detailFor={(groups) => (
         <>
-          {currentAgentHintRow}
-          {items.length > 0 ? (
+          {hintRow(groups)}
+          {groups.agents.length + groups.teams.length > 0 ? (
             <Box marginTop={1}>
-              <Text bold>{primarySectionTitle}</Text>
+              <Text bold>{sectionTitle(groups)}</Text>
             </Box>
           ) : null}
         </>
-      }
+      )}
       // The hint row, then the section heading behind its blank row.
-      detailRows={(currentAgentHint ? 1 : 0) + 2}
-      compactDetail={
+      detailRowsFor={(groups) => (hintRow(groups) ? 1 : 0) + 2}
+      compactDetailFor={(groups) => (
         <>
-          {currentAgentHintRow}
-          <Text bold>{primarySectionTitle}</Text>
+          {hintRow(groups)}
+          <Text bold>{sectionTitle(groups)}</Text>
         </>
-      }
+      )}
       emptyClosesOnEnter
       emptyMessage="No agents are available in this workspace."
       action={props.selectable ? 'select' : 'close'}
-      onSelect={picker.select}
+      onSelect={(value) => props.onSelect?.(value)}
       onCancel={props.onClose}
     />
   );
