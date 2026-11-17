@@ -29,7 +29,7 @@ export const runTabStyles = css`
     max-width: 100%;
     gap: var(--wa-space-2xs);
     min-height: var(--row-height);
-    border-radius: var(--run-tab-radius, var(--wa-border-radius-s));
+    border-radius: var(--run-tab-radius, var(--border-radius));
     padding-inline-end: var(--wa-space-2xs);
     box-sizing: border-box;
     overflow: hidden;
@@ -182,10 +182,7 @@ export const runTabStyles = css`
       --wa-color-list-active-bg,
       color-mix(in srgb, var(--wa-color-brand-fill-quiet) 85%, transparent)
     );
-    color: var(
-      --wa-color-list-active-fg,
-      var(--wa-color-brand-on-quiet, var(--wa-color-text-normal))
-    );
+    color: var(--wa-color-list-active-fg, var(--wa-color-brand-on-quiet));
   }
 
   /*
@@ -265,8 +262,8 @@ export const runTabStyles = css`
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    min-width: 24px;
+    width: var(--control-size-s);
+    min-width: var(--control-size-s);
     height: 100%;
     color: var(--color-text-muted);
   }

@@ -70,14 +70,8 @@ this.
 
 ## 4. The merge feature's edited file is a harness launch field
 
-`editedFile` on the harness's `AgentConfig`
-(`packages/harness/src/shared/schemas/fileFields.ts`) and the `EDITED_*`
-template variables (`packages/harness/src/agent/prompt/templateInputs.ts`)
-serve one app agent (`packages/extension/resources/agents/merge.yaml`, launched
-from `packages/texra/src/controllers/session/hostRunActions.ts`). A plugin may
-already render its own variables beside the harness's, so the documents
-plugin can own it. `AgentConfig` is stored in run rows, so this is a row
-version change.
+Taken on 2026-11-16: the merge program reads `editedFile` from its `args`,
+`document_context` takes it as input, and `run.config` is at v9 without it.
 
 ## 5. The run list is built twice
 
@@ -136,6 +130,16 @@ the Claude-to-harness tool mapping already
 should translate when it builds the log, and the classifier keep only the
 canonical names. The `str_replace` / `text_editor` branch has no producer in
 the repo.
+
+Checked on 2026-11-16 and left: translating in `buildClaudeToolUseLog`
+changes more than the classifier. `Read`, `Write` and `Bash` rows would gain
+the harness's file and shell treatments, the row header would read the
+harness name (`edit_file`) where it reads Claude's (`Edit`), and the
+translation (`CLAUDE_TOOLS`' `back` in `hookConfig.ts`) would become a
+public export of the plugins entry. The `claude-agent` plugin still
+registers an icon for `str_replace_editor`, so that branch's producer is a
+question for the plugin, not dead code yet. Needs the decision on how a
+delegated Claude Code call is labelled.
 
 ## Checked and left alone
 

@@ -25,14 +25,14 @@ export const heroStyles = css`
     width: 24px;
     height: 24px;
     color: var(--wa-color-brand-on-quiet);
-    font-size: 20px;
+    font-size: var(--font-size-h1);
   }
 
   .hero h1 {
     margin: var(--wa-space-3xs) 0 0;
     font-size: var(--hero-heading-size, var(--font-size-h1));
     font-weight: var(--font-weight-semibold);
-    letter-spacing: -0.025em;
+    letter-spacing: var(--letter-spacing-tight);
     line-height: var(--line-height-heading);
     text-wrap: balance;
   }

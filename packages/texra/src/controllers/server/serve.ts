@@ -18,7 +18,9 @@
  *
  * Whichever ends it, it leaves as a drain does first: no task starts; the
  * record is released as it exits. It never starts at login: a client starts it detached when none answers.
- * The sessions it opened are the host's to close once this returns. Every
+ * Its projects are its own (one session per project, opened on demand over
+ * that project's own roots, as the desktop opens its folders), and it
+ * closes every session the process opened before its socket closes. Every
  * fact the lifetime follows is a published one (the projects' load, the
  * admissions, the watch streams), never a poll.
  */
@@ -29,17 +31,36 @@ import {
   Deferred,
   Duration,
   Effect,
+  Exit,
   FileSystem,
   Layer,
+  Path,
+  RcMap,
   Schema,
-  type Scope,
+  Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { RpcSerialization, RpcServer } from 'effect/rpc';
 
-import { type Sessions } from '@texra-ai/harness';
-import { GlobalValues, type ProcessServices } from '@texra-ai/harness/host';
+import { type LocalSession, Sessions } from '@texra-ai/harness';
+import {
+  AppState,
+  GlobalValues,
+  type ProcessServices,
+  StateStores,
+} from '@texra-ai/harness/host';
+import { canonicalizeWorkspaceRoot } from '@texra-ai/harness/node';
+import { withLogChannel } from '@texra-ai/harness/plugins';
+import { ensureError } from '@texra-ai/harness/schemas';
+import {
+  openLocalSession,
+  openProjectRoots,
+} from '@texra/controllers/session/openProjectSession';
+import { openTexraGlobalConfigStore } from '@texra/platform/defaults/nodeStores';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
+import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import {
   probeService,
   ServiceUnavailable,
@@ -54,9 +75,11 @@ import {
 } from './discovery';
 import {
   type ServiceControl,
+  type ServiceLoad,
+  type ServiceProjects,
   serviceHandlers,
-  ServiceProjects,
   runningTasks,
+  runsAtWork,
 } from './service';
 import {
   BUILD_VERSION,
@@ -95,14 +118,183 @@ class ServiceListenFailed extends Schema.TaggedError<ServiceListenFailed>()(
 type ServeExit = 'stopped' | 'drained' | 'idle';
 
 interface ServeOptions {
+  /** The storage root every project's store sits under. */
+  readonly storageRoot: string;
   /** Exit after this long with no client and no task at work. */
   readonly idleAfter: Duration.Input;
   /** The host's own stop (a signal): ends the run as a `stop` would. */
   readonly shutdown: Deferred.Deferred<void>;
-  /** Stop and finish every task, run once the service is ending and while
-   *  its clients are still connected, so they see each task's last rows. */
-  readonly finishTasks: Effect.Effect<void>;
 }
+
+/** The service's own log channel. */
+const CHANNEL = 'service';
+
+/**
+ * The service's projects over `storageRoot`, opened in the caller's scope
+ * and closed with it. A project is its session, opened on first use and
+ * released once nothing has held it for `idleAfter` (`RcMap`): a client's
+ * lease is its scope on `open`, and a run at work holds a lease of the
+ * project's own, taken as the view shows one and let go as none is left,
+ * so a project with a task running never idles out.
+ */
+const openProjects = Effect.fn('server.openProjects')(function* (
+  storageRoot: string,
+  idleAfter: Duration.Input,
+) {
+  // The process's sessions, which each project's session is opened through.
+  const sessions = yield* Sessions;
+  // The windows and the CLI write these files while the service runs: a
+  // store's read serves what they hold now, so a setting changed in any
+  // client reaches the next task and the next turn.
+  const { store: globalConfig, warnings: globalWarnings } =
+    yield* openTexraGlobalConfigStore(TEXRA_SETTINGS.catalog, storageRoot);
+  yield* Effect.forEach(
+    globalWarnings,
+    (message) => Effect.logWarning(message).pipe(withLogChannel(CHANNEL)),
+    { discard: true },
+  );
+  // What opening a project reads, captured once: `open` is called from
+  // handlers that hold no process context of their own. Exactly these
+  // services, never the service's scope with them: provided over a
+  // handler's lease, that scope would hold the lease's release until the
+  // service exits, so no project would ever go idle.
+  const services = Context.pick(
+    AppState,
+    ChildProcessSpawner,
+    FileSystem.FileSystem,
+    Path.Path,
+    StateStores,
+  )(
+    yield* Effect.context<
+      | AppState
+      | ChildProcessSpawner
+      | FileSystem.FileSystem
+      | Path.Path
+      | StateStores
+    >(),
+  );
+  // The sessions open now, by storage root, and the load they carry (a
+  // project counts as open from its lookup's first read): what the task
+  // list reads and the service's lifetime follows.
+  const open = new Map<string, LocalSession>();
+  const load = yield* SubscriptionRef.make<ServiceLoad>({
+    open: 0,
+    working: 0,
+  });
+  const count = (opened: number, working: number) =>
+    SubscriptionRef.update(load, (now) => ({
+      open: now.open + opened,
+      working: now.working + working,
+    }));
+  // Each project's approval policy is its persisted setting, which the
+  // session reads at every decision through these following config stores:
+  // a change any client writes applies to the next request, and nothing a
+  // window holds can replace it.
+  const lookup = Effect.fn('server.openProjects.lookup')(function* (
+    root: string,
+  ): Effect.fn.Return<
+    LocalSession,
+    Error,
+    | Scope.Scope
+    | AppState
+    | ChildProcessSpawner
+    | FileSystem.FileSystem
+    | Path.Path
+    | StateStores
+  > {
+    const projectScope = yield* Effect.scope;
+    // Counted as open from the first read of the lookup, not from the
+    // session's open: the idle decision reads this count, and a project
+    // still opening when the idle deadline passes is one the service
+    // serves, not one it may leave. A failed lookup gives the count back
+    // with its scope.
+    yield* Effect.acquireRelease(count(1, 0), () => count(-1, 0));
+    // The service is the process that holds each project's state.
+    const { roots, warnings } = yield* openProjectRoots(
+      storageRoot,
+      root,
+      globalConfig,
+      undefined,
+    ).pipe(Scope.provide(projectScope));
+    yield* Effect.forEach(
+      warnings,
+      (message) => Effect.logWarning(message).pipe(withLogChannel(CHANNEL)),
+      { discard: true },
+    );
+    // A project store is held by one process, and one service serves a
+    // storage root at a time (the client that replaces a service waits for
+    // its exit), so a held store is another process's to answer for. The
+    // session closes as the project is released, before its roots
+    // (registered after them, so released first); the service's exit
+    // closes every session ahead of that (`serve`'s close of the sessions).
+    const session = yield* openLocalSession(sessions, roots);
+    // A damaged store moved aside at open is said once, in
+    // the service's log and to the project's first window: the windows
+    // open no store of their own to notice it.
+    const moved = session.storeMovedAside;
+    if (moved) {
+      const message = sessionStoreMovedAsideMessage(moved);
+      yield* Effect.logWarning(message).pipe(withLogChannel(CHANNEL));
+      yield* session.emit('requestShowInstruction', {
+        key: `store-moved-aside-${moved.aside}`,
+        message,
+      });
+    }
+    yield* Effect.acquireRelease(
+      Effect.sync(() => open.set(session.roots.storage, session)),
+      () => Effect.sync(() => open.delete(session.roots.storage)),
+    );
+    // A run at work holds the project through a lease of the project's
+    // own (not one waiting for its next message, which the service's close
+    // stops, resumable).
+    let hold: Scope.Closeable | null = null;
+    const follow = (busy: boolean) =>
+      Effect.gen(function* () {
+        if (busy === (hold !== null)) return;
+        if (busy) {
+          hold = yield* Scope.make();
+          // The entry exists: this runs inside its own lookup's scope.
+          yield* RcMap.get(projects, root).pipe(
+            Scope.provide(hold),
+            Effect.orDie,
+          );
+          yield* count(0, 1);
+          return;
+        }
+        const held = hold;
+        hold = null;
+        if (held !== null) yield* Scope.close(held, Exit.void);
+        yield* count(0, -1);
+      });
+    yield* Effect.forkScoped(
+      Stream.runForEach(
+        session.view.changes.pipe(
+          Stream.map(() => runsAtWork(session) > 0),
+          Stream.changes,
+        ),
+        follow,
+      ).pipe(Effect.ensuring(follow(false))),
+    );
+    return session;
+  });
+  const projects: RcMap.RcMap<string, LocalSession, Error> = yield* RcMap.make({
+    lookup: (root: string) => lookup(root).pipe(Effect.mapError(ensureError)),
+    idleTimeToLive: idleAfter,
+  });
+  return {
+    // A lookup that failed (a store another process still holds) is not
+    // kept for the idle time: the next open tries again.
+    open: (workspace) => {
+      const key = canonicalizeWorkspaceRoot(workspace);
+      return RcMap.get(projects, key).pipe(
+        Effect.tapError(() => RcMap.invalidate(projects, key)),
+        Effect.provideContext(services),
+      );
+    },
+    opened: Effect.sync(() => new Map(open)),
+    load,
+  } satisfies ServiceProjects;
+});
 
 /** How long the watch streams get, after the tasks are stopped, to end
  *  with their sessions and carry the last rows before the socket closes: a
@@ -111,15 +303,15 @@ const WATCH_END_DEADLINE = '5 seconds';
 
 /**
  * Serve {@link TexraRpcs} on the storage root's socket until the service
- * stops, drains or idles out. The projects port is the host's: it opens
- * each project's session with the host's roots.
+ * stops, drains or idles out. A plain `Error` is the global config file
+ * that could not be read.
  */
 export const serve = Effect.fn('server.serve')(function* (
   options: ServeOptions,
 ): Effect.fn.Return<
   ServeExit,
-  ServiceAlreadyRunning | ServiceListenFailed | ServiceUnavailable,
-  ProcessServices | Sessions | ServiceProjects | HostWindows | Scope.Scope
+  ServiceAlreadyRunning | ServiceListenFailed | ServiceUnavailable | Error,
+  ProcessServices | Sessions | HostWindows | Scope.Scope
 > {
   if (process.platform === 'win32')
     return yield* new ServiceListenFailed({
@@ -127,8 +319,10 @@ export const serve = Effect.fn('server.serve')(function* (
       cause: new Error(WINDOWS_UNSUPPORTED),
     });
   const fs = yield* FileSystem.FileSystem;
-  const projects = yield* ServiceProjects;
-  const paths = servicePaths(projects.storageRoot);
+  // Opened first, so the projects close last, after the socket and the
+  // record.
+  const projects = yield* openProjects(options.storageRoot, options.idleAfter);
+  const paths = servicePaths(options.storageRoot);
   // This service's own socket: a retired one that exits later can only
   // remove its own file, never this one's.
   const socket = paths.socketFor(process.pid);
@@ -216,7 +410,7 @@ export const serve = Effect.fn('server.serve')(function* (
   };
   yield* Effect.forkScoped(
     RpcServer.make(TexraRpcs).pipe(
-      Effect.provide(serviceHandlers(control)),
+      Effect.provide(serviceHandlers(projects, control)),
       Effect.provideService(RpcServer.Protocol, protocol),
     ),
   );
@@ -298,8 +492,10 @@ export const serve = Effect.fn('server.serve')(function* (
   const exit = yield* Deferred.await(ended);
   yield* Effect.logInfo(`TeXRA service exiting: ${exit}`);
   yield* leave('end');
-  yield* options.finishTasks;
-  // The watch streams end with the sessions `finishTasks` closed, each having
+  // Every task stopped and finished while the clients are still connected,
+  // so they see each task's last rows.
+  yield* (yield* Sessions).closeAll;
+  // The watch streams end with the sessions just closed, each having
   // carried its tasks' last rows; the socket closes once they have.
   yield* SubscriptionRef.changes(control.watching).pipe(
     Stream.filter((open) => open === 0),

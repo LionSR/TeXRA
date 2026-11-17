@@ -1,7 +1,6 @@
 /**
- * The {@link LeanLanguageServices} port over `lake env lean --server`, for
- * hosts without a VS Code extension bridge (Electron desktop, CLI, the agent
- * package): every operation as an Effect over a `LayerMap` of
+ * The {@link LeanLanguageServices} over `lake env lean --server`, in every
+ * host: every operation as an Effect over a `LayerMap` of
  * {@link LeanServer}s keyed by workspace root.
  *
  * The map builds a root's server on first use, serializes concurrent
@@ -64,7 +63,6 @@ const LAKE_PROJECT_ARGS = {
   build: ['build'],
   clean: ['clean'],
   fetch_cache: ['exe', 'cache', 'get'],
-  fetch_file_cache: ['exe', 'cache', 'get'],
 } satisfies Partial<Record<LeanProjectCommand, readonly string[]>>;
 
 /**
@@ -298,13 +296,10 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
           discard: true,
         });
         return;
-      // `fetch_file_cache` normally needs the active editor's file; CLI and
-      // desktop have none, so it falls back to the project-wide fetch (same
-      // as `fetch_cache`). All four fan out one LAKE_PROJECT_ARGS set per root.
+      // All three fan out one LAKE_PROJECT_ARGS set per root.
       case 'build':
       case 'clean':
       case 'fetch_cache':
-      case 'fetch_file_cache':
         yield* runLake(
           live.map((held) => held.root),
           owner,
@@ -341,9 +336,8 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
       Effect.withSpan('LeanServerPool.fetchDiagnosticsForFile'),
     );
 
-  // Both file commands have the same effect from our point of view: drop
-  // the cached open state and re-open with fresh contents.
-  const executeFileCommand = (filePath: string) =>
+  // Drop the cached open state and re-open with fresh contents.
+  const restartFile = (filePath: string) =>
     withServer(filePath, (server) => server.restartFile(filePath)).pipe(
       Effect.catchTag(SERVER_ENDED, (error) =>
         Effect.fail(serverStopped(error)),
@@ -361,7 +355,7 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
             }),
           ),
       ),
-      Effect.withSpan('LeanServerPool.executeFileCommand'),
+      Effect.withSpan('LeanServerPool.restartFile'),
     );
 
   /** `reply` decodes Lean's non-null answer; a mismatch is the result's error. */
@@ -394,7 +388,7 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
 
   const listServers = Effect.flatMap(heldRoots, (held) =>
     Effect.forEach(held, ({ root, start }): Effect.Effect<LeanServerInfo> => {
-      const base = { workspaceRoot: root, mode: 'direct-lsp' } as const;
+      const base = { workspaceRoot: root };
       if (!start) return Effect.succeed({ ...base, status: 'starting' });
       return Exit.isSuccess(start)
         ? Context.get(start.value, LeanServer).info
@@ -412,7 +406,7 @@ const make = Effect.fn('LeanServerPool.make')(function* () {
   return LeanLanguageServices.of({
     listServers,
     fetchDiagnosticsForFile,
-    executeFileCommand: (_command, filePath) => executeFileCommand(filePath),
+    restartFile,
     executeProjectCommand,
     getGoalState: (filePath, line, column) =>
       positionRequest(

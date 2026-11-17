@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { Effect, Layer, RcMap, Result, Schema } from 'effect';
 
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure } from '@logger/effectLog';
 import { GlobalValues, StateStores } from '@platform/processRuntime';
 import { AppState, type AppStateStore } from '@platform/interfaces';
 import { StateReadFailed, StateWriteFailed } from '@shared/config/settings';
@@ -154,12 +154,10 @@ const openProjectStateStore = Effect.fn('appStateStore.openProjectStateStore')(
         )
         .pipe(
           Effect.catch((error) =>
-            Effect.logWarning(
+            logFailure(
+              'sessionDatabase',
               `Could not record that ${storage} serves ${workspaceRoot}; \`texra doctor --prune-storage\` will not list it as an orphan.`,
-            ).pipe(
-              Effect.annotateLogs({ data: error }),
-              withLogChannel('sessionDatabase'),
-            ),
+            )(error),
           ),
         );
     }

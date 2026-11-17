@@ -38,9 +38,18 @@ export function keyHintsText(hints: readonly KeyHint[]): string {
   return joinFacts(hints.map(keyHintText));
 }
 
+/** Esc abandons what the surface was doing. */
+export const CANCEL_HINT: KeyHint = Object.freeze({
+  key: 'Esc',
+  action: 'cancel',
+});
+
+/** Esc steps back to the surface this one was opened from. */
+export const BACK_HINT: KeyHint = Object.freeze({ key: 'Esc', action: 'back' });
+
 const DEFAULT_TAIL: readonly KeyHint[] = Object.freeze([
   Object.freeze({ key: 'Enter', action: 'confirm' }),
-  Object.freeze({ key: 'Esc', action: 'cancel' }),
+  CANCEL_HINT,
 ]);
 
 /** How a hint names each arrow-key pair. */
@@ -62,9 +71,15 @@ export const CLOSE_HINT: KeyHint = Object.freeze({
 /** The whole footer of a surface Esc only closes. */
 export const CLOSE_HINTS: readonly KeyHint[] = Object.freeze([CLOSE_HINT]);
 
+/** Enter closes a surface with nothing to choose. */
+const ENTER_CLOSE_HINT: KeyHint = Object.freeze({
+  key: 'Enter',
+  action: 'close',
+});
+
 /** The footer of a surface with nothing to choose: either key closes it. */
 export const ENTER_OR_ESC_CLOSE_HINTS: readonly KeyHint[] = Object.freeze([
-  Object.freeze({ key: 'Enter', action: 'close' }),
+  ENTER_CLOSE_HINT,
   CLOSE_HINT,
 ]);
 

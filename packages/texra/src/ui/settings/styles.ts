@@ -20,12 +20,12 @@ export const settingsViewStyles: CSSResult[] = [
     }
 
     .settings-navigation {
-      z-index: 2;
+      z-index: var(--layer-pinned);
       flex: 0 0 auto;
       border-bottom: var(--border-thin) solid var(--border-hairline);
       background: color-mix(
         in srgb,
-        var(--wa-color-surface-lowered) 86%,
+        var(--color-bg-secondary) 86%,
         var(--wa-color-surface-default)
       );
     }
@@ -66,7 +66,7 @@ export const settingsViewStyles: CSSResult[] = [
       border: 0;
       border-radius: var(--row-radius);
       background: transparent;
-      color: var(--wa-color-text-quiet);
+      color: var(--color-text-secondary);
     }
 
     .settings-section-button[data-active='true']::part(base) {
@@ -87,9 +87,9 @@ export const settingsViewStyles: CSSResult[] = [
       border: 0;
       border-radius: 0;
       background: transparent;
-      color: var(--wa-color-text-quiet);
+      color: var(--color-text-secondary);
       font-size: var(--font-size-sm);
-      font-weight: var(--font-weight);
+      font-weight: var(--font-weight-normal);
       letter-spacing: var(--letter-spacing-tight);
       box-shadow: inset 0 -2px transparent;
       transition:
@@ -116,7 +116,7 @@ export const settingsViewStyles: CSSResult[] = [
       width: 1em;
       height: 1em;
       place-items: center;
-      line-height: 1;
+      line-height: var(--line-height-tight);
     }
 
     .settings-panel {
@@ -143,13 +143,13 @@ export const settingsViewStyles: CSSResult[] = [
       margin: 0;
       color: var(--wa-color-text-normal);
       font-size: var(--font-size-h1);
-      font-weight: var(--wa-font-weight-semibold);
+      font-weight: var(--font-weight-semibold);
       line-height: var(--line-height-heading);
     }
 
     .settings-page-header p {
       margin: var(--wa-space-2xs) 0 0;
-      color: var(--wa-color-text-quiet);
+      color: var(--color-text-secondary);
       font-size: var(--font-size-sm);
       line-height: var(--line-height-normal);
       max-width: 65ch;
@@ -173,8 +173,8 @@ export const settingsViewStyles: CSSResult[] = [
       overflow-y: auto;
       overscroll-behavior: contain;
       border-bottom: 0;
-      border-inline-end: var(--border-thin) solid var(--wa-color-surface-border);
-      background: var(--wa-color-surface-lowered);
+      border-inline-end: var(--border-thin) solid var(--color-border);
+      background: var(--color-bg-secondary);
     }
 
     :host([data-desktop-view]) .settings-page-nav {
@@ -188,7 +188,7 @@ export const settingsViewStyles: CSSResult[] = [
     .settings-nav-group-label {
       margin-block-start: var(--wa-space-s);
       padding: var(--wa-space-2xs) var(--wa-space-xs);
-      color: var(--wa-color-text-quiet);
+      color: var(--color-text-secondary);
       font-size: var(--font-size-xs);
       font-weight: var(--font-weight-medium);
       line-height: var(--line-height-normal);

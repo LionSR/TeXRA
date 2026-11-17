@@ -27,7 +27,6 @@ import { Effect, FileSystem, Scope } from 'effect';
 import {
   agentFileName,
   toErrorMessage,
-  programOf,
   runActionRefusal,
   type RunAction,
   type RunId,
@@ -42,7 +41,11 @@ import { forkRun, resumeRun } from '@texra/controllers/session/runActionPolicy';
 import { HISTORY_DIR } from '@housekeeping/constants';
 import { fileNameTimestamp } from '@housekeeping/artifactFiles';
 import { modelFileName } from '@texra/utils/files/outputFileUtils';
-import { documentRoundsOf } from '@texra/shared/plugins/documents';
+import {
+  documentRoundsOf,
+  isDocumentTaskRun,
+  MERGE_EDITED_FILE,
+} from '@texra/shared/plugins/documents';
 import type { Dialogs, HostFailed } from '@texra/hosts/uiHosts';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';
@@ -281,9 +284,12 @@ export const createHostRunActions = Effect.fn(
       Effect.flatMap((run) => Effect.asVoid(run.result)),
     );
 
+  /** A document task's rounds; undefined for a run that is none. */
   const roundsOfRun = (runId: RunId) => {
     const run = runView(runId);
-    return run === undefined ? [] : documentRoundsOf(run);
+    return run !== undefined && isDocumentTaskRun(run)
+      ? documentRoundsOf(run)
+      : undefined;
   };
 
   /** The saved config of a document task's run. `files` holds on every
@@ -296,7 +302,8 @@ export const createHostRunActions = Effect.fn(
         return yield* new Rejected({
           reason: 'This run saved no setup to act on.',
         });
-      if (programOf(config) === null)
+      const run = runView(runId);
+      if (run === undefined || !isDocumentTaskRun(run))
         return yield* new Rejected({
           reason: 'This action applies to a document task.',
         });
@@ -382,7 +389,7 @@ export const createHostRunActions = Effect.fn(
       const inputFiles = [baseFile];
       const launch = yield* programLaunch(
         'merge',
-        {},
+        { [MERGE_EDITED_FILE]: editedFile },
         { inputFiles, outputFiles: [] },
       ).pipe(
         // No merge program is registered: said beside the merge docs, and
@@ -405,7 +412,6 @@ export const createHostRunActions = Effect.fn(
           ...launch,
           model: (yield* getHelperModelName(roots)) ?? DEFAULT_AGENT_MODEL,
           inputFiles,
-          editedFile,
         });
     }),
     documentTaskFileOperation: Effect.fn(

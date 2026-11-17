@@ -1,25 +1,11 @@
-import { Effect, Schema } from 'effect';
+import { Schema } from 'effect';
+import { decodingDefault } from './schemaDefaults.js';
 
-/** The four canonical `*Files` list fields, defaulting to `[]` when absent. */
-const fileListFields = {
-  inputFiles: Schema.Array(Schema.String).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
-  contextFiles: Schema.Array(Schema.String).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
-  mediaFiles: Schema.Array(Schema.String).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
-  outputFiles: Schema.Array(Schema.String).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
-};
-
-/** Used by AgentConfig where `editedFile` may be null. */
-export const NullableFileFieldsSchema = Schema.Struct({
-  ...fileListFields,
-  editedFile: Schema.NullOr(Schema.String).pipe(
-    Schema.withDecodingDefault(Effect.succeed(null)),
-  ),
+/** The four canonical `*Files` list fields of a run's launch, each
+ *  defaulting to `[]` when absent. */
+export const FileFieldsSchema = Schema.Struct({
+  inputFiles: decodingDefault(Schema.Array(Schema.String), []),
+  contextFiles: decodingDefault(Schema.Array(Schema.String), []),
+  mediaFiles: decodingDefault(Schema.Array(Schema.String), []),
+  outputFiles: decodingDefault(Schema.Array(Schema.String), []),
 });

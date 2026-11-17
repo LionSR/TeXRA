@@ -40,27 +40,27 @@ function parseGraphicspath(content: string): string[] {
 /**
  * Resolve a figure path against each search path in order, trying the figure
  * extensions when the reference has none. The first existing file wins and
- * later candidates are never probed. Returns a path relative to `latexDir`,
- * or null.
+ * later candidates are never probed. Returns the absolute path, or null.
  */
 const resolveFigurePath = Effect.fn('latex.resolveFigurePath')(function* (
   figPath: string,
   searchPaths: readonly string[],
-  latexDir: string,
 ) {
   const extensions = figPath.includes('.') ? [''] : FIGURE_EXTENSIONS;
   for (const basePath of searchPaths) {
     const joined = path.normalize(path.join(basePath, figPath));
     for (const ext of extensions) {
       const hit = yield* existingExternalPath(`${joined}${ext}`);
-      if (hit !== null) return path.relative(latexDir, hit);
+      if (hit !== null) return hit;
     }
   }
   return null;
 });
 
 /**
- * Extract figure paths from a LaTeX file.
+ * The absolute paths of the figures a LaTeX file includes that exist on
+ * disk, resolved against the file's real directory (so a `.tex` symlinked
+ * elsewhere still finds the figures beside its target).
  *
  * The resolutions run concurrently but `Effect.forEach` hands their results
  * back in source order, so the de-duplicated output stays deterministic.
@@ -101,7 +101,7 @@ export const extractFigurePathsFromLatex = Effect.fn(
 
   const resolved = yield* Effect.forEach(
     referenced,
-    (figPath) => resolveFigurePath(figPath, graphicspaths, latexDir),
+    (figPath) => resolveFigurePath(figPath, graphicspaths),
     { concurrency: RESOLVE_CONCURRENCY },
   );
 

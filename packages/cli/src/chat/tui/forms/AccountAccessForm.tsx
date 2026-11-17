@@ -242,7 +242,7 @@ export function AccountAccessForm(
         props.connecting === true ? undefined : (
           <Box marginTop={1} flexDirection="column">
             {detailLines === undefined ? (
-              <LoadingIndicator label="loading account access..." />
+              <LoadingIndicator label="Loading account access…" />
             ) : (
               detailLines.map((line, index) => (
                 <Text key={`${index}:${line}`} dimColor>

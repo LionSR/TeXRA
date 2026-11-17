@@ -30,7 +30,7 @@ export class WorktreeChip extends LitElement {
         align-items: center;
         gap: var(--wa-space-3xs);
         min-width: 0;
-        color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
+        color: var(--color-text-secondary);
       }
 
       .branch-name {

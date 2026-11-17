@@ -122,7 +122,7 @@ function askedBy(
  */
 export function reportRecipients(
   asking: Asking,
-  parent: RunRows['parent'],
+  parent: RowOf<'run.start'>['parent'],
 ): readonly RunId[] {
   if (parent === null) return asking.since;
   const awaited = !asking.ended && parent.call?.awaited === true;
@@ -232,7 +232,6 @@ export const RECORD_ROW_TYPES = [
 /** The record of a run no row has said anything about. */
 export const NO_RUN_ROWS: RunRows = Object.freeze({
   start: null,
-  parent: null,
   activation: null,
   end: null,
   stop: null,
@@ -262,7 +261,6 @@ export function recordAfter(record: RunRows, row: SessionRow): RunRows {
       return {
         ...record,
         start: row,
-        parent: row.parent,
         grants: row.approvalPolicy ?? NO_APPROVAL_GRANTS,
       };
     case 'approval.policy':

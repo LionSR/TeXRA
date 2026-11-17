@@ -21,9 +21,9 @@
 import { Cause, Effect, type Layer, Schema } from 'effect';
 
 // Local imports
-import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { ITool } from '@tools/core/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure, withLogChannel } from '@logger/effectLog';
 import { type AppSignals, emitAppSignal } from '@platform/appSignals';
 import {
   aggregateTarget,
@@ -129,7 +129,7 @@ export interface Plugin {
   /** Its section of each request's system text, pinned while it is on. */
   readonly prompt?: PromptSection;
   /** Process-lifetime services, up while the plugin is switched on or a step
-   *  pins it. A host-supplied one (VS Code's Lean services) is passed with
+   *  pins it. A host-supplied one (VS Code's setup commands) is passed with
    *  the host's plugin value. */
   readonly processLayer?: ProcessPluginLayer;
   /** Session-lifetime services, one per open session, up while the plugin
@@ -369,12 +369,10 @@ export const factRows = (
   ).pipe(
     Effect.tap(({ rejected }) =>
       Effect.forEach(rejected, (error) =>
-        Effect.logWarning(
+        logFailure(
+          'plugins',
           `A plugin fact under run ${runId} was not written`,
-        ).pipe(
-          Effect.annotateLogs({ data: error.message }),
-          withLogChannel('plugins'),
-        ),
+        )(error.message),
       ),
     ),
     Effect.map(({ kept }) => kept),

@@ -114,7 +114,7 @@ export class GitTab extends SignalWatcher(LitElement) {
       .instructions {
         margin: var(--wa-space-2xs) 0 0 0;
         font-size: var(--font-size-sm);
-        color: var(--wa-color-text-quiet);
+        color: var(--color-text-secondary);
       }
       .instructions ol {
         margin: var(--wa-space-3xs) 0 0 0;
@@ -124,7 +124,7 @@ export class GitTab extends SignalWatcher(LitElement) {
         margin: var(--wa-space-3xs) 0;
       }
       .instructions code {
-        background: var(--wa-color-surface-lowered);
+        background: var(--color-bg-secondary);
         padding: 0 var(--wa-space-2xs);
         border-radius: var(--border-radius);
         font-size: var(--font-size-sm);
@@ -143,7 +143,7 @@ export class GitTab extends SignalWatcher(LitElement) {
         padding: var(--wa-space-3xs) 0;
       }
       .subscriptions-list code {
-        background: var(--wa-color-surface-lowered);
+        background: var(--color-bg-secondary);
         padding: var(--border-thin) var(--wa-space-xs);
         border-radius: var(--border-radius);
         font-size: var(--font-size-sm);
@@ -171,7 +171,7 @@ export class GitTab extends SignalWatcher(LitElement) {
       .subscription-owner-label,
       .subscription-owner-placeholder {
         font-size: var(--font-size-sm);
-        color: var(--wa-color-text-quiet);
+        color: var(--color-text-secondary);
       }
       .subscription-owner-placeholder {
         margin: 0;

@@ -64,7 +64,6 @@ const publishRun = (
         contextFiles: [],
         mediaFiles: [],
         outputFiles: [],
-        editedFile: null,
         memories: [],
         instruction: '',
         workingDirectory: '/tmp/project',

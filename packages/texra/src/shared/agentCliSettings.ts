@@ -1,7 +1,9 @@
-import { Effect, Schema } from 'effect';
+import { Schema } from 'effect';
+import { decodingDefault } from '@texra-ai/harness/schemas';
 import type { SettingChoiceCopy } from '@texra-ai/harness/schemas';
 import {
   DEFAULT_EFFORT,
+  isUnservedModel,
   MODEL_CONFIGS,
   type ModelConfig,
   ModelProvider,
@@ -23,13 +25,13 @@ import {
 
 /** A model the Claude Code CLI can run: any Anthropic model still served. */
 export const isClaudeCodeModel = (config: ModelConfig): boolean =>
-  config.provider === ModelProvider.ANTHROPIC && config.retired !== true;
+  config.provider === ModelProvider.ANTHROPIC && !isUnservedModel(config);
 
 /** A model the Codex CLI can run: an OpenAI model the Codex backend serves. */
 export const isCodexModel = (config: ModelConfig): boolean =>
   config.provider === ModelProvider.OPENAI &&
   config.codexSubscription !== undefined &&
-  config.retired !== true;
+  !isUnservedModel(config);
 
 /** The picker's models: the eligible ones that are not deprecated, in registry order. */
 function pickerModels(eligible: (config: ModelConfig) => boolean) {
@@ -78,21 +80,15 @@ export type AgentCliEffort = typeof AgentCliEffortSchema.Type;
 
 /** Value facts of the settings rows: the schema with its default, and the picker labels. */
 export const CLAUDE_AGENT_MODEL_VALUES = {
-  schema: ClaudeAgentModelSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(CLAUDE_AGENT_DEFAULT_MODEL)),
-  ),
+  schema: decodingDefault(ClaudeAgentModelSchema, CLAUDE_AGENT_DEFAULT_MODEL),
   choices: claudeCodeModels.choices,
 };
 export const CODEX_MODEL_VALUES = {
-  schema: CodexModelSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(CODEX_DEFAULT_MODEL)),
-  ),
+  schema: decodingDefault(CodexModelSchema, CODEX_DEFAULT_MODEL),
   choices: codexModels.choices,
 };
 export const AGENT_CLI_EFFORT_VALUES = {
-  schema: AgentCliEffortSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_EFFORT)),
-  ),
+  schema: decodingDefault(AgentCliEffortSchema, DEFAULT_EFFORT),
   choices: {
     [ReasoningEffort.LOW]: { label: 'Low' },
     [ReasoningEffort.MEDIUM]: { label: 'Medium' },

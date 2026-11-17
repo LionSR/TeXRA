@@ -18,7 +18,6 @@ import {
   CUT_BY_RUN_END_NOTE,
   isMcpToolName,
   toolDisplayKind,
-  transcriptText,
   type ToolSection,
   type ToolSectionFile,
   type TranscriptText,
@@ -320,10 +319,11 @@ function buildStyledLines(
   toolRow: ToolRow,
   options: DisplayLineOptions,
 ): readonly ToolDisplayLine[] {
-  const { model, toolUse } = toolRow;
-  const { headerPreview } = model;
+  const { model } = toolRow;
+  const { headerPreview, output } = model;
+  const toolName = toolRow.log.toolName.trim();
   const elide = options.elide !== false;
-  const isBashKind = toolDisplayKind(toolUse.toolName) === 'bash';
+  const isBashKind = toolDisplayKind(toolName) === 'bash';
 
   const budget = toolHeaderPreviewBudget(options.width, model.headerLabel);
   const preview =
@@ -349,9 +349,8 @@ function buildStyledLines(
         ),
   );
 
-  const outputRows = model.output
-    ? cornerRows(elidedLines(model.output, elide))
-    : [];
+  const outputRows =
+    output.kind === 'shown' ? cornerRows(elidedLines(output.text, elide)) : [];
   const exitCode = model.isError ? model.exitCode : undefined;
   const errorRows = cornerRows(toolErrorLines(toolRow, elide), COLOR_ERROR);
   const feedbackRows = model.userInstruction
@@ -368,22 +367,18 @@ function buildStyledLines(
   // the confirmation plus any user adjustments. A `trivial-write` output is
   // the word the card's file link already implies.
   const cardPaintsOutput =
-    model.outputSuppression === 'duplicate-of-error' ||
-    model.outputSuppression === 'trivial-write' ||
-    (model.outputSuppression === 'rendered-by-sections' &&
-      (isMcpToolName(toolUse.toolName) ||
-        toolUse.toolName === AGENT_TOOL_NAME));
+    output.kind === 'withheld' &&
+    (output.reason === 'duplicate-of-error' ||
+      output.reason === 'trivial-write' ||
+      (output.reason === 'rendered-by-sections' &&
+        (isMcpToolName(toolName) || toolName === AGENT_TOOL_NAME)));
   if (
     options.showFullOutput &&
-    !model.showOutput &&
-    !cardPaintsOutput &&
-    toolUse.outputText
+    output.kind === 'withheld' &&
+    !cardPaintsOutput
   ) {
     compactOutput.push(row([{ text: 'Full output:' }]));
-    for (const line of elidedTextLines(
-      transcriptText(toolUse.outputText),
-      false,
-    )) {
+    for (const line of elidedTextLines(output.text, false)) {
       compactOutput.push(row([{ text: line }]));
     }
   }

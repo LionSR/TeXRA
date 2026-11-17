@@ -29,26 +29,28 @@ import {
   type RunId,
   type SettingRow,
 } from '@texra-ai/harness/schemas';
-import { hostFailure } from '@texra/controllers/session/hostCallFailure';
 import {
   latexdiffPackMessage,
   runPackLatexdiffvc,
 } from '@housekeeping/packLatexdiffvc';
+import { latexdiff, latexdiffAgainstCommit } from '@latex/latexdiff';
+import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
+import {
+  latexdiffPairs,
+  pairDiffSuffix,
+} from '@latex/latexdiff/diffOperations';
+import { WORKSPACE_DIFF_SUFFIX } from '@latex/latexdiff/diffFileNameManager';
 import type { Dialogs } from '@texra/hosts/uiHosts';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import { documentRoundsOf } from '@texra/shared/plugins/documents';
 import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
-
-// Local file imports
-import { latexdiff, latexdiffAgainstCommit } from '../latexdiff';
-import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
-import { latexdiffPairs } from './diffOperations';
-import { WORKSPACE_DIFF_SUFFIX } from './diffFileNameManager';
-import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
 import {
   LATEXDIFF_BETWEEN_ROUNDS_SETTING,
   LATEXDIFF_MATH_MARKUP_SETTING,
 } from '@texra/shared/settings/documentsSettings';
+
+// Local file imports
+import { hostFailure, type HostCommandFailure } from './hostCallFailure';
 
 /** The latexdiff verbs taken against a commit rather than an edited file. */
 type LatexdiffCommitAction = Extract<
@@ -192,33 +194,31 @@ export function latexdiffVerbs(parts: {
 
     // Sequential: each latexdiff is a whole TeX run, narrated one at a time.
     const diffPairs = (progress: ProgressReporter) =>
-      Effect.forEach(
-        pairs,
-        ({ revised, document, base, baseRound, suffix }) => {
-          const description =
-            baseRound === null
-              ? `${document} (${formatRoundLabel(revised.round)})`
-              : `${document} (${formatRoundLabel(baseRound)} → ${formatRoundLabel(revised.round)})`;
-          progress.report({
-            increment: 100 / pairs.length,
-            message: `Running diff for ${description}`,
-          });
-          return latexdiff(base, revised.location, {
-            roots,
-            // A diff runs in its base file's folder when no folder is open.
-            cwd: roots.workspace ?? path.dirname(base.absolutePath),
-            suffix,
-            mathMarkup,
-          }).pipe(
-            Effect.map((diffPath): readonly string[] => [diffPath]),
-            Effect.catch((error) =>
-              Effect.logWarning(
-                `Diff failed (${description}): ${error.message}`,
-              ).pipe(Effect.as([])),
-            ),
-          );
-        },
-      );
+      Effect.forEach(pairs, (pair) => {
+        const { revised, document, base, baseRound } = pair;
+        const description =
+          baseRound === null
+            ? `${document} (${formatRoundLabel(revised.round)})`
+            : `${document} (${formatRoundLabel(baseRound)} → ${formatRoundLabel(revised.round)})`;
+        progress.report({
+          increment: 100 / pairs.length,
+          message: `Running diff for ${description}`,
+        });
+        return latexdiff(base, revised.location, {
+          roots,
+          // A diff runs in its base file's folder when no folder is open.
+          cwd: roots.workspace ?? path.dirname(base.absolutePath),
+          suffix: pairDiffSuffix(pair),
+          mathMarkup,
+        }).pipe(
+          Effect.map((diffPath): readonly string[] => [diffPath]),
+          Effect.catch((error) =>
+            Effect.logWarning(
+              `Diff failed (${description}): ${error.message}`,
+            ).pipe(Effect.as([])),
+          ),
+        );
+      });
     const fresh =
       pairs.length === 0
         ? []

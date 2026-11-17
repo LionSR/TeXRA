@@ -24,9 +24,9 @@ export const userQuestionPanelStyles: CSSResult = css`
     min-inline-size: 0;
     margin: 0;
     padding: var(--wa-space-xs);
-    border: var(--border-thin) solid var(--wa-color-surface-border);
+    border: var(--border-thin) solid var(--color-border);
     border-radius: var(--border-radius);
-    background: var(--wa-color-surface-lowered);
+    background: var(--color-bg-secondary);
   }
 
   .user-question-request__heading {
@@ -47,7 +47,7 @@ export const userQuestionPanelStyles: CSSResult = css`
   }
 
   .user-question-request__header {
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
     flex: 0 0 auto;
@@ -91,7 +91,7 @@ export const userQuestionPanelStyles: CSSResult = css`
   }
 
   .user-question-request__option small {
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     font-size: var(--font-size-xs);
   }
 
@@ -102,7 +102,7 @@ export const userQuestionPanelStyles: CSSResult = css`
   .user-question-request__answer-requirement {
     min-height: calc(var(--font-size-xs) * var(--line-height-normal));
     margin: 0;
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     font-size: var(--font-size-xs);
     line-height: var(--line-height-normal);
   }

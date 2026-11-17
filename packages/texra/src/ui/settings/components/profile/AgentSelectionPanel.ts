@@ -289,9 +289,10 @@ export class AgentSelectionPanel extends LitElement {
       >
         <div slot="actions" class="catalog-toolbar-actions">
           <wa-dropdown>
-            <wa-button slot="trigger" appearance="plain" size="s"
-              >Visibility</wa-button
-            >
+            ${renderLabeledActionButton({
+              text: 'Visibility',
+              slot: 'trigger',
+            })}
             ${sources
               .filter((source) =>
                 this.agents.some((entry) => entry.source === source),

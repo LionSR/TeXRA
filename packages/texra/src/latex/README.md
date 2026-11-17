@@ -27,8 +27,9 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
 ## Files
 
 - **Compilation**: `texTools.ts` (kpathsea search path, `compileLatex2Pdf`);
-  `latexToolchain.ts` (the `texra doctor` probe over the tools the
-  `@texra/shared/constants/latexToolchain` catalog lists); `latexLogging.ts` (the shared channel for
+  `latexToolchain.ts` (the one probe over the tools the
+  `@texra/shared/constants/latexToolchain` catalog lists, and the tools the
+  dependency banner names as missing); `latexLogging.ts` (the shared channel for
   `texcount.ts`, `formatter/` and the GUI hosts' latexdiff verbs; other
   `latexdiff` callers name their own with `withLogChannel`).
 - **Extraction**: `extractFigure.ts` (figure paths); `extractBibliography.ts`
@@ -38,7 +39,9 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
   local `.sty` files, for `latexMedia.ts` to mirror);
   `latexParsingUtils.ts` (comment stripping and bibliography-directive
   matching shared by the extractors; put new shared parsing here);
-  `labelSearch.ts` (`\label{}` lookup).
+  `labelSearch.ts` (`\label{}` lookup); `criticismParser.ts` (the
+  `\criticize` annotations and their positions, for the editor's inline
+  decorations).
 - **Output**: `texcount.ts` (word counts); `latexdiff.ts` (`latexdiff` and
   `latexdiffAgainstCommit`: one run of the tool, its `--flatten` fallback and
   the clean-up of its output, which restores bibliography directives and
@@ -62,9 +65,7 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
 - **`latexdiff/`**: the diffs of a document task's rounds around
   `latexdiff`. `diffOperations.ts` (`latexdiffPairs`) is the one pairing of a
   round's outputs, which the run's `document_diff` pass
-  (`agent/output/revisionLatexdiffs.ts`) and the hosts' verb share.
-  `latexdiffVerbs.ts` is the one body of the GUI hosts' latexdiff verbs (two
-  files, against a commit, a whole run), with the guards, refusals and
-  notices; a whole run opens the diffs its rounds recorded and diffs only a
-  round that recorded none. A host supplies only how a diff opens and how
-  progress shows. `diffFileNameManager.ts` names outputs.
+  (`agent/output/revisionLatexdiffs.ts`) and the hosts' verb share. The GUI
+  hosts' latexdiff verbs over them are window code
+  (`controllers/session/latexdiffVerbs.ts`). `diffFileNameManager.ts` names
+  outputs.

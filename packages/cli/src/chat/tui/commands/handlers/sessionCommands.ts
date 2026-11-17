@@ -97,7 +97,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
       formatCliSessionStatus({
         agent: meta.agent,
         model,
-        teamName: meta.teamName,
+        teamName: meta.team?.name,
         // A completed request's route cannot change, so it outranks the
         // prospective one.
         modelAccess: run?.usage.usageRoute ?? option?.usageRoute,
@@ -115,7 +115,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
         approvalPolicy: context.getApprovalPolicy(),
         queuedFollowUpMessages: (activeRunId === undefined
           ? []
-          : (view.queuedFollowUps.get(activeRunId) ?? [])
+          : (view.runs.get(activeRunId)?.queuedFollowUps ?? [])
         ).map((followUp) => followUp.text),
         cost: taskCostStatus(view, run),
       }),

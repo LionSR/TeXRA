@@ -2,8 +2,8 @@
 import { Cause, Effect, Result, Schema, type Scope } from 'effect';
 
 // Local imports
-import type { ITool, ToolGuard } from '@agent/core/tools/ToolTypes';
-import { withLogChannel } from '@logger/effectLog';
+import type { ITool, ToolGuard } from '@tools/core/ToolTypes';
+import { logFailure } from '@logger/effectLog';
 import {
   ToolError,
   type ToolCard,
@@ -138,13 +138,10 @@ export function defineTool<T, R = never, const Name extends string = string>(
             // tool: the model reads it as a failed call, so the log keeps
             // its cause, or nothing would.
             return Cause.hasDies(cause) && !(error instanceof ToolError)
-              ? Effect.logWarning(
+              ? logFailure(
+                  CHANNEL,
                   `Tool ${name} crashed: ${toErrorMessage(error)}`,
-                ).pipe(
-                  Effect.annotateLogs({ data: error }),
-                  withLogChannel(CHANNEL),
-                  Effect.andThen(result),
-                )
+                )(error).pipe(Effect.andThen(result))
               : result;
           }),
         ),

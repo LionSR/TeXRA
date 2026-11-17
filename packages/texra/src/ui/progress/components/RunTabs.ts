@@ -154,7 +154,7 @@ export class RunTabs extends LitElement {
         .run=${run}
         ?active=${run.id === selected}
         ?unseen=${this.unseen.has(run.id)}
-        .unread=${this.view?.queuedFollowUps.get(run.id)?.length ?? 0}
+        .unread=${run.queuedFollowUps.length}
         ?expandable=${expandable}
         ?expanded=${expanded}
         ?removable=${this.removable && run.actions.includes('delete')}

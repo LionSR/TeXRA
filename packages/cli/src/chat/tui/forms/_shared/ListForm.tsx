@@ -13,41 +13,52 @@ import {
   selectIndexForHotkeyInput,
   type SelectItem,
 } from '@cli/tui/ui/Select';
+import { isCompactRows } from '@cli/tui/ui/theme';
 
-import {
-  computeSelectWindowSize,
-  isCompactFormRows,
-  type SelectWindowSize,
-} from '@cli/tui/selectWindow';
-import {
-  CompactFormKeyHints,
-  FormFrame,
-  renderAsyncListFormTransient,
-} from './FormFrame';
+import { FormFrame, renderAsyncListFormTransient } from './FormFrame';
 import { useAsyncListForm } from './useAsyncListForm';
 import type { ProcessServices } from '@texra-ai/harness/host';
 import type { Effect } from 'effect';
 
 const LIST_FORM_FRAME_ROWS = 3;
 const LIST_FORM_FOOTER_ROWS = 2;
+/** At or below this many rows a form drops to its one-row compact layout. */
+const COMPACT_FORM_MAX_ROWS = 9;
 
+/**
+ * How many list rows the form's `Select` may show and whether to spend rows
+ * on overflow markers. With no row budget it shows everything. Otherwise the
+ * frame, footer, description and detail rows come off the budget first; on a
+ * very short terminal (fewer than 3 list rows) the active choice stays
+ * visible instead of the whole budget going to overflow markers.
+ */
 function listFormSelectWindow(args: {
   readonly availableRows: number | undefined;
   readonly itemCount: number;
   readonly hasDescription?: boolean;
   readonly detailRows?: number;
   readonly selectMarginTop?: number;
-}): SelectWindowSize {
-  return computeSelectWindowSize({
-    availableRows: args.availableRows,
-    itemCount: args.itemCount,
-    chromeRows:
-      LIST_FORM_FRAME_ROWS +
-      LIST_FORM_FOOTER_ROWS +
-      (args.hasDescription ? 1 : 0) +
-      Math.max(0, args.detailRows ?? 0) +
-      Math.max(0, args.selectMarginTop ?? 0),
-  });
+}): {
+  readonly maxVisibleItems: number | undefined;
+  readonly showOverflow: boolean;
+} {
+  if (args.availableRows == null) {
+    return { maxVisibleItems: undefined, showOverflow: false };
+  }
+  const chromeRows =
+    LIST_FORM_FRAME_ROWS +
+    LIST_FORM_FOOTER_ROWS +
+    (args.hasDescription ? 1 : 0) +
+    Math.max(0, args.detailRows ?? 0) +
+    Math.max(0, args.selectMarginTop ?? 0);
+  const selectRows = Math.max(1, args.availableRows - chromeRows);
+  if (args.itemCount <= selectRows) {
+    return { maxVisibleItems: args.itemCount, showOverflow: false };
+  }
+  if (selectRows < 3) {
+    return { maxVisibleItems: selectRows, showOverflow: false };
+  }
+  return { maxVisibleItems: selectRows - 2, showOverflow: true };
 }
 
 interface ListFormProps<T> {
@@ -94,9 +105,13 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
     );
   }
 
-  const shortcut = listFormShortcutLabel(props.items.length);
+  const primary = {
+    key: listFormShortcutLabel(props.items.length),
+    action: props.action,
+  };
+  const escape = { key: 'Esc', action: props.escapeAction ?? 'close' };
 
-  if (isCompactFormRows(props.availableRows)) {
+  if (isCompactRows(props.availableRows, COMPACT_FORM_MAX_ROWS)) {
     return (
       <FormFrame
         title={props.compactTitle ?? props.title}
@@ -114,9 +129,9 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
           onSelect={props.onSelect}
           onCancel={props.onCancel}
         />
-        <CompactFormKeyHints
-          primary={{ key: shortcut, action: props.action }}
-          escapeAction={props.escapeAction}
+        <KeyHints
+          hints={[NAVIGATE_HINT, primary, escape]}
+          confirmCancel={false}
         />
       </FormFrame>
     );
@@ -148,12 +163,7 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
       </Box>
       <Box marginTop={1}>
         <KeyHints
-          hints={[
-            NAVIGATE_HINT,
-            { key: shortcut, action: props.action },
-            ...(props.extraHints ?? []),
-            { key: 'Esc', action: props.escapeAction ?? 'close' },
-          ]}
+          hints={[NAVIGATE_HINT, primary, ...(props.extraHints ?? []), escape]}
           confirmCancel={false}
         />
       </Box>
@@ -214,53 +224,68 @@ interface AsyncListFormControls<TData> {
   readonly update: (write: Effect.Effect<void, Error, ProcessServices>) => void;
 }
 
-interface AsyncPickerForm<TData, TValue> {
-  readonly data: TData | undefined;
-  readonly items: ReadonlyArray<SelectItem<TValue>>;
-  /** Apply a selection: the caller's handler, or a close for a read-only list. */
-  readonly select: (value: TValue) => void;
-  /** Loading / error frame to return before the form's own layout, else null. */
-  readonly transient: React.JSX.Element | null;
-}
-
-/**
- * The async lifecycle every `/`-form picker runs: load once, buffer keystrokes
- * typed before the list mounts, render the loading/error frame, and turn a
- * selection into the caller's handler (or a close, for a read-only list).
- * Forms whose layout is the plain picker use {@link AsyncListForm}; `/agent`
- * and `/model` render their own sections on top of this hook.
- */
-export function useAsyncPickerForm<TData, TValue>(args: {
-  readonly title: string;
+interface AsyncListFormProps<TData, TValue> extends Omit<
+  ListFormProps<TValue>,
+  'items' | 'onSelect'
+> {
   readonly loadingLabel: string;
-  readonly showTransientCloseHint?: boolean;
   readonly load: () => Effect.Effect<TData, Error, ProcessServices>;
-  readonly isEmpty?: (data: TData) => boolean;
-  readonly closeEmptyOnEnter?: boolean;
   readonly items: (data: TData) => ReadonlyArray<SelectItem<TValue>>;
+  readonly isEmpty?: (data: TData) => boolean;
   /** `false` renders a read-only list where selecting closes the form. */
   readonly selectable?: boolean;
-  readonly onSelect?: (
+  readonly showTransientCloseHint?: boolean;
+  /** The active row's value, one of `items` (Select matches by identity). */
+  readonly activeValueFor?: (
+    data: TData,
+    items: ReadonlyArray<SelectItem<TValue>>,
+  ) => TValue | undefined;
+  readonly detailFor?: (data: TData) => ReactNode;
+  readonly detailRowsFor?: (data: TData) => number;
+  readonly compactDetailFor?: (data: TData) => ReactNode;
+  readonly onSelect: (
     value: TValue,
     controls: AsyncListFormControls<TData>,
   ) => void;
-  readonly onClose: () => void;
-}): AsyncPickerForm<TData, TValue> {
+}
+
+/**
+ * The async lifecycle every `/`-form picker runs, over the shared picker
+ * layout: load once, buffer keystrokes typed before the list mounts, render
+ * the loading/error frame, and turn a selection into the caller's handler (or
+ * a close, for a read-only list).
+ */
+export function AsyncListForm<TData, TValue>(
+  props: AsyncListFormProps<TData, TValue>,
+): React.JSX.Element {
+  const {
+    loadingLabel,
+    load,
+    items: itemsFor,
+    isEmpty,
+    selectable = true,
+    showTransientCloseHint,
+    activeValueFor,
+    detailFor,
+    detailRowsFor,
+    compactDetailFor,
+    onSelect,
+    ...listProps
+  } = props;
   const { data, loading, error, pendingInput, clearPendingInput, update } =
     useAsyncListForm<TData>({
-      load: args.load,
-      onClose: args.onClose,
-      isEmpty: args.isEmpty,
-      closeEmptyOnEnter: args.closeEmptyOnEnter,
+      load,
+      onClose: listProps.onCancel,
+      isEmpty: isEmpty ?? ((loaded) => itemsFor(loaded).length === 0),
+      closeEmptyOnEnter: listProps.emptyClosesOnEnter,
     });
-  const selectable = args.selectable !== false;
-  const items = data === undefined ? [] : args.items(data);
+  const items = data === undefined ? [] : itemsFor(data);
   const select = (value: TValue): void => {
     if (!selectable) {
-      args.onClose();
+      listProps.onCancel();
       return;
     }
-    if (data !== undefined) args.onSelect?.(value, { data, update });
+    if (data !== undefined) onSelect(value, { data, update });
   };
   usePendingListFormSelection({
     loading,
@@ -272,67 +297,14 @@ export function useAsyncPickerForm<TData, TValue>(args: {
     onSelect: select,
   });
 
-  return {
-    data,
-    items,
-    select,
-    transient: renderAsyncListFormTransient({
-      loading,
-      error,
-      title: args.title,
-      loadingLabel: args.loadingLabel,
-      showCloseHint: args.showTransientCloseHint,
-    }),
-  };
-}
-
-interface AsyncListFormProps<TData, TValue> extends Omit<
-  ListFormProps<TValue>,
-  'items' | 'onSelect'
-> {
-  readonly loadingLabel: string;
-  readonly load: () => Effect.Effect<TData, Error, ProcessServices>;
-  readonly items: (data: TData) => ReadonlyArray<SelectItem<TValue>>;
-  readonly isEmpty?: (data: TData) => boolean;
-  readonly showTransientCloseHint?: boolean;
-  readonly detailFor?: (data: TData) => ReactNode;
-  readonly detailRowsFor?: (data: TData) => number;
-  readonly compactDetailFor?: (data: TData) => ReactNode;
-  readonly onSelect: (
-    value: TValue,
-    controls: AsyncListFormControls<TData>,
-  ) => void;
-}
-
-/** Async list lifecycle plus the shared picker layout. */
-export function AsyncListForm<TData, TValue>(
-  props: AsyncListFormProps<TData, TValue>,
-): React.JSX.Element {
-  const {
-    loadingLabel,
-    load,
-    items: itemsFor,
-    isEmpty,
-    showTransientCloseHint,
-    detailFor,
-    detailRowsFor,
-    compactDetailFor,
-    onSelect,
-    ...listProps
-  } = props;
-  const picker = useAsyncPickerForm<TData, TValue>({
+  const transient = renderAsyncListFormTransient({
+    loading,
+    error,
     title: listProps.title,
     loadingLabel,
-    showTransientCloseHint,
-    load,
-    isEmpty: isEmpty ?? ((loaded) => itemsFor(loaded).length === 0),
-    items: itemsFor,
-    onSelect,
-    onClose: listProps.onCancel,
+    showCloseHint: showTransientCloseHint,
   });
-
-  if (picker.transient) return picker.transient;
-  const { data } = picker;
+  if (transient) return transient;
   if (data === undefined) {
     throw new Error(`${listProps.title} list finished loading without data.`);
   }
@@ -340,11 +312,12 @@ export function AsyncListForm<TData, TValue>(
   return (
     <ListForm
       {...listProps}
-      items={picker.items}
+      items={items}
+      activeValue={activeValueFor?.(data, items) ?? listProps.activeValue}
       detail={detailFor?.(data) ?? listProps.detail}
       detailRows={detailRowsFor?.(data) ?? listProps.detailRows}
       compactDetail={compactDetailFor?.(data) ?? listProps.compactDetail}
-      onSelect={picker.select}
+      onSelect={select}
     />
   );
 }

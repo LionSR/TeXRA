@@ -22,10 +22,10 @@
   );
   --dv-activegroup-visiblepanel-tab-color: var(--wa-color-text-normal);
   --dv-inactivegroup-visiblepanel-tab-color: var(--wa-color-text-normal);
-  --dv-activegroup-hiddenpanel-tab-color: var(--wa-color-text-quiet);
-  --dv-inactivegroup-hiddenpanel-tab-color: var(--wa-color-text-quiet);
-  --dv-tab-divider-color: var(--wa-color-surface-border);
-  --dv-separator-border: var(--wa-color-surface-border);
+  --dv-activegroup-hiddenpanel-tab-color: var(--color-text-muted);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--color-text-muted);
+  --dv-tab-divider-color: var(--color-border);
+  --dv-separator-border: var(--color-border);
   --dv-active-sash-color: var(--wa-color-focus);
   --dv-sash-color: transparent;
   --dv-drag-over-background-color: color-mix(
@@ -33,26 +33,26 @@
     var(--wa-color-focus) 16%,
     transparent
   );
-  --dv-drag-over-border: 1px solid var(--wa-color-focus);
+  --dv-drag-over-border: var(--border-thin) solid var(--wa-color-focus);
   --dv-icon-hover-background-color: var(--wa-color-neutral-fill-quiet);
-  --dv-tabs-container-scrollbar-color: var(--wa-color-surface-border);
-  --dv-scrollbar-background-color: var(--wa-color-surface-border);
+  --dv-tabs-container-scrollbar-color: var(--color-border);
+  --dv-scrollbar-background-color: var(--color-border);
   --dv-border-radius: var(--field-radius);
   --dv-tab-margin: 0;
   --dv-tab-border-radius: 0;
   --dv-floating-box-shadow: var(--wa-shadow-m);
-  --dv-tab-close-icon-size: 14px;
+  --dv-tab-close-icon-size: var(--font-size-icon-sm);
   --dv-overlay-z-index: 100;
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
-  background: var(--wa-color-surface-border);
-  font-family: var(--wa-font-family-body);
+  background: var(--color-border);
+  font-family: var(--font-family);
   color: var(--wa-color-text-normal);
 }
 .shell-dock .dv-tabs-and-actions-container {
-  border-bottom: 1px solid var(--wa-color-surface-border);
+  border-bottom: var(--border-thin) solid var(--color-border);
   box-sizing: border-box;
 }
 .shell-dock .dv-tab {
@@ -62,8 +62,8 @@
 .shell-dock-tab {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding-inline: 10px 4px;
+  gap: var(--wa-space-2xs);
+  padding-inline: var(--wa-space-xs) var(--wa-space-2xs);
   box-sizing: border-box;
   height: 100%;
   width: 100%;
@@ -71,9 +71,9 @@
   overflow: hidden;
 }
 .shell-dock-tab > wa-icon {
-  flex: 0 0 14px;
-  width: 14px;
-  height: 14px;
+  flex: 0 0 var(--font-size-icon-sm);
+  width: var(--font-size-icon-sm);
+  height: var(--font-size-icon-sm);
 }
 .shell-dock-tab-label {
   min-width: 0;
@@ -94,7 +94,7 @@
   display: flex;
   align-items: center;
   flex: none;
-  padding-inline: 3px;
+  padding-inline: var(--wa-space-2xs);
 }
 .shell-dock-tab-menu,
 .shell-dock-context-root {
@@ -133,8 +133,8 @@
   display: grid;
   place-content: center;
   height: 100%;
-  padding: 16px;
-  color: var(--wa-color-text-quiet);
+  padding: var(--wa-space-m);
+  color: var(--color-text-muted);
   box-sizing: border-box;
   gap: var(--wa-space-s);
   min-width: 0;
@@ -154,7 +154,7 @@
 }
 @media (forced-colors: active) {
   .shell-dock {
-    --dv-drag-over-border: 2px solid Highlight;
+    --dv-drag-over-border: var(--border-medium) solid Highlight;
     --dv-drag-over-background-color: transparent;
   }
 }

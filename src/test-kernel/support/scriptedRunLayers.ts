@@ -19,7 +19,7 @@ import {
 } from 'effect';
 
 import { UsageLog } from '@texra-ai/harness/host';
-import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { ITool } from '@tools/core/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { modelInvokerLayer } from '@agent/runtime/ModelInvoker';
 import { makeRetryGate, RouteRetries } from '@agent/runtime/ModelRetryGate';
@@ -167,7 +167,6 @@ export function testBinding(
     forcedToolChoice: true,
     billing: 'api-key',
     maxOutputTokens: null,
-    background: false,
     serviceTier: null,
     routes: routePolicies(['test-route'], 'test-model'),
     automaticRetries: Schema.decodeUnknownSync(
@@ -289,7 +288,13 @@ export function testLaunch(
     logger,
     toolPolicy: {},
     opening: {
-      inputs: {},
+      inputs: {
+        IS_ANTHROPIC_MODEL: false,
+        CWD: '.',
+        BUILTIN_AGENTS_DIR: '',
+        CUSTOM_AGENTS_DIR: '',
+        AGENT_DOCS_DIR: '',
+      },
       activated: [],
       attachedMemories: null,
       attachedMemoryMisses: [],

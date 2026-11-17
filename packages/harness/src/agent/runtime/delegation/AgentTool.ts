@@ -15,6 +15,7 @@ import { Effect, Result, Schema, ScopedRef } from 'effect';
 
 // Local imports
 import { programLaunch, readProgramResult } from '@agent/runtime/programRun';
+import { ToolRegistry } from '@tools/toolTable';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { inRunSession, noLaterTurn } from '@agent/runtime/RunCall';
 import { decisionOf } from '@agent/runtime/requests';
@@ -306,18 +307,27 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   const outputSchema = yield* childOutputSchema(
     launch.program === null ? launch.schema : null,
   );
-  // The call's files: a run-storage file must be this run's own or a declared
-  // output of a completed child of it; a program's files pass as named.
+  // The call's files, the program's file arguments among them: a
+  // run-storage file must be this run's own or a declared output of a
+  // completed child of it; a program's files pass as named.
   const trusted = programOf(run.config) !== null;
+  const fileArgs =
+    program === null
+      ? []
+      : ((yield* ToolRegistry).programs.get(program.name)?.fileArgs ?? []);
   const resolved = yield* Effect.result(
     Effect.all(
-      (
-        [
-          ['Input file', files.inputFiles],
-          ['Context file', files.contextFiles],
-          ['Media file', files.mediaFiles],
-        ] as const
-      ).map(([label, list]) =>
+      [
+        ['Input file', files.inputFiles] as const,
+        ['Context file', files.contextFiles] as const,
+        ['Media file', files.mediaFiles] as const,
+        ...fileArgs.flatMap((key) => {
+          const value = program?.args[key];
+          return typeof value === 'string'
+            ? [[`Argument ${key}`, [value]] as const]
+            : [];
+        }),
+      ].map(([label, list]) =>
         trusted
           ? Effect.succeed(list.map((file) => ({ file, absolutePath: file })))
           : resolveInvocationFileList(parentId, label, list),
@@ -327,7 +337,8 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
   );
   if (Result.isFailure(resolved))
     return errorResult(toErrorMessage(resolved.failure));
-  const [inputs = [], contexts = [], media = []] = resolved.success;
+  const [inputs = [], contexts = [], media = [], ...fileArgFiles] =
+    resolved.success;
   const contextFiles = contexts.map(({ file }) => file);
 
   // Awaited in a script unless sent to the background, and always in a
@@ -357,7 +368,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
           workingDirectory: launch.workingDirectory ?? null,
           id: launch.id ?? null,
           files: yield* fingerprint(
-            [inputs, contexts, media].map((group) =>
+            [inputs, contexts, media, ...fileArgFiles].map((group) =>
               group.map(({ absolutePath }) => absolutePath),
             ),
           ),

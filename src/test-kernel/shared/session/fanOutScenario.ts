@@ -322,7 +322,7 @@ export function buildScenario({ proposal = false } = {}) {
     type: 'tool.end',
     logId: 'dispatch-lint',
     status: 'completed',
-    result: { ...dispatchData, output: 'Appendix B: no findings.' },
+    result: { status: 'executed', output: 'Appendix B: no findings.' },
   });
 
   // A top-level process run, newer than the root: leads the order.
@@ -410,13 +410,17 @@ export function buildScenario({ proposal = false } = {}) {
     type: 'tool.end',
     logId: 'call-1',
     status: 'completed',
-    result: { output: 'search done', summary: "Completed 'custom:search'" },
+    result: {
+      status: 'executed',
+      output: 'search done',
+      summary: "Completed 'custom:search'",
+    },
   });
   log.emit(ROOT, T.childDone + 2, {
     type: 'tool.end',
     logId: SCRIPT_STAGE,
     status: 'completed',
-    result: { output: 'review done' },
+    result: { status: 'executed', output: 'review done' },
   });
   log.emit(ROOT, T.rootDone, {
     type: 'run.end',

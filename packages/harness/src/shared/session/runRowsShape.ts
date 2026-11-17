@@ -81,9 +81,8 @@ export type SharedRunRows = RunRowState & PendingFollowUps;
  * what the session view keeps per run for the fields it shows.
  */
 export type RunRows = {
-  /** Its `run.start`, and its parent edge: the start's. */
+  /** Its `run.start`, which names its parent edge (`start.parent`). */
   readonly start: RowOf<'run.start'> | null;
-  readonly parent: RowOf<'run.start'>['parent'];
   /** Its latest `run.activate`, and the `run.end` of the lifecycle that
    *  began (null until it ends): a resumed run never carries an old end. */
   readonly activation: RowOf<'run.activate'> | null;

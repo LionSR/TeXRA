@@ -2,7 +2,7 @@
  * The persistence substrate: the run history's one write path, the
  * aggregate lifecycle, deletion and collection, and the reads, over one
  * store's connection (`storeConnection.ts`). One database per session root
- * (`WorkspaceRoots`), never a process singleton; a project store is held
+ * (`SessionWorkspace`), never a process singleton; a project store is held
  * exclusively by the one process that opened it; an ephemeral session runs
  * the same schema in SQLite memory, and a failed file open is an error,
  * never the ephemeral mode. The process's global store holds current values
@@ -28,7 +28,7 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { SessionWorkspace } from '@shared/session/sessionWorkspace';
 import { logFailure } from '@logger/effectLog';
 import {
   DISPLAY_ROW_TYPES,
@@ -186,12 +186,12 @@ export const databaseLayer = (
 ): Layer.Layer<
   Database,
   DatabaseOpenFailed,
-  WorkspaceRoots | FileSystem.FileSystem | ToolRegistry
+  SessionWorkspace | FileSystem.FileSystem | ToolRegistry
 > =>
   Layer.effect(
     Database,
     Effect.gen(function* () {
-      const { storage } = yield* WorkspaceRoots;
+      const { storage } = yield* SessionWorkspace;
       const {
         path,
         sql,

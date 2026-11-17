@@ -5,9 +5,9 @@
 import { Box, Text } from 'ink';
 import { useState, type ReactNode } from 'react';
 
-import { COLOR_ERROR } from '@cli/tui/ui/colors';
-import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
-import { CROSS, POINTER } from '@cli/tui/ui/glyphs';
+import { BACK_HINT, KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
+import { POINTER } from '@cli/tui/ui/glyphs';
+import { ToneLine } from '@cli/tui/ui/ToneLine';
 
 import { TextInput } from '@cli/chat/tui/input/TextInput';
 import { FormFrame } from './FormFrame';
@@ -40,7 +40,7 @@ export function TextEntryForm(props: TextEntryFormProps): React.JSX.Element {
   const error = props.error ?? submitError;
 
   const status = error ? (
-    <Text color={COLOR_ERROR}>{`${CROSS} ${error}`}</Text>
+    <ToneLine tone="danger" text={error} />
   ) : (
     props.hint && <Text dimColor>{props.hint}</Text>
   );
@@ -81,7 +81,7 @@ export function TextEntryForm(props: TextEntryFormProps): React.JSX.Element {
           hints={[
             { key: 'Enter', action: 'save' },
             ...(props.extraHints ?? []),
-            { key: 'Esc', action: 'back' },
+            BACK_HINT,
           ]}
           confirmCancel={false}
         />

@@ -20,11 +20,12 @@
  * the failure in its transcript.
  */
 import { Duration, Effect, Exit, Fiber, Schema, Scope, Stream } from 'effect';
+import { decodingDefault } from '@shared/schemas';
 import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
 
-import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { ITool } from '@tools/core/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
-import { capToolResultText } from '@agent/runtime/run/toolResultText';
+import { capToolResultText } from '@shared/toolResultText';
 import type { McpServerConfig } from '@common/plugins/mcpServers';
 import { withLogChannel } from '@logger/effectLog';
 import type { ToolResult } from '@shared/schemas';
@@ -93,12 +94,15 @@ const ListToolsResultSchema = Schema.Struct({
 });
 
 const CallToolResultSchema = Schema.Struct({
-  content: Schema.Array(
-    Schema.Struct({
-      type: Schema.String,
-      text: Schema.optional(Schema.NullOr(Schema.String)),
-    }),
-  ).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  content: decodingDefault(
+    Schema.Array(
+      Schema.Struct({
+        type: Schema.String,
+        text: Schema.optional(Schema.NullOr(Schema.String)),
+      }),
+    ),
+    [],
+  ),
   structuredContent: Schema.optional(Schema.Unknown),
   isError: Schema.optional(Schema.NullOr(Schema.Boolean)),
 });

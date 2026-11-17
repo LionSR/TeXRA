@@ -9,10 +9,13 @@ import { randomUUID } from 'node:crypto';
 import { Effect, Schema, Context } from 'effect';
 
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
-import type { RunRecord } from '@agent/core/definition/RunRecord';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { freshRunState } from '@shared/session/runState';
-import { RunRecordFieldsSchema, type RunId } from '@shared/schemas';
+import {
+  RunRecordFieldsSchema,
+  type RunId,
+  type RunRecord,
+} from '@shared/schemas';
 import { SessionLog, RunHistory } from '@shared/session/runHistory';
 import { seedRows } from './sessionTestUtils';
 

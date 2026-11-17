@@ -29,12 +29,14 @@ import {
   ToolError,
   type RunId,
   type ToolResult,
+  serializeFilteredConfig,
 } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import type { SessionView } from '@shared/session/sessionView';
+import { formatConversation } from '@shared/transcript/conversationFormat';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
-import { readCompletedRunConversation } from '@transcript/completedRunArchive';
+import { readCompletedRunConversation } from '@agent/storage/completedRunArchive';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { getPathSegments } from '@utils/core/pathCore';
@@ -52,8 +54,6 @@ import {
 } from './executionFormatters';
 import { defineTool } from './core/definition';
 import { formatFileView, type LineRange } from './formatting';
-import { serializeFilteredConfig } from './executions/configView';
-import { formatConversation } from './executions/conversationFormat';
 import { orchestratorKillDenial } from './executions/killPolicy';
 import { queryHistory } from './executions/queryAction';
 import { showOutput } from './executions/processOutput';
@@ -102,7 +102,9 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
         })
         .join(',');
     const sent = (view: SessionView): readonly string[] =>
-      (view.queuedFollowUps.get(context.runId) ?? []).map((f) => f.followUpId);
+      (view.runs.get(context.runId)?.queuedFollowUps ?? []).map(
+        (f) => f.followUpId,
+      );
     const started = phases(initial);
     const held = new Set(sent(initial));
     const { changes, ref } = yield* SessionViewAccess;

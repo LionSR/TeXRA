@@ -1,5 +1,5 @@
 /**
- * The Tools sheet: a bottom sheet titled LaTeXDiffs hosting the
+ * The Tools sheet: a bottom `wa-drawer` titled LaTeXDiffs hosting the
  * real `<latexdiffs-section>` on properties. Reachable from any state
  * through the header overflow; `Surface.toolsSheetOpen` opens and closes
  * it. The section's selections ride in `Surface.launch` (base, edited,
@@ -8,10 +8,10 @@
  * `surface-action`.
  */
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, query } from 'lit/decorators.js';
 
-import '@awesome.me/webawesome/dist/components/button/button.js';
-import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/drawer/drawer.js';
+import type WaDrawer from '@awesome.me/webawesome/dist/components/drawer/drawer.js';
 
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
@@ -29,29 +29,13 @@ export class ToolsSheet extends LitElement {
     commonViewStyles,
     overlaySurfaceStyles,
     css`
-      :host {
-        z-index: 3;
+      /* As tall as the section, up to most of the view. */
+      wa-drawer {
+        --size: auto;
       }
 
-      .scrim {
-        background: color-mix(
-          in srgb,
-          var(--wa-color-surface-default) 55%,
-          transparent
-        );
-      }
-
-      .sheet {
-        position: absolute;
-        inset-inline: 0;
-        bottom: 0;
+      wa-drawer::part(dialog) {
         max-height: 62%;
-        display: flex;
-        flex-direction: column;
-        background: var(--wa-color-surface-default);
-        color: var(--wa-color-text-normal);
-        border-top: var(--border-thin) solid var(--wa-color-surface-border);
-        box-shadow: var(--wa-shadow-l);
       }
 
       latexdiffs-section {
@@ -67,13 +51,50 @@ export class ToolsSheet extends LitElement {
   @property({ attribute: false }) surface: Surface | null = null;
   @property({ attribute: false }) host: HostSnapshot | null = null;
 
-  private close = (): void => {
+  @query('wa-drawer') private drawer!: WaDrawer;
+
+  /** Opening after the first render lets the drawer animate in and note the
+   *  focus it returns to on close. */
+  override firstUpdated(): void {
+    this.drawer.open = true;
+  }
+
+  /** Every way out (the button, Escape, a click outside) runs the drawer's
+   *  close; the surface forgets it once that has finished. */
+  private handleAfterHide = (event: Event): void => {
+    if (event.target !== event.currentTarget) return;
     this.dispatchEvent(
       SessionUiEvents.surface({ kind: 'toolsSheet', open: false }),
     );
   };
 
-  override render(): TemplateResult | typeof nothing {
+  override render(): TemplateResult {
+    return html`
+      <wa-drawer
+        label="LaTeXDiffs"
+        placement="bottom"
+        without-header
+        light-dismiss
+        @wa-after-hide=${this.handleAfterHide}
+      >
+        <div class="overlay-header">
+          <span class="overlay-title">LaTeXDiffs</span>
+          ${renderIconActionButton({
+            id: 'tools-sheet-close',
+            icon: 'xmark',
+            label: 'Close',
+            tooltip: 'Close',
+            onClick: () => {
+              this.drawer.open = false;
+            },
+          })}
+        </div>
+        ${this.renderSection()}
+      </wa-drawer>
+    `;
+  }
+
+  private renderSection(): TemplateResult | typeof nothing {
     const launch = this.surface?.launch;
     const host = this.host;
     if (!launch || !host) return nothing;
@@ -86,28 +107,15 @@ export class ToolsSheet extends LitElement {
       ? launch.editedFile
       : '';
     return html`
-      <div class="scrim" @click=${this.close}></div>
-      <div class="sheet" role="dialog" aria-label="LaTeXDiffs">
-        <div class="overlay-header">
-          <span class="overlay-title">LaTeXDiffs</span>
-          ${renderIconActionButton({
-            id: 'tools-sheet-close',
-            icon: 'xmark',
-            label: 'Close',
-            tooltip: 'Close',
-            onClick: this.close,
-          })}
-        </div>
-        <latexdiffs-section
-          .baseFile=${launch.baseFile}
-          .baseFileOptions=${[...host.fileOptions.baseFile]}
-          .editedFile=${editedFile}
-          .editedFileOptions=${editedFileOptions}
-          .commit=${launch.commit}
-          .commitOptions=${[...host.fileOptions.commit]}
-          .isGitRepo=${host.isGitRepo}
-        ></latexdiffs-section>
-      </div>
+      <latexdiffs-section
+        .baseFile=${launch.baseFile}
+        .baseFileOptions=${[...host.fileOptions.baseFile]}
+        .editedFile=${editedFile}
+        .editedFileOptions=${editedFileOptions}
+        .commit=${launch.commit}
+        .commitOptions=${[...host.fileOptions.commit]}
+        .isGitRepo=${host.isGitRepo}
+      ></latexdiffs-section>
     `;
   }
 }

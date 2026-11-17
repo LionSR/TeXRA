@@ -218,7 +218,6 @@ const openTask = Effect.fn('documents.openTask')(function* (
     const data = files.map(({ path, ok }) => ({
       path,
       ok,
-      source: category,
       sourceDisplay: category,
     }));
     logger.info('', { messageType: MESSAGE_TYPES.FILE_LIST, data });
@@ -234,7 +233,7 @@ const optionalFlag = (description: string) =>
 export const DocumentContextTool = defineTool({
   name: 'document_context',
   description:
-    "A document program's revision prompt: `intro`, the launch's documents and the `templates`, the instruction, every earlier request of `requests` with the reply it got, and this revision's request with the compile failures that rejected the last one and the `critique` of it, if any. The call for revision 0 records `intro`, `requests`, `templates` and `creates` as the run's task; a later call's are not read. Resolves to `{ prompt, mediaFiles, memories }`, for the revision's `agent()` call; `memories` are the launch's.",
+    "A document program's revision prompt: `intro`, the launch's documents and the `templates`, the partial edit a merge launch names, the instruction, every earlier request of `requests` with the reply it got, and this revision's request with the compile failures that rejected the last one and the `critique` of it, if any. The call for revision 0 records `intro`, `requests`, `templates` and `creates` as the run's task; a later call's are not read. Resolves to `{ prompt, mediaFiles, memories }`, for the revision's `agent()` call; `memories` are the launch's.",
   scriptReturns: '{ prompt: string; mediaFiles: string[]; memories: string[] }',
   replay: 'safe',
   schema: Schema.Struct({

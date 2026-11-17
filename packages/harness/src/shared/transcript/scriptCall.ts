@@ -24,14 +24,17 @@ export function formatScriptCallFiles(files: {
   );
 }
 
-/** The outcomes a tally counts, in the order it reads them; `total` is
- *  their sum, not an outcome. */
+/** The outcomes a tally counts, in the order it reads them. */
 const TALLY_OUTCOMES = EffectRecord.keys({
   ok: true,
   failed: true,
   cancelled: true,
   skipped: true,
-} satisfies Record<Exclude<keyof ScriptTally, 'total'>, true>);
+} satisfies Record<keyof ScriptTally, true>);
+
+/** How many calls a tally counts: every call ended under one outcome. */
+export const tallyTotal = (tally: ScriptTally): number =>
+  TALLY_OUTCOMES.reduce((sum, key) => sum + tally[key], 0);
 
 /** `6 ok · 1 failed · 1 cancelled` — the one spelling of a tally, by outcome,
  *  so no count can read as "done" beside a failure it includes. */

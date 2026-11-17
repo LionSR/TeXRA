@@ -6,7 +6,6 @@
 // perform is `Rejected` with its reason, never dropped.
 
 import { Effect } from 'effect';
-import type { ProcessServices } from '@texra-ai/harness/host';
 import { Rejected } from '@texra-ai/harness/schemas';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 
@@ -14,37 +13,36 @@ import {
   hostFailed,
   hostFailure,
 } from '@texra/controllers/session/hostCallFailure';
+import {
+  pickLauncherFiles,
+  type OpenFilesDialog,
+} from '@texra/controllers/session/launcherFilePicker';
 import type {
   GuiWindowHost,
   OwnHostHandlers,
   SharedHostCommandBindings,
 } from '@texra/controllers/session/openGuiWindow';
-import { instructionActions } from '@ui/copy/instructionActions';
-import { shownFailureText } from '@ui/copy/modelAccess';
 
 import {
   DESKTOP_DOCS_URL,
   postDesktopSettingsView,
 } from '../shared/desktopCommandSurface.js';
 import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
-import type { WindowOnboarding } from './desktopWindowOnboarding.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
-import type { DesktopFileSelection } from './desktopFileSelection.js';
 import type { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 
 interface DesktopHostRequestsOptions {
   host: DesktopAgentRunHost;
-  files: DesktopFileSelection;
+  /** The project's folder; undefined for the window with no folder. */
+  workspaceRoot: string | undefined;
+  openFiles: OpenFilesDialog;
   workspaceFile: ReturnType<typeof createDesktopWorkspaceIpc>['file'];
   postToRenderer(message: DesktopPush): void;
-  onboarding: WindowOnboarding;
   /** The window's settings surface, absent while the window switches
    *  projects; the onboarding card's sign-in goes through it. */
   settings(): DesktopSettingsIpc | undefined;
   openExternalUrl(url: string): Effect.Effect<void, HostFailed>;
-  /** Re-probe the LaTeX toolchain. */
-  recheckTools(): Effect.Effect<void, never, ProcessServices>;
 }
 
 /** The desktop's half of a project's window, for the window's scope. */
@@ -53,25 +51,10 @@ export const createDesktopHostRequests = (
 ) =>
   Effect.sync(() => {
     const { host } = options;
-    /**
-     * Each notice answers with the program that presents it; the session
-     * forks it, so nothing here waits on a dialog on a fiber of its own.
-     * Where the failure is reported depends on the notice: the two dialog
-     * members report their own (a dialog rejects when its window is torn
-     * down beneath it, and the host binds them through `awaitOrReport`), so
-     * the programs they hand back cannot fail; `openPath` fails in its own
-     * channel and the session's fork warn-logs it.
-     */
+    /** Each notice answers with the program that presents it; the session
+     *  forks it and warn-logs its failure. */
     const notices: GuiWindowHost['notices'] = {
-      requestShowError: (failure) =>
-        host.showErrorDialog(shownFailureText(failure), failure.docsPage),
-      // An instruction is actionable guidance, not a failure, so it uses
-      // the info-style dialog with each action token as a real button.
-      requestShowInstruction: (instruction) =>
-        host.showInstructionDialog(
-          instruction.message,
-          instructionActions(instruction.key),
-        ),
+      ...host.notices,
       // Desktop has no editor integration to preview through, so the
       // resolved path goes to the preview-with-fallback host directly.
       openFile: (data) => host.openPath(data.location.absolutePath),
@@ -83,11 +66,7 @@ export const createDesktopHostRequests = (
     const bindings: SharedHostCommandBindings = {
       openPath: (file, line) => host.openPath(file, line),
       pickFiles: (fileType) =>
-        options.files
-          .pickFiles(fileType)
-          .pipe(
-            Effect.mapError((cause) => hostFailure('files.pickFiles', cause)),
-          ),
+        pickLauncherFiles(options.workspaceRoot, fileType, options.openFiles),
       latexdiff: {
         // Each diff opens in the PDF tab through the build display, as a
         // run's outputs do.
@@ -117,7 +96,6 @@ export const createDesktopHostRequests = (
           postDesktopSettingsView(options.postToRenderer, 'models/keys'),
         ),
       openExternal: (url) => options.openExternalUrl(url),
-      recheckDependencies: Effect.suspend(() => options.recheckTools()),
       openInstallGuide: Effect.sync(() =>
         postDesktopSettingsView(options.postToRenderer, 'plugins'),
       ),
@@ -138,8 +116,6 @@ export const createDesktopHostRequests = (
                 }),
               );
         }),
-        runSetup: (launch) =>
-          Effect.suspend(() => options.onboarding.runSetup(launch)),
         // The desktop has no walkthrough of its own: the card's "Open
         // walkthrough" opens the desktop docs.
         openGettingStarted: Effect.suspend(() =>
@@ -167,6 +143,7 @@ export const createDesktopHostRequests = (
         openFinalOutput: (absolutePath: string) => host.openPath(absolutePath),
         // The progress surface is always on screen in the desktop window.
         revealProgress: () => Effect.void,
+        showRunView: () => Effect.void,
       },
       files: {
         openDiff: (baseFile: string, editedFile: string, title: string) =>

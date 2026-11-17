@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import { appSignalStream } from '@texra-ai/harness/host';
 import { Settings, type AppSignals } from '@texra-ai/harness/plugins';
 import {
+  DETAIL_SEPARATOR,
   APPROVAL_POLICY_SETTING,
   descendantRuns,
   isWorking,
@@ -69,7 +70,7 @@ function paint(
   // The project's persisted policy: what a run here, or the service's for
   // this project, decides under.
   const policy = Settings.getConfig(config, APPROVAL_POLICY_SETTING);
-  const policyLine = `Approval policy: ${approvalPolicyLabel(policy)} — ${formatApprovalPolicy(policy)}`;
+  const policyLine = `Approval policy: ${approvalPolicyLabel(policy)}${DETAIL_SEPARATOR}${formatApprovalPolicy(policy)}`;
   const { cost, inputTokens, outputTokens } = usage;
   if (cost === 0 && inputTokens === 0 && outputTokens === 0) {
     item.tooltip = `${policyLine}\n\nClick to show TeXRA sessions`;

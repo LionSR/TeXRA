@@ -149,7 +149,8 @@ export function settingsToolCommands(ports: {
           ),
     // The rows follow the results the re-probe publishes.
     recheckToolStatus: () => refresh,
-    // The plugin rows follow the editor's own extension-change re-probe.
+    // The LaTeX page reads which extensions are installed; no plugin probe
+    // or row does, so only that page is rebuilt.
     installExtension: ({ extensionId }) =>
       reported(
         `Failed to install extension "${extensionId}"`,

@@ -55,7 +55,7 @@ import {
 } from '@shared/session/runHistory';
 import { acceptsFollowUp, descendantRuns } from '@shared/session/sessionView';
 import { runBypasses } from '@shared/approvalBypassKind';
-import { summarizeSubagentFollowup } from '@shared/subagentFollowup';
+import { followUpDisplay } from '@shared/subagentFollowup';
 import { CURATED_MODELS } from '@texra/model/curatedModels';
 import {
   parseApprovalPolicy,
@@ -910,29 +910,39 @@ function makeRejectedBashToolEntries(): HarnessLogRow[] {
 function seedSubagentFollowupTranscript(): void {
   const entries: HarnessLogRow[] = [];
   const timestamp = Date.now();
-  const followups = [
-    [
-      '<subagent-result id="child-b" agent="leanSolver" status="completed">',
-      '<wall-time>2min, 3sec</wall-time>',
-      '<response>Proved &lt;/response> is escaped &amp; visible.</response>',
-      '</subagent-result>',
-    ].join('\n'),
-    [
-      '<subagent-error id="child-c" agent="reviewer" retryable="true">',
-      '<message>rate limit: &lt;tokens&gt; &amp; retries exhausted</message>',
-      '</subagent-error>',
-    ].join('\n'),
+  const deliveries = [
+    {
+      family: 'subagent',
+      runId: 'child-b',
+      attributes: [
+        { name: 'agent', value: 'leanSolver' },
+        { name: 'status', value: 'completed' },
+      ],
+      wallTime: '2min, 3sec',
+      response: 'Proved </response> is escaped & visible.',
+    },
+    {
+      family: 'subagent',
+      runId: 'child-c',
+      attributes: [
+        { name: 'agent', value: 'reviewer' },
+        { name: 'retryable', value: 'true' },
+      ],
+      message: 'rate limit: <tokens> & retries exhausted',
+    },
   ];
-  // The run's transcript shows a delivery as its summary
-  // (`followUpDisplay`), never its envelope; built here from the envelope's
-  // text, which reads back to the same summary.
-  for (const [index, text] of followups.entries()) {
+  // The run's transcript shows a delivery as the summary of its typed facts
+  // (`followUpDisplay`), never its envelope.
+  for (const [index, delivery] of deliveries.entries()) {
     entries.push({
       id: `harness-subagent-followup-${index}`,
       level: LOG_LEVELS.INFO,
       timestamp: timestamp + index,
       messageType: MESSAGE_TYPES.USER_MESSAGE,
-      text: summarizeSubagentFollowup(text),
+      text: followUpDisplay({
+        delivery,
+        from: { kind: 'run', runId: DELIVERING_CHILD_RUN_ID },
+      }).text,
     });
   }
   seedRows(HARNESS_RUN_ID, entries);
@@ -1317,7 +1327,7 @@ sessionMeta.set({
   modelSource: 'builtin-default',
   cwd: HARNESS_CWD,
   approvalPolicy: APPROVAL_POLICY_DEFAULT,
-  teamName: TEAM_NAME,
+  ...(TEAM_NAME && { team: { id: TEAM_NAME, name: TEAM_NAME } }),
   version: '0.0.0-harness',
 });
 // The harness root: minted before any fixture, like a real run's start.
@@ -1325,8 +1335,8 @@ seedRun(HARNESS_RUN_ID);
 focusRun(HARNESS_RUN_ID);
 rootRunId.set(HARNESS_RUN_ID);
 seedRows(HARNESS_RUN_ID, harnessInitialEntries());
-// Built as the run's inbox builds them (`queuedRow`): a run's envelope text
-// carries the summary (`displayText`) every surface shows, and a message
+// Built as the run's inbox builds them (`queuedRow`): a child's delivery
+// (`HARNESS_QUEUED_DELIVERIES`, JSON) keeps its facts typed, and a message
 // from the user is kept as typed.
 publish(
   ...[
@@ -1334,8 +1344,8 @@ publish(
       text,
       from: { kind: 'user' as const },
     })),
-    ...QUEUED_DELIVERIES.map((text) => ({
-      text,
+    ...QUEUED_DELIVERIES.map((json) => ({
+      delivery: JSON.parse(json),
       from: { kind: 'run' as const, runId: DELIVERING_CHILD_RUN_ID },
     })),
   ].map((item, index) => ({
@@ -1721,7 +1731,7 @@ function appendHarnessStatus(): void {
     formatCliSessionStatus({
       agent: meta.agent,
       model: meta.model,
-      teamName: meta.teamName,
+      teamName: meta.team?.name,
       modelAccess: run?.usage.usageRoute,
       approvalPolicy: harnessApprovalPolicy(),
       approvalBypasses: runBypasses(view, runId),
@@ -1729,7 +1739,7 @@ function appendHarnessStatus(): void {
       activeChildSessions: runningChildCount(view, run),
       // The harness never commits a `skills.snapshot` row.
       activeSkills: [],
-      queuedFollowUpMessages: (view.queuedFollowUps.get(runId) ?? []).map(
+      queuedFollowUpMessages: (view.runs.get(runId)?.queuedFollowUps ?? []).map(
         (followUp) => followUp.text,
       ),
       cost: taskCostStatus(view, run),

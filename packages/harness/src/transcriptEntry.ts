@@ -42,7 +42,7 @@
 
 // A session's view across a process boundary: built from the inputs the
 // caller's transport serves.
-export { RemoteSessionView } from '@controllers/session/sessionViewService';
+export { RemoteSessionView } from '@shared/session/sessionViewService';
 export type { TranscriptInterest } from '@shared/session/sessionViewAccess';
 export { SessionInputs } from '@shared/session/sessionInputs';
 export {
@@ -107,6 +107,7 @@ export type {
   ToolIdentifierSection,
   ToolOutputSuppression,
   ToolRowModel,
+  ToolRowOutput,
   ToolSection,
   ToolSectionBase,
   ToolSectionFile,
@@ -135,9 +136,6 @@ export {
   transcriptTimeline,
   type TimelineEntry,
 } from '@shared/transcript/transcriptTimeline';
-// Delivery envelopes inside assistant text, collapsed to their summaries,
-// and the entity decoding their bodies take.
-export { summarizeEmbeddedSubagentFollowups } from '@shared/subagentFollowup';
 // Run lists' order, and a compaction's status.
 export { compareByNewestCreationTime } from '@shared/runs/runOrdering';
 export type {

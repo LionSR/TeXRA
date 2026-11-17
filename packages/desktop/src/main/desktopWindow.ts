@@ -18,6 +18,7 @@ import { app, clipboard, dialog, Menu } from 'electron';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
+import { followGitHubTokenRejections } from '@texra/controllers/session/windowNotices';
 import {
   DESKTOP_PROJECT_COMMANDS,
   DesktopCloseProjectMessageSchema,
@@ -25,6 +26,7 @@ import {
   DesktopSelectProjectMessageSchema,
 } from '../shared/desktopProjectMessages.js';
 import { DESKTOP_WORKSPACE_INBOUND_COMMANDS } from '../shared/desktopWorkspaceMessages.js';
+import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
 import {
   attachRendererConsoleLog,
   getDesktopLogDirectory,
@@ -58,7 +60,6 @@ import { SETTINGS_VIEW_INBOUND_COMMANDS } from './desktopSettingsIpc.js';
 import { createDesktopShellCommands } from './desktopShellIpc.js';
 import type { DesktopLayout } from './platform/paths.js';
 import { checkForDesktopUpdate } from './desktopUpdateChecker.js';
-import { openWindowOnboarding } from './desktopWindowOnboarding.js';
 import { createDesktopWindowHost } from './desktopWindowHost.js';
 import { bootstrapDesktopWindowLifecycle } from './desktopWindowLifecycle.js';
 import { getDesktopWindowTitle } from './desktopWindowTitle.js';
@@ -157,6 +158,13 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     (controller) => Effect.sync(() => controller.dispose()),
   );
   attachRendererConsoleLog(window.webContents);
+  // A rejected GitHub token is told in this window, whose Git settings
+  // replace it; the window's close ends the follower and its notices.
+  spawn(
+    followGitHubTokenRejections(host.dialogs.ask, (target) =>
+      Effect.sync(() => postDesktopSettingsView(host.post, target)),
+    ),
+  );
   installDesktopNavigationPolicy(window.webContents, {
     openExternal: host.openExternalInBackground,
   });
@@ -178,8 +186,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     ),
   );
 
-  const onboarding = yield* openWindowOnboarding(runtime);
-
   const shellCommands = createDesktopShellCommands(host.post, {
     openExternalUrl: previewHost.openExternal,
     openLogFolder: () => previewHost.openPath(getDesktopLogDirectory()),
@@ -193,7 +199,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     runtime,
     projects,
     draftRequests: options.draftRequests,
-    onboarding,
     // `surface` is declared below and read only when a card asks.
     settings: () => surface.settings(),
   });

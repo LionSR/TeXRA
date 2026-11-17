@@ -9,7 +9,6 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Third-party imports - Lit utilities
 import { html, nothing } from 'lit';
-import { ifDefined } from 'lit/directives/if-defined.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Local imports - shared transcript model
@@ -65,7 +64,7 @@ const BANNER_CONFIG: Record<StreamingTextRow['kind'], BannerConfig> = {
 export function formatBannerContentTemplate(
   row: StreamingTextRow,
 ): FormatResult {
-  const { id, timestamp, verbose, level, kind } = row;
+  const { timestamp, verbose, level, kind } = row;
   const trimmedContent = row.text.full.trim();
   if (!trimmedContent) return null;
 
@@ -93,8 +92,8 @@ export function formatBannerContentTemplate(
   // (raw text has no <p>/<br> tags to do it for us, unlike markdown HTML).
   // prettier-ignore
   const contentTemplate = isRunning
-    ? html`<div class="banner-content banner-content--streaming log-entry-content ${contentClass}" aria-busy="true" data-log-id=${ifDefined(id)}>${trimmedContent}</div>`
-    : html`<div class="banner-content markdown-content log-entry-content ${contentClass}" data-log-id=${ifDefined(id)}>${unsafeHTML(renderMarkdownHtml(trimmedContent))}</div>`;
+    ? html`<div class="banner-content banner-content--streaming log-entry-content ${contentClass}" aria-busy="true">${trimmedContent}</div>`
+    : html`<div class="banner-content markdown-content log-entry-content ${contentClass}">${unsafeHTML(renderMarkdownHtml(trimmedContent))}</div>`;
 
   if (kind === 'assistant') {
     const time = formatDisplayTimestamp(new Date(timestamp), 'minute');

@@ -16,7 +16,7 @@ import { recoverLogged } from '@texra/utils/diagnostics/recoverLogged';
 import { extractLatexFileDependencies } from './extractFileDependencies';
 import { extractFigurePathsFromLatex } from './extractFigure';
 import { resolveLatexDir } from './latexParsingUtils';
-import { compileTikzPictures } from './tikzPictures';
+import { compileTikzPictures, extractTikzPictures } from './tikzPictures';
 import { compileLatex2Pdf } from './texTools';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -289,9 +289,12 @@ const extractFiguresFromFiles = Effect.fn('latexMedia.extractFiguresFromFiles')(
     { logger, roots, fileService }: MediaRun,
     files: readonly FileLocation[],
   ): Effect.fn.Return<FileLocation[], Error, FileSystem.FileSystem> {
-    const fs = yield* FileSystem.FileSystem;
-    // Each file's extraction, base directory and existence probes run
-    // together; the results come back in file order for the logs below.
+    // The extractor returns only figures that exist, so nothing that cannot
+    // be compiled into the PDF or attached to vision context enters media.
+    // Its paths are resolved against the .tex file's real directory, so they
+    // map back to workspace files when the .tex is symlinked into run
+    // storage (otherwise mirrorWorkspaceFile would classify them as
+    // external and skip).
     const figureResults = yield* Effect.forEach(
       files,
       (file) =>
@@ -306,69 +309,29 @@ const extractFiguresFromFiles = Effect.fn('latexMedia.extractFiguresFromFiles')(
               }),
             () => Effect.succeed<readonly string[]>([]),
           ),
-          Effect.flatMap(
-            Effect.fnUntraced(function* (figures) {
-              if (figures.length === 0) return { file, figures, probed: [] };
-              // Match the resolution in extractFigurePathsFromLatex so the
-              // returned figure paths (relative to the real latexDir) map
-              // back to workspace files when the .tex is symlinked into run
-              // storage (otherwise mirrorWorkspaceFile would classify them
-              // as external and skip).
-              const baseDir = yield* resolveLatexDir(file.absolutePath);
-              // A figure that no longer exists cannot be compiled into the
-              // PDF or attached to vision context, so it must not enter
-              // media.
-              const probed = yield* Effect.forEach(
-                figures,
-                (relativePath) => {
-                  const loc = pathToLocationIn(
-                    roots.workspace,
-                    path.normalize(path.join(baseDir, relativePath)),
-                  );
-                  return fs
-                    .exists(loc.absolutePath)
-                    .pipe(Effect.map((exists) => ({ loc, exists })));
-                },
-                { concurrency: LATEX_CONCURRENCY },
-              );
-              return { file, figures, probed };
-            }),
-          ),
+          Effect.map((figures) => ({ file, figures })),
         ),
       { concurrency: LATEX_CONCURRENCY },
     );
 
-    const media: FileLocation[] = [];
-    for (const { file, figures, probed } of figureResults) {
+    const media = new Map<string, FileLocation>();
+    for (const { file, figures } of figureResults) {
       if (figures.length === 0) continue;
       logger.debug('Extracted figures', {
         data: { count: figures.length, from: file.absolutePath },
       });
-      for (const { loc, exists } of probed) {
-        if (exists) {
-          media.push(loc);
-          continue;
-        }
-        logger.debug('Extracted figure path does not exist', {
-          data: { figurePath: loc.absolutePath, from: file.absolutePath },
-        });
+      for (const figure of figures) {
+        media.set(figure, pathToLocationIn(roots.workspace, figure));
       }
     }
 
-    // Every figure a file names is mirrored, found or not, from the
-    // locations probed above.
-    const figureLocations = new Map(
-      figureResults.flatMap(({ probed }) =>
-        probed.map(({ loc }) => [loc.absolutePath, loc] as const),
-      ),
-    );
     yield* forEachFile(
       logger,
-      [...figureLocations.values()],
+      [...media.values()],
       'Unable to mirror figure dependency',
       (loc) => fileService.mirrorWorkspaceFile(loc),
     );
-    return media;
+    return [...media.values()];
   },
 );
 
@@ -380,7 +343,10 @@ const compileTikzFigures = Effect.fn('latexMedia.compileTikzFigures')(
     const tikzResults = yield* Effect.forEach(
       files,
       (file) =>
-        compileTikzPictures(file, roots).pipe(
+        extractTikzPictures(file).pipe(
+          Effect.flatMap((pictures) =>
+            compileTikzPictures(file, pictures, roots),
+          ),
           // The fan-out continues past an individual failure. A failed
           // compile is reported by compileTikzPictures itself; everything
           // else (standalone generation, the filesystem) lands here and

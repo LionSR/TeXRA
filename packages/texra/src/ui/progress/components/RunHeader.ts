@@ -22,12 +22,14 @@ import { runNoticeText, runStatus } from '@ui/copy/runStatus';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { statusIndicatorStyles } from '@ui/styles/statusIndicatorStyles';
-import { renderIconActionButton } from '@ui/wa/actionButtons';
+import {
+  renderIconActionButton,
+  renderIconActionButtonParts,
+} from '@ui/wa/actionButtons';
 import { actionMenu, type ActionMenuItem } from '@ui/wa/actionMenu';
 import { inlineRenameField } from '@ui/wa/inlineRename';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import '@ui/progress/components/ToolTimer';
-import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
@@ -95,8 +97,8 @@ export class RunHeader extends LitElement {
         color: var(--wa-color-text-normal);
         font-size: var(--font-size);
         font-weight: var(--font-weight-semibold);
-        line-height: 1.2;
-        letter-spacing: -0.012em;
+        line-height: var(--line-height-heading);
+        letter-spacing: var(--letter-spacing-tight);
       }
 
       .rename-input {
@@ -106,23 +108,27 @@ export class RunHeader extends LitElement {
         font-weight: var(--font-weight-semibold);
       }
 
-      .forked-from {
+      /* A quiet chip that goes to a related run: the fork source, or one
+         ancestor in the path. */
+      .run-chip {
         flex: 0 1 auto;
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
         padding: var(--wa-space-3xs) var(--wa-space-2xs);
         border: none;
         border-radius: var(--border-radius-small);
         background: var(--wa-color-neutral-fill-quiet);
         font: inherit;
-        font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
         cursor: pointer;
       }
-      .forked-from:hover {
+      .run-chip:hover {
         color: var(--color-text-link);
+      }
+      .forked-from {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: var(--font-size-xs);
       }
 
       .status-label,
@@ -172,28 +178,13 @@ export class RunHeader extends LitElement {
         display: inline-flex;
         align-items: center;
         gap: var(--wa-space-3xs);
-        flex: 0 1 auto;
-        min-width: 0;
-        padding: var(--wa-space-3xs) var(--wa-space-2xs);
-        background: var(--wa-color-neutral-fill-quiet);
-        border: none;
-        border-radius: var(--border-radius-small);
-        font: inherit;
         font-size: var(--font-size-sm);
-        color: var(--color-text-secondary);
-        cursor: pointer;
       }
       .ancestor-label {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
         min-width: 0;
-      }
-      .ancestor:hover {
-        color: var(--color-text-link);
-      }
-      .ancestor:focus-visible {
-        border-radius: var(--border-radius-small);
       }
       .ancestor-separator {
         flex: 0 0 auto;
@@ -281,7 +272,7 @@ export class RunHeader extends LitElement {
     const label = TASK_ACTIONS.forkedFromRun(from);
     return html`<button
       type="button"
-      class="forked-from"
+      class="run-chip forked-from"
       title=${label}
       ?disabled=${from === undefined}
       @click=${() => this.navigateTo(source.id)}
@@ -447,25 +438,20 @@ export class RunHeader extends LitElement {
         : []),
     ];
     const menu = actionMenu(items);
+    const more = renderIconActionButtonParts({
+      id: ELEMENT_IDS.HEADER_MORE_BTN,
+      icon: 'ellipsis',
+      slot: 'trigger',
+      label: 'Task actions',
+      tooltip: 'Task actions',
+    });
     return html`
       <wa-dropdown placement="bottom-end" @wa-select=${menu.onSelect}>
-        <wa-button
-          slot="trigger"
-          id=${ELEMENT_IDS.HEADER_MORE_BTN}
-          class="action-icon-button"
-          appearance="plain"
-          variant="neutral"
-          size="s"
-          type="button"
-          aria-label="Task actions"
-          >${waIcon('ellipsis')}<span class="action-button-label"
-            >Task actions</span
-          ></wa-button
-        >
+        ${more.button}
         <div class="menu-status">${joinFacts([statusLabel, passLabel])}</div>
         ${menu.items}
       </wa-dropdown>
-      <wa-tooltip for=${ELEMENT_IDS.HEADER_MORE_BTN}>Task actions</wa-tooltip>
+      ${more.tooltip}
     `;
   }
 
@@ -505,7 +491,7 @@ export class RunHeader extends LitElement {
             >
             <button
               type="button"
-              class="ancestor"
+              class="run-chip ancestor"
               id=${`ancestor-${index}`}
               aria-label=${`Go to ${ancestor.label}`}
               @click=${() => this.navigateTo(ancestor.id)}

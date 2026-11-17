@@ -285,7 +285,7 @@ export class SessionRunRegistry implements RunsShape {
   attachedParent(runId: RunId): Effect.Effect<RunId | null> {
     return this.init.log.facts(runId).pipe(
       Effect.orDie,
-      Effect.map((facts) => facts?.parent?.id ?? null),
+      Effect.map((facts) => facts?.start?.parent?.id ?? null),
     );
   }
 

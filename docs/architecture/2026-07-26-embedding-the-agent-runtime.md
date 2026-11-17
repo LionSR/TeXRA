@@ -77,15 +77,11 @@ kernel's `support/testKernel.ts`.
 
 TeXRA's Lean tools are the `lean4` plugin
 (`packages/texra/src/tools/lean/plugin.ts`), and its process layer is
-the Lean language-server pool. By default that is the direct
-`lake env lean --server` pool (`directLeanLanguageServices`,
-`packages/texra/src/tools/lean/direct/leanServerPool.ts`); a host passes its
-own services in its place through `texraPlugins({ lean })`, as the VS Code
-extension does with its Lean 4 extension bridge:
-
-```ts
-processLayer({ /* … */, plugins: texraPlugins({ lean: myLeanServices }) });
-```
+the Lean language-server pool: the direct `lake env lean --server` pool
+(`directLeanLanguageServices`,
+`packages/texra/src/tools/lean/direct/leanServerPool.ts`) in every host, the
+VS Code extension included. An embedder that wants other Lean services
+registers its own plugin with the same tools beside `texraPlugins(...)`'s.
 
 The two conditional tool injections — `memory` and the unified `plan` tool
 that drives the goal loop — are not part of this step: they are data on the
@@ -456,10 +452,10 @@ when it opens.
   not fewer. A store the process builds itself, and the embedder's global
   state under `Sessions.layer`, are seeded (`seedDisabledToolDefaults` in
   `packages/harness/src/tools/toolAvailability.ts`).
-- **`lean: directLeanLanguageServices('lake')`:** The raw loop still runs over any
-  `LeanLanguageServices` layer; without the direct one, Lean tools reach
-  whatever port the embedder passed. The `memory`/`plan` injections do not
-  depend on this choice (`packages/harness/src/tools/plugins.ts`).
+- **Lean without `lake`:** The `lean4` plugin's layer spawns nothing until a
+  Lean tool runs, so a machine with no `lake` only gets the tools' setup
+  advice; its probe reports the plugin as needing setup. The `memory`/`plan`
+  injections do not depend on it (`packages/harness/src/tools/plugins.ts`).
 
 The installed `AgentDirectoriesPort` is the whole of the core agent bundle:
 `AgentDirectoryService` resolves `builtIn()` inside the

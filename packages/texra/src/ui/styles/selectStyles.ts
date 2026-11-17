@@ -108,9 +108,9 @@ export const compactFormControlStyles: CSSResult = css`
   }
 
   /* The plain skin (controlStyles.ts) owns a whole band; the band is the
-     affordance, so its focus keeps the hairline and draws no halo. */
+     affordance, so focus draws no border or halo inside it. */
   .input-plain:focus-within::part(base) {
-    border-bottom-color: var(--border-hairline);
+    border-color: transparent;
     box-shadow: none;
   }
 `;

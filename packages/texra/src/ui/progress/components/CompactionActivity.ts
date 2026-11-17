@@ -32,7 +32,7 @@ export class CompactionActivity extends LitElement {
         background: var(--wa-color-surface-raised);
         color: var(--wa-color-text-normal);
         font-size: var(--font-size-sm);
-        line-height: 1.4;
+        line-height: var(--line-height-normal);
       }
 
       .icon {

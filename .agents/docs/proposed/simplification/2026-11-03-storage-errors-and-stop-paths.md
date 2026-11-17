@@ -63,7 +63,7 @@ cannot be read":
   `RunCell.append` path (`:273`) that `runHistory.ts:174-181` calls the only
   writer.
 - `factKindOf` (`rowCodec.ts:341-364`) and `readTraceFacts`
-  (`packages/harness/src/transcript/traceDocumentSchema.ts:61-79`) implement
+  (`packages/harness/src/shared/schemas/traceDocument.ts`) implement
   the same four version branches.
 - "The store is missing" is decided two ways: `readSessionView.ts:53-69`
   (absence, SQLite 14, then `fs.exists`) and `storeOpenElsewhere`'s
@@ -303,7 +303,7 @@ behaviour, which is the documented one.
 - **A tool fails three ways** (`throw new ToolError` ×160, `errorResult()`
   ×40, literal `status: 'error'` ×26) and a thrown error is converted twice
   with two message texts (`packages/harness/src/tools/core/definition.ts:106-128`,
-  `packages/harness/src/agent/core/tools/toolCallParsing.ts:74-89`). The
+  `packages/harness/src/tools/core/toolCallParsing.ts`). The
   tool boundary is catch-budget plane 3, so catching is right; but
   `definition.ts:106` squashes a defect, a programming error, into a
   model-visible error with no log. `diagnostics.code` values (`hook_denied`,

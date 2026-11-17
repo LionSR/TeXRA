@@ -2,9 +2,9 @@ import { Schema } from 'effect';
 
 import { NonNegativeIntSchema } from './nonNegativeInt';
 
-/** How a background script's calls ended. */
+/** How a background script's calls ended, by outcome: every call counts
+ *  under one. */
 const ScriptTallySchema = Schema.Struct({
-  total: NonNegativeIntSchema,
   ok: NonNegativeIntSchema,
   failed: NonNegativeIntSchema,
   cancelled: NonNegativeIntSchema,

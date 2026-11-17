@@ -47,10 +47,14 @@ export interface FoundCommand {
 
 /** Found paths by tool name, kept for the process (bounded): a TeX Live
  *  script's lookup spawns `kpsewhich`. A miss is not kept: a tool installed
- *  mid-session is found by the next lookup. */
-const FoundTools = Context.Reference('@texra-ai/texra/utils/FoundTools', {
-  defaultValue: () => new LRUCache<string, string>({ max: 64 }),
-});
+ *  mid-session is found by the next lookup. A test that controls the
+ *  lookup provides a fresh one. */
+export const FoundTools = Context.Reference(
+  '@texra-ai/texra/utils/FoundTools',
+  {
+    defaultValue: () => new LRUCache<string, string>({ max: 64 }),
+  },
+);
 
 function toolCandidates(tool: string): string[] {
   const candidates = [tool];

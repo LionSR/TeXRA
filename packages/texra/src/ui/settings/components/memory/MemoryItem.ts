@@ -27,6 +27,7 @@ import {
   renderIconActionButtonParts,
   type IconActionButtonOptions,
 } from '@ui/wa/actionButtons';
+import { renderEmptyMessage } from '@ui/wa/emptyState';
 import { metaStripStyles, renderDotMeta } from '@ui/wa/metaStrip';
 import { memoryItemFacts } from '@ui/copy/memory';
 import type { MemoryViewItem } from '@texra-ai/harness/schemas';
@@ -44,10 +45,10 @@ export class MemoryItem extends LitElement {
       }
 
       .memory-path {
-        font-family: var(--wa-font-family-mono, monospace), monospace;
+        font-family: var(--wa-font-family-mono), monospace;
         font-size: var(--font-size);
         font-weight: var(--font-weight-medium);
-        color: var(--wa-color-text-link);
+        color: var(--color-text-link);
         overflow-wrap: anywhere;
       }
 
@@ -223,11 +224,11 @@ export class MemoryItem extends LitElement {
   private renderPreviewBody(item: MemoryViewItem): TemplateResult {
     if (item.preview === undefined) {
       return item.previewError === true
-        ? html`<em class="text-secondary">Unable to load contents.</em>`
-        : html`<em class="text-secondary">Loading contents…</em>`;
+        ? renderEmptyMessage('Unable to load contents.')
+        : renderEmptyMessage('Loading contents…');
     }
     if (!item.preview.trim()) {
-      return html`<em class="text-secondary">This note is empty.</em>`;
+      return renderEmptyMessage('This note is empty.');
     }
     return html`<div class="markdown-content">
       ${unsafeHTML(this.renderMarkdown(item.preview))}

@@ -66,14 +66,14 @@ import {
 import { LocalRuntimeStateSchema, pluginAggregateId } from '@shared/schemas';
 import { sessionEventsLayer } from '@agent/runtime/sessionEventsLayer';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { SessionWorkspace } from '@shared/session/sessionWorkspace';
 import { sessionInputsLayer } from '@controllers/session/sessionInputsLayer';
-import { SessionViewService } from '@controllers/session/sessionViewService';
+import { SessionViewService } from '@shared/session/sessionViewService';
 import {
   LocalRuntimeSource,
   TextChunkSource,
   TranscriptSubscriptions,
-} from '@controllers/session/sessionSources';
+} from '@shared/session/sessionSources';
 import { deletionCollector } from '@controllers/session/deletionCleanup';
 import { databaseLayer } from '@controllers/session/databaseLayer';
 import { STORE_HELD_MESSAGE } from '@controllers/session/storeConnection';
@@ -116,7 +116,7 @@ const STORE_WRITER = `
 import { Effect, Layer } from 'effect';
 import { databaseLayer } from '@controllers/session/databaseLayer';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
-import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { SessionWorkspace } from '@shared/session/sessionWorkspace';
 import { nodePlatformServices } from '@platform/defaults/nodeServices';
 import { Database } from '@shared/session/database';
 
@@ -126,7 +126,7 @@ const append = Effect.flatMap(Database, (db) =>
     identity: { kind: 'agent', agent: 'chat' }, takesFollowUps: false,
     parent: null, provenance: null }]));
 await Effect.runPromise(append.pipe(Effect.provide(databaseLayer('persistent').pipe(
-  Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
+  Layer.provide(Layer.succeed(SessionWorkspace)({ storage })),
   Layer.provide(Layer.succeed(ToolRegistry)(toolTable([]))),
   Layer.provide(nodePlatformServices)))));
 `;
@@ -217,7 +217,7 @@ const graph = (
   store: Layer.Layer<
     Database,
     never,
-    WorkspaceRoots | FileSystem.FileSystem
+    SessionWorkspace | FileSystem.FileSystem
   > = databaseLayer('ephemeral').pipe(
     Layer.orDie,
     Layer.provide(storePluginsLayer),
@@ -244,7 +244,7 @@ const graph = (
         TranscriptSubscriptions.layer,
       ),
     ),
-    Layer.provide(Layer.succeed(WorkspaceRoots)(roots)),
+    Layer.provide(Layer.succeed(SessionWorkspace)(roots)),
     Layer.provide(nodePlatformLayer),
   );
 };
@@ -499,7 +499,7 @@ describe('Sessions owner', () => {
       }).pipe(
         Effect.provide(
           databaseLayer('persistent').pipe(
-            Layer.provide(Layer.succeed(WorkspaceRoots)(platform.roots)),
+            Layer.provide(Layer.succeed(SessionWorkspace)(platform.roots)),
             Layer.provide(Layer.succeed(ToolRegistry)(toolTable([]))),
             Layer.provide(nodePlatformServices),
           ),
@@ -608,7 +608,7 @@ describe('the session event table and its one publisher', () => {
 
   const substrate = (storage: string) =>
     databaseLayer('persistent').pipe(
-      Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
+      Layer.provide(Layer.succeed(SessionWorkspace)({ storage })),
       Layer.provide(storePluginsLayer),
       Layer.provide(nodePlatformLayer),
       Layer.fresh,

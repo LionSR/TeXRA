@@ -46,7 +46,7 @@ export const designTokens: CSSResult = css`
     /* Typography */
     --font-size: var(--wa-font-size-m);
     --font-family: var(--wa-font-family-body);
-    --font-weight: var(--wa-font-weight-normal);
+    --font-weight-normal: var(--wa-font-weight-normal);
     --font-weight-medium: 500;
     --font-weight-semibold: 600;
     --font-weight-bold: 700;
@@ -92,6 +92,14 @@ export const designTokens: CSSResult = css`
     /* Borders */
     --border-thin: 1px;
     --border-medium: 2px;
+
+    /* Stacking, for the layers that recur across surfaces: a sticky header
+       or footer over its own scroller, and a bar or cue pinned over the
+       content beside it. Drawers and dialogs open in the top layer and need
+       none. A local "above my sibling" 1 inside one component stays a
+       literal. */
+    --layer-sticky: 1;
+    --layer-pinned: 2;
 
     /* State overlays. Every hover/active/selected state in the app is one of
        these three translucent overlays on a background-color-only transition —

@@ -27,7 +27,6 @@ import {
   applyCompactionActivityEvent,
   finalizeCompactionActivities,
 } from '@shared/runs/compactionActivityProjection';
-import { decodeToolUseLog } from '@shared/toolUse';
 
 import {
   recordLogRow,
@@ -214,20 +213,17 @@ function record(d: TranscriptUpdate, event: TraceRowFields): void {
       if (slot?.kind !== 'tool') return;
       const inProgress = event.status === TOOL_CALL_STATUS.IN_PROGRESS;
       if (inProgress && !isOpenCard(slot)) return;
-      // The end carries the call's output and names no tool, input or card:
-      // those are the ones its `tool.start` opened.
-      const result: Record<PropertyKey, unknown> = Predicate.isObject(
-        event.result,
-      )
-        ? event.result
-        : {};
-      slot.log = decodeToolUseLog({
+      // A call with a run history ends with its stored result; a card
+      // without one with what its tool last stated, which may restate its
+      // name, input and card over the ones its `tool.start` opened.
+      slot.log = {
         toolName: slot.log.toolName,
         input: slot.log.input,
         ...(slot.log.card ? { card: slot.log.card } : {}),
-        ...result,
+        ...event.log,
+        ...(event.result === undefined ? {} : { result: event.result }),
         status: event.status,
-      });
+      };
       // The call's own end replaces a cut by the run's end.
       const { cutByRunEnd: _cut, ...call } = slot.call;
       slot.call = call;

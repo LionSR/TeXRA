@@ -42,10 +42,12 @@ import {
   type TranscriptSubscription,
   factName,
 } from '@shared/schemas';
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { getModelLabel } from '@shared/model/modelLabel';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
 import { followUpDisplay } from '@shared/subagentFollowup';
+import { toolCallTexts } from '@shared/toolUse';
 import { isFinalRow, rowHeadline } from '../transcript/transcriptRow';
 import {
   applyRunRow,
@@ -55,12 +57,7 @@ import {
   ownCopy,
   type SharedRunRow,
 } from './runRows';
-import {
-  NO_RUN_ROWS,
-  recordAfter,
-  standingAfter,
-  type RunStanding,
-} from './runRowReads';
+import { NO_RUN_ROWS, recordAfter, standingAfter } from './runRowReads';
 import { applyTranscriptEvent } from './transcriptUpdate';
 import {
   applyLiveText,
@@ -222,7 +219,7 @@ function countGroups(view: ViewDraft): void {
 /** What the updates keep for one run beside its `RunView`. */
 interface RunWork {
   /** What the rows `runRows.ts` reads say about the run: `view.requests`,
-   *  `view.queuedFollowUps` and `RunView.turn` are built from it. */
+   *  `RunView.queuedFollowUps` and `RunView.turn` are built from it. */
   rows: SharedRunRows;
   /** The run's record (`recordAfter`): its title, its attached parent and
    *  what its end left are read off it, so the view states none of those
@@ -233,6 +230,9 @@ interface RunWork {
   /** Whether the run's current turn is over ({@link turnIsOver}) as last
    *  derived, so a change finishes its transcript once. */
   turnOver: boolean;
+  /** The current turn's start as the rows record it: the input to
+   *  `RunView.runStartedAt`, kept while the run's holder is not yet known. */
+  turnStartedAt: number | null;
 }
 
 /** What one session's updates keep beside its view, never on it. */
@@ -325,6 +325,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     record: NO_RUN_ROWS,
     transcript: emptyTranscriptIndexes(),
     turnOver: false,
+    turnStartedAt: null,
   });
   const label = runIdentityDisplayName(event.identity);
   const common = {
@@ -348,11 +349,12 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     lost: null,
     createdAt: event.commit,
     launchedAt: event.at,
-    turnStartedAt: null,
     runStartedAt: null,
     lastTimestamp: event.at,
     turn: null,
     takesFollowUps: event.takesFollowUps,
+    queuedFollowUps: [],
+    grants: event.approvalPolicy ?? NO_APPROVAL_GRANTS,
     context: null,
     parentId: event.parent?.id ?? null,
     launch:
@@ -476,20 +478,20 @@ function withAggregates(u: Update, run: RunView): RunView {
   else if (run.lost !== null)
     statusNotice = { kind: 'lost', message: run.lost };
   const facts = { ...run, holder };
+  const work = runWork(u, run.id);
   const next = withDerived(run, {
     holder,
     approval,
     actions: runActions(facts, unreadable !== undefined),
     runStartedAt:
       holder === 'here' && run.position === 'running' && !waiting
-        ? run.turnStartedAt
+        ? work.turnStartedAt
         : null,
     rollup: rollupOf(children),
     treeUsage,
     statusNotice,
   });
   const turnOver = turnIsOver(next);
-  const work = runWork(u, run.id);
   if (turnOver === work.turnOver) return next;
   work.turnOver = turnOver;
   // A turn its rows ended finished its compactions at the transcript's
@@ -551,7 +553,8 @@ function operationalLatestLine(
     const row = rows[index];
     if (row.kind === 'tool') {
       const line =
-        nonEmpty(row.toolUse.headerSummary) ?? nonEmpty(row.model.headerLabel);
+        nonEmpty(toolCallTexts(row.log).headerSummary) ??
+        nonEmpty(row.model.headerLabel);
       if (line) return line;
       continue;
     }
@@ -703,9 +706,8 @@ function applyRunEvent(
       // Every activation (the launch, a resume, a follow-up) sets the run
       // running (`applyEvent` puts it there), which clears its outcome; the
       // tool-call count is the run's and carries over. Its turn's clock
-      // starts here: an interrupted run's old start would count the time
-      // nothing ran it.
-      return { ...run, turnStartedAt: null, turn: null, ...endOf(record) };
+      // starts here (`applyEvent`).
+      return { ...run, turn: null, ...endOf(record) };
     case 'run.config': {
       // A process has no model; any other run is on its newest config's.
       const { config } = event;
@@ -756,22 +758,6 @@ function applyRunEvent(
   }
 }
 
-/** Put the run where a lifecycle row leaves it: the one standing writer. Inside
- *  a turn its clock keeps the turn's start; out of one it clears. */
-function applyStanding(
-  run: RunView,
-  standing: RunStanding,
-  at: number,
-): RunView {
-  return {
-    ...run,
-    position: standing.position,
-    outcome: standing.outcome,
-    turnStartedAt:
-      standing.position === 'running' ? (run.turnStartedAt ?? at) : null,
-  };
-}
-
 /** A plugin's own aggregate's fact, the newest of its kind (a run's own
  *  facts go on the run, `applyRunEvent`). */
 function applyPluginFact(u: Update, event: DisplayRow): void {
@@ -807,13 +793,16 @@ function applyRowFacts(u: Update, run: RunView, event: SharedRunRow): RunView {
   const after: SharedRunRows = { ...before, ...moved };
   work.rows = after;
   if (moved.requests !== undefined) projectRequests(u.view, run.id, after);
-  if (moved.followUps !== undefined) projectFollowUps(u, run.id, after);
+  const queued =
+    moved.followUps === undefined
+      ? run
+      : { ...run, queuedFollowUps: queuedMessages(after) };
   // A position moves the turn, and a wait is a point a fork may cut at;
   // where it leaves the run is `applyEvent`'s.
-  if (moved.at === undefined) return run;
+  if (moved.at === undefined) return queued;
   return event.type === 'run.position' && event.payload.at === 'waiting'
-    ? { ...run, turn: after.turn, forkPoint: event.seq }
-    : { ...run, turn: after.turn };
+    ? { ...queued, turn: after.turn, forkPoint: event.seq }
+    : { ...queued, turn: after.turn };
 }
 
 /** `view.requests` is every run's open requests, in the order the rows
@@ -837,21 +826,11 @@ function projectRequests(view: ViewDraft, runId: RunId, rows: SharedRunRows) {
 }
 
 /** The run's untaken messages (not its own requests), as the view shows them. */
-function projectFollowUps(u: Update, runId: RunId, rows: SharedRunRows) {
-  const { view } = u;
-  const messages = rows.followUps.filter(isMessage);
-  if (messages.length === 0) {
-    view.queuedFollowUps = without(u, view.queuedFollowUps, runId);
-    return;
-  }
-  view.queuedFollowUps = writable(u, view.queuedFollowUps).set(
-    runId,
-    messages.map((f) => ({
-      followUpId: f.followUpId,
-      text: followUpDisplay(f.content).text,
-    })),
-  );
-}
+const queuedMessages = (rows: SharedRunRows): RunView['queuedFollowUps'] =>
+  rows.followUps.filter(isMessage).map((f) => ({
+    followUpId: f.followUpId,
+    text: followUpDisplay(f.content).text,
+  }));
 
 /**
  * Move `run` from `previousParentId` to its current parent. A run whose
@@ -930,9 +909,6 @@ function applyEvent(
   const work = runWork(u, runId);
   const record = recordAfter(work.record, event);
   work.record = record;
-  // Its grants, before its own change, whose derived fields read them.
-  if (record.grants !== null && u.view.policy.get(runId) !== record.grants)
-    u.view.policy = writable(u, u.view.policy).set(runId, record.grants);
 
   // The rows the run loop's state is also built from are applied once, in
   // `runRows.ts`; every other row is the view's own.
@@ -953,14 +929,27 @@ function applyEvent(
   } else {
     own = applyRunEvent(before, event, record);
   }
-  if (standing !== null) own = applyStanding(own, standing, event.at);
+  // Where a lifecycle row leaves the run: the one standing writer. Inside a
+  // turn its clock keeps the turn's start, which an activation starts over
+  // (an interrupted run's old start would count the time nothing ran it);
+  // out of one it clears.
+  if (event.type === 'run.activate') work.turnStartedAt = null;
+  if (standing !== null) {
+    own = { ...own, position: standing.position, outcome: standing.outcome };
+    work.turnStartedAt =
+      standing.position === 'running' ? (work.turnStartedAt ?? event.at) : null;
+  }
   if (event.type === 'run.end') {
     // A run can end with a row unfinalized: its end drops all live text.
     clearLiveText(transcriptWork(u, runId).ix);
   }
   // Reads arrive in any order: older history never moves the clock back.
   const lastTimestamp = Math.max(own.lastTimestamp, event.at);
-  let next: RunView = { ...own, lastTimestamp };
+  let next: RunView = {
+    ...own,
+    lastTimestamp,
+    grants: record.grants ?? own.grants,
+  };
   setRun(u, next);
 
   if (created || next.parentId !== before.parentId) {
@@ -1014,8 +1003,6 @@ function removeRun(u: Update, runId: RunId): boolean {
   const run = view.runs.get(runId);
   if (!run) return false;
   view.runs = without(u, view.runs, run.id);
-  view.policy = without(u, view.policy, run.id);
-  view.queuedFollowUps = without(u, view.queuedFollowUps, run.id);
   state.runs.delete(run.id);
   const aggregateId = run.id;
   view.transcriptSeq = without(u, view.transcriptSeq, aggregateId);

@@ -1,8 +1,8 @@
 /**
  * VS Code as the host's code editor: its extension registry and Marketplace
  * install, and the LaTeX settings TeXRA recommends in it. The composition
- * root passes it to the process layer (the setup tools and the Lean probe)
- * and to the settings view.
+ * root passes it to the process layer (the setup tools) and to the settings
+ * view.
  */
 import { Effect, Predicate } from 'effect';
 import * as vscode from 'vscode';

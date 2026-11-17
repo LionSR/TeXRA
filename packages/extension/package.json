@@ -534,12 +534,12 @@
     "@texra-ai/harness": "workspace:*",
     "@texra-ai/llm": "workspace:*",
     "@types/vscode": "^1.125.0",
-    "@vscode/vsce": "^4.1.0",
+    "@vscode/vsce": "^4.1.1",
     "concurrently": "^10.0.7",
     "effect": "catalog:",
     "esbuild": "^0.28.2",
     "lit": "^3.3.3",
-    "vite": "^8.3.7"
+    "vite": "^8.3.8"
   },
   "scripts": {
     "clean:dist": "node scripts/clean-dist.mjs",

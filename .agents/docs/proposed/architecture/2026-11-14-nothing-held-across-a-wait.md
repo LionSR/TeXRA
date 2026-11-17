@@ -336,6 +336,18 @@ Left, with the reason:
   toast's promise); `HostInteractions.ts`, `ToolUseFollowUp.ts` (row 6),
   `hostRunActions.ts`, `openGuiWindow.ts`, `nodeServices.ts`, and the TUI's
   `sessionCommands.ts`.
+- Row 12, the three in-process lanes (`reconcileLane` and `routing` in
+  `desktop/src/main/desktopWindow.ts`, `inOrder` in
+  `cli/src/chat/chatSessionController.ts`): checked on 2026-11-16 against
+  Effect 4.1.4, where a `Semaphore` whose callers all take one permit is
+  first come, first served (`takePermits` queues behind any waiter, and a
+  release wakes the first in insertion order). Read from the source, not
+  re-measured; the gap under "Needs the owner" was measured on
+  `withPerKeyLane`'s counted map, not on one long-lived `Semaphore`. So the
+  lanes keep call order. A queue with one consumer would add an answer channel per caller
+  (`inOrder`'s caller awaits its message's route; a workspace route answers
+  its request), and `routing` must be held from inside `did-navigate`'s own
+  step, which a queued reset cannot do.
 - Row 20: `settingsViewBody.ts`'s inputs (each page filters after the
   `PubSub`, so a dropped input only one page follows is a page that never
   rebuilds); `appSignals.ts` (a lost `credentialChanged` is a stale

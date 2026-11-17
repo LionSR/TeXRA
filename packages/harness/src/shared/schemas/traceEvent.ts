@@ -3,8 +3,13 @@
 import { Schema } from 'effect';
 
 import { ContextStateDataSchema } from './contextManagement';
-import { FileListEntrySchema, LogLevelSchema, MessageTypeSchema } from './log';
-import { ToolCallStatusSchema, ToolCardSchema } from './toolCard';
+import { LogLevelSchema, MessageTypeSchema } from './log';
+import {
+  ToolCallStatusSchema,
+  ToolCardEndSchema,
+  ToolCardSchema,
+} from './toolCard';
+import { FinishedToolResultSchema } from './toolResult';
 import { RunOutcomeSchema } from './run';
 import { TokenUsageStatsSchema } from './usage';
 
@@ -69,16 +74,17 @@ export const TraceRowFieldsSchema = Schema.Union([
     card: Schema.optional(ToolCardSchema),
   }),
   /**
-   * A call's card closes: `result` is its output and `files` names what it
-   * edited. A run with a run history stores none: a display read shows the
-   * call's `tool.result` as this row (`callCard`). A run without one (an
-   * agent-CLI child) stores it.
+   * A call's card closes, or a card without a run history updates. A run
+   * with a run history stores none: a display read shows the call's
+   * `tool.result` as this row, its stored result as `result` (`callCard`).
+   * A run without one (an agent-CLI child) stores it, with what its tool
+   * last stated as `log`.
    */
   trace('tool.end', {
     logId: Schema.String,
     status: ToolCallStatusSchema,
-    result: Schema.optional(Schema.Json),
-    files: Schema.optional(Schema.Array(FileListEntrySchema)),
+    result: Schema.optional(FinishedToolResultSchema),
+    log: Schema.optional(ToolCardEndSchema),
   }),
   /**
    * One priced model turn of the row's run: never a running total, so a

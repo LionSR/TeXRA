@@ -72,6 +72,7 @@ const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
     if (compile) {
       const compiledPaths = yield* compileTikzPictures(
         location,
+        tikzFigures,
         call.env.roots,
       );
       if (compiledPaths.length > 0) {

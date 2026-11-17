@@ -48,7 +48,7 @@ export const runTabsContainerStyles = css`
   /* Recursive child stream nesting — indentation alone carries the
      hierarchy (child rows also render a nested-run chevron). */
   .child-runs {
-    padding-inline-start: var(--wa-space-xs, 12px);
+    padding-inline-start: var(--wa-space-xs);
     margin-inline-start: var(--wa-space-2xs);
     box-sizing: border-box;
     min-width: 0;

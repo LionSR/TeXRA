@@ -1,4 +1,5 @@
-import { Effect, Result, Schema, SchemaGetter, Struct } from 'effect';
+import { Result, Schema, SchemaGetter, Struct } from 'effect';
+import { decodingDefault } from './schemaDefaults.js';
 
 import { ToolDefinitionSchema, type ToolDefinition } from './toolDefinition';
 
@@ -131,11 +132,9 @@ const TemperatureSchema = Schema.Number.check(
  * task is the user message, so a persona has no request template.
  */
 export const PersonaSchema = Schema.Struct({
-  prompt: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
-  tools: ToolsSchema.pipe(Schema.withDecodingDefault(Effect.succeed([]))),
-  temperature: TemperatureSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(1.0)),
-  ),
+  prompt: decodingDefault(Schema.String, ''),
+  tools: decodingDefault(ToolsSchema, []),
+  temperature: decodingDefault(TemperatureSchema, 1.0),
 });
 /** A persona with its defaults applied: what a run is offered and told. */
 export type Persona = typeof PersonaSchema.Type;

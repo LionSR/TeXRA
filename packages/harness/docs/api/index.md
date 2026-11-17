@@ -436,8 +436,6 @@ What `Session.deleteRuns` did with the runs it was asked for.
 
 ```ts
 interface RunDeletion {
-  /** How many listed runs the target named. */
-  readonly listed: number;
   readonly deleted: readonly RunId[];
   /** Held by a live owner: left as is. */
   readonly active: readonly RunId[];

@@ -20,7 +20,7 @@ import {
 
 import { ModelProvider } from '@texra-ai/llm';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
-import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { ITool } from '@tools/core/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { registrationRows } from '@agent/storage/runLifecycle';
 import { TraceEmitter } from '@agent/trace/TraceEmitter';
@@ -31,7 +31,6 @@ import { SessionRoots } from '@platform/rootedFs';
 import type { AgentEvent } from '@shared/session/agentEvent';
 import {
   type CommitOrdinal,
-  programOf,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
@@ -101,7 +100,7 @@ const enterRun = Effect.fn('enterRun')(function* (
   const awaited =
     options.registration !== undefined
       ? options.registration.parentCall?.awaited === true
-      : (facts?.parent?.call?.awaited ?? false);
+      : (facts?.start?.parent?.call?.awaited ?? false);
   // Whether the run ends after one cycle, decided once: every child does
   // (a message to it is a resume), a script's run (its call is its only
   // turn), a root its caller asks to, and a root launched to run once,
@@ -187,24 +186,21 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
     entry,
   } = yield* enterRun(definition, runId, options);
 
-  // A program's tools read this opening's inputs at every call, so it is
-  // built on resume too; a conversation's rows hold its own.
-  const opening =
-    resumed && programOf(config) === null
-      ? null
-      : yield* buildTemplateInputs(
-          config,
-          modelConfig.provider === ModelProvider.ANTHROPIC,
-          agentLogger,
-          {
-            // The session's own roots, handed to prompt assembly as data,
-            // so file reads resolve in this project, not the calling
-            // fiber's.
-            workspaceRoot: roots.workspace,
-            workingDirectory,
-            storageRoot: roots.storage,
-          },
-        );
+  // A resume renders nothing again: the run's rows hold its opening.
+  const opening = resumed
+    ? null
+    : yield* buildTemplateInputs(
+        config,
+        modelConfig.provider === ModelProvider.ANTHROPIC,
+        {
+          // The session's own roots, handed to prompt assembly as data, so
+          // the working directory and memories resolve in this project, not
+          // the calling fiber's.
+          workspaceRoot: roots.workspace,
+          workingDirectory,
+          storageRoot: roots.storage,
+        },
+      );
 
   const launch: RunLaunch = {
     runId,

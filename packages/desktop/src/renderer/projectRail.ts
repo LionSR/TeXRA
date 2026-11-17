@@ -89,13 +89,10 @@ export function createProjectRail(deps: {
         (id) => !sidebarRevealedForRequestIds.has(id),
       );
       sidebarRevealedForRequestIds = new Set(offScreen);
-      const state = shown()?.getState();
-      if (isNewRequest && state?.sidebarCollapsed) {
-        sessions.act(active, {
-          kind: 'workbench',
-          layout: toggleSidebar(state),
-        });
-      }
+      const project = shown();
+      const state = project?.getState();
+      if (isNewRequest && state?.sidebarCollapsed)
+        project?.updateState(toggleSidebar(state));
     },
   };
 }

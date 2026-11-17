@@ -4,13 +4,12 @@ import { expect } from 'vitest';
 import { Effect, Layer, Schema } from 'effect';
 import { AgentConfigSchema } from '@texra-ai/harness/schemas';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
-import { noopTrace } from '@test/support/noopTrace';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { FakeHost } from '@test/support/testKernel';
 
 const buildVars = (agentConfig: typeof AgentConfigSchema.Type) =>
   Effect.flatMap(FakeHost, (host) =>
-    buildTemplateInputs(agentConfig, false, noopTrace, {
+    buildTemplateInputs(agentConfig, false, {
       workspaceRoot: host.path('workspace'),
       storageRoot: host.roots.storage,
     }),

@@ -3,8 +3,7 @@ import { useState } from 'react';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { tryOpenBrowser } from '@cli/runtime/models/browser';
-import { COLOR_ERROR } from '@cli/tui/ui/colors';
-import { CROSS } from '@cli/tui/ui/glyphs';
+import { ToneLine } from '@cli/tui/ui/ToneLine';
 import { GITHUB_TOKEN_CREATE_URL } from '@texra/tools/github/githubAuth';
 import { credentialOriginLabel, TOKEN_ACTION_COPY } from '@ui/copy/credentials';
 
@@ -126,9 +125,7 @@ export function GitHubTokenForm(
   const status = props.statusView?.status ?? 'none';
   const loading = props.statusView?.loading ?? false;
   const statusError = props.statusView?.error ?? false;
-  const errorNode = error ? (
-    <Text color={COLOR_ERROR}>{`${CROSS} ${error}`}</Text>
-  ) : undefined;
+  const errorNode = error ? <ToneLine tone="danger" text={error} /> : undefined;
   return (
     <ListForm
       title="GitHub token"

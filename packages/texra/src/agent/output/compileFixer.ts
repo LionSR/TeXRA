@@ -12,7 +12,6 @@ import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   toErrorMessage,
   Rejected,
-  programOf,
   fileLocationAddressPath,
   isModelOptionAvailable,
   RunIdSchema,
@@ -50,8 +49,9 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
   function* (input: {
     readonly runId: RunId;
     readonly runConfig: AgentConfig | undefined;
-    /** The run's rounds, as its documents fact records them. */
-    readonly rounds: readonly RoundOutput[];
+    /** The run's rounds, as its documents fact records them; undefined
+     *  for a run that is no document task's (it recorded no documents). */
+    readonly rounds: readonly RoundOutput[] | undefined;
     readonly modelOptions: readonly Pick<
       ModelOptionData,
       'value' | 'availability'
@@ -62,18 +62,15 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
     Rejected | CompileFixerPlanFailed,
     FileSystem.FileSystem
   > {
-    const compileFailures = input.rounds.flatMap(compileFailuresOf);
     // The compile-fixer planner serves document tasks only.
-    const savedTaskConfig =
-      input.runConfig && programOf(input.runConfig) !== null
-        ? input.runConfig
-        : undefined;
-    if (!savedTaskConfig) {
+    const { runConfig: savedTaskConfig, rounds } = input;
+    if (!savedTaskConfig || rounds === undefined) {
       return yield* new Rejected({
         reason:
           'No document task found for this stream. Cannot run latexFixer.',
       });
     }
+    const compileFailures = rounds.flatMap(compileFailuresOf);
 
     if (compileFailures.length === 0) {
       return yield* new Rejected({
@@ -108,7 +105,7 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
     const targets = yield* compileFixerTargets(
       savedTaskConfig,
       compileFailures,
-      input.rounds,
+      rounds,
       input.workspaceRoot,
     ).pipe(
       Effect.mapError(
@@ -143,7 +140,6 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
       script: null,
       inputFiles: targets.map((target) => target.path),
       outputFiles: [],
-      editedFile: null,
     };
   },
 );

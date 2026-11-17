@@ -61,7 +61,7 @@ export const providerKeyListStyles: CSSResult = css`
   }
 
   .provider-setting-warning {
-    color: var(--wa-color-warning-on-quiet);
+    color: var(--color-warning);
   }
 
   wa-button.provider-setting-link {

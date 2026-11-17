@@ -4,15 +4,13 @@
  */
 
 import { Number as Num } from 'effect';
-import '@awesome.me/webawesome/dist/components/button/button.js';
-import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { LitElement, html, css, type TemplateResult, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles and utilities
 import type { IconName } from '@ui/wa/iconNames';
 import { designTokens, commonViewStyles } from '@ui/styles';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { renderIconActionButton } from '@ui/wa/actionButtons';
 
 /** Detail payload for the `page-change` custom event. */
 export interface PageChangeDetail {
@@ -66,11 +64,6 @@ export class Pagination extends LitElement {
         gap: var(--wa-space-2xs);
         margin-inline-start: auto;
       }
-
-      .pagination-controls wa-button::part(base) {
-        min-width: var(--height-control);
-        min-height: var(--height-control);
-      }
     `,
   ];
 
@@ -113,19 +106,12 @@ export class Pagination extends LitElement {
     page: number,
     disabled: boolean,
   ): TemplateResult {
-    return html`
-      <wa-button
-        appearance="outlined"
-        variant="neutral"
-        size="s"
-        aria-label=${label}
-        title=${label}
-        ?disabled=${disabled}
-        @click=${() => this.goTo(page)}
-      >
-        ${waIcon(icon)}
-      </wa-button>
-    `;
+    return renderIconActionButton({
+      icon,
+      label,
+      disabled,
+      onClick: () => this.goTo(page),
+    });
   }
 
   override render(): TemplateResult | typeof nothing {

@@ -15,6 +15,7 @@ import {
   TEXRA_TAGLINE,
 } from '@ui/copy/onboarding';
 import { designTokens, commonViewStyles } from '@ui/styles';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 /**
@@ -73,7 +74,7 @@ export class OnboardingWelcomeCard extends LitElement {
         display: block;
         font-weight: var(--font-weight-semibold);
         font-size: var(--font-size-h1);
-        letter-spacing: -0.025em;
+        letter-spacing: var(--letter-spacing-tight);
         line-height: var(--line-height-heading);
         margin: 0 0 var(--wa-space-xs);
         text-wrap: balance;
@@ -87,7 +88,7 @@ export class OnboardingWelcomeCard extends LitElement {
 
       .card-copy {
         margin: 0;
-        color: var(--wa-color-text-quiet);
+        color: var(--color-text-secondary);
         line-height: var(--line-height-normal);
         overflow-wrap: anywhere;
         text-wrap: pretty;
@@ -105,8 +106,8 @@ export class OnboardingWelcomeCard extends LitElement {
         gap: var(--wa-space-s);
         min-width: 0;
         padding: var(--wa-space-m);
-        border: var(--border-thin) solid var(--wa-color-surface-border);
-        border-radius: var(--wa-border-radius-l);
+        border: var(--border-thin) solid var(--color-border);
+        border-radius: var(--border-radius-large);
         background: var(--wa-form-control-background-color);
       }
 
@@ -137,7 +138,7 @@ export class OnboardingWelcomeCard extends LitElement {
         text-align: start;
         font-size: var(--font-size-sm);
         line-height: var(--line-height-normal);
-        color: var(--wa-color-text-quiet);
+        color: var(--color-text-secondary);
         overflow-wrap: anywhere;
       }
 
@@ -148,10 +149,6 @@ export class OnboardingWelcomeCard extends LitElement {
         flex-wrap: wrap;
         gap: var(--wa-space-2xs);
         margin-top: var(--wa-space-l);
-      }
-
-      .skip-row wa-button::part(base) {
-        font-size: var(--font-size-sm);
       }
 
       @container onboarding-card (max-width: 540px) {
@@ -253,25 +250,21 @@ export class OnboardingWelcomeCard extends LitElement {
             </div>
           </div>
           <div class="skip-row">
-            <wa-button
-              id="onboardingWalkthroughButton"
-              class="btn-ghost"
-              appearance="plain"
-              size="s"
-              @click=${this.handleOpenGettingStarted}
-            >
-              ${waIcon(ONBOARDING_OPEN_WALKTHROUGH.icon, { slot: 'start' })}
-              ${ONBOARDING_OPEN_WALKTHROUGH.label}
-            </wa-button>
-            <wa-button
-              id="onboardingSkipButton"
-              class="btn-ghost"
-              appearance="plain"
-              size="s"
-              @click=${this.handleSkip}
-            >
-              ${ONBOARDING_CHOICE_SKIP_LABEL}
-            </wa-button>
+            ${renderLabeledActionButton({
+              id: 'onboardingWalkthroughButton',
+              icon: ONBOARDING_OPEN_WALKTHROUGH.icon,
+              text: ONBOARDING_OPEN_WALKTHROUGH.label,
+              kind: 'ghost',
+              className: 'is-compact',
+              onClick: () => this.handleOpenGettingStarted(),
+            })}
+            ${renderLabeledActionButton({
+              id: 'onboardingSkipButton',
+              text: ONBOARDING_CHOICE_SKIP_LABEL,
+              kind: 'ghost',
+              className: 'is-compact',
+              onClick: () => this.handleSkip(),
+            })}
           </div>
         </section>
       </div>

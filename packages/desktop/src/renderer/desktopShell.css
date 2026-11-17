@@ -51,10 +51,6 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   gap: 4px;
   -webkit-app-region: no-drag;
 }
-.shell-view-switch .action-button[aria-pressed='true']::part(base) {
-  background: var(--wa-color-surface-raised);
-  color: var(--wa-color-text-normal);
-}
 .shell-workspace-tools {
   display: flex;
   gap: 4px;
@@ -112,29 +108,6 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 .shell-sidebar-primary {
   padding: 12px 12px 4px;
 }
-.shell-sidebar-action {
-  display: block;
-  width: 100%;
-  color: var(--wa-color-text-quiet);
-}
-.shell-sidebar-action::part(base) {
-  width: 100%;
-  justify-content: flex-start;
-  height: var(--row-height);
-  min-height: var(--row-height);
-  padding-inline: 8px;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-normal);
-}
-.shell-sidebar-action::part(label) {
-  min-width: 0;
-  text-align: start;
-}
-.shell-sidebar-action-icon {
-  width: 14px;
-  height: 14px;
-  font-size: var(--font-size-icon-sm);
-}
 .shell-sidebar-scroll {
   min-height: 0;
   overflow: auto;
@@ -177,23 +150,6 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 .shell-project-item:hover {
   background: var(--surface-hover);
 }
-.shell-project-row {
-  display: block;
-  width: 100%;
-  min-width: 0;
-  color: var(--wa-color-text-normal);
-}
-.shell-project-row::part(base) {
-  width: 100%;
-  justify-content: start;
-  padding-inline: 8px 0;
-  min-height: var(--row-height);
-  background: transparent;
-}
-.shell-project-row::part(label) {
-  min-width: 0;
-  text-align: start;
-}
 .shell-project-row wa-icon {
   color: var(--wa-color-text-quiet);
 }
@@ -226,12 +182,6 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
 .shell-project-rename {
   margin-inline-start: 4px;
   width: calc(100% - 4px);
-}
-.shell-history-empty {
-  margin: 4px 8px;
-  font-size: var(--font-size-xs);
-  color: var(--wa-color-text-quiet);
-  line-height: 1.5;
 }
 .shell-project-runs {
   --run-tab-padding-inline-start: 8px;
@@ -306,11 +256,6 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-xs);
-}
-.shell-editor-toolbar .action-button::part(base) {
-  min-height: 24px;
-  height: 24px;
   font-size: var(--font-size-xs);
 }
 .shell-workbench-pdf-frame {

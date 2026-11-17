@@ -44,7 +44,10 @@ import {
 import { generatePastedImageName } from '@texra/shared/utils/pastedImageName';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { overlineDeclarations } from '@ui/styles/commonViewStyles';
-import { renderIconActionButton } from '@ui/wa/actionButtons';
+import {
+  renderIconActionButton,
+  renderLabeledActionButton,
+} from '@ui/wa/actionButtons';
 import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import './QueuedFollowUps';
@@ -146,12 +149,12 @@ export class SessionComposer extends LitElement {
         overflow-y: auto;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
-        font-family: var(--wa-font-family-body, inherit);
+        font-family: var(--font-family);
         font-size: var(--font-size-reading);
         line-height: var(--line-height-normal);
       }
       textarea::placeholder {
-        color: var(--wa-color-text-quiet);
+        color: var(--color-text-secondary);
       }
       .composer:not(.is-compact) textarea {
         --textarea-min-height: calc(3lh + 2 * var(--wa-space-2xs));
@@ -210,7 +213,7 @@ export class SessionComposer extends LitElement {
       .menu-choice small {
         font-size: var(--font-size-xs);
         line-height: var(--line-height-normal);
-        color: var(--wa-color-text-quiet);
+        color: var(--color-text-secondary);
       }
       .chip-label {
         display: block;
@@ -225,7 +228,7 @@ export class SessionComposer extends LitElement {
       }
 
       .recording::part(base) {
-        color: var(--wa-color-danger-on-quiet);
+        color: var(--color-error);
       }
       queued-follow-ups {
         display: block;
@@ -518,14 +521,12 @@ export class SessionComposer extends LitElement {
       ${waIcon('code-branch')}
       <span class="routing-target">Your message goes to ${run.label}</span>
       <span aria-hidden="true">·</span>
-      <wa-button
-        class="routing-parent btn-ghost is-link"
-        appearance="plain"
-        size="s"
-        type="button"
-        @click=${() => this.replyToParent(parent.id)}
-        >reply to ${parent.label} instead</wa-button
-      >
+      ${renderLabeledActionButton({
+        text: `reply to ${parent.label} instead`,
+        kind: 'link',
+        className: 'routing-parent',
+        onClick: () => this.replyToParent(parent.id),
+      })}
     </div>`;
   }
 
@@ -534,9 +535,9 @@ export class SessionComposer extends LitElement {
     if (run && !run.takesFollowUps) return nothing;
     const compact = this.compact;
     const readOnly = run != null && isUnreadable(run);
-    const queued = (
-      run ? (this.view?.queuedFollowUps.get(run.id) ?? []) : []
-    ).map((followUp) => followUp.text);
+    const queued = (run?.queuedFollowUps ?? []).map(
+      (followUp) => followUp.text,
+    );
     const text = this.text;
     const hasText = text.trim() !== '';
     // Send and Cmd+Alt+E share `canSendFollowUp`; the launcher needs text.

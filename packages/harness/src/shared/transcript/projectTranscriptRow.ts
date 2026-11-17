@@ -17,10 +17,9 @@ import {
   reasonPhrase,
   type FileListEntry,
   type LogPayload,
-  type ToolUseLog,
+  type ToolCallLog,
 } from '@shared/schemas';
-import { normalizeToolUse } from '@shared/toolUse';
-import { hasIncompleteEmbeddedSubagentFollowup } from '@shared/subagentFollowup';
+import { normalizeToolUse, resultFields } from '@shared/toolUse';
 import { formatCompactTokenCount } from '@utils/text/stringUtils';
 
 import { toolRowModel, type ToolRowModelContext } from './toolRowModel';
@@ -68,10 +67,6 @@ export function streamingTextRow(
     text: measured,
     streaming,
     ...(cut === undefined ? {} : { cut }),
-    ...(kind === 'assistant' &&
-    hasIncompleteEmbeddedSubagentFollowup(measured.full)
-      ? { pendingEmbeddedFollowup: true }
-      : {}),
   };
 }
 
@@ -192,21 +187,21 @@ export type ToolCallFacts = Pick<
  *  what its slot holds beyond the payload, which every repaint carries. */
 export function toolRow(
   base: TranscriptRowBase,
-  log: ToolUseLog,
+  log: ToolCallLog,
   output: string | undefined,
   runLabels: ToolRowModelContext['runLabels'],
   call: ToolCallFacts,
 ): ToolRow {
-  const shown = output === undefined ? log : { ...log, output };
-  const toolUse = normalizeToolUse(shown);
+  const { result: _result, ...stated } = log;
+  const shown: ToolCallLog = output === undefined ? log : { ...stated, output };
   return {
     ...base,
     ...call,
     kind: 'tool',
-    toolUse,
-    model: toolRowModel(toolUse, {
+    model: toolRowModel(normalizeToolUse(shown), {
       ...(runLabels ? { runLabels } : {}),
-      parsedOutput: shown.output,
+      parsedOutput:
+        shown.result === undefined ? shown.output : resultFields(shown.result),
     }),
     log,
   };

@@ -24,7 +24,7 @@ on purpose.
   `status`. That is the "nested" case.
 
 `output` being the whole result is read back as such in two places:
-`toolResultNodes` (`packages/harness/src/transcript/completedRunArchive.ts`)
+`toolResultNodes` (`packages/harness/src/agent/storage/completedRunArchive.ts`)
 decodes it with `ToolResultSchema` to rebuild the text the model read, and
 `statusOf` (`packages/harness/src/shared/transcript/scriptStage.ts`) reads
 `reusedFrom` and `name` from it. Lifting the three fields out of `output`
@@ -34,12 +34,14 @@ that carries user feedback (`tool.error` is returned before the decode).
 
 Landed: `toolName` is required (every producer already wrote it).
 
-Left: give the card the result as a typed field. `tool.end` would carry
-`result: SettledToolResult` for a call with a run history and the flat fields
-only for an agent-CLI card; the export and the script stage read `result`
-without decoding `output`, and `normalizeToolUse` loses `firstTrimmed` and
-`extractOutputContent`. `tool.end` is stored for agent-CLI children, so the
-change bumps its row version.
+Landed 2026-11-16: the card carries the result as a typed field. `tool.end`
+carries `result` (the stored `FinishedToolResult`) for a call with a run
+history and `log` (`ToolCardEndSchema`, what the tool last stated) for an
+agent-CLI card, with no `files` beside them (they were `result.edits`
+restated). The transcript holds the card as a `ToolCallLog`; the export and
+the script stage read `result` without decoding, `normalizeToolUse` has no
+nested fallback, and `decodeToolUseLog` is gone (the row schema decodes the
+card). `tool.end` is version 2.
 
 ## 2. `ExecutedToolResult`: commit instructions on the result
 
@@ -71,7 +73,7 @@ Left, in order:
    it commits (no return change, but a collector the call writes to, which
    `packages/harness/AGENTS.md` "Event channels and cards" argues against).
 2. With the fields off the result, `extractToolAttachments`
-   (`packages/harness/src/agent/core/tools/toolAttachmentExtraction.ts`) only
+   (`packages/harness/src/tools/core/toolAttachmentExtraction.ts`) only
    strips bytes.
 
 ## 3. `ChildRunDelivery`: a union on family and outcome

@@ -83,7 +83,7 @@ export const logEntryStyles = css`
   }
 
   .file-list-content .file-media {
-    font-size: 0.85em;
+    font-size: var(--font-size-xs);
   }
 
   .file-list-content .file-var {
@@ -92,7 +92,7 @@ export const logEntryStyles = css`
   }
 
   .file-list-content .file-source {
-    font-size: 0.85em;
+    font-size: var(--font-size-xs);
     font-style: italic;
   }
 
@@ -100,21 +100,6 @@ export const logEntryStyles = css`
 
   .file-load-icon {
     color: var(--tone-color);
-  }
-
-  .file-link {
-    color: var(--color-text-link);
-    cursor: pointer;
-  }
-
-  .file-link:hover {
-    text-decoration: underline;
-  }
-
-  /* Radius only — the ring itself comes from focusRingStyles, which an
-     outline here would narrow to 1px. */
-  .file-link:focus-visible {
-    border-radius: var(--border-radius-small);
   }
 
   .memory-path {
@@ -127,7 +112,7 @@ export const logEntryStyles = css`
 
   .memory-path .file-source {
     opacity: var(--opacity-subtle);
-    font-size: 0.85em;
+    font-size: var(--font-size-xs);
   }
 
   /* Web search result styles */
@@ -161,18 +146,8 @@ export const logEntryStyles = css`
     opacity: var(--opacity-full);
   }
 
-  /* Same shadow-piercing exception as .code-block-copy: this is a wa-button,
-     and WebAwesome ships no focus styling of its own for it, so without this
-     the control falls back to the UA default ring while every sibling control
-     shows the branded one. */
-  .banner-content-copy:focus-visible::part(base) {
-    outline: var(--focus-ring-width) solid var(--wa-color-focus);
-    outline-offset: var(--focus-ring-offset);
-  }
-
   .banner-content-copy.copy-success {
     opacity: var(--opacity-full);
-    color: var(--color-success);
   }
 
   .timestamp {
@@ -249,7 +224,7 @@ export const logEntryStyles = css`
   .details-summary {
     gap: var(--wa-space-xs);
     min-width: 0;
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
   }
 
@@ -260,7 +235,7 @@ export const logEntryStyles = css`
   .error-timestamp {
     flex: 0 0 auto;
     margin-inline-start: auto;
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     font-size: var(--font-size-xs);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -278,13 +253,13 @@ export const logEntryStyles = css`
 
   .banner-content--thinking {
     padding: var(--wa-space-xs) var(--wa-space-s);
-    border-radius: var(--wa-border-radius-m, var(--border-radius));
+    border-radius: var(--border-radius-medium);
     background: color-mix(
       in srgb,
       var(--wa-color-neutral-fill-quiet) 72%,
       transparent
     );
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
   }
 
   /* Raw streamed text has no <p>/<br> tags to carry line breaks (unlike the
@@ -310,19 +285,10 @@ export const logEntryStyles = css`
      Applied to runs that proxy raw process output (e.g. bash child runs)
      so their stdout/stderr reads like a terminal instead of a logger. */
   :host([terminal]) .log-container {
-    font-family: var(
-      --wa-font-family-mono,
-      ui-monospace,
-      SFMono-Regular,
-      Consolas,
-      monospace
-    );
-    font-size: var(--wa-editor-font-size, var(--font-size));
-    background-color: var(
-      --wa-color-terminal-background,
-      var(--wa-color-surface-default, transparent)
-    );
-    color: var(--wa-color-terminal-foreground, var(--wa-color-text-normal));
+    font-family: var(--wa-font-family-mono);
+    font-size: var(--wa-editor-font-size);
+    background-color: var(--wa-color-terminal-background);
+    color: var(--wa-color-terminal-foreground);
     padding-block: var(--wa-space-xs);
     /* <terminal-output> fills this box and scrolls inside its own viewport;
        the outer container must not add a second scrollbar. */

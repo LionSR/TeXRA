@@ -227,7 +227,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     ),
     approvalDepth: attention.length,
     approvalKind: approvalQueueStatusKind(
-      attention.map((request) => request.kind),
+      attention.map((request) => request.payload.kind),
     ),
     modelAccess,
     subscriptionProbeFailed,

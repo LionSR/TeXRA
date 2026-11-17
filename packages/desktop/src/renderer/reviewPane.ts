@@ -99,11 +99,11 @@ export function createReviewPane(): ReviewPaneController {
       return html`
         <wa-button
           type="button"
-          class="desktop-review-file btn-ghost"
+          class="desktop-review-file btn-ghost is-row is-compact"
           style=${styleMap({ '--tree-depth': String(depth) })}
           appearance="plain"
           size="s"
-          data-active=${active ? 'true' : 'false'}
+          aria-current=${active ? 'true' : nothing}
           title=${entry.displayPath}
           @click=${() => select(entry)}
         >

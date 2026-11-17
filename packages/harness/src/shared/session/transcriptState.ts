@@ -12,7 +12,7 @@ import {
   type LogLevel,
   type MessageType,
   type Stage,
-  type ToolUseLog,
+  type ToolCallLog,
 } from '@shared/schemas';
 import type { CompactionActivityProjection } from '@shared/runs/compactionActivityProjection';
 import type { RunLabels } from '@shared/tools/executionsDisplay';
@@ -65,7 +65,7 @@ export type RowState =
   | {
       readonly kind: 'tool';
       base: TranscriptRowBase;
-      log: ToolUseLog;
+      log: ToolCallLog;
       /** What the row says of the call beyond its payload. */
       call: ToolCallFacts;
     }

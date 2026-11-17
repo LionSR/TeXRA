@@ -13,7 +13,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Effect, FiberHandle } from 'effect';
 
-import { type Session, type WorkspaceRoots } from '@texra-ai/harness';
+import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
   withProcessServices,
   type ProcessRuntime,
@@ -30,7 +30,6 @@ import {
 import { setApiKey } from '@commands/api/apiKeyCommands';
 import { cloneOverleafProject } from '@commands/git/gitCommands';
 import { downloadArXivSource } from '@commands/latex/arXivCommands';
-import { launchSetupAssistant } from '@commands/setup/setupAssistantCommand';
 import { createSampleProject } from '@commands/system/sampleProjectCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import {
@@ -41,7 +40,7 @@ import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import type { ShowBuilt } from '@frontend/latex/openBuild';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { quickPick } from '@frontend/ui/dialogs';
+import { openFilesDialog, quickPick } from '@frontend/ui/dialogs';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { previewFinalOutput } from '@frontend/agents/finalOutputOpener';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
@@ -70,6 +69,7 @@ import {
   hostFailure,
 } from '@texra/controllers/session/hostCallFailure';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
+import { pickLauncherFiles } from '@texra/controllers/session/launcherFilePicker';
 import type {
   GuiWindowHost,
   OwnHostHandlers,
@@ -83,14 +83,12 @@ import {
 
 // Local file imports
 import { handleCompare } from './compareFiles';
-import { createFileSelectionPickers, getCurrentFile } from './fileSelection';
+import { getCurrentFile } from './fileSelection';
 import { openFile } from './openFile';
 
 const CHANNEL = 'ExtensionHostRequests';
 
 export interface ExtensionHostRequestsOptions {
-  /** Where this window's runs run: the session here, or the service's. */
-  readonly runSession: Session;
   readonly roots: WorkspaceRoots;
   /** "Show a built file", bound to this window's roots and the view's
    *  scope, so a close of the view cancels a PDF viewer open still
@@ -118,9 +116,6 @@ export interface ExtensionHostRequestsOptions {
   signInSubscription(
     providerId: SubscriptionProviderId,
   ): Effect.Effect<void, Error, ProcessServices>;
-  /** Bring the "Connect a model" card into view (the setup assistant's
-   *  answer when no credential is usable). */
-  showConnectModel(): Effect.Effect<void, Error, ProcessServices>;
   /** Reveal the task list (`texra.showProgressView`). */
   showProgressView(): Effect.Effect<void, Error>;
   /** Reveal the task list for a run this window just started, or name the
@@ -188,10 +183,8 @@ const openExportPath = (
 export const createExtensionHostRequests = Effect.fn(
   'createExtensionHostRequests',
 )(function* (options: ExtensionHostRequestsOptions) {
-  const { runSession, snapshot, runtime, roots } = options;
+  const { snapshot, runtime, roots } = options;
 
-  /** The native picker of each multi-file launcher list. */
-  const multipleFilePickers = createFileSelectionPickers(roots);
   // The window's one comparison refresh: a newer comparison replaces it,
   // and the view's scope ends it.
   const diffRefresh = yield* FiberHandle.make();
@@ -302,9 +295,8 @@ export const createExtensionHostRequests = Effect.fn(
    *  onto a VS Code command, an editor API, or the sidebar. */
   const bindings: SharedHostCommandBindings = {
     openPath: (file, line) => runHandler('openFile', openFile(file, line)),
-    // The picker reports its own failures where they happen and answers
-    // `null`, as it does for a cancel.
-    pickFiles: (fileType) => multipleFilePickers[fileType](),
+    pickFiles: (fileType) =>
+      pickLauncherFiles(roots.workspace, fileType, openFilesDialog),
     latexdiff: {
       openDiffs: ([first, ...rest]) =>
         first === undefined
@@ -341,7 +333,6 @@ export const createExtensionHostRequests = Effect.fn(
         ),
     // The banner refresh probes the dependencies again; the banner shows
     // what is missing.
-    recheckDependencies: snapshot.refreshHostBanners,
     // Every dependency the banner lists installs from the one guide page.
     openInstallGuide: runHandler('openDoc', openGuidePage('installation')),
     onboarding: {
@@ -351,17 +342,6 @@ export const createExtensionHostRequests = Effect.fn(
         // card's program runs, not when this table is built.
         Effect.suspend(() => options.signInSubscription('chatgpt')),
       ),
-      runSetup: (launch) =>
-        runHandler(
-          'runSetupAssistant',
-          launchSetupAssistant(
-            roots,
-            runSession,
-            launch.runValidated,
-            options.showConnectModel(),
-            options.showProgressView(),
-          ),
-        ),
       openGettingStarted: runHandler(
         'openGettingStarted',
         openGettingStarted(options.extensionId),
@@ -415,6 +395,7 @@ export const createExtensionHostRequests = Effect.fn(
     runs: {
       revealProgress: options.revealProgress,
       openFinalOutput: previewFinalOutput,
+      showRunView: options.showProgressView,
     },
     // Each command is named, so a failure carries a tag, never a rejection.
     files: {

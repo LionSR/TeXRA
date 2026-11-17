@@ -24,7 +24,8 @@ export class TexraDiffView extends LitElement {
     css`
       :host {
         display: block;
-        min-height: 240px;
+        --diff-min-height: 240px;
+        min-height: var(--diff-min-height);
       }
 
       :host([fill]) {
@@ -34,7 +35,7 @@ export class TexraDiffView extends LitElement {
 
       .diff-view {
         display: flex;
-        min-height: 240px;
+        min-height: var(--diff-min-height);
         height: 42vh;
         max-height: 640px;
         border: var(--border-thin) solid var(--color-border);
@@ -60,7 +61,7 @@ export class TexraDiffView extends LitElement {
         display: flex;
         align-items: center;
         justify-content: center;
-        min-height: 240px;
+        min-height: var(--diff-min-height);
         padding: var(--wa-space-xs);
         border: var(--border-thin) solid var(--color-border);
         color: var(--color-error);
@@ -68,7 +69,7 @@ export class TexraDiffView extends LitElement {
       }
 
       .loading-state {
-        min-height: 240px;
+        min-height: var(--diff-min-height);
         border: var(--border-thin) solid var(--color-border);
         background: var(--color-bg-secondary);
       }

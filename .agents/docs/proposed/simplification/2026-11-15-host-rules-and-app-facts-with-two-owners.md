@@ -49,7 +49,7 @@ In order of size. Each needs the decision named.
    `packages/extension/src/extension.ts`,
    `packages/desktop/src/main/desktopProjects.ts`,
    `packages/cli/src/runtime/platform/initPlatform.ts` and (without the
-   service state) `packages/cli/src/runtime/platform/cliService.ts`.
+   service state) `packages/texra/src/controllers/server/serve.ts`.
    `openProjectSession`
    (`packages/texra/src/controllers/session/openProjectSession.ts`) then
    decides "service or local" a second time from the same result. The guards
@@ -69,20 +69,8 @@ In order of size. Each needs the decision named.
    defines `BuildDisplayFn`, answering a PDF path or a sentence. The output
    directory stays a host fact (LaTeX Workshop's `outDir`). Decision: the
    extension starts showing the failure.
-3. **What a setup launch's outcomes do.**
-   `packages/extension/src/commands/setup/setupAssistantCommand.ts` and
-   `packages/desktop/src/main/desktopWindowOnboarding.ts` each map
-   `launchSetup`'s outcomes
-   (`packages/texra/src/controllers/onboarding/setupLaunch.ts`). Already
-   running: a toast and the task list in the extension, nothing on the
-   desktop. No usable model: the "Connect a model" card in the extension, an
-   error dialog on the desktop. The desktop holds one launch at a time with a
-   `FiberHandle`; the extension relies on the live-run check, which a
-   double-click can beat. Proposed: the `runSetup` case of
-   `packages/texra/src/controllers/session/openGuiWindow.ts` owns the
-   single launch and maps each outcome to a host verb. Decision: the desktop
-   gets the card instead of the dialog. This was listed in
-   `2026-11-14-reading-a-failed-cause.md` and is still true.
+3. **What a setup launch's outcomes do.** Landed 2026-11-17, see the end
+   of this note.
 4. **A rejected GitHub token.** The extension
    (`packages/extension/src/extension.ts`) offers "Open Git settings"; the
    desktop (`packages/desktop/src/main/desktopSettingsIpc.ts`) shows a plain
@@ -189,3 +177,76 @@ In order of size. Each needs the decision named.
   banner's check (`packages/extension/src/progressView/checkCoreDependencies.ts`)
   is VS Code-free code living in the extension, which belongs in the app
   once its one importer, the progress view provider, can be edited.
+
+## Landed in the 2026-11-16 sweep
+
+- **Host rule 5** (run verbs): `openGuiWindow` returns the settings body's
+  `selectLauncherAgent`, `revealRun` and `runLabel` over the window's own
+  bridge and session (`GuiWindowSettingsRuns`), and each host binds them;
+  the extension's three `ProgressViewProvider` methods and the desktop's
+  `ProjectBindings.active` are gone. The desktop read the shown project
+  (`projects.active()`), not the one its settings belong to, so a settings
+  request handled while the window switched projects (between the
+  registry's change and the surface's re-attach) looked the run up in the
+  other project. A host's "bring the run view up" is the window host's
+  `runs.showRunView`.
+- **App fact 5, the banner's check**: `missingDependencyTools` in
+  `packages/texra/src/latex/latexToolchain.ts`, read by the host snapshot
+  itself, so `missingTools` is no longer a host option, and its "Recheck"
+  (`recheckDependencies`) is the shared body's, not a host binding. Whether
+  a host shows the banner is a row of its `shows` table beside the
+  credential banner: VS Code shows it, the desktop does not. Showing it on
+  the desktop is left for a decision: the banner outranks the "tasks run in
+  this window only" notice (`SessionBanners`), so on a machine without
+  latexindent, Perl, Ghostscript or an image tool it would hide that
+  notice, as the desktop E2E `serviceClient.spec.ts` showed. The LaTeX
+  status's seven `*Path` fields stay open.
+- **App fact 6** (agent CLI models): `isClaudeCodeModel` and `isCodexModel`
+  ask llm's `isUnservedModel`, so an OpenRouter-only model leaves the Claude
+  Code and Codex pickers. No listed model changes today: the registry's
+  OpenRouter-only OpenAI models have no Codex entry and no Anthropic model
+  is OpenRouter-only.
+- **Host rule 1, "decided a second time"**: not a finding. In
+  `openProjectSession` the second test is the first one's other branch,
+  restated so TypeScript narrows `reached`; the service-or-local choice has
+  one owner there.
+- **App fact 7** (key pages): left open. The three toggle links are chosen
+  per toggle with their own labels (Moonshot's and MiniMax's point at the
+  international platform, GLM's at the China one, against Moonshot's and
+  GLM's China default), so they are not "the key page the toggle picks".
+  `settingSurfaces.ts` cannot read `KEY_PAGES`: `texraSettings.ts` imports
+  it and `providerPresentation.ts` imports `texraSettings.ts`, a cycle that
+  breaks at module load when `providerPresentation.ts` is evaluated first.
+  Either `KEY_PAGES` moves below both (a leaf module, or llm beside
+  `providerDisplayName`), or the link follows the toggle, which changes its
+  copy.
+
+## Landed in the 2026-11-17 sweep
+
+- **Host rule 3** (setup launch outcomes): `openWindowSetup` in
+  `packages/texra/src/controllers/onboarding/setupLaunch.ts` is the window's
+  one setup verb. `openGuiWindow` builds it over the window's session,
+  launcher, notices and run view, answers the setup card's Run Setup with
+  it and returns it, so VS Code's command and status pill call the same
+  verb. The extension's `launchSetupAssistant`, the desktop's
+  `openWindowOnboarding`, the `onboarding.runSetup` host binding and the
+  extension view's `showConnectModel` are deleted. Behavior changes: the
+  desktop shows the "Connect a model" card instead of an error dialog when
+  no model is usable, and a setup run already live is announced and
+  selected on both hosts (the desktop said nothing; the extension showed the
+  task list without selecting it). One launch at a time is now held per
+  project window on both hosts, with a semaphore over the start only: a
+  second Run Setup once the run is live gets the "already running" answer
+  instead of a silent no-op, and the extension's double-click race is
+  closed. A failure before the run opens is presented through the window's
+  notices on both hosts.
+- **Host rule 4** (rejected GitHub token): still open, checked on this
+  sweep. Moving the follower into the settings body needs two decisions
+  first. `Dialogs` has no non-modal notice with an action: `confirm` is
+  the only call that takes an action label, and the extension's toast with
+  "Open Git settings" would become a modal. And the body runs once per
+  project on the desktop (`createDesktopSettingsIpc`) but once per
+  activation in VS Code, so a follower in the body would raise one notice
+  for each project the desktop has open. Either `Dialogs` gains
+  `notify(level, message, action)`, or the follower stays one per process
+  and only its wording is shared.

@@ -17,10 +17,7 @@ import {
   type SessionView,
 } from '@texra-ai/harness/schemas';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
-import {
-  createAgentPresentationHost,
-  warnOnFailure,
-} from '@frontend/events/agentEventListeners';
+import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { openBuilt, type ShowBuilt } from '@frontend/latex/openBuild';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
@@ -30,7 +27,6 @@ import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
 import { sectionCountLabel } from '@ui/copy/runStatus';
 import { hostFailed } from '@texra/controllers/session/hostCallFailure';
 import type { HostFailed } from '@texra/hosts/uiHosts';
-import { setOnboardingDeclined } from '@texra/controllers/onboarding/onboardingFunnel';
 import {
   EXTENSION_CATEGORIES,
   getFilterExtensions,
@@ -48,13 +44,12 @@ import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshot
 import {
   openGuiWindow,
   type GuiSession,
+  type GuiWindowSettingsRuns,
 } from '@texra/controllers/session/openGuiWindow';
 import type {
   AttachedPort,
   SessionBridge,
 } from '@texra/controllers/session/SessionBridge';
-import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
-import { checkCoreDependencies } from './checkCoreDependencies';
 import { BundledViewContentProvider } from '../common/webview/BundledViewContentProvider';
 
 import {
@@ -66,12 +61,9 @@ import type {
   ProcessRuntime,
   ProcessServices,
   ScopedFork,
-  StateStore,
 } from '@texra-ai/harness/host';
 
 const CHANNEL = 'ProgressViewProvider';
-
-type ProgressRunRevealResult = 'revealed' | 'missing';
 
 /** The toast that names a run when its progress view cannot be revealed:
  *  the run's agent, model and files. */
@@ -119,13 +111,14 @@ interface ViewParts {
   readonly bridge: SessionBridge;
   readonly snapshot: HostSnapshotSource;
   readonly runValidated: HostRunActions['runValidated'];
+  readonly runSetup: Effect.Effect<void, never, ProcessServices>;
+  readonly settingsRuns: GuiWindowSettingsRuns;
   /** Where this window's runs run: the service's session, or this one. */
   readonly runSession: Session;
   /** The view's scope: each surface's scope is a child of it, so the
    *  surfaces close first when it does. */
   readonly scope: Scope.Scope;
   readonly contentProvider: BundledViewContentProvider;
-  readonly globalState: StateStore;
   readonly runtime: ProcessRuntime;
   /** The view's run function: a surface's posts and messages start their
    *  work there, so a request a surface sent outlives that surface and
@@ -228,15 +221,16 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         roots,
         project: projectDisplayOf(roots.storage, roots.workspace),
         snapshot: {
-          fileOptions: () => workspaceFileOptions(roots.workspace),
           workspaceRoots: () =>
             vscode.workspace.workspaceFolders?.map((folder) => ({
               label: folder.name,
               value: folder.uri.fsPath,
             })) ?? [],
-          shows: { apiKeyBanner: true, gettingStarted: true },
-          // A failed probe reads as a missing tool, so the read never fails.
-          missingTools: () => checkCoreDependencies(),
+          shows: {
+            apiKeyBanner: true,
+            dependencyBanner: true,
+            gettingStarted: true,
+          },
         },
         // The tool-edit preview: staged copies of the original and proposed
         // content the diff editor shows, for each tool edit the session
@@ -256,7 +250,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         host: (parts) =>
           createExtensionHostRequests({
             ...parts,
-            runSession,
             roots,
             showBuilt,
             notices: createAgentPresentationHost(roots, runtime, showBuilt),
@@ -265,7 +258,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             extensionPath: context.extensionPath,
             extensionId: context.extension.id,
             ...settings,
-            showConnectModel: () => onView((view) => view.showConnectModel()),
             showProgressView: () => onView((view) => view.showProgressView()),
             revealProgress: (config) =>
               onView((view) => view.revealProgress(config)),
@@ -277,10 +269,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         bridge: gui.bridge,
         snapshot: gui.snapshot,
         runValidated: gui.runValidated,
+        runSetup: gui.runSetup,
+        settingsRuns: gui.settingsRuns,
         runSession,
         scope,
         contentProvider,
-        globalState: roots.globalState,
         runtime,
         fork,
       });
@@ -314,13 +307,16 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public readonly credentialUsable: Stream.Stream<boolean>;
   /** The window's launcher (`HostRunActions.runValidated`). */
   public readonly runValidated: HostRunActions['runValidated'];
+  /** The window's setup verb, for the command and the status pill. */
+  public readonly runSetup: Effect.Effect<void, never, ProcessServices>;
+  /** The settings view's verbs on this window's runs. */
+  public readonly settingsRuns: GuiWindowSettingsRuns;
   /** Where this window's runs run: the service's session, or this one. */
   private readonly runSession: Session;
 
   /** The sidebar's badge: the requests this window can answer. */
   private badge: vscode.ViewBadge | undefined;
 
-  private readonly globalState: StateStore;
   private readonly runtime: ProcessRuntime;
   private readonly fork: ScopedFork<ProcessServices>;
   private constructor(parts: ViewParts) {
@@ -330,8 +326,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.contentProvider = parts.contentProvider;
     this.credentialUsable = parts.snapshot.credentialUsable;
     this.runValidated = parts.runValidated;
+    this.runSetup = parts.runSetup;
+    this.settingsRuns = parts.settingsRuns;
     this.runSession = parts.runSession;
-    this.globalState = parts.globalState;
     this.runtime = parts.runtime;
     this.fork = parts.fork;
   }
@@ -388,13 +385,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       ),
     );
   });
-
-  /** Select `agent` in the launcher. */
-  public selectLauncherAgent(agent: string) {
-    return Effect.sync(() =>
-      this.bridge.surfaceAction({ kind: 'launch', patch: { agent } }),
-    );
-  }
 
   // --- Ports ---
 
@@ -646,9 +636,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     if (this.visibleSurface() !== undefined) return;
     // A failed reveal is a diagnostic, not non-delivery: fall through to the
     // visibility re-check and the toast (#10554).
-    yield* warnOnFailure(
-      this.showProgressView(),
-      'Failed to reveal the progress view',
+    yield* this.showProgressView().pipe(
+      Effect.ignore({
+        log: 'Warn',
+        message: 'Failed to reveal the progress view',
+      }),
     );
     // Delivery is the reveal actually becoming visible, not the reveal
     // command resolving.
@@ -662,23 +654,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       items: ['Show Tasks'],
     });
     if (!selection) return;
-    yield* warnOnFailure(
-      this.showProgressView(),
-      'Failed to retry the progress-view reveal',
+    yield* this.showProgressView().pipe(
+      Effect.ignore({
+        log: 'Warn',
+        message: 'Failed to retry the progress-view reveal',
+      }),
     );
-  });
-
-  /**
-   * "Connect a model" from outside the panel (the setup command, the status
-   * pill): bring the one credential prompt into view. A previous "Skip for
-   * now" is cleared so the card shows again on a first install; after a
-   * finished task the credential-lost banner stands in its place.
-   */
-  public readonly showConnectModel = Effect.fn(
-    'ProgressViewProvider.showConnectModel',
-  )({ self: this }, function* () {
-    yield* setOnboardingDeclined(this.globalState, false);
-    yield* this.showLauncher();
   });
 
   /** The New-task state in the sidebar (`texra.showMainView`). */
@@ -702,23 +683,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     if (newest !== undefined)
       this.bridge.surfaceAction({ kind: 'showSessions', runId: newest });
   });
-
-  public readonly revealRun = Effect.fn('ProgressViewProvider.revealRun')(
-    { self: this },
-    function* (
-      runId: RunId,
-    ): Effect.fn.Return<ProgressRunRevealResult, HostFailed> {
-      const view = this.runSession.view.current();
-      if (!view.runs.has(runId)) return 'missing' as const;
-      yield* this.showProgressView();
-      this.bridge.surfaceAction({ kind: 'select', runId });
-      return 'revealed' as const;
-    },
-  );
-
-  public runLabel(runId: RunId): string | undefined {
-    return this.runSession.view.current().runs.get(runId)?.label;
-  }
 
   public readonly popOutToEditor = Effect.fn(
     'ProgressViewProvider.popOutToEditor',

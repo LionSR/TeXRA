@@ -5,7 +5,6 @@
 
 import { html, nothing, type TemplateResult } from 'lit';
 import type { ClassInfo } from 'lit/directives/class-map.js';
-import { ifDefined } from 'lit/directives/if-defined.js';
 import { buildDetailsCard } from '@ui/progress/formatters/htmlBuilders';
 import type { IconName } from '@ui/wa/iconNames';
 import type { TranscriptRowBase } from '@texra-ai/harness/transcript';
@@ -45,7 +44,7 @@ export function buildToolUseDetails(opts: {
   // prettier-ignore
   return buildDetailsCard({
     summary: { iconName: opts.iconName, running: opts.running, label: opts.label, labelClass: 'tool-use-title', extraContent },
-    body: html`<div class="banner-content log-entry-content" data-log-id=${ifDefined(opts.row.id)}>${opts.content}</div>`,
+    body: html`<div class="banner-content log-entry-content">${opts.content}</div>`,
     open: opts.defaultOpen,
     classes,
   });

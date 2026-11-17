@@ -166,8 +166,7 @@ Where things go:
 - The extension's webview HTML provider is in
   `packages/extension/src/common/webview/`, not in the harness.
 - The transcript row model is `packages/harness/src/shared/transcript/`
-  (`@shared/transcript`); `packages/harness/src/transcript/` (`@transcript`) is
-  run-transcript persistence.
+  (`@shared/transcript`).
 
 Two wiring points fail silently: a new VS Code command is registered through
 `packages/extension/src/commands.ts`, and a new setting is declared in the
@@ -207,8 +206,8 @@ providers in `packages/extension/src/progressView/` and
 
 ## Agent system
 
-The harness's `packages/harness/src/agent/` holds the domain model (`core/`,
-see its README) and the runtime. A run is one Effect program
+The harness's `packages/harness/src/agent/` holds the runtime; the tool
+contract is `packages/harness/src/tools/core/`. A run is one Effect program
 (`runtime/loop/runLoop.ts`) that appends rows to the run history and continues
 from the `RunState` each append returns; resume is the same function over the
 same rows. There is no flow engine: do not add a node, a cursor, a services
@@ -325,7 +324,7 @@ not `Schema.optional(S)`: OpenAI-compatible APIs (DeepSeek, Kimi, …) require
 optional fields to be nullable. Test with `== null`, coalesce with
 `?? undefined`. Numbers are `Schema.Finite` or `Schema.Int`, never
 `Schema.Number` (its JSON Schema admits `"NaN"` and drops checks). The model's
-JSON Schema comes from `packages/harness/src/agent/core/tools/toolSchema.ts`.
+JSON Schema comes from `packages/harness/src/tools/core/toolSchema.ts`.
 Decode with `{ errors: 'all' }`. Union branches and defaults:
 `packages/harness/AGENTS.md` "Tool input schemas".
 

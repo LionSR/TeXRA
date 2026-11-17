@@ -3,10 +3,11 @@
  * `command` wrapper, so both the outbound and inbound message modules can
  * compose them without a circular import.
  */
-import { Schema } from 'effect';
+import { Schema, Struct } from 'effect';
 
 import { ScriptDeliverySummarySchema } from './scriptDelivery';
 import { StoredMediaSchema } from './storedTurn';
+import type { FinishedToolResult } from './toolResult';
 
 // ============================================================
 // Shared Field Schemas
@@ -123,6 +124,31 @@ export const ToolUseLogSchema = Schema.Struct({
   card: Schema.optional(ToolCardSchema),
 });
 export type ToolUseLog = typeof ToolUseLogSchema.Type;
+
+/**
+ * A card a run without a run history (an agent-CLI child's) closes or
+ * updates, as its `tool.end` stores it: what its tool last stated, in JSON,
+ * without the status the row states.
+ */
+export const ToolCardEndSchema = ToolUseLogSchema.mapFields(
+  Struct.omit(['status']),
+).mapFields(
+  Struct.assign({
+    input: Schema.optional(Schema.Json),
+    output: Schema.optional(Schema.Json),
+  }),
+);
+/** A `tool.end`'s card ({@link ToolCardEndSchema}). */
+export type ToolCardEnd = typeof ToolCardEndSchema.Type;
+
+/**
+ * A tool card as the transcript holds it: what its tool states and, for a
+ * call with a run history, the result its `tool.result` stored, which the
+ * card shows in place of the stated output, summary and error.
+ */
+export type ToolCallLog = ToolUseLog & {
+  readonly result?: FinishedToolResult;
+};
 
 /**
  * The flat, renderer-friendly tool-use view `normalizeToolUse`

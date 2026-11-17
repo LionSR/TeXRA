@@ -39,7 +39,7 @@ const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
     // The store's edge, not the view's: the view trails the log, and a
     // child it has not applied yet would be refused as no child at all.
     const facts = yield* (yield* SessionLog).facts(reference.runId);
-    if (facts?.parent?.id !== parentId) {
+    if (facts?.start?.parent?.id !== parentId) {
       return yield* Effect.fail(
         new Error(
           `Run ${reference.runId} is not a direct child of ${parentId}.`,

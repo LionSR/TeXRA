@@ -53,7 +53,7 @@ export class PluginsTab extends SignalWatcher(LitElement) {
       }
 
       .plugins-warnings {
-        color: var(--wa-color-danger-text);
+        color: var(--color-error);
         font-size: var(--font-size-sm);
         margin: 0 0 var(--wa-space-xs);
         overflow-wrap: anywhere;

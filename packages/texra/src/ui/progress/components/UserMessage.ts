@@ -94,10 +94,6 @@ export class UserMessage extends LitElement {
         opacity: 1;
       }
 
-      .user-message-copy.copy-success {
-        opacity: 1;
-      }
-
       .user-message-content {
         color: var(--wa-color-text-normal);
         white-space: pre-wrap;
@@ -111,13 +107,10 @@ export class UserMessage extends LitElement {
         max-height: min(45vh, 520px);
         overflow: auto;
         padding: var(--wa-space-xs);
-        background: var(
-          --wa-color-surface-lowered,
-          var(--wa-color-surface-default)
-        );
-        border-radius: var(--wa-border-radius-m, var(--border-radius-small));
+        background: var(--color-bg-secondary);
+        border-radius: var(--border-radius-medium);
         font-size: var(--font-size-sm);
-        line-height: 1.5;
+        line-height: var(--line-height-normal);
         white-space: normal;
       }
 
@@ -126,19 +119,13 @@ export class UserMessage extends LitElement {
       :host-context(.vscode-high-contrast) .user-message::part(base),
       :host-context(.vscode-high-contrast-light) .user-message::part(base) {
         background-color: var(--wa-color-surface-default);
-        border-color: var(
-          --vscode-contrastBorder,
-          var(--wa-color-surface-border)
-        );
+        border-color: var(--vscode-contrastBorder, var(--color-border));
       }
     `,
   ];
 
   /** Message text content */
   @property({ attribute: false }) text = '';
-
-  /** Log ID for tracking */
-  @property({ attribute: false }) logId = '';
 
   /** Message timestamp (Unix ms) */
   @property({ attribute: false }) timestamp = 0;
@@ -261,7 +248,6 @@ export class UserMessage extends LitElement {
             isStructuredDelivery
               ? html`<div
                   class="user-message-content markdown-content"
-                  data-log-id=${this.logId}
                   tabindex="0"
                   aria-label="User message details"
                 >
@@ -273,7 +259,6 @@ export class UserMessage extends LitElement {
                 </div>`
               : html`<div
                   class="user-message-content"
-                  data-log-id=${this.logId}
                   .textContent=${this.text}
                 ></div>`
           }

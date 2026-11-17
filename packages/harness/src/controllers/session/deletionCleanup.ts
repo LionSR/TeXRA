@@ -19,7 +19,7 @@ import {
 import { runNoun } from '@agent/runtime/forkRun';
 import { RunLive, type RunRegistry } from '@agent/runtime/runRegistry';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { withLogChannel } from '@logger/effectLog';
+import { logFailure, withLogChannel } from '@logger/effectLog';
 import {
   SessionRoots,
   StorageFs,
@@ -148,12 +148,10 @@ export const deletionCollector = Effect.fn('deletionCleanup.deletionCollector')(
       database.deletions
         .collect(marker, (ids) => removeRunDirectories(fs, storage, ids))
         .pipe(
-          Effect.catch((error) =>
-            Effect.logWarning(
+          Effect.catch(
+            logFailure(
+              CHANNEL,
               `Deletion cleanup remains pending for ${marker.aggregateId}`,
-            ).pipe(
-              Effect.annotateLogs({ data: error }),
-              withLogChannel(CHANNEL),
             ),
           ),
         );
@@ -167,12 +165,7 @@ export const deletionCollector = Effect.fn('deletionCleanup.deletionCollector')(
       for (const marker of yield* database.deletions.pending())
         if (marker.type === 'run.removed') yield* collect(marker);
     }).pipe(
-      Effect.catch((error) =>
-        Effect.logWarning('Deletion records could not be read.').pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
-        ),
-      ),
+      Effect.catch(logFailure(CHANNEL, 'Deletion records could not be read.')),
     );
     return {
       pending,

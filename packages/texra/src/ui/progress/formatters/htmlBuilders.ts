@@ -129,7 +129,7 @@ export function buildStatusBadge(
 
 /** Options for building a details summary header. */
 interface DetailsSummaryOptions {
-  /** wa-icon name (codicon-style aliases supported). */
+  /** The icon shown when not running. */
   iconName: IconName;
   /** Show a spinner in place of the icon. */
   running?: boolean;

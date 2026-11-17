@@ -14,7 +14,10 @@
  * written.
  */
 import type { Program } from '@texra-ai/harness/plugins';
-import type { DocumentsOutput } from '@texra/shared/plugins/documents';
+import {
+  MERGE_EDITED_FILE,
+  type DocumentsOutput,
+} from '@texra/shared/plugins/documents';
 import { DOCUMENT_TASK_RESULT } from '@texra/tools/documents/documentResult';
 
 /** What every program's run is offered: the child agent and the document
@@ -328,9 +331,12 @@ export const THEORY_PROGRAMS = Object.freeze({
   apply: program(
     'Implement the fixes that inline annotations from an earlier review ask for.',
   ),
-  merge: program(
-    'Merge a partial edit back into the full original document. Started by the Merge action, which supplies the edited file.',
-  ),
+  merge: Object.freeze({
+    ...program(
+      'Merge a partial edit (`args.editedFile`) back into the full original document, its one input. Started by the Merge action, which supplies the edited file.',
+    ),
+    fileArgs: Object.freeze([MERGE_EDITED_FILE]),
+  }),
   transcribe: program(
     'Turn `mediaFiles` (handwriting or scans, or audio) into a LaTeX document.',
     ['transcript.tex'],

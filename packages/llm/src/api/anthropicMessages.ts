@@ -430,24 +430,9 @@ function anthropicWire() {
           usage: canonicalUsage(usage),
         });
       stopped = true;
-      const refusal = stop.stop_details;
       return [
         { kind: 'usage', usage: canonicalUsage(usage) },
-        {
-          kind: 'finish',
-          finish: {
-            finishReason: FINISH[reason],
-            ...(refusal === undefined
-              ? {}
-              : {
-                  refusalEvidence: refusal && {
-                    kind: 'anthropic-refusal',
-                    category: refusal.category,
-                    explanation: refusal.explanation,
-                  },
-                }),
-          },
-        },
+        { kind: 'finish', finish: { finishReason: FINISH[reason] } },
       ];
     }
     if (stop.stop_reason != null)

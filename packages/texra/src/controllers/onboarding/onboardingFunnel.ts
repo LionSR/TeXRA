@@ -19,22 +19,21 @@
  */
 
 import { Effect, Schema, type Scope, Stream } from 'effect';
-
-import { Settings, withLogChannel } from '@texra-ai/harness/plugins';
 import {
+  decodingDefault,
   agentName,
   type SessionView,
   type StateKey,
 } from '@texra-ai/harness/schemas';
+
+import { Settings, withLogChannel } from '@texra-ai/harness/plugins';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
 import type { Session } from '@texra-ai/harness';
 import type { StateStore, StateWriteFailed } from '@texra-ai/harness/host';
 
 /** An onboarding flag: off until something sets it. */
-const OnboardingFlagSchema = Schema.Boolean.pipe(
-  Schema.withDecodingDefault(Effect.succeed(false)),
-);
+const OnboardingFlagSchema = decodingDefault(Schema.Boolean, false);
 
 /** "Skip for now" on the State 0 picker. The key keeps the CLI's spelling,
  *  under which it was first stored. */

@@ -1,16 +1,10 @@
 /** Completed-run display reads, keyed by run id. */
-import { Effect, Predicate, Result, Schema, absurd } from 'effect';
-import type { ExportNode } from '@agent/export/schemas';
-import { formatToolResultAsText } from '@agent/runtime/run/toolResultText';
-import { stringifyConversationValue } from '@agent/storage/conversationFormat';
+import { Effect, absurd } from 'effect';
+import { formatToolResultAsText } from '@shared/toolResultText';
+import { stringifyConversationValue } from '@shared/transcript/conversationFormat';
 
 import { Settings, type ConfigProvider } from '@shared/config/settings';
-import {
-  TOOL_CALL_STATUS,
-  ToolResultSchema,
-  type RunId,
-  type ToolUseLog,
-} from '@shared/schemas';
+import type { RunId, ToolCallLog, ExportNode } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
 import type { TranscriptView } from '@shared/session/sessionView';
 import { buildRunTranscript } from '@shared/session/transcriptUpdate';
@@ -23,33 +17,25 @@ import { DEBUG_MODE_SETTING } from '@shared/state/stateSettings';
 
 /**
  * A call's `tool-result` node, when it has a result: the text the model read
- * and the structured `value` the call recorded, if any. Deliberate non-goal
- * (#7508): image blocks inside a tool result are not reconstructed here.
- * `ToolUseLog.output` carries either historical display text or the
- * attachment-stripped `ToolResult` fields; attachment bytes never reach the
- * transcript row.
+ * and the structured `value` the call recorded, if any, from its stored
+ * result; for a card without one (an agent-CLI child's), what its tool
+ * stated. Deliberate non-goal (#7508): image blocks inside a tool result are
+ * not reconstructed here; attachment bytes never reach the transcript row.
  */
-function toolResultNodes(tool: ToolUseLog): ExportNode[] {
+function toolResultNodes(tool: ToolCallLog): ExportNode[] {
   const node = (text: string): ExportNode[] => [{ kind: 'tool-result', text }];
+  const { result } = tool;
+  if (result !== undefined)
+    return [
+      {
+        kind: 'tool-result',
+        text: formatToolResultAsText(result),
+        ...(result.status === 'executed' &&
+          result.value !== undefined && { value: result.value }),
+      },
+    ];
   if (tool.error !== undefined) return node(tool.error);
   if (typeof tool.output === 'string') return node(tool.output);
-  if (Predicate.isObject(tool.output)) {
-    const result = Schema.decodeUnknownResult(ToolResultSchema)({
-      ...tool.output,
-      status: tool.status === TOOL_CALL_STATUS.FAILED ? 'error' : 'executed',
-    });
-    if (Result.isSuccess(result)) {
-      const decoded = result.success;
-      return [
-        {
-          kind: 'tool-result',
-          text: formatToolResultAsText(decoded),
-          ...(decoded.status === 'executed' &&
-            decoded.value !== undefined && { value: decoded.value }),
-        },
-      ];
-    }
-  }
   if (tool.output !== undefined)
     return node(stringifyConversationValue(tool.output));
   return tool.summary === undefined ? [] : node(tool.summary);

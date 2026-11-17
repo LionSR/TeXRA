@@ -30,6 +30,7 @@ import {
   meansAbsent,
   entryTypeIn,
   readDirectoryTypedTolerant,
+  readNormalizedFile,
 } from '@texra-ai/harness/node';
 import { onAppSignal } from '@texra-ai/harness/host';
 import type { AppSignals } from '@texra-ai/harness/plugins';
@@ -323,25 +324,13 @@ export function createDesktopWorkspaceIpc(
       Effect.map((entries): HostOutcome => ({ kind: 'entries', entries })),
     );
 
-  // The editor's buffers are LF-only, as every read of a workspace file
-  // through the shared facade this replaces already was. Decoding the bytes
-  // ourselves keeps a UTF-8 BOM, which `readFileString`'s decoder strips and
-  // the editor's verbatim save would otherwise delete.
-  const editorText = (fs: FileSystem.FileSystem, absolutePath: string) =>
-    fs
-      .readFile(absolutePath)
-      .pipe(
-        Effect.map((bytes) =>
-          Buffer.from(bytes).toString('utf8').replaceAll('\r\n', '\n'),
-        ),
-      );
-
   const readFile = Effect.fn('readFile')(function* (path: string) {
     const fs = yield* FileSystem.FileSystem;
     const absolutePath = yield* isAgentDocumentTarget(path)
       ? resolveAgentDocument(path, false)
       : resolveWorkspacePath(options.workspaceRoot, path);
-    const contents = yield* editorText(fs, absolutePath);
+    // LF-only with a UTF-8 BOM kept, so the editor's verbatim save keeps it.
+    const contents = yield* readNormalizedFile(fs, absolutePath);
     return { kind: 'contents', contents } satisfies HostOutcome;
   });
 
@@ -364,7 +353,7 @@ export function createDesktopWorkspaceIpc(
         : resolveWorkspaceWritePath(options.workspaceRoot, path);
       return yield* Effect.gen(function* () {
         if (base !== null) {
-          const onDisk = yield* editorText(fs, absolutePath).pipe(
+          const onDisk = yield* readNormalizedFile(fs, absolutePath).pipe(
             Effect.catchIf(meansAbsent, () => Effect.succeed(null)),
           );
           if (onDisk !== null && onDisk !== base)

@@ -15,10 +15,8 @@ import { withLogChannel } from '@logger/effectLog';
 import {
   RETIRED_PLUGIN_FACTS,
   RunIdSchema,
-  toJsonValue,
   TOOL_CALL_STATUS,
   type DisplayRow,
-  type FileListEntry,
   type UnreadableRun,
   type RunId,
   type SessionRow,
@@ -362,8 +360,8 @@ const isCardRow = (
 /**
  * The tool card row a call row shows, on that row's envelope, or none: a
  * `tool.intent` opens its call's card (`tool.start`), and a `tool.result`
- * that names a card closes it (`tool.end`) with the call's output and the
- * files it edited. A display read returns it in the call row's place, so a
+ * that names a card closes it (`tool.end`) with the call's stored result.
+ * A display read returns it in the call row's place, so a
  * card is never stored beside the call it shows and each row shows at most
  * one.
  */
@@ -394,23 +392,6 @@ export function callCard(row: SessionRow): readonly DisplayRow[] {
   }
   const { logId, result } = row.payload;
   if (logId === null) return [];
-  const edited =
-    result.status === 'executed'
-      ? (result.edits ?? []).flatMap(({ path }) => (path ? [path] : []))
-      : [];
-  const files: FileListEntry[] = [...new Set(edited)].map((path) => ({
-    path,
-    ok: true,
-    source: 'tool',
-    sourceDisplay: 'Tool use',
-  }));
-  const { status: _status, ...output } = result;
-  // A stored result's optional keys may read `undefined`: the card's result
-  // is JSON, so they are dropped.
-  const json = toJsonValue({
-    ...(Object.keys(output).length > 0 ? { output } : {}),
-    ...(files.length > 0 ? { files } : {}),
-  });
   return [
     {
       ...envelope,
@@ -420,8 +401,7 @@ export function callCard(row: SessionRow): readonly DisplayRow[] {
         result.status === 'error'
           ? TOOL_CALL_STATUS.FAILED
           : TOOL_CALL_STATUS.COMPLETED,
-      result: json,
-      ...(files.length > 0 ? { files } : {}),
+      result,
     },
   ];
 }

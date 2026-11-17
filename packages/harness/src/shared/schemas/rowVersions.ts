@@ -139,7 +139,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // block (an earlier build's team and output fields would be dropped).
   // v8: a plugin's script is a `program` named by its registration, with
   // its `args`; no `recipe` kind with its source, block and options.
-  'run.config': { version: 8, listing: 'own' },
+  // v9: no `editedFile`: the merge program reads it from its `args` (an
+  // earlier build would resume a merge without the edited file).
+  'run.config': { version: 9, listing: 'own' },
   // v2: no `shutdown` reason: a process that exits writes nothing for its
   // runs (an earlier build's shutdown stop would fail as damaged).
   'run.stop': { version: 2, listing: 'own' },
@@ -270,7 +272,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // no context-management row has the `compaction` action (an earlier
   // build's would fail as damaged, and its activity would read with
   // nothing freed).
-  log: { version: 11, listing: 'none' },
+  // v12: a file list's entry has no `source`, which nothing read beside the
+  // `sourceDisplay` it repeated (an earlier build's would be silently
+  // stripped).
+  log: { version: 12, listing: 'none' },
   // v2: no `phase` kind and no `index`/`total` (an earlier build's script
   // phase stage would fail its run as damaged rather than read as that
   // build's).
@@ -285,7 +290,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // title), not its `phase` (an earlier build's title would be silently
   // dropped).
   'tool.start': { version: 4, listing: 'none' },
-  'tool.end': { ...V1, listing: 'none' },
+  // v2: an agent-CLI card states what its tool last said as a typed `log`,
+  // not as an untyped `result` (an earlier build's card would close with no
+  // output, summary or error).
+  'tool.end': { version: 2, listing: 'none' },
   // v2: the counts carry `TurnUsage`'s names (`cachedInputTokens`,
   // `cacheWriteTokens`, `toolUsePromptTokens`), and `elapsedTime` is gone (an
   // earlier build's cache counts would read as absent).
@@ -360,7 +368,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v20: a completed turn has no `kind` or `modelFingerprint`, and a
   // Responses anchor no `kind` (an earlier build reads this build's turn as
   // damaged without them).
-  'model.message': { version: 20, listing: 'none' },
+  // v21: a completed turn has no `finishEvidence` or `refusalEvidence`,
+  // which nothing read (an earlier build's would be silently stripped).
+  'model.message': { version: 21, listing: 'none' },
   // v2: the causes are `compaction` and `fork` alone (an earlier build's edit
   // of another cause would fail its run as damaged rather than read as that
   // build's).
@@ -395,7 +405,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v5: the result names the card it closes (`logId`), which a display read
   // shows as the call's `tool.end`; the run loop stores no card row beside
   // it (an earlier build's row would close no card).
-  'tool.result': { version: 5, listing: 'none' },
+  // v6: no `attachmentSummary`, which nothing wrote or read: the summary of
+  // a call's attachments is composed where its text is (an earlier build's
+  // row holding one would have it silently dropped).
+  'tool.result': { version: 6, listing: 'none' },
   // v2: no `continuation`: goal mode is a script, and a waiting run never
   // continues itself (an earlier build's row names a plugin continuation this
   // build has none of).

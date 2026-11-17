@@ -148,7 +148,7 @@ const JOURNEYS = {
     check(dir, records) {
       const value = records
         .filter((r) => r.kind === 'progress' && r.event === 'tool.end')
-        .map((r) => r.payload.result?.output?.value)
+        .map((r) => r.payload.result?.value)
         .find((returned) => returned?.corrected !== undefined);
       assert(value, 'the script returned no { polished, corrected }');
       // Run storage paths, compared below `executions/`: macOS spells the

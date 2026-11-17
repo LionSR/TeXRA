@@ -11,13 +11,10 @@
  * where a `Map` serializes to `{}`, so the persisted form beside it is a
  * schema whose maps are entry arrays, rebuilt into `Map`s at load.
  */
-import { Effect, Option, Schema, SchemaGetter, Struct } from 'effect';
-
-import { modelRefOf } from '@texra-ai/llm';
-import { DEFAULT_AGENT_MODEL } from '@texra/model/curatedModels';
-
+import { Option, Schema, SchemaGetter, Struct } from 'effect';
 import {
-  NullableFileFieldsSchema,
+  decodingDefault,
+  FileFieldsSchema,
   RunIdSchema,
   isModelOptionAvailable,
   type RunId,
@@ -27,6 +24,10 @@ import {
   type RunView,
   type StoredMediaSchema,
 } from '@texra-ai/harness/schemas';
+
+import { modelRefOf } from '@texra-ai/llm';
+import { DEFAULT_AGENT_MODEL } from '@texra/model/curatedModels';
+
 import type { BridgeError } from './bridgeErrors';
 import { InquiryDraftSchema } from '@texra/shared/plugins/externalInquiry';
 import { markShownRunSeen } from './unseenRuns';
@@ -37,7 +38,7 @@ import type { HostSnapshot } from './hostSnapshot';
 const LaunchTargetSchema = Schema.Literals(['agent', 'team']);
 
 /** The launcher's file lists; an absent or null `editedFile` reads ''. */
-const UIFileFieldsSchema = NullableFileFieldsSchema.mapFields(
+const UIFileFieldsSchema = FileFieldsSchema.mapFields(
   Struct.assign({
     editedFile: Schema.optional(Schema.NullOr(Schema.String)).pipe(
       Schema.decodeTo(Schema.String, {
@@ -58,33 +59,18 @@ const UIFileFieldsSchema = NullableFileFieldsSchema.mapFields(
  */
 export const LaunchSurfaceSchema = UIFileFieldsSchema.mapFields(
   Struct.assign({
-    launchTarget: LaunchTargetSchema.pipe(
-      Schema.withDecodingDefault(Effect.succeed('agent')),
-    ),
-    selectedTeamId: Schema.String.pipe(
-      Schema.withDecodingDefault(Effect.succeed('')),
-    ),
-    workingDirectory: Schema.String.pipe(
-      Schema.withDecodingDefault(Effect.succeed('')),
-    ),
-    agent: Schema.String.pipe(
-      Schema.withDecodingDefault(Effect.succeed('orchestrator')),
-    ),
-    model: Schema.String.pipe(
-      Schema.withDecodingDefault(Effect.succeed(DEFAULT_AGENT_MODEL)),
-    ),
-    commit: Schema.String.pipe(
-      Schema.withDecodingDefault(Effect.succeed('HEAD')),
-    ),
-    instruction: Schema.String.pipe(
-      Schema.withDecodingDefault(Effect.succeed('')),
-    ),
-    baseFile: Schema.String.pipe(
-      Schema.withDecodingDefault(Effect.succeed('')),
-    ),
+    launchTarget: decodingDefault(LaunchTargetSchema, 'agent'),
+    selectedTeamId: decodingDefault(Schema.String, ''),
+    workingDirectory: decodingDefault(Schema.String, ''),
+    agent: decodingDefault(Schema.String, 'orchestrator'),
+    model: decodingDefault(Schema.String, DEFAULT_AGENT_MODEL),
+    commit: decodingDefault(Schema.String, 'HEAD'),
+    instruction: decodingDefault(Schema.String, ''),
+    baseFile: decodingDefault(Schema.String, ''),
     /** Per-task approval, applied at launch by `launchApprovalOptions`. */
-    approval: Schema.Literals(['policy', 'autoApprove']).pipe(
-      Schema.withDecodingDefault(Effect.succeed('policy')),
+    approval: decodingDefault(
+      Schema.Literals(['policy', 'autoApprove']),
+      'policy',
     ),
   }),
 );
@@ -250,9 +236,7 @@ export interface Surface {
 }
 
 function entries<K extends Schema.Top, V extends Schema.Top>(key: K, value: V) {
-  return Schema.Array(Schema.Tuple([key, value])).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  );
+  return decodingDefault(Schema.Array(Schema.Tuple([key, value])), []);
 }
 
 /**
@@ -286,31 +270,24 @@ export type RequestDraft = typeof RequestDraftSchema.Type;
  * session's whole record to these defaults.
  */
 export const PersistedSurfaceSchema = Schema.Struct({
-  selected: Schema.NullOr(RunIdSchema).pipe(
-    Schema.withDecodingDefault(Effect.succeed(null)),
-  ),
-  launch: LaunchSurfaceSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed({})),
-  ),
+  selected: decodingDefault(Schema.NullOr(RunIdSchema), null),
+  launch: decodingDefault(LaunchSurfaceSchema, {}),
   runs: entries(
     RunIdSchema,
     Schema.Struct({
       /** Text only; image bytes are not persisted. */
-      draft: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
+      draft: decodingDefault(Schema.String, ''),
       expanded: Schema.optionalKey(Schema.Boolean),
       groups: entries(Schema.String, Schema.Boolean),
       seen: Schema.optionalKey(Schema.Number),
     }),
   ),
   requestDrafts: entries(Schema.String, RequestDraftSchema),
-  drawerOpen: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
-  storageHintDismissed: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
-  workbench: Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown)).pipe(
-    Schema.withDecodingDefault(Effect.succeed(null)),
+  drawerOpen: decodingDefault(Schema.Boolean, false),
+  storageHintDismissed: decodingDefault(Schema.Boolean, false),
+  workbench: decodingDefault(
+    Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown)),
+    null,
   ),
 });
 type PersistedSurface = typeof PersistedSurfaceSchema.Type;

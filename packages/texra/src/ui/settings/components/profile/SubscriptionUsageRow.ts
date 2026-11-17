@@ -57,7 +57,7 @@ export class SubscriptionUsageRow extends LitElement {
         display: grid;
         gap: var(--wa-space-xs);
         padding: var(--wa-space-xs);
-        background-color: var(--wa-color-surface-lowered);
+        background-color: var(--color-bg-secondary);
         border-radius: var(--border-radius);
       }
 

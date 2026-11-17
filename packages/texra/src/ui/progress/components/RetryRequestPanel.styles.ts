@@ -31,7 +31,7 @@ export const retryRequestPanelStyles: CSSResult = css`
     min-height: var(--height-control-compact);
     padding: 0;
     box-sizing: border-box;
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
   }
 
   .retry-request__error-details::part(content) {
@@ -40,7 +40,7 @@ export const retryRequestPanelStyles: CSSResult = css`
 
   .retry-request__error-summary {
     cursor: pointer;
-    color: var(--wa-color-text-quiet);
+    color: var(--color-text-secondary);
     display: flex;
     align-items: center;
     gap: var(--wa-space-3xs);

@@ -18,11 +18,22 @@ import {
 } from '@cli/tui/ui/glyphs';
 import type { RunTone } from '@ui/copy/runStatus';
 
+/** The colours a tone can paint: the palette's status roles. */
+type ToneColor =
+  | typeof COLOR_HINT
+  | typeof COLOR_SUCCESS
+  | typeof COLOR_ERROR
+  | typeof COLOR_WARNING
+  | typeof COLOR_BORDER;
+
+interface TonePaint {
+  readonly marker: string;
+  readonly color: ToneColor;
+}
+
 /** How the terminal paints a tone: copy decides a status's tone (`RunTone`),
  *  and every TUI row that shows a status takes its marker and colour here. */
-export const TONE_PAINT: Readonly<
-  Record<RunTone, { readonly marker: string; readonly color: string }>
-> = Object.freeze(
+export const TONE_PAINT: Readonly<Record<RunTone, TonePaint>> = Object.freeze(
   Rec.map(
     {
       running: { marker: STATUS_DOT, color: COLOR_HINT },
@@ -30,7 +41,7 @@ export const TONE_PAINT: Readonly<
       danger: { marker: CROSS, color: COLOR_ERROR },
       warning: { marker: WARNING, color: COLOR_WARNING },
       neutral: { marker: SKIP_CIRCLE, color: COLOR_BORDER },
-    },
-    (paint) => Object.freeze(paint),
+    } satisfies Record<RunTone, TonePaint>,
+    (paint): TonePaint => Object.freeze(paint),
   ),
 );

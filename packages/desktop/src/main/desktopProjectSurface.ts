@@ -142,27 +142,14 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
             projects.active().root ?? app.getPath('home'),
             ['openDirectory', 'createDirectory'],
           ),
-        // Applying a team sends its root to this project's launcher only.
-        selectLauncherAgent: (agent) =>
-          Effect.sync(() => {
-            const binding = bindings.get(project.key);
-            if (!binding || binding !== documentBinding) return;
-            binding.bridge.surfaceAction({ kind: 'launch', patch: { agent } });
-          }),
-        // Selection is the surface's: a settings jump asks the shown
-        // project's surface to select the run, and reports a run the view no
-        // longer holds as missing.
-        revealRun: (runId) =>
-          Effect.sync(() => {
-            const binding = bindings.active();
-            if (!binding) return 'unavailable' as const;
-            const view = binding.project.session.view.current();
-            if (!view.runs.has(runId)) return 'missing' as const;
-            binding.bridge.surfaceAction({ kind: 'select', runId });
-            return 'revealed' as const;
-          }),
-        runLabel: (runId) =>
-          projects.active().session.view.current().runs.get(runId)?.label,
+        // The run verbs of the project these settings belong to, even while
+        // the window is switching to another; a released binding's bridge
+        // has no port left, so a late verb reaches no surface.
+        ...(documentBinding?.settingsRuns ?? {
+          selectLauncherAgent: () => Effect.void,
+          revealRun: () => Effect.succeed('unavailable' as const),
+          runLabel: () => undefined,
+        }),
         runInTerminal: (_name, command) =>
           Effect.sync(() => {
             if (bindings.get(project.key) !== documentBinding) return;

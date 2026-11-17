@@ -103,7 +103,7 @@ describe('createTestRunTrace script stage across a stop and resume', () => {
     // The card the run's end cut is running again, as its stage is.
     const card = transcript().rows.find((row) => row.id === 'call-1');
     expect(card).toMatchObject({
-      toolUse: { status: 'in_progress' },
+      model: { status: 'in_progress' },
       attempt: 2,
     });
     expect(card).not.toHaveProperty('cutByRunEnd');

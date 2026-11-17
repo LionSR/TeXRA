@@ -6,7 +6,6 @@
 import { Context, Effect, Result, Schema } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 
-import type { RunRecord } from '@agent/core/definition/RunRecord';
 import { Inbox } from '@agent/followUp/Inbox';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { consumedRows } from '@agent/runtime/loop/rows';
@@ -22,6 +21,7 @@ import {
   type RunId,
   type RunOutcome,
   type RunStopReason,
+  type RunRecord,
 } from '@shared/schemas';
 import {
   Approvals,
@@ -217,7 +217,10 @@ const replyDelivery = Effect.fn('replyDelivery')(function* (
   const input = yield* Effect.result(inbox.read(runId));
   if (Result.isFailure(input))
     return yield* undelivered('its own input cannot be read', input.failure);
-  const recipients = reportRecipients(input.success.asked, facts.parent);
+  const recipients = reportRecipients(
+    input.success.asked,
+    facts.start?.parent ?? null,
+  );
   const item = {
     delivery,
     from: { kind: 'run', runId } as const,
@@ -250,7 +253,7 @@ export const lastReportRecipients = Effect.fn('lastReportRecipients')(
     const { atEnd } = (yield* (yield* Inbox).read(runId)).asked;
     if (atEnd === null) return [];
     const facts = yield* (yield* SessionLog).facts(runId);
-    return reportRecipients(atEnd, facts?.parent ?? null);
+    return reportRecipients(atEnd, facts?.start?.parent ?? null);
   },
 );
 
@@ -286,7 +289,9 @@ const endIn = Effect.fn('endIn')(function* (
   }
   const end = runEndDraft(runId, { outcome, error, output: input.output });
   const unapplied =
-    facts.parent === null ? (yield* (yield* Inbox).read(runId)).followUps : [];
+    facts.start?.parent == null
+      ? (yield* (yield* Inbox).read(runId)).followUps
+      : [];
   const target = runId;
   const report =
     input.report == null

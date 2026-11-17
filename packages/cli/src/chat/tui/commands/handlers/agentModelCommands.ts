@@ -3,7 +3,7 @@ import { Effect, Predicate } from 'effect';
 import { agentName as bareAgentName } from '@texra-ai/harness/schemas';
 import { resolveCliRunAgent } from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/platform/cliContext';
-import { readCliTeamName } from '@cli/runtime/cliTeams';
+import { readCliTeam } from '@cli/runtime/cliTeams';
 
 import {
   patchSessionMeta,
@@ -57,8 +57,7 @@ export const applyInitialCliAgentSelection = Effect.fn(
   patchSessionMeta({
     agent: nextAgent,
     agentSource: entry.source,
-    teamName: undefined,
-    cliTeamId: undefined,
+    team: undefined,
     delegationAgentScope: undefined,
   });
   appendLocalNotice(`Root agent set to ${nextAgent}.`);
@@ -97,20 +96,19 @@ export const applyCliTeamSelection = Effect.fn('applyCliTeamSelection')(
       setTransientNotice(fixedTeamNotice);
       return;
     }
-    const teamName = yield* readCliTeamName(
+    const team = yield* readCliTeam(
       context.runSession.roots.repoState,
       fields.launch.teamId,
     );
     patchSessionMeta({
       agent: fields.agent,
       agentSource: entry.source,
-      teamName,
-      cliTeamId: fields.launch.teamId,
+      team,
       delegationAgentScope: fields.delegationAgentScope,
     });
     appendLocalNotice(
       [
-        `Team set to ${teamName ?? teamId}; ${bareAgentName(fields.agent)} leads it.`,
+        `Team set to ${team?.name ?? teamId}; ${bareAgentName(fields.agent)} leads it.`,
         resolution.missingNames.length > 0
           ? `Unavailable members: ${resolution.missingNames.join(', ')}.`
           : undefined,

@@ -18,9 +18,8 @@ import {
   type MediaAttachmentKind,
   type LogLevel,
   type MessageType,
-  type NormalizedToolUse,
   type ResponseCut,
-  type ToolUseLog,
+  type ToolCallLog,
   type ScriptDeliverySummary,
   type StoredMedia,
 } from '@shared/schemas';
@@ -81,9 +80,6 @@ export interface StreamingTextRow extends TranscriptRowBase {
   readonly text: TranscriptText;
   /** True while the producer is still appending to `text`. */
   readonly streaming: boolean;
-  /** True while the text hides an embedded subagent block that has opened but
-   *  not closed. Blocks result: the visible text is still going to move. */
-  readonly pendingEmbeddedFollowup?: boolean;
   /** The limit that ended an assistant's answer early, from its
    *  `response.finalized` row; each reader words it. */
   readonly cut?: ResponseCut;
@@ -146,11 +142,11 @@ export interface ErrorRow extends TranscriptRowBase {
 
 export interface ToolRow extends TranscriptRowBase {
   readonly kind: 'tool';
-  readonly toolUse: NormalizedToolUse;
+  /** What a host paints for the call, live output included. */
   readonly model: ToolRowModel;
-  /** The decoded durable payload the row was built from, without live
-   *  output: what a conversation export formats. */
-  readonly log: ToolUseLog;
+  /** The card the row was built from, without live output: what a
+   *  conversation export formats. */
+  readonly log: ToolCallLog;
   /** A script's call's section, as its card's `tool.start` names it. */
   readonly section?: string;
   /** The call's attempt, from the second on (its card's `tool.start`). */
@@ -284,13 +280,13 @@ export function isFinalRow(row: TranscriptRow, hasLaterRow: boolean): boolean {
   if (isSelfFinalRow(row)) return true;
   switch (row.kind) {
     case 'assistant':
-      return !row.pendingEmbeddedFollowup && hasLaterRow;
+      return hasLaterRow;
     case 'thinking':
       return !row.streaming && hasLaterRow;
     case 'tool':
       return (
-        row.toolUse.status === TOOL_CALL_STATUS.COMPLETED ||
-        row.toolUse.status === TOOL_CALL_STATUS.FAILED
+        row.model.status === TOOL_CALL_STATUS.COMPLETED ||
+        row.model.status === TOOL_CALL_STATUS.FAILED
       );
     case 'compactionActivity':
       return row.block.finalized;
