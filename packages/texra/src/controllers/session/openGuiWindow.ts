@@ -110,7 +110,7 @@ import {
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@texra/controllers/onboarding/onboardingFunnel';
-import type { WindowSetupLaunch } from '@texra/controllers/onboarding/setupLaunch';
+import { openWindowSetup } from '@texra/controllers/onboarding/setupLaunch';
 import type { SettingsHostBindings } from '@texra/controllers/settingsView/settingsHostBindings';
 import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
 
@@ -192,12 +192,10 @@ export interface SharedHostCommandBindings {
   readonly openInstallGuide: HostVerb<void>;
   /** The onboarding card's verbs a host performs. "Set an API key" is
    *  {@link SharedHostCommandBindings.setApiKey}, the same verb the banner
-   *  takes, and the two skips write the funnel's flags in the body below. */
+   *  takes, the two skips write the funnel's flags and Run Setup launches
+   *  the window's setup conversation in the body below. */
   readonly onboarding: {
     readonly signInChatGpt: HostVerb<void>;
-    /** Launch this window's project's setup conversation through the
-     *  window's own launch path. */
-    runSetup(launch: WindowSetupLaunch): HostVerb<void>;
     readonly openGettingStarted: HostVerb<void>;
   };
 }
@@ -424,6 +422,29 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     notify: host.notify,
   });
   const { bindings } = host;
+  const runSetup = yield* openWindowSetup({
+    session,
+    roots,
+    start: runActions.runValidated,
+    present,
+    notify: host.notify,
+    showRun: (runId) =>
+      host.runs
+        .showRunView()
+        .pipe(
+          Effect.andThen(
+            Effect.sync(() => bridge.surfaceAction({ kind: 'select', runId })),
+          ),
+        ),
+    // A previous "Skip for now" is cleared so the card shows again; after a
+    // finished task the credential-lost banner stands in its place.
+    showConnectModel: setOnboardingDeclined(roots.globalState, false).pipe(
+      Effect.andThen(host.runs.showRunView()),
+      Effect.andThen(
+        Effect.sync(() => bridge.surfaceAction({ kind: 'selectNew' })),
+      ),
+    ),
+  });
   const latexdiff = latexdiffVerbs({
     host: bindings.latexdiff,
     roots,
@@ -695,12 +716,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
               yield* setOnboardingDeclined(roots.globalState, true);
               return done;
             case 'runSetup':
-              yield* bindings.onboarding.runSetup({
-                session,
-                roots,
-                runValidated: runActions.runValidated,
-                present,
-              });
+              yield* runSetup;
               return done;
             case 'skipSetup':
               yield* setFirstRunDone(roots.globalState);
@@ -770,6 +786,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     snapshot,
     present,
     runValidated: runActions.runValidated,
+    runSetup,
     settingsRuns,
   };
 });

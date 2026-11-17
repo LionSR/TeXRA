@@ -43,7 +43,6 @@ import { DesktopToolEditApprovalHost } from './desktopToolEditApproval.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 import { desktopSpawner, type DesktopSpawn } from './desktopWindows.js';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
-import type { WindowOnboarding } from './desktopWindowOnboarding.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type {
   DesktopProject,
@@ -88,7 +87,6 @@ interface ProjectBindingsOptions {
   readonly projects: DesktopProjectRegistry;
   /** Recording has one process owner, shared by every project and window. */
   readonly draftRequests: HostDraftRequests;
-  readonly onboarding: WindowOnboarding;
   /** The window's settings surface, built after these bindings and absent
    *  while the window switches projects. */
   readonly settings: () => DesktopSettingsIpc | undefined;
@@ -280,7 +278,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
             files,
             workspaceFile: workspace.file,
             postToRenderer: host.post,
-            onboarding: options.onboarding,
             settings: options.settings,
             openExternalUrl: host.openExternalUrl,
           }),

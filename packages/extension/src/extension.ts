@@ -510,7 +510,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     runtime,
     fork,
     roots,
-    session,
   );
   yield* Deferred.succeed(settingsView, settingsViewProvider);
   registerWalkthroughWorkspaceAction(context, (command) =>
