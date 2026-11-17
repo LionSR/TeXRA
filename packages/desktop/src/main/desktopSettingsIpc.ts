@@ -5,7 +5,6 @@ import {
   type SubscriptionDeviceCodePrompt,
 } from '@texra-ai/llm/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { onAppSignal } from '@texra-ai/harness/host';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import { SettingsViewInboundMessageSchema } from '@texra/shared/settingsView/settingsViewMessages';
 import { makeSettingsViewBody } from '@texra/controllers/settingsView/settingsViewBody';
@@ -14,7 +13,6 @@ import {
   subscriptionProvider,
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
-import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness/host';
@@ -64,12 +62,10 @@ export interface DesktopSettingsIpc extends Pick<
 }
 
 /**
- * The settings surface of one project, with its app-signal subscriptions
- * forked into the caller's scope. They belong to the window's project
- * binding, not to the process: the window opens again on macOS dock
- * reactivation, so a listener that outlived its scope would post to a
- * destroyed window's renderer and, for `githubTokenInvalid`, raise a dialog
- * against a `BrowserWindow` that no longer exists.
+ * The settings surface of one project, with the body's follower forked into
+ * the caller's scope. It belongs to the window's project binding, not to the
+ * process: the window opens again on macOS dock reactivation, so a follower
+ * that outlived its scope would post to a destroyed window's renderer.
  */
 export function createDesktopSettingsIpc(
   options: DesktopSettingsIpcOptions,
@@ -153,31 +149,13 @@ export function createDesktopSettingsIpc(
       },
     });
 
-    const subscriptions: Array<Effect.Effect<void, never, ProcessServices>> = [
-      body.follow,
-      // Outside VS Code a rejected token left the pollers failing in silence.
-      // The dialog is the whole fix: the token status reports only which store
-      // holds a token, and rejection leaves the secret in place, so re-posting
-      // it would repaint the same "token set" badge.
-      onAppSignal('githubTokenInvalid', ({ message }) => {
-        spawn(
-          bindings.dialogs.notify('error', gitHubTokenRejectedMessage(message)),
-        );
-      }),
-    ];
-
     const settingsIpc: DesktopSettingsIpc = {
       signInSubscription: body.signInSubscription,
       route: parsedRoute(SettingsViewInboundMessageSchema, (message) =>
         body.handleMessage(message),
       ),
     };
-    yield* Effect.forEach(
-      subscriptions,
-      (subscription) =>
-        Effect.forkScoped(subscription, { startImmediately: true }),
-      { discard: true },
-    );
+    yield* Effect.forkScoped(body.follow, { startImmediately: true });
     return settingsIpc;
   });
 }

@@ -40,7 +40,7 @@ import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import type { ShowBuilt } from '@frontend/latex/openBuild';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { quickPick } from '@frontend/ui/dialogs';
+import { openFilesDialog, quickPick } from '@frontend/ui/dialogs';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { previewFinalOutput } from '@frontend/agents/finalOutputOpener';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
@@ -69,6 +69,7 @@ import {
   hostFailure,
 } from '@texra/controllers/session/hostCallFailure';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
+import { pickLauncherFiles } from '@texra/controllers/session/launcherFilePicker';
 import type {
   GuiWindowHost,
   OwnHostHandlers,
@@ -82,7 +83,7 @@ import {
 
 // Local file imports
 import { handleCompare } from './compareFiles';
-import { createFileSelectionPickers, getCurrentFile } from './fileSelection';
+import { getCurrentFile } from './fileSelection';
 import { openFile } from './openFile';
 
 const CHANNEL = 'ExtensionHostRequests';
@@ -184,8 +185,6 @@ export const createExtensionHostRequests = Effect.fn(
 )(function* (options: ExtensionHostRequestsOptions) {
   const { snapshot, runtime, roots } = options;
 
-  /** The native picker of each multi-file launcher list. */
-  const multipleFilePickers = createFileSelectionPickers(roots);
   // The window's one comparison refresh: a newer comparison replaces it,
   // and the view's scope ends it.
   const diffRefresh = yield* FiberHandle.make();
@@ -296,9 +295,8 @@ export const createExtensionHostRequests = Effect.fn(
    *  onto a VS Code command, an editor API, or the sidebar. */
   const bindings: SharedHostCommandBindings = {
     openPath: (file, line) => runHandler('openFile', openFile(file, line)),
-    // The picker reports its own failures where they happen and answers
-    // `null`, as it does for a cancel.
-    pickFiles: (fileType) => multipleFilePickers[fileType](),
+    pickFiles: (fileType) =>
+      pickLauncherFiles(roots.workspace, fileType, openFilesDialog),
     latexdiff: {
       openDiffs: ([first, ...rest]) =>
         first === undefined

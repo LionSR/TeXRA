@@ -3,11 +3,10 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
-import { workspaceRelativePath } from '@texra-ai/harness/node';
 import { hostFailed } from '@texra/controllers/session/hostCallFailure';
+import type { OpenFilesDialog } from '@texra/controllers/session/launcherFilePicker';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import { withCancellationToken } from '@frontend/hosts/VscodeUiHost';
-import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 
 export function quickPick<T extends string | vscode.QuickPickItem>(
   items: readonly T[],
@@ -43,50 +42,26 @@ export function inputBox(
   );
 }
 
-interface FileDialogOptions {
-  /** Label for the open button */
-  openLabel: string;
-  /** Mapping from filter name to array of extensions without dots */
-  filters: { [name: string]: string[] };
-  /** The workspace root the dialog opens in and relativizes picks against. */
-  workspaceRoot: string | undefined;
-}
-
-/**
- * Show a multi-select open file dialog in the workspace and return the
- * selected workspace-relative paths.
- */
-export const selectFiles = Effect.fn('selectFiles')(function* (
-  options: FileDialogOptions,
-): Effect.fn.Return<string[] | null, HostFailed> {
-  const { workspaceRoot } = options;
-  if (!workspaceRoot) {
-    // The notice is detached: the picker answers "nothing picked" straight
-    // away rather than waiting on a toast the user may never dismiss.
-    yield* showLoggedMessage('No workspace folder open');
-    return null;
-  }
-
-  const fileUris = yield* Effect.tryPromise({
+/** VS Code's dialog that opens several files, behind the app's launcher
+ *  picker (`pickLauncherFiles`). */
+export const openFilesDialog: OpenFilesDialog = (options) =>
+  Effect.tryPromise({
     try: async () =>
       vscode.window.showOpenDialog({
         canSelectMany: true,
-        openLabel: options.openLabel,
         canSelectFiles: true,
         canSelectFolders: false,
-        defaultUri: vscode.Uri.file(workspaceRoot),
-        filters: options.filters,
+        title: options.title,
+        defaultUri: vscode.Uri.file(options.defaultPath),
+        filters: Object.fromEntries(
+          options.filters.map(({ name, extensions }) => [
+            name,
+            [...extensions],
+          ]),
+        ),
       }),
-    catch: (cause) => hostFailed('selectFiles', cause),
-  });
-
-  if (!fileUris?.length) {
-    return null;
-  }
-  return fileUris.map((uri) =>
-    workspaceRelativePath(workspaceRoot, uri.fsPath),
-  );
-});
+    catch: (cause) => hostFailed('openFilesDialog', cause),
+  }).pipe(Effect.map((picked) => picked?.map((uri) => uri.fsPath)));
 
 interface FolderDialogOptions {
   /** Label for the open button */
@@ -97,8 +72,8 @@ interface FolderDialogOptions {
 
 /**
  * Generic helper to show a folder-picker dialog and return the selected
- * absolute path. Unlike {@link selectFiles}, this needs
- * no workspace, so it's safe to call before a workspace is available.
+ * absolute path. It needs no workspace, so it's safe to call before a
+ * workspace is available.
  */
 export function selectFolder(
   options: FolderDialogOptions,

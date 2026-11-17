@@ -186,8 +186,6 @@ export const ResumeBlockedSchema = Schema.Union([
     reason: Schema.String,
   }),
 ]);
-/** What a blocked resume waits for ({@link ResumeBlockedSchema}). */
-export type ResumeBlocked = typeof ResumeBlockedSchema.Type;
 
 /**
  * Why a persisted run is not continued here: the one answer a resume, a
