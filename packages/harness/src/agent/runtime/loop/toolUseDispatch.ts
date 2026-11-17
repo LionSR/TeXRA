@@ -79,6 +79,10 @@ import {
   type ToolCallResult,
   type CallStatus,
 } from '@shared/session/inFlight';
+import {
+  formatAttachmentSummary,
+  formatToolResultAsText,
+} from '@shared/toolResultText';
 import { checkOwnFacts, factRows } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 import { getBasename } from '@utils/core/pathBasics';
@@ -97,10 +101,6 @@ import {
   SKIPPED_OUTCOME_UNKNOWN,
   skippedByScriptEnd,
 } from '../run/tools';
-import {
-  formatAttachmentSummary,
-  formatToolResultAsText,
-} from '../run/toolResultText';
 import { decideRequest } from '../requests';
 import { callRequests, guardedToolCall } from './toolGuard';
 import { appendRow } from './rows';

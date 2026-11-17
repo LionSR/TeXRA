@@ -1,6 +1,6 @@
 /** Completed-run display reads, keyed by run id. */
 import { Effect, absurd } from 'effect';
-import { formatToolResultAsText } from '@agent/runtime/run/toolResultText';
+import { formatToolResultAsText } from '@shared/toolResultText';
 import { stringifyConversationValue } from '@shared/transcript/conversationFormat';
 
 import { Settings, type ConfigProvider } from '@shared/config/settings';

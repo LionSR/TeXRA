@@ -24,7 +24,6 @@ file, so `npm run gate:docs` fails when one moves.
   [`compaction`](run/compaction.ts), [`contextTokens`](run/contextTokens.ts),
   [`mediaInput`](run/mediaInput.ts) and [`img`](run/img.ts) (a launch's
   media as model input), [`tools`](run/tools.ts),
-  [`toolResultText`](run/toolResultText.ts),
   [`recordedRequest`](run/recordedRequest.ts), and
   [`backgroundTurn`](run/backgroundTurn.ts).
 - `modelAccess/`: the one path from settings to a bound llm `Model`

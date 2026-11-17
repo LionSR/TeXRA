@@ -24,7 +24,7 @@ import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
 
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
-import { capToolResultText } from '@agent/runtime/run/toolResultText';
+import { capToolResultText } from '@shared/toolResultText';
 import type { McpServerConfig } from '@common/plugins/mcpServers';
 import { withLogChannel } from '@logger/effectLog';
 import type { ToolResult } from '@shared/schemas';
