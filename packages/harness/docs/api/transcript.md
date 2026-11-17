@@ -509,19 +509,10 @@ interface StreamingTextRow extends TranscriptRowBase {
   readonly text: TranscriptText;
   /** True while the producer is still appending to `text`. */
   readonly streaming: boolean;
-  /** True while the text hides an embedded subagent block that has opened but
-   *  not closed. Blocks result: the visible text is still going to move. */
-  readonly pendingEmbeddedFollowup?: boolean;
   /** The limit that ended an assistant's answer early, from its
    *  `response.finalized` row; each reader words it. */
   readonly cut?: ResponseCut;
 }
-```
-
-## summarizeEmbeddedSubagentFollowups
-
-```ts
-function summarizeEmbeddedSubagentFollowups(text: string): string
 ```
 
 ## TextBudget

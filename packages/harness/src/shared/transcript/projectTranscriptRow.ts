@@ -20,7 +20,6 @@ import {
   type ToolCallLog,
 } from '@shared/schemas';
 import { normalizeToolUse, resultFields } from '@shared/toolUse';
-import { hasIncompleteEmbeddedSubagentFollowup } from '@shared/subagentFollowup';
 import { formatCompactTokenCount } from '@utils/text/stringUtils';
 
 import { toolRowModel, type ToolRowModelContext } from './toolRowModel';
@@ -68,10 +67,6 @@ export function streamingTextRow(
     text: measured,
     streaming,
     ...(cut === undefined ? {} : { cut }),
-    ...(kind === 'assistant' &&
-    hasIncompleteEmbeddedSubagentFollowup(measured.full)
-      ? { pendingEmbeddedFollowup: true }
-      : {}),
   };
 }
 
