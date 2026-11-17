@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
 import {
@@ -317,35 +317,52 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
   const pdfDirectory = '/tmp/texra-trajectory';
   const pdfPath = join(pdfDirectory, 'output.pdf');
   const pdfUrl = `file://${pdfPath}`;
-  mkdirSync(pdfDirectory, { recursive: true });
-  writeFileSync(pdfPath, BLANK_PDF);
+  rmSync(pdfPath, { force: true });
   const session = await page
     .locator('.shell-project-workbench:not([hidden])')
     .getAttribute('data-session');
   const pdfTab = page.locator('.shell-dock-tab[data-kind="pdf"]');
   const frame = page.locator('iframe.shell-workbench-pdf-frame');
+  const pane = page.locator('.shell-workbench-pdf');
+  const failure = pane.locator('.shell-workbench-pdf-failure');
+  const showPdf = (build: number) =>
+    page.evaluate(
+      ({ session, pdfUrl, build }) => {
+        window.postMessage(
+          {
+            command: 'desktop:showPdf',
+            session,
+            title: 'output.pdf',
+            pdfUrl,
+            build,
+          },
+          '*',
+        );
+      },
+      { session, pdfUrl, build },
+    );
 
-  await page.evaluate(
-    ({ session, pdfUrl }) => {
-      window.postMessage(
-        {
-          command: 'desktop:showPdf',
-          session,
-          title: 'output.pdf',
-          pdfUrl,
-          build: 1,
-        },
-        '*',
-      );
-    },
-    { session, pdfUrl },
-  );
+  // A file that is not there shows why, in place of the viewer.
+  await showPdf(1);
   await expect(pdfTab).toBeVisible();
   await expect(pdfTab.locator('xpath=..')).toHaveAttribute(
     'aria-selected',
     'true',
   );
   await expect(pdfTab).toContainText('output.pdf');
+  await expect(failure).toContainText('This PDF could not be shown');
+  await expect(failure).toContainText(`${pdfPath} is no longer there.`);
+  await expect(frame).toBeHidden();
+  await page.screenshot({
+    path: test.info().outputPath('pdf-missing.png'),
+    animations: 'disabled',
+  });
+
+  // A rebuild that writes the file shows the viewer again.
+  mkdirSync(pdfDirectory, { recursive: true });
+  writeFileSync(pdfPath, BLANK_PDF);
+  await showPdf(2);
+  await expect(failure).toHaveCount(0);
   await expect(frame).toBeVisible();
   await expect(frame).toHaveAttribute('src', pdfUrl);
   await expect(frame).toHaveAttribute('title', 'output.pdf');
@@ -360,6 +377,25 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
       ),
     )
     .toBe(true);
+  await expect(failure).toHaveCount(0);
+  await page.screenshot({
+    path: test.info().outputPath('pdf-shown.png'),
+    animations: 'disabled',
+  });
+
+  // "Open externally" hands the tab's file to the system's viewer.
+  await app.evaluate(({ shell }) => {
+    const opened: string[] = [];
+    Object.assign(globalThis, { openedPaths: opened });
+    shell.openPath = async (path) => {
+      opened.push(path);
+      return '';
+    };
+  });
+  await pane.getByRole('button', { name: 'Open externally' }).click();
+  await expect
+    .poll(() => app.evaluate(() => Reflect.get(globalThis, 'openedPaths')))
+    .toEqual([pdfPath]);
 
   const rejectedUrl = page.waitForEvent('console', (message) =>
     message.text().includes('Dropped a malformed desktop:showPdf push'),

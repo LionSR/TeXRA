@@ -1,24 +1,79 @@
 // Compiled PDFs as workbench tabs: one `<iframe>` per open PDF, kept mounted
 // across tab switches like the editor and terminal surfaces, so the viewer's
-// scroll position and zoom survive a layout change.
+// scroll position and zoom survive a layout change. A bar above the frame
+// opens the file in the system's viewer; a file that fails to load replaces
+// the frame with its reason, which the main process reports.
 
+import { html, nothing, render } from 'lit';
+
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { renderEmptyState } from '@ui/wa/emptyState';
+import {
+  OPEN_EXTERNALLY_LABEL,
+  PDF_LOAD_FAILED_TITLE,
+} from '@ui/copy/hostViews';
 import type { WorkbenchTab } from '../shared/desktopShellState';
 
-export function createPdfPane() {
-  const frames = new Map<string, HTMLIFrameElement>();
+interface PdfView {
+  readonly host: HTMLElement;
+  readonly frame: HTMLIFrameElement;
+  /** Why the frame's file did not load, until it loads again. */
+  failure: string | undefined;
+}
 
-  /** The frame for a `pdf` tab, created on first render of that tab and
+export function createPdfPane(options: {
+  /** Opens the PDF at `pdfUrl` in the system's viewer. */
+  openExternally(pdfUrl: string): void;
+}) {
+  const views = new Map<string, PdfView>();
+
+  function paint(view: PdfView): void {
+    const url = view.frame.src;
+    view.frame.hidden = view.failure !== undefined;
+    render(
+      html`
+        <div class="shell-workbench-pdf-bar">
+          ${renderLabeledActionButton({
+            icon: 'arrow-up-right-from-square',
+            text: OPEN_EXTERNALLY_LABEL,
+            kind: 'secondary',
+            onClick: () => options.openExternally(url),
+          })}
+        </div>
+        ${
+          view.failure === undefined
+            ? nothing
+            : renderEmptyState({
+                icon: 'triangle-exclamation',
+                title: PDF_LOAD_FAILED_TITLE,
+                body: view.failure,
+                className: 'shell-workbench-pdf-failure',
+              })
+        }
+      `,
+      view.host,
+      // The frame is a sibling the template must not own: re-rendering
+      // would otherwise reload it.
+      { renderBefore: view.frame },
+    );
+  }
+
+  /** The surface for a `pdf` tab, created on first render of that tab and
    *  reloaded when the tab names another build: a rebuild keeps the URL. */
-  function frameFor(tab: WorkbenchTab): HTMLIFrameElement {
+  function viewFor(tab: WorkbenchTab): HTMLElement {
     const build = String(tab.build);
-    const existing = frames.get(tab.id);
+    const existing = views.get(tab.id);
     if (existing) {
-      if (existing.dataset.build !== build) {
-        existing.dataset.build = build;
-        existing.src = tab.target ?? '';
+      if (existing.frame.dataset.build !== build) {
+        existing.frame.dataset.build = build;
+        existing.frame.src = tab.target ?? '';
+        existing.failure = undefined;
+        paint(existing);
       }
-      return existing;
+      return existing.host;
     }
+    const host = document.createElement('div');
+    host.classList.add('shell-workbench-pdf');
     // An `<iframe>`, not `<webview>`: `<webview>` needs `webviewTag: true`
     // in webPreferences, which the window does not enable. Electron's main
     // BrowserWindow renders PDFs in iframes through the bundled Chromium
@@ -34,16 +89,28 @@ export function createPdfPane() {
     // reaches this renderer.
     frame.dataset.build = build;
     frame.src = tab.target ?? '';
-    frames.set(tab.id, frame);
-    return frame;
+    host.append(frame);
+    const view: PdfView = { host, frame, failure: undefined };
+    views.set(tab.id, view);
+    paint(view);
+    return host;
+  }
+
+  /** Every tab showing `pdfUrl` shows `reason` in place of its frame. */
+  function reportFailed(pdfUrl: string, reason: string): void {
+    for (const view of views.values()) {
+      if (view.frame.src !== pdfUrl) continue;
+      view.failure = reason;
+      paint(view);
+    }
   }
 
   function dispose(tabId: string): void {
-    const frame = frames.get(tabId);
-    if (!frame) return;
-    frame.removeAttribute('src');
-    frames.delete(tabId);
+    const view = views.get(tabId);
+    if (!view) return;
+    view.frame.removeAttribute('src');
+    views.delete(tabId);
   }
 
-  return { frameFor, dispose };
+  return { viewFor, reportFailed, dispose };
 }

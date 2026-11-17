@@ -36,6 +36,7 @@ import {
   type PaneKind,
 } from './workbenchController';
 import { agentDocumentIdentity } from '../shared/desktopAgentDocument';
+import { DESKTOP_PDF_COMMANDS } from '../shared/desktopPdfMessages';
 
 const FILE_REQUEST_TIMEOUT_MS = 60_000;
 
@@ -193,7 +194,10 @@ export function createProjectWorkbench(options: {
       send({ command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_CLOSE, sessionId }),
   });
   const reviewPane = createReviewPane();
-  const pdfPane = createPdfPane();
+  const pdfPane = createPdfPane({
+    openExternally: (pdfUrl) =>
+      postToMain({ command: DESKTOP_PDF_COMMANDS.OPEN_PDF_EXTERNALLY, pdfUrl }),
+  });
   // A browser tab loads its page the first time its panel is laid out.
   const loadedBrowserTabs = new Set<string>();
   const panes = {
@@ -243,8 +247,8 @@ export function createProjectWorkbench(options: {
     },
     pdf: {
       zone: 'document',
-      mount: (tab, host) => host.append(pdfPane.frameFor(tab)),
-      update: (tab) => void pdfPane.frameFor(tab),
+      mount: (tab, host) => host.append(pdfPane.viewFor(tab)),
+      update: (tab) => void pdfPane.viewFor(tab),
       release: (tab) => pdfPane.dispose(tab.id),
     },
     browser: {
@@ -316,6 +320,7 @@ export function createProjectWorkbench(options: {
     updateState,
     conversationView: options.conversationView,
     fileTree,
+    pdfPane,
     openDocument,
     async refreshFiles() {
       await Promise.all([

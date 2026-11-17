@@ -760,6 +760,10 @@ const routeMessage = createMessageRoutes({
       }),
     );
   },
+  'desktop:pdf:loadFailed': (message) => {
+    for (const project of projectWorkbenches.values())
+      project.pdfPane.reportFailed(message.pdfUrl, message.reason);
+  },
   'desktop:showPrompt': (message) => promptOverlay.open(message),
   'desktop:terminal:data': (message) =>
     projectWorkbenches

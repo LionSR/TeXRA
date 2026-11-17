@@ -44,6 +44,7 @@ import {
   type DesktopCommandRoutes,
 } from './desktopIpcTypes.js';
 import { createDesktopLogIpc } from './desktopLogIpc.js';
+import { createDesktopPdfIpc } from './desktopPdfIpc.js';
 import { buildDesktopMenuTemplate } from './desktopMenuTemplate.js';
 import { installDesktopNavigationPolicy } from './desktopNavigationPolicy.js';
 import {
@@ -346,6 +347,10 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
       copyLog: (text) => clipboard.writeText(text),
       showSaveDialog: (dialogOptions) =>
         dialog.showSaveDialog(window, dialogOptions),
+    }),
+    createDesktopPdfIpc(host.post, {
+      webContents: window.webContents,
+      openPath: previewHost.openPath,
     }),
     shellCommands.routes,
   ]) {

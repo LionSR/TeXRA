@@ -16,3 +16,25 @@ export function viewLoadFailedText(view: string, cause: string): string {
 export function switchToProjectLabel(project: string): string {
   return `Switch to ${project}`;
 }
+
+/** The desktop PDF tab's action that opens its file in the system viewer. */
+export const OPEN_EXTERNALLY_LABEL = 'Open externally';
+
+/** A desktop PDF tab whose file did not load. */
+export const PDF_LOAD_FAILED_TITLE = 'This PDF could not be shown';
+
+/** Chromium's net error for a file that is not there. */
+const ERR_FILE_NOT_FOUND = -6;
+
+/** Why a PDF tab's file did not load, from the frame's net error: a missing
+ *  file says so and where it was; any other failure carries Chromium's own
+ *  name for it, the only detail there is. */
+export function pdfLoadFailureText(
+  path: string,
+  errorCode: number,
+  errorDescription: string,
+): string {
+  return errorCode === ERR_FILE_NOT_FOUND
+    ? `${path} is no longer there. Rebuild it to show it again.`
+    : `${path} did not load (${errorDescription}).`;
+}
