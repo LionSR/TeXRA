@@ -17,10 +17,12 @@ interface PdfView {
 }
 
 /** The path a PDF's `file:` URL names. The main process built the URL from
- *  the path, so its pathname is the path, percent-encoded; a Windows path
- *  follows one extra slash. */
+ *  the path, so its pathname is the path, percent-encoded: a Windows drive
+ *  path follows one extra slash, and a network share's server is the host. */
 function filePathOf(url: string): string {
-  const path = decodeURIComponent(new URL(url).pathname);
+  const { hostname, pathname } = new URL(url);
+  const path = decodeURIComponent(pathname);
+  if (hostname) return `//${hostname}${path}`;
   return /^\/[A-Za-z]:/.test(path) ? path.slice(1) : path;
 }
 
