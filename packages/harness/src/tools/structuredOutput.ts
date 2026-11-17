@@ -167,8 +167,8 @@ export function buildTerminalTool(
     execute: Effect.fn('structuredOutput.execute')(function* (input) {
       const facts = yield* inRunSession((call) => call.facts);
       if (facts.structured != null) {
-        return yield* Effect.fail(
-          new ToolError('submit_output can only be accepted once per run.'),
+        return yield* new ToolError(
+          'submit_output can only be accepted once per run.',
         );
       }
       const value = yield* Schema.decodeUnknownEffect(Schema.Json)(input);

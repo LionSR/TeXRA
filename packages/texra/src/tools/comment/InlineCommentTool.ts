@@ -85,10 +85,8 @@ export class InlineComments extends Context.Service<
 const requireProvider = Effect.gen(function* () {
   const provider = yield* Effect.serviceOption(InlineComments);
   if (Option.isNone(provider)) {
-    return yield* Effect.fail(
-      new ToolError(
-        'Inline comments are unavailable: this host serves no inline-comment provider. Only the VS Code extension host wires this tool.',
-      ),
+    return yield* new ToolError(
+      'Inline comments are unavailable: this host serves no inline-comment provider. Only the VS Code extension host wires this tool.',
     );
   }
   return provider.value;
@@ -290,7 +288,7 @@ const listThreads = Effect.fn('InlineCommentTool.list')(function* (
 
 function inlineComment(
   input: InlineCommentInput,
-): Effect.Effect<ToolResult, ToolError, ToolContext> {
+): Effect.Effect<ToolResult, Error, ToolContext> {
   switch (input.command) {
     case 'add':
       return addThread(input);

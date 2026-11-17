@@ -184,7 +184,7 @@ export const resolveToolPath = Effect.fn('resolveToolPath')(function* (
     !resolution.match &&
     (yield* Settings.get(settings, TOOL_PATH_PROTECTION_SETTING))
   ) {
-    return yield* Effect.fail(new ToolError(resolution.outsideMessage));
+    return yield* new ToolError(resolution.outsideMessage);
   }
   // `relative` is the full absolute path so an external operation never
   // reads as a workspace one, even when basenames collide.

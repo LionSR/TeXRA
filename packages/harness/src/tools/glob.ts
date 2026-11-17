@@ -80,11 +80,9 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
   // outside the search directory (the whole disk, for `/**`).
   const escaping = globEscape(walker.patterns);
   if (escaping !== undefined) {
-    return yield* Effect.fail(
-      new ToolError(
-        `Glob pattern must stay under the search directory: "${escaping}". ` +
-          `Put an outside base in "path" instead (for example path ".." with pattern "**/*.tex"); that path is still checked against the allowed roots.`,
-      ),
+    return yield* new ToolError(
+      `Glob pattern must stay under the search directory: "${escaping}". ` +
+        `Put an outside base in "path" instead (for example path ".." with pattern "**/*.tex"); that path is still checked against the allowed roots.`,
     );
   }
   const matches = yield* Effect.tryPromise({

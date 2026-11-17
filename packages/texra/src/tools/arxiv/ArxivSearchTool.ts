@@ -153,7 +153,7 @@ const searchArxiv = Effect.fn('ArxivSearchTool.execute')(function* (
 ) {
   const trimmedQuery = input.query.trim();
   if (!trimmedQuery) {
-    return yield* Effect.fail(new ToolError('Search query cannot be empty.'));
+    return yield* new ToolError('Search query cannot be empty.');
   }
 
   // Select the query function based on the field parameter

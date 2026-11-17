@@ -337,8 +337,8 @@ const executeRead = Effect.fn('executeRead')(function* (
   const records = yield* InquiryRecords;
   const manifest = yield* records.readExternalInquiryThread(input.thread_id);
   if (!manifest) {
-    return yield* Effect.fail(
-      new ToolError(`External inquiry thread not found: ${input.thread_id}`),
+    return yield* new ToolError(
+      `External inquiry thread not found: ${input.thread_id}`,
     );
   }
   return buildReadOutput(manifest);

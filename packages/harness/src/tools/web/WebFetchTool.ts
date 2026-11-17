@@ -168,18 +168,16 @@ const getPublic = Effect.fn('WebFetchTool.getPublic')(function* (
     if (response.status < 300) return response;
     const { location } = response.headers;
     if (!location || redirects >= MAX_REDIRECTS) {
-      return yield* Effect.fail(
-        new ToolError(
-          location
-            ? `Too many redirects (more than ${MAX_REDIRECTS}).`
-            : `HTTP ${response.status} redirect without a Location header.`,
-        ),
+      return yield* new ToolError(
+        location
+          ? `Too many redirects (more than ${MAX_REDIRECTS}).`
+          : `HTTP ${response.status} redirect without a Location header.`,
       );
     }
     target = new URL(location, target);
     if (target.protocol !== 'http:' && target.protocol !== 'https:') {
-      return yield* Effect.fail(
-        new ToolError(`Redirect to a non-HTTP URL: ${target.protocol}`),
+      return yield* new ToolError(
+        `Redirect to a non-HTTP URL: ${target.protocol}`,
       );
     }
   }
@@ -196,10 +194,8 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
       const lengthHeader = response.headers['content-length'];
       if (lengthHeader && Number(lengthHeader) > MAX_CONTENT_BYTES) {
         // Permanent: not retried.
-        return yield* Effect.fail(
-          new ToolError(
-            `Failed to fetch ${url}: Response too large (${lengthHeader} bytes); maximum is ${MAX_CONTENT_BYTES.toLocaleString('en-US')} bytes.`,
-          ),
+        return yield* new ToolError(
+          `Failed to fetch ${url}: Response too large (${lengthHeader} bytes); maximum is ${MAX_CONTENT_BYTES.toLocaleString('en-US')} bytes.`,
         );
       }
 

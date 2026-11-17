@@ -112,10 +112,8 @@ const runSelf = Effect.fn('self.call')(function* (
   const { runId: parentId } = run;
   const { config, source, before, boundAt } = yield* selfOf(call);
   if (input.fork && source === null)
-    return yield* Effect.fail(
-      new ToolError(
-        "A program's script has no conversation to fork: call self() with `fork: false`.",
-      ),
+    return yield* new ToolError(
+      "A program's script has no conversation to fork: call self() with `fork: false`.",
     );
   const name = config.agent;
   const outputSchema = yield* childOutputSchema(input.schema);

@@ -127,7 +127,7 @@ interface AgentCliProvider<I, S, R> {
   readonly store: Context.Key<S, ClaimThread>;
   /** The thread the call continues, if any. */
   resumeId(input: I): string | undefined;
-  prepare(input: I): Effect.Effect<AgentCliLaunch, ToolError, R>;
+  prepare(input: I): Effect.Effect<AgentCliLaunch, Error, R>;
 }
 
 /**
@@ -139,19 +139,15 @@ interface AgentCliProvider<I, S, R> {
  */
 export function agentCliTool<I extends { readonly prompt: string }, S, R>(
   provider: AgentCliProvider<I, S, R>,
-): (
-  input: I,
-) => Effect.Effect<ToolResult, ToolError, R | S | PluginToolServices> {
+): (input: I) => Effect.Effect<ToolResult, Error, R | S | PluginToolServices> {
   return (input) =>
     Effect.gen(function* () {
       const { run } = (yield* ToolContext).env;
       // A one-shot run has no later turn to take the delivery: refuse rather
       // than launch work nobody collects.
       if (noLaterTurn(run)) {
-        return yield* Effect.fail(
-          new ToolError(
-            `${provider.name} is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Delegate with \`agent\`, which returns the child's result directly.`,
-          ),
+        return yield* new ToolError(
+          `${provider.name} is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Delegate with \`agent\`, which returns the child's result directly.`,
         );
       }
       const resumeId = provider.resumeId(input);
@@ -166,10 +162,8 @@ export function agentCliTool<I extends { readonly prompt: string }, S, R>(
         Effect.gen(function* () {
           const claim = yield* claimThread(resumeId);
           if (claim === undefined)
-            return yield* Effect.fail(
-              new ToolError(
-                `${provider.threadLabel} '${resumeId}' is still processing a turn. Wait for its result (a follow-up message) before sending it another instruction.`,
-              ),
+            return yield* new ToolError(
+              `${provider.threadLabel} '${resumeId}' is still processing a turn. Wait for its result (a follow-up message) before sending it another instruction.`,
             );
           return yield* restore(
             Effect.suspend(() => launchTurn(provider, input, claim)),
@@ -189,7 +183,7 @@ function launchTurn<I extends { readonly prompt: string }, S, R>(
   provider: AgentCliProvider<I, S, R>,
   input: I,
   claim: Scope.Closeable | undefined,
-): Effect.Effect<ToolResult, ToolError, R | PluginToolServices> {
+): Effect.Effect<ToolResult, Error, R | PluginToolServices> {
   return Effect.gen(function* () {
     const launch = yield* provider.prepare(input);
     // An external CLI drives this agent: the CLI is both the agent name and

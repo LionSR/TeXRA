@@ -1952,8 +1952,17 @@ interface ToolEnv {
 
 ## ToolError
 
+A tool's own failure: the model reads `message` as the failed call's
+result. Tagged, so a caller can recover it with `Effect.catchTag` and a
+generator can `yield*` it directly.
+
 ```ts
-class ToolError extends Error
+class ToolError extends Data.TaggedError('ToolError')<{
+  readonly message: string;
+  /** Brief human-facing summary carried through to the ToolResult, when set. */
+  readonly summary?: string;
+  readonly cause?: unknown;
+}>
 ```
 
 ## ToolFileAttachment

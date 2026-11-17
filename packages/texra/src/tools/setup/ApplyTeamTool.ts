@@ -56,10 +56,8 @@ const execute = Effect.fn('ApplyTeamTool.execute')(function* (
   if (result.status === 'unknown') {
     // The schema gates ids, so this only fires if the enum and the preset
     // list ever disagree — fail loudly rather than half-apply.
-    return yield* Effect.fail(
-      new ToolError(
-        `Unknown team id "${input.teamId}". Valid ids: ${TEAM_IDS.join(', ')}.`,
-      ),
+    return yield* new ToolError(
+      `Unknown team id "${input.teamId}". Valid ids: ${TEAM_IDS.join(', ')}.`,
     );
   }
 

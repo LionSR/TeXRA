@@ -298,10 +298,8 @@ export const gitHubSubscriptionsLayer: Layer.Layer<
           (other) => other.target._tag === target._tag,
         ).length;
         if (active >= cap) {
-          return yield* Effect.fail(
-            new ToolError(
-              `Too many active ${TARGET_LABEL[target._tag]} subscriptions (max ${cap}). Unsubscribe from one before adding another.`,
-            ),
+          return yield* new ToolError(
+            `Too many active ${TARGET_LABEL[target._tag]} subscriptions (max ${cap}). Unsubscribe from one before adding another.`,
           );
         }
       }

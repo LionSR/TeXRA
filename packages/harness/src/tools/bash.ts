@@ -259,7 +259,7 @@ const executeBashTool = Effect.fn('executeBashTool')(function* (
     !input.run_in_background &&
     SHELL_BACKGROUNDING_PATTERN.test(input.command)
   ) {
-    return yield* Effect.fail(new ToolError(SHELL_BACKGROUNDING_MESSAGE));
+    return yield* new ToolError(SHELL_BACKGROUNDING_MESSAGE);
   }
 
   const cwd = toolCall.env.workingDirectory ?? toolCall.env.roots.workspace;
@@ -325,7 +325,7 @@ const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
         `- Set run_in_background: true to execute asynchronously: { "run_in_background": true }\n` +
         `Do not use shell-level backgrounding such as \`nohup ... &\` inside a foreground call.`,
     );
-    return yield* Effect.fail(new ToolError(parts.join('\n')));
+    return yield* new ToolError(parts.join('\n'));
   }
 
   const elapsedMs = (yield* Clock.currentTimeMillis) - startedAt;
@@ -342,9 +342,7 @@ const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
   const errorOutput =
     [retainedStderr, retainedStdout].filter(Boolean).join('\n') ||
     'No error output available';
-  return yield* Effect.fail(
-    new ToolError(`Command failed (${duration}): ${errorOutput}`),
-  );
+  return yield* new ToolError(`Command failed (${duration}): ${errorOutput}`);
 });
 
 const executeBackground = Effect.fn('BashTool.executeBackground')(function* (

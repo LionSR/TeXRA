@@ -56,16 +56,14 @@ export const OpenPdfTool = defineTool({
     const { runId } = env.run;
     const openPdf = (yield* EditorHost).at(env.roots.storage).openPdf;
     if (!openPdf) {
-      return yield* Effect.fail(
-        new ToolError(
-          'open_pdf is not available in this host. Open the PDF manually, or use a host that registers a PDF opener.',
-        ),
+      return yield* new ToolError(
+        'open_pdf is not available in this host. Open the PDF manually, or use a host that registers a PDF opener.',
       );
     }
 
     const trimmedPath = input.path.trim();
     if (!trimmedPath) {
-      return yield* Effect.fail(new ToolError('path is required.'));
+      return yield* new ToolError('path is required.');
     }
     // An absolute path inside this run's own storage directory names a
     // run-storage file; anything else resolves as a tool path.
@@ -83,8 +81,8 @@ export const OpenPdfTool = defineTool({
     const displayPath = fileLocationDisplayPath(location);
 
     if (!hasExtension(location.absolutePath, '.pdf')) {
-      return yield* Effect.fail(
-        new ToolError(`open_pdf only opens PDF files: ${displayPath}`),
+      return yield* new ToolError(
+        `open_pdf only opens PDF files: ${displayPath}`,
       );
     }
     // The path is already absolute — the resolution above produced it — so
@@ -96,9 +94,7 @@ export const OpenPdfTool = defineTool({
       .stat(location.absolutePath)
       .pipe(Effect.catchIf(meansAbsent, () => Effect.undefined));
     if (info?.type !== 'File') {
-      return yield* Effect.fail(
-        new ToolError(`PDF file not found: ${displayPath}`),
-      );
+      return yield* new ToolError(`PDF file not found: ${displayPath}`);
     }
 
     // The host viewer's own failure, matched by tag: the agent is told the

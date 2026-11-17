@@ -336,10 +336,8 @@ const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
     );
   });
   if (!route) {
-    return yield* Effect.fail(
-      new ToolError(
-        `Unknown path: ${input.path}.\nValid paths:\n${EXECUTION_PATH_LIST}`,
-      ),
+    return yield* new ToolError(
+      `Unknown path: ${input.path}.\nValid paths:\n${EXECUTION_PATH_LIST}`,
     );
   }
   const handle = handlerFor(route.actions, input.action);
@@ -347,10 +345,8 @@ const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
     const validOn = EXECUTION_ROUTES.filter(
       ({ actions }) => actions[input.action],
     );
-    return yield* Effect.fail(
-      new ToolError(
-        `action='${input.action}' runs on ${validOn.map(({ path }) => path).join(' or ')}, not on ${route.path}.`,
-      ),
+    return yield* new ToolError(
+      `action='${input.action}' runs on ${validOn.map(({ path }) => path).join(' or ')}, not on ${route.path}.`,
     );
   }
   return yield* handle({
@@ -460,38 +456,32 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
   runId: RunId,
 ) {
   if (context.runId === runId) {
-    return yield* Effect.fail(
-      new ToolError(`Cannot kill your own run (${runId}).`),
-    );
+    return yield* new ToolError(`Cannot kill your own run (${runId}).`);
   }
 
   const { runs } = context;
   if (runs.get(runId) === undefined) {
-    return yield* Effect.fail(
-      new ToolError(`Run ${runId} not found or already completed.`),
-    );
+    return yield* new ToolError(`Run ${runId} not found or already completed.`);
   }
 
   // Only your own children, by the attached parent the fold reads.
   const view = yield* (yield* SessionViewAccess).read([]);
   if (view.runs.get(runId)?.parentId !== context.runId) {
-    return yield* Effect.fail(
-      new ToolError(`Cannot kill run ${runId}: not a child of this session.`),
+    return yield* new ToolError(
+      `Cannot kill run ${runId}: not a child of this session.`,
     );
   }
 
   // The permission gate: off, or a stored value that fails its schema, denies.
   const killDenial = yield* orchestratorKillDenial(yield* SessionRoots);
   if (killDenial !== undefined) {
-    return yield* Effect.fail(new ToolError(killDenial));
+    return yield* new ToolError(killDenial);
   }
 
   // Its children follow the session's stop policy (`RunRegistry.stop`).
   const success = yield* runs.stop(runId, 'user').pipe(Effect.uninterruptible);
   if (success) return executed(`Run ${runId} terminated.`);
-  return yield* Effect.fail(
-    new ToolError(`Run ${runId} could not be terminated.`),
-  );
+  return yield* new ToolError(`Run ${runId} could not be terminated.`);
 });
 
 const showReport = Effect.fn('ExecutionsTool.showReport')(function* (
@@ -532,9 +522,7 @@ const showConfig = Effect.fn('ExecutionsTool.showConfig')(function* (
   const record = yield* records.readRunRecord();
 
   if (!record) {
-    return yield* Effect.fail(
-      new ToolError(`Config not found for run: ${runId}.`),
-    );
+    return yield* new ToolError(`Config not found for run: ${runId}.`);
   }
 
   // Filter out fields irrelevant to this run's display category, which
@@ -565,7 +553,7 @@ const showConversation = Effect.fn('ExecutionsTool.showConversation')(
       // A checkpoint implies the `run.start` `exists` reads: it is seq 1 of
       // the run's aggregate.
       if (!(yield* records.exists())) {
-        return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
+        return yield* new ToolError(`Run not found: ${runId}`);
       }
       return executed(
         formatConversation([], {
@@ -621,7 +609,7 @@ const readFile = Effect.fn('ExecutionsTool.readFile')(function* (
     filePath,
   );
   if (!fullPath) {
-    return yield* Effect.fail(new ToolError(`File not found: ${displayPath}`));
+    return yield* new ToolError(`File not found: ${displayPath}`);
   }
 
   return yield* readFileContent(yield* StorageFs, fullPath, {
@@ -690,10 +678,8 @@ const readWorkspaceFile = Effect.fn('ExecutionsTool.readWorkspaceFile')(
         ? recordedFile(filePath.slice(displayPrefix.length))
         : undefined);
     if (!resolved) {
-      return yield* Effect.fail(
-        new ToolError(
-          `Workspace file not found: /executions/${runId}/workspace-files/${filePath}`,
-        ),
+      return yield* new ToolError(
+        `Workspace file not found: /executions/${runId}/workspace-files/${filePath}`,
       );
     }
 
@@ -765,10 +751,8 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
   // A symlink to a directory counts, which is what the bitmask probe this
   // replaced answered for: the standard `stat` follows the link.
   if (stats.type === 'Directory') {
-    return yield* Effect.fail(
-      new ToolError(
-        `Path is a directory: ${directoryErrorPath}. Use without trailing path to list.`,
-      ),
+    return yield* new ToolError(
+      `Path is a directory: ${directoryErrorPath}. Use without trailing path to list.`,
     );
   }
 

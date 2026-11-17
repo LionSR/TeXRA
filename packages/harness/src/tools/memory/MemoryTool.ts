@@ -136,8 +136,8 @@ const run = Effect.fn('MemoryTool.run')(function* (
       // being absent, so the error below is unreachable from decoded input.
       const insertText = input.insert_text ?? input.new_str;
       if (insertText == null) {
-        return yield* Effect.fail(
-          new ToolError('insert_text is required for command="insert".'),
+        return yield* new ToolError(
+          'insert_text is required for command="insert".',
         );
       }
       return yield* insert(
@@ -215,7 +215,7 @@ const requireEditableFile = Effect.fn('MemoryTool.requireEditableFile')(
       ),
     );
     if (stats.type === 'Directory') {
-      return yield* Effect.fail(new ToolError(errorMsg));
+      return yield* new ToolError(errorMsg);
     }
   },
 );
@@ -238,10 +238,8 @@ const view = Effect.fn('MemoryTool.view')(function* (
         'Viewed empty memory directory',
       );
     }
-    return yield* Effect.fail(
-      new ToolError(
-        `The path ${inputPath} does not exist. Please provide a valid path.`,
-      ),
+    return yield* new ToolError(
+      `The path ${inputPath} does not exist. Please provide a valid path.`,
     );
   }
 
@@ -293,9 +291,7 @@ const create = Effect.fn('MemoryTool.create')(function* (
   const { display: inputPath, storage: resolvedPath } = loc;
   const exists = yield* memoryPathExists(resolvedPath);
   if (exists) {
-    return yield* Effect.fail(
-      new ToolError(`File ${inputPath} already exists.`),
-    );
+    return yield* new ToolError(`File ${inputPath} already exists.`);
   }
 
   // Relative to the session's storage root, which the view captured when
@@ -326,10 +322,8 @@ const strReplace = Effect.fn('MemoryTool.strReplace')(function* (
 ) {
   const { display: inputPath, storage: resolvedPath } = loc;
   if (oldStr.length === 0) {
-    return yield* Effect.fail(
-      new ToolError(
-        `old_str must not be empty for ${inputPath}. Provide the exact text to replace.`,
-      ),
+    return yield* new ToolError(
+      `old_str must not be empty for ${inputPath}. Provide the exact text to replace.`,
     );
   }
 
@@ -384,10 +378,8 @@ const insert = Effect.fn('MemoryTool.insert')(function* (
   const lines = content.split('\n');
   const totalLines = lines.length;
   if (insertLine < 0 || insertLine > totalLines) {
-    return yield* Effect.fail(
-      new ToolError(
-        `Invalid \`insert_line\` parameter: ${insertLine}. It should be within the range of lines of the file: [0, ${totalLines}].`,
-      ),
+    return yield* new ToolError(
+      `Invalid \`insert_line\` parameter: ${insertLine}. It should be within the range of lines of the file: [0, ${totalLines}].`,
     );
   }
 
@@ -420,9 +412,7 @@ const deleteMemory = Effect.fn('MemoryTool.delete')(function* (
   const { display: inputPath, storage: resolvedPath } = loc;
   const exists = yield* memoryPathExists(resolvedPath);
   if (!exists) {
-    return yield* Effect.fail(
-      new ToolError(`The path ${inputPath} does not exist.`),
-    );
+    return yield* new ToolError(`The path ${inputPath} does not exist.`);
   }
 
   const readGate = yield* requireViewBeforeModify(inputPath, 'deleting');
@@ -441,9 +431,7 @@ const rename = Effect.fn('MemoryTool.rename')(function* (
 
   const oldExists = yield* memoryPathExists(resolvedOldPath);
   if (!oldExists) {
-    return yield* Effect.fail(
-      new ToolError(`The path ${oldPathInput} does not exist.`),
-    );
+    return yield* new ToolError(`The path ${oldPathInput} does not exist.`);
   }
 
   const readGate = yield* requireViewBeforeModify(oldPathInput, 'renaming');
@@ -451,8 +439,8 @@ const rename = Effect.fn('MemoryTool.rename')(function* (
 
   const newExists = yield* memoryPathExists(resolvedNewPath);
   if (newExists) {
-    return yield* Effect.fail(
-      new ToolError(`The destination ${newPathInput} already exists.`),
+    return yield* new ToolError(
+      `The destination ${newPathInput} already exists.`,
     );
   }
 
@@ -475,10 +463,8 @@ const pin = Effect.fn('MemoryTool.pin')(function* (loc: MemoryLocation) {
     );
   }
   if (result.status === 'cap-reached') {
-    return yield* Effect.fail(
-      new ToolError(
-        `Cannot pin ${inputPath}: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
-      ),
+    return yield* new ToolError(
+      `Cannot pin ${inputPath}: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
     );
   }
 

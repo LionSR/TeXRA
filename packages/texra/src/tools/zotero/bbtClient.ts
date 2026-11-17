@@ -288,24 +288,18 @@ export const callBetterBibTeX = Effect.fn('bbtClient.callBetterBibTeX')(
     });
     const parsed = Schema.decodeUnknownResult(responseSchema)(raw);
     if (!Result.isSuccess(parsed)) {
-      return yield* Effect.fail(
-        new ToolError(
-          `Better BibTeX returned an unexpected response for ${method}: ${parsed.failure.message}`,
-        ),
+      return yield* new ToolError(
+        `Better BibTeX returned an unexpected response for ${method}: ${parsed.failure.message}`,
       );
     }
     if (parsed.success.error) {
-      return yield* Effect.fail(
-        new ToolError(
-          `Better BibTeX API error: ${parsed.success.error.message}`,
-        ),
+      return yield* new ToolError(
+        `Better BibTeX API error: ${parsed.success.error.message}`,
       );
     }
     if (parsed.success.result === undefined) {
-      return yield* Effect.fail(
-        new ToolError(
-          `Better BibTeX returned an empty response for ${method}.`,
-        ),
+      return yield* new ToolError(
+        `Better BibTeX returned an empty response for ${method}.`,
       );
     }
     return parsed.success.result;

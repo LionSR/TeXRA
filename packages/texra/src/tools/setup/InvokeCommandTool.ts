@@ -62,8 +62,8 @@ const invokeCommand = Effect.fn('InvokeCommandTool.execute')(function* (
   const commandId = input.command;
   const commands = platform.commands;
   if (!commands) {
-    return yield* Effect.fail(
-      new ToolError('VS Code command invocation is unavailable in this host.'),
+    return yield* new ToolError(
+      'VS Code command invocation is unavailable in this host.',
     );
   }
   yield* commands
