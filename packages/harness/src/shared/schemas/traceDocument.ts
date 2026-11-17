@@ -1,15 +1,10 @@
 import { Result, Schema } from 'effect';
 
-import {
-  DisplayRowSchema,
-  GOAL_PLAN_KIND,
-  RETIRED_PLUGIN_FACTS,
-  RunIdSchema,
-  RunRecordFieldsSchema,
-  unavailableFactReason,
-  factName,
-  type FactName,
-} from '@shared/schemas';
+import { factName, RunIdSchema, type FactName } from './identifiers';
+import { GOAL_PLAN_KIND } from './plan';
+import { RETIRED_PLUGIN_FACTS, unavailableFactReason } from './rowVersions';
+import { RunRecordFieldsSchema } from './runRecords';
+import { DisplayRowSchema } from './sessionEvent';
 
 /**
  * One finished run as a static viewer replays it: the run aggregate's own

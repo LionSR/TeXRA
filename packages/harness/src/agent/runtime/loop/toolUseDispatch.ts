@@ -38,15 +38,15 @@ import {
   Semaphore,
 } from 'effect';
 
-import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
-import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
+import { normalizeToolCallError } from '@tools/core/toolCallParsing';
+import { extractToolAttachments } from '@tools/core/toolAttachmentExtraction';
 import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
 import {
   ChildRuns,
   childRuns,
   sessionServices,
 } from '@agent/runtime/ToolServices';
-import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { ToolContext } from '@tools/core/ToolTypes';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import {
   RunCall,
@@ -79,6 +79,10 @@ import {
   type ToolCallResult,
   type CallStatus,
 } from '@shared/session/inFlight';
+import {
+  formatAttachmentSummary,
+  formatToolResultAsText,
+} from '@shared/toolResultText';
 import { checkOwnFacts, factRows } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 import { getBasename } from '@utils/core/pathBasics';
@@ -97,10 +101,6 @@ import {
   SKIPPED_OUTCOME_UNKNOWN,
   skippedByScriptEnd,
 } from '../run/tools';
-import {
-  formatAttachmentSummary,
-  formatToolResultAsText,
-} from '../run/toolResultText';
 import { decideRequest } from '../requests';
 import { callRequests, guardedToolCall } from './toolGuard';
 import { appendRow } from './rows';

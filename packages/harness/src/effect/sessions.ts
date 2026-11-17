@@ -6,7 +6,7 @@
  * behind them are `sessionPrograms.ts`'s.
  */
 
-import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { ITool } from '@tools/core/ToolTypes';
 import type {
   HostInteractions,
   Notices,

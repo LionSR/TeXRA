@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { DateTime, Effect, type FileSystem, Option, Stream } from 'effect';
 
 // Local imports
-import { ToolContext } from '@agent/core/tools/ToolTypes';
+import { ToolContext } from '@tools/core/ToolTypes';
 import { requireFileReadForEdit } from '@agent/runtime/RunCall';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import {

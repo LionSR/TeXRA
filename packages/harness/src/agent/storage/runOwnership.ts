@@ -3,12 +3,9 @@
  *  the child loop's turn bookkeeping: database reads of committed rows. */
 
 import { Effect, Result, Schema } from 'effect';
+import stableStringify from 'safe-stable-stringify';
 
 import { runHistoryRows } from '@agent/runtime/providerMessages';
-import {
-  isAgentRunRecord,
-  type RunRecord,
-} from '@agent/core/definition/RunRecord';
 import { SessionRoots } from '@platform/rootedFs';
 import { DatabaseReadFailed } from '@shared/session/database';
 import { attemptOf } from '@shared/session/inFlight';
@@ -31,8 +28,10 @@ import {
   type SessionRow,
   type RunId,
   type AgentConfig,
+  isAgentRunRecord,
+  type RunRecord,
 } from '@shared/schemas';
-import { deriveRunId } from '@utils/core/idHash';
+import { truncatedHexId } from '@utils/core/idHash';
 
 /** What a read of a run's records takes from its session. */
 type RecordServices =
@@ -78,7 +77,9 @@ const parentEdge = Effect.fn('parentEdge')(function* (runId: RunId) {
  *  background script), named by its response too: call ids repeat. The id
  *  is a hash of these fields under these names, `parentRunId` among them:
  *  a resumed call finds the run an earlier attempt launched by deriving
- *  the same id, so the names are part of the stored format. */
+ *  the same id, so the names are part of the stored format. One of the two
+ *  minting sites (`generateRunId` in `@shared/schemas` is the other), so
+ *  the brand is applied here and nowhere downstream. */
 export const callChildRunId = ({
   parentId,
   responseId,
@@ -89,8 +90,16 @@ export const callChildRunId = ({
   readonly responseId: string;
   readonly callId: string;
   readonly attempt: number;
-}): RunId =>
-  deriveRunId({ parentRunId: parentId, responseId, callId, attempt });
+}): RunId => {
+  const identity: Readonly<Record<string, string | number>> = {
+    parentRunId: parentId,
+    responseId,
+    callId,
+    attempt,
+  };
+  // cast: a minting site; 24 hex digits satisfy `RunIdSchema` by construction.
+  return truncatedHexId(stableStringify(identity), 24) as RunId;
+};
 
 /** The runs the attempts so far of `runId`'s open calls launched under
  *  their derived ids (they may not exist), by call: a call no attempt of

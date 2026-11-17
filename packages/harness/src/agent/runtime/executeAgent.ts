@@ -20,7 +20,7 @@ import {
 
 import { ModelProvider } from '@texra-ai/llm';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
-import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { ITool } from '@tools/core/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { registrationRows } from '@agent/storage/runLifecycle';
 import { TraceEmitter } from '@agent/trace/TraceEmitter';
