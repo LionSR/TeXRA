@@ -82,10 +82,7 @@ import {
 } from '@texra/controllers/server/windowHost';
 import { documentRoundsOf } from '@texra/shared/plugins/documents';
 import { texraGuideUrl } from '@ui/copy/guide';
-import {
-  latexdiffVerbs,
-  type LatexdiffHost,
-} from '@texra/latex/latexdiff/latexdiffVerbs';
+import { latexdiffVerbs, type LatexdiffHost } from './latexdiffVerbs';
 import {
   createHostRunActions,
   type HostRunActionPorts,
