@@ -26,7 +26,6 @@ import {
 } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { HOLLOW_DOT, REUSED, STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
-import { COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { TONE_PAINT } from '@cli/tui/ui/tonePaint';
 import { fillRows, safeTerminalText } from '@cli/runtime/terminal/terminalText';
 import {
@@ -77,7 +76,10 @@ function CallRow({
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
       <Box flexShrink={0}>
-        <Text aria-hidden color={waiting ? COLOR_WARNING : paint.color}>
+        <Text
+          aria-hidden
+          color={waiting ? TONE_PAINT.warning.color : paint.color}
+        >
           {fillRows(` ${OWN_MARKER[call.status] ?? paint.marker}`, 3)}
         </Text>
       </Box>
@@ -89,7 +91,9 @@ function CallRow({
       </RowSegment>
       {last ? (
         <RowSegment
-          color={call.detail?.kind === 'error' ? COLOR_ERROR : undefined}
+          color={
+            call.detail?.kind === 'error' ? TONE_PAINT.danger.color : undefined
+          }
           dimColor={call.detail?.kind !== 'error'}
           flexShrink={1}
         >{`  ${safeTerminalText(last)}`}</RowSegment>

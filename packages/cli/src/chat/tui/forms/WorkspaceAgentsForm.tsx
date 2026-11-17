@@ -1,5 +1,4 @@
 import { Effect, Predicate } from 'effect';
-import { Text } from 'ink';
 import { useState } from 'react';
 
 import {
@@ -18,8 +17,8 @@ import {
 } from '@cli/runtime/workspaceAgents';
 
 import { setWorkspaceCliChatAgent } from '@cli/runtime/platform/cliConfig';
-import { COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
-import { CROSS, TICK, WARNING } from '@cli/tui/ui/glyphs';
+import { TICK } from '@cli/tui/ui/glyphs';
+import { ToneLine } from '@cli/tui/ui/ToneLine';
 import type { SelectItem } from '@cli/tui/ui/Select';
 
 import { workspaceTeams, type TeamPreset } from '@texra/shared/agentTeams';
@@ -138,14 +137,13 @@ export function WorkspaceAgentsForm(
   }
 
   const notices = [
-    error ? (
-      <Text key="error" color={COLOR_ERROR}>{`${CROSS} ${error}`}</Text>
-    ) : null,
+    error ? <ToneLine key="error" tone="danger" text={error} /> : null,
     data.record.missingTeamId ? (
-      <Text key="missing-team" color={COLOR_WARNING}>
-        {WARNING} Team "{data.record.missingTeamId}" is unavailable; showing all
-        agents.
-      </Text>
+      <ToneLine
+        key="missing-team"
+        tone="warning"
+        text={`Team "${data.record.missingTeamId}" is unavailable; showing all agents.`}
+      />
     ) : null,
   ].filter(Predicate.isNotNull);
   const frame = <T extends string>(
