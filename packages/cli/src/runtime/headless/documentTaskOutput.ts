@@ -415,8 +415,13 @@ export function formatDocumentTaskTextResult(
     return result.copiedOutput;
   }
 
+  // A program that writes no documents (a Lean program edits the
+  // workspace) answers in text.
   const finalOutput = finalDocumentOutput(result.output.documents.outputs);
-  return finalOutput?.absolutePath ?? result.runDirectory;
+  return (
+    finalOutput?.absolutePath ??
+    (result.output.response.trim() || result.runDirectory)
+  );
 }
 
 /**
