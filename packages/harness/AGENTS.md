@@ -21,13 +21,13 @@ points to a strictly lower layer:
 4. `common/`: cross-cutting logic with domain meaning (errors, parsing, storage layout).
 5. `platform/`: the host ports and the process runtime types.
 6. `model/`, `skills/`: model capabilities and pricing; skill discovery.
-7. `agent/`, `tools/`, `transcript/`: the run runtime, the tool engine with the
-   built-in tools, and run-transcript persistence. They import each other.
+7. `agent/`, `tools/`: the run runtime with its storage reads, and the tool
+   engine with the built-in tools. They import each other.
 8. `controllers/`: the SQLite session stores and the session composition.
 9. `effect/`: the SDK (`Sessions`, `processLayer`).
 10. The entry files at the root (`index.ts`, `node.ts`, `plugins.ts`, `schemas.ts`, `host.ts`, `transcriptEntry.ts`).
 
-The known exceptions: two `utils/` modules import a type from `shared/`, `execUtils.ts` its `ExecResult` and `idHash.ts` the `RunId`; and `agent/`, `tools/` and `transcript/` form one cycle.
+The known exceptions: two `utils/` modules import a type from `shared/`, `execUtils.ts` its `ExecResult` and `idHash.ts` the `RunId`; and `agent/` and `tools/` form one cycle.
 
 ## Configuration, storage, and workspace files
 

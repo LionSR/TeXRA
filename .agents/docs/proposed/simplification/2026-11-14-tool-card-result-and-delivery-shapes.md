@@ -24,7 +24,7 @@ on purpose.
   `status`. That is the "nested" case.
 
 `output` being the whole result is read back as such in two places:
-`toolResultNodes` (`packages/harness/src/transcript/completedRunArchive.ts`)
+`toolResultNodes` (`packages/harness/src/agent/storage/completedRunArchive.ts`)
 decodes it with `ToolResultSchema` to rebuild the text the model read, and
 `statusOf` (`packages/harness/src/shared/transcript/scriptStage.ts`) reads
 `reusedFrom` and `name` from it. Lifting the three fields out of `output`

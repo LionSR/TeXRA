@@ -36,7 +36,7 @@ import type { SessionView } from '@shared/session/sessionView';
 import { formatConversation } from '@shared/transcript/conversationFormat';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
-import { readCompletedRunConversation } from '@transcript/completedRunArchive';
+import { readCompletedRunConversation } from '@agent/storage/completedRunArchive';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { getPathSegments } from '@utils/core/pathCore';

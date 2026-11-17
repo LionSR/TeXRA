@@ -166,8 +166,7 @@ Where things go:
 - The extension's webview HTML provider is in
   `packages/extension/src/common/webview/`, not in the harness.
 - The transcript row model is `packages/harness/src/shared/transcript/`
-  (`@shared/transcript`); `packages/harness/src/transcript/` (`@transcript`) is
-  run-transcript persistence.
+  (`@shared/transcript`).
 
 Two wiring points fail silently: a new VS Code command is registered through
 `packages/extension/src/commands.ts`, and a new setting is declared in the

@@ -29,8 +29,8 @@ import type {
 } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import type { RequestError } from '@shared/session/runtimeRequest';
-import { readCompletedRunConversation } from '@transcript/completedRunArchive';
-import { assembleTrace } from '@transcript/traceAssembler';
+import { readCompletedRunConversation } from '@agent/storage/completedRunArchive';
+import { assembleTrace } from '@agent/storage/traceAssembler';
 
 import type { LocalSession } from './sessions.js';
 
