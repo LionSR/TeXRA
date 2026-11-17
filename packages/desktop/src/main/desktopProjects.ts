@@ -170,9 +170,7 @@ const partitionFolders = Effect.fn('desktopProjects.partitionFolders')(
       } else if (meansAbsent(stat.failure)) {
         missing.push(root);
       } else {
-        const reason = toErrorMessage(
-          stat.failure.reason.cause ?? stat.failure,
-        );
+        const reason = toErrorMessage(stat.failure);
         yield* Effect.logWarning(
           `Cannot read the remembered project ${root}; keeping it for the next launch: ${reason}`,
         );
