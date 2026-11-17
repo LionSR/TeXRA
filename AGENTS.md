@@ -266,7 +266,8 @@ in `node_modules/effect` instead of guessing a pattern.
   the declared type of a port whose hosts fail differently stays `Error`; its
   implementations still raise tagged errors. Turn a foreign rejection into
   the tagged error in the `catch` of `Effect.try` / `Effect.tryPromise`
-  (`toErrorMessage(cause)` as the message, the original as `cause`), never a
+  (its own message, `ensureError(cause).message`, and the original as
+  `cause`), never a
   `(e) => e` pass-through and never the thunk form `Effect.try(() => …)` /
   `Effect.tryPromise(() => …)`, whose `UnknownError` hides the message.
   `yield*` a tagged error directly; `Effect.fail` is for outside a generator.
