@@ -387,7 +387,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         AttemptServices
       > {
         const state = yield* cell.current;
-        const mode = bound.background ? 'background' : 'foreground';
+        const mode = bound.model.background ? 'background' : 'foreground';
         yield* saveDebug(state.messages, 'messages', invocation, bound);
         // What the window leaves a foreground request (`outputBudget`); a
         // background one is the provider's to size.
