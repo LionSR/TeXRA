@@ -120,7 +120,6 @@ class TuiUiHost implements Dialogs {
         title={field.prompt}
         masked={field.secret ?? false}
         placeholder={field.placeholder ?? ''}
-        hint="Press Enter to submit."
         onSubmit={answer}
         onCancel={() => answer(undefined)}
       />
