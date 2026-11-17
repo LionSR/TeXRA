@@ -805,7 +805,7 @@ function validateLeanBlueprintProgram() {
     );
     assert(
       response.startsWith(
-        'The dependency graph still has problems: 3 statements, 2 marked \\leanok. 2 problems:',
+        'After 2 rounds the check still reports:\n3 statements, 2 marked \\leanok. 2 problems:',
       ) &&
         response.includes(
           'blueprint/src/content.tex:16: "lem:missing" is not the label of any statement.',
