@@ -88,17 +88,6 @@ export const askUnlessSilenced = Effect.fn('askUnlessSilenced')(function* (
   return undefined;
 });
 
-/** Warn-log a button's program that failed: the notice has been answered. */
-const warnOnFailure = (
-  program: Effect.Effect<void, Error>,
-  what: string,
-): Effect.Effect<void> =>
-  program.pipe(
-    Effect.catchCause((cause) =>
-      Effect.logWarning(what, cause).pipe(withLogChannel(CHANNEL)),
-    ),
-  );
-
 /** What each instruction action's button runs. */
 const ACTION_RUN: Record<
   InstructionAction,
@@ -134,9 +123,14 @@ export function windowNotices(
       .pipe(
         Effect.flatMap((choice) =>
           choice && docsPage
-            ? warnOnFailure(
-                host.openGuide(docsPage),
-                `Failed to open the ${docsPage} guide`,
+            ? // The notice has been answered: a guide that fails to open is
+              // a diagnostic.
+              host.openGuide(docsPage).pipe(
+                Effect.ignore({
+                  log: 'Warn',
+                  message: `Failed to open the ${docsPage} guide`,
+                }),
+                withLogChannel(CHANNEL),
               )
             : Effect.void,
         ),
@@ -168,9 +162,12 @@ export function windowNotices(
           );
           return action === undefined
             ? Effect.void
-            : warnOnFailure(
-                ACTION_RUN[action](host),
-                `The instruction action "${INSTRUCTION_ACTION_BUTTON_LABELS[action]}" failed`,
+            : ACTION_RUN[action](host).pipe(
+                Effect.ignore({
+                  log: 'Warn',
+                  message: `The instruction action "${INSTRUCTION_ACTION_BUTTON_LABELS[action]}" failed`,
+                }),
+                withLogChannel(CHANNEL),
               );
         }),
       );

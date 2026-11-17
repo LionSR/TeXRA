@@ -9,14 +9,11 @@
  * presentation layer forks it and reports its failure, so nothing here runs
  * a fiber of its own.
  */
-import { Effect } from 'effect';
 
 import {
   withProcessServices,
   type ProcessRuntime,
 } from '@texra-ai/harness/host';
-import { withLogChannel } from '@texra-ai/harness/plugins';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { setApiKey } from '@commands/api/apiKeyCommands';
 import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
 import { askNotice } from '@frontend/hosts/VscodeUiHost';
@@ -24,23 +21,6 @@ import type { ShowBuilt } from '@frontend/latex/openBuild';
 import type { GuiWindowHost } from '@texra/controllers/session/openGuiWindow';
 import { windowNotices } from '@texra/controllers/session/windowNotices';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-
-const CHANNEL = 'agentEventListeners';
-
-/** Warn-log a step whose failure is a diagnostic rather than non-delivery,
- *  and carry on with the step after it. */
-export function warnOnFailure<E>(
-  program: Effect.Effect<void, E>,
-  what: string,
-): Effect.Effect<void> {
-  return program.pipe(
-    Effect.catchCause((cause) =>
-      Effect.logWarning(`${what}: ${toErrorMessage(cause)}`).pipe(
-        withLogChannel(CHANNEL),
-      ),
-    ),
-  );
-}
 
 /**
  * The runtime's notices this extension presents its own way; the window's
