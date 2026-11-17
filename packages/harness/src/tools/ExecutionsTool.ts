@@ -33,6 +33,7 @@ import {
 } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import type { SessionView } from '@shared/session/sessionView';
+import { formatConversation } from '@shared/transcript/conversationFormat';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { readCompletedRunConversation } from '@transcript/completedRunArchive';
@@ -53,7 +54,6 @@ import {
 } from './executionFormatters';
 import { defineTool } from './core/definition';
 import { formatFileView, type LineRange } from './formatting';
-import { formatConversation } from './executions/conversationFormat';
 import { orchestratorKillDenial } from './executions/killPolicy';
 import { queryHistory } from './executions/queryAction';
 import { showOutput } from './executions/processOutput';

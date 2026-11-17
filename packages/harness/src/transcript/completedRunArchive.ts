@@ -1,7 +1,7 @@
 /** Completed-run display reads, keyed by run id. */
 import { Effect, absurd } from 'effect';
 import { formatToolResultAsText } from '@agent/runtime/run/toolResultText';
-import { stringifyConversationValue } from '@agent/storage/conversationFormat';
+import { stringifyConversationValue } from '@shared/transcript/conversationFormat';
 
 import { Settings, type ConfigProvider } from '@shared/config/settings';
 import type { RunId, ToolCallLog, ExportNode } from '@shared/schemas';

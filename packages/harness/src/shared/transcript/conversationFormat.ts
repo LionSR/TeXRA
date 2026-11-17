@@ -1,15 +1,16 @@
 /**
  * Plain-text rendering of a completed run's conversation nodes
- * (`readCompletedRunConversation` in `@transcript/completedRunArchive`).
+ * (`readCompletedRunConversation` in `completedRunArchive.ts`).
  *
  * Used by:
  *  - `ExecutionsTool`'s `/executions/{id}/conversation` endpoint
- *    (`tools/executions/conversationFormat.ts`)
+ *    (`formatConversation`, below)
  *  - a host's history and resume previews
  *
  * Callers keep their own output composition (XML-ish `<message>` blocks for
  * the tools endpoint; a structured preview/transcript shape plus whole-message
  * truncation for the CLI). Node rendering and truncation are shared here.
+ * Pure: the caller owns storage access and paging.
  */
 import { absurd } from 'effect';
 import type { ExportNode } from '@shared/schemas';
@@ -118,4 +119,42 @@ export function formatConversationMessage(
     role: NODE_ROLE[node.kind],
     content: formatNodeContent(node, options).trim(),
   };
+}
+
+/** The truncation the `/executions/{id}/conversation` endpoint applies. */
+const CONVERSATION_PAGE_FORMAT_OPTIONS: ConversationFormatOptions = {
+  textLimit: 500,
+  toolBlockLimit: 100,
+};
+
+interface ConversationPageFormatOptions {
+  /** Zero-based index of the first message in this page. */
+  readonly offset?: number;
+  /** Total messages in the unsliced archive. */
+  readonly totalMessages?: number;
+  /** Archive-selection facts shown before the message blocks. */
+  readonly metadata?: readonly string[];
+}
+
+/** Render a stored conversation as numbered <message> blocks. */
+export function formatConversation(
+  conversation: readonly ExportNode[],
+  options: ConversationPageFormatOptions = {},
+): string {
+  const offset = options.offset ?? 0;
+  const totalMessages = options.totalMessages ?? conversation.length;
+  const messages = conversation.map((msg, i) => {
+    const { role, content } = formatConversationMessage(
+      msg,
+      CONVERSATION_PAGE_FORMAT_OPTIONS,
+    );
+    return `<message index="${offset + i + 1}" role="${role}">\n${content}\n</message>`;
+  });
+
+  return [
+    `Conversation (${totalMessages} messages):`,
+    ...(options.metadata ?? []),
+    '',
+    messages.join('\n\n'),
+  ].join('\n');
 }

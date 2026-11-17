@@ -30,7 +30,7 @@ export { ExportNodeSchema, type ExportNode } from '@shared/schemas/exportNode';
 export {
   formatConversationMessage,
   type ConversationFormatOptions,
-} from '@agent/storage/conversationFormat';
+} from '@shared/transcript/conversationFormat';
 // What `SessionHost.emit` takes and answers: the notices a session's runs
 // ask a host to present.
 export type {
