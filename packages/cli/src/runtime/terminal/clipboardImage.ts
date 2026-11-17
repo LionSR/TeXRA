@@ -23,7 +23,8 @@ import * as ChildProcess from 'effect/process/ChildProcess';
 
 import { withSessionFs } from '@texra-ai/harness/host';
 import { meansAbsent, executeCommand } from '@texra-ai/harness/node';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { hostFailed } from '@texra/controllers/session/hostCallFailure';
+import type { HostFailed } from '@texra/hosts/uiHosts';
 import { generatePastedImageName } from '@texra/shared/utils/pastedImageName';
 import {
   type PastedImageSaveFailed,
@@ -41,22 +42,11 @@ class ClipboardImageTooLarge extends Schema.TaggedError<ClipboardImageTooLarge>(
   {},
 ) {}
 
-/**
- * The clipboard probe failed at a foreign edge (an OS clipboard tool, a
- * temp-dir creation, or a temp-file read): the untagged value that edge
- * threw, wrapped here so the channel stays typed. `message` is the cause's
- * own message, which is what the input bar's error hook prints.
- */
-class ClipboardImageProbeFailed extends Schema.TaggedError<ClipboardImageProbeFailed>()(
-  'ClipboardImageProbeFailed',
-  {
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
-
-const probeFailed = (cause: unknown): ClipboardImageProbeFailed =>
-  new ClipboardImageProbeFailed({ message: toErrorMessage(cause), cause });
+/** The clipboard probe failed at a foreign edge (an OS clipboard tool, a
+ *  temp-dir creation, or a temp-file read), in the cause's own words, which
+ *  is what the input bar's error hook prints. */
+const probeFailed = (cause: unknown): HostFailed =>
+  hostFailed('clipboardImage', cause);
 
 type ClipboardAttachResult =
   | {
@@ -76,17 +66,14 @@ type ClipboardRead = Buffer | 'none' | 'unsupported' | 'too-large';
  *  worded by the errno text. */
 const readPngFileWithinLimit: (
   outFile: string,
-) => Effect.Effect<
-  ClipboardRead,
-  ClipboardImageProbeFailed,
-  FileSystem.FileSystem
-> = Effect.fn('readPngFileWithinLimit')(function* (outFile: string) {
-  const fs = yield* FileSystem.FileSystem;
-  const { size } = yield* fs.stat(outFile);
-  if (Number(size) > MAX_IMAGE_BYTES) return 'too-large' as const;
-  const bytes = yield* fs.readFile(outFile);
-  return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-}, Effect.mapError(probeFailed));
+) => Effect.Effect<ClipboardRead, HostFailed, FileSystem.FileSystem> =
+  Effect.fn('readPngFileWithinLimit')(function* (outFile: string) {
+    const fs = yield* FileSystem.FileSystem;
+    const { size } = yield* fs.stat(outFile);
+    if (Number(size) > MAX_IMAGE_BYTES) return 'too-large' as const;
+    const bytes = yield* fs.readFile(outFile);
+    return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  }, Effect.mapError(probeFailed));
 
 /** Whether a platform reader ran to success and left no 'NO_IMAGE' mark. */
 function readerWrote(
@@ -106,7 +93,7 @@ function readClipboardPngMac(
   outFile: string,
 ): Effect.Effect<
   ClipboardRead,
-  ClipboardImageProbeFailed,
+  HostFailed,
   FileSystem.FileSystem | ChildProcessSpawner
 > {
   // osascript ships with macOS — no external dependency. The first statement
@@ -193,7 +180,7 @@ function readClipboardPngWindows(
   outFile: string,
 ): Effect.Effect<
   ClipboardRead,
-  ClipboardImageProbeFailed,
+  HostFailed,
   FileSystem.FileSystem | ChildProcessSpawner
 > {
   const quotedOutFile = outFile.replaceAll("'", "''");
@@ -220,7 +207,7 @@ export function attachClipboardImage(
   roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>,
 ): Effect.Effect<
   ClipboardAttachResult,
-  ClipboardImageProbeFailed | PastedImageSaveFailed,
+  HostFailed | PastedImageSaveFailed,
   FileSystem.FileSystem | Path.Path | ChildProcessSpawner
 > {
   /** Nothing attached: the caller surfaces `reason` and keeps the draft. */
@@ -242,7 +229,7 @@ export function attachClipboardImage(
 
     let reader: Effect.Effect<
       ClipboardRead,
-      ClipboardImageProbeFailed,
+      HostFailed,
       FileSystem.FileSystem | ChildProcessSpawner
     >;
     switch (plat) {

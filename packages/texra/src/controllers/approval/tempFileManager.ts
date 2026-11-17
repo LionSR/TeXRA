@@ -19,39 +19,27 @@
 import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 
-import { Effect, FileSystem, type PlatformError, Schema } from 'effect';
+import { Effect, FileSystem, type PlatformError } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { hostFailed } from '@texra/controllers/session/hostCallFailure';
+import type { HostFailed } from '@texra/hosts/uiHosts';
 
 const CHANNEL = 'approval.tempFiles';
 
-/** A staged diff side could not be written to the host filesystem. */
-class ApprovalTempWriteFailed extends Schema.TaggedError<ApprovalTempWriteFailed>()(
-  'ApprovalTempWriteFailed',
-  {
-    side: Schema.Literals(['original', 'proposed']),
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
-
+/** Write one staged diff side; a failure is the host's, named by the side,
+ *  like the directory the host created for it. */
 const writeSide = (
   fs: FileSystem.FileSystem,
   side: 'original' | 'proposed',
   filePath: string,
   content: string,
-): Effect.Effect<void, ApprovalTempWriteFailed> =>
-  fs.writeFileString(filePath, content).pipe(
-    Effect.mapError(
-      (cause) =>
-        new ApprovalTempWriteFailed({
-          side,
-          message: toErrorMessage(cause),
-          cause,
-        }),
-    ),
-  );
+): Effect.Effect<void, HostFailed> =>
+  fs
+    .writeFileString(filePath, content)
+    .pipe(
+      Effect.mapError((cause) => hostFailed(`approval.write.${side}`, cause)),
+    );
 
 export interface ApprovalTempFiles {
   readonly originalPath: string;
@@ -96,11 +84,7 @@ const removeTempFile = (
 export const writeApprovalTempFiles = Effect.fn('writeApprovalTempFiles')(
   function* (
     input: WriteApprovalTempFilesInput,
-  ): Effect.fn.Return<
-    ApprovalTempFiles,
-    ApprovalTempWriteFailed,
-    FileSystem.FileSystem
-  > {
+  ): Effect.fn.Return<ApprovalTempFiles, HostFailed, FileSystem.FileSystem> {
     const fs = yield* FileSystem.FileSystem;
     const { directory, targetPath, originalContent, proposedContent } = input;
     const ext = path.extname(targetPath) || '.txt';
