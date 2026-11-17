@@ -969,7 +969,7 @@ const SCENARIOS = [
     bootExpect: ' Ctrl-C ',
     keys: ['a', '/approval', '\r', '4'],
     expect: ['Auto-approving commands: off'],
-    unexpect: ['Auto: commands', 'Run command?'],
+    unexpect: ['AUTO: COMMANDS', 'Run command?'],
   },
   {
     name: 'approval-policy-status-bar',
@@ -1008,7 +1008,7 @@ const SCENARIOS = [
       '/plugins',
       'Switch plugins on or off. Add one: /plugins add <URL or folder>',
       'always on · TeXRA plugin',
-      'Multi-Agent Workflow — on · TeXRA plugin · 1 tool',
+      'Multi-Agent Workflow — on · TeXRA plugin · 2 tools',
       'switch on/off',
     ],
     unexpect: ['[TeXRA]', 'toolUtils', '/config · Tools', 'TeXRA CLI'],
@@ -1025,7 +1025,7 @@ const SCENARIOS = [
     keys: [...PLUGINS_FORM_KEYS, 'b'],
     frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
-    expect: ['/plugins', 'Multi-Agent Workflow — on · TeXRA plugin · 1 tool'],
+    expect: ['/plugins', 'Multi-Agent Workflow — on · TeXRA plugin · 2 tools'],
     unexpect: ['Multi-Agent Workflow — off'],
   },
   {
@@ -1093,7 +1093,7 @@ const SCENARIOS = [
       '/agent',
       'Current: chat (hidden from picker)',
       'Agents',
-      '+11 more',
+      '+9 more',
       '↑/↓ navigate',
       '1-9/a-z/Enter select',
       'Esc close',
@@ -1616,7 +1616,7 @@ const SCENARIOS = [
     bootExpect: ' Ctrl-C ',
     keys: ['a'],
     frame: 'viewport',
-    expect: ['Auto: commands', '/ commands'],
+    expect: ['AUTO: COMMANDS', '/ commands'],
     unexpect: ['AUTO-APPROVE', 'Run command?', '1 approval'],
   },
   {
@@ -1642,7 +1642,7 @@ const SCENARIOS = [
     expect: [
       'approval: Ask before shell commands and file edits.',
       'auto-approvals: commands',
-      'Auto: commands',
+      'AUTO: COMMANDS',
     ],
     unexpect: ['Run command?', '1 approval'],
   },
@@ -1671,7 +1671,7 @@ const SCENARIOS = [
     bootExpect: ' Ctrl-C ',
     keys: ['a', '/status', '\r'],
     frame: 'viewport',
-    expect: ['team: Physicist', 'auto-approvals: commands', 'Auto: commands'],
+    expect: ['team: Physicist', 'auto-approvals: commands', 'AUTO: COMMANDS'],
     unexpect: ['Run command?', '1 approval', 's subagents'],
   },
   {
@@ -2520,12 +2520,18 @@ const SCENARIOS = [
       '\r',
     ],
     frame: 'viewport',
-    expect: ['◆ Stopped', 'root active', 'Esc parent'],
+    // A stopped agent with saved steps takes a follow-up, which resumes it
+    // (`acceptsFollowUp`), so the message reaches the focused child.
+    expect: [
+      '◆ Stopped',
+      'root active',
+      'Esc parent',
+      '» Harness received: can you still receive this?',
+    ],
     unexpect: [
       STOPPED_SUBAGENT_INPUT_MESSAGE_START,
       STOPPED_SELECTED_BACKGROUND_TASK_MESSAGE,
-      'Harness received: can you still receive this?',
-      'can you still receive this?',
+      'This run cannot accept messages right now.',
     ],
     unexpectPatterns: [RUNNING_STATUS_PATTERN],
   },
