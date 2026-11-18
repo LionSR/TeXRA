@@ -328,8 +328,10 @@ const DELTA_CHANNELS = new Map<string, Append['channel']>([
   ['response.reasoning_summary_text.delta', 'summary'],
   ['response.reasoning_text.delta', 'reasoning'],
 ]);
-// Events that own no content: framing (output_item.done carries the item) and
-// the Codex backend's response.metadata notices (serving model, safety hints).
+// Events that own no content: framing (output_item.done carries the item),
+// the Codex backend's response.metadata notices (serving model, safety hints)
+// and the transport's keepalive, which the SDK's own `accumulateResponse`
+// takes beside the stream events and leaves the response unchanged by.
 const FRAMING_EVENTS = new Set([
   'response.content_part.added',
   'response.content_part.done',
@@ -342,6 +344,7 @@ const FRAMING_EVENTS = new Set([
   'response.function_call_arguments.delta',
   'response.function_call_arguments.done',
   'response.metadata',
+  'keepalive',
 ]);
 
 /** One decoded Responses event: its parts, and whether it finishes. */
