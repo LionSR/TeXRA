@@ -6,8 +6,6 @@
 // window's shared request body; this file only tells the renderer when a
 // write lands in its tree.
 
-import { toErrorMessage } from '@texra-ai/harness/schemas';
-
 import { Effect } from 'effect';
 
 import { isPathWithin, onAppSignal } from '@texra-ai/harness/host';
@@ -113,7 +111,9 @@ export function createDesktopWorkspaceIpc(
             post({
               command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_ERROR,
               sessionId,
-              message: `Could not start a terminal: ${toErrorMessage(error)}`,
+              // The pty host's `HostFailed` is already its cause in its own
+              // words.
+              message: `Could not start a terminal: ${error.message}`,
             }),
           ),
           Effect.fail(error),
