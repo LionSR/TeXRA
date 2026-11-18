@@ -253,6 +253,24 @@ Done, on the branch after PR 14927:
   while a run opens stops the runs under it where the launch writes its
   stop row. The JSON-RPC pending table and the draft recorder's reservation
   follow row 4.
+- Row 6, fiber-first opening: a run is one fiber from its launch's first
+  step. `RunRegistry.start` forks it in the step that checks the launch
+  may start (the fiber takes its entry as its first step, which the fork
+  runs before it returns), and the fiber opens the run in a scope it owns,
+  answers its launcher through one `Deferred`, runs it and ends it
+  (`Launch { open, run, end }`; `executeAgent` is that for an agent run,
+  over the launch's own preparation). The `opening` state and its
+  `launched` `Deferred`, executeAgent's detached `Scope.make`,
+  `PreparedRun`, the uninterruptible open-and-fork in the registry, the
+  stop kept on an opening entry and the resume's `stopAsked` check are
+  gone. A stop is the fiber's interruption plus its row: one that cuts an
+  opening refuses the launch (`RunStopped`), and the rows the opening had
+  committed (its batch is uninterruptible, so the interruption lands as it
+  finishes) end with the stop's reason in the registry (`endUnopened`),
+  not in the run's end, which never sees such a stop. A launcher only
+  waits for the answer; its interruption leaves the run to its fiber,
+  except that an awaited child is released. Three commits: the move with
+  behaviour kept, then each behaviour change ("Needs the owner").
 - Row 1: a run's open step is a `Ref`.
 - Row 8: `withPerKeyLane` is a `Semaphore` per key in a counted map; the
   `Deferred` chain is gone. The agent catalog's one-key lane is a
@@ -456,16 +474,30 @@ Left, with the reason:
   scope deletes the files they read, so its close waits for them) and its
   approval, a session request.
 
-Open: fiber-first opening (row 6), the frames on `rpc` (row 16), the
-remaining buffers (row 20: the session events' gap read, and the three in
-row 16's files), and slice 7. What the passes learned:
+Open: the frames on `rpc` (row 16), the remaining buffers (row 20: the
+session events' gap read, and the three in row 16's files), and slice 7.
+What the passes learned:
 
 - Row 6 keeps a `Map`, for the reason in its "Stays" cell. Fiber-first
-  opening (the run's fiber acquires its own resources) removes the
-  `opening` and `pending` states and the detached scope. It changes what a
-  launcher's interruption means, and a stop that reaches a run before its
-  registration commits has no row to carry its reason, so the run's end
-  would read the reason from the registry.
+  opening removed the `opening` state and the detached scope but not
+  `pending`: a stop of a run id with nothing here and no rows is a launch
+  its caller minted and has not handed over (a window's stop racing its
+  own start), and without the record the stop is lost and the run runs.
+  It now refuses that launch. The stop's reason never had to ride the
+  run's end: an interruption that cuts an opening always lands inside the
+  opening (an uninterruptible region's end checks for it), so the
+  registry, which holds the reason, ends those rows itself. Two orderings
+  the old hand-off gave for free had to be kept by hand. The fiber must
+  hold its entry before anything can see the id free, so its first step
+  takes it and the registry fails loudly if a fork ever only schedules
+  its fiber. And a `Deferred`'s completion runs its waiter inside the
+  completing fiber's step, so a launcher woken by the answer ran before
+  the run reached its loop and found no controls (`crashConformanceResume`
+  3 and 4: a model switch right after a resume); the launcher yields once,
+  uninterruptibly, after the answer. Still left in this path: the wake's
+  `forkDetach` (`wakeIfOwed`, row 14's list): it now only waits for the
+  resume's answer to log a refusal, and moving it to the session's
+  `FiberSet` is that row's work.
 - Row 21, the close deadline: the step with no bound is
   `Fiber.interruptAll` in the run `FiberMap`'s finalizer, which waits for
   a run that does not unwind. No such run was reproduced, and a bounded
@@ -522,8 +554,17 @@ row 16's files), and slice 7. What the passes learned:
   told one is running.
 - **A failed refresh no longer signs out** unless the stored session is the
   one that failed.
-- **A launcher's interruption stops being a `user` stop** (row 6), and a
-  child interrupted while opening under "Keep agents running" keeps opening.
+- **A launcher's interruption stops being a `user` stop** (row 6, landed
+  as its own commit): an interrupted `session.start` or `resume`, or a
+  tool call interrupted while the background child it launched opens,
+  gives up only its wait, and the run opens and runs on (an awaited child
+  is `released`, as it was once running). `session.start` interrupted just
+  after the run opened no longer interrupts it either.
+- **A stop that reaches a run before its first rows refuses the launch**
+  (row 6, its own commit): the launch fails with "was stopped before it
+  started" and no run exists, where the opening used to finish and end
+  CANCELLED with the stop's row. The same for a stop of a minted id
+  before its launch arrived. A stop of a run that has rows is unchanged.
 
 ## What this gives up
 
