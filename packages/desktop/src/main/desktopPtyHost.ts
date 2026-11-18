@@ -15,8 +15,9 @@ import { chmodSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { platform as osPlatform } from 'node:os';
 import { dirname, join } from 'node:path';
-import { Effect, Schema } from 'effect';
-import { ensureError } from '@texra-ai/harness/schemas';
+import { Effect } from 'effect';
+import type { HostFailed } from '@texra/hosts/uiHosts';
+import { hostFailed } from '@texra/controllers/session/hostCallFailure';
 import { withCommandDirs } from '@texra-ai/harness/node';
 
 /**
@@ -63,13 +64,7 @@ interface DesktopPtyHostOptions {
 
 /** A terminal's shell could not be started: the native PTY module would not
  *  load, or it could not spawn the shell. */
-class PtyStartFailed extends Schema.TaggedError<PtyStartFailed>()(
-  'PtyStartFailed',
-  { message: Schema.String, cause: Schema.Defect() },
-) {}
-
-const ptyStartFailed = (cause: unknown) =>
-  new PtyStartFailed({ message: ensureError(cause).message, cause });
+const ptyStartFailed = (cause: unknown) => hostFailed('ptyHost.create', cause);
 
 export interface DesktopPtyHost {
   /**
@@ -84,7 +79,7 @@ export interface DesktopPtyHost {
     id: string;
     cols: number;
     rows: number;
-  }): Effect.Effect<PtySessionHandle | undefined, PtyStartFailed>;
+  }): Effect.Effect<PtySessionHandle | undefined, HostFailed>;
   get(id: string): PtySessionHandle | undefined;
   disposeAll(): void;
 }
@@ -264,7 +259,7 @@ export function createDesktopPtyHost(
             for (const data of heldInput.splice(0)) spawned.write(data);
             return handle;
           }),
-          Effect.catch((error: PtyStartFailed) => {
+          Effect.catch((error: HostFailed) => {
             if (sessions.get(id) === handle) sessions.delete(id);
             return disposed ? Effect.undefined : Effect.fail(error);
           }),
