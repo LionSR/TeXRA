@@ -124,7 +124,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // earlier build's child end would deliver to a call that reads it.
     // v4: whether the run takes a message is a boolean (`takesFollowUps`),
     // not `userFollowUpSupport`; an earlier build's row names neither.
-    'run.start': Object.freeze({ version: 4, listing: 'lifecycle' }),
+    // v5: `approvalPolicy` (the run's grants at launch) is always written and
+    // `worktree` is null, never absent, for a run in the workspace (an
+    // earlier build's row without them would fail as damaged).
+    'run.start': Object.freeze({ version: 5, listing: 'lifecycle' }),
     'run.activate': Object.freeze({ ...V1, listing: 'own' }),
     // v2: a recipe's script names its block and options; `toolConfig` is gone
     // (an earlier build's v1 row refuses its run as written by that build,

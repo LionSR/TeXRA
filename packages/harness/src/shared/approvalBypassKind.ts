@@ -106,15 +106,10 @@ export function withUnborn(
   source: ApprovalGrantSource,
   runId: RunId,
   parentId: RunId | null,
-  grants: ApprovalGrants | null | undefined,
+  grants: ApprovalGrants,
 ): ApprovalGrantSource {
   if (source.runs.has(runId)) return source;
-  return {
-    runs: new Map(source.runs).set(runId, {
-      parentId,
-      grants: grants ?? NO_APPROVAL_GRANTS,
-    }),
-  };
+  return { runs: new Map(source.runs).set(runId, { parentId, grants }) };
 }
 
 /** The strictest launch limit on a run's ancestry while its edges stand,

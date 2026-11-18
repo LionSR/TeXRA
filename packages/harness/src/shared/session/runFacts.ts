@@ -275,7 +275,7 @@ export function registrationDrafts(
     aggregateId: target,
     identity: options.identity,
     takesFollowUps: options.takesFollowUps ?? false,
-    worktree: worktree ? { workingDirectory: worktree } : undefined,
+    worktree: worktree ? { workingDirectory: worktree } : null,
     parent: options.parent ?? null,
     provenance: options.provenance ?? null,
     approvalPolicy: options.grants ?? NO_APPROVAL_GRANTS,

@@ -17,6 +17,7 @@ import {
   RunIdSchema,
   type SessionView,
 } from '@texra-ai/harness/schemas';
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { emptyRunEndOutput, type RunParent } from '@shared/schemas';
 import {
   makeSessionViewUpdater,
@@ -226,6 +227,8 @@ export function buildScenario({ proposal = false } = {}) {
     },
     provenance: null,
     takesFollowUps: true,
+    worktree: null,
+    approvalPolicy: NO_APPROVAL_GRANTS,
   });
   log.emit(CHILD, T.child, {
     type: 'run.config',
@@ -277,6 +280,8 @@ export function buildScenario({ proposal = false } = {}) {
     takesFollowUps: false,
     parent: log.parent(CHILD),
     provenance: null,
+    worktree: null,
+    approvalPolicy: NO_APPROVAL_GRANTS,
   });
   log.emit(GRANDCHILD, T.grandchild, {
     type: 'run.activate',
@@ -332,6 +337,8 @@ export function buildScenario({ proposal = false } = {}) {
     parent: null,
     provenance: null,
     takesFollowUps: false,
+    worktree: null,
+    approvalPolicy: NO_APPROVAL_GRANTS,
   });
   log.emit(PROCESS, T.process, {
     type: 'run.config',

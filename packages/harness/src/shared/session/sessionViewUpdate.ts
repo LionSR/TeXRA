@@ -42,7 +42,6 @@ import {
   type TranscriptSubscription,
   factName,
 } from '@shared/schemas';
-import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { getModelLabel } from '@shared/model/modelLabel';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
@@ -340,7 +339,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     inputFiles: [],
     agentScope: null,
     facts: {},
-    worktree: event.worktree ?? null,
+    worktree: event.worktree,
     position: 'ready' as const,
     outcome: null,
     holder: 'none' as const,
@@ -354,7 +353,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     turn: null,
     takesFollowUps: event.takesFollowUps,
     queuedFollowUps: [],
-    grants: event.approvalPolicy ?? NO_APPROVAL_GRANTS,
+    grants: event.approvalPolicy,
     context: null,
     parentId: event.parent?.id ?? null,
     launch:

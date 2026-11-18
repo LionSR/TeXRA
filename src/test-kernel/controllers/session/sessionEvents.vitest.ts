@@ -127,7 +127,8 @@ const [storage, run] = process.argv.slice(2);
 const append = Effect.flatMap(Database, (db) =>
   db.appendAll([{ type: 'run.start', aggregateId: run,
     identity: { kind: 'agent', agent: 'chat' }, takesFollowUps: false,
-    parent: null, provenance: null }]));
+    worktree: null, parent: null, provenance: null,
+    approvalPolicy: { own: {}, goal: [] } }]));
 await Effect.runPromise(append.pipe(Effect.provide(databaseLayer('persistent').pipe(
   Layer.provide(Layer.succeed(SessionWorkspace)({ storage })),
   Layer.provide(Layer.succeed(ToolRegistry)(toolTable([]))),

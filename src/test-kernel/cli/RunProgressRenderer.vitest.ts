@@ -15,6 +15,7 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { createCliRuntimeHost } from '@cli/runtime/headless/cliPresentationHost';
 import { attachCliSessionProgressProjection } from '@cli/runtime/headless/sessionProgressSubscription';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -52,7 +53,7 @@ const publishRun = (
       worktree: null,
       parent: null,
       provenance: null,
-      approvalPolicy: null,
+      approvalPolicy: NO_APPROVAL_GRANTS,
     },
     {
       type: 'run.config',
@@ -205,6 +206,8 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                     takesFollowUps: true,
                     parent: null,
                     provenance: null,
+                    worktree: null,
+                    approvalPolicy: NO_APPROVAL_GRANTS,
                   },
                   {
                     type: 'run.start',
@@ -213,6 +216,8 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                     takesFollowUps: false,
                     parent: { id: parentId, call: null },
                     provenance: null,
+                    worktree: null,
+                    approvalPolicy: NO_APPROVAL_GRANTS,
                   },
                 ]);
                 yield* holdTestRun(handle, childRunId);
