@@ -143,11 +143,26 @@ export interface AgentCatalogShape {
   readonly pinned: (scope: AgentDelegationScope) => AgentEntry[];
   /** One workspace's agents over this catalog, its stores captured. */
   readonly workspaceAgents: (stores: WorkspaceAgentsStores) => WorkspaceAgents;
-  /** Change a custom copy of `entry` (see {@link AgentCustomization}):
+  /** Make a custom copy of `entry` (see {@link AgentCustomization}):
    *  the copy's path. */
   readonly customize: (
     entry: AgentEntry,
     change: AgentCustomization,
+  ) => Effect.Effect<
+    { readonly path: string },
+    | AgentCustomizeRefused
+    | AgentDirectoriesFailed
+    | StateReadFailed
+    | PlatformError.PlatformError
+  >;
+  /**
+   * Keep the custom agent `name` and dismiss its newer-built-in notice: its
+   * copy is re-stamped with the changed bundled version. Refused when the
+   * catalog holds no such custom agent (`noFile`) or its bundled version has
+   * not changed (`current`). The copy's path.
+   */
+  readonly keepCustom: (
+    name: string,
   ) => Effect.Effect<
     { readonly path: string },
     | AgentCustomizeRefused
@@ -439,6 +454,19 @@ export class AgentCatalog extends Context.Service<
         customizeCopy(entry, change, newerBuiltIn(entry)).pipe(
           Effect.provide(services),
         );
+      const keepCustom = (name: string) => {
+        const entry = state.entries.get(agentKey('custom', agentName(name)));
+        return entry === undefined
+          ? Effect.fail(
+              new AgentCustomizeRefused({
+                reason: 'noFile',
+                message: `${name} has no custom copy.`,
+              }),
+            )
+          : customizeCopy(entry, 'keep', newerBuiltIn(entry)).pipe(
+              Effect.provide(services),
+            );
+      };
 
       return {
         list,
@@ -452,6 +480,7 @@ export class AgentCatalog extends Context.Service<
         pinned: reads.pinned,
         workspaceAgents,
         customize,
+        keepCustom,
       };
     }),
   );

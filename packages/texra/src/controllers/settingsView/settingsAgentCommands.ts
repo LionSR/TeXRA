@@ -326,20 +326,14 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     keepCustomAgent: (message) =>
       present.reported(
         'Failed to keep the custom agent',
-        Effect.gen(function* () {
-          const agents = yield* AgentCatalog;
-          const custom = agents.get(agentKey('custom', message.agentName));
-          if (custom === undefined)
-            return yield* present.alert(
-              `${message.agentName} has no custom copy.`,
-            );
-          yield* agents.customize(custom, 'keep').pipe(
+        Effect.flatMap(AgentCatalog, (agents) =>
+          agents.keepCustom(message.agentName).pipe(
             Effect.andThen(agentFilesChanged),
             Effect.catchTag('AgentCustomizeRefused', (refused) =>
               present.alert(refused.message),
             ),
-          );
-        }),
+          ),
+        ),
       ),
     revealAgentFile: (message) =>
       present.reported(
