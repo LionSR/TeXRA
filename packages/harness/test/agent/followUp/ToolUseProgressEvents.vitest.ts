@@ -42,12 +42,12 @@ const runScript = Effect.fn('test.runScript')(function* (init: LoopInit) {
     (opened) => runToolUse({ resume: false }, opened),
   ).pipe(
     Effect.provide(
-      Layer.mergeAll(
-        scriptedInvokerLayer,
-        nativeToolTestLayer({
-          run: { runId: init.runId, session: init.session, toolPolicy: {} },
-        }),
-      ).pipe(
+      scriptedInvokerLayer.pipe(
+        Layer.provideMerge(
+          nativeToolTestLayer({
+            run: { runId: init.runId, session: init.session, toolPolicy: {} },
+          }),
+        ),
         Layer.provideMerge(
           agentRunTestLayer({ stopAfterCycle: true, ...init, model }),
         ),
@@ -81,12 +81,12 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             const events: AgentEvent[] = [];
             yield* openToolUse({ resume: false }).pipe(
               Effect.provide(
-                Layer.mergeAll(
-                  scriptedInvokerLayer,
-                  nativeToolTestLayer({
-                    run: { runId, session, toolPolicy: {} },
-                  }),
-                ).pipe(
+                scriptedInvokerLayer.pipe(
+                  Layer.provideMerge(
+                    nativeToolTestLayer({
+                      run: { runId, session, toolPolicy: {} },
+                    }),
+                  ),
                   Layer.provideMerge(
                     agentRunTestLayer({
                       runId,

@@ -37,10 +37,17 @@ describe('Sessions.layer', () => {
       expect(lines.some((line) => /Loaded \d+ agents/.test(line))).toBe(true);
     }).pipe(
       Effect.scoped,
-      Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins })),
-      Effect.provide(Logger.layer([captured])),
-      // The catalog's load time is a debug line.
-      Effect.provide(Layer.succeed(References.MinimumLogLevel)('Debug')),
+      Effect.provide(
+        Sessions.layer({ platform, plugins: harnessBuiltins }).pipe(
+          Layer.provideMerge(
+            Layer.merge(
+              Logger.layer([captured]),
+              // The catalog's load time is a debug line.
+              Layer.succeed(References.MinimumLogLevel)('Debug'),
+            ),
+          ),
+        ),
+      ),
     );
   });
 });

@@ -29,9 +29,11 @@ export const testRunFork: Effect.Effect<
 
 /** A test registry's launches open on the calling fiber, which stands for
  *  the session ({@link testRunFork}). */
-// cast: nothing a test registry opens asks for a session service.
-export const testRunInSession = ((effect) =>
-  effect) as RunRegistryInit['inSession'];
+export const testRunInSession: RunRegistryInit['inSession'] = <A, E>(
+  effect: Effect.Effect<A, E, unknown>,
+) =>
+  // cast: nothing a test registry opens asks for a session service.
+  effect as Effect.Effect<A, E>;
 
 /** A run started at `runs`' door with nothing to open, and awaited: the
  *  caller's interruption stops it. Its parent, when it has one, is the

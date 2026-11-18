@@ -126,10 +126,14 @@ layer(SessionGraph.hosted)(
                 readFileString: () => Effect.succeed('user edited output\n'),
               }),
               AppSignals.layer,
+            ).pipe(
+              Layer.provideMerge(
+                sessionFsLayer({
+                  workspace: '/workspace',
+                  storage: '/storage',
+                }),
+              ),
             ),
-          ),
-          Effect.provide(
-            sessionFsLayer({ workspace: '/workspace', storage: '/storage' }),
           ),
         ),
     );
