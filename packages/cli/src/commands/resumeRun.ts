@@ -14,7 +14,6 @@ import {
   formatResumeCommand,
   oneShotResumeNotice,
 } from '../chat/tui/state/resumeHint';
-import { isLinked } from '../runtime/platform/cliService';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import { cliErrorMessage, writeTextStderr } from '../runtime/platform/logSinks';
@@ -97,8 +96,8 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
   // headless, in this process; a service this process holds none of is
   // said, since nothing after this would say it.
   const stores = yield* cliPlatform;
-  if (!isLinked(stores.service))
-    writeTextStderr(`This task runs here: ${stores.service.none}`);
+  if (Result.isFailure(stores.service))
+    writeTextStderr(`This task runs here: ${stores.service.failure.message}`);
   const runSession = yield* stores.runSession;
   const configResult = yield* Effect.result(runSession.records(id).readConfig);
   if (Result.isFailure(configResult)) {

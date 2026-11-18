@@ -18,8 +18,9 @@ import {
   CliUsageError,
   type CliContext,
 } from '../runtime/platform/cliContext';
-import { isLinked, linkCliService } from '../runtime/platform/cliService';
+import { linkCliService } from '../runtime/platform/cliService';
 import {
+  linkedClient,
   probeRecordedService,
   ServiceUnavailable,
   stopService,
@@ -251,13 +252,7 @@ const restartCommand = defineCliCommand({
     const info = yield* Effect.scoped(
       Effect.gen(function* () {
         const link = yield* linkCliService(context.storageRoot, true);
-        if (!isLinked(link))
-          return yield* new ServiceUnavailable({ reason: link.none });
-        const client = yield* link.client.get;
-        if (client === null)
-          return yield* new ServiceUnavailable({
-            reason: 'The TeXRA service is not linked.',
-          });
+        const client = yield* linkedClient(link);
         return yield* client['service.hello']({ protocol: PROTOCOL.digest });
       }),
     );

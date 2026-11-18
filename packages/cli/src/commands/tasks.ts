@@ -20,7 +20,6 @@ import {
   linkedClient,
   requestOnService,
   type ServiceClient,
-  ServiceUnavailable,
 } from '@texra/controllers/server/client';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import { runStatusLabel } from '@ui/copy/runStatus';
@@ -32,7 +31,6 @@ import {
   launchApprovalNotice,
   projectApprovalPolicy,
 } from '../runtime/platform/cliContext';
-import { isLinked } from '../runtime/platform/cliService';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import {
@@ -82,12 +80,10 @@ function findTask(client: ServiceClient, id: string) {
 
 /** The service's client, through the platform's link; a command that
  *  holds none fails with why. */
-const serviceClient = Effect.gen(function* () {
-  const { service } = yield* cliPlatform;
-  if (!isLinked(service))
-    return yield* new ServiceUnavailable({ reason: service.none });
-  return yield* linkedClient(service);
-});
+const serviceClient = cliPlatform.pipe(
+  Effect.flatMap(({ service }) => Effect.fromResult(service)),
+  Effect.flatMap(linkedClient),
+);
 
 /** One request to the task `id` names, refused as a usage error. */
 function requestTask<R extends RuntimeCommand>(
@@ -201,9 +197,7 @@ const startCommand = defineCliCommand({
         message: '--instruction must not be empty.',
       });
     const services = yield* cliPlatform;
-    if (!isLinked(services.service))
-      return yield* new ServiceUnavailable({ reason: services.service.none });
-    const link = services.service;
+    const link = yield* Effect.fromResult(services.service);
     // The task runs in the service under the project's persisted policy,
     // with what this command asked for riding the launch
     // (`launchApproval`).

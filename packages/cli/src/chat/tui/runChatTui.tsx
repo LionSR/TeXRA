@@ -10,6 +10,7 @@ import {
   Effect,
   Exit,
   FiberHandle,
+  Result,
   Scope,
   Stream,
   SubscriptionRef,
@@ -33,7 +34,6 @@ import {
   projectApprovalPolicy,
   type CliContext,
 } from '@cli/runtime/platform/cliContext';
-import { isLinked } from '@cli/runtime/platform/cliService';
 import { linkedClient } from '@texra/controllers/server/client';
 
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
@@ -145,7 +145,7 @@ export async function runChat(
       // platform could not link runs here, and says so once.
       const services = yield* cliPlatform;
       const { service } = services;
-      const link = isLinked(service) ? service : undefined;
+      const link = Result.isSuccess(service) ? service.success : undefined;
       const served = link !== undefined;
       // Where this chat's runs run: the service's session, or this one.
       const runSession = yield* services.runSession;
@@ -159,7 +159,7 @@ export async function runChat(
         projectApprovalPolicy(services.roots.config),
       );
       if (refused !== undefined) startupNotices.push(refused);
-      if (!isLinked(service)) {
+      if (Result.isFailure(service)) {
         // A store this process moved aside at open is said in the
         // transcript, not on stderr before Ink mounts, where it would sit
         // above the header.
@@ -169,7 +169,7 @@ export async function runChat(
             sessionStoreMovedAsideMessage(local.storeMovedAside),
           );
         startupNotices.push(
-          `This chat runs here only, so other terminals and windows will not see it: ${service.none}`,
+          `This chat runs here only, so other terminals and windows will not see it: ${service.failure.message}`,
         );
       }
       // Without a usable credential the chat still opens: the "Connect a
