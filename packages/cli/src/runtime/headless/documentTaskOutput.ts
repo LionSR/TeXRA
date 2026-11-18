@@ -10,6 +10,7 @@ import { Effect, FileSystem, Path, PlatformError, Schema } from 'effect';
 
 import {
   programOf,
+  Rejected,
   RUN_OUTCOME,
   formatResultCount,
   pluralize,
@@ -32,13 +33,6 @@ import { STDIN_DOCUMENT_TASK_INPUT_BASENAME } from './documentTaskInputs';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
 
 type OutputFlag = '--output' | '--output-dir';
-
-/** A document task's output was not published where the command asked: the
- *  run produced none, or its recorded destination or documents did not read. */
-export class DocumentTaskOutputFailed extends Schema.TaggedError<DocumentTaskOutputFailed>()(
-  'DocumentTaskOutputFailed',
-  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
-) {}
 
 const notADirectory = (error: PlatformError.PlatformError): boolean =>
   error.reason._tag === 'BadResource' &&
@@ -326,8 +320,8 @@ export const resolveDocumentTaskOutput = Effect.fn('resolveDocumentTaskOutput')(
     if (result.outcome !== RUN_OUTCOME.COMPLETED) return baseResult;
     const terminalStatus = runOutcomeToCliRunStatus(result.outcome);
     if (documents.outputs.length === 0 && (outputFile || outputDir)) {
-      return yield* new DocumentTaskOutputFailed({
-        message: outputDir
+      return yield* new Rejected({
+        reason: outputDir
           ? `Program ${terminalStatus} without generated outputs; nothing was copied to ${outputDir}.`
           : `Program ${terminalStatus} without a generated output; ${outputFile} was not written.`,
       });
@@ -368,8 +362,8 @@ export const resolveDocumentTaskOutput = Effect.fn('resolveDocumentTaskOutput')(
         (expected) => !outputsByRelativePath.has(expected),
       );
       if (missing.length > 0) {
-        return yield* new DocumentTaskOutputFailed({
-          message: `Program ${terminalStatus} without expected ${pluralize(missing.length, 'output')}: ${missing.join(', ')}; copied ${copiedOutputs.length} of ${formatResultCount(expectedRelativePaths.length, 'expected output')} to ${targetRoot}.`,
+        return yield* new Rejected({
+          reason: `Program ${terminalStatus} without expected ${pluralize(missing.length, 'output')}: ${missing.join(', ')}; copied ${copiedOutputs.length} of ${formatResultCount(expectedRelativePaths.length, 'expected output')} to ${targetRoot}.`,
         });
       }
 

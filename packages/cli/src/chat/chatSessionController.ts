@@ -10,7 +10,6 @@ import {
   Exit,
   Fiber,
   FiberSet,
-  Schema,
   Scope,
   Semaphore,
   Stream,
@@ -35,6 +34,7 @@ import {
   generateRunId,
   programOf,
   type RunId,
+  Rejected,
   acceptsFollowUp,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
@@ -91,12 +91,6 @@ import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
 // ---------------------------------------------------------------------------
 // Controller
 // ---------------------------------------------------------------------------
-
-/** A resumed run's stored configuration is absent, so the chat cannot adopt it. */
-class RunConfigMissing extends Schema.TaggedError<RunConfigMissing>()(
-  'RunConfigMissing',
-  { message: Schema.String },
-) {}
 
 /**
  * The recovery tail every run/resume program below shares. A typed failure
@@ -556,8 +550,8 @@ export function createChatSessionController(
               ? config
               : yield* init.runSession.records(run.runId).readConfig;
           if (adoptedConfig === null)
-            return yield* new RunConfigMissing({
-              message: `Run ${run.runId} has no configuration to resume`,
+            return yield* new Rejected({
+              reason: `Run ${run.runId} has no configuration to resume`,
             });
           adoptRunConfig(adoptedConfig, 'history');
           clearLocalTranscript();
@@ -602,8 +596,8 @@ export function createChatSessionController(
     Effect.gen(function* () {
       const config = yield* init.runSession.records(runId).readConfig;
       if (!config)
-        return yield* new RunConfigMissing({
-          message: 'it has no stored configuration',
+        return yield* new Rejected({
+          reason: 'it has no stored configuration',
         });
       adoptRunConfig(config, 'history');
     }).pipe(

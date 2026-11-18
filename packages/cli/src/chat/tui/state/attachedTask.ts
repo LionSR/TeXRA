@@ -3,10 +3,12 @@
 // send a follow-up, answer a request, fetch an edit's preview. Nothing here
 // writes the task's history: every action is a request the service lands.
 
-import { Effect, Schema, type Scope, Stream } from 'effect';
+import { Effect, type Scope, Stream } from 'effect';
 
 import {
   type RuntimeCommand,
+  Rejected,
+  Unavailable,
   attentionOf,
   type RunView,
   type SessionView,
@@ -20,13 +22,6 @@ import {
 import { requestErrorText } from '@ui/copy/requestErrors';
 import type { OutcomeOf } from '@texra-ai/harness';
 import type { GlobalValues } from '@texra-ai/harness/host';
-
-/** The attached task could not be acted on or followed: the service
- *  rejected a request for it, or the task left its project. */
-class AttachedTaskFailed extends Schema.TaggedError<AttachedTaskFailed>()(
-  'AttachedTaskFailed',
-  { message: Schema.String },
-) {}
 
 /** One level of the attached task, as the view paints it. */
 export interface AttachedTaskLevel {
@@ -82,7 +77,7 @@ export function followAttachedTask(
           Effect.mapError((error) =>
             error._tag === 'RpcClientError'
               ? error
-              : new AttachedTaskFailed({ message: requestErrorText(error) }),
+              : new Rejected({ reason: requestErrorText(error) }),
           ),
         ),
     });
@@ -95,8 +90,9 @@ export function followAttachedTask(
         // and no run in it.
         if (run === undefined && (seen || view.transcriptSeq.has(aggregate)))
           return Effect.fail(
-            new AttachedTaskFailed({
-              message: 'The task is no longer in its project.',
+            new Unavailable({
+              runId: task.runId,
+              reason: 'The task is no longer in its project.',
             }),
           );
         seen ||= run !== undefined;

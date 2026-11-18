@@ -60,7 +60,6 @@ import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
   cliLaunchOutput,
-  DocumentTaskOutputFailed,
   formatDocumentTaskTextResult,
   inputDerivedOutputFiles,
   resolveDocumentTaskOutput,
@@ -68,6 +67,7 @@ import {
   resumeDocumentTaskOutputFile,
 } from '../runtime/headless/documentTaskOutput';
 import type { Sessions } from '@texra-ai/harness';
+import { TaskRecordsFailed } from '@texra/controllers/server/protocol';
 import { programLaunch, type ProcessServices } from '@texra-ai/harness/host';
 import { ToolRegistry } from '@texra-ai/harness/plugins';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
@@ -362,9 +362,9 @@ export const executeCliRun = Effect.fn('executeCliRun')(function* (
       if (Result.isFailure(recorded)) {
         const message = `The output of task ${ended.runId} was not copied: its recorded configuration could not be read: ${toErrorMessage(recorded.failure)}`;
         if ((output || outputDir) && ended.outcome === RUN_OUTCOME.COMPLETED)
-          documentTaskOutputError = new DocumentTaskOutputFailed({
+          documentTaskOutputError = new TaskRecordsFailed({
+            runId: ended.runId,
             message,
-            cause: recorded.failure,
           });
         else writeTextStderr(`[warn] ${message}`);
       }
@@ -381,9 +381,9 @@ export const executeCliRun = Effect.fn('executeCliRun')(function* (
         session.view.read([]).pipe(
           Effect.mapError(
             (cause) =>
-              new DocumentTaskOutputFailed({
+              new TaskRecordsFailed({
+                runId: ended.runId,
                 message: `The documents of task ${ended.runId} could not be read: ${toErrorMessage(cause)}`,
-                cause,
               }),
           ),
           Effect.flatMap((stored) => {
