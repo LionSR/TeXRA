@@ -24,7 +24,8 @@ Five largest files: `styles/controlStyles.ts` (692),
 (541).
 
 Open PRs touching this area: #14950 (`claude/admiring-mayer-14efx5`, UI
-primitives; note `2026-11-15-ui-primitives-restated-at-call-sites.md`),
+primitives; note `2026-11-15-ui-primitives-restated-at-call-sites.md`, since
+deleted),
 #14955 (`claude/clever-pascal-h5a0xm`, layer misplacements; note
 `2026-11-15-layer-misplacements-left-open.md`, items 5 to 8 are UI), #14953
 (`claude/optimistic-cori-q0n270`, the markdown shields). Their notes' items
@@ -782,8 +783,10 @@ bare-name lookup only).
 - The pasted image's name minted by the host: refused,
   `UI-pasted-image-name-host-minted`.
 - One-line placeholders, bare `<button>`s with a skin, the " — " joiner,
-  fixed titles with their own dot: open in #14950's note
-  `2026-11-15-ui-primitives-restated-at-call-sites.md`, items 1 to 4.
+  fixed titles with their own dot: items 1 to 4 of #14950's note
+  `2026-11-15-ui-primitives-restated-at-call-sites.md`. Items 1 to 3 landed
+  and the note was deleted; item 4 (`formTitle`) was judged not worth a
+  helper.
 - The run list built twice (`RunTabs.ts` and the CLI), the web's "Ready" and
   "Needs approval" overrides of `runStatus`, the interrupted reading of an
   open call, child counts called "agents": open in #14955's note

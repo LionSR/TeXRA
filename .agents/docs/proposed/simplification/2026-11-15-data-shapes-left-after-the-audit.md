@@ -118,6 +118,9 @@ the readers that needed the stated texts read them from the log
   `ModelFailure` route branch
   (`packages/harness/src/shared/schemas/errors.ts`), joined by a
   field-by-field copy.
+  Landed 2026-11-16 (#14981): `RouteFailureFieldsSchema` in `errors.ts`
+  states the fields once, and `RouteUnavailable` and the `ModelFailure` route
+  branch both spread it.
 
 ## Needs the owner's decision
 

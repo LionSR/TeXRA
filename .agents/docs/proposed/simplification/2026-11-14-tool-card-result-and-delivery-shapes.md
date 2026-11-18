@@ -72,6 +72,8 @@ Left, in order:
    the call states them through its `ToolContext` and dispatch reads them when
    it commits (no return change, but a collector the call writes to, which
    `packages/harness/AGENTS.md` "Event channels and cards" argues against).
+   Not decided at `c78e9f9`: `consumedFollowUps` and `facts` are still
+   fields of the tool's result (`toolResult.ts:156,159`).
 2. With the fields off the result, `extractToolAttachments`
    (`packages/harness/src/tools/core/toolAttachmentExtraction.ts`) only
    strips bytes.
@@ -94,12 +96,15 @@ What the code does:
   the same struct from an envelope a model echoes as text, where only the tag
   and attributes are known. It would build the generic case, or
   `deliverySummary` would take a narrower input than the stored type.
-- The delivery is stored on `followup.queued` (version 6) and exported from
+- The delivery (`ChildRunDeliverySchema`,
+  `packages/harness/src/shared/schemas/followUp.ts`) is stored on
+  `followup.queued` (version 8 at `c78e9f9`) and exported from
   `@texra-ai/harness/plugins`, so the change is a row version bump and a
   plugin-contract change.
 
 Landed: nothing. No step separates from the stored shape, and the version
-bump is the owner's decision.
+bump is the owner's decision. Still so at `c78e9f9` (2026-11-17): the
+schema is one struct with an open `family` and ordered `attributes`.
 
 Proposed shape, for that decision:
 

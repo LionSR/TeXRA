@@ -14,7 +14,11 @@ read-only reviews (lifecycle; the wire and `serviceSession.ts`; windows and
 attach). R10 of the root designs
 (`2026-11-05-root-designs-effect-native.md`, PR 14766) already covers the
 hosts' verbs and the client's three sessions; this note is the service side
-R10 does not reach, and names what in R10 this reading changes.
+R10 does not reach, and names what in R10 this reading changes. Since that
+read the two CLI files moved to `packages/cli/src/runtime/platform/cliService.ts`
+and `packages/cli/src/runtime/platform/initPlatform.ts`, and the service's
+handlers are in `packages/texra/src/controllers/server/service.ts`
+(`handlers.ts` no longer exists).
 
 ## 1. What the service is today
 

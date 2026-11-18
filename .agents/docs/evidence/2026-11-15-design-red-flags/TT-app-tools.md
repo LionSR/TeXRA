@@ -814,8 +814,9 @@ which the wrapped form keeps.
   controller, not a signal; the file is the lint rule's one named
   exemption (`oxlint.config.mts:370-375`).
 - The four LaTeX dependency probes (doctor, setup, settings view, banner)
-  over one catalog: recorded in
-  `.agents/docs/proposed/simplification/2026-11-04-core-dependency-check-overlap.md`.
+  over one catalog: recorded in the note
+  `2026-11-04-core-dependency-check-overlap.md`, deleted once it was done
+  (git history keeps it).
 - The replacement presets and the regex/non-regex key pairs
   (`2026-11-03-fewer-processing-options.md` §6, kept by the owner); I12's
   `replacement/` items landed (#14807) and no regression was found in

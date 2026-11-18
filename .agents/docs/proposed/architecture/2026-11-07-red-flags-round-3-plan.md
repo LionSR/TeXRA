@@ -12,6 +12,8 @@ Packages B (#14791, less step 3.3), C's first half (#14790), D (#14792), E
 (#14785, #14787, #14788, #14793), A's first half (#14789) and the document
 task's follow-up (#14713) are on main. Open: A's #14794 and one more A PR,
 C's 4.3, B's 3.3, and #14795 (P1, below). Round 3 found what is left.
+All of those have landed since: the catalogue's "Status at main `453cd41`"
+has no row assigned, and its P1 row reads "landed (#14795)".
 
 ## How this note orders the work
 
@@ -36,7 +38,7 @@ twice").
 
 | Id  | What is wrong                                                                                                                                                                                                                        | Principle                                                      | Fix                                                                                                                       |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| P1  | The CLI read a malformed telemetry opt-out as consent, and a misspelled approval policy as the user-wide Auto-approve.                                                                                                               | Define errors out of existence (ch. 10)                        | **#14795**, open                                                                                                          |
+| P1  | The CLI read a malformed telemetry opt-out as consent, and a misspelled approval policy as the user-wide Auto-approve.                                                                                                               | Define errors out of existence (ch. 10)                        | **#14795**, landed                                                                                                        |
 | S1  | The release gate reads the newest `validate` run. A nightly run skips the static checks, the build and the e2e suites but still reports `validate` green, so a failed push run can be released.                                      | Define errors out of existence                                 | The gate reads the push run's required jobs; the release jobs stop re-running checks; `build` stops carrying a type check |
 | U5  | Storage keeps its own copy of llm's finish reasons, media kinds and content part kinds, with no compile-time check that the copies match. A new llm finish reason compiles, then fails while storing a turn that was already billed. | Two representations without the check that keeps them equal    | Three `AssertNever<Exclude<…>>` lines in `agent/runtime/storedTurn.ts`, as the provider enums already have                |
 | T1  | The "new document task" template's loops run when the agent is created, not when the task runs, so it writes an agent that asks for 17 documents named `{`, `I`, `N`, …                                                              | Information leakage (a two-pass render every author must know) | A template is rendered once, at run time; creation copies it with its name filled in                                      |
@@ -320,6 +322,33 @@ appendix group). 36 landed; 9 are open with no owner: GS4, GS7 a, TC7's two
 remaining parts, IC6's rest, IC7, NM10's eleven parts, NC-B, and NM1 and
 NM9 as a rule. The catalogue's "Status at main `433d874`" lists them by
 package.
+
+**Status (main `c78e9f9`, 2026-11-17):** of those nine, GS4, GS7 a, TC7,
+IC7 and NC-B have landed. The catalogue's lens rows record the lens-2
+batch (GS4: `requireToolRun`, `callerRun` and `noRunChildRuns` have no
+references and `RunCall` is a required service; GS7 a: the follow-up
+sender's `source` is a string; IC7 and NC-B, with NC-B 2, the launch
+counter, kept as a policy decision). TC7's last half landed after it:
+`StreamedToolCards.make` closes its cards in an `acquireRelease`, and
+`failOpen` has no references. NM10 is down to two parts: (b), (c)
+(`PluginFactRow`), (d), (f), (h) (one read-only `RunView` and
+`SessionView`, in `shared/session/sessionView.ts`), (i), (j), (k)
+(`absentReason` has no references; the reading is `meansAbsent`) and (l)
+(`copyOrRemoveRunDir` has none) have landed; (a) is one exported
+`ScriptCallStatus` beside `scriptRun.ts`'s own four-value
+`ScriptCallOutcome`, and (g) `Draft` still names two interfaces
+(`packages/cli/src/chat/tui/input/draftAttachments.ts`,
+`packages/texra/src/shared/session/surface.ts`). Of IC6, `ModelInvoker`'s
+header and `ITool.describe` are gone; `withPerKeyLane`'s doc (16 lines,
+from 29), `fetchAllCheckRuns`'s pagination explanations
+(`packages/texra/src/tools/github/checkRunsClient.ts`) and the API
+reference's internal file names (`storageLayout.ts` in
+`packages/harness/docs/api/host.md`) stay. So 4 are open with no owner:
+IC6's rest, NM10 (a) and (g), and NM1 and NM9 as a rule ("settle" is down
+from 491 to 28 occurrences in `packages/*/src`). GS7 b,
+`StartOptions.continues`, stays the owner's call. The held ids (H9, M4
+and M9 with #14773; S9, W7 and W9's rule; I-C1, I-C4, I-C5 and I-C16;
+R6-T7 b) and the two copy questions of §8.1 were not re-checked.
 
 ## 5. Round 4: unaudited areas, today's compromises, and what today's code added
 
