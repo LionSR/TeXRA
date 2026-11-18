@@ -267,185 +267,176 @@ export const openDesktopProjectRegistry: (
   DesktopProjectRegistry,
   Error,
   DesktopProjectRecords | StateStores | AppState | Sessions | HostWindows
-> = Effect.fn('openDesktopProjectRegistry')(
-  function* (options: DesktopProjectRegistryOptions) {
-    // The process's sessions and windows, which every project opens with.
-    const sessions = yield* Sessions;
-    const hosts = yield* HostWindows;
-    // A project's warnings outlive its open and end with the process.
-    const notice = noticeIn(options.processScope);
-    const warn = (message: string) => notice('warning', message);
-    const openProject = (
-      root: string | undefined,
-      roots: WorkspaceRoots,
-      scope: Scope.Closeable,
-      service: Result.Result<ServiceLink, Error>,
-    ) =>
-      openDesktopProject(root, roots, scope, service, warn).pipe(
-        Effect.provideService(Sessions, sessions),
-        Effect.provideService(HostWindows, hosts),
-      );
-    const records = yield* DesktopProjectRecords;
-    // Every project's roots share the process's state stores.
-    const stateStores = yield* StateStores;
-    const appState = yield* AppState;
-    // One open or close of a root at a time; and one write of the selection
-    // and the recent list at a time, across roots.
-    const lanes = new Map<string, PerKeyLane>();
-    const selectionLane = yield* Semaphore.make(1);
-    const fallback = yield* Effect.uninterruptible(
-      openProject(
-        undefined,
-        options.processRoots,
-        options.processScope,
-        options.service,
-      ).pipe(
-        Scope.provide(options.processScope),
-        Effect.onError(() => Scope.close(options.processScope, Exit.void)),
-      ),
+> = Effect.fn('openDesktopProjectRegistry')(function* (
+  options: DesktopProjectRegistryOptions,
+) {
+  // The process's sessions and windows, which every project opens with.
+  const sessions = yield* Sessions;
+  const hosts = yield* HostWindows;
+  // A project's warnings outlive its open and end with the process.
+  const notice = noticeIn(options.processScope);
+  const warn = (message: string) => notice('warning', message);
+  const openProject = (
+    root: string | undefined,
+    roots: WorkspaceRoots,
+    scope: Scope.Closeable,
+    service: Result.Result<ServiceLink, Error>,
+  ) =>
+    openDesktopProject(root, roots, scope, service, warn).pipe(
+      Effect.provideService(Sessions, sessions),
+      Effect.provideService(HostWindows, hosts),
     );
-    const state = yield* SubscriptionRef.make<DesktopProjectsState>({
-      projects: [],
-      activeKey: fallback.key,
-      recent: yield* records.readRecent,
-    });
-    const current = () => SubscriptionRef.getUnsafe(state);
-    const byRoot = (root: string) =>
-      current().projects.find((project) => project.root === root);
-    const active = (): DesktopProject =>
-      current().projects.find(
-        (project) => project.key === current().activeKey,
-      ) ?? fallback;
-    const activate = Effect.fn('activate')(function* (
-      root: string | undefined,
-    ) {
-      const next = root === undefined ? undefined : byRoot(root);
-      if (next?.root !== undefined) yield* records.activate(next.root);
-      const activeKey = (next ?? fallback).key;
-      if (activeKey === current().activeKey) return;
-      yield* SubscriptionRef.update(state, (s) => ({ ...s, activeKey }));
-    }, selectionLane.withPermit);
-    return {
-      state,
-      open(rootInput) {
-        const root = canonicalizeWorkspaceRoot(rootInput);
-        return Effect.gen(function* () {
-          const existing = byRoot(root);
-          if (existing) return existing;
-          const projectScope = yield* Scope.make();
-          return yield* Effect.gen(function* () {
-            const { roots, warnings } = yield* openProjectRoots(
-              options.dataRoot,
-              root,
-              options.globalConfigStore,
-              Result.isSuccess(options.service)
-                ? options.service.success
-                : undefined,
-            ).pipe(
-              Effect.provideService(StateStores, stateStores),
-              Effect.provideService(AppState, appState),
-            );
-            for (const message of warnings) {
-              yield* Effect.logWarning(message).pipe(withLogChannel('desktop'));
-              yield* warn(message);
-            }
-            // Acquire the session, remember it for the next launch and
-            // install its registry owner before interruption can leave this
-            // operation; a failed write closes the session again.
-            return yield* Effect.uninterruptible(
-              openProject(root, roots, projectScope, options.service).pipe(
-                Effect.tap(
-                  Effect.fnUntraced(function* (project) {
-                    const { recent } = yield* records.remember(root);
-                    yield* SubscriptionRef.update(state, (s) => ({
-                      ...s,
-                      projects: [...s.projects, project],
-                      recent,
-                    }));
-                  }, selectionLane.withPermit),
-                ),
+  const records = yield* DesktopProjectRecords;
+  // Every project's roots share the process's state stores.
+  const stateStores = yield* StateStores;
+  const appState = yield* AppState;
+  // One open or close of a root at a time; and one write of the selection
+  // and the recent list at a time, across roots.
+  const lanes = new Map<string, PerKeyLane>();
+  const selectionLane = yield* Semaphore.make(1);
+  const fallback = yield* Effect.uninterruptible(
+    openProject(
+      undefined,
+      options.processRoots,
+      options.processScope,
+      options.service,
+    ).pipe(
+      Scope.provide(options.processScope),
+      Effect.onError(() => Scope.close(options.processScope, Exit.void)),
+    ),
+  );
+  const state = yield* SubscriptionRef.make<DesktopProjectsState>({
+    projects: [],
+    activeKey: fallback.key,
+    recent: yield* records.readRecent,
+  });
+  const current = () => SubscriptionRef.getUnsafe(state);
+  const byRoot = (root: string) =>
+    current().projects.find((project) => project.root === root);
+  const active = (): DesktopProject =>
+    current().projects.find((project) => project.key === current().activeKey) ??
+    fallback;
+  const activate = Effect.fn('activate')(function* (root: string | undefined) {
+    const next = root === undefined ? undefined : byRoot(root);
+    if (next?.root !== undefined) yield* records.activate(next.root);
+    const activeKey = (next ?? fallback).key;
+    if (activeKey === current().activeKey) return;
+    yield* SubscriptionRef.update(state, (s) => ({ ...s, activeKey }));
+  }, selectionLane.withPermit);
+  return {
+    state,
+    open(rootInput) {
+      const root = canonicalizeWorkspaceRoot(rootInput);
+      return Effect.gen(function* () {
+        const existing = byRoot(root);
+        if (existing) return existing;
+        const projectScope = yield* Scope.make();
+        return yield* Effect.gen(function* () {
+          const { roots, warnings } = yield* openProjectRoots(
+            options.dataRoot,
+            root,
+            options.globalConfigStore,
+            Result.isSuccess(options.service)
+              ? options.service.success
+              : undefined,
+          ).pipe(
+            Effect.provideService(StateStores, stateStores),
+            Effect.provideService(AppState, appState),
+          );
+          for (const message of warnings) {
+            yield* Effect.logWarning(message).pipe(withLogChannel('desktop'));
+            yield* warn(message);
+          }
+          // Acquire the session, remember it for the next launch and
+          // install its registry owner before interruption can leave this
+          // operation; a failed write closes the session again.
+          return yield* Effect.uninterruptible(
+            openProject(root, roots, projectScope, options.service).pipe(
+              Effect.tap(
+                Effect.fnUntraced(function* (project) {
+                  const { recent } = yield* records.remember(root);
+                  yield* SubscriptionRef.update(state, (s) => ({
+                    ...s,
+                    projects: [...s.projects, project],
+                    recent,
+                  }));
+                }, selectionLane.withPermit),
               ),
+            ),
+          );
+        }).pipe(
+          Scope.provide(projectScope),
+          Effect.onError(() =>
+            byRoot(root) ? Effect.void : Scope.close(projectScope, Exit.void),
+          ),
+        );
+      }).pipe(withPerKeyLane(lanes, root), Effect.mapError(ensureError));
+    },
+    list: () => current().projects,
+    active,
+    fallback: () => fallback,
+    activate,
+    close(root) {
+      return Effect.gen(function* () {
+        const project = byRoot(root);
+        if (!project) return;
+        // A failed persistence operation leaves the project with the host;
+        // the session's own close, run by the project's scope, stops its
+        // runs.
+        yield* Effect.uninterruptible(
+          Effect.gen(function* () {
+            const wasActive = active() === project;
+            const remembered = yield* records.read;
+            const next =
+              remembered.findLast(
+                (candidate) => candidate !== root && byRoot(candidate),
+              ) ??
+              current().projects.findLast(
+                (candidate) => candidate.root !== root,
+              )?.root;
+            const { recent } = yield* records.forget(
+              root,
+              wasActive ? next : undefined,
             );
-          }).pipe(
-            Scope.provide(projectScope),
-            Effect.onError(() =>
-              byRoot(root) ? Effect.void : Scope.close(projectScope, Exit.void),
-            ),
-          );
-        }).pipe(withPerKeyLane(lanes, root), Effect.mapError(ensureError));
-      },
-      list: () => current().projects,
-      active,
-      fallback: () => fallback,
-      activate,
-      close(root) {
-        return Effect.gen(function* () {
-          const project = byRoot(root);
-          if (!project) return;
-          // A failed persistence operation leaves the project with the host;
-          // the session's own close, run by the project's scope, stops its
-          // runs.
-          yield* Effect.uninterruptible(
-            Effect.gen(function* () {
-              const wasActive = active() === project;
-              const remembered = yield* records.read;
-              const next =
-                remembered.findLast(
-                  (candidate) => candidate !== root && byRoot(candidate),
-                ) ??
-                current().projects.findLast(
-                  (candidate) => candidate.root !== root,
-                )?.root;
-              const { recent } = yield* records.forget(
-                root,
-                wasActive ? next : undefined,
-              );
-              yield* SubscriptionRef.update(state, (s) => ({
-                projects: s.projects.filter(
-                  (candidate) => candidate !== project,
-                ),
-                activeKey: wasActive
-                  ? (
-                      (next === undefined ? undefined : byRoot(next)) ??
-                      fallback
-                    ).key
-                  : s.activeKey,
-                recent,
-              }));
-              yield* project.dispose();
-            }).pipe(selectionLane.withPermit),
-          );
-        }).pipe(withPerKeyLane(lanes, root), Effect.mapError(ensureError));
-      },
-      clearRecent: () =>
-        records.replaceRecent([]).pipe(
-          Effect.flatMap(({ recent }) =>
-            SubscriptionRef.update(state, (s) => ({ ...s, recent })),
-          ),
-          selectionLane.withPermit,
-          Effect.mapError(ensureError),
+            yield* SubscriptionRef.update(state, (s) => ({
+              projects: s.projects.filter((candidate) => candidate !== project),
+              activeKey: wasActive
+                ? ((next === undefined ? undefined : byRoot(next)) ?? fallback)
+                    .key
+                : s.activeKey,
+              recent,
+            }));
+            yield* project.dispose();
+          }).pipe(selectionLane.withPermit),
+        );
+      }).pipe(withPerKeyLane(lanes, root), Effect.mapError(ensureError));
+    },
+    clearRecent: () =>
+      records.replaceRecent([]).pipe(
+        Effect.flatMap(({ recent }) =>
+          SubscriptionRef.update(state, (s) => ({ ...s, recent })),
         ),
-      dispose: () =>
-        Effect.suspend(() =>
-          current()
-            .projects.toReversed()
-            .reduce(
-              (cleanup, project) =>
-                cleanup.pipe(Effect.ensuring(project.dispose())),
-              Effect.void,
-            ),
-        ).pipe(
-          Effect.ensuring(fallback.dispose()),
-          Effect.ensuring(
-            SubscriptionRef.update(state, (s) => ({
-              ...s,
-              projects: [],
-              activeKey: fallback.key,
-            })),
+        selectionLane.withPermit,
+        Effect.mapError(ensureError),
+      ),
+    dispose: () =>
+      Effect.suspend(() =>
+        current()
+          .projects.toReversed()
+          .reduce(
+            (cleanup, project) =>
+              cleanup.pipe(Effect.ensuring(project.dispose())),
+            Effect.void,
           ),
+      ).pipe(
+        Effect.ensuring(fallback.dispose()),
+        Effect.ensuring(
+          SubscriptionRef.update(state, (s) => ({
+            ...s,
+            projects: [],
+            activeKey: fallback.key,
+          })),
         ),
-    } satisfies DesktopProjectRegistry;
-  },
-  Effect.uninterruptible,
-  Effect.mapError(ensureError),
-);
+      ),
+  } satisfies DesktopProjectRegistry;
+}, Effect.mapError(ensureError));
