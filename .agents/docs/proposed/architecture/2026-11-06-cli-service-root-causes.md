@@ -1,7 +1,8 @@
 # The CLI service and its sessions: root causes and the plan
 
 Date: 2026-11-06
-Status: open (the plan in §4 is unassigned)
+Status: the plan in §4 landed; one decision is the owner's (see the
+2026-11-17 section)
 Origin: the owner's remark after the review rounds of PR 14769 that the CLI
 service and the service sessions look suspicious, and the instruction to
 fix root causes, never symptoms. Read on `simplify/session-core` at
@@ -471,13 +472,56 @@ surface selects a run this window started once its view holds the
 run's activation, which the handle names) and the window-side presenter
 instance (the session presenter over the window's own host).
 
-Left for a later PR, each a smell, none a defect:
+The leftovers that PR listed, as of 2026-11-17 (the host-call modules
+have since moved to `packages/texra/src/controllers/server/`):
 
-- The notice round-trips (`tell` mints an id nothing awaits; an answer
-  past `ANSWER_WITHIN` logged as a notice failure); `editorHost` keyed by
-  storage root beside `HostWindows` keyed by session; two windows on one
-  project, where service sessions always read as "can ask".
-- §3.2's smells, less the two PR 3 ended (`closeAll` run three times,
-  the race loser's usage code) and the one it keeps with its reason (the
-  reconnect's first failure); the record's `protocol`/`version` and the
-  `released` flag went with PR 14771.
+- **The notice round-trips: ended.** An answer past its wait was already
+  logged as late, not as a notice failure. The rest had one cause:
+  whether a window answers had two owners, the service choosing `ask` or
+  `tell` from `ANSWERED` and the window re-deriving the choice by kind,
+  over one frame shape that made `tell` mint an id. The `host.attach`
+  frame is now `ask` (an id and a call a run waits on) or `tell` (a told
+  call, no id); the window answers exactly the frames with an id, and
+  `ANSWERED` is total over the asked kinds (`hostCalls.ts`). A wire
+  change: the protocol digest moves, and the handoff between builds runs
+  on `service.hello` and `service.stop`, whose pinned shapes did not.
+- **`editorHost` keyed by storage root beside `HostWindows`: ended.** The
+  registry was a second record of what a project's windows offer, filled
+  from the window table only because the plugins are built before
+  `HostWindows`. The table is now made first (`makeWindowTable`) and its
+  `editors` is the reading the editor tools and `HostCapabilities` get;
+  the registry's map, `attach` and its identity check went.
+- **Two windows on one project: needs the owner** (the section below).
+- **§3.2's smells: ended, or kept with a reason.** The record's
+  `protocol`/`version` and the `released` flag went with PR 14771;
+  `control` is built after `protocol`; `closeAll` and the race loser's
+  usage code ended in PR 3; the polls are gone. Kept: the reconnect's
+  first failure (its reason above), and liveness read three ways, since
+  each read answers its own question: the record says where the service
+  is, the hello whether it answers, and `process.kill(pid, 0)` in
+  `removeDeadSockets` whose socket file may be removed, which a starting
+  service racing another's listen needs (the socket per pid stays for
+  the same reason).
+
+## 2026-11-17: two windows on one project, and who can ask
+
+A service session opens with `answeredFromView: true`
+(`openLocalSession`), so it always reads as able to ask: an approval
+request is a row that waits until a surface (a window, the terminal
+client) decides it, whether or not one is attached. Calls and notices go
+to the project's window focused last. Two designs:
+
+- **Keep it (recommended).** A request waits for the next surface that
+  shows the project, which sees it as an open row; closing a window never
+  turns a pending approval into a denial. The cost: a task started and
+  left with no window waits on the approval until someone looks.
+- **"Can ask" follows the attachments.** `HostWindows` tells the session
+  whether any surface of the project is attached, and with none the
+  session's policy treats prompts as unavailable: approval-gated tools
+  are withheld and open requests denied by policy. A task with no window
+  goes on with less power instead of waiting, but closing the last window
+  mid-run denies what it was about to approve, and the terminal client
+  would have to count as a surface too.
+
+Notices, either way, stay with the window focused last: sending them to
+every window of the project shows each one twice.

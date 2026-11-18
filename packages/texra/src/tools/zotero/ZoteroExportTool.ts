@@ -63,10 +63,8 @@ const exportEntries = Effect.fn('ZoteroExportTool.execute')(function* ({
 
   const exported = result.trim();
   if (exported === '') {
-    return yield* Effect.fail(
-      new ToolError(
-        `No entries found for citation keys: ${citekeys.join(', ')}`,
-      ),
+    return yield* new ToolError(
+      `No entries found for citation keys: ${citekeys.join(', ')}`,
     );
   }
 

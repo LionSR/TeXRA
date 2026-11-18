@@ -3,9 +3,10 @@
  * harness's `processLayer` with TeXRA's policy fixed, so a host passes only
  * what it decides and hands the result to `ManagedRuntime.make`. TeXRA's
  * part is the settings catalog, the command directories, its plugins over
- * one editor registry the host's windows attach to (`HostWindows`), the one
- * credential store under the storage root, the project folder its skills
- * are read from, the agent directories, and the usage log.
+ * the window table whose attached windows their editor tools read
+ * (`HostWindows`), the one credential store under the storage root, the
+ * project folder its skills are read from, the agent directories, and the
+ * usage log.
  */
 
 // Third-party imports
@@ -35,11 +36,14 @@ import {
   usageLogLayer,
   type UsageLogOptions,
 } from '@telemetry/UsageLogService';
-import { HostWindows } from '@texra/controllers/server/hostWindows';
+import {
+  HostWindows,
+  makeWindowTable,
+} from '@texra/controllers/server/hostWindows';
 import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import { TEXRA_STORAGE_DIR_NAME } from '@texra/platform/defaults/nodeStorage';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
-import { makeEditorHost } from '@texra/tools/editorHost';
+
 import { texraPlugins } from '@texra/tools/registry';
 import type { Sessions } from '@texra-ai/harness';
 
@@ -108,8 +112,8 @@ export const texraProcessLayer = ({
   agentIssues,
   ...pluginHost
 }: TexraProcessHost): Layer.Layer<ProcessServices | Sessions | HostWindows> => {
-  const editors = makeEditorHost();
-  const plugins = texraPlugins({ ...pluginHost, editors });
+  const windows = makeWindowTable();
+  const plugins = texraPlugins({ ...pluginHost, editors: windows.editors });
   const services = processLayer({
     storageRoot,
     settings: TEXRA_SETTINGS.catalog,
@@ -157,7 +161,7 @@ export const texraProcessLayer = ({
     Layer.provide(nodePlatformServices),
   );
   return Layer.merge(
-    HostWindows.layer(editors),
+    HostWindows.layer(windows),
     // Every process follows keys written by other hosts, even without a
     // window. The watch closes before the services that consume its signals.
     Layer.effectDiscard(

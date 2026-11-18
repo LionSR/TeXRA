@@ -162,38 +162,30 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
   });
 
   if (result.end._tag === 'LimitExceeded') {
-    return yield* Effect.fail(
-      new ToolError(
-        `Search output exceeded the ${GREP_MAX_BUFFER_CHARS.toLocaleString()}-character retained-output ceiling.\n` +
-          `Narrow the search path or pattern, or use glob/type filters. ` +
-          `Pagination with offset/head_limit does not avoid draining the total ripgrep output.`,
-      ),
+    return yield* new ToolError(
+      `Search output exceeded the ${GREP_MAX_BUFFER_CHARS.toLocaleString()}-character retained-output ceiling.\n` +
+        `Narrow the search path or pattern, or use glob/type filters. ` +
+        `Pagination with offset/head_limit does not avoid draining the total ripgrep output.`,
     );
   }
 
   if (result.end._tag === 'NoExit' && result.end.why === 'spawn') {
-    return yield* Effect.fail(
-      new ToolError(
-        `ripgrep could not start: ${result.stderr}.\n` +
-          `Check that rg is installed and the search path exists.`,
-      ),
+    return yield* new ToolError(
+      `ripgrep could not start: ${result.stderr}.\n` +
+        `Check that rg is installed and the search path exists.`,
     );
   }
   if (result.end._tag !== 'Exited') {
-    return yield* Effect.fail(
-      new ToolError(`ripgrep did not finish: ${result.stderr}`),
-    );
+    return yield* new ToolError(`ripgrep did not finish: ${result.stderr}`);
   }
   // ripgrep exit codes: 0 = matches found, 1 = no matches, 2 = error.
   const exitCode = result.end.code;
   if (exitCode >= 2) {
-    return yield* Effect.fail(
-      new ToolError(
-        `Regex error: ${result.stderr || `exit code ${exitCode}`}.\n` +
-          `To fix, either:\n` +
-          `- Escape special regex characters in the pattern (e.g. \\., \\(, \\{)\n` +
-          `- Set literal: true for exact string matching: { "literal": true }`,
-      ),
+    return yield* new ToolError(
+      `Regex error: ${result.stderr || `exit code ${exitCode}`}.\n` +
+        `To fix, either:\n` +
+        `- Escape special regex characters in the pattern (e.g. \\., \\(, \\{)\n` +
+        `- Set literal: true for exact string matching: { "literal": true }`,
     );
   }
 

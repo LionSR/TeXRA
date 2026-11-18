@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import { meansAbsent } from '@texra-ai/harness/node';
 import { MemoryStore } from '@texra-ai/harness/plugins';
@@ -39,6 +39,12 @@ export function formatCliMemoryList(items: readonly MemoryViewItem[]): string {
   return lines.join('\n');
 }
 
+/** The path names no stored memory. */
+class CliMemoryNotFound extends Schema.TaggedError<CliMemoryNotFound>()(
+  'CliMemoryNotFound',
+  { message: Schema.String },
+) {}
+
 interface CliMemoryDetail {
   readonly path: string;
   readonly lineCount?: number;
@@ -53,9 +59,9 @@ export const loadCliMemoryDetail = Effect.fn('cli.loadCliMemoryDetail')(
     const preview = yield* MemoryStore.preview(storagePath).pipe(
       Effect.catchIf(meansAbsent, () =>
         Effect.fail(
-          new Error(
-            `No stored memory at ${MemoryStore.displayPath(storagePath)}; \`memory list\` shows the stored ones.`,
-          ),
+          new CliMemoryNotFound({
+            message: `No stored memory at ${MemoryStore.displayPath(storagePath)}; \`memory list\` shows the stored ones.`,
+          }),
         ),
       ),
     );

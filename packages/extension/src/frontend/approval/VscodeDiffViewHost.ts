@@ -165,29 +165,23 @@ export class VscodeDiffViewHost implements DiffViewHost {
     session: DiffSession,
     text: string,
   ): Effect.Effect<void, EditorCallFailed> {
-    return Effect.suspend(() => {
-      const proposed = this.proposedDocument(session);
-      return fromHost('openTextDocument', () =>
+    const proposedDocument = () => this.proposedDocument(session);
+    return Effect.gen(function* () {
+      const proposed = proposedDocument();
+      const copy = yield* fromHost('openTextDocument', () =>
         vscode.workspace.openTextDocument({
           content: text,
           language: proposed?.languageId,
         }),
-      ).pipe(
-        Effect.flatMap((copy) =>
-          fromHost('showTextDocument', () =>
-            vscode.window.showTextDocument(copy, {
-              preview: false,
-              preserveFocus: true,
-            }),
-          ),
-        ),
-        Effect.andThen(
-          proposed?.isDirty === true
-            ? fromHost('saveProposed', () => proposed.save())
-            : Effect.void,
-        ),
-        Effect.asVoid,
       );
+      yield* fromHost('showTextDocument', () =>
+        vscode.window.showTextDocument(copy, {
+          preview: false,
+          preserveFocus: true,
+        }),
+      );
+      if (proposed?.isDirty === true)
+        yield* fromHost('saveProposed', () => proposed.save());
     });
   }
 

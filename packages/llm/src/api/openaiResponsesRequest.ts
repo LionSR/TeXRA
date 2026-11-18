@@ -212,8 +212,7 @@ export const authorized = <A, R>(
     if (typeof bearer === 'string') return yield* request(token);
     const first = yield* Effect.result(request(token));
     if (Result.isSuccess(first)) return first.success;
-    if (first.failure.kind !== 'authentication')
-      return yield* Effect.fail(first.failure);
+    if (first.failure.kind !== 'authentication') return yield* first.failure;
     yield* bearer.rejected(token).pipe(Effect.interruptible);
     return yield* request(yield* current);
   });

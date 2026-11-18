@@ -213,10 +213,8 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
     !hasDirectory &&
     !(yield* (yield* ChildRuns).records(input.execution_id).exists)
   ) {
-    return yield* Effect.fail(
-      new ToolError(
-        `Run not found: ${input.execution_id}. Use the executions tool with path /executions to list available runs.`,
-      ),
+    return yield* new ToolError(
+      `Run not found: ${input.execution_id}. Use the executions tool with path /executions to list available runs.`,
     );
   }
   const { execution_id: runId, files, strip_criticize } = input;
@@ -241,8 +239,8 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
         ? pathToLocationIn(workspaceRoot, destPath)
         : undefined;
       if (dest?.kind !== 'workspace') {
-        return yield* Effect.fail(
-          new ToolError(`original must be inside the workspace: ${destPath}`),
+        return yield* new ToolError(
+          `original must be inside the workspace: ${destPath}`,
         );
       }
       const workspaceFs: FileSystem.FileSystem = yield* WorkspaceFs;
@@ -457,21 +455,17 @@ const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
       case 'file':
         return entry.location;
       case 'symlink':
-        return yield* Effect.fail(
-          new ToolError(
-            `Cannot accept ${runPath} from run ${runId}: the run-storage entry is a symlink, meaning this round did not emit the file. Accepting it would propagate snapshot or workspace content rather than agent output.`,
-          ),
+        return yield* new ToolError(
+          `Cannot accept ${runPath} from run ${runId}: the run-storage entry is a symlink, meaning this round did not emit the file. Accepting it would propagate snapshot or workspace content rather than agent output.`,
         );
       case 'directory':
       case 'unsupported':
-        return yield* Effect.fail(
-          new ToolError(
-            `Cannot accept ${runPath} from run ${runId}: the run-storage entry is not a regular file.`,
-          ),
+        return yield* new ToolError(
+          `Cannot accept ${runPath} from run ${runId}: the run-storage entry is not a regular file.`,
         );
       case 'invalid':
-        return yield* Effect.fail(
-          new ToolError(`Cannot accept ${runPath}: ${entry.reason}`),
+        return yield* new ToolError(
+          `Cannot accept ${runPath}: ${entry.reason}`,
         );
       case 'missing':
         break;
@@ -490,11 +484,9 @@ const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
       return wsLoc;
     }
 
-    return yield* Effect.fail(
-      new ToolError(
-        `File not found in run storage or workspace: ${runPath}. ` +
-          `Use executions tool with path /executions/${runId}/files to list available files.`,
-      ),
+    return yield* new ToolError(
+      `File not found in run storage or workspace: ${runPath}. ` +
+        `Use executions tool with path /executions/${runId}/files to list available files.`,
     );
   },
 );

@@ -19,10 +19,10 @@ import {
   type RunId,
   type UserQuestionAnswers,
   type UserQuestionRequest,
-  ensureError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import {
+  ApprovalPromptFailed,
   type CliApprovalContent,
   type CliApprovalPromptHooks,
   askApproval,
@@ -77,7 +77,7 @@ const askHeadlessUserQuestion = Effect.fn(
               ...payload,
               questions: [question],
             }),
-          catch: ensureError,
+          catch: ApprovalPromptFailed.from,
         });
         const answer = yield* whilePrompting(
           hooks,
@@ -90,7 +90,7 @@ const askHeadlessUserQuestion = Effect.fn(
         );
         const parsed = yield* Effect.try({
           try: () => parseUserQuestionAnswer(answer, question),
-          catch: ensureError,
+          catch: ApprovalPromptFailed.from,
         });
         if (parsed != null) answers[question.question] = parsed;
       }),

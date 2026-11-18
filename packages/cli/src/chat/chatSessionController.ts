@@ -10,6 +10,7 @@ import {
   Exit,
   Fiber,
   FiberSet,
+  Schema,
   Scope,
   Semaphore,
   Stream,
@@ -45,6 +46,7 @@ import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { RequestRefusal } from '@texra/controllers/session/hostCallFailure';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import { selectChatModel } from './tui/commands/handlers/slashContext';
+import type { ScopeRunner } from './scopeRunner';
 import {
   selectedRunId as selectedRunIdSignal,
   focusRun,
@@ -89,6 +91,12 @@ import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
 // ---------------------------------------------------------------------------
 // Controller
 // ---------------------------------------------------------------------------
+
+/** A resumed run's stored configuration is absent, so the chat cannot adopt it. */
+class RunConfigMissing extends Schema.TaggedError<RunConfigMissing>()(
+  'RunConfigMissing',
+  { message: Schema.String },
+) {}
 
 /**
  * The recovery tail every run/resume program below shares. A typed failure
@@ -172,14 +180,14 @@ interface ChatSessionControllerInit {
   /** How the user invoked this CLI, for the resume command a notice names. */
   readonly commandName: string;
 
-  /** The chat's scope: the host attachment and the resumed-root watch
-   *  close with it, which the exit drain awaits. */
-  readonly chatScope: Scope.Scope;
+  /** The runner of the chat's scope: the host attachment and the
+   *  resumed-root watch close with it, which the exit drain awaits. */
+  readonly chat: ScopeRunner;
 
-  /** The process's shutdown scope: the work that outlives a turn (run
-   *  actions, sends, resumed roots) runs there, so every exit path, signal
-   *  or graceful, awaits it. */
-  readonly shutdownScope: Scope.Scope;
+  /** The runner of the process's shutdown scope: the work that outlives a
+   *  turn (run actions, sends, resumed roots) runs there, so every exit
+   *  path, signal or graceful, awaits it. */
+  readonly untilShutdown: ScopeRunner;
 
   readonly cwd: string;
   /**
@@ -188,9 +196,9 @@ interface ChatSessionControllerInit {
    * looked up again here.
    */
   readonly stores: SettingsStores;
-  /** The process runtime this controller runs its programs on, captured once
-   *  here: the controller lives for the length of the chat session, and its
-   *  Promise-facing methods are that session's run edge. */
+  /** The process runtime, for a stop alone: Ctrl-C asks for one, and a
+   *  second Ctrl-C leaves the process at once, closing the shutdown scope
+   *  before a fiber it held could land the request. */
   readonly runtime: ProcessRuntime;
   /** The policy the chat asked for itself (its flag, then `/approval`),
    *  which each launch carries (`launchApproval`); none follows the
@@ -241,8 +249,8 @@ export function createChatSessionController(
     session,
     runSession,
     served,
-    chatScope,
-    shutdownScope,
+    chat,
+    untilShutdown,
     cwd,
     stores,
     runtime,
@@ -310,22 +318,21 @@ export function createChatSessionController(
   const interactions = createTuiHostInteractions({
     requests: runSession,
     settings: stores,
-    runtime,
+    chat,
   });
   // Attached to the chat's session for its lifetime: here, its requests'
   // host; in the service, one of its project's windows, whose notices its
   // tasks raise here.
   // The attachment closes after the interactions are disposed.
-  runtime.runSync(
+  chat.sync(
     Effect.gen(function* () {
-      const attached = yield* Scope.fork(chatScope);
-      yield* Scope.addFinalizer(
-        chatScope,
+      const attached = yield* Scope.fork(chat.scope);
+      yield* Effect.addFinalizer(() =>
         Effect.sync(() => interactions.dispose?.()),
       );
       yield* runSession
         .attach(interactions)
-        .pipe(Scope.provide(attached), Effect.forkIn(chatScope));
+        .pipe(Scope.provide(attached), Effect.forkScoped);
     }),
   );
 
@@ -334,7 +341,7 @@ export function createChatSessionController(
   // transcript is always on screen, so nothing is revealed, and a run is
   // taken up by the path that launched it (the root launch adopts its run;
   // a task resumed beside the chat joins the agent list).
-  const runActions = runtime.runSync(
+  const runActions = untilShutdown.sync(
     createHostRunActions({
       roots: runSession.roots,
       session: runSession,
@@ -345,7 +352,7 @@ export function createChatSessionController(
         Effect.sync(() => appendLocalNotice(`Final output: ${absolutePath}`)),
       notify: (_level, message) =>
         Effect.sync(() => appendLocalNotice(message)),
-    }).pipe(Scope.provide(shutdownScope)),
+    }),
   );
   const resumeTask: ChatSessionController['resumeTask'] = (id) =>
     runActions.resume(id);
@@ -380,6 +387,8 @@ export function createChatSessionController(
     const result = yield* Effect.cached(run.result);
     yield* Effect.raceFirst(shownHeld(run.runId), Effect.ignore(result));
     session.endLaunch(launched, { runId: run.runId });
+    // The cached result is handed back as an effect for the caller to await.
+    // @effect-diagnostics-next-line returnEffectInGen:off
     return result;
   });
 
@@ -459,7 +468,7 @@ export function createChatSessionController(
               session.endLaunch(launched, { exitCode: CliExitCode.Success }),
             ),
           ),
-          Effect.forkIn(shutdownScope),
+          Effect.forkIn(untilShutdown.scope),
           Effect.andThen(restore(Deferred.await(launched))),
           Effect.map(() => held),
         );
@@ -511,7 +520,7 @@ export function createChatSessionController(
                   Effect.sync(() => appendLocalRequestRefusal(refusal, id)),
                 ),
               ),
-              shutdownScope,
+              untilShutdown.scope,
             );
             return;
           }
@@ -547,9 +556,9 @@ export function createChatSessionController(
               ? config
               : yield* init.runSession.records(run.runId).readConfig;
           if (adoptedConfig === null)
-            return yield* Effect.fail(
-              new Error(`Run ${run.runId} has no configuration to resume`),
-            );
+            return yield* new RunConfigMissing({
+              message: `Run ${run.runId} has no configuration to resume`,
+            });
           adoptRunConfig(adoptedConfig, 'history');
           clearLocalTranscript();
           // The transcript and the work plan are the view's: the TUI
@@ -579,7 +588,7 @@ export function createChatSessionController(
           ),
         ).pipe(
           Effect.ensuring(endWithout(CliExitCode.Interrupted)),
-          Effect.forkIn(shutdownScope),
+          Effect.forkIn(untilShutdown.scope),
           Effect.andThen(restore(Deferred.await(launched))),
           Effect.asVoid,
         );
@@ -593,7 +602,9 @@ export function createChatSessionController(
     Effect.gen(function* () {
       const config = yield* init.runSession.records(runId).readConfig;
       if (!config)
-        return yield* Effect.fail(new Error('it has no stored configuration'));
+        return yield* new RunConfigMissing({
+          message: 'it has no stored configuration',
+        });
       adoptRunConfig(config, 'history');
     }).pipe(
       Effect.catch((error) =>
@@ -614,7 +625,7 @@ export function createChatSessionController(
   const adoptRoot = (runId: RunId): void => {
     if (!session.takeUpRoot(runId)) return;
     focusRun(runId);
-    runtime.runSync(Effect.forkIn(adoptRunRecord(runId), shutdownScope));
+    untilShutdown.fork(adoptRunRecord(runId));
   };
   // A run counts from the level where it is live here and was not on the
   // level before, so neither a child detached while running (live already)
@@ -643,12 +654,7 @@ export function createChatSessionController(
   // A chat of the service adopts only the runs it launches or resumes: the
   // service's view also holds other terminals' conversations.
   if (!served) {
-    runtime.runSync(
-      Effect.forkIn(
-        Stream.runForEach(viewChanges, observeResumedRoots),
-        chatScope,
-      ),
-    );
+    chat.fork(Stream.runForEach(viewChanges, observeResumedRoots));
   }
 
   // -----------------------------------------------------------------------
@@ -691,7 +697,7 @@ export function createChatSessionController(
     launchRootRun(
       Effect.gen(function* () {
         const meta = sessionMetaSignal.get();
-        const selection = yield* selectChatModel(stores, runtime, {
+        const selection = yield* selectChatModel(stores, {
           model: meta.model,
           reason: meta.modelSource,
         });
@@ -714,9 +720,7 @@ export function createChatSessionController(
   // a run's messages in order.
   const inOrder = Semaphore.makeUnsafe(1).withPermit;
   // The sends in flight, which a graceful exit waits for.
-  const sending = runtime.runSync(
-    FiberSet.make<MessageResult>().pipe(Scope.provide(shutdownScope)),
-  );
+  const sending = untilShutdown.sync(FiberSet.make<MessageResult>());
 
   /**
    * Send `prepared` to `target`. The session decides everything about the
@@ -912,7 +916,7 @@ export function createChatSessionController(
     const wasPending = SubscriptionRef.getUnsafe(draft).skills.some(
       (skill) => skill.name === selection.name,
     );
-    runtime.runSync(
+    chat.sync(
       SubscriptionRef.update(draft, (current) => withSkill(current, selection)),
     );
     appendLocalNotice(
@@ -935,7 +939,7 @@ export function createChatSessionController(
     activateSkill,
     performHost: interactions.performHost,
     clearPendingSkills: () =>
-      runtime.runSync(
+      chat.sync(
         SubscriptionRef.update(draft, (current) => ({
           ...current,
           skills: [],

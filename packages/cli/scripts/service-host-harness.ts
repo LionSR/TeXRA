@@ -35,6 +35,12 @@ if (storageRoot === undefined || workspace === undefined)
     'usage: service-host-harness <storageRoot> <workspace> <answer|hang|approve>',
   );
 
+/** No service answered, and the harness starts none. */
+class ServiceNotRunning extends Schema.TaggedError<ServiceNotRunning>()(
+  'ServiceNotRunning',
+  { message: Schema.String },
+) {}
+
 /** The storage root's global values, where the service's record is. */
 const globalValues = Layer.effect(
   GlobalValues,
@@ -85,7 +91,9 @@ await Effect.runPromise(
         {
           storageRoot,
           start: Effect.fail(
-            new Error('The harness attaches to a running service only.'),
+            new ServiceNotRunning({
+              message: 'The harness attaches to a running service only.',
+            }),
           ),
         },
         Effect.logWarning,

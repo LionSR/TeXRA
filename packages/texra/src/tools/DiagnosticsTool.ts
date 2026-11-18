@@ -97,10 +97,8 @@ const readDiagnostics = Effect.fn('DiagnosticsTool.readDiagnostics')(function* (
   const diagnosticsPath = (yield* resolveToolPath(ports.call, path)).absolute;
   const linter = ports.readDiagnostics;
   if (!linter) {
-    return yield* Effect.fail(
-      new ToolError(
-        'Diagnostics capability unavailable: this session has no diagnostics provider.',
-      ),
+    return yield* new ToolError(
+      'Diagnostics capability unavailable: this session has no diagnostics provider.',
     );
   }
 
@@ -142,10 +140,8 @@ const addCriticism = Effect.fn('DiagnosticsTool.addCriticism')(function* (
   const { path, line, message, severity, confidence } = input;
   const addCriticismSink = ports.addCriticism;
   if (!addCriticismSink) {
-    return yield* Effect.fail(
-      new ToolError(
-        'Diagnostics add capability unavailable: this session has no criticism sink.',
-      ),
+    return yield* new ToolError(
+      'Diagnostics add capability unavailable: this session has no criticism sink.',
     );
   }
 

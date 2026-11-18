@@ -42,7 +42,11 @@ export function startAwaited<A, E, R extends AgentRunServices>(
   program: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E | Error> {
   return Effect.flatMap(
-    runs.start(runId, { open: Effect.void, run: () => program }),
+    runs.start(runId, {
+      open: Effect.void,
+      run: () => program,
+      end: (_, exit) => exit,
+    }),
     ({ fiber }) =>
       Fiber.join(fiber).pipe(Effect.onInterrupt(() => Fiber.interrupt(fiber))),
   );

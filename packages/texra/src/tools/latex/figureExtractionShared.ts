@@ -64,9 +64,7 @@ export const resolveLatexFile = Effect.fn('tools.resolveLatexFile')(function* (
   const { display } = path;
   const exists = (yield* entryTypeIn(fs, path.absolute)) !== undefined;
   if (!exists) {
-    return yield* Effect.fail(
-      new ToolError(`LaTeX file not found: ${display}`),
-    );
+    return yield* new ToolError(`LaTeX file not found: ${display}`);
   }
 
   return { path, display };

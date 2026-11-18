@@ -8,6 +8,7 @@ import {
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
+import { CliSettingUpdateFailed } from '@cli/runtime/platform/cliConfig';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
@@ -96,7 +97,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   const applyUpdate = Effect.fn('applyUpdate')(function* (
     entry: TexraSettingRow,
     value: unknown,
-  ): Effect.fn.Return<void, Error, AppSignals> {
+  ): Effect.fn.Return<void, CliSettingUpdateFailed, AppSignals> {
     const result = yield* applyStateSettingUpdate(entry.key, value, {
       host: 'cli',
       stores: roots,
@@ -110,19 +111,15 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
         // ConfigForm rolls its optimistic value back on a failure and
         // reports it, so a refused write must fail rather than read as
         // applied.
-        return yield* Effect.fail(
-          new Error(
-            `Failed to update "${label}": ${toErrorMessage(result.error)}`,
-            { cause: result.error },
-          ),
-        );
+        return yield* new CliSettingUpdateFailed({
+          message: `Failed to update "${label}": ${toErrorMessage(result.error)}`,
+          cause: result.error,
+        });
       case 'ignored':
       case 'workspace-required':
-        return yield* Effect.fail(
-          new Error(
-            `Setting "${label}" is not writable from /config (${result.kind}).`,
-          ),
-        );
+        return yield* new CliSettingUpdateFailed({
+          message: `Setting "${label}" is not writable from /config (${result.kind}).`,
+        });
     }
     settings.reload();
     if (entry.key === APPROVAL_POLICY_SETTING.key) {
@@ -131,7 +128,11 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
         Effect.flatMap((policy) =>
           Effect.try({
             try: () => props.onApprovalPolicyChanged?.(policy),
-            catch: ensureError,
+            catch: (cause) =>
+              new CliSettingUpdateFailed({
+                message: ensureError(cause).message,
+                cause,
+              }),
           }),
         ),
         Effect.tapError((error) => Effect.sync(() => props.onError?.(error))),

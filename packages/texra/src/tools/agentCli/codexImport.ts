@@ -133,7 +133,7 @@ const codexBinaryInPlatformPackage = Effect.fn(
  */
 export function findCodexBinaryPath() {
   const info = PLATFORM_INFO[`${process.platform}-${process.arch}`];
-  if (!info) return Effect.succeed(undefined);
+  if (!info) return Effect.undefined;
 
   return findCliBinary({
     platformPackages: [info.pkg, '@openai/codex'],

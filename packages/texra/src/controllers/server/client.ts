@@ -35,10 +35,10 @@ import { RpcClient, RpcSerialization, type RpcClientError } from 'effect/rpc';
 import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
 import { isOutcomeOf } from '@texra-ai/harness';
 import {
-  ensureError,
   formatResultCount,
   type RuntimeCommand,
   Rejected,
+  ensureError,
 } from '@texra-ai/harness/schemas';
 import { nodeFileServices } from '@texra-ai/harness/node';
 import {
@@ -280,6 +280,16 @@ export const probeRecordedService: Effect.Effect<
   ),
 );
 
+/** The service's process could not be started: its directories or log
+ *  could not be prepared, or the spawn itself failed. */
+class ServiceStartFailed extends Schema.TaggedError<ServiceStartFailed>()(
+  'ServiceStartFailed',
+  { message: Schema.String, cause: Schema.Defect() },
+) {}
+
+const startFailed = (cause: unknown) =>
+  new ServiceStartFailed({ message: ensureError(cause).message, cause });
+
 /**
  * How a host starts the service of a storage root: the root, whose
  * `serve.log` is where a service that never answers is explained, and the
@@ -311,11 +321,11 @@ export function spawnService(
     yield* prepareServiceDirectories(paths);
     const log = yield* Effect.try({
       try: () => openSync(paths.log, 'a', 0o600),
-      catch: ensureError,
+      catch: startFailed,
     });
     // Finish on the child's own report: an `error` event (no such binary,
     // EACCES, no processes left) fails the start with its cause.
-    yield* Effect.callback<void, Error>((resume) => {
+    yield* Effect.callback<void, ServiceStartFailed>((resume) => {
       const child = spawn(command, [...args], {
         cwd: paths.runDirectory,
         detached: true,
@@ -336,13 +346,18 @@ export function spawnService(
           ...env,
         },
       });
-      child.once('error', (error) => resume(Effect.fail(error)));
+      child.once('error', (error) => resume(Effect.fail(startFailed(error))));
       child.once('spawn', () => {
         child.unref();
         resume(Effect.void);
       });
     }).pipe(Effect.ensuring(Effect.sync(() => closeSync(log))));
-  }).pipe(Effect.mapError(ensureError), Effect.provide(nodeFileServices));
+  }).pipe(
+    Effect.catchTag('PlatformError', (error) =>
+      Effect.fail(startFailed(error)),
+    ),
+    Effect.provide(nodeFileServices),
+  );
   return { storageRoot, start };
 }
 
@@ -356,12 +371,14 @@ export function spawnService(
 export const reachBundledService = (
   storageRoot: string,
   resourcesRoot: string,
-): Effect.Effect<ServiceLink, Error, Scope.Scope | GlobalValues> =>
+): Effect.Effect<ServiceLink, ServiceUnavailable, Scope.Scope | GlobalValues> =>
   Effect.suspend(() => {
     const bundle = join(resourcesRoot, 'serve', 'texra-serve.mjs');
     if (!existsSync(bundle))
       return Effect.fail(
-        new Error(`this build has no service bundle at ${bundle}`),
+        new ServiceUnavailable({
+          reason: `this build has no service bundle at ${bundle}`,
+        }),
       );
     return linkService(
       spawnService(
@@ -456,8 +473,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
             );
     }),
   );
-  if (info !== null && isNewer(info))
-    return yield* Effect.fail(newerService(info));
+  if (info !== null && isNewer(info)) return yield* newerService(info);
   if (info !== null && (isOlder(info) || info.draining)) {
     const leaving = info;
     const tasks = formatResultCount(leaving.running, 'running task');
@@ -608,10 +624,10 @@ export const linkOver = <Client>(
  *  it. */
 export const linkedClient = <Client>(
   link: ServiceLink<Client>,
-): Effect.Effect<Client, Error> =>
+): Effect.Effect<Client, ServiceUnavailable> =>
   Effect.flatMap(link.state.get, (state) =>
     'away' in state
-      ? Effect.fail(new Error(state.away))
+      ? Effect.fail(new ServiceUnavailable({ reason: state.away }))
       : Effect.succeed(state.client),
   );
 

@@ -75,14 +75,14 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
       // deleted meanwhile is not recreated, one created meanwhile is not
       // merged into.
       if (exists !== (original !== null)) {
-        return yield* Effect.fail(new ApprovedEditConflictError(path));
+        return yield* new ApprovedEditConflictError(path);
       }
       if (original === finalContent) return unchanged;
       let appliedContent = finalContent;
       if (original !== null && baseContent !== original) {
         const merged = mergeEditOnto(original, finalContent, baseContent);
         if (merged === undefined) {
-          return yield* Effect.fail(new ApprovedEditConflictError(path));
+          return yield* new ApprovedEditConflictError(path);
         }
         appliedContent = merged;
       }

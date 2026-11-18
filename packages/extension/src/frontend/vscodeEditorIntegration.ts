@@ -7,8 +7,8 @@
 import { Effect, Predicate } from 'effect';
 import * as vscode from 'vscode';
 
-import { ensureError } from '@texra-ai/harness/schemas';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
+import { hostFailed } from '@texra/controllers/session/hostCallFailure';
 import type { EditorIntegrationShape } from '@texra/hosts/editorIntegration';
 import {
   LATEX_RECOMMENDED_SETTINGS,
@@ -100,7 +100,7 @@ export const vscodeEditorIntegration: EditorIntegrationShape = {
                 resolveUpdateValue(setting, reset),
                 vscode.ConfigurationTarget.Global,
               ),
-          catch: ensureError,
+          catch: (cause) => hostFailed('configuration.update', cause),
         }),
       { concurrency: 'unbounded', discard: true },
     ),

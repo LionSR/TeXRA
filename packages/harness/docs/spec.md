@@ -732,19 +732,21 @@ not ended and is not among them is interrupted
 ### 7.2 Resume
 
 A resume is one launch of the run on the session's registry
-(`agent/runtime/resumeRun.ts#resumeRun`, `agent/runtime/runRegistry.ts#start`):
-its opening reads the run's records, its queued input, whether an open call of
-its parent owns it, and whether its rows can be continued, then commits the
-run's activation (`agent/runtime/resumeRun.ts#openResume`). A run whose
-records are gone, or deleted or whose input closed while those reads ran, is
-refused, as the opening's failure, with no fiber behind it
+(`agent/runtime/resumeRun.ts#resumeRun`, `agent/runtime/runRegistry.ts#start`),
+on the run's own fiber: its opening reads the run's records, its queued input,
+whether an open call of its parent owns it, and whether its rows can be
+continued, then commits the run's activation
+(`agent/runtime/resumeRun.ts#openResume`). A run whose records are gone, or
+deleted or whose input closed while those reads ran, is refused, as the
+opening's failure, and the fiber ends with nothing opened
 (`agent/runtime/resumeRun.ts#openResume`). The registry holds the run from the
-resume's first read: a second resume, or any launch, of the run meanwhile is
-refused (`agent/runtime/runRegistry.ts#RunLive`), and a stop asked meanwhile
-is applied as the opening answers: a failed opening's run ends cancelled on
-its rows, and a committed one is forked and interrupted at once, so its one
-terminal ends it (`agent/runtime/runRegistry.ts#stopAsked`,
-`agent/runtime/runRegistry.ts#stopRows`). A child an open call of its parent
+fiber's first step: a second resume, or any launch, of the run meanwhile is
+refused (`agent/runtime/runRegistry.ts#RunLive`), and a stop meanwhile writes
+its row, interrupts the fiber and refuses the resume
+(`agent/runtime/runRegistry.ts#RunStopped`); rows of the run with no end,
+the previous process's or the activation that was committing as the stop
+landed, end cancelled with the stop's reason
+(`agent/runtime/runRegistry.ts#endUnopened`). A child an open call of its parent
 owns resumes through that parent (`agent/runtime/resumeRun.ts#owningCall`; a
 resume a wake took follows it itself, whoever opened it,
 `agent/followUp/ToolUseFollowUp.ts#wakeRun`, and the package's resume through

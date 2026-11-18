@@ -35,7 +35,7 @@ function launchAs(catalog: AgentCatalogShape, entry: AgentEntry | undefined) {
     ? Effect.flatMap(FakeHost, ({ roots }) =>
         catalog.workspaceAgents(roots).forLaunch(entry.name, entry.source),
       )
-    : Effect.succeed(undefined);
+    : Effect.undefined;
 }
 
 const tempDirs: string[] = [];

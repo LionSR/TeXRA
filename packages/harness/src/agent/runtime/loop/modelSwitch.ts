@@ -3,7 +3,7 @@
  * model boundary: the rows that record it are appended by the one fiber that
  * holds the run's state.
  */
-import { Effect, ScopedRef } from 'effect';
+import { Effect, Schema, ScopedRef } from 'effect';
 
 import { selectModel } from '@texra-ai/llm';
 import { Inbox } from '@agent/followUp/Inbox';
@@ -14,6 +14,13 @@ import type { RunState } from '@shared/session/runState';
 import type { RunCell } from '@shared/session/runHistory';
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
 import { configRow, consumedRows } from './rows';
+
+/** A model switch that cannot apply: the model is not registered or cannot
+ *  replace the run's, or the run takes no more input. */
+class ModelSwitchRejected extends Schema.TaggedError<ModelSwitchRejected>()(
+  'ModelSwitchRejected',
+  { message: Schema.String },
+) {}
 
 /** Apply the model switches the run's input queues (the latest wins): the
  *  `run.config` naming the new model and the requests' `followup.consumed`,
@@ -46,7 +53,9 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
     // A switch that cannot apply fails the run: its `run.end` consumes the
     // request, so no resume meets it again.
     if (!selected) {
-      return yield* Effect.fail(new Error(`Model ${model} is not registered`));
+      return yield* new ModelSwitchRejected({
+        message: `Model ${model} is not registered`,
+      });
     }
     const state = yield* cell.current;
     let switched = state;
@@ -102,7 +111,8 @@ export function modelSwitchPort(
       Effect.map(switchRejection(model), (refused) => refused ?? undefined),
     switchModel: Effect.fn('toolUse.switchModel')(function* (model: string) {
       const refused = yield* switchRejection(model);
-      if (refused !== null) return yield* Effect.fail(new Error(refused));
+      if (refused !== null)
+        return yield* new ModelSwitchRejected({ message: refused });
       // Queued on the run's input, durable at once; the loop binds and
       // records it at its next model boundary, which consumes it. A switch
       // back to the current model is queued too: the latest request wins.
@@ -113,9 +123,9 @@ export function modelSwitchPort(
       });
       // Its input closed while the switch was accepted: nothing switches.
       if (sent.kind === 'refused')
-        return yield* Effect.fail(
-          new Error('This conversation takes no more input.'),
-        );
+        return yield* new ModelSwitchRejected({
+          message: 'This conversation takes no more input.',
+        });
     }),
   };
 }

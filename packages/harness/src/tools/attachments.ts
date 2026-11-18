@@ -132,9 +132,7 @@ export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
 > {
   const call = yield* ToolContext;
   if (typeof filePath !== 'string' || filePath.trim() === '') {
-    return yield* Effect.fail(
-      new ToolError('Attachment path must be provided.'),
-    );
+    return yield* new ToolError('Attachment path must be provided.');
   }
 
   // An unresolvable path rejects with a ToolError the tool runner reports to
@@ -154,9 +152,7 @@ export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
     ),
   );
   if (!present) {
-    return yield* Effect.fail(
-      new ToolError(`Attachment not found: ${display}`),
-    );
+    return yield* new ToolError(`Attachment not found: ${display}`);
   }
 
   const stats = yield* fs
@@ -168,10 +164,8 @@ export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
     );
 
   if (stats.size > BigInt(ATTACHMENT_MAX_BYTES)) {
-    return yield* Effect.fail(
-      new ToolError(
-        `Attachment ${display} exceeds maximum size of ${ATTACHMENT_MAX_BYTES.toLocaleString('en-US')} bytes.`,
-      ),
+    return yield* new ToolError(
+      `Attachment ${display} exceeds maximum size of ${ATTACHMENT_MAX_BYTES.toLocaleString('en-US')} bytes.`,
     );
   }
 

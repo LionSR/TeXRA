@@ -166,6 +166,7 @@ import { resolveCliResourcesPath } from '../src/runtime/platform/cliContext';
 import { setCliToolEnabled } from '../src/runtime/tools';
 import type { CliContext } from '../src/runtime/platform/cliContext';
 import { ChatProcessProvider } from '../src/chat/tui/chatProcess';
+import { scopeRunner } from '../src/chat/scopeRunner';
 
 const harnessRunId = Schema.decodeUnknownSync(RunIdSchema);
 const HARNESS_RUN_ID = harnessRunId('aaaa0001f10e');
@@ -473,6 +474,13 @@ const isCellRow = (draft: SeedRow): draft is CellRow =>
 // The TUI reads the session fold: bind it and subscribe every
 // run's transcript tier the way `runChat` does.
 HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, harnessRunSession.view));
+// The chat's scope and its runner, as `runChat` builds them: what the TUI
+// starts from a key press or a mounted component ends with this scope.
+const harnessChatScope = Scope.makeUnsafe();
+HARNESS_DISPOSERS.push(() =>
+  harnessRuntime.runFork(Scope.close(harnessChatScope, Exit.void)),
+);
+const harnessChat = scopeRunner(harnessRuntime, harnessChatScope);
 {
   // The harness's set, held until it disposes.
   const scope = Scope.makeUnsafe();
@@ -515,7 +523,7 @@ const harnessInteractions = createTuiHostInteractions({
     },
   },
   settings: HARNESS_PLATFORM_SERVICES,
-  runtime: harnessRuntime,
+  chat: harnessChat,
 });
 Effect.runSync(
   attachInteractions(session().interactions, harnessInteractions).pipe(
@@ -607,6 +615,7 @@ function holdRun(runId: RunId): void {
                   publishRunEnd(runId, RUN_OUTCOME.CANCELLED);
               }),
             ),
+          end: (_, exit) => exit,
         }),
         ({ fiber }) => fiber,
       ),
@@ -1830,7 +1839,7 @@ const harnessSlashContext: SlashCommandContext = {
   session: harnessSession,
   runSession: harnessRunSession,
   stores: HARNESS_PLATFORM_SERVICES,
-  runtime: harnessRuntime,
+  chat: harnessChat,
   requestInputExit: () => void exitHarness(0),
   getApprovalPolicy: harnessApprovalPolicy,
   setApprovalPolicy: (policy) =>
@@ -1866,8 +1875,8 @@ const harnessSlashContext: SlashCommandContext = {
 const harnessLaunch = canInterrupt ? harnessSession.claimLaunch() : undefined;
 
 const inkRef: { current?: ReturnType<typeof render> } = {};
-const scrollback = chatScrollback(harnessRuntime, inkRef);
-const harnessDraft = harnessRuntime.runSync(SubscriptionRef.make(EMPTY_DRAFT));
+const scrollback = chatScrollback(harnessChat, inkRef);
+const harnessDraft = harnessChat.sync(SubscriptionRef.make(EMPTY_DRAFT));
 
 function handleHarnessCtrlC(): void {
   if (canInterrupt) {
@@ -1882,7 +1891,7 @@ function renderHarnessApp(): React.JSX.Element {
     <SlashContextProvider value={harnessSlashContext}>
       <ChatProcessProvider
         value={{
-          runtime: harnessRuntime,
+          chat: harnessChat,
           roots: HARNESS_PLATFORM_SERVICES.roots,
         }}
       >

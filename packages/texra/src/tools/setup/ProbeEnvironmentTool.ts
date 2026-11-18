@@ -128,10 +128,8 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
   if (input.tool != null) {
     const name = input.tool.trim();
     if (!name) {
-      return yield* Effect.fail(
-        new ToolError(
-          'tool must be a non-empty command name (e.g. "pdflatex"). Call probe_environment with no arguments for the full report.',
-        ),
+      return yield* new ToolError(
+        'tool must be a non-empty command name (e.g. "pdflatex"). Call probe_environment with no arguments for the full report.',
       );
     }
     // Accept the image-capability label as an alias since that's how the
@@ -152,10 +150,8 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
     // through the common-paths search to existing directories (e.g.
     // `/usr/bin/.`) and produce a false "ok" verification result.
     if (!/^[A-Za-z0-9][A-Za-z0-9._+-]*$/.test(name)) {
-      return yield* Effect.fail(
-        new ToolError(
-          `Invalid tool name "${name}". Must start with an alphanumeric character; only \`A-Za-z0-9._+-\` are allowed thereafter (or the alias "${IMAGE_TOOL_LABEL}").`,
-        ),
+      return yield* new ToolError(
+        `Invalid tool name "${name}". Must start with an alphanumeric character; only \`A-Za-z0-9._+-\` are allowed thereafter (or the alias "${IMAGE_TOOL_LABEL}").`,
       );
     }
     const { installed: ok } = yield* locateTool(name);

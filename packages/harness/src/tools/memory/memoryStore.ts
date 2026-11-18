@@ -65,17 +65,17 @@ function storagePathOf(input: string): Result.Result<string, ToolError> {
 }
 
 /** A memory's storage path, or why the name is not one. */
-const storagePath = (input: string): Effect.Effect<string, Error> =>
+const storagePath = (input: string): Effect.Effect<string, ToolError> =>
   Effect.fromResult(storagePathOf(input));
 
 /** The storage path of one memory file a mutation acts on: the memory root
  *  itself is no memory, so a delete or pin of it is refused rather than
  *  acting on the whole tree. */
-const memoryFilePath = (input: string): Effect.Effect<string, Error> =>
+const memoryFilePath = (input: string): Effect.Effect<string, ToolError> =>
   Effect.flatMap(storagePath(input), (path) =>
     path === WORKSPACE_STORAGE_LAYOUT.memory
       ? Effect.fail(
-          new Error(
+          new ToolError(
             `"${input}" names the memory folder, not a memory; name one file under ${MEMORY_DISPLAY_ROOT}.`,
           ),
         )
@@ -113,7 +113,7 @@ export const MemoryStore = {
     input: string,
   ): Effect.Effect<
     MemoryPreview,
-    Error | PlatformError.PlatformError,
+    ToolError | PlatformError.PlatformError,
     StorageFs
   > =>
     storagePath(input).pipe(
@@ -126,7 +126,7 @@ export const MemoryStore = {
   /** Delete a memory, on the memory tree's lane. */
   delete: (
     input: string,
-  ): Effect.Effect<void, Error | PlatformError.PlatformError, StorageFs> =>
+  ): Effect.Effect<void, ToolError | PlatformError.PlatformError, StorageFs> =>
     memoryFilePath(input).pipe(
       Effect.flatMap((path) => deleteMemoryPath(path).pipe(onMemoryTreeLane)),
     ),
@@ -135,7 +135,7 @@ export const MemoryStore = {
     input: string,
   ): Effect.Effect<
     MemoryPinResult,
-    Error | PlatformError.PlatformError,
+    ToolError | PlatformError.PlatformError,
     StorageFs
   > =>
     memoryFilePath(input).pipe(
@@ -149,7 +149,7 @@ export const MemoryStore = {
   /** Unpin a memory, on the memory tree's lane; one not pinned stays so. */
   unpin: (
     input: string,
-  ): Effect.Effect<void, Error | PlatformError.PlatformError, StorageFs> =>
+  ): Effect.Effect<void, ToolError | PlatformError.PlatformError, StorageFs> =>
     memoryFilePath(input).pipe(
       Effect.flatMap((path) => unpinMemory(path).pipe(onMemoryTreeLane)),
       Effect.asVoid,

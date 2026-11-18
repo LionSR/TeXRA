@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { Cancelled, ensureError } from '@texra-ai/harness/schemas';
+import { Cancelled } from '@texra-ai/harness/schemas';
 import { vscodeOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
@@ -11,6 +11,7 @@ import {
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
+import { hostFailed } from '@texra/controllers/session/hostCallFailure';
 import {
   subscriptionProvider,
   type SubscriptionAccount,
@@ -35,7 +36,7 @@ function vscodePresenter(
       function* (prompt) {
         const copied = yield* Effect.tryPromise({
           try: () => vscode.env.clipboard.writeText(prompt.userCode),
-          catch: ensureError,
+          catch: (cause) => hostFailed('clipboard.writeText', cause),
         }).pipe(
           Effect.as(true),
           Effect.catch((error) =>
@@ -80,7 +81,7 @@ function vscodePresenter(
         if (choice === COPY_SIGN_IN_LINK) {
           yield* Effect.tryPromise({
             try: () => vscode.env.clipboard.writeText(url),
-            catch: ensureError,
+            catch: (cause) => hostFailed('clipboard.writeText', cause),
           });
           yield* showLoggedInfoMessage(
             `Sign-in link copied. Paste it into the browser where you use ${copyTarget}.`,
