@@ -28,6 +28,10 @@ import {
 import { DESKTOP_WORKSPACE_INBOUND_COMMANDS } from '../shared/desktopWorkspaceMessages.js';
 import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
 import {
+  DESKTOP_PDF_COMMANDS,
+  DesktopPdfLoadFailedMessageSchema,
+} from '../shared/desktopPdfMessages.js';
+import {
   attachRendererConsoleLog,
   getDesktopLogDirectory,
   getDesktopLogFilePath,
@@ -89,6 +93,11 @@ interface DesktopWindowOptions {
 
 /** The one field every session message carries: which project it names. */
 const SessionMessageEnvelopeSchema = Schema.Struct({ session: Schema.String });
+
+/** Chromium's net error codes for a load a newer one replaced, which is not a
+ *  failure, and for a `file:` URL that names nothing. */
+const CHROMIUM_ERR_ABORTED = -3;
+const CHROMIUM_ERR_FILE_NOT_FOUND = -6;
 
 /** Opening is synchronous, as Electron's window creation is: see
  *  {@link DesktopWindows.open}. */
@@ -279,6 +288,27 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   // `subscribe` (or terminal) reaches the binding the reset makes, never the
   // one it is about to close.
   const routing = Semaphore.makeUnsafe(1).withPermit;
+
+  // A PDF tab is a frame of this window, and a frame that cannot load tells
+  // only the main process. A failure of any other frame does not decode as
+  // a PDF's and is left to the frame.
+  window.webContents.on(
+    'did-fail-load',
+    (_event, errorCode, errorDescription, url, isMainFrame) => {
+      if (isMainFrame || errorCode === CHROMIUM_ERR_ABORTED) return;
+      const failed = Schema.decodeUnknownResult(
+        DesktopPdfLoadFailedMessageSchema,
+      )({
+        command: DESKTOP_PDF_COMMANDS.LOAD_FAILED,
+        pdfUrl: url,
+        reason:
+          errorCode === CHROMIUM_ERR_FILE_NOT_FOUND
+            ? 'The file is no longer on disk. Build the document again to reload it.'
+            : `The viewer reported ${errorDescription}.`,
+      });
+      if (Result.isSuccess(failed)) host.post(failed.success);
+    },
+  );
 
   // The renderer owns editor dirtiness. This event is the main process's only
   // reading of it: Chromium emits it after the renderer's beforeunload handler

@@ -9,7 +9,6 @@ import { scopedFork } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   attentionOf,
-  ensureError,
   formatResultCount,
   type AgentConfig,
   type FileLocation,
@@ -161,7 +160,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       const draftRequests = yield* HostDraftRequests.make;
       const contentProvider = new BundledViewContentProvider(
         context,
-        'ProgressView',
+        'TeXRA Tasks',
         'progressView',
       );
       const runSession = windowSession.session;
@@ -416,7 +415,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         this.fork(
           Effect.tryPromise({
             try: () => view.webview.postMessage(message),
-            catch: ensureError,
+            catch: (cause) => hostFailed('webview.postMessage', cause),
           }).pipe(
             Effect.flatMap((delivered) =>
               delivered
@@ -459,22 +458,18 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         ),
       );
       // The template is read off this tick (it never fails: a failed render
-      // is a logged error page); a port closed before it lands paints nothing,
-      // because closing the port interrupts the render. The listeners are
-      // registered after the render, so closing removes them first.
+      // is a reported error page); a port closed before it lands paints
+      // nothing, because closing the port interrupts the render. The
+      // listeners are registered after the render, so closing removes them
+      // first.
       yield* Effect.forkIn(
-        this.contentProvider
-          .getHtmlContent(view.webview, {
-            sessionKey: this.bridge.key,
-            placement: id,
-          })
-          .pipe(
-            Effect.flatMap((html) =>
-              Effect.sync(() => {
-                view.webview.html = html;
-              }),
-            ),
-          ),
+        this.contentProvider.render(
+          view.webview,
+          (html) => {
+            view.webview.html = html;
+          },
+          { sessionKey: this.bridge.key, placement: id },
+        ),
         surface.scope,
       );
       for (const listener of [

@@ -2,7 +2,7 @@
 
 import type { AgentDirectories, AppState } from '@platform/interfaces';
 import type { GlobalStorageFs } from '@platform/rootedFs';
-import type { Persona, AgentSource } from '@shared/schemas';
+import type { Persona, CatalogAgentSource } from '@shared/schemas';
 import type { ToolRegistry } from '@tools/toolTable';
 import type { FileSystem } from 'effect';
 
@@ -26,7 +26,7 @@ export type AgentCatalogServices =
  */
 export interface AgentEntry {
   name: string;
-  source: AgentSource;
+  source: CatalogAgentSource;
   path: string; // absolute path to the definition file
   description?: string;
   /** Digest of the definition file; absent on a plugin agent. */

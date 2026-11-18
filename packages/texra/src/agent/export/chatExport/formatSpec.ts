@@ -29,12 +29,12 @@ export interface FormatSpec {
 }
 
 /** Metadata fields rendered in the document header. */
-export const HEADER_FIELDS = [
-  { key: 'date', label: 'Date' },
-  { key: 'agent', label: 'Agent' },
-  { key: 'model', label: 'Model' },
-  { key: 'description', label: 'Summary' },
-] as const satisfies readonly { key: keyof DocumentMeta; label: string }[];
+export const HEADER_FIELDS = Object.freeze([
+  Object.freeze({ key: 'date', label: 'Date' }),
+  Object.freeze({ key: 'agent', label: 'Agent' }),
+  Object.freeze({ key: 'model', label: 'Model' }),
+  Object.freeze({ key: 'description', label: 'Summary' }),
+] as const satisfies readonly { key: keyof DocumentMeta; label: string }[]);
 
 function collectFiles(
   config: ExportConfig,

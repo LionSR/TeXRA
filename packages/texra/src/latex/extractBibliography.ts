@@ -18,7 +18,8 @@ import {
   collectBibliographyPaths,
   collectCommaSeparatedMatches,
   LATEX_CITATION_COMMANDS,
-  stripLatexComments,
+  LATEX_PROBE_CONCURRENCY,
+  readUncommentedLatex,
 } from './latexParsingUtils';
 
 // Third-party imports - types
@@ -48,27 +49,13 @@ interface BibliographyEntriesResult {
   missingKeys: string[];
 }
 
-/** Bibliography probes hit the filesystem, so bound the fan-out. */
-const PROBE_CONCURRENCY = 8;
-
-/** Read a bibliography file, surfacing the read failure as a typed error. */
-const readBibliographyFile = Effect.fn('latex.readBibliographyFile')(function* (
-  filePath: string,
-) {
-  const fs = yield* FileSystem.FileSystem;
-  return yield* readNormalizedFile(fs, filePath).pipe(
-    Effect.mapError(ensureError),
-  );
-});
-
 export const extractBibliographyContext = Effect.fn(
   'latex.extractBibliographyContext',
 )(function* (
   texPath: string,
 ): Effect.fn.Return<BibliographyReferenceResult, Error, FileSystem.FileSystem> {
   const texDir = path.dirname(texPath);
-  const content = yield* readBibliographyFile(texPath);
-  const uncommented = stripLatexComments(content);
+  const uncommented = yield* readUncommentedLatex(texPath);
 
   const referencedPaths = collectBibliographyPaths(texDir, uncommented);
   const fs = yield* FileSystem.FileSystem;
@@ -78,7 +65,7 @@ export const extractBibliographyContext = Effect.fn(
       pathExists(fs, candidate).pipe(
         Effect.map((exists) => ({ candidate, exists })),
       ),
-    { concurrency: PROBE_CONCURRENCY },
+    { concurrency: LATEX_PROBE_CONCURRENCY },
   );
   const pathsWhere = (exists: boolean): string[] =>
     probed.filter((entry) => entry.exists === exists).map((e) => e.candidate);
@@ -174,12 +161,11 @@ export const loadBibliographyEntries = Effect.fn(
   // Citation keys are matched case-insensitively; the first definition of a
   // key across the bibliography files wins, so the files are read as one
   // bounded fan-out and merged back in their declared order.
+  const fs = yield* FileSystem.FileSystem;
   const contents = yield* Effect.forEach(
     bibliographyFiles,
-    readBibliographyFile,
-    {
-      concurrency: PROBE_CONCURRENCY,
-    },
+    (file) => readNormalizedFile(fs, file).pipe(Effect.mapError(ensureError)),
+    { concurrency: LATEX_PROBE_CONCURRENCY },
   );
 
   const parsedEntries = new Map<string, { key: string; value: string }>();

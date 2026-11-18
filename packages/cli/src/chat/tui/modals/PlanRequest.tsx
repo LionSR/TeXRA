@@ -13,6 +13,7 @@ import {
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import { PLAN_GOAL_COPY } from '@ui/copy/delegationApproval';
+import { REQUEST_ASK } from '@ui/copy/requestCards';
 
 import { ConfirmCard, ConfirmCardFeedback } from './ConfirmCard';
 import {
@@ -32,7 +33,6 @@ interface PlanRequestProps {
 }
 
 const COMPACT_PLAN_APPROVAL_MAX_ROWS = 7;
-const PLAN_APPROVAL_TITLE = 'Approve plan?';
 const PLAN_APPROVAL_GOAL_NOTICE_ROWS = 2;
 const PLAN_APPROVAL_HIDDEN_NOUN = 'plan rows';
 /** Run as goal: `r` auto-approves commands only; `a`, the card's key handlers'
@@ -79,7 +79,7 @@ function planApprovalCompactBodyRowsBudget({
   if (availableRows === undefined) return undefined;
   const chromeRows = confirmCardCompactChromeRows({
     kind: 'planApproval',
-    title: PLAN_APPROVAL_TITLE,
+    title: REQUEST_ASK.plan,
     columns,
     extraActions: PLAN_APPROVAL_GOAL_ACTIONS,
   });
@@ -117,7 +117,7 @@ export function PlanRequest(props: PlanRequestProps): React.JSX.Element {
     <ConfirmCard
       color={COLOR_INFO}
       compact={compact}
-      title={PLAN_APPROVAL_TITLE}
+      title={REQUEST_ASK.plan}
       kind="planApproval"
       extraActions={goalActionVisible ? PLAN_APPROVAL_GOAL_ACTIONS : []}
       onDecide={onDecide}
@@ -163,7 +163,7 @@ function PlanApprovalBody({
         extraFixedRows:
           (goalNoticeVisible ? PLAN_APPROVAL_GOAL_NOTICE_ROWS : 0) +
           feedback.rows,
-        title: PLAN_APPROVAL_TITLE,
+        title: REQUEST_ASK.plan,
       });
 
   return (

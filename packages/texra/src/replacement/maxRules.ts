@@ -477,10 +477,10 @@ const MAX_MANUAL_PATTERNS: Record<string, string> = {
   antiIto: 'anti-Ito',
 };
 
-export const MAX_STYLE_REPLACEMENTS: PatternDict = {
+export const MAX_STYLE_REPLACEMENTS: PatternDict = Object.freeze({
   ...MAX_AUTO_PATTERNS,
   ...MAX_MANUAL_PATTERNS,
-};
+});
 
 // prettier-ignore
 // Define the comprehensive list of all trigger words
@@ -592,9 +592,9 @@ export function restoreLatexSectionSign(text: string): string {
   return text.replaceAll(/([_^])\\sS(?![A-Za-z])/g, '$1\\S');
 }
 
-export const MAX_REGEX_REPLACEMENTS: RegexRuleSet = {
+export const MAX_REGEX_REPLACEMENTS: RegexRuleSet = Object.freeze({
   flags: 'gms',
-  patterns: {
+  patterns: Object.freeze({
     // Spell words with the following preﬁxes solid and not hyphenated: anti, co, counter, extra, inter, intra, macro, micro, multi, non, over, post, pre, pro, pseudo, psycho, re, semi, socio, sub, trans.
     '\\b(anti|co|counter|extra|inter|intra|macro|micro|multi|non|over|post|pre|pro|pseudo|psycho|re|semi|socio|sub|trans)-([a-z]+)':
       '$1$2',
@@ -640,5 +640,5 @@ export const MAX_REGEX_REPLACEMENTS: RegexRuleSet = {
     // --- End of custom word list based \cref{fig:...} replacements ---
 
     '\\(see\\s+\\\\cref\\{(fig:[^,}]+)\\}\\)': '(see Figure~\\ref{$1})',
-  },
-};
+  }),
+});

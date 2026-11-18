@@ -28,6 +28,7 @@ import {
   RequestPayloadSchema,
   type RunId,
   toJsonValue,
+  ToolError,
   type ToolResult,
 } from '@shared/schemas';
 import { refusalCopy } from '@shared/session/approvalDecision';
@@ -215,7 +216,10 @@ const rejection = Effect.fn('toolUse.guard')(function* (
   // becoming a defect.
   const targets = yield* Effect.try({
     try: () => guard?.writes?.(decoded) ?? [],
-    catch: ensureError,
+    catch: (cause) =>
+      cause instanceof ToolError
+        ? cause
+        : new ToolError(ensureError(cause).message, { cause }),
   });
   for (const target of targets) {
     const path = yield* resolveToolPath(call.env, target);

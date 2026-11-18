@@ -378,7 +378,7 @@ export class SubscriptionOAuthCoordinator<
               )
                 return Result.fail(stored);
               yield* this.secrets.delete(this.policy.secretKey);
-              return yield* Effect.fail(error);
+              return yield* error;
             }),
         ),
       );

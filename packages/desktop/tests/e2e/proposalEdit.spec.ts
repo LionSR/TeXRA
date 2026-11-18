@@ -266,7 +266,7 @@ test('a proposal edited in the app runs its child with the edits, and Back leave
   ).toBeEnabled();
   await expect(
     askingRow.getByRole('button', {
-      name: /^propose_validation · Status: Needs approval/,
+      name: /^propose_validation · Status: Waiting on you/,
     }),
   ).toBeVisible();
   expect(rowsOf(asking.runId, 'request.decided')).toHaveLength(0);
@@ -320,7 +320,7 @@ test('a proposal edited in the app runs its child with the edits, and Back leave
   const childConfig = runConfig(child);
   expect(childConfig.config).toMatchObject({
     agent: 'edit',
-    agentSource: 'inline',
+    agentSource: { kind: 'inline', persona: {} },
     model: 'openai/gpt-6.1-sol@high',
     instruction: EDITED,
     inputFiles: ['draft.tex'],

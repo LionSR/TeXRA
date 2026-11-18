@@ -5,13 +5,13 @@
 import { Effect } from 'effect';
 
 import { setLogSink } from '@texra-ai/harness/node';
-import { ensureError } from '@texra-ai/harness/schemas';
 
 import { runCommandForExitCode } from '../commands/_helpers/exitCode';
 import { serveCommand } from '../commands/service';
 import { readCliArgv } from '../runtime/platform/cliContext';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import {
+  CliEntryCrashed,
   cliErrorMessage,
   installCliPipeErrorHandlers,
   stderrDiagnosticSink,
@@ -29,9 +29,9 @@ await Effect.runPromise(
         readCliArgv(),
       );
     },
-    catch: ensureError,
+    catch: (cause) => new CliEntryCrashed({ cause }),
   }).pipe(
-    Effect.catch((error) =>
+    Effect.catch(({ cause: error }) =>
       Effect.sync(() => {
         writeTextStderr(`TeXRA service failed: ${cliErrorMessage(error)}`);
         process.exitCode = CliExitCode.AgentError;

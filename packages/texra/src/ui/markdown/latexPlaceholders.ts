@@ -11,18 +11,18 @@ const INLINE_MATH_SPAN_PATTERN =
 
 // Display and inline delimiter regexes used by the render shield before the
 // bounded inline-dollar scanner runs, and by the lax HTML-normalize shield.
-export const DISPLAY_MATH_SPAN_PATTERNS: readonly RegExp[] = [
+export const DISPLAY_MATH_SPAN_PATTERNS: readonly RegExp[] = Object.freeze([
   /\$\$[\s\S]+?\$\$/g, // $$ … $$  (display, may span lines)
   /(?<!\\)\\\[[\s\S]+?(?<!\\)\\\]/g, // \[ … \]  (display)
   /(?<!\\)\\\([\s\S]+?(?<!\\)\\\)/g, // \( … \)  (inline)
-];
+]);
 
 // Lax HTML-normalize math pattern set: display fences first so `$…$` never
 // splits a `$$…$$`, then the intentionally lax inline `$…$` regex.
-export const MATH_SPAN_PATTERNS: readonly RegExp[] = [
+export const MATH_SPAN_PATTERNS: readonly RegExp[] = Object.freeze([
   ...DISPLAY_MATH_SPAN_PATTERNS,
   INLINE_MATH_SPAN_PATTERN,
-];
+]);
 
 // LaTeX backslash-macros whose trailing character is CommonMark-escapable
 // punctuation, so markdown-it's parser strips the backslash (`\;`→`;`,

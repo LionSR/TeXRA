@@ -98,7 +98,7 @@ interface ProviderApiKeyFormProps {
 export function ProviderApiKeyForm(
   props: ProviderApiKeyFormProps,
 ): React.JSX.Element {
-  const { runtime } = useChatProcess();
+  const { chat } = useChatProcess();
   const [provider, setProvider] = useState<ApiKeyProviderId>();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
@@ -134,7 +134,7 @@ export function ProviderApiKeyForm(
       }}
       onSubmit={(key) => {
         setSaving(true);
-        runFormWrite(runtime, () => props.onSave(provider, key), {
+        runFormWrite(chat, () => props.onSave(provider, key), {
           onSuccess: (modelNotice) =>
             props.onDone(provider, modelNotice || undefined),
           onError: (cause) => {

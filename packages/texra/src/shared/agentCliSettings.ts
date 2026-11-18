@@ -40,8 +40,13 @@ function pickerModels(eligible: (config: ModelConfig) => boolean) {
   );
   return {
     schema: Schema.Literals(configs.map((config) => config.ref)),
-    choices: Object.fromEntries(
-      configs.map((config) => [config.ref, { label: config.label }]),
+    choices: Object.freeze(
+      Object.fromEntries(
+        configs.map((config) => [
+          config.ref,
+          Object.freeze({ label: config.label }),
+        ]),
+      ),
     ),
   };
 }
@@ -79,21 +84,21 @@ export const AgentCliEffortSchema = Schema.Literals([
 export type AgentCliEffort = typeof AgentCliEffortSchema.Type;
 
 /** Value facts of the settings rows: the schema with its default, and the picker labels. */
-export const CLAUDE_AGENT_MODEL_VALUES = {
+export const CLAUDE_AGENT_MODEL_VALUES = Object.freeze({
   schema: decodingDefault(ClaudeAgentModelSchema, CLAUDE_AGENT_DEFAULT_MODEL),
   choices: claudeCodeModels.choices,
-};
-export const CODEX_MODEL_VALUES = {
+});
+export const CODEX_MODEL_VALUES = Object.freeze({
   schema: decodingDefault(CodexModelSchema, CODEX_DEFAULT_MODEL),
   choices: codexModels.choices,
-};
-export const AGENT_CLI_EFFORT_VALUES = {
+});
+export const AGENT_CLI_EFFORT_VALUES = Object.freeze({
   schema: decodingDefault(AgentCliEffortSchema, DEFAULT_EFFORT),
-  choices: {
-    [ReasoningEffort.LOW]: { label: 'Low' },
-    [ReasoningEffort.MEDIUM]: { label: 'Medium' },
-    [ReasoningEffort.HIGH]: { label: 'High' },
-    [ReasoningEffort.XHIGH]: { label: 'Extra high' },
-    [ReasoningEffort.MAX]: { label: 'Maximum' },
-  } satisfies Record<AgentCliEffort, SettingChoiceCopy>,
-};
+  choices: Object.freeze({
+    [ReasoningEffort.LOW]: Object.freeze({ label: 'Low' }),
+    [ReasoningEffort.MEDIUM]: Object.freeze({ label: 'Medium' }),
+    [ReasoningEffort.HIGH]: Object.freeze({ label: 'High' }),
+    [ReasoningEffort.XHIGH]: Object.freeze({ label: 'Extra high' }),
+    [ReasoningEffort.MAX]: Object.freeze({ label: 'Maximum' }),
+  }) satisfies Record<AgentCliEffort, SettingChoiceCopy>,
+});

@@ -3,6 +3,7 @@ import { assert, expect } from 'vitest';
 
 import { Effect, Exit, Layer, Scope } from 'effect';
 import { createSessionExitController } from '@cli/chat/tui/sessionExitController';
+import { scopeRunner } from '@cli/chat/scopeRunner';
 import { rootRunId } from '@cli/chat/tui/state/cliState';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import type { TuiTerminal } from '@cli/tui/terminalCleanup';
@@ -65,9 +66,10 @@ const createController = (
       commandName: 'texra',
       cwd: '/tmp/project',
       chatScope,
+      chat: scopeRunner(runtime, chatScope),
       // The test's scope stands in for the process's shutdown: the signal
       // holds the exit takes are released with it.
-      shutdownScope: yield* Scope.Scope,
+      untilShutdown: scopeRunner(runtime, yield* Scope.Scope),
       terminal: tuiTerminal,
       runtime,
       // Only an exit that leaves a waiting root leaves the process here.

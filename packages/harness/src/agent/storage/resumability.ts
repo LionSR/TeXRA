@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import { programOf, type ResumeRefusal, type RunId } from '@shared/schemas';
@@ -7,6 +7,12 @@ import { runReadRefusal, SessionLog } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'Resumability';
+
+/** A run's state that could not be read right now. */
+class RunStateUnread extends Schema.TaggedError<RunStateUnread>()(
+  'RunStateUnread',
+  { message: Schema.String },
+) {}
 
 /** Where a run continues from: a point its loop opened, none, rows an
  *  earlier build wrote, rows that are damaged or cannot be continued, a
@@ -80,13 +86,13 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
  */
 export const checkpointRefusal = Effect.fn('checkpointRefusal')(function* (
   runId: RunId,
-): Effect.fn.Return<ResumeRefusal | null, Error, SessionLog> {
+): Effect.fn.Return<ResumeRefusal | null, RunStateUnread, SessionLog> {
   const decision = yield* deriveResumability(runId);
   if (decision.kind === 'checkpoint') return null;
   if (decision.kind === 'unreadable')
-    return yield* Effect.fail(
-      new Error(`Could not read the state of run ${runId}: ${decision.cause}`),
-    );
+    return yield* new RunStateUnread({
+      message: `Could not read the state of run ${runId}: ${decision.cause}`,
+    });
   if (decision.kind === 'unusableCheckpoint')
     return { kind: 'unusableCheckpoint' };
   return decision;

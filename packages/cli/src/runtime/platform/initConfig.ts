@@ -100,7 +100,7 @@ export const ensureTexraGitignored = Effect.fn('ensureTexraGitignored')(
       // a transient I/O error, ...) must not be treated as "file absent":
       // doing so would fall through to the write below and overwrite
       // unreadable-but-present content instead of surfacing the failure.
-      Effect.catchIf(meansAbsent, () => Effect.succeed(undefined)),
+      Effect.catchIf(meansAbsent, () => Effect.undefined),
     );
     const next = gitignoreWithTexra(existing ?? '');
     if (next === null) return 'present';

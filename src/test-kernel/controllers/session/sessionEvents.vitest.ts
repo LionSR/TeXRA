@@ -1227,6 +1227,66 @@ describe('the session event table and its one publisher', () => {
     }).pipe(Effect.provide(Layer.merge(substrate(storage), nodePlatformLayer)));
   });
 
+  it.effect(
+    "a run's removal closes its child runs and names their files",
+    () => {
+      const storage = workspace();
+      const runId = Schema.decodeUnknownSync(RunIdSchema);
+      const [parent, child, grandchild, deletedFirst] = [
+        'a1a1a1',
+        'b2b2b2',
+        'c3c3c3',
+        'd4d4d4',
+      ].map((id) => runId(id));
+      const under = (id: RunId, over: RunId) =>
+        runStart(id, { parent: { id: over, call: null } });
+      return Effect.gen(function* () {
+        const store = yield* Database;
+        const [started] = yield* store.appendAll([
+          runStart(parent),
+          under(child, parent),
+          under(grandchild, child),
+          under(deletedFirst, parent),
+        ]);
+        if (started === undefined) throw new Error('nothing appended');
+        // A child deleted on its own first, its collection still pending.
+        const [childStart] = yield* store.aggregateState([deletedFirst]);
+        if (childStart?.startCommit == null) throw new Error('no child start');
+        const [childRemoved] = yield* store.runRemoval(
+          deletedFirst,
+          childStart.startCommit,
+        );
+        const [removed] = yield* store.runRemoval(parent, started.commit);
+        // Each marker names the files it alone cleans up.
+        expect([childRemoved, removed]).toMatchObject([
+          { type: 'run.removed', runIds: [deletedFirst] },
+          { type: 'run.removed', runIds: [parent, child, grandchild] },
+        ]);
+        expect(
+          (yield* store.aggregateState([child, grandchild])).map(
+            (state) => state.closed,
+          ),
+        ).toEqual([true, true]);
+        if (
+          childRemoved?.type !== 'run.removed' ||
+          removed?.type !== 'run.removed'
+        )
+          throw new Error('no deletion markers');
+        // The parent's collection first leaves the earlier marker's run to
+        // that marker, which still collects it.
+        const cleaned: (readonly RunId[])[] = [];
+        const record = (ids: readonly RunId[]) =>
+          Effect.sync(() => void cleaned.push(ids));
+        yield* store.deletions.collect(removed, record);
+        yield* store.deletions.collect(childRemoved, record);
+        expect(cleaned).toEqual([[parent, child, grandchild], [deletedFirst]]);
+        expect(
+          yield* store.aggregateState([parent, child, deletedFirst]),
+        ).toEqual([]);
+      }).pipe(Effect.provide(substrate(storage)));
+    },
+  );
+
   /**
    * Two OS processes on one file: a session holds its store exclusively,
    * so a second process opening it is refused at open with the message a

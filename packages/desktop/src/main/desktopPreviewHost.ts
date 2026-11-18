@@ -72,7 +72,7 @@ export function createDesktopPreviewHost(
         fail(
           meansAbsent(error)
             ? `File not found: ${filePath}`
-            : `Cannot access file ${filePath}: ${toErrorMessage(error.reason.cause ?? error)}`,
+            : `Cannot access file ${filePath}: ${toErrorMessage(error)}`,
         ),
       ),
     );
@@ -89,7 +89,7 @@ export function createDesktopPreviewHost(
     }).pipe(Effect.catch((message) => Effect.succeed(message)));
 
     if (shellError) {
-      yield* fail(`Failed to open file ${filePath}: ${shellError}`);
+      return yield* fail(`Failed to open file ${filePath}: ${shellError}`);
     }
   });
 

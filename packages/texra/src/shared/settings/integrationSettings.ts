@@ -17,52 +17,60 @@ import type { TexraSettingRow } from '@texra/shared/settings/settingSurfaces';
 
 /** Where an external coding agent's row lives and shows: repo-scoped, on the
  *  approval tab and in `/config`. */
-const AGENT_CLI_PLACEMENT = {
+const AGENT_CLI_PLACEMENT = Object.freeze({
   category: 'ai-agents',
   slot: 'repoState',
-  surfaces: { settingsView: 'approval', cliConfig: true },
-} as const;
+  surfaces: Object.freeze({ settingsView: 'approval', cliConfig: true }),
+} as const);
 
-export const CODEX_MODEL_SETTING = {
+export const CODEX_MODEL_SETTING = Object.freeze({
   key: 'codexModel',
   ...CODEX_MODEL_VALUES,
   title: 'Codex model',
   description: 'OpenAI model selected for Codex agent sessions.',
   ...AGENT_CLI_PLACEMENT,
-} as const satisfies TexraSettingRow<string>;
+} as const satisfies TexraSettingRow<string>);
 
-export const CODEX_REASONING_EFFORT_SETTING = {
+export const CODEX_REASONING_EFFORT_SETTING = Object.freeze({
   key: 'codexReasoningEffort',
   ...AGENT_CLI_EFFORT_VALUES,
   title: 'Codex reasoning effort',
   description: 'Reasoning effort for Codex runs, up to what the model takes.',
   ...AGENT_CLI_PLACEMENT,
-} as const satisfies TexraSettingRow<AgentCliEffort>;
+} as const satisfies TexraSettingRow<AgentCliEffort>);
 
-export const CLAUDE_AGENT_MODEL_SETTING = {
+export const CLAUDE_AGENT_MODEL_SETTING = Object.freeze({
   key: 'claudeAgentModel',
   ...CLAUDE_AGENT_MODEL_VALUES,
   title: 'Claude Code model',
   description: 'Claude model selected for Claude Code agent sessions.',
   ...AGENT_CLI_PLACEMENT,
-} as const satisfies TexraSettingRow<string>;
+} as const satisfies TexraSettingRow<string>);
 
-export const CLAUDE_AGENT_EFFORT_SETTING = {
+export const CLAUDE_AGENT_EFFORT_SETTING = Object.freeze({
   key: 'claudeAgentEffort',
   ...AGENT_CLI_EFFORT_VALUES,
   title: 'Claude Code reasoning effort',
   description: 'Reasoning effort for Claude Code, up to what the model takes.',
   ...AGENT_CLI_PLACEMENT,
-} as const satisfies TexraSettingRow<AgentCliEffort>;
+} as const satisfies TexraSettingRow<AgentCliEffort>);
 
 /** The `codex` plugin's rows, in its card's order. */
-export const CODEX_SETTINGS: readonly PluginSettingRow[] = [
-  { label: 'Model', row: CODEX_MODEL_SETTING },
-  { label: 'Reasoning effort', row: CODEX_REASONING_EFFORT_SETTING },
-];
+export const CODEX_SETTINGS: readonly PluginSettingRow[] = Object.freeze([
+  Object.freeze({ label: 'Model', row: CODEX_MODEL_SETTING }),
+  Object.freeze({
+    label: 'Reasoning effort',
+    row: CODEX_REASONING_EFFORT_SETTING,
+  }),
+]);
 
 /** The `claude-agent` plugin's rows, in its card's order. */
-export const CLAUDE_AGENT_SETTINGS: readonly PluginSettingRow[] = [
-  { label: 'Model', row: CLAUDE_AGENT_MODEL_SETTING },
-  { label: 'Reasoning effort', row: CLAUDE_AGENT_EFFORT_SETTING },
-];
+export const CLAUDE_AGENT_SETTINGS: readonly PluginSettingRow[] = Object.freeze(
+  [
+    Object.freeze({ label: 'Model', row: CLAUDE_AGENT_MODEL_SETTING }),
+    Object.freeze({
+      label: 'Reasoning effort',
+      row: CLAUDE_AGENT_EFFORT_SETTING,
+    }),
+  ],
+);

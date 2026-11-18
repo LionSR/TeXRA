@@ -66,11 +66,10 @@ export {
   type WorkspaceAgentsStores,
 } from '@agent/index/agentCatalog';
 export { agentToolNames, type AgentEntry } from '@agent/index/agentEntry';
-export {
-  InvalidAgentTeamError,
-  type WorkspaceAgentsController,
-  type WorkspaceAgentsControllerDeps,
-  type WorkspaceAgentsEntry,
+export type {
+  WorkspaceAgentsController,
+  WorkspaceAgentsControllerDeps,
+  WorkspaceAgentsEntry,
 } from '@agent/workspaceAgents/WorkspaceAgentsController';
 export type { AgentDelegationScope } from '@shared/schemas';
 export {
@@ -201,11 +200,7 @@ export type { McpServerConfig } from '@common/plugins/mcpServers';
 // The skills a session's roots discover (the settings inventory, the enabled
 // ones a person activates) with their issues, and a host's skill sources and
 // source options.
-export {
-  Skills,
-  type EnabledSkill,
-  type SkillRoots,
-} from '@skills/runtimeSkills';
+export { Skills, type SkillRoots } from '@skills/runtimeSkills';
 export type { HostSkillOptions } from '@skills/skillSources';
 export type { SkillSourceOptions } from '@skills/skillSources';
 export type {

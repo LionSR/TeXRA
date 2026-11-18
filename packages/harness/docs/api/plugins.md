@@ -786,7 +786,7 @@ interface ITool<E = Error, R = never> {
    * was.
    */
   readonly describe?: (
-    declared: readonly Pick<ITool, 'definition' | 'scriptGlobal'>[],
+    declared: readonly Pick<ITool, 'definition' | 'scriptGlobal' | 'lane'>[],
     /** The specifiers of the modules the step's scripts may import. */
     modules: readonly string[],
     /** The programs of the step's plugins, each with its one-line
@@ -966,7 +966,7 @@ The memory tree's host-facing reads and edits, over the caller's
 `StorageFs`.
 
 ```ts
-const MemoryStore: { folder: "memories"; storagePath: (input: string) => Effect<string, Error, never>; displayPath: (storagePath: string) => string; list: Effect<{ readonly displayPath: string; readonly storagePath: string; readonly size: number; readonly mtime: string; readonly preview?: string | undefined; readonly lineCount?: number | undefined; readonly previewError?: boolean | undefined; readonly modifiedBy?: string | undefined; readonly pinned?: boolean | undefined; }[], PlatformError, StorageFs>; preview: (input: string) => Effect<MemoryPreview, Error | PlatformError, StorageFs>; delete: (input: string) => Effect<void, Error | PlatformError, StorageFs>; pin: (input: string) => Effect<MemoryPinResult, Error | PlatformError, StorageFs>; unpin: (input: string) => Effect<void, Error | PlatformError, StorageFs>; }
+const MemoryStore: { folder: "memories"; storagePath: (input: string) => Effect<string, ToolError, never>; displayPath: (storagePath: string) => string; list: Effect<{ readonly displayPath: string; readonly storagePath: string; readonly size: number; readonly mtime: string; readonly preview?: string | undefined; readonly lineCount?: number | undefined; readonly previewError?: boolean | undefined; readonly modifiedBy?: string | undefined; readonly pinned?: boolean | undefined; }[], PlatformError, StorageFs>; preview: (input: string) => Effect<MemoryPreview, ToolError | PlatformError, StorageFs>; delete: (input: string) => Effect<void, ToolError | PlatformError, StorageFs>; pin: (input: string) => Effect<MemoryPinResult, ToolError | PlatformError, StorageFs>; unpin: (input: string) => Effect<void, ToolError | PlatformError, StorageFs>; }
 ```
 
 ## memoryWorkflow
@@ -1375,6 +1375,18 @@ interface ProgramResult<R = unknown> {
 }
 ```
 
+## PromptRenderFailed
+
+A prompt that did not render: the template's own error, or `nunjucks`
+failing to load.
+
+```ts
+class PromptRenderFailed extends Schema.TaggedError<PromptRenderFailed>()(
+  'PromptRenderFailed',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+)
+```
+
 ## PromptSection
 
 A plugin's section of each request's system text, rendered from the tool
@@ -1414,10 +1426,10 @@ Render a prompt string using nunjucks templating.
 
 - `@param` prompt The prompt template string
 - `@param` variables Variables to use in template rendering
-- `@returns` The rendered prompt; a template error fails with that `Error`
+- `@returns` The rendered prompt; a template error fails with its message
 
 ```ts
-const renderPrompt: (prompt: string, variables: Record<string, unknown>) => Effect<string, Error, never>
+const renderPrompt: (prompt: string, variables: Record<string, unknown>) => Effect<string, PromptRenderFailed, never>
 ```
 
 ## RequestDecisionHook
@@ -1489,7 +1501,7 @@ directories are registered external roots).
 outside path.
 
 ```ts
-const resolveToolPath: (call: ToolPathCall, targetPath?: string | undefined) => Effect<ToolPathResolution, Error, never>
+const resolveToolPath: (call: ToolPathCall, targetPath?: string | undefined) => Effect<ToolPathResolution, ToolError | StateReadFailed, never>
 ```
 
 ## retryTransientFetch
@@ -1956,8 +1968,17 @@ interface ToolEnv {
 
 ## ToolError
 
+A tool's own failure: the model reads `message` as the failed call's
+result. Tagged, so a caller can recover it with `Effect.catchTag` and a
+generator can `yield*` it directly.
+
 ```ts
-class ToolError extends Error
+class ToolError extends Data.TaggedError('ToolError')<{
+  readonly message: string;
+  /** Brief human-facing summary carried through to the ToolResult, when set. */
+  readonly summary?: string;
+  readonly cause?: unknown;
+}>
 ```
 
 ## ToolFileAttachment

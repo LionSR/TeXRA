@@ -176,8 +176,6 @@ const followedPorts = (current: Ref.Ref<HostRecord>) => {
     custom: () => host().platform.agentDirectories.custom(),
     customConfigured: () => host().platform.agentDirectories.customConfigured(),
     builtIn: () => host().platform.agentDirectories.builtIn(),
-    teamMembers: (repoState, teamId) =>
-      host().app.teamMembers?.(repoState, teamId) ?? Effect.succeed(undefined),
   };
   return { secrets, appState, agentDirectories };
 };

@@ -67,16 +67,6 @@ function host(): HostSnapshot {
       { value: 'gpt-5.6', label: 'GPT 5.6' },
       { value: 'claude-sonnet-5-5', label: 'Sonnet 5.5' },
     ],
-    teamOptions: [
-      {
-        value: 'review-team',
-        label: 'Review team',
-        source: 'built-in',
-        icon: 'users',
-        description: 'Scout, review, verify.',
-        unavailableMembers: [],
-      },
-    ],
     workspaceRoots: [{ value: '/paper', label: 'ldt-lean' }],
     fileOptions: {
       baseFile: ['main.tex', 'section2.tex', 'appendixB.tex'],
@@ -532,8 +522,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
           runId: CHILD,
           task: true,
           agent: 'edit',
-          agentSource: 'inline',
-          persona: { name: 'edit' },
+          agentSource: { kind: 'inline', persona: {} },
           model: 'gemini-3.8-flash',
           instruction: 'Fix the typos and notation slips in Section 2.',
           memories: [],

@@ -22,7 +22,6 @@ import { getBasename } from '@texra-ai/harness/schemas';
 import { html, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
-import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 import '@awesome.me/webawesome/dist/components/callout/callout.js';
@@ -31,7 +30,6 @@ import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Local imports - shared webview
 import '@ui/wa/spinner';
@@ -56,6 +54,7 @@ import { requestErrorText } from '@ui/copy/requestErrors';
 
 // Local imports - progress view frontend
 import { progressAppStyles } from './progressAppStyles';
+import { renderTaskFilter, taskFilterStyles } from './components/taskFilter';
 import './components/RunTabs';
 import './components/RunConversation';
 import './components/SessionBanners';
@@ -76,7 +75,7 @@ registerTeXRAWebAwesomeIcons();
 
 @customElement('progress-app')
 export class ProgressApp extends LitElement {
-  static override styles = [designTokens, progressAppStyles];
+  static override styles = [designTokens, progressAppStyles, taskFilterStyles];
 
   @property({ attribute: false }) view: SessionView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
@@ -300,33 +299,16 @@ export class ProgressApp extends LitElement {
     `;
   }
 
-  private handleSearchInput = (event: Event): void => {
-    if (!(event.target instanceof WaInput)) return;
-    // An input event always follows a typed value, so `value` is set.
-    const value = event.target.value ?? '';
-    this.dispatchEvent(SessionUiEvents.surface({ kind: 'search', value }));
-  };
-
   /** The wide editor tab's left column: the drawer body, docked. Its
-   *  header is the shell header's dock cell; the filter sits above the
-   *  list, bound to `Surface.search` like the drawer's. */
+   *  header is the shell header's dock cell; the drawer's filter sits
+   *  above the list. */
   private renderDockedList(
     view: SessionView,
     surface: Surface,
   ): TemplateResult {
     return html`
       <aside class="dock" aria-label="Tasks">
-        <div class="dock-search">
-          <wa-input
-            size="s"
-            placeholder="Filter tasks"
-            aria-label="Filter tasks"
-            .value=${live(surface.search)}
-            @input=${this.handleSearchInput}
-          >
-            ${waIcon('magnifying-glass', { slot: 'start' })}
-          </wa-input>
-        </div>
+        ${renderTaskFilter(this, surface.search)}
         <run-tabs sections .view=${view} .surface=${surface}></run-tabs>
       </aside>
     `;

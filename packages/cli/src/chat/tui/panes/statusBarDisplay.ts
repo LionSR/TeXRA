@@ -36,11 +36,13 @@ import {
 } from '@ui/copy/contextGauge';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { usageRouteBadge } from '@ui/copy/modelAccess';
+import { formatSubscriptionUsagePercent } from '@ui/copy/subscriptionUsage';
 import { runStatus, type RunTone } from '@ui/copy/runStatus';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { AGENT_LIST, NESTED_AGENT, TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { RUN_GRANT_COPY, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 
+import { taskCostStatus } from '../sessionStatus';
 import { formatResumeCommand } from '../state/resumeHint';
 import { type TransientNotice } from '../state/cliState';
 import { runViewOf } from '../state/sessionView';
@@ -233,17 +235,20 @@ function subscriptionQuotaSegment(
   snapshot: SubscriptionUsageSnapshot | undefined,
 ): StatusBarSegment | undefined {
   if (snapshot?.state !== 'available') return undefined;
-  const limitingWindow = snapshot.windows.toSorted(
+  // The window the plan runs out of first, worded as every usage
+  // percentage is, so the bar and `/status` read one number.
+  const limiting = snapshot.windows.toSorted(
     (left, right) => right.percentUsed - left.percentUsed,
   )[0];
-  if (!limitingWindow) return undefined;
-  const remaining = Math.max(0, Math.round(limitingWindow.percentRemaining));
+  if (!limiting) return undefined;
+  const remaining = limiting.percentRemaining;
+  const left = formatSubscriptionUsagePercent(remaining);
   let tone: RunTone | undefined;
-  if (remaining === 0) tone = 'danger';
+  if (remaining <= 0) tone = 'danger';
   else if (remaining <= 20) tone = 'warning';
   return {
-    text: `${snapshot.planName} ${remaining}% left`,
-    compactText: `${remaining}% left`,
+    text: `${snapshot.planName} ${left} left`,
+    compactText: `${left} left`,
     ...(tone === undefined ? { dim: true } : { color: TONE_PAINT[tone].color }),
     priority: STATUS_BAR_PRIORITY.subscriptionQuota,
     policy: 'drop',
@@ -286,16 +291,13 @@ function formatUsage(
   };
 }
 
-// The task's spend so far, its agents included: the root's `treeUsage`,
-// whichever run the bar describes. A subscription that billed nothing
+// The task's total (`taskCostStatus`). A subscription that billed nothing
 // already reads as `subscription`, so a zero total earns no segment.
 function taskCostSegment(
   run: RunView | undefined,
   view: Pick<SessionView, 'runs'>,
 ): StatusBarSegment | undefined {
-  if (run === undefined) return undefined;
-  const root = view.runs.get(run.ancestors[0]?.id ?? run.id);
-  const cost = root?.treeUsage.cost ?? 0;
+  const cost = taskCostStatus(view, run)?.total.cost ?? 0;
   if (cost <= 0) return undefined;
   return {
     text: formatCostUsd(cost),

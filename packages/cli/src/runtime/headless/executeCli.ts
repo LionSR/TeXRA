@@ -127,7 +127,7 @@ function launchOn(
  * Validate a headless CLI run's configuration and run it: stand up a runtime
  * host, run the request, always close the host, and resolve the terminal
  * outcome. Command handlers own command-specific config construction; this
- * owns the common request lifecycle, so document task, chat and team runs
+ * owns the common request lifecycle, so document task and chat runs
  * cannot drift on validation, run ids, host lifecycle or outcome handling.
  *
  * A classified run failure (AgentRunLifecycle already ran it through
@@ -400,7 +400,7 @@ export const executeCliConfig: (
       );
     }
     if (primaryRunFailure) return yield* Effect.die(primaryRunFailure.error);
-    if (refusal) return yield* Effect.fail(refusal);
+    if (refusal) return yield* refusal;
     if (!runResult.ok) {
       return {
         ok: false as const,

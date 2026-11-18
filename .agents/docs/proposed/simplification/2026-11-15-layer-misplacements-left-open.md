@@ -75,24 +75,20 @@ Taken on 2026-11-16: the merge program reads `editedFile` from its `args`,
 
 ## 5. The run list is built twice
 
-`packages/texra/src/ui/progress/components/RunTabs.ts` and
-`packages/cli/src/chat/tui/state/cliState.ts` each group top-level runs by
-`runStatus(run).section` in `RUN_SECTION_ORDER`, apply "expanded when it needs
-the user or the surface chose it", and recurse into children. One pure
-`runListRows(view, surface, filters)` beside `Surface` in
-`packages/texra/src/shared/session/surface.ts` would leave both painting rows.
-The copies differ in scope (the terminal lists one session's runs and appends
-detached children; the web has search and an active-only filter), so the
-function takes those as arguments. About 40 lines.
+Taken on 2026-11-17: `runListSections` (`packages/texra/src/ui/copy/runStatus.ts`)
+groups and `runExpanded` (`packages/texra/src/shared/session/surface.ts`)
+decides expansion for the web tab strip and the TUI tree.
 
 ## 6. Web components replace the status word `runStatus` decides
 
-`RunHeader.ts` shows "Ready" for a finished run that accepts a follow-up and
-`RunTab.ts` shows "Needs approval" when a descendant waits; the terminal
-paints `runStatus(run).word`. The same run reads "Ready" in the web header
-and "Completed" in the web tab and the terminal. Either the two readings
-become keys in `packages/texra/src/shared/session/runStatusKey.ts`, or the
-overrides go. Decision needed: which word is right.
+`RunHeader.ts` shows "Ready" for a finished run that accepts a follow-up;
+the terminal paints `runStatus(run).word`. The same run reads "Ready" in the
+web header and "Completed" in the web tab and the terminal. Either the
+reading becomes a key in `packages/texra/src/shared/session/runStatusKey.ts`,
+or the override goes. Decision needed: which word is right.
+
+Taken on 2026-11-18 for the tab: a request under the run reads in the status
+table's word for that state, "Waiting on you", not a second "Needs approval".
 
 ## 7. A tool call's time limit and its interrupted reading are decided in the web renderer
 
@@ -140,6 +136,34 @@ public export of the plugins entry. The `claude-agent` plugin still
 registers an icon for `str_replace_editor`, so that branch's producer is a
 question for the plugin, not dead code yet. Needs the decision on how a
 delegated Claude Code call is labelled.
+
+## 10. The terminal title restates `sessionActivity` (found 2026-11-17)
+
+`packages/cli/src/chat/tui/terminalTitle.ts` computes approval over
+`attentionRequests` (this terminal's runs, plugin requests dropped) and
+running over `rootRunIds` plus a launch in flight, where
+`sessionActivity` (`packages/harness/src/shared/session/sessionView.ts`)
+reads the whole view. A detached child working in the background leaves the
+terminal title idle. Folding it into `sessionActivity` needs that function to
+take a run scope and a pending-launch fact, or the TUI to bind a narrowed
+view; and a plugin request the TUI cannot show would turn its title to
+approval. Needs the decision on scope.
+
+## 11. The status bar's task cost is a bare amount (found 2026-11-17)
+
+`taskCostSegment` (`packages/cli/src/chat/tui/panes/statusBarDisplay.ts`)
+prints `formatCostUsd`, while `/status` reads `usageCostLabel` ("$x via
+…"). The bar shows the access mode in its own segment, so whether the cost
+segment should carry the route too is a narrow-terminal layout decision.
+
+## 12. Two tone drifts between web and terminal (found 2026-11-17)
+
+- A run grant: the terminal paints `superYolo` in its error colour
+  (`statusBarDisplay.ts`), the web's `runGrantChips.ts` every grant as a
+  warning.
+- A user-feedback rejection: the terminal's `toolRenderers.tsx` paints any
+  `isError` row `danger`; the web's `toolFormatters.ts` excludes
+  `isUserFeedback`. The row model (`toolRowModel`) could carry the tone.
 
 ## Checked and left alone
 

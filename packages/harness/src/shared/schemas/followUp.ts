@@ -8,6 +8,7 @@
 import { Schema, Struct } from 'effect';
 
 import { DELIVERY_FAMILY_PATTERN } from '@shared/deliveryTags';
+import { ActivatedSkillsSchema } from './activeSkills';
 import { RunIdSchema } from './identifiers';
 import { ProcessExitSchema } from './runRecords';
 import { ScriptDeliverySummarySchema } from './scriptDelivery';
@@ -103,6 +104,10 @@ const FollowUpMessageSchema = Schema.Struct({
   /** Media a user follow-up attached (e.g. pasted images), by address:
    *  the row links the blobs, so they live as long as it does. */
   media: Schema.optional(Schema.Array(StoredMediaSchema)),
+  /** The skills a user activated with the message, by name: `text` already
+   *  carries their instructions, and the run records them when it takes
+   *  the message. */
+  skills: Schema.optional(ActivatedSkillsSchema),
   from: FollowUpSenderSchema,
 });
 /** A follow-up that is a message, not a child's delivery. */

@@ -192,9 +192,9 @@ const multiFilesStyles = css`
 `;
 
 /** Combined file-select styles for components that need all of them. */
-export const fileSelectStyles = [
+export const fileSelectStyles = Object.freeze([
   buttonStyles,
   compactFormControlStyles,
   fileSelectLayoutStyles,
   multiFilesStyles,
-];
+]);

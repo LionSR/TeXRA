@@ -9,9 +9,9 @@ import { isPlainReturnInput } from '@cli/tui/inputKeys';
 import { moreRowsText, previousRowsText } from '@cli/tui/overflowText';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { CLOSE_HINT, KeyHints, NAVIGATE_HINT } from '@cli/tui/ui/KeyHints';
-import { nextWrappingHighlightIndex } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
+import { nextListIndex } from '@ui/wa/listInteraction';
 import {
   useSlashContext,
   type SlashCommand,
@@ -37,7 +37,7 @@ interface SlashPaletteWindow {
   readonly hiddenAfter: number;
 }
 
-// Wraparound highlight stepping is shared with `ui/Select.tsx`. The window
+// Highlight stepping is every list's (`@ui/wa/listInteraction`). The window
 // below stays local: scrolling through the middle of a long list shows one
 // fewer row than at the edges, on purpose, so both overflow markers ("… N
 // previous rows" / "… N more rows") can be visible at once — unlike `Select`'s simple
@@ -143,11 +143,7 @@ export function SlashPalette(
       if (key.upArrow || key.downArrow) {
         if (!slashPaletteOwnsArrows(matchCount)) return;
         setHighlight((h) =>
-          nextWrappingHighlightIndex({
-            direction: key.upArrow ? -1 : 1,
-            highlight: h,
-            itemCount: matchCount,
-          }),
+          nextListIndex(key.upArrow ? 'previous' : 'next', h, matchCount),
         );
         return;
       }

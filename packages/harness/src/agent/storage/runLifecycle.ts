@@ -55,6 +55,13 @@ function pinRunWorkingDirectory(record: RunRecord, root?: string): RunRecord {
   return workingDirectory ? { ...record, workingDirectory } : record;
 }
 
+/** A child that cannot register under its parent: the parent is gone, or
+ *  was stopped. */
+class ParentRunClosed extends Schema.TaggedError<ParentRunClosed>()(
+  'ParentRunClosed',
+  { message: Schema.String },
+) {}
+
 /** A defect is the path's failure, as a refusal is: its caller words it. */
 const defectAsFailure = Effect.catchDefect((d) => Effect.fail(ensureError(d)));
 
@@ -121,15 +128,13 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
       const log = yield* SessionLog;
       const parent = yield* log.facts(options.parentId);
       if (parent === null)
-        return yield* Effect.fail(
-          new Error(`Parent run ${options.parentId} is unavailable.`),
-        );
+        return yield* new ParentRunClosed({
+          message: `Parent run ${options.parentId} is unavailable.`,
+        });
       if (parent.stop !== null || parent.end !== null)
-        return yield* Effect.fail(
-          new Error(
-            `Cannot launch child run ${runId} under run ${options.parentId}: that run was stopped.`,
-          ),
-        );
+        return yield* new ParentRunClosed({
+          message: `Cannot launch child run ${runId} under run ${options.parentId}: that run was stopped.`,
+        });
     }
     const config = yield* Schema.decodeUnknownEffect(RunRecordFieldsSchema)(
       pinRunWorkingDirectory(record, (yield* SessionRoots).workspace),
@@ -259,9 +264,9 @@ export const lastReportRecipients = Effect.fn('lastReportRecipients')(
 
 /**
  * A run's end in `tx`'s job, decided from what it reads under the lock:
- * the requests it leaves open cancelled, a root's unread input dropped (a
- * child's stays: a message to a child that ended is its resume's), its
- * closure, its `run.end`, its report with the delivery to the run it
+ * the requests it leaves open cancelled, a root's pending controls dropped
+ * (its queued messages stay for its resume, and so does all of a child's
+ * input), its closure, its `run.end`, its report with the delivery to the run it
  * works for ({@link replyDelivery}), and `leading` rows ahead of them (a stop's
  * `run.stop`, a process run's exit). A run never created has nothing to
  * end; one that ended in its current lifecycle keeps that end. A run whose

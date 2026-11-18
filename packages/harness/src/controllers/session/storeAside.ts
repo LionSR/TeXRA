@@ -1,8 +1,9 @@
 /**
  * The session store's aside copies: the damaged files a store open renamed
  * beside it (`.corrupt-<stamp>`), kept until a storage prune deletes them;
- * the outermost transaction's busy retry; and the test of whether a failed
- * open is SQLite reporting the file damaged.
+ * the outermost transaction's busy retry; the test of whether a failed
+ * open is SQLite reporting the file damaged; and the failure of a check on
+ * what a store holds.
  */
 import { basename, dirname, join } from 'node:path';
 import {
@@ -12,12 +13,22 @@ import {
   FileSystem,
   Predicate,
   Schedule,
+  Schema,
 } from 'effect';
 import { isSqlError } from 'effect/sql/SqlError';
 import type * as SqlClient from 'effect/sql/SqlClient';
 import { causeChain } from '@utils/errors/errorMessage';
 
 export type Sql = SqlClient.SqlClient;
+
+/** The store holds something this build cannot work from: a setting SQLite
+ *  did not apply, another build's schema, a value that no longer matches
+ *  its schema, or a blob that is missing or damaged. The store's caller
+ *  wraps it as the open or read that failed. */
+export class StoreCheckFailed extends Schema.TaggedError<StoreCheckFailed>()(
+  'StoreCheckFailed',
+  { message: Schema.String },
+) {}
 
 /** A store's file and the two SQLite keeps beside it in WAL mode. */
 export const STORE_FILE_SUFFIXES = Object.freeze(['', '-wal', '-shm'] as const);

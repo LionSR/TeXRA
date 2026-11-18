@@ -5,8 +5,9 @@
  * draft, a picker returns its paths, a polish its text). The sidebar and
  * the editor tab hold one session; the Electron renderer holds one per
  * open project. A root assigns each session's three records to its shell and
- * forwards the shell's events here; nothing else reaches the runtime or
- * the host bridge for a session.
+ * forwards the shell's events here; nothing else reaches the host bridge
+ * for a session, and a pane with Effect work of its own runs it on the
+ * runtime this hands out.
  */
 import { signal, type Signal } from '@lit-labs/signals';
 import { Effect, Result } from 'effect';
@@ -89,6 +90,7 @@ interface SessionSurface {
 }
 
 export interface SessionSurfaces {
+  runtime: WebviewTransport['runtime'];
   /** One message from the host's session channel. */
   receive(data: unknown): void;
   /** Open the sessions the host names and close the rest. */
@@ -345,7 +347,10 @@ export function createSessionSurfaces(options: {
         return;
       case 'launch':
         if (launch.instruction === request.launch.instruction) {
-          act(entry, { kind: 'launch', patch: { instruction: '' } });
+          act(entry, {
+            kind: 'launch',
+            patch: { instruction: '', skills: [] },
+          });
         }
         return;
       default:
@@ -649,6 +654,7 @@ export function createSessionSurfaces(options: {
       const entry = held.get(key);
       if (entry) act(entry, action);
     },
+    runtime: transport.runtime,
     answer: transport.hostRequest,
     listen(root, sessionOf) {
       const entryOf = (event: Event) => {

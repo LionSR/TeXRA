@@ -40,6 +40,12 @@ const SubagentFrontmatterSchema = Schema.Struct({
   ),
 });
 
+/** A plugin's subagent file that does not read as an agent. */
+class PluginAgentUnread extends Schema.TaggedError<PluginAgentUnread>()(
+  'PluginAgentUnread',
+  { message: Schema.String },
+) {}
+
 /** Read the subagent file `file` of plugin `plugin`: its catalog entry,
  *  and the tools it names that the harness has no counterpart for. */
 const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
@@ -49,23 +55,29 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
   const content = yield* readNormalizedFile(
     yield* FileSystem.FileSystem,
     file,
-  ).pipe(Effect.mapError((error) => new Error(error.message)));
+  ).pipe(
+    Effect.mapError(
+      (error) => new PluginAgentUnread({ message: error.message }),
+    ),
+  );
   const split = splitFrontmatterFence(content);
   if (split.kind !== 'ok')
-    return yield* Effect.fail(
-      new Error(`${file} must start with YAML frontmatter (---).`),
-    );
+    return yield* new PluginAgentUnread({
+      message: `${file} must start with YAML frontmatter (---).`,
+    });
   const parsed = Result.flatMap(
     safeParseYaml(split.frontmatterText),
     Schema.decodeUnknownResult(SubagentFrontmatterSchema),
   );
   if (Result.isFailure(parsed))
-    return yield* Effect.fail(
-      new Error(`${file}: ${toErrorMessage(parsed.failure)}`),
-    );
+    return yield* new PluginAgentUnread({
+      message: `${file}: ${toErrorMessage(parsed.failure)}`,
+    });
   const systemPrompt = split.body.trim();
   if (!systemPrompt)
-    return yield* Effect.fail(new Error(`${file} has no system prompt.`));
+    return yield* new PluginAgentUnread({
+      message: `${file} has no system prompt.`,
+    });
   const declared =
     parsed.success.tools === undefined
       ? undefined
@@ -84,11 +96,9 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
     declared.length > 0 &&
     mapped.every((t) => t === undefined)
   )
-    return yield* Effect.fail(
-      new Error(
-        `${file} names only tools this build does not have (${declared.join(', ')}).`,
-      ),
-    );
+    return yield* new PluginAgentUnread({
+      message: `${file} names only tools this build does not have (${declared.join(', ')}).`,
+    });
   // `undefined` when it names none and inherits them (`AgentRun`).
   const tools =
     declared === undefined || declared.length === 0

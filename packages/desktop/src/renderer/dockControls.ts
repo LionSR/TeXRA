@@ -217,17 +217,6 @@ export function dockTab(id: string, actions: DockActions): ITabRenderer {
       menu.open = true;
     }
   });
-  element.addEventListener('keydown', (event) => {
-    if (event.key !== 'F10' || !event.shiftKey) return;
-    event.preventDefault();
-    const bounds = element.getBoundingClientRect();
-    element.dispatchEvent(
-      new MouseEvent('contextmenu', {
-        clientX: bounds.left,
-        clientY: bounds.bottom,
-      }),
-    );
-  });
   element.addEventListener('auxclick', (event) => {
     if (event.button !== 1) return;
     event.preventDefault();

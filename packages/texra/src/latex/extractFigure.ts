@@ -2,22 +2,19 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Predicate } from 'effect';
+import { Effect, Predicate } from 'effect';
 
-import { ensureError, type FileLocation } from '@texra-ai/harness/schemas';
-import { readNormalizedFile } from '@texra-ai/harness/node';
+import type { FileLocation } from '@texra-ai/harness/schemas';
 
 import {
   existingExternalPath,
   joinLatexPath,
   resolveLatexDir,
-  stripLatexComments,
+  LATEX_PROBE_CONCURRENCY,
+  readUncommentedLatex,
 } from './latexParsingUtils';
 
 const FIGURE_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg'];
-
-/** Figure lookups run against the filesystem, so bound the fan-out. */
-const RESOLVE_CONCURRENCY = 8;
 
 /**
  * Parse graphicspath commands supporting both single and multiple path formats.
@@ -77,15 +74,9 @@ export const extractFigurePathsFromLatex = Effect.fn(
     /\\begin\{overpic\}\s*(?:\[.*?\])?\s*\{(.+?)\}/g,
   ];
 
-  const fs = yield* FileSystem.FileSystem;
-  const content = yield* readNormalizedFile(
-    fs,
+  const processedContent = yield* readUncommentedLatex(
     latexFileLocation.absolutePath,
-  ).pipe(Effect.mapError(ensureError));
-
-  // Pre-process content to remove commented-out text (including inline
-  // comments and escaped `\%`, unlike a naive whole-line strip).
-  const processedContent = stripLatexComments(content);
+  );
 
   // The LaTeX file's own directory first, then its \graphicspath entries.
   const graphicspaths = [
@@ -102,7 +93,7 @@ export const extractFigurePathsFromLatex = Effect.fn(
   const resolved = yield* Effect.forEach(
     referenced,
     (figPath) => resolveFigurePath(figPath, graphicspaths),
-    { concurrency: RESOLVE_CONCURRENCY },
+    { concurrency: LATEX_PROBE_CONCURRENCY },
   );
 
   return [...new Set(resolved.filter(Predicate.isNotNull))];

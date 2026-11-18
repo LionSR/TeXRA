@@ -9,14 +9,14 @@ import { NonNegativeIntSchema } from './nonNegativeInt';
 
 /** The hook events the harness runs in v1; the protocol module parses the
  *  rest of the reference's events and ignores them. */
-export const SUPPORTED_HOOK_EVENTS = [
+export const SUPPORTED_HOOK_EVENTS = Object.freeze([
   'SessionStart',
   'UserPromptSubmit',
   'PreToolUse',
   'PostToolUse',
   'Stop',
   'SubagentStop',
-] as const;
+] as const);
 const HookEventSchema = Schema.Literals(SUPPORTED_HOOK_EVENTS);
 export type HookEvent = typeof HookEventSchema.Type;
 

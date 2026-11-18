@@ -47,6 +47,7 @@ import { taskStatusBar } from '@frontend/statusBar/taskStatusBar';
 import { vscodeSetupPlatform } from '@frontend/vscodeSetupPlatform';
 import { vscodeEditorIntegration } from '@frontend/vscodeEditorIntegration';
 import {
+  reportingFailure,
   showLoggedErrorMessage,
   showLoggedInfoMessage,
   showLoggedMessageWithDocs,
@@ -73,6 +74,7 @@ import {
 } from '@texra/controllers/session/openProjectSession';
 import {
   reachBundledService,
+  ServiceUnavailable,
   type ServiceLink,
 } from '@texra/controllers/server/client';
 import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
@@ -196,7 +198,11 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     Effect.gen(function* () {
       const reached: Result.Result<ServiceLink, Error> =
         extras.service === undefined || workspaceRoot === undefined
-          ? Result.fail(new Error('a window with no folder uses no service'))
+          ? Result.fail(
+              new ServiceUnavailable({
+                reason: 'a window with no folder uses no service',
+              }),
+            )
           : // Held with the project state it serves: after the sessions
             // that read it close, before the runtime its reconnects use.
             yield* Effect.result(
@@ -260,15 +266,13 @@ const noFolderCommands = (
       ).pipe(
         // A defect is reported like a failure, as the settings body reports
         // one; an interrupt is the window closing, not a failed sign-in.
-        Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.interrupt
-            : showLoggedErrorMessage(
-                ACCOUNT_OUTCOME.signInFailed(
-                  subscriptionProvider('chatgpt').displayName,
-                ),
-                Cause.squash(cause),
-              ),
+        reportingFailure((error) =>
+          showLoggedErrorMessage(
+            ACCOUNT_OUTCOME.signInFailed(
+              subscriptionProvider('chatgpt').displayName,
+            ),
+            error,
+          ),
         ),
         withLogChannel('welcomeView'),
       ),

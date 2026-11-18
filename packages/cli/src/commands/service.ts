@@ -19,7 +19,11 @@ import {
   CliUsageError,
   type CliContext,
 } from '../runtime/platform/cliContext';
-import { isLinked, linkCliService } from '../runtime/platform/cliService';
+import {
+  CliServiceFailed,
+  isLinked,
+  linkCliService,
+} from '../runtime/platform/cliService';
 import { probeRecordedService } from '@texra/controllers/server/client';
 import { cliProcessLayer } from '../runtime/platform/cliProcessRuntime';
 import { CliExitCode } from '../runtime/platform/exitCodes';
@@ -191,10 +195,17 @@ const stopRunningService = Effect.gen(function* () {
     Effect.timeoutOrElse({
       duration: STOP_TIMEOUT,
       orElse: () =>
-        Effect.fail(new Error(`it did not exit within ${STOP_TIMEOUT}`)),
+        Effect.fail(
+          new CliServiceFailed({
+            message: `it did not exit within ${STOP_TIMEOUT}`,
+          }),
+        ),
     }),
     Effect.mapError(
-      (failure) => new Error(`Could not stop ${service}: ${failure.message}`),
+      (failure) =>
+        new CliServiceFailed({
+          message: `Could not stop ${service}: ${failure.message}`,
+        }),
     ),
   );
   return service;
@@ -239,15 +250,17 @@ const restartCommand = defineCliCommand({
     yield* stopRunningService;
     // The one door, starting the service: its hello is the status shown.
     const info = yield* Effect.scoped(
-      Effect.flatMap(linkCliService(context.storageRoot, true), (link) =>
-        isLinked(link)
-          ? Effect.flatMap(link.client.get, (client) =>
-              client === null
-                ? Effect.fail(new Error('The TeXRA service is not linked.'))
-                : client['service.hello']({ protocol: PROTOCOL.digest }),
-            )
-          : Effect.fail(new Error(link.none)),
-      ),
+      Effect.gen(function* () {
+        const link = yield* linkCliService(context.storageRoot, true);
+        if (!isLinked(link))
+          return yield* new CliServiceFailed({ message: link.none });
+        const client = yield* link.client.get;
+        if (client === null)
+          return yield* new CliServiceFailed({
+            message: 'The TeXRA service is not linked.',
+          });
+        return yield* client['service.hello']({ protocol: PROTOCOL.digest });
+      }),
     );
     yield* emitStatus(info);
   }),

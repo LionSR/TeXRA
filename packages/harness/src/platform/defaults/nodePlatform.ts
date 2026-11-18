@@ -53,7 +53,7 @@ const unpersisted = (operation: 'set' | 'delete', key: string) =>
 
 /** Holds nothing; an API key comes from its env var via `resolveCredential`. */
 const unpersistedSecrets: PlatformSecrets = {
-  get: () => Effect.succeed(undefined),
+  get: () => Effect.undefined,
   set: (key) => unpersisted('set', key),
   delete: (key) => unpersisted('delete', key),
   listStoredKeys: () => Effect.succeed([]),

@@ -211,7 +211,8 @@ export class ScriptStage extends LitElement {
       call.childRunId === undefined
         ? undefined
         : this.view.runs.get(call.childRunId);
-    if (call.status !== 'running' || child === undefined) return nothing;
+    if (call.status !== 'running' || !child?.actions.includes('stop'))
+      return nothing;
     const menu = actionMenu([
       {
         icon: 'circle-stop',

@@ -19,7 +19,7 @@ import {
 } from '@tools/timeouts';
 import { defineTool } from '@tools/core/definition';
 import { executed } from '@tools/core/result';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { createHtmlToMarkdown } from '@utils/text/htmlToMarkdown';
 import type { LookupFunction } from 'node:net';
 
@@ -132,7 +132,9 @@ function assertPublicLiteral(url: URL) {
  * of a transport failure, as a permanent `ToolError` instead of a transient
  * failure the retry would repeat.
  */
-function refusalOf(error: HttpClientError.HttpClientError): Error {
+function refusalOf(
+  error: HttpClientError.HttpClientError,
+): HttpClientError.HttpClientError | ToolError {
   const { reason } = error;
   return reason._tag === 'TransportError' &&
     reason.cause instanceof Error &&
@@ -168,18 +170,16 @@ const getPublic = Effect.fn('WebFetchTool.getPublic')(function* (
     if (response.status < 300) return response;
     const { location } = response.headers;
     if (!location || redirects >= MAX_REDIRECTS) {
-      return yield* Effect.fail(
-        new ToolError(
-          location
-            ? `Too many redirects (more than ${MAX_REDIRECTS}).`
-            : `HTTP ${response.status} redirect without a Location header.`,
-        ),
+      return yield* new ToolError(
+        location
+          ? `Too many redirects (more than ${MAX_REDIRECTS}).`
+          : `HTTP ${response.status} redirect without a Location header.`,
       );
     }
     target = new URL(location, target);
     if (target.protocol !== 'http:' && target.protocol !== 'https:') {
-      return yield* Effect.fail(
-        new ToolError(`Redirect to a non-HTTP URL: ${target.protocol}`),
+      return yield* new ToolError(
+        `Redirect to a non-HTTP URL: ${target.protocol}`,
       );
     }
   }
@@ -196,10 +196,8 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
       const lengthHeader = response.headers['content-length'];
       if (lengthHeader && Number(lengthHeader) > MAX_CONTENT_BYTES) {
         // Permanent: not retried.
-        return yield* Effect.fail(
-          new ToolError(
-            `Failed to fetch ${url}: Response too large (${lengthHeader} bytes); maximum is ${MAX_CONTENT_BYTES.toLocaleString('en-US')} bytes.`,
-          ),
+        return yield* new ToolError(
+          `Failed to fetch ${url}: Response too large (${lengthHeader} bytes); maximum is ${MAX_CONTENT_BYTES.toLocaleString('en-US')} bytes.`,
         );
       }
 
@@ -213,6 +211,11 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
         !charset ||
         Result.isSuccess(Result.try(() => new TextDecoder(charset)));
       const decoder = new TextDecoder(supported ? charset || 'utf-8' : 'utf-8');
+      // What the classification below words any other failure as.
+      const undecoded = (cause: unknown) =>
+        new ToolError(`Failed to fetch ${url}: ${toErrorMessage(cause)}`, {
+          cause,
+        });
       let total = 0;
       const parts = yield* response.stream.pipe(
         // A response without a body reads as empty text.
@@ -233,7 +236,7 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
           }
           return Effect.try({
             try: () => decoder.decode(chunk, { stream: true }),
-            catch: ensureError,
+            catch: undecoded,
           });
         }),
         Stream.runCollect,
@@ -243,7 +246,7 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
       parts.push(
         yield* Effect.try({
           try: () => decoder.decode(),
-          catch: ensureError,
+          catch: undecoded,
         }),
       );
       return {

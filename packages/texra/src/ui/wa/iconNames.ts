@@ -19,7 +19,7 @@
 // `webAwesomeIcons.ts` exactly (and in the same order). Add a new icon there
 // first, then mirror its key here — the `satisfies` constraint on `icons`
 // turns any mismatch into a type error.
-export const ICON_NAMES = [
+export const ICON_NAMES = Object.freeze([
   'arrow-down',
   'arrow-right',
   'arrow-rotate-left',
@@ -123,7 +123,7 @@ export const ICON_NAMES = [
   'window-maximize',
   'wrench',
   'xmark',
-] as const;
+] as const);
 
 /** An icon the UI toolkit can draw. */
 export type IconName = (typeof ICON_NAMES)[number];

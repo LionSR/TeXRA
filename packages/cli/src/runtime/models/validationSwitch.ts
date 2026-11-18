@@ -15,9 +15,9 @@ export const VALIDATION_FLAG = 'TEXRA_INTERNAL_VALIDATE_MODEL_FLAG';
 /** What the flag file holds (a trailing newline is allowed). */
 export const VALIDATION_FLAG_CONTENT = 'texra-cli-run-validation';
 /** Each scenario's switch: `1` turns it on. */
-export const VALIDATION_SCENARIOS = {
+export const VALIDATION_SCENARIOS = Object.freeze({
   golden: 'TEXRA_INTERNAL_VALIDATE_GOLDEN',
   echo: 'TEXRA_INTERNAL_VALIDATE_ECHO',
   scriptFanout: 'TEXRA_INTERNAL_VALIDATE_SCRIPT_FANOUT',
   historyQuery: 'TEXRA_INTERNAL_VALIDATE_HISTORY_QUERY',
-} as const;
+} as const);

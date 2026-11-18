@@ -7,7 +7,7 @@
 import { formatRoundLabel } from '@texra/shared/plugins/documentOutputs';
 import { Effect, FileSystem, Schema } from 'effect';
 
-import { meansAbsent } from '@texra-ai/harness/node';
+import { meansAbsent, readNormalizedFile } from '@texra-ai/harness/node';
 import { executed, defineTool } from '@texra-ai/harness/plugins';
 import { fileLocationDisplayPath } from '@texra-ai/harness/schemas';
 import { failureContextFromLogs } from '@texra/agent/output/compileFailureRoundContext';
@@ -100,10 +100,13 @@ export const DocumentReviewTool = defineTool({
         const before =
           base === undefined
             ? ''
-            : yield* fs
-                .readFileString(base.absolutePath)
-                .pipe(Effect.catchIf(meansAbsent, () => Effect.succeed('')));
-        const after = yield* fs.readFileString(output.location.absolutePath);
+            : yield* readNormalizedFile(fs, base.absolutePath).pipe(
+                Effect.catchIf(meansAbsent, () => Effect.succeed('')),
+              );
+        const after = yield* readNormalizedFile(
+          fs,
+          output.location.absolutePath,
+        );
         return {
           path: fileLocationDisplayPath(output.location),
           text: yield* unifiedDiffOf(before, after),

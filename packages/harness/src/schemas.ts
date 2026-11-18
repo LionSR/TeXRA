@@ -44,6 +44,7 @@ export {
 export {
   acceptsFollowUp,
   isInterrupted,
+  isLive,
   isUnreadable,
   isWorking,
   attentionOf,
@@ -85,6 +86,7 @@ export type {
   AgentProposal,
   AgentSource,
   AttachedMemoryMiss,
+  CatalogAgentSource,
   CompactionActivityData,
   CompactionActivityOutcome,
   ContextManagementData,
@@ -311,6 +313,7 @@ export {
 
 // Agents, request payloads, harness setting keys, skills, and run outputs.
 export {
+  ACTIVATED_SKILLS_MAX,
   type ActiveSkillSourceScope,
   ActiveSkillSourceScopeSchema,
   AGENT_FILE_EXTENSION,

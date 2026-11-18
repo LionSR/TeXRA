@@ -85,8 +85,9 @@ export class RunHistoryInconsistent extends Schema.TaggedError<RunHistoryInconsi
 
 /**
  * Where the loop stands: its newest `run.position`, or a row inside the
- * turn that no position restates, `response.ready` from a `response` and
- * `results.ready` from the `append` delivering its calls' results. A stop
+ * turn that no position restates, `response.ready` from a `response`, and
+ * from the `append` delivering its calls' results `results.ready`, or
+ * `results.final` when one of those results ends the turn. A stop
  * writes no position: the loop stops where it stands, so a resume
  * continues from there. `turn.ready` is input consumed while waiting,
  * still between turns; a `turn.end` that no `waiting` or `turn.begin`
@@ -94,7 +95,7 @@ export class RunHistoryInconsistent extends Schema.TaggedError<RunHistoryInconsi
  * concluded before its terminal row. A run's first position opens it: its
  * opening batch's `turn.ready`, or a fork's `waiting`.
  */
-type LoopAt = PositionAt | 'response.ready' | 'results.ready';
+type LoopAt = PositionAt | 'response.ready' | 'results.ready' | 'results.final';
 
 /**
  * What the loop continues from. A plain type with no schema of its own,

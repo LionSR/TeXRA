@@ -32,9 +32,12 @@ export const visuallyHiddenDeclarations: CSSResult = css`
  * Available to the accessibility tree, absent from the layout. Exported on
  * its own (and interpolated into `commonViewStyles` below) for roots that
  * compose a narrower sheet and so do not take the full common one.
+ * `.has-hidden-label` does the same for a Web Awesome control's `label`, so
+ * the label still names the control's inner input.
  */
 export const visuallyHiddenStyles: CSSResult = css`
-  .visually-hidden {
+  .visually-hidden,
+  .has-hidden-label::part(form-control-label) {
     ${visuallyHiddenDeclarations}
   }
 `;

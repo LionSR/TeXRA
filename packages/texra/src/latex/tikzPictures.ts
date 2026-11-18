@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - log
-import { readNormalizedFile } from '@texra-ai/harness/node';
 import { pathToLocationIn } from '@texra-ai/harness/host';
 import {
   renderPrompt,
@@ -14,7 +13,8 @@ import {
 } from '@texra-ai/harness/plugins';
 
 // Local imports - latex utils
-import { compileLatex2Pdf } from './texTools';
+import { readUncommentedLatex } from './latexParsingUtils';
+import { compileLatex2Pdf, perInputBuildDirectory } from './texTools';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import type { FileLocation } from '@texra-ai/harness/schemas';
 import type { WorkspaceRoots } from '@texra-ai/harness';
@@ -62,8 +62,8 @@ const createStandalone = Effect.fn('tikzPictures.createStandalone')(function* (
 export const extractTikzPictures = Effect.fn('tikzPictures.extract')(function* (
   latexFile: FileLocation,
 ) {
-  const fs = yield* FileSystem.FileSystem;
-  const content = yield* readNormalizedFile(fs, latexFile.absolutePath);
+  // A commented-out figure is not compiled.
+  const content = yield* readUncommentedLatex(latexFile.absolutePath);
 
   // Match each figure block first, then inspect labels inside the block. This
   // prevents an unlabeled figure from consuming a later figure's label.
@@ -112,12 +112,7 @@ export const compileTikzPictures = Effect.fn('tikzPictures.compile')(function* (
   roots: WorkspaceRoots,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const inputName = path.parse(latexFile.absolutePath).name;
-  const buildDir = path.join(
-    path.dirname(latexFile.absolutePath),
-    'build',
-    inputName,
-  );
+  const buildDir = perInputBuildDirectory(latexFile.absolutePath);
 
   yield* fs.makeDirectory(buildDir, { recursive: true });
 

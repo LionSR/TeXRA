@@ -10,9 +10,14 @@ import type { CliOutputFormat } from '@texra/shared/cliOutputFormat';
 import { formatTokenCount } from '@ui/copy/format';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
+import { visibleTokenStats } from '@ui/copy/tokenUsage';
 
 import { runViewOf } from './sessionView';
-import type { ApprovalPolicy, SessionView } from '@texra-ai/harness/schemas';
+import type {
+  ApprovalPolicy,
+  RunView,
+  SessionView,
+} from '@texra-ai/harness/schemas';
 
 interface ResumeCommandOptions {
   readonly cwd?: string;
@@ -54,13 +59,17 @@ export function formatResumeCommand(
   return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${runId}${cwdArg}${policyFlag}${outputFormatFlag}${printFlag}${sourceFlags}`;
 }
 
-/** Why a run launched to run once (a headless `texra run`) that ended is
- *  not reopened as a chat: it reads no messages, so a fork, a new task
- *  holding its conversation, is how it continues. */
+/** Why `run`, when it was launched to run once (a headless `texra run`)
+ *  and has ended, is not reopened as a chat: it reads no messages, so a
+ *  fork, a new task holding its conversation, is how it continues. One
+ *  stopped mid-turn (no outcome yet) still resumes to finish it, and any
+ *  other run resumes: both read undefined. */
 export function oneShotResumeNotice(
   commandName: string | undefined,
   runId: RunId,
-): string {
+  run: Pick<RunView, 'takesFollowUps' | 'outcome'> | undefined,
+): string | undefined {
+  if (run?.takesFollowUps !== false || run.outcome === null) return undefined;
   const name = commandName || DEFAULT_RESUME_COMMAND_NAME;
   return `Task ${runId} ran once and takes no messages. See it with \`${name} history show ${runId}\`, or continue it in a new task with \`${name} resume ${runId} --fork\`.`;
 }
@@ -78,24 +87,20 @@ function formatResumeUsage(
   usage: TokenUsageStats | undefined,
 ): string | undefined {
   if (!usage || isEmptyUsage(usage)) return undefined;
-  const total = usage.inputTokens + usage.outputTokens;
-  const cached = usage.cachedInputTokens ?? 0;
-  const reasoning = usage.reasoningTokens ?? 0;
-  const lines = [
-    `total=${formatTokenCount(total)}`,
-    `input=${formatTokenCount(usage.inputTokens)}`,
-  ];
-  if (cached > 0) lines.push(`(+ ${formatTokenCount(cached)} cached)`);
-  lines.push(`output=${formatTokenCount(usage.outputTokens)}`);
-  if (reasoning > 0) lines.push(`(reasoning ${formatTokenCount(reasoning)})`);
+  // The counters the progress view's usage strip shows, exact.
+  const tokens = visibleTokenStats(usage)
+    .map(
+      ({ label, value }) => `${formatTokenCount(value)} ${label.toLowerCase()}`,
+    )
+    .join(', ');
   // A task that never reached a model has no cost to state.
   const costLine =
     usage.cost > 0 || usage.usageRoute !== undefined
       ? usageCostLabel(usage)
       : undefined;
   return costLine
-    ? `Token usage: ${lines.join(' ')}\nTask cost: ${costLine}`
-    : `Token usage: ${lines.join(' ')}`;
+    ? `Token usage: ${tokens}\nTask cost: ${costLine}`
+    : `Token usage: ${tokens}`;
 }
 
 /** The exit hint: the task's usage, then the one command that resumes its

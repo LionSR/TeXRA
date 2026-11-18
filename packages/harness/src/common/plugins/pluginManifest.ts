@@ -93,10 +93,10 @@ const PluginManifestSchema = Schema.Struct({
 });
 type PluginManifest = typeof PluginManifestSchema.Type;
 
-export const PLUGIN_MANIFEST_FILES = [
+export const PLUGIN_MANIFEST_FILES = Object.freeze([
   path.join('.claude-plugin', 'plugin.json'),
   path.join('.codex-plugin', 'plugin.json'),
-] as const;
+] as const);
 
 /** A `.mcp.json` file: the servers under `mcpServers`, or the map itself. */
 const McpFileSchema = Schema.Record(Schema.String, Schema.Unknown);

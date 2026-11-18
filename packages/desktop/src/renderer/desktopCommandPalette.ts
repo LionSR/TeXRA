@@ -9,6 +9,12 @@ import { repeat } from 'lit/directives/repeat.js';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import type { IconName } from '@ui/wa/iconNames';
 import { renderEmptyMessage } from '@ui/wa/emptyState';
+import { isCommitEnter } from '@ui/wa/keyActivation';
+import {
+  listMoveOfKey,
+  matchesQuery,
+  nextListIndex,
+} from '@ui/wa/listInteraction';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { formatDesktopAccelerator } from '../shared/accelerators';
 import type { OsPlatform } from '@texra/shared/osPlatform';
@@ -16,25 +22,54 @@ import {
   dispatchDesktopCommand,
   paletteEntries,
   type DesktopCommandActions,
-  type DesktopCommandId,
-  type DesktopPaletteEntry,
 } from '../shared/desktopCommandSurface';
 
-// Single command row. `meta` is the trailing label (an accelerator hint, a
+// Single row: a command, or a project the Switch Project command lists. `meta` is the trailing label (an accelerator hint, a
 // category, etc.). `category` is an optional, separate field included in the
 // search haystack without being displayed — useful when `meta` is reserved for
 // an accelerator but the row should still match category-name queries.
 interface CommandPaletteEntry {
-  readonly id: DesktopCommandId;
+  /** Unique among the rows shown together. */
+  readonly id: string;
   readonly label: string;
   readonly icon: IconName;
   readonly meta?: string;
   readonly category?: string;
+  run(): void;
+}
+
+/** One list the palette shows: its rows and the words around them. */
+interface CommandPaletteList {
+  readonly entries: readonly CommandPaletteEntry[];
+  readonly searchLabel: string;
+  /** Shown when the list has no rows at all, before any filtering. */
+  readonly emptyLabel: string;
+  readonly noMatchLabel: string;
+}
+
+const NO_LIST: CommandPaletteList = {
+  entries: [],
+  searchLabel: 'Search commands',
+  emptyLabel: 'No matching commands',
+  noMatchLabel: 'No matching commands',
+};
+
+/** A project the palette can switch to. */
+interface PaletteProject {
+  /** The project's folder, which is also its key. */
+  readonly key: string;
+  readonly name: string;
 }
 
 interface CommandPaletteController {
   element: HTMLElement;
   open(): void;
+  /** Lists `projects` in place of the commands; choosing one runs `select`.
+   *  Opens the palette when it is closed. */
+  showProjects(
+    projects: readonly PaletteProject[],
+    select: (key: string) => void,
+  ): void;
 }
 
 interface DesktopCommandPaletteOptions {
@@ -49,38 +84,24 @@ interface DesktopCommandPaletteOptions {
 // the host, so the host is where the combobox semantics resolve.
 const COMMAND_PALETTE_LIST_ID = 'desktop-command-palette-list';
 
-function commandPaletteOptionId(entryId: string): string {
-  return `desktop-command-palette-option-${entryId}`;
+/** A row's DOM id, by its place in the shown list: a row's own id may be a
+ *  folder path, which is not an id other attributes can refer to. */
+function commandPaletteOptionId(index: number): string {
+  return `desktop-command-palette-option-${index}`;
 }
 
+/** A row matches on its label, category, trailing label and id, so a
+ *  category name finds rows whose `meta` is an accelerator. */
 function filterCommandPaletteEntries(
   entries: readonly CommandPaletteEntry[],
   query: string,
 ): CommandPaletteEntry[] {
-  const normalizedQuery = query.trim().toLowerCase();
-  if (!normalizedQuery) return [...entries];
-
-  const queryParts = normalizedQuery.split(/\s+/);
-  return entries.filter((entry) => {
-    // Include both `category` and `meta` (separated by a space) so rows that
-    // reserve `meta` for an accelerator/reason can still surface by
-    // category-name match. Empty/undefined fields collapse to '' and don't
-    // affect matching.
-    const haystack =
-      `${entry.label} ${entry.category ?? ''} ${entry.meta ?? ''} ${entry.id}`
-        .replaceAll('.', ' ')
-        .toLowerCase();
-    return queryParts.every((part) => haystack.includes(part));
-  });
-}
-
-function getNextCommandPaletteIndex(
-  currentIndex: number,
-  itemCount: number,
-  delta: number,
-): number {
-  if (itemCount <= 0) return -1;
-  return (currentIndex + delta + itemCount) % itemCount;
+  return entries.filter((entry) =>
+    matchesQuery(
+      `${entry.label} ${entry.category ?? ''} ${entry.meta ?? ''} ${entry.id}`,
+      query,
+    ),
+  );
 }
 
 export function createDesktopCommandPalette({
@@ -88,13 +109,22 @@ export function createDesktopCommandPalette({
   actions,
   platform,
 }: DesktopCommandPaletteOptions): CommandPaletteController {
-  const getEntries = (): CommandPaletteEntry[] =>
-    paletteEntries(platform).map((entry) => toPaletteEntry(entry, platform));
+  const commandList = (): CommandPaletteList => ({
+    ...NO_LIST,
+    entries: paletteEntries(platform).map((entry) => ({
+      id: entry.id,
+      label: entry.label,
+      icon: entry.icon,
+      meta: formatDesktopAccelerator(entry.accelerator, platform),
+      category: entry.category,
+      run: () => dispatchDesktopCommand(entry.id, actions),
+    })),
+  });
 
   // Reactive state: every mutation calls renderTemplate() to keep the DOM in
   // sync. wa-dialog handles modal backdrop, focus trap, escape key, and focus
   // restoration natively, so none of those are managed here.
-  let allEntries: CommandPaletteEntry[] = [];
+  let list = NO_LIST;
   let visibleEntries: CommandPaletteEntry[] = [];
   let activeIndex = -1;
   let query = '';
@@ -105,16 +135,18 @@ export function createDesktopCommandPalette({
   dialog.lightDismiss = true;
   dialog.setAttribute('aria-label', 'Command palette');
 
-  const executeActiveCommand = (): void => {
-    const entry = visibleEntries[activeIndex];
+  /** Runs a row, then closes the palette unless the row put another list
+   *  in it, as Switch Project does. */
+  const runEntry = (entry: CommandPaletteEntry | undefined): void => {
     if (!entry) return;
-    dispatchDesktopCommand(entry.id, actions);
-    close();
+    const shown = list;
+    entry.run();
+    if (list === shown) close();
   };
 
   const applyQuery = (nextQuery: string): void => {
     query = nextQuery;
-    visibleEntries = filterCommandPaletteEntries(allEntries, query);
+    visibleEntries = filterCommandPaletteEntries(list.entries, query);
     activeIndex = visibleEntries.length > 0 ? 0 : -1;
     renderTemplate();
   };
@@ -125,36 +157,24 @@ export function createDesktopCommandPalette({
     );
   };
 
+  /** The filter keeps Home and End for its caret; the arrows move. */
   const handleFilterKeydown = (event: KeyboardEvent): void => {
-    switch (event.key) {
-      case 'ArrowDown':
-      case 'ArrowUp': {
-        event.preventDefault();
-        const delta = event.key === 'ArrowDown' ? 1 : -1;
-        activeIndex = getNextCommandPaletteIndex(
-          activeIndex,
-          visibleEntries.length,
-          delta,
-        );
-        renderTemplate();
-        scrollActiveItemIntoView();
-        break;
-      }
-      case 'Enter':
-        event.preventDefault();
-        executeActiveCommand();
-        break;
+    if (isCommitEnter(event)) {
+      event.preventDefault();
+      runEntry(visibleEntries[activeIndex]);
+      return;
     }
+    const move = listMoveOfKey(event.key, 'vertical');
+    if (move !== 'next' && move !== 'previous') return;
+    event.preventDefault();
+    activeIndex = nextListIndex(move, activeIndex, visibleEntries.length);
+    renderTemplate();
+    scrollActiveItemIntoView();
   };
 
   const handleItemMouseEnter = (index: number) => (): void => {
     activeIndex = index;
     renderTemplate();
-  };
-
-  const handleItemClick = (entry: CommandPaletteEntry) => (): void => {
-    dispatchDesktopCommand(entry.id, actions);
-    close();
   };
 
   const renderTemplate = (): void => {
@@ -174,14 +194,14 @@ export function createDesktopCommandPalette({
             type="search"
             autocomplete="off"
             spellcheck="false"
-            placeholder="Search commands"
-            aria-label="Search commands"
+            placeholder=${list.searchLabel}
+            aria-label=${list.searchLabel}
             role="combobox"
             aria-expanded="true"
             aria-autocomplete="list"
             aria-controls=${COMMAND_PALETTE_LIST_ID}
             aria-activedescendant=${
-              activeEntry ? commandPaletteOptionId(activeEntry.id) : nothing
+              activeEntry ? commandPaletteOptionId(activeIndex) : nothing
             }
             .value=${query}
             @input=${handleFilterInput}
@@ -197,7 +217,11 @@ export function createDesktopCommandPalette({
         >
           ${
             visibleEntries.length === 0
-              ? renderEmptyMessage('No matching commands')
+              ? renderEmptyMessage(
+                  list.entries.length === 0
+                    ? list.emptyLabel
+                    : list.noMatchLabel,
+                )
               : nothing
           }
           ${groups.map(
@@ -220,7 +244,7 @@ export function createDesktopCommandPalette({
                     return html`
                       <wa-button
                         class="desktop-command-palette-item"
-                        id=${commandPaletteOptionId(entry.id)}
+                        id=${commandPaletteOptionId(index)}
                         type="button"
                         appearance="plain"
                         size="s"
@@ -231,7 +255,7 @@ export function createDesktopCommandPalette({
                         }
                         tabindex="-1"
                         @mouseenter=${handleItemMouseEnter(index)}
-                        @click=${handleItemClick(entry)}
+                        @click=${() => runEntry(entry)}
                       >
                         <span class="desktop-command-palette-main">
                           <span class="desktop-command-palette-item-icon">
@@ -278,12 +302,33 @@ export function createDesktopCommandPalette({
     items.item(activeIndex)?.scrollIntoView({ block: 'nearest' });
   };
 
-  const open = (): void => {
-    if (dialog.open) return;
-    allEntries = getEntries();
+  const show = (next: CommandPaletteList): void => {
+    list = next;
     applyQuery('');
-    dialog.open = true;
+    if (dialog.open) focusFilter();
+    else dialog.open = true;
   };
+
+  const open = (): void => {
+    if (!dialog.open) show(commandList());
+  };
+
+  const showProjects: CommandPaletteController['showProjects'] = (
+    projects,
+    select,
+  ) =>
+    show({
+      entries: projects.map(({ key, name }) => ({
+        id: key,
+        label: name,
+        icon: 'folder',
+        category: 'Open projects',
+        run: () => select(key),
+      })),
+      searchLabel: 'Search open projects',
+      emptyLabel: 'No other project is open',
+      noMatchLabel: 'No matching projects',
+    });
 
   const close = (): void => {
     if (!dialog.open) return;
@@ -292,25 +337,13 @@ export function createDesktopCommandPalette({
 
   // wa-dialog focuses its first focusable child on show. Override that to
   // focus the filter input directly so users can start typing immediately.
-  dialog.addEventListener('wa-after-show', () => {
+  const focusFilter = (): void => {
     dialog.querySelector<WaInput>('.desktop-command-palette-input')?.focus();
-  });
+  };
+  dialog.addEventListener('wa-after-show', focusFilter);
 
   renderTemplate();
-  return { element: dialog, open };
-}
-
-function toPaletteEntry(
-  entry: DesktopPaletteEntry,
-  platform: OsPlatform,
-): CommandPaletteEntry {
-  return {
-    id: entry.id,
-    label: entry.label,
-    icon: entry.icon,
-    meta: formatDesktopAccelerator(entry.accelerator, platform),
-    category: entry.category,
-  };
+  return { element: dialog, open, showProjects };
 }
 
 function slugify(value: string): string {

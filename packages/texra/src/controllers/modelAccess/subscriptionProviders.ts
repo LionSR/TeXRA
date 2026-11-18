@@ -9,7 +9,7 @@
  * package never reads; {@link subscriptionAuthStatus} joins the same two
  * facts for the settings views.
  */
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import {
   LoopbackTransportUnavailableError,
@@ -190,6 +190,14 @@ interface SubscriptionProviderBindings<
   ) => string;
 }
 
+/** A sign-in that could not finish: no transport this machine can use, or
+ *  an account signed in whose subscription could not be turned on. The
+ *  message is the user-facing text. */
+class SubscriptionSignInFailed extends Schema.TaggedError<SubscriptionSignInFailed>()(
+  'SubscriptionSignInFailed',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
+
 /**
  * Bind one provider's account to the shared sign-in flow. Two callers (the
  * catalog rows below); the flow it closes over is the whole point.
@@ -212,9 +220,9 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
   ) =>
     signIn === undefined
       ? Effect.fail(
-          new Error(
-            `${descriptor.displayName} sign-in has no device code: it returns to a browser on this machine (127.0.0.1). Sign in where TeXRA runs, or forward port 1455 from your browser's machine to this one.`,
-          ),
+          new SubscriptionSignInFailed({
+            message: `${descriptor.displayName} sign-in has no device code: it returns to a browser on this machine (127.0.0.1). Sign in where TeXRA runs, or forward port 1455 from your browser's machine to this one.`,
+          }),
         )
       : // The prompt is shown beside the poll, not before it: the poll waits
         // on the user, who may be reading (or dismissing) exactly this
@@ -275,10 +283,10 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
       ).pipe(
         Effect.mapError(
           (cause) =>
-            new Error(
-              `Signed in with ${descriptor.displayName}, but its subscription could not be turned on: ${toErrorMessage(cause)}`,
-              { cause },
-            ),
+            new SubscriptionSignInFailed({
+              message: `Signed in with ${descriptor.displayName}, but its subscription could not be turned on: ${toErrorMessage(cause)}`,
+              cause,
+            }),
         ),
         Effect.ensuring(emitAppSignal('modelAccessChanged', undefined)),
       );

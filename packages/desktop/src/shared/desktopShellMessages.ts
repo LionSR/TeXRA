@@ -1,10 +1,10 @@
 import { Schema } from 'effect';
 import { SettingsTargetSchema } from '@texra/shared/settingsView/settingsTarget';
 
-export const DESKTOP_SHELL_COMMANDS = {
+export const DESKTOP_SHELL_COMMANDS = Object.freeze({
   OPEN_SETTINGS: 'desktop:openSettings',
   RUN_COMMAND: 'desktop:runCommand',
-} as const;
+} as const);
 
 /** Settings is a popup dialog over the shell, not a workbench tab. It opens
  *  on `tab` when one is named, else where it was left. */

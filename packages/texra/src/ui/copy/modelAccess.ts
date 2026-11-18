@@ -161,7 +161,7 @@ export function errorRowText({ summary, details, failure }: ErrorRow): {
 }
 
 /** Model calls paid for by your own provider accounts. */
-export const OWN_API_KEYS = {
+export const OWN_API_KEYS = Object.freeze({
   /** Standalone display name, e.g. a section heading or detailed status. */
   label: 'Your own API keys',
   /** Width-constrained badge or status label. */
@@ -169,10 +169,10 @@ export const OWN_API_KEYS = {
   /** Same name inside a sentence. */
   inline: 'your own API keys',
   /** Model-access picker option. */
-  option: {
+  option: Object.freeze({
     label: 'Use your own API keys',
-  },
-} as const;
+  }),
+} as const);
 
 /** One plan's API-credit reminder: the hint under its provider's key row
  *  and the page that carries the amounts, which change. */

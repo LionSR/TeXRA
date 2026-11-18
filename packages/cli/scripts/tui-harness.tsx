@@ -166,6 +166,7 @@ import { resolveCliResourcesPath } from '../src/runtime/platform/cliContext';
 import { setCliToolEnabled } from '../src/runtime/tools';
 import type { CliContext } from '../src/runtime/platform/cliContext';
 import { ChatProcessProvider } from '../src/chat/tui/chatProcess';
+import { scopeRunner } from '../src/chat/scopeRunner';
 
 const harnessRunId = Schema.decodeUnknownSync(RunIdSchema);
 const HARNESS_RUN_ID = harnessRunId('aaaa0001f10e');
@@ -252,7 +253,6 @@ const SHOW_NESTED_CHILDREN = process.env.HARNESS_NESTED_CHILDREN === '1';
 const SHOW_PLAN = process.env.HARNESS_PLAN === '1';
 const SHOW_IDLE_PLAN = process.env.HARNESS_PLAN_IDLE === '1';
 const FAILED_CHILD_AGENT = process.env.HARNESS_FAILED_CHILD?.trim();
-const TEAM_NAME = process.env.HARNESS_TEAM_NAME?.trim() || undefined;
 let canInterrupt = process.env.HARNESS_CAN_INTERRUPT === '1';
 const QUEUED_FOLLOW_UPS = parseList(process.env.HARNESS_QUEUED_FOLLOWUPS);
 // Deliveries a child run queued on the root (a `<subagent-result>`
@@ -474,6 +474,13 @@ const isCellRow = (draft: SeedRow): draft is CellRow =>
 // The TUI reads the session fold: bind it and subscribe every
 // run's transcript tier the way `runChat` does.
 HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, harnessRunSession.view));
+// The chat's scope and its runner, as `runChat` builds them: what the TUI
+// starts from a key press or a mounted component ends with this scope.
+const harnessChatScope = Scope.makeUnsafe();
+HARNESS_DISPOSERS.push(() =>
+  harnessRuntime.runFork(Scope.close(harnessChatScope, Exit.void)),
+);
+const harnessChat = scopeRunner(harnessRuntime, harnessChatScope);
 {
   // The harness's set, held until it disposes.
   const scope = Scope.makeUnsafe();
@@ -516,7 +523,7 @@ const harnessInteractions = createTuiHostInteractions({
     },
   },
   settings: HARNESS_PLATFORM_SERVICES,
-  runtime: harnessRuntime,
+  chat: harnessChat,
 });
 Effect.runSync(
   attachInteractions(session().interactions, harnessInteractions).pipe(
@@ -608,6 +615,7 @@ function holdRun(runId: RunId): void {
                   publishRunEnd(runId, RUN_OUTCOME.CANCELLED);
               }),
             ),
+          end: (_, exit) => exit,
         }),
         ({ fiber }) => fiber,
       ),
@@ -1327,7 +1335,6 @@ sessionMeta.set({
   modelSource: 'builtin-default',
   cwd: HARNESS_CWD,
   approvalPolicy: APPROVAL_POLICY_DEFAULT,
-  ...(TEAM_NAME && { team: { id: TEAM_NAME, name: TEAM_NAME } }),
   version: '0.0.0-harness',
 });
 // The harness root: minted before any fixture, like a real run's start.
@@ -1731,7 +1738,6 @@ function appendHarnessStatus(): void {
     formatCliSessionStatus({
       agent: meta.agent,
       model: meta.model,
-      teamName: meta.team?.name,
       modelAccess: run?.usage.usageRoute,
       approvalPolicy: harnessApprovalPolicy(),
       approvalBypasses: runBypasses(view, runId),
@@ -1833,7 +1839,7 @@ const harnessSlashContext: SlashCommandContext = {
   session: harnessSession,
   runSession: harnessRunSession,
   stores: HARNESS_PLATFORM_SERVICES,
-  runtime: harnessRuntime,
+  chat: harnessChat,
   requestInputExit: () => void exitHarness(0),
   getApprovalPolicy: harnessApprovalPolicy,
   setApprovalPolicy: (policy) =>
@@ -1847,10 +1853,8 @@ const harnessSlashContext: SlashCommandContext = {
       appendHarnessAssistantTranscript(`Harness resume selected: ${id}.`);
     }),
   resumeTask: () => Effect.void,
-  activateSkill: (selection) =>
-    appendHarnessAssistantTranscript(
-      `Harness skill selected: ${selection.name}.`,
-    ),
+  activateSkill: (name) =>
+    appendHarnessAssistantTranscript(`Harness skill selected: ${name}.`),
   onProjectApprovalPolicyChanged: (policy) =>
     appendHarnessAssistantTranscript(
       `Project approval policy: ${formatApprovalPolicy(policy)}`,
@@ -1869,8 +1873,8 @@ const harnessSlashContext: SlashCommandContext = {
 const harnessLaunch = canInterrupt ? harnessSession.claimLaunch() : undefined;
 
 const inkRef: { current?: ReturnType<typeof render> } = {};
-const scrollback = chatScrollback(harnessRuntime, inkRef);
-const harnessDraft = harnessRuntime.runSync(SubscriptionRef.make(EMPTY_DRAFT));
+const scrollback = chatScrollback(harnessChat, inkRef);
+const harnessDraft = harnessChat.sync(SubscriptionRef.make(EMPTY_DRAFT));
 
 function handleHarnessCtrlC(): void {
   if (canInterrupt) {
@@ -1885,7 +1889,7 @@ function renderHarnessApp(): React.JSX.Element {
     <SlashContextProvider value={harnessSlashContext}>
       <ChatProcessProvider
         value={{
-          runtime: harnessRuntime,
+          chat: harnessChat,
           roots: HARNESS_PLATFORM_SERVICES.roots,
         }}
       >

@@ -26,7 +26,6 @@ import {
   CredentialOriginSchema,
   ReasoningEffortSchema,
 } from '@texra-ai/llm';
-import { AgentModePresetSchema } from '@texra/shared/agentTeams';
 import {
   LATEX_DEPENDENCIES,
   LATEX_RECOMMENDED_SETTINGS,
@@ -222,36 +221,6 @@ export type ModelSelectionPage = typeof ModelSelectionPageSchema.Type;
 const CustomAgentDirPageSchema = Schema.Struct({
   path: Schema.String,
   isDefault: Schema.Boolean,
-});
-
-// ============================================================
-// Agent team data schema
-// ============================================================
-
-/** One team card: a team from the workspace's team catalog and where it came
- *  from. Only a custom team can be deleted. */
-const SettingsTeamPresetSchema = AgentModePresetSchema.mapFields(
-  Struct.assign({ source: Schema.Literals(['built-in', 'custom']) }),
-);
-export type SettingsTeamPreset = typeof SettingsTeamPresetSchema.Type;
-
-/** Outbound: backend → frontend agent teams (built-in + custom) */
-const TeamsPageSchema = Schema.Struct({
-  /** Every launchable team in catalog order: the built-in teams, then the
-   *  workspace's custom teams. */
-  presets: Schema.Array(SettingsTeamPresetSchema),
-  /**
-   * Agent names that can lead a team (carry delegation tools), computed from
-   * the agent registry so preset cards badge orchestrators by capability
-   * instead of guessing from the agent's name.
-   */
-  orchestratorAgents: decodingDefault(Schema.Array(Schema.String), []),
-  /**
-   * The team the workspace agents currently resolves to, or null when it runs
-   * no team. Owned by the workspace agents so a preset card reports the applied team
-   * rather than the last one the user clicked.
-   */
-  activePresetId: decodingDefault(Schema.NullOr(Schema.String), null),
 });
 
 // ============================================================
@@ -458,7 +427,6 @@ const SettingsHostStateSchema = Schema.Struct({
   models: ModelSelectionPageSchema,
   agents: AgentSelectionPageSchema,
   customAgentDir: CustomAgentDirPageSchema,
-  teams: TeamsPageSchema,
   skills: SkillsPageSchema,
   plugins: PluginsPageSchema,
   githubToken: GitHubTokenPageSchema,
@@ -585,19 +553,6 @@ const SetCustomAgentDirMessageSchema = commandOnly(
 const ResetCustomAgentDirMessageSchema = commandOnly(
   SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR,
 );
-
-// Agent team inbound messages
-const ApplyAgentModePresetMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET),
-  presetId: Schema.NonEmptyString,
-});
-const SaveAgentModePresetMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET,
-);
-const DeleteAgentModePresetMessageSchema = Schema.Struct({
-  command: Schema.Literal(SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET),
-  presetId: Schema.NonEmptyString,
-});
 
 // Tool dashboard inbound messages
 const InstallExtensionMessageSchema = Schema.Struct({
@@ -760,10 +715,6 @@ export const SettingsViewInboundMessageSchema = Schema.Union([
   // Generic catalog-driven scalar-setting write
   UpdateStateSettingMessageSchema,
   SetSkillEnabledMessageSchema,
-  // Agent team messages
-  ApplyAgentModePresetMessageSchema,
-  SaveAgentModePresetMessageSchema,
-  DeleteAgentModePresetMessageSchema,
 ]);
 
 export type SettingsViewInboundMessage =

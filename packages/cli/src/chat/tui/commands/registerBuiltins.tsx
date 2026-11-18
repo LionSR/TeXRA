@@ -10,7 +10,7 @@ import type { ConnectService } from '../state/attachedTask';
 import { RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { PLUGINS_TUI } from '@ui/copy/plugins';
 
-import { AgentListForm, type AgentPickerValue } from '../forms/AgentListForm';
+import { AgentListForm } from '../forms/AgentListForm';
 import {
   ApprovalPolicyForm,
   type ApprovalFormValue,
@@ -22,13 +22,12 @@ import { ModelListForm } from '../forms/ModelListForm';
 import { PluginsListForm } from '../forms/PluginsListForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
 import { TasksForm } from '../forms/TasksForm';
-import { SkillsListForm, type SkillActivation } from '../forms/SkillsListForm';
+import { SkillsListForm } from '../forms/SkillsListForm';
 import { selectedRunId, sessionMeta } from '../state/cliState';
 import { currentView, runViewOf } from '../state/sessionView';
 import { appendLocalNotice } from '../state/transcript';
 import {
   applyCliModelSelection,
-  applyCliTeamSelection,
   applyInitialCliAgentSelection,
 } from './handlers/agentModelCommands';
 import {
@@ -63,6 +62,7 @@ import {
   type SlashFormProps,
 } from './slashRegistry';
 import { openRegisteredCliSlashForm } from './slashForms';
+import { SlashCommandFailed } from './handleSlashCommand';
 import { modelAccessContribution } from './modelAccessContribution';
 
 /** The built-in slash commands, with the two forms the chat opens itself:
@@ -84,14 +84,11 @@ export function builtinSlashCommands(options: {
     const context = useSlashContext();
     const meta = sessionMeta.get();
     const selectable = context.session.canStartRootRun();
-    const onPick: FormAction<AgentPickerValue> = (value) =>
-      value.kind === 'agent'
-        ? applyInitialCliAgentSelection(value.agent, context)
-        : applyCliTeamSelection(value.teamId, context);
+    const onPick: FormAction<string> = (agent) =>
+      applyInitialCliAgentSelection(agent, context);
     return (
       <AgentListForm
         currentAgent={meta.agent}
-        {...(meta.team !== undefined ? { currentTeamId: meta.team.id } : {})}
         availableRows={props.availableRows}
         selectable={selectable}
         onSelect={bindSelection(context, props, onPick, {
@@ -217,7 +214,7 @@ export function builtinSlashCommands(options: {
         />
       )
     : undefined;
-  const SkillsListFormAdapter = makeSelectFormAdapter<SkillActivation>(
+  const SkillsListFormAdapter = makeSelectFormAdapter<string>(
     ({ context, ...formProps }) => <SkillsListForm {...formProps} />,
     (selection, context) => Effect.sync(() => context.activateSkill(selection)),
   );
@@ -253,14 +250,14 @@ export function builtinSlashCommands(options: {
     const [, source, pick] =
       /^(.+?)(?:\s+--plugin\s+(\S+))?$/.exec(rest ?? '') ?? [];
     if (verb?.toLowerCase() !== 'add' || !source)
-      return yield* Effect.fail(new Error(PLUGINS_TUI.addUsage));
+      return yield* new SlashCommandFailed({ message: PLUGINS_TUI.addUsage });
     const { roots } = context.runSession;
     const origin = InstalledPlugins.origin(
       source,
       roots.workspace ?? context.cliContext.cwd,
       undefined,
     );
-    if (Result.isFailure(origin)) return yield* Effect.fail(origin.failure);
+    if (Result.isFailure(origin)) return yield* origin.failure;
     const added = yield* InstalledPlugins.install(
       origin.success,
       pick === undefined ? [] : [pick],
@@ -286,7 +283,7 @@ export function builtinSlashCommands(options: {
 
   const agent: SlashCommand = {
     name: 'agent',
-    description: 'Choose an agent, or a team it leads',
+    description: 'Choose the agent for this chat',
     aliases: ['agents'],
     category: 'configuration',
     echo: 'ifPersists',
@@ -385,9 +382,9 @@ export function builtinSlashCommands(options: {
               return yield* resumeInterruptedTasks(context.resumeTask);
             const id = parseCliHistoryId(remainder);
             if (!id)
-              return yield* Effect.fail(
-                new Error(`Invalid task id: ${remainder}`),
-              );
+              return yield* new SlashCommandFailed({
+                message: `Invalid task id: ${remainder}`,
+              });
             yield* context.resumeRun(id);
           }),
           formComponent: ResumeListFormAdapter,

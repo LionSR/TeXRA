@@ -164,6 +164,7 @@ function describedAtFreeze<T extends ResolvedTools>(
     .map((definition) => ({
       definition,
       scriptGlobal: tools.registry.get(definition.name)?.scriptGlobal,
+      lane: tools.registry.get(definition.name)?.lane,
     }));
   const recorded = (name: string) => {
     const shown =

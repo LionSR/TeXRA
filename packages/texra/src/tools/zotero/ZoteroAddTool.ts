@@ -238,10 +238,8 @@ const addItems = Effect.fn('ZoteroAddTool.execute')(function* ({
 
   // Fail if all items failed (items.length >= 1 per schema)
   if (successCount === 0) {
-    return yield* Effect.fail(
-      new ToolError(
-        `Failed to add all ${errorCount} ${pluralize(errorCount, 'item')} to Zotero:\n${output}`,
-      ),
+    return yield* new ToolError(
+      `Failed to add all ${errorCount} ${pluralize(errorCount, 'item')} to Zotero:\n${output}`,
     );
   }
 

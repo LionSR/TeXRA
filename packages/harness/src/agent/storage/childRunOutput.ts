@@ -8,6 +8,7 @@ import {
 import { SessionRoots } from '@platform/rootedFs';
 import {
   RUN_OUTCOME,
+  ToolError,
   type RunId,
   type RunStorageFileLocation,
 } from '@shared/schemas';
@@ -40,10 +41,8 @@ const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
     // child it has not applied yet would be refused as no child at all.
     const facts = yield* (yield* SessionLog).facts(reference.runId);
     if (facts?.start?.parent?.id !== parentId) {
-      return yield* Effect.fail(
-        new Error(
-          `Run ${reference.runId} is not a direct child of ${parentId}.`,
-        ),
+      return yield* new ToolError(
+        `Run ${reference.runId} is not a direct child of ${parentId}.`,
       );
     }
     // A completed program's changes are its declared outputs: the files it
@@ -53,8 +52,8 @@ const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
         ? yield* readProgramResult(config, reference.runId, yield* SessionRoots)
         : undefined;
     if (program === undefined) {
-      return yield* Effect.fail(
-        new Error(`Run ${reference.runId} is no completed program's run.`),
+      return yield* new ToolError(
+        `Run ${reference.runId} is no completed program's run.`,
       );
     }
     const declared = program.changes.some(
@@ -63,10 +62,8 @@ const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
         normalizeFilePath(reference.absolutePath),
     );
     if (!declared) {
-      return yield* Effect.fail(
-        new Error(
-          `${reference.relativePath} is not a declared output of run ${reference.runId}.`,
-        ),
+      return yield* new ToolError(
+        `${reference.relativePath} is not a declared output of run ${reference.runId}.`,
       );
     }
   },
@@ -96,8 +93,8 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
     const storageRoot = roots.storage;
     const reference = runStorageLocationUnder(storageRoot, absolutePath);
     if (!reference) {
-      return yield* Effect.fail(
-        new Error('A declared output is not inside run storage.'),
+      return yield* new ToolError(
+        'A declared output is not inside run storage.',
       );
     }
 
@@ -116,20 +113,14 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
       case 'symlink':
         return undefined;
       case 'missing':
-        return yield* Effect.fail(
-          new Error(
-            `Declared output ${reference.relativePath} is missing from run ${reference.runId}.`,
-          ),
+        return yield* new ToolError(
+          `Declared output ${reference.relativePath} is missing from run ${reference.runId}.`,
         );
       case 'invalid':
-        return yield* Effect.fail(
-          new Error(`Invalid declared output: ${entry.reason}`),
-        );
+        return yield* new ToolError(`Invalid declared output: ${entry.reason}`);
       default:
-        return yield* Effect.fail(
-          new Error(
-            `Declared output ${reference.relativePath} is not a regular file.`,
-          ),
+        return yield* new ToolError(
+          `Declared output ${reference.relativePath} is not a regular file.`,
         );
     }
   },

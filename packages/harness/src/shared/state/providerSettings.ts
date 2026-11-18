@@ -37,7 +37,7 @@ const endpointRow = <const Id extends string>(id: Id) =>
 export const GLM_ENDPOINT_SETTING = endpointRow('glm');
 
 /** The providers' custom-endpoint rows, in catalog order. */
-export const PROVIDER_ENDPOINT_SETTINGS = [
+export const PROVIDER_ENDPOINT_SETTINGS = Object.freeze([
   endpointRow('openai'),
   endpointRow('anthropic'),
   endpointRow('google'),
@@ -48,7 +48,7 @@ export const PROVIDER_ENDPOINT_SETTINGS = [
   endpointRow('minimax'),
   GLM_ENDPOINT_SETTING,
   endpointRow('meta'),
-] as const;
+] as const);
 
 /** A China-region toggle: "set" is the China region. */
 type RegionSettingRow = SettingRow<boolean> & { readonly provider: string };
@@ -99,12 +99,12 @@ export const GLM_REGION_SETTING = {
 } as const satisfies RegionSettingRow;
 
 /** The China-region toggles, in catalog order. */
-export const PROVIDER_REGION_SETTINGS = [
+export const PROVIDER_REGION_SETTINGS = Object.freeze([
   MOONSHOT_REGION_SETTING,
   DASHSCOPE_REGION_SETTING,
   MINIMAX_REGION_SETTING,
   GLM_REGION_SETTING,
-] as const;
+] as const);
 
 /** A provider's custom-endpoint row, if it offers one. */
 export function providerEndpointSetting(

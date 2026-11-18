@@ -307,7 +307,6 @@ export class RunHeader extends LitElement {
     const statusLabel = canContinue ? 'Ready' : status.word;
     // The header offers exactly what the session view's `actions` licenses.
     const canStop = run.actions.includes('stop');
-    const idle = status.key === 'waiting' && run.approval === 'none';
     const canGrant = run.actions.includes('grant');
     const passLabel = progressBadgeLabel(run, this.plannedPasses);
 
@@ -344,7 +343,7 @@ export class RunHeader extends LitElement {
             : nothing
         }
         ${
-          canStop && !idle
+          canStop
             ? renderIconActionButton({
                 id: ELEMENT_IDS.STOP_STREAM_BTN,
                 icon: 'circle-stop',

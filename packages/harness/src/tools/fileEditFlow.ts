@@ -24,6 +24,7 @@ import {
 import { writeApprovedContent } from '@tools/approval/approvedWrite';
 import { findExternalRoot } from '@utils/files/externalRoots';
 import { entryExists } from '@utils/files/fsEntryExists';
+import { readNormalizedFile } from '@utils/files/fsDurability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
@@ -101,9 +102,7 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
 
     const originalContent =
       exists || (options.missing ?? 'require') === 'require'
-        ? yield* fs
-            .readFileString(absolutePath)
-            .pipe(Effect.map((text: string) => text.replaceAll('\r\n', '\n')))
+        ? yield* readNormalizedFile(fs, absolutePath)
         : '';
 
     return {

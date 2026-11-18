@@ -1,17 +1,20 @@
-// The process an Ink tree runs its programs on, and the project it works in:
-// one value per root (`texra chat`, `texra config edit`), read by every
-// component that runs a program instead of passed down by hand.
+// How an Ink tree runs its programs, and the project it works in: one value
+// per root (`texra chat`, `texra config edit`), read by every component that
+// runs a program instead of passed down by hand.
 
 // Third-party imports
 import { createContext, useContext } from 'react';
 
 // Local imports
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { ProcessRuntime } from '@texra-ai/harness/host';
+import type { ScopeRunner } from '../scopeRunner';
 
 export interface ChatProcess {
-  /** The process runtime the tree's reads and writes run on. */
-  readonly runtime: ProcessRuntime;
+  /** The runner of the root's own scope (the chat's, or the config
+   *  editor's): work that must outlive the component that starts it, such
+   *  as a form's write, runs here. A component's own reads and timers run
+   *  on its mount's runner (`useMountScope`). */
+  readonly chat: ScopeRunner;
   /** The project's roots: its files, its storage and its settings slots. */
   readonly roots: WorkspaceRoots;
 }

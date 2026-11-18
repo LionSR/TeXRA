@@ -99,7 +99,7 @@ const heldRun = (run: LiveRun): HeldRun => ({
   runId: run.runId,
   drained: Effect.asVoid(run.drained),
   modelSwitchDisabledReason: (model) =>
-    run.controls?.modelSwitchDisabledReason(model) ?? Effect.succeed(undefined),
+    run.controls?.modelSwitchDisabledReason(model) ?? Effect.undefined,
 });
 
 /** The runs `runs` holds here: one, or all. */

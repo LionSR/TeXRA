@@ -20,7 +20,13 @@ import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports
 import { SessionUiEvents } from '@ui/progress/uiEvents';
-import { runNoticeText, runStatus } from '@ui/copy/runStatus';
+import {
+  runNoticeText,
+  runStatus,
+  runStatusLabel,
+  statusGlyph,
+  type RunTone,
+} from '@ui/copy/runStatus';
 import { designTokens } from '@ui/styles';
 import {
   buttonStyles,
@@ -53,6 +59,30 @@ import { TickerController } from '@ui/litControllers/TickerController';
 import { runTabStyles } from './RunTab.styles';
 import type { RunView } from '@texra-ai/harness/schemas';
 
+/** How the row reads: a request anywhere under the run (its own, or a
+ *  descendant's) waits on the user, which the row says in the status
+ *  table's word for that state; otherwise as the run's status reads. */
+function rowStatus(run: RunView): {
+  readonly word: string;
+  readonly tone: RunTone;
+  readonly glyph: ReturnType<typeof statusGlyph>;
+  readonly waiting: boolean;
+  readonly shown: boolean;
+} {
+  const status = runStatus(run);
+  if (run.approval === 'none')
+    return { ...status, waiting: false, shown: status.tone !== 'neutral' };
+  return {
+    word: runStatusLabel('waitingOnUser'),
+    // The row keeps its run's own tone; only its word and glyph say a
+    // request waits under it.
+    tone: status.tone,
+    glyph: statusGlyph({ tone: 'warning' }),
+    waiting: true,
+    shown: true,
+  };
+}
+
 function buildTooltip(run: RunView, nowMs: number): string {
   const modelDisplay = run.identity.kind === 'agent' ? run.modelLabel : null;
   const worktree = run.worktree;
@@ -61,7 +91,7 @@ function buildTooltip(run: RunView, nowMs: number): string {
     : undefined;
   const mainLine = joinFacts([
     run.label,
-    `Status: ${run.approval === 'none' ? runStatus(run).word : 'Needs approval'}`,
+    `Status: ${rowStatus(run).word}`,
     run.rollup.total > 0 && nestedRollupLabel(run.rollup),
     modelDisplay && `Model: ${modelDisplay}`,
     worktreeDisplay,
@@ -146,15 +176,7 @@ export class RunTab extends LitElement {
   override render(): TemplateResult {
     const run = this.run;
     const notice = runNoticeText(run);
-    // A descendant's request needs the user too, though this run is not
-    // the one waiting on it.
-    const status = runStatus(run);
-    const pendingApproval = run.approval !== 'none';
-    const showStatus = pendingApproval || status.tone !== 'neutral';
-    const statusGlyph = pendingApproval ? 'triangle-exclamation' : status.glyph;
-    const accessibleStatusLabel = pendingApproval
-      ? 'Needs approval'
-      : status.word;
+    const status = rowStatus(run);
     const runTitle = run.title;
     const tooltip = buildTooltip(run, this.ticker.now);
     const noun = runNoun(run);
@@ -214,7 +236,7 @@ export class RunTab extends LitElement {
           'tab-container': true,
           'is-active': this.active,
           [`tone-${status.tone}`]: true,
-          'has-pending-approval': pendingApproval,
+          'has-pending-approval': status.waiting,
           'is-unseen': this.unseen,
         })}
       >
@@ -325,18 +347,18 @@ export class RunTab extends LitElement {
             </div>
             ${notice ? html`<div class="tab-detail">${notice}</div>` : nothing}
           </button>
-          ${showStatus ? html`<wa-tooltip for="run-tab-status">${accessibleStatusLabel}</wa-tooltip>` : nothing}
+          ${status.shown ? html`<wa-tooltip for="run-tab-status">${status.word}</wa-tooltip>` : nothing}
         </div>
         ${
-          showStatus
+          status.shown
             ? html`<span
                 id="run-tab-status"
                 class="tab-status"
                 role="img"
-                aria-label=${accessibleStatusLabel}
+                aria-label=${status.word}
               >
-                ${waIcon(statusGlyph, { className: 'tab-status-icon' })}
-                ${pendingApproval ? html`<span class="tab-status-label">Needs approval</span>` : nothing}
+                ${waIcon(status.glyph, { className: 'tab-status-icon' })}
+                ${status.waiting ? html`<span class="tab-status-label">${status.word}</span>` : nothing}
               </span>`
             : nothing
         }

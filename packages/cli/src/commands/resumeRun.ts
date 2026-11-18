@@ -20,6 +20,7 @@ import { cliErrorMessage, writeTextStderr } from '../runtime/platform/logSinks';
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
+  DocumentTaskOutputFailed,
   resumeDocumentTaskOutputDirectory,
   resumeDocumentTaskOutputFile,
 } from '../runtime/headless/documentTaskOutput';
@@ -32,6 +33,16 @@ import { CliUsageError, type CliContext } from '../runtime/platform/cliContext';
 function loadFailureMessage(id: RunId, error: unknown): string {
   return `Could not load session ${id}: ${cliErrorMessage(error)}`;
 }
+
+/** What a stored-destination reader threw: its own usage error, or the
+ *  failure to read the recorded launch at all. */
+const storedDestinationFailure = (cause: unknown) =>
+  cause instanceof CliUsageError
+    ? cause
+    : new DocumentTaskOutputFailed({
+        message: ensureError(cause).message,
+        cause,
+      });
 
 /** Report a failed resume step: a usage refusal names itself, any other
  *  failure reads as a session that could not load. */
@@ -136,20 +147,21 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
     }
     return { chat: { initialResume: { id: forkId, config: forkConfig } } };
   }
-  // A run launched to run once reads no messages, so a chat over it would
-  // refuse every one: once it ended, it continues as a fork. One stopped
-  // mid-turn (no outcome yet) still resumes to finish it, since a fork
-  // needs a finished turn. Read from the log: a service window's own view
-  // fills after it opens.
+  // An ended one-shot run continues as a fork (`oneShotResumeNotice`).
+  // Read from the log: a service window's own view fills after it opens.
   if (!documentTask) {
     const stored = yield* Effect.result(runSession.view.read([id]));
     if (Result.isFailure(stored)) {
       writeTextStderr(loadFailureMessage(id, stored.failure));
       return CliExitCode.AgentError;
     }
-    const run = stored.success.runs.get(id);
-    if (run?.takesFollowUps === false && run.outcome !== null) {
-      writeTextStderr(oneShotResumeNotice(context.commandName, id));
+    const oneShot = oneShotResumeNotice(
+      context.commandName,
+      id,
+      stored.success.runs.get(id),
+    );
+    if (oneShot !== undefined) {
+      writeTextStderr(oneShot);
       return CliExitCode.Usage;
     }
   }
@@ -200,12 +212,12 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
     Effect.gen(function* () {
       const outputFile = yield* Effect.try({
         try: () => resumeDocumentTaskOutputFile(config),
-        catch: ensureError,
+        catch: storedDestinationFailure,
       });
       yield* assertOutputFileAvailable(outputFile, context.cwd);
       const outputDirectory = yield* Effect.try({
         try: () => resumeDocumentTaskOutputDirectory(config),
-        catch: ensureError,
+        catch: storedDestinationFailure,
       });
       yield* assertOutputDirAvailable(outputDirectory, context.cwd);
       const recoveryInputIsDurable =

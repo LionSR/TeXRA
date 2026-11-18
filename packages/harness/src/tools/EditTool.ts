@@ -49,11 +49,9 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
   }
   const { path, displayPath, exists, originalContent } = prepared.target;
   if (old_str.length === 0) {
-    return yield* Effect.fail(
-      new ToolError(
-        `old_str must not be empty for ${displayPath}. ` +
-          `Provide the exact text to replace, copied from read_file output (excluding the line-number prefix).`,
-      ),
+    return yield* new ToolError(
+      `old_str must not be empty for ${displayPath}. ` +
+        `Provide the exact text to replace, copied from read_file output (excluding the line-number prefix).`,
     );
   }
 

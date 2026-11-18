@@ -1,18 +1,17 @@
 <script setup>
-// Terminal card for a team session in `texra chat` — the Teams section of
-// guide/texra-cli.md and the multi-agent-workflows guide. The team is picked in
-// `/agent`, so the session header reads `team: … · root: … · model: …`
-// (packages/cli/src/chat/tui/panes/staticTranscriptRing.ts). Headless
-// `texra team run` prints only a one-line stderr status instead, so it is not
-// what this card shows. Shows the orchestrator-and-delegates shape the TUI
-// actually renders: the team's lead agent at work, then the subagent panel's
-// numbered child rows (status marker colored by child state, agent label,
-// status, elapsed and tool calls, one dim output tail line —
-// packages/cli/src/chat/tui/panes/SubagentListDisplay.ts), with the status
-// bar's key strip at the bottom (packages/cli/src/chat/tui/panes/
-// statusBarDisplay.ts: `Tab agents · Ctrl-T transcript · / commands · …`). Team id
-// and agent names match the built-in Software Engineer preset (lead `engineer`
-// delegating to `coder`, `testEngineer`, …) quoted in the surrounding prose.
+// Terminal card for a chat a lead agent runs in `texra chat` — the Lead
+// agents section of guide/texra-cli.md and the multi-agent-workflows guide.
+// The lead is picked in `/agent`, so the session header reads
+// `agent: … · model: …`
+// (packages/cli/src/chat/tui/panes/staticTranscriptRing.ts). Shows the
+// lead-and-delegates shape the TUI actually renders: the lead agent at work,
+// then the subagent panel's numbered child rows (status marker colored by
+// child state, agent label, status, elapsed and tool calls, one dim output
+// tail line — packages/cli/src/chat/tui/panes/SubagentListDisplay.ts), with
+// the status bar's key strip at the bottom (packages/cli/src/chat/tui/panes/
+// statusBarDisplay.ts: `Tab agents · Ctrl-T transcript · / commands · …`).
+// The agent names are the bundled ones (lead `engineer` delegating to
+// `coder`, `testEngineer`, …) quoted in the surrounding prose.
 //
 // Built on <TermWindow>; .mockup-scoped, so the shared --mk-* tokens resolve
 // here and the card flips with the docs theme. Believable static strings only.
@@ -37,24 +36,22 @@ const children = [
 <template>
   <TermWindow
     title="texra chat"
-    aria-label="texra chat team session with delegating subagents"
+    aria-label="texra chat session with a lead agent delegating to subagents"
   >
     <!-- Prompt line -->
     <div class="mk-term-prompt cma-prompt">
       <span class="mk-term-sigil">$</span>
       <span class="mk-term-cmd">texra chat</span>
     </div>
-    <!-- Session header after picking the team in /agent -->
-    <div class="cma-identity">
-      team: Software Engineer · root: engineer · model: DeepSeek V4 Pro
-    </div>
+    <!-- Session header after picking the lead in /agent -->
+    <div class="cma-identity">agent: engineer · model: DeepSeek V4 Pro</div>
     <!-- The user's request -->
     <div class="cma-user">
       <span class="cma-chevron">›</span>
       <span>Profile and speed up scripts/simulate.py</span>
     </div>
 
-    <!-- Orchestrator row: the team's lead plans and delegates -->
+    <!-- Lead row: the lead agent plans and delegates -->
     <div class="cma-root">
       <wa-spinner class="cma-spin mk-spinner"></wa-spinner>
       <span class="cma-agent">engineer</span>

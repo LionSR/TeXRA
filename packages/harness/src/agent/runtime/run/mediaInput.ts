@@ -12,7 +12,7 @@
  * its media is read once, as it is sent, and stored by address). Nothing
  * drops an attachment silently.
  */
-import { Effect, Exit, FileSystem } from 'effect';
+import { Effect, Exit, FileSystem, Schema } from 'effect';
 
 import { pathToLocationIn } from '@common/storage/fileLocation';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -43,6 +43,13 @@ interface MediaCapabilities {
   readonly supportsNativeAudio: boolean;
 }
 
+/** A file that cannot be made model input: of no medium a model takes, or
+ *  a PDF whose pages did not render. */
+class MediaInputFailed extends Schema.TaggedError<MediaInputFailed>()(
+  'MediaInputFailed',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
+
 interface MediaInputParts {
   readonly parts: readonly InputPart[];
   /** What was inserted, for the transcript's attachment badges. */
@@ -65,10 +72,10 @@ const pdfPageParts = Effect.fn('mediaInput.pdfPages')(function* (
   const { pages, pageCount } = yield* rasterizePdfPages(path).pipe(
     Effect.mapError(
       (cause) =>
-        new Error(
-          `Failed to process PDF file as image: ${display}: ${cause.message}`,
-          { cause },
-        ),
+        new MediaInputFailed({
+          message: `Failed to process PDF file as image: ${display}: ${cause.message}`,
+          cause,
+        }),
     ),
   );
   const parts: InputPart[] = pages.map((base64) => ({
@@ -142,11 +149,9 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
     return { parts: [{ kind: 'audio', mimeType, base64 }], kinds: [] };
   }
   if (!isImageMimeType(mimeType) || mimeType === null) {
-    return yield* Effect.fail(
-      new Error(
-        `Unsupported media file: ${display} (${ext || 'no extension'})`,
-      ),
-    );
+    return yield* new MediaInputFailed({
+      message: `Unsupported media file: ${display} (${ext || 'no extension'})`,
+    });
   }
   if (!capabilities.supportsVision) return skipped('images');
   const base64 = yield* getBase64EncodedMedia(path, config);
@@ -204,9 +209,9 @@ export const attachedMedia = Effect.fn('mediaInput.attached')(
         const path = pathToLocationIn(roots.workspace, entry).absolutePath;
         const mimeType = getMimeType(path);
         if (mimeType === null || !storedMediaPart(mimeType, '', ANY_MODEL))
-          return yield* Effect.fail(
-            new Error(`Unsupported media file: ${entry}`),
-          );
+          return yield* new MediaInputFailed({
+            message: `Unsupported media file: ${entry}`,
+          });
         const base64 = yield* getBase64EncodedMedia(path, roots.config);
         const digest = blobAddress(base64);
         return {
