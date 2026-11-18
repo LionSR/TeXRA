@@ -77,6 +77,7 @@ const STATUS_BY_ERROR_TYPE: ReadonlyMap<string, number> = new Map([
   ['not_found_error', 404],
   ['request_too_large', 413],
   ['rate_limit_error', 429],
+  ['rate_limit_exceeded', 429],
   ['service_unavailable_error', 503],
   ['server_is_overloaded', 503],
   ['api_error', 500],

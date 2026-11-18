@@ -132,6 +132,17 @@ const normalizeItem = Effect.fn('llm.responses.normalizeItem')(function* (
 });
 
 /**
+ * The failure codes of a `failed` response that a repeat can clear. Every
+ * other code (a policy, the prompt, an image, data residency) fails the same
+ * request the same way again.
+ */
+const TRANSIENT_FAILURE_CODES: ReadonlySet<string> = new Set([
+  'server_error',
+  'rate_limit_exceeded',
+  'vector_store_timeout',
+] satisfies OpenAI.Responses.ResponseError['code'][]);
+
+/**
  * A terminal snapshot as parts: its identity, usage and finish, with its
  * items for whatever no item event delivered.
  */
@@ -146,6 +157,9 @@ export const terminalParts = Effect.fn('llm.responses.terminalParts')(
         message:
           response.error?.message ??
           `The model response ended with status ${response.status}.`,
+        retryable:
+          response.error == null ||
+          TRANSIENT_FAILURE_CODES.has(response.error.code),
         cause: response.error,
       });
     if (

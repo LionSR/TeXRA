@@ -391,4 +391,35 @@ describe('native OpenAI Responses protocol', () => {
         );
       }),
   );
+  it.effect(
+    'does not repeat a response that failed on a policy, and repeats a server error',
+    () =>
+      Effect.gen(function* () {
+        const failure = (code: string) =>
+          Effect.gen(function* () {
+            const failed = snapshot([], {
+              status: 'failed',
+              error: { code, message: `failed: ${code}` },
+            });
+            const frames = [
+              ...events([]).slice(0, -1),
+              { type: 'response.failed', response: failed },
+            ];
+            const model = yield* modelWith(
+              vi
+                .fn<typeof globalThis.fetch>()
+                .mockResolvedValue(response(frames)),
+            );
+            const turn = yield* model.prepareTurn(REQUEST);
+            assert(turn.mode === 'foreground');
+            return yield* Effect.flip(completedTurn(model.streamTurn(turn)));
+          });
+        expect(yield* failure('bio_policy')).toMatchObject({
+          retryable: false,
+        });
+        expect(yield* failure('server_error')).toMatchObject({
+          retryable: true,
+        });
+      }),
+  );
 });
