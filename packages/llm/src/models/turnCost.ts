@@ -53,6 +53,26 @@ function anthropicCost(
 }
 
 /**
+ * OpenAI counts cache reads and writes inside the input, and bills a write
+ * in place of the input rate: 1.25x for the 30-minute lifetime and 2.5x for
+ * the 12-hour one. Only receipts of models that bill writes split them by
+ * lifetime; an earlier model's writes bill as ordinary input.
+ */
+function openaiCost(
+  usage: TurnUsage,
+  provider: Extract<TurnUsage['providerUsage'], { kind: 'openai' }>,
+  rates: TurnRates,
+): number {
+  // The input rate is already in the standard cost; add what a write costs
+  // above it.
+  return (
+    standardCost(usage, rates, false) +
+    perMillion(provider.cacheWrite30mTokens, rates.inputPrice * 0.25) +
+    perMillion(provider.cacheWrite12hTokens, rates.inputPrice * 1.5)
+  );
+}
+
+/**
  * Inclusive-cache cost: cached prompt tokens are a subset of the reported
  * input, billed at the input rate and rebated down to the model's cache
  * discount; reasoning tokens bill at the output rate on top of the output
@@ -127,6 +147,9 @@ function costAt(
   switch (provider?.kind) {
     case 'anthropic':
       cost = anthropicCost(usage, provider, rates);
+      break;
+    case 'openai':
+      cost = openaiCost(usage, provider, rates);
       break;
     case 'xai':
       cost = standardCost(usage, rates, true);

@@ -381,7 +381,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // damaged without them).
     // v21: a completed turn has no `finishEvidence` or `refusalEvidence`,
     // which nothing read (an earlier build's would be silently stripped).
-    'model.message': Object.freeze({ version: 21, listing: 'none' }),
+    // v22: an OpenAI turn's usage carries its cache writes split by lifetime
+    // (`providerUsage` kind `openai`), which an earlier build fails to read.
+    'model.message': Object.freeze({ version: 22, listing: 'none' }),
     // v2: the causes are `compaction` and `fork` alone (an earlier build's edit
     // of another cause would fail its run as damaged rather than read as that
     // build's).

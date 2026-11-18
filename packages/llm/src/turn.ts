@@ -93,6 +93,7 @@ const CacheSchema = Schema.Literals(['disabled', '5m']);
 /** The protocol each provider's own usage report belongs to. */
 const PROVIDER_USAGE_PROTOCOL = Object.freeze({
   anthropic: 'anthropic-messages',
+  openai: 'openai-responses',
   xai: 'openai-responses',
 } as const satisfies Record<
   NonNullable<(typeof TurnUsageSchema.Type)['providerUsage']>['kind'],
