@@ -56,12 +56,17 @@ function taskStatus(view: SessionView): TaskStatus {
   };
 }
 
+/** The token rows the tooltip lists, so a repaint follows exactly them. */
+const tokenRows = (usage: TaskStatus['usage']): string =>
+  visibleTokenStats(usage)
+    .map(({ key, value }) => `${key}=${value}`)
+    .join();
+
 const sameTaskStatus = (a: TaskStatus, b: TaskStatus): boolean =>
   a.activity === b.activity &&
   a.working === b.working &&
   a.usage.cost === b.usage.cost &&
-  a.usage.inputTokens === b.usage.inputTokens &&
-  a.usage.outputTokens === b.usage.outputTokens;
+  tokenRows(a.usage) === tokenRows(b.usage);
 
 function paint(
   item: vscode.StatusBarItem,
