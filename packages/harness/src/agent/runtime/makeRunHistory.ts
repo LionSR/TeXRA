@@ -170,19 +170,22 @@ const unprepared = (
   });
 };
 
-type Refusal = DatabaseAggregateClosed;
 /** A closed aggregate's refusal, worded by `runRefusal`; any other rollback
  *  stays the write failure it is. */
 const notOwner =
   (runId: RunId) =>
   <A, E, R>(
     effect: Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, Exclude<E, Refusal> | RunHistoryRefused, R> =>
+  ): Effect.Effect<
+    A,
+    Exclude<E, DatabaseAggregateClosed> | RunHistoryRefused,
+    R
+  > =>
     Effect.mapError(effect, (failure) =>
       failure instanceof DatabaseAggregateClosed
         ? runRefusal(runId, failure)
         : // cast: the instanceof test above ruled the refusal out.
-          (failure as Exclude<E, Refusal>),
+          (failure as Exclude<E, DatabaseAggregateClosed>),
     );
 
 /** The refusal of rows that cannot be applied. */

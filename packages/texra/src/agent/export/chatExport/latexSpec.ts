@@ -6,10 +6,11 @@
  * formatter stays pure.
  */
 
+import type { MediaAttachmentKind } from '@texra-ai/harness/schemas';
+
 import type {
   ChatExportInput,
   DocumentMeta,
-  ExportAttachmentType,
 } from '@texra/agent/export/schemas';
 
 import { escapeLatex, latexListing } from './escapeUtils';
@@ -63,7 +64,7 @@ function latexHeader(meta: DocumentMeta, latexPreamble: string): string {
 const LATEX_ATTACHMENT_LABELS = {
   image: '\\textit{[Image attachment]}',
   document: '\\textit{[Document attachment]}',
-} as const satisfies Record<ExportAttachmentType, string>;
+} as const satisfies Record<MediaAttachmentKind, string>;
 
 const TEX_NODES: NodeRenderers = {
   'user-message': ({ parts }) => {

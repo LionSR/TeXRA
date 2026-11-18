@@ -16,12 +16,10 @@ import type { Secrets } from '@texra-ai/harness/plugins';
 import type { Effect } from 'effect';
 import { useChatProcess } from '../chatProcess';
 
-/** Which source backs the GitHub token, as `resolveGitHubTokenSource`
- *  reports it. */
-type GitHubTokenStatus = CredentialOrigin;
-
 export interface GitHubTokenStatusView {
-  readonly status?: GitHubTokenStatus;
+  /** Which source backs the GitHub token, as `resolveGitHubTokenSource`
+   *  reports it. */
+  readonly status?: CredentialOrigin;
   readonly loading: boolean;
   readonly error: boolean;
 }
@@ -39,7 +37,7 @@ export function formatGitHubTokenSummary(view: GitHubTokenStatusView): string {
 }
 
 function buildGitHubTokenActionItems(
-  status: GitHubTokenStatus,
+  status: CredentialOrigin,
 ): Array<{ value: GitHubTokenAction; label: string; description?: string }> {
   return [
     {
@@ -65,7 +63,7 @@ function buildGitHubTokenActionItems(
   ];
 }
 
-function statusHint(status: GitHubTokenStatus | undefined): string {
+function statusHint(status: CredentialOrigin | undefined): string {
   if (status === 'env') {
     return 'A token is already available from GH_TOKEN or GITHUB_TOKEN. Setting one here overrides it.';
   }
