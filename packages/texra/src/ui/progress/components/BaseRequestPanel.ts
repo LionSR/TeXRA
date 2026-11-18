@@ -39,6 +39,7 @@ import {
 import type { RequestDraft, Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import type { IconName } from '@ui/wa/iconNames';
+import { isSendChord } from '@ui/wa/keyActivation';
 import {
   commonViewStyles,
   designTokens,
@@ -309,7 +310,7 @@ export abstract class BaseRequestPanel<
       event.preventDefault();
       event.stopPropagation();
       this.closeNote();
-    } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+    } else if (isSendChord(event)) {
       event.preventDefault();
       this.sendDecline();
     }

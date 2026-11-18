@@ -29,6 +29,7 @@ import {
 } from '@texra/shared/plugins/externalInquiry';
 import { CopyButtonController } from '@ui/litControllers/CopyButtonController';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { isSendChord } from '@ui/wa/keyActivation';
 import { renderDotMeta } from '@ui/wa/metaStrip';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -385,10 +386,9 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      this.handleSubmit();
-    }
+    if (!isSendChord(e)) return;
+    e.preventDefault();
+    this.handleSubmit();
   }
 
   private handleSubmit(): void {
