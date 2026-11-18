@@ -17,6 +17,9 @@
  *   account, keyed by its route
  *   ([`SubscriptionAccounts`](#subscriptionaccounts)), which runs its own
  *   browser and (Grok's) device-code sign-in.
+ * - **Provider endpoints outside a turn**: [`fetchPlanUsage`](#fetchplanusage)
+ *   reads a coding plan's quota windows, and
+ *   [`transcribeAudio`](#transcribeaudio) a recording's text.
  */
 import { Effect, type Scope } from 'effect';
 import { ModelError, type BillingRoute } from './errors.js';
@@ -190,3 +193,34 @@ export type {
 export type { ChatgptSession } from './oauth/chatgpt/chatgptProvider.js';
 export type { XaiSession } from './oauth/xai/xaiProvider.js';
 export { SubscriptionAccounts } from './oauth/subscriptionAccounts.js';
+
+// Provider endpoints outside the turn contract.
+export { fetchPlanUsage } from './providers/planUsage.js';
+
+/**
+ * The text of an audio file, from OpenAI's transcription model with an
+ * OpenAI key at `endpoint`. The SDK loads on the first call.
+ */
+export const transcribeAudio = (
+  audioPath: string,
+  credential: { readonly bearer: string; readonly endpoint: string },
+): Effect.Effect<string, ModelError> =>
+  Effect.flatMap(
+    // A module that fails to load (a broken bundle) still fails as a
+    // ModelError, so the caller's one error case covers it.
+    Effect.tryPromise({
+      try: () => import('./api/openaiTranscription.js'),
+      catch: (cause) =>
+        new ModelError({
+          kind: 'transport',
+          message: `The transcription module failed to load: ${cause instanceof Error ? cause.message : String(cause)}`,
+          retryable: false,
+        }),
+    }),
+    (module) => module.transcribeAudio(audioPath, credential),
+  );
+export type {
+  PlanUsage,
+  PlanUsageRequest,
+  PlanUsageWindow,
+} from './providers/planUsage.js';
