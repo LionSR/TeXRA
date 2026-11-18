@@ -3,7 +3,7 @@ import { Cause, Context, Effect, Exit } from 'effect';
 
 import { checkpointRefusal } from '@agent/storage/resumability';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { LaunchKeys, RunRegistry, Runs } from '@agent/runtime/runRegistry';
+import { LaunchKeys, RunRegistry } from '@agent/runtime/runRegistry';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { logFailure, withLogChannel } from '@logger/effectLog';
 import {
@@ -18,7 +18,6 @@ import { Inbox, type InboxItem } from './Inbox';
 /** What a follow-up's acceptance and its wake read of the session. */
 type FollowUpServices =
   | Inbox
-  | Runs
   | RunRegistry
   | SessionLog
   | SessionViewAccess
@@ -83,7 +82,7 @@ export const REFUSED: { readonly failed: ResumeRefusal } = Object.freeze({
  */
 const wakeRun = Effect.fn('wakeRun')(function* (
   runId: RunId,
-): Effect.fn.Return<void, never, Runs | RunRegistry | SessionLog> {
+): Effect.fn.Return<void, never, RunRegistry | SessionLog> {
   // The store's answer, not the view's: the view trails the log, and a run
   // it has not applied yet would lose its wake.
   const facts = yield* (yield* SessionLog)
@@ -110,7 +109,7 @@ const wakeRun = Effect.fn('wakeRun')(function* (
   // The parent's open call reattaches the run it owns.
   if ('ownedBy' in answer) return yield* wakeRun(answer.ownedBy);
   // A run a launch here holds reads its input itself: nothing to say.
-  if ('failed' in answer && (yield* Runs).get(runId) === undefined)
+  if ('failed' in answer && (yield* RunRegistry).get(runId) === undefined)
     yield* Effect.logWarning(
       `Run ${runId} was not resumed for its input: ${describeRefusal(answer.failed)}`,
     ).pipe(withLogChannel(CHANNEL));
@@ -123,7 +122,7 @@ const wakeRun = Effect.fn('wakeRun')(function* (
 export const wakeIfOwed = Effect.fn('wakeIfOwed')(function* (
   runId: RunId,
   apiKeys: Readonly<Record<string, string>> = {},
-): Effect.fn.Return<boolean, never, Inbox | Runs | RunRegistry | SessionLog> {
+): Effect.fn.Return<boolean, never, Inbox | RunRegistry | SessionLog> {
   const owed = yield* (yield* Inbox).owesResume(runId);
   if (owed === undefined) return false;
   // The wake's own keys, never the fiber's: the sender may be another
@@ -155,7 +154,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
 ): Effect.fn.Return<SubmitFollowUpResult, Error, FollowUpServices> {
   const { hold, prepare, apiKeys, skills } = options;
   const inbox = yield* Inbox;
-  const runs = yield* Runs;
+  const runs = yield* RunRegistry;
   const log = yield* SessionLog;
   const view = yield* SessionViewAccess;
   // From the checks to the row's commit, one send to a run at a time, so a

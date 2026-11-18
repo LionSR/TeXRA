@@ -28,7 +28,7 @@ import { Sessions } from '@texra-ai/harness';
 import { resumeRun, type ResumeRunOptions } from '@agent/runtime/resumeRun';
 import { Inbox } from '@agent/followUp/Inbox';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import { queuedFollowUps } from '@test/support/sessionTestUtils';
 import {
   answersOf,
@@ -229,7 +229,7 @@ describe(
               // The resume holds the run as it decides: the stop is taken,
               // and the resume ends the run in the batch that records it.
               expect(
-                yield* Context.get(session, Runs).stop(runId, 'user'),
+                yield* Context.get(session, RunRegistry).stop(runId, 'user'),
               ).toBe(true);
               yield* input.release;
               expect(yield* Fiber.join(resumed)).toHaveProperty('failed');

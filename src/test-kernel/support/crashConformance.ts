@@ -91,7 +91,7 @@ import {
   type SessionServices,
 } from '@agent/runtime/rootLaunch';
 import { decideRequest, SessionRequests } from '@agent/runtime/requests';
-import { Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import {
   AgentConfigSchema,
   aggregateTarget,
@@ -457,7 +457,7 @@ const userSteps = (
     // row is committed is the resumed run's to apply.
     if (!requested(yield* liveRows(storage), root, 'model')) {
       yield* until(storage, (rows) => waitingAfter(rows, root, 1));
-      const controls = Context.get(session, Runs).get(root)?.controls;
+      const controls = Context.get(session, RunRegistry).get(root)?.controls;
       if (controls === undefined)
         return yield* Effect.die('the waiting run has no live controls');
       yield* controls.switchModel(SWITCH_TO);

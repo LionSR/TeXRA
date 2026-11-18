@@ -31,7 +31,7 @@ import { humanGrant } from './runApprovalQueue';
 import { prepareAgentDefinition } from './AgentLaunchContext';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { applyHelperModelPreference } from './helperModelName';
-import { RunRegistry, type Runs } from './runRegistry';
+import { RunRegistry } from './runRegistry';
 import type { SessionHandleInit } from './SessionHandle';
 import type { Interactions } from './HostInteractions';
 import type { ProjectTools } from './loop/step';
@@ -42,7 +42,6 @@ import type { SessionRequests } from './requests';
  * which its runs, its requests and the SDK's reads of it take from context.
  */
 export type SessionServices =
-  | Runs
   | RunRegistry
   | SessionLog
   | SessionViewAccess

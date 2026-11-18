@@ -310,7 +310,9 @@ deep-import row.
   public entries export. 65 of 182 deep-importing suites can switch with a
   codemod today.
 - Most of the rest are seams the general-package design removes:
-  `SessionHandle` (28), `humanGrant`, `registryOf`, `RunHistory`, `Runs`.
+  `SessionHandle` (28), `humanGrant`, `registryOf`, `RunHistory`. (`Runs`,
+  a second tag over the session's `RunRegistry`, is gone: its suites read
+  the registry.)
 
 **Setup.** `support/testKernel.ts` holds three `Layer`s, built per
 `describe` with `@effect/vitest`'s `layer(L)` / `it.layer(L)`:
