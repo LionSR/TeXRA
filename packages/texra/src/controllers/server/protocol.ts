@@ -133,7 +133,7 @@ export type TaskSummary = typeof TaskSummarySchema.Type;
 /** The run a `task.start` or `task.resume` reached, and the commit of the
  *  activation it reached (`Run.activation`): a window's handle is for that
  *  activation, whatever later activation the run has by then. */
-const TaskStarted = Schema.Struct({
+export const TaskStarted = Schema.Struct({
   runId: RunIdSchema,
   activation: CommitOrdinalSchema,
 });
