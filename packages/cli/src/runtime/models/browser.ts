@@ -71,7 +71,7 @@ function resolveBrowserLaunch(url: string, wsl: boolean): BrowserLaunchCommand {
  * release after `xdg-open` exits 0 would signal that group, which can hold
  * the browser it just forked.
  */
-const launchBrowser = Effect.fn('launchBrowser')(function* (
+export const launchBrowser = Effect.fn('launchBrowser')(function* (
   url: string,
 ): Effect.fn.Return<void, HostFailed, ChildProcessSpawner> {
   const wsl =
