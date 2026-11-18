@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 const PROVIDER_PLACEHOLDER_PATTERNS: readonly RegExp[] = [
   /^(sk-?)?(x{3,}|\*{3,}|\.{3,}|<.*>|your[- _]?(?:api[- _]?)?key)/i,
@@ -49,6 +49,13 @@ interface StoreCredentialOptions {
   readonly label?: string;
 }
 
+/** A value refused before it reaches the secret store: empty, or a masked
+ *  or example value. The message is the sentence the user reads. */
+class CredentialRejected extends Schema.TaggedError<CredentialRejected>()(
+  'CredentialRejected',
+  { message: Schema.String },
+) {}
+
 /**
  * Validate, normalize, and persist a credential consistently across hosts.
  * The rejection copy lives here too, so the CLI, the desktop app, and the
@@ -60,23 +67,26 @@ interface StoreCredentialOptions {
 export function storeCredential<E>(
   store: CredentialStore<E>,
   options: StoreCredentialOptions,
-): Effect.Effect<void, Error | E> {
-  return Effect.suspend((): Effect.Effect<void, Error | E> => {
+): Effect.Effect<void, CredentialRejected | E> {
+  return Effect.suspend((): Effect.Effect<void, CredentialRejected | E> => {
     const subject =
       options.kind === 'github'
         ? 'GitHub token'
         : `${options.label ?? 'provider'} API key`;
     const normalized = options.value.trim();
     if (!normalized) {
-      return Effect.fail(new Error(`${subject} is empty.`));
+      return Effect.fail(
+        new CredentialRejected({ message: `${subject} is empty.` }),
+      );
     }
     if (looksLikeCredentialPlaceholder(normalized, options.kind)) {
       return Effect.fail(
-        new Error(
-          options.kind === 'github'
-            ? `This looks like a placeholder rather than a ${subject}. Enter a personal access token from GitHub.`
-            : `This looks like a placeholder rather than a ${subject}. Enter the key issued by the provider.`,
-        ),
+        new CredentialRejected({
+          message:
+            options.kind === 'github'
+              ? `This looks like a placeholder rather than a ${subject}. Enter a personal access token from GitHub.`
+              : `This looks like a placeholder rather than a ${subject}. Enter the key issued by the provider.`,
+        }),
       );
     }
     return store.set(options.secretName, normalized);

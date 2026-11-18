@@ -5,7 +5,6 @@ import { Effect, Predicate } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import { type AgentRunListingEntry, isAgentRunRecord } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { deriveResumability } from './resumability';
 const CHANNEL = 'RunListing';
@@ -34,19 +33,21 @@ export const listRuns = Effect.fn('listRuns')(function* (): Effect.fn.Return<
     ),
     (run) =>
       Effect.gen(function* (): Effect.fn.Return<
-        AgentRunListingEntry,
-        Error,
+        AgentRunListingEntry | null,
+        never,
         SessionLog
       > {
         const { id, identity } = run;
         const own = rows.get(id) ?? [];
         const record = own.findLast((row) => row.type === 'run.config')?.config;
         // Registration commits `run.config` in the `run.start` batch, so an
-        // agent run without an AgentConfig is corrupt: skipped loudly below.
-        if (identity.kind !== 'agent' || !record || !isAgentRunRecord(record))
-          return yield* Effect.fail(
-            new Error('agent run without an AgentConfig'),
-          );
+        // agent run without an AgentConfig is corrupt: skipped loudly.
+        if (identity.kind !== 'agent' || !record || !isAgentRunRecord(record)) {
+          yield* Effect.logWarning(
+            `Skipping corrupt run ${run.id}: agent run without an AgentConfig`,
+          ).pipe(withLogChannel(CHANNEL));
+          return null;
+        }
         const resumeFrom = yield* deriveResumability(id);
         return {
           id,
@@ -59,13 +60,7 @@ export const listRuns = Effect.fn('listRuns')(function* (): Effect.fn.Return<
           identity,
           record,
         };
-      }).pipe(
-        Effect.catch((error) =>
-          Effect.logWarning(
-            `Skipping corrupt run ${run.id}: ${toErrorMessage(error)}`,
-          ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
-        ),
-      ),
+      }),
     { concurrency: RUN_STORAGE_CONCURRENCY },
   );
 

@@ -41,6 +41,7 @@ import {
   Layer,
   Schedule,
   Stream,
+  Schema,
 } from 'effect';
 
 import { AgentCatalog } from '@agent/index/agentCatalog';
@@ -54,6 +55,12 @@ import { DISABLED_TOOLS_KEY } from '@shared/state/disabledTools';
 import { CUSTOM_AGENT_DIR_KEY } from '@agent/index/AgentDirectoryService';
 import { INSTALLED_PLUGINS_KEY } from '@common/plugins/installRecord';
 
+/** An agent directory was not accepted as a root the file tools may reach. */
+class RootNotRegistered extends Schema.TaggedError<RootNotRegistered>()(
+  'RootNotRegistered',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
+
 /** Register one agent directory root; a failure (an unreadable directory
  *  setting, a relative path, a path that cannot be canonicalised) is logged
  *  and leaves the other roots registered. A defect still propagates. */
@@ -65,7 +72,8 @@ const registerRoot = <E, R>(
     Effect.flatMap((absolutePath) =>
       Effect.try({
         try: () => registerExternalRoot(absolutePath, options),
-        catch: ensureError,
+        catch: (cause) =>
+          new RootNotRegistered({ message: ensureError(cause).message, cause }),
       }),
     ),
     Effect.catch((error) =>

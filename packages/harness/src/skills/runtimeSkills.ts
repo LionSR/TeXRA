@@ -277,6 +277,12 @@ export const Skills = Object.freeze({
   }),
 } as const);
 
+/** A skill's directory could not be resolved to its canonical place. */
+class SkillDirectoryUnverified extends Schema.TaggedError<SkillDirectoryUnverified>()(
+  'SkillDirectoryUnverified',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
+
 /**
  * One discovered skill as a step lists it: its plugin, name and listing
  * text, and the directory tools may read while the step lists or activated
@@ -290,7 +296,11 @@ const catalogEntry = (
 ): Effect.Effect<SkillCatalogEntry> =>
   Effect.try({
     try: () => canonicalizePath(skill.baseDir),
-    catch: ensureError,
+    catch: (cause) =>
+      new SkillDirectoryUnverified({
+        message: ensureError(cause).message,
+        cause,
+      }),
   }).pipe(
     Effect.map((real) =>
       workspaceRoot !== undefined && isPathWithin(workspaceRoot, real)

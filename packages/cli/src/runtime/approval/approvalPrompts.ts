@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
@@ -12,6 +12,16 @@ import { askCliQuestion, writeTextStderr } from '../platform/logSinks';
 import { safeTerminalText } from '../terminal/terminalText';
 
 const CHANNEL = 'cli.approval';
+
+/** Caller-supplied prompt code threw: the terminal hook, or the rendering or
+ *  parsing of a request's content. */
+export class ApprovalPromptFailed extends Schema.TaggedError<ApprovalPromptFailed>()(
+  'ApprovalPromptFailed',
+  { message: Schema.String, cause: Schema.Defect() },
+) {
+  static readonly from = (cause: unknown) =>
+    new ApprovalPromptFailed({ message: ensureError(cause).message, cause });
+}
 
 export interface CliApprovalPromptHooks {
   /** Called as a prompt opens, before anything is written for it; what it
@@ -30,9 +40,12 @@ export interface CliApprovalPromptHooks {
 export const whilePrompting = <A, E, R>(
   hooks: CliApprovalPromptHooks,
   ask: Effect.Effect<A, E, R>,
-): Effect.Effect<A, E | Error, R> =>
+): Effect.Effect<A, E | ApprovalPromptFailed, R> =>
   Effect.acquireUseRelease(
-    Effect.try({ try: () => hooks.prompting?.(), catch: ensureError }),
+    Effect.try({
+      try: () => hooks.prompting?.(),
+      catch: ApprovalPromptFailed.from,
+    }),
     () => ask,
     (release) => Effect.sync(() => release?.()),
   );
@@ -133,7 +146,7 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
         }
         yield* Effect.try({
           try: () => writeTextStderr(safeTerminalText(details())),
-          catch: ensureError,
+          catch: ApprovalPromptFailed.from,
         });
       }
 

@@ -297,7 +297,10 @@ export const sessionTools = Effect.fnUntraced(function* (
   const servers = yield* projectServers(shared.spawner, shared.loader);
   const resources = { layers, holdServer: servers.holdServer };
   return {
-    pin: (off, options) => pinStep(shared, resources, off, options),
+    pin: <E>(
+      off: Effect.Effect<ReadonlySet<string>, E>,
+      options?: Parameters<SessionTools['pin']>[1],
+    ) => pinStep(shared, resources, off, options),
     hold: (declared, root) =>
       Effect.map(servers.hold(declared, root), ({ warnings, held }) => ({
         warnings,

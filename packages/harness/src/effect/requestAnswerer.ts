@@ -13,6 +13,7 @@ import {
   FiberMap,
   Option,
   Schedule,
+  Schema,
   type Scope,
   Stream,
   SubscriptionRef,
@@ -41,6 +42,13 @@ import type { ApprovalHandler, SessionHost } from './sessions.js';
 
 const CHANNEL = 'agentPackage';
 
+/** The approval handler answered with a decision the request's kind does
+ *  not take. */
+class DecisionMismatch extends Schema.TaggedError<DecisionMismatch>()(
+  'DecisionMismatch',
+  { message: Schema.String },
+) {}
+
 /** How a decision the session refused to record is tried again, briefly,
  *  before the next view offers its request again. */
 const DECIDE_RETRY = Schedule.exponential('100 millis').pipe(Schedule.jittered);
@@ -60,7 +68,7 @@ const decisionOf = (
       const mismatch = answerMismatch(pending, decision);
       return mismatch === null
         ? Effect.succeed(decision)
-        : Effect.fail(new Error(mismatch));
+        : Effect.fail(new DecisionMismatch({ message: mismatch }));
     }),
     Effect.catchCause((cause) =>
       Cause.hasInterruptsOnly(cause)

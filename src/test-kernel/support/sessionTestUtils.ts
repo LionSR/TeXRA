@@ -80,7 +80,11 @@ export const holdTestRun = (
   Effect.gen(function* () {
     yield* Effect.acquireRelease(
       Context.get(session, RunRegistry)
-        .start(runId, { open: Effect.void, run: () => Effect.never })
+        .start(runId, {
+          open: Effect.void,
+          run: () => Effect.never,
+          end: (_, exit) => exit,
+        })
         .pipe(Effect.orDie),
       ({ fiber }) => Fiber.interrupt(fiber),
     );

@@ -44,7 +44,7 @@ export function modelAccessContribution(): SlashCommandContribution & {
 } {
   function AccountAccessFormAdapter(props: SlashFormProps): React.JSX.Element {
     const context = useSlashContext();
-    const { stores, runtime } = context;
+    const { stores, chat } = context;
     const bound = bindSelection<AccountAction>(
       context,
       props,
@@ -67,7 +67,7 @@ export function modelAccessContribution(): SlashCommandContribution & {
       {
         onDone: (value) => {
           props.onDone(value);
-          runtime.runFork(context.onAccountChanged());
+          chat.fork(context.onAccountChanged());
         },
         completion: 'busy',
         busyTitle: (value) => {
@@ -107,7 +107,7 @@ export function modelAccessContribution(): SlashCommandContribution & {
 
   function ProviderApiKeyFormAdapter(props: SlashFormProps): React.JSX.Element {
     const context = useSlashContext();
-    const { runtime } = context;
+    const { chat } = context;
     // A failed status read is said in the transcript; the rows then read
     // "Status unavailable".
     const apiKeys = useAsyncResource({
@@ -130,7 +130,7 @@ export function modelAccessContribution(): SlashCommandContribution & {
           // every host; only the coding-plan tip is this surface's to write.
           if (modelNotice) appendLocalNotice(modelNotice);
           props.onDone(provider);
-          runtime.runFork(context.onAccountChanged());
+          chat.fork(context.onAccountChanged());
         }}
         onCancel={() => props.onDone(undefined)}
       />

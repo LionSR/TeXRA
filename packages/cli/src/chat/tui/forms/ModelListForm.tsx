@@ -27,16 +27,14 @@ interface ModelListFormProps {
 }
 
 export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
-  const { roots, runtime } = useChatProcess();
+  const { roots } = useChatProcess();
   return (
     <AsyncListForm<readonly CliModelPickerItem[], string>
       title="/model"
       loadingLabel="Loading models…"
       load={() =>
-        Effect.flatMap(
-          getCliModelAccessList({ stores: { ...roots, runtime } }),
-          (models) =>
-            modelSelectItemsForCli(models, props.getModelSwitchDisabledReason),
+        Effect.flatMap(getCliModelAccessList({ stores: roots }), (models) =>
+          modelSelectItemsForCli(models, props.getModelSwitchDisabledReason),
         )
       }
       items={(items) => items}

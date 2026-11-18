@@ -300,13 +300,11 @@ export const modelInvokerLayer = (): Layer.Layer<
             case 'defect':
               return yield* Effect.die(failed.defect);
             case 'error':
-              return yield* Effect.fail(
-                failed.error instanceof ModelError
-                  ? fillModelError(failed.error, {
-                      partialText: completed.streamedText,
-                    })
-                  : failed.error,
-              );
+              return yield* failed.error instanceof ModelError
+                ? fillModelError(failed.error, {
+                    partialText: completed.streamedText,
+                  })
+                : failed.error;
           }
         }
         const responseTimeMs = (yield* monotonicMillis) - started;

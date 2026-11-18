@@ -95,7 +95,7 @@ export class FileSecrets implements PlatformSecrets {
       fs.readFileString(this.fileOf(key)),
     ).pipe(
       Effect.map((value): string | undefined => value),
-      Effect.catchIf(meansAbsent, () => Effect.succeed(undefined)),
+      Effect.catchIf(meansAbsent, () => Effect.undefined),
       Effect.mapError((cause) => failure(this.directory, 'get', cause, key)),
       Effect.provide(nodeFileServices),
     );

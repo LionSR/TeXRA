@@ -58,7 +58,7 @@ export const listRunWorkspaceFiles = Effect.fn('storage.listRunWorkspaceFiles')(
             size: entry.size,
             isDirectory: entry.type === 'Directory',
           })),
-          Effect.catchIf(meansAbsent, () => Effect.succeed(undefined)),
+          Effect.catchIf(meansAbsent, () => Effect.undefined),
         ),
       { concurrency: 8 },
     );

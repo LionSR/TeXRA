@@ -15,7 +15,7 @@ import { chmodSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { platform as osPlatform } from 'node:os';
 import { dirname, join } from 'node:path';
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { withCommandDirs } from '@texra-ai/harness/node';
 
@@ -61,6 +61,16 @@ interface DesktopPtyHostOptions {
   onError(error: unknown): void;
 }
 
+/** A terminal's shell could not be started: the native PTY module would not
+ *  load, or it could not spawn the shell. */
+class PtyStartFailed extends Schema.TaggedError<PtyStartFailed>()(
+  'PtyStartFailed',
+  { message: Schema.String, cause: Schema.Defect() },
+) {}
+
+const ptyStartFailed = (cause: unknown) =>
+  new PtyStartFailed({ message: ensureError(cause).message, cause });
+
 export interface DesktopPtyHost {
   /**
    * Starts a session. Fails with the load or spawn error when the native
@@ -74,7 +84,7 @@ export interface DesktopPtyHost {
     id: string;
     cols: number;
     rows: number;
-  }): Effect.Effect<PtySessionHandle | undefined, Error>;
+  }): Effect.Effect<PtySessionHandle | undefined, PtyStartFailed>;
   get(id: string): PtySessionHandle | undefined;
   disposeAll(): void;
 }
@@ -220,11 +230,11 @@ export function createDesktopPtyHost(
         // restarts.
         return Effect.tryPromise({
           try: (): Promise<NodePtyModule> => import('node-pty'),
-          catch: ensureError,
+          catch: ptyStartFailed,
         }).pipe(
           Effect.flatMap((pty) => {
             ensureSpawnHelperExecutable();
-            if (disposed) return Effect.succeed(undefined);
+            if (disposed) return Effect.undefined;
             return Effect.flatMap(ptyEnvironment(), (env) =>
               Effect.try({
                 try: () =>
@@ -235,7 +245,7 @@ export function createDesktopPtyHost(
                     cwd: options.cwd,
                     env,
                   }),
-                catch: ensureError,
+                catch: ptyStartFailed,
               }),
             );
           }),
@@ -254,9 +264,9 @@ export function createDesktopPtyHost(
             for (const data of heldInput.splice(0)) spawned.write(data);
             return handle;
           }),
-          Effect.catch((error: Error) => {
+          Effect.catch((error: PtyStartFailed) => {
             if (sessions.get(id) === handle) sessions.delete(id);
-            return disposed ? Effect.succeed(undefined) : Effect.fail(error);
+            return disposed ? Effect.undefined : Effect.fail(error);
           }),
           Effect.uninterruptible,
         );

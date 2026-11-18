@@ -21,6 +21,7 @@ import {
 } from '@texra-ai/harness/plugins';
 import {
   AgentConfigSchema,
+  ensureError,
   toErrorMessage,
   previewLabel,
   type RunId,
@@ -99,6 +100,12 @@ export interface AgentCliTurn {
   readonly failure?: string;
 }
 
+/** A failure that is not the tool's own (a throw from a provider's SDK, a
+ *  harness service's error) as the tool's failure, under the message it
+ *  carried. */
+export const asToolError = (cause: unknown): ToolError =>
+  new ToolError(ensureError(cause).message, { cause });
+
 /** A launch the provider prepared from the call's input. */
 interface AgentCliLaunch {
   /** The model reference the child run is labeled with. */
@@ -108,7 +115,7 @@ interface AgentCliLaunch {
   /** The turn, on the trace of the run the launch registered. A stop
    *  interrupts it: the provider hands its SDK a signal that interruption
    *  aborts. */
-  readonly turn: (logger: AgentTrace) => Effect.Effect<AgentCliTurn, Error>;
+  readonly turn: (logger: AgentTrace) => Effect.Effect<AgentCliTurn, ToolError>;
 }
 
 /** What a provider supplies to be an agent-CLI tool. */
@@ -148,10 +155,8 @@ export function agentCliTool<I extends { readonly prompt: string }, S, R>(
       // A one-shot run has no later turn to take the delivery: refuse rather
       // than launch work nobody collects.
       if (noLaterTurn(run)) {
-        return yield* Effect.fail(
-          new ToolError(
-            `${provider.name} is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Delegate with \`agent\`, which returns the child's result directly.`,
-          ),
+        return yield* new ToolError(
+          `${provider.name} is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Delegate with \`agent\`, which returns the child's result directly.`,
         );
       }
       const resumeId = provider.resumeId(input);
@@ -166,10 +171,8 @@ export function agentCliTool<I extends { readonly prompt: string }, S, R>(
         Effect.gen(function* () {
           const claim = yield* claimThread(resumeId);
           if (claim === undefined)
-            return yield* Effect.fail(
-              new ToolError(
-                `${provider.threadLabel} '${resumeId}' is still processing a turn. Wait for its result (a follow-up message) before sending it another instruction.`,
-              ),
+            return yield* new ToolError(
+              `${provider.threadLabel} '${resumeId}' is still processing a turn. Wait for its result (a follow-up message) before sending it another instruction.`,
             );
           return yield* restore(
             Effect.suspend(() => launchTurn(provider, input, claim)),
@@ -247,7 +250,7 @@ function childTurn(params: {
   prompt: string;
   runId: RunId;
   logger: AgentTrace;
-  turn: Effect.Effect<AgentCliTurn, Error>;
+  turn: Effect.Effect<AgentCliTurn, ToolError>;
   /** The claim on the thread this turn continues, closed as it ends. */
   claim: Scope.Closeable | undefined;
 }): ProcessTurn {

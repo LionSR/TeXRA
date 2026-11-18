@@ -6,8 +6,9 @@
 import { app, dialog, shell, type BrowserWindow } from 'electron';
 import { Cause, Effect } from 'effect';
 
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { HostFailed } from '@texra/hosts/uiHosts';
+import { hostFailed } from '@texra/controllers/session/hostCallFailure';
 import type { OpenFilesDialog } from '@texra/controllers/session/launcherFilePicker';
 import { windowNotices } from '@texra/controllers/session/windowNotices';
 import { texraGuideUrl } from '@ui/copy/guide';
@@ -131,7 +132,7 @@ export function createDesktopWindowHost(options: {
      *  `shell.openExternal` opens. */
     announceRelease: Effect.fn('announceRelease')(function* (release: {
       version: string;
-    }): Effect.fn.Return<void, Error> {
+    }): Effect.fn.Return<void, HostFailed> {
       const download = yield* choose(window, {
         type: 'info',
         message: `TeXRA ${release.version} is available (you have ${app.getVersion()}).`,
@@ -141,7 +142,7 @@ export function createDesktopWindowHost(options: {
       if (download)
         yield* Effect.tryPromise({
           try: () => shell.openExternal(DESKTOP_RELEASES_PAGE_URL),
-          catch: ensureError,
+          catch: (cause) => hostFailed('shell.openExternal', cause),
         });
     }),
     /** The folder the user picked, or undefined when they cancelled. */
@@ -159,7 +160,7 @@ export function createDesktopWindowHost(options: {
           });
           return result.canceled ? undefined : result.filePaths[0];
         },
-        catch: ensureError,
+        catch: (cause) => hostFailed('pickFolder', cause),
       }),
     /** The native dialog that opens several files. */
     openFileDialog: ((dialogOptions) =>
@@ -176,7 +177,7 @@ export function createDesktopWindowHost(options: {
           });
           return result.canceled ? undefined : result.filePaths;
         },
-        catch: ensureError,
+        catch: (cause) => hostFailed('openFileDialog', cause),
       })) satisfies OpenFilesDialog,
     /**
      * What one project's runs present through: its dialogs name that project,

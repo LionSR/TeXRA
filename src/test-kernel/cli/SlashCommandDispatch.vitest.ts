@@ -12,6 +12,7 @@ import { startChat } from '@cli/chat/tui/state/cliState';
 import { activeForm } from '@cli/chat/tui/state/formSlot';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { scopeRunner } from '@cli/chat/scopeRunner';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { SessionGraph, TestSession } from '@test/support/testKernel';
 import type { ApprovalPolicy, RunId } from '@texra-ai/harness/schemas';
@@ -24,7 +25,7 @@ const processServices = Effect.gen(function* () {
   const session = yield* TestSession;
   return {
     stores: makeFakeSettingsStores().stores,
-    runtime: yield* SessionGraph.runtime,
+    chat: scopeRunner(yield* SessionGraph.runtime, yield* Effect.scope),
     runSession: session,
   };
 });
@@ -56,7 +57,7 @@ function createContext(
     resumeTask: (_id: RunId) => Effect.void,
     activateSkill: vi.fn(),
     onProjectApprovalPolicyChanged: vi.fn(),
-    getModelSwitchDisabledReason: () => Effect.succeed(undefined),
+    getModelSwitchDisabledReason: () => Effect.undefined,
     onAccountChanged: () => Effect.void,
   };
 }

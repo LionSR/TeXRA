@@ -80,7 +80,7 @@ const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
     `self() needs the conversation the script ${run.runId} launched from, and the call that launched it.`,
   );
   const edge = start?.parent;
-  if (edge?.call == null) return yield* Effect.fail(missing);
+  if (edge?.call == null) return yield* missing;
   const { id: parent } = edge;
   const { card } = edge.call;
   const config = yield* getRunRecords(parent).readConfig();
@@ -93,8 +93,7 @@ const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
   const issued = Object.values(conversation?.calls ?? {}).find(
     ({ logId }) => logId === card,
   );
-  if (config === null || issued === undefined)
-    return yield* Effect.fail(missing);
+  if (config === null || issued === undefined) return yield* missing;
   return {
     config,
     source: parent,
@@ -112,10 +111,8 @@ const runSelf = Effect.fn('self.call')(function* (
   const { runId: parentId } = run;
   const { config, source, before, boundAt } = yield* selfOf(call);
   if (input.fork && source === null)
-    return yield* Effect.fail(
-      new ToolError(
-        "A program's script has no conversation to fork: call self() with `fork: false`.",
-      ),
+    return yield* new ToolError(
+      "A program's script has no conversation to fork: call self() with `fork: false`.",
     );
   const name = config.agent;
   const outputSchema = yield* childOutputSchema(input.schema);

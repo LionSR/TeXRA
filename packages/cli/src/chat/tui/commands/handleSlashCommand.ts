@@ -1,4 +1,4 @@
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, Schema } from 'effect';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 
@@ -18,6 +18,13 @@ import {
   type SlashCommands,
 } from './slashRegistry';
 import type { ProcessServices } from '@texra-ai/harness/host';
+
+/** A slash command could not do what its line asked; the chat shows the
+ *  message under the echoed line. */
+export class SlashCommandFailed extends Schema.TaggedError<SlashCommandFailed>()(
+  'SlashCommandFailed',
+  { message: Schema.String },
+) {}
 
 /**
  * Run a command body with centralized echo and error persistence. A typed
@@ -106,9 +113,9 @@ export const handleTuiSlashCommand = Effect.fn('handleTuiSlashCommand')(
       }
       yield* runGuardedSlashCommand(commands, line, registered, () =>
         Effect.fail(
-          new Error(
-            `/${parsed.name} is registered but is not available in this CLI view yet.`,
-          ),
+          new SlashCommandFailed({
+            message: `/${parsed.name} is registered but is not available in this CLI view yet.`,
+          }),
         ),
       );
       return true;

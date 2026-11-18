@@ -38,8 +38,9 @@ const NoticeSchema = Schema.Union([
 ]);
 export type Notice = typeof NoticeSchema.Type;
 
-/** One call of the service on a window, by kind. */
-const HostCallSchema = Schema.Union([
+/** The calls a run waits on, by kind: each is answered with
+ *  `host.answer`. */
+const AskedCallSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('readDiagnostics'),
     path: Schema.String,
@@ -53,6 +54,12 @@ const HostCallSchema = Schema.Union([
     location: FileLocationSchema,
     preserveFocus: Schema.Boolean,
   }),
+]);
+export type AskedCall = typeof AskedCallSchema.Type;
+
+/** The calls nothing waits on: the window carries each out and says itself
+ *  when it could not. */
+const ToldCallSchema = Schema.Union([
   // The runtime's notices and its approval-policy denials, which a window
   // with `emit` presents.
   Schema.Struct({ kind: Schema.Literal('notices'), notice: NoticeSchema }),
@@ -63,18 +70,23 @@ const HostCallSchema = Schema.Union([
     absolutePaths: Schema.Array(Schema.String),
   }),
 ]);
-export type HostCall = typeof HostCallSchema.Type;
+export type ToldCall = typeof ToldCallSchema.Type;
+
+/** One call of the service on a window, by kind. */
+export type HostCall = AskedCall | ToldCall;
 
 /** What a window can do for a run: each kind of call is the capability a
  *  window offers to be sent it. */
 export const HostCapabilitySchema = Schema.Literals(
-  HostCallSchema.members.map((member) => member.fields.kind.literal),
+  [...AskedCallSchema.members, ...ToldCallSchema.members].map(
+    (member) => member.fields.kind.literal,
+  ),
 );
 export type HostCapability = HostCall['kind'];
 
-/** The calls a run waits on: what each answers with, and how long a run
- *  waits for it. A diagnostics read may build the document first, so it
- *  waits longest. Every other call is told and not answered. */
+/** What each call a run waits on answers with, and how long a run waits
+ *  for it. A diagnostics read may build the document first, so it waits
+ *  longest. */
 export const ANSWERED = Object.freeze({
   readDiagnostics: Object.freeze({
     result: Schema.Array(GenericDiagnosticSchema),
@@ -85,28 +97,30 @@ export const ANSWERED = Object.freeze({
     within: '10 seconds',
   }),
   openPdf: Object.freeze({ result: Schema.Null, within: '30 seconds' }),
-} as const) satisfies Partial<
-  Record<
-    HostCall['kind'],
-    {
-      readonly result: Schema.Codec<unknown, unknown>;
-      readonly within: Duration.Input;
-    }
-  >
+} as const) satisfies Record<
+  AskedCall['kind'],
+  {
+    readonly result: Schema.Codec<unknown, unknown>;
+    readonly within: Duration.Input;
+  }
 >;
 
-/** A frame of `host.attach`: the attachment's id first, then the calls. */
+/** A frame of `host.attach`: the attachment's id first, then the calls. A
+ *  call a run waits on (`ask`) carries the id its answer names; a told one
+ *  carries none, since nothing waits for its answer. */
 export const HostAttachFrameSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('attached'),
     attachment: Schema.String,
   }),
   Schema.Struct({
-    kind: Schema.Literal('call'),
+    kind: Schema.Literal('ask'),
     id: Schema.String,
-    /** Answered with `host.answer` when its kind is one a run waits on
-     *  ({@link ANSWERED}); a notice or a file notification is told. */
-    call: HostCallSchema,
+    call: AskedCallSchema,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('tell'),
+    call: ToldCallSchema,
   }),
 ]);
 export type HostAttachFrame = typeof HostAttachFrameSchema.Type;

@@ -6,7 +6,7 @@ import { BrowserWindow, dialog, type MessageBoxOptions } from 'electron';
 import { Effect, Predicate, type Scope } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   HostFailed,
   type ConfirmQuestion,
@@ -103,6 +103,10 @@ export const noticeIn =
       Effect.asVoid,
     );
 
+/** A step of the export's format dialog failed, in the cause's own words. */
+const exportFailed = (cause: unknown) =>
+  new TranscriptExportFailed({ message: toErrorMessage(cause), cause });
+
 export function createDesktopDialogs(
   window: BrowserWindow,
   /** The window's fibers, where a notice waits for its dismissal. */
@@ -160,7 +164,7 @@ export function createDesktopDialogs(
     pickTranscriptExportFormat: (project: string) =>
       Effect.tryPromise({
         try: () => import('@texra/controllers/progressView/exportTranscript'),
-        catch: ensureError,
+        catch: exportFailed,
       }).pipe(
         Effect.flatMap(({ TRANSCRIPT_EXPORT_FORMAT_CHOICES }) =>
           choose(window, {
@@ -176,14 +180,7 @@ export function createDesktopDialogs(
               }),
             ),
             close: 'Cancel',
-          }),
-        ),
-        Effect.mapError(
-          (cause) =>
-            new TranscriptExportFailed({
-              message: toErrorMessage(cause),
-              cause,
-            }),
+          }).pipe(Effect.mapError(exportFailed)),
         ),
       ),
   };

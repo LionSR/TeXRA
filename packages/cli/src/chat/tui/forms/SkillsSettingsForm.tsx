@@ -13,6 +13,7 @@ import { Skills } from '@texra-ai/harness/host';
 import { Settings } from '@texra-ai/harness/plugins';
 import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
 import { enabledLabel } from '@ui/copy/format';
+import { CliSettingUpdateFailed } from '@cli/runtime/platform/cliConfig';
 
 import { AsyncListForm } from './_shared/ListForm';
 import { useChatProcess } from '../chatProcess';
@@ -110,7 +111,9 @@ export function SkillsSettingsForm(
               result.kind === 'applied'
                 ? Effect.void
                 : Effect.fail(
-                    new Error(`Could not update skills (${result.kind}).`),
+                    new CliSettingUpdateFailed({
+                      message: `Could not update skills (${result.kind}).`,
+                    }),
                   ),
           ),
         );

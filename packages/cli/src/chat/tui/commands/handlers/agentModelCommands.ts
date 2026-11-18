@@ -58,11 +58,10 @@ export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
   function* (model: string, context: SlashCommandContext) {
     const nextModel = model.trim();
     if (context.session.canStartRootRun()) {
-      const selection = yield* selectChatModel(
-        context.stores,
-        context.runtime,
-        { model: nextModel, reason: 'explicit-override' },
-      );
+      const selection = yield* selectChatModel(context.stores, {
+        model: nextModel,
+        reason: 'explicit-override',
+      });
       setCliSessionModelOverride(selection.model);
       appendLocalNotice(`Root model set to ${selection.model}.`);
       return;

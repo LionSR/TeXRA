@@ -20,6 +20,7 @@ import {
   type FileSystem,
   Option,
   type PlatformError,
+  Schema,
   Semaphore,
   Stream,
 } from 'effect';
@@ -175,13 +176,23 @@ const readStoragePrefix = Effect.fn('memoryFileSystem.readStoragePrefix')(
  */
 const CHANNEL = 'memory';
 
+/** A memory file's frontmatter head does not parse. */
+class MemoryHeadUnparsed extends Schema.TaggedError<MemoryHeadUnparsed>()(
+  'MemoryHeadUnparsed',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
+
 const readMemoryMeta = Effect.fn('memoryFileSystem.readMemoryMeta')(
   (storagePath: string, stats: { size: number }) =>
     readStoragePrefix(storagePath, FRONTMATTER_SCAN_BYTES, stats).pipe(
       Effect.flatMap(({ text }) =>
         Effect.try({
           try: () => parseFrontmatter(text).meta,
-          catch: ensureError,
+          catch: (cause) =>
+            new MemoryHeadUnparsed({
+              message: ensureError(cause).message,
+              cause,
+            }),
         }),
       ),
       Effect.catch((cause) =>

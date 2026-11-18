@@ -200,7 +200,7 @@ export class SubscriptionUsageService {
     return Effect.matchCauseEffect(
       Effect.suspend(
         (): Effect.Effect<boolean | undefined, Error> =>
-          adapter.resolveVariant?.() ?? Effect.succeed(undefined),
+          adapter.resolveVariant?.() ?? Effect.undefined,
       ),
       {
         onFailure: Effect.fn('onFailure')({ self: this }, function* (cause) {

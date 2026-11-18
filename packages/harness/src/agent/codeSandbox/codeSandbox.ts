@@ -245,14 +245,21 @@ const make = Effect.gen(function* () {
           return Result.isSuccess(report)
             ? Queue.offer(reports, report.success)
             : Effect.fail(
-                new Error(
-                  `Code sandbox worker sent a malformed message: ${report.failure.message}`,
-                ),
+                new SandboxUnavailable({
+                  cause: new Error(
+                    `Code sandbox worker sent a malformed message: ${report.failure.message}`,
+                  ),
+                }),
               );
         })
         .pipe(
-          Effect.catch((cause) =>
-            Queue.fail(reports, new SandboxUnavailable({ cause })),
+          Effect.catch((error) =>
+            Queue.fail(
+              reports,
+              error._tag === 'SandboxUnavailable'
+                ? error
+                : new SandboxUnavailable({ cause: error }),
+            ),
           ),
           Effect.forkScoped,
         );

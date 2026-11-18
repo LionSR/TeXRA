@@ -83,25 +83,19 @@ export class SettingsProfileKeyController {
 
   private readonly storeProviderKey = Effect.fn(
     'SettingsProfileKeyController.storeProviderKey',
-  )(
-    { self: this },
-    function* (
-      provider: string,
-      apiKey: string,
-    ): Effect.fn.Return<void, Error, Secrets> {
-      const displayName = yield* getProviderDisplayName(
-        this.deps.stores,
-        provider,
-      );
-      yield* storeCredential(yield* Secrets, {
-        secretName: yield* secretNameFor(provider),
-        value: apiKey,
-        kind: 'provider',
-        label: displayName,
-      });
-      yield* this.notify(`${displayName} API key has been set`);
-    },
-  );
+  )({ self: this }, function* (provider: string, apiKey: string) {
+    const displayName = yield* getProviderDisplayName(
+      this.deps.stores,
+      provider,
+    );
+    yield* storeCredential(yield* Secrets, {
+      secretName: yield* secretNameFor(provider),
+      value: apiKey,
+      kind: 'provider',
+      label: displayName,
+    });
+    yield* this.notify(`${displayName} API key has been set`);
+  });
 
   /** Name a failed action after its provider; interruption propagates. */
   private readonly run = Effect.fn('SettingsProfileKeyController.run')(
@@ -139,8 +133,15 @@ export class SettingsProfileKeyController {
  * The credential store's name for a provider's key. An unknown provider is a
  * failure of the action, reported like any other, never a thrown defect.
  */
-function secretNameFor(provider: string): Effect.Effect<string, Error> {
+function secretNameFor(
+  provider: string,
+): Effect.Effect<string, ProviderKeyActionFailed> {
   return isApiProvider(provider)
     ? Effect.succeed(apiKeySecretName(provider))
-    : Effect.fail(new Error(`Unknown API provider: ${provider}`));
+    : Effect.fail(
+        new ProviderKeyActionFailed({
+          message: `Unknown API provider: ${provider}`,
+          cause: undefined,
+        }),
+      );
 }

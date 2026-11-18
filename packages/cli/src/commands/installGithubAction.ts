@@ -259,7 +259,6 @@ const runInstallGithubAction = Effect.fn('runInstallGithubAction')(function* (
         Effect.andThen(fs.writeFileString(workflowAbsPath, WORKFLOW_TEMPLATE)),
       ),
   ).pipe(
-    Effect.uninterruptible,
     Effect.as(null),
     Effect.catch((error: PlatformError.PlatformError) =>
       Effect.succeed(cliErrorMessage(error)),

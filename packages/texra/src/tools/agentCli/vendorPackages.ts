@@ -21,7 +21,14 @@
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 
-import { Context, Effect, FileSystem, Predicate, Semaphore } from 'effect';
+import {
+  Context,
+  Effect,
+  FileSystem,
+  Predicate,
+  Schema,
+  Semaphore,
+} from 'effect';
 import which from 'which';
 
 import { isModuleNotFoundError } from '@texra-ai/harness/host';
@@ -31,6 +38,17 @@ import { ensureError } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'VendorPackages';
+
+/** A vendor CLI's SDK could not be imported, or its package or binary could
+ *  not be looked up. */
+class VendorPackageLookupFailed extends Schema.TaggedError<VendorPackageLookupFailed>()(
+  'VendorPackageLookupFailed',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
+
+/** A foreign throw as a failed lookup, under the message it carried. */
+const lookupFailed = (cause: unknown): VendorPackageLookupFailed =>
+  new VendorPackageLookupFailed({ message: ensureError(cause).message, cause });
 
 /**
  * `process.resourcesPath` when running inside a packaged Electron app;
@@ -78,13 +96,16 @@ export function importForeignSdk<M, K extends keyof M & string>(opts: {
   readonly exportName: K;
   readonly specifier: string;
   readonly errorLabel: string;
-}): Effect.Effect<M[K], Error> {
+}): Effect.Effect<M[K], VendorPackageLookupFailed> {
   return Effect.tryPromise({
     try: opts.load,
     catch: (err) =>
       isModuleNotFoundError(err)
-        ? new Error(opts.notFoundMessage, { cause: err })
-        : ensureError(err),
+        ? new VendorPackageLookupFailed({
+            message: opts.notFoundMessage,
+            cause: err,
+          })
+        : lookupFailed(err),
   }).pipe(
     Effect.flatMap((mod) => {
       // The bundler's interop shape is not what the module's type declares,
@@ -108,10 +129,11 @@ export function importForeignSdk<M, K extends keyof M & string>(opts: {
         ? Object.keys(namespace).join(', ')
         : '';
       return Effect.fail(
-        new Error(
-          `${opts.errorLabel} not found in ${opts.specifier}. Module keys: [${keys}]. ` +
+        new VendorPackageLookupFailed({
+          message:
+            `${opts.errorLabel} not found in ${opts.specifier}. Module keys: [${keys}]. ` +
             `Ensure ${opts.specifier} is NOT in esbuild externals.`,
-        ),
+        }),
       );
     }),
   );
@@ -255,7 +277,7 @@ export const findCliBinary = Effect.fn('vendorPackages.findCliBinary')(
     config: ResolveBinaryConfig,
   ): Effect.fn.Return<
     string | undefined,
-    Error,
+    VendorPackageLookupFailed,
     ChildProcessSpawner | FileSystem.FileSystem
   > {
     const { found, probing } = yield* FoundCliBinaries;
@@ -269,7 +291,7 @@ export const findCliBinary = Effect.fn('vendorPackages.findCliBinary')(
       // The probe steps are plain synchronous calls (Node module resolution,
       // the PATH extension, `which.sync`); one that throws is a failed
       // lookup the caller reports, not a crash of the calling fiber.
-      Effect.catchDefect((defect) => Effect.fail(ensureError(defect))),
+      Effect.catchDefect((defect) => Effect.fail(lookupFailed(defect))),
       probing.withPermit,
     );
   },
@@ -295,13 +317,13 @@ export function resolvePackageDir(
       const req = createRequire(path.join(baseDir, 'package.json'));
       return path.dirname(req.resolve(`${pkg}/package.json`));
     },
-    catch: ensureError,
+    catch: lookupFailed,
   }).pipe(
-    Effect.catch((error) =>
-      isModuleNotFoundError(error)
-        ? Effect.succeed(undefined)
+    Effect.catch(({ cause }) =>
+      isModuleNotFoundError(cause)
+        ? Effect.undefined
         : Effect.logWarning(`Could not resolve ${pkg} from ${baseDir}`).pipe(
-            Effect.annotateLogs({ data: error }),
+            Effect.annotateLogs({ data: cause }),
             withLogChannel(CHANNEL),
             Effect.as(undefined),
           ),

@@ -111,10 +111,10 @@ jobs:
           fi
 
   # The static gate is `npm run gate` (package.json): lint and the
-  # invariants, the docs checks, then typecheck + formatting. CI runs the
-  # three groups as parallel jobs (the docs group ungated, see
-  # `guidance-refs`), and a local `npm run gate` reproduces exactly what
-  # these jobs enforce.
+  # invariants, the docs checks, typecheck + formatting, then the Effect
+  # language service's diagnostics. CI runs the four groups as parallel jobs
+  # (the docs group ungated, see `guidance-refs`), and a local `npm run gate`
+  # reproduces exactly what these jobs enforce.
   invariants:
     name: invariants (linux)
     needs: changes
@@ -198,6 +198,25 @@ jobs:
       # its token, retrigger, cancellation, and branch-race complexity.
       - name: Check types and formatting
         run: pnpm run gate:typecheck
+
+  effect-diagnostics:
+    name: effect diagnostics (linux)
+    needs: changes
+    if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+
+      # The Effect language service over every source project: the editor
+      # plugin's diagnostics, which `tsc` does not report.
+      - name: Check Effect diagnostics
+        run: pnpm run gate:effect
 
   guidance-refs:
     name: guidance references
@@ -520,6 +539,7 @@ jobs:
       - changes
       - invariants
       - typecheck
+      - effect-diagnostics
       - guidance-refs
       - test
       - build
@@ -549,7 +569,7 @@ jobs:
           required='changes guidance-refs'
           if [ "$CODE" = true ]; then
             if [ "$EVENT" = schedule ]; then required="$required test"
-            else required="$required test invariants typecheck build"; fi
+            else required="$required test invariants typecheck effect-diagnostics build"; fi
           elif [ "$EVENT" = pull_request ]; then
             required="$required docs-check"
           fi

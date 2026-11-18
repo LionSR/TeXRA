@@ -220,6 +220,8 @@ const openCliPlatform = Effect.fn('openCliPlatform')(function* (
     if (notice) writeTextStderr(notice);
   }
 
+  // `process.exit` returns `never`, which the check reads as a promise.
+  // @effect-diagnostics lazyPromiseInEffectSync:off
   const leave = (code: number): Effect.Effect<never> =>
     leaveProcess(
       Scope.close(scope, Exit.void).pipe(
@@ -227,6 +229,7 @@ const openCliPlatform = Effect.fn('openCliPlatform')(function* (
       ),
       context.quietLogs,
     ).pipe(Effect.andThen(Effect.sync(() => process.exit(code))));
+  // @effect-diagnostics lazyPromiseInEffectSync:warning
   // The platform's own answer to SIGINT, SIGTERM and SIGHUP while it is
   // up: leave with the signal's code, closing the platform first. Onboarding and model resolution run before Ink
   // mounts and need a graceful exit as much as a headless command does.
