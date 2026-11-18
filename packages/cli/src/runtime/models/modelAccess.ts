@@ -1,15 +1,18 @@
 // Third-party imports
-import { Effect, Result, absurd } from 'effect';
+import { Effect, absurd } from 'effect';
 
 import { LaunchRefused } from '@texra-ai/harness';
 
 // Local imports
-import { decideRunModel, type RunModelCandidate } from '@texra-ai/harness/host';
+import type { RunModelCandidate } from '@texra-ai/harness/host';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
 import { isModelOptionAvailable, joinFacts } from '@texra-ai/harness/schemas';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
-import { loadModelOptions } from '@texra/model/setupCredentialAccess';
+import {
+  chooseLaunchModel,
+  loadModelOptions,
+} from '@texra/model/setupCredentialAccess';
 
 // Local file imports
 import { modelAvailabilityLabel } from '@ui/copy/modelAccess';
@@ -32,16 +35,8 @@ interface CliRunnableModelResolution {
   readonly notice?: string;
 }
 
-interface CliModelAccessEntryOptions {
+interface CliRunnableModelOptions {
   readonly stores: SettingsStores;
-  /** Optional preloaded list, used by commands that already fetched access. */
-  readonly accessList?: readonly ModelOptionData[];
-}
-
-interface CliRunnableModelOptions extends Pick<
-  CliModelAccessEntryOptions,
-  'stores' | 'accessList'
-> {
   /** What to do when no model can run, as one sentence; the shell's
    *  `texra setup` unless the surface has its own way to add a key. */
   readonly recovery?: string;
@@ -219,34 +214,21 @@ export function formatCliModelDetails(model: ModelOptionData): string {
   return lines.join('\n');
 }
 
-/** The caller's preloaded list, or one computed now. */
-const loadCliModelAccessList = Effect.fn('loadCliModelAccessList')(function* (
-  options: CliModelAccessEntryOptions,
-) {
-  const models: readonly ModelOptionData[] =
-    options.accessList ?? (yield* loadModelOptions(options.stores));
-  return models;
-});
-
+/**
+ * The row `texra models show` describes: the listed row a CLI spelling names
+ * (`grok-4.7`, `Opus 5.5`), else the row of the catalog model it names that
+ * the picker does not list.
+ */
 export const loadCliModelAccessEntry = Effect.fn('loadCliModelAccessEntry')(
-  function* (model: string, options: CliModelAccessEntryOptions) {
-    const models = yield* loadCliModelAccessList(options);
+  function* (model: string, stores: SettingsStores) {
+    const models = yield* loadModelOptions(stores);
     const trimmed = model.trim();
     const listedEntry = findCliModelAccessEntry(models, trimmed);
     if (listedEntry || trimmed.length === 0) return listedEntry;
 
     const hiddenModelId = resolveKnownCliModelId(trimmed);
     if (hiddenModelId == null) return undefined;
-
-    const [hiddenEntry] = yield* loadModelOptions(options.stores, [
-      hiddenModelId,
-    ]);
-    if (!hiddenEntry) {
-      return yield* new LaunchRefused({
-        message: `Model "${hiddenModelId}" is configured but has no option data.`,
-      });
-    }
-
+    const [hiddenEntry] = yield* loadModelOptions(stores, [hiddenModelId]);
     return hiddenEntry;
   },
 );
@@ -274,112 +256,49 @@ function formatUnavailableModelMessage(
   return `Model "${model}" is not available${status}. ${formatAvailableModels(availableIds, options)}`;
 }
 
-type NormalizedCliModelCandidate = RunModelCandidate & {
-  readonly model: string;
-};
-
 /**
- * The model a CLI run takes, from its candidates: `decideRunModel` picks by
- * precedence and falls back as each candidate's reason says.
+ * The model a CLI run takes, from its candidates: the app decides
+ * (`chooseLaunchModel`), and this words a fallback's notice and a refusal.
+ * A candidate's CLI spelling resolves to its catalog id first; a message
+ * names the model as the person spelled it.
  */
 export const selectCliRunnableModel = Effect.fn('selectCliRunnableModel')(
   function* (
     candidates: readonly RunModelCandidate[],
     options: CliRunnableModelOptions,
   ) {
-    const models = yield* loadCliModelAccessList(options);
-    const requestedCandidates: NormalizedCliModelCandidate[] =
-      candidates.flatMap((candidate) => {
-        const model = candidate.model?.trim();
-        return model ? [{ ...candidate, model }] : [];
-      });
-    const requestedModels = [
-      ...new Set(requestedCandidates.map((candidate) => candidate.model)),
-    ];
-    // Every requested id gets its own hidden-entry lookup, and a failed one
-    // is carried as a value so a sibling's success still counts: only the id
-    // the decision actually lands on re-raises its failure below.
-    const hiddenEntries = yield* Effect.forEach(
-      requestedModels,
-      (model) =>
-        Effect.result(
-          loadCliModelAccessEntry(model, {
-            stores: options.stores,
-            accessList: models,
-          }),
-        ),
-      { concurrency: 'unbounded' },
+    const spelled = new Map<string, string>();
+    const resolved = candidates.flatMap((candidate) => {
+      const given = candidate.model?.trim();
+      if (!given) return [];
+      const model = resolveKnownCliModelId(given) ?? given;
+      if (!spelled.has(model)) spelled.set(model, given);
+      return [{ ...candidate, model }];
+    });
+    const { decision, rows, runnable } = yield* chooseLaunchModel(
+      options.stores,
+      resolved,
     );
-    const entryErrorByModel = new Map(
-      hiddenEntries.flatMap((result, index) => {
-        const model = requestedModels[index];
-        return model && Result.isFailure(result)
-          ? ([[model, result.failure]] as const)
-          : [];
-      }),
-    );
-    let modelsWithHiddenEntry = models;
-    for (const result of hiddenEntries) {
-      if (Result.isFailure(result)) continue;
-      const entry = result.success;
-      if (
-        entry &&
-        !findCliModelAccessEntry(modelsWithHiddenEntry, entry.value)
-      ) {
-        modelsWithHiddenEntry = [...modelsWithHiddenEntry, entry];
-      }
-    }
-    const runnableEntries = modelsWithHiddenEntry.filter(
-      isModelOptionAvailable,
-    );
-    const availableIds = runnableEntries.map((entry) => entry.value);
-    const decision = decideRunModel(
-      [
-        ...requestedCandidates,
-        { model: availableIds[0], reason: 'access-list-default' },
-      ],
-      (candidate) =>
-        findCliModelAccessEntry(runnableEntries, candidate) != null,
-    );
-
-    if (decision && decision._tag !== 'Unavailable') {
-      const selectedModel =
-        findCliModelAccessEntry(runnableEntries, decision.model)?.value ??
-        decision.model;
-      if (decision._tag === 'Chosen') {
-        return { model: selectedModel } satisfies CliRunnableModelResolution;
-      }
-
-      const fallbackLoadError = entryErrorByModel.get(decision.from.model);
-      if (fallbackLoadError) return yield* fallbackLoadError;
-
-      // The access list knows why the model cannot run, which the decision's
-      // own notice does not say.
-      const unavailableMessage = formatUnavailableModelMessage(
-        decision.from.model,
-        findCliModelAccessEntry(modelsWithHiddenEntry, decision.from.model),
-        availableIds,
+    const unavailable = (model: string) =>
+      formatUnavailableModelMessage(
+        spelled.get(model) ?? model,
+        rows.find((row) => row.value === model),
+        runnable,
         options,
       );
+
+    if (decision?._tag === 'Chosen') {
+      return { model: decision.model } satisfies CliRunnableModelResolution;
+    }
+    if (decision?._tag === 'Fallback') {
+      // The rows know why the model cannot run, which the decision's own
+      // notice does not say.
       return {
-        model: selectedModel,
-        notice: `${unavailableMessage} Using "${selectedModel}" instead.`,
+        model: decision.model,
+        notice: `${unavailable(decision.from.model)} Using "${decision.model}" instead.`,
       } satisfies CliRunnableModelResolution;
     }
-
-    const selectedLoadError = decision
-      ? entryErrorByModel.get(decision.model)
-      : undefined;
-    if (selectedLoadError) return yield* selectedLoadError;
-
-    const requestedModel =
-      (decision?.model ?? requestedCandidates[0]?.model) || '<empty>';
-    const unavailableMessage = formatUnavailableModelMessage(
-      requestedModel,
-      findCliModelAccessEntry(modelsWithHiddenEntry, requestedModel),
-      availableIds,
-      options,
-    );
-    return yield* new LaunchRefused({ message: unavailableMessage });
+    const requestedModel = (decision?.model ?? resolved[0]?.model) || '<empty>';
+    return yield* new LaunchRefused({ message: unavailable(requestedModel) });
   },
 );

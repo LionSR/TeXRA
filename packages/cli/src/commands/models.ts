@@ -76,7 +76,7 @@ const listModels = Effect.fn('listModels')(function* (
 
 const showModel = Effect.fn('showModel')(function* (id: string) {
   const services = yield* cliPlatform;
-  const entry = yield* loadCliModelAccessEntry(id, { stores: services });
+  const entry = yield* loadCliModelAccessEntry(id, services);
 
   if (!entry) {
     writeTextStderr(`Model not found: ${id}`);
