@@ -45,6 +45,7 @@ import type { OsPlatform } from '@texra/shared/osPlatform';
 import { type Shell } from './shell';
 
 import {
+  DESKTOP_COMMAND_PALETTE_ID,
   DESKTOP_LOCAL_COMMANDS,
   dispatchDesktopCommand,
   paletteEntries,
@@ -55,7 +56,6 @@ import { createDesktopCommandPalette } from './desktopCommandPalette';
 import {
   createDesktopShortcutRegistry,
   desktopCommandPaletteShortcut,
-  DESKTOP_COMMAND_PALETTE_ID,
 } from './desktopShortcutRegistry';
 import './desktopShell.css';
 import { shellSidebarTemplate, type RailProject } from './desktopShell';

@@ -27,7 +27,7 @@ import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import {
   settingsTabByCommand,
-  type ExtensionCommandId,
+  type CommandId,
   type SettingsTabCommandId,
 } from '@texra/shared/commands/catalog';
 import {
@@ -70,7 +70,7 @@ type CommandProgram = Effect.Effect<
  * catalog row fails the handler map's `satisfies` until its handler is
  * written.
  */
-type RegisteredCommandId = Exclude<ExtensionCommandId, CommentCommandId>;
+type RegisteredCommandId = Exclude<CommandId, CommentCommandId>;
 
 /** `texra.setApiKey`, optionally naming the provider to start on: one row
  *  for the folder's window and the window without one. */
