@@ -11,10 +11,9 @@ import {
   type TaskFiles,
   type TaskFilesReason,
 } from '@texra/controllers/session/taskFiles';
-import type { HostFailed } from '@texra/hosts/uiHosts';
 
 const STDIN_INPUT_TOKEN = '-';
-export const STDIN_DOCUMENT_TASK_INPUT_BASENAME = 'stdin.tex';
+const STDIN_DOCUMENT_TASK_INPUT_BASENAME = 'stdin.tex';
 /**
  * One wording for "a program's run has no input", said both for a spec that
  * resolves to nothing and by `texra run`'s pre-flight guard (no `--input` at
@@ -71,7 +70,6 @@ export function hasMixedStdinDocumentTaskInputSpecs(
 function flagSources(
   role: TaskFileRole,
   specs: readonly string[],
-  readStdinText: Effect.Effect<string, HostFailed>,
 ): TaskFileSource[] {
   let stdinNamed = false;
   return specs.flatMap((spec): TaskFileSource[] => {
@@ -79,16 +77,13 @@ function flagSources(
     if (stdinNamed) return [];
     stdinNamed = true;
     return [
-      { role, text: readStdinText, name: STDIN_DOCUMENT_TASK_INPUT_BASENAME },
+      {
+        role,
+        text: readProcessStdinText,
+        name: STDIN_DOCUMENT_TASK_INPUT_BASENAME,
+      },
     ];
   });
-}
-
-interface ExpandedRunInputs extends Omit<TaskFiles, 'writtenFiles'> {
-  /** Path this invocation materialized stdin to, when the literal `-` token was
-   *  expanded. Ground truth for "was this run's input read from stdin" — never
-   *  re-derive it by inspecting a path's shape. */
-  readonly stdinInputPath?: string;
 }
 
 /**
@@ -102,12 +97,8 @@ export function withExpandedRunInputs<T, E, R = never>(
   inputSpecs: readonly string[],
   contextSpecs: readonly string[],
   cwd: string,
-  options: {
-    readonly task: 'program' | 'agent';
-    /** Where `-` reads from; a test hands in its own text. */
-    readonly readStdinText?: Effect.Effect<string, HostFailed>;
-  },
-  run: (inputs: ExpandedRunInputs) => Effect.Effect<T, E, R>,
+  task: 'program' | 'agent',
+  run: (inputs: TaskFiles) => Effect.Effect<T, E, R>,
 ): Effect.Effect<T, E | Error, R | FileSystem.FileSystem> {
   if (inputSpecs.some(isStdinSpec) && contextSpecs.some(isStdinSpec)) {
     return Effect.fail(
@@ -117,24 +108,21 @@ export function withExpandedRunInputs<T, E, R = never>(
       }),
     );
   }
-  const readStdinText = options.readStdinText ?? readProcessStdinText;
   return Effect.scoped(
     Effect.gen(function* () {
-      const { writtenFiles, ...files } = yield* resolveTaskFiles(
+      const files = yield* resolveTaskFiles(
         [
-          ...flagSources('input', inputSpecs, readStdinText),
-          ...flagSources('context', contextSpecs, readStdinText),
+          ...flagSources('input', inputSpecs),
+          ...flagSources('context', contextSpecs),
         ],
         cwd,
-        options.task,
+        task,
       ).pipe(
         Effect.catchTag('TaskFilesRejected', ({ reason }) =>
           Effect.fail(new CliUsageError({ message: usageMessage(reason) })),
         ),
       );
-      // `-` is refused above when both flags name it, so at most one file
-      // was written.
-      return yield* run({ ...files, stdinInputPath: writtenFiles[0] });
+      return yield* run(files);
     }),
   );
 }

@@ -18,8 +18,7 @@ import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import { cliErrorMessage, writeTextStderr } from '../runtime/platform/logSinks';
 import {
-  assertOutputDirAvailable,
-  assertOutputFileAvailable,
+  assertOutputDestinationAvailable,
   resumeDocumentTaskOutputDirectory,
   resumeDocumentTaskOutputFile,
 } from '../runtime/headless/documentTaskOutput';
@@ -210,12 +209,16 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
         try: () => resumeDocumentTaskOutputFile(config),
         catch: storedDestinationFailure(id),
       });
-      yield* assertOutputFileAvailable(outputFile, context.cwd);
+      yield* assertOutputDestinationAvailable('file', outputFile, context.cwd);
       const outputDirectory = yield* Effect.try({
         try: () => resumeDocumentTaskOutputDirectory(config),
         catch: storedDestinationFailure(id),
       });
-      yield* assertOutputDirAvailable(outputDirectory, context.cwd);
+      yield* assertOutputDestinationAvailable(
+        'directory',
+        outputDirectory,
+        context.cwd,
+      );
       const recoveryInputIsDurable =
         yield* documentTaskRecoveryInputsAreDurable(config, context.cwd);
       // The run continues through the session's resume, inside the
