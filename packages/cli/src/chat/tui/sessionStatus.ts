@@ -23,7 +23,6 @@ const QUEUED_MESSAGE_STATUS_LENGTH = 160;
 interface CliSessionStatusInput {
   readonly agent: string;
   readonly model: string;
-  readonly teamName?: string;
   readonly modelAccess: UsageRoute | undefined;
   readonly approvalBypasses?: Partial<BypassState>;
   /** The session view's status label for the reported stream; undefined before a run. */
@@ -118,7 +117,6 @@ function activeApprovalBypassLabels(
 export function formatCliSessionStatus(input: CliSessionStatusInput): string {
   const bypassLabels = activeApprovalBypassLabels(input.approvalBypasses);
   return [
-    ...(input.teamName ? [`team: ${input.teamName}`] : []),
     `agent: ${input.agent}`,
     `model: ${getModelLabel(input.model)}`,
     `model access: ${usageRouteBadge(input.modelAccess)?.label ?? OWN_API_KEYS.inline}`,

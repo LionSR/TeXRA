@@ -144,7 +144,6 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
         // the window is switching to another; a released binding's bridge
         // has no port left, so a late verb reaches no surface.
         ...(documentBinding?.settingsRuns ?? {
-          selectLauncherAgent: () => Effect.void,
           revealRun: () => Effect.succeed('unavailable' as const),
           runLabel: () => undefined,
         }),

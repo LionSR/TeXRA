@@ -253,9 +253,10 @@ Refused on investigation:
   settings contract, not a sweep. Recorded as
   `PLATFORM-roots-drop-global-slots`.
 - **`AgentDirectoriesPort.teamMembers` and `resourcesRoot`.** The harness
-  persists a team selection (`shared/schemas/workspaceAgents.ts`,
-  `WorkspaceAgentsController.setTeam`) and filters its catalog by it; the
-  optional reader is the one place the app's definition of a team enters.
+  persisted a team selection (`shared/schemas/workspaceAgents.ts`,
+  `WorkspaceAgentsController.setTeam`) and filtered its catalog by it; the
+  optional reader was the one place the app's definition of a team entered.
+  Teams and the reader were removed 2026-11-17.
   `resourcesRoot` is where a host's bundle sits, a host fact the harness
   reads for the plugins' agent directories and the creator's docs; it is
   absent for an embedder that ships none. Neither is an app fact restated.

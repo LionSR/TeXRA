@@ -52,7 +52,6 @@ import { fileWatchRetrySchedule } from '@utils/files/fsEntryExists';
 import { AGENT_FILE_EXTENSION } from '@shared/schemas';
 import { DISABLED_TOOLS_KEY } from '@shared/state/disabledTools';
 import { CUSTOM_AGENT_DIR_KEY } from '@agent/index/AgentDirectoryService';
-import { ACTIVE_TEAM_ID_KEY } from '@agent/workspaceAgents/WorkspaceAgentsController';
 import { INSTALLED_PLUGINS_KEY } from '@common/plugins/installRecord';
 
 /** Register one agent directory root; a failure (an unreadable directory
@@ -228,17 +227,6 @@ export const agentCatalogFollower = Layer.effectDiscard(
         ),
       ),
       Stream.runDrain,
-      Effect.forkScoped,
-    );
-    // The team a workspace runs (`apply_team`, the settings view), written by
-    // this process or another sharing the store, a background service task's
-    // among them: every agent list here repaints. The first element is the
-    // subscription itself, not a change.
-    yield* appState.changes([ACTIVE_TEAM_ID_KEY.key]).pipe(
-      Stream.drop(1),
-      Stream.runForEach(() =>
-        emitAppSignal('workspaceAgentsChanged', undefined),
-      ),
       Effect.forkScoped,
     );
     // The first element is the catalog's load, and the build waits for it,

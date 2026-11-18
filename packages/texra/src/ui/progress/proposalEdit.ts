@@ -51,8 +51,8 @@ export function editedProposal(
 
 /**
  * The agents a proposal may launch instead: for a chat, the ones the asking
- * run may delegate to (its team's, which may be hidden from the catalog,
- * else every visible one); for a program, none, since the proposal names
+ * run may delegate to (those its launch pinned, which may be hidden from the
+ * catalog, else every visible one); for a program, none, since the proposal names
  * the program and not an agent. The proposed one is always among them, so
  * an unchanged form launches what was proposed.
  */
@@ -69,8 +69,8 @@ function proposalAgentOptions(
       ? host.agentOptions
       : scope.flatMap((key) => {
           const option = host.agentOptions.find(({ value }) => value === key);
-          // A member the catalog hides is offered, as the team names it,
-          // only when proposed.
+          // A pinned agent the catalog hides is offered, by its key, only
+          // when proposed.
           if (option === undefined)
             return isProposedAgent(key, data)
               ? [{ value: key, label: agentName(key) }]
@@ -83,7 +83,7 @@ function proposalAgentOptions(
 }
 
 /** The catalogs as the launch form offers them: while it is open on a
- *  proposal, its agents are the proposal's and it offers no team. */
+ *  proposal, its agents are the proposal's. */
 export function formHost(
   surface: Surface,
   view: SessionView,
@@ -94,7 +94,6 @@ export function formHost(
   return {
     ...host,
     agentOptions: proposalAgentOptions(edited.data, edited.run, host),
-    teamOptions: [],
   };
 }
 

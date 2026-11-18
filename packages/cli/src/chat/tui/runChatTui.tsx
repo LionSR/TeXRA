@@ -43,7 +43,6 @@ import { cliPlatform } from '@cli/runtime/platform/initPlatform';
 import { selectCliRunnableModel } from '@cli/runtime/models/modelAccess';
 import { silentLogSink, writeTextStderr } from '@cli/runtime/platform/logSinks';
 import { setLogSink } from '@texra-ai/harness/node';
-import { readCliTeam } from '@cli/runtime/cliTeams';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import {
   acquireTuiTerminal,
@@ -51,7 +50,6 @@ import {
 } from '@cli/tui/terminalCleanup';
 import { getFirstRunDone } from '@texra/controllers/onboarding/onboardingFunnel';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { launchTeamId } from '@texra/agent/teams/teamLaunch';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 
@@ -116,12 +114,8 @@ export interface RunChatInit {
   readonly agentOverride?: string;
   /** `--model` override from the CLI; falls through `resolveChatDefaults`. */
   readonly modelOverride?: string;
-  /**
-   * Startup resume from `texra resume <id>`, with the run's persisted config.
-   * A resumed team run carries its team identity and delegation
-   * scope in that config; those are the only fields below still sourced here,
-   * because a team run is started headlessly by `texra team run`.
-   */
+  /** Startup resume from `texra resume <id>`, with the run's persisted
+   *  config: its agent and model are the chat's. */
   readonly initialResume?: {
     readonly id: RunId;
     readonly config: AgentConfig;
@@ -219,12 +213,6 @@ export async function runChat(
         return { exitCode: CliExitCode.Usage };
       }
       const modelSelection = modelSelectionExit.value;
-      // The delegation scope is optional and nullable on the wire, so a
-      // resumed run that never carried one lands `null` where `SessionMeta`
-      // wants absent.
-      const initialPresetId = initialResume
-        ? launchTeamId(initialResume.config)
-        : undefined;
       sessionMetaSignal.set({
         agent: defaults.agent,
         agentSource: agentEntry.source,
@@ -235,9 +223,6 @@ export async function runChat(
           context.requestedApprovalPolicy,
           projectApprovalPolicy(services.roots.config),
         ),
-        team: yield* readCliTeam(services.roots.repoState, initialPresetId),
-        delegationAgentScope:
-          initialResume?.config.delegationAgentScope ?? undefined,
         version: context.version,
       });
       if (modelSelection.notice) startupNotices.push(modelSelection.notice);

@@ -40,13 +40,11 @@ Set `<PROVIDER>_API_KEY` to use your own credentials, sign in with a
 ChatGPT or Grok subscription, or add the API key for a Kimi Code or
 GLM Coding Plan subscription.
 
-### Agents and teams
+### Agents
 
-Every agent ships bundled, including the document-task agents that the
-Physicist, Mathematician, and Computer Scientist teams delegate to. Each agent
-is a YAML file you can read, copy into a custom agent, and modify. There is no
-TeXRA account; model calls run directly against your configured provider
-credentials.
+Every agent ships bundled. Each agent is a YAML file you can read, copy into a
+custom agent, and modify. There is no TeXRA account; model calls run directly
+against your configured provider credentials.
 
 TeXRA is sustained by the community. If TeXRA helps your
 research, consider supporting it via
@@ -65,27 +63,16 @@ In the terminal:
 ```sh
 texra chat                                  # interactive tool-use session
 texra run edit --input paper.tex            # one-shot document program
-texra team run physicist --instruction "Check this derivation"  # named team
+texra run orchestrator --instruction "Check this derivation" --print  # a lead agent that delegates
 ```
 
 Run history and agent settings are shared between both surfaces.
 
-## Teams
-
-Five built-in presets cover the most common research disciplines:
-
-| Team                   | Built for                                                                        |
-| ---------------------- | -------------------------------------------------------------------------------- |
-| **Physicist**          | Analytical derivations, numerical experiments, literature search, slide drafting |
-| **Mathematician**      | Attacking open problems, proofs, Lean 4 formalization, LaTeX correction          |
-| **Computer Scientist** | Algorithm design, code-driven experiments and ablations, tests, literature       |
-| **Lean Project**       | Mathlib search, tactic simplification, blueprint-driven formalization            |
-| **Software Engineer**  | An engineer lead delegating implementation, review, debugging, and testing       |
-
-Pick a team in **Settings → Agents → Teams**, or with `texra team
-run <preset>`. Or save the agents you have shown as your own team.
-
 ## Agents
+
+**Lead agents** plan a task, delegate the pieces to specialists, and review
+what comes back: `orchestrator` for research projects, `leanOrchestrator` for
+Lean 4 formalization, and `engineer` for a project's code.
 
 **Document programs** process selected files and produce reviewable LaTeX diffs:
 `edit`, `annotate`, `enhance`, `apply`, `merge`, `transcribe`, `slides`, and
@@ -105,7 +92,7 @@ skips approval for autonomous runs.
 ## Models
 
 Bring your own keys for OpenAI, Anthropic, Google Gemini, DeepSeek,
-xAI Grok, Moonshot Kimi, Alibaba Qwen, Zhipu GLM, MiniMax, or any OpenAI-compatible endpoint. Each agent in a team can run a
+xAI Grok, Moonshot Kimi, Alibaba Qwen, Zhipu GLM, MiniMax, or any OpenAI-compatible endpoint. Each agent a lead delegates to can run a
 different model — pair a flagship reasoner for orchestration with
 cheaper, faster models for routine sub-tasks.
 

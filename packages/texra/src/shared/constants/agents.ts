@@ -4,21 +4,13 @@ import { agentName } from '@texra-ai/harness/schemas';
 export const SETUP_AGENT_NAME = 'setup';
 
 /**
- * Bundled orchestrator roots that delegate to a team. They ship with every
- * host and need no sign-in; UIs surface them first.
- */
-export const BUILTIN_TEAM_ROOT_AGENT_NAMES = Object.freeze([
-  'orchestrator',
-  'leanOrchestrator',
-  'engineer',
-] as const);
-
-/**
  * Preferred agents for dropdown fallback and sorting.
  * Orchestrators come first, then general and task-flavored fallbacks.
  */
 export const PREFERRED_TOOL_USE_AGENTS = Object.freeze([
-  ...BUILTIN_TEAM_ROOT_AGENT_NAMES,
+  'orchestrator',
+  'leanOrchestrator',
+  'engineer',
   'assistant',
   'research',
   'review',

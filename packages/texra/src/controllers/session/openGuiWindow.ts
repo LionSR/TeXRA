@@ -254,11 +254,11 @@ interface GuiWindowPorts {
   ): Effect.Effect<GuiWindowHost, never, Scope.Scope | ProcessServices>;
 }
 
-/** The settings body's verbs on a window's runs: its own session and
- *  launcher, never those of another project its host happens to show. */
+/** The settings body's verbs on a window's runs: its own session's, never
+ *  those of another project its host happens to show. */
 export type GuiWindowSettingsRuns = Pick<
   SettingsHostBindings,
-  'selectLauncherAgent' | 'revealRun' | 'runLabel'
+  'revealRun' | 'runLabel'
 >;
 
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
@@ -758,10 +758,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   }
 
   const settingsRuns: GuiWindowSettingsRuns = {
-    selectLauncherAgent: (agent) =>
-      Effect.sync(() =>
-        bridge.surfaceAction({ kind: 'launch', patch: { agent } }),
-      ),
     revealRun: (runId) =>
       session.view.current().runs.has(runId)
         ? host.runs

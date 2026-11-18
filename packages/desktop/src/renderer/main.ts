@@ -345,7 +345,7 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
             By default it asks before it acts: edits arrive as diffs you accept
             or reject.
           </li>
-          <li>You choose the model and the team; progress stays in view.</li>
+          <li>You choose the model; progress stays in view.</li>
         </ul>
         <div class="desktop-empty-workspace-actions">
           ${renderLabeledActionButton({

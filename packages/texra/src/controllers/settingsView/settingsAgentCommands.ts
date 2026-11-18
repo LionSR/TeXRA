@@ -1,12 +1,12 @@
 /**
  * The Agents page of the settings body both GUI hosts answer through: the
- * agent toggles, the agent-file actions, the custom agent directory and the
- * team presets, with the refresh every mutation ends in. The host binds only
- * what it shows its own way (a document, a folder picker, the AI creator).
+ * agent toggles, the agent-file actions and the custom agent directory,
+ * with the refresh every mutation ends in. The host binds only what it
+ * shows its own way (a document, a folder picker, the AI creator).
  */
 import * as path from 'node:path';
 
-import { Effect, FileSystem, Result, Schema, absurd } from 'effect';
+import { Effect, FileSystem, Result, Schema } from 'effect';
 
 import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
@@ -24,12 +24,7 @@ import {
   AgentNameSchema,
   agentKey,
   isPackagedAgentSource,
-  toErrorMessage,
-  formatResultCount,
 } from '@texra-ai/harness/schemas';
-import { launchableTeams, workspaceTeams } from '@texra/shared/agentTeams';
-import { formatUnknownTeamMessage } from '@texra/agent/teams/teamLaunch';
-import { applyTeam } from '@texra/agent/teams/teamPlan';
 import {
   AGENT_TEMPLATE_FILE,
   agentFileFromTemplate,
@@ -108,7 +103,6 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       agents,
       workspaceAgents,
       catalog: new SettingsAgentCatalogController({
-        repoState: ports.roots.repoState,
         workspaceAgents,
         getAgents: () => [...agents.list()],
         newerBuiltInOf: (entry) => agents.newerBuiltIn(entry)?.source,
@@ -142,39 +136,19 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
         };
       }),
     ),
-    // The presets follow the agents because enabling one agent rewrites the
-    // selection as `custom`, which retires whatever team was applied.
-    hostStatePage(
-      'teams',
-      ['agents'],
-      Effect.gen(function* () {
-        const { catalog, workspaceAgents } = yield* page;
-        return {
-          presets: launchableTeams(
-            yield* workspaceTeams(ports.roots.repoState),
-          ),
-          orchestratorAgents: catalog.getOrchestratorAgentNames(),
-          activePresetId: yield* workspaceAgents.getActiveTeamId(),
-        };
-      }),
-    ),
   ];
 
   /** The agents changed: every agent list view follows the signal, these
-   *  pages and every launcher, and the launcher selects the tool-use root a
-   *  team just applied named. */
-  const agentsChanged = (selectedToolUseAgent?: string): HostEffect =>
-    Effect.andThen(
-      emitAppSignal('workspaceAgentsChanged', undefined),
-      selectedToolUseAgent === undefined
-        ? Effect.void
-        : bindings.selectLauncherAgent(selectedToolUseAgent),
-    );
+   *  pages and every launcher. */
+  const agentsChanged: HostEffect = emitAppSignal(
+    'workspaceAgentsChanged',
+    undefined,
+  );
   /** A mutation moved agent files: the registry is read again first, so
    *  nothing that follows paints the catalog it replaced. */
   const agentFilesChanged = Effect.andThen(
     AgentCatalog.use((agents) => agents.refresh),
-    agentsChanged(),
+    agentsChanged,
   );
 
   // The file tools accept the new directory before the change reports done,
@@ -199,14 +173,14 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
             name: message.agentName,
             enabled: message.enabled,
           }),
-        ).pipe(Effect.andThen(agentsChanged())),
+        ).pipe(Effect.andThen(agentsChanged)),
       ),
     setAllAgentsEnabled: (message) =>
       present.reported(
         'Failed to update agent visibility',
         Effect.flatMap(page, ({ catalog }) =>
           catalog.setAllAgentsEnabled(message),
-        ).pipe(Effect.andThen(agentsChanged())),
+        ).pipe(Effect.andThen(agentsChanged)),
       ),
     openAgentYaml: (message) =>
       present.reported(
@@ -412,81 +386,6 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
         globalState
           .update(CUSTOM_AGENT_DIR_KEY.key, undefined)
           .pipe(Effect.andThen(afterCustomDirChange)),
-      ),
-    applyAgentModePreset: (message) =>
-      present.reported(
-        'Failed to apply agent team',
-        Effect.gen(function* () {
-          const { agents, workspaceAgents } = yield* page;
-          const result = yield* applyTeam(message.presetId, {
-            workspaceAgents,
-            repoState: ports.roots.repoState,
-            resolveAgent: agents.get,
-          });
-          switch (result.status) {
-            case 'unknown':
-              return yield* present.alert(
-                formatUnknownTeamMessage(message.presetId),
-              );
-            case 'applied': {
-              const { preset, rootAgent, missingAgents } = result.plan;
-              // The team is committed before this repaint, so a failed
-              // repaint says the apply itself went through.
-              yield* agentsChanged(rootAgent?.name).pipe(
-                Effect.mapError(
-                  (cause) =>
-                    new Error(
-                      `The team was applied, but the settings view could not be refreshed: ${toErrorMessage(cause)}`,
-                      { cause },
-                    ),
-                ),
-              );
-              const unresolvedCount = missingAgents.length;
-              return yield* present.notice(
-                unresolvedCount === 0
-                  ? `Applied "${preset.name}" team`
-                  : `Applied "${preset.name}" with ${formatResultCount(unresolvedCount, 'member')} still unavailable`,
-              );
-            }
-            default:
-              return absurd(result);
-          }
-        }),
-      ),
-    saveAgentModePreset: () =>
-      present.reported(
-        'Failed to save agent team',
-        Effect.gen(function* () {
-          const name = yield* bindings.dialogs.input({
-            prompt: 'Name for the new team',
-            placeholder: 'e.g. My Research Team',
-          });
-          if (!name?.trim()) return;
-          const { catalog } = yield* page;
-          const preset = yield* catalog.saveCurrentPreset(name);
-          yield* agentsChanged();
-          yield* present.notice(`Saved team "${preset.name}"`);
-        }),
-      ),
-    deleteAgentModePreset: (message) =>
-      present.reported(
-        'Failed to delete agent team',
-        Effect.gen(function* () {
-          const { catalog } = yield* page;
-          const target = yield* catalog.getCustomPreset(message.presetId);
-          if (!target) {
-            return yield* present.alert(
-              `Unknown custom team: ${message.presetId}`,
-            );
-          }
-          const confirmed = yield* bindings.dialogs.confirm({
-            message: `Delete team "${target.name}"?`,
-            action: 'Delete',
-          });
-          if (!confirmed) return;
-          yield* catalog.deleteCustomPreset(message.presetId);
-          yield* agentsChanged();
-        }),
       ),
   } satisfies Partial<SettingsViewInboundHandlerRegistry>;
 

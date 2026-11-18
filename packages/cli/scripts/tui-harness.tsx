@@ -252,7 +252,6 @@ const SHOW_NESTED_CHILDREN = process.env.HARNESS_NESTED_CHILDREN === '1';
 const SHOW_PLAN = process.env.HARNESS_PLAN === '1';
 const SHOW_IDLE_PLAN = process.env.HARNESS_PLAN_IDLE === '1';
 const FAILED_CHILD_AGENT = process.env.HARNESS_FAILED_CHILD?.trim();
-const TEAM_NAME = process.env.HARNESS_TEAM_NAME?.trim() || undefined;
 let canInterrupt = process.env.HARNESS_CAN_INTERRUPT === '1';
 const QUEUED_FOLLOW_UPS = parseList(process.env.HARNESS_QUEUED_FOLLOWUPS);
 // Deliveries a child run queued on the root (a `<subagent-result>`
@@ -1327,7 +1326,6 @@ sessionMeta.set({
   modelSource: 'builtin-default',
   cwd: HARNESS_CWD,
   approvalPolicy: APPROVAL_POLICY_DEFAULT,
-  ...(TEAM_NAME && { team: { id: TEAM_NAME, name: TEAM_NAME } }),
   version: '0.0.0-harness',
 });
 // The harness root: minted before any fixture, like a real run's start.
@@ -1731,7 +1729,6 @@ function appendHarnessStatus(): void {
     formatCliSessionStatus({
       agent: meta.agent,
       model: meta.model,
-      teamName: meta.team?.name,
       modelAccess: run?.usage.usageRoute,
       approvalPolicy: harnessApprovalPolicy(),
       approvalBypasses: runBypasses(view, runId),

@@ -19,14 +19,14 @@ const DEFAULT_AGENT_PRIORITY: readonly string[] = [
 
 /**
  * Pick the implicit default chat agent from the visible agents, so the
- * default follows whatever single agent or team the user applied:
+ * default follows the agents the user chose to show:
  *
  *  1. the built-in default ({@link BUILTIN_DEFAULT_CHAT_AGENT}) when visible —
  *     a fresh, full-catalog workspace starts on `assistant`;
  *  2. otherwise the highest-priority visible agent by
- *     {@link PREFERRED_TOOL_USE_AGENTS} order (team leads/orchestrators first),
- *     so a scoped discipline team defaults to its lead rather than whatever
- *     sorts first in the registry's file order;
+ *     {@link PREFERRED_TOOL_USE_AGENTS} order (orchestrators first), so a
+ *     narrowed agent list defaults to a lead rather than whatever sorts
+ *     first in the registry's file order;
  *  3. otherwise the first visible candidate.
  *
  * The trailing {@link BUILTIN_DEFAULT_CHAT_AGENT} only applies when no candidate

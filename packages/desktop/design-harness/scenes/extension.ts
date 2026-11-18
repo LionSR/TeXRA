@@ -67,16 +67,6 @@ function host(): HostSnapshot {
       { value: 'gpt-5.6', label: 'GPT 5.6' },
       { value: 'claude-sonnet-5-5', label: 'Sonnet 5.5' },
     ],
-    teamOptions: [
-      {
-        value: 'review-team',
-        label: 'Review team',
-        source: 'built-in',
-        icon: 'users',
-        description: 'Scout, review, verify.',
-        unavailableMembers: [],
-      },
-    ],
     workspaceRoots: [{ value: '/paper', label: 'ldt-lean' }],
     fileOptions: {
       baseFile: ['main.tex', 'section2.tex', 'appendixB.tex'],

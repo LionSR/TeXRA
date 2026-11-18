@@ -236,10 +236,7 @@ interface AsyncListFormProps<TData, TValue> extends Omit<
   readonly selectable?: boolean;
   readonly showTransientCloseHint?: boolean;
   /** The active row's value, one of `items` (Select matches by identity). */
-  readonly activeValueFor?: (
-    data: TData,
-    items: ReadonlyArray<SelectItem<TValue>>,
-  ) => TValue | undefined;
+  readonly activeValueFor?: (data: TData) => TValue | undefined;
   readonly detailFor?: (data: TData) => ReactNode;
   readonly detailRowsFor?: (data: TData) => number;
   readonly compactDetailFor?: (data: TData) => ReactNode;
@@ -313,7 +310,7 @@ export function AsyncListForm<TData, TValue>(
     <ListForm
       {...listProps}
       items={items}
-      activeValue={activeValueFor?.(data, items) ?? listProps.activeValue}
+      activeValue={activeValueFor?.(data) ?? listProps.activeValue}
       detail={detailFor?.(data) ?? listProps.detail}
       detailRows={detailRowsFor?.(data) ?? listProps.detailRows}
       compactDetail={compactDetailFor?.(data) ?? listProps.compactDetail}

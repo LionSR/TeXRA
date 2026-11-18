@@ -96,7 +96,6 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
       formatCliSessionStatus({
         agent: meta.agent,
         model,
-        teamName: meta.team?.name,
         // A completed request's route cannot change, so it outranks the
         // prospective one.
         modelAccess: run?.usage.usageRoute ?? option?.usageRoute,

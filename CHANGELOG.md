@@ -6,6 +6,30 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Agent teams are removed.** There are no built-in teams (Lean Project,
+  Physicist, Mathematician, Computer Scientist, Software Engineer) and no
+  saved custom teams: Settings → Agents has no **Teams** section, the launch
+  form and `/agent` list agents only, and `texra team` is gone. To run
+  multi-agent work, start a lead agent (`orchestrator`, `leanOrchestrator` or
+  `engineer`), which delegates to the agents the workspace shows:
+  `texra run orchestrator --instruction …` where `texra team run physicist`
+  was. A workspace shows every agent unless you turn some off (Settings →
+  Agents → Library, or `texra config agents --agents <agent,...>`);
+  `texra config agents` no longer takes `--default-team`, `--agents inherit`
+  or `--agents team:<team>`, refuses a list naming an agent that does not
+  exist instead of storing it, and its output has no `Effective agents` or
+  `Default team` line. The setup assistant no longer asks for your field to
+  apply a team (its `apply_team` tool is removed), and the command
+  **TeXRA: Agent Team Settings** is removed. A workspace whose stored
+  selection named a team or inherited the default shows every agent; saved
+  custom teams are no longer read. The NDJSON kinds `team`,
+  `team-inspection` and `team-result` are gone. SDK:
+  `WorkspaceAgentsSelection` is `all` or `custom`;
+  `AgentDirectoriesPort.teamMembers`, `InvalidAgentTeamError` and the
+  workspace agents' `getDefaultTeamId`, `getActiveTeamId`, `setDefaultTeam`
+  and `removeTeamPreset` are removed, `snapshot()` answers
+  `{ selection, unresolvedNames }`, and `WorkspaceAgentsStores` is the
+  repository state alone.
 - **Document tasks are programs, not agents.** The agents `correct`,
   `polish`, `generic`, `devise`, `criticize`, `firstread`, `logic`,
   `notation`, `enhance`, `apply`, `merge`, `ocr`, `transcribe_audio`,

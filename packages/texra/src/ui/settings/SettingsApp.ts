@@ -33,7 +33,6 @@ import './tabs/PrivacyTab';
 import './tabs/SubscriptionsTab';
 import './tabs/ModelsTab';
 import './tabs/AgentsTab';
-import './tabs/TeamsTab';
 import './tabs/ApprovalTab';
 import './tabs/PluginsTab';
 import './tabs/SkillsTab';
@@ -269,12 +268,6 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             .customAgentDirIsDefault=${host.customAgentDir?.isDefault ?? true}
             .customAgentScanIssues=${host.agents?.customAgentIssues ?? []}
           >
-            <teams-tab
-              slot="teams"
-              .activePresetId=${host.teams?.activePresetId ?? null}
-              .presets=${host.teams?.presets ?? []}
-              .orchestratorAgents=${host.teams?.orchestratorAgents ?? []}
-            ></teams-tab>
             <skills-tab
               slot="skills"
               .skills=${host.skills?.skills ?? []}

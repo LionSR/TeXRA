@@ -185,8 +185,7 @@ function findCliModelAccessEntry(
 
 /**
  * Output projection for JSON/NDJSON: the model id is addressable under the
- * same key (`.id`) as every other CLI resource (`agents`, `team`,
- * `history`).
+ * same key (`.id`) as every other CLI resource (`agents`, `history`).
  *
  * The record is the whole of `ModelOptionData`, so it follows that schema: at
  * 1.0 the fanned-out `availabilityLabel`, `requiresKey` and `disabled` keys are

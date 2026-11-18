@@ -427,9 +427,9 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
             Stream.filter((input) => input === 'view'),
             Stream.runForEach(() => finish(toolsPage.refresh)),
           ),
-          // A run that binds a GitHub subscription, the setup agent's
-          // `apply_team`, and a provider key written by any writer (the setup
-          // agent's `unset_api_key`, another window). OAuth tokens and other
+          // A run that binds a GitHub subscription, an agent catalog reload,
+          // and a provider key written by any writer (the setup agent's
+          // `unset_api_key`, another window). OAuth tokens and other
           // secrets are not provider keys, so they change nothing here.
           followSignal('githubSubscriptionsChanged', () => changed('github')),
           followSignal('workspaceAgentsChanged', () => changed('agents')),

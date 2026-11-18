@@ -16,9 +16,3 @@ export function formatCliHistorySubject(
     (entry.description && collapseWhitespace(entry.description)) || noInputLabel
   );
 }
-
-export function formatCliHistoryAgentLabel(
-  entry: Pick<CliHistoryEntry, 'agent' | 'teamId'>,
-): string {
-  return entry.teamId ? `team:${entry.teamId}` : entry.agent;
-}

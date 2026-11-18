@@ -92,7 +92,7 @@ const WRAPPED_EDIT_APPROVAL_ENV = Object.freeze({
   HARNESS_EDIT_APPROVAL: '1',
   HARNESS_EDIT_APPROVAL_WRAPPED_CONTEXT: '1',
 });
-const PHYSICIST_AGENTS = [
+const VISIBLE_AGENTS = [
   'research',
   'review',
   'latexFixer',
@@ -626,15 +626,11 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_ROOT_ENDED: '1',
-      HARNESS_VISIBLE_AGENTS: PHYSICIST_AGENTS,
+      HARNESS_VISIBLE_AGENTS: VISIBLE_AGENTS,
     },
     keys: ['/', `${ESC}/agent\r`],
     settleMs: ASYNC_FORM_SETTLE_MS,
-    expect: [
-      '/agent',
-      'Agents',
-      'Choose an agent, or a team it leads, for this chat.',
-    ],
+    expect: ['/agent', 'Agents', 'Choose an agent for this chat.'],
     unexpect: ['//agent', 'Harness received: //agent', '/agent · error'],
   },
   {
@@ -685,7 +681,7 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_ROOT_ENDED: '1',
-      HARNESS_VISIBLE_AGENTS: PHYSICIST_AGENTS,
+      HARNESS_VISIBLE_AGENTS: VISIBLE_AGENTS,
     },
     keys: ['/agent', '\r'],
     settleMs: ASYNC_FORM_SETTLE_MS,
@@ -696,8 +692,8 @@ const SCENARIOS = [
       'review',
       'latexFixer',
       'Current: chat (hidden from picker)',
-      'Choose an agent, or a team it leads, for this chat.',
-      '1-9/a-z/Enter select',
+      'Choose an agent for this chat.',
+      '1-5/Enter select',
       'Esc close',
     ],
     unexpect: [
@@ -720,7 +716,7 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_ROOT_ENDED: '1',
-      HARNESS_VISIBLE_AGENTS: PHYSICIST_AGENTS,
+      HARNESS_VISIBLE_AGENTS: VISIBLE_AGENTS,
     },
     keys: ['/agent', '\r'],
     settleMs: ASYNC_FORM_SETTLE_MS,
@@ -731,8 +727,8 @@ const SCENARIOS = [
       'review',
       'latexFixer',
       'Current: chat (hidden from picker)',
-      'Choose an agent, or a team it leads, for this chat.',
-      '1-9/a-z/Enter select',
+      'Choose an agent for this chat.',
+      '1-5/Enter select',
       'Esc close',
     ],
     unexpect: [
@@ -893,8 +889,7 @@ const SCENARIOS = [
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/config · Agents',
-      'Workspace agents',
-      'Default team',
+      'All agents',
       'Default chat agent',
       'Custom selection',
       '↑/↓ navigate',
@@ -1098,7 +1093,7 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_ROOT_ENDED: '1',
-      HARNESS_VISIBLE_AGENTS: PHYSICIST_AGENTS,
+      HARNESS_VISIBLE_AGENTS: VISIBLE_AGENTS,
     },
     keys: ['/agent', '\r'],
     frame: 'viewport',
@@ -1107,9 +1102,9 @@ const SCENARIOS = [
       '/agent',
       'Current: chat (hidden from picker)',
       'Agents',
-      '+9 more',
+      '+4 more',
       '↑/↓ navigate',
-      '1-9/a-z/Enter select',
+      '1-5/Enter select',
       'Esc close',
     ],
     unexpect: ['Platform not initialized', '/agent · error'],
@@ -1676,16 +1671,15 @@ const SCENARIOS = [
     ],
   },
   {
-    name: 'team-status-empty-subagents-hidden',
+    name: 'status-empty-subagents-hidden',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_BASH_APPROVAL: '1',
-      HARNESS_TEAM_NAME: 'Physicist',
     },
     bootExpect: ' Ctrl-C ',
     keys: ['a', '/status', '\r'],
     frame: 'viewport',
-    expect: ['team: Physicist', 'auto-approvals: commands', 'AUTO: COMMANDS'],
+    expect: ['auto-approvals: commands', 'AUTO: COMMANDS'],
     unexpect: ['Run command?', '1 approval', 's subagents'],
   },
   {

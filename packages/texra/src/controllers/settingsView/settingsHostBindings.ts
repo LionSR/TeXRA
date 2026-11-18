@@ -46,10 +46,6 @@ export interface SettingsHostBindings {
   /** Show YAML the user must not save back over where it came from. */
   showReadOnlyYaml(filePath: string, text: string): HostEffect;
   pickFolder(title: string): HostEffect<string | undefined>;
-  /** Select the tool-use root a team just applied named in the launcher
-   *  of the project this view belongs to. Every launcher's catalogs follow
-   *  the agent list on their own (`workspaceAgentsChanged`). */
-  selectLauncherAgent(agent: string): HostEffect;
   /** Run one subscription's sign-in (`SubscriptionProvider.signIn`) over
    *  this host's prompts and answer the account. The body tells the user how
    *  it ended; a user who backs out of a prompt fails with `Cancelled`,
