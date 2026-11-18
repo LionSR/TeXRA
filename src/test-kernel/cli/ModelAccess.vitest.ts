@@ -2,46 +2,18 @@ import { layer } from '@effect/vitest';
 import { expect } from 'vitest';
 import { Effect } from 'effect';
 
-import {
-  selectCliRunnableModel,
-  type CliModelAccess,
-} from '@cli/runtime/models/modelAccess';
+import { selectCliRunnableModel } from '@cli/runtime/models/modelAccess';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import type { RunModelDecisionReason } from '@texra-ai/harness/host';
 
-function model(
-  value: string,
-  overrides: Partial<CliModelAccess> = {},
-): CliModelAccess {
-  return {
-    model: { value, label: value },
-    available: true,
-    status: 'available',
-    ...overrides,
-  };
+function model(value: string): ModelOptionData {
+  return { value, label: value };
 }
 
-function modelOption(
-  value: string,
-  overrides: Partial<ModelOptionData> = {},
-): ModelOptionData {
-  return {
-    value,
-    label: value,
-    ...overrides,
-  };
-}
-
-function missingKeyModel(value: string): CliModelAccess {
-  return model(value, {
-    available: false,
-    status: 'missing api key',
-    model: modelOption(value, {
-      availability: 'missing-key',
-    }),
-  });
+function missingKeyModel(value: string): ModelOptionData {
+  return { value, label: value, availability: 'missing-key' };
 }
 
 /**
@@ -56,7 +28,7 @@ const stores = Effect.map(SessionGraph.runtime, (runtime) => ({
 
 /** The lookup for one fallback reason, over the process stores. */
 const resolveModelFromAccessList = (
-  accessList: readonly CliModelAccess[],
+  accessList: readonly ModelOptionData[],
   model: string,
   { fallbackReason }: { readonly fallbackReason: RunModelDecisionReason },
 ) =>

@@ -52,6 +52,12 @@ export const resolveSetupLaunchModel = Effect.fn('resolveSetupLaunchModel')(
 export const hasUsableSetupCredential = (stores: SettingsStores) =>
   resolveSetupLaunchModel(stores).pipe(Effect.map((model) => model !== null));
 
-/** The picker's model options as the follow-up controls list them, read live. */
-export const loadModelOptions = (stores: SettingsStores) =>
-  readModelOptions(stores).pipe(Effect.map(modelOptionsFrom));
+/**
+ * The picker's rows, read live: every visible model's (the harness's default
+ * list), or those of `models`, one each, in order. Each row carries its
+ * availability verdict, which every host words itself.
+ */
+export const loadModelOptions = (
+  stores: SettingsStores,
+  models?: readonly string[],
+) => readModelOptions(stores, models).pipe(Effect.map(modelOptionsFrom));

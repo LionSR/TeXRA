@@ -4,28 +4,16 @@ import { Effect, Result, absurd } from 'effect';
 import { LaunchRefused } from '@texra-ai/harness';
 
 // Local imports
-import {
-  decideRunModel,
-  readModelOptions,
-  type ModelVerdict,
-  type RunModelCandidate,
-} from '@texra-ai/harness/host';
+import { decideRunModel, type RunModelCandidate } from '@texra-ai/harness/host';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
 import { isModelOptionAvailable, joinFacts } from '@texra-ai/harness/schemas';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
-import { modelOptionsFrom } from '@texra/model/modelOptions';
+import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 
 // Local file imports
 import { modelAvailabilityLabel } from '@ui/copy/modelAccess';
 import { resolveKnownCliModelId } from '../platform/cliConfig';
-
-export interface CliModelAccess {
-  readonly model: ModelOptionData;
-  /** Runnable with the currently configured credentials. */
-  readonly available: boolean;
-  readonly status: string;
-}
 
 export interface CliModelPickerItem {
   readonly value: string;
@@ -44,22 +32,10 @@ interface CliRunnableModelResolution {
   readonly notice?: string;
 }
 
-interface CliModelAccessListOptions {
-  readonly stores: SettingsStores;
-  readonly models?: readonly string[];
-}
-
-/**
- * Deliberately does NOT extend {@link CliModelAccessListOptions}:
- * `loadCliModelAccessList` calls `getCliModelAccessList()` with the stores and
- * nothing else, so a `models` filter passed here would be silently dropped.
- * Keeping the field off the type makes that unrepresentable rather than
- * ignored.
- */
 interface CliModelAccessEntryOptions {
   readonly stores: SettingsStores;
   /** Optional preloaded list, used by commands that already fetched access. */
-  readonly accessList?: readonly CliModelAccess[];
+  readonly accessList?: readonly ModelOptionData[];
 }
 
 interface CliRunnableModelOptions extends Pick<
@@ -81,20 +57,15 @@ const NO_RUNNABLE_MODEL_ACCESS_COPY = 'No models are available';
  *  to figure out key storage on their own. */
 export const CLI_SETUP_RECOVERY = 'Add a provider API key with `texra setup`.';
 
-function runnableCliModelAccessEntries(
-  models: readonly CliModelAccess[],
-): CliModelAccess[] {
-  return models.filter((entry) => entry.available);
-}
-
 export function formatCliNoRunnableModelsMessage(
   recovery: string = CLI_SETUP_RECOVERY,
 ): string {
   return `${NO_RUNNABLE_MODEL_ACCESS_COPY}. ${recovery}`;
 }
 
-/** The kind's label, lower-cased for the terminal's sentence-case rows. */
-function formatModelAccessStatus(model: ModelOptionData): string {
+/** A row's availability as the terminal's sentence-case rows read it: the
+ *  kind's label, lower-cased. */
+export function cliModelStatus(model: ModelOptionData): string {
   return model.availability === undefined
     ? 'available'
     : modelAvailabilityLabel({
@@ -107,9 +78,9 @@ function formatModelAccessStatus(model: ModelOptionData): string {
  * The picker row's access, naming the coding plan when one pays for the next
  * request (the option's `usageRoute`, decided by the picker).
  */
-function formatModelStatusForCli(model: CliModelAccess): string {
-  const plan = codingPlanForUsageRoute(model.model.usageRoute);
-  return `api: ${plan?.displayName ?? model.status}`;
+function formatModelStatusForCli(model: ModelOptionData): string {
+  const plan = codingPlanForUsageRoute(model.usageRoute);
+  return `api: ${plan?.displayName ?? cliModelStatus(model)}`;
 }
 
 // Reason a given model id cannot be switched to right now, or undefined if it can.
@@ -118,23 +89,23 @@ export type GetModelSwitchDisabledReason = (
 ) => Effect.Effect<string | undefined, Error>;
 
 export function modelSelectItemsForCli(
-  models: readonly CliModelAccess[],
+  models: readonly ModelOptionData[],
   getModelSwitchDisabledReason?: GetModelSwitchDisabledReason,
 ) {
   return Effect.forEach(
-    runnableCliModelAccessEntries(models),
+    models.filter(isModelOptionAvailable),
     Effect.fnUntraced(function* (model) {
       const disabledReason = getModelSwitchDisabledReason
-        ? yield* getModelSwitchDisabledReason(model.model.value)
+        ? yield* getModelSwitchDisabledReason(model.value)
         : undefined;
       const access = formatModelStatusForCli(model);
       const status = joinFacts([
         access,
-        model.model.reasoning && `reasoning setting: ${model.model.reasoning}`,
+        model.reasoning && `reasoning setting: ${model.reasoning}`,
       ]);
       return {
-        value: model.model.value,
-        label: model.model.label || model.model.value,
+        value: model.value,
+        label: model.label || model.value,
         description: disabledReason ? `${disabledReason}; ${status}` : status,
         disabled: disabledReason != null,
       } satisfies CliModelPickerItem;
@@ -142,41 +113,22 @@ export function modelSelectItemsForCli(
   );
 }
 
-/** Each option's picker row, with the plan its route pays through. */
-function cliModelAccessFrom(
-  options: readonly ModelVerdict[],
-): CliModelAccess[] {
-  return modelOptionsFrom(options).map((model) => ({
-    model,
-    available: isModelOptionAvailable(model),
-    status: formatModelAccessStatus(model),
-  }));
-}
-
-export const getCliModelAccessList = Effect.fn('getCliModelAccessList')(
-  function* (options: CliModelAccessListOptions) {
-    return cliModelAccessFrom(
-      yield* readModelOptions(options.stores, options.models),
-    );
-  },
-);
-
 function findCliModelAccessEntry(
-  models: readonly CliModelAccess[],
+  models: readonly ModelOptionData[],
   model: string,
-): CliModelAccess | undefined {
-  const exact = models.find((entry) => entry.model.value === model);
+): ModelOptionData | undefined {
+  const exact = models.find((entry) => entry.value === model);
   if (exact) return exact;
 
   const lower = model.toLowerCase();
   const lowerMatch = models.find(
-    (entry) => entry.model.value.toLowerCase() === lower,
+    (entry) => entry.value.toLowerCase() === lower,
   );
   if (lowerMatch) return lowerMatch;
 
   const canonical = resolveKnownCliModelId(model);
   if (!canonical) return undefined;
-  return models.find((entry) => entry.model.value === canonical);
+  return models.find((entry) => entry.value === canonical);
 }
 
 /**
@@ -196,11 +148,11 @@ export function cliModelRecord(
 }
 
 export function listableModelAccessEntries(
-  models: readonly CliModelAccess[],
+  models: readonly ModelOptionData[],
   options: CliModelListOptions = {},
-): readonly CliModelAccess[] {
+): readonly ModelOptionData[] {
   if (options.includeUnavailable === true) return models;
-  return runnableCliModelAccessEntries(models);
+  return models.filter(isModelOptionAvailable);
 }
 
 export function formatNoListableModelsMessage(
@@ -217,10 +169,10 @@ export function formatNoListableModelsMessage(
   ].join('\n');
 }
 
-function formatCliModelRecovery(entry: CliModelAccess): string | undefined {
-  if (entry.available) return undefined;
+function formatCliModelRecovery(model: ModelOptionData): string | undefined {
+  if (isModelOptionAvailable(model)) return undefined;
 
-  const availability = entry.model.availability;
+  const availability = model.availability;
 
   switch (availability) {
     case 'missing-key':
@@ -243,13 +195,12 @@ function formatCliModelRecovery(entry: CliModelAccess): string | undefined {
   }
 }
 
-export function formatCliModelDetails(entry: CliModelAccess): string {
-  const { model, status } = entry;
+export function formatCliModelDetails(model: ModelOptionData): string {
   const lines: string[] = [];
   lines.push(`id: ${model.value}`);
   lines.push(`label: ${model.label}`);
   if (model.provider) lines.push(`provider: ${model.provider}`);
-  lines.push(`status: ${status}`);
+  lines.push(`status: ${cliModelStatus(model)}`);
   if (model.availability)
     lines.push(
       `availability: ${modelAvailabilityLabel({
@@ -257,7 +208,7 @@ export function formatCliModelDetails(entry: CliModelAccess): string {
         usageRoute: model.usageRoute,
       })}`,
     );
-  const recovery = formatCliModelRecovery(entry);
+  const recovery = formatCliModelRecovery(model);
   if (recovery) lines.push(`recovery: ${recovery}`);
   if (model.context) lines.push(`context: ${model.context}`);
   if (model.cost) lines.push(`cost: ${model.cost}`);
@@ -272,9 +223,8 @@ export function formatCliModelDetails(entry: CliModelAccess): string {
 const loadCliModelAccessList = Effect.fn('loadCliModelAccessList')(function* (
   options: CliModelAccessEntryOptions,
 ) {
-  const models: readonly CliModelAccess[] =
-    options.accessList ??
-    (yield* getCliModelAccessList({ stores: options.stores }));
+  const models: readonly ModelOptionData[] =
+    options.accessList ?? (yield* loadModelOptions(options.stores));
   return models;
 });
 
@@ -288,9 +238,9 @@ export const loadCliModelAccessEntry = Effect.fn('loadCliModelAccessEntry')(
     const hiddenModelId = resolveKnownCliModelId(trimmed);
     if (hiddenModelId == null) return undefined;
 
-    const [hiddenEntry] = cliModelAccessFrom(
-      yield* readModelOptions(options.stores, [hiddenModelId]),
-    );
+    const [hiddenEntry] = yield* loadModelOptions(options.stores, [
+      hiddenModelId,
+    ]);
     if (!hiddenEntry) {
       return yield* new LaunchRefused({
         message: `Model "${hiddenModelId}" is configured but has no option data.`,
@@ -316,11 +266,11 @@ function formatAvailableModels(
 
 function formatUnavailableModelMessage(
   model: string,
-  entry: CliModelAccess | undefined,
+  entry: ModelOptionData | undefined,
   availableIds: readonly string[],
   options: CliAvailableModelsMessageOptions,
 ): string {
-  const status = entry ? ` (${entry.status})` : '';
+  const status = entry ? ` (${cliModelStatus(entry)})` : '';
   return `Model "${model}" is not available${status}. ${formatAvailableModels(availableIds, options)}`;
 }
 
@@ -374,15 +324,15 @@ export const selectCliRunnableModel = Effect.fn('selectCliRunnableModel')(
       const entry = result.success;
       if (
         entry &&
-        !findCliModelAccessEntry(modelsWithHiddenEntry, entry.model.value)
+        !findCliModelAccessEntry(modelsWithHiddenEntry, entry.value)
       ) {
         modelsWithHiddenEntry = [...modelsWithHiddenEntry, entry];
       }
     }
-    const runnableEntries = runnableCliModelAccessEntries(
-      modelsWithHiddenEntry,
+    const runnableEntries = modelsWithHiddenEntry.filter(
+      isModelOptionAvailable,
     );
-    const availableIds = runnableEntries.map((entry) => entry.model.value);
+    const availableIds = runnableEntries.map((entry) => entry.value);
     const decision = decideRunModel(
       [
         ...requestedCandidates,
@@ -394,7 +344,7 @@ export const selectCliRunnableModel = Effect.fn('selectCliRunnableModel')(
 
     if (decision && decision._tag !== 'Unavailable') {
       const selectedModel =
-        findCliModelAccessEntry(runnableEntries, decision.model)?.model.value ??
+        findCliModelAccessEntry(runnableEntries, decision.model)?.value ??
         decision.model;
       if (decision._tag === 'Chosen') {
         return { model: selectedModel } satisfies CliRunnableModelResolution;

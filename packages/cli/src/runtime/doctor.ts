@@ -10,7 +10,10 @@ import {
 } from 'effect';
 
 // Local imports
-import { formatResultCount } from '@texra-ai/harness/schemas';
+import {
+  formatResultCount,
+  isModelOptionAvailable,
+} from '@texra-ai/harness/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { probeLatexTools } from '@latex/latexToolchain';
 import type { UsageLoggingOptOut } from '@telemetry/UsageLogService';
@@ -33,7 +36,7 @@ import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from './terminal/terminalRequirements'
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { CliContext } from './platform/cliContext';
 import type { CliStyle } from './terminal/style';
-import type { CliModelAccess } from './models/modelAccess';
+import type { ModelOptionData } from '@texra/shared/pickerOptions';
 
 type DoctorCheckStatus = 'pass' | 'warn' | 'fail' | 'skip';
 
@@ -73,7 +76,10 @@ type DoctorInput =
   | { readonly kind: 'degraded'; readonly initError: Error }
   | {
       readonly kind: 'ready';
-      readonly modelAccessList: Effect.Effect<readonly CliModelAccess[], Error>;
+      readonly modelAccessList: Effect.Effect<
+        readonly ModelOptionData[],
+        Error
+      >;
       readonly usageLoggingOptOut: Effect.Effect<UsageLoggingOptOut>;
     };
 
@@ -219,7 +225,7 @@ function checkDirectory(
 function checkModels(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
   return deps.modelAccessList.pipe(
     Effect.map((models) => {
-      const available = models.filter((entry) => entry.available);
+      const available = models.filter(isModelOptionAvailable);
       if (available.length > 0) {
         return pass(
           'models',

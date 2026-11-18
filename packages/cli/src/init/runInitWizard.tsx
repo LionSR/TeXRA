@@ -16,7 +16,9 @@ import {
 } from '@texra/shared/cliOutputFormat';
 import { pickDefaultToolUseAgent } from '../runtime/defaultAgents';
 import type { InitAnswers } from '../runtime/platform/initConfig';
-import type { CliModelAccess } from '../runtime/models/modelAccess';
+import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
+import type { ModelOptionData } from '@texra/shared/pickerOptions';
+import { cliModelStatus } from '../runtime/models/modelAccess';
 import { CANCEL_HINT, KeyHints, NAVIGATE_HINT } from '@cli/tui/ui/KeyHints';
 
 interface InitWizardAgentOption {
@@ -25,7 +27,7 @@ interface InitWizardAgentOption {
 
 interface InitWizardOptions {
   readonly agents: readonly InitWizardAgentOption[];
-  readonly models: readonly CliModelAccess[];
+  readonly models: readonly ModelOptionData[];
   readonly colorEnabled?: boolean;
 }
 
@@ -59,17 +61,19 @@ interface Draft {
 }
 
 function initWizardModelSelectItems(
-  models: readonly CliModelAccess[],
+  models: readonly ModelOptionData[],
 ): ReadonlyArray<SelectItem<string>> {
-  const hasAvailableModel = models.some((model) => model.available);
-  return models.map((model) => ({
-    value: model.model.value,
-    label: model.model.label || model.model.value,
-    description: model.available
-      ? model.status
-      : `${model.status} (unavailable now)`,
-    disabled: hasAvailableModel && !model.available,
-  }));
+  const hasAvailableModel = models.some(isModelOptionAvailable);
+  return models.map((model) => {
+    const available = isModelOptionAvailable(model);
+    const status = cliModelStatus(model);
+    return {
+      value: model.value,
+      label: model.label || model.value,
+      description: available ? status : `${status} (unavailable now)`,
+      disabled: hasAvailableModel && !available,
+    };
+  });
 }
 
 function initWizardDefaultAgentIndex(
@@ -150,7 +154,7 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
           key={step}
           initialIndex={Math.max(
             0,
-            props.options.models.findIndex((model) => model.available),
+            props.options.models.findIndex(isModelOptionAvailable),
           )}
           items={initWizardModelSelectItems(props.options.models)}
           onSelect={(model) => commit({ model })}
