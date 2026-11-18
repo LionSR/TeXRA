@@ -472,6 +472,30 @@ describe('canonical Anthropic Messages protocol', () => {
       }),
   );
 
+  // Failure mode: the API marks a failure not worth repeating with
+  // `x-should-retry: false`, which the SDK obeys, but a 5xx status alone
+  // made the turn retryable, so the run resent it.
+  it.effect('does not retry a failure the API says not to retry', () =>
+    Effect.gen(function* () {
+      fetchModel.mockImplementationOnce(async () =>
+        Response.json(
+          {
+            type: 'error',
+            error: { type: 'api_error', message: 'Internal error.' },
+          },
+          { status: 500, headers: { 'x-should-retry': 'false' } },
+        ),
+      );
+      const configured = yield* model();
+      const prepared = yield* configured.prepareTurn(REQUEST);
+      assert(prepared.mode === 'foreground');
+      const failure = yield* Effect.flip(
+        completedTurn(configured.streamTurn(prepared)),
+      );
+      expect(failure).toMatchObject({ status: 500, retryable: false });
+    }),
+  );
+
   it.effect(
     'rejects ambient custom headers before they override the selected credentials',
     () =>
