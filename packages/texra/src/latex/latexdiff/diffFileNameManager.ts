@@ -4,8 +4,6 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 import { entryTypeIn, workspaceRelativePath } from '@texra-ai/harness/node';
 
-import { COMMIT_HASH_HEX_RANGE } from '@texra/utils/git/commitHashPattern';
-
 type GeneratedLatexdiffArtifactKind =
   | 'workspaceDiff'
   | 'versionControlDiff'
@@ -62,7 +60,11 @@ export function generateDiffFileName(
   return `${path.parse(editedFile).name}${suffix}.tex`;
 }
 
-/** Hash group sourced from `@texra/utils/git/commitHashPattern` so it can't drift from the git-commit validator. */
+/** An abbreviated or full git commit hash: git accepts one as short as 4
+ *  characters (shorter prefixes risk ambiguity) up to a full 40-character
+ *  SHA-1. */
+const COMMIT_HASH_HEX_RANGE = '[0-9a-fA-F]{4,40}';
+
 const VERSION_CONTROL_DIFF_PATTERN = new RegExp(
   `^(.+)${VERSION_CONTROL_DIFF_INFIX}(${COMMIT_HASH_HEX_RANGE})$`,
   'i',
