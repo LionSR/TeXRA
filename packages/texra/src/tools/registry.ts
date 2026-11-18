@@ -74,7 +74,6 @@ import { OpenPdfTool } from './OpenPdfTool';
  *     allowlisted one
  *   - send_to_terminal — type into VS Code's integrated terminal for
  *     sudo / interactive prompts the captured-stdio bash tool can't handle
- *   - apply_team — apply a discipline team + record the default team
  *
  * Shell-rc writes go through the regular `bash` tool (and its approval
  * dialog) — there's no dedicated rc-writing tool. A hand-rolled validator
@@ -92,7 +91,6 @@ import { InvokeCommandTool } from './setup/InvokeCommandTool';
 import { InstallVscodeExtensionTool } from './setup/InstallVscodeExtensionTool';
 import { ReadConfigTool, UpdateConfigTool } from './setup/ConfigTools';
 import { SendToTerminalTool } from './setup/SendToTerminalTool';
-import { ApplyTeamTool } from './setup/ApplyTeamTool';
 import {
   SetupHost,
   SetupPlatform,
@@ -292,7 +290,6 @@ const setup = (
       ReadConfigTool,
       UpdateConfigTool,
       SendToTerminalTool,
-      ApplyTeamTool,
     ],
   });
 

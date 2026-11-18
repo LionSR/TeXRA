@@ -20,9 +20,7 @@ interface CliAgentListResult {
 }
 
 const AGENT_LOOKUP_HINT =
-  'Use `texra agents list` for visible starter agents, `texra agents list --all` for every agent, or pass a known launchable agent name from a team.';
-const TEAM_LOOKUP_HINT =
-  'Use `texra team list` for available teams, then run `texra team show <team>` to check a team before launch.';
+  'Use `texra agents list` for the agents this workspace shows, or `texra agents list --all` for every agent.';
 
 export const AGENT_NAME_DESCRIPTION =
   'Agent name from `texra agents list` or `texra agents list --all`';
@@ -40,10 +38,6 @@ export function missingRunTargetMessage(
   programNames: readonly string[],
 ): string {
   return `No program or agent is named ${name}. Programs: ${programNames.toSorted().join(', ')}. ${AGENT_LOOKUP_HINT}`;
-}
-
-export function missingTeamMessage(name: string): string {
-  return `Team not found: ${name}. ${TEAM_LOOKUP_HINT}`;
 }
 
 /**

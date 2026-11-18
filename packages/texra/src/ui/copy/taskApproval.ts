@@ -9,11 +9,11 @@ import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 
 const AUTO_APPROVE_LABEL = approvalPolicyLabel('yolo');
 
-export const TASK_APPROVAL = {
+export const TASK_APPROVAL = Object.freeze({
   title: 'Approval',
-  autoApprove: {
+  autoApprove: Object.freeze({
     label: AUTO_APPROVE_LABEL,
     description:
       'Auto-approve file edits, shell commands and agent work in this task. Turn it off from the task header at any time; a Block policy still blocks.',
-  },
-} as const;
+  }),
+} as const);

@@ -301,66 +301,70 @@ function validateBinarySmoke() {
   );
 }
 
-function validateTeamListAvailability() {
+function validateBundledLeanAgents() {
   const cwd = makeScratch('texra-cli-list-cwd-');
   const home = makeScratch('texra-cli-list-home-');
   try {
-    const listEnv = isolatedCliHomeEnv(home);
-    const runList = (args = []) =>
-      run(
-        process.execPath,
-        [binaryPath, 'team', 'list', '--cwd', cwd, ...args, '--no-color'],
-        {
-          cwd: repoRoot,
-          env: listEnv,
-        },
+    // The Lean agents ship bundled (#13080), so a fresh home lists them
+    // without any sign-in.
+    const ndjson = run(
+      process.execPath,
+      [
+        binaryPath,
+        'agents',
+        'list',
+        '--cwd',
+        cwd,
+        '--output-format',
+        'ndjson',
+        '--no-color',
+      ],
+      { cwd: repoRoot, env: isolatedCliHomeEnv(home) },
+    );
+    assertSuccess(ndjson, 'texra agents list NDJSON in a fresh home');
+    const names = parseNdjson(ndjson.stdout, 'agents list NDJSON').map(
+      (record) => record.agent?.name,
+    );
+    for (const lean of [
+      'lean',
+      'leanSearch',
+      'leanSimplifier',
+      'leanBlueprint',
+      'leanOrchestrator',
+    ]) {
+      assert(
+        names.includes(lean),
+        `agents list should include the bundled ${lean} agent without auth\nstdout:\n${ndjson.stdout}`,
       );
+    }
+  } finally {
+    removeScratch(cwd);
+    removeScratch(home);
+  }
+}
 
-    const text = runList();
-    assertSuccess(text, 'texra team list');
-    const leanProjectLine = text.stdout
-      .split('\n')
-      .find((line) => line.includes('\tlean-project\t'));
-    assert(
-      leanProjectLine != null,
-      `team list should include lean-project\nstdout:\n${text.stdout}`,
+/** A list naming an agent that does not exist is a usage error and stores
+ *  nothing: stored, it would leave the workspace only the agents it names. */
+function validateUnknownWorkspaceAgent() {
+  const cwd = makeScratch('texra-cli-agents-cwd-');
+  const home = makeScratch('texra-cli-agents-home-');
+  const configAgents = (...args) =>
+    run(
+      process.execPath,
+      [binaryPath, 'config', 'agents', ...args, '--cwd', cwd, '--no-color'],
+      { cwd: repoRoot, env: isolatedCliHomeEnv(home) },
     );
-    // The Lean agents ship bundled (#13080), so the preset is whole without
-    // any sign-in: a full count and no degraded/unavailable marker.
-    assert(
-      leanProjectLine.endsWith('\tagents:7'),
-      `lean-project should show its bundled agents as available without auth\nline:\n${leanProjectLine}`,
+  try {
+    assertUsageError(
+      configAgents('--agents', 'assistant,inherit'),
+      'texra config agents with a name no agent has',
+      'Agent not found: inherit',
     );
-
-    const json = runList(['--output-format', 'json']);
-    assertSuccess(json, 'texra team list JSON');
-    const jsonRecords = JSON.parse(json.stdout);
-    const leanProjectJson = jsonRecords.find(
-      (record) => record.id === 'lean-project',
-    );
-    const leanProjectAvailability = leanProjectJson?.availability;
+    const shown = configAgents();
+    assertSuccess(shown, 'texra config agents after a refused list');
     assert(
-      leanProjectAvailability?.agents?.label != null,
-      `team list JSON should include planned availability\nstdout:\n${json.stdout}`,
-    );
-    const leanProjectAgents = leanProjectAvailability?.agents;
-    assert(
-      leanProjectAvailability?.status === 'available' &&
-        leanProjectAgents?.available === 7 &&
-        leanProjectAgents?.total === 7 &&
-        leanProjectAgents?.missing?.length === 0,
-      `lean-project JSON should report its bundled agents as available without auth\nrecord:\n${JSON.stringify(leanProjectJson, null, 2)}`,
-    );
-
-    const ndjson = runList(['--output-format', 'ndjson']);
-    assertSuccess(ndjson, 'texra team list NDJSON');
-    const leanProjectNdjson = parseNdjson(
-      ndjson.stdout,
-      'team list NDJSON',
-    ).find((record) => record.preset?.id === 'lean-project');
-    assert(
-      leanProjectNdjson?.preset?.availability?.agents?.label != null,
-      `team list NDJSON should include planned availability\nstdout:\n${ndjson.stdout}`,
+      shown.stdout.includes('Workspace agents: all'),
+      `a refused list should leave the workspace agents unchanged\nstdout:\n${shown.stdout}`,
     );
   } finally {
     removeScratch(cwd);
@@ -402,18 +406,6 @@ function validateFileFlagMissingValues() {
     ]),
     'texra run missing --instruction-file value',
     'Missing value for --instruction-file',
-  );
-  assertUsageError(
-    run(process.execPath, [
-      binaryPath,
-      'team',
-      'run',
-      'mathematician',
-      '--input',
-      '--print',
-    ]),
-    'texra team run missing --input value',
-    'Missing value for --input',
   );
 }
 
@@ -3459,118 +3451,6 @@ prompt: |
   }
 }
 
-function validateTeamRunCommand() {
-  const cwd = makeScratch('texra-cli-team-run-');
-  // A preset whose members are all chat agents keeps this check cheap.
-  const validationPreset = 'software-engineer';
-  try {
-    const inputPath = path.join(cwd, 'math-problem.md');
-    const validationFlagPath = path.join(cwd, validationFlagName);
-    writeFileSync(
-      inputPath,
-      'Problem: Prove that if n is odd, then n^2 is congruent to 1 modulo 8.\n',
-    );
-    writeFileSync(validationFlagPath, validationFlagContent);
-
-    const baseArgs = [
-      binaryPath,
-      'team',
-      'run',
-      validationPreset,
-      '--input',
-      'math-problem.md',
-      '--cwd',
-      cwd,
-      '--approval-policy',
-      'never',
-      '--print',
-    ];
-
-    const json = run(
-      process.execPath,
-      [...baseArgs, '--output-format', 'json'],
-      { cwd: repoRoot, validationModel: true, validationFlagPath },
-    );
-    assertSuccess(json, 'texra team run JSON');
-    const jsonResult = JSON.parse(json.stdout);
-    assert(
-      jsonResult.preset?.id === validationPreset,
-      'team JSON output should identify the preset',
-    );
-    assert(
-      typeof jsonResult.rootAgent === 'string' &&
-        jsonResult.rootAgent.length > 0,
-      'team run should select an available preset root agent',
-    );
-    assert(
-      jsonResult.result?.output != null &&
-        jsonResult.result.output.documents === undefined,
-      'team JSON output should serialize the chat result',
-    );
-    assert(
-      String(jsonResult.result?.output?.response ?? '').includes(
-        'Validated CLI Runtime',
-      ),
-      'team run should return the validation model response',
-    );
-
-    const inlineInstruction = run(
-      process.execPath,
-      [
-        binaryPath,
-        'team',
-        'run',
-        validationPreset,
-        '--instruction',
-        'Prove that every odd square is congruent to 1 modulo 8.',
-        '--cwd',
-        cwd,
-        '--approval-policy',
-        'never',
-        '--print',
-        '--output-format',
-        'json',
-      ],
-      { cwd: repoRoot, validationModel: true, validationFlagPath },
-    );
-    assertSuccess(inlineInstruction, 'texra team instruction-only JSON');
-    const inlineJsonResult = JSON.parse(inlineInstruction.stdout);
-    assert(
-      inlineJsonResult.preset?.id === validationPreset,
-      'instruction-only team JSON output should identify the preset',
-    );
-    assert(
-      inlineJsonResult.result?.output != null &&
-        inlineJsonResult.result.output.documents === undefined,
-      'instruction-only team JSON output should serialize the chat result',
-    );
-    assert(
-      String(inlineJsonResult.result?.output?.response ?? '').includes(
-        'Validated CLI Runtime',
-      ),
-      'instruction-only team run should return the validation model response',
-    );
-
-    const ndjson = run(
-      process.execPath,
-      [...baseArgs, '--output-format', 'ndjson'],
-      { cwd: repoRoot, validationModel: true, validationFlagPath },
-    );
-    assertSuccess(ndjson, 'texra team run NDJSON');
-    assert(
-      parseNdjson(ndjson.stdout, 'team run NDJSON').some(
-        (record) =>
-          record.kind === 'team-result' &&
-          record.preset?.id === validationPreset &&
-          record.rootAgent === jsonResult.rootAgent,
-      ),
-      'team run NDJSON should include a preset result record with the selected root agent',
-    );
-  } finally {
-    removeScratch(cwd);
-  }
-}
-
 async function validateCliRunArtifacts(options = {}) {
   if (options.noBuild) {
     preflightExistingValidationBundle();
@@ -3578,7 +3458,8 @@ async function validateCliRunArtifacts(options = {}) {
     buildValidationBundle();
   }
   validateBinarySmoke();
-  validateTeamListAvailability();
+  validateBundledLeanAgents();
+  validateUnknownWorkspaceAgent();
   validateFileFlagMissingValues();
   await validateChatOnboardingPickers();
   validateRunCommand();
@@ -3602,7 +3483,6 @@ async function validateCliRunArtifacts(options = {}) {
   await validateServicePolicyOwner();
   await validateServiceBuildIdentity();
   validateScriptFanoutRunCommand();
-  validateTeamRunCommand();
   console.log('CLI run validation passed');
 }
 

@@ -6,11 +6,10 @@
  * step reads.
  *
  * The one default for a custom agent an agent list does not name: it is
- * shown unless the user hid it. A list (a team, or an exact custom
- * selection) is written before the agent exists, so leaving it out is not a
- * choice to hide it; turning the agent off is, and records it here. The
- * `creator` agent's new agents therefore reach the selector without a
- * separate step, and one the user turned off stays off under any team.
+ * shown unless the user hid it. A list is written before the agent exists,
+ * so leaving it out is not a choice to hide it; turning the agent off is,
+ * and records it here. The `creator` agent's new agents therefore reach the
+ * selector without a separate step, and one the user turned off stays off.
  */
 import { Effect, Result, Schema } from 'effect';
 import {
@@ -21,7 +20,7 @@ import {
   WorkspaceAgentsSelectionSchema,
   type AgentSource,
   HiddenCustomAgentKeysSchema,
-  INHERITED_WORKSPACE_AGENTS,
+  ALL_WORKSPACE_AGENTS,
   type WorkspaceAgentsSelection,
 } from '@shared/schemas';
 
@@ -33,14 +32,11 @@ import {
 import type { StateKey } from '@shared/state/stateSettings';
 
 /** How the workspace obtains its visible agents, per repository; absent is
- *  inherited. */
+ *  every agent. */
 export const WORKSPACE_AGENTS_KEY = {
   key: 'workspaceAgents',
   slot: 'repoState',
-  schema: decodingDefault(
-    WorkspaceAgentsSelectionSchema,
-    INHERITED_WORKSPACE_AGENTS,
-  ),
+  schema: decodingDefault(WorkspaceAgentsSelectionSchema, ALL_WORKSPACE_AGENTS),
 } as const satisfies StateKey<WorkspaceAgentsSelection>;
 
 /** The custom agents the user turned off, per repository; every other

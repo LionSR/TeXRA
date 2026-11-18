@@ -221,7 +221,7 @@ const startCommand = defineCliCommand({
     );
     const payload: AgentConfigPayload = {
       agent: ctx.args.agent,
-      agentSource: agent.source,
+      agentSource: { kind: agent.source },
       model,
       inputFiles: [],
       contextFiles: [],

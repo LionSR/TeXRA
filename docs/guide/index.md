@@ -37,7 +37,7 @@ serve as supporting capabilities within your research project.
 
 - [**Built-in agents**](./built-in-agents.md): the full catalog
 - [**Agent architecture**](./agent-architecture.md): programs vs. chats, reflection, planning
-- [**Multi-agent workflows**](./multi-agent-workflows.md): how a team lead fans work out to specialists in parallel
+- [**Multi-agent workflows**](./multi-agent-workflows.md): how a lead agent fans work out to specialists in parallel
 - [**Models**](./models.md): picking a model for the job
 - [**Custom agents**](./custom-agents.md): define your own in YAML
 

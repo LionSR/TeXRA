@@ -13,7 +13,7 @@ import {
   PersonaSchema,
   type AgentDefinition,
 } from '@shared/schemas';
-import type { AgentSource, AgentScanIssue } from '@shared/schemas';
+import type { AgentScanIssue, CatalogAgentSource } from '@shared/schemas';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
@@ -61,7 +61,7 @@ interface ParsedAgentYaml {
  */
 export function scanDirectory(
   roots: readonly string[],
-  source: AgentSource,
+  source: CatalogAgentSource,
 ): Effect.Effect<AgentDirectoryScan, never, FileSystem.FileSystem> {
   const dirs = roots.filter((root) => root !== '');
   if (dirs.length === 0) return Effect.succeed({ entries: [], issues: [] });
@@ -263,7 +263,7 @@ export function agentEntryOf(
 /** The entry a definition file makes. */
 function scanYaml(
   entry: ParsedAgentYaml,
-  source: AgentSource,
+  source: CatalogAgentSource,
 ): Effect.Effect<AgentEntry, AgentScanError> {
   return Effect.try({
     try: (): AgentEntry =>

@@ -53,18 +53,22 @@ const latexMetricsPlugin = definePlugin({
 
 const { platform, requests, route } = await makeExampleWorkspace([
   {
+    // The model is sent `script` alone; it calls the plugin's tool from one.
     toolCalls: [
       {
         id: 'call_eq_1',
-        name: 'count_equations',
+        name: 'script',
         input: {
-          tex: '\\begin{equation}E = mc^2\\end{equation}\n$$a^2 + b^2 = c^2$$',
-          includeUnnumbered: true,
+          code: `return await tools.count_equations(${JSON.stringify({
+            tex: '\\begin{equation}E = mc^2\\end{equation}\n$$a^2 + b^2 = c^2$$',
+            includeUnnumbered: true,
+          })});`,
         },
       },
     ],
   },
   {
+    expect: 'The script returned',
     text: 'Found 2 display equations (1 numbered, 1 unnumbered).',
   },
 ]);

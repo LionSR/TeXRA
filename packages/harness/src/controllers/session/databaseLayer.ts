@@ -301,18 +301,26 @@ export const databaseLayer = (
         Effect.map(commitFromRows),
       );
       yield* gate.pipe(mapDatabaseFailure(openFailed));
+      // An aggregate and its open descendants. A descendant an earlier
+      // deletion closed belongs to that deletion's marker alone, which
+      // names its files and collects it.
       const dependents = `WITH RECURSIVE dependents(id) AS (
         SELECT id FROM event_sequence WHERE kind = ? AND logical_id = ?
         UNION ALL
         SELECT child.id FROM event_sequence child
         JOIN dependents parent ON child.parent_id = parent.id
+        WHERE child.closed_by IS NULL
       )`;
-      const dependentStates = `${dependents} ${STATE_COLUMNS}
-        WHERE s.id IN (SELECT id FROM dependents)`;
       const deletionRuns = `${dependents}
         SELECT logical_id AS runId FROM event_sequence
         WHERE id IN (SELECT id FROM dependents) AND kind = 'run'
         ORDER BY runId
+      `;
+      // Taken out from under the closing tree first, so the tree's
+      // collection does not cascade into an earlier marker's aggregate.
+      const detachClosed = `${dependents}
+        UPDATE event_sequence SET parent_id = NULL
+        WHERE closed_by IS NOT NULL AND parent_id IN (SELECT id FROM dependents)
       `;
       const closeDependents = `${dependents}
         UPDATE event_sequence SET closed_by = ?
@@ -586,16 +594,20 @@ export const databaseLayer = (
             [commit, aggregate],
           );
         }
-        if (edges.reparent !== undefined) {
-          // A plugin's aggregate hangs under its `parent` run, so that
-          // run's deletion collects it, or under none.
+        // A child run hangs under its parent run, and a plugin's aggregate
+        // under its `parent` run or none, so the parent's deletion closes
+        // and collects it.
+        const hangsUnder =
+          edges.reparent === undefined ? edges.parent : edges.reparent;
+        if (edges.reparent !== undefined || hangsUnder !== null) {
           const parentColumns =
-            edges.reparent === null
-              ? [null, null]
-              : aggregateColumns(edges.reparent);
+            hangsUnder === null ? [null, null] : aggregateColumns(hangsUnder);
           yield* exec(reparent, [...parentColumns, aggregate]);
         }
-        if (edges.closes) yield* exec(closeDependents, [...columns, commit]);
+        if (edges.closes) {
+          yield* exec(detachClosed, columns);
+          yield* exec(closeDependents, [...columns, commit]);
+        }
         return {
           ...committedDraft,
           seq,
@@ -720,12 +732,8 @@ export const databaseLayer = (
         runRemoval: (id, expectedStartCommit) =>
           transaction(
             Effect.gen(function* () {
-              const observed = yield* states(
-                dependentStates,
-                aggregateColumns(id),
-              );
-              const target = observed.find((row) => row.aggregateId === id);
-              if (target === undefined || observed.some((row) => row.closed))
+              const [target] = yield* readState([id]);
+              if (target === undefined || target.closed)
                 return yield* new DatabaseAggregateClosed({ aggregateId: id });
               if (target.startCommit !== expectedStartCommit)
                 return yield* new RunChanged({ aggregateId: id });

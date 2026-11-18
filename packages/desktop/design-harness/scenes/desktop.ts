@@ -213,7 +213,7 @@ const transcriptBody = (project: RailProject, run: RunView) =>
       .tools=${{ icons: {}, terminalOutput: [] }}
     ></log-list>`;
 
-const pdfPane = createPdfPane();
+const pdfPane = createPdfPane({ openExternally: () => undefined });
 const tab = (
   kind: WorkbenchTab['kind'],
   title: string,
@@ -289,7 +289,7 @@ function sceneDesktopProjects(): TemplateResult {
   ];
   const run = lp.view.runs.get(CHILD);
   const tabs = [
-    tab('pdf', 'main.pdf', '/paper/main.pdf'),
+    tab('pdf', 'main.pdf', 'file:///paper/main.pdf'),
     tab('editor', 'section2.tex', '/paper/section2.tex'),
     tab('terminal', 'Terminal', '/paper'),
   ];
@@ -297,7 +297,7 @@ function sceneDesktopProjects(): TemplateResult {
     '288px minmax(0,1fr) 440px',
     rail(projects, shellOf('LP', ['LP', 'CT', 'TN'])),
     conversationPane(lp, run, run ? transcriptBody(lp, run) : nothing),
-    workbench(lp.display.key, tabs, tabs[0].id, pdfPane.frameFor(tabs[0])),
+    workbench(lp.display.key, tabs, tabs[0].id, pdfPane.elementFor(tabs[0])),
   );
 }
 

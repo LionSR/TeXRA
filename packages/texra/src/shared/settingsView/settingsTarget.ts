@@ -36,21 +36,21 @@ export type SettingsTabPanelName = (typeof SETTINGS_TAB_ORDER)[number];
  */
 export const SETTINGS_PAGE_SECTIONS = {
   models: ['keys', 'subscriptions', 'models'],
-  agents: ['library', 'teams', 'skills', 'advanced'],
+  agents: ['library', 'skills', 'advanced'],
   plugins: [],
   latex: ['dependencies', 'compile', 'formatting', 'vscode'],
   memory: [],
   general: ['appearance', 'approval', 'privacy', 'git'],
 } as const satisfies Record<SettingsTabPanelName, readonly string[]>;
 
-/** A section of page `P`, e.g. `'teams'` for `'agents'`. */
+/** A section of page `P`, e.g. `'skills'` for `'agents'`. */
 export type SettingsSectionName<
   P extends SettingsTabPanelName = SettingsTabPanelName,
 > = (typeof SETTINGS_PAGE_SECTIONS)[P][number];
 
 /**
  * Where a settings link lands: a page (on its remembered section), or one
- * section of it spelled `page/section`, e.g. `'agents/teams'`.
+ * section of it spelled `page/section`, e.g. `'agents/skills'`.
  */
 export type SettingsTarget =
   | SettingsTabPanelName

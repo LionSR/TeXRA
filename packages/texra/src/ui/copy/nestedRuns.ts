@@ -35,7 +35,7 @@ export const runNoun = (run: Pick<RunView, 'parentId' | 'identity'>): string =>
   run.parentId === null ? 'task' : NESTED_NOUNS[run.identity.kind];
 
 /** The agents a task started. */
-export const NESTED_AGENT = {
+export const NESTED_AGENT = Object.freeze({
   /** Count noun (singular; pair with a formatter): "3 agents". */
   countNoun: 'agent',
   /** The CLI status bar's narrow count suffix: "3 agt". */
@@ -44,7 +44,7 @@ export const NESTED_AGENT = {
   compactLiveSuffix: 'live',
   /** Expand-toggle aria when the tree is open. */
   collapseAction: 'Collapse agents',
-} as const;
+} as const);
 
 /** A collapsed parent's descendants in words: "2 agents · 1 running". */
 export function nestedRollupLabel(rollup: RunView['rollup']): string {
@@ -61,7 +61,7 @@ export const dispatchSummary = (counts: string): string =>
  * CLI agent-list navigation. The list shows the task and the agents it
  * started.
  */
-export const AGENT_LIST = {
+export const AGENT_LIST = Object.freeze({
   /** Status-bar Tab action: `Tab agents`. */
   openAction: 'agents',
   /** Help / prose for the same Tab binding. */
@@ -74,10 +74,10 @@ export const AGENT_LIST = {
     'Agent list. Enter opens an agent. Esc stays here and returns to typing.',
   /** Status-bar Esc action while a nested agent is focused: walk to its parent. */
   parentAction: 'parent',
-} as const;
+} as const);
 
 /** The task-level actions every host names the same way. */
-export const TASK_ACTIONS = {
+export const TASK_ACTIONS = Object.freeze({
   /** The header and row menus' destructive item, named for what it
    *  deletes: "Delete task", "Delete agent". */
   delete: (run: Pick<RunView, 'parentId' | 'identity'>) =>
@@ -105,7 +105,7 @@ export const TASK_ACTIONS = {
   ancestors: 'Started by',
   /** The CLI's exit line before the `texra resume …` command. */
   resumeHint: 'Resume this task with:',
-} as const;
+} as const);
 
 /** An agent row's one action: open its agent's conversation, the composer
  *  addressed to it, to steer it while it runs or keep talking after. */

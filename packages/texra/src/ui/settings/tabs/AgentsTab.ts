@@ -1,7 +1,7 @@
 /**
- * The Agents page, one section at a time: the agent library, the team cards
- * (slot `teams`) and skills (slot `skills`) the settings app composes in, and
- * Advanced, the session and team-coordination knobs.
+ * The Agents page, one section at a time: the agent library, the skills
+ * (slot `skills`) the settings app composes in, and Advanced, the session
+ * and multi-agent coordination knobs.
  */
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
@@ -20,7 +20,6 @@ import {
   type AgentScanIssue,
   ALLOW_ORCHESTRATOR_KILL_SETTING,
   GIT_WORKTREE_SUPPORT_SETTING,
-  SCRIPT_ONLY_SETTING,
   pluralize,
 } from '@texra-ai/harness/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
@@ -86,7 +85,6 @@ export class AgentsTab extends SignalWatcher(LitElement) {
         margin-block-start: var(--wa-space-s);
       }
 
-      ::slotted([slot='teams']),
       ::slotted([slot='skills']) {
         display: block;
       }
@@ -160,8 +158,6 @@ export class AgentsTab extends SignalWatcher(LitElement) {
     switch (this.section) {
       case 'library':
         return this.renderLibrary();
-      case 'teams':
-        return html`<slot name="teams"></slot>`;
       case 'skills':
         return html`<slot name="skills"></slot>`;
       case 'advanced':
@@ -247,7 +243,6 @@ export class AgentsTab extends SignalWatcher(LitElement) {
           step: 1,
           revertOnEmpty: false,
         })}
-        ${renderStateSettingToggleRow(SCRIPT_ONLY_SETTING)}
         ${renderStateSettingToggleRow(ALLOW_ORCHESTRATOR_KILL_SETTING)}
         ${renderStateSettingToggleRow(GIT_WORKTREE_SUPPORT_SETTING)}
         ${renderStateSettingNumberRow(CHILD_RUN_CONCURRENCY_BUDGET_SETTING, {

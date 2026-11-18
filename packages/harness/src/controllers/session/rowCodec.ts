@@ -156,23 +156,25 @@ function rowRefusal({ commit, type, version: stored }: typeof RowSchema.Type) {
  * `json_each(?)` list of `[type, version]` pairs. `CROSS JOIN` keeps the
  * list outermost, so each kind is one range of `event_type_commit`.
  */
-export const EARLIER_RUNS: readonly [string, readonly unknown[]] = [
-  `SELECT s.logical_id AS logicalId, min(e."commit") AS "commit",
+export const EARLIER_RUNS: readonly [string, readonly unknown[]] =
+  Object.freeze([
+    `SELECT s.logical_id AS logicalId, min(e."commit") AS "commit",
       e.type AS type FROM json_each(?) k
     CROSS JOIN event e ON e.type = k.value ->> 0 AND e.version < k.value ->> 1
     ${EVENT_JOINS}
     WHERE s.kind = 'run'
     GROUP BY k.key, s.logical_id ORDER BY k.key`,
-  [
-    JSON.stringify(
-      [...RETIRED_ROW_KINDS.keys(), ...Object.keys(ROW_KINDS)].flatMap((type) =>
-        RETIRED_ROW_KINDS.get(type) !== 'display' && readableFrom(type) > 1
-          ? [[type, readableFrom(type)]]
-          : [],
+    Object.freeze([
+      JSON.stringify(
+        [...RETIRED_ROW_KINDS.keys(), ...Object.keys(ROW_KINDS)].flatMap(
+          (type) =>
+            RETIRED_ROW_KINDS.get(type) !== 'display' && readableFrom(type) > 1
+              ? [[type, readableFrom(type)]]
+              : [],
+        ),
       ),
-    ),
-  ],
-];
+    ]),
+  ]);
 
 /** Validate a draft and encode it at its kind's current version, with the
  *  blobs it brings. Throws on a draft that does not parse, is not JSON, or

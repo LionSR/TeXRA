@@ -206,8 +206,7 @@ interface CommonAgentRunFlags {
 
 /**
  * The `--input/-i`, `--context/-c`, `--instruction`, and `--instruction-file`
- * flags shared by the `run` and `team run` commands.
- * Spread the result into the command's run options.
+ * flags of the `run` command. Spread the result into its run options.
  */
 export function collectCommonAgentRunFlags(
   rawArgs: readonly string[],

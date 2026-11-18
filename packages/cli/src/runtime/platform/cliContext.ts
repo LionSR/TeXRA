@@ -15,7 +15,6 @@ import {
 
 import { DatabaseOpenFailed } from '@texra-ai/harness';
 import {
-  BUNDLED_AGENTS_DIRECTORY,
   type ConfigProvider,
   type SkillSourceOptions,
 } from '@texra-ai/harness/host';
@@ -25,7 +24,6 @@ import {
   meansAbsent,
   APPROVAL_POLICY_ENV,
   canonicalizeWorkspaceRoot,
-  pathExists,
 } from '@texra-ai/harness/node';
 import {
   APPROVAL_POLICY_SETTING,
@@ -36,6 +34,7 @@ import {
   type LaunchApproval,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
+import { checkResourcesPath } from '@texra/controllers/texraProcessLayer';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import {
   CliOutputFormatSchema,
@@ -247,22 +246,14 @@ export function readCliVersion(): string {
   return loadCliPackageManifest().version;
 }
 
-/** This build's resources do not hold the bundled agents. */
-class CliResourcesNotFound extends Schema.TaggedError<CliResourcesNotFound>()(
-  'CliResourcesNotFound',
-  {
-    message: Schema.String,
-  },
-) {}
-
 /**
  * This build's resources directory. Every bundle `scripts/build-bundle.mjs`
  * writes sits one directory below its `resources/` (`dist/bin/` beside
  * `dist/resources/`, the service's `serve/` beside the extension's and the
  * desktop app's `resources/`), and the build stamps that location; a source
  * run reads the extension package's own tree, four directories above this
- * module. Fails by its path when it holds no bundled agents (a bundle copied
- * without its `resources/`).
+ * module. Fails by its path when it holds no bundled agents
+ * ({@link checkResourcesPath}).
  */
 export const resolveCliResourcesPath = Effect.fn(
   'cliContext.resolveCliResourcesPath',
@@ -271,12 +262,7 @@ export const resolveCliResourcesPath = Effect.fn(
     path.dirname(fileURLToPath(import.meta.url)),
     process.env.TEXRA_CLI_RESOURCES ?? '../../../../extension/resources',
   );
-  const fs = yield* FileSystem.FileSystem;
-  if (!(yield* pathExists(fs, path.join(resources, BUNDLED_AGENTS_DIRECTORY))))
-    return yield* new CliResourcesNotFound({
-      message: `TeXRA CLI resources not found: ${resources} holds no ${BUNDLED_AGENTS_DIRECTORY}/ directory`,
-    });
-  return resources;
+  return yield* checkResourcesPath(resources);
 });
 
 /**

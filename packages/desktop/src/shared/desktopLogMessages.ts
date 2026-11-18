@@ -1,12 +1,12 @@
 import { Schema } from 'effect';
 
-export const DESKTOP_LOG_COMMANDS = {
+export const DESKTOP_LOG_COMMANDS = Object.freeze({
   REQUEST_LOG: 'desktop:requestLog',
   FOLLOW_LOG: 'desktop:followLog',
   SET_LOG: 'desktop:setLog',
   COPY_LOG: 'desktop:copyLog',
   EXPORT_LOG: 'desktop:exportLog',
-} as const;
+} as const);
 
 const DesktopLogSnapshotSchema = Schema.Struct({
   text: Schema.String,

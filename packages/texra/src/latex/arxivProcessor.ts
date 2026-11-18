@@ -358,13 +358,11 @@ const extractTarFile = Effect.fn('arxivProcessor.extractTarFile')(function* (
 ): Effect.fn.Return<void, ArxivSourcePermanentError> {
   yield* Effect.logDebug(`Extracting tar file: ${tarPath} to ${destDir}`);
   let pending: Promise<void> | undefined;
-  let signal: AbortSignal | undefined;
   // The rejection that already failed this extraction, by identity, so
   // the late join below does not raise it a second time.
   let rejected: { error: unknown } | undefined;
   yield* Effect.tryPromise({
     try: (requestSignal) => {
-      signal = requestSignal;
       pending = tar.x({
         file: tarPath,
         cwd: destDir,
@@ -400,14 +398,6 @@ const extractTarFile = Effect.fn('arxivProcessor.extractTarFile')(function* (
             () => {},
             (error: unknown) => {
               if (rejected !== undefined && rejected.error === error) return;
-              if (
-                signal?.aborted &&
-                (error === signal.reason ||
-                  (error instanceof Error &&
-                    error.name === 'AbortError' &&
-                    error.cause === signal.reason))
-              )
-                return;
               // A distinct late tar failure must survive interruption.
               throw error;
             },

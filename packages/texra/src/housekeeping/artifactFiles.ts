@@ -5,15 +5,19 @@
  */
 // Standard library imports
 import * as path from 'node:path';
-import { normalizeFilePath } from '@texra-ai/harness/schemas';
 
 // Third-party imports
 import { Clock, Effect, FileSystem, type PlatformError, Schema } from 'effect';
 
 // Local imports
-import { meansAbsent, relativeToRoot } from '@texra-ai/harness/node';
+import {
+  meansAbsent,
+  relativeToRoot,
+  workspaceRelativePath,
+} from '@texra-ai/harness/node';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 
+import { LATEX_BUILD_DIRECTORY } from '@texra/common/files/fileHandlingRules';
 import { CHANNEL } from './constants';
 import type { RootedFileSystem } from '@texra-ai/harness/host';
 
@@ -114,8 +118,10 @@ export const collectFilesFromPatterns = Effect.fn(
   // workspace root. Joining an absolute path onto the root duplicated the
   // prefix and found nothing.
   const searchDirs = [path.resolve(workspaceRoot, inputDir)];
-  if (!inputDir.includes('build')) {
-    searchDirs.push(path.resolve(workspaceRoot, inputDir, 'build'));
+  if (!inputDir.includes(LATEX_BUILD_DIRECTORY)) {
+    searchDirs.push(
+      path.resolve(workspaceRoot, inputDir, LATEX_BUILD_DIRECTORY),
+    );
   }
 
   // A path that does not exist, or runs through something that is not a
@@ -149,9 +155,7 @@ export const collectFilesFromPatterns = Effect.fn(
       absentAs(false),
     );
   const record = Effect.fnUntraced(function* (match: string) {
-    const relativePath = normalizeFilePath(
-      relativeToRoot(workspaceRoot, match) ?? match,
-    );
+    const relativePath = workspaceRelativePath(workspaceRoot, match);
     yield* Effect.logDebug(`Found file: ${relativePath}`).pipe(
       withLogChannel(CHANNEL),
     );

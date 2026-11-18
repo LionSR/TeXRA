@@ -1,11 +1,12 @@
 // Third-party imports
-import { Cause, Effect } from 'effect';
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - utils
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
 import {
+  reportingFailure,
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
@@ -153,12 +154,6 @@ export function runGuardedLatexCommand<R = never>(
     // not one of them: an extension-host reload or deactivation while a guarded LaTeX
     // command runs is a cancellation, and re-raising it keeps a spurious
     // "Failed to ..." toast off the screen (#12841).
-    Effect.catchCause((cause) =>
-      Cause.hasInterruptsOnly(cause)
-        ? Effect.interrupt
-        : showLoggedErrorMessage(errorMessage, Cause.squash(cause)).pipe(
-            Effect.asVoid,
-          ),
-    ),
+    reportingFailure((error) => showLoggedErrorMessage(errorMessage, error)),
   );
 }

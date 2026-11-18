@@ -533,12 +533,13 @@ What the passes learned:
   nothing shipped does that, so the session and desktop project lanes
   stay. The Codex probe keeps its lane and its map: it caches only what a
   probe said, which `Cache` would need a failure channel to express.
-- Row 22's agent selection decides from a team's members and the default
-  team, which the app reads (`AgentDirectoriesPort.teamMembers`) and the
-  global store holds; neither can be read inside the repository store's
-  step, so a change from a team selection is a compare-and-set that
-  decides again. A team's members as a pure function of the saved teams'
-  value would make every change one pure step.
+- Row 22's agent selection decided from a team's members and the default
+  team, which the app read (`AgentDirectoriesPort.teamMembers`) and the
+  global store held; neither could be read inside the repository store's
+  step, so a change from a team selection was a compare-and-set that
+  decided again. Closed 2026-11-17 by removing teams: a selection is `all`
+  or `custom`, both pure, so `setAgentEnabled` decides inside its one
+  `modify` step and the decide-again loop is gone.
 
 ## Needs the owner
 

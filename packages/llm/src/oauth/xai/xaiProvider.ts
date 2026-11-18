@@ -33,6 +33,7 @@ import {
   SubscriptionSessionBaseSchema,
   SubscriptionTokenResponseSchema,
 } from '../subscriptionSessionSchema.js';
+import { SubscriptionOAuthError } from '../subscriptionOAuthError.js';
 import type { SubscriptionOAuthPolicy } from '../subscriptionCoordinator.js';
 
 /** Borrowed OAuth client id (Grok CLI desktop registration). */
@@ -193,18 +194,6 @@ function decodeXaiJwtClaims(token: string): XaiJwtClaims {
   return decodeJwtClaimsWithSchema(token, XaiJwtPayloadSchema, EMPTY_CLAIMS);
 }
 
-/** The user refused the device authorization (terminal, re-auth required). */
-class DeviceAuthorizationDenied extends Schema.TaggedError<DeviceAuthorizationDenied>()(
-  'DeviceAuthorizationDenied',
-  { message: Schema.String, status: Schema.Number },
-) {}
-
-/** The server expired the device code before the user approved. */
-class DeviceCodeExpired extends Schema.TaggedError<DeviceCodeExpired>()(
-  'DeviceCodeExpired',
-  { message: Schema.String, status: Schema.Number },
-) {}
-
 /** Begin the RFC 8628 device-code flow. */
 const requestDeviceCode = Effect.fn('xai.requestDeviceCode')(function* () {
   const response = yield* postOAuthForm(
@@ -239,8 +228,8 @@ const DeviceErrorBodySchema = Schema.Struct({
  * fails with {@link DeviceAuthorizationPending} while the user has not yet
  * approved. A network blip mid-poll is {@link DeviceAuthorizationTransient},
  * which the shared poll retries a few times before failing with it.
- * Terminal device errors are {@link DeviceAuthorizationDenied} and
- * {@link DeviceCodeExpired}.
+ * A refused authorization or an expired code is a
+ * {@link SubscriptionOAuthError} that needs a fresh sign-in.
  */
 const pollDeviceToken = Effect.fn('xai.pollDeviceToken')(function* (
   deviceCode: string,
@@ -280,14 +269,16 @@ const pollDeviceToken = Effect.fn('xai.pollDeviceToken')(function* (
     });
   }
   if (oauthError === 'access_denied' || oauthError === 'authorization_denied') {
-    return yield* new DeviceAuthorizationDenied({
+    return yield* new SubscriptionOAuthError({
       message: 'Grok device authorization was denied',
+      kind: 'fatal',
       status: response.status,
     });
   }
   if (oauthError === 'expired_token') {
-    return yield* new DeviceCodeExpired({
+    return yield* new SubscriptionOAuthError({
       message: 'Grok device code expired — please sign in again',
+      kind: 'expired',
       status: response.status,
     });
   }

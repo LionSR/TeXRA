@@ -22,27 +22,27 @@ export type TranscriptExportFormat = Parameters<typeof writeTranscript>[1];
 
 export type TranscriptExportOpenKind = 'text' | 'pdf' | 'external';
 
-export const TRANSCRIPT_EXPORT_FORMAT_CHOICES = [
-  {
+export const TRANSCRIPT_EXPORT_FORMAT_CHOICES = Object.freeze([
+  Object.freeze({
     format: 'html',
     label: 'HTML',
     description: 'Shareable webpage',
-  },
-  {
+  }),
+  Object.freeze({
     format: 'md',
     label: 'Markdown',
     description: 'Plain-text conversation',
-  },
-  {
+  }),
+  Object.freeze({
     format: 'tex',
     label: 'PDF',
     description: 'Formatted via LaTeX',
-  },
+  }),
 ] as const satisfies ReadonlyArray<{
   readonly format: TranscriptExportFormat;
   readonly label: string;
   readonly description: string;
-}>;
+}>);
 
 /** What a host does for a transcript export: ask for a format and open
  *  what was written. */

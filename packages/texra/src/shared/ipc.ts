@@ -55,10 +55,6 @@ export const SETTINGS_VIEW_COMMANDS = {
   // Custom agent directory commands
   SET_CUSTOM_AGENT_DIR: 'setCustomAgentDir',
   RESET_CUSTOM_AGENT_DIR: 'resetCustomAgentDir',
-  // Team commands
-  APPLY_AGENT_MODE_PRESET: 'applyAgentModePreset',
-  SAVE_AGENT_MODE_PRESET: 'saveAgentModePreset',
-  DELETE_AGENT_MODE_PRESET: 'deleteAgentModePreset',
   // Generic settings-view scalar write. The backend looks up {key, value} in the
   // unified catalog, validates and persists it using the row's metadata, then
   // refreshes the row's owning snapshot.

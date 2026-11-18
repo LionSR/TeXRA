@@ -42,7 +42,6 @@ import { initCommand } from './init';
 import { installGithubActionCommand } from './installGithubAction';
 import { memoryCommand } from './memory';
 import { modelsCommand } from './models';
-import { teamCommand } from './team';
 import { pluginCommand } from './plugin';
 import { resumeCommand } from './resume';
 import { serveCommand, serviceCommand } from './service';
@@ -86,7 +85,6 @@ export const rootCommand = withUsageSections(
       agents: agentsCommand,
       skills: skillsCommand,
       plugin: pluginCommand,
-      team: teamCommand,
       models: modelsCommand,
       auth: authCommand,
       doctor: doctorCommand,

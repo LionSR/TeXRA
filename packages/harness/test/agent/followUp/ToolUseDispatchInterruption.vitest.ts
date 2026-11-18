@@ -1,7 +1,9 @@
 // Third-party imports
+import { join } from 'node:path';
+
 import { layer } from '@effect/vitest';
 import { Deferred, Effect, Fiber, Layer, Queue, Context } from 'effect';
-import { expect, vi } from 'vitest';
+import { assert, expect, vi } from 'vitest';
 
 // Local imports
 import { generateRunId } from '@texra-ai/harness/schemas';
@@ -18,10 +20,20 @@ import {
   type ScriptedRunInit,
 } from '@test/support/scriptedRunLayers';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';
+import {
+  crashAt,
+  persistentTestSession,
+  readStoreSnapshot,
+  storedRows,
+} from '@test/support/storeFaults';
+import {
+  FakeHost,
+  isolatedTestSession,
+  SessionGraph,
+} from '@test/support/testKernel';
 import type { ITool } from '@texra-ai/harness/plugins';
 
-import type { TurnResult } from '@texra-ai/llm';
+import type { Model, TurnResult } from '@texra-ai/llm';
 
 // ---------------------------------------------------------------------------
 // The loop harness: the run's own services over a real session run history, with
@@ -32,6 +44,8 @@ import type { TurnResult } from '@texra-ai/llm';
 interface HarnessInit extends Omit<ScriptedRunInit, 'model'> {
   readonly tools: Record<string, ITool>;
   readonly turns: readonly TurnResult[];
+  /** The model to serve, when the case counts its attempts. */
+  readonly model?: Model;
 }
 
 /** The calls a folded state holds settled. */
@@ -48,7 +62,10 @@ function loopLayer(init: HarnessInit) {
     }),
   ).pipe(
     Layer.provideMerge(
-      agentRunTestLayer({ ...init, model: scriptedModel(init.turns).model }),
+      agentRunTestLayer({
+        ...init,
+        model: init.model ?? scriptedModel(init.turns).model,
+      }),
     ),
     Layer.provideMerge(
       Layer.succeed(RunHistory)(Context.get(init.session, RunHistory)),
@@ -66,6 +83,23 @@ function blockingTool(name: string) {
   const tool: ITool = { call, definition: { name } };
   return { call, started: Deferred.await(started), tool };
 }
+
+/** The commit of the run's delivering `append`: its tool results. */
+const deliveryCommit = (storage: string) => {
+  const delivery = storedRows(storage).find((row) => {
+    // cast: a `model.message` row's data holds its payload's kind and source.
+    const { payload } = JSON.parse(row.data) as {
+      payload: { kind?: string; sourceResponse?: string | null };
+    };
+    return (
+      row.type === 'model.message' &&
+      payload.kind === 'append' &&
+      payload.sourceResponse != null
+    );
+  });
+  assert(delivery !== undefined);
+  return delivery.commit;
+};
 
 function executedTool(name: string) {
   const call = vi.fn(() =>
@@ -240,6 +274,86 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           group?.role === 'tool' ? JSON.stringify(group.results[0]) : '',
         ).toContain('fourth start finished');
       }),
+    );
+
+    /**
+     * Failure mode: a crash after the `append` that delivers a turn-ending
+     * result (`submit_output`'s) and before the turn's end is recorded
+     * resumes into the turn and pays for one more model request.
+     */
+    it.effect(
+      'a turn its delivered results ended stays ended across a crash before its end is recorded',
+      () =>
+        Effect.gen(function* () {
+          const { roots } = yield* FakeHost;
+          const clean = join(roots.storage, 'clean');
+          const runId = generateRunId();
+          const tools: Record<string, ITool> = {
+            finish: {
+              call: () =>
+                Effect.succeed({
+                  status: 'executed' as const,
+                  output: 'submitted',
+                  endTurn: true,
+                }),
+              definition: { name: 'finish' },
+            },
+          };
+          const committed = join(roots.storage, 'committed.db');
+          yield* Effect.scoped(
+            Effect.gen(function* () {
+              const session = yield* persistentTestSession({
+                ...roots,
+                storage: clean,
+              });
+              yield* publishTestRunStart(session, runId);
+              const done = yield* Effect.flatMap(
+                openToolUse({ resume: false }),
+                (opened) => runToolUse({ resume: false }, opened),
+              ).pipe(
+                Effect.provide(
+                  loopLayer({
+                    runId,
+                    session,
+                    tools,
+                    turns: [toolCallTurn([{ id: 'call-1', name: 'finish' }])],
+                    stopAfterCycle: true,
+                  }),
+                ),
+              );
+              expect(done.outcome).toBe('completed');
+              readStoreSnapshot(clean, (db) =>
+                db.exec(`VACUUM INTO '${committed}'`),
+              );
+            }),
+          );
+
+          // The process died once the results were delivered.
+          const cut = join(roots.storage, 'cut');
+          crashAt(committed, cut, deliveryCommit(clean));
+          const session = yield* persistentTestSession({
+            ...roots,
+            storage: cut,
+          });
+          const model = scriptedModel([textTurn('Asked again.')]);
+          const resumed = yield* Effect.flatMap(
+            openToolUse({ resume: true }),
+            (opened) => runToolUse({ resume: true }, opened),
+          ).pipe(
+            Effect.provide(
+              loopLayer({
+                runId,
+                session,
+                tools,
+                turns: [],
+                model: model.model,
+                stopAfterCycle: true,
+              }),
+            ),
+          );
+          expect(resumed.outcome).toBe('completed');
+          expect(model.attempts()).toBe(0);
+        }),
     );
   },
 );

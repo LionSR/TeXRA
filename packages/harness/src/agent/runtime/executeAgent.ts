@@ -278,7 +278,7 @@ const openAgent = Effect.fn('executeAgent.open')(function* (
   const opening = yield* openToolUse({ resume }).pipe(Effect.provide(services));
   return {
     activation: opening.activation,
-    description: definition.agentEntry.description,
+    description: definition.description,
     launch,
     services,
     opening,

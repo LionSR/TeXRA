@@ -203,7 +203,21 @@ export function createProjectWorkbench(options: {
       send({ command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_CLOSE, sessionId }),
   });
   const reviewPane = createReviewPane();
-  const pdfPane = createPdfPane();
+  const pdfPane = createPdfPane({
+    // The desktop answers `openFile` by handing the path to the OS, and
+    // shows a failure in the window's own notice before it answers.
+    openExternally: (path) =>
+      void Effect.runFork(
+        Effect.exit(
+          surfaces.answer({
+            kind: 'host.request',
+            session,
+            requestId: crypto.randomUUID(),
+            request: { kind: 'openFile', path },
+          }),
+        ),
+      ),
+  });
   // A browser tab loads its page the first time its panel is laid out.
   const loadedBrowserTabs = new Set<string>();
   const panes = {
@@ -253,8 +267,8 @@ export function createProjectWorkbench(options: {
     },
     pdf: {
       zone: 'document',
-      mount: (tab, host) => host.append(pdfPane.frameFor(tab)),
-      update: (tab) => void pdfPane.frameFor(tab),
+      mount: (tab, host) => host.append(pdfPane.elementFor(tab)),
+      update: (tab) => void pdfPane.elementFor(tab),
       release: (tab) => pdfPane.dispose(tab.id),
     },
     browser: {
@@ -342,6 +356,7 @@ export function createProjectWorkbench(options: {
     },
     terminalPane,
     reviewPane,
+    pdfPane,
     workbench,
     setTheme(theme: Theme) {
       currentTheme = theme;

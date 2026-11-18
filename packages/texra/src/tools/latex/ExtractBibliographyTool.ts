@@ -4,18 +4,16 @@ import * as nodePath from 'node:path';
 // Third-party imports
 import { Effect, FileSystem, Schema } from 'effect';
 import { ToolContext } from '@texra-ai/harness/plugins';
-import { toPosixPath } from '@texra-ai/harness/host';
-import { relativeToRoot, pathExists } from '@texra-ai/harness/node';
+import { pathExists, workspaceRelativePath } from '@texra-ai/harness/node';
 
 // Local imports - tools
-import { ensureError, formatResultCount } from '@texra-ai/harness/schemas';
+import { formatResultCount } from '@texra-ai/harness/schemas';
 import {
   resolveToolPath,
   type ToolPathCall,
   executed,
   formatToolOutput,
   defineTool,
-  ToolError,
   type ToolResult,
   Settings,
   WorkspaceFs,
@@ -54,20 +52,11 @@ const DEFAULT_MAX_ENTRIES = 25;
  * files the document names, not tool input, so no containment applies: a
  * chapter run's missing `../refs.bib` is a note, not a tool failure.
  */
-function formatPathList(call: ToolPathCall, filePaths: string[]) {
+function formatPathList(call: ToolPathCall, filePaths: string[]): string {
   const base = call.workingDirectory ?? call.roots.workspace;
-  return Effect.try({
-    try: () =>
-      filePaths
-        .map((filePath) =>
-          toPosixPath(
-            (base === undefined ? undefined : relativeToRoot(base, filePath)) ??
-              filePath,
-          ),
-        )
-        .join(', '),
-    catch: (cause) => new ToolError(ensureError(cause).message, { cause }),
-  });
+  return filePaths
+    .map((filePath) => workspaceRelativePath(base, filePath))
+    .join(', ');
 }
 
 const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
@@ -117,7 +106,7 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
 
     const missingBibliographyNote =
       missingBibliographyFiles.length > 0
-        ? `Missing bibliography files: ${yield* formatPathList(
+        ? `Missing bibliography files: ${formatPathList(
             call.env,
             missingBibliographyFiles,
           )}.`

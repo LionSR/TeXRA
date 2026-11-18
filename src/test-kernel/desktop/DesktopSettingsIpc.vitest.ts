@@ -42,7 +42,6 @@ function createStubSettingsBindings(): DesktopSettingsIpcOptions['bindings'] {
     revealPath: noOpEffect,
     showReadOnlyYaml: noOpEffect,
     pickFolder: () => Effect.undefined,
-    selectLauncherAgent: noOpEffect,
     revealRun: () => Effect.succeed('revealed'),
     runLabel: () => undefined,
     runInTerminal: noOpEffect,

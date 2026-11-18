@@ -141,12 +141,6 @@
         "icon": "$(shield)"
       },
       {
-        "command": "texra.showTeamSettings",
-        "title": "Agent Team Settings",
-        "category": "TeXRA",
-        "icon": "$(organization)"
-      },
-      {
         "command": "texra.showGitSettings",
         "title": "Git Settings",
         "category": "TeXRA",
@@ -233,7 +227,7 @@
           {
             "id": "texra.gettingStarted.setupAssistant",
             "title": "Run the setup assistant",
-            "description": "One conversation covers the rest. The setup assistant checks your LaTeX tools and offers to install what is missing, asks what you are working on and applies a matching agent team, then runs a first polish on your paper that ends at a diff. It asks before every command it runs.\n\n[Run Setup Assistant](command:texra.walkthroughWorkspaceAction?%5B%22texra.runSetupAssistant%22%5D)",
+            "description": "One conversation covers the rest. The setup assistant checks your LaTeX tools and offers to install what is missing, then runs a first polish on your paper that ends at a diff. It asks before every command it runs.\n\n[Run Setup Assistant](command:texra.walkthroughWorkspaceAction?%5B%22texra.runSetupAssistant%22%5D)",
             "media": {
               "image": "resources/walkthroughs/media/texra-progressboard.png",
               "altText": "Screenshot of a TeXRA session"
@@ -359,10 +353,6 @@
         },
         {
           "command": "texra.showApprovalSettings",
-          "when": "false"
-        },
-        {
-          "command": "texra.showTeamSettings",
           "when": "false"
         },
         {

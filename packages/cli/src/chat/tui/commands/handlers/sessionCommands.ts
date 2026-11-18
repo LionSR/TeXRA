@@ -27,6 +27,7 @@ import {
   runningChildCount,
   runViewOf,
 } from '@cli/chat/tui/state/sessionView';
+import { resolveChildListTarget } from '@cli/chat/tui/state/childControls';
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import {
   appendLocalErrorTranscript,
@@ -79,13 +80,11 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
     const view = currentView();
     const activeRunId = selectedRunIdSignal.get();
     const run = runViewOf(view, activeRunId);
-    // The children a status line counts: the active run's, else its
-    // parent's (a focused leaf reports its siblings' activity).
-    const countedParent =
-      run && run.childIds.length === 0 && run.parentId
-        ? runViewOf(view, run.parentId)
-        : run;
-    const activeChildSessions = runningChildCount(view, countedParent);
+    // The children the status bar counts: the child list's target.
+    const activeChildSessions = runningChildCount(
+      view,
+      runViewOf(view, resolveChildListTarget(view, activeRunId)),
+    );
     const model = run?.model ?? meta.model;
     // The skills the run's latest step lists, read from its rows.
     const activeSkills =
@@ -97,7 +96,6 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
       formatCliSessionStatus({
         agent: meta.agent,
         model,
-        teamName: meta.team?.name,
         // A completed request's route cannot change, so it outranks the
         // prospective one.
         modelAccess: run?.usage.usageRoute ?? option?.usageRoute,

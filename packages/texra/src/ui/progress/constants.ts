@@ -26,14 +26,14 @@ export interface RunMenuAction {
 /**
  * DOM element IDs used across the progress view.
  */
-export const ELEMENT_IDS = {
+export const ELEMENT_IDS = Object.freeze({
   LOG_CONTENT: 'logContent',
   ACTIVE_RUN_NAME: 'activeRunName',
   STATUS_INDICATOR: 'statusIndicator',
   PROGRESS_BADGE: 'progressBadge',
   HEADER_MORE_BTN: 'headerMoreButton',
   STOP_STREAM_BTN: 'stopStreamBtn',
-};
+});
 
 /** An action that sends the host command `kind` on the run. */
 const hostAction =
@@ -51,28 +51,28 @@ const hostAction =
   (run: RunView, target: RunMenuTarget) =>
     target.dispatchEvent(SessionUiEvents.host({ kind, runId: run.id }));
 
-const OPEN_RUN_STORAGE_ACTION: RunMenuAction = {
+const OPEN_RUN_STORAGE_ACTION: RunMenuAction = Object.freeze({
   action: 'openRunStorage',
   icon: 'folder-open',
   label: TASK_ACTIONS.openFolder,
   activate: hostAction('openRunStorage'),
-};
+});
 
-const EXPORT_TRANSCRIPT_ACTION: RunMenuAction = {
+const EXPORT_TRANSCRIPT_ACTION: RunMenuAction = Object.freeze({
   action: 'export',
   icon: 'file-export',
   label: 'Export conversation…',
   activate: hostAction('exportTranscript'),
-};
+});
 
 /** A task's facts for a bug report: the one place its raw ids are shown.
  *  A clipboard write the header makes itself, with no round trip. */
-const COPY_DIAGNOSTICS_ACTION: RunMenuAction = {
+const COPY_DIAGNOSTICS_ACTION: RunMenuAction = Object.freeze<RunMenuAction>({
   action: 'copy',
   icon: 'copy',
   label: TASK_ACTIONS.copyDiagnostics,
   activate: (run, target) => target.copy(formatTaskDiagnostics(run)),
-};
+});
 
 const TASK_RUN_ACTIONS: readonly RunMenuAction[] = [
   {
@@ -134,8 +134,8 @@ export function runMenuActions(
  * Actions for a run that is not an agent's — identity still pending, or a
  * process or multi-agent workflow container. Only the neutral actions.
  */
-export const NEUTRAL_RUN_ACTIONS: readonly RunMenuAction[] = [
+export const NEUTRAL_RUN_ACTIONS: readonly RunMenuAction[] = Object.freeze([
   OPEN_RUN_STORAGE_ACTION,
   EXPORT_TRANSCRIPT_ACTION,
   COPY_DIAGNOSTICS_ACTION,
-];
+]);

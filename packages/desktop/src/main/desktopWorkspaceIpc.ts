@@ -18,7 +18,7 @@ import {
   Rejected,
 } from '@texra-ai/harness/schemas';
 
-import { Effect, FileSystem, type PlatformError, Schema } from 'effect';
+import { Effect, FileSystem, type PlatformError } from 'effect';
 
 import {
   isPathWithin,
@@ -52,10 +52,8 @@ import {
   type DesktopWorkspaceInboundMessage,
   type DesktopWorkspaceReply,
 } from '../shared/desktopWorkspaceMessages.js';
-import {
-  AgentDocumentUnavailable,
-  resolveAgentDocument,
-} from './desktopAgentDocuments.js';
+import { resolveAgentDocument } from './desktopAgentDocuments.js';
+import { DesktopCommandFailed } from './desktopIpcTypes.js';
 import { isAgentDocumentTarget } from '../shared/desktopAgentDocument.js';
 import type { ProcessServices } from '@texra-ai/harness/host';
 import type { DesktopPtyHost } from './desktopPtyHost.js';
@@ -105,22 +103,8 @@ interface DesktopWorkspaceIpc {
   readonly followFilesWritten: Effect.Effect<void, never, AppSignals>;
 }
 
-/**
- * A workspace request the editor rejected, carrying the whole sentence the
- * renderer shows for it — never a prefix over another message.
- */
-class WorkspaceRequestRejected extends Schema.TaggedError<WorkspaceRequestRejected>()(
-  'WorkspaceRequestRejected',
-  {
-    message: Schema.String,
-  },
-) {}
-
 /** Everything a file-I/O program here can fail with. */
-type WorkspaceFileFailure =
-  | WorkspaceRequestRejected
-  | AgentDocumentUnavailable
-  | PlatformError.PlatformError;
+type WorkspaceFileFailure = DesktopCommandFailed | PlatformError.PlatformError;
 
 /** The single workspace-boundary error every containment path reports. */
 const WORKSPACE_BOUNDARY_ERROR =
@@ -135,11 +119,11 @@ const WORKSPACE_BOUNDARY_ERROR =
 function assertWithinWorkspace(
   canonicalRoot: string,
   canonicalTarget: string,
-): Effect.Effect<string, WorkspaceRequestRejected> {
+): Effect.Effect<string, DesktopCommandFailed> {
   return isPathWithin(canonicalRoot, canonicalTarget)
     ? Effect.succeed(canonicalTarget)
     : Effect.fail(
-        new WorkspaceRequestRejected({ message: WORKSPACE_BOUNDARY_ERROR }),
+        new DesktopCommandFailed({ message: WORKSPACE_BOUNDARY_ERROR }),
       );
 }
 
@@ -152,15 +136,12 @@ function assertWithinWorkspace(
 function locateWorkspaceTarget(
   root: string | undefined,
   inputPath: string,
-): Effect.Effect<
-  { absolutePath: string; root: string },
-  WorkspaceRequestRejected
-> {
+): Effect.Effect<{ absolutePath: string; root: string }, DesktopCommandFailed> {
   // With no folder open every path is outside it.
   const located = root ? pathToLocationIn(root, inputPath) : undefined;
   if (!root || located?.kind !== 'workspace') {
     return Effect.fail(
-      new WorkspaceRequestRejected({ message: WORKSPACE_BOUNDARY_ERROR }),
+      new DesktopCommandFailed({ message: WORKSPACE_BOUNDARY_ERROR }),
     );
   }
   return Effect.succeed({ absolutePath: located.absolutePath, root });
@@ -217,7 +198,7 @@ const resolveWorkspaceWritePath = Effect.fn(
   // as "no link here".
   const entryType = yield* entryTypeIn(fs, absolutePath);
   if (entryType === 'SymbolicLink') {
-    return yield* new WorkspaceRequestRejected({
+    return yield* new DesktopCommandFailed({
       message: 'Symbolic links cannot be recreated by the editor.',
     });
   }
@@ -228,7 +209,7 @@ const resolveWorkspaceWritePath = Effect.fn(
   ).pipe(
     Effect.catchIf(meansAbsent, () =>
       Effect.fail(
-        new WorkspaceRequestRejected({
+        new DesktopCommandFailed({
           message:
             'The file cannot be recreated because its parent folder no longer exists.',
         }),

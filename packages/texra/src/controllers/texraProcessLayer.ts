@@ -5,18 +5,21 @@
  * part is the settings catalog, the command directories, its plugins over
  * the window table whose attached windows their editor tools read
  * (`HostWindows`), the one credential store under the storage root, the
- * project folder its skills are read from, the agent directories with
- * their team membership, and the usage log.
+ * project folder its skills are read from, the agent directories, and the
+ * usage log.
  */
 
 // Third-party imports
-import { Effect, Layer, type LogLevel } from 'effect';
+import { join } from 'node:path';
+
+import { Effect, FileSystem, Layer, Schema, type LogLevel } from 'effect';
 
 // Local imports
 import {
   AgentDirectories,
   AgentDirectoryService,
   AppState,
+  BUNDLED_AGENTS_DIRECTORY,
   processLayer,
   type ProcessServices,
   type SkillSourceOptions,
@@ -25,6 +28,7 @@ import { emitAppSignal, Secrets } from '@texra-ai/harness/plugins';
 import {
   CommandDirs,
   FileSecrets,
+  meansAbsent,
   nodePlatformServices,
   secretsDirectory,
 } from '@texra-ai/harness/node';
@@ -38,11 +42,36 @@ import {
 } from '@texra/controllers/server/hostWindows';
 import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import { TEXRA_STORAGE_DIR_NAME } from '@texra/platform/defaults/nodeStorage';
-import { teamMembers } from '@texra/shared/agentTeams';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 
 import { texraPlugins } from '@texra/tools/registry';
 import type { Sessions } from '@texra-ai/harness';
+
+/** A host's resources directory holds no bundled agents: a bundle copied
+ *  without its `resources/`, or a broken checkout. */
+class ResourcesNotFound extends Schema.TaggedError<ResourcesNotFound>()(
+  'ResourcesNotFound',
+  { message: Schema.String },
+) {}
+
+/** `resourcesPath`, failing by its path when it holds no bundled agents
+ *  directory: what a host checks before it builds {@link texraProcessLayer}
+ *  over that path. */
+export const checkResourcesPath = Effect.fn('checkResourcesPath')(function* (
+  resourcesPath: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const agents = join(resourcesPath, BUNDLED_AGENTS_DIRECTORY);
+  const isDirectory = yield* fs.stat(agents).pipe(
+    Effect.map((info) => info.type === 'Directory'),
+    Effect.catchIf(meansAbsent, () => Effect.succeed(false)),
+  );
+  if (!isDirectory)
+    return yield* new ResourcesNotFound({
+      message: `TeXRA resources not found: ${resourcesPath} holds no ${BUNDLED_AGENTS_DIRECTORY}/ directory`,
+    });
+  return resourcesPath;
+});
 
 /** What a host decides about its process: its name and host-only plugin
  *  inputs (as `texraPlugins` takes them), and the facts below. */
@@ -109,7 +138,6 @@ export const texraProcessLayer = ({
           new AgentDirectoryService({
             resourcesPath,
             state,
-            teamMembers,
             ...(agentIssues && { issueReporter: { report: agentIssues } }),
           }),
       ),

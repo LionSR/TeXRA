@@ -163,7 +163,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
         {
           name: 'agents',
           label: 'Agents',
-          description: 'workspace agents and user default team',
+          description: 'workspace agents and the default chat agent',
         },
         {
           name: 'api-keys',

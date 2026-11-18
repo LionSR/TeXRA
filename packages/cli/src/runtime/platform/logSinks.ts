@@ -3,7 +3,7 @@ import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
 
 // Third-party imports
-import { Effect, LogLevel, PlatformError, Predicate, Schema } from 'effect';
+import { Effect, LogLevel, Predicate, Schema } from 'effect';
 
 // Local imports
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
@@ -143,25 +143,13 @@ export class CliEntryCrashed extends Schema.TaggedError<CliEntryCrashed>()(
   { cause: Schema.Defect() },
 ) {}
 
-/**
- * The user-facing text of a caught error. A `PlatformError`'s own message is
- * `Tag: FileSystem.method (path)`, with no errno text; its Node cause carries
- * the real reason (`ENOSPC: no space left on device, copyfile 'a' -> 'b'`),
- * so that is what the CLI prints.
- */
+/** The user-facing text of a caught error: the CLI's one wording of a
+ *  failure, which every command prints through. */
 export function cliErrorMessage(error: unknown): string {
-  return toErrorMessage(
-    error instanceof PlatformError.PlatformError
-      ? (error.reason.cause ?? error)
-      : error,
-  );
+  return toErrorMessage(error);
 }
 
-/**
- * Write a caught error's human-readable message to stderr. Replaces the
- * `writeTextStderr(cliErrorMessage(error))` pair every command's catch block
- * repeated so the error-formatting choice lives in one place.
- */
+/** Write a caught error's human-readable message to stderr. */
 export function writeErrorStderr(error: unknown): void {
   writeTextStderr(cliErrorMessage(error));
 }

@@ -62,7 +62,6 @@ function onGlobalStorage<A, E>(
  *  live under. */
 const ROOTS = {
   repoState: new FakeStateStore(),
-  globalState: new FakeStateStore(),
   storage: '/papers/first/.texra',
 };
 
@@ -93,7 +92,6 @@ layer(FakeHost.layer())('main-view run launch controller', (it) => {
 
         expect(yield* launchFormOf(config)).toMatchObject({
           ...selections,
-          launchTarget: 'agent',
           instruction: 'Improve the draft.',
         });
       }),

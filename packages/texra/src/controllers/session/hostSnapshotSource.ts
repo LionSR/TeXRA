@@ -52,7 +52,6 @@ import {
 import { recentCommitLabels } from '@texra-ai/harness/node';
 import { apiKeyEntry } from '@texra-ai/llm';
 import { GIT_COMMITS_TO_SHOW_SETTING } from '@texra/shared/settings/texraSettings';
-import { loadTeamOptions } from '@texra/agent/teams/teamLaunch';
 import type {
   FileOptions,
   HostSnapshot,
@@ -64,7 +63,6 @@ import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOp
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { missingDependencyTools } from '@latex/latexToolchain';
-import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import {
   deriveOnboardingFunnelState,
   ONBOARDING_FLAG_KEYS,
@@ -87,8 +85,8 @@ interface HostSnapshotSourceOptions {
    *  for a session with no folder open, which is never a repository. */
   root: string | undefined;
   /**
-   * The owning session's three setting slots: its workspace-scoped team and
-   * agent list state, its configuration, and the process global state. The model
+   * The owning session's three setting slots: its workspace-scoped agent
+   * list state, its configuration, and the process global state. The model
    * catalog's availability read resolves the routing switches and the two
    * "prefer my subscription" preferences against these, so a host with several
    * open projects in one process answers for the project this source belongs
@@ -112,10 +110,7 @@ interface Inputs {
   /** False until the first {@link HostSnapshotSource.refresh} has finished,
    *  so the shell never paints the empty catalogs. */
   readonly loaded: boolean;
-  readonly catalogs: Pick<
-    HostSnapshot,
-    'agentOptions' | 'modelOptions' | 'teamOptions'
-  >;
+  readonly catalogs: Pick<HostSnapshot, 'agentOptions' | 'modelOptions'>;
   readonly workspaceRoots: HostSnapshot['workspaceRoots'];
   readonly fileOptions: FileOptions;
   readonly commits: { readonly commits: string[]; readonly isGitRepo: boolean };
@@ -223,7 +218,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     const appState = yield* AppState;
     const inputs = yield* SubscriptionRef.make<Inputs>({
       loaded: false,
-      catalogs: { agentOptions: [], modelOptions: [], teamOptions: [] },
+      catalogs: { agentOptions: [], modelOptions: [] },
       workspaceRoots: options.workspaceRoots(),
       fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
       commits: { commits: [], isGitRepo: false },
@@ -271,18 +266,6 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         yield* SubscriptionRef.update(inputs, (s) => ({
           ...s,
           catalogs: { ...s.catalogs, agentOptions },
-        }));
-      }),
-    );
-    const loadTeams = yield* producer(
-      'the teams',
-      Effect.gen(function* () {
-        const teamOptions = loadTeamOptions(
-          yield* createTeamCatalogPorts(stores.repoState),
-        );
-        yield* SubscriptionRef.update(inputs, (s) => ({
-          ...s,
-          catalogs: { ...s.catalogs, teamOptions },
         }));
       }),
     );
@@ -349,7 +332,7 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
       ),
     );
 
-    const catalogs = Effect.all([loadAgents, loadTeams, loadModels], {
+    const catalogs = Effect.all([loadAgents, loadModels], {
       concurrency: 'unbounded',
       discard: true,
     });
@@ -386,8 +369,8 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
         ),
         Effect.forkScoped,
       );
-    // The agent catalog reloaded, a team was applied or the agent list was
-    // edited (`workspaceAgentsChanged`).
+    // The agent catalog reloaded or the agent list was edited
+    // (`workspaceAgentsChanged`).
     yield* follow(
       yield* subscribeAppSignal('workspaceAgentsChanged'),
       catalogs,

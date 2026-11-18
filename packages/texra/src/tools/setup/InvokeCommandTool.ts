@@ -31,7 +31,6 @@ const SETUP_INVOKABLE_COMMANDS = [
   'texra.showModels',
   'texra.showAgents',
   'texra.showTools',
-  'texra.showTeamSettings',
   'texra.showGitSettings',
   'texra.showMainView',
   'texra.showDashboard',

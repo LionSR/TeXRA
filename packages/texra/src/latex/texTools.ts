@@ -12,6 +12,7 @@ import {
   splitContentLines,
   type FileLocation,
 } from '@texra-ai/harness/schemas';
+import { LATEX_BUILD_DIRECTORY } from '@texra/common/files/fileHandlingRules';
 import { SUPPORTED_LATEX_COMPILERS } from '@texra/shared/constants/latexToolchain';
 import { runTool, type ToolMissing } from '@texra/utils/system/toolChecks';
 import type { WorkspaceRoots } from '@texra-ai/harness';
@@ -158,6 +159,20 @@ function buildLatexSearchParts(input: {
 type CompileLatex2PdfResult =
   | { ok: true; pdfPath: string }
   | { ok: false; logTail: string };
+
+/**
+ * The build folder of one input, `<dir>/build/<stem>`. Inputs compiled at
+ * once get one each: two inputs in one folder that share an `\include` or a
+ * `.bib` would otherwise write the same `.aux`/`.bbl` files into one `build/`
+ * and corrupt each other's.
+ */
+export function perInputBuildDirectory(texPath: string): string {
+  return path.join(
+    path.dirname(texPath),
+    LATEX_BUILD_DIRECTORY,
+    path.parse(texPath).name,
+  );
+}
 
 /**
  * Compile a LaTeX file to PDF.

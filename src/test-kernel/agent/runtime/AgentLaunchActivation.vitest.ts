@@ -72,13 +72,14 @@ const permissionsOf = (storage: string, runId: string) => {
 const FILE_AGENT = { agent: 'golden_effect' } as const;
 const INLINE_AGENT = {
   agent: 'golden_effect',
-  agentSource: 'inline',
-  persona: {
-    name: 'golden_effect',
-    description:
-      "The golden store's run killed after its command's effect and before its result committed.",
-    prompt: 'GOLDEN-APPROVAL: run one command.',
-    tools: ['bash'],
+  agentSource: {
+    kind: 'inline',
+    persona: {
+      description:
+        "The golden store's run killed after its command's effect and before its result committed.",
+      prompt: 'GOLDEN-APPROVAL: run one command.',
+      tools: ['bash'],
+    },
   },
 } as const;
 

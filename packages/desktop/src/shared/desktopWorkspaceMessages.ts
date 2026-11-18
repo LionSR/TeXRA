@@ -10,7 +10,7 @@ import { Schema, Struct } from 'effect';
 /** Auxiliary resources and replies belong to the project that opened them. */
 const DesktopWorkspaceMessageSchema = Schema.Struct({ session: Schema.String });
 
-export const DESKTOP_WORKSPACE_COMMANDS = {
+export const DESKTOP_WORKSPACE_COMMANDS = Object.freeze({
   // Editor
   FILES_CHANGED: 'desktop:workspace:filesChanged',
   OPEN_DOCUMENT: 'desktop:workspace:openDocument',
@@ -29,7 +29,7 @@ export const DESKTOP_WORKSPACE_COMMANDS = {
   BROWSER_HIDE: 'desktop:browser:hide',
   BROWSER_CLOSE: 'desktop:browser:close',
   BROWSER_STATE: 'desktop:browser:state',
-} as const;
+} as const);
 
 // ── Editor ──
 //

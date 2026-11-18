@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Cause, Effect } from 'effect';
 
 // Local imports
 import { formatError, toErrorMessage } from '@texra-ai/harness/schemas';
@@ -34,6 +34,22 @@ export function announce<A>(
     ),
   );
 }
+
+/**
+ * A program's last handler: `report` gets what it failed or died with, as one
+ * error, so a defect is reported like a failure. An interrupt is the window
+ * or the view closing, not a failure: it is raised again and reports nothing.
+ */
+export const reportingFailure =
+  <R2>(report: (error: unknown) => Effect.Effect<unknown, never, R2>) =>
+  <E, R>(
+    program: Effect.Effect<void, E, R>,
+  ): Effect.Effect<void, never, R | R2> =>
+    Effect.catchCause(program, (cause) =>
+      Cause.hasInterruptsOnly(cause)
+        ? Effect.interrupt
+        : Effect.asVoid(report(Cause.squash(cause))),
+    );
 
 const INSTALL_GUIDE_ACTION = 'View Installation Guide';
 

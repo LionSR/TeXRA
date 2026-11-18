@@ -1,9 +1,7 @@
-import { Effect, Predicate } from 'effect';
+import { Effect } from 'effect';
 
-import { agentName as bareAgentName } from '@texra-ai/harness/schemas';
 import { resolveCliRunAgent } from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/platform/cliContext';
-import { readCliTeam } from '@cli/runtime/cliTeams';
 
 import {
   patchSessionMeta,
@@ -15,8 +13,6 @@ import {
   appendLocalNotice,
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
-import { resolveTeamLaunch } from '@texra/agent/teams/teamLaunch';
-import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import { selectChatModel, type SlashCommandContext } from './slashContext';
 import type { WorkspaceAgentsStores } from '@texra-ai/harness/host';
 
@@ -54,70 +50,9 @@ export const applyInitialCliAgentSelection = Effect.fn(
     setTransientNotice(fixedAgentNotice);
     return;
   }
-  patchSessionMeta({
-    agent: nextAgent,
-    agentSource: entry.source,
-    team: undefined,
-    delegationAgentScope: undefined,
-  });
+  patchSessionMeta({ agent: nextAgent, agentSource: { kind: entry.source } });
   appendLocalNotice(`Root agent set to ${nextAgent}.`);
 });
-
-/**
- * `/agent` → a team: the same launch resolution the extension and desktop
- * launchers use, so a team started here pins the same root agent and
- * delegation scope as one started there. The picker row already names any
- * unavailable members, so choosing it means continuing without them.
- */
-export const applyCliTeamSelection = Effect.fn('applyCliTeamSelection')(
-  function* (teamId: string, context: SlashCommandContext) {
-    const fixedTeamNotice =
-      'The agent is fixed for this task. Start a new task to use a team.';
-    if (!context.session.canStartRootRun()) {
-      setTransientNotice(fixedTeamNotice);
-      return;
-    }
-    const resolution = resolveTeamLaunch({
-      teamId,
-      ...(yield* createTeamCatalogPorts(context.runSession.roots.repoState)),
-    });
-    if (resolution.status === 'refused') {
-      setTransientNotice(resolution.message);
-      return;
-    }
-    const { fields } = resolution;
-    const entry = yield* resolveChatToolUseAgent(context.stores, fields.agent);
-    if (entry instanceof CliUsageError) {
-      setTransientNotice(entry.message);
-      return;
-    }
-    // Validation yields; another input may have claimed the root run.
-    if (!context.session.canStartRootRun()) {
-      setTransientNotice(fixedTeamNotice);
-      return;
-    }
-    const team = yield* readCliTeam(
-      context.runSession.roots.repoState,
-      fields.launch.teamId,
-    );
-    patchSessionMeta({
-      agent: fields.agent,
-      agentSource: entry.source,
-      team,
-      delegationAgentScope: fields.delegationAgentScope,
-    });
-    appendLocalNotice(
-      [
-        `Team set to ${team?.name ?? teamId}; ${bareAgentName(fields.agent)} leads it.`,
-        resolution.missingNames.length > 0
-          ? `Unavailable members: ${resolution.missingNames.join(', ')}.`
-          : undefined,
-      ]
-        .filter(Predicate.isNotUndefined)
-        .join(' '),
-    );
-  },
-);
 
 export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
   function* (model: string, context: SlashCommandContext) {

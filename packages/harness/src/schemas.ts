@@ -44,6 +44,7 @@ export {
 export {
   acceptsFollowUp,
   isInterrupted,
+  isLive,
   isUnreadable,
   isWorking,
   attentionOf,
@@ -85,6 +86,7 @@ export type {
   AgentProposal,
   AgentSource,
   AttachedMemoryMiss,
+  CatalogAgentSource,
   CompactionActivityData,
   CompactionActivityOutcome,
   ContextManagementData,
@@ -234,7 +236,6 @@ export {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   OPENAI_FAST_TIER_SETTING,
-  SCRIPT_ONLY_SETTING,
   CHATGPT_PREFER_SUBSCRIPTION_SETTING,
   DEBUG_MODE_SETTING,
   GOAL_STRATEGY_SETTING,

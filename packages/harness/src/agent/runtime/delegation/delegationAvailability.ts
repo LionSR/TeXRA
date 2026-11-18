@@ -3,7 +3,7 @@
  *
  * The agents a delegation tool can launch, the models a child can run and
  * whether worktrees are on all change while a run lives (agent visibility, a
- * team swap, a new credential, the worktree setting). The step reads them
+ * new credential, the worktree setting). The step reads them
  * (`readDelegationTargets`) into the run's context; the system text renders
  * them once, at the step that freezes it (`delegationSection`), and a later
  * change reaches the model as lines of the context update

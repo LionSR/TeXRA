@@ -367,9 +367,11 @@ interface ChildRunsShape {
 
 Code mode: the `script` tool, a program that calls the run's other tools,
 and `self()`, the function a script runs this agent again with. An agent
-gets them if its configuration names `script`, or, while script-only
-tools are on, as every chat run does; its session layer is the code
-sandbox the scripts run in.
+gets them if its configuration names `script`, or as every run that takes
+injected tools does (not a program's run, a text-only persona, or a plugin
+agent that names its own tools). A step that offers `script` sends it and
+the run's own tools alone; its session layer is the code sandbox the
+scripts run in.
 
 ```ts
 const codemode: Plugin
@@ -784,7 +786,7 @@ interface ITool<E = Error, R = never> {
    * was.
    */
   readonly describe?: (
-    declared: readonly Pick<ITool, 'definition' | 'scriptGlobal'>[],
+    declared: readonly Pick<ITool, 'definition' | 'scriptGlobal' | 'lane'>[],
     /** The specifiers of the modules the step's scripts may import. */
     modules: readonly string[],
     /** The programs of the step's plugins, each with its one-line

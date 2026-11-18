@@ -29,7 +29,7 @@ export type AttachedMemoryMiss = typeof AttachedMemoryMissSchema.Type;
  * API-key provider a retry offer names (with the coding plans) both read
  * this one list, so a new provider is added once.
  */
-export const MODEL_PROVIDERS = [
+export const MODEL_PROVIDERS = Object.freeze([
   'openai',
   'anthropic',
   'google',
@@ -40,7 +40,7 @@ export const MODEL_PROVIDERS = [
   'minimax',
   'glm',
   'meta',
-] as const;
+] as const);
 
 /**
  * Who serves a run's conversation: the model's own provider, whose plugin
