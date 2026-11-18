@@ -786,7 +786,7 @@ interface ITool<E = Error, R = never> {
    * was.
    */
   readonly describe?: (
-    declared: readonly Pick<ITool, 'definition' | 'scriptGlobal'>[],
+    declared: readonly Pick<ITool, 'definition' | 'scriptGlobal' | 'lane'>[],
     /** The specifiers of the modules the step's scripts may import. */
     modules: readonly string[],
     /** The programs of the step's plugins, each with its one-line
