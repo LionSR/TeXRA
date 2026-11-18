@@ -16,7 +16,7 @@ function model(
   overrides: Partial<CliModelAccess> = {},
 ): CliModelAccess {
   return {
-    model: { value, label: value },
+    model: { value, label: value, availability: 'provider-key' },
     available: true,
     status: 'available',
     ...overrides,
@@ -30,6 +30,7 @@ function modelOption(
   return {
     value,
     label: value,
+    availability: 'provider-key',
     ...overrides,
   };
 }

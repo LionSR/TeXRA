@@ -63,9 +63,21 @@ function host(): HostSnapshot {
       { value: 'review', label: 'review' },
     ],
     modelOptions: [
-      { value: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
-      { value: 'gpt-5.6', label: 'GPT 5.6' },
-      { value: 'claude-sonnet-5-5', label: 'Sonnet 5.5' },
+      {
+        value: 'gemini-3.8-flash',
+        label: 'Gemini 3.8 Flash',
+        availability: 'provider-key',
+      },
+      {
+        value: 'gpt-5.6',
+        label: 'GPT 5.6',
+        availability: 'provider-key',
+      },
+      {
+        value: 'claude-sonnet-5-5',
+        label: 'Sonnet 5.5',
+        availability: 'provider-key',
+      },
     ],
     workspaceRoots: [{ value: '/paper', label: 'ldt-lean' }],
     fileOptions: {

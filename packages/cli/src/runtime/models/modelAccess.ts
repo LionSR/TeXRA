@@ -99,12 +99,7 @@ export function formatCliNoRunnableModelsMessage(
 
 /** The kind's label, lower-cased for the terminal's sentence-case rows. */
 function formatModelAccessStatus(model: ModelOptionData): string {
-  return model.availability === undefined
-    ? 'available'
-    : modelAvailabilityLabel({
-        availability: model.availability,
-        usageRoute: model.usageRoute,
-      }).toLowerCase();
+  return modelAvailabilityLabel(model).toLowerCase();
 }
 
 /**
@@ -238,7 +233,6 @@ function formatCliModelRecovery(entry: CliModelAccess): string | undefined {
     case 'unserved':
       return 'Only OpenRouter or GitHub Copilot serves this model, which TeXRA no longer supports: choose another model.';
     case 'subscription-access':
-    case undefined:
       return undefined;
     case 'unknown-model':
       return 'Choose a model that is available in the current registry.';
@@ -254,13 +248,7 @@ export function formatCliModelDetails(entry: CliModelAccess): string {
   lines.push(`label: ${model.label}`);
   if (model.provider) lines.push(`provider: ${model.provider}`);
   lines.push(`status: ${status}`);
-  if (model.availability)
-    lines.push(
-      `availability: ${modelAvailabilityLabel({
-        availability: model.availability,
-        usageRoute: model.usageRoute,
-      })}`,
-    );
+  lines.push(`availability: ${modelAvailabilityLabel(model)}`);
   const recovery = formatCliModelRecovery(entry);
   if (recovery) lines.push(`recovery: ${recovery}`);
   if (model.context) lines.push(`context: ${model.context}`);

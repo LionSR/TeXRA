@@ -31,7 +31,7 @@ const PickerOptionBaseSchema = Schema.Struct({
  * `MODEL_AVAILABILITY_STATUS` reads the kind.
  */
 export const ModelAvailabilityFieldsSchema = Schema.Struct({
-  availability: Schema.optional(ModelAvailabilityKindSchema),
+  availability: ModelAvailabilityKindSchema,
   /** The subscription paying for the next request; absent means own keys. */
   usageRoute: Schema.optional(DeclinableUsageRouteSchema),
   /** Effective request route for a model that can use multiple backends. */
