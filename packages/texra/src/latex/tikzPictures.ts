@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - log
-import { readNormalizedFile } from '@texra-ai/harness/node';
 import { pathToLocationIn } from '@texra-ai/harness/host';
 import {
   renderPrompt,
@@ -14,6 +13,7 @@ import {
 } from '@texra-ai/harness/plugins';
 
 // Local imports - latex utils
+import { readUncommentedLatex } from './latexParsingUtils';
 import { compileLatex2Pdf } from './texTools';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import type { FileLocation } from '@texra-ai/harness/schemas';
@@ -62,8 +62,8 @@ const createStandalone = Effect.fn('tikzPictures.createStandalone')(function* (
 export const extractTikzPictures = Effect.fn('tikzPictures.extract')(function* (
   latexFile: FileLocation,
 ) {
-  const fs = yield* FileSystem.FileSystem;
-  const content = yield* readNormalizedFile(fs, latexFile.absolutePath);
+  // A commented-out figure is not compiled.
+  const content = yield* readUncommentedLatex(latexFile.absolutePath);
 
   // Match each figure block first, then inspect labels inside the block. This
   // prevents an unlabeled figure from consuming a later figure's label.
