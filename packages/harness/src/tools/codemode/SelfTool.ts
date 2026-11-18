@@ -128,13 +128,7 @@ const runSelf = Effect.fn('self.call')(function* (
   const limited = yield* countLaunch(script, name);
   if (limited !== null) return limited;
   const runId = agentChildRunId(call);
-  // A child takes no skill its parent's user activated.
-  const {
-    rootUserInstruction: _root,
-    script: _script,
-    skills: _skills,
-    ...launch
-  } = config;
+  const { rootUserInstruction: _root, script: _script, ...launch } = config;
   // Forked, the child is born on the conversation's history; fresh, on its
   // framed prompt alone. Either way it is launched, never resumed, so it starts
   // with the grants its parent holds now.
@@ -145,18 +139,22 @@ const runSelf = Effect.fn('self.call')(function* (
       const forked = fork
         ? yield* forkSeed(source, before, runId, task, boundAt)
         : null;
+      // The child's first message is its task or its seed, never its
+      // parent's launch, so it renders none of the skills that launch
+      // activated; forked, it holds the activations its seed copies.
+      const { skills: _skills, ...record } = forked?.record ?? {
+        ...launch,
+        model: (yield* ScopedRef.get(run.model)).modelId,
+        instruction: task,
+        displayInstruction: input.prompt,
+        outputFiles: [],
+        launch: null,
+      };
       return yield* executeSubagentInBand({
         runId,
         parentId,
         configPayload: Schema.decodeUnknownSync(AgentConfigSchema)({
-          ...(forked?.record ?? {
-            ...launch,
-            model: (yield* ScopedRef.get(run.model)).modelId,
-            instruction: task,
-            displayInstruction: input.prompt,
-            outputFiles: [],
-            launch: null,
-          }),
+          ...record,
           script: null,
           outputSchema: outputSchema ?? null,
           asCaller: true,
