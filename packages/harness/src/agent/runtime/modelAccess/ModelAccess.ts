@@ -61,10 +61,11 @@ export interface BoundModel extends Binding {
 }
 
 /**
- * Whether the model is sent every tool it may call, whatever the script-only
- * setting says: a model listed here reads `codeMode.scriptOnly` as off. The
- * validation model is the one member, because its canned conversations call
- * tools directly; no real model is listed.
+ * Whether the model is sent every tool it may call directly instead of
+ * `script` alone: it is not given `script` unless its agent declares it, and
+ * a declared `script` sends beside the rest. The validation model is the one
+ * member, because its canned conversations call tools directly; no real
+ * model is listed.
  */
 export const keepsDirectToolCalls = (bound: Pick<BoundModel, 'route'>) =>
   bound.route.kind === 'validation';

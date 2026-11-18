@@ -1,18 +1,5 @@
 import { join } from 'node:path';
 
-import { Effect, FileSystem, Schema } from 'effect';
-
-import { BUNDLED_AGENTS_DIRECTORY } from '@texra-ai/harness/host';
-import { meansAbsent } from '@texra-ai/harness/node';
-
-/** The app's resources directory holds no bundled agents. */
-class DesktopResourcesNotFound extends Schema.TaggedError<DesktopResourcesNotFound>()(
-  'DesktopResourcesNotFound',
-  {
-    message: Schema.String,
-  },
-) {}
-
 /** Where this build's files are. */
 export type DesktopLayout = ReturnType<typeof desktopLayout>;
 
@@ -36,26 +23,3 @@ export function desktopLayout(mainDir: string, isPackaged: boolean) {
     serviceRoot: extension,
   };
 }
-
-/** `resourcesPath`, failing by its path when it holds no bundled agents. */
-export const checkResourcesPath = Effect.fn('checkResourcesPath')(function* (
-  resourcesPath: string,
-) {
-  const fs = yield* FileSystem.FileSystem;
-  if (
-    !(yield* isExistingDirectory(
-      fs,
-      join(resourcesPath, BUNDLED_AGENTS_DIRECTORY),
-    ))
-  )
-    return yield* new DesktopResourcesNotFound({
-      message: `Unable to locate TeXRA resources: ${resourcesPath} holds no ${BUNDLED_AGENTS_DIRECTORY}/ directory`,
-    });
-  return resourcesPath;
-});
-
-const isExistingDirectory = (fs: FileSystem.FileSystem, path: string) =>
-  fs.stat(path).pipe(
-    Effect.map((info) => info.type === 'Directory'),
-    Effect.catchIf(meansAbsent, () => Effect.succeed(false)),
-  );

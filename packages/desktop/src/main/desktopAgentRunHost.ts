@@ -5,7 +5,7 @@ import type { BuildDisplayFn } from '@texra/controllers/approval/latexPreview';
 import type { windowNotices } from '@texra/controllers/session/windowNotices';
 import type { Effect } from 'effect';
 
-import type { PreviewUnavailable } from './desktopPreviewHost.js';
+import type { DesktopCommandFailed } from './desktopIpcTypes.js';
 
 /** Required desktop capabilities used throughout an agent run. */
 export interface DesktopAgentRunHost {
@@ -25,7 +25,7 @@ export interface DesktopAgentRunHost {
   openPath(
     filePath: string,
     line?: number,
-  ): Effect.Effect<void, PreviewUnavailable>;
+  ): Effect.Effect<void, DesktopCommandFailed>;
   openBuildDisplay: BuildDisplayFn;
   openDiff: DiffViewHost['openDiff'];
   confirm: Dialogs['confirm'];

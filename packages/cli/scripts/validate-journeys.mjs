@@ -14,13 +14,10 @@
  * that runs on every PR against the canned validation model.
  *
  *   node scripts/validate-journeys.mjs [--model <ref>]... [--journey edit]...
- *     [--no-build] [--out dir] [--direct] [--repeat n]
+ *     [--no-build] [--out dir] [--repeat n]
  *
- * A journey runs as a fresh install does, with `texra.codeMode.scriptOnly` on
- * (the model is sent `script` and the run's own tools alone): the "only" arm
- * of the code mode comparison. `--direct` turns the setting off in the run's
- * home, so the model is sent every tool: the "direct" arm. `--repeat` runs
- * each journey that many times. Every run appends one JSON line to `<out>/results.jsonl`.
+ * A journey runs as a fresh install does: the model is sent `script` and the
+ * run's own tools alone. `--repeat` runs each journey that many times. Every run appends one JSON line to `<out>/results.jsonl`.
  *
  * With no `--model` it runs every model in `MODEL_KEYS`, so this map is the one
  * list of models the journeys run.
@@ -39,7 +36,6 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 import { parseArgs } from 'node:util';
 
 import {
@@ -268,7 +264,7 @@ const JOURNEYS = {
 };
 
 /** Run one journey through the real CLI; returns its usage or throws. */
-function runJourney(name, model, outDir, { arm, attempt }) {
+function runJourney(name, model, outDir, attempt) {
   const journey = JOURNEYS[name];
   const dir = mkdtempSync(path.join(tmpdir(), `texra-journey-${name}-`));
   const home = mkdtempSync(path.join(tmpdir(), `texra-journey-${name}-home-`));
@@ -296,17 +292,6 @@ function runJourney(name, model, outDir, { arm, attempt }) {
     // enabled ones only.
     const enable = texra(['models', 'enable', model], 60_000);
     assert(enable.status === 0, `texra models enable ${model} failed`);
-    if (arm === 'direct') {
-      // The global state the `enable` above created: the "direct" arm's one
-      // setting, written as the app-state store writes it.
-      const db = new DatabaseSync(
-        path.join(home, '.texra', 'v1', 'global-storage', 'texra.db'),
-      );
-      db.prepare(
-        "INSERT OR REPLACE INTO current_value (family, key, value, at) VALUES ('app-state', 'texra.codeMode.scriptOnly', 'false', ?)",
-      ).run(Date.now());
-      db.close();
-    }
     const startedAt = Date.now();
     const result = texra(
       [
@@ -326,7 +311,7 @@ function runJourney(name, model, outDir, { arm, attempt }) {
     const wallMs = Date.now() - startedAt;
     const stem = path.join(
       outDir,
-      `${name}.${model.replaceAll(/[^\w.-]/g, '-')}.${arm}.${attempt}`,
+      `${name}.${model.replaceAll(/[^\w.-]/g, '-')}.${attempt}`,
     );
     writeFileSync(`${stem}.ndjson`, result.stdout ?? '');
     writeFileSync(`${stem}.stderr`, result.stderr ?? '');
@@ -395,7 +380,6 @@ const { values } = parseArgs({
     model: { type: 'string', multiple: true },
     journey: { type: 'string', multiple: true },
     'no-build': { type: 'boolean', default: false },
-    direct: { type: 'boolean', default: false },
     repeat: { type: 'string', default: '1' },
     out: { type: 'string', default: path.join(cliRoot, 'dist/journeys') },
   },
@@ -440,7 +424,6 @@ if (!values['no-build']) {
 }
 mkdirSync(values.out, { recursive: true });
 
-const arm = values.direct ? 'direct' : 'only';
 const repeat = Number(values.repeat);
 if (!Number.isInteger(repeat) || repeat < 1) {
   console.error(`--repeat must be a positive integer, got ${values.repeat}`);
@@ -458,9 +441,7 @@ const recorded = existsSync(resultsFile)
 const lastAttempt = (model) =>
   Math.max(
     0,
-    ...recorded
-      .filter((row) => row.model === model && row.arm === arm)
-      .map((row) => row.attempt),
+    ...recorded.filter((row) => row.model === model).map((row) => row.attempt),
   );
 let failed = false;
 for (const model of funded) {
@@ -471,7 +452,7 @@ for (const model of funded) {
       try {
         return {
           name,
-          ...runJourney(name, model, values.out, { arm, attempt }),
+          ...runJourney(name, model, values.out, attempt),
         };
       } catch (error) {
         return {
@@ -484,12 +465,12 @@ for (const model of funded) {
     for (const row of rows)
       appendFileSync(
         resultsFile,
-        `${JSON.stringify({ model, arm, attempt, ...row, pass: !row.error })}\n`,
+        `${JSON.stringify({ model, attempt, ...row, pass: !row.error })}\n`,
       );
     const lines = rows.map((row) =>
       row.error
-        ? `FAIL ${row.name} (${model}, ${arm} #${attempt}): ${row.error}`
-        : `PASS ${row.name} (${model}, ${arm} #${attempt}): ${row.tokens} tokens, $${row.cost.toFixed(5)}, ${(row.wallMs / 1000).toFixed(0)}s, ${row.scripts} script call(s)`,
+        ? `FAIL ${row.name} (${model} #${attempt}): ${row.error}`
+        : `PASS ${row.name} (${model} #${attempt}): ${row.tokens} tokens, $${row.cost.toFixed(5)}, ${(row.wallMs / 1000).toFixed(0)}s, ${row.scripts} script call(s)`,
     );
     console.log(lines.join('\n'));
     failed ||= rows.some((row) => row.error);
