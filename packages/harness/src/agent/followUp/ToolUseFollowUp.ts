@@ -41,10 +41,16 @@ interface SubmitFollowUpOptions {
   /** A user's message the run reads when its current turn ends, not at the
    *  turn's next model request. */
   readonly hold?: 'turn';
-  /** The message's media, read in the run's send lane once the message is
-   *  accepted, so a slow read never lets a later message commit first. */
-  readonly attach?: Effect.Effect<
-    Pick<Extract<InboxItem, { readonly text: string }>, 'media' | 'blobs'>,
+  /** What the message's read files add to it, read in the run's send lane
+   *  once the message is accepted, so a slow read never lets a later message
+   *  commit first: its media, and the text its activated skills lead. */
+  readonly prepare?: Effect.Effect<
+    Partial<
+      Pick<
+        Extract<InboxItem, { readonly text: string }>,
+        'text' | 'displayText' | 'media' | 'blobs'
+      >
+    >,
     Error
   >;
   /** The keys the run resumes with if the message wakes it: the sending
@@ -148,7 +154,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   item: InboxItem,
   options: SubmitFollowUpOptions,
 ): Effect.fn.Return<SubmitFollowUpResult, Error, FollowUpServices> {
-  const { hold, attach, apiKeys, skills } = options;
+  const { hold, prepare, apiKeys, skills } = options;
   const inbox = yield* Inbox;
   const runs = yield* Runs;
   const log = yield* SessionLog;
@@ -197,10 +203,10 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       const facts = yield* log.facts(runId);
       if (facts?.stop !== null && facts?.end === null) yield* live.drained;
     }
-    const media = attach === undefined ? {} : yield* attach;
+    const prepared = prepare === undefined ? {} : yield* prepare;
     const landed = yield* inbox.send(
       runId,
-      { ...item, ...media },
+      { ...item, ...prepared },
       { hold, skills },
     );
     return { status: 'landed', landed, live: live !== undefined } as const;

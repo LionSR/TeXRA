@@ -348,46 +348,55 @@ export function sessionRequests(
     // and keeps its run's sends in order, its media read included.
     if (req.kind === 'followUp.send') {
       const roots = yield* SessionRoots;
-      const attach = Effect.provideContext(
-        attachedMedia(req.media ?? [], roots),
-        mediaReadOf(deps.services),
-      );
-      // The skills the user activated lead the text the run reads; the
-      // transcript shows what was typed.
       const skills = req.skills ?? [];
-      const message =
+      // The skills the user activated lead the text the run reads, read with
+      // the media in the run's send lane; the transcript shows what was
+      // typed.
+      const skillText =
         skills.length === 0
-          ? {
-              text: req.text,
-              ...(req.displayText == null
-                ? {}
-                : { displayText: req.displayText }),
-            }
-          : {
-              text: yield* skillActivationText(roots, skills, req.text).pipe(
-                Effect.provideContext(skillReadOf(deps.services)),
-                Effect.catchTag('StateReadFailed', (error) =>
-                  Effect.fail(
-                    new Unavailable({
-                      runId: req.runId,
-                      reason: `The activated skills could not be read: ${error.message}`,
-                    }),
-                  ),
+          ? Effect.succeed({})
+          : skillActivationText(roots, skills, req.text).pipe(
+              Effect.provideContext(skillReadOf(deps.services)),
+              Effect.catchTag('StateReadFailed', (error) =>
+                Effect.fail(
+                  new Unavailable({
+                    runId: req.runId,
+                    reason: `The activated skills could not be read: ${error.message}`,
+                  }),
                 ),
               ),
-              displayText: req.displayText ?? req.text,
-            };
+              Effect.map((text) => ({
+                text,
+                displayText: req.displayText ?? req.text,
+              })),
+            );
+      const prepare = Effect.all([
+        Effect.provideContext(
+          attachedMedia(req.media ?? [], roots),
+          mediaReadOf(deps.services),
+        ),
+        skillText,
+      ]).pipe(Effect.map(([media, text]) => ({ ...media, ...text })));
       const result = yield* submitFollowUp(
         req.runId,
-        { ...message, from: { kind: 'user' } },
+        {
+          text: req.text,
+          ...(req.displayText == null ? {} : { displayText: req.displayText }),
+          from: { kind: 'user' },
+        },
         {
           hold: req.holdUntil ?? undefined,
-          attach,
+          prepare,
           apiKeys: req.apiKeys,
           ...(skills.length > 0 && { skills }),
         },
       ).pipe(
-        Effect.catchIf((e): e is Error => !(e instanceof Rejected), Effect.die),
+        // The refusals a send states: its own, and a skill read that failed.
+        Effect.catchIf(
+          (e): e is Error =>
+            !(e instanceof Rejected) && !(e instanceof Unavailable),
+          Effect.die,
+        ),
       );
       if (result.status === 'failed')
         return yield* new Unavailable({
