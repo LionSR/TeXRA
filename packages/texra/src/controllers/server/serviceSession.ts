@@ -230,9 +230,11 @@ export const serviceProjectState = (
 const runFailure = (message: string) =>
   new RunFailure({ cause: new Error(message), message });
 
-/** The service's answer to a start or resume it did not run, as the run's
- *  own failure, worded `prefix` and its message; a refused launch passes
- *  as itself, for this window's presenter to show with its notice. */
+/** The service's own reason for a start or resume it did not run (it is
+ *  shutting down, the project would not open), as the run's failure,
+ *  worded `prefix` and its message. What the session's start or resume
+ *  failed with passes as itself, for this window to present as it would
+ *  its own session's. */
 const taskFailed = (prefix: string) => (error: TaskFailed) =>
   Effect.fail(runFailure(`${prefix}${error.message}`));
 

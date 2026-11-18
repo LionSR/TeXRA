@@ -21,7 +21,7 @@ import {
 } from 'effect';
 import type { RpcGroup } from 'effect/rpc';
 
-import { LaunchRefused, type LocalSession, type Run } from '@texra-ai/harness';
+import { type LocalSession, type Run } from '@texra-ai/harness';
 import {
   type RunId,
   toErrorMessage,
@@ -123,26 +123,20 @@ const internal = Effect.fn('handlers.internal')(function* (
 
 /**
  * What a start or a resume answers its client: the run it reached, or why
- * it reached none. A start that fails before its run opens has no row to
- * show it: the window that asked shows it. A client that disconnects gives
+ * it reached none, which is the session's own failure, carried as the class
+ * it is. A start that fails before its run opens has no row to show it: the
+ * window that asked shows it. A client that disconnects gives
  * up only this answer: the run is its own fiber's from the moment the
  * session's registry holds it, and a stop is how it ends.
  */
-const started = <E extends { readonly message: string }>(
+const started = <E>(
   start: Effect.Effect<Run, E>,
-): Effect.Effect<typeof TaskStarted.Type, TaskFailed | LaunchRefused> =>
+): Effect.Effect<typeof TaskStarted.Type, E | TaskFailed> =>
   start.pipe(
     Effect.tapCause((cause) =>
       Cause.hasInterruptsOnly(cause)
         ? Effect.void
         : Effect.logWarning('A service task ended with a failure', cause),
-    ),
-    // A refused launch is carried as itself, for the window that asked to
-    // show with its notice.
-    Effect.mapError((error) =>
-      error instanceof LaunchRefused
-        ? error
-        : new TaskFailed({ message: error.message }),
     ),
     Effect.catchDefect((defect) =>
       Effect.fail(new TaskFailed({ message: toErrorMessage(defect) })),
