@@ -10,13 +10,13 @@ import {
 import { tuiUi } from '@cli/chat/tui/hosts/tuiUiHost';
 import { commitProviderKey } from '@texra/controllers/settingsView/providerKeyActions';
 import { SettingsRequestFailed } from '@texra/controllers/settingsView/settingsHostBindings';
-import { storeCredential } from '@texra/common/secrets/storeCredential';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
 import type { TexraSettingRow } from '@texra/shared/settings/settingSurfaces';
 import {
-  GITHUB_TOKEN_STORAGE_KEY,
+  removeGitHubToken,
   resolveGitHubTokenSource,
+  saveGitHubToken,
 } from '@texra/tools/github/githubAuth';
 
 import { WorkspaceAgentsForm } from './WorkspaceAgentsForm';
@@ -207,18 +207,14 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             statusView={githubTokenStatusView}
             onSave={(token) =>
               Effect.gen(function* () {
-                yield* storeCredential(yield* Secrets, {
-                  secretName: GITHUB_TOKEN_STORAGE_KEY,
-                  value: token,
-                  kind: 'github',
-                });
+                yield* saveGitHubToken(token);
                 githubToken.setData(() => 'secret');
                 yield* githubToken.refresh();
               })
             }
             onRemove={() =>
               Effect.gen(function* () {
-                yield* (yield* Secrets).delete(GITHUB_TOKEN_STORAGE_KEY);
+                yield* removeGitHubToken;
                 yield* githubToken.refresh();
               })
             }

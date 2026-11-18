@@ -5,7 +5,6 @@
 import { Effect } from 'effect';
 
 import { Secrets } from '@texra-ai/harness/plugins';
-import { storeCredential } from '@texra/common/secrets/storeCredential';
 import {
   listGitHubSubscriptionEntries,
   unsubscribeGitHubKey,
@@ -15,8 +14,9 @@ import {
   GITHUB_TOKEN_PROMPT,
   GITHUB_TOKEN_REMOVED_MESSAGE,
   GITHUB_TOKEN_SAVED_MESSAGE,
-  GITHUB_TOKEN_STORAGE_KEY,
+  removeGitHubToken,
   resolveGitHubTokenSource,
+  saveGitHubToken,
 } from '@texra/tools/github/githubAuth';
 
 import {
@@ -64,11 +64,7 @@ export function settingsGitCommands(ports: {
         if (token == null) return;
         yield* reported(
           'Failed to save GitHub token',
-          storeCredential(yield* Secrets, {
-            secretName: GITHUB_TOKEN_STORAGE_KEY,
-            value: token,
-            kind: 'github',
-          }).pipe(
+          saveGitHubToken(token).pipe(
             Effect.andThen(notice(GITHUB_TOKEN_SAVED_MESSAGE)),
             Effect.andThen(changed('github')),
           ),
@@ -78,9 +74,7 @@ export function settingsGitCommands(ports: {
     removeGitHubToken: () =>
       reported(
         'Failed to remove GitHub token',
-        Effect.flatMap(Secrets, (secrets) =>
-          secrets.delete(GITHUB_TOKEN_STORAGE_KEY),
-        ).pipe(
+        removeGitHubToken.pipe(
           Effect.andThen(notice(GITHUB_TOKEN_REMOVED_MESSAGE)),
           Effect.andThen(changed('github')),
         ),
