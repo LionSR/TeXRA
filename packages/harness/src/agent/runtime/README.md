@@ -70,8 +70,8 @@ file, so `npm run gate:docs` fails when one moves.
 - **Registry**: [`runRegistry`](runRegistry.ts) (one entry per run: fiber,
   loop controls, activation, serial lane; the one in-process answer to which
   runs are launched here, published to the view as `runsHere`, with
-  admission, lookup and stop); [`runs`](runs.ts) (the session's `Runs` as
-  hosts and tools see them, and a loop's `RunControls`).
+  admission, lookup and stop); [`runs`](runs.ts) (what tools and reads
+  see of the registry, and a loop's `RunControls`).
 - **Session**: [`SessionHandle`](SessionHandle.ts) (what opening a session
   supplies, and the shape of its requests);
   [`sessionEventsLayer`](sessionEventsLayer.ts) (the session's event

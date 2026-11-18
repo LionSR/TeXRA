@@ -41,14 +41,10 @@ import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';
 
 interface LoopInit extends Omit<ScriptedRunInit, 'model'> {
   readonly script: readonly ScriptedAttempt[];
-  readonly resume?: boolean;
 }
 
 function loopProgram(init: LoopInit, model: ScriptedModel['model']) {
-  return Effect.flatMap(
-    openToolUse({ resume: init.resume === true }),
-    (opened) => runToolUse({ resume: init.resume === true }, opened),
-  ).pipe(
+  return Effect.flatMap(openToolUse(), runToolUse).pipe(
     Effect.provide(
       scriptedInvokerLayer.pipe(
         Layer.provideMerge(

@@ -159,9 +159,7 @@ layer(
           workingDirectory: process.cwd(),
         });
         const ctx = validationLaunch(runId, config);
-        yield* Effect.flatMap(openToolUse({ resume: false }), (opened) =>
-          runToolUse({ resume: false }, opened),
-        ).pipe(
+        yield* Effect.flatMap(openToolUse(), runToolUse).pipe(
           Effect.provide(runLayer(session, ctx, [tool('gone'), tool('kept')])),
           Effect.orDie,
         );
@@ -220,9 +218,10 @@ layer(
           warn: (message: string) => void warnings.push(message),
         },
       };
-      yield* Effect.flatMap(openToolUse({ resume: false }), (opened) =>
-        runToolUse({ resume: false }, opened),
-      ).pipe(Effect.provide(runLayer(session, ctx, [])), Effect.orDie);
+      yield* Effect.flatMap(openToolUse(), runToolUse).pipe(
+        Effect.provide(runLayer(session, ctx, [])),
+        Effect.orDie,
+      );
 
       // The user activated a Lean skill; the Lean plugin is not available
       // in this workspace when the run resumes.
