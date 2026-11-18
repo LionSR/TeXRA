@@ -61,9 +61,6 @@ export interface ExecuteAgentOptions {
   readonly parentId?: RunId;
   /** Run-scoped tools added to the agent without mutating the default registry. */
   readonly tools?: readonly ITool<Error, PluginToolServices>[];
-  /** The skills a fresh root's user activated, by name, which its opening
-   *  records; the instruction already carries their blocks. */
-  readonly skills?: readonly string[];
   /** Fires on meaningful progress: plan changes and tool call milestones. */
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
   /** The caller asks a root to end after one model/tool cycle instead of
@@ -202,7 +199,6 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
           workspaceRoot: roots.workspace,
           workingDirectory,
           storageRoot: roots.storage,
-          activated: options.skills ?? [],
         },
       );
 

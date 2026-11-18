@@ -82,6 +82,7 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
       agent: launch.agent,
       model: launch.model,
       instruction,
+      ...(launch.skills.length > 0 && { skills: launch.skills }),
       workingDirectory: launch.workingDirectory.trim() || undefined,
       // The form starts chats only; it shows its file lists only while open
       // on a program's proposal, so a launch carries none of them.
@@ -120,6 +121,7 @@ export function launchFormOf(
     // Effort and mode included: the model menu offers it as itself.
     model: config.model,
     instruction: config.instruction,
+    skills: [...(config.skills ?? [])],
     workingDirectory: config.workingDirectory ?? '',
     mediaFiles: [...config.mediaFiles],
   });

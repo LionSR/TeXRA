@@ -145,7 +145,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // v10: the agent's source is one field (`agentSource`) whose `inline`
     // case carries the persona, unnamed since it is the agent's; no
     // `persona` beside it (an earlier build's row would fail as damaged).
-    'run.config': Object.freeze({ version: 10, listing: 'own' }),
+    // v11: the skills the user activated are named (`skills`) beside the
+    // instruction as typed, no longer written into it (an earlier build's
+    // instruction would carry the blocks and its rerun would activate none).
+    'run.config': Object.freeze({ version: 11, listing: 'own' }),
     // v2: no `shutdown` reason: a process that exits writes nothing for its
     // runs (an earlier build's shutdown stop would fail as damaged).
     'run.stop': Object.freeze({ version: 2, listing: 'own' }),

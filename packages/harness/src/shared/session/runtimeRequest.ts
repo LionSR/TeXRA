@@ -309,9 +309,6 @@ export const StartOptionsSchema = Schema.Struct({
    *  process's environment, when its model binds and in what it hands a
    *  child agent CLI. Never stored: a resume passes them again. */
   apiKeys: Schema.optional(Schema.Record(Schema.String, Schema.String)),
-  /** The skills the user activated for the instruction: the launch puts
-   *  their instructions before it, and the opening records them. */
-  skills: Schema.optional(ActivatedSkillsSchema),
 });
 
 /**

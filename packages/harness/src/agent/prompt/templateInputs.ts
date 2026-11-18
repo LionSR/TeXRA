@@ -4,11 +4,7 @@ import { Effect, FileSystem } from 'effect';
 
 import { parseFrontmatter } from '@agent/memory/memoryMeta';
 import { displayToStoragePath } from '@agent/memory/memoryLayout';
-import {
-  programOf,
-  type AgentConfig,
-  type AttachedMemoryMiss,
-} from '@shared/schemas';
+import type { AgentConfig, AttachedMemoryMiss } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   listExternalRoots,
@@ -54,8 +50,6 @@ interface BuildTemplateInputsOptions {
   workspaceRoot: string | undefined;
   workingDirectory?: string;
   storageRoot: string;
-  /** The skills the launch's user activated, by name. */
-  activated: readonly string[];
 }
 
 type AttachedMemoriesResult = {
@@ -105,8 +99,9 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
   return {
     inputs,
     // What the launch activates (`/skills`): each step resolves the names
-    // against its own catalog; a program's, none.
-    activated: programOf(agentConfig) !== null ? [] : options.activated,
+    // against its own catalog; a script's run, which renders no prompt,
+    // none.
+    activated: agentConfig.script != null ? [] : (agentConfig.skills ?? []),
     attachedMemories: attachedMemories.xml,
     attachedMemoryMisses: attachedMemories.misses,
   };

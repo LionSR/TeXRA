@@ -7,6 +7,7 @@ import {
   CatalogAgentSourceSchema,
   InlinePersonaSchema,
 } from './agent';
+import { ActivatedSkillsSchema } from './activeSkills';
 import { AgentDelegationScopeSchema } from './workspaceAgents';
 import { FileFieldsSchema } from './fileFields';
 
@@ -50,6 +51,12 @@ const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
     displayInstruction: Schema.optional(Schema.NullOr(Schema.String)),
     /** Memory display paths attached to this delegation (e.g. /memories/conventions.md). */
     memories: decodingDefault(Schema.Array(Schema.String), []),
+    /**
+     * The skills the user activated for `instruction`, which stays as typed:
+     * the run's first message leads with their activation blocks, and its
+     * opening records them. A child or a script run takes none.
+     */
+    skills: Schema.optional(ActivatedSkillsSchema),
     /** Working directory override for subagent tool calls (e.g. a git worktree). */
     workingDirectory: Schema.optional(Schema.NullOr(Schema.String)),
     /**

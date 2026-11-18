@@ -12,7 +12,6 @@ const buildVars = (agentConfig: typeof AgentConfigSchema.Type) =>
     buildTemplateInputs(agentConfig, false, {
       workspaceRoot: host.path('workspace'),
       storageRoot: host.roots.storage,
-      activated: [],
     }),
   );
 

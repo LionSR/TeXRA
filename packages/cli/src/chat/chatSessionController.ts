@@ -362,14 +362,12 @@ export function createChatSessionController(
    * The one root-run launch: claims the root launch, then prepares and
    * starts the run on its own fiber, so a message typed while the model is
    * chosen already sees the launch. `shownInstruction` goes to the
-   * transcript when preparing failed before any run could show it;
-   * `skills` are the ones the user activated for it.
+   * transcript when preparing failed before any run could show it.
    * Completes with whether the session holds the run.
    */
   const launchRootRun = <R>(
     resolveConfig: Effect.Effect<AgentConfigPayload, Error, R>,
     shownInstruction: string,
-    skills: readonly string[],
   ): Effect.Effect<boolean, never, R | ProcessServices> =>
     // The claim and the fork of the program that ends it are one
     // uninterruptible step: an interrupted caller never leaves a launch
@@ -408,7 +406,6 @@ export function createChatSessionController(
             runId,
             continues: rootRunId.get(),
             approval: launchApproval(init.approvalPolicy()),
-            ...(skills.length > 0 && { skills: [...skills] }),
           });
           held = true;
           moveLocalTranscriptToRun(run.runId);
@@ -678,12 +675,12 @@ export function createChatSessionController(
           agentSource: meta.agentSource,
           model: selection.model,
           instruction,
+          ...(skills.length > 0 && { skills: [...skills] }),
           workingDirectory: cwd,
           ...(mediaFiles.length > 0 ? { mediaFiles: [...mediaFiles] } : {}),
         } satisfies AgentConfigPayload;
       }),
       instruction,
-      skills,
     );
 
   // Where each message goes is decided one at a time, in the order typed,

@@ -28,6 +28,7 @@ import { Context, Effect, Exit, type Scope, ScopedRef } from 'effect';
 import { buildOpeningSystemPrompt } from '@agent/prompt/PromptBuilder';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import { logUserMessage } from '@agent/trace/traceLogs';
+import { LaunchRefused } from '@common/errors/agentErrors';
 import { sourceLocationUnder } from '@common/storage/storageLayout';
 import {
   type BoundModel,
@@ -53,6 +54,7 @@ import {
 } from '@shared/session/runHistory';
 import { isResuming, type RunState } from '@shared/session/runState';
 import { turnText } from '@shared/session/runFacts';
+import { skillActivationText } from '@skills/runtimeSkills';
 import { sentDefinitions } from '@tools/catalogEntries';
 import { sha256 } from '@utils/core/idHash';
 
@@ -365,6 +367,16 @@ export const openToolUse = Effect.fn('toolUse.open')(function* (
         return yield* Effect.fail(
           new Error('A conversation requires a non-empty task.'),
         );
+      // The skills its user activated lead it, each as its activation block.
+      const skills = run.config.skills ?? [];
+      const request =
+        skills.length === 0
+          ? userRequest
+          : yield* skillActivationText(roots, skills, userRequest).pipe(
+              Effect.catchTag('Rejected', ({ reason }) =>
+                Effect.fail(new LaunchRefused({ message: reason })),
+              ),
+            );
       const content: InputPart[] = [];
       const media = yield* Effect.exit(
         run.config.mediaFiles.length
@@ -377,8 +389,8 @@ export const openToolUse = Effect.fn('toolUse.open')(function* (
       );
       echo(Exit.isSuccess(media) ? media.value.kinds : []);
       if (Exit.isFailure(media)) return yield* Effect.failCause(media.cause);
-      content.push(...media.value.parts, { kind: 'text', text: userRequest });
-      const hooked = yield* step.tools.hooks.opening(opening, userRequest);
+      content.push(...media.value.parts, { kind: 'text', text: request });
+      const hooked = yield* step.tools.hooks.opening(opening, request);
       content.push(...hooked.parts);
       return { content, offered: [...step.rows, ...hooked.rows], handed: [] };
     }),
