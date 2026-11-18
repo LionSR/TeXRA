@@ -482,8 +482,10 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     },
   );
   yield* Effect.forkScoped(
-    Stream.runForEach(progressViewProvider.credentialUsable, (usable) =>
-      Effect.sync(() => (usable ? setupPill.hide() : setupPill.show())),
+    Stream.runForEach(
+      progressViewProvider.window.snapshot.credentialUsable,
+      (usable) =>
+        Effect.sync(() => (usable ? setupPill.hide() : setupPill.show())),
     ),
   );
   yield* Effect.logInfo('TeXRA extension activated').pipe(

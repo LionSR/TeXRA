@@ -138,7 +138,7 @@ export class SettingsViewProvider {
               selectFolder({ title, openLabel: 'Select Folder' }),
               (selected) => selected ?? undefined,
             ),
-          ...progressView.settingsRuns,
+          ...progressView.window.settingsRuns,
           signInSubscription: (providerId) =>
             signInWithSubscription(roots, providerId),
           runInTerminal: (name, command) =>

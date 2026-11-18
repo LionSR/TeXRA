@@ -172,7 +172,7 @@ export function registerCommands(
     'texra.cleanBuild': () => confirmCleanBuild,
     'texra.auth.chatgpt.signIn': () =>
       settingsViewProvider.signInSubscription('chatgpt'),
-    'texra.runSetupAssistant': () => progressViewProvider.runSetup,
+    'texra.runSetupAssistant': () => progressViewProvider.window.runSetup,
     'texra.openGettingStarted': () => openGettingStarted(context.extension.id),
     'texra.createSampleProject': () =>
       createSampleProject(context.extensionPath),
@@ -180,7 +180,7 @@ export function registerCommands(
     'texra.openProgressViewInTab': () => progressViewProvider.popOutToEditor(),
     'texra.indentCurrentTeX': () => handleIndentCurrentTeX(roots),
     'texra.fixCompilation': () =>
-      handleFixCompilation(roots, progressViewProvider.runValidated),
+      handleFixCompilation(roots, progressViewProvider.window.runValidated),
     'texra.getTeXCount': () => handleGetTeXCount(roots),
     'texra.compileTikzFigures': () => handleCompileTikzFigures(roots),
     'texra.cloneOverleafProject': () => cloneOverleafProject(),
@@ -198,7 +198,7 @@ export function registerCommands(
         config === undefined
           ? progressViewProvider.submit()
           : decodeLaunchConfig(config).pipe(
-              Effect.flatMap(progressViewProvider.runValidated),
+              Effect.flatMap(progressViewProvider.window.runValidated),
               Effect.flatMap((run) => run.result),
             ),
     ),

@@ -37,13 +37,11 @@ import {
 } from '@texra/tools/editorHost';
 import { projectDisplayOf } from '@texra/shared/session/hostSnapshot';
 import type { SessionWire } from '@texra/shared/session/sessionFrames';
-import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import {
   openGuiWindow,
   type GuiSession,
-  type GuiWindowSettingsRuns,
 } from '@texra/controllers/session/openGuiWindow';
 import type {
   AttachedPort,
@@ -104,14 +102,13 @@ interface Surfaces {
   editor?: Surface<vscode.WebviewPanel>;
 }
 
+/** The window a view is opened on, as `openGuiWindow` answers it. */
+type GuiWindow = Effect.Success<ReturnType<typeof openGuiWindow>>;
+
 /** What the view is built over: its window's parts and the scope it lives
  *  in. */
 interface ViewParts {
-  readonly bridge: SessionBridge;
-  readonly snapshot: HostSnapshotSource;
-  readonly runValidated: HostRunActions['runValidated'];
-  readonly runSetup: Effect.Effect<void, never, ProcessServices>;
-  readonly settingsRuns: GuiWindowSettingsRuns;
+  readonly window: GuiWindow;
   /** Where this window's runs run: the service's session, or this one. */
   readonly runSession: Session;
   /** The view's scope: each surface's scope is a child of it, so the
@@ -272,11 +269,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           ),
       });
       const view = new ProgressViewProvider({
-        bridge: gui.bridge,
-        snapshot: gui.snapshot,
-        runValidated: gui.runValidated,
-        runSetup: gui.runSetup,
-        settingsRuns: gui.settingsRuns,
+        window: gui,
         runSession,
         scope,
         contentProvider,
@@ -308,15 +301,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   /** The sidebar while VS Code holds one resolved, and the popped-out tab;
    *  an entry leaves when its surface's scope closes. */
   private readonly surfaces: Surfaces = {};
-  /** Whether a usable credential exists, as each check answers: the setup
-   *  pill follows the answer the "Connect a model" card reads. */
-  public readonly credentialUsable: Stream.Stream<boolean>;
-  /** The window's launcher (`HostRunActions.runValidated`). */
-  public readonly runValidated: HostRunActions['runValidated'];
-  /** The window's setup verb, for the command and the status pill. */
-  public readonly runSetup: Effect.Effect<void, never, ProcessServices>;
-  /** The settings view's verbs on this window's runs. */
-  public readonly settingsRuns: GuiWindowSettingsRuns;
+  /** The window this view shows: its launcher and setup verb for the
+   *  commands, the settings view's verbs on its runs, and the snapshot the
+   *  setup pill follows. */
+  public readonly window: GuiWindow;
   /** Where this window's runs run: the service's session, or this one. */
   private readonly runSession: Session;
 
@@ -326,14 +314,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private readonly runtime: ProcessRuntime;
   private readonly fork: ScopedFork<ProcessServices>;
   private constructor(parts: ViewParts) {
-    this.bridge = parts.bridge;
-    this.snapshot = parts.snapshot;
+    this.window = parts.window;
+    this.bridge = parts.window.bridge;
+    this.snapshot = parts.window.snapshot;
     this.scope = parts.scope;
     this.contentProvider = parts.contentProvider;
-    this.credentialUsable = parts.snapshot.credentialUsable;
-    this.runValidated = parts.runValidated;
-    this.runSetup = parts.runSetup;
-    this.settingsRuns = parts.settingsRuns;
     this.runSession = parts.runSession;
     this.runtime = parts.runtime;
     this.fork = parts.fork;
