@@ -22,7 +22,6 @@ import {
   type RunId,
   type ToolFact,
   NonNegativeIntSchema,
-  decodingDefault,
 } from '@texra-ai/harness/schemas';
 import type { ValueFamily } from '@texra-ai/harness/host';
 import type { SessionView } from '@texra-ai/harness/schemas';
@@ -45,17 +44,15 @@ export const InquiryThreadIdSchema = Schema.String.check(
 );
 export type InquiryThreadId = typeof InquiryThreadIdSchema.Type;
 
-/** One turn of a thread, as its full record keeps it. The global records
- *  hold turns written before `suggestSearch` and the lists were always
- *  stated, with the field absent for none: an absent one reads as `false`
- *  or `[]`. */
+/** One turn of a thread, as its full record keeps it. The writer states
+ *  `suggestSearch` and the lists on every turn, `false` or `[]` for none. */
 const InquiryTurnBaseShape = {
   turnIndex: Schema.Int.check(Schema.isGreaterThan(0)),
   timestamp: Schema.NonEmptyString,
   question: Schema.String,
   context: Schema.optional(Schema.String),
-  suggestSearch: decodingDefault(Schema.Boolean, false),
-  attachFiles: decodingDefault(Schema.Array(Schema.String), []),
+  suggestSearch: Schema.Boolean,
+  attachFiles: Schema.Array(Schema.String),
 };
 
 /** A turn awaiting the person's answer. Panel drafts belong to view state. */
@@ -71,7 +68,7 @@ const AnsweredInquiryTurnSchema = Schema.Struct({
   kind: Schema.Literal('answered'),
   answer: Schema.String,
   answeredAt: Schema.NonEmptyString,
-  sessionLinks: decodingDefault(InquirySessionLinksSchema, []),
+  sessionLinks: InquirySessionLinksSchema,
 });
 export type AnsweredInquiryTurn = typeof AnsweredInquiryTurnSchema.Type;
 
