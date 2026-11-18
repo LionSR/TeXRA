@@ -135,21 +135,22 @@ const LATEXDIFF_INSTALL: InstallRecord = {
 // ============================================================
 
 /**
- * What `texra doctor` makes of one dependency. A missing `required` row fails
- * the report, which is what sets the CLI's nonzero exit code; a missing
- * `optional` row only warns. `none` means the doctor does not probe the tool
- * at all, so it renders no row for it.
+ * What the toolchain health report (`latexToolchainHealth`, which
+ * `texra doctor` prints) makes of one dependency. A missing `required` tool
+ * fails the report, which is what sets the CLI's nonzero exit code; a missing
+ * `optional` one only warns. `none` means the report does not probe the tool
+ * at all, so it lists no row for it.
  *
  * Known residual, stated rather than hidden: `latexmk` is `required` even
- * though a pdflatex-only machine counts as having a compiler and
- * `compileLatex2Pdf` falls back to a single pdflatex pass on it (degraded —
- * bibliography, cross-references, and index may be incomplete). So such a
- * machine passes the `latex.compiler` check and still exits nonzero on the
- * `latex.latexmk` row. Demoting latexmk to a warning changes `doctorExitCode`
- * for a real machine configuration, which is a product decision, not a
- * consolidation.
+ * though a pdflatex-only machine counts as having a compiler (the settings
+ * view's TeX Distribution row says the same) and `compileLatex2Pdf` falls
+ * back to a single pdflatex pass on it (degraded: bibliography,
+ * cross-references, and index may be incomplete). So such a machine passes
+ * the compiler check and still fails on the latexmk row. Demoting latexmk to
+ * a warning changes the doctor's exit code for a real machine configuration,
+ * which is a product decision, not a consolidation.
  */
-type DoctorRole =
+type HealthRole =
   | { readonly row: 'none' }
   | { readonly row: 'required' | 'optional'; readonly purpose: string };
 
@@ -176,7 +177,7 @@ interface LatexToolEntry {
   readonly alternates?: readonly string[];
   /** Display name for missing-dependency lists; defaults to the name. */
   readonly label?: string;
-  readonly doctor: DoctorRole;
+  readonly health: HealthRole;
   readonly probe: ProbeRole;
   /**
    * True when `compileLatex2Pdf` can actually drive this compiler: it runs
@@ -194,12 +195,13 @@ interface LatexToolEntry {
  * each is probed and installed, and what each one means to each consumer that
  * probes it. The runner (`@texra/utils/system/toolChecks`) and the one probe
  * (`probeLatexTools` in `@latex/latexToolchain`) read it, and so do the four
- * surfaces that report from that probe, none restating a name: the doctor,
- * the setup assistant (`probe_environment`), the settings view's LaTeX
- * status (`@texra/controllers/settingsView/LatexToolingController`), and the
+ * surfaces that report from that probe, none restating a name: the health
+ * report (`latexToolchainHealth`, beside the probe), the setup assistant
+ * (`probe_environment`), the settings view's LaTeX status
+ * (`@texra/controllers/settingsView/LatexToolingController`), and the
  * dependency banner (`missingDependencyTools`, beside the probe).
  *
- * The order is the doctor's row order, which is user-visible CLI output.
+ * The order is the health report's row order, which `texra doctor` prints.
  *
  * Lives in `shared` rather than `tools` or `latex` because all three
  * subsystems consume it — and `tools` already depends on `latex`, so a
@@ -217,51 +219,51 @@ const LATEX_TOOLS = [
       tex: 'latexmk',
       notes: { darwin: 'Also included with MacTeX.' },
     },
-    doctor: { row: 'required', purpose: 'LaTeX build orchestration' },
+    health: { row: 'required', purpose: 'LaTeX build orchestration' },
     probe: 'required',
     drivesCompile: true,
   },
   {
     name: 'pdflatex',
     install: TEX_DISTRIBUTION_INSTALL,
-    doctor: { row: 'optional', purpose: 'PDFLaTeX compiler' },
+    health: { row: 'optional', purpose: 'PDFLaTeX compiler' },
     probe: 'required',
     drivesCompile: true,
   },
   {
     name: 'xelatex',
     install: TEX_DISTRIBUTION_INSTALL,
-    doctor: { row: 'optional', purpose: 'XeLaTeX compiler' },
+    health: { row: 'optional', purpose: 'XeLaTeX compiler' },
     probe: 'none',
   },
   {
     name: 'lualatex',
     install: TEX_DISTRIBUTION_INSTALL,
-    doctor: { row: 'optional', purpose: 'LuaLaTeX compiler' },
+    health: { row: 'optional', purpose: 'LuaLaTeX compiler' },
     probe: 'none',
   },
   {
     name: 'bibtex',
     install: TEX_DISTRIBUTION_INSTALL,
-    doctor: { row: 'optional', purpose: 'BibTeX bibliography processing' },
+    health: { row: 'optional', purpose: 'BibTeX bibliography processing' },
     probe: 'none',
   },
   {
     name: 'biber',
     install: TEX_DISTRIBUTION_INSTALL,
-    doctor: { row: 'optional', purpose: 'Biber bibliography processing' },
+    health: { row: 'optional', purpose: 'Biber bibliography processing' },
     probe: 'none',
   },
   {
     name: 'latexdiff',
     install: LATEXDIFF_INSTALL,
-    doctor: { row: 'optional', purpose: 'LaTeX diff generation' },
+    health: { row: 'optional', purpose: 'LaTeX diff generation' },
     probe: 'required',
   },
   {
     name: 'latexdiff-vc',
     install: LATEXDIFF_INSTALL,
-    doctor: { row: 'none' },
+    health: { row: 'none' },
     probe: 'none',
   },
   {
@@ -277,14 +279,14 @@ const LATEX_TOOLS = [
         win32: 'Also requires Perl (Strawberry Perl recommended).',
       },
     },
-    doctor: { row: 'optional', purpose: 'LaTeX formatting' },
+    health: { row: 'optional', purpose: 'LaTeX formatting' },
     probe: 'required',
     core: true,
   },
   {
     name: 'tex-fmt',
     install: { brew: 'tex-fmt', apt: 'tex-fmt', cargo: 'tex-fmt' },
-    doctor: { row: 'none' },
+    health: { row: 'none' },
     probe: 'none',
   },
   {
@@ -299,7 +301,7 @@ const LATEX_TOOLS = [
         win32: TEX_DIST,
       },
     },
-    doctor: { row: 'none' },
+    health: { row: 'none' },
     probe: 'required',
   },
   {
@@ -312,7 +314,7 @@ const LATEX_TOOLS = [
           'Perl is pre-installed on macOS. If missing, reinstall via:\n  brew install perl',
       },
     },
-    doctor: { row: 'none' },
+    health: { row: 'none' },
     probe: 'required',
     core: true,
   },
@@ -328,7 +330,7 @@ const LATEX_TOOLS = [
       },
     },
     alternates: ['gswin64c', 'gswin32c'],
-    doctor: { row: 'none' },
+    health: { row: 'none' },
     probe: 'required',
     core: true,
   },
@@ -347,7 +349,7 @@ const LATEX_TOOLS = [
         win32: 'https://git-scm.com/downloads',
       },
     },
-    doctor: { row: 'none' },
+    health: { row: 'none' },
     probe: 'none',
   },
   {
@@ -369,7 +371,7 @@ const LATEX_TOOLS = [
       },
     },
     versionArgs: ['version'],
-    doctor: { row: 'none' },
+    health: { row: 'none' },
     probe: 'image',
   },
   {
@@ -383,7 +385,7 @@ const LATEX_TOOLS = [
         win32: 'https://imagemagick.org/script/download.php',
       },
     },
-    doctor: { row: 'none' },
+    health: { row: 'none' },
     probe: 'image',
   },
 ] as const satisfies readonly LatexToolEntry[];
@@ -405,7 +407,7 @@ export const LATEX_TOOL_ENTRIES = Object.freeze(
       Object.freeze({
         ...tool,
         install: freezeInstall(tool.install),
-        doctor: Object.freeze({ ...tool.doctor }),
+        health: Object.freeze({ ...tool.health }),
         ...(tool.versionArgs && {
           versionArgs: Object.freeze([...tool.versionArgs]),
         }),
@@ -429,9 +431,9 @@ type CompilerEntry = Extract<CatalogEntry, { drivesCompile: true }>;
 
 type CoreEntry = Extract<CatalogEntry, { core: true }>;
 
-type DoctorEntry = Extract<
+type HealthEntry = Extract<
   CatalogEntry,
-  { doctor: { row: 'required' | 'optional' } }
+  { health: { row: 'required' | 'optional' } }
 >;
 
 /** A dependency the setup assistant and the settings view both probe. */
@@ -522,37 +524,35 @@ export function missingLatexTools<T extends string>(
   return missing;
 }
 
-/** A dependency `texra doctor` renders a row for. */
-type DoctorLatexToolName = DoctorEntry['name'];
+/** A dependency the toolchain health report lists. */
+type HealthLatexToolName = HealthEntry['name'];
 
-/**
- * What one dependency means to `texra doctor`, flattened into the row it
- * renders. The doctor owns the rendering; this is the fact behind it.
- */
-export interface DoctorLatexTool {
-  /** The binary name; the row's id is `latex.<name>`. */
-  readonly name: DoctorLatexToolName;
-  /** A missing required tool fails the report and sets a nonzero exit code. */
+/** What one dependency means to the toolchain health report. */
+export interface HealthLatexTool {
+  /** The binary name; `texra doctor`'s row id is `latex.<name>`. */
+  readonly name: HealthLatexToolName;
+  /** A missing required tool fails the report. */
   readonly required: boolean;
+  /** What the tool does, which a row shows when it is installed. */
   readonly purpose: string;
 }
 
-/** The dependencies `texra doctor` renders a row for, in row order. */
-export const DOCTOR_LATEX_TOOLS: readonly DoctorLatexTool[] = Object.freeze(
+/** The dependencies the toolchain health report lists, in row order. */
+export const HEALTH_LATEX_TOOLS: readonly HealthLatexTool[] = Object.freeze(
   LATEX_TOOLS.filter(
-    (tool): tool is DoctorEntry => tool.doctor.row !== 'none',
+    (tool): tool is HealthEntry => tool.health.row !== 'none',
   ).map((tool) =>
     Object.freeze({
       name: tool.name,
-      required: tool.doctor.row === 'required',
-      purpose: tool.doctor.purpose,
+      required: tool.health.row === 'required',
+      purpose: tool.health.purpose,
     }),
   ),
 );
 
 /**
  * The LaTeX-to-PDF compilers TeXRA can actually drive. Single source for that
- * answer (the doctor probe, the compile option enum, and the settings view's
+ * answer (the health report, the compile option enum, and the settings view's
  * TeX-distribution row), so none of them can disagree with the advice text.
  */
 export const SUPPORTED_LATEX_COMPILERS: readonly SupportedLatexCompiler[] =

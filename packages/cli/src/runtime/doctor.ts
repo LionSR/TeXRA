@@ -15,13 +15,9 @@ import {
   isModelOptionAvailable,
 } from '@texra-ai/harness/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import { probeLatexTools } from '@latex/latexToolchain';
+import { latexToolchainHealth } from '@latex/latexToolchain';
 import type { UsageLoggingOptOut } from '@telemetry/UsageLogService';
 import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
-import {
-  DOCTOR_LATEX_TOOLS,
-  SUPPORTED_LATEX_COMPILERS,
-} from '@texra/shared/constants/latexToolchain';
 import {
   TELEMETRY_ENABLED_SETTING,
   TEXRA_SETTINGS,
@@ -258,10 +254,10 @@ function checkLatex(): Effect.Effect<
   never,
   ChildProcessSpawner
 > {
-  return probeLatexTools(DOCTOR_LATEX_TOOLS.map((tool) => tool.name)).pipe(
-    Effect.map(({ installed }) => {
+  return latexToolchainHealth().pipe(
+    Effect.map(({ compiler, tools }) => {
       const checks: DoctorCheck[] = [];
-      if (!SUPPORTED_LATEX_COMPILERS.some((name) => installed.has(name))) {
+      if (!compiler) {
         checks.push(
           fail(
             'latex.compiler',
@@ -272,8 +268,8 @@ function checkLatex(): Effect.Effect<
         );
       }
       checks.push(
-        ...DOCTOR_LATEX_TOOLS.map((tool) => {
-          if (installed.has(tool.name)) {
+        ...tools.map((tool) => {
+          if (tool.installed) {
             return pass(
               `latex.${tool.name}`,
               `LaTeX ${tool.name}`,
