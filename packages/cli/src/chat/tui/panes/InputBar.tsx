@@ -6,11 +6,10 @@ import {
   useRef,
 } from 'react';
 import { Box, Text, useInput, useWindowSize, type Key } from 'ink';
-import { Cause, Effect, SubscriptionRef } from 'effect';
+import { Effect, SubscriptionRef } from 'effect';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { attachClipboardImage } from '@cli/runtime/terminal/clipboardImage';
-import { writeTextStderr } from '@cli/runtime/platform/logSinks';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { isCtrlInput } from '@cli/tui/inputKeys';
 import { COLOR_BORDER, COLOR_HINT } from '@cli/tui/ui/colors';
@@ -260,26 +259,14 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       }
       const historyText = expandTextForHistory(message).trim();
       clearDraft();
-      // Persisting history is best-effort — a disk failure (read-only fs,
-      // ENOSPC) must not block the submit. Surface the failure through the
-      // shared log sink so it isn't completely silent.
+      // The chat's work, not the bar's: the entry is added even when a
+      // foreground surface replaces the bar right after the submit. Storing
+      // it never holds the submit; a failed store is reported on stderr.
       const historyPersist =
         historyText.length > 0 && !commands.shouldRedact(historyText)
           ? historyRef.current?.push(historyText)
           : undefined;
-      if (historyPersist) {
-        // The chat's work, not the bar's: the entry is written even when a
-        // foreground surface replaces the bar right after the submit.
-        chat.fork(
-          Effect.catchCause(historyPersist, (cause) =>
-            Effect.sync(() => {
-              writeTextStderr(
-                `texra: failed to persist input history: ${String(Cause.squash(cause))}`,
-              );
-            }),
-          ),
-        );
-      }
+      if (historyPersist) chat.fork(historyPersist);
       onSubmit(message, holdUntil);
     },
     [chat, clearDraft, commands, onSubmit, readDraft],

@@ -249,7 +249,10 @@ export async function runChat(
         version: context.version,
       });
       if (modelSelection.notice) startupNotices.push(modelSelection.notice);
-      const { history: inputHistory, readFailure } = yield* loadInputHistory;
+      // Stored until the platform closes, after the chat's scope: a graceful
+      // exit keeps the line it was typed after.
+      const { history: inputHistory, readFailure } =
+        yield* loadInputHistory.pipe(Scope.provide(services.shutdownScope));
       if (readFailure !== null)
         startupNotices.push(
           `Input history could not be read (${toErrorMessage(readFailure)}); ↑/↓ and Ctrl-R start from this session's entries.`,
