@@ -5,6 +5,7 @@ import { html, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 // Local imports - progress view styles
+import { REQUEST_ASK } from '@ui/copy/requestCards';
 import { codeBlockStyles } from '../styles/codeBlockStyles';
 
 // Local imports - progress view formatters
@@ -26,11 +27,11 @@ export class BashRequestPanel extends BaseRequestPanel<'bash'> {
 
   // The directory a command runs in is the security-relevant field of this
   // prompt, so it sits in the ask rather than in small print under it.
-  protected override renderAsk(): TemplateResult {
+  protected override renderAsk(): TemplateResult | string {
     const { cwd } = this.permission.data;
     return cwd
-      ? html`Run a command in <code><bdi dir="ltr">${cwd}</bdi></code>`
-      : html`Run a command`;
+      ? html`${REQUEST_ASK.command} in <code><bdi dir="ltr">${cwd}</bdi></code>`
+      : REQUEST_ASK.command;
   }
 
   override render(): TemplateResult {

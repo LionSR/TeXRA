@@ -1,4 +1,4 @@
-/** Retry request card: "The request to <model> failed", Retry / Stop run. */
+/** Retry request card: "The request to <model> failed", Retry / Stop task. */
 
 // Third-party imports
 import { html, nothing, type TemplateResult } from 'lit';
@@ -9,9 +9,10 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared schemas
-import { getModelLabel, type RetryRequest } from '@texra-ai/harness/schemas';
+import type { RetryRequest } from '@texra-ai/harness/schemas';
 import { REQUEST_ACTIONS } from '@texra/shared/session/surfaceDecision';
 import { modelFailureText } from '@ui/copy/modelAccess';
+import { REQUEST_ASK } from '@ui/copy/requestCards';
 import type { IconName } from '@ui/wa/iconNames';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
@@ -29,15 +30,8 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
     return 'rotate-right';
   }
 
-  protected override get primaryLabel(): string {
-    return 'Retry';
-  }
-
   protected override renderAsk(): string {
-    const { model } = this.permission.data;
-    return model
-      ? `The request to ${getModelLabel(model)} failed`
-      : 'The model request failed';
+    return REQUEST_ASK.retry(this.permission.data.model);
   }
 
   protected override handleExtraKey(key: string): boolean {

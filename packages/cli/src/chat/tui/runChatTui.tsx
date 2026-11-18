@@ -67,6 +67,7 @@ import { expandText } from './input/draftAttachments';
 import { SlashContextProvider } from './commands/slashRegistry';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
+import { runAttentionLine, runStatus } from '@ui/copy/runStatus';
 import { announceForegroundApprovals } from './state/subscribeApprovals';
 import { chatScrollback } from './panes/staticTranscriptRing';
 import { EMPTY_DRAFT } from './input/draftAttachments';
@@ -642,7 +643,7 @@ export async function runChat(
     untilShutdown.fork(chatController.resume(initialResume.id));
   }
 
-  // The one "agent finished" notification: the root run's turn finishes,
+  // The one turn-finished notification: the root run's turn finishes,
   // at WAITING ("your turn", alongside the StatusBar pill) or at its outcome.
   // A run that ends after waiting was already announced, and a stop the user
   // asked for is not news. A turn end, not `attentionOf`'s `finished`: a
@@ -653,16 +654,17 @@ export async function runChat(
     subscribeToSignalChanges([sessionView()], () => {
       const previous = rootStanding;
       rootStanding = rootStandingNow();
-      const outcome = rootStanding?.outcome ?? null;
+      if (rootStanding === undefined) return;
+      const { outcome } = rootStanding;
       if (
         previous?.position !== 'waiting' &&
-        (rootStanding?.position === 'waiting' ||
+        (rootStanding.position === 'waiting' ||
           (outcome !== null &&
             outcome !== previous?.outcome &&
             // A stop ends the run cancelled: no "finished" bell for it.
             outcome !== 'cancelled'))
       ) {
-        notify('agentFinished');
+        notify(runAttentionLine(rootStanding, runStatus(rootStanding).key));
       }
     }),
   );

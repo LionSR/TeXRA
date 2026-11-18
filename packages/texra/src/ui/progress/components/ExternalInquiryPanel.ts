@@ -122,10 +122,6 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
     ];
   }
 
-  protected override get primaryLabel(): string {
-    return 'Submit';
-  }
-
   protected override get declineTakesNote(): boolean {
     return false;
   }

@@ -27,6 +27,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import type { ToolEditTuiRequest } from '../state/approvalQueue';
 import { formatLineChanges } from '@ui/copy/format';
+import { REQUEST_ASK } from '@ui/copy/requestCards';
 
 const EDIT_DIFF_PADDING = 6;
 const EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE = 8;
@@ -70,7 +71,7 @@ export function ToolEditRequest(
   props: ToolEditRequestProps,
 ): React.JSX.Element {
   const { data } = props.payload;
-  const title = `Apply edit to ${data.relativePath}?`;
+  const title = `${REQUEST_ASK.edit} ${data.relativePath}`;
   return (
     <ConfirmCard
       color={COLOR_HINT}

@@ -3,9 +3,11 @@ import { Effect, Schema } from 'effect';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   type RequestDecision,
+  type RequestPayload,
   ensureError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
+import { requestPrimaryLabel } from '@ui/copy/requestCards';
 
 import { CliInvocation } from '../platform/cliContext';
 import { askCliQuestion, writeTextStderr } from '../platform/logSinks';
@@ -114,16 +116,21 @@ export const queueCliApprovalQuestion = (request: CliPromptRequest) =>
     onPromptLane(askCliApprovalQuestion(request)),
   );
 
+/** Ask about one `kind` request, in its primary action's word (`Approve?`,
+ *  `Retry?`), as every host's card names it. */
 export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
+  kind: RequestPayload['kind'],
   content: CliApprovalContent,
   hooks: CliApprovalPromptHooks = {},
 ) {
   const { onPromptLane } = yield* CliInvocation;
   return yield* onPromptLane(
     Effect.gen(function* () {
-      const prompt = content.details
-        ? 'Approve? [y/N, v view full, or n <feedback>] '
-        : 'Approve? [y/N, or n <feedback>] ';
+      const prompt = `${requestPrimaryLabel(kind)}? ${
+        content.details
+          ? '[y/N, v view full, or n <feedback>] '
+          : '[y/N, or n <feedback>] '
+      }`;
       let answer: string;
       // `content.details()` renders caller-supplied content, so it can
       // throw. Left as a bare call inside the gen its throw is a defect,

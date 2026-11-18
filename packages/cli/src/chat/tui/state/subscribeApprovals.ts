@@ -37,6 +37,8 @@ import {
 import { shownFailureText } from '@ui/copy/modelAccess';
 
 import { notify } from '../notifications/terminalNotifier';
+import { runAttentionLine, runStatusLabel } from '@ui/copy/runStatus';
+import { currentView, runViewOf } from './sessionView';
 import {
   attentionRequests,
   currentApproval,
@@ -224,10 +226,16 @@ export function announceForegroundApprovals(): () => void {
       new Set(attentionRequests.get().map((request) => request.requestId)),
       announced,
     );
-    const id = pending.payload.data.requestId;
+    const { requestId: id, runId } = pending.payload.data;
     if (announced.has(id)) return;
     announced.add(id);
-    notify('approvalNeeded');
+    const run = runViewOf(currentView(), runId);
+    // A request whose run the view does not hold yet still rings, unnamed.
+    notify(
+      run === undefined
+        ? runStatusLabel('waitingOnUser')
+        : runAttentionLine(run, 'waitingOnUser'),
+    );
   };
   check();
   return subscribeToSignalChanges([currentApproval], check);

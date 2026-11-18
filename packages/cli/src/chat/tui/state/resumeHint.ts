@@ -10,6 +10,7 @@ import type { CliOutputFormat } from '@texra/shared/cliOutputFormat';
 import { formatTokenCount } from '@ui/copy/format';
 import { usageCostLabel } from '@ui/copy/modelAccess';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
+import { visibleTokenStats } from '@ui/copy/tokenUsage';
 
 import { runViewOf } from './sessionView';
 import type {
@@ -86,24 +87,20 @@ function formatResumeUsage(
   usage: TokenUsageStats | undefined,
 ): string | undefined {
   if (!usage || isEmptyUsage(usage)) return undefined;
-  const total = usage.inputTokens + usage.outputTokens;
-  const cached = usage.cachedInputTokens ?? 0;
-  const reasoning = usage.reasoningTokens ?? 0;
-  const lines = [
-    `total=${formatTokenCount(total)}`,
-    `input=${formatTokenCount(usage.inputTokens)}`,
-  ];
-  if (cached > 0) lines.push(`(+ ${formatTokenCount(cached)} cached)`);
-  lines.push(`output=${formatTokenCount(usage.outputTokens)}`);
-  if (reasoning > 0) lines.push(`(reasoning ${formatTokenCount(reasoning)})`);
+  // The counters the progress view's usage strip shows, exact.
+  const tokens = visibleTokenStats(usage)
+    .map(
+      ({ label, value }) => `${formatTokenCount(value)} ${label.toLowerCase()}`,
+    )
+    .join(', ');
   // A task that never reached a model has no cost to state.
   const costLine =
     usage.cost > 0 || usage.usageRoute !== undefined
       ? usageCostLabel(usage)
       : undefined;
   return costLine
-    ? `Token usage: ${lines.join(' ')}\nTask cost: ${costLine}`
-    : `Token usage: ${lines.join(' ')}`;
+    ? `Token usage: ${tokens}\nTask cost: ${costLine}`
+    : `Token usage: ${tokens}`;
 }
 
 /** The exit hint: the task's usage, then the one command that resumes its
