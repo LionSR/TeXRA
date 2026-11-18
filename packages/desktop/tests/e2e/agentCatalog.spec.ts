@@ -184,7 +184,7 @@ test('a launch that cannot start is told once, by its notice', async ({
   await expect
     .poll(() => shownMessageBoxes.jsonValue())
     .toEqual([
-      'The TeXRA service could not start the task: Missing API key for openai. Set a provider API key in settings.',
+      'Missing API key for openai. Set a provider API key in settings.',
     ]);
   // The launch has its answer once the Send is no longer busy.
   await expect(
