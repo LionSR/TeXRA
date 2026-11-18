@@ -24,7 +24,6 @@ import {
   type AgentCatalog,
 } from '@agent/index/agentCatalog';
 import type { ProjectView } from '@controllers/session/readSessionView';
-import { LaunchKeys } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { SessionRequests } from '@agent/runtime/requests';
@@ -33,7 +32,7 @@ import {
   SessionOwner,
   type SessionServices,
 } from '@agent/runtime/rootLaunch';
-import { RunRegistry, Runs } from '@agent/runtime/runRegistry';
+import { LaunchKeys, RunRegistry, Runs } from '@agent/runtime/runRegistry';
 import type { ITool } from '@tools/core/ToolTypes';
 import { AgentUnavailable, LaunchRefused } from '@common/errors/agentErrors';
 import { asksApproval } from '@agent/runtime/agentToolResolution';

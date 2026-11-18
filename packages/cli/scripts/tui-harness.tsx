@@ -616,6 +616,7 @@ function holdRun(runId: RunId): void {
                   publishRunEnd(runId, RUN_OUTCOME.CANCELLED);
               }),
             ),
+          end: (_, exit) => exit,
         }),
         ({ fiber }) => fiber,
       ),

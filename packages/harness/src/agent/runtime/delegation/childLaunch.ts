@@ -5,10 +5,10 @@
  * background, a goal round through `self()`) is `executeAgent` under a
  * parent edge, so it runs one cycle: it ends with its `run.end`, whose transaction delivers
  * its report to the parent's input unless the call awaits it
- * (`RunParent.call.awaited`). The run opens in the caller's fiber and is
- * forked on the session's registry under its id, so a launch that fails
- * before the run exists fails the call, and the run outlives the call that
- * started it. An awaited call reads the child's end once the run here has
+ * (`RunParent.call.awaited`). The run is forked on the session's registry
+ * under its id and opens on its own fiber; the call waits for its opening,
+ * so a launch that fails before the run exists fails the call, and the run
+ * outlives the call that started it. An awaited call reads the child's end once the run here has
  * ended; interrupting the call stops the child, unless the stop detached it
  * (`RunRegistry.stop`), in which case it runs on as a root and only the
  * wait ends.
@@ -62,11 +62,11 @@ const defectsAsErrors = <A, R>(
   );
 
 /**
- * Start a fresh native child on the session's registry: its opening (its
- * registration batch) in this fiber, its run forked under its id. Answers
- * the commit of its opening; a launch that fails before the run exists
- * fails this with no run behind it. The child opens in its parent's
- * tool-call fiber, so it takes the parent's `LaunchKeys`, awaited or not.
+ * Start a fresh native child on the session's registry, forked under its
+ * id, its opening (its registration batch) on its own fiber. Answers the
+ * commit of its opening; a launch that fails before the run exists fails
+ * this with no run behind it. The registry carries the launching call's
+ * `LaunchKeys` onto the child, so it takes the parent's, awaited or not.
  */
 export const startChildRun = Effect.fn('startChildRun')(function* (
   runId: RunId,
@@ -74,13 +74,13 @@ export const startChildRun = Effect.fn('startChildRun')(function* (
   registration: RegisterRunOptions,
   options: Pick<ExecuteAgentOptions, 'onProgress' | 'tools'> = {},
 ): Effect.fn.Return<CommitOrdinal, Error, AgentRunServices> {
-  const { opened } = yield* (yield* RunRegistry).start(runId, {
-    open: executeAgent(definition, runId, {
-      ...options,
-      registration,
-    }),
-    run: (prepared) => prepared.run,
-  });
+  const { opened } = yield* (yield* RunRegistry).start(
+    runId,
+    executeAgent(
+      runId,
+      Effect.succeed({ definition, options: { ...options, registration } }),
+    ),
+  );
   return opened.activation;
 });
 
@@ -96,21 +96,23 @@ const resumeOwnedChild = Effect.fn('resumeOwnedChild')(function* (
   parentId: RunId,
   options: Pick<ExecuteAgentOptions, 'onProgress'>,
 ): Effect.fn.Return<CommitOrdinal, Error, AgentRunServices> {
-  const runs = yield* RunRegistry;
-  const { opened } = yield* runs.start(runId, {
-    open: openResume(runs, runId, options, parentId).pipe(
-      Effect.catchTag('ResumeNotOpened', ({ answer }) =>
-        Effect.fail(
-          new ToolError(
-            'failed' in answer
-              ? `Subagent ${runId} cannot be resumed here (${answer.failed.kind}).`
-              : `Subagent ${runId} belongs to an open call of ${answer.ownedBy}.`,
+  const { opened } = yield* (yield* RunRegistry).start(
+    runId,
+    executeAgent(
+      runId,
+      openResume(runId, options, parentId).pipe(
+        Effect.catchTag('ResumeNotOpened', ({ answer }) =>
+          Effect.fail(
+            new ToolError(
+              'failed' in answer
+                ? `Subagent ${runId} cannot be resumed here (${answer.failed.kind}).`
+                : `Subagent ${runId} belongs to an open call of ${answer.ownedBy}.`,
+            ),
           ),
         ),
       ),
     ),
-    run: (prepared) => prepared.run,
-  });
+  );
   return opened.activation;
 });
 

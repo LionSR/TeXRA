@@ -296,10 +296,10 @@ const afterTextResponse = Effect.fn('toolUse.afterTextResponse')(function* (
 });
 
 /**
- * Open the run's cell and commit what opens it, in the caller's fiber,
- * before the run is forked: a fresh run's opening batch (its registration,
- * its prompt, its first step), a fork's history, or a resume's activation.
- * The loop ({@link runToolUse}) then runs over what this answered.
+ * Open the run's cell and commit what opens it, as the run's fiber opens
+ * the run: a fresh run's opening batch (its registration, its prompt, its
+ * first step), a fork's history, or a resume's activation. The loop
+ * ({@link runToolUse}) then runs over what this answered.
  */
 export const openToolUse = Effect.fn('toolUse.open')(function* (
   start: Pick<ToolUseStart, 'resume'>,
