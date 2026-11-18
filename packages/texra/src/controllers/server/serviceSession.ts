@@ -282,25 +282,30 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       ),
     ).pipe(
       Stream.map((frame) => frame.inputs),
-      Stream.catch((error) =>
-        Stream.fromEffect(
-          Effect.logWarning(
-            `The TeXRA service stopped sending ${workspace}; this window's run state no longer updates`,
-          ).pipe(Effect.annotateLogs({ data: error })),
-        ).pipe(Stream.drain),
+      // A service that went ends this read: the link closing its connection
+      // interrupts the call, which must not end the view with it, and the
+      // next service the link reaches is asked again (below).
+      Stream.catchCause((cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Stream.empty
+          : Stream.fromEffect(
+              Effect.logWarning(
+                `The TeXRA service stopped sending ${workspace}; this window's run state no longer updates`,
+              ).pipe(Effect.annotateLogs({ data: cause })),
+            ).pipe(Stream.drain),
       ),
     ),
   );
   const { subscribe } = view;
-  // The service went (offline: the watch stops) or the link reached it
-  // again: naming the window's own empty set again has the view ask the
-  // service from where it is. The window tells it nothing else: the
+  // Each service the link reaches, the one it holds now included (the
+  // view's first read may have found none): naming the window's own empty
+  // set again has the view ask that service from where the view is. Offline,
+  // the watch stops. The window tells the service nothing else: the
   // project's approval policy is its persisted setting, which the service
   // reads itself.
   const window = yield* subscribe([]);
   yield* Effect.forkScoped(
     link.client.changes.pipe(
-      Stream.drop(1),
       Stream.runForEach((client) =>
         client === null ? Effect.void : window.set([]),
       ),
