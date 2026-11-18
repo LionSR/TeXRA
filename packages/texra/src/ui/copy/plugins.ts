@@ -32,6 +32,15 @@ export const PLUGINS_PAGE = Object.freeze({
   openInstallPage: 'Open install page',
   setUp: (name: string) => `Set up ${name}`,
   toolsItAdds: 'Tools it adds',
+  addPrompt:
+    'Add a Claude Code or Codex plugin: github.com/<owner>/<repo>[@ref], a git URL, or a folder',
+  addPlaceholder: 'github.com/owner/repo',
+  added: (names: readonly string[]) =>
+    `Installed ${names.join(', ')}. Switch it on to review what it declares and trust it.`,
+  trustQuestion: (name: string, version: string | null) =>
+    `Trust ${name}${version ? ` ${version}` : ''} and enable it?`,
+  trustAction: 'Trust and enable',
+  declined: (name: string) => `${name} was not trusted, so it stays off.`,
 });
 
 /** The TUI's `/plugins` copy. */
