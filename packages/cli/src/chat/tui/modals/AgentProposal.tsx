@@ -105,9 +105,19 @@ function agentProposalMetadataLines({
   // A script's request for its `agent` calls: what approving allows, the
   // first agent, and the calls it issued first; its code is the scrolling
   // text below, under its line count.
-  const defined: MetadataLine[] = payload.persona
-    ? [{ segments: [{ text: DEFINED_AGENT_COPY.heading(payload.persona) }] }]
-    : [];
+  const source = payload.agentSource;
+  const defined: MetadataLine[] =
+    source?.kind === 'inline'
+      ? [
+          {
+            segments: [
+              {
+                text: DEFINED_AGENT_COPY.heading(payload.agent, source.persona),
+              },
+            ],
+          },
+        ]
+      : [];
   if (payload.script) {
     const { calls } = payload.script;
     return [
@@ -215,9 +225,10 @@ function MetadataLineRow(props: {
 /** The text a proposal scrolls: a script's code or the agent's task, after
  *  a defined agent's system prompt. */
 function proposalText(payload: AgentProposalRequest): string {
-  const { script, persona } = payload;
+  const { script, agentSource } = payload;
   const body = script ? script.source : payload.instruction;
-  if (!persona) return body;
+  if (agentSource?.kind !== 'inline') return body;
+  const { persona } = agentSource;
   const label = script
     ? SCRIPT_REQUEST_COPY.code(script)
     : DEFINED_AGENT_COPY.instructionLabel;

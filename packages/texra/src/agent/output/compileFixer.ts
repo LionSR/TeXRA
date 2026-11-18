@@ -129,7 +129,6 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
       agent: 'latexFixer',
       // The catalog's latexFixer, not the program's own empty persona.
       agentSource: null,
-      persona: null,
       model,
       instruction: buildCompileFixerQuestion(
         compileFailures,

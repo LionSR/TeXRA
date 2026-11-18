@@ -86,6 +86,7 @@ export type {
   AgentProposal,
   AgentSource,
   AttachedMemoryMiss,
+  CatalogAgentSource,
   CompactionActivityData,
   CompactionActivityOutcome,
   ContextManagementData,

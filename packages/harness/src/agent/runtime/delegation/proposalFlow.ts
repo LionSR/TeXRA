@@ -322,7 +322,7 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
       // pins the exact entry the re-validation just resolved.
       ...(resolvedAgentOverride && {
         agent: resolvedAgentOverride.name,
-        agentSource: resolvedAgentOverride.source,
+        agentSource: { kind: resolvedAgentOverride.source },
       }),
     },
     approvalMeta: {

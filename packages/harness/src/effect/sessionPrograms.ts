@@ -43,6 +43,7 @@ import { asksApproval } from '@agent/runtime/agentToolResolution';
 import { SessionRoots } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
+  AGENT_SOURCE,
   AgentConfigSchema,
   describeRefusal,
   InlinePersonaSchema,
@@ -130,31 +131,30 @@ const acceptInput = Effect.fn('acceptInput')(function* (
   // A host's whole configuration: its launch resolves the agent itself.
   if ('config' in input) return input.config;
   const { agent } = input;
-  const resolved =
-    typeof agent === 'string'
-      ? catalog.get(agent)
-      : { name: null, source: 'inline' as const };
-  if (!resolved) {
+  const resolved = typeof agent === 'string' ? catalog.get(agent) : null;
+  if (typeof agent === 'string' && !resolved) {
     // The same wording as the catalog's miss, so every host says one thing.
     return yield* missingAgentRefusal({
-      agent: String(agent),
-      message: agentMissMessage(String(agent)),
+      agent,
+      message: agentMissMessage(agent),
     });
   }
   // The schema is the launch's last refusal, and it is a refusal rather
   // than a defect: an input this surface will not accept is the caller's,
   // as an unknown agent above is.
   // The run is named as its persona's schema spells the name.
-  const persona =
-    typeof agent === 'string'
-      ? null
+  const named =
+    resolved != null
+      ? { agent: resolved.name, agentSource: { kind: resolved.source } }
       : yield* Schema.decodeUnknownEffect(InlinePersonaSchema)(agent).pipe(
+          Effect.map(({ name, ...persona }) => ({
+            agent: name,
+            agentSource: { kind: AGENT_SOURCE.INLINE, persona },
+          })),
           Effect.mapError(inputRefused),
         );
   return yield* Schema.decodeUnknownEffect(AgentConfigSchema)({
-    agent: persona?.name ?? resolved.name,
-    agentSource: resolved.source,
-    persona,
+    ...named,
     instruction: input.instruction,
     model: input.model,
   }).pipe(Effect.mapError(inputRefused));
