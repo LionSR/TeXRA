@@ -2028,7 +2028,7 @@ const SCENARIOS = [
       'Retry the failed call?',
       'HTTP 429 Too Many Requests',
       'retry',
-      'stop run',
+      'stop task',
       '1 approval',
     ],
     unexpect: [
@@ -2052,7 +2052,7 @@ const SCENARIOS = [
       'ChatGPT subscription usage limit reached. Resets in 2h.',
       'Press k to use your own API key for this retry.',
       'retry',
-      'stop run',
+      'stop task',
       'use your own API key',
       '1 approval',
     ],
@@ -2063,7 +2063,7 @@ const SCENARIOS = [
     frame: 'viewport',
     cols: 120,
     env: { HARNESS_ENTRIES: '4', HARNESS_RETRY_APPROVAL: '1' },
-    bootExpect: 'stop run',
+    bootExpect: 'stop task',
     keys: ['n'],
     expect: ['RETRY-REJECTED', '/ commands'],
     unexpect: [

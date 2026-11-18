@@ -29,10 +29,6 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
     return 'rotate-right';
   }
 
-  protected override get primaryLabel(): string {
-    return 'Retry';
-  }
-
   protected override renderAsk(): string {
     const { model } = this.permission.data;
     return model

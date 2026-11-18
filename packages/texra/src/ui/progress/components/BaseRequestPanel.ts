@@ -3,7 +3,7 @@
  * the evidence the decision needs, and the same action row on every kind.
  *
  *   primary (y)  ·  optional ▾ "Approve all <kind> in this run" (a)
- *   ·  kind-specific secondaries  ·  Reject / Skip / Stop run (n)  ·  Add a note…
+ *   ·  kind-specific secondaries  ·  Reject / Skip / Stop task (n)  ·  Add a note…
  *
  * The negative answers in one click; "Add a note…" opens an optional note
  * that rides on the same decision. Esc only closes that note: it never
@@ -64,15 +64,10 @@ import {
   DELEGATION_APPROVAL_COPY,
   runGrantLabel,
 } from '@ui/copy/delegationApproval';
-
-/** The three ways a card declines, each with its one word. */
-const DECLINE_LABEL = {
-  reject: 'Reject',
-  skip: 'Skip',
-  stop: 'Stop task',
-} as const;
-
-type Decline = keyof typeof DECLINE_LABEL;
+import {
+  requestDeclineLabel,
+  requestPrimaryLabel,
+} from '@ui/copy/requestCards';
 
 /** What a card this window cannot answer says in place of its actions. */
 const UNANSWERABLE_NOTE = {
@@ -179,11 +174,6 @@ export abstract class BaseRequestPanel<
   /** The one sentence at the top: what the agent wants, object named. */
   protected abstract renderAsk(): TemplateResult | string;
 
-  /** The primary action's word: Approve, Submit, or Retry. */
-  protected get primaryLabel(): string {
-    return 'Approve';
-  }
-
   protected get primaryIcon(): IconName {
     return 'check';
   }
@@ -195,19 +185,9 @@ export abstract class BaseRequestPanel<
     if ('y' in actions) this.emitAction(actions.y);
   }
 
-  /** The negative's kind; its word comes from {@link DECLINE_LABEL}. */
-  protected get decline(): Decline {
-    return REQUEST_ACTIONS[this.permission.kind].n;
-  }
-
-  /** The decline button's text. */
-  protected get declineLabel(): string {
-    return DECLINE_LABEL[this.decline];
-  }
-
   /** Whether the decline can carry a note the agent reads. */
   protected get declineTakesNote(): boolean {
-    return this.decline !== 'stop';
+    return REQUEST_ACTIONS[this.permission.kind].n !== 'stop';
   }
 
   /** The note box's label: what the agent should hear. */
@@ -391,10 +371,11 @@ export abstract class BaseRequestPanel<
     const grant = this.readOnly || this.noteOpen ? null : this.grant;
     // A native title, not a wa-tooltip: a new card focuses this button, and
     // a focus-shown tooltip would cover the evidence above it.
+    const primaryLabel = requestPrimaryLabel(this.permission.kind);
     const button = {
       icon: this.primaryIcon,
-      text: this.primaryLabel,
-      title: `${this.primaryLabel} (y)`,
+      text: primaryLabel,
+      title: `${primaryLabel} (y)`,
       action: 'primary',
       disabled: this.readOnly,
       onClick: () => this.submitPrimary(),
@@ -435,7 +416,7 @@ export abstract class BaseRequestPanel<
   }
 
   private renderDecline(): TemplateResult {
-    const label = this.declineLabel;
+    const label = requestDeclineLabel(this.permission.kind);
     return html`
       ${renderLabeledActionButton({
         icon: 'xmark',
@@ -460,7 +441,7 @@ export abstract class BaseRequestPanel<
 
   private renderNote(): TemplateResult | typeof nothing {
     if (!this.noteOpen) return nothing;
-    const label = this.declineLabel;
+    const label = requestDeclineLabel(this.permission.kind);
     return html`
       <wa-textarea
         class="request-card__note"

@@ -42,7 +42,7 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   const contentWidth = confirmCardContentWidth(columns);
   // A provider stack trace can be arbitrarily tall. Budget the body the same
   // way the other approval cards do so the error scrolls instead of pushing
-  // retry/stop run past the live region's clip.
+  // retry/stop task past the live region's clip.
   const maxSubjectRows = scrollableModalTextRowsBudget({
     availableRows: props.availableRows,
     columns,
@@ -57,8 +57,6 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
       color={COLOR_WARNING}
       title={RETRY_REQUEST_TITLE}
       kind="retry"
-      approveLabel="retry"
-      rejectLabel="stop run"
       extraActions={
         canSwitchToPersonalKey
           ? [
