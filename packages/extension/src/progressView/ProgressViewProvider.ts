@@ -251,18 +251,26 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             ...parts,
             roots,
             showBuilt,
-            notices: createAgentPresentationHost(roots, runtime, showBuilt),
-            window: editor,
             runtime,
             extensionPath: context.extensionPath,
             extensionId: context.extension.id,
             ...settings,
-            showProgressView: () => onView((view) => view.showProgressView()),
-            revealProgress: (config) =>
-              onView((view) => view.revealProgress(config)),
             popOutToEditor: () => onView((view) => view.popOutToEditor()),
             showInSidebar: () => showInSidebar,
-          }),
+          }).pipe(
+            Effect.map(({ openFinalOutput, ...requests }) => ({
+              ...requests,
+              notices: createAgentPresentationHost(roots, runtime, showBuilt),
+              window: editor,
+              runs: {
+                openFinalOutput,
+                showRunView: () => onView((view) => view.showProgressView()),
+                // Or name the run in a toast when the list cannot be shown.
+                revealProgress: (config: AgentConfig) =>
+                  onView((view) => view.revealProgress(config)),
+              },
+            })),
+          ),
       });
       const view = new ProgressViewProvider({
         bridge: gui.bridge,

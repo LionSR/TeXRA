@@ -22,11 +22,7 @@ import {
 } from '@texra-ai/harness/host';
 import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
 import { commitExists, workspaceRelativePath } from '@texra-ai/harness/node';
-import {
-  toErrorMessage,
-  type AgentConfig,
-  Rejected,
-} from '@texra-ai/harness/schemas';
+import { toErrorMessage, Rejected } from '@texra-ai/harness/schemas';
 import { setApiKey } from '@commands/api/apiKeyCommands';
 import { cloneOverleafProject } from '@commands/git/gitCommands';
 import { downloadArXivSource } from '@commands/latex/arXivCommands';
@@ -71,7 +67,6 @@ import {
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import { pickLauncherFiles } from '@texra/controllers/session/launcherFilePicker';
 import type {
-  GuiWindowHost,
   OwnHostHandlers,
   SharedHostCommandBindings,
 } from '@texra/controllers/session/openGuiWindow';
@@ -97,10 +92,6 @@ export interface ExtensionHostRequestsOptions {
   /** The window's bridge and snapshot. */
   readonly bridge: SessionBridge;
   readonly snapshot: HostSnapshotSource;
-  /** The runtime's notices this window presents its own way. */
-  readonly notices: GuiWindowHost['notices'];
-  /** What this window's editor does for its project's runs. */
-  readonly window: GuiWindowHost['window'];
   readonly extensionPath: string;
   /** The extension's id, which names its getting-started walkthrough. */
   readonly extensionId: string;
@@ -116,11 +107,6 @@ export interface ExtensionHostRequestsOptions {
   signInSubscription(
     providerId: SubscriptionProviderId,
   ): Effect.Effect<void, Error, ProcessServices>;
-  /** Reveal the task list (`texra.showProgressView`). */
-  showProgressView(): Effect.Effect<void, Error>;
-  /** Reveal the task list for a run this window just started, or name the
-   *  run in a toast when it cannot (the run actions' `revealProgress`). */
-  readonly revealProgress: (config: AgentConfig) => Effect.Effect<void, Error>;
   /** The placement commands the sidebar and the editor tab share. */
   popOutToEditor(): Effect.Effect<void, HostCommandFailure, ProcessServices>;
   showInSidebar(): Effect.Effect<void, HostCommandFailure, ProcessServices>;
@@ -387,16 +373,10 @@ export const createExtensionHostRequests = Effect.fn(
   return {
     bindings,
     own,
-    notices: options.notices,
-    window: options.window,
     // The host's members read `this`, so they cross the boundary bound.
     notify: (level: NoticeLevel, message: string) =>
       vscodeUi.notify(level, message),
-    runs: {
-      revealProgress: options.revealProgress,
-      openFinalOutput: previewFinalOutput,
-      showRunView: options.showProgressView,
-    },
+    openFinalOutput: previewFinalOutput,
     // Each command is named, so a failure carries a tag, never a rejection.
     files: {
       openDiff: (base: string, edited: string, title: string) =>
