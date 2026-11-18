@@ -14,6 +14,8 @@
 // `--print`) path has no input and never creates a placeholder, so piped
 // output stays byte-identical.
 
+import { ACTIVATED_SKILLS_MAX } from '@texra-ai/harness/schemas';
+
 /** Collapse a paste into a chip when it exceeds either bound. */
 const PASTE_CHAR_THRESHOLD = 800;
 const PASTE_MAX_INLINE_LINES = 2;
@@ -150,11 +152,14 @@ export function withPastedImage(
   return { draft: next.draft, chip: `[Image #${next.id}]` };
 }
 
-/** The skill activated for the next message, replacing one of its name. */
+/** The skill activated for the next message, replacing one of its name;
+ *  a message takes the latest `ACTIVATED_SKILLS_MAX`. */
 export function withSkill(draft: Draft, skill: string): Draft {
   return {
     ...draft,
-    skills: [...draft.skills.filter((s) => s !== skill), skill],
+    skills: [...draft.skills.filter((s) => s !== skill), skill].slice(
+      -ACTIVATED_SKILLS_MAX,
+    ),
   };
 }
 
@@ -209,7 +214,7 @@ export function resolveImages(draft: Draft): PastedImageEntry[] {
  * A message the session did not take, back in the input: its text below
  * whatever was typed since, its chips renumbered into the current draft's id
  * space, and its skills activated again unless one of the same name was
- * activated since.
+ * activated since, the latest `ACTIVATED_SKILLS_MAX` kept.
  */
 export function restoreDraft(current: Draft, returned: Draft): Draft {
   let next: Draft = {
@@ -217,7 +222,7 @@ export function restoreDraft(current: Draft, returned: Draft): Draft {
     skills: [
       ...current.skills,
       ...returned.skills.filter((skill) => !current.skills.includes(skill)),
-    ],
+    ].slice(-ACTIVATED_SKILLS_MAX),
   };
   if (returned.text.length === 0) return next;
   const renumbered = new Map<number, number>();

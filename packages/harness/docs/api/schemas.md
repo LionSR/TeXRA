@@ -39,6 +39,15 @@ ends.
 function acceptsFollowUp(run: RunView): boolean
 ```
 
+## ACTIVATED_SKILLS_MAX
+
+The most skills a run keeps activated; a newer activation displaces the
+oldest.
+
+```ts
+const ACTIVATED_SKILLS_MAX: 20
+```
+
 ## ActiveSkillSourceScope
 
 ```ts
