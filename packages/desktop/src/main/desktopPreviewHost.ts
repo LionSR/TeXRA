@@ -72,7 +72,7 @@ export function createDesktopPreviewHost(
         fail(
           meansAbsent(error)
             ? `File not found: ${filePath}`
-            : `Cannot access file ${filePath}: ${toErrorMessage(error.reason.cause ?? error)}`,
+            : `Cannot access file ${filePath}: ${toErrorMessage(error)}`,
         ),
       ),
     );

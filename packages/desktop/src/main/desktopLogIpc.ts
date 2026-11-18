@@ -100,7 +100,7 @@ export function createDesktopLogIpc(
               Effect.mapError(
                 (error) =>
                   new DesktopCommandFailed({
-                    message: `The log could not be written to ${filePath}: ${toErrorMessage(error.reason.cause ?? error)}`,
+                    message: `The log could not be written to ${filePath}: ${toErrorMessage(error)}`,
                     cause: error,
                   }),
               ),
