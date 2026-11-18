@@ -6,10 +6,10 @@
 // this module keeps only composition, rendering glue, and the Ink lifecycle.
 
 import {
+  Cause,
   Effect,
   Exit,
   FiberHandle,
-  Schema,
   Scope,
   Stream,
   SubscriptionRef,
@@ -107,12 +107,6 @@ import { scopeRunner } from '../scopeRunner';
 interface ChatResult {
   exitCode: number;
 }
-
-/** The session's rows were not all written before the chat's exit deadline. */
-class SessionRowsNotWritten extends Schema.TaggedError<SessionRowsNotWritten>()(
-  'SessionRowsNotWritten',
-  { message: Schema.String },
-) {}
 
 /** A change of a run's approval grants (`policy.set`). */
 type PolicyChange = Extract<RuntimeCommand, { kind: 'policy.set' }>['change'];
@@ -621,13 +615,15 @@ export async function runChat(
       ? Effect.void
       : Effect.flatMap(services.session, (local) => local.drained)
     ).pipe(
-      Effect.timeout(SESSION_CLOSE_DEADLINE_MS),
-      Effect.mapError(
-        () =>
-          new SessionRowsNotWritten({
-            message: `the session's rows were not all written within ${SESSION_CLOSE_DEADLINE_MS} ms`,
-          }),
-      ),
+      Effect.timeoutOrElse({
+        duration: SESSION_CLOSE_DEADLINE_MS,
+        orElse: () =>
+          Effect.fail(
+            new Cause.TimeoutError(
+              `the session's rows were not all written within ${SESSION_CLOSE_DEADLINE_MS} ms`,
+            ),
+          ),
+      }),
     ),
     repaintAfterTerminalResume: scrollback.restart,
     interruptActive: () => chatController.stop(),
