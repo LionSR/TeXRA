@@ -4,12 +4,7 @@ import { Effect, FileSystem } from 'effect';
 
 import { parseFrontmatter } from '@agent/memory/memoryMeta';
 import { displayToStoragePath } from '@agent/memory/memoryLayout';
-import {
-  programOf,
-  type AgentConfig,
-  type AttachedMemoryMiss,
-} from '@shared/schemas';
-import { activatedSkillNames } from '@skills/runtimeSkills';
+import type { AgentConfig, AttachedMemoryMiss } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   listExternalRoots,
@@ -64,7 +59,7 @@ type AttachedMemoriesResult = {
 
 /**
  * What a launch opens from: the prompt variables; the names of the skills a
- * tool-use run's instruction activated; the attached memories' XML block,
+ * tool-use run's user activated with its launch; the attached memories' XML block,
  * appended to the system prompt (null when none are attached); and the
  * attached memories that could not be read.
  */
@@ -103,12 +98,10 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
 
   return {
     inputs,
-    // What the launch instruction activates (`/skills`): each step resolves
-    // the names against its own catalog; a program's, none.
-    activated:
-      programOf(agentConfig) !== null
-        ? []
-        : activatedSkillNames([agentConfig.instruction]),
+    // What the launch activates (`/skills`): each step resolves the names
+    // against its own catalog; a script's run, which renders no prompt,
+    // none.
+    activated: agentConfig.script != null ? [] : (agentConfig.skills ?? []),
     attachedMemories: attachedMemories.xml,
     attachedMemoryMisses: attachedMemories.misses,
   };

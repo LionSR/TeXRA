@@ -21,10 +21,12 @@ export function userFollowUpInstruction(
 /** The `followup.queued` row one send writes, with the blobs its media
  *  brings: its id is the delivery id when the producer gave one, a child's
  *  delivery keeps its facts typed, a message keeps the `displayText` its
- *  producer gave, and a host's notification waits for the turn's end. */
+ *  producer gave and the skills its user activated, and a host's
+ *  notification waits for the turn's end. */
 export function queuedRow(
   item: InboxItem,
   hold: QueuedFollowUp['holdUntil'],
+  skills?: readonly string[],
 ): WithBlobs<Omit<QueuedFollowUp, 'commit'>> {
   const { from, deliveryId, control } = item;
   const holdUntil = hold ?? (from.kind === 'notification' ? 'turn' : undefined);
@@ -43,6 +45,7 @@ export function queuedRow(
       text,
       ...(displayText !== undefined && { displayText }),
       ...(media !== undefined && { media: [...media] }),
+      ...(skills !== undefined && { skills: [...skills] }),
       from,
     },
   };

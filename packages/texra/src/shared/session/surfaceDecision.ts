@@ -48,15 +48,15 @@ export type SurfaceDecision =
 
 /** How a prompt declines: with a note the agent reads (`reject`), by passing
  *  on it (`skip`), or by stopping the task (`stop`, sent as a `cancel`). */
-type RequestDecline = 'reject' | 'skip' | 'stop';
+export type RequestDecline = 'reject' | 'skip' | 'stop';
 
 const APPROVE = Object.freeze({ action: 'approve' });
 
 /**
  * The answers each request kind offers, by the key every surface binds them
  * to: `y` the primary answer (none for a question, whose answers are its
- * form's), `n` how it declines, and the kind's own keys. Labels are each
- * surface's; what a key sends is this table's. The `a` run grant of a kind
+ * form's), `n` how it declines, and the kind's own keys. The words for `y`
+ * and `n` are `@ui/copy/requestCards`'; what a key sends is this table's. The `a` run grant of a kind
  * with a bypass is {@link APPROVE_SESSION_ACTION}, and a key the request
  * itself must allow (a retry's move onto the user's own key) is checked by
  * the surface and again by {@link approvalDecisionDelivery}.

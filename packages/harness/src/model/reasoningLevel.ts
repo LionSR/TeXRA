@@ -22,16 +22,6 @@ import { Settings, type StateStore } from '@shared/config/settings';
 import type { StateKey } from '@shared/state/stateSettings';
 
 /**
- * The user's per-model reasoning effort overrides, in llm-zoo's vocabulary,
- * keyed by model reference (`provider/id`).
- *
- * This is the one boundary between the persisted `reasoningLevels`
- * record and the runtime: the stored strings are parsed here, so no caller
- * carries a bare string and an entry that is not an effort is reported rather
- * than quietly disappearing. Reads only; the write path keeps the stored
- * record verbatim so an unreadable entry is never dropped from storage.
- */
-/**
  * The user's saved reasoning effort per model reference. Its entries stay
  * unparsed in the record so a write keeps every entry, readable or not.
  */
@@ -41,6 +31,16 @@ export const REASONING_LEVELS_KEY = {
   schema: decodingDefault(Schema.Record(Schema.String, Schema.Unknown), {}),
 } as const satisfies StateKey<Readonly<Record<string, unknown>>>;
 
+/**
+ * The user's per-model reasoning effort overrides, in llm-zoo's vocabulary,
+ * keyed by model reference (`provider/id`).
+ *
+ * This is the one boundary between the persisted `reasoningLevels`
+ * record and the runtime: the stored strings are parsed here, so no caller
+ * carries a bare string and an entry that is not an effort is reported rather
+ * than quietly disappearing. Reads only; the write path keeps the stored
+ * record verbatim so an unreadable entry is never dropped from storage.
+ */
 export const reasoningEffortOverrides = Effect.fn('reasoningEffortOverrides')(
   function* (state: StateStore) {
     const stored = yield* Settings.state(state, REASONING_LEVELS_KEY);

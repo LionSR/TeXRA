@@ -3,7 +3,6 @@ import {
   selectCliRunnableModel,
   type GetModelSwitchDisabledReason,
 } from '@cli/runtime/models/modelAccess';
-import type { SkillActivation } from '@cli/chat/tui/forms/SkillsListForm';
 import { type CliSignInProgress } from '@cli/runtime/models/signInUrl';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
@@ -62,8 +61,8 @@ export interface SlashCommandContext {
   readonly resumeTask: (
     id: RunId,
   ) => Effect.Effect<void, RequestRefusal, ProcessServices>;
-  /** Activate a skill for the next message (`/skills`). */
-  readonly activateSkill: (selection: SkillActivation) => void;
+  /** Activate a skill, by name, for the next message (`/skills`). */
+  readonly activateSkill: (name: string) => void;
   /** The project's policy `/config` wrote: the status bar follows it, and
    *  the chat's own `/approval` choice stays as it was. A plain callback:
    *  the shared write path takes it as a void-returning port. */

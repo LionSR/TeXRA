@@ -266,7 +266,7 @@ test('a proposal edited in the app runs its child with the edits, and Back leave
   ).toBeEnabled();
   await expect(
     askingRow.getByRole('button', {
-      name: /^propose_validation · Status: Needs approval/,
+      name: /^propose_validation · Status: Waiting on you/,
     }),
   ).toBeVisible();
   expect(rowsOf(asking.runId, 'request.decided')).toHaveLength(0);

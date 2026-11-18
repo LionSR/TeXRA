@@ -9,6 +9,7 @@ import { customElement } from 'lit/decorators.js';
 // Local imports - shared utilities
 import { REQUEST_ACTIONS } from '@texra/shared/session/surfaceDecision';
 import { PLAN_GOAL_COPY } from '@ui/copy/delegationApproval';
+import { REQUEST_ASK } from '@ui/copy/requestCards';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
 // Local imports - base class
@@ -37,7 +38,7 @@ export class PlanApprovalRequestPanel extends BaseRequestPanel<'planApproval'> {
   ];
 
   protected override renderAsk(): string {
-    return 'Approve this plan';
+    return REQUEST_ASK.plan;
   }
 
   // A plan's broad approval is its goal's (`REQUEST_ACTIONS.planApproval`,

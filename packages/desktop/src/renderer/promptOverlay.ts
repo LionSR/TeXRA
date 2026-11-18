@@ -6,6 +6,7 @@ import { Effect, type ManagedRuntime } from 'effect';
 import { RpcServer, type RpcMessage } from 'effect/rpc';
 
 import { serveOverMessages } from '@texra/shared/rpcOverMessages';
+import { isCommitEnter } from '@ui/wa/keyActivation';
 import {
   DESKTOP_PROMPT_COMMANDS,
   DesktopPromptRpcs,
@@ -94,7 +95,7 @@ export function createDesktopPromptOverlay(
     answer(input.value ?? '');
   });
   input.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter' || event.isComposing) return;
+    if (!isCommitEnter(event)) return;
     event.preventDefault();
     form.requestSubmit();
   });

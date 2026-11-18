@@ -10,7 +10,6 @@ import {
   ToolError,
 } from '@texra-ai/harness/plugins';
 import {
-  activatedSkillNames,
   HostSkillSources,
   loadRuntimeSkillCatalog as loadRuntimeSkillCatalogEffect,
 } from '@skills/runtimeSkills';
@@ -137,11 +136,7 @@ layer(FakeHost.layer({ workspaceRoot: WORKSPACE_ROOT }), {
         // Another run's call, or a step that no longer lists the skill.
         expect(yield* Effect.flip(resolveFrom([]))).toBeInstanceOf(ToolError);
         // A skill the user activated by name is granted again, even unlisted.
-        const names = activatedSkillNames([
-          '<skill_activation>\nThe user selected it.\n<skill name="shared-notes">\n</skill>\n</skill_activation>',
-        ]);
-        expect(names).toEqual(['shared-notes']);
-        const activated = catalog.filter(({ name }) => names.includes(name));
+        const activated = catalog.filter(({ name }) => name === 'shared-notes');
         expect(
           (yield* resolveFrom(rootsOf(activated))).external?.writable,
         ).toBe(false);

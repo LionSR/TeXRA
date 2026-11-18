@@ -1853,10 +1853,8 @@ const harnessSlashContext: SlashCommandContext = {
       appendHarnessAssistantTranscript(`Harness resume selected: ${id}.`);
     }),
   resumeTask: () => Effect.void,
-  activateSkill: (selection) =>
-    appendHarnessAssistantTranscript(
-      `Harness skill selected: ${selection.name}.`,
-    ),
+  activateSkill: (name) =>
+    appendHarnessAssistantTranscript(`Harness skill selected: ${name}.`),
   onProjectApprovalPolicyChanged: (policy) =>
     appendHarnessAssistantTranscript(
       `Project approval policy: ${formatApprovalPolicy(policy)}`,

@@ -342,7 +342,10 @@ export function createSessionSurfaces(options: {
         return;
       case 'launch':
         if (launch.instruction === request.launch.instruction) {
-          act(entry, { kind: 'launch', patch: { instruction: '' } });
+          act(entry, {
+            kind: 'launch',
+            patch: { instruction: '', skills: [] },
+          });
         }
         return;
       default:

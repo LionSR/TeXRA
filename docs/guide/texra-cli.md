@@ -153,8 +153,8 @@ Every `--output-format ndjson` line is one JSON object whose first key is
   `tool.start`, `run.description`, `run.removed`, and so on), and `payload` is
   the rest of the event under its own field names. A `usage` event is one
   priced model turn, so a run's spend is the sum of its `usage` events. A
-  run's events name it through `payload.aggregateId`, the JSON array
-  `["run", "<run id>"]`; a
+  run's events name it through `payload.aggregateId`, its run id (an
+  event a plugin owns carries the plugin's key behind `plugin:` instead); a
   parent edge is `payload.parent` on `run.start`; the terminal fact is
   `run.end` with its `outcome`. A run's turns are its `run.position`
   events (`turn.begin`, `turn.end`); a `stage.start`/`stage.end` pair is a

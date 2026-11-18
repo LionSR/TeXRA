@@ -165,6 +165,16 @@ export function runStatusLabel(key: RunStatusKey): string {
   return RUN_STATUS[key].word;
 }
 
+/** A run's news as a notification says it, in the status's word:
+ *  `Draft review: Waiting on you.` Every host that announces a run reads
+ *  it, whatever event it announces on. */
+export function runAttentionLine(
+  run: Pick<RunView, 'title'>,
+  key: RunStatusKey,
+): string {
+  return `${run.title}: ${RUN_STATUS[key].word}.`;
+}
+
 /** How a stage reads: the outcome it closed with, or, while it is open, as
  *  its run reads: interrupted when nobody drives the run any more (its
  *  process died before the run's end closed the stage), else running. A
