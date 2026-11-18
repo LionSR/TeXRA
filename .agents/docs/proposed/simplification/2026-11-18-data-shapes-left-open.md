@@ -21,8 +21,11 @@ written from `state.turn`, yet its readers coalesce it.
 
 Proposed: drop `outcome` and its filter; make `turn` required.
 
-Held back: a `run.position` row version bump (rows from earlier builds may
-lack `turn`).
+`turn` is required now (the `claude/sweep-2026-11-18-stored-shapes-once`
+branch). It needed no row version bump: every `run.position` at v6 was
+written with its turn. Still open: `outcome`. Dropping it changes the one
+`positionRow` caller in `runLoop.ts` (`turn.end`), and bumps `run.position`,
+since an earlier build's filter requires it on every `turn.end`.
 
 ## 2. `run.start.approvalPolicy` and `worktree` are optional and nullable
 
@@ -34,8 +37,12 @@ field holds grants, not a policy.
 
 Proposed: required `grants`, and `worktree: NullOr(...)` required.
 
-Held back: a `run.start` row version bump. Take it with finding 1 so the
-run rows change once.
+Both fields are required now, `worktree` as `NullOr`, and the
+`?? NO_APPROVAL_GRANTS` restatements are gone (`run.start` v5, same
+branch). Still open: the stored key is `approvalPolicy`, not `grants`;
+`packages/cli/scripts/validate-run.mjs` reads `$.approvalPolicy.limit`
+from the row, so the rename lands with that script's edit and another
+`run.start` bump.
 
 ## 3. `ToolFileAttachment`'s payload is three optional fields
 
@@ -59,14 +66,17 @@ an outside plugin may set the inline fields. Needs a decision on that API.
 Proposed: `suggestSearch: boolean`, the lists as arrays defaulting to `[]`,
 `context` optional.
 
-Held back: persisted in the global store (`external-inquiry/thread`);
-changing what is written needs its own commit with the store's checks.
+Done on the same branch. The global store's families carry no version of
+their own (a record that fails to decode fails the read), so the turn
+schema decodes the flags an earlier record left absent as `false` or `[]`,
+and the writer states them.
 
 ## 5. Smaller
 
 - `FollowUpMessage.displayText` and `ChildRunDelivery.usage`
-  (`packages/harness/src/shared/schemas/followUp.ts`) are nullable though no
-  producer writes `null`; take them with the next `followup.queued` change.
+  (`packages/harness/src/shared/schemas/followUp.ts`): done on the same
+  branch (`followup.queued` v10). The claim was half true: the agent-CLI
+  driver did write `usage: null`; it now leaves the field out.
 - `SubscriptionAuthStatus` (`packages/texra/src/shared/model/subscriptionAuthStatus.ts`)
   makes `email` and `accountId` nullable while copying a session whose
   fields never are; the account labels in `SubscriptionSection.ts` accept
@@ -75,3 +85,17 @@ changing what is written needs its own commit with the store's checks.
   (`packages/desktop/src/renderer/terminalPane.ts`) are one shell state;
   input typed after the shell exits still reaches `sendInput`. Recently
   changed (#15026), so let it settle first.
+
+## 6. More of the same, found on the sweep branch
+
+Landed beside the findings above, none needing a row version bump since
+no stored row at the current versions holds `null` there:
+`RetryRequest.credentialSwitch` (a required `NullOr`), `run.config.binding`,
+a `model.message` append's `input` and `reason`, and a `context.edit`'s
+`input` (plain optional).
+
+Still open: `rootUserInstruction` and the nullable optionals of
+`AgentConfigSchema` (`packages/harness/src/shared/schemas/agentConfig.ts`),
+which `BaseProposalFieldsSchema` and `AgentProposalSchema` restate on
+`request.opened` (`proposalFields.ts`, `requestPayloads.ts`): check each
+producer, then bump `run.config` and `request.opened` once.
