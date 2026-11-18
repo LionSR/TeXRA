@@ -18,6 +18,7 @@ import {
 } from '@latex/overleafProject';
 import { installAdvice } from '@texra/shared/constants/latexToolchain';
 import { osPlatformOf } from '@texra/shared/osPlatform';
+import { CLONE_COPY, cloneProviderLabel } from '@ui/copy/clone';
 
 // Local imports - runtime
 import { CliUsageError, type CliContext } from '../runtime/platform/cliContext';
@@ -73,7 +74,7 @@ function presentCloneOutcome(
   };
   switch (outcome._tag) {
     case 'Cloned': {
-      const label = remote.isOverleaf ? 'Overleaf' : 'ShareLaTeX';
+      const label = cloneProviderLabel(remote);
       writeCliResult(
         context.outputFormat,
         commandResult(
@@ -90,7 +91,7 @@ function presentCloneOutcome(
       return undefined;
     }
     case 'Cancelled':
-      writeTextStderr('Clone cancelled.');
+      writeTextStderr(CLONE_COPY.cancelled);
       return CliExitCode.Cancelled;
     case 'InvalidToken':
       writeTextStderr(outcome.message);
@@ -115,12 +116,12 @@ function presentCloneOutcome(
       const detail = remote.isOverleaf
         ? `Generate a new token at ${OVERLEAF_GIT_TOKEN_URL}, then rerun the command.`
         : 'Check the ShareLaTeX credentials for this host, then rerun the command.';
-      writeTextStderr(`Clone failed: authentication error. ${detail}`);
+      writeTextStderr(`${CLONE_COPY.authFailed} ${detail}`);
       gitError(outcome.error);
       return CliExitCode.AgentError;
     }
     case 'CloneFailed':
-      writeTextStderr('Clone failed. Check credentials and connection.');
+      writeTextStderr(CLONE_COPY.failed);
       gitError(outcome.error);
       return CliExitCode.AgentError;
   }

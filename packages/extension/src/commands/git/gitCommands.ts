@@ -27,6 +27,7 @@ import {
   LATEX_TOOL_ENTRIES,
 } from '@texra/shared/constants/latexToolchain';
 import { osPlatformOf } from '@texra/shared/osPlatform';
+import { CLONE_COPY, cloneProviderLabel } from '@ui/copy/clone';
 import { hasPackageManager } from '@texra/utils/system/toolChecks';
 import {
   Secrets,
@@ -65,7 +66,7 @@ const promptInput = Effect.fn('promptInput')(function* (
   if (!trimmed) {
     // Show cancellation message only if user dismissed with empty string (not Escape)
     if (val !== undefined) {
-      yield* vscodeUi.notify('warning', 'Clone cancelled.');
+      yield* vscodeUi.notify('warning', CLONE_COPY.cancelled);
     }
     return null;
   }
@@ -183,15 +184,11 @@ const presentCloneOutcome = Effect.fn('gitCommands.presentCloneOutcome')(
           ? 'Your git token may be invalid or expired.'
           : 'Check your credentials.';
         const selected = yield* announce(
-          vscodeUi.ask(
-            'error',
-            `Clone failed: authentication error. ${detail}`,
-            {
-              items: remote.isOverleaf
-                ? ['Get New Token', 'How to get a token']
-                : ['Retry'],
-            },
-          ),
+          vscodeUi.ask('error', `${CLONE_COPY.authFailed} ${detail}`, {
+            items: remote.isOverleaf
+              ? ['Get New Token', 'How to get a token']
+              : ['Retry'],
+          }),
           undefined,
         );
         if (selected === 'Get New Token') {
@@ -203,10 +200,7 @@ const presentCloneOutcome = Effect.fn('gitCommands.presentCloneOutcome')(
       }
       case 'CloneFailed':
         yield* Effect.logError(`Clone failed: ${outcome.error}`);
-        return yield* vscodeUi.notify(
-          'error',
-          'Clone failed. Check credentials and connection.',
-        );
+        return yield* vscodeUi.notify('error', CLONE_COPY.failed);
     }
   },
   withLogChannel(CHANNEL),
@@ -233,7 +227,7 @@ export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
       yield* showLoggedMessage('Open a workspace folder first.');
       return;
     }
-    const label = remote.isOverleaf ? 'Overleaf' : 'ShareLaTeX';
+    const label = cloneProviderLabel(remote);
     const outcome = yield* runOverleafClone(
       remote,
       workspaceRoot,
