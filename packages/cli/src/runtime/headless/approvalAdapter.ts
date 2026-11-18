@@ -149,7 +149,8 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
     runId: RunId,
     payload: RequestPayload,
   ): Effect.fn.Return<RequestDecision, Error, CliInvocation> {
-    const ask = (content: CliApprovalContent) => askApproval(content, hooks);
+    const ask = (content: CliApprovalContent) =>
+      askApproval(payload.kind, content, hooks);
     switch (payload.kind) {
       case 'bash':
         return yield* ask({ summary: formatBashApprovalSummary(payload.data) });
