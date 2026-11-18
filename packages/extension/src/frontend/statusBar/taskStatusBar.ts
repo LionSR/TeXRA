@@ -22,7 +22,7 @@ import {
 } from '@ui/copy/approvalPolicy';
 import { formatTokenCount } from '@ui/copy/format';
 import { usageCostLabel } from '@ui/copy/modelAccess';
-import { runStatusLabel } from '@ui/copy/runStatus';
+import { runStatusLabel, sectionCountLabel } from '@ui/copy/runStatus';
 import type { Session, WorkspaceRoots } from '@texra-ai/harness';
 
 /** What the task pill paints from one session view. */
@@ -91,23 +91,20 @@ function paint(
     tip.isTrusted = false;
     item.tooltip = tip;
   }
-  if (activity === 'approval') {
-    const waiting = runStatusLabel('waitingOnUser');
-    item.text = `$(bell-dot) TeXRA: ${waiting}`;
-    item.accessibilityInformation = { label: `TeXRA tasks, ${waiting}` };
-  } else if (working > 1) {
-    item.text = `$(loading~spin) TeXRA: ${working} active`;
-    item.accessibilityInformation = {
-      label: `TeXRA tasks, ${working} active`,
-    };
-  } else if (working === 1) {
-    item.text = `$(loading~spin) TeXRA: ${runStatusLabel('running')}`;
-    item.accessibilityInformation = { label: 'TeXRA tasks, one active' };
-  } else {
+  const waiting = activity === 'approval';
+  if (!waiting && working === 0) {
     // Nothing running: no pill. The setup pill covers the first run.
     item.hide();
     return;
   }
+  // Worded as the run list and the desktop rail word the same counts.
+  const label = waiting
+    ? runStatusLabel('waitingOnUser')
+    : sectionCountLabel('running', String(working));
+  item.text = `${waiting ? '$(bell-dot)' : '$(loading~spin)'} TeXRA: ${label}`;
+  item.accessibilityInformation = {
+    label: `TeXRA tasks, ${label.toLowerCase()}`,
+  };
   item.show();
 }
 
