@@ -206,7 +206,10 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // information only, would read as an instruction).
     // v9: a user's message names the skills it activates (`skills`), no
     // longer only in its text (a v8 row's activations would read as none).
-    'followup.queued': Object.freeze({ version: 9, listing: 'followup' }),
+    // v10: a delivery with no usage leaves `usage` out, never `null`, and a
+    // message's `displayText` is never `null` (an earlier build's agent-CLI
+    // delivery without usage would fail as damaged).
+    'followup.queued': Object.freeze({ version: 10, listing: 'followup' }),
     // v2: `disposition` says why the follow-up left the queue; a v1 row lacks
     // it and fails to decode.
     // v3: no `stale` reason: nothing drops a notice of an ended child (a v2
