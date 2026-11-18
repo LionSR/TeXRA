@@ -2,9 +2,27 @@
 import { Schema, Struct } from 'effect';
 import { decodingDefault } from './schemaDefaults.js';
 
-import { AgentSourceSchema, InlinePersonaSchema } from './agent';
+import {
+  AGENT_SOURCE,
+  CatalogAgentSourceSchema,
+  InlinePersonaSchema,
+} from './agent';
 import { AgentDelegationScopeSchema } from './workspaceAgents';
 import { FileFieldsSchema } from './fileFields';
+
+/**
+ * Where a run's agent comes from: the catalog source its entry lives in, or
+ * the persona the launch carried instead of naming a file (`inline`),
+ * recorded so a resume runs it with no file. The persona is the agent's, so
+ * its name is `agent`.
+ */
+const AgentOriginSchema = Schema.Union([
+  Schema.Struct({ kind: CatalogAgentSourceSchema }),
+  Schema.Struct({
+    kind: Schema.Literal(AGENT_SOURCE.INLINE),
+    persona: InlinePersonaSchema.mapFields(Struct.omit(['name'])),
+  }),
+]);
 
 /** A run's launch configuration, as its `run.config` row records it. */
 const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
@@ -17,12 +35,7 @@ const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
      * this instead of re-resolving the ambiguous bare name. Absent only on a
      * payload not yet launched, which launch resolves by name.
      */
-    agentSource: Schema.optional(Schema.NullOr(AgentSourceSchema)),
-    /**
-     * The persona the launch carried instead of naming a file (source
-     * `inline`), named `agent`; recorded so a resume runs it with no file.
-     */
-    persona: Schema.optional(Schema.NullOr(InlinePersonaSchema)),
+    agentSource: Schema.optional(Schema.NullOr(AgentOriginSchema)),
     /**
      * A `self()` child: it runs as its caller, so it is offered the installed
      * plugins' tools as a top-level run is, still narrowed to what its
@@ -99,21 +112,10 @@ const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
   }),
 );
 
-/** Canonical configuration: at most as many outputs as text/media inputs, and
- *  a persona exactly when the agent is inline, named as the agent is. */
+/** Canonical configuration: at most as many outputs as text/media inputs. */
 export const AgentConfigSchema = AgentConfigObjectSchema.check(
   Schema.makeFilter((config) => {
     const issues: Schema.FilterIssue[] = [];
-    if (
-      (config.agentSource === 'inline') !== (config.persona != null) ||
-      (config.persona != null && config.persona.name !== config.agent)
-    ) {
-      issues.push({
-        path: ['persona'],
-        issue:
-          'An inline agent carries its persona, named as the agent, and only it does.',
-      });
-    }
     if (
       config.outputFiles.length >
       config.inputFiles.length + config.mediaFiles.length

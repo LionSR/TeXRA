@@ -24,7 +24,7 @@ import {
 } from '@texra/shared/constants/revisionLayout';
 import {
   type CompileFailure,
-  isGenericOutputStem,
+  outputDisplayName,
   type OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
 
@@ -75,19 +75,6 @@ const skipped = (reason: string, unverified = false): CompileCheckResult => ({
   reason,
   unverified,
 });
-
-/**
- * Return a human-readable display name for an output file in compile messages.
- * Prefers the `source` field (which carries the original document name, e.g.
- * "constrained_note.tex") over the extracted-file basename.
- */
-function getCompileDisplayName(file: OutputFileInfo): string {
-  const rawBase = path.basename(file.location.absolutePath);
-  const srcBase = file.source ? path.basename(file.source) : '';
-  return srcBase && srcBase !== rawBase && !isGenericOutputStem(srcBase)
-    ? srcBase
-    : rawBase;
-}
 
 /**
  * Resolve a workspace/run-storage location back to its live source folder.
@@ -150,7 +137,9 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
     const artifacts: RunStorageFileLocation[] = [];
 
     for (const outputFile of texOutputs) {
-      const displayName = getCompileDisplayName(outputFile);
+      // The name the output reads by everywhere, without its folders: a
+      // compile message and the published PDF name the file, not the path.
+      const displayName = path.basename(outputDisplayName(outputFile));
       const result = yield* compileOne(
         ctx,
         outputFile,

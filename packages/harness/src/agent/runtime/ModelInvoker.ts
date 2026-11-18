@@ -210,7 +210,10 @@ export const modelInvokerLayer = (): Layer.Layer<
       const access = yield* ModelAccess;
       const gate = yield* RouteRetries;
       const attribution = {
-        agentName: usageAgentName(run.config.agent, run.config.agentSource),
+        agentName: usageAgentName(
+          run.config.agent,
+          run.config.agentSource?.kind,
+        ),
         runId,
       };
 

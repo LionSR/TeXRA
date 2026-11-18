@@ -10,7 +10,7 @@ import { Effect, FileSystem } from 'effect';
 
 import { hasExtension } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { pathExists } from '@texra-ai/harness/node';
+import { pathExists, readNormalizedFile } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'LatexParsing';
@@ -85,13 +85,27 @@ export const LATEX_CITATION_COMMANDS: readonly string[] = Object.freeze([
 const COMMENT_PATTERN =
   /(?<=(?<!\\)(?:\\\\)*)(?:(\\(?:url|nolinkurl|path|href)\s*\{[^{}\n]*\})|%.*$)/gm;
 
-/** Removes each comment, from its `%` to the end of the line. */
-export function stripLatexComments(content: string): string {
-  return content.replaceAll(
-    COMMENT_PATTERN,
-    (_match, url: string | undefined) => url ?? '',
-  );
-}
+/** The reads of a LaTeX file's references probe the filesystem, so each
+ *  bounds its fan-out to this many at once. */
+export const LATEX_PROBE_CONCURRENCY = 8;
+
+/**
+ * The text of the LaTeX file at `absolutePath` with each comment removed,
+ * from its `%` to the end of the line, so nothing commented out reads as a
+ * figure, input, bibliography or picture the document uses.
+ */
+export const readUncommentedLatex = Effect.fn('latex.readUncommentedLatex')(
+  function* (absolutePath: string) {
+    const fs = yield* FileSystem.FileSystem;
+    const content = yield* readNormalizedFile(fs, absolutePath).pipe(
+      Effect.mapError(ensureError),
+    );
+    return content.replaceAll(
+      COMMENT_PATTERN,
+      (_match, url: string | undefined) => url ?? '',
+    );
+  },
+);
 
 /** `\input{…}` or `\include{…}`: the command, then the file it names. */
 const TEX_INPUT = String.raw`\\(input|include)\s*\{([^}]+)\}`;

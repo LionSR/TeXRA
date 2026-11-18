@@ -10,8 +10,7 @@ export function asDocumentTask<C extends Partial<AgentConfig>>(config: C) {
   return {
     ...config,
     agent: 'edit',
-    agentSource: 'inline',
-    persona: { name: 'edit' },
+    agentSource: { kind: 'inline', persona: {} },
     script: { kind: 'program', name: 'edit', args: {} },
   } as const;
 }

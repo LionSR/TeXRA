@@ -115,13 +115,14 @@ describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
             yield* rootRun({
               config: Schema.decodeUnknownSync(AgentConfigSchema)({
                 agent: 'command_runner',
-                persona: {
-                  name: 'command_runner',
-                  description: 'Runs one command.',
-                  prompt: `GOLDEN-APPROVAL bash until [ -e ${release} ]; do sleep 0.05; done`,
-                  tools: ['bash'],
+                agentSource: {
+                  kind: 'inline',
+                  persona: {
+                    description: 'Runs one command.',
+                    prompt: `GOLDEN-APPROVAL bash until [ -e ${release} ]; do sleep 0.05; done`,
+                    tools: ['bash'],
+                  },
                 },
-                agentSource: 'inline',
                 model: 'openai/gpt-5.6-sol',
                 instruction: 'Run the command.',
               }),

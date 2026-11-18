@@ -14,9 +14,11 @@ import {
 } from '@texra-ai/harness/host';
 import { type AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 
-interface SettingsAgentCatalogEntry extends Pick<AgentEntry, 'persona'> {
+interface SettingsAgentCatalogEntry extends Pick<
+  AgentEntry,
+  'persona' | 'source'
+> {
   name: string;
-  source: AgentSource;
   description?: string;
   path?: string;
   basedOn?: string;

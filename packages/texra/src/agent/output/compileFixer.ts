@@ -20,7 +20,11 @@ import {
   type RunId,
   pluralize,
 } from '@texra-ai/harness/schemas';
-import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
+import {
+  latexdiffArtifactNote,
+  latexdiffArtifactSource,
+  type LatexdiffArtifactSource,
+} from '@latex/latexdiff/diffFileNameManager';
 import {
   type CompileFailure,
   compileFailuresOf,
@@ -37,7 +41,7 @@ export class CompileFixerPlanFailed extends Schema.TaggedError<CompileFixerPlanF
 
 interface CompileFixerTarget {
   path: string;
-  latexdiffArtifact?: { sourcePath: string; sourceExists: boolean };
+  latexdiffArtifact?: LatexdiffArtifactSource;
   missingLatexdiffArtifact?: string;
 }
 
@@ -129,7 +133,6 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
       agent: 'latexFixer',
       // The catalog's latexFixer, not the program's own empty persona.
       agentSource: null,
-      persona: null,
       model,
       instruction: buildCompileFixerQuestion(
         compileFailures,
@@ -157,14 +160,7 @@ function buildCompileFixerQuestion(
       return `- ${target.missingLatexdiffArtifact} was a latexdiff artifact candidate, but it is not present in the workspace. ${target.path} is the inferred source fallback.`;
     }
     const artifact = target.latexdiffArtifact;
-    if (!artifact) return [];
-    const sourceHint = artifact.sourceExists
-      ? ` generated from ${artifact.sourcePath}`
-      : `; inferred source ${artifact.sourcePath} is not present in the workspace`;
-    const sourceFixHint = artifact.sourceExists
-      ? ` If the error originates in the original source document, fix ${artifact.sourcePath} too so a regenerated diff stays fixed.`
-      : '';
-    return `- ${target.path} is a latexdiff artifact${sourceHint}. If the error comes from broken latexdiff markup (\\DIFadd/\\DIFdel or DIF preamble blocks), repair this artifact in place and keep diff annotations intact.${sourceFixHint}`;
+    return artifact ? `- ${latexdiffArtifactNote(target.path, artifact)}` : [];
   });
   const latexdiffContext =
     latexdiffLines.length > 0
@@ -263,32 +259,22 @@ const compileFixerTargetsForCandidate = Effect.fn(
       entryTypeIn(fs, path.join(workspaceRoot, relative)),
       (type) => type !== undefined,
     );
-  const artifact = detectGeneratedLatexdiffArtifact(relativePath);
+  const artifact = yield* latexdiffArtifactSource(relativePath, workspaceRoot);
   if (!artifact) {
     return (yield* exists(relativePath)) ? [{ path: relativePath }] : [];
   }
 
-  const sourcePath = artifact.sourcePath;
-  const [sourceExists, artifactExists] = yield* Effect.all(
-    [exists(sourcePath), exists(relativePath)],
-    { concurrency: 'unbounded' },
-  );
-  if (!artifactExists) {
+  const { sourcePath, sourceExists } = artifact;
+  if (!(yield* exists(relativePath))) {
     return sourceExists
       ? [{ path: sourcePath, missingLatexdiffArtifact: relativePath }]
       : [];
   }
 
-  // A user may legitimately name a source file `chapter_diff.tex`. Treat the
-  // weak workspace suffix as generated only when its inferred source exists.
-  if (artifact.kind === 'workspaceDiff' && !sourceExists) {
-    return [{ path: relativePath }];
-  }
-
   const targets: CompileFixerTarget[] = [
     {
       path: relativePath,
-      latexdiffArtifact: { sourcePath, sourceExists },
+      latexdiffArtifact: artifact,
     },
   ];
   if (sourceExists) {

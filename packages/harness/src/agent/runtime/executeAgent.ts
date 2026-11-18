@@ -349,12 +349,7 @@ export const executeAgent = Effect.fn('executeAgent')(function* (
     // A labelled run is a root, so its flow takes no budget permit.
     const described = labelled
       ? budgeted.pipe(
-          withSessionDescription(
-            runId,
-            config,
-            definition.agentEntry.description,
-            resume,
-          ),
+          withSessionDescription(runId, config, definition.description, resume),
         )
       : budgeted;
     return yield* Effect.uninterruptibleMask((restore) =>
