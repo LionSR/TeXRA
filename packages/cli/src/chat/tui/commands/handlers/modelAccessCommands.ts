@@ -4,7 +4,8 @@ import type { SettingsStores } from '@texra-ai/harness/plugins';
 
 import { type ApiKeyProviderId } from '@texra-ai/llm';
 import { loadCliDetailedAccountStatusLines } from '@cli/runtime/models/apiStatus';
-import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
+import { tuiUi } from '@cli/chat/tui/hosts/tuiUiHost';
+import { commitProviderKey } from '@texra/controllers/settingsView/providerKeyActions';
 import { type CliModelAccessSelection } from '@cli/runtime/models/modelAccessRoute';
 import { updateCliModelAccess } from '@cli/runtime/models/modelAccessSelection';
 
@@ -17,14 +18,14 @@ import {
 } from './slashContext';
 
 /**
- * Save a provider key through the shared key controller and answer the extra
- * notice a provider needs, if any. The controller owns the write, the
+ * Save a provider key through the shared key action and answer the extra
+ * notice a provider needs, if any. That action owns the write, the
  * "<provider> API key has been set" confirmation and the post-write refresh
  * on every host, so only the coding-plan tip is worded here.
  */
 export const applyCliProviderApiKey = Effect.fn('applyCliProviderApiKey')(
   function* (stores: SettingsStores, provider: ApiKeyProviderId, key: string) {
-    yield* commitCliProviderApiKey(stores, provider, key);
+    yield* commitProviderKey(tuiUi, stores, provider, key);
     const codingPlan = CODING_PLAN_BY_API_PROVIDER.get(provider);
     if (!codingPlan) return undefined;
     if (!codingPlan.exclusiveCredential) {

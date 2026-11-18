@@ -7,7 +7,8 @@ import {
   ensureError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
+import { tuiUi } from '@cli/chat/tui/hosts/tuiUiHost';
+import { commitProviderKey } from '@texra/controllers/settingsView/providerKeyActions';
 import { SettingsRequestFailed } from '@texra/controllers/settingsView/settingsHostBindings';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
@@ -192,7 +193,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             // The save and the refresh that follows it are one program.
             onSave={(provider, key) =>
               Effect.gen(function* () {
-                yield* commitCliProviderApiKey(roots, provider, key);
+                yield* commitProviderKey(tuiUi, roots, provider, key);
                 apiKeys.setData(
                   (current) => current && { ...current, [provider]: 'secret' },
                 );

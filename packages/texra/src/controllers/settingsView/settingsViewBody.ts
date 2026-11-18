@@ -58,7 +58,10 @@ import {
 } from '@texra/controllers/settingsView/modelSelection';
 import { settingsPluginCommands } from '@texra/controllers/settingsView/settingsPluginCommands';
 import { buildProfilePage } from '@texra/controllers/settingsView/profileMessage';
-import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
+import {
+  removeProviderKey,
+  setProviderKey,
+} from '@texra/controllers/settingsView/providerKeyActions';
 import { settingsToolCommands } from '@texra/controllers/settingsView/settingsToolCommands';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import { buildSettingsSnapshotMessage } from '@texra/controllers/settingsView/settingsSnapshot';
@@ -280,13 +283,9 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
           ),
       ).pipe(withPerKeyLane(skillListLanes, key));
 
-    const profileKeys = new SettingsProfileKeyController({
-      dialogs: bindings.dialogs,
-      stores: roots,
-    });
     // A failed key write is reported, and the profile and the Models page
     // show the key as it is.
-    const keyAction = (action: ReturnType<typeof profileKeys.setProviderKey>) =>
+    const keyAction = (action: ReturnType<typeof setProviderKey>) =>
       action.pipe(
         Effect.catchTag('ProviderKeyActionFailed', (error) =>
           Effect.andThen(
@@ -302,9 +301,9 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       webviewReady: () => changed('view'),
       ...agents.handlers,
       setProviderKey: (message) =>
-        keyAction(profileKeys.setProviderKey(message.provider)),
+        keyAction(setProviderKey(bindings.dialogs, roots, message.provider)),
       removeProviderKey: (message) =>
-        keyAction(profileKeys.removeProviderKey(message.provider)),
+        keyAction(removeProviderKey(bindings.dialogs, roots, message.provider)),
       openProviderKeyUrl: (message) =>
         getProviderKeyUrl(roots, message.provider).pipe(
           Effect.flatMap((url) =>
