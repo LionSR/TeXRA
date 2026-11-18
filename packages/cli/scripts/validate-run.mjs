@@ -3505,11 +3505,11 @@ prompt: |
       records.every((record) => record.contract === 3),
       'every NDJSON line should carry the version-3 contract stamp',
     );
-    // A progress record carries the session row: its run is the `run`
-    // aggregate key, `["run", <run id>]`.
+    // A progress record carries the session row: a run's rows ride on the
+    // run id itself, a plugin's own aggregate on `plugin:<key>`.
     const runIdOf = (record) => {
-      const [kind, id] = JSON.parse(record.payload.aggregateId);
-      return kind === 'run' ? id : undefined;
+      const id = record.payload.aggregateId;
+      return id.startsWith('plugin:') ? undefined : id;
     };
     // A run id is opaque: the script's children are the runs whose
     // `run.start` names the headless run as their parent, never names parsed
