@@ -11,19 +11,12 @@ import {
   sessionHandleOf,
   TestSession,
 } from '@test/support/testKernel';
-import {
-  EditorHost,
-  makeEditorHost,
-  type EditorCapabilities,
-} from '@texra/tools/editorHost';
+import { EditorHost, type EditorCapabilities } from '@texra/tools/editorHost';
 import { OpenPdfTool } from '@texra/tools/OpenPdfTool';
 import { generateRunId } from '@texra-ai/harness/schemas';
 
 /** The request shape the host's PDF opener receives, derived from the port. */
 type OpenPdfRequest = Parameters<NonNullable<EditorCapabilities['openPdf']>>[0];
-
-/** The registry the tool reads; each test attaches its viewer to it. */
-const editors = makeEditorHost();
 
 /** The process, over a fresh host per test and a session over its roots
  *  whose requests a person answers from the view. */
@@ -43,12 +36,10 @@ const perTest = Layer.provideMerge(
 layer(perTest, { buildPerTest: true, excludeTestServices: true })(
   'OpenPdfTool',
   (it) => {
-    /** Attach a PDF viewer the way a host does: to the editor registry, for
-     *  the calling test's scope. */
-    const installOpener = Effect.gen(function* () {
+    /** A PDF viewer, offered for every storage root. */
+    const installOpener = Effect.sync(() => {
       const openPdf = vi.fn<(request: OpenPdfRequest) => Effect.Effect<void>>();
       openPdf.mockReturnValue(Effect.void);
-      yield* editors.attach((yield* TestSession).roots.storage, { openPdf });
       return openPdf;
     });
 
@@ -63,7 +54,7 @@ layer(perTest, { buildPerTest: true, excludeTestServices: true })(
           const result = yield* OpenPdfTool.call({
             path: host.path('run/paper.pdf'),
           }).pipe(
-            Effect.provideService(EditorHost, editors),
+            Effect.provideService(EditorHost, { at: () => ({ openPdf }) }),
             Effect.provide(
               nativeToolTestLayer({
                 workingDirectory: host.path('workspace'),

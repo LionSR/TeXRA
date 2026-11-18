@@ -92,7 +92,7 @@ const WRAPPED_EDIT_APPROVAL_ENV = Object.freeze({
   HARNESS_EDIT_APPROVAL: '1',
   HARNESS_EDIT_APPROVAL_WRAPPED_CONTEXT: '1',
 });
-const PHYSICIST_AGENTS = [
+const VISIBLE_AGENTS = [
   'research',
   'review',
   'latexFixer',
@@ -212,8 +212,8 @@ const SCENARIOS = [
     // decision shows over main right away (the asking stream is a
     // descendant of the selection) and the selection stays on main: no
     // child focus, so no "Esc parent".
-    bootExpect: 'Run command?',
-    expect: ['Run command?', '$ npm run typecheck', 'y approve'],
+    bootExpect: 'Run a command',
+    expect: ['Run a command', '$ npm run typecheck', 'y approve'],
     unexpect: ['Esc parent'],
   },
   {
@@ -350,8 +350,15 @@ const SCENARIOS = [
     cols: 120,
     env: {
       HARNESS_ENTRIES: '2',
-      HARNESS_QUEUED_DELIVERIES:
-        '<subagent-result id="child-q" agent="reviewer" status="completed"><response>All good &lt;ok&gt;</response></subagent-result>',
+      HARNESS_QUEUED_DELIVERIES: JSON.stringify({
+        family: 'subagent',
+        runId: 'child-q',
+        attributes: [
+          { name: 'agent', value: 'reviewer' },
+          { name: 'status', value: 'completed' },
+        ],
+        response: 'All good <ok>',
+      }),
     },
     bootExpect: 'queued 1',
     keys: ['/status', '\r'],
@@ -368,8 +375,15 @@ const SCENARIOS = [
     cols: 140,
     env: {
       HARNESS_ENTRIES: '2',
-      HARNESS_QUEUED_DELIVERIES:
-        '<subagent-error id="child-q" agent="review" retryable="true"><message>rate limit</message></subagent-error>',
+      HARNESS_QUEUED_DELIVERIES: JSON.stringify({
+        family: 'subagent',
+        runId: 'child-q',
+        attributes: [
+          { name: 'agent', value: 'review' },
+          { name: 'retryable', value: 'true' },
+        ],
+        message: 'rate limit',
+      }),
     },
     bootExpect: 'queued 1',
     frame: 'viewport',
@@ -612,15 +626,11 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_ROOT_ENDED: '1',
-      HARNESS_VISIBLE_AGENTS: PHYSICIST_AGENTS,
+      HARNESS_VISIBLE_AGENTS: VISIBLE_AGENTS,
     },
     keys: ['/', `${ESC}/agent\r`],
     settleMs: ASYNC_FORM_SETTLE_MS,
-    expect: [
-      '/agent',
-      'Agents',
-      'Choose an agent, or a team it leads, for this chat.',
-    ],
+    expect: ['/agent', 'Agents', 'Choose an agent for this chat.'],
     unexpect: ['//agent', 'Harness received: //agent', '/agent · error'],
   },
   {
@@ -671,7 +681,7 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_ROOT_ENDED: '1',
-      HARNESS_VISIBLE_AGENTS: PHYSICIST_AGENTS,
+      HARNESS_VISIBLE_AGENTS: VISIBLE_AGENTS,
     },
     keys: ['/agent', '\r'],
     settleMs: ASYNC_FORM_SETTLE_MS,
@@ -682,8 +692,8 @@ const SCENARIOS = [
       'review',
       'latexFixer',
       'Current: chat (hidden from picker)',
-      'Choose an agent, or a team it leads, for this chat.',
-      '1-9/a-z/Enter select',
+      'Choose an agent for this chat.',
+      '1-5/Enter select',
       'Esc close',
     ],
     unexpect: [
@@ -706,7 +716,7 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_ROOT_ENDED: '1',
-      HARNESS_VISIBLE_AGENTS: PHYSICIST_AGENTS,
+      HARNESS_VISIBLE_AGENTS: VISIBLE_AGENTS,
     },
     keys: ['/agent', '\r'],
     settleMs: ASYNC_FORM_SETTLE_MS,
@@ -717,8 +727,8 @@ const SCENARIOS = [
       'review',
       'latexFixer',
       'Current: chat (hidden from picker)',
-      'Choose an agent, or a team it leads, for this chat.',
-      '1-9/a-z/Enter select',
+      'Choose an agent for this chat.',
+      '1-5/Enter select',
       'Esc close',
     ],
     unexpect: [
@@ -879,8 +889,7 @@ const SCENARIOS = [
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/config · Agents',
-      'Workspace agents',
-      'Default team',
+      'All agents',
       'Default chat agent',
       'Custom selection',
       '↑/↓ navigate',
@@ -969,7 +978,7 @@ const SCENARIOS = [
     bootExpect: ' Ctrl-C ',
     keys: ['a', '/approval', '\r', '4'],
     expect: ['Auto-approving commands: off'],
-    unexpect: ['AUTO: COMMANDS', 'Run command?'],
+    unexpect: ['AUTO: COMMANDS', 'Run a command'],
   },
   {
     name: 'approval-policy-status-bar',
@@ -1084,7 +1093,7 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_ROOT_ENDED: '1',
-      HARNESS_VISIBLE_AGENTS: PHYSICIST_AGENTS,
+      HARNESS_VISIBLE_AGENTS: VISIBLE_AGENTS,
     },
     keys: ['/agent', '\r'],
     frame: 'viewport',
@@ -1093,9 +1102,9 @@ const SCENARIOS = [
       '/agent',
       'Current: chat (hidden from picker)',
       'Agents',
-      '+9 more',
+      '+4 more',
       '↑/↓ navigate',
-      '1-9/a-z/Enter select',
+      '1-5/Enter select',
       'Esc close',
     ],
     unexpect: ['Platform not initialized', '/agent · error'],
@@ -1213,7 +1222,7 @@ const SCENARIOS = [
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/memory',
-      'Choose a memory to preview. Press Esc to close.',
+      'Choose a memory to preview.',
       '/memories/project.md',
       '/memories/ideas.md',
       '/memories/notes/plan.md',
@@ -1245,7 +1254,7 @@ const SCENARIOS = [
       'Esc close',
     ],
     unexpect: [
-      'Choose a memory to preview. Press Esc to close.',
+      'Choose a memory to preview.',
       'No memory files found.',
       '/memory · error',
     ],
@@ -1291,7 +1300,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
     bootExpect: ' Ctrl-C ',
     frame: 'viewport',
-    expect: ['Apply edit to draft.tex?', 'y approve', 'n reject', 'approval'],
+    expect: ['Edit draft.tex', 'y approve', 'n reject', 'approval'],
     unexpect: ['Alt-p tasks', 'Option-p tasks', '/model models'],
   },
   {
@@ -1302,7 +1311,7 @@ const SCENARIOS = [
     bootExpect: ' Ctrl-C ',
     frame: 'viewport',
     expect: [
-      'Apply edit to acknowledgments.tex?',
+      'Edit acknowledgments.tex',
       '-Old acknowledgment.',
       '+Revised acknowledgment.',
       'previous rows',
@@ -1337,7 +1346,7 @@ const SCENARIOS = [
     keys: ['n', 'needs direct proof'],
     frame: 'viewport',
     expect: [
-      'Apply edit to draft.tex?',
+      'Edit draft.tex',
       '› needs direct proof',
       'Enter send note',
       'Esc back',
@@ -1428,7 +1437,7 @@ const SCENARIOS = [
     bootExpect: ' Ctrl-C ',
     frame: 'viewport',
     expect: [
-      'Apply edit to draft.tex?',
+      'Edit draft.tex',
       'y approve',
       'n reject',
       'Esc reject',
@@ -1448,7 +1457,7 @@ const SCENARIOS = [
     // session/transcript hints win over `/model models`, so `/status details`
     // is the stable marker.
     expect: ['/ commands'],
-    unexpect: ['Apply edit to draft.tex?', '1 approval'],
+    unexpect: ['Edit draft.tex', '1 approval'],
   },
   {
     name: 'bash-approval',
@@ -1458,9 +1467,9 @@ const SCENARIOS = [
     resizes: [{ cols: 120 }],
     expect: [
       'agent: chat · model: harness-model',
-      'Run command?',
+      'Run a command',
       '$ npm run typecheck',
-      'Directory:',
+      'Working directory:',
       'y approve',
       'a approve commands for this task',
     ],
@@ -1473,11 +1482,11 @@ const SCENARIOS = [
       },
       {
         before: 'agent: chat · model: harness-model',
-        after: 'Run command?',
+        after: 'Run a command',
       },
     ],
     maxBlankLinesBetween: [
-      { from: 'entry-4 chat history line', to: 'Run command?', max: 3 },
+      { from: 'entry-4 chat history line', to: 'Run a command', max: 3 },
     ],
   },
   {
@@ -1488,9 +1497,9 @@ const SCENARIOS = [
     bootExpect: ' Ctrl-C ',
     frame: 'viewport',
     expect: [
-      'Run command?',
+      'Run a command',
       '$ npm run typecheck',
-      'Directory:',
+      'Working directory:',
       'y approve',
       'n reject',
       'Esc reject',
@@ -1506,7 +1515,7 @@ const SCENARIOS = [
     keys: ['n', 'use portable python3 instead'],
     frame: 'viewport',
     expect: [
-      'Run command?',
+      'Run a command',
       '› use portable python3 instead',
       'Enter send note',
       'Esc back',
@@ -1525,8 +1534,8 @@ const SCENARIOS = [
     },
     bootExpect: ' Ctrl-C ',
     expect: [
-      'Run command?',
-      'Directory:',
+      'Run a command',
+      'Working directory:',
       "$ python3 << 'EOF'",
       'more rows',
       'scroll command',
@@ -1545,8 +1554,8 @@ const SCENARIOS = [
     bootExpect: ' Ctrl-C ',
     frame: 'viewport',
     expect: [
-      'Run command?',
-      'Directory:',
+      'Run a command',
+      'Working directory:',
       "$ python3 << 'EOF'",
       'more rows',
       'scroll command',
@@ -1566,8 +1575,8 @@ const SCENARIOS = [
     keys: [DOWN, DOWN, DOWN],
     frame: 'viewport',
     expect: [
-      'Run command?',
-      'Directory:',
+      'Run a command',
+      'Working directory:',
       'x2 = 1 + 2 * y * y',
       'previous',
       'more rows',
@@ -1588,8 +1597,8 @@ const SCENARIOS = [
     keys: [PAGE_DOWN],
     frame: 'viewport',
     expect: [
-      'Run command?',
-      'Directory:',
+      'Run a command',
+      'Working directory:',
       'for y in range(1, 100):',
       'previous',
       'more rows',
@@ -1607,7 +1616,7 @@ const SCENARIOS = [
     },
     bootExpect: ' Ctrl-C ',
     frame: 'viewport',
-    expect: ['Run command?', 'Directory:', 'rows hidden', 'y approve'],
+    expect: ['Run a command', 'Working directory:', 'rows hidden', 'y approve'],
     unexpect: ['Option-p tasks'],
   },
   {
@@ -1617,7 +1626,7 @@ const SCENARIOS = [
     keys: ['a'],
     frame: 'viewport',
     expect: ['AUTO: COMMANDS', '/ commands'],
-    unexpect: ['AUTO-APPROVE', 'Run command?', '1 approval'],
+    unexpect: ['AUTO-APPROVE', 'Run a command', '1 approval'],
   },
   {
     name: 'bash-approval-approve-twice',
@@ -1631,7 +1640,7 @@ const SCENARIOS = [
     settleMs: 6000,
     frame: 'viewport',
     expect: ['SECOND-BASH-APPROVED', '/ commands'],
-    unexpect: ['Run command?', '1 approval'],
+    unexpect: ['Run a command', '1 approval'],
   },
   {
     name: 'bash-approval-session-status',
@@ -1644,7 +1653,7 @@ const SCENARIOS = [
       'auto-approvals: commands',
       'AUTO: COMMANDS',
     ],
-    unexpect: ['Run command?', '1 approval'],
+    unexpect: ['Run a command', '1 approval'],
   },
   {
     // The task's total, its agents included, live on the status line, and
@@ -1662,17 +1671,16 @@ const SCENARIOS = [
     ],
   },
   {
-    name: 'team-status-empty-subagents-hidden',
+    name: 'status-empty-subagents-hidden',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_BASH_APPROVAL: '1',
-      HARNESS_TEAM_NAME: 'Physicist',
     },
     bootExpect: ' Ctrl-C ',
     keys: ['a', '/status', '\r'],
     frame: 'viewport',
-    expect: ['team: Physicist', 'auto-approvals: commands', 'AUTO: COMMANDS'],
-    unexpect: ['Run command?', '1 approval', 's subagents'],
+    expect: ['auto-approvals: commands', 'AUTO: COMMANDS'],
+    unexpect: ['Run a command', '1 approval', 's subagents'],
   },
   {
     // A script's request leads with what approving allows and the first
@@ -1714,7 +1722,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_AGENT_PROPOSAL: '1' },
     bootExpect: ' Ctrl-C ',
     expect: [
-      'Spawn review?',
+      'Delegate a task to review',
       FULL_WIDTH_AGENT_PROPOSAL_BORDER_80,
       'Kind: agent',
       'Review the mathematical proof',
@@ -1739,7 +1747,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_AGENT_PROPOSAL: '1' },
     bootExpect: ' Ctrl-C ',
     expect: [
-      'Spawn review?',
+      'Delegate a task to review',
       'y approve',
       'n reject',
       'a all agent work',
@@ -1759,7 +1767,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_AGENT_PROPOSAL: '1' },
     bootExpect: 'y approve',
     expect: [
-      'Spawn review?',
+      'Delegate a task to review',
       'y approve',
       'n reject & note',
       'a approve agent work for this task',
@@ -1795,7 +1803,7 @@ const SCENARIOS = [
     ],
     frame: 'viewport',
     expect: [
-      'Spawn review?',
+      'Delegate a task to review',
       // The proposal card names the model by its catalogue label, not its
       // persisted id; the label itself belongs to llm-zoo, so pin the prefix.
       'Model: DeepSeek',
@@ -1824,7 +1832,7 @@ const SCENARIOS = [
     keys: ['a', '/status', '\r'],
     frame: 'viewport',
     expect: ['auto-approvals: edits, commands, agent work'],
-    unexpect: ['Spawn review?'],
+    unexpect: ['Delegate a task to review'],
   },
   {
     name: 'compact-user-question',
@@ -1861,7 +1869,7 @@ const SCENARIOS = [
     },
     bootExpect: ' Ctrl-C ',
     expect: [
-      'Approve plan?',
+      'Approve this plan',
       'Coordinate a short math proof through CLI chat.',
       'Split the finite and symbolic cases',
       'Runs until done; only Bash is automatic',
@@ -1897,7 +1905,7 @@ const SCENARIOS = [
     // wrap-boundary continuation into view before asserting on it.
     keys: [PAGE_DOWN],
     expect: [
-      'Approve plan?',
+      'Approve this plan',
       'Runs until done; only Bash is automatic',
       'observations. Do not edit any files',
       'scroll plan',
@@ -1936,7 +1944,7 @@ const SCENARIOS = [
     },
     bootExpect: ' Ctrl-C ',
     expect: [
-      'Approve plan?',
+      'Approve this plan',
       'Runs until done; only Bash is automatic',
       '4. Delegate a brief independent verification to the `review` subagent to',
       "check the derivation's correctness.",
@@ -1957,7 +1965,7 @@ const SCENARIOS = [
     },
     bootExpect: ' Ctrl-C ',
     expect: [
-      'Approve plan?',
+      'Approve this plan',
       'Coordinate a short math proof through CLI chat.',
       'Split the finite and symbolic cases',
       'Runs until done; only Bash is automatic',
@@ -1979,7 +1987,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: ['PLAN-GOAL', 'status: Running', '/ commands'],
     // The goal's grants are its own run's: the chat's stay as they were.
-    unexpect: ['Approve plan?', '1 approval', 'auto-approvals'],
+    unexpect: ['Approve this plan', '1 approval', 'auto-approvals'],
   },
   {
     // `a`, the card grammar's broad approval, runs the plan as a goal that
@@ -1993,7 +2001,7 @@ const SCENARIOS = [
     keys: ['a', '/status', '\r'],
     frame: 'viewport',
     expect: ['PLAN-GOAL-ALL'],
-    unexpect: ['Approve plan?', '1 approval', 'auto-approvals'],
+    unexpect: ['Approve this plan', '1 approval', 'auto-approvals'],
   },
   {
     name: 'plan-approval-ctrl-r-ignored',
@@ -2004,7 +2012,7 @@ const SCENARIOS = [
     bootExpect: ' Ctrl-C ',
     keys: [DC2],
     frame: 'viewport',
-    expect: ['Approve plan?', 'r run as goal', '1 approval'],
+    expect: ['Approve this plan', 'r run as goal', '1 approval'],
     unexpect: ['PLAN-GOAL', '/model models'],
   },
   {
@@ -2017,10 +2025,10 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_RETRY_APPROVAL: '1' },
     bootExpect: ' Ctrl-C ',
     expect: [
-      'Retry the failed call?',
+      'The request to harness-model failed',
       'HTTP 429 Too Many Requests',
       'retry',
-      'stop run',
+      'stop task',
       '1 approval',
     ],
     unexpect: [
@@ -2040,11 +2048,11 @@ const SCENARIOS = [
     },
     bootExpect: ' Ctrl-C ',
     expect: [
-      'Retry the failed call?',
+      'The request to harness-model failed',
       'ChatGPT subscription usage limit reached. Resets in 2h.',
       'Press k to use your own API key for this retry.',
       'retry',
-      'stop run',
+      'stop task',
       'use your own API key',
       '1 approval',
     ],
@@ -2055,11 +2063,11 @@ const SCENARIOS = [
     frame: 'viewport',
     cols: 120,
     env: { HARNESS_ENTRIES: '4', HARNESS_RETRY_APPROVAL: '1' },
-    bootExpect: 'stop run',
+    bootExpect: 'stop task',
     keys: ['n'],
     expect: ['RETRY-REJECTED', '/ commands'],
     unexpect: [
-      'Retry the failed call?',
+      'The request to harness-model failed',
       'Feedback to send with rejection',
       'send note',
       '1 approval',
@@ -2079,7 +2087,7 @@ const SCENARIOS = [
     keys: ['k'],
     frame: 'viewport',
     expect: ['RETRY-PERSONAL-CREDENTIALS', '/ commands'],
-    unexpect: ['Retry the failed call?', '1 approval'],
+    unexpect: ['The request to harness-model failed', '1 approval'],
   },
   {
     name: 'edit-approval-reject',
@@ -2088,7 +2096,7 @@ const SCENARIOS = [
     keys: ['n', '\r'],
     frame: 'viewport',
     expect: ['/ commands'],
-    unexpect: ['Apply edit to draft.tex?', '1 approval'],
+    unexpect: ['Edit draft.tex', '1 approval'],
   },
   {
     name: 'session-tree-groups',
@@ -2331,7 +2339,7 @@ const SCENARIOS = [
     keys: ['\t', RIGHT, DOWN, DOWN, DOWN, '\r', '\t', UP, UP, UP, '\r'],
     expect: [
       'agent: chat · model: harness-model',
-      'Run command?',
+      'Run a command',
       '$ npm run typecheck',
       'y approve',
     ],
@@ -2730,12 +2738,12 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
       HARNESS_BASH_APPROVAL: '1',
     },
-    bootExpect: 'Run command?',
+    bootExpect: 'Run a command',
     keys: [{ input: ESC, delayMs: 700 }],
     frame: 'viewport',
     expect: ['3 agents', 'Tab agents', 'Ctrl-C stop'],
     unexpect: [
-      'Run command?',
+      'Run a command',
       'Harness focused interrupt requested',
       'Harness interrupt requested.',
     ],

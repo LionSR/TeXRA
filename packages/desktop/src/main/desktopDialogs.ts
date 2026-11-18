@@ -6,18 +6,13 @@ import { BrowserWindow, dialog, type MessageBoxOptions } from 'electron';
 import { Effect, Predicate, type Scope } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   HostFailed,
   type ConfirmQuestion,
   type NoticeLevel,
 } from '@texra/hosts/uiHosts';
 import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
-import {
-  INSTRUCTION_ACTION_BUTTON_LABELS,
-  READ_GUIDE_BUTTON_LABEL,
-  type InstructionAction,
-} from '@ui/copy/instructionActions';
 import type { DesktopSpawn } from './desktopWindows.js';
 
 /** The project as the title where the platform draws one, and as a line of
@@ -108,15 +103,14 @@ export const noticeIn =
       Effect.asVoid,
     );
 
+/** A step of the export's format dialog failed, in the cause's own words. */
+const exportFailed = (cause: unknown) =>
+  new TranscriptExportFailed({ message: toErrorMessage(cause), cause });
+
 export function createDesktopDialogs(
   window: BrowserWindow,
   /** The window's fibers, where a notice waits for its dismissal. */
   spawn: DesktopSpawn,
-  actions: {
-    /** Open the guide page a refusal names. */
-    openGuide(docsPage: string): void;
-    dispatchInstructionAction(action: InstructionAction): void;
-  },
 ) {
   /** A message box nobody answers or waits for, held by the window; one
    *  the window cannot show is logged at warn, and once the window's scope
@@ -150,61 +144,27 @@ export function createDesktopDialogs(
         choices: [{ label: question.action, value: true, default: true }],
         close: 'Cancel',
       }).pipe(Effect.map((confirmed) => confirmed ?? false)),
-    /**
-     * A failure is an 'error' dialog; a refusal that names a docs page
-     * (`docsPage`, e.g. a launch without an input file) adds a guide
-     * button so the desktop dialog keeps the link the extension's
-     * request-error callout renders. The URL path is host-originated, never
-     * network data.
-     */
-    showErrorDialog: (
+    /** A message with one button per label, closed by "Dismiss": the
+     *  label chosen, or `undefined` when closed. With no labels it is a
+     *  plain notice with the platform's own OK. */
+    ask: (
+      level: NoticeLevel,
       message: string,
-      docsPage: string | undefined,
-      project: string,
-    ): Effect.Effect<void, HostFailed> => {
-      if (!docsPage) return notify('error', message, project);
-      return choose(window, {
-        type: 'error',
-        message,
-        project,
-        choices: [{ label: READ_GUIDE_BUTTON_LABEL, value: docsPage }],
-        close: 'OK',
-      }).pipe(
-        Effect.map((page) => {
-          if (page) actions.openGuide(page);
-        }),
-      );
-    },
-    /**
-     * Instructions (e.g. a missing API key) are actionable guidance, not
-     * failures, so this stays an 'info' dialog, with each action token as a
-     * real button. A native dialog has no persistent "never remind again"
-     * control, so no notice is silenced here (`instructionSuppressible`).
-     */
-    showInstructionDialog: (
-      message: string,
-      choices: readonly InstructionAction[],
-      project: string,
-    ): Effect.Effect<void, HostFailed> =>
+      labels: readonly string[],
+      project?: string,
+    ): Effect.Effect<string | undefined, HostFailed> =>
       choose(window, {
-        type: 'info',
+        type: level,
         message,
         project,
-        choices: choices.map((action) => ({
-          label: INSTRUCTION_ACTION_BUTTON_LABELS[action],
-          value: action,
-        })),
-        close: 'Dismiss',
-      }).pipe(
-        Effect.map((action) => {
-          if (action) actions.dispatchInstructionAction(action);
-        }),
-      ),
+        choices: labels.map((label) => ({ label, value: label })),
+        ...(labels.length > 0 && { close: 'Dismiss' }),
+      }),
     /** The export's format dialog; a cancelled dialog answers `undefined`. */
     pickTranscriptExportFormat: (project: string) =>
       Effect.tryPromise({
         try: () => import('@texra/controllers/progressView/exportTranscript'),
-        catch: ensureError,
+        catch: exportFailed,
       }).pipe(
         Effect.flatMap(({ TRANSCRIPT_EXPORT_FORMAT_CHOICES }) =>
           choose(window, {
@@ -220,14 +180,7 @@ export function createDesktopDialogs(
               }),
             ),
             close: 'Cancel',
-          }),
-        ),
-        Effect.mapError(
-          (cause) =>
-            new TranscriptExportFailed({
-              message: toErrorMessage(cause),
-              cause,
-            }),
+          }).pipe(Effect.mapError(exportFailed)),
         ),
       ),
   };

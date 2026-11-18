@@ -345,7 +345,7 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
             By default it asks before it acts: edits arrive as diffs you accept
             or reject.
           </li>
-          <li>You choose the model and the team; progress stays in view.</li>
+          <li>You choose the model; progress stays in view.</li>
         </ul>
         <div class="desktop-empty-workspace-actions">
           ${renderLabeledActionButton({
@@ -686,6 +686,13 @@ const desktopRendererCommandActions: DesktopCommandActions = {
   },
   showTerminal: showTerminalView,
   showFiles: showFilesView,
+  switchProject: () =>
+    palette.showProjects(
+      railProjects().flatMap(({ display }) =>
+        display.key === shell.active ? [] : [display],
+      ),
+      selectProject,
+    ),
 };
 const shortcuts = createDesktopShortcutRegistry({
   document,
@@ -754,6 +761,10 @@ const routeMessage = createMessageRoutes({
         build: message.build,
       }),
     );
+  },
+  'desktop:pdfLoadFailed': (message) => {
+    for (const project of projectWorkbenches.values())
+      project.pdfPane.reportLoadFailure(message.pdfUrl, message.reason);
   },
   'desktop:showPrompt': (message) => promptOverlay.open(message),
   'desktop:terminal:data': (message) =>

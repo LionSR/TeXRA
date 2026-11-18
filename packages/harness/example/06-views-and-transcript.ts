@@ -3,8 +3,9 @@
  *
  * 1. Writes a `paper.tex` file in the workspace and subscribes to the run's
  *    transcript via `session.view.subscribe`.
- * 2. Runs an agent that calls the built-in `read_file` tool on `paper.tex` and
- *    answers from its contents.
+ * 2. Runs an agent whose script calls the built-in `read_file` tool on
+ *    `paper.tex` (the model is sent `script` alone), and answers from its
+ *    contents.
  * 3. Reads `SessionView` with `@texra-ai/harness/schemas` helpers
  *    (`sessionActivity`, `attentionOf`, `acceptsFollowUp`) and formats every
  *    `TranscriptRow` with `@texra-ai/harness/transcript` (`rowHeadline`,
@@ -31,8 +32,8 @@ const { workspace, platform, route } = await makeExampleWorkspace([
     toolCalls: [
       {
         id: 'call_read_1',
-        name: 'read_file',
-        input: { path: 'paper.tex' },
+        name: 'script',
+        input: { code: "return await tools.read_file({ path: 'paper.tex' });" },
       },
     ],
   },

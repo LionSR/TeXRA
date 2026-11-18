@@ -75,14 +75,9 @@ type ScriptError =
   | ScriptLimitExceeded
   | SandboxUnavailable;
 
-/** One call the guest issued, numbered in issue order from 0. */
-export interface ScriptOp {
-  readonly seq: number;
-  readonly name: string;
-  readonly input: unknown;
-  /** The title of the guest's latest `section()` call, if it made one. */
-  readonly section: string | null;
-}
+/** One call the guest issued, numbered in issue order from 0, as its step
+ *  report decodes it. */
+export type ScriptOp = (typeof StepReportSchema.Type)['ops'][number];
 
 /** How a call finishes: a JSON value, or an error the guest's `await` throws. */
 export type ScriptOpResult =
@@ -250,14 +245,21 @@ const make = Effect.gen(function* () {
           return Result.isSuccess(report)
             ? Queue.offer(reports, report.success)
             : Effect.fail(
-                new Error(
-                  `Code sandbox worker sent a malformed message: ${report.failure.message}`,
-                ),
+                new SandboxUnavailable({
+                  cause: new Error(
+                    `Code sandbox worker sent a malformed message: ${report.failure.message}`,
+                  ),
+                }),
               );
         })
         .pipe(
-          Effect.catch((cause) =>
-            Queue.fail(reports, new SandboxUnavailable({ cause })),
+          Effect.catch((error) =>
+            Queue.fail(
+              reports,
+              error._tag === 'SandboxUnavailable'
+                ? error
+                : new SandboxUnavailable({ cause: error }),
+            ),
           ),
           Effect.forkScoped,
         );

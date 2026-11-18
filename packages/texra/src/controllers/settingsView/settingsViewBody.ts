@@ -12,7 +12,7 @@
  * can do (an editor's extensions and settings) is a binding the host fills
  * or leaves out. The binding table is `settingsHostBindings.ts`.
  */
-import { Cause, Effect, PubSub, Stream } from 'effect';
+import { Cause, Effect, Stream, SubscriptionRef } from 'effect';
 import { apiKeyEntry } from '@texra-ai/llm';
 
 import {
@@ -48,6 +48,7 @@ import {
   settingsPresentation,
   type SettingsHostBindings,
   type SettingsInput,
+  type SettingsInputCounts,
   type SettingsPage,
 } from '@texra/controllers/settingsView/settingsHostBindings';
 import { settingsMemoryCommands } from '@texra/controllers/settingsView/settingsMemoryCommands';
@@ -96,7 +97,7 @@ interface SettingsViewBodyPorts {
 export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
   function* (ports: SettingsViewBodyPorts) {
     const { bindings, roots } = ports;
-    const inputs = yield* PubSub.unbounded<SettingsInput>();
+    const inputs = yield* SubscriptionRef.make<SettingsInputCounts>({});
 
     const present = settingsPresentation(bindings, inputs);
     const { notice, alert, report, reported, changed } = present;
@@ -370,14 +371,23 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
         }),
       );
 
+    /** Each change, after the follower subscribed, to `view` or to an input
+     *  of `follows`. The counts the subscription starts from are the
+     *  baseline, so a change made before it subscribed is not one. */
+    const moved = (follows: readonly SettingsInput[]) =>
+      SubscriptionRef.changes(inputs).pipe(
+        Stream.map((counts) =>
+          ['view' as const, ...follows].map((key) => counts[key] ?? 0).join(),
+        ),
+        Stream.changes,
+        Stream.drop(1),
+      );
+
     /** Rebuild and send `page` each time an input it follows changes, one
      *  build at a time; inputs that arrive during a build are answered by one
      *  more build. */
     const followPage = (page: SettingsPage<ProcessServices | StorageFs>) =>
-      Stream.fromPubSub(inputs).pipe(
-        Stream.filter(
-          (input) => input === 'view' || page.follows.includes(input),
-        ),
+      moved(page.follows).pipe(
         Stream.buffer({ capacity: 1, strategy: 'sliding' }),
         Stream.runForEach(() => finish(bindings.post(page.build))),
       );
@@ -423,13 +433,10 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
           toolsPage.followToolAvailability,
           // The re-probe's network checks (Zotero and others) never hold the
           // view's ready answer, so the host's tab reveal is not kept waiting.
-          Stream.fromPubSub(inputs).pipe(
-            Stream.filter((input) => input === 'view'),
-            Stream.runForEach(() => finish(toolsPage.refresh)),
-          ),
-          // A run that binds a GitHub subscription, the setup agent's
-          // `apply_team`, and a provider key written by any writer (the setup
-          // agent's `unset_api_key`, another window). OAuth tokens and other
+          moved([]).pipe(Stream.runForEach(() => finish(toolsPage.refresh))),
+          // A run that binds a GitHub subscription, an agent catalog reload,
+          // and a provider key written by any writer (the setup agent's
+          // `unset_api_key`, another window). OAuth tokens and other
           // secrets are not provider keys, so they change nothing here.
           followSignal('githubSubscriptionsChanged', () => changed('github')),
           followSignal('workspaceAgentsChanged', () => changed('agents')),

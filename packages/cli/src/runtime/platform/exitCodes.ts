@@ -1,5 +1,5 @@
 /** Canonical CLI process exit codes. */
-export const CliExitCode = {
+export const CliExitCode = Object.freeze({
   Success: 0,
   AgentError: 1,
   Usage: 2,
@@ -8,7 +8,7 @@ export const CliExitCode = {
   Hangup: 129,
   Interrupted: 130,
   Terminated: 143,
-} as const;
+} as const);
 
 export type CliExitCode = (typeof CliExitCode)[keyof typeof CliExitCode];
 

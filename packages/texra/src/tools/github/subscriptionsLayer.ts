@@ -24,6 +24,7 @@ import {
 import type { RunId } from '@texra-ai/harness/schemas';
 
 import type { GitHubCheckAnnotationLevel } from './checkAnnotationLevels';
+import type { WebhookEvent } from './formatUtils';
 import type { GitHubServices } from './githubClient';
 import { pollIssue, type IssueState } from './issuePoller';
 import { pollTarget, type PollEvent } from './poller';
@@ -132,7 +133,7 @@ export const gitHubSubscriptionsLayer: Layer.Layer<
       path: string,
       runId: RunId,
       inbox: RunInbox,
-      text: string,
+      event: WebhookEvent,
     ): Effect.Effect<void> => {
       // The identifiers ride in the message: the sink renders `data` with
       // sorted keys under a length bound, so beside an error's stack they
@@ -142,7 +143,7 @@ export const gitHubSubscriptionsLayer: Layer.Layer<
           `Failed to deliver subscription follow-up for ${path} (run ${runId})`,
         ).pipe(Effect.annotateLogs({ data: { err } }), inLogChannel);
       return inbox
-        .send({ text, from: { kind: 'notification', source: 'github' } })
+        .send({ ...event, from: { kind: 'notification', source: 'github' } })
         .pipe(
           Effect.asVoid,
           Effect.catch(reportFailure),
@@ -165,13 +166,13 @@ export const gitHubSubscriptionsLayer: Layer.Layer<
             Effect.forEach(
               events,
               (event) => {
-                const text =
-                  typeof event === 'string'
-                    ? event
-                    : event(binding.minAnnotationLevel);
-                return text === undefined
+                const shown =
+                  typeof event === 'function'
+                    ? event(binding.minAnnotationLevel)
+                    : event;
+                return shown === undefined
                   ? Effect.void
-                  : deliver(path, runId, binding.inbox, text);
+                  : deliver(path, runId, binding.inbox, shown);
               },
               { discard: true },
             ),
@@ -297,10 +298,8 @@ export const gitHubSubscriptionsLayer: Layer.Layer<
           (other) => other.target._tag === target._tag,
         ).length;
         if (active >= cap) {
-          return yield* Effect.fail(
-            new ToolError(
-              `Too many active ${TARGET_LABEL[target._tag]} subscriptions (max ${cap}). Unsubscribe from one before adding another.`,
-            ),
+          return yield* new ToolError(
+            `Too many active ${TARGET_LABEL[target._tag]} subscriptions (max ${cap}). Unsubscribe from one before adding another.`,
           );
         }
       }

@@ -23,7 +23,6 @@ const QUEUED_MESSAGE_STATUS_LENGTH = 160;
 interface CliSessionStatusInput {
   readonly agent: string;
   readonly model: string;
-  readonly teamName?: string;
   readonly modelAccess: UsageRoute | undefined;
   readonly approvalBypasses?: Partial<BypassState>;
   /** The session view's status label for the reported stream; undefined before a run. */
@@ -56,10 +55,11 @@ interface CliSessionCostStatus {
 /**
  * The spend of the task `run` belongs to, read off the session view: its root's
  * `treeUsage`, the root's own calls (`usage`), and each agent the root
- * started that spent anything, with that agent's `treeUsage`.
+ * started that spent anything, with that agent's `treeUsage`. `/status` and
+ * the status bar both read it, whichever run they describe.
  */
 export function taskCostStatus(
-  view: SessionView,
+  view: Pick<SessionView, 'runs'>,
   run: RunView | undefined,
 ): CliSessionCostStatus | undefined {
   if (run === undefined) return undefined;
@@ -118,7 +118,6 @@ function activeApprovalBypassLabels(
 export function formatCliSessionStatus(input: CliSessionStatusInput): string {
   const bypassLabels = activeApprovalBypassLabels(input.approvalBypasses);
   return [
-    ...(input.teamName ? [`team: ${input.teamName}`] : []),
     `agent: ${input.agent}`,
     `model: ${getModelLabel(input.model)}`,
     `model access: ${usageRouteBadge(input.modelAccess)?.label ?? OWN_API_KEYS.inline}`,

@@ -28,6 +28,7 @@ import {
   hasExtension,
   withPerKeyLane,
 } from '@texra-ai/harness/host';
+import { readNormalizedFile } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { outputFilesProduced } from '@texra/controllers/session/outputFilesProduced';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
@@ -108,8 +109,7 @@ export function makeInlineCriticism(): InlineCriticism {
 
     const fs = yield* FileSystem.FileSystem;
     // An unreadable output file loses its squiggles, not the whole refresh.
-    const text = yield* fs.readFileString(absolutePath).pipe(
-      Effect.map((text: string) => text.replaceAll('\r\n', '\n')),
+    const text = yield* readNormalizedFile(fs, absolutePath).pipe(
       Effect.catch((error) =>
         Effect.logError(
           `Failed to read ${absolutePath}: ${error.message}`,

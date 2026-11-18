@@ -51,7 +51,6 @@ import { assembleTurn, turnAssembly } from './assembleTurn.js';
 import {
   authorized,
   bearerHeaders,
-  openaiAbortMatch,
   openaiClient,
   prepareResponsesTurn,
   responseParameters,
@@ -310,22 +309,18 @@ export const openaiResponsesModel = Effect.fn('llm.responses.model')(function* (
     },
     cancel: Effect.fnUntraced(function* (operation, learned) {
       const reply = yield* authorized(bearer, (token) =>
-        ownedAbortSafeRequest(
-          async (signal) => {
-            const response = await client.responses
-              .cancel(operation.providerResponseId, {
-                signal,
-                headers: bearerHeaders(token),
-              })
-              .asResponse();
-            return {
-              requestId: response.headers.get('x-request-id') ?? undefined,
-              body: await response.text(),
-            };
-          },
-          openaiFailure,
-          { isAbortMatch: openaiAbortMatch },
-        ),
+        ownedAbortSafeRequest(async (signal) => {
+          const response = await client.responses
+            .cancel(operation.providerResponseId, {
+              signal,
+              headers: bearerHeaders(token),
+            })
+            .asResponse();
+          return {
+            requestId: response.headers.get('x-request-id') ?? undefined,
+            body: await response.text(),
+          };
+        }, openaiFailure),
       );
       yield* Ref.update(learned, (known) => ({
         ...known,

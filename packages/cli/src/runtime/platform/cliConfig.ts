@@ -42,6 +42,12 @@ import {
  */
 export const CLI_CHEAP_START_MODEL = 'deepseek/deepseek-v4-pro';
 
+/** A setting the terminal client was asked to change was not changed. */
+export class CliSettingUpdateFailed extends Schema.TaggedError<CliSettingUpdateFailed>()(
+  'CliSettingUpdateFailed',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
+
 /** The `texra.*` command sections: `texra.chat` and `texra.run`. */
 const COMMAND_SECTIONS = {
   chat: CLI_CHAT_SETTING,
@@ -109,12 +115,15 @@ export interface CliStartupConfig {
    * next run reads.
    */
   readonly config: ConfigProvider;
-  /** The routine config problems found at open, for the CLI and `texra doctor`. */
+  /** The routine config problems only the CLI reads (its command sections,
+   *  its MCP server file), for the CLI and `texra doctor`. */
   readonly warnings: readonly string[];
   /**
-   * The problems saying the project file could not be used at all (malformed
-   * JSON, not an object, not writable): actionable degradation, not routine
-   * noise, so it is printed even under `--quiet`.
+   * What the shared open found: a config file that could not be used at all
+   * (malformed JSON, not an object), and entries that cannot apply (an
+   * unknown project key, a rejected value, a key a project cannot set).
+   * Actionable degradation, not routine noise, so it is printed even under
+   * `--quiet`.
    */
   readonly degradations: readonly string[];
 }
@@ -151,9 +160,9 @@ export const setWorkspaceCliChatAgent = Effect.fn(
 )(function* (stores: SettingsStores, agent: string | undefined) {
   const trimmed = agent?.trim();
   if (agent !== undefined && !trimmed) {
-    return yield* Effect.fail(
-      new Error('The default chat agent must not be empty.'),
-    );
+    return yield* new CliSettingUpdateFailed({
+      message: 'The default chat agent must not be empty.',
+    });
   }
   // The workspace file's own section, not the merged read: the write below
   // lands in the workspace target, so seeding from `workspace over user` would
@@ -175,61 +184,36 @@ export const setWorkspaceCliChatAgent = Effect.fn(
   );
 });
 
-/**
- * The members each command section's row accepts, by its key. `texra run`
- * takes its agent as a required argument, so its section sets only the model.
- */
-const COMMAND_SECTION_KEYS: ReadonlyMap<string, ReadonlySet<string>> = new Map(
-  [CLI_CHAT_SETTING, CLI_RUN_SETTING].map((row) => [
-    row.key,
-    new Set(Object.keys(Schema.required(row.schema).fields)),
-  ]),
+/** The `texra.chat` / `texra.run` rows, each with the members it accepts.
+ *  `texra run` takes its agent as a required argument, so its section sets
+ *  only the model. */
+const COMMAND_SECTION_MEMBERS = [CLI_CHAT_SETTING, CLI_RUN_SETTING].map(
+  (row) =>
+    [row, new Set(Object.keys(Schema.required(row.schema).fields))] as const,
 );
 
 /**
- * Names the config-file entries that cannot apply. An unknown project key (a
- * typo such as `texra.modle` or `texra.chat.modle`) is a setting that silently
- * never applies, and so is a known key whose value its catalog row rejects:
- * a typed read gets its row's default, and a fail-closed reader its own
- * reading (telemetry reads as off). Unknown keys are reported for the
- * project file only: the user file is shared by all three hosts and holds rows
- * the CLI does not honor, so its unrecognized keys are not the CLI's to report.
- * Invalid values are reported for both files, since the CLI reads both.
+ * Names the members of the project file's command sections that no command
+ * reads (a typo such as `texra.chat.modle`): the section's row ignores them,
+ * so they silently never apply. The file's unknown keys and rejected values
+ * are named by the shared open (`openTexraConfigStores`).
  */
-function configFileWarnings(
-  files: readonly {
-    readonly store: JsonStore;
-    readonly isProjectFile: boolean;
-  }[],
-): readonly string[] {
-  const warnings: string[] = [];
-  for (const { store, isProjectFile } of files) {
-    const { filePath } = store;
-    for (const key of store.keys()) {
-      const entry = TEXRA_SETTINGS.catalog.byStoredKey(key);
-      if (entry?.slot !== 'config') {
-        if (isProjectFile) {
-          warnings.push(`Ignoring unknown ${filePath} key "${key}".`);
-        }
-        continue;
-      }
-      const value = store.get(key);
-      if (Result.isFailure(Schema.decodeUnknownResult(entry.schema)(value))) {
-        warnings.push(
-          `Ignoring invalid ${filePath} value ${JSON.stringify(value)} for "${key}".`,
-        );
-        continue;
-      }
-      const sectionKeys = COMMAND_SECTION_KEYS.get(entry.key);
-      if (!isProjectFile || !sectionKeys) continue;
-      if (!Predicate.isObject(value)) continue;
-      for (const nested of Object.keys(value)) {
-        if (sectionKeys.has(nested)) continue;
-        warnings.push(`Ignoring unknown ${filePath} key "${key}.${nested}".`);
-      }
-    }
-  }
-  return warnings;
+function commandSectionWarnings(store: JsonStore): string[] {
+  return COMMAND_SECTION_MEMBERS.flatMap(([row, members]) => {
+    const key = `${TEXRA_SETTINGS.catalog.namespace}.${row.key}`;
+    const value = store.get(key);
+    if (
+      !Predicate.isObject(value) ||
+      Result.isFailure(Schema.decodeUnknownResult(row.schema)(value))
+    )
+      return [];
+    return Object.keys(value)
+      .filter((member) => !members.has(member))
+      .map(
+        (member) =>
+          `Ignoring unknown ${store.filePath} key "${key}.${member}".`,
+      );
+  });
 }
 
 /**
@@ -257,8 +241,8 @@ export function loadCliStartupConfig(
       const mcpConfig = yield* readMcpConfig(mcpConfigPathOf(storageRoot));
       // A value its catalog row rejects stays in its tier, as in the other
       // hosts: a read of it gets the row's default (and a fail-closed row its
-      // own reading), never a looser tier's value. `warnings` below names it
-      // once at startup.
+      // own reading), never a looser tier's value. The open names it once at
+      // startup.
       return {
         config: new JsonConfigProvider({
           workspace: stores.workspace,
@@ -267,11 +251,7 @@ export function loadCliStartupConfig(
           catalog: TEXRA_SETTINGS.catalog,
         }),
         warnings: [
-          ...configFileWarnings([
-            { store: stores.workspace, isProjectFile: true },
-            { store: stores.global, isProjectFile: false },
-            { store: stores.local, isProjectFile: false },
-          ]),
+          ...commandSectionWarnings(stores.workspace),
           ...(mcpConfig?.warnings ?? []),
         ],
         degradations,

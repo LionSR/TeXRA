@@ -19,10 +19,10 @@ import {
   type RunId,
   type UserQuestionAnswers,
   type UserQuestionRequest,
-  ensureError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import {
+  ApprovalPromptFailed,
   type CliApprovalContent,
   type CliApprovalPromptHooks,
   askApproval,
@@ -35,6 +35,7 @@ import {
   formatBashApprovalSummary,
   formatRetryRequestMessage,
   formatUserQuestionPrompt,
+  toolEditAsk,
 } from '../approval/approvalSummaries';
 import {
   parseUserQuestionAnswer,
@@ -47,6 +48,7 @@ import {
 } from '@texra/shared/session/surfaceDecision';
 import { CliInvocation } from '../platform/cliContext';
 import { formatLineChanges } from '@ui/copy/format';
+import { REQUEST_ASK } from '@ui/copy/requestCards';
 import { writeTextStderr } from '../platform/logSinks';
 import type { Session, SessionHost } from '@texra-ai/harness';
 import type { HostInteractions } from '@texra-ai/harness/host';
@@ -77,7 +79,7 @@ const askHeadlessUserQuestion = Effect.fn(
               ...payload,
               questions: [question],
             }),
-          catch: ensureError,
+          catch: ApprovalPromptFailed.from,
         });
         const answer = yield* whilePrompting(
           hooks,
@@ -90,7 +92,7 @@ const askHeadlessUserQuestion = Effect.fn(
         );
         const parsed = yield* Effect.try({
           try: () => parseUserQuestionAnswer(answer, question),
-          catch: ensureError,
+          catch: ApprovalPromptFailed.from,
         });
         if (parsed != null) answers[question.question] = parsed;
       }),
@@ -133,7 +135,7 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
       if (read.kind === 'preview')
         return buildToolEditApprovalContent({ ...data, ...read.content });
       return {
-        summary: `Tool edit requested by ${data.sourceTool}: ${data.relativePath} (${formatLineChanges(data.addedLines, data.removedLines)})\nPreview unavailable: ${read.reason}`,
+        summary: `${toolEditAsk({ path: data.relativePath, sourceTool: data.sourceTool })}: ${formatLineChanges(data.addedLines, data.removedLines)}\nPreview unavailable: ${read.reason}`,
       } satisfies CliApprovalContent;
     },
   );
@@ -147,7 +149,8 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
     runId: RunId,
     payload: RequestPayload,
   ): Effect.fn.Return<RequestDecision, Error, CliInvocation> {
-    const ask = (content: CliApprovalContent) => askApproval(content, hooks);
+    const ask = (content: CliApprovalContent) =>
+      askApproval(payload.kind, content, hooks);
     switch (payload.kind) {
       case 'bash':
         return yield* ask({ summary: formatBashApprovalSummary(payload.data) });
@@ -155,7 +158,7 @@ export const createHeadlessCliHostInteractions = Effect.fnUntraced(function* (
         return yield* ask(yield* toolEditContent(runId, payload));
       case 'planApproval':
         return yield* ask({
-          summary: `Plan approval requested:\n${JSON.stringify(payload.data.plan, null, 2)}`,
+          summary: `${REQUEST_ASK.plan}:\n${JSON.stringify(payload.data.plan, null, 2)}`,
         });
       case 'proposal':
         return yield* ask(buildAgentProposalApprovalContent(payload.data));

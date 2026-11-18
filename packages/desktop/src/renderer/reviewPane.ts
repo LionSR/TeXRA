@@ -1,6 +1,5 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
-import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import './TexraDiffView';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { styleMap } from 'lit/directives/style-map.js';
@@ -8,8 +7,9 @@ import { formatResultCount } from '@texra-ai/harness/schemas';
 
 import { DESKTOP_THEME_KIND, type Theme } from '@texra/shared/ipc';
 import { buildLineChangeStats } from '@ui/progress/formatters/htmlBuilders';
-import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { renderEmptyMessage, renderEmptyState } from '@ui/wa/emptyState';
+import { renderFilterField } from '@ui/wa/filterField';
+import { matchesQuery } from '@ui/wa/listInteraction';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import { buildEditorTree, type EditorTreeNode } from './editorTree';
@@ -55,11 +55,8 @@ export function createReviewPane(): ReviewPaneController {
   function visibleEntries(
     shown: Map<string, DesktopShowDiffMessage>,
   ): readonly DesktopShowDiffMessage[] {
-    const query = filter.trim().toLocaleLowerCase();
-    const values = [...shown.values()];
-    if (!query) return values;
-    return values.filter((entry) =>
-      `${entry.displayPath} ${entry.title}`.toLocaleLowerCase().includes(query),
+    return [...shown.values()].filter((entry) =>
+      matchesQuery(`${entry.displayPath} ${entry.title}`, filter),
     );
   }
 
@@ -170,34 +167,15 @@ export function createReviewPane(): ReviewPaneController {
             }
           </main>
           <aside class="desktop-review-sidebar" aria-label="Changed files">
-            <wa-input
-              class="desktop-review-filter"
-              size="s"
-              placeholder="Filter files…"
-              aria-label="Filter changed files"
-              .value=${filter}
-              @input=${(event: Event) => {
-                if (!(event.currentTarget instanceof WaInput)) return;
-                filter = event.currentTarget.value ?? '';
+            ${renderFilterField({
+              label: 'Filter changed files',
+              placeholder: 'Filter files…',
+              value: filter,
+              onInput: (value) => {
+                filter = value;
                 rerender();
-              }}
-            >
-              ${waIcon('magnifying-glass', { slot: 'start' })}
-              ${
-                filter
-                  ? renderIconActionButton({
-                      icon: 'xmark',
-                      label: 'Clear file filter',
-                      className: 'icon-button is-size-s',
-                      slot: 'end',
-                      onClick: () => {
-                        filter = '';
-                        rerender();
-                      },
-                    })
-                  : nothing
-              }
-            </wa-input>
+              },
+            })}
             <div class="desktop-review-tree">
               ${
                 visible.length > 0

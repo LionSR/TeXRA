@@ -54,7 +54,7 @@ There is no TeXRA sign-in. Every agent and program ships
 bundled and runs on the credential you configured above.
 :::
 
-Once a credential is in place, the setup assistant takes it from here: one conversation that checks your environment, applies a team for your field, and runs your first polish, ending at a diff. [First run](./first-run.md) is the manual mirror of that conversation.
+Once a credential is in place, the setup assistant takes it from here: one conversation that checks your environment and runs your first polish, ending at a diff. [First run](./first-run.md) is the manual mirror of that conversation.
 
 ::: tip CLI credentials
 The terminal uses the same paths: provider env vars for your own keys,

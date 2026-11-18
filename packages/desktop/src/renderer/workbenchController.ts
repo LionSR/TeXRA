@@ -69,6 +69,8 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
   const element = document.createElement('div');
   element.className = 'shell-dock';
   element.dataset.session = deps.session;
+  // Shift+F10 opens a tab's menu wherever focus sits in the tab: on
+  // dockview's tab itself or on a control inside ours.
   element.addEventListener('keydown', (event) => {
     if (event.defaultPrevented || event.key !== 'F10' || !event.shiftKey)
       return;

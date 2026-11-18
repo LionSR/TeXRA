@@ -1,17 +1,18 @@
 // Third-party imports
-import { Cause, Effect } from 'effect';
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - utils
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
-import { ensureError } from '@texra-ai/harness/schemas';
 import {
+  reportingFailure,
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import type { HostFailed } from '@texra/hosts/uiHosts';
+import { hostFailed } from '@texra/controllers/session/hostCallFailure';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
@@ -83,13 +84,13 @@ const getActiveLatexEditor = Effect.fn('activeFileGuards.getActiveLatexEditor')(
       // A rejected save is the same answer as a declined one: saveFailed.
       const saved = yield* Effect.tryPromise({
         try: () => editor.document.save(),
-        catch: ensureError,
+        catch: (cause) => hostFailed('document.save', cause),
       }).pipe(
         Effect.catch((error) =>
-          Effect.logWarning('Saving the active document failed', error).pipe(
-            withLogChannel(CHANNEL),
-            Effect.as(false),
-          ),
+          Effect.logWarning(
+            'Saving the active document failed',
+            error.cause,
+          ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
         ),
       );
       if (!saved) {
@@ -153,12 +154,6 @@ export function runGuardedLatexCommand<R = never>(
     // not one of them: an extension-host reload or deactivation while a guarded LaTeX
     // command runs is a cancellation, and re-raising it keeps a spurious
     // "Failed to ..." toast off the screen (#12841).
-    Effect.catchCause((cause) =>
-      Cause.hasInterruptsOnly(cause)
-        ? Effect.interrupt
-        : showLoggedErrorMessage(errorMessage, Cause.squash(cause)).pipe(
-            Effect.asVoid,
-          ),
-    ),
+    reportingFailure((error) => showLoggedErrorMessage(errorMessage, error)),
   );
 }

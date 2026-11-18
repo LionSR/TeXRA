@@ -1,5 +1,5 @@
 import { basename, dirname } from 'node:path';
-import { Effect, FiberHandle, FileSystem, Schema, Stream } from 'effect';
+import { Effect, FiberHandle, FileSystem, Stream } from 'effect';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 
@@ -10,21 +10,15 @@ import {
 } from '../shared/desktopLogMessages.js';
 import type { SaveDialogOptions, SaveDialogReturnValue } from 'electron';
 import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
-import { parsedRoute, type DesktopCommandRoutes } from './desktopIpcTypes.js';
+import {
+  DesktopCommandFailed,
+  parsedRoute,
+  type DesktopCommandRoutes,
+} from './desktopIpcTypes.js';
 
 /** How long the log file must stay quiet before a follow pushes it: a burst
  *  of entries is one repaint. */
 const LOG_FOLLOW_QUIET_MS = 300;
-
-/** The clipboard write, the save dialog, or the file write behind a log
- *  action failed. */
-class DesktopLogActionFailed extends Schema.TaggedError<DesktopLogActionFailed>()(
-  'DesktopLogActionFailed',
-  {
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
 
 interface DesktopLogIpcOptions {
   readLog(): DesktopLogSnapshot;
@@ -76,7 +70,7 @@ export function createDesktopLogIpc(
     Effect.try({
       try: () => options.copyLog(text),
       catch: (cause) =>
-        new DesktopLogActionFailed({
+        new DesktopCommandFailed({
           message: `The log could not be copied: ${toErrorMessage(cause)}`,
           cause,
         }),
@@ -92,7 +86,7 @@ export function createDesktopLogIpc(
           filters: [{ name: 'Text Logs', extensions: ['txt', 'log'] }],
         }),
       catch: (cause) =>
-        new DesktopLogActionFailed({
+        new DesktopCommandFailed({
           message: `The save dialog could not be shown: ${toErrorMessage(cause)}`,
           cause,
         }),
@@ -105,8 +99,8 @@ export function createDesktopLogIpc(
             ).pipe(
               Effect.mapError(
                 (error) =>
-                  new DesktopLogActionFailed({
-                    message: `The log could not be written to ${filePath}: ${toErrorMessage(error.reason.cause ?? error)}`,
+                  new DesktopCommandFailed({
+                    message: `The log could not be written to ${filePath}: ${toErrorMessage(error)}`,
                     cause: error,
                   }),
               ),

@@ -19,15 +19,11 @@ import {
 } from '@texra-ai/harness/host';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
-import { launchTeamId } from '@texra/agent/teams/teamLaunch';
 import { cliLaunchOutput } from '@cli/runtime/headless/documentTaskOutput';
 import { runStatus, runStatusLabel } from '@ui/copy/runStatus';
 import type { RunStatusKey } from '@texra/shared/session/runStatusKey';
 
-import {
-  formatCliHistoryAgentLabel,
-  formatCliHistorySubject,
-} from './historyLabels';
+import { formatCliHistorySubject } from './historyLabels';
 import {
   createConversationPreview,
   createConversationTranscript,
@@ -68,7 +64,6 @@ export interface CliHistoryEntry {
   /** A document task's run, or a chat. */
   readonly kind?: 'task' | 'chat';
   readonly description?: string;
-  readonly teamId?: string;
 }
 
 interface CliHistoryDetails {
@@ -300,7 +295,7 @@ export const deleteCliHistory = Effect.fn('deleteCliHistory')(function* (
       })),
     } satisfies CliHistoryDeleteResult;
   const [refused] = failed;
-  if (refused) return yield* Effect.fail(refused.error);
+  if (refused) return yield* refused.error;
   let status: 'deleted' | 'active' | 'not-found' = 'not-found';
   if (deleted.length > 0) status = 'deleted';
   else if (active.length > 0) status = 'active';
@@ -320,7 +315,7 @@ export function formatCliHistoryText(
       [
         entry.id,
         entry.timestamp,
-        formatCliHistoryAgentLabel(entry),
+        entry.agent,
         historyStanding(entry),
         formatCliHistorySubject(entry, '-'),
       ].join('\t'),
@@ -361,7 +356,6 @@ export function formatCliHistoryDetailsText(
 ): string {
   const { config, run } = details;
   const model = details.currentModel ?? config?.model;
-  const team = config ? launchTeamId(config) : undefined;
   const cliOutputFile = config
     ? cliLaunchOutput(config).outputFile?.trim()
     : undefined;
@@ -377,7 +371,6 @@ export function formatCliHistoryDetailsText(
     `Model: ${model ?? 'unknown'}`,
   ];
 
-  if (team) lines.push(`Team: ${team}`);
   if (
     details.currentModel &&
     config?.model &&
@@ -435,7 +428,6 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
     inputBasename,
     kind: runKindOf(config),
     description: entry.description,
-    teamId: config ? launchTeamId(config) : undefined,
   };
 }
 

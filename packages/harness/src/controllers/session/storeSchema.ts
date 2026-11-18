@@ -19,6 +19,7 @@ import {
   retryBusy,
   run,
   STORE_FILE_SUFFIXES,
+  StoreCheckFailed,
   type Sql,
 } from './storeAside';
 
@@ -141,9 +142,9 @@ const verifyPragma = Effect.fnUntraced(function* (
 ) {
   const value = yield* pragmaValue(sql, pragma);
   if (value !== expected)
-    return yield* Effect.fail(
-      new Error(`PRAGMA ${pragma} is ${String(value)}, not ${expected}`),
-    );
+    return yield* new StoreCheckFailed({
+      message: `PRAGMA ${pragma} is ${String(value)}, not ${expected}`,
+    });
 });
 
 /** Give an empty file its `auto_vacuum` setting, which is fixed when the
@@ -161,13 +162,12 @@ const checkStamps = Effect.fnUntraced(function* (sql: Sql, path: string) {
   const stored = Number(yield* pragmaValue(sql, 'user_version'));
   if (stored === SCHEMA_VERSION) return true;
   if (stored === 0) return false;
-  return yield* Effect.fail(
-    new Error(
+  return yield* new StoreCheckFailed({
+    message:
       stored > SCHEMA_VERSION
         ? `Session store ${path} has schema ${stored}, newer than this build's ${SCHEMA_VERSION}: a newer build opens it.`
         : `Session store ${path} was written by an earlier build (schema ${stored}; this build writes ${SCHEMA_VERSION}) and this build keeps no compatibility with it; move it away to create a fresh store there.`,
-    ),
-  );
+  });
 });
 
 /** The filename SQLite opens as a store held in memory, not in a file: it

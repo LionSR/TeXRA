@@ -15,7 +15,7 @@ import {
   type Notices,
 } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { ensureError } from '@texra-ai/harness/schemas';
+import { hostFailed } from '@texra/controllers/session/hostCallFailure';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { type HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
@@ -36,7 +36,6 @@ import {
   createDesktopBrowserViews,
   type DesktopBrowserViews,
 } from './desktopBrowserViews.js';
-import { createDesktopFileSelection } from './desktopFileSelection.js';
 import { createDesktopHostRequests } from './desktopHostRequests.js';
 import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { DesktopToolEditApprovalHost } from './desktopToolEditApproval.js';
@@ -110,12 +109,15 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
     const terminalCwd = (root: string | undefined): Effect.Effect<string> =>
       root !== undefined
         ? Effect.succeed(root)
-        : Effect.try({ try: homedir, catch: ensureError }).pipe(
+        : Effect.try({
+            try: homedir,
+            catch: (cause) => hostFailed('homedir', cause),
+          }).pipe(
             Effect.catch((error) =>
               Effect.logWarning(
                 'No home directory could be determined; the terminal opens in the app directory.',
               ).pipe(
-                Effect.annotateLogs({ data: error }),
+                Effect.annotateLogs({ data: error.cause }),
                 withLogChannel('desktop'),
                 Effect.as(process.cwd()),
               ),
@@ -205,10 +207,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         yield* terminalCwd(project.root),
       );
       const hosts = host.forProject(project);
-      const files = createDesktopFileSelection({
-        workspaceRoot: project.root,
-        showOpenFileDialog: host.openFileDialog,
-      });
       yield* Effect.forkScoped(workspace.followFilesWritten, {
         startImmediately: true,
       });
@@ -274,7 +272,8 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         host: () =>
           createDesktopHostRequests({
             host: hosts.run,
-            files,
+            workspaceRoot: project.root,
+            openFiles: host.openFileDialog,
             workspaceFile: workspace.file,
             postToRenderer: host.post,
             settings: options.settings,

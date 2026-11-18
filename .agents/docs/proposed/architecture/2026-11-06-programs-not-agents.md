@@ -8,7 +8,9 @@ status: proposed
 基线：`main` 的 `d173e42`（2026-11-14）。路径相对仓库根。度量用 `wc -l`
 和 `grep`，"现状的度量"一节给出可复核的数字。本文是设计的当前状态，不是
 讨论的记录；负责人的裁决集中在"决定记录"，2026-11-14 这次改写改了什么、
-无上下文审稿后又改了什么，列在"修订记录"。
+无上下文审稿后又改了什么，列在"修订记录"。基线之后落地的两处：第 1、2
+期的程序（#14968），和从第 5 期提前的 team 删除（2026-11-17，见"分期"和
+"修订记录"）；"现状的度量"里 team 的那几行是基线时的数字。
 
 正文里的"今天"和各处度量说的是基线 `d173e42`。此后第 1、2、6 期已随
 #14968 落地（2026-11-17 对照 `c78e9f9` 的源码核对过，逐项见"分期"）；第
@@ -1013,7 +1015,7 @@ newer-built-in 提示存在的唯一理由是 built-in 太大、改得太勤，�
 | -------------------------------------------------------------------------------------------------------- | ---------------------- | ----------------------------------- |
 | 35 个 bundled agent 文件、lean4 和 multi-agent 的随包目录、TeXRA 自己的 skill                            | 3524 + 1292 + 593      | 十个程序文件、各插件的 prompt 段    |
 | harness：agent 索引、catalog follower、workspace 选择、persona schema、`AgentBlock`                      | 约 2800                | skills 子系统                       |
-| team：预设、启动、CLI、标签页、`apply_team`                                                              | 1647                   | 无                                  |
+| team：预设、启动、CLI、标签页、`apply_team`（已删，2026-11-17）                                          | 1647                   | 无                                  |
 | agent 设置页（前端和后端）                                                                               | 1353                   | Skills 标签页；Plugins 页多一列程序 |
 | documents：`task:` 块、Nunjucks、`files:`/`outputs:`、选项表、`rounds`、`document_task`、recipe 源码生成 | 约 1000 of 2271        | 文档工具本身和 `revise`             |
 | CLI：`texra agents`（`team` 已计入上面）                                                                 | 271                    | `texra run`、`texra skills`         |
@@ -1223,15 +1225,16 @@ history 的行。
    果的读法没有删（`Program.result` 仍由
    `packages/harness/src/agent/runtime/childDelivery.ts` 读），那次对比没
    有记录；步骤工具对模型写的程序开放，等第 1 期剩下的那一项。
-3. **`lean4` 插件的两个程序**。它的 agent 和 skill 先不删（team 还指着
-   它们），留到第 5 期。
+3. **`lean4` 插件的两个程序**。它的 agent 和 skill 留到第 5 期：team 已
+   先删，不再有名单指着它们，留着只因为 agent 目录整体在那一期删。
 4. **安装式插件带程序**，即"用户自己的程序"一节。要在第 5 期之前，否
    则删掉 custom agent 时用户自己的东西没处放。
 5. **删 agent 文件和补偿层，聊天的存法变更**。`run.chat` 去掉 persona 和
    agent 名（第二次存法变更），`agent()` 和 `StartRequest` 改签名；
-   agents 目录（含 lean4 的）、agent 索引和 schema、team、workspace 选
-   择、TeXRA 自己的 skill、customize、`agents` 和 `team` 两个 CLI 命令、
-   `latex-extract` 插件、launch form 的 agent 列表；聊天
+   agents 目录（含 lean4 的）、agent 索引和 schema、workspace 选
+   择（team 删后剩 `all` 和 `custom` 两种）、`AgentConfig` 上已无人写的
+   `delegationAgentScope`、TeXRA 自己的 skill、customize、`agents` 这个
+   CLI 命令、`latex-extract` 插件、launch form 的 agent 列表；聊天
    的 system 文本改由 app 的基础文本和插件的段拼出，根聊天能调的改为
    "开着的"、声明的改为一张短表，MCP 改为配了就能调；测试套件改写或
    删；文档、迁移说明和 `texra-action`。只有入口 agent 的 launch form 到
@@ -1244,6 +1247,17 @@ history 的行。
    之后要补的三件（glm 和 fan-out journey、靠搜索找工具的整套聊天
    journey、回退名单里的真实模型）还没做。
 7. **（可选）工具改 CLI**。先从 `arxiv` 试。
+
+**team 已从第 5 期提前删除（2026-11-17）。** 它不依赖第 4 期：custom
+team 只是一张名单，删掉之后没有东西需要新家。删掉的是五个预设和
+starter、Teams 分区、`apply_team`、`setup` 里问学科的那一步、launch
+form 和 `/agent` 里的 team 行、`texra team`、workspace 选择的 `inherit`
+和 `team` 两种 kind、默认 team 的全局键和 `AgentDirectoriesPort.teamMembers`。
+留给第 5 期的：`all` 和 `custom` 两种 workspace 选择、hidden custom
+agents、agent 设置页，以及 harness 上 `AgentConfig.delegationAgentScope`
+这个字段（app 里已经没有写它的地方；它是 `run.config` 的一部分，随第二
+次存法变更一起删，不为它单独升一次行版本）。过渡期的代价：一个没有手动
+勾选过的 workspace，picker 里是全部 agent。
 
 ## 负责人问题
 
@@ -1305,7 +1319,17 @@ history 的行。
   team）；**不同意删安装式插件的 skills、commands 和 agents**。
 - `latex-extract`："extract 那个可以去掉了"。
 
+负责人 2026-11-17：
+
+- "我们这个 team 设计在新的 general skills、more codemode 和 more
+  plugins 下比较过时了，也许应该 remove。"team 据此从第 5 期提前，单独
+  删除（"分期"末段）。
+
 ## 修订记录
+
+**2026-11-17，team 先删。** 第 5 期里 team 的部分单独落地，其余不动；
+"分期"第 3、5 条和"删除清单"随之改。存法没有变：`run.config` 的行版本
+不升，`delegationAgentScope` 留在 harness 上等第 5 期。
 
 **2026-11-14，按小内核和程序插件重写。** 相对 11-06 版：
 

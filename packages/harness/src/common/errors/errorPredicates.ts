@@ -23,10 +23,18 @@ export function findInCauseChain<T>(
   return undefined;
 }
 
-/** Check if an error represents a "no space left on device" condition. */
+/** SQLite's primary result code for a full disk (`SQLITE_FULL`). */
+const SQLITE_FULL = 13;
+
+/** Check if an error represents a "no space left on device" condition: an
+ *  `ENOSPC` errno, or SQLite reporting `SQLITE_FULL` (`node:sqlite` puts the
+ *  extended result code on `errcode`; the low byte is the primary one). */
 export function isDiskFullError(err: unknown): boolean {
   return causeChain(err).some(
     (current) =>
-      Predicate.hasProperty(current, 'code') && current.code === 'ENOSPC',
+      (Predicate.hasProperty(current, 'code') && current.code === 'ENOSPC') ||
+      (Predicate.hasProperty(current, 'errcode') &&
+        Predicate.isNumber(current.errcode) &&
+        (current.errcode & 0xff) === SQLITE_FULL),
   );
 }

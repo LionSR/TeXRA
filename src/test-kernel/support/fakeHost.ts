@@ -68,14 +68,10 @@ function seedRoot(
   }
 }
 
-const fakeAgentDirectories = (
-  root: string,
-  { teamMembers }: TestApp,
-): AgentDirectoriesPort => ({
+const fakeAgentDirectories = (root: string): AgentDirectoriesPort => ({
   custom: () => Effect.succeed(path.join(root, 'workspace/.texra/agents')),
   customConfigured: () => Effect.succeed(false),
   builtIn: () => Effect.succeed(path.join(root, 'workspace/resources/agents')),
-  ...(teamMembers ? { teamMembers } : {}),
 });
 
 /** A host's process ports over `root`, with `options.files` seeded into it. */
@@ -87,7 +83,7 @@ function createFakePlatform(
   seedRoot(root, options.files ?? {});
   return {
     shutdownScope: Scope.makeUnsafe(),
-    agentDirectories: fakeAgentDirectories(root, options.app ?? HARNESS_APP),
+    agentDirectories: fakeAgentDirectories(root),
     ...overrides,
   };
 }

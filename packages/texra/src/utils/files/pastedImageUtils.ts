@@ -6,7 +6,7 @@ import { Clock, Effect, FileSystem, Option, Schema } from 'effect';
 
 // Local imports
 import { StorageFs, withLogChannel } from '@texra-ai/harness/plugins';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { PASTED_DIR, isPastedImage } from '@texra/shared/utils/pastedImageName';
 
 // Local imports - filesystem
@@ -120,10 +120,12 @@ export const savePastedImageBuffer = Effect.fn(
   const storageFs = yield* StorageFs;
   const relativePath = yield* Effect.try({
     try: () => path.join(PASTED_DIR, pastedImageFileName(fileName)),
-    catch: ensureError,
+    catch: saveFailed,
   });
-  yield* storageFs.makeDirectory(PASTED_DIR, { recursive: true });
-  yield* storageFs.writeFile(relativePath, data);
-  yield* sweepStaleFiles(storageFs, PASTED_DIR).pipe(withLogChannel(CHANNEL));
-  return yield* storageFs.resolve(relativePath);
-}, Effect.mapError(saveFailed));
+  return yield* Effect.gen(function* () {
+    yield* storageFs.makeDirectory(PASTED_DIR, { recursive: true });
+    yield* storageFs.writeFile(relativePath, data);
+    yield* sweepStaleFiles(storageFs, PASTED_DIR).pipe(withLogChannel(CHANNEL));
+    return yield* storageFs.resolve(relativePath);
+  }).pipe(Effect.mapError(saveFailed));
+});

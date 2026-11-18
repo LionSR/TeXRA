@@ -79,23 +79,6 @@ export const findExistingRunStoragePathUnder = Effect.fn(
     : undefined;
 });
 
-/** Create a run's directory under `storageRoot`, runs directory included. */
-export const ensureRunDirUnder = Effect.fn('runStorage.ensureRunDir')(
-  function* (storageRoot: string, id: RunId) {
-    const fs = yield* FileSystem.FileSystem;
-    yield* fs.makeDirectory(runDirUnder(storageRoot, id), { recursive: true });
-  },
-);
-
-/** An absolute path inside a run's directory under `storageRoot`. */
-export function runStorageAbsolutePathUnder(
-  storageRoot: string,
-  id: RunId,
-  workspaceRelative: string,
-): string {
-  return path.join(storageRoot, resolveRunStoragePath(id, workspaceRelative));
-}
-
 /**
  * Recover run identity from an absolute path inside the runs directory under
  * `storageRoot`.

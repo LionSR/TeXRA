@@ -5,14 +5,14 @@ import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports
-import { shownRun, type Surface } from '@texra/shared/session/surface';
+import {
+  runExpanded,
+  shownRun,
+  type Surface,
+} from '@texra/shared/session/surface';
 import { unseenRuns } from '@texra/shared/session/unseenRuns';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
-import {
-  RUN_SECTION_LABELS,
-  RUN_SECTION_ORDER,
-  runStatus,
-} from '@ui/copy/runStatus';
+import { runListSections, runStatus } from '@ui/copy/runStatus';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { overlineDeclarations } from '@ui/styles/commonViewStyles';
 
@@ -24,12 +24,12 @@ import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import './WorktreeChip';
 import { renderEmptyState } from '@ui/wa/emptyState';
+import { matchesQuery } from '@ui/wa/listInteraction';
 import { layoutStyles } from '../styles/logStyles';
 import { runTabsContainerStyles } from './RunTabsContainer.styles';
 import { getComposedPathElement } from './composedPath';
 import { RunTab } from './RunTab';
 import {
-  needsUser,
   type SessionView,
   type RunView,
   type RunId,
@@ -116,21 +116,20 @@ export class RunTabs extends LitElement {
     return this.view?.runs.get(id);
   }
 
-  private matchesSearch(run: RunView, needle: string): boolean {
-    if (needle === '') return true;
+  /** A run is listed when it or any run under it matches the filter. */
+  private matchesSearch(run: RunView, query: string): boolean {
     return (
-      run.label.toLowerCase().includes(needle) ||
-      (run.description?.toLowerCase().includes(needle) ?? false) ||
+      matchesQuery(`${run.label} ${run.description ?? ''}`, query) ||
       run.childIds.some((id) => {
         const child = this.runOfEvent(id);
-        return child !== undefined && this.matchesSearch(child, needle);
+        return child !== undefined && this.matchesSearch(child, query);
       })
     );
   }
 
   private isExpanded(run: RunView): boolean {
-    if (this.view !== null && needsUser(run, this.view.runs)) return true;
-    return this.surface?.runs.get(run.id)?.expanded === true;
+    if (this.view === null) return false;
+    return runExpanded(this.surface ?? { runs: new Map() }, this.view, run);
   }
 
   /** The tree under a row, at any depth. The rail (`topLevelOnly`) shows
@@ -189,26 +188,25 @@ export class RunTabs extends LitElement {
     const surface = this.surface;
     const selected = surface ? shownRun(surface) : null;
     this.unseen = view && surface ? unseenRuns(surface, view) : new Set();
-    const needle = (surface?.search ?? '').trim().toLowerCase();
+    const query = surface?.search ?? '';
     const top = (view?.order ?? [])
       .map((id) => this.runOfEvent(id))
       .filter((run): run is RunView => run !== undefined)
       .filter((run) => !this.activeOnly || runStatus(run).section !== 'recent')
-      .filter((run) => this.matchesSearch(run, needle));
+      .filter((run) => this.matchesSearch(run, query));
 
     let body: TemplateResult;
     if (!this.sections) {
       body = this.renderRows(top, selected);
     } else {
-      body = html`${RUN_SECTION_ORDER.map((group) => {
-        const rows = top.filter((run) => runStatus(run).section === group);
-        if (rows.length === 0) return nothing;
-        return html`<div class="group-heading group-${group}">
-            <span>${RUN_SECTION_LABELS[group]}</span>
-            <span class="group-count">${rows.length}</span>
-          </div>
-          ${this.renderRows(rows, selected)}`;
-      })}`;
+      body = html`${runListSections(top).map(
+        ({ section, label, runs }) =>
+          html`<div class="group-heading group-${section}">
+              <span>${label}</span>
+              <span class="group-count">${runs.length}</span>
+            </div>
+            ${this.renderRows(runs, selected)}`,
+      )}`;
     }
 
     return html`

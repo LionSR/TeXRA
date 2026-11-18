@@ -4,7 +4,7 @@
  */
 import { Context, Effect, FileSystem, Layer, Schema, Stream } from 'effect';
 import { AgentSourceSchema } from '@shared/schemas';
-import type { StateReadFailed, StateStore } from '@shared/config/settings';
+import type { StateStore } from '@shared/config/settings';
 
 import type { GlobalStorageFs } from './rootedFs';
 
@@ -93,16 +93,6 @@ export interface AgentDirectoriesPort {
     FileSystem.FileSystem
   >;
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
-  /**
-   * The member names of the workspace's team `teamId`, read from its
-   * repository state; `undefined` for a team the workspace has none of. The
-   * app owns what a team is; the harness only stores a selection naming one
-   * by id. Absent, the app has no teams.
-   */
-  readonly teamMembers?: (
-    repoState: StateStore,
-    teamId: string,
-  ) => Effect.Effect<readonly string[] | undefined, StateReadFailed>;
   /**
    * The packaged resources root a host ships its bundled agents under,
    * the tool plugins' agent directories among them. Absent where none ships:

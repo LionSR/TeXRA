@@ -3,7 +3,7 @@ import { app, BrowserWindow, session } from 'electron';
 
 import { Sessions } from '@texra-ai/harness';
 import { GlobalValues, withProcessServices } from '@texra-ai/harness/host';
-import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import { reachBundledService } from '@texra/controllers/server/client';
@@ -74,10 +74,9 @@ function installContentSecurityPolicy(): void {
 export const startDesktop = (mainDir: string): void => {
   void Effect.runPromise(
     Effect.gen(function* () {
-      yield* Effect.tryPromise({
-        try: () => app.whenReady(),
-        catch: ensureError,
-      });
+      // A rejection is a defect: nothing recovers it, and the fatal report
+      // below prints the error Electron raised, not a wrapper around it.
+      yield* Effect.promise(() => app.whenReady());
       // Opened by the startup program below; a startup that fails before it
       // runs the shutdown handlers that read it.
       let projects: DesktopProjectRegistry | undefined;

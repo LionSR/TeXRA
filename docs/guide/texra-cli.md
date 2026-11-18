@@ -1,7 +1,7 @@
 <script setup>
 import CliChatHero from '../.vitepress/components/CliChatHero.vue';
 import CliRunHero from '../.vitepress/components/CliRunHero.vue';
-import CliTeamHero from '../.vitepress/components/CliTeamHero.vue';
+import CliSubagentsHero from '../.vitepress/components/CliSubagentsHero.vue';
 import ConfigPrecedenceStack from '../.vitepress/components/ConfigPrecedenceStack.vue';
 </script>
 
@@ -9,8 +9,8 @@ import ConfigPrecedenceStack from '../.vitepress/components/ConfigPrecedenceStac
 
 The TeXRA CLI brings TeXRA's theorist agents to the terminal: a local `texra`
 command for chatting with an agent, running long autonomous attempts at a
-problem, launching specialist teams, and running document workflows over your
-project. It is published to npm as [`@texra-ai/cli`](https://www.npmjs.com/package/@texra-ai/cli).
+problem, delegating to specialist agents, and running document workflows over
+your project. It is published to npm as [`@texra-ai/cli`](https://www.npmjs.com/package/@texra-ai/cli).
 
 ## Install
 
@@ -40,9 +40,8 @@ Run `texra` with no model connected and the chat still opens, with a
 **Connect a model** panel in front: sign in with a ChatGPT or Grok
 subscription, or add a provider API key. A message typed before you connect
 is sent as soon as you do. On your first run TeXRA then hands the chat to the
-setup assistant and opens `/agent`, where you pick an agent or a **team** (a
-preset such as Lean Project, led by its orchestrator); `/agent` stays
-available until your first message in any new chat.
+setup assistant and opens `/agent`, where you pick the agent for the chat;
+`/agent` stays available until your first message in any new chat.
 
 For a guided first run, use `texra setup`. It walks you through sign-in
 (a ChatGPT or Grok subscription, or an API key), checks your
@@ -154,8 +153,8 @@ Every `--output-format ndjson` line is one JSON object whose first key is
   `tool.start`, `run.description`, `run.removed`, and so on), and `payload` is
   the rest of the event under its own field names. A `usage` event is one
   priced model turn, so a run's spend is the sum of its `usage` events. A
-  run's events name it through `payload.aggregateId`, the JSON array
-  `["run", "<run id>"]`; a
+  run's events name it through `payload.aggregateId`, its run id (an
+  event a plugin owns carries the plugin's key behind `plugin:` instead); a
   parent edge is `payload.parent` on `run.start`; the terminal fact is
   `run.end` with its `outcome`. A run's turns are its `run.position`
   events (`turn.begin`, `turn.end`); a `stage.start`/`stage.end` pair is a
@@ -168,8 +167,8 @@ Every `--output-format ndjson` line is one JSON object whose first key is
   `agentName`, and `status` — where its loop stands: `running`,
   `waiting`, or `ready` before the child's first activation. A child that reached a terminal outcome leaves the
   list; its `run.end` record carries the outcome.
-- `kind: "agent-result"`, `kind: "result"`, and `kind: "team-result"`
-  carry the run result described above under `result`, with `runId`.
+- `kind: "agent-result"` and `kind: "result"` carry the run result described
+  above under `result`, with `runId`.
 - History records (`history-entry`, `history-detail`) carry the run's
   `outcome` (`completed`, `cancelled`, `failed`, or `null` when none was
   recorded) and, separately, whether `texra resume` continues it
@@ -280,41 +279,31 @@ Slash commands inside the session:
 - A **program** runs over `--input` files (required), accepts `--output` / `--output-dir`, and writes versioned document outputs. A name that is neither a program nor an agent prints the program names.
 - A bare agent name picks the highest-priority match (`custom`, then `builtIn`, then `plugin`); pass a qualified key such as `texra run builtIn:assistant` to target a specific source.
 
-## Teams
+## Lead agents
 
-The CLI can list, show, and run the same built-in teams as the
-extension's Teams settings tab: Lean Project, Physicist, Mathematician,
-Computer Scientist, and Software Engineer.
+A lead agent plans the work and delegates to specialists: `orchestrator` for
+research projects, `leanOrchestrator` for Lean 4 projects, and `engineer` for
+a project's code. Start one like any other agent:
 
 ```bash
-texra team list
-texra team show software-engineer
-texra team run software-engineer --instruction "Profile and speed up scripts/simulate.py"
+texra run engineer --instruction "Profile and speed up scripts/simulate.py" --print
+texra chat --agent engineer
 ```
 
-`run` starts the team's orchestrator, which plans the work and delegates to its
-specialists. For example, the Software Engineer team's `engineer` lead delegates
-to `coder`, `codeReviewer`, `testEngineer`, and `codeSimplifier`. Pass `--input`
-and `--context` files as with `texra run`;
-read-only context files are included in the instruction the team receives.
-When the work splits cleanly, the lead can fan it out as a scripted
+The lead delegates to the agents your workspace shows. For example, `engineer`
+hands work to `coder`, `codeReviewer`, `testEngineer`, and `codeSimplifier`.
+Pass `--input` and `--context` files as with any `texra run`. When the work
+splits cleanly, the lead can fan it out as a scripted
 [multi-agent workflow](./multi-agent-workflows.md).
 
-`run` executes the team in the terminal and exits after the final response.
-For an interactive session, open a chat and pick the team in `/agent`, which
-lists teams beside agents: the team's lead becomes the root agent and
-delegation stays within the team, as with `team run`. Picking a lead such as
-`engineer` or `orchestrator` as a plain agent does not limit its delegation to
-the team.
+<CliSubagentsHero />
 
-<CliTeamHero />
+<p class="hero-caption">A chat led by <code>engineer</code>. The lead delegates while child agents stream below it as numbered subagent rows. Each one is a focusable stream with its own scoped transcript.</p>
 
-<p class="hero-caption">A chat with the Software Engineer team picked in <code>/agent</code>. The lead delegates while child agents stream below it as numbered subagent rows. Each one is a focusable stream with its own scoped transcript.</p>
-
-In an interactive team session, focusing a subagent shows only its own
-transcript. Scroll back through its earlier output with normal terminal
-scrolling and search. Each subagent keeps its own scoped history that persists
-across sessions, and resuming a subagent continues it where it left off.
+Focusing a subagent shows only its own transcript. Scroll back through its
+earlier output with normal terminal scrolling and search. Each subagent keeps
+its own scoped history that persists across sessions, and resuming a subagent
+continues it where it left off.
 
 ## Skills
 
@@ -573,14 +562,10 @@ texra memory show memories/<file>
 ## Workspace defaults
 
 Run `texra config` in a terminal, or `/config` in a chat, to open the same
-configuration view. Its **Agents** section has three distinct choices:
+configuration view. Its **Agents** section has two distinct choices:
 
 - **Workspace agents** controls which agents are available in the current
-  folder. It may inherit the user default, show all agents, use a named team,
-  or store an exact custom selection.
-- **Default team** is a user-level choice used only by workspaces whose agents are
-  set to inherit. With no default team, an inherited workspace shows all
-  agents.
+  folder: every agent (**All agents**), or an exact **Custom selection**.
 - **Default chat agent** is the root agent selected for new chats in this
   workspace. It is stored under `texra.chat` in `.texra/config.json` and does
   not change which agents are visible.
@@ -588,19 +573,15 @@ configuration view. Its **Agents** section has three distinct choices:
 The corresponding non-interactive interface is `texra config agents`:
 
 ```bash
-texra config agents                               # inspect the effective agents
+texra config agents                               # inspect the workspace agents
 texra config agents --agents all                  # make every agent visible in this folder
-texra config agents --agents team:lean-project    # use a named team
-texra config agents --agents inherit              # follow the user default
 texra config agents --agents assistant,research,review
-texra config agents --default-team physicist      # or `none` to clear it
 texra config agents --default-agent builtIn:assistant   # or `none` for the automatic default
 ```
 
-`texra agents list` and `texra team list|show|run` keep narrower
-responsibilities: they inspect or run agents and teams, but do not alter the
-workspace agents. `texra init` writes initial command defaults and likewise
-does not change agent visibility.
+`texra agents list` keeps a narrower responsibility: it inspects agents, but
+does not alter the workspace agents. `texra init` writes initial command
+defaults and likewise does not change agent visibility.
 
 The CLI reads optional, non-secret defaults from `.texra/config.json` in the
 current workspace. Scaffold one with `texra init` (add `--yes` to accept

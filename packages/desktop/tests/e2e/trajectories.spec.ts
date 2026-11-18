@@ -301,7 +301,7 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
   ).toHaveCount(0);
 });
 
-/** The host opens compiled PDFs in the originating paper's workbench. */
+/** The host opens compiled PDFs in the originating project's workbench. */
 test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
   const { page } = launched;
   const pdfUrl = 'file:///tmp/texra-trajectory/output.pdf';
@@ -332,10 +332,20 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
     'true',
   );
   await expect(pdfTab).toContainText('output.pdf');
-  await expect(frame).toBeVisible();
   await expect(frame).toHaveAttribute('src', pdfUrl);
   await expect(frame).toHaveAttribute('sandbox', 'allow-same-origin');
   await expect(frame).toHaveAttribute('title', 'output.pdf');
+  // No file is at that URL: the pane says so in place of the viewer, and
+  // still offers the PDF to another application.
+  const pane = page.locator('.shell-workbench-pdf');
+  await expect(pane.getByRole('alert')).toContainText(
+    "Couldn't load output.pdf. The file is no longer on disk.",
+  );
+  await expect(frame).toBeHidden();
+  await expect(
+    pane.getByRole('button', { name: 'Open externally' }),
+  ).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath('pdf-missing.png') });
 
   const rejectedUrl = page.waitForEvent('console', (message) =>
     message.text().includes('Dropped a malformed desktop:showPdf push'),

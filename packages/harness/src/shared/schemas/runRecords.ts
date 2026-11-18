@@ -11,7 +11,7 @@ import { RunOutcomeSchema } from './run';
 import { RunIdentitySchema } from './runIdentity';
 import { TokenUsageStatsSchema } from './usage';
 
-export const NonAgentRunRecordSchema = Schema.Struct({
+const NonAgentRunRecordSchema = Schema.Struct({
   name: Schema.NonEmptyString,
   instruction: Schema.String,
   workingDirectory: Schema.optional(Schema.String),

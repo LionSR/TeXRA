@@ -120,7 +120,7 @@ function renderWelcomeHtml(): string {
   <ol>
     <li>Open a single-folder workspace containing your LaTeX project, or start with the sample project.</li>
     <li>${ONBOARDING_CARD_TITLE}: the TeXRA panel asks once the folder is open.</li>
-    <li>Run the setup assistant: it checks LaTeX, picks your agent team, and starts your first task.</li>
+    <li>Run the setup assistant: it checks LaTeX and starts your first task.</li>
   </ol>
   <p class="section-label">Open your project</p>
   <div class="actions">

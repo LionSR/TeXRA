@@ -3,7 +3,7 @@
 // Node imports
 
 // Third-party imports
-import { Effect, FiberHandle, Scope, SubscriptionRef } from 'effect';
+import { Effect, FiberHandle, SubscriptionRef } from 'effect';
 import { useInput, useWindowSize, type Key } from 'ink';
 import {
   Fragment,
@@ -119,7 +119,7 @@ interface AppProps {
 }
 
 export function App(props: AppProps): React.JSX.Element {
-  const { runtime } = useChatProcess();
+  const { chat } = useChatProcess();
   const requests = props.session;
   const view = useSignal(sessionView());
   const pending = useSignal(currentApproval);
@@ -193,7 +193,7 @@ export function App(props: AppProps): React.JSX.Element {
     activeRun?.transcript.rows.some(isScriptCall) ?? false;
   // Kill, skip and retry; a refusal (a finished call) reads into the transcript.
   const request = (req: RuntimeCommand): void => {
-    runtime.runFork(
+    chat.fork(
       Effect.catch(requests.request(req), (error) =>
         Effect.sync(() => appendLocalRequestRefusal(error)),
       ),
@@ -310,7 +310,7 @@ export function App(props: AppProps): React.JSX.Element {
               pending.decide(
                 {
                   requests,
-                  runtime: runtime,
+                  chat,
                   performHost: props.performHost,
                 },
                 decision,
@@ -335,14 +335,8 @@ export function App(props: AppProps): React.JSX.Element {
   const pendingEscapeInterrupt = useRef<
     { readonly parentId: RunId | undefined; readonly runId: RunId } | undefined
   >(undefined);
-  const mountScope = useMountScope(runtime);
-  const [escapeTimer] = useState(() =>
-    runtime.runSync(
-      FiberHandle.make<void>().pipe(
-        Effect.provideService(Scope.Scope, mountScope),
-      ),
-    ),
-  );
+  const mount = useMountScope();
+  const [escapeTimer] = useState(() => mount.sync(FiberHandle.make<void>()));
   const inputBarRef = useRef<InputBarHandle>(null);
   // The key that just resolved a pending Esc chord. Ink hands every keypress
   // to each `useInput` listener in subscription order, so the draft may see
@@ -364,7 +358,7 @@ export function App(props: AppProps): React.JSX.Element {
   const clearPendingEscapeInterrupt = () => {
     if (pendingEscapeInterrupt.current === undefined) return;
     pendingEscapeInterrupt.current = undefined;
-    runtime.runSync(FiberHandle.clear(escapeTimer));
+    mount.sync(FiberHandle.clear(escapeTimer));
   };
 
   const handleMetaShortcut = (value: string): boolean => {
@@ -406,7 +400,7 @@ export function App(props: AppProps): React.JSX.Element {
     clearPendingEscapeInterrupt();
     const parentId = parentIdOf(runId);
     pendingEscapeInterrupt.current = { parentId, runId };
-    runtime.runFork(
+    mount.fork(
       FiberHandle.run(
         escapeTimer,
         Effect.sleep(ESC_META_CHORD_INTERRUPT_DELAY_MS).pipe(

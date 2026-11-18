@@ -102,18 +102,18 @@ export type RunFacts = {
 };
 
 /** A run's facts before any row. */
-export const NO_FACTS: RunFacts = {
+export const NO_FACTS: RunFacts = Object.freeze({
   answer: '',
-  input: {},
-  edited: [],
-  read: [],
+  input: Object.freeze({}),
+  edited: Object.freeze([]),
+  read: Object.freeze([]),
   toolCalls: 0,
   structured: null,
   handedDown: null,
   finalTool: null,
   answerFinalized: false,
-  calls: byId([]),
-};
+  calls: Object.freeze<RunFacts['calls']>(byId([])),
+});
 
 /** `input` with what a row recorded: each field it names replaces the
  *  last, and a `null` instruction returns to the launch's. */

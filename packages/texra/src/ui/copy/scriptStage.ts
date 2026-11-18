@@ -16,7 +16,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import type { StatusLook } from '@ui/copy/runStatus';
 
-export const SCRIPT_CALL_STATUS_LABEL = {
+export const SCRIPT_CALL_STATUS_LABEL = Object.freeze({
   queued: 'Queued',
   running: 'Running',
   interrupted: 'Interrupted',
@@ -26,7 +26,7 @@ export const SCRIPT_CALL_STATUS_LABEL = {
   cancelled: 'Cancelled',
   failed: 'Failed',
   'not run': 'Not run',
-} as const satisfies Record<ScriptCallStatus, string>;
+} as const satisfies Record<ScriptCallStatus, string>);
 
 /** How each call status is painted. A queued call has not started and a
  *  reused one ran nothing this time, so neither shows its tone's glyph. */

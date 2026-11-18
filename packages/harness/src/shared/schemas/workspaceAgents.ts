@@ -5,17 +5,11 @@ const AgentKeyListSchema = Schema.Array(
 );
 
 /**
- * One durable description of how a workspace obtains its visible agents.
- * The discriminant keeps inheritance, the complete catalog, named teams, and
- * exact custom selections distinct instead of overloading absent arrays.
+ * How a workspace obtains its visible agents: every agent of the catalog, or
+ * an exact list.
  */
 export const WorkspaceAgentsSelectionSchema = Schema.Union([
-  Schema.Struct({ kind: Schema.Literal('inherit') }),
   Schema.Struct({ kind: Schema.Literal('all') }),
-  Schema.Struct({
-    kind: Schema.Literal('team'),
-    teamId: Schema.Trim.check(Schema.isMinLength(1)),
-  }),
   Schema.Struct({
     kind: Schema.Literal('custom'),
     agentKeys: AgentKeyListSchema,
@@ -33,10 +27,10 @@ export type WorkspaceAgentsSelection =
  */
 export const HiddenCustomAgentKeysSchema = AgentKeyListSchema;
 
-export const INHERITED_WORKSPACE_AGENTS: WorkspaceAgentsSelection =
-  Object.freeze({
-    kind: 'inherit',
-  });
+/** The selection of a workspace that stored none: every agent. */
+export const ALL_WORKSPACE_AGENTS: WorkspaceAgentsSelection = Object.freeze({
+  kind: 'all',
+});
 
 /** Exact delegation catalog attached to a run, independent of durable UI state. */
 export const AgentDelegationScopeSchema = AgentKeyListSchema;

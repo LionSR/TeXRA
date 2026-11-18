@@ -46,7 +46,7 @@ export const ONBOARDING_CHOICE_API_KEY = {
 
 /** The card's lede: what connecting a model leads to. */
 export const ONBOARDING_CARD_LEDE =
-  'Sign in with ChatGPT or add an API key. Then the setup assistant checks this project, picks your agent team, and starts your first task.';
+  'Sign in with ChatGPT or add an API key. Then the setup assistant checks this project and starts your first task.';
 
 /**
  * The API-key banner: shown once a task has finished and no sign-in or API
@@ -68,7 +68,7 @@ export const ONBOARDING_CHOICE_SKIP_LABEL = 'Skip for now';
  * CLI's `/agent`, the card's Run-setup button) stay in the surface.
  */
 export const ONBOARDING_SETUP_HANDOFF =
-  "You're starting with the setup assistant: it checks your environment, applies the right agent team, and helps you run your first task.";
+  "You're starting with the setup assistant: it checks your environment and helps you run your first task.";
 
 /** Button label and leading icon for each getting-started banner action. */
 export const GETTING_STARTED_ACTION_PRESENTATION = {

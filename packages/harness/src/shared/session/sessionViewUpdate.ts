@@ -477,12 +477,11 @@ function withAggregates(u: Update, run: RunView): RunView {
   if (unreadable !== undefined) statusNotice = { kind: unreadable };
   else if (run.lost !== null)
     statusNotice = { kind: 'lost', message: run.lost };
-  const facts = { ...run, holder };
   const work = runWork(u, run.id);
   const next = withDerived(run, {
     holder,
     approval,
-    actions: runActions(facts, unreadable !== undefined),
+    actions: runActions({ ...run, holder }, unreadable !== undefined),
     runStartedAt:
       holder === 'here' && run.position === 'running' && !waiting
         ? work.turnStartedAt

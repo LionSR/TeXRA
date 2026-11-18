@@ -1,4 +1,4 @@
-/** Agent proposal card: "Delegate a task to reviewer" / "Start a team run: …". */
+/** Agent proposal card: "Delegate a task to reviewer". */
 
 // Third-party imports
 import {
@@ -24,6 +24,7 @@ import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { APPROVE_SESSION_ACTION } from '@texra/shared/session/surfaceDecision';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { DEFINED_AGENT_COPY } from '@ui/copy/delegationApproval';
+import { REQUEST_ASK, WORKING_DIRECTORY_LABEL } from '@ui/copy/requestCards';
 
 // Local imports - shared utils
 import {
@@ -97,9 +98,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     }
     const agent = html` <strong>${data.agent}</strong>`;
     const model = html` on ${this.renderModel()}`;
-    return data.task
-      ? html`Run${agent}${model}`
-      : html`Delegate a task to${agent}${model}`;
+    return html`${REQUEST_ASK.proposal(data.task)}${agent}${model}`;
   }
 
   /** The model in the ask. On a card that can be answered it is a menu over
@@ -240,10 +239,11 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   private renderDefinedAgent(
     data: AgentProposalRequest,
   ): TemplateResult | typeof nothing {
-    const { persona } = data;
-    if (!persona) return nothing;
+    const { agentSource } = data;
+    if (agentSource?.kind !== 'inline') return nothing;
+    const { persona } = agentSource;
     return html`<div class="workflow-proposal__plan-note">
-        ${DEFINED_AGENT_COPY.heading(persona)}
+        ${DEFINED_AGENT_COPY.heading(data.agent, persona)}
       </div>
       <wa-details
         class="workflow-proposal__workflow-details"
@@ -269,7 +269,9 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     const workingDirectory = data.workingDirectory;
     if (!workingDirectory) return nothing;
     return html`<div id="proposal-working-directory">
-        <span class="workflow-proposal__file-label">Working directory:</span>
+        <span class="workflow-proposal__file-label"
+          >${WORKING_DIRECTORY_LABEL}:</span
+        >
         <span
           class="workflow-proposal__file-name workflow-proposal__file-name--readonly workflow-proposal__file-name--wrap"
           >${workingDirectory}</span

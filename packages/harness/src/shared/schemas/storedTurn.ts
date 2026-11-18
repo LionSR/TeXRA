@@ -125,8 +125,6 @@ export const StoredTurnSchema = Schema.Struct({
     'tool-calls',
     'refusal',
   ]),
-  finishEvidence: Schema.optional(ProviderEvidenceSchema),
-  refusalEvidence: Schema.optional(Schema.NullOr(ProviderEvidenceSchema)),
   usage: Schema.NullOr(
     Schema.Struct({
       inputTokens: TokenCount,

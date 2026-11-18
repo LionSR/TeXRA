@@ -22,7 +22,7 @@ import { describe, expect } from 'vitest';
 import { Sessions } from '@texra-ai/harness';
 import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
-import { executeAgent } from '@agent/runtime/executeAgent';
+import { startChildRun } from '@agent/runtime/delegation/childLaunch';
 import { rootRun, type SessionServices } from '@agent/runtime/rootLaunch';
 import {
   waitingAfter,
@@ -72,13 +72,14 @@ const permissionsOf = (storage: string, runId: string) => {
 const FILE_AGENT = { agent: 'golden_effect' } as const;
 const INLINE_AGENT = {
   agent: 'golden_effect',
-  agentSource: 'inline',
-  persona: {
-    name: 'golden_effect',
-    description:
-      "The golden store's run killed after its command's effect and before its result committed.",
-    prompt: 'GOLDEN-APPROVAL: run one command.',
-    tools: ['bash'],
+  agentSource: {
+    kind: 'inline',
+    persona: {
+      description:
+        "The golden store's run killed after its command's effect and before its result committed.",
+      prompt: 'GOLDEN-APPROVAL: run one command.',
+      tools: ['bash'],
+    },
   },
 } as const;
 
@@ -119,17 +120,15 @@ describe(
               yield* faults.failNext('appendAll', 'run.start');
               const runId = generateRunId();
 
-              // The opening fails in the caller's fiber: the launch's
-              // failure, which the parent's call reads, and no run behind it.
+              // The opening fails on the run's fiber: the launch's failure,
+              // which the parent's call reads, and no run behind it.
               const refused = yield* prepareAgentDefinition({
                 config: config('Refused.'),
               }).pipe(
                 Effect.flatMap((definition) =>
-                  executeAgent(definition, runId, {
-                    registration: {
-                      identity: { kind: 'agent', agent: 'assistant' },
-                      parentId,
-                    },
+                  startChildRun(runId, definition, {
+                    identity: { kind: 'agent', agent: 'assistant' },
+                    parentId,
                   }),
                 ),
                 Effect.provide(session),

@@ -17,7 +17,7 @@ export type ApprovalBypassKind = (typeof APPROVAL_BYPASS_KINDS)[number];
 
 /** The policies a launch can narrow a run to: anything below Auto-approve,
  *  which is never stricter than a project's policy. */
-export const APPROVAL_POLICY_LIMITS = ['never', 'ask'] as const;
+export const APPROVAL_POLICY_LIMITS = Object.freeze(['never', 'ask'] as const);
 export type ApprovalPolicyLimit = (typeof APPROVAL_POLICY_LIMITS)[number];
 
 /** What a launch asks of its run's approvals: Auto-approve (its run starts
@@ -150,7 +150,10 @@ function* ancestry(
 }
 
 /** No grants of its own: every kind defers to the run's ancestry. */
-export const NO_APPROVAL_GRANTS: ApprovalGrants = { own: {}, goal: [] };
+export const NO_APPROVAL_GRANTS: ApprovalGrants = Object.freeze({
+  own: Object.freeze({}),
+  goal: Object.freeze([]),
+});
 
 /** The rows a bypass is read from: each run's parent edge and its own
  *  grants, as the session view folds them. */

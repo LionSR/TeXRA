@@ -72,7 +72,7 @@
     "@typescript/native": "catalog:",
     "effect": "catalog:",
     "esbuild": "catalog:",
-    "openai": "7.56.0",
+    "openai": "7.57.0",
     "vitest": "^5.1.0"
   }
 }

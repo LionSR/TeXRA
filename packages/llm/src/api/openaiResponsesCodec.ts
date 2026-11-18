@@ -171,14 +171,7 @@ export const terminalParts = Effect.fn('llm.responses.terminalParts')(
       },
       {
         kind: 'finish',
-        finish: {
-          finishReason,
-          finishEvidence: {
-            kind: 'openai-responses',
-            status: response.status,
-            incompleteReason: incomplete ?? null,
-          },
-        },
+        finish: { finishReason },
         snapshot,
       },
     ] satisfies PartEvent[];

@@ -10,6 +10,7 @@ import {
 import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
+import { ToolError } from '@shared/schemas';
 
 const DDG_TIMEOUT_MS = 15_000; // 15 s
 const DDG_RETRIES = 2;
@@ -104,10 +105,8 @@ const searchDuckDuckGo = Effect.fn('WebSearchTool.searchDuckDuckGo')(
           raw,
         );
         if (!Result.isSuccess(parsed)) {
-          return yield* Effect.fail(
-            new Error(
-              `Unexpected DuckDuckGo response shape: ${parsed.failure.message}`,
-            ),
+          return yield* new ToolError(
+            `Unexpected DuckDuckGo response shape: ${parsed.failure.message}`,
           );
         }
         return parsed.success;

@@ -1,15 +1,14 @@
 // The clipboard image pastes of one input bar in flight, and the submit that
 // waits for them: a `FiberSet` of pastes and a `FiberHandle` for the waiting
-// submit, both in a scope the bar's mount owns, so unmounting interrupts them.
+// submit, both in the scope the bar's mount owns, so unmounting interrupts them.
 
 // Third-party imports
-import { Effect, Fiber, FiberHandle, FiberSet, Scope } from 'effect';
+import { Effect, Fiber, FiberHandle, FiberSet } from 'effect';
 import { useState } from 'react';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness/plugins';
-import { useMountScope } from '../state/useMountScope';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/harness/host';
+import type { ScopeRunner } from '../../scopeRunner';
 
 export interface ImagePastes {
   readonly hasPending: () => boolean;
@@ -37,14 +36,13 @@ export const NO_IMAGE_PASTES: ImagePastes = Object.freeze({
   discardPending: () => undefined,
 });
 
-export function useImagePastes(runtime: ProcessRuntime): ImagePastes {
-  const scope = useMountScope(runtime);
+export function useImagePastes(mount: ScopeRunner): ImagePastes {
   const [pastes] = useState((): ImagePastes => {
-    const { inFlight, waiting } = runtime.runSync(
+    const { inFlight, waiting } = mount.sync(
       Effect.all({
         inFlight: FiberSet.make<void>(),
         waiting: FiberHandle.make<void>(),
-      }).pipe(Effect.provideService(Scope.Scope, scope)),
+      }),
     );
     const hasPending = (): boolean => [...inFlight].length > 0;
     const hasDeferredAction = (): boolean =>
@@ -54,39 +52,28 @@ export function useImagePastes(runtime: ProcessRuntime): ImagePastes {
       if (hasDeferredAction()) return true;
       // The handle holds only the wait, so the action (which may discard the
       // draft and clear the handle) runs after the handle let its fiber go.
-      const wait = runtime.runSync(
+      const wait = mount.sync(
         FiberHandle.run(waiting, FiberSet.awaitEmpty(inFlight)),
       );
-      runtime.runFork(
-        Fiber.join(wait).pipe(
-          Effect.andThen(Effect.sync(action)),
-          // The submit runs in a fiber, where a throw would vanish.
-          Effect.catchDefect((defect) =>
-            Effect.logWarning('The deferred image-paste action failed.').pipe(
-              Effect.annotateLogs({ data: defect }),
-              withLogChannel('cli.tui'),
-            ),
-          ),
-        ),
-      );
+      mount.fork(Fiber.join(wait).pipe(Effect.andThen(Effect.sync(action))));
       return true;
     };
     return {
       hasPending,
       hasDeferredAction,
       add: (paste) => {
-        runtime.runSync(FiberSet.run(inFlight, paste));
+        mount.sync(FiberSet.run(inFlight, paste));
       },
       runWhenIdle: (action) => {
         if (!deferUntilIdle(action)) action();
       },
       deferUntilIdle,
       cancelDeferredAction: () => {
-        runtime.runSync(FiberHandle.clear(waiting));
+        mount.sync(FiberHandle.clear(waiting));
       },
       discardPending: () => {
         // The waiting submit first: emptying the pastes would release it.
-        runtime.runSync(
+        mount.sync(
           Effect.andThen(FiberHandle.clear(waiting), FiberSet.clear(inFlight)),
         );
       },

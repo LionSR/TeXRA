@@ -139,10 +139,8 @@ export const openDocuments = Effect.fn('documents.open')(function* (
   const output = yield* (yield* ChildRuns).fact(runId, DOCUMENTS_OUTPUT_KIND);
   const task = output?.task ?? described;
   if (task === undefined)
-    return yield* Effect.fail(
-      new ToolError(
-        `Run ${runId} has no documents yet: a document program's first step is \`document_context\` for revision 0.`,
-      ),
+    return yield* new ToolError(
+      `Run ${runId} has no documents yet: a document program's first step is \`document_context\` for revision 0.`,
     );
   const expected = expectedDocuments(config);
   const sources = expected.names.map((file) =>
@@ -212,19 +210,15 @@ const readTemplates = Effect.fn('documents.readTemplates')(function* (
   return yield* Effect.forEach(task.templates, (name) =>
     Effect.gen(function* () {
       if (directory === undefined)
-        return yield* Effect.fail(
-          new ToolError(
-            `This host ships no document templates, so '${name}' cannot be read.`,
-          ),
+        return yield* new ToolError(
+          `This host ships no document templates, so '${name}' cannot be read.`,
         );
       // A template is a file of the bundled directory, named by a program's
       // arguments, which a model may write: a name that leaves the directory
       // would read any file into the prompt unasked.
       if (basename(name) !== name)
-        return yield* Effect.fail(
-          new ToolError(
-            `'${name}' is not a bundled template: name one by its file name.`,
-          ),
+        return yield* new ToolError(
+          `'${name}' is not a bundled template: name one by its file name.`,
         );
       const path = join(directory, name);
       const content = yield* fs
@@ -373,11 +367,7 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
     prompt: parts.filter(Boolean).join('\n\n'),
     media: yield* revisionMedia(docs, revision, files, asked),
     /** The template files the prompt read, for their card. */
-    loaded: templates.map(({ path }): FileListEntry => ({
-      path,
-      ok: true,
-      source: 'templates',
-    })),
+    loaded: templates.map(({ path }): FileListEntry => ({ path, ok: true })),
   };
 });
 

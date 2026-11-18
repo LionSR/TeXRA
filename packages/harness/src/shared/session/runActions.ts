@@ -21,7 +21,8 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * damaged, or an earlier build's) never becomes readable,
  * so it offers delete beside inspection, the one way to clear it. A run
  * this process holds (working, waiting, or spawned and not started yet) can
- * be stopped; an agent's run takes approval grants, and a conversation (not
+ * be stopped, an idle one too (stopping is how a person ends a conversation
+ * that waits for its next message); an agent's run takes approval grants, and a conversation (not
  * a program) its compaction, unless it is still starting (no loop
  * step and no finished point yet). Nothing that rewrites or
  * removes a run's files or history is offered while it is live. Any run this

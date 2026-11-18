@@ -5,7 +5,7 @@ import { Effect, Result } from 'effect';
 // Local imports
 import { ToolError } from '@shared/schemas';
 import { Settings } from '@shared/config/settings';
-import type { SettingsStores } from '@shared/config/settings';
+import type { SettingsStores, StateReadFailed } from '@shared/config/settings';
 import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeFilePath } from '@utils/core/pathBasics';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
@@ -113,7 +113,7 @@ export const assertNoParentTraversal = (
 export const resolveToolPath = Effect.fn('resolveToolPath')(function* (
   call: ToolPathCall,
   targetPath?: string,
-): Effect.fn.Return<ToolPathResolution, Error> {
+): Effect.fn.Return<ToolPathResolution, ToolError | StateReadFailed> {
   const settings = call.roots;
   const root = call.workingDirectory ?? call.roots.workspace;
   const scope = call.workingDirectory ? 'working directory' : 'workspace';
@@ -170,7 +170,10 @@ export const resolveToolPath = Effect.fn('resolveToolPath')(function* (
         call.stepRoots,
       );
     },
-    catch: ensureError,
+    catch: (cause) =>
+      cause instanceof ToolError
+        ? cause
+        : new ToolError(ensureError(cause).message, { cause }),
   });
 
   if (!('kind' in resolution)) {
@@ -184,7 +187,7 @@ export const resolveToolPath = Effect.fn('resolveToolPath')(function* (
     !resolution.match &&
     (yield* Settings.get(settings, TOOL_PATH_PROTECTION_SETTING))
   ) {
-    return yield* Effect.fail(new ToolError(resolution.outsideMessage));
+    return yield* new ToolError(resolution.outsideMessage);
   }
   // `relative` is the full absolute path so an external operation never
   // reads as a workspace one, even when basenames collide.

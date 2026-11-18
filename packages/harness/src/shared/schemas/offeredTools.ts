@@ -26,10 +26,9 @@ const OfferedToolSchema = Schema.Struct({
   plugin: Schema.NonEmptyString,
   revision: Schema.NonEmptyString,
   /** Whether the step's requests send the model this declaration. False
-   *  for a script's own function (`self`), and, while script-only tools
-   *  are on (`codeMode.scriptOnly`), for every tool but `script`
-   *  and the run's own: the model reaches it from inside a script alone.
-   *  Not part of the identity. */
+   *  for a script's own function (`self`), and, when the step offers
+   *  `script`, for every tool but `script` and the run's own: the model
+   *  reaches it from inside a script alone. Not part of the identity. */
   sent: Schema.Boolean,
 });
 export type OfferedTool = typeof OfferedToolSchema.Type;

@@ -18,7 +18,7 @@ export const DEFAULT_AGENT_MODEL = 'openai/gpt-6.1-sol';
  * deprecates an entry.
  */
 // `PinnedModels.vitest.ts` fails such a bump.
-export const CURATED_MODELS: readonly string[] = [
+export const CURATED_MODELS: readonly string[] = Object.freeze([
   // The picker / new-chat default leads. Do not lead with Gemini — GPT is the
   // quality default.
   DEFAULT_AGENT_MODEL,
@@ -39,4 +39,4 @@ export const CURATED_MODELS: readonly string[] = [
   // Current non-retired xAI flagship — API key or experimental Grok OAuth.
   'xai/grok-4.7',
   'meta/muse-spark-1.3',
-];
+]);

@@ -10,12 +10,13 @@ import {
   type HarnessInstructionKey,
 } from '@texra-ai/harness/schemas';
 
-/** Host-agnostic action tokens; each host maps a token to its own UI. */
-export const INSTRUCTION_ACTION = {
+/** Host-agnostic action tokens; `windowNotices` runs a window's button for
+ *  each, and the CLI prints a hint. */
+export const INSTRUCTION_ACTION = Object.freeze({
   SET_API_KEY: 'set-api-key',
   OPEN_CONFIGURATION_GUIDE: 'open-configuration-guide',
   OPEN_MODELS_DOC: 'open-models-doc',
-} as const;
+} as const);
 
 export type InstructionAction =
   (typeof INSTRUCTION_ACTION)[keyof typeof INSTRUCTION_ACTION];
@@ -56,8 +57,7 @@ export function instructionSuppressible(key: string): boolean {
   return !isHarnessKey(key);
 }
 
-/** The button a window shows for each action. What the button runs is the
- *  host's: the extension binds a command, the desktop opens its settings. */
+/** The button a window shows for each action. */
 export const INSTRUCTION_ACTION_BUTTON_LABELS: Readonly<
   Record<InstructionAction, string>
 > = Object.freeze({

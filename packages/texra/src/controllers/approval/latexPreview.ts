@@ -61,6 +61,12 @@ export class DisplayCompileFailed extends Schema.TaggedError<DisplayCompileFaile
   { message: Schema.String },
 ) {}
 
+/** A preview asked for with no workspace folder to stage its files in. */
+class PreviewWorkspaceMissing extends Schema.TaggedError<PreviewWorkspaceMissing>()(
+  'PreviewWorkspaceMissing',
+  { message: Schema.String },
+) {}
+
 /**
  * Compile a TeX file to show it, into `outputDirectory` (where the host's
  * viewer reads the PDF), answering the PDF's path. A missing compiler or a
@@ -268,14 +274,12 @@ const readFileWithFallback = Effect.fn('latexPreview.readFileWithFallback')(
  * Returns the temp file path for further operations.
  */
 const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
-  function* (
-    entry: LatexPreviewEntry,
-    content: string,
-    suffix: string,
-  ): Effect.fn.Return<string, Error, PreviewServices> {
+  function* (entry: LatexPreviewEntry, content: string, suffix: string) {
     const workspaceRoot = entry.request.roots.workspace;
     if (!workspaceRoot) {
-      return yield* Effect.fail(new Error('No workspace folder open'));
+      return yield* new PreviewWorkspaceMissing({
+        message: 'No workspace folder open',
+      });
     }
 
     const originalPath = entry.request.path;

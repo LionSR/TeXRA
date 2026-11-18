@@ -22,7 +22,10 @@ import {
 } from './desktopDiffMessages.js';
 import { DesktopSetLogMessageSchema } from './desktopLogMessages.js';
 import { DesktopProjectsMessageSchema } from './desktopProjectMessages.js';
-import { DesktopShowPdfMessageSchema } from './desktopPdfMessages.js';
+import {
+  DesktopPdfLoadFailedMessageSchema,
+  DesktopShowPdfMessageSchema,
+} from './desktopPdfMessages.js';
 import { DesktopShowPromptMessageSchema } from './desktopPromptMessages.js';
 import { DesktopRunCommandMessageSchema } from './desktopCommandSurface.js';
 import { DesktopOpenSettingsMessageSchema } from './desktopShellMessages.js';
@@ -51,6 +54,7 @@ export const DesktopOutboundMessageSchema = Schema.Union([
   DesktopShowDiffMessageSchema,
   DesktopCloseDiffMessageSchema,
   DesktopShowPdfMessageSchema,
+  DesktopPdfLoadFailedMessageSchema,
   DesktopShowPromptMessageSchema,
   // Shell and logs
   DesktopRunCommandMessageSchema,

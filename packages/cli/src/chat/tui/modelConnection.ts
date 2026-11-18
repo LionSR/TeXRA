@@ -102,7 +102,7 @@ export const checkModelConnection = Effect.fn('checkModelConnection')(
  * Re-check after an account change. When a model can answer now: clear the
  * state, resolve the chat's model the way startup does, hand a first run to
  * the setup agent, then let the waiting messages go — or, with none waiting
- * on a first run, open `/agent` so a newcomer sees the agents and teams.
+ * on a first run, open `/agent` so a newcomer sees the agents.
  */
 export const connectChatModel = Effect.fn('connectChatModel')(function* (
   context: SlashCommandContext,
@@ -113,7 +113,7 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
   connection: ModelConnection,
 ) {
   if (!modelConnectionNeeded.get()) return;
-  const { stores, runtime } = context;
+  const { stores } = context;
   // A check that cannot be answered fails to the transcript report below and
   // leaves the panel state as it was.
   const ready = yield* hasUsableSetupCredential(stores);
@@ -129,7 +129,7 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
     // A typed failure is said here; a defect goes to the reporting below, and
     // an interruption (the chat closing) goes on unreported.
     const selection = yield* Effect.result(
-      selectChatModel(stores, runtime, {
+      selectChatModel(stores, {
         model: sessionMeta.get().model,
         reason: options.modelSource,
       }),

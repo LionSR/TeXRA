@@ -6,6 +6,30 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Agent teams are removed.** There are no built-in teams (Lean Project,
+  Physicist, Mathematician, Computer Scientist, Software Engineer) and no
+  saved custom teams: Settings → Agents has no **Teams** section, the launch
+  form and `/agent` list agents only, and `texra team` is gone. To run
+  multi-agent work, start a lead agent (`orchestrator`, `leanOrchestrator` or
+  `engineer`), which delegates to the agents the workspace shows:
+  `texra run orchestrator --instruction …` where `texra team run physicist`
+  was. A workspace shows every agent unless you turn some off (Settings →
+  Agents → Library, or `texra config agents --agents <agent,...>`);
+  `texra config agents` no longer takes `--default-team`, `--agents inherit`
+  or `--agents team:<team>`, refuses a list naming an agent that does not
+  exist instead of storing it, and its output has no `Effective agents` or
+  `Default team` line. The setup assistant no longer asks for your field to
+  apply a team (its `apply_team` tool is removed), and the command
+  **TeXRA: Agent Team Settings** is removed. A workspace whose stored
+  selection named a team or inherited the default shows every agent; saved
+  custom teams are no longer read. The NDJSON kinds `team`,
+  `team-inspection` and `team-result` are gone. SDK:
+  `WorkspaceAgentsSelection` is `all` or `custom`;
+  `AgentDirectoriesPort.teamMembers`, `InvalidAgentTeamError` and the
+  workspace agents' `getDefaultTeamId`, `getActiveTeamId`, `setDefaultTeam`
+  and `removeTeamPreset` are removed, `snapshot()` answers
+  `{ selection, unresolvedNames }`, and `WorkspaceAgentsStores` is the
+  repository state alone.
 - **Document tasks are programs, not agents.** The agents `correct`,
   `polish`, `generic`, `devise`, `criticize`, `firstread`, `logic`,
   `notation`, `enhance`, `apply`, `merge`, `ocr`, `transcribe_audio`,
@@ -1351,14 +1375,11 @@ All notable changes to this project will be documented in this file.
   modules its run recorded, never a newer copy shipped since. SDK: a
   plugin ships modules as `Plugin.scriptModules` (module source by name,
   imported as `builtIn:<name>`).
-- **Script-only tools, on by default.** The `texra.codeMode.scriptOnly`
-  setting (Settings → Agents → Advanced, or CLI `/config`) gives chat
-  agents the `script` tool and their own tools alone, with every other tool
-  called from inside a script; turn it off to send every tool directly. A
-  run keeps the tool set it started with when it resumes, even if the
-  setting changed in between. SDK: the harness row stays off, so an
-  embedder's agent is sent the tools it declares unless its catalog's
-  `defaults` turns the row on.
+- **Script-only tools.** Chat agents are sent the `script` tool and their
+  own tools alone, with every other tool called from inside a script. There
+  is no setting: every chat agent works this way, an SDK embedder's
+  included, except a plugin agent that names its own tools, which is sent
+  those directly. A run keeps the tool set it started with when it resumes.
 - **Scripts can run their agent again: `self(prompt, options)`.** It runs
   the same agent with the same tools as a child of the call, forked from
   the conversation as it stood when the script started (or from the prompt
@@ -2112,10 +2133,9 @@ All notable changes to this project will be documented in this file.
   and the run stopped. The file now reaches the model in the turn after the
   tool results, labeled with the tool that attached it.
 - **Script-only tools: a direct call to a tool the model was not sent is
-  refused.** With `texra.codeMode.scriptOnly` on, the model is sent only
-  `script` and the run's own tools, yet a model that guessed a tool's name
-  from the script declarations (Gemini does) had its direct call run as if
-  the tool had been offered directly, so the setting leaked. Such a call now
+  refused.** The model is sent only `script` and the run's own tools, yet a
+  model that guessed a tool's name from the script declarations (Gemini
+  does) had its direct call run as if the tool had been offered directly. Such a call now
   settles as unavailable with a message naming the script form
   (`tools.bash(...)`), and the run continues.
 - **A call a script issued and never awaited to its end is settled.** When

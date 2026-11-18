@@ -10,23 +10,28 @@ import { EFFORT_SCALE, ReasoningEffort } from '@texra-ai/llm';
  * the picker offers them in that order. The key type keeps the record
  * exhaustive against the registry vocabulary.
  */
-export const REASONING_LEVEL_LABELS: Record<ReasoningEffort, string> = {
-  [ReasoningEffort.NONE]: 'None',
-  [ReasoningEffort.MINIMAL]: 'Minimal',
-  [ReasoningEffort.LOW]: 'Low',
-  [ReasoningEffort.MEDIUM]: 'Medium',
-  [ReasoningEffort.HIGH]: 'High',
-  [ReasoningEffort.XHIGH]: 'Extra High',
-  [ReasoningEffort.MAX]: 'Max',
-};
+export const REASONING_LEVEL_LABELS: Record<ReasoningEffort, string> =
+  Object.freeze({
+    [ReasoningEffort.NONE]: 'None',
+    [ReasoningEffort.MINIMAL]: 'Minimal',
+    [ReasoningEffort.LOW]: 'Low',
+    [ReasoningEffort.MEDIUM]: 'Medium',
+    [ReasoningEffort.HIGH]: 'High',
+    [ReasoningEffort.XHIGH]: 'Extra High',
+    [ReasoningEffort.MAX]: 'Max',
+  });
 /** The reasoning levels a picker offers, low to high, with their labels. */
 export const REASONING_LEVEL_OPTIONS: readonly {
   readonly value: ReasoningEffort;
   readonly label: string;
-}[] = EFFORT_SCALE.map((value) => ({
-  value,
-  label: REASONING_LEVEL_LABELS[value],
-}));
+}[] = Object.freeze(
+  EFFORT_SCALE.map((value) =>
+    Object.freeze({
+      value,
+      label: REASONING_LEVEL_LABELS[value],
+    }),
+  ),
+);
 
 /**
  * Price-based "fast first response" hint: models strictly under $1/M input

@@ -15,8 +15,7 @@ import {
   type SubscriptionTarget,
 } from './subscriptionTarget';
 
-/** An activity report's tag (`<family>-activity`), which the harness's
- *  render surfaces recognize by that shape. */
+/** The envelope every GitHub event reaches its run's model in. */
 const WEBHOOK_TAG = 'github-webhook-activity';
 
 /** The cap on a comment or title quoted in an issue or pull request event. */
@@ -38,21 +37,33 @@ const WEBHOOK_TAG_RE = new RegExp(`<\\s*/?\\s*${WEBHOOK_TAG}\\s*>`, 'gi');
  */
 const BROKEN_WEBHOOK_TAG = `${WEBHOOK_TAG.at(0)}${String.fromCharCode(0x200b)}${WEBHOOK_TAG.slice(1)}`;
 
+/** One event as a run receives it: the envelope its model reads, and its
+ *  headline, which the transcript and the queued list show instead. */
+export interface WebhookEvent {
+  readonly text: string;
+  readonly displayText?: string;
+}
+
 /**
  * Wrap formatter output in the `<github-webhook-activity>` envelope, first
  * neutralizing any literal occurrence of the tag inside the body so a payload
  * coming from an untrusted source (PR webhook fields, agent names, etc.)
  * cannot escape the wrapper and feed text to the LLM as if it were direct
  * user input. Every comment body, username, CI name, file path, or URL
- * interpolated into the wrapper flows through here.
+ * interpolated into the wrapper flows through here. Its headline is the
+ * body's first line.
  */
-export function wrapWebhookEvent(inner: string): string {
+export function wrapWebhookEvent(inner: string): WebhookEvent {
   const neutralized = inner.replaceAll(WEBHOOK_TAG_RE, (match) =>
     match.includes('/')
       ? `</${BROKEN_WEBHOOK_TAG}>`
       : `<${BROKEN_WEBHOOK_TAG}>`,
   );
-  return `<${WEBHOOK_TAG}>\n${neutralized}\n</${WEBHOOK_TAG}>`;
+  const headline = neutralized.trim().split('\n')[0]?.trim();
+  return {
+    text: `<${WEBHOOK_TAG}>\n${neutralized}\n</${WEBHOOK_TAG}>`,
+    ...(headline ? { displayText: headline } : {}),
+  };
 }
 
 /**
@@ -112,7 +123,7 @@ export function makeTruncator(
 export function formatCommentEvent(
   target: SubscriptionTarget,
   c: GhIssueComment,
-): string {
+): WebhookEvent {
   return wrapWebhookEvent(
     sections(
       `New comment on ${targetPath(target)} by ${authorOf(c.user)}:`,
@@ -131,7 +142,7 @@ export function formatCommentEvent(
 export function formatSubscriptionHalted(
   target: SubscriptionTarget,
   detail: string,
-): string {
+): WebhookEvent {
   return wrapWebhookEvent(
     `${TARGET_LABEL[target._tag]} subscription to ${targetPath(target)} halted: ${detail}`,
   );

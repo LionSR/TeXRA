@@ -82,13 +82,17 @@ export const readFilesAsPromptXml = Effect.fn(
     (file) => {
       // With no workspace root open a relative entry has nothing to resolve
       // against: that one file is skipped, the readable ones kept (#12803).
-      const absolute: Effect.Effect<string, Error> = isAbsolute(file)
-        ? Effect.succeed(file)
+      const absolute = isAbsolute(file)
+        ? file
         : workspaceRoot
-          ? Effect.succeed(join(workspaceRoot, file))
-          : Effect.fail(new Error('Workspace path is not available.'));
-      return absolute.pipe(
-        Effect.flatMap((absolute) => readNormalizedFile(fs, absolute)),
+          ? join(workspaceRoot, file)
+          : undefined;
+      if (absolute === undefined)
+        return Effect.succeed({
+          document: null,
+          skipped: { file, reason: 'Error: Workspace path is not available.' },
+        });
+      return readNormalizedFile(fs, absolute).pipe(
         Effect.map((content) => ({
           document: {
             file,

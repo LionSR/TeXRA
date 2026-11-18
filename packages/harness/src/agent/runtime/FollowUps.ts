@@ -39,7 +39,6 @@ import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { SessionLog, type RunCell } from '@shared/session/runHistory';
 import { followUpDisplay } from '@shared/subagentFollowup';
-import { activatedSkillNames } from '@skills/runtimeSkills';
 import { sha256 } from '@utils/core/idHash';
 import { formatDelivery } from './deliveryEnvelope';
 import {
@@ -226,10 +225,8 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     // `ACTIVATED_SKILLS_MAX` kept; each step resolves them again.
     const found = yield* resolveActivations(
       run,
-      activatedSkillNames(
-        followUps.flatMap(({ content }) =>
-          isInstruction(content) ? [content.text] : [],
-        ),
+      followUps.flatMap(({ content }) =>
+        isInstruction(content) ? (content.skills ?? []) : [],
       ),
     );
     const current = state.input.activated ?? [];

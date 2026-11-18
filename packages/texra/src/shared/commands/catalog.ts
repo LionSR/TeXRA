@@ -151,13 +151,6 @@ const commandCatalog = [
     settingsTab: 'general/approval',
   },
   {
-    id: 'texra.showTeamSettings',
-    palette: false,
-    title: 'Agent Team Settings',
-    icon: '$(organization)',
-    settingsTab: 'agents/teams',
-  },
-  {
     id: 'texra.showGitSettings',
     palette: false,
     title: 'Git Settings',
@@ -268,6 +261,11 @@ const desktopCommandCatalog = [
     title: 'Open Folder',
     category: 'File',
     keybinding: { key: 'ctrl+o', mac: 'cmd+o' },
+  },
+  {
+    id: 'texra.desktop.switchProject',
+    title: 'Switch Project',
+    category: 'File',
   },
   {
     id: 'texra.desktop.openDesktopDocs',

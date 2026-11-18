@@ -1,8 +1,7 @@
 // Third-party imports
-import { Clock, Effect, Predicate, Result } from 'effect';
+import { Effect } from 'effect';
 
 // Local imports
-import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
 import {
   agentKeyOf,
   agentMatchesIdentifier,
@@ -10,29 +9,22 @@ import {
 } from '@texra-ai/harness/schemas';
 import {
   agentToolNames,
-  StateReadFailed,
   type AgentEntry,
-  type StateStore,
   type WorkspaceAgentsController,
 } from '@texra-ai/harness/host';
 import { type AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
-import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra/shared/constants/agents';
-import {
-  CUSTOM_TEAMS_KEY,
-  parseAgentModePresets,
-  type AgentModePreset,
-} from '@texra/shared/agentTeams';
 
-interface SettingsAgentCatalogEntry extends Pick<AgentEntry, 'persona'> {
+interface SettingsAgentCatalogEntry extends Pick<
+  AgentEntry,
+  'persona' | 'source'
+> {
   name: string;
-  source: AgentSource;
   description?: string;
   path?: string;
   basedOn?: string;
 }
 
 interface SettingsAgentCatalogControllerDeps {
-  repoState: StateStore;
   workspaceAgents: WorkspaceAgentsController<SettingsAgentCatalogEntry>;
   getAgents(): SettingsAgentCatalogEntry[];
   /** The source of the changed bundled agent a customized copy overrides. */
@@ -53,65 +45,6 @@ export class SettingsAgentCatalogController {
       .getAgents()
       .map((entry) => this.toSelectionItem(entry, enabledKeys))
       .toSorted((a, b) => a.name.localeCompare(b.name));
-  });
-
-  readonly getCustomPreset = Effect.fn(
-    'SettingsAgentCatalogController.getCustomPreset',
-  )({ self: this }, function* (presetId: string) {
-    return (
-      parseAgentModePresets(
-        yield* this.deps.repoState.get(CUSTOM_TEAMS_KEY),
-      ).find((preset) => preset.id === presetId) ?? null
-    );
-  });
-
-  getOrchestratorAgentNames(): string[] {
-    const names = new Set<string>(BUILTIN_TEAM_ROOT_AGENT_NAMES);
-    for (const agent of this.deps.getAgents()) {
-      if (agentToolNames(agent).includes(AGENT_TOOL_NAME))
-        names.add(agent.name);
-    }
-    return [...names].toSorted();
-  }
-
-  readonly saveCurrentPreset = Effect.fn(
-    'SettingsAgentCatalogController.saveCurrentPreset',
-  )({ self: this }, function* (name: string) {
-    const trimmedName = name.trim();
-    const agents = (yield* this.deps.workspaceAgents.visible()).map(
-      (entry) => entry.name,
-    );
-    const preset: AgentModePreset = {
-      id: `custom-${yield* Clock.currentTimeMillis}`,
-      name: trimmedName,
-      description: `Custom team: ${agents.join(', ')}`,
-      icon: 'bookmark',
-      agents,
-    };
-
-    return yield* this.deps.repoState.modify([CUSTOM_TEAMS_KEY], (stored) =>
-      Result.map(
-        presetRecords(stored[CUSTOM_TEAMS_KEY]),
-        (records) =>
-          [preset, { [CUSTOM_TEAMS_KEY]: [...records, preset] }] as const,
-      ),
-    );
-  });
-
-  readonly deleteCustomPreset = Effect.fn(
-    'SettingsAgentCatalogController.deleteCustomPreset',
-  )({ self: this }, function* (presetId: string) {
-    if (!(yield* this.getCustomPreset(presetId))) return;
-
-    yield* this.deps.workspaceAgents.removeTeamPreset(presetId, {
-      key: CUSTOM_TEAMS_KEY,
-      remove: (stored) =>
-        Result.map(presetRecords(stored), (records) =>
-          records.filter(
-            (record) => !Predicate.isObject(record) || record.id !== presetId,
-          ),
-        ),
-    });
   });
 
   /**
@@ -157,23 +90,4 @@ export class SettingsAgentCatalogController {
       enabled: enabledKeys.some((key) => agentMatchesIdentifier(entry, key)),
     };
   }
-}
-
-/** The stored preset records as they are, unparsed, so a catalog write
- *  preserves records this version cannot read. A stored value that is not a
- *  list refuses the write: rewriting it from an empty list would erase it. */
-function presetRecords(
-  stored: unknown,
-): Result.Result<unknown[], StateReadFailed> {
-  if (stored == null) return Result.succeed([]);
-  return Array.isArray(stored)
-    ? Result.succeed(stored)
-    : Result.fail(
-        new StateReadFailed({
-          key: CUSTOM_TEAMS_KEY,
-          message:
-            'The saved custom teams are not a list; fix or remove that setting before changing a team.',
-          cause: stored,
-        }),
-      );
 }

@@ -1,12 +1,11 @@
 // Third-party imports
-import { Effect, Result, absurd } from 'effect';
+import { Effect, Result, Schema, absurd } from 'effect';
 
 // Local imports
 import {
   decideRunModel,
   readModelOptions,
   type ModelVerdict,
-  type ProcessRuntime,
   type RunModelCandidate,
 } from '@texra-ai/harness/host';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
@@ -43,13 +42,8 @@ interface CliRunnableModelResolution {
   readonly notice?: string;
 }
 
-/** Stores and runtime held by command actions and form loaders. */
-export type CliModelStores = SettingsStores & {
-  readonly runtime: ProcessRuntime;
-};
-
 interface CliModelAccessListOptions {
-  readonly stores: CliModelStores;
+  readonly stores: SettingsStores;
   readonly models?: readonly string[];
 }
 
@@ -61,7 +55,7 @@ interface CliModelAccessListOptions {
  * ignored.
  */
 interface CliModelAccessEntryOptions {
-  readonly stores: CliModelStores;
+  readonly stores: SettingsStores;
   /** Optional preloaded list, used by commands that already fetched access. */
   readonly accessList?: readonly CliModelAccess[];
 }
@@ -115,6 +109,13 @@ function formatModelStatusForCli(model: CliModelAccess): string {
   const plan = codingPlanForUsageRoute(model.model.usageRoute);
   return `api: ${plan?.displayName ?? model.status}`;
 }
+
+/** No model the command could run: the requested one is unavailable, or
+ *  its option data is missing. */
+class CliModelUnavailable extends Schema.TaggedError<CliModelUnavailable>()(
+  'CliModelUnavailable',
+  { message: Schema.String },
+) {}
 
 // Reason a given model id cannot be switched to right now, or undefined if it can.
 export type GetModelSwitchDisabledReason = (
@@ -185,8 +186,7 @@ function findCliModelAccessEntry(
 
 /**
  * Output projection for JSON/NDJSON: the model id is addressable under the
- * same key (`.id`) as every other CLI resource (`agents`, `team`,
- * `history`).
+ * same key (`.id`) as every other CLI resource (`agents`, `history`).
  *
  * The record is the whole of `ModelOptionData`, so it follows that schema: at
  * 1.0 the fanned-out `availabilityLabel`, `requiresKey` and `disabled` keys are
@@ -297,11 +297,9 @@ export const loadCliModelAccessEntry = Effect.fn('loadCliModelAccessEntry')(
       yield* readModelOptions(options.stores, [hiddenModelId]),
     );
     if (!hiddenEntry) {
-      return yield* Effect.fail(
-        new Error(
-          `Model "${hiddenModelId}" is configured but has no option data.`,
-        ),
-      );
+      return yield* new CliModelUnavailable({
+        message: `Model "${hiddenModelId}" is configured but has no option data.`,
+      });
     }
 
     return hiddenEntry;
@@ -408,7 +406,7 @@ export const selectCliRunnableModel = Effect.fn('selectCliRunnableModel')(
       }
 
       const fallbackLoadError = entryErrorByModel.get(decision.from.model);
-      if (fallbackLoadError) return yield* Effect.fail(fallbackLoadError);
+      if (fallbackLoadError) return yield* fallbackLoadError;
 
       // The access list knows why the model cannot run, which the decision's
       // own notice does not say.
@@ -427,7 +425,7 @@ export const selectCliRunnableModel = Effect.fn('selectCliRunnableModel')(
     const selectedLoadError = decision
       ? entryErrorByModel.get(decision.model)
       : undefined;
-    if (selectedLoadError) return yield* Effect.fail(selectedLoadError);
+    if (selectedLoadError) return yield* selectedLoadError;
 
     const requestedModel =
       (decision?.model ?? requestedCandidates[0]?.model) || '<empty>';
@@ -437,6 +435,6 @@ export const selectCliRunnableModel = Effect.fn('selectCliRunnableModel')(
       availableIds,
       options,
     );
-    return yield* Effect.fail(new Error(unavailableMessage));
+    return yield* new CliModelUnavailable({ message: unavailableMessage });
   },
 );

@@ -44,7 +44,7 @@ import {
   type InlineCommentProvider,
 } from './comment/InlineCommentTool';
 import { DiagnosticsTool } from './DiagnosticsTool';
-import { EditorHost, makeEditorHost, type EditorRegistry } from './editorHost';
+import { EditorHost, editorRegistry, type EditorRegistry } from './editorHost';
 import {
   DocumentCompileTool,
   DocumentContextTool,
@@ -74,7 +74,6 @@ import { OpenPdfTool } from './OpenPdfTool';
  *     allowlisted one
  *   - send_to_terminal — type into VS Code's integrated terminal for
  *     sudo / interactive prompts the captured-stdio bash tool can't handle
- *   - apply_team — apply a discipline team + record the default team
  *
  * Shell-rc writes go through the regular `bash` tool (and its approval
  * dialog) — there's no dedicated rc-writing tool. A hand-rolled validator
@@ -92,7 +91,6 @@ import { InvokeCommandTool } from './setup/InvokeCommandTool';
 import { InstallVscodeExtensionTool } from './setup/InstallVscodeExtensionTool';
 import { ReadConfigTool, UpdateConfigTool } from './setup/ConfigTools';
 import { SendToTerminalTool } from './setup/SendToTerminalTool';
-import { ApplyTeamTool } from './setup/ApplyTeamTool';
 import {
   SetupHost,
   SetupPlatform,
@@ -292,7 +290,6 @@ const setup = (
       ReadConfigTool,
       UpdateConfigTool,
       SendToTerminalTool,
-      ApplyTeamTool,
     ],
   });
 
@@ -353,14 +350,14 @@ export const texraPlugins = (host: {
   readonly setup?: SetupPlatformShape;
   /** The host's code editor (VS Code); none elsewhere. */
   readonly editor?: EditorIntegrationShape;
-  /** The composition's editor registry its hosts attach to
-   *  (`makeEditorHost`); none attached when absent. */
+  /** What the composition's windows offer the editor tools (its window
+   *  table's `editors`); none offered when absent. */
   readonly editors?: EditorRegistry;
   /** The host shows external inquiries (VS Code, desktop): the `inquiry`
    *  tool is offered only there. */
   readonly inquiryPanel?: true;
 }): readonly TexraPlugin[] => {
-  const editors = host.editors ?? makeEditorHost();
+  const editors = host.editors ?? editorRegistry(() => ({}));
   return [
     {
       ...fileOps({ writeFilter: texWriteFilter }),

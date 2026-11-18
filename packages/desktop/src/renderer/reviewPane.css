@@ -71,10 +71,6 @@
   background: var(--wa-color-surface-raised);
 }
 
-.desktop-review-filter {
-  width: 100%;
-}
-
 .desktop-review-tree {
   min-height: 0;
   margin-top: var(--wa-space-xs);

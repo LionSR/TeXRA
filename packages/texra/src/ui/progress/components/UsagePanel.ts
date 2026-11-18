@@ -21,82 +21,30 @@ import type { IconName } from '@ui/wa/iconNames';
 import { designTokens } from '@ui/styles';
 import { formatTokenCount } from '@ui/copy/format';
 import { usageCost, usageCostLabel } from '@ui/copy/modelAccess';
+import { visibleTokenStats, type TokenUsageStat } from '@ui/copy/tokenUsage';
 import { focusRingStyles } from '@ui/styles/controlStyles';
 import { toneStyles } from '@ui/styles/toneStyles';
 
 // Local imports - shared icons and utils
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
-/** The usage strip's token counters in order: each one's icon and tooltip,
- *  and the words the strip's aria summary reads. Only the `always` ones show
- *  at zero; the rest stay hidden until the run reports them. */
-const TOKEN_STATS = [
-  {
-    key: 'inputTokens',
-    icon: 'arrow-up',
-    id: 'usage-input-icon',
-    tooltip: 'Input tokens',
-    label: 'input tokens',
-    always: true,
-  },
-  {
-    key: 'cachedInputTokens',
-    icon: 'cloud-arrow-down',
-    id: 'usage-cache-read-icon',
-    tooltip: 'Cache read tokens (discounted)',
-    label: 'cache read tokens',
-  },
-  {
-    key: 'cacheMissInputTokens',
-    icon: 'cloud-arrow-up',
-    id: 'usage-cache-miss-icon',
-    tooltip: 'Cache miss tokens (full price)',
-    label: 'cache miss tokens',
-  },
-  {
-    key: 'cacheWriteTokens',
-    icon: 'database',
-    id: 'usage-cache-write-icon',
-    tooltip: 'Cache creation tokens (1.25× cost)',
-    label: 'cache creation tokens',
-  },
-  {
-    key: 'outputTokens',
-    icon: 'arrow-down',
-    id: 'usage-output-icon',
-    tooltip: 'Output tokens',
-    label: 'output tokens',
-    always: true,
-  },
-  {
-    key: 'reasoningTokens',
-    icon: 'comments',
-    id: 'usage-reasoning-icon',
-    tooltip: 'Reasoning tokens',
-    label: 'reasoning tokens',
-  },
-] as const satisfies readonly {
-  key: keyof TokenUsageStats;
-  icon: IconName;
-  id: string;
-  tooltip: string;
-  label: string;
-  always?: true;
-}[];
+/** Each counter's icon and tooltip anchor in the strip; its name, order
+ *  and visibility are `visibleTokenStats`'. */
+const TOKEN_STAT_ICONS = Object.freeze({
+  inputTokens: { icon: 'arrow-up', id: 'usage-input-icon' },
+  cachedInputTokens: { icon: 'cloud-arrow-down', id: 'usage-cache-read-icon' },
+  cacheMissInputTokens: { icon: 'cloud-arrow-up', id: 'usage-cache-miss-icon' },
+  cacheWriteTokens: { icon: 'database', id: 'usage-cache-write-icon' },
+  outputTokens: { icon: 'arrow-down', id: 'usage-output-icon' },
+  reasoningTokens: { icon: 'comments', id: 'usage-reasoning-icon' },
+} satisfies Record<TokenUsageStat['key'], { icon: IconName; id: string }>);
 
-type TokenStat = (typeof TOKEN_STATS)[number] & { value: number };
-
-function visibleTokenStats(usage: TokenUsageStats): TokenStat[] {
-  return TOKEN_STATS.flatMap((stat) => {
-    const value = usage[stat.key] ?? 0;
-    return 'always' in stat || value > 0 ? [{ ...stat, value }] : [];
-  });
-}
-
-function renderTokenStat(stat: TokenStat): TemplateResult {
-  const tooltip = `${stat.tooltip}: ${formatTokenCount(stat.value)}`;
+function renderTokenStat(stat: TokenUsageStat): TemplateResult {
+  const { icon, id } = TOKEN_STAT_ICONS[stat.key];
+  const name = 'note' in stat ? `${stat.label} (${stat.note})` : stat.label;
+  const tooltip = `${name}: ${formatTokenCount(stat.value)}`;
   // prettier-ignore
-  return html`<span id=${stat.id} class="token-stat" tabindex="0">${waIcon(stat.icon)}<span class="token-value">${formatCompactTokenCount(stat.value)}</span></span><wa-tooltip for=${stat.id}>${tooltip}</wa-tooltip>`;
+  return html`<span id=${id} class="token-stat" tabindex="0">${waIcon(icon)}<span class="token-value">${formatCompactTokenCount(stat.value)}</span></span><wa-tooltip for=${id}>${tooltip}</wa-tooltip>`;
 }
 
 @customElement('usage-panel')
@@ -345,7 +293,8 @@ export class UsagePanel extends LitElement {
   private buildUsageLabel(): string {
     if (!this.usage) return '';
     const parts = visibleTokenStats(this.usage).map(
-      ({ value, label }) => `${formatCompactTokenCount(value)} ${label}`,
+      ({ value, label }) =>
+        `${formatCompactTokenCount(value)} ${label.toLowerCase()}`,
     );
     parts.push(usageCostLabel(this.usage));
     const ownShare = this.ownShareLabel();

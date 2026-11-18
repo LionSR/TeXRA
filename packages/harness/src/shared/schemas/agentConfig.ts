@@ -2,9 +2,28 @@
 import { Schema, Struct } from 'effect';
 import { decodingDefault } from './schemaDefaults.js';
 
-import { AgentSourceSchema, InlinePersonaSchema } from './agent';
+import {
+  AGENT_SOURCE,
+  CatalogAgentSourceSchema,
+  InlinePersonaSchema,
+} from './agent';
+import { ActivatedSkillsSchema } from './activeSkills';
 import { AgentDelegationScopeSchema } from './workspaceAgents';
 import { FileFieldsSchema } from './fileFields';
+
+/**
+ * Where a run's agent comes from: the catalog source its entry lives in, or
+ * the persona the launch carried instead of naming a file (`inline`),
+ * recorded so a resume runs it with no file. The persona is the agent's, so
+ * its name is `agent`.
+ */
+const AgentOriginSchema = Schema.Union([
+  Schema.Struct({ kind: CatalogAgentSourceSchema }),
+  Schema.Struct({
+    kind: Schema.Literal(AGENT_SOURCE.INLINE),
+    persona: InlinePersonaSchema.mapFields(Struct.omit(['name'])),
+  }),
+]);
 
 /** A run's launch configuration, as its `run.config` row records it. */
 const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
@@ -17,12 +36,7 @@ const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
      * this instead of re-resolving the ambiguous bare name. Absent only on a
      * payload not yet launched, which launch resolves by name.
      */
-    agentSource: Schema.optional(Schema.NullOr(AgentSourceSchema)),
-    /**
-     * The persona the launch carried instead of naming a file (source
-     * `inline`), named `agent`; recorded so a resume runs it with no file.
-     */
-    persona: Schema.optional(Schema.NullOr(InlinePersonaSchema)),
+    agentSource: Schema.optional(Schema.NullOr(AgentOriginSchema)),
     /**
      * A `self()` child: it runs as its caller, so it is offered the installed
      * plugins' tools as a top-level run is, still narrowed to what its
@@ -37,18 +51,25 @@ const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
     displayInstruction: Schema.optional(Schema.NullOr(Schema.String)),
     /** Memory display paths attached to this delegation (e.g. /memories/conventions.md). */
     memories: decodingDefault(Schema.Array(Schema.String), []),
+    /**
+     * The skills the user activated for `instruction`, which stays as typed:
+     * the run's first message leads with their activation blocks, and its
+     * opening records them. A child or a script run takes none.
+     */
+    skills: Schema.optional(ActivatedSkillsSchema),
     /** Working directory override for subagent tool calls (e.g. a git worktree). */
     workingDirectory: Schema.optional(Schema.NullOr(Schema.String)),
     /**
-     * What the launching app records about its own launch (a team it ran,
-     * where a command line copies the output) and reads back on resume. The
-     * harness never reads it, and a child run does not inherit it; each
-     * owner decodes its own keys.
+     * What the launching app records about its own launch (where a command
+     * line copies the output) and reads back on resume. The harness never
+     * reads it, and a child run does not inherit it; each owner decodes its
+     * own keys.
      */
     launch: Schema.optional(
       Schema.NullOr(Schema.Record(Schema.String, Schema.Json)),
     ),
-    /** Run-scoped delegation agent list used by team runs and their children. */
+    /** The agents this run and its children may delegate to, pinned at its
+     *  launch; absent, the workspace's visible agents. */
     delegationAgentScope: Schema.optional(
       Schema.NullOr(AgentDelegationScopeSchema),
     ),
@@ -98,21 +119,10 @@ const AgentConfigObjectSchema = FileFieldsSchema.mapFields(
   }),
 );
 
-/** Canonical configuration: at most as many outputs as text/media inputs, and
- *  a persona exactly when the agent is inline, named as the agent is. */
+/** Canonical configuration: at most as many outputs as text/media inputs. */
 export const AgentConfigSchema = AgentConfigObjectSchema.check(
   Schema.makeFilter((config) => {
     const issues: Schema.FilterIssue[] = [];
-    if (
-      (config.agentSource === 'inline') !== (config.persona != null) ||
-      (config.persona != null && config.persona.name !== config.agent)
-    ) {
-      issues.push({
-        path: ['persona'],
-        issue:
-          'An inline agent carries its persona, named as the agent, and only it does.',
-      });
-    }
     if (
       config.outputFiles.length >
       config.inputFiles.length + config.mediaFiles.length
