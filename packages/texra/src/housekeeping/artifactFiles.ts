@@ -5,13 +5,16 @@
  */
 // Standard library imports
 import * as path from 'node:path';
-import { normalizeFilePath } from '@texra-ai/harness/schemas';
 
 // Third-party imports
 import { Clock, Effect, FileSystem, type PlatformError, Schema } from 'effect';
 
 // Local imports
-import { meansAbsent, relativeToRoot } from '@texra-ai/harness/node';
+import {
+  meansAbsent,
+  relativeToRoot,
+  workspaceRelativePath,
+} from '@texra-ai/harness/node';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 
 import { CHANNEL } from './constants';
@@ -149,9 +152,7 @@ export const collectFilesFromPatterns = Effect.fn(
       absentAs(false),
     );
   const record = Effect.fnUntraced(function* (match: string) {
-    const relativePath = normalizeFilePath(
-      relativeToRoot(workspaceRoot, match) ?? match,
-    );
+    const relativePath = workspaceRelativePath(workspaceRoot, match);
     yield* Effect.logDebug(`Found file: ${relativePath}`).pipe(
       withLogChannel(CHANNEL),
     );
