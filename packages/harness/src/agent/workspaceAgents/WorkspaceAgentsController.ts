@@ -1,5 +1,6 @@
 import { Effect, Result, Schema } from 'effect';
 
+import { withLogChannel } from '@logger/effectLog';
 import {
   Settings,
   type StateReadFailed,
@@ -51,13 +52,32 @@ export interface WorkspaceAgentsControllerDeps<
 const storedSelection = (selection: WorkspaceAgentsSelection) =>
   Schema.decodeSync(WorkspaceAgentsSelectionSchema)(selection);
 
-/** A stored selection as every read decodes it: one that no longer decodes
- *  reads as every agent. */
-const decodedSelection = (stored: unknown): WorkspaceAgentsSelection =>
-  Result.getOrElse(
-    Schema.decodeUnknownResult(WORKSPACE_AGENTS_KEY.schema)(stored),
-    () => ALL_WORKSPACE_AGENTS,
+/**
+ * The stored selection a toggle starts from. One that no longer decodes
+ * reads as every agent, which is what each read showed the workspace, and
+ * comes back with its error for the toggle to report.
+ */
+function shownSelection(stored: unknown): {
+  readonly selection: WorkspaceAgentsSelection;
+  readonly invalid?: string;
+} {
+  const decoded = Schema.decodeUnknownResult(WORKSPACE_AGENTS_KEY.schema)(
+    stored,
   );
+  return Result.isSuccess(decoded)
+    ? { selection: decoded.success }
+    : { selection: ALL_WORKSPACE_AGENTS, invalid: decoded.failure.message };
+}
+
+/** Say that a toggle started from every agent because the stored selection
+ *  did not decode. A list the toggle then wrote replaced that value. */
+const reportInvalid = (invalid: string | undefined) =>
+  invalid === undefined
+    ? Effect.void
+    : Effect.logWarning(
+        `Invalid stored ${SELECTION}; the toggle started from every agent, as the workspace showed.`,
+        invalid,
+      ).pipe(withLogChannel('settings'));
 
 export class WorkspaceAgentsController<
   Entry extends WorkspaceAgentsEntry = WorkspaceAgentsEntry,
@@ -178,35 +198,39 @@ export class WorkspaceAgentsController<
     readonly name: string | readonly string[];
     readonly enabled: boolean;
   }): Effect.Effect<void, StateWriteFailed | StateReadFailed> {
-    return this.deps.repoState.modify([SELECTION, HIDDEN], (current) =>
-      Result.map(storedHidden(current[HIDDEN]), (hidden) => {
-        const agents = this.deps.getAgents();
-        const target = [
-          ...(this.selectionKeys(
-            decodedSelection(current[SELECTION]),
-            hidden,
-          ) ?? visibleAgents(hidden, agents).map(agentKeyOf)),
-        ];
-        // Every name flips the same way, so the length says if any changed.
-        const before = target.length;
-        for (const name of [input.name].flat()) {
-          const agent = { source: input.source, name };
-          const index = target.findIndex((candidate) =>
-            agentMatchesIdentifier(agent, candidate),
-          );
-          if (input.enabled === index >= 0) continue;
-          if (input.enabled) target.push(agentKeyOf(agent));
-          else target.splice(index, 1);
-        }
-        if (target.length === before) return [undefined] as const;
-        return [
-          undefined,
-          {
-            [SELECTION]: storedSelection({ kind: 'custom', agentKeys: target }),
-            [HIDDEN]: withCustomChoices(hidden, agents, target),
-          },
-        ] as const;
-      }),
-    );
+    return this.deps.repoState
+      .modify([SELECTION, HIDDEN], (current) =>
+        Result.map(storedHidden(current[HIDDEN]), (hidden) => {
+          const agents = this.deps.getAgents();
+          const { selection, invalid } = shownSelection(current[SELECTION]);
+          const target = [
+            ...(this.selectionKeys(selection, hidden) ??
+              visibleAgents(hidden, agents).map(agentKeyOf)),
+          ];
+          // Every name flips the same way, so the length says if any changed.
+          const before = target.length;
+          for (const name of [input.name].flat()) {
+            const agent = { source: input.source, name };
+            const index = target.findIndex((candidate) =>
+              agentMatchesIdentifier(agent, candidate),
+            );
+            if (input.enabled === index >= 0) continue;
+            if (input.enabled) target.push(agentKeyOf(agent));
+            else target.splice(index, 1);
+          }
+          if (target.length === before) return [invalid] as const;
+          return [
+            invalid,
+            {
+              [SELECTION]: storedSelection({
+                kind: 'custom',
+                agentKeys: target,
+              }),
+              [HIDDEN]: withCustomChoices(hidden, agents, target),
+            },
+          ] as const;
+        }),
+      )
+      .pipe(Effect.flatMap(reportInvalid));
   }
 }
