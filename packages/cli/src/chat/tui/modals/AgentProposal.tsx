@@ -24,6 +24,7 @@ import {
   scriptRequestCallLine,
   scriptRequestFirstAgentLine,
 } from '@ui/copy/scriptRequest';
+import { REQUEST_ASK } from '@ui/copy/requestCards';
 
 import { ConfirmCard } from './ConfirmCard';
 import {
@@ -238,9 +239,10 @@ function proposalText(payload: AgentProposalRequest): string {
 export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const fileGroups = getProposalFileGroups(props.payload);
-  const { script } = props.payload;
-  let title = `Spawn ${props.payload.agent}?`;
-  if (script) title = SCRIPT_REQUEST_COPY.title(script);
+  const { script, task, agent } = props.payload;
+  const title = script
+    ? SCRIPT_REQUEST_COPY.title(script)
+    : `${REQUEST_ASK.proposal(task)} ${agent}`;
   const instructionWidth = confirmCardContentWidth(columns);
   const metadataLines = agentProposalMetadataLines({
     fileGroups,

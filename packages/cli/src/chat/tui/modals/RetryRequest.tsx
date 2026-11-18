@@ -8,6 +8,7 @@ import {
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import { modelFailureText } from '@ui/copy/modelAccess';
+import { REQUEST_ASK } from '@ui/copy/requestCards';
 import { ConfirmCard } from './ConfirmCard';
 import {
   ScrollableModalText,
@@ -21,12 +22,12 @@ interface RetryRequestProps {
   readonly onDecide: (decision: SurfaceDecision) => void;
 }
 
-const RETRY_REQUEST_TITLE = 'Retry the failed call?';
 const RETRY_REQUEST_HIDDEN_NOUN = 'error rows';
 
 export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const { data } = props.payload;
+  const title = REQUEST_ASK.retry(data.model);
   const errorText = modelFailureText(data.failure);
   // The run decided the offer; the card only renders it.
   const canSwitchToPersonalKey = data.credentialSwitch != null;
@@ -49,13 +50,13 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
     extraFixedRows: guidanceText
       ? wrappedRowCount(guidanceText, contentWidth)
       : 0,
-    title: RETRY_REQUEST_TITLE,
+    title,
   });
 
   return (
     <ConfirmCard
       color={COLOR_WARNING}
-      title={RETRY_REQUEST_TITLE}
+      title={title}
       kind="retry"
       extraActions={
         canSwitchToPersonalKey

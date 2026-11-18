@@ -5,6 +5,7 @@ import { confirmCardContentWidth } from '@cli/tui/ui/theme';
 import { truncateToWidth } from '@cli/runtime/terminal/terminalText';
 
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
+import { REQUEST_ASK } from '@ui/copy/requestCards';
 import { ConfirmCard } from './ConfirmCard';
 import {
   ScrollableModalText,
@@ -22,8 +23,6 @@ interface BashRequestProps {
   readonly grant: ApprovalBypassKind | null;
   readonly onDecide: (decision: SurfaceDecision) => void;
 }
-
-const COMMAND_APPROVAL_TITLE = 'Run command?';
 
 function bashCwdDisplayLine({
   cwd,
@@ -49,13 +48,13 @@ export function BashRequest(props: BashRequestProps): React.JSX.Element {
     availableRows: props.availableRows,
     columns,
     extraFixedRows: cwdLine ? 1 : 0,
-    title: COMMAND_APPROVAL_TITLE,
+    title: REQUEST_ASK.command,
   });
 
   return (
     <ConfirmCard
       color={COLOR_WARNING}
-      title={COMMAND_APPROVAL_TITLE}
+      title={REQUEST_ASK.command}
       kind="bash"
       grant={props.grant}
       onDecide={props.onDecide}

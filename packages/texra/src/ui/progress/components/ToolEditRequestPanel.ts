@@ -12,6 +12,7 @@ import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
 import { buildLineChangeStats } from '@ui/progress/formatters/htmlBuilders';
+import { REQUEST_ASK } from '@ui/copy/requestCards';
 
 // Local imports - shared helpers
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
@@ -30,7 +31,8 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
 
   protected override renderAsk(): TemplateResult {
     const { relativePath, path } = this.permission.data;
-    return html`Edit <code dir="ltr">${relativePath || path}</code>`;
+    // prettier-ignore
+    return html`${REQUEST_ASK.edit} <code dir="ltr">${relativePath || path}</code>`;
   }
 
   /**

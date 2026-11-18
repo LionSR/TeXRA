@@ -1667,8 +1667,8 @@ prompt: |
             advance('/ commands', 'asked');
             pty.setTimer(() => pty.write('Run the held command.'), 500);
             pty.setTimer(() => pty.write('\r'), 900);
-          } else if (phase === 'asked' && plain.includes('Run command?')) {
-            advance('Run command?', 'running');
+          } else if (phase === 'asked' && plain.includes('Run a command')) {
+            advance('Run a command', 'running');
             pty.write('y');
             // The command writes its start marker, then waits. The TUI
             // confirms the follow-up was queued before we release it.
@@ -2964,7 +2964,7 @@ prompt: |
         const steps = [
           ['opening', 'list', '/ commands', ['/tasks', '\r']],
           ['list', 'attach', 'approval_validation', ['\r']],
-          ['attach', 'approved', 'Run command?', ['y']],
+          ['attach', 'approved', 'Run a command', ['y']],
           ['approved', 'sent', 'The approved command ran.', ['Ping', '\r']],
         ];
         const step = steps.find(([at]) => at === phase);
