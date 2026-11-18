@@ -151,7 +151,6 @@ const isOwnHostCommand = (request: HostCommand): request is OwnHostCommand =>
 export type OwnHostHandlers = {
   readonly [K in OwnHostCommand['kind']]?: (
     request: Extract<OwnHostCommand, { kind: K }>,
-    port: string,
   ) => HostVerb<HostOutcome>;
 };
 
@@ -730,10 +729,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   }
   /** An own kind the host binds runs its handler; one it leaves out is
    *  refused, worded here for both hosts. */
-  const own = (
-    request: OwnHostCommand,
-    port: string,
-  ): HostVerb<HostOutcome> => {
+  const own = (request: OwnHostCommand): HostVerb<HostOutcome> => {
     const handler = host.own[request.kind];
     if (handler === undefined)
       return Effect.fail(
@@ -742,19 +738,16 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         }),
       );
     // cast: the handler bound under `request.kind` takes a request of that kind.
-    return (
-      handler as (
-        request: OwnHostCommand,
-        port: string,
-      ) => HostVerb<HostOutcome>
-    )(request, port);
+    return (handler as (request: OwnHostCommand) => HostVerb<HostOutcome>)(
+      request,
+    );
   };
   function handle(
     request: HostCommand,
     port: string,
   ): Effect.Effect<HostOutcome, HostCommandFailure, ProcessServices> {
     return Effect.provide(
-      isOwnHostCommand(request) ? own(request, port) : shared(request, port),
+      isOwnHostCommand(request) ? own(request) : shared(request, port),
       requestLayer,
     );
   }
