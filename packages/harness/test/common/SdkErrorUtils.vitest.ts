@@ -54,6 +54,29 @@ describe('an account out of credit', () => {
 
     expect(judged(err)).toMatchObject({ quota: { plan: null } });
   });
+
+  // Anthropic answers a request past the tier's monthly spend cap with a 429
+  // typed as a rate limit; only its error code says waiting will not help.
+  it("is the credit verdict on Anthropic's spend-cap 429, not a rate limit", () => {
+    const capped = new ModelError({
+      kind: 'provider-rejection',
+      status: 429,
+      message: 'You have reached your API usage limits.',
+      cause: {
+        type: 'error',
+        error: {
+          type: 'rate_limit_error',
+          message: 'You have reached your API usage limits.',
+          details: { error_code: 'enforced_spend_limit_reached' },
+        },
+      },
+    });
+
+    expect(judgeFailure(capped, 'api-key', false)).toMatchObject({
+      retryable: false,
+      quota: { plan: null },
+    });
+  });
 });
 
 describe('a ChatGPT plan limit', () => {

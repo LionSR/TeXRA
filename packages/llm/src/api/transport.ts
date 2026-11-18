@@ -3,6 +3,7 @@ import {
   Cause,
   Effect,
   Exit,
+  Predicate,
   Result,
   Schema,
   type Scope,
@@ -143,6 +144,30 @@ export const wireFail = (
   Effect.fail(new ModelError({ kind, message }));
 
 /**
+ * Fails when `raw` is a stream event whose `key` names a type outside
+ * `known`. The provider sends that event again on every repeat of the
+ * request, so the failure is not retried; a malformed event of a known type
+ * still is.
+ */
+export const refuseUnknownEvent = (
+  provider: string,
+  key: string,
+  known: ReadonlySet<string>,
+  raw: unknown,
+): Effect.Effect<void, ModelError> => {
+  const type = Predicate.hasProperty(raw, key) ? raw[key] : undefined;
+  return typeof type !== 'string' || known.has(type)
+    ? Effect.void
+    : Effect.fail(
+        new ModelError({
+          kind: 'provider-rejection',
+          retryable: false,
+          message: `${provider} sent a stream event of a type this version does not support: ${type}.`,
+        }),
+      );
+};
+
+/**
  * Decodes one raw wire value with `schema`, failing as the provider's
  * rejection with `message` when it does not match. The process did not author provider
  * output, so a mismatch is the model's; the parse failure rides along as the
@@ -226,15 +251,19 @@ export const readerAbortSignal = Effect.fn('transport.readerAbortSignal')(
 
 /**
  * Whether a promise rejected because Effect aborted `signal`: once it is
- * aborted, the abort reason itself, an SDK's wrapper around it (OpenAI's
- * `APIUserAbortError` carries it as `cause`), or a bare `AbortError` (the
- * Google SDK's `DOMException`, which names no reason).
+ * aborted, the abort reason itself (what `fetch` and a streamed body reject
+ * with), an SDK's wrapper around it (OpenAI's `APIUserAbortError` carries it
+ * as `cause`), the Google SDK's `APIUserAbortError`, which drops the reason
+ * and is not exported, so only its name identifies it, or a bare
+ * `AbortError` from a `fetch` that rejects with its own `DOMException`.
  */
 const isOwnAbort = (cause: unknown, signal: AbortSignal): boolean =>
   signal.aborted &&
   (cause === signal.reason ||
     (cause instanceof Error &&
-      (cause.cause === signal.reason || cause.name === 'AbortError')));
+      (cause.cause === signal.reason ||
+        cause.name === 'APIUserAbortError' ||
+        cause.name === 'AbortError')));
 
 /**
  * Run a promise-returning provider request under Effect's own abort signal,

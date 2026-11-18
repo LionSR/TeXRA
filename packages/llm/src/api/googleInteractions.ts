@@ -16,6 +16,8 @@ import { assembleTurn } from './assembleTurn.js';
 import { boundTurn, resolveTurn } from './turnInput.js';
 import {
   COMPLETED_STATUSES,
+  CONTINUATION_STATUS,
+  EVENT_TYPES,
   IN_FLIGHT_STATUSES,
   WireCompletedStepSchema,
   WireEventSchema,
@@ -40,6 +42,7 @@ import {
   parseOutboundToolArguments,
   pullStream,
   readerAbortSignal,
+  refuseUnknownEvent,
   wireFail as fail,
 } from './transport.js';
 import type { InputPart, Part, PartEvent } from './parts.js';
@@ -437,9 +440,10 @@ function googleWire() {
   let done = false;
   return (raw: unknown): Effect.Effect<PartEvent[], ModelError> =>
     Effect.gen(function* () {
+      yield* refuseUnknownEvent('Google', 'event_type', EVENT_TYPES, raw);
       const event = yield* decodeWireOrFail(
         WireEventSchema,
-        'Google returned malformed or unsupported stream data.',
+        'Google returned malformed stream data.',
         raw,
       );
       if (done)
@@ -466,6 +470,16 @@ function googleWire() {
               ...usageParts(interaction.usage),
             ];
           done = true;
+          // Finishing needs another billed request carrying the
+          // continuation token, which this one-request turn does not send;
+          // the same request resent would stop at the same limit.
+          if (event.interaction.status === CONTINUATION_STATUS)
+            return yield* new ModelError({
+              kind: 'provider-rejection',
+              retryable: false,
+              message:
+                'Google stopped the response at its per-request decode limit; continuing it is not supported.',
+            });
           if (!COMPLETED_STATUSES.includes(event.interaction.status))
             return yield* fail(
               'Google ended without an authoritative completed turn.',
