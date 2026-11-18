@@ -16,8 +16,8 @@ export const ResponsesUsageSchema = Schema.Struct({
       Schema.Struct({
         cached_tokens: Schema.optional(Schema.NullOr(CountSchema)),
         cache_write_tokens: Schema.optional(Schema.NullOr(CountSchema)),
-        // Only the models that bill cache writes (GPT-5.6 and later) split
-        // them by the cache lifetime requested.
+        // The writes by the cache lifetime requested; what each lifetime
+        // costs is the catalog's (llm-zoo `cacheWriteFactors`).
         cache_write_tokens_details: Schema.optional(
           Schema.NullOr(
             Schema.Struct({

@@ -4,7 +4,12 @@
  * token classes a provider bills apart, and which receipt carries its own
  * final cost.
  */
-import { ModelProvider, requestRates, type ModelConfig } from 'llm-zoo';
+import {
+  ModelProvider,
+  requestRates,
+  type CacheWriteFactors,
+  type ModelConfig,
+} from 'llm-zoo';
 
 import type { TurnUsage } from '../protocol.js';
 
@@ -20,12 +25,22 @@ const perMillion = (tokens: number, price: number): number =>
   (tokens * price) / 1e6;
 
 /**
+ * A cache write's multiplier of the input rate for one lifetime, from the
+ * catalog. A model the catalog gives no write rate bills its writes as
+ * ordinary input.
+ */
+const writeFactor = (
+  model: ModelConfig,
+  lifetime: keyof CacheWriteFactors,
+): number => model.capabilities.cacheWriteFactors?.[lifetime] ?? 1;
+
+/**
  * Anthropic bills cache reads and writes as separate token classes on top
- * of the uncached input: reads at the model's cache discount (0.1x on most
- * models, 0.05x on Opus 5.5, 0.025x on Fable/Mythos 5.1), five-minute writes
- * at 1.25x and one-hour writes at 2x.
+ * of the uncached input: reads at the model's cache discount, writes at the
+ * catalog's five-minute and one-hour write rates.
  */
 function anthropicCost(
+  model: ModelConfig,
   usage: TurnUsage,
   provider: Extract<TurnUsage['providerUsage'], { kind: 'anthropic' }>,
   rates: TurnRates,
@@ -46,19 +61,20 @@ function anthropicCost(
   return (
     perMillion(uncached, inputPrice) +
     perMillion(cached, inputPrice * cacheDiscountFactor) +
-    perMillion(write5m + unclassified, inputPrice * 1.25) +
-    perMillion(write1h, inputPrice * 2) +
+    perMillion(write5m + unclassified, inputPrice * writeFactor(model, '5m')) +
+    perMillion(write1h, inputPrice * writeFactor(model, '1h')) +
     perMillion(usage.outputTokens ?? 0, outputPrice)
   );
 }
 
 /**
  * OpenAI counts cache reads and writes inside the input, and bills a write
- * in place of the input rate: 1.25x for the 30-minute lifetime and 2.5x for
- * the 12-hour one. Only receipts of models that bill writes split them by
- * lifetime; an earlier model's writes bill as ordinary input.
+ * at the catalog's 30-minute or 12-hour write rate in place of the input
+ * rate. A model with no write rate (GPT-5.5 and earlier) bills its writes as
+ * ordinary input.
  */
 function openaiCost(
+  model: ModelConfig,
   usage: TurnUsage,
   provider: Extract<TurnUsage['providerUsage'], { kind: 'openai' }>,
   rates: TurnRates,
@@ -67,8 +83,14 @@ function openaiCost(
   // above it.
   return (
     standardCost(usage, rates, false) +
-    perMillion(provider.cacheWrite30mTokens, rates.inputPrice * 0.25) +
-    perMillion(provider.cacheWrite12hTokens, rates.inputPrice * 1.5)
+    perMillion(
+      provider.cacheWrite30mTokens,
+      rates.inputPrice * (writeFactor(model, '30m') - 1),
+    ) +
+    perMillion(
+      provider.cacheWrite12hTokens,
+      rates.inputPrice * (writeFactor(model, '12h') - 1),
+    )
   );
 }
 
@@ -146,10 +168,10 @@ function costAt(
   let cost: number;
   switch (provider?.kind) {
     case 'anthropic':
-      cost = anthropicCost(usage, provider, rates);
+      cost = anthropicCost(model, usage, provider, rates);
       break;
     case 'openai':
-      cost = openaiCost(usage, provider, rates);
+      cost = openaiCost(model, usage, provider, rates);
       break;
     case 'xai':
       cost = standardCost(usage, rates, true);
