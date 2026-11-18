@@ -5,7 +5,7 @@
  * embeds the engine. Every window is a client of it; the service owns
  * every task it starts.
  *
- * The payloads are the runtime's own wire schemas (the session bridge's
+ * The payloads are the runtime's own wire schemas (the session channel's
  * `Subscribe` and `EventsFrame`, `RuntimeCommand`, `StartRequestSchema`,
  * `AgentConfig`), used as
  * they are; a procedure's error is the error class the handler fails with,
@@ -230,14 +230,8 @@ export const TexraRpcs = RpcGroup.make(
     success: Schema.Array(TaskSummarySchema),
   }),
   Rpc.make('task.watch', {
-    // `workspace` names the project; the frames name the session. The
-    // watch is one ordered stream, so it takes no generation.
-    payload: {
-      workspace,
-      subscribe: SubscribeSchema.mapFields(
-        Struct.pick(['debug', 'cursor', 'aggregates']),
-      ),
-    },
+    // `workspace` names the project.
+    payload: { workspace, subscribe: SubscribeSchema },
     success: EventsFrameSchema,
     error: TaskFailed,
     stream: true,

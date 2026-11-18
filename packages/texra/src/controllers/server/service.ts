@@ -264,15 +264,9 @@ export const serviceHandlers = (
               );
               const session = yield* open(workspace);
               // The frames name the session as the service keys it.
-              const key = session.roots.storage;
               return frameSubscription(
-                { key, view: session.view },
-                {
-                  kind: 'subscribe',
-                  generation: 0,
-                  ...subscribe,
-                  session: key,
-                },
+                { key: session.roots.storage, view: session.view },
+                subscribe,
               );
             }),
           ),

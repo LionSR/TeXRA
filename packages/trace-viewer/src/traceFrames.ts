@@ -95,7 +95,7 @@ export function traceFrame(
   return {
     kind: 'events',
     session,
-    generation: subscribe.generation,
+    generation: 0,
     cursor: events.at(-1)?.commit ?? 0,
     inputs: replayInputs({
       debug: subscribe.debug,

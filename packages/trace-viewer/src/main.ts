@@ -8,7 +8,7 @@ import './shell.css';
 // are). The shell then mounts on the `<progress-app data-session>` the HTML
 // carries, as in every host. This page owns the mount (rather than the
 // bundle's entry) because the scrubber remounts it: a fresh shell is a fresh
-// generation, and the bridge answers that generation at the new cut.
+// client, and the bridge answers it at the new cut.
 import './traceHostBridge';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import '@ui/wa';
@@ -88,7 +88,7 @@ if (!(app instanceof ProgressApp))
   throw new Error('The trace viewer HTML carries no <progress-app>');
 let mounted = { app, unmount: mountProgressWebview(app) };
 
-/** Replace the shell with a fresh one: a new graph, generation, and session view. */
+/** Replace the shell with a fresh one: a new client and session view. */
 function remount(): void {
   mounted.unmount();
   const fresh = mounted.app.cloneNode(false);

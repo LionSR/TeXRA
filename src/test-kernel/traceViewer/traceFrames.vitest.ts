@@ -17,9 +17,6 @@ const AGGREGATE = RUN_ID;
  *  subscribed. */
 function foldTrace(trace: TraceDocument) {
   const frame = traceFrame(trace, 'trace', {
-    kind: 'subscribe',
-    session: 'trace',
-    generation: 1,
     debug: false,
     cursor: 0,
     aggregates: [{ id: AGGREGATE, fromSeq: 0 }],
