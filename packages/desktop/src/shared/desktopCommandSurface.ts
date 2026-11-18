@@ -22,6 +22,7 @@ export const DESKTOP_LOCAL_COMMANDS = {
   OPEN_LOG_FOLDER: 'texra.desktop.openLogFolder',
   OPEN_WORKSPACE_FOLDER: 'texra.desktop.openWorkspaceFolder',
   SAVE_FILE: 'texra.desktop.saveFile',
+  SWITCH_PROJECT: 'texra.desktop.switchProject',
   OPEN_DESKTOP_DOCS: 'texra.desktop.openDesktopDocs',
 } as const;
 
@@ -35,6 +36,7 @@ type DesktopLocalCommandId =
 const DESKTOP_PALETTE_COMMANDS = [
   DESKTOP_LOCAL_COMMANDS.SAVE_FILE,
   DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
+  DESKTOP_LOCAL_COMMANDS.SWITCH_PROJECT,
   'texra.showMainView',
   DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
   DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
@@ -76,6 +78,7 @@ export const DesktopRunCommandMessageSchema = Schema.Struct({
 const DESKTOP_COMMAND_ICONS = {
   [DESKTOP_LOCAL_COMMANDS.SAVE_FILE]: 'floppy-disk',
   [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: 'folder-open',
+  [DESKTOP_LOCAL_COMMANDS.SWITCH_PROJECT]: 'folder',
   'texra.showMainView': 'pencil',
   [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: 'file-lines',
   [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: 'folder',
@@ -106,7 +109,7 @@ function commandIcon(id: DesktopCommandId): IconName {
   return icon;
 }
 
-export interface DesktopPaletteEntry {
+interface DesktopPaletteEntry {
   id: DesktopCommandId;
   label: string;
   category: string;
@@ -128,6 +131,8 @@ export interface DesktopCommandActions {
   openLogFolder(): void;
   openWorkspaceFolder(): void;
   saveFile(): void;
+  /** Lists the other open projects to choose one to show. */
+  switchProject(): void;
   showTerminal(): void;
   showFiles(): void;
 }
@@ -162,6 +167,7 @@ const DESKTOP_COMMAND_HANDLERS = {
   [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: (a) =>
     a.openWorkspaceFolder(),
   [DESKTOP_LOCAL_COMMANDS.SAVE_FILE]: (a) => a.saveFile(),
+  [DESKTOP_LOCAL_COMMANDS.SWITCH_PROJECT]: (a) => a.switchProject(),
   [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: (a) => a.openDesktopDocs(),
 } as const satisfies Record<
   Exclude<DesktopCommandId, SettingsTabCommandId>,

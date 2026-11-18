@@ -1,7 +1,7 @@
 // Third-party imports
 import * as path from 'node:path';
 
-import { Cause, Effect, Option } from 'effect';
+import { Effect, Option } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -9,7 +9,10 @@ import { withLogChannel } from '@texra-ai/harness/plugins';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { inputBox, quickPick } from '@frontend/ui/dialogs';
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import {
+  reportingFailure,
+  showLoggedErrorMessage,
+} from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { tokenCancelled } from '@frontend/vscode/vscodeEvents';
 import {
@@ -30,9 +33,8 @@ const CHANNEL = 'arXivCommands';
  * notification that lives for exactly as long as the download.
  *
  * The prompts are the foreign edge; the download is a step of this program.
- * `catchCause` is the command's one terminal boundary, as the `catch` it
- * replaces was: a typed failure and a rejected prompt alike are squashed to
- * the value that `catch` clause bound, so the message is unchanged.
+ * `reportingFailure` is the command's one terminal boundary: a typed failure
+ * and a rejected prompt alike reach it as one error.
  */
 export const downloadArXivSource: (
   roots: WorkspaceRoots,
@@ -135,17 +137,11 @@ export const downloadArXivSource: (
       ]);
     }
   },
-  Effect.catchCause((cause) =>
-    // Shutdown interrupts this fiber while it waits on a host prompt or on
-    // the download. That is a cancellation, not a download failure, and the
-    // `Effect.catch` this replaces never saw it, so it must not become a
-    // notification now that the download runs on this fiber.
-    Cause.hasInterruptsOnly(cause)
-      ? Effect.interrupt
-      : showLoggedErrorMessage(
-          'Failed to download arXiv source',
-          Cause.squash(cause),
-        ).pipe(Effect.asVoid),
+  // Shutdown interrupts this fiber while it waits on a host prompt or on
+  // the download. That is a cancellation, not a download failure, so it must
+  // not become a notification.
+  reportingFailure((error) =>
+    showLoggedErrorMessage('Failed to download arXiv source', error),
   ),
   withLogChannel(CHANNEL),
 );

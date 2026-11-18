@@ -258,6 +258,20 @@ body[data-desktop-platform='darwin'] .shell-workspace-toolbar {
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-xs);
 }
+.shell-workbench-pdf {
+  display: grid;
+  /* The notice row collapses to nothing while the PDF has no failure. */
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+}
+.shell-workbench-pdf-frame[hidden] {
+  display: none;
+}
+/* The footer keeps the last row while a failed PDF's frame is hidden. */
+.shell-workbench-pdf > footer {
+  grid-row: 3;
+}
 .shell-workbench-pdf-frame {
   display: block;
   width: 100%;

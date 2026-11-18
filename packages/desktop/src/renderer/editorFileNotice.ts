@@ -6,7 +6,7 @@
 
 import { getBasename, extractErrorMessage } from '@texra-ai/harness/schemas';
 import '@awesome.me/webawesome/dist/components/callout/callout.js';
-import { html, nothing, render } from 'lit';
+import { html, nothing, render, type TemplateResult } from 'lit';
 
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -17,6 +17,19 @@ interface Notice {
   readonly message: string;
   /** The answers it offers, each a button. */
   readonly actions: readonly { readonly label: string; run(): void }[];
+}
+
+/** The danger callout a pane shows above its content for a failure, with
+ *  the buttons that answer it. */
+export function renderNoticeCallout(
+  message: string,
+  buttons: unknown = nothing,
+): TemplateResult {
+  return html`<wa-callout variant="danger" size="s" role="alert">
+    ${waIcon('triangle-exclamation', { slot: 'icon' })}
+    <span class="desktop-editor-notice-text">${message}</span>
+    ${buttons}
+  </wa-callout>`;
 }
 
 export function createEditorFileNotice(options: {
@@ -34,21 +47,19 @@ export function createEditorFileNotice(options: {
     render(
       notice === undefined
         ? nothing
-        : html`<wa-callout variant="danger" size="s" role="alert">
-            ${waIcon('triangle-exclamation', { slot: 'icon' })}
-            <span class="desktop-editor-notice-text">${notice.message}</span>
-            ${notice.actions.map((action) =>
+        : renderNoticeCallout(notice.message, [
+            ...notice.actions.map((action) =>
               renderLabeledActionButton({
                 text: action.label,
                 kind: 'secondary',
                 onClick: () => action.run(),
               }),
-            )}
-            ${renderLabeledActionButton({
+            ),
+            renderLabeledActionButton({
               text: 'Dismiss',
               onClick: () => show(undefined),
-            })}
-          </wa-callout>`,
+            }),
+          ]),
       element,
     );
   }
