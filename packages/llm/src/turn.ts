@@ -106,6 +106,7 @@ export const ThinkingLevelSchema = Schema.Literals([
   'low',
   'medium',
   'high',
+  'xhigh',
 ]);
 
 /** Materialized input; no SDK value, credential, file path or storage reference. */

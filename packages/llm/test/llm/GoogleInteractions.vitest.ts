@@ -4,14 +4,17 @@ import { once } from 'node:events';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Schema, Stream } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Result, Schema, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { beforeEach, describe, expect, vi } from 'vitest';
 import {
   completedTurn,
+  modelConfig,
+  ReasoningEffort,
   RemoteOperationSchema,
   type TurnRequest,
 } from '@texra-ai/llm';
+import { configurationFor } from '../../src/api/configuration.js';
 import { googleInteractionsModel } from '../../src/api/googleInteractions.js';
 import { judgedModel } from '../../src/api/verdict.js';
 
@@ -395,6 +398,34 @@ describe('canonical Google Interactions protocol', () => {
       expect(Exit.hasInterrupts(exit)).toBe(true);
     }),
   );
+
+  // Failure mode: a Gemini effort the Interactions request names
+  // (`xhigh`) must reach it as itself, not fall back to `high`.
+  it('sends a Gemini xhigh effort as the xhigh thinking level', () => {
+    const model = modelConfig('google/gemini-4-hydrogen');
+    assert(model);
+    const bound = configurationFor({
+      model,
+      route: {
+        kind: 'api-key',
+        endpoint: 'https://synthetic.invalid',
+        provider: 'google',
+        plan: null,
+      },
+      bearer: 'synthetic-key',
+      options: {
+        reasoning: {
+          thinking: true,
+          effort: ReasoningEffort.XHIGH,
+          mode: null,
+        },
+      },
+    });
+    assert(Result.isSuccess(bound));
+    const { configuration } = bound.success;
+    assert(configuration.protocol === 'google-interactions');
+    expect(configuration.defaults.thinkingLevel).toBe('xhigh');
+  });
 
   // Failure mode: judging a cancellation refusal must not turn the
   // lifecycle's explicit non-retryable result into a retryable rejection.
