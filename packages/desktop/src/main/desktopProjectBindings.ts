@@ -274,7 +274,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
             host: hosts.run,
             workspaceRoot: project.root,
             openFiles: host.openFileDialog,
-            workspaceFile: workspace.file,
             postToRenderer: host.post,
             settings: options.settings,
             openExternalUrl: host.openExternalUrl,

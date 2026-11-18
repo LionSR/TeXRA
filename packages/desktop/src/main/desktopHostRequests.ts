@@ -30,14 +30,12 @@ import {
 import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
-import type { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 
 interface DesktopHostRequestsOptions {
   host: DesktopAgentRunHost;
   /** The project's folder; undefined for the window with no folder. */
   workspaceRoot: string | undefined;
   openFiles: OpenFilesDialog;
-  workspaceFile: ReturnType<typeof createDesktopWorkspaceIpc>['file'];
   postToRenderer(message: DesktopPush): void;
   /** The window's settings surface, absent while the window switches
    *  projects; the onboarding card's sign-in goes through it. */
@@ -124,12 +122,10 @@ export const createDesktopHostRequests = (
       },
     };
 
-    /** The requests this window performs its own way. A capability's failure
-     *  is named through `hostFailure`, so the failure channel is the value
-     *  the request failed with. */
-    const own: OwnHostHandlers = {
-      workspaceFile: (request) => options.workspaceFile(request.action),
-    };
+    /** The requests a host performs its own way: the desktop has none (no
+     *  pop-out, no editor current file, no getting-started walkthrough), so
+     *  the shared router refuses each. */
+    const own: OwnHostHandlers = {};
 
     return {
       bindings,

@@ -35,7 +35,7 @@ import {
   createWorkbenchController,
   type PaneKind,
 } from './workbenchController';
-import { agentDocumentIdentity } from '../shared/desktopAgentDocument';
+import { agentDocumentIdentity } from '@texra/shared/agentDocumentTarget';
 
 const FILE_REQUEST_TIMEOUT_MS = 60_000;
 

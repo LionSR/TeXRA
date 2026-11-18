@@ -11,7 +11,8 @@ import { layer } from '@effect/vitest';
 import { Effect, Exit } from 'effect';
 import { beforeEach, expect } from 'vitest';
 
-import { createDesktopWorkspaceIpc } from '@desktop/main/desktopWorkspaceIpc';
+import { sessionFsLayer } from '@texra-ai/harness/host';
+import { answerWorkspaceFile } from '@texra/controllers/session/workspaceFileRequest';
 import { createFakeHost } from '@test/support/fakeHost';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
@@ -21,31 +22,16 @@ let workspaceRoot = '';
 let externalPath = '';
 let missingExternalPath = '';
 
-/** The IPC with its file follower running for the test's scope: it follows
- *  a process-global bus, so a follower that outlived the test would keep
- *  reacting to later tests' emits. */
-const createIpc = Effect.gen(function* () {
-  const ipc = createDesktopWorkspaceIpc(() => {}, {
-    ptyHost: {
-      create: () => Effect.die(new Error('Terminal is not used in this test.')),
-      get: () => undefined,
-      disposeAll: () => {},
-    },
-    browserViews: {
-      open: () => {},
-      show: () => {},
-      hideAll: () => {},
-      close: () => {},
-      disposeAll: () => {},
-    },
-    toWindowBounds: (bounds) => bounds,
-    workspaceRoot,
-  });
-  yield* Effect.forkScoped(ipc.followFilesWritten, { startImmediately: true });
-  return ipc;
-});
+/** The request over the test's workspace, as the window's dispatch provides
+ *  its session's rooted filesystems. */
+const file = (action: Parameters<typeof answerWorkspaceFile>[0]) =>
+  answerWorkspaceFile(action).pipe(
+    Effect.provide(
+      sessionFsLayer({ workspace: workspaceRoot, storage: fixtureRoot }),
+    ),
+  );
 
-layer(SessionGraph.hosted)('desktop workspace IPC', (it) => {
+layer(SessionGraph.hosted)('workspaceFile request', (it) => {
   const tempDirs = useTempDirs();
 
   beforeEach(async () => {
@@ -73,22 +59,20 @@ layer(SessionGraph.hosted)('desktop workspace IPC', (it) => {
       'reads regular workspace files but rejects symlink targets outside the workspace',
       () =>
         Effect.gen(function* () {
-          const ipc = yield* createIpc;
-
-          expect(yield* ipc.file({ kind: 'read', path: 'paper.tex' })).toEqual({
+          expect(yield* file({ kind: 'read', path: 'paper.tex' })).toEqual({
             kind: 'contents',
             contents: 'inside',
           });
 
           const refused = [
-            ipc.file({ kind: 'read', path: 'linked.tex' }),
-            ipc.file({
+            file({ kind: 'read', path: 'linked.tex' }),
+            file({
               kind: 'write',
               path: 'linked.tex',
               base: null,
               contents: 'overwritten',
             }),
-            ipc.file({
+            file({
               kind: 'write',
               path: 'dangling-linked.tex',
               base: null,
@@ -108,9 +92,8 @@ layer(SessionGraph.hosted)('desktop workspace IPC', (it) => {
       'refuses a save over a file that changed on disk since the editor read it',
       () =>
         Effect.gen(function* () {
-          const ipc = yield* createIpc;
           const save = (contents: string, base: string | null) =>
-            ipc.file({ kind: 'write', path: 'paper.tex', contents, base });
+            file({ kind: 'write', path: 'paper.tex', contents, base });
           // A run rewrote the file while the editor held "inside".
           writeFileSync(join(workspaceRoot, 'paper.tex'), 'from the run');
 

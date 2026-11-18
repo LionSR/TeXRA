@@ -16,7 +16,7 @@ import {
 import { desktopSignInPresenters } from './desktopSignInPresenters.js';
 import { installDesktopWindowTitle } from './desktopWindowTitle.js';
 import { desktopSpawner } from './desktopWindows.js';
-import { agentDocumentForPath } from './desktopAgentDocuments.js';
+import { agentDocumentForPath } from '@texra/controllers/session/workspaceFileRequest';
 import { DesktopCommandFailed } from './desktopIpcTypes.js';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 import type { ProjectBindings } from './desktopProjectBindings.js';

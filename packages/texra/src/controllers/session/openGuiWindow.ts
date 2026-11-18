@@ -93,6 +93,7 @@ import {
 } from './hostSnapshotSource';
 import { SessionBridge } from './SessionBridge';
 import { findLabelInWorkspace } from './workspaceFileOptions';
+import { answerWorkspaceFile } from './workspaceFileRequest';
 import type { RunId } from '@texra-ai/harness/schemas';
 import {
   agentKeyOf,
@@ -132,7 +133,6 @@ const OWN_REQUEST_LABEL = {
   useCurrentFile: "The editor's current file",
   addOpenedFiles: "The editor's open files",
   gettingStarted: 'Starting a project',
-  workspaceFile: 'The file editor',
 } as const satisfies Partial<Record<HostCommand['kind'], string>>;
 
 /** The requests a host answers its own way. */
@@ -509,6 +509,8 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         case 'openFile':
           yield* bindings.openPath(request.path, request.line ?? undefined);
           return done;
+        case 'workspaceFile':
+          return yield* answerWorkspaceFile(request.action);
         case 'openLabel': {
           // The search is the body's; the host only opens the match.
           const opened = yield* findLabelInWorkspace(
