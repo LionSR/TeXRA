@@ -124,10 +124,9 @@ const materializeStdinDocumentTaskInput = Effect.fn(
       fs.remove(directory, { recursive: true, force: true }).pipe(Effect.orDie),
   );
   const inputFile = path.join(inputDir, STDIN_DOCUMENT_TASK_INPUT_BASENAME);
-  // Finish this finite local write before the scope removes its directory.
-  yield* fs
-    .writeFileString(inputFile, text, { flag: 'wx' })
-    .pipe(Effect.uninterruptible);
+  // The process's file system finishes a write it started before an
+  // interruption lands, so the scope never removes the directory under it.
+  yield* fs.writeFileString(inputFile, text, { flag: 'wx' });
   return inputFile;
 });
 

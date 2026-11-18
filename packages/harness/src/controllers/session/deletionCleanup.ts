@@ -113,7 +113,8 @@ const removeRunDirectories: (
         { concurrency: 8, discard: true },
       );
     },
-    Effect.uninterruptible,
+    // Uninterruptible where it runs: the store's `collect` masks the
+    // cleanup it is handed, then marks the deletion collected.
     Effect.catchIf(meansAbsent, () => Effect.void),
   );
 
