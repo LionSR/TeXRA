@@ -231,7 +231,7 @@ export const serviceHandlers = (
                 () => SubscriptionRef.update(control.watching, (n) => n - 1),
               );
               const session = yield* open(workspace);
-              return frameSubscription({ view: session.view }, subscribe);
+              return frameSubscription(session.view, subscribe);
             }),
           ),
         'task.result': ({ workspace, runId, activation }) =>
