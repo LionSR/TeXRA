@@ -54,7 +54,7 @@ import {
   SessionViewAccess,
 } from '@shared/session/runHistory';
 import { acceptsFollowUp, descendantRuns } from '@shared/session/sessionView';
-import { runBypasses } from '@shared/approvalBypassKind';
+import { NO_APPROVAL_GRANTS, runBypasses } from '@shared/approvalBypassKind';
 import { followUpDisplay } from '@shared/subagentFollowup';
 import { CURATED_MODELS } from '@texra/model/curatedModels';
 import {
@@ -576,6 +576,8 @@ function seedRun(
         ? null
         : { id: options.parentId, call: null },
     provenance: null,
+    worktree: null,
+    approvalPolicy: NO_APPROVAL_GRANTS,
   });
   if (identity.kind === 'agent') {
     publish({
@@ -660,7 +662,7 @@ function seedStanding(runId: RunId, standing: SeededStanding): void {
     publish({
       type: 'run.position',
       aggregateId: runId,
-      payload: { at: 'waiting' },
+      payload: { at: 'waiting', turn: run?.turn ?? 1 },
     });
   } else {
     publish({
@@ -1933,6 +1935,8 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
       // refuses a parent that never started.
       parent: parentId === null ? null : log.parent(parentId),
       provenance: null,
+      worktree: null,
+      approvalPolicy: NO_APPROVAL_GRANTS,
     });
     log.emit(id, 10_000_000, { type: 'run.activate' });
   }

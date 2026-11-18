@@ -11,6 +11,7 @@ import { zstdDecompressSync } from 'node:zlib';
 
 import { Effect, Result, Schema, Struct } from 'effect';
 
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { withLogChannel } from '@logger/effectLog';
 import {
   DISPLAY_ROW_TYPES,
@@ -381,6 +382,8 @@ function bareStart(input: SqlRow): SessionRow | null {
     takesFollowUps: false,
     parent: null,
     provenance: null,
+    worktree: null,
+    approvalPolicy: NO_APPROVAL_GRANTS,
   };
 }
 

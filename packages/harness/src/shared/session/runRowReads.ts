@@ -10,7 +10,6 @@
  *
  * Pure: no IO, no clock, no platform, no synthetic id.
  */
-import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
   type RunId,
   type RunOutcome,
@@ -258,11 +257,7 @@ export function recordAfter(record: RunRows, row: SessionRow): RunRows {
   if (!isRecordRow(row)) return record;
   switch (row.type) {
     case 'run.start':
-      return {
-        ...record,
-        start: row,
-        grants: row.approvalPolicy ?? NO_APPROVAL_GRANTS,
-      };
+      return { ...record, start: row, grants: row.approvalPolicy };
     case 'approval.policy':
       return { ...record, grants: row.snapshot };
     // A resumed run never carries the previous lifecycle's end or stop, and

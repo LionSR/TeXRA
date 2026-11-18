@@ -224,7 +224,7 @@ function answerFor(
       case 'retry':
         return {
           kind: 'retry',
-          credentialFailure: payload.data.credentialSwitch != null,
+          credentialFailure: payload.data.credentialSwitch !== null,
         };
       case 'plugin':
         return undefined;

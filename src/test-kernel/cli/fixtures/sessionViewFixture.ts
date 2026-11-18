@@ -15,6 +15,7 @@ import {
   type SessionView,
 } from '@texra-ai/harness/schemas';
 import { bindSessionView, sessionView } from '@cli/chat/tui/state/sessionView';
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { emptySessionView } from '@shared/session/sessionView';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import { SessionGraph } from '@test/support/testKernel';
@@ -68,6 +69,8 @@ export function viewWith(
       parent: run.parentId === undefined ? null : log.parent(run.parentId),
       provenance: null,
       takesFollowUps: true,
+      worktree: null,
+      approvalPolicy: NO_APPROVAL_GRANTS,
     });
     log.emit(run.id, 1, { type: 'run.activate' });
     log.emit(run.id, 1, {

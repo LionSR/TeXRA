@@ -119,9 +119,9 @@ export const NO_FACTS: RunFacts = Object.freeze({
  *  last, and a `null` instruction returns to the launch's. */
 export function withInput(
   input: RunFacts['input'],
-  recorded: RunInput | null | undefined,
+  recorded: RunInput | undefined,
 ): RunFacts['input'] {
-  if (recorded == null) return input;
+  if (recorded === undefined) return input;
   const { instruction: was, ...kept } = input;
   const { instruction, system, activated, memoryMisses } = recorded;
   const next = instruction === undefined ? was : (instruction ?? undefined);
@@ -275,7 +275,7 @@ export function registrationDrafts(
     aggregateId: target,
     identity: options.identity,
     takesFollowUps: options.takesFollowUps ?? false,
-    worktree: worktree ? { workingDirectory: worktree } : undefined,
+    worktree: worktree ? { workingDirectory: worktree } : null,
     parent: options.parent ?? null,
     provenance: options.provenance ?? null,
     approvalPolicy: options.grants ?? NO_APPROVAL_GRANTS,

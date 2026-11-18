@@ -93,7 +93,7 @@ export type PositionAt = typeof PositionAtSchema.Type;
  *  delivering `append` move it on), and the view as `RunView.position`. */
 export const RunPositionPayloadSchema = Schema.Struct({
   at: PositionAtSchema,
-  turn: Schema.optional(Schema.NullOr(NonNegativeIntSchema)),
+  turn: NonNegativeIntSchema,
   /** A `turn.end`'s: how the turn ended, `completed` with its answer or
    *  `failed` without one. The run's own end is its `run.end` row. */
   outcome: Schema.optional(Schema.NullOr(RunOutcomeSchema)),
@@ -216,9 +216,9 @@ export const ModelMessagePayloadSchema = Schema.Union([
     kind: Schema.Literal('append'),
     messages: Schema.Array(StoredMessageSchema).check(Schema.isMinLength(1)),
     sourceResponse: Schema.NullOr(ResponseIdSchema),
-    input: Schema.optional(Schema.NullOr(RunInputSchema)),
+    input: Schema.optional(RunInputSchema),
     reason: Schema.optional(
-      Schema.NullOr(Schema.Literals(['blank-continuation', 'final-tool'])),
+      Schema.Literals(['blank-continuation', 'final-tool']),
     ),
   }),
 ]).check(
@@ -297,7 +297,7 @@ export const ContextEditPayloadSchema = Schema.Struct({
   }),
   messages: Schema.Array(StoredMessageSchema),
   usage: Schema.NullOr(NormalizedUsageSchema),
-  input: Schema.optional(Schema.NullOr(RunInputSchema)),
+  input: Schema.optional(RunInputSchema),
 })
   .check(
     Schema.makeFilter(({ range }) => range.from <= range.to, {

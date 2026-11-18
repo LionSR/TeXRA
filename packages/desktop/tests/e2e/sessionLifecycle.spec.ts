@@ -95,6 +95,8 @@ async function writeCanonicalRunFixtures(
             takesFollowUps: true,
             parent: null,
             provenance: null,
+            worktree: null,
+            approvalPolicy: { own: {}, goal: [] },
           },
           { type: 'run.activate', aggregateId: id },
           {
@@ -105,7 +107,7 @@ async function writeCanonicalRunFixtures(
           {
             type: 'run.position',
             aggregateId: id,
-            payload: { at: runFixture.step },
+            payload: { at: runFixture.step, turn: 0 },
           },
         ]);
       }

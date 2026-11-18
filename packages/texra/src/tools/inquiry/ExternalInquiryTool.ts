@@ -143,7 +143,7 @@ function buildReadOutput(manifest: InquiryThreadRecord): ToolResult {
     switch (turn.kind) {
       case 'answered':
         lines.push('', `A: (answered ${turn.answeredAt})`, turn.answer);
-        if (turn.sessionLinks?.length) {
+        if (turn.sessionLinks.length > 0) {
           lines.push('', 'Session links:');
           for (const link of turn.sessionLinks) lines.push(`  - ${link}`);
         }

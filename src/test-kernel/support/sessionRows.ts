@@ -3,6 +3,7 @@
 // renamed in one fixture.
 
 // Local imports - harness
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { type RunId, type SessionRowDraft } from '@shared/schemas';
 import type { RunHistoryDraft } from '@shared/session/runState';
 
@@ -26,6 +27,8 @@ export const runStart = (
   parent: null,
   provenance: null,
   ...over,
+  worktree: null,
+  approvalPolicy: NO_APPROVAL_GRANTS,
 });
 
 /**

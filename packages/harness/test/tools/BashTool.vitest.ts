@@ -71,7 +71,7 @@ async function parkRunWaiting(
       {
         type: 'run.position',
         aggregateId: runId,
-        payload: { at: 'waiting' },
+        payload: { at: 'waiting', turn: 0 },
       },
     ]),
   );
