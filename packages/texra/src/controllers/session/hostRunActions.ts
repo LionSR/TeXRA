@@ -21,8 +21,8 @@ import {
   workspaceEnvironmentLayer,
   programLaunch,
 } from '@texra-ai/harness/host';
-import { Secrets, withLogChannel } from '@texra-ai/harness/plugins';
-import { Effect, FileSystem, Scope } from 'effect';
+import { withLogChannel } from '@texra-ai/harness/plugins';
+import { Effect, Scope } from 'effect';
 
 import {
   agentFileName,
@@ -158,18 +158,9 @@ export const createHostRunActions = Effect.fn(
   'hostRunActions.createHostRunActions',
 )(function* (
   ports: HostRunActionPorts,
-): Effect.fn.Return<
-  HostRunActions,
-  never,
-  FileSystem.FileSystem | Secrets | Scope.Scope
-> {
-  // Resolved once here and carried: the planner's workspace probes below
-  // read through this filesystem rather than taking one from whatever
-  // context each of its callers happens to run on.
-  const fs = yield* FileSystem.FileSystem;
+): Effect.fn.Return<HostRunActions, never, Scope.Scope> {
   // What an action does when its run ends lives as long as the window.
   const scope = yield* Scope.Scope;
-  const secrets = yield* Secrets;
   const { roots, session } = ports;
   const view = () => session.view.current();
   const runView = (runId: RunId) => view().runs.get(runId);
@@ -485,7 +476,6 @@ export const createHostRunActions = Effect.fn(
       const config = yield* readConfig(runId);
       const modelOptions = yield* loadModelOptions(roots).pipe(
         Effect.provide(workspaceEnvironmentLayer(roots.workspace)),
-        Effect.provideService(Secrets, secrets),
       );
       const fixer = yield* planCompileFixer({
         runId,
@@ -493,7 +483,7 @@ export const createHostRunActions = Effect.fn(
         rounds: roundsOfRun(runId),
         modelOptions,
         workspaceRoot: roots.workspace,
-      }).pipe(Effect.provideService(FileSystem.FileSystem, fs));
+      });
       yield* runAgentRequest(fixer, { helperModel: true });
     }),
     fork: Effect.fn('HostRunActions.fork')(function* (runId, at) {
