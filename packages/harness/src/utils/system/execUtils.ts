@@ -259,10 +259,6 @@ function drain(
   });
 }
 
-function describeFailure(error: PlatformError): string {
-  return toErrorMessage(error);
-}
-
 /** The command for a log or a message: argv quoted as this platform's
  *  programs split a command line, with control characters escaped. */
 function displayCommand(command: string | string[]): string {
@@ -346,7 +342,7 @@ const awaitOutcome = Effect.fnUntraced(function* (
     Effect.map((exit): Outcome =>
       Result.isSuccess(exit)
         ? { _tag: 'Exited', code: exit.success }
-        : { _tag: 'Signalled', description: describeFailure(exit.failure) },
+        : { _tag: 'Signalled', description: toErrorMessage(exit.failure) },
     ),
     Effect.catchTags({
       OutputLimitExceeded: (error) =>
@@ -359,7 +355,7 @@ const awaitOutcome = Effect.fnUntraced(function* (
       PlatformError: (error) =>
         Effect.succeed<Outcome>({
           _tag: 'ReadFailed',
-          description: describeFailure(error),
+          description: toErrorMessage(error),
         }),
     }),
   );

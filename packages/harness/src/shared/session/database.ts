@@ -60,14 +60,13 @@ export type AggregateState = typeof AggregateStateSchema.Type;
  *  SQLite error that says why (`database is locked`), its reason's cause,
  *  which `toErrorMessage` reads. */
 const storeFailure = { path: Schema.String, cause: Schema.Defect() };
-const storeFailureMessage = (cause: unknown): string => toErrorMessage(cause);
 
 /** The database could not be opened, or its schema could not be applied. */
 export class DatabaseOpenFailed extends Schema.TaggedError<DatabaseOpenFailed>()(
   'DatabaseOpenFailed',
   storeFailure,
 ) {
-  override readonly message = storeFailureMessage(this.cause);
+  override readonly message = toErrorMessage(this.cause);
 }
 
 /** A batch was rejected whole: no member or sequence moved. */
@@ -75,7 +74,7 @@ export class DatabaseWriteFailed extends Schema.TaggedError<DatabaseWriteFailed>
   'DatabaseWriteFailed',
   storeFailure,
 ) {
-  override readonly message = storeFailureMessage(this.cause);
+  override readonly message = toErrorMessage(this.cause);
 }
 
 /** A batch member targets an aggregate that is closed (deleted) or was
@@ -101,7 +100,7 @@ export class DatabaseReadFailed extends Schema.TaggedError<DatabaseReadFailed>()
   'DatabaseReadFailed',
   storeFailure,
 ) {
-  override readonly message = storeFailureMessage(this.cause);
+  override readonly message = toErrorMessage(this.cause);
 }
 
 /** The strings a blob read returns, by digest: total over the digests it
