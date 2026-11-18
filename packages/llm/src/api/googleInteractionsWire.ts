@@ -117,6 +117,8 @@ export const WireEventSchema = Schema.Union([
   Schema.Struct({
     event_type: Schema.Literal('step.stop'),
     index: CountSchema,
+    // The interaction's running total, which replaces the last receipt;
+    // `step_usage` counts this step alone.
     usage: Schema.optional(WireUsageSchema),
   }),
   Schema.Struct({
