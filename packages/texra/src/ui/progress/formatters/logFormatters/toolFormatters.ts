@@ -58,12 +58,13 @@ export function formatToolUseTemplate(
   tools: HostSnapshot['tools'],
 ): FormatResult {
   const { model } = row;
-  const running = model.isInProgress && !interrupted;
-  const stopped = model.isInProgress && interrupted;
+  const inProgress = model.status === 'in_progress';
+  const running = inProgress && !interrupted;
+  const stopped = inProgress && interrupted;
   const toolName = row.log.toolName.trim();
   const normalizedToolName = normalizeToolName(toolName);
   const displayKind = toolDisplayKind(toolName);
-  const showAsError = model.isError && !model.isUserFeedback;
+  const showAsError = model.status === 'failed' && !model.isUserFeedback;
 
   let iconName: IconName;
   if (model.isUserFeedback) {
@@ -101,7 +102,7 @@ export function formatToolUseTemplate(
 
   // The shell exit status a failed call reported. Only meaningful on failure:
   // a successful command's `exit 0` says nothing the status icon does not.
-  if (model.isError && model.exitCode !== undefined) {
+  if (model.status === 'failed' && model.exitCode !== undefined) {
     // prettier-ignore
     sections.push(html`<div class="tool-use-section tool-exit-code" dir="ltr">exit ${model.exitCode}</div>`);
   }

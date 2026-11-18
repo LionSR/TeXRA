@@ -48,7 +48,7 @@ interface RunProgressSession {
  *  run's own handle does, as does the chat for every run it lists). */
 export function finishedToolCalls(run: RunView): number {
   return run.transcript.rows.filter(
-    (row) => row.kind === 'tool' && !row.model.isInProgress,
+    (row) => row.kind === 'tool' && row.model.status !== 'in_progress',
   ).length;
 }
 

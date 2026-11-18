@@ -7,7 +7,7 @@ status: proposed
 
 这是一份评审后的设计提案，基线是 `main` 的 `db09959`。范围是一次运行（run）的数据怎么存、怎么读，不含设置和其他当前值。
 
-**进度。** 提案里的格式批已在同一分支落地（§5 的第 1、2 步）。规则二（§3.2）第一次算账时被否决，换成“单一事实来源”的问法之后找到了更小的做法，已落地。三份 implemented 说明里点名的过时段落已改。冻结时归零还没有做，要等负责人决定。正文各节写明哪些已经是现状、哪些仍是提议。实现时有两处和最初的提案不同，见 §3.1 的“和最初提案的两处不同”。
+**进度。** 提案里的格式批已落地（§5 的第 1、2 步），和规则二、§8 的修复一起随 #14894 合入 `main`（`.agents/docs/implemented/architecture/2026-11-10-harness-against-pi-durable-and-deepseek-round-2.md` 记着这次合入；2026-11-17 在 `c78e9f9` 上按整词搜索核对过：`cardRows`、`settleCards`、`cardResult`、`run_record`、`lifecycleOf`、`OwnerId`、`ProcessIdentity` 都搜不到，`platform/defaults/nodeProcesses.ts` 不存在）。规则二（§3.2）第一次算账时被否决，换成“单一事实来源”的问法之后找到了更小的做法，已落地。三份 implemented 说明里点名的过时段落已改。冻结时归零还没有做，要等负责人决定（`config/storage/frozen/` 仍不存在）。正文各节写明哪些已经是现状、哪些仍是提议。实现时有两处和最初的提案不同，见 §3.1 的“和最初提案的两处不同”。
 
 与已定案规则的关系：
 

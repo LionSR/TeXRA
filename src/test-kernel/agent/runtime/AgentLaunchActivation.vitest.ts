@@ -128,7 +128,7 @@ describe(
                 Effect.flatMap((definition) =>
                   startChildRun(runId, definition, {
                     identity: { kind: 'agent', agent: 'assistant' },
-                    parentId,
+                    parent: { id: parentId, call: null },
                   }),
                 ),
                 Effect.provide(session),

@@ -495,8 +495,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
       : yield* programLaunch(program.name, program.args, approved).pipe(
           Effect.orDie,
         );
-  const childApproval = decided.approvalMeta.childApproval ?? 'inherit';
-  const grants = delegatedChildGrants(childApproval);
+  const grants = delegatedChildGrants(decided.approvalMeta.childApproval);
   const configPayload = {
     ...approved,
     ...(outputSchema !== undefined && { outputSchema }),

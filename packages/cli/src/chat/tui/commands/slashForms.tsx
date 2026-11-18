@@ -60,10 +60,10 @@ function FormBusyFrame(props: {
   const [copied, setCopied] = useState(false);
   // Once archived, the message has been written to scrollback and is no
   // longer "live" for display/sizing purposes, even though the raw value is
-  // kept on `progress.copyableMessage` for archiveCopyable's own use.
-  const liveCopyable = progress.copyableMessageArchived
+  // kept on `progress.copyable` for archiveCopyable's own use.
+  const liveCopyable = progress.copyable?.archived
     ? undefined
-    : progress.copyableMessage;
+    : progress.copyable?.text;
   useInput((input, key) => {
     if (key.ctrl) return;
     if (input === 'c' && liveCopyable) {

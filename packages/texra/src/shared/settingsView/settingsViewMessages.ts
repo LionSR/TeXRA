@@ -270,8 +270,8 @@ const ToolDashboardItemSchema = Schema.Struct({
   configNotes: Schema.optional(Schema.String),
   statusDetail: Schema.optional(Schema.String),
   authNote: Schema.optional(Schema.String),
-  toggleable: Schema.optional(Schema.Boolean),
-  enabled: Schema.optional(Schema.Boolean),
+  /** A built-in plugin is always on; one with a toggle is on or off. */
+  switch: Schema.Literals(['always-on', 'on', 'off']),
   settings: Schema.optional(
     Schema.Array(Schema.Tuple([Schema.String, Schema.String])),
   ),

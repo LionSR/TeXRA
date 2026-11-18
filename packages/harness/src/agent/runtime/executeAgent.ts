@@ -72,7 +72,7 @@ const enterRun = Effect.fn('enterRun')(function* (
 ) {
   const log = yield* SessionLog;
   const { config } = definition;
-  const parent = options.registration?.parentId ?? options.parentId ?? null;
+  const parent = options.registration?.parent?.id ?? options.parentId ?? null;
   // A resumed run's facts, read once: whether its parent's call awaits it,
   // and whether its launch let it take input.
   const facts =
@@ -81,7 +81,7 @@ const enterRun = Effect.fn('enterRun')(function* (
   // registration says; a resumed run's rows do.
   const awaited =
     options.registration !== undefined
-      ? options.registration.parentCall?.awaited === true
+      ? options.registration.parent?.call?.awaited === true
       : (facts?.start?.parent?.call?.awaited ?? false);
   // Whether the run ends after one cycle, decided once: every child does
   // (a message to it is a resume), a script's run (its call is its only

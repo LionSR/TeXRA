@@ -679,7 +679,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
             case 'dir': {
               // Without a custom directory there is nothing to reveal, so the
               // banner's link is the agent settings instead.
-              if (request.customDirSet !== true) {
+              if (!request.customDirSet) {
                 yield* bindings.openSettings('agents/library');
                 return done;
               }

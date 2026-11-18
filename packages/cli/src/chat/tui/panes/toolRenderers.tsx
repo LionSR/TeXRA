@@ -161,7 +161,7 @@ function toolErrorLines(
 ): string[] {
   if (cutByRunEnd === true) return [CUT_BY_RUN_END_NOTE];
   if (model.errorPreview) return elidedLines(model.errorPreview, elide);
-  return model.isError && !model.isUserFeedback ? ['(error)'] : [];
+  return model.status === 'failed' && !model.isUserFeedback ? ['(error)'] : [];
 }
 
 // ---------------------------------------------------------------------------
@@ -324,6 +324,7 @@ function buildStyledLines(
   const toolName = toolRow.log.toolName.trim();
   const elide = options.elide !== false;
   const isBashKind = toolDisplayKind(toolName) === 'bash';
+  const failed = model.status === 'failed';
 
   const budget = toolHeaderPreviewBudget(options.width, model.headerLabel);
   const preview =
@@ -331,12 +332,10 @@ function buildStyledLines(
       ? truncateSummaryToWidth(safeTerminalText(headerPreview), budget)
       : '';
   // A call whose status was never recorded has no tone: a dim dot.
-  const statusTone = model.isError
-    ? 'danger'
-    : model.status && TOOL_STATUS[model.status].tone;
+  const statusTone = model.status && TOOL_STATUS[model.status].tone;
   const statusColor = statusTone && TONE_PAINT[statusTone].color;
 
-  const patchGroups = patchGroupsFromSections(model.sections, model.isError);
+  const patchGroups = patchGroupsFromSections(model.sections, failed);
   const sectionRows = model.sections.flatMap((section) =>
     isHeaderRedundantSection(section, headerPreview, isBashKind)
       ? []
@@ -351,7 +350,7 @@ function buildStyledLines(
 
   const outputRows =
     output.kind === 'shown' ? cornerRows(elidedLines(output.text, elide)) : [];
-  const exitCode = model.isError ? model.exitCode : undefined;
+  const exitCode = failed ? model.exitCode : undefined;
   const errorRows = cornerRows(toolErrorLines(toolRow, elide), COLOR_ERROR);
   const feedbackRows = model.userInstruction
     ? cornerRows(labeledLines('Feedback:', model.userInstruction, elide))

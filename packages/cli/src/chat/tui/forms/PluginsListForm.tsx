@@ -80,7 +80,7 @@ export function PluginsListForm(
     // A plugin's bundled agents follow its switch (`pluginCatalogLayer`).
     if (row.kind === 'texra')
       return Effect.flatMap(ToolCatalog, (catalog) =>
-        catalog.setEnabled(row.item.id, row.item.enabled === false),
+        catalog.setEnabled(row.item.id, row.item.switch === 'off'),
       );
     if (row.kind === 'installed')
       // On and trusted switches off; on but changed since it was trusted

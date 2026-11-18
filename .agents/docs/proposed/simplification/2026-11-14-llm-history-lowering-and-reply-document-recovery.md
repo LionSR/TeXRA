@@ -32,8 +32,8 @@ decisions that are the same in all three are already single functions in
   `callsAnsweredBy`), including the "answers no call" error;
 - the wrapper text of a system update shown as user text (`systemUpdateText`);
 - dropping what another model of the same protocol left behind
-  (`replayableHistory`; Anthropic and OpenAI call it, Google does not, see
-  the open question below);
+  (`replayableHistory`; all three call it, Google since the follow-up
+  below);
 - parsing stored call arguments for the two APIs that take an object
   (`parseOutboundToolArguments`);
 - the origin comparison (`sameModelOrigin`).
@@ -48,7 +48,7 @@ differs:
 | System message mid-history | native `system` role only in an allowed position (reads the next message and the previous output), else user text | always user text, joined into the previous `user_input` step                                         | `developer` on the OpenAI endpoint, else user text                                     |
 | Role grouping              | one message per history message                                                                                   | joins adjacent user content; one step per assistant part                                             | one item per part or result                                                            |
 | Tool result                | all results of a group in one user message, `is_error` flag                                                       | one step per result; non-text, non-image parts moved to a following user step, labelled by call name | one item per result; text-only results become a string, errors get an `Error: ` prefix |
-| Reasoning                  | another origin's is an error after `replayableHistory`; needs a signature or redacted data                        | another origin's is skipped; signature optional, no content                                          | needs its own evidence; replays item id, status, encrypted content                     |
+| Reasoning                  | another origin's is an error after `replayableHistory`; needs a signature or redacted data                        | another origin's is an error after `replayableHistory`; signature optional, no content               | needs its own evidence; replays item id, status, encrypted content                     |
 | Assistant text             | text blocks; refusal content rejected                                                                             | one `model_output` step; any evidence rejected                                                       | plain message, or the original item with id, status and phase when evidence is present |
 | Local call                 | parsed arguments; evidence rejected                                                                               | parsed arguments; duplicate ids rejected                                                             | raw argument text; optional namespace, item id, status                                 |
 | Attachments                | `inputPart` with an upload cache                                                                                  | `lowerInputPart`                                                                                     | `responsesContent` with document access                                                |
@@ -90,7 +90,8 @@ the codec layout move, so the next audit does not re-raise it.
 
 ### Recommendation and verification
 
-Choose C. A and B both add an interface over three callers whose branches
+Choose C. Still open at `c78e9f9`: `refuted-candidates.json` has no entry
+for the walk yet. A and B both add an interface over three callers whose branches
 share no behavior, which is the single-caller-extraction and pass-through
 shape the design guardrails refuse. Two smaller follow-ups are worth doing
 on their own:
@@ -107,12 +108,16 @@ on their own:
    assistant message with no origin would go from omitted to sent as an
    unsigned `thought` step. The harness produces neither: a resume, a fork
    and a model switch all stay on the run's backend, and so on its protocol
-   (`foreignProtocol` in `runProgram.ts` refuses the rest), and its one
+   (`foreignProtocol` in
+   `packages/harness/src/agent/runtime/loop/runLoop.ts` refuses the rest), and its one
    origin-less assistant message (`turnRowHandlers.ts`, a handed-down call)
    holds only a local call. An SDK caller can send both, so the swap is a
    public-behavior decision for the llm package, not a refactor: decide
    whether origin-less reasoning is this model's, then make the swap with
    that answer.
+   Done by 2026-11-17: Google's `lowerMessages` calls `replayableHistory`
+   (`packages/llm/src/api/googleInteractions.ts:105`) and rejects
+   reasoning of another origin (`:161-171`) instead of skipping it.
 2. If a fourth protocol is added, revisit A with four callers.
 
 Any change here is checked by the request bodies the codec suites already
@@ -124,7 +129,7 @@ redacted blocks, ordered tool results, replay of another codec version),
 `packages/llm/test-live/googleInteractions.live.ts` and
 `packages/llm/test-live/openaiResponses.live.ts`. Prompt-cache hits depend
 on byte-identical prefixes (the top-level Anthropic `cache_control`, the
-Responses prefix fingerprint in `packages/llm/src/api/prefixFingerprint.ts`),
+Responses prefix fingerprint, now in `packages/llm/src/api/continuation.ts`),
 so a refactor must leave every lowered body byte-identical, not merely
 equivalent.
 
@@ -138,7 +143,7 @@ request with the exact envelope, a `<documents>` container holding one
 `<document name="...">` per expected file. Agent YAML never restates it.
 `document_extract` (`packages/texra/src/tools/documents/documentTools.ts`)
 applies the replacement rules, closes an open container
-(`ensureCorrectXmlStructure`) and calls `extractReplyDocuments`
+(`normalizeReplyXml`) and calls `extractReplyDocuments`
 (`packages/texra/src/agent/output/replyDocuments.ts`), which tries these in
 order and stops at the first that yields documents:
 
@@ -184,8 +189,8 @@ Three options, from least to most change:
    that names no document yields no outputs and the existing warning; the
    round's `missing` list already reaches the critic through
    `document_review`, and the raw reply is kept.
-2. **Reject and ask again.** As 1, plus the document recipe
-   (`packages/texra/src/agent/output/documentRecipe.ts`) re-requests once
+2. **Reject and ask again.** As 1, plus the document programs' revision
+   loop (`packages/texra/src/tools/theory/programs.ts`) re-requests once
    with a short message naming what was missing, before compile and diff.
    One extra model call on a malformed reply instead of a guess.
 3. **Tool-call emission.** The model writes each document through a tool
@@ -204,9 +209,10 @@ line carries a `recoveryStep` field in its data payload (`document-tags`,
 `content-similarity`), so a stored trace says which step fired; nothing
 aggregates them yet. Before retiring anything:
 
-- run the bundled document agents (`polish`, `correct`, `ocr`,
-  `paper2slide` under `packages/extension/resources/agents/`) across the
-  supported model routes and count step 1 through 5 hits;
+- run the theory plugin's document programs (`edit`, `transcribe`,
+  `slides` and the others in `packages/texra/src/tools/theory/programs.ts`,
+  which replaced the bundled document agents) across the supported model
+  routes and count step 1 through 5 hits;
 - retire a step when it fires on none of the current routes, or only on
   routes where the re-request of option 2 succeeds.
 
@@ -227,9 +233,9 @@ agents are unaffected in format because the envelope is not theirs to write.
 1. Record which step fired (one field, no behavior change). Landed: the
    `recoveryStep` field of each "Recovered" debug line in
    `replyDocuments.ts`.
-2. Collect counts over the bundled agents and routes; attach the table to
-   this note.
-3. Add the single re-request to the recipe behind the same counts: confirm
+2. Collect counts over the document programs and routes; attach the table
+   to this note. Not started at `c78e9f9`.
+3. Add the single re-request to the revision loop behind the same counts: confirm
    it recovers the replies steps 3 to 5 rescued.
 4. Delete step 5 first (largest, least certain guess, and the only user of
    `similarityBaseFiles` and `assignByContentSimilarity`), then 4, then 3,

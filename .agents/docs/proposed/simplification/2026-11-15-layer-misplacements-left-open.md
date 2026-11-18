@@ -26,6 +26,8 @@ key, `packages/texra/src/controllers/session/hostDraftRequests.ts` asks for
 the own-key route of a pinned chat model it never calls. Decision needed:
 what the harness exposes as "the credential for transcription" (a route of
 its own, or the OpenAI own-key route by provider).
+The transcription credential is open question 3 of
+[a subscription is a credential](../feature/2026-11-17-subscriptions-as-credentials.md).
 
 ## 2. The harness asks "is this Anthropic?" to choose prompt text
 

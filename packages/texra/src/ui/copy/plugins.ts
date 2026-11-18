@@ -63,7 +63,7 @@ export function pluginRowKey(row: PluginRow): string {
 export function pluginRowSwitchable(row: PluginRow): boolean {
   switch (row.kind) {
     case 'texra':
-      return row.item.toggleable === true;
+      return row.item.switch !== 'always-on';
     case 'installed':
       return row.plugin.code.length === 0 && row.plugin.problem === undefined;
     case 'mcp':
@@ -120,8 +120,7 @@ export function pluginRowSummary(row: PluginRow): string {
 export function pluginRowState(row: PluginRow): string {
   switch (row.kind) {
     case 'texra':
-      if (row.item.toggleable !== true) return 'always on';
-      return row.item.enabled === false ? 'off' : 'on';
+      return row.item.switch === 'always-on' ? 'always on' : row.item.switch;
     case 'installed':
       return row.plugin.enabled ? 'on' : 'off';
     case 'mcp':

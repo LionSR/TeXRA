@@ -1,16 +1,20 @@
 // Node imports
 import assert from 'node:assert/strict';
+import { once } from 'node:events';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Schema, Stream } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Result, Schema, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { beforeEach, describe, expect, vi } from 'vitest';
 import {
   completedTurn,
+  modelConfig,
+  ReasoningEffort,
   RemoteOperationSchema,
   type TurnRequest,
 } from '@texra-ai/llm';
+import { configurationFor } from '../../src/api/configuration.js';
 import { googleInteractionsModel } from '../../src/api/googleInteractions.js';
 import { judgedModel } from '../../src/api/verdict.js';
 
@@ -363,6 +367,102 @@ describe('canonical Google Interactions protocol', () => {
       });
     }),
   );
+
+  // Failure mode: a stream that stops at Google's per-request decode limit
+  // needs another billed request with its continuation token; the turn
+  // fails without a resend, since an unchanged resend stops there again.
+  it.effect('fails a turn stopped at the decode limit as not retryable', () =>
+    Effect.gen(function* () {
+      fetchModel.mockImplementationOnce(async () =>
+        response([
+          {
+            event_type: 'interaction.created',
+            interaction: { id: 'int_1', status: 'in_progress' },
+          },
+          {
+            event_type: 'interaction.completed',
+            interaction: {
+              id: 'int_1',
+              status: 'requires_continuation',
+              continuation_token: 'synthetic-token',
+            },
+          },
+        ]),
+      );
+      const configured = configuredModel();
+      const turn = yield* configured.prepareTurn(REQUEST);
+      assert(turn.mode === 'foreground');
+      const failure = yield* Effect.flip(
+        completedTurn(configured.streamTurn(turn)),
+      );
+      expect(fetchModel).toHaveBeenCalledTimes(1);
+      expect(failure).toMatchObject({
+        kind: 'provider-rejection',
+        retryable: false,
+        responseId: 'int_1',
+        message: expect.stringContaining('decode limit'),
+      });
+    }),
+  );
+
+  // Failure mode: the SDK reports our own abort of a pending request as its
+  // `APIUserAbortError`, which carries no cause. Joining that request after
+  // an interruption must not raise the abort as an independent defect.
+  it.effect('ends an interrupted background request as an interruption', () =>
+    Effect.gen(function* () {
+      const configured = configuredModel();
+      const turn = yield* configured.prepareTurn({
+        ...REQUEST,
+        mode: 'background',
+      });
+      assert(
+        turn.mode === 'background' && turn.protocol === 'google-interactions',
+      );
+      const background = configured.background;
+      assert(background);
+      const sent = yield* Deferred.make<void>();
+      fetchModel.mockImplementationOnce(async (input) => {
+        assert(input instanceof Request);
+        Deferred.doneUnsafe(sent, Effect.void);
+        if (!input.signal.aborted) await once(input.signal, 'abort');
+        throw input.signal.reason;
+      });
+      const submit = yield* Effect.forkChild(background.submit(turn));
+      yield* Deferred.await(sent);
+      yield* Fiber.interrupt(submit);
+      const exit = yield* Fiber.await(submit);
+      expect(Exit.hasDies(exit)).toBe(false);
+      expect(Exit.hasInterrupts(exit)).toBe(true);
+    }),
+  );
+
+  // Failure mode: a Gemini effort the Interactions request names
+  // (`xhigh`) must reach it as itself, not fall back to `high`.
+  it('sends a Gemini xhigh effort as the xhigh thinking level', () => {
+    const model = modelConfig('google/gemini-4-hydrogen');
+    assert(model);
+    const bound = configurationFor({
+      model,
+      route: {
+        kind: 'api-key',
+        endpoint: 'https://synthetic.invalid',
+        provider: 'google',
+        plan: null,
+      },
+      bearer: 'synthetic-key',
+      options: {
+        reasoning: {
+          thinking: true,
+          effort: ReasoningEffort.XHIGH,
+          mode: null,
+        },
+      },
+    });
+    assert(Result.isSuccess(bound));
+    const { configuration } = bound.success;
+    assert(configuration.protocol === 'google-interactions');
+    expect(configuration.defaults.thinkingLevel).toBe('xhigh');
+  });
 
   // Failure mode: judging a cancellation refusal must not turn the
   // lifecycle's explicit non-retryable result into a retryable rejection.

@@ -304,6 +304,9 @@ export function sdkModelError(
   fallbackMessage: string,
 ): ModelError {
   const retryAfterMs = retryAfterMsOf(http?.headers);
+  // The server's own word that repeating cannot help, which the SDKs obey
+  // too. Its `true` is not taken over a status that cannot succeed again.
+  const doNotRetry = http?.headers?.get('x-should-retry') === 'false';
   let kind: ModelError['kind'] = 'transport';
   if (cause instanceof SyntaxError) kind = 'provider-rejection';
   else if (http) kind = authOrRejectionKind(http.status);
@@ -313,6 +316,7 @@ export function sdkModelError(
     ...(http?.status === undefined ? {} : { status: http.status }),
     ...(http?.requestId == null ? {} : { requestId: http.requestId }),
     ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+    ...(doNotRetry ? { retryable: false } : {}),
     cause,
   });
 }

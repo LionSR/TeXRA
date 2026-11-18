@@ -11,6 +11,7 @@ import {
   Stream,
 } from 'effect';
 import { Socket } from 'effect/socket';
+import type OpenAI from 'openai';
 import { WebSocket } from 'ws';
 
 // Local imports - canonical model contract
@@ -214,7 +215,7 @@ const connect = Effect.fnUntraced(function* (
         JSON.stringify({
           type: 'response.create',
           ...parameters,
-        }),
+        } satisfies OpenAI.Responses.ResponsesClientEvent),
       ).pipe(Effect.mapError(socketFailure));
       const chunks = Stream.fromPull(
         Effect.succeed(
