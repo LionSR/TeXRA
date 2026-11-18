@@ -8,21 +8,15 @@ import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
 import {
   AgentCatalog,
   agentToolNames,
-  type AgentEntry,
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness/host';
 import { agentKeyOf } from '@texra-ai/harness/schemas';
 import type { AgentOptionData } from '@texra/shared/pickerOptions';
-import { PREFERRED_TOOL_USE_AGENTS } from '@texra/shared/constants/agents';
+import { compareAgentsForDefault } from '@texra/shared/constants/agents';
 
-const PREFERRED: readonly string[] = PREFERRED_TOOL_USE_AGENTS;
-const preferredRank = ({ name }: AgentEntry) => {
-  const rank = PREFERRED.indexOf(name);
-  return rank < 0 ? PREFERRED.length : rank;
-};
-
-/** The workspace's visible agents, the preferred ones first and the rest by
- *  name. */
+/** The workspace's visible agents in the order every agent list shows them,
+ *  so the first is the agent a new conversation starts on when none is
+ *  chosen (`pickDefaultToolUseAgent`). */
 export const agentOptionsData = (stores: WorkspaceAgentsStores) =>
   Effect.map(
     Effect.flatMap(AgentCatalog, (catalog) =>
@@ -30,10 +24,7 @@ export const agentOptionsData = (stores: WorkspaceAgentsStores) =>
     ),
     (entries) =>
       entries
-        .toSorted(
-          (a, b) =>
-            preferredRank(a) - preferredRank(b) || a.name.localeCompare(b.name),
-        )
+        .toSorted((a, b) => compareAgentsForDefault(a.name, b.name))
         .map((entry): AgentOptionData => ({
           value: agentKeyOf(entry),
           label: entry.name,
