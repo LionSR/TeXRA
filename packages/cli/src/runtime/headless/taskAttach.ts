@@ -12,21 +12,16 @@
  */
 import { stripVTControlCharacters } from 'node:util';
 
-import {
-  Effect,
-  Fiber,
-  LogLevel,
-  Option,
-  Predicate,
-  Schema,
-  Stream,
-} from 'effect';
+import { Effect, Fiber, LogLevel, Option, Predicate, Stream } from 'effect';
 
 import { type RunOutcome } from '@texra-ai/harness/schemas';
 import { fullTranscriptEntryLayout } from '@cli/chat/tui/panes/transcriptEntryLayout';
 import type { EventsFrame } from '@texra/shared/session/sessionFrames';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
-import type { ServiceClient } from '@texra/controllers/server/client';
+import {
+  ServiceUnavailable,
+  type ServiceClient,
+} from '@texra/controllers/server/client';
 import { WebviewSessions } from '@texra/shared/session/webviewSessionLayer';
 
 import { writeTextStdout } from '../platform/logSinks';
@@ -39,19 +34,6 @@ interface TaskAttachOutput {
   /** Text layout width. */
   readonly columns: number;
   readonly color: boolean;
-}
-
-/** The service stopped sending the task before it ended. */
-class TaskWatchEnded extends Schema.TaggedError<TaskWatchEnded>()(
-  'TaskWatchEnded',
-  {
-    runId: Schema.String,
-    reason: Schema.String,
-  },
-) {
-  override get message(): string {
-    return `The TeXRA service stopped sending task ${this.runId}: ${this.reason}`;
-  }
 }
 
 /** The task's own rows in one frame, as `texra run`'s progress records. */
@@ -74,14 +56,14 @@ function writeProgress(
  * The live view of `task`'s session, as the service's frames build it: one
  * level per change, with `task`'s transcript named so its rows load. Each
  * frame is handed to `onFrame` before it is applied. The stream fails with
- * {@link TaskWatchEnded} when the service stops sending; it never ends on
+ * {@link ServiceUnavailable} when the service stops sending; it never ends on
  * its own. The session view's graph lives as long as the stream.
  */
 export function watchTask(
   client: ServiceClient,
   task: Pick<TaskSummary, 'workspace' | 'runId'>,
   onFrame: (frame: EventsFrame) => void = () => {},
-): Stream.Stream<SessionView, TaskWatchEnded> {
+): Stream.Stream<SessionView, ServiceUnavailable> {
   return Stream.unwrap(
     Effect.gen(function* () {
       const graph = yield* WebviewSessions.open(task.workspace);
@@ -107,19 +89,16 @@ export function watchTask(
         Effect.forkScoped,
       );
       // The watch only ends when the service does: the task did not end.
+      const stoppedSending = (why: string) =>
+        Effect.fail(
+          new ServiceUnavailable({
+            reason: `The TeXRA service stopped sending task ${task.runId}: ${why}`,
+          }),
+        );
       const ended = Fiber.join(feeding).pipe(
         Effect.matchEffect({
-          onFailure: (error) =>
-            Effect.fail(
-              new TaskWatchEnded({ runId: task.runId, reason: error.message }),
-            ),
-          onSuccess: () =>
-            Effect.fail(
-              new TaskWatchEnded({
-                runId: task.runId,
-                reason: 'the service closed the watch.',
-              }),
-            ),
+          onFailure: (error) => stoppedSending(error.message),
+          onSuccess: () => stoppedSending('the service closed the watch.'),
         }),
       );
       return graph.view.changes.pipe(Stream.interruptWhen(ended));
@@ -136,7 +115,7 @@ export const attachTask = Effect.fn('attachTask')(function* (
   client: ServiceClient,
   task: TaskSummary,
   output: TaskAttachOutput,
-): Effect.fn.Return<RunOutcome | null, TaskWatchEnded> {
+): Effect.fn.Return<RunOutcome | null, ServiceUnavailable> {
   const includeDebugLogs = yield* LogLevel.isEnabled('Debug');
   const aggregate = task.runId;
   let printed = 0;
