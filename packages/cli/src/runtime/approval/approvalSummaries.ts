@@ -129,9 +129,10 @@ function definedAgentLines(
   proposal: AgentProposalRequest,
   promptLines: readonly string[],
 ): readonly string[] {
-  if (!proposal.persona) return [];
+  const source = proposal.agentSource;
+  if (source?.kind !== 'inline') return [];
   return [
-    DEFINED_AGENT_COPY.heading(proposal.persona),
+    DEFINED_AGENT_COPY.heading(proposal.agent, source.persona),
     `${DEFINED_AGENT_COPY.promptLabel}:`,
     ...promptLines.map((line) => `  ${line}`),
   ];
@@ -193,7 +194,9 @@ export function buildAgentProposalApprovalContent(
     boundedAgentProposalInstructionLines(instructionLines);
   // A defined agent's prompt is bounded as the instruction is.
   const promptLines = agentProposalInstructionLines(
-    proposal.persona?.prompt ?? '',
+    proposal.agentSource?.kind === 'inline'
+      ? (proposal.agentSource.persona.prompt ?? '')
+      : '',
   );
   const boundedPromptLines = boundedAgentProposalInstructionLines(promptLines);
   const fileGroups = getProposalFileGroups(proposal);

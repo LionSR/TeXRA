@@ -26,7 +26,7 @@ type LaunchPatch = Extract<SurfaceAction, { kind: 'launch' }>['patch'];
 /** The proposal's agent as an option value: options carry source-qualified
  *  keys, and a proposal with no source names the agent bare. */
 function proposedAgentKey({ agent, agentSource }: AgentProposalRequest) {
-  return agentSource == null ? agent : agentKey(agentSource, agent);
+  return agentSource == null ? agent : agentKey(agentSource.kind, agent);
 }
 
 /** Whether an agent option value (a key) is the proposal's agent. */

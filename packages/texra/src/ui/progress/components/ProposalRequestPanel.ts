@@ -240,10 +240,11 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   private renderDefinedAgent(
     data: AgentProposalRequest,
   ): TemplateResult | typeof nothing {
-    const { persona } = data;
-    if (!persona) return nothing;
+    const { agentSource } = data;
+    if (agentSource?.kind !== 'inline') return nothing;
+    const { persona } = agentSource;
     return html`<div class="workflow-proposal__plan-note">
-        ${DEFINED_AGENT_COPY.heading(persona)}
+        ${DEFINED_AGENT_COPY.heading(data.agent, persona)}
       </div>
       <wa-details
         class="workflow-proposal__workflow-details"

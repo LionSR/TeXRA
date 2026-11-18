@@ -215,7 +215,7 @@ export async function runChat(
       const modelSelection = modelSelectionExit.value;
       sessionMetaSignal.set({
         agent: defaults.agent,
-        agentSource: agentEntry.source,
+        agentSource: { kind: agentEntry.source },
         model: modelSelection.model,
         modelSource: defaults.modelSource,
         cwd: context.cwd,

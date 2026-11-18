@@ -50,7 +50,7 @@ export const applyInitialCliAgentSelection = Effect.fn(
     setTransientNotice(fixedAgentNotice);
     return;
   }
-  patchSessionMeta({ agent: nextAgent, agentSource: entry.source });
+  patchSessionMeta({ agent: nextAgent, agentSource: { kind: entry.source } });
   appendLocalNotice(`Root agent set to ${nextAgent}.`);
 });
 

@@ -125,7 +125,13 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
       init.agent,
       missingRunTargetMessage(init.agent, [...programs.keys()]),
     );
-    return yield* runToolUseAgent(context, init, source, instruction, services);
+    return yield* runToolUseAgent(
+      context,
+      init,
+      { kind: source },
+      instruction,
+      services,
+    );
   }
 
   // A program with no `--input` cannot run, and the output probes below
