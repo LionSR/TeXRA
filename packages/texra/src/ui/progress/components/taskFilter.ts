@@ -23,6 +23,7 @@ export function renderTaskFilter(
   return html`<div class="task-filter">
     ${renderFilterField({
       label: 'Filter tasks',
+      placeholder: 'Filter tasks',
       value: search,
       onInput: (value) =>
         host.dispatchEvent(SessionUiEvents.surface({ kind: 'search', value })),

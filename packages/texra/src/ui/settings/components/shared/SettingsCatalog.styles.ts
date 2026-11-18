@@ -149,7 +149,7 @@ export const settingsCatalogStyles: CSSResult = css`
     .catalog-toolbar {
       grid-template-columns: minmax(0, 1fr) auto;
     }
-    .catalog-search {
+    .catalog-toolbar > wa-input {
       grid-column: 1 / -1;
     }
     .catalog-panel {

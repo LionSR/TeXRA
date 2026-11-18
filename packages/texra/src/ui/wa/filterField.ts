@@ -9,8 +9,9 @@ import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import { waIcon } from './webAwesomeIcons';
 
 interface FilterField {
-  /** Names the field and is its placeholder. */
+  /** Names the field's input; hidden, since the list says what it holds. */
   readonly label: string;
+  readonly placeholder: string;
   readonly value: string;
   /** Every edit, the clear button's included. */
   readonly onInput: (value: string) => void;
@@ -20,10 +21,11 @@ interface FilterField {
  *  when it last rendered the same string. */
 export function renderFilterField(field: FilterField): TemplateResult {
   return html`<wa-input
+    class="has-hidden-label"
     size="s"
     with-clear
-    placeholder=${field.label}
-    aria-label=${field.label}
+    label=${field.label}
+    placeholder=${field.placeholder}
     .value=${live(field.value)}
     @input=${(event: Event) => {
       if (event.currentTarget instanceof WaInput)

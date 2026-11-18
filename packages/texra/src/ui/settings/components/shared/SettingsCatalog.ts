@@ -6,16 +6,15 @@ import '@awesome.me/webawesome/dist/components/option/option.js';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
-import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderEmptyMessage } from '@ui/wa/emptyState';
+import { renderFilterField } from '@ui/wa/filterField';
 import {
   listMoveOfKey,
   matchesQuery,
   nextListIndex,
 } from '@ui/wa/listInteraction';
 import { readSelectValue } from '@ui/wa/selectTemplates';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { settingsCatalogStyles } from './SettingsCatalog.styles';
 
 export interface SettingsCatalogItem {
@@ -112,19 +111,14 @@ export class SettingsCatalog extends LitElement {
     const sources = [...new Set(this.items.map((item) => item.group))];
     return html`
       <div class="catalog-toolbar">
-        <wa-input
-          class="catalog-search"
-          label=${`Search ${this.label.toLocaleLowerCase()}`}
-          placeholder=${this.placeholder}
-          size="s"
-          with-clear
-          .value=${this.query}
-          @input=${(event: Event) => {
-            if (event.currentTarget instanceof WaInput)
-              this.query = event.currentTarget.value ?? '';
-          }}
-          >${waIcon('magnifying-glass', { slot: 'start' })}</wa-input
-        >
+        ${renderFilterField({
+          label: `Search ${this.label.toLocaleLowerCase()}`,
+          placeholder: this.placeholder,
+          value: this.query,
+          onInput: (value) => {
+            this.query = value;
+          },
+        })}
         <wa-select
           label="Source"
           size="s"

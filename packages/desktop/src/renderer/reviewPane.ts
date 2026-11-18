@@ -169,6 +169,7 @@ export function createReviewPane(): ReviewPaneController {
           <aside class="desktop-review-sidebar" aria-label="Changed files">
             ${renderFilterField({
               label: 'Filter changed files',
+              placeholder: 'Filter files…',
               value: filter,
               onInput: (value) => {
                 filter = value;
