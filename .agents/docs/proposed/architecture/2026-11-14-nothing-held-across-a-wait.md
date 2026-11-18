@@ -311,6 +311,17 @@ Done, on the branch after PR 14927:
   and starts its fibers with a `FiberSet.makeRuntime` of the pane's scope;
   its six bare `Effect.run*` calls are gone, and a defect in one of its
   fibers reaches the pane's log.
+- Row 13, the terminal chat: `scopeRunner`
+  (`cli/src/chat/scopeRunner.ts`) is `scopedFork` plus a synchronous run
+  that provides the owner's scope, over one of three owners. A component's
+  mount (`useMountScope`, a child of its Ink root's scope) holds its reads,
+  timers and followed streams; the chat's scope holds what a form or a key
+  starts that must outlive the component (a form's write, a slash form's
+  action, a request's decision, the input history); the shutdown scope
+  holds a submitted message and the startup resume, which a graceful exit
+  waits for after it closed the chat's scope. Run sites in `cli/src` fell
+  from 66 to 11: the roots, the chat's startup program, `stop` (below) and
+  the headless renderer's heartbeat.
 - Row 14, the scoped forks: the desktop window's notice waits on the
   window's fibers, a project's warning dialog on the process scope, and
   the CLI's resume of a document task on the shutdown scope beside the
