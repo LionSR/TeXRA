@@ -48,7 +48,11 @@ const unusedModel = new Proxy({} as Model, {
 const anthropicConfig = buildTestModelConfig({
   inputPrice: INPUT_PRICE,
   outputPrice: OUTPUT_PRICE,
-  capabilities: { cacheDiscountFactor: CACHE_DISCOUNT },
+  capabilities: {
+    cacheDiscountFactor: CACHE_DISCOUNT,
+    // The catalog's Anthropic write rates, which the cost reads.
+    cacheWriteFactors: { '5m': 1.25, '1h': 2 },
+  },
 });
 
 const boundAnthropic: BoundModel = {
