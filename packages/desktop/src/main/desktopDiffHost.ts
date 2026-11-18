@@ -9,6 +9,7 @@ import {
   reportDiffTimeout,
   withProcessServices,
 } from '@texra-ai/harness/host';
+import { readNormalizedFile } from '@texra-ai/harness/node';
 import type { DiffLabel, DiffSource, DiffViewHost } from '@texra/hosts/uiHosts';
 import { monacoLanguageForPath } from '../shared/monacoLanguage';
 
@@ -85,8 +86,8 @@ export function createDesktopDiffHost(
         // process filesystem rather than through either rooted view.
         const [originalContent, proposedContent] = yield* Effect.all(
           [
-            fs.readFileString(original.filePath),
-            fs.readFileString(proposed.filePath),
+            readNormalizedFile(fs, original.filePath),
+            readNormalizedFile(fs, proposed.filePath),
           ],
           { concurrency: 2 },
         );

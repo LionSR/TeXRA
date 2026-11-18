@@ -17,6 +17,7 @@ import {
   createWorkspaceLocation,
   withFileWriteLane,
 } from '@texra-ai/harness/host';
+import { readNormalizedFile } from '@texra-ai/harness/node';
 import {
   withLogChannel,
   WorkspaceFs,
@@ -159,10 +160,7 @@ const commitAcceptedFile = Effect.fn('commitAcceptedFile')(function* <E>(
   const targetFileName = path.basename(targetPath);
   const editedPath = editedLocation.absolutePath;
 
-  const editedContent = (yield* fs.readFileString(editedPath)).replaceAll(
-    '\r\n',
-    '\n',
-  );
+  const editedContent = yield* readNormalizedFile(fs, editedPath);
   // The confirmation was given to the target as it was when the dialog
   // opened; the dialog can stay open for minutes. A save to the target
   // meanwhile (the user's editor, a run) is not replaced on that answer.
