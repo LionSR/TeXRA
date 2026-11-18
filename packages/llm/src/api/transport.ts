@@ -3,6 +3,7 @@ import {
   Cause,
   Effect,
   Exit,
+  Predicate,
   Result,
   Schema,
   type Scope,
@@ -141,6 +142,30 @@ export const wireFail = (
   kind: ModelError['kind'] = 'provider-rejection',
 ): Effect.Effect<never, ModelError> =>
   Effect.fail(new ModelError({ kind, message }));
+
+/**
+ * Fails when `raw` is a stream event whose `key` names a type outside
+ * `known`. The provider sends that event again on every repeat of the
+ * request, so the failure is not retried; a malformed event of a known type
+ * still is.
+ */
+export const refuseUnknownEvent = (
+  provider: string,
+  key: string,
+  known: ReadonlySet<string>,
+  raw: unknown,
+): Effect.Effect<void, ModelError> => {
+  const type = Predicate.hasProperty(raw, key) ? raw[key] : undefined;
+  return typeof type !== 'string' || known.has(type)
+    ? Effect.void
+    : Effect.fail(
+        new ModelError({
+          kind: 'provider-rejection',
+          retryable: false,
+          message: `${provider} sent a stream event of a type this version does not support: ${type}.`,
+        }),
+      );
+};
 
 /**
  * Decodes one raw wire value with `schema`, failing as the provider's

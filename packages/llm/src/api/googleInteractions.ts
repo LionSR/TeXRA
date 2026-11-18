@@ -17,6 +17,7 @@ import { boundTurn, resolveTurn } from './turnInput.js';
 import {
   COMPLETED_STATUSES,
   CONTINUATION_STATUS,
+  EVENT_TYPES,
   IN_FLIGHT_STATUSES,
   WireCompletedStepSchema,
   WireEventSchema,
@@ -41,6 +42,7 @@ import {
   parseOutboundToolArguments,
   pullStream,
   readerAbortSignal,
+  refuseUnknownEvent,
   wireFail as fail,
 } from './transport.js';
 import type { InputPart, Part, PartEvent } from './parts.js';
@@ -438,9 +440,10 @@ function googleWire() {
   let done = false;
   return (raw: unknown): Effect.Effect<PartEvent[], ModelError> =>
     Effect.gen(function* () {
+      yield* refuseUnknownEvent('Google', 'event_type', EVENT_TYPES, raw);
       const event = yield* decodeWireOrFail(
         WireEventSchema,
-        'Google returned malformed or unsupported stream data.',
+        'Google returned malformed stream data.',
         raw,
       );
       if (done)

@@ -155,6 +155,18 @@ export const WireEventSchema = Schema.Union([
   }),
   Schema.Struct({ event_type: Schema.Literal('error'), error: Schema.Unknown }),
 ]);
+/** The event types `WireEventSchema` decodes; the record's key type keeps them in step. */
+export const EVENT_TYPES: ReadonlySet<string> = new Set(
+  Object.keys({
+    'interaction.created': true,
+    'interaction.completed': true,
+    'interaction.status_update': true,
+    'step.start': true,
+    'step.stop': true,
+    'step.delta': true,
+    error: true,
+  } satisfies Record<(typeof WireEventSchema.Type)['event_type'], true>),
+);
 
 type Assignable<T extends U, U> = T;
 // The schemas that restate an SDK shape decode into it, so an SDK release

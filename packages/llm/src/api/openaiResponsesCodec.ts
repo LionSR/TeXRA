@@ -438,7 +438,12 @@ export function responsesWire() {
         ]);
       }
       if (FRAMING_EVENTS.has(type)) return at([]);
-      return yield* fail(`The model returned an unsupported event: ${type}.`);
+      // The provider sends this event again on every repeat of the request.
+      return yield* new ModelError({
+        kind: 'provider-rejection',
+        retryable: false,
+        message: `OpenAI sent a stream event of a type this version does not support: ${type}.`,
+      });
     });
 }
 
