@@ -219,7 +219,7 @@ function supersedesThreadRow(latest: ThreadRow, next: ThreadRow): boolean {
 }
 
 /** The external-inquiry plugin's one row kind. */
-export const EXTERNAL_INQUIRY_THREAD_KIND = {
+export const EXTERNAL_INQUIRY_THREAD_KIND = Object.freeze({
   plugin: 'external-inquiry',
   kind: 'thread',
   version: 1,
@@ -228,7 +228,7 @@ export const EXTERNAL_INQUIRY_THREAD_KIND = {
   fork: 'drop',
   accepts: acceptsThreadRow,
   supersedes: supersedesThreadRow,
-} as const;
+} as const);
 
 /** The inquiry's request, declared once: its `ask` returns at once, so the
  *  run never waits on it, and it is answered or skipped. Each `ask` posts

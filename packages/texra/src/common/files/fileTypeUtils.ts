@@ -10,10 +10,10 @@ import { FILE_HANDLING_RULES } from './fileHandlingRules';
 export type ExtensionCategory = (typeof EXTENSION_CATEGORIES)[number];
 
 /** Every extension category, for callers that aggregate them all. */
-export const EXTENSION_CATEGORIES = [
+export const EXTENSION_CATEGORIES = Object.freeze([
   ...DocumentFileTypeSchema.literals,
   'edited',
-] as const;
+] as const);
 
 /** The category's included extensions, as a fresh mutable copy. */
 export function getIncludedExtensions(category: ExtensionCategory): string[] {

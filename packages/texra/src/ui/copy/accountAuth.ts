@@ -25,7 +25,7 @@ export const DEVICE_CODE_DESCRIPTION =
   'One-time code; works over SSH or in any browser' as const;
 
 /** ChatGPT subscription account — OpenAI models via Plus/Pro/Team. */
-export const CHATGPT_AUTH = {
+export const CHATGPT_AUTH = Object.freeze({
   label: 'ChatGPT',
   subscriptionLabel: 'ChatGPT subscription',
   signInLabel: 'Sign in with ChatGPT',
@@ -35,10 +35,10 @@ export const CHATGPT_AUTH = {
   startingDevice: 'Starting ChatGPT device-code sign-in.',
   startingNoBrowser: 'Starting ChatGPT sign-in.',
   startingBrowser: 'Opening browser for ChatGPT sign-in...',
-} as const;
+} as const);
 
 /** Grok / xAI subscription account. */
-export const GROK_AUTH = {
+export const GROK_AUTH = Object.freeze({
   label: 'Grok',
   subscriptionLabel: 'Grok subscription',
   signInLabel: 'Sign in with Grok',
@@ -48,16 +48,16 @@ export const GROK_AUTH = {
   startingDevice: 'Starting Grok device-code sign-in.',
   startingNoBrowser: 'Starting Grok sign-in.',
   startingBrowser: 'Opening browser for Grok sign-in...',
-} as const;
+} as const);
 
 /** Each OAuth subscription's copy, keyed by the provider id it belongs to. */
-export const SUBSCRIPTION_AUTH_COPY = {
+export const SUBSCRIPTION_AUTH_COPY = Object.freeze({
   chatgpt: CHATGPT_AUTH,
   grok: GROK_AUTH,
 } as const satisfies Record<
   (typeof SUBSCRIPTION_AUTH_PROVIDERS)[number],
   unknown
->;
+>);
 
 /**
  * Sign-in / sign-out outcome sentences that read the same for any account,
@@ -68,7 +68,7 @@ export const SUBSCRIPTION_AUTH_COPY = {
  * extension and the desktop share. One outcome of one operation on one
  * account gets one sentence.
  */
-export const ACCOUNT_OUTCOME = {
+export const ACCOUNT_OUTCOME = Object.freeze({
   signedInAs: (providerDisplayName: string, accountLabel: string): string =>
     `Signed in with ${providerDisplayName} as ${accountLabel}.`,
   /** What a finished sign-in reports: it also turned the subscription on
@@ -99,4 +99,4 @@ export const ACCOUNT_OUTCOME = {
     reason: string,
   ): string =>
     `${ACCOUNT_OUTCOME.signOutFailed(providerDisplayName)}: ${reason}`,
-} as const;
+} as const);
