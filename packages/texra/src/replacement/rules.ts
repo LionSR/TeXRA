@@ -456,17 +456,6 @@ export const LATEX_XML_REPLACEMENTS: PatternDict = (() => {
   });
 })();
 
-// A blank line latexdiff leaves before the closing brace of a starred
-// environment: \n\n}\end{align*}%DIFAUXCMD -> \n}\end{align*}%DIFAUXCMD
-export const LATEXDIFF_REPLACEMENTS: PatternDict = Object.freeze(
-  createPatterns(['align*', 'aligned*'], (env) =>
-    BLANK_LINES.map((blank): [string, string] => [
-      `${blank}}\\end{${env}}%DIFAUXCMD`,
-      `\n}\\end{${env}}%DIFAUXCMD`,
-    ]),
-  ),
-);
-
 export const PERSONAL_STYLE_REPLACEMENTS: PatternDict = Object.freeze({
   // ===== Spacing preferences =====
   // Consistent spacing for math mode and delimiters
