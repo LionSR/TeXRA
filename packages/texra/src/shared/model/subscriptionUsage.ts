@@ -27,9 +27,6 @@ const SubscriptionUsageWindowSchema = Schema.Struct({
     Schema.isLessThanOrEqualTo(100),
   ),
   resetAt: Schema.optional(NonNegativeIntSchema),
-  limitWindowSeconds: Schema.optional(
-    Schema.Int.check(Schema.isGreaterThan(0)),
-  ),
 });
 export type SubscriptionUsageWindow =
   (typeof SubscriptionUsageWindowSchema)['Type'];
