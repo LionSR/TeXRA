@@ -56,6 +56,7 @@ import {
   PROTOCOL,
   TexraRpcs,
   type ServiceInfo,
+  type TaskSummary,
 } from './protocol';
 import type { GlobalValues } from '@texra-ai/harness/host';
 import type { SocketError } from 'effect/socket/Socket';
@@ -106,6 +107,26 @@ export const requestOnService = <R extends RuntimeCommand>(
         }),
     ),
   );
+
+/**
+ * The task `id` names among every task the service holds: its full id, or
+ * a prefix only one task has. Answers that task, or else every task the
+ * prefix matches: none, or more than one.
+ */
+export const findTask = (
+  client: ServiceClient,
+  id: string,
+): Effect.Effect<
+  { readonly task: TaskSummary } | { readonly matches: readonly TaskSummary[] },
+  RpcClientError.RpcClientError
+> =>
+  Effect.map(client['tasks.list']({ all: true }), (tasks) => {
+    const exact = tasks.find((task) => task.runId === id);
+    const matches = exact
+      ? [exact]
+      : tasks.filter((task) => task.runId.startsWith(id));
+    return matches.length === 1 ? { task: matches[0] } : { matches };
+  });
 
 /** A connected client and the service it reached. */
 export interface ServiceConnection {

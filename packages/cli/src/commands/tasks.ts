@@ -17,6 +17,7 @@ import {
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import {
   environmentApiKeys,
+  findTask,
   linkedClient,
   requestOnService,
   type ServiceClient,
@@ -57,26 +58,21 @@ const TASK_ID_ARG = {
   description: 'Task id (or a unique prefix) from `texra tasks list`',
 } as const;
 
-/** The task `id` names: its full id, or a prefix only one task has. */
-function findTask(client: ServiceClient, id: string) {
-  return client['tasks.list']({ all: true }).pipe(
-    Effect.flatMap((tasks) => {
-      const exact = tasks.find((task) => task.runId === id);
-      const matches = exact
-        ? [exact]
-        : tasks.filter((task) => task.runId.startsWith(id));
-      if (matches.length === 1) return Effect.succeed(matches[0]);
-      return Effect.fail(
-        new CliUsageError({
-          message:
-            matches.length === 0
-              ? `No task ${id}. \`texra tasks list\` shows the tasks.`
-              : `${matches.length} tasks start with ${id}; give more of the id.`,
-        }),
-      );
-    }),
+/** The task `id` names (`findTask`); naming none or several is a usage
+ *  error. */
+const taskNamed = (client: ServiceClient, id: string) =>
+  Effect.flatMap(findTask(client, id), (found) =>
+    'task' in found
+      ? Effect.succeed(found.task)
+      : Effect.fail(
+          new CliUsageError({
+            message:
+              found.matches.length === 0
+                ? `No task ${id}. \`texra tasks list\` shows the tasks.`
+                : `${found.matches.length} tasks start with ${id}; give more of the id.`,
+          }),
+        ),
   );
-}
 
 /** The service's client, through the platform's link; a command that
  *  holds none fails with why. */
@@ -92,7 +88,7 @@ function requestTask<R extends RuntimeCommand>(
 ) {
   return Effect.gen(function* () {
     const client = yield* serviceClient;
-    const task = yield* findTask(client, id);
+    const task = yield* taskNamed(client, id);
     const outcome = yield* requestOnService(
       client,
       task.workspace,
@@ -154,7 +150,7 @@ const attachCommand = defineCliCommand({
       });
     return Effect.gen(function* () {
       const client = yield* serviceClient;
-      const task = yield* findTask(client, ctx.args.id);
+      const task = yield* taskNamed(client, ctx.args.id);
       const outcome = yield* attachTask(client, task, {
         format: context.outputFormat === 'ndjson' ? 'ndjson' : 'text',
         columns: context.stdoutIsTty
