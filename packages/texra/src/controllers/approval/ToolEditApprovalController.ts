@@ -200,6 +200,25 @@ interface ToolEditApprovalControllerOptions {
   roots: WorkspaceRoots;
 }
 
+const BOM = '\uFEFF';
+
+/**
+ * The proposed copy as the user left it, in the proposal's own form: a host
+ * reads its copy back with CRLF line ends, and without the leading BOM its
+ * file holds (an editor buffer's text and a decoded file string both drop
+ * it), so the approved content would lose a BOM the file had.
+ */
+function readBack(preview: ToolEditPreview, proposal: string) {
+  return preview.readProposedContent().pipe(
+    Effect.map((text) => {
+      const content = text.replaceAll('\r\n', '\n');
+      return proposal.startsWith(BOM) && !content.startsWith(BOM)
+        ? BOM + content
+        : content;
+    }),
+  );
+}
+
 /** One staged request, for its scope's life. */
 interface StagedPreview extends LatexPreviewEntry {
   readonly pending: PendingRequest;
@@ -356,7 +375,7 @@ export class ToolEditApprovalController {
   /** Approve as the Approve button does: the document as the user left it
    *  in this view goes with the decision, which applies it. */
   private approve(entry: StagedPreview, grant?: Grant): PreviewCall<void> {
-    return entry.preview.readProposedContent().pipe(
+    return readBack(entry.preview, entry.proposedContent).pipe(
       Effect.flatMap((content) => this.decide(entry.pending, grant, content)),
       Effect.andThen(Ref.set(entry.applied, true)),
     );
@@ -392,7 +411,7 @@ export class ToolEditApprovalController {
           (r) => r.runId === pending.runId && r.requestId === pending.requestId,
         );
       if (listed) return undefined;
-      const left = yield* preview.readProposedContent().pipe(
+      const left = yield* readBack(preview, proposal).pipe(
         Effect.mapError(
           (cause) =>
             new HostFailed({
@@ -402,10 +421,7 @@ export class ToolEditApprovalController {
             }),
         ),
       );
-      // A host may read its copy back with CRLF line ends.
-      return left.replaceAll('\r\n', '\n') === proposal.replaceAll('\r\n', '\n')
-        ? undefined
-        : left;
+      return left === proposal.replaceAll('\r\n', '\n') ? undefined : left;
     },
   );
 

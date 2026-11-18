@@ -117,13 +117,19 @@ layer(SessionGraph.hosted)(
                 writeFileString: () => Effect.void,
                 rename: () => Effect.void,
                 remove: () => Effect.void,
-                // The model's copy the revision kept, and the file the user
-                // changed before accepting.
-                readFile: () =>
+                // The file the user changed before accepting, and the model's
+                // copy the revision kept in the run's storage.
+                readFile: (file) =>
                   Effect.succeed(
-                    new TextEncoder().encode('original model output\n'),
+                    new TextEncoder().encode(
+                      file === EDITED
+                        ? 'user edited output\n'
+                        : 'original model output\n',
+                    ),
                   ),
-                readFileString: () => Effect.succeed('user edited output\n'),
+                // The target as the confirmation saw it and as the write
+                // checks it again: unchanged between the two.
+                readFileString: () => Effect.succeed('base content\n'),
               }),
               AppSignals.layer,
             ).pipe(
