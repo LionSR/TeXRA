@@ -265,7 +265,12 @@ export {
 // The tool catalog: enabled built-ins, plugin services and switches.
 export { ToolCatalog, type ToolCatalogShape } from '@tools/liveTools';
 // The write path's redaction, for host text shown outside it.
-export { formatFatalErrorDetail, redactSecrets } from '@logger/redaction';
+export {
+  formatFatalErrorDetail,
+  redactEmailAddresses,
+  redactPathPrefixes,
+  redactSecrets,
+} from '@logger/redaction';
 // The config and state store ports a host implements and their failures
 // (`Settings`, which reads and writes through them, is on `./plugins`).
 export {

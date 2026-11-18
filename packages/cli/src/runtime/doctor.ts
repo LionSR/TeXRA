@@ -13,6 +13,7 @@ import {
   formatResultCount,
   isModelOptionAvailable,
 } from '@texra-ai/harness/schemas';
+import { redactEmailAddresses } from '@texra-ai/harness/host';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { latexToolchainHealth } from '@latex/latexToolchain';
 import type { UsageLoggingOptOut } from '@telemetry/UsageLogService';
@@ -70,32 +71,6 @@ type DoctorInput =
     };
 
 type ReadyDoctorInput = Extract<DoctorInput, { kind: 'ready' }>;
-
-const EMAIL_LIKE_DIAGNOSTIC_PATTERN =
-  /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
-
-function maskIdentifierPart(part: string): string {
-  return part ? `${part.at(0)}***` : '***';
-}
-
-function redactEmailDiagnosticValue(value: string): string {
-  const atIndex = value.indexOf('@');
-  const localPart = value.slice(0, atIndex);
-  const domain = value.slice(atIndex + 1);
-  const domainParts = domain.split('.');
-  const suffix = domainParts.length > 1 ? domainParts.at(-1) : undefined;
-  const domainName = suffix ? domainParts.slice(0, -1).join('.') : domain;
-  const maskedDomain = suffix
-    ? `${maskIdentifierPart(domainName)}.${suffix}`
-    : maskIdentifierPart(domainName);
-  return `${maskIdentifierPart(localPart)}@${maskedDomain}`;
-}
-
-function redactEmailDiagnostics(text: string): string {
-  return text.replaceAll(EMAIL_LIKE_DIAGNOSTIC_PATTERN, (value) =>
-    redactEmailDiagnosticValue(value),
-  );
-}
 
 function check(
   id: string,
@@ -442,11 +417,11 @@ function formatDoctorText(
   };
   return report.checks
     .map((check) => {
-      const head = `${marker[check.status]} ${check.name}: ${redactEmailDiagnostics(check.message)}`;
+      const head = `${marker[check.status]} ${check.name}: ${redactEmailAddresses(check.message)}`;
       if (!check.hint) return head;
       // Install advice runs over several lines; each sits under the marker
       // column, and a blank line between its steps stays blank.
-      const hint = redactEmailDiagnostics(check.hint)
+      const hint = redactEmailAddresses(check.hint)
         .split('\n')
         .map((line) => (line ? `     ${style.muted(line)}` : ''))
         .join('\n');
