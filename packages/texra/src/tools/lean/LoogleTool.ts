@@ -238,13 +238,7 @@ const searchLoogle = Effect.fn('LoogleTool.execute')(function* ({
 }: LeanLoogleInput) {
   const queries = Arr.ensure(query);
 
-  // Single query: return directly (backward-compatible format)
-  if (queries.length === 1) {
-    const { result } = yield* searchOne(queries[0], limit);
-    return result;
-  }
-
-  // Batched queries: run concurrently and combine results
+  // Each query runs concurrently; the results are combined under headings.
   const results = yield* Effect.forEach(queries, (q) => searchOne(q, limit), {
     concurrency: 'unbounded',
   });
@@ -257,13 +251,14 @@ const searchLoogle = Effect.fn('LoogleTool.execute')(function* ({
 
   const totalHits = results.reduce((sum, r) => sum + r.hits.length, 0);
   const allFailed = results.every(({ result }) => result.status === 'error');
+  const counted = formatResultCount(queries.length, 'query', 'queries');
   let summary: string;
   if (totalHits > 0) {
-    summary = `${formatResultCount(totalHits, 'result')} across ${queries.length} queries`;
+    summary = `${formatResultCount(totalHits, 'result')} across ${counted}`;
   } else if (allFailed) {
-    summary = `All ${queries.length} queries failed`;
+    summary = `${counted} failed`;
   } else {
-    summary = `No results across ${queries.length} queries`;
+    summary = `No results across ${counted}`;
   }
 
   const output = sections.join('\n\n---\n\n');

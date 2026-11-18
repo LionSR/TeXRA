@@ -78,6 +78,9 @@ interface SendOptions {
   /** When the row may be read (`readableMessages`). Absent: at once, or at
    *  the turn's end for a host's notification (`queuedRow`). */
   readonly hold?: QueuedFollowUp['holdUntil'];
+  /** The skills the user activated with the message, which its row
+   *  records; only a user's request names them. */
+  readonly skills?: readonly string[];
 }
 
 /** A send decided inside a job: its rows, and how it landed. */
@@ -278,7 +281,7 @@ export class SessionInbox {
     return Effect.gen({ self: this }, function* () {
       const input = yield* this.read(runId);
       if (closed(input)) return only(CLOSED);
-      const row = queuedRow(item, options.hold);
+      const row = queuedRow(item, options.hold, options.skills);
       const queuedStill = input.followUps.some(
         (f) => f.followUpId === row.followUpId,
       );

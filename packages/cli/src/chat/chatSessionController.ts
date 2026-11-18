@@ -31,7 +31,6 @@ import {
   type SessionView,
   type AgentConfig,
   type AgentConfigPayload,
-  escapeText,
   generateRunId,
   programOf,
   type RunId,
@@ -84,7 +83,6 @@ import {
   type Draft,
 } from './tui/input/draftAttachments';
 import type { ModelConnection } from './tui/modelConnection';
-import type { SkillActivation } from './tui/forms/SkillsListForm';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
 import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
 
@@ -156,8 +154,8 @@ export interface ChatSessionController {
   /** Succeeds once every message submitted so far has been sent, or has
    *  started its run. */
   readonly submitted: Effect.Effect<void>;
-  /** Activate a skill for the next submitted message. */
-  activateSkill(selection: SkillActivation): void;
+  /** Activate a skill, by name, for the next submitted message. */
+  activateSkill(name: string): void;
   /** Drop every activated skill. */
   clearPendingSkills(): void;
   /** Perform the host command a decision names instead of a
@@ -218,29 +216,6 @@ type MessageResult =
   | { readonly kind: 'returned'; readonly reason?: string };
 
 const SENT: MessageResult = Object.freeze({ kind: 'sent' });
-
-interface PreparedChatInstruction {
-  readonly instruction: string;
-  readonly displayInstruction?: string;
-}
-
-/** The instruction a message sends: its line, wrapped in the prompts of the
- *  skills activated for it. */
-function preparedInstruction(
-  line: string,
-  skills: readonly SkillActivation[],
-): PreparedChatInstruction {
-  if (skills.length === 0) return { instruction: line };
-  return {
-    instruction: [
-      skills.map((skill) => skill.activationPrompt).join('\n\n'),
-      '<user_request>',
-      escapeText(line),
-      '</user_request>',
-    ].join('\n'),
-    displayInstruction: line,
-  };
-}
 
 export function createChatSessionController(
   init: ChatSessionControllerInit,
@@ -401,7 +376,7 @@ export function createChatSessionController(
    */
   const launchRootRun = <R>(
     resolveConfig: Effect.Effect<AgentConfigPayload, Error, R>,
-    shownInstruction?: string,
+    shownInstruction: string,
   ): Effect.Effect<boolean, never, R | ProcessServices> =>
     // The claim and the fork of the program that ends it are one
     // uninterruptible step: an interrupted caller never leaves a launch
@@ -423,8 +398,7 @@ export function createChatSessionController(
         }).pipe(
           Effect.tapError((error) =>
             Effect.sync(() => {
-              if (!resolved && shownInstruction !== undefined)
-                appendLocalUserTranscript(shownInstruction);
+              if (!resolved) appendLocalUserTranscript(shownInstruction);
             }).pipe(Effect.andThen(showFailure(error))),
           ),
         );
@@ -688,11 +662,12 @@ export function createChatSessionController(
     );
   };
 
-  /** A fresh root run of the chat's agent on the model it selects now. */
+  /** A fresh root run of the chat's agent on the model it selects now,
+   *  with the skills the user activated for its instruction. */
   const startSession = (
     instruction: string,
-    mediaFiles?: readonly string[],
-    displayInstruction?: string,
+    mediaFiles: readonly string[],
+    skills: readonly string[],
   ): Effect.Effect<boolean, never, ProcessServices> =>
     launchRootRun(
       Effect.gen(function* () {
@@ -706,12 +681,12 @@ export function createChatSessionController(
           agentSource: meta.agentSource,
           model: selection.model,
           instruction,
-          ...(displayInstruction !== undefined ? { displayInstruction } : {}),
+          ...(skills.length > 0 && { skills: [...skills] }),
           workingDirectory: cwd,
-          ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
+          ...(mediaFiles.length > 0 ? { mediaFiles: [...mediaFiles] } : {}),
         } satisfies AgentConfigPayload;
       }),
-      displayInstruction ?? instruction,
+      instruction,
     );
 
   // Where each message goes is decided one at a time, in the order typed,
@@ -723,7 +698,8 @@ export function createChatSessionController(
   const sending = untilShutdown.sync(FiberSet.make<MessageResult>());
 
   /**
-   * Send `prepared` to `target`. The session decides everything about the
+   * Send `line`, with the skills the user activated for it, to `target`.
+   * The session decides everything about the
    * message: whether the run takes it, waiting for a run that is stopping
    * to finish, and resuming a run that is not running. `continuing`: the
    * message may continue `target`, the root: a root the session does not
@@ -733,7 +709,8 @@ export function createChatSessionController(
   const sendMessage = Effect.fn('sendMessage')(function* (
     target: RunId,
     continuing: boolean,
-    prepared: PreparedChatInstruction,
+    line: string,
+    skills: readonly string[],
     mediaFiles: readonly string[],
     holdUntil: 'turn' | undefined,
   ) {
@@ -746,8 +723,8 @@ export function createChatSessionController(
           .request({
             kind: 'followUp.send',
             runId: target,
-            text: prepared.instruction,
-            displayText: prepared.displayInstruction,
+            text: line,
+            skills: skills.length > 0 ? [...skills] : undefined,
             media: mediaFiles.length > 0 ? [...mediaFiles] : undefined,
             holdUntil,
           })
@@ -827,12 +804,11 @@ export function createChatSessionController(
       { ...current, skills: [] },
     ]);
     const message: Draft = { ...submitted, skills };
-    const prepared = preparedInstruction(line, skills);
     const mediaFiles = resolveImages(message).map((image) => image.path);
     const send = (target: RunId, continuing: boolean) =>
       FiberSet.run(
         sending,
-        sendMessage(target, continuing, prepared, mediaFiles, holdUntil),
+        sendMessage(target, continuing, line, skills, mediaFiles, holdUntil),
       );
     const returned = (reason?: string): MessageResult => ({
       kind: 'returned',
@@ -864,11 +840,7 @@ export function createChatSessionController(
           (root.outcome === 'cancelled' && acceptsFollowUp(root)))
       )
         return yield* send(root.id, true);
-      const started = yield* startSession(
-        prepared.instruction,
-        mediaFiles,
-        prepared.displayInstruction,
-      );
+      const started = yield* startSession(line, mediaFiles, skills);
       if (!started) yield* returnToInput({ ...EMPTY_DRAFT, skills });
       return SENT;
     });
@@ -912,16 +884,14 @@ export function createChatSessionController(
     yield* submitChatMessage(submitted, line, holdUntil);
   });
 
-  const activateSkill = (selection: SkillActivation): void => {
-    const wasPending = SubscriptionRef.getUnsafe(draft).skills.some(
-      (skill) => skill.name === selection.name,
-    );
+  const activateSkill = (name: string): void => {
+    const wasPending = SubscriptionRef.getUnsafe(draft).skills.includes(name);
     chat.sync(
-      SubscriptionRef.update(draft, (current) => withSkill(current, selection)),
+      SubscriptionRef.update(draft, (current) => withSkill(current, name)),
     );
     appendLocalNotice(
       [
-        `Skill ${wasPending ? 'refreshed' : 'activated'}: ${selection.name}.`,
+        `Skill ${wasPending ? 'refreshed' : 'activated'}: ${name}.`,
         'It will be applied to your next message.',
       ].join(' '),
     );

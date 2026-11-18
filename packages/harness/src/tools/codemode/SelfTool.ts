@@ -139,18 +139,22 @@ const runSelf = Effect.fn('self.call')(function* (
       const forked = fork
         ? yield* forkSeed(source, before, runId, task, boundAt)
         : null;
+      // The child's first message is its task or its seed, never its
+      // parent's launch, so it renders none of the skills that launch
+      // activated; forked, it holds the activations its seed copies.
+      const { skills: _skills, ...record } = forked?.record ?? {
+        ...launch,
+        model: (yield* ScopedRef.get(run.model)).modelId,
+        instruction: task,
+        displayInstruction: input.prompt,
+        outputFiles: [],
+        launch: null,
+      };
       return yield* executeSubagentInBand({
         runId,
         parentId,
         configPayload: Schema.decodeUnknownSync(AgentConfigSchema)({
-          ...(forked?.record ?? {
-            ...launch,
-            model: (yield* ScopedRef.get(run.model)).modelId,
-            instruction: task,
-            displayInstruction: input.prompt,
-            outputFiles: [],
-            launch: null,
-          }),
+          ...record,
           script: null,
           outputSchema: outputSchema ?? null,
           asCaller: true,

@@ -22,7 +22,7 @@ import { ModelListForm } from '../forms/ModelListForm';
 import { PluginsListForm } from '../forms/PluginsListForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
 import { TasksForm } from '../forms/TasksForm';
-import { SkillsListForm, type SkillActivation } from '../forms/SkillsListForm';
+import { SkillsListForm } from '../forms/SkillsListForm';
 import { selectedRunId, sessionMeta } from '../state/cliState';
 import { currentView, runViewOf } from '../state/sessionView';
 import { appendLocalNotice } from '../state/transcript';
@@ -214,7 +214,7 @@ export function builtinSlashCommands(options: {
         />
       )
     : undefined;
-  const SkillsListFormAdapter = makeSelectFormAdapter<SkillActivation>(
+  const SkillsListFormAdapter = makeSelectFormAdapter<string>(
     ({ context, ...formProps }) => <SkillsListForm {...formProps} />,
     (selection, context) => Effect.sync(() => context.activateSkill(selection)),
   );

@@ -7,9 +7,8 @@
  */
 import { Schema } from 'effect';
 
-import { ACTIVATED_SKILLS_MAX } from './activeSkills';
+import { ActivatedSkillsSchema } from './activeSkills';
 import { Sha256Schema } from './identifiers';
-import { QualifiedSkillNameSchema } from './skillName';
 import { DeclinableUsageRouteSchema } from './usage';
 
 // ------------------------------------------------------------ launch facts
@@ -73,11 +72,7 @@ export const RunInputSchema = Schema.Struct({
   /** The names of the skills the run's user activated: each step resolves
    *  them against its own catalog, and grants one while its plugin, if any,
    *  still contributes. */
-  activated: Schema.optional(
-    Schema.Array(QualifiedSkillNameSchema).check(
-      Schema.isMaxLength(ACTIVATED_SKILLS_MAX),
-    ),
-  ),
+  activated: Schema.optional(ActivatedSkillsSchema),
   /** The attached memories the opening could not read. */
   memoryMisses: Schema.optional(Schema.Array(AttachedMemoryMissSchema)),
 });
