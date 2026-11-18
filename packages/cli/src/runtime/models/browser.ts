@@ -1,16 +1,33 @@
-import { Config, Effect, Option, Schema } from 'effect';
+import { Config, Effect, Option } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { PlatformError } from 'effect/PlatformError';
 
-/** The OS browser launcher could not open the URL. The message never
- *  carries the URL, which can be a sign-in link. */
-class BrowserLaunchFailed extends Schema.TaggedError<BrowserLaunchFailed>()(
-  'BrowserLaunchFailed',
-  {
-    message: Schema.String,
-  },
-) {}
+import { HostFailed } from '@texra/hosts/uiHosts';
+
+/**
+ * Why the launcher did not open the URL: it could not start, or it exited
+ * with a failure code. Facts only, never its argv, which is the URL (a
+ * sign-in link can carry a code).
+ */
+type LaunchFault = { readonly command: string } & (
+  | { readonly start: PlatformError['reason']['_tag'] }
+  | { readonly exitCode: number }
+);
+
+/** The app's failure for a host capability, worded from the fault alone so
+ *  neither the message nor the cause can carry the URL. */
+function launchFailed(fault: LaunchFault): HostFailed {
+  const what =
+    'exitCode' in fault
+      ? `exited with code ${fault.exitCode}`
+      : `could not start (${fault.start})`;
+  return new HostFailed({
+    member: fault.command,
+    message: `Could not open the browser automatically: ${fault.command} ${what}`,
+    cause: fault,
+  });
+}
 
 interface BrowserLaunchCommand {
   readonly command: string;
@@ -56,7 +73,7 @@ function resolveBrowserLaunch(url: string, wsl: boolean): BrowserLaunchCommand {
  */
 const launchBrowser = Effect.fn('launchBrowser')(function* (
   url: string,
-): Effect.fn.Return<void, BrowserLaunchFailed, ChildProcessSpawner> {
+): Effect.fn.Return<void, HostFailed, ChildProcessSpawner> {
   const wsl =
     Option.isSome(
       yield* Config.String('WSL_DISTRO_NAME').pipe(Config.option, Effect.orDie),
@@ -66,8 +83,8 @@ const launchBrowser = Effect.fn('launchBrowser')(function* (
     );
   const launch = resolveBrowserLaunch(url, wsl);
   const spawner = yield* ChildProcessSpawner;
-  // Never the `PlatformError` message: it embeds the argv, and the argv is
-  // the URL.
+  // Never the `PlatformError` itself: its message embeds the argv, and the
+  // argv is the URL.
   const code = yield* spawner
     .exitCode(
       ChildProcess.make(launch.command, launch.args, {
@@ -79,17 +96,12 @@ const launchBrowser = Effect.fn('launchBrowser')(function* (
       }),
     )
     .pipe(
-      Effect.mapError(
-        (error: PlatformError) =>
-          new BrowserLaunchFailed({
-            message: `Could not open the browser automatically: ${launch.command} could not start (${error.reason._tag})`,
-          }),
+      Effect.mapError((error: PlatformError) =>
+        launchFailed({ command: launch.command, start: error.reason._tag }),
       ),
     );
   if (code !== 0) {
-    return yield* new BrowserLaunchFailed({
-      message: `Could not open the browser automatically: ${launch.command} exited with code ${code}`,
-    });
+    return yield* launchFailed({ command: launch.command, exitCode: code });
   }
 });
 
@@ -100,7 +112,7 @@ export const tryOpenBrowser = (
 ): Effect.Effect<boolean, never, ChildProcessSpawner> =>
   launchBrowser(url).pipe(
     Effect.as(true),
-    Effect.catch((error: BrowserLaunchFailed) =>
+    Effect.catch((error: HostFailed) =>
       Effect.logDebug(error.message).pipe(Effect.as(false)),
     ),
   );
