@@ -15,6 +15,11 @@ import {
 import { HttpClientError } from 'effect/http';
 
 import { apiKey, providerDisplayName } from '@texra-ai/llm';
+import {
+  fetchPlanUsage,
+  type PlanUsage,
+  type PlanUsageRequest,
+} from '@texra-ai/llm/node';
 import { toErrorMessage, GLM_REGION_SETTING } from '@texra-ai/harness/schemas';
 import type {
   SubscriptionUsageProvider,
@@ -25,27 +30,11 @@ import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
 } from '@texra/shared/model/codingPlans';
-
-import {
-  fetchGlmCodingPlanUsage,
-  GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
-  GLM_CODING_PLAN_USAGE_URL,
-} from './glmCodingPlanUsageAdapter';
-import { fetchKimiCodeUsage } from './kimiCodeUsageAdapter';
-import type { ParsedSubscriptionUsage } from './subscriptionUsageParsing';
 import type { HttpClient } from 'effect/http';
 
 const CHANNEL = 'SubscriptionUsage';
 
-/** A coding plan's stored key, from the process `Secrets`. */
-const lookupStoredKey = (provider: 'kimiCode' | 'glm') =>
-  Effect.flatMap(Secrets, (secrets) =>
-    Effect.map(apiKey(secrets, provider), (key) => key.value),
-  );
-
 const CACHE_TTL = Duration.seconds(30);
-/** The one deadline over a usage request and its body read. */
-const REQUEST_TIMEOUT_MS = 15_000;
 
 const [KIMI_CODE_PLAN, GLM_CODING_PLAN] = CODING_PLAN_SUBSCRIPTIONS;
 
@@ -61,26 +50,16 @@ interface SubscriptionUsageServiceInit {
   readonly stores: SettingsStores;
 }
 
-/** One cache entry per provider and request variant (the GLM region). */
-type UsageCacheKey = readonly [SubscriptionUsageProvider, boolean | undefined];
+/** One cache entry per plan and, for GLM, the platform its key is on. */
+type UsageCacheKey =
+  | readonly ['kimiCode']
+  | readonly ['glmCodingPlan', 'china' | 'international'];
 
 /** Why a usage snapshot carries no data (the `unavailable` variant's reason). */
 type SubscriptionUsageUnavailableReason = Extract<
   SubscriptionUsageSnapshot,
   { state: 'unavailable' }
 >['reason'];
-
-interface SubscriptionUsageAdapter {
-  /** Credential-derived request variant (today: the GLM region flag). */
-  readonly resolveVariant?: () => Effect.Effect<boolean, Error>;
-  readonly fetch: (
-    variant: boolean | undefined,
-  ) => Effect.Effect<
-    ParsedSubscriptionUsage | null,
-    Error,
-    HttpClient.HttpClient | Secrets
-  >;
-}
 
 /**
  * Read-only, host-neutral access to coding-plan usage. Every read is a
@@ -91,9 +70,6 @@ interface SubscriptionUsageAdapter {
  */
 export class SubscriptionUsageService {
   private readonly stores: SettingsStores;
-  private readonly adapters: Readonly<
-    Record<SubscriptionUsageProvider, SubscriptionUsageAdapter>
-  >;
   private cache:
     | Cache.Cache<
         UsageCacheKey,
@@ -105,7 +81,6 @@ export class SubscriptionUsageService {
 
   constructor(init: SubscriptionUsageServiceInit) {
     this.stores = init.stores;
-    this.adapters = this.createAdapters();
   }
 
   /**
@@ -118,52 +93,14 @@ export class SubscriptionUsageService {
     this.cache
       ? Effect.succeed(this.cache)
       : Effect.map(
-          Cache.makeWith(
-            ([provider, variant]: UsageCacheKey) =>
-              this.fetchUsage(provider, variant),
-            {
-              capacity: 64,
-              timeToLive: () => CACHE_TTL,
-              requireServicesAt: 'lookup',
-            },
-          ),
+          Cache.makeWith((key: UsageCacheKey) => this.fetchUsage(key), {
+            capacity: 64,
+            timeToLive: () => CACHE_TTL,
+            requireServicesAt: 'lookup',
+          }),
           (made) => (this.cache ??= made),
         ),
   );
-
-  /** Provider transports are adapters; caching and failure policy stay common. */
-  private createAdapters(): Readonly<
-    Record<SubscriptionUsageProvider, SubscriptionUsageAdapter>
-  > {
-    // Each adapter fetch is already a program over the `HttpClient` service,
-    // so the client's own failure reaches the handler below unchanged.
-    // `REQUEST_TIMEOUT_MS` is the one deadline over the request and body read.
-    return Object.freeze({
-      kimiCode: {
-        fetch: () =>
-          Effect.flatMap(lookupStoredKey('kimiCode'), (apiKey) =>
-            apiKey
-              ? fetchKimiCodeUsage(apiKey, REQUEST_TIMEOUT_MS)
-              : Effect.succeed(null),
-          ),
-      },
-      glmCodingPlan: {
-        resolveVariant: () => Settings.get(this.stores, GLM_REGION_SETTING),
-        fetch: (useChina) =>
-          Effect.flatMap(lookupStoredKey('glm'), (apiKey) =>
-            apiKey
-              ? fetchGlmCodingPlanUsage(
-                  apiKey,
-                  REQUEST_TIMEOUT_MS,
-                  (useChina ?? true)
-                    ? GLM_CODING_PLAN_USAGE_URL
-                    : GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
-                )
-              : Effect.succeed(null),
-          ),
-      },
-    });
-  }
 
   /**
    * Drop a provider's cached and in-flight entries after its credentials or
@@ -196,23 +133,26 @@ export class SubscriptionUsageService {
     never,
     HttpClient.HttpClient | Secrets
   > {
-    const adapter = this.adapters[provider];
-    return Effect.matchCauseEffect(
-      Effect.suspend(
-        (): Effect.Effect<boolean | undefined, Error> =>
-          adapter.resolveVariant?.() ?? Effect.succeed(undefined),
-      ),
-      {
-        onFailure: Effect.fn('onFailure')({ self: this }, function* (cause) {
-          const error = Cause.squash(cause);
-          yield* Effect.logWarning(
-            `Subscription usage variant probe failed for ${provider}: ${toErrorMessage(error)}`,
-          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL));
-          return yield* this.unavailable(provider, 'request_failed');
-        }),
-        onSuccess: (variant) => this.coalesced(provider, variant),
-      },
-    );
+    // The GLM region decides which platform's quota endpoint is asked.
+    const key: Effect.Effect<UsageCacheKey, Error> =
+      provider === 'glmCodingPlan'
+        ? Effect.map(
+            Settings.get(this.stores, GLM_REGION_SETTING),
+            (china) => [provider, china ? 'china' : 'international'] as const,
+          )
+        : Effect.succeed([provider] as const);
+    return Effect.matchCauseEffect(key, {
+      onFailure: Effect.fn('onFailure')({ self: this }, function* (cause) {
+        const error = Cause.squash(cause);
+        yield* Effect.logWarning(
+          `Subscription usage variant probe failed for ${provider}: ${toErrorMessage(error)}`,
+        ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL));
+        return yield* this.unavailable(provider, 'request_failed');
+      }),
+      // One lookup per key at a time, served from the cache while it is warm.
+      onSuccess: (key) =>
+        Effect.flatMap(this.usageCache, (cache) => Cache.get(cache, key)),
+    });
   }
 
   /** One snapshot per subscription provider, for a settings-view refresh. */
@@ -231,19 +171,6 @@ export class SubscriptionUsageService {
     );
   }
 
-  /** One lookup per key at a time, served from the cache while it is warm. */
-  private coalesced(
-    provider: SubscriptionUsageProvider,
-    variant: boolean | undefined,
-  ): Effect.Effect<
-    SubscriptionUsageSnapshot,
-    never,
-    HttpClient.HttpClient | Secrets
-  > {
-    const key: UsageCacheKey = [provider, variant];
-    return Effect.flatMap(this.usageCache, (cache) => Cache.get(cache, key));
-  }
-
   private unavailable(
     provider: SubscriptionUsageProvider,
     reason: SubscriptionUsageUnavailableReason,
@@ -260,7 +187,7 @@ export class SubscriptionUsageService {
 
   private available(
     provider: SubscriptionUsageProvider,
-    parsed: ParsedSubscriptionUsage,
+    parsed: PlanUsage,
   ): Effect.Effect<SubscriptionUsageSnapshot> {
     return Effect.map(Clock.currentTimeMillis, (fetchedAt) => ({
       state: 'available',
@@ -271,15 +198,26 @@ export class SubscriptionUsageService {
     }));
   }
 
+  /** One plan's snapshot from its provider, with the key `Secrets` holds.
+   *  The client's own failure reaches the handler below unchanged. */
   private fetchUsage(
-    provider: SubscriptionUsageProvider,
-    variant: boolean | undefined,
+    key: UsageCacheKey,
   ): Effect.Effect<
     SubscriptionUsageSnapshot,
     never,
     HttpClient.HttpClient | Secrets
   > {
-    return Effect.suspend(() => this.adapters[provider].fetch(variant)).pipe(
+    const [provider] = key;
+    const request: PlanUsageRequest =
+      key[0] === 'glmCodingPlan'
+        ? { plan: 'glm', region: key[1] }
+        : { plan: 'kimiCode' };
+    return Effect.flatMap(Secrets, (secrets) =>
+      apiKey(secrets, request.plan),
+    ).pipe(
+      Effect.flatMap(({ value }) =>
+        value ? fetchPlanUsage(request, value) : Effect.succeed(null),
+      ),
       Effect.flatMap((parsed) => {
         if (parsed === null) {
           return this.unavailable(provider, 'missing_credentials');

@@ -17,6 +17,8 @@
  *   account, keyed by its route
  *   ([`SubscriptionAccounts`](#subscriptionaccounts)), which runs its own
  *   browser and (Grok's) device-code sign-in.
+ * - **Plan usage**: [`fetchPlanUsage`](#fetchplanusage) reads a coding
+ *   plan's quota windows from its provider.
  */
 import { Effect, type Scope } from 'effect';
 import { ModelError, type BillingRoute } from './errors.js';
@@ -190,3 +192,11 @@ export type {
 export type { ChatgptSession } from './oauth/chatgpt/chatgptProvider.js';
 export type { XaiSession } from './oauth/xai/xaiProvider.js';
 export { SubscriptionAccounts } from './oauth/subscriptionAccounts.js';
+
+// Provider endpoints outside the turn contract.
+export { fetchPlanUsage } from './providers/planUsage.js';
+export type {
+  PlanUsage,
+  PlanUsageRequest,
+  PlanUsageWindow,
+} from './providers/planUsage.js';
