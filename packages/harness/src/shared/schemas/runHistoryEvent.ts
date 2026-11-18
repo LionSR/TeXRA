@@ -216,9 +216,9 @@ export const ModelMessagePayloadSchema = Schema.Union([
     kind: Schema.Literal('append'),
     messages: Schema.Array(StoredMessageSchema).check(Schema.isMinLength(1)),
     sourceResponse: Schema.NullOr(ResponseIdSchema),
-    input: Schema.optional(Schema.NullOr(RunInputSchema)),
+    input: Schema.optional(RunInputSchema),
     reason: Schema.optional(
-      Schema.NullOr(Schema.Literals(['blank-continuation', 'final-tool'])),
+      Schema.Literals(['blank-continuation', 'final-tool']),
     ),
   }),
 ]).check(
@@ -297,7 +297,7 @@ export const ContextEditPayloadSchema = Schema.Struct({
   }),
   messages: Schema.Array(StoredMessageSchema),
   usage: Schema.NullOr(NormalizedUsageSchema),
-  input: Schema.optional(Schema.NullOr(RunInputSchema)),
+  input: Schema.optional(RunInputSchema),
 })
   .check(
     Schema.makeFilter(({ range }) => range.from <= range.to, {

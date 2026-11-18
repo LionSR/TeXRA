@@ -119,9 +119,9 @@ export const NO_FACTS: RunFacts = Object.freeze({
  *  last, and a `null` instruction returns to the launch's. */
 export function withInput(
   input: RunFacts['input'],
-  recorded: RunInput | null | undefined,
+  recorded: RunInput | undefined,
 ): RunFacts['input'] {
-  if (recorded == null) return input;
+  if (recorded === undefined) return input;
   const { instruction: was, ...kept } = input;
   const { instruction, system, activated, memoryMisses } = recorded;
   const next = instruction === undefined ? was : (instruction ?? undefined);

@@ -233,7 +233,7 @@ const DisplayRowDraftSchema = Schema.Union([
   /** What the run runs with: the newest row's model and `binding` hold. */
   durable('run.config', {
     config: RunRecordFieldsSchema,
-    binding: Schema.optional(Schema.NullOr(RunBindingSchema)),
+    binding: Schema.optional(RunBindingSchema),
   }),
   /**
    * A stop asked of the run, and why: a person's, or the call that
