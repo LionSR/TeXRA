@@ -267,8 +267,7 @@ export { ToolCatalog, type ToolCatalogShape } from '@tools/liveTools';
 // The write path's redaction, for host text shown outside it.
 export {
   formatFatalErrorDetail,
-  redactEmailAddresses,
-  redactPathPrefixes,
+  redactDiagnostics,
   redactSecrets,
 } from '@logger/redaction';
 // The config and state store ports a host implements and their failures

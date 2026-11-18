@@ -1,3 +1,6 @@
+// Node imports
+import { homedir } from 'node:os';
+
 // Third-party imports
 import {
   Effect,
@@ -13,7 +16,7 @@ import {
   formatResultCount,
   isModelOptionAvailable,
 } from '@texra-ai/harness/schemas';
-import { redactEmailAddresses } from '@texra-ai/harness/host';
+import { redactDiagnostics } from '@texra-ai/harness/host';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { latexToolchainHealth } from '@latex/latexToolchain';
 import type { UsageLoggingOptOut } from '@telemetry/UsageLogService';
@@ -407,7 +410,8 @@ export function doctorExitCode(report: DoctorReport): number {
 
 function formatDoctorText(
   report: DoctorReport,
-  style: CliStyle = createCliStyle(false),
+  style: CliStyle,
+  redact: (text: string) => string,
 ): string {
   const marker: Record<DoctorCheckStatus, string> = {
     pass: style.success('PASS'),
@@ -417,11 +421,11 @@ function formatDoctorText(
   };
   return report.checks
     .map((check) => {
-      const head = `${marker[check.status]} ${check.name}: ${redactEmailAddresses(check.message)}`;
+      const head = `${marker[check.status]} ${check.name}: ${redact(check.message)}`;
       if (!check.hint) return head;
       // Install advice runs over several lines; each sits under the marker
       // column, and a blank line between its steps stays blank.
-      const hint = redactEmailAddresses(check.hint)
+      const hint = redact(check.hint)
         .split('\n')
         .map((line) => (line ? `     ${style.muted(line)}` : ''))
         .join('\n');
@@ -447,15 +451,27 @@ export function writeDoctorReport(
   // A failing report's text goes to stderr (clig.dev); each stream's own
   // color gate. One stderr-keyed gate leaked ANSI into `doctor | cat` and
   // stripped color from `doctor 2>/dev/null`.
+  // The text report is what gets pasted into a bug report, so it masks what
+  // the desktop's log viewer masks.
+  const redact = (text: string) =>
+    redactDiagnostics(text, { home: homedir(), workspace: context.cwd });
   if (context.outputFormat === 'text' && !report.ok) {
     writeTextStderr(
-      formatDoctorText(report, createCliStyle(context.stderrColorEnabled)),
+      formatDoctorText(
+        report,
+        createCliStyle(context.stderrColorEnabled),
+        redact,
+      ),
     );
     return;
   }
   writeCliResult(context.outputFormat, {
     json: report,
     ndjson: doctorNdjsonRecords(report),
-    text: formatDoctorText(report, createCliStyle(context.stdoutColorEnabled)),
+    text: formatDoctorText(
+      report,
+      createCliStyle(context.stdoutColorEnabled),
+      redact,
+    ),
   });
 }

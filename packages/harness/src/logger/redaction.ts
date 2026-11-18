@@ -102,7 +102,7 @@ function maskEmailAddress(value: string): string {
 }
 
 /** Mask every e-mail-like value in `text`. */
-export function redactEmailAddresses(text: string): string {
+function redactEmailAddresses(text: string): string {
   return text.replaceAll(EMAIL_LIKE_PATTERN, (value) =>
     maskEmailAddress(value),
   );
@@ -117,7 +117,7 @@ export function redactEmailAddresses(text: string): string {
  * is one pattern rather than one more enumerated spelling. Longer prefixes go
  * first, so a workspace inside the home directory is not cut at home.
  */
-export function redactPathPrefixes(
+function redactPathPrefixes(
   text: string,
   ...prefixes: readonly (string | undefined)[]
 ): string {
@@ -146,6 +146,24 @@ export function redactPathPrefixes(
         '[path]',
       );
     }, text);
+}
+
+/**
+ * Text a host shows as a diagnostic (a health report, a log viewer, an
+ * exported log) with what would identify the user masked: the home and
+ * workspace path prefixes as `[path]`, e-mail addresses to their first
+ * letters, and provider secrets as {@link redactSecrets} does. Paths go
+ * first, so a path that holds an address or a key-shaped name is one
+ * `[path]`. The caller names the paths because this module runs in
+ * browser bundles too and cannot ask the OS for the home directory.
+ */
+export function redactDiagnostics(
+  text: string,
+  paths: { readonly home: string; readonly workspace: string | undefined },
+): string {
+  return redactSecrets(
+    redactEmailAddresses(redactPathPrefixes(text, paths.workspace, paths.home)),
+  );
 }
 
 /** Scrub a constructed JSON-shaped display value without changing its field structure.

@@ -1823,6 +1823,23 @@ unparsed in the record so a write keeps every entry, readable or not.
 const REASONING_LEVELS_KEY: { readonly key: "reasoningLevels"; readonly slot: "globalState"; readonly schema: withDecodingDefault<$Record<String, Unknown>, never>; }
 ```
 
+## redactDiagnostics
+
+Text a host shows as a diagnostic (a health report, a log viewer, an
+exported log) with what would identify the user masked: the home and
+workspace path prefixes as `[path]`, e-mail addresses to their first
+letters, and provider secrets as {@link redactSecrets} does. Paths go
+first, so a path that holds an address or a key-shaped name is one
+`[path]`. The caller names the paths because this module runs in
+browser bundles too and cannot ask the OS for the home directory.
+
+```ts
+function redactDiagnostics(
+  text: string,
+  paths: { readonly home: string; readonly workspace: string | undefined },
+): string
+```
+
 ## redactSecrets
 
 ```ts

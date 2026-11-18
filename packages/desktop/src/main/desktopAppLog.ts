@@ -17,7 +17,7 @@ import {
   type WebContentsConsoleMessageEventParams,
 } from 'electron';
 
-import { redactPathPrefixes, redactSecrets } from '@texra-ai/harness/host';
+import { redactDiagnostics } from '@texra-ai/harness/host';
 import { setLogSink, type LogEntry } from '@texra-ai/harness/node';
 
 import type { DesktopLogSnapshot } from '../shared/desktopLogMessages.js';
@@ -187,11 +187,11 @@ function redactDesktopLogText(
   text: string,
   workspaceRoot: string | undefined,
 ): string {
-  return redactSecrets(
-    redactPathPrefixes(text, workspaceRoot, normalizeFilePath(homedir())),
-  );
+  return redactDiagnostics(text, {
+    home: normalizeFilePath(homedir()),
+    workspace: workspaceRoot,
+  });
 }
-
 function toConsoleLevel(
   level: WebContentsConsoleMessageEventParams['level'],
 ): ConsoleLevel {
