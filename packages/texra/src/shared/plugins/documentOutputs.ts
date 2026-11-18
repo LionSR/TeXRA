@@ -254,6 +254,23 @@ export const RoundOutputSchema = Schema.Struct({
 });
 export type RoundOutput = typeof RoundOutputSchema.Type;
 
+/** What a round flags to its reader: that it wrote no documents, and the
+ *  reply to open when it wrote none or missed some (null when it kept no
+ *  reply or there is nothing to check). Every renderer of a round reads it. */
+export function roundAlerts(
+  round: Pick<RoundOutput, 'outputs' | 'missingOutputs' | 'reply'>,
+): {
+  readonly noDocuments: boolean;
+  readonly replyToCheck: RoundOutput['reply'];
+} {
+  const noDocuments = round.outputs.length === 0;
+  return {
+    noDocuments,
+    replyToCheck:
+      noDocuments || round.missingOutputs.length > 0 ? round.reply : null,
+  };
+}
+
 /** Every round's outputs flattened, each at the round that wrote it. */
 export function roundOutputsToOutputSummaries(
   roundOutputs: readonly RoundOutput[],

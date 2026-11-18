@@ -44,6 +44,7 @@ export {
 export {
   acceptsFollowUp,
   isInterrupted,
+  isLive,
   isUnreadable,
   isWorking,
   attentionOf,

@@ -11,7 +11,6 @@ import {
   type AgentSource,
   type RunId,
   descendantRuns,
-  needsUser,
   FACT_SEPARATOR,
 } from '@texra-ai/harness/schemas';
 import { compareByNewestCreationTime } from '@texra-ai/harness/transcript';
@@ -19,17 +18,13 @@ import {
   applySurfaceAction,
   emptySurface,
   pruneSurface,
+  runExpanded,
   shownRun,
   type SelectionRule,
   type Surface,
   type SurfaceAction,
 } from '@texra/shared/session/surface';
-import {
-  RUN_SECTION_LABELS,
-  RUN_SECTION_ORDER,
-  runStatus,
-} from '@ui/copy/runStatus';
-import type { RunSection } from '@texra/shared/session/runStatusKey';
+import { runListSections } from '@ui/copy/runStatus';
 import { sessionView } from './sessionView';
 import type { RootLaunch } from './sessionRunState';
 import type { LocalNotice } from './transcript';
@@ -239,14 +234,8 @@ export type SessionListRow =
 export const sessionListRows = computed<readonly SessionListRow[]>(() => {
   const view = sessionView().get();
   const included = sessionRunIds.get();
-  const { runs } = surface.get();
+  const shown = surface.get();
   const rows: SessionListRow[] = [];
-  const groups: Record<RunSection, RunView[]> = {
-    running: [],
-    waiting: [],
-    interrupted: [],
-    recent: [],
-  };
   // Top-level runs come in the session view's order. A child this terminal owns
   // under a parent outside the scope (detached from an earlier turn) is a
   // root here but not in `view.order`: only these sort, after the session view's.
@@ -267,12 +256,8 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
       !included.has(run.parentId),
   );
   detached.sort(compareByNewestCreationTime);
-  for (const run of [...tops, ...detached]) {
-    if (included.has(run.id)) groups[runStatus(run).section].push(run);
-  }
   const append = (run: RunView, depth: number): void => {
-    const open =
-      needsUser(run, view.runs) || runs.get(run.id)?.expanded === true;
+    const open = runExpanded(shown, view, run);
     rows.push({ kind: 'run', run, depth, expanded: open });
     if (open) {
       for (const id of run.childIds) {
@@ -281,10 +266,9 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
       }
     }
   };
-  for (const section of RUN_SECTION_ORDER) {
-    const runs = groups[section];
-    if (runs.length === 0) continue;
-    rows.push({ kind: 'group', label: RUN_SECTION_LABELS[section] });
+  const roots = [...tops, ...detached].filter((run) => included.has(run.id));
+  for (const { label, runs } of runListSections(roots)) {
+    rows.push({ kind: 'group', label });
     for (const run of runs) append(run, 0);
   }
   return rows;

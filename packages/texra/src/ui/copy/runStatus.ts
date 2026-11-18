@@ -28,21 +28,13 @@ export function formatLoopPositionLabel(
   return turn == null ? undefined : `t${turn}`;
 }
 
-/**
- * One label per section, in the order the sections are painted. Both
- * surfaces that group a run list (the webview tab strip and the TUI's run
- * tree) read this table rather than spelling the four labels again.
- *
- * Deep-frozen: the record crosses a module boundary into two renderers, and
- * `readonly` is compile-time only.
- */
-export const RUN_SECTION_LABELS: Readonly<Record<RunSection, string>> =
-  Object.freeze({
-    running: 'Running',
-    waiting: 'Waiting on you',
-    interrupted: 'Interrupted',
-    recent: 'Recent',
-  });
+/** One label per section, in the order the sections are painted. */
+const RUN_SECTION_LABELS: Readonly<Record<RunSection, string>> = Object.freeze({
+  running: 'Running',
+  waiting: 'Waiting on you',
+  interrupted: 'Interrupted',
+  recent: 'Recent',
+});
 
 /** A count of runs in one section, as a rollup reads it: `2 waiting on you`. */
 export function sectionCountLabel(section: RunSection, count: string): string {
@@ -50,11 +42,32 @@ export function sectionCountLabel(section: RunSection, count: string): string {
 }
 
 /** Section order, in the table's own order. */
-export const RUN_SECTION_ORDER: readonly RunSection[] = Object.freeze(
+const RUN_SECTION_ORDER: readonly RunSection[] = Object.freeze(
   Object.keys(RUN_SECTION_LABELS).filter((key): key is RunSection =>
     Object.hasOwn(RUN_SECTION_LABELS, key),
   ),
 );
+
+/** One section of a grouped run list: its key, its label and its runs. */
+export interface RunListSection<R> {
+  readonly section: RunSection;
+  readonly label: string;
+  readonly runs: readonly R[];
+}
+
+/** `runs` grouped by section in paint order, each section keeping the
+ *  order it was given; an empty section is left out. The one grouping the
+ *  webview tab strip and the TUI's run tree both paint. */
+export function runListSections<R extends RunStatusFacts>(
+  runs: readonly R[],
+): readonly RunListSection<R>[] {
+  return RUN_SECTION_ORDER.flatMap((section) => {
+    const members = runs.filter((run) => runSection(run) === section);
+    return members.length === 0
+      ? []
+      : [{ section, label: RUN_SECTION_LABELS[section], runs: members }];
+  });
+}
 
 /** A fact-only word every host paints in its own colour vocabulary. */
 export type RunTone = 'running' | 'success' | 'danger' | 'neutral' | 'warning';

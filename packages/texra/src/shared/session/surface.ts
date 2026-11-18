@@ -19,6 +19,7 @@ import {
   isModelOptionAvailable,
   type RunId,
   acceptsFollowUp,
+  needsUser,
   Rejected,
   type SessionView,
   type RunView,
@@ -173,6 +174,18 @@ export function runSurface(
       seen: undefined,
       rejected: undefined,
     }
+  );
+}
+
+/** Whether a run's children show in a run tree: always when the run needs
+ *  the user (`needsUser`), otherwise when the surface chose to expand it. */
+export function runExpanded(
+  surface: Pick<Surface, 'runs'>,
+  view: Pick<SessionView, 'runs'>,
+  run: RunView,
+): boolean {
+  return (
+    needsUser(run, view.runs) || surface.runs.get(run.id)?.expanded === true
   );
 }
 

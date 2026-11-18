@@ -23,6 +23,7 @@ import {
   OUTPUT_DOCUMENTS_TAG,
   type OutputFileInfo,
   type RoundOutput,
+  roundAlerts,
 } from '@texra/shared/plugins/documentOutputs';
 import type { FileActionSchema } from '@texra/shared/session/hostRequest';
 import type { Surface } from '@texra/shared/session/surface';
@@ -162,10 +163,10 @@ export class FileList extends LitElement {
       round,
       outputs: files,
       missingOutputs: missing,
-      reply,
       latexdiffs,
     } = record;
     const failures = compileFailuresOf(record);
+    const { noDocuments, replyToCheck } = roundAlerts(record);
     const rows = html`
       <ul class="file-round-list">
         ${repeat(
@@ -181,15 +182,15 @@ export class FileList extends LitElement {
               ),
             ),
         )}
-        ${files.length === 0 ? html`<li class="file-item">${waIcon('triangle-exclamation')} Wrote no documents</li>` : nothing}
+        ${noDocuments ? html`<li class="file-item">${waIcon('triangle-exclamation')} Wrote no documents</li>` : nothing}
         ${missing.map((name) => html`<li class="file-item">${waIcon('triangle-exclamation')} Missing: <bdi dir="auto">${name}</bdi></li>`)}
         ${
-          reply && (files.length === 0 || missing.length > 0)
+          replyToCheck
             ? html`<li class="file-item">
                 ${waIcon('file-code')}
                 <span
                   class="file-path clickable-link"
-                  data-file=${reply.absolutePath}
+                  data-file=${replyToCheck.absolutePath}
                   role="button"
                   tabindex="0"
                   >Open the reply</span

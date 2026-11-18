@@ -17,6 +17,7 @@ import {
   formatCompactDuration,
   pluralize,
   joinFacts,
+  isLive,
 } from '@texra-ai/harness/schemas';
 import {
   formatLoopPositionLabel,
@@ -222,7 +223,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     if (!root || this.rootRunTerminal) return [];
     return root.childIds.flatMap((childId) => {
       const child = this.view?.runs.get(childId);
-      return child?.holder === 'here' ? [child] : [];
+      return child !== undefined && isLive(child) ? [child] : [];
     });
   }
 

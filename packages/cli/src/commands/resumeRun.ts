@@ -136,20 +136,21 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
     }
     return { chat: { initialResume: { id: forkId, config: forkConfig } } };
   }
-  // A run launched to run once reads no messages, so a chat over it would
-  // refuse every one: once it ended, it continues as a fork. One stopped
-  // mid-turn (no outcome yet) still resumes to finish it, since a fork
-  // needs a finished turn. Read from the log: a service window's own view
-  // fills after it opens.
+  // An ended one-shot run continues as a fork (`oneShotResumeNotice`).
+  // Read from the log: a service window's own view fills after it opens.
   if (!documentTask) {
     const stored = yield* Effect.result(runSession.view.read([id]));
     if (Result.isFailure(stored)) {
       writeTextStderr(loadFailureMessage(id, stored.failure));
       return CliExitCode.AgentError;
     }
-    const run = stored.success.runs.get(id);
-    if (run?.takesFollowUps === false && run.outcome !== null) {
-      writeTextStderr(oneShotResumeNotice(context.commandName, id));
+    const oneShot = oneShotResumeNotice(
+      context.commandName,
+      id,
+      stored.success.runs.get(id),
+    );
+    if (oneShot !== undefined) {
+      writeTextStderr(oneShot);
       return CliExitCode.Usage;
     }
   }
