@@ -8,6 +8,7 @@ import {
   FILE_HANDLING_RULES,
   LATEX_BUILD_DIRECTORY,
 } from '@texra/common/files/fileHandlingRules';
+import { removeBestEffort } from '@texra/common/files/removeBestEffort';
 import { listWorkspaceFiles } from '@texra/common/files/workspaceFileListing';
 
 // Local file imports
@@ -57,25 +58,10 @@ export const removeBuildDirectories = Effect.fn(
   'housekeeping.removeBuildDirectories',
 )(function* (directories: readonly string[]) {
   const workspaceFs = yield* WorkspaceFs;
-  const removed = yield* Effect.forEach(
-    directories,
-    (dir) =>
-      workspaceFs.remove(dir, { recursive: true, force: true }).pipe(
-        Effect.tap(() =>
-          Effect.logDebug(`Removed build directory: ${dir}`).pipe(
-            withLogChannel(CHANNEL),
-          ),
-        ),
-        Effect.as(true),
-        Effect.catch((error) =>
-          Effect.logError(`Error removing build directory ${dir}`).pipe(
-            Effect.annotateLogs({ data: error }),
-            withLogChannel(CHANNEL),
-            Effect.as(false),
-          ),
-        ),
-      ),
-    { concurrency: 8 },
+  const removed = new Set(
+    yield* removeBestEffort(workspaceFs, directories, 'build directory', {
+      recursive: true,
+    }),
   );
-  return directories.filter((_, index) => !removed[index]);
-});
+  return directories.filter((dir) => !removed.has(dir));
+}, withLogChannel(CHANNEL));

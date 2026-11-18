@@ -28,6 +28,7 @@ import {
   generateDiffFileName,
   WORKSPACE_DIFF_SUFFIX,
 } from '@latex/latexdiff/diffFileNameManager';
+import { removeBestEffort } from '@texra/common/files/removeBestEffort';
 
 const CHANNEL = 'AcceptedFileTarget';
 
@@ -220,15 +221,9 @@ const commitAcceptedFile = Effect.fn('commitAcceptedFile')(function* <E>(
     // Diff-file cleanup is a best-effort side effect of accepting a file: a
     // file already gone is the post-condition, and any other failure (a
     // locked file) is reported without failing the accept.
-    yield* fs
-      .remove(stale.absolutePath, { force: true })
-      .pipe(
-        Effect.catchTag('PlatformError', (error) =>
-          Effect.logWarning(
-            `Could not remove the stale diff file ${stale.absolutePath}: ${error.message}`,
-          ).pipe(withLogChannel(CHANNEL)),
-        ),
-      );
+    yield* removeBestEffort(fs, [stale.absolutePath], 'stale diff file').pipe(
+      withLogChannel(CHANNEL),
+    );
   }
 
   yield* ports.showInfo(
@@ -339,21 +334,11 @@ export const cleanupAcceptedWorkspaceDiffFiles = Effect.fn(
   // sweep keeps every deletion that worked and names the ones that did not
   // rather than dropping them silently. `force` keeps an already-absent
   // companion a success: there is nothing left to remove.
-  const workspaceFs = yield* WorkspaceFs;
-  const removed = yield* Effect.forEach(
+  return yield* removeBestEffort(
+    yield* WorkspaceFs,
     stale,
-    (relativePath) =>
-      workspaceFs.remove(relativePath, { force: true }).pipe(
-        Effect.as(true),
-        Effect.catch((error) =>
-          Effect.logWarning(
-            `Could not remove the stale diff file ${relativePath}: ${error.message}`,
-          ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
-        ),
-      ),
-    { concurrency: 8 },
-  );
-  return stale.filter((_, index) => removed[index]);
+    'stale diff file',
+  ).pipe(withLogChannel(CHANNEL));
 });
 
 /** Where accepted content goes: over the base when the extensions match,
