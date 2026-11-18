@@ -26,6 +26,7 @@ import {
   linkService,
   requestOnService,
   type ServiceLink,
+  ServiceUnavailable,
 } from '@texra/controllers/server/client';
 import { attachWindowHost } from '@texra/controllers/server/windowHost';
 
@@ -34,12 +35,6 @@ if (storageRoot === undefined || workspace === undefined)
   throw new Error(
     'usage: service-host-harness <storageRoot> <workspace> <answer|hang|approve>',
   );
-
-/** No service answered, and the harness starts none. */
-class ServiceNotRunning extends Schema.TaggedError<ServiceNotRunning>()(
-  'ServiceNotRunning',
-  { message: Schema.String },
-) {}
 
 /** The storage root's global values, where the service's record is. */
 const globalValues = Layer.effect(
@@ -91,8 +86,8 @@ await Effect.runPromise(
         {
           storageRoot,
           start: Effect.fail(
-            new ServiceNotRunning({
-              message: 'The harness attaches to a running service only.',
+            new ServiceUnavailable({
+              reason: 'The harness attaches to a running service only.',
             }),
           ),
         },
