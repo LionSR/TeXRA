@@ -3,6 +3,9 @@ import { html, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { ref } from 'lit/directives/ref.js';
 
+// Local imports
+import { isCommitEnter } from './keyActivation';
+
 interface InlineRenameField {
   readonly value: string;
   /** Accessible name of the field (there is no visible label). */
@@ -57,7 +60,7 @@ export function inlineRenameField(field: InlineRenameField): TemplateResult {
     ${ref(focusAndSelect)}
     @keydown=${(event: KeyboardEvent) => {
       event.stopPropagation();
-      if (event.key === 'Enter') finish(field, event, true);
+      if (isCommitEnter(event)) finish(field, event, true);
       else if (event.key === 'Escape') finish(field, event, false);
     }}
     @blur=${(event: FocusEvent) => finish(field, event, true)}

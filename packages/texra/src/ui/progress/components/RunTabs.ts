@@ -24,6 +24,7 @@ import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import './WorktreeChip';
 import { renderEmptyState } from '@ui/wa/emptyState';
+import { matchesQuery } from '@ui/wa/listInteraction';
 import { layoutStyles } from '../styles/logStyles';
 import { runTabsContainerStyles } from './RunTabsContainer.styles';
 import { getComposedPathElement } from './composedPath';
@@ -115,14 +116,13 @@ export class RunTabs extends LitElement {
     return this.view?.runs.get(id);
   }
 
-  private matchesSearch(run: RunView, needle: string): boolean {
-    if (needle === '') return true;
+  /** A run is listed when it or any run under it matches the filter. */
+  private matchesSearch(run: RunView, query: string): boolean {
     return (
-      run.label.toLowerCase().includes(needle) ||
-      (run.description?.toLowerCase().includes(needle) ?? false) ||
+      matchesQuery(`${run.label} ${run.description ?? ''}`, query) ||
       run.childIds.some((id) => {
         const child = this.runOfEvent(id);
-        return child !== undefined && this.matchesSearch(child, needle);
+        return child !== undefined && this.matchesSearch(child, query);
       })
     );
   }
@@ -188,12 +188,12 @@ export class RunTabs extends LitElement {
     const surface = this.surface;
     const selected = surface ? shownRun(surface) : null;
     this.unseen = view && surface ? unseenRuns(surface, view) : new Set();
-    const needle = (surface?.search ?? '').trim().toLowerCase();
+    const query = surface?.search ?? '';
     const top = (view?.order ?? [])
       .map((id) => this.runOfEvent(id))
       .filter((run): run is RunView => run !== undefined)
       .filter((run) => !this.activeOnly || runStatus(run).section !== 'recent')
-      .filter((run) => this.matchesSearch(run, needle));
+      .filter((run) => this.matchesSearch(run, query));
 
     let body: TemplateResult;
     if (!this.sections) {
