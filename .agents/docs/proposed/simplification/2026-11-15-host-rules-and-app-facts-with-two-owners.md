@@ -91,7 +91,10 @@ In order of size. Each needs the decision named.
 
 ## Open: app facts with two owners
 
-1. **Symbol to LaTeX command.** `MATH_UNICODE_MAP`
+1. **Symbol to LaTeX command.** Landed: `MATH_SYMBOL_SPELLINGS`
+   (`packages/texra/src/replacement/constants.ts`) owns both spellings,
+   and the last nine entity-only symbols joined it on 2026-11-18. Was:
+   `MATH_UNICODE_MAP`
    (`packages/texra/src/replacement/advanced.ts`) and
    `HTML_ENTITY_REPLACEMENTS` (`packages/texra/src/replacement/rules.ts`)
    state about forty of the same pairs, one keyed by character and one by
