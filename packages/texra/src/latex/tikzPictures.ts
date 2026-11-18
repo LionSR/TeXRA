@@ -14,7 +14,7 @@ import {
 
 // Local imports - latex utils
 import { readUncommentedLatex } from './latexParsingUtils';
-import { compileLatex2Pdf } from './texTools';
+import { compileLatex2Pdf, perInputBuildDirectory } from './texTools';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import type { FileLocation } from '@texra-ai/harness/schemas';
 import type { WorkspaceRoots } from '@texra-ai/harness';
@@ -112,12 +112,7 @@ export const compileTikzPictures = Effect.fn('tikzPictures.compile')(function* (
   roots: WorkspaceRoots,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const inputName = path.parse(latexFile.absolutePath).name;
-  const buildDir = path.join(
-    path.dirname(latexFile.absolutePath),
-    'build',
-    inputName,
-  );
+  const buildDir = perInputBuildDirectory(latexFile.absolutePath);
 
   yield* fs.makeDirectory(buildDir, { recursive: true });
 
