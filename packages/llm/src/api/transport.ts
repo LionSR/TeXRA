@@ -226,15 +226,19 @@ export const readerAbortSignal = Effect.fn('transport.readerAbortSignal')(
 
 /**
  * Whether a promise rejected because Effect aborted `signal`: once it is
- * aborted, the abort reason itself, an SDK's wrapper around it (OpenAI's
- * `APIUserAbortError` carries it as `cause`), or a bare `AbortError` (the
- * Google SDK's `DOMException`, which names no reason).
+ * aborted, the abort reason itself (what `fetch` and a streamed body reject
+ * with), an SDK's wrapper around it (OpenAI's `APIUserAbortError` carries it
+ * as `cause`), the Google SDK's `APIUserAbortError`, which drops the reason
+ * and is not exported, so only its name identifies it, or a bare
+ * `AbortError` from a `fetch` that rejects with its own `DOMException`.
  */
 const isOwnAbort = (cause: unknown, signal: AbortSignal): boolean =>
   signal.aborted &&
   (cause === signal.reason ||
     (cause instanceof Error &&
-      (cause.cause === signal.reason || cause.name === 'AbortError')));
+      (cause.cause === signal.reason ||
+        cause.name === 'APIUserAbortError' ||
+        cause.name === 'AbortError')));
 
 /**
  * Run a promise-returning provider request under Effect's own abort signal,

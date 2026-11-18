@@ -1,9 +1,10 @@
 // Node imports
 import assert from 'node:assert/strict';
+import { once } from 'node:events';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Schema, Stream } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Schema, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { beforeEach, describe, expect, vi } from 'vitest';
 import {
@@ -361,6 +362,37 @@ describe('canonical Google Interactions protocol', () => {
         responseId: 'int_1',
         message: 'Google ended without an identified terminal result.',
       });
+    }),
+  );
+
+  // Failure mode: the SDK reports our own abort of a pending request as its
+  // `APIUserAbortError`, which carries no cause. Joining that request after
+  // an interruption must not raise the abort as an independent defect.
+  it.effect('ends an interrupted background request as an interruption', () =>
+    Effect.gen(function* () {
+      const configured = configuredModel();
+      const turn = yield* configured.prepareTurn({
+        ...REQUEST,
+        mode: 'background',
+      });
+      assert(
+        turn.mode === 'background' && turn.protocol === 'google-interactions',
+      );
+      const background = configured.background;
+      assert(background);
+      const sent = yield* Deferred.make<void>();
+      fetchModel.mockImplementationOnce(async (input) => {
+        assert(input instanceof Request);
+        Deferred.doneUnsafe(sent, Effect.void);
+        if (!input.signal.aborted) await once(input.signal, 'abort');
+        throw input.signal.reason;
+      });
+      const submit = yield* Effect.forkChild(background.submit(turn));
+      yield* Deferred.await(sent);
+      yield* Fiber.interrupt(submit);
+      const exit = yield* Fiber.await(submit);
+      expect(Exit.hasDies(exit)).toBe(false);
+      expect(Exit.hasInterrupts(exit)).toBe(true);
     }),
   );
 
