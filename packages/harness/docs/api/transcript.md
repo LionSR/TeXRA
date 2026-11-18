@@ -700,9 +700,7 @@ interface ToolRowModel {
    *  nothing" is a result for a call whose output is the point. */
   readonly showsNoOutputMarker: boolean;
   readonly status?: ToolCallStatus;
-  readonly isError: boolean;
   readonly isUserFeedback: boolean;
-  readonly isInProgress: boolean;
   /** The limit a running call is stopped at, the one its tool enforces;
    *  absent once it finished, and on a call with no limit. */
   readonly timeoutMs?: number;
