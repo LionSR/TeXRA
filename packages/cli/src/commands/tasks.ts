@@ -16,7 +16,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import {
-  environmentApiKeys,
   findTask,
   linkedClient,
   requestOnService,
@@ -193,7 +192,9 @@ const startCommand = defineCliCommand({
         message: '--instruction must not be empty.',
       });
     const services = yield* cliPlatform;
-    const link = yield* Effect.fromResult(services.service);
+    // A task starts in the service only: a command that holds none fails
+    // with why.
+    yield* Effect.fromResult(services.service);
     // The task runs in the service under the project's persisted policy,
     // with what this command asked for riding the launch
     // (`launchApproval`).
@@ -226,16 +227,13 @@ const startCommand = defineCliCommand({
     };
     const config =
       yield* Schema.decodeUnknownEffect(AgentConfigSchema)(payload);
-    const { runId } = yield* Effect.flatMap(linkedClient(link), (client) =>
-      client['task.start']({
-        workspace: context.cwd,
-        start: {
-          config,
-          approval: launchApproval(requested),
-          apiKeys: environmentApiKeys(),
-        },
-      }),
-    );
+    // Started through the project's session in the service, as a window
+    // starts one; this terminal's provider keys go with it.
+    const session = yield* services.runSession;
+    const { runId } = yield* session.start({
+      config,
+      approval: launchApproval(requested),
+    });
     yield* emitCliResult(
       cliResult('task', { runId, workspace: context.cwd }, runId),
     );
