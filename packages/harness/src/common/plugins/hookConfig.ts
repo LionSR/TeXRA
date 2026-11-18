@@ -260,17 +260,14 @@ const CLAUDE_TOOLS: Readonly<
   web_search: { name: 'WebSearch', ...same('query') },
 };
 
-const TEXRA_TOOL_OF_CLAUDE_TOOL = new Map<string, string>([
+/** The harness tool that does what each of Claude Code's tools does (a
+ *  `MultiEdit` is an `edit_file`), for a plugin agent's `tools` list. */
+export const TEXRA_TOOL_OF_CLAUDE_TOOL: ReadonlyMap<string, string> = new Map([
   ...Object.entries(CLAUDE_TOOLS).map(
     ([texra, { name }]) => [name, texra] as const,
   ),
   ['MultiEdit', 'edit_file'],
 ]);
-
-/** The harness tool that does what Claude Code's tool `name` does (a
- *  `MultiEdit` is an `edit_file`), for a plugin agent's `tools` list. */
-export const texraToolOfClaudeTool = (name: string): string | undefined =>
-  TEXRA_TOOL_OF_CLAUDE_TOOL.get(name);
 
 /** The harness tools that have a Claude Code counterpart. */
 export const CLAUDE_COUNTERPART_TOOLS: readonly string[] = Object.freeze(

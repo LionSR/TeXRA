@@ -15,7 +15,7 @@ import { Effect, FileSystem, Predicate, Result, Schema } from 'effect';
 import { AgentUnavailable } from '@common/errors/agentErrors';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
-import { texraToolOfClaudeTool } from '@common/plugins/hookConfig';
+import { TEXRA_TOOL_OF_CLAUDE_TOOL } from '@common/plugins/hookConfig';
 import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
@@ -87,7 +87,7 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
           .map((entry) => entry.trim())
           .filter(Boolean);
   const mapped = (declared ?? []).map((tool) =>
-    tool.startsWith('mcp__') ? tool : texraToolOfClaudeTool(tool),
+    tool.startsWith('mcp__') ? tool : TEXRA_TOOL_OF_CLAUDE_TOOL.get(tool),
   );
   // Naming only tools the harness lacks must not read as naming none, which
   // would widen the agent to everything it inherits.
