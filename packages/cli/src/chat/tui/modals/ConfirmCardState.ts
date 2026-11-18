@@ -17,6 +17,10 @@ import {
   runGrantCliAction,
   RUN_GRANT_ORDER,
 } from '@ui/copy/delegationApproval';
+import {
+  requestDeclineLabel,
+  requestPrimaryLabel,
+} from '@ui/copy/requestCards';
 import type { ApprovalBypassKind } from '@texra-ai/harness/schemas';
 
 const APPROVAL_PULSE_FRAMES = [STATUS_DOT, HOLLOW_DOT] as const;
@@ -39,11 +43,9 @@ export interface ConfirmCardKeyRow extends KeyHint {
 export interface ConfirmCardHintOptions<Extra extends KeyHint = KeyHint> {
   /** The request kind answered: what `y`, `n` and Esc send is its row of
    *  `REQUEST_ACTIONS`. A kind that declines with a note opens the note on
-   *  `n`; one that stops the task stops it at once. */
+   *  `n`; one that stops the task stops it at once. Its words are the
+   *  kind's on every host (`@ui/copy/requestCards`). */
   readonly kind: ConfirmCardKind;
-  /** Omitted labels are resolved by `confirmCardKeyRows`. */
-  readonly approveLabel?: string;
-  readonly rejectLabel?: string;
   /** The run grant the `a` row turns on (`offeredGrant`); none where the
    *  request offers none. */
   readonly grant?: ApprovalBypassKind | null;
@@ -81,17 +83,20 @@ export function confirmCardPulsedTitle(nowMs: number, title: string): string {
  */
 export function confirmCardKeyRows<Extra extends KeyHint = ConfirmCardKeyRow>({
   kind,
-  approveLabel = 'approve',
-  rejectLabel,
   grant,
   extraActions = [],
 }: ConfirmCardHintOptions<Extra>): (ConfirmCardKeyRow | Extra)[] {
   const feedback = takesNote(kind);
+  const decline = declineAction(kind);
   return [
-    { key: 'y', action: approveLabel, decision: REQUEST_ACTIONS[kind].y },
+    {
+      key: 'y',
+      action: requestPrimaryLabel(kind).toLowerCase(),
+      decision: REQUEST_ACTIONS[kind].y,
+    },
     {
       key: 'n',
-      action: rejectLabel ?? (feedback ? 'reject & note' : 'reject'),
+      action: feedback ? `${decline} & note` : decline,
       decision: feedback ? 'feedback' : declineDecision(kind),
     },
     ...(grant == null
@@ -114,6 +119,11 @@ function takesNote(kind: ConfirmCardKind): boolean {
   return REQUEST_ACTIONS[kind].n === 'reject';
 }
 
+/** The decline's word as a key hint reads it. */
+function declineAction(kind: ConfirmCardKind): string {
+  return requestDeclineLabel(kind).toLowerCase();
+}
+
 export function confirmCardKeyDecision(
   input: string,
   key: ConfirmCardKey,
@@ -127,10 +137,10 @@ export function confirmCardKeyDecision(
 }
 
 function confirmCardKeyHints(options: ConfirmCardHintOptions): KeyHint[] {
-  const escapeLabel = takesNote(options.kind)
-    ? 'reject'
-    : (options.rejectLabel ?? 'reject');
-  return [...confirmCardKeyRows(options), { key: 'Esc', action: escapeLabel }];
+  return [
+    ...confirmCardKeyRows(options),
+    { key: 'Esc', action: declineAction(options.kind) },
+  ];
 }
 
 export function confirmCardFeedbackHints(): KeyHint[] {

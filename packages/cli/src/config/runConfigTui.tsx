@@ -1,7 +1,9 @@
 import { Effect } from 'effect';
 import { useApp, useWindowSize } from 'ink';
 
+import type { ProcessRuntime } from '@texra-ai/harness/host';
 import { renderCliPrompt } from '@cli/tui/renderCliPrompt';
+import { scopeRunner } from '../chat/scopeRunner';
 import { ChatProcessProvider, type ChatProcess } from '../chat/tui/chatProcess';
 import {
   CliConfigForm,
@@ -26,19 +28,28 @@ export function runConfigTui({
   roots,
   ...props
 }: ConfigAppProps &
-  ChatProcess & { readonly colorEnabled?: boolean }): Effect.Effect<void> {
-  return Effect.asVoid(
-    renderCliPrompt(
-      () => (
-        <ChatProcessProvider value={{ runtime, roots }}>
-          <ConfigApp {...props} />
-        </ChatProcessProvider>
-      ),
-      {
-        stdout: process.stdout,
-        stderr: process.stderr,
-        colorEnabled,
-      },
-    ),
+  Pick<ChatProcess, 'roots'> & {
+    /** The process runtime the editor's reads and writes run over. */
+    readonly runtime: ProcessRuntime;
+    readonly colorEnabled?: boolean;
+  }): Effect.Effect<void> {
+  return Effect.scoped(
+    Effect.gen(function* () {
+      // The editor's own scope: leaving it ends a read or write still in
+      // flight.
+      const chat = scopeRunner(runtime, yield* Effect.scope);
+      yield* renderCliPrompt(
+        () => (
+          <ChatProcessProvider value={{ chat, roots }}>
+            <ConfigApp {...props} />
+          </ChatProcessProvider>
+        ),
+        {
+          stdout: process.stdout,
+          stderr: process.stderr,
+          colorEnabled,
+        },
+      );
+    }),
   );
 }

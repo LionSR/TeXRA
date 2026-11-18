@@ -58,7 +58,7 @@ export function settingsPluginCommands(ports: {
       roots.workspace ?? os.homedir(),
       undefined,
     );
-    if (Result.isFailure(origin)) return yield* Effect.fail(origin.failure);
+    if (Result.isFailure(origin)) return yield* origin.failure;
     const added = yield* InstalledPlugins.install(origin.success, [], roots);
     yield* present.notice(
       `Installed ${added.map(({ name }) => name).join(', ')}. Switch it on to review what it declares and trust it.`,

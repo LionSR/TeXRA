@@ -4,7 +4,7 @@
 // detaches; the task keeps running in the service.
 
 import { Box, Text, useInput, useWindowSize } from 'ink';
-import { Effect, Fiber } from 'effect';
+import { Effect } from 'effect';
 import { useEffect, useRef, useState } from 'react';
 
 import { presentFollowUpResult } from '@texra-ai/harness/host';
@@ -44,6 +44,7 @@ import {
 } from '../state/attachedTask';
 import { transcriptToLines } from '../state/transcriptLines';
 import { useChatProcess } from '../chatProcess';
+import { useMountScope } from '../state/useMountScope';
 import { AsyncListForm } from './_shared/ListForm';
 import type { TuiRequest, PendingApprovalFact } from '../state/approvalQueue';
 
@@ -116,7 +117,8 @@ interface AttachedTaskProps {
 
 function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
   const { task } = props;
-  const { runtime } = useChatProcess();
+  const { chat } = useChatProcess();
+  const mount = useMountScope();
   const { columns } = useWindowSize();
   const [level, setLevel] = useState<AttachedTaskLevel>({
     run: undefined,
@@ -132,7 +134,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
   const actions = useRef<AttachedTaskActions>(undefined);
 
   useEffect(() => {
-    const fiber = runtime.runFork(
+    const fiber = mount.fork(
       followAttachedTask(
         props.connect,
         task,
@@ -147,14 +149,14 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
           ),
       ),
     );
-    return () => {
-      runtime.runFork(Fiber.interrupt(fiber));
-    };
-  }, [runtime, props.connect, task]);
+    return () => fiber.interruptUnsafe();
+  }, [mount, props.connect, task]);
 
   /** Run one action on the service, saying so when it fails. The notice
    *  is about the latest attempt: a new one clears it, and an older attempt
-   *  that finishes later says nothing. */
+   *  that finishes later says nothing. An action belongs to the chat, not
+   *  this view: a decision or a stop already sent lands even when the view
+   *  closes first. */
   const attempt = useRef(0);
   const act = (
     program: (
@@ -173,7 +175,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
       say('Still connecting to the TeXRA service.');
       return;
     }
-    runtime.runFork(
+    chat.fork(
       program(ready, say).pipe(
         Effect.catch((error) =>
           Effect.sync(() => {

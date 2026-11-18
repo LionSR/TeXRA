@@ -44,8 +44,9 @@ const FRONTMATTER_FENCE = '---';
 
 /**
  * Split a raw file string into optional attribution metadata and the
- * user-visible content.  Files without (valid) frontmatter return null
- * metadata and the full string as content (backward-compatible).
+ * user-visible content. A file without (valid) frontmatter, such as one a
+ * person wrote by hand, returns null metadata and the full string as
+ * content.
  */
 export function parseFrontmatter(raw: string): {
   meta: MemoryFileMeta | null;

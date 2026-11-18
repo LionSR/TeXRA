@@ -62,6 +62,9 @@ export const LaunchSurfaceSchema = UIFileFieldsSchema.mapFields(
     model: decodingDefault(Schema.String, DEFAULT_AGENT_MODEL),
     commit: decodingDefault(Schema.String, 'HEAD'),
     instruction: decodingDefault(Schema.String, ''),
+    /** The skills of the run Run again… opened the form on, which its
+     *  launch activates again; a new task clears them. */
+    skills: decodingDefault(Schema.Array(Schema.String), []),
     baseFile: decodingDefault(Schema.String, ''),
     /** Per-task approval, applied at launch by `launchApprovalOptions`. */
     approval: decodingDefault(
@@ -594,7 +597,7 @@ export function applySurfaceAction(
         arriving: null,
         drawerOpen: false,
         requestError: null,
-        launch: { ...surface.launch, instruction: '' },
+        launch: { ...surface.launch, instruction: '', skills: [] },
       };
     case 'editProposal':
       return {

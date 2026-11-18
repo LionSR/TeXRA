@@ -163,12 +163,6 @@ export const progressAppStyles = css`
     background: var(--color-bg-secondary);
   }
 
-  .dock-search {
-    flex: 0 0 auto;
-    padding: var(--wa-space-2xs) var(--wa-space-xs);
-    border-bottom: var(--border-thin) solid var(--color-border);
-  }
-
   .dock run-tabs {
     flex: 1;
     min-height: 0;

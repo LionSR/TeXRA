@@ -11,12 +11,11 @@
 // The attached host answers nothing on its own: it stages each listed tool
 // edit's preview for the modal, and presents events as transcript rows.
 
-import { Cause, Effect, Exit, FiberSet, Scope } from 'effect';
+import { Cause, Effect } from 'effect';
 
 import type {
   HostInteractions,
   PresentationEventHandlers,
-  ProcessRuntime,
   RuntimePresentationEventPayloads,
 } from '@texra-ai/harness/host';
 import { withLogChannel, type SettingsStores } from '@texra-ai/harness/plugins';
@@ -38,6 +37,8 @@ import {
 import { shownFailureText } from '@ui/copy/modelAccess';
 
 import { notify } from '../notifications/terminalNotifier';
+import { runAttentionLine, runStatusLabel } from '@ui/copy/runStatus';
+import { currentView, runViewOf } from './sessionView';
 import {
   attentionRequests,
   currentApproval,
@@ -53,13 +54,14 @@ import {
 } from './transcript';
 import type { Session } from '@texra-ai/harness';
 import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
+import type { ScopeRunner } from '../../scopeRunner';
 
 /**
  * What this host holds for its lifetime: the session its denial notices read
  * the policy from and its decisions land on, the settings slots a retry's
- * key prompt goes through, and the runtime its work is forked on, which
- * serves the secret store that prompt writes. All three come from the chat
- * session's caller, which holds them already.
+ * key prompt goes through, and the chat's runner, under which its own work
+ * runs. All three come from the chat session's caller, which holds them
+ * already.
  */
 interface TuiApprovalStores {
   /** Where its decisions land and its pending requests are read: the
@@ -71,9 +73,9 @@ interface TuiApprovalStores {
    *  URL from, so a retry that has to ask for a credential words the ask the
    *  same way `/key` does. */
   readonly settings: SettingsStores;
-  /** The process runtime this attachment's work is forked on, held for the
-   *  host's lifetime rather than looked up per decision. */
-  readonly runtime: ProcessRuntime;
+  /** The chat's runner: this attachment's work runs in a scope under the
+   *  chat's, which ends with `dispose` or with the chat. */
+  readonly chat: ScopeRunner;
 }
 
 /** The TUI's presentation host, and the host commands it performs for the
@@ -122,10 +124,7 @@ export function createTuiHostInteractions(
    *  own-key switches in flight. An attachment that is gone answers for
    *  nobody, so `dispose` closes it, interrupting the switches before they
    *  decide a request the next owner will. */
-  const attached = stores.runtime.runSync(Scope.make());
-  const switches = stores.runtime.runSync(
-    FiberSet.make<void>().pipe(Effect.provideService(Scope.Scope, attached)),
-  );
+  const attached = stores.chat.child();
 
   /**
    * A retry on the user's own key, through the shared controller. A switch
@@ -137,35 +136,32 @@ export function createTuiHostInteractions(
     request: Extract<HostCommand, { kind: 'useOwnApiKey' }>,
   ): void => {
     const { runId, requestId } = request;
-    stores.runtime.runFork(
-      FiberSet.run(
-        switches,
-        apiKeyRetry.useOwnApiKey(request).pipe(
-          Effect.catch((error) =>
-            Effect.logWarning(
-              `Retry ${requestId} stays pending: ${toErrorMessage(error)}`,
-            ).pipe(
-              withLogChannel('cli.tui'),
-              Effect.andThen(
-                Effect.sync(() => {
-                  reopenRequest(requestId);
-                  appendLocalNotice(
-                    isRequestRefusal(error)
-                      ? requestErrorText(error)
-                      : toErrorMessage(error),
-                    runId,
-                  );
-                }),
-              ),
+    attached.fork(
+      apiKeyRetry.useOwnApiKey(request).pipe(
+        Effect.catch((error) =>
+          Effect.logWarning(
+            `Retry ${requestId} stays pending: ${toErrorMessage(error)}`,
+          ).pipe(
+            withLogChannel('cli.tui'),
+            Effect.andThen(
+              Effect.sync(() => {
+                reopenRequest(requestId);
+                appendLocalNotice(
+                  isRequestRefusal(error)
+                    ? requestErrorText(error)
+                    : toErrorMessage(error),
+                  runId,
+                );
+              }),
             ),
           ),
-          // An interruption is this attachment leaving, not a failure.
-          Effect.catchDefect((defect) =>
-            Effect.map(reportRequestDefect(Cause.die(defect)), (message) => {
-              reopenRequest(requestId);
-              appendLocalErrorTranscript(message, runId);
-            }),
-          ),
+        ),
+        // An interruption is this attachment leaving, not a failure.
+        Effect.catchDefect((defect) =>
+          Effect.map(reportRequestDefect(Cause.die(defect)), (message) => {
+            reopenRequest(requestId);
+            appendLocalErrorTranscript(message, runId);
+          }),
         ),
       ),
     );
@@ -178,7 +174,7 @@ export function createTuiHostInteractions(
     }
     // Every other capability belongs to a windowed host's surfaces; no TUI
     // action names one, so reaching here is a defect.
-    stores.runtime.runFork(
+    attached.fork(
       Effect.logWarning(
         `The TUI does not perform the ${command.kind} host capability.`,
       ).pipe(withLogChannel('cli.tui')),
@@ -191,17 +187,14 @@ export function createTuiHostInteractions(
    * request was listed, so what is listed waits for a person. A preview
    * that could not be read is said on the card itself.
    */
-  stores.runtime.runFork(
-    Effect.forkIn(
-      followToolEditPreviews(stores.requests, ({ payload, requestId }, tui) =>
-        Effect.acquireRelease(
-          Effect.sync(() =>
-            stagePresentation({ kind: 'toolEdit', data: payload.data, tui }),
-          ),
-          () => dropPresentation(requestId),
+  attached.fork(
+    followToolEditPreviews(stores.requests, ({ payload, requestId }, tui) =>
+      Effect.acquireRelease(
+        Effect.sync(() =>
+          stagePresentation({ kind: 'toolEdit', data: payload.data, tui }),
         ),
+        () => dropPresentation(requestId),
       ),
-      attached,
     ),
   );
   return {
@@ -211,9 +204,7 @@ export function createTuiHostInteractions(
     emit: (event, payload) => {
       presentInTranscript[event](payload);
     },
-    dispose() {
-      stores.runtime.runFork(Scope.close(attached, Exit.void));
-    },
+    dispose: attached.close,
   };
 }
 
@@ -235,10 +226,16 @@ export function announceForegroundApprovals(): () => void {
       new Set(attentionRequests.get().map((request) => request.requestId)),
       announced,
     );
-    const id = pending.payload.data.requestId;
+    const { requestId: id, runId } = pending.payload.data;
     if (announced.has(id)) return;
     announced.add(id);
-    notify('approvalNeeded');
+    const run = runViewOf(currentView(), runId);
+    // A request whose run the view does not hold yet still rings, unnamed.
+    notify(
+      run === undefined
+        ? runStatusLabel('waitingOnUser')
+        : runAttentionLine(run, 'waitingOnUser'),
+    );
   };
   check();
   return subscribeToSignalChanges([currentApproval], check);

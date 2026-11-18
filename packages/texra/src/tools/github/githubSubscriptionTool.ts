@@ -151,10 +151,8 @@ const requireToken = Effect.fn('githubSubscriptionTool.requireToken')(
     const secrets = yield* Secrets;
     const token = yield* getGitHubToken(secrets);
     if (!token) {
-      return yield* Effect.fail(
-        new ToolError(
-          'No GitHub token configured. In the CLI, open /config → GitHub token. In VS Code, use TeXRA Settings → General → "Set token". Or export GITHUB_TOKEN or GH_TOKEN. Needs `repo` scope for private repos, `public_repo` for public.',
-        ),
+      return yield* new ToolError(
+        'No GitHub token configured. In the CLI, open /config → GitHub token. In VS Code, use TeXRA Settings → General → "Set token". Or export GITHUB_TOKEN or GH_TOKEN. Needs `repo` scope for private repos, `public_repo` for public.',
       );
     }
   },
@@ -418,10 +416,8 @@ const execFindCurrent = Effect.fn('GitHubSubscriptionTool.findCurrent')(
         parseWorkingDirectory(input.working_directory),
       )) ?? workingDirectory;
     if (!cwd) {
-      return yield* Effect.fail(
-        new ToolError(
-          'No working_directory available. Provide one explicitly.',
-        ),
+      return yield* new ToolError(
+        'No working_directory available. Provide one explicitly.',
       );
     }
     const [remoteUrl, branch] = yield* Effect.all(
@@ -429,21 +425,19 @@ const execFindCurrent = Effect.fn('GitHubSubscriptionTool.findCurrent')(
       { concurrency: 'unbounded' },
     );
     if (remoteUrl === null) {
-      return yield* Effect.fail(
-        new ToolError(
-          `${cwd} has no readable origin remote (it may not be a git repository).`,
-        ),
+      return yield* new ToolError(
+        `${cwd} has no readable origin remote (it may not be a git repository).`,
       );
     }
     const remote = parseGitHubSlug(remoteUrl);
     if (!remote) {
-      return yield* Effect.fail(
-        new ToolError(`origin remote is not a github.com URL: ${remoteUrl}`),
+      return yield* new ToolError(
+        `origin remote is not a github.com URL: ${remoteUrl}`,
       );
     }
     if (branch === null) {
-      return yield* Effect.fail(
-        new ToolError('HEAD is detached: cannot infer a PR branch.'),
+      return yield* new ToolError(
+        'HEAD is detached: cannot infer a PR branch.',
       );
     }
     const apiPath = `/repos/${remote.owner}/${remote.repo}/pulls?state=open&head=${remote.owner}:${encodeURIComponent(branch)}&per_page=1`;
@@ -460,23 +454,17 @@ const execFindCurrent = Effect.fn('GitHubSubscriptionTool.findCurrent')(
         cwd,
       );
       if (branch === defaultBranch) {
-        return yield* Effect.fail(
-          new ToolError(
-            `Current branch is the default branch "${branch}", and no open PR uses it as the head branch. Pass command="subscribe" with an explicit path such as "${remote.owner}/${remote.repo}/pulls/N".${suggestions}`,
-          ),
+        return yield* new ToolError(
+          `Current branch is the default branch "${branch}", and no open PR uses it as the head branch. Pass command="subscribe" with an explicit path such as "${remote.owner}/${remote.repo}/pulls/N".${suggestions}`,
         );
       }
       if (!defaultBranch && branch === 'main') {
-        return yield* Effect.fail(
-          new ToolError(
-            `Current branch is "main", no open PR uses it as the head branch, and the default branch could not be confirmed. Pass command="subscribe" with an explicit path such as "${remote.owner}/${remote.repo}/pulls/N".${suggestions}`,
-          ),
+        return yield* new ToolError(
+          `Current branch is "main", no open PR uses it as the head branch, and the default branch could not be confirmed. Pass command="subscribe" with an explicit path such as "${remote.owner}/${remote.repo}/pulls/N".${suggestions}`,
         );
       }
-      return yield* Effect.fail(
-        new ToolError(
-          `No open PR found for ${remote.owner}/${remote.repo} head ${branch}. Push this branch and open a PR, or pass command="subscribe" with an explicit path for an existing PR.${suggestions}`,
-        ),
+      return yield* new ToolError(
+        `No open PR found for ${remote.owner}/${remote.repo} head ${branch}. Push this branch and open a PR, or pass command="subscribe" with an explicit path for an existing PR.${suggestions}`,
       );
     }
     const path = targetPath({ _tag: 'pull', ...remote, number: pr.number });

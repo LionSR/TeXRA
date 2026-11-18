@@ -142,7 +142,13 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // its `args`; no `recipe` kind with its source, block and options.
     // v9: no `editedFile`: the merge program reads it from its `args` (an
     // earlier build would resume a merge without the edited file).
-    'run.config': Object.freeze({ version: 9, listing: 'own' }),
+    // v10: the agent's source is one field (`agentSource`) whose `inline`
+    // case carries the persona, unnamed since it is the agent's; no
+    // `persona` beside it (an earlier build's row would fail as damaged).
+    // v11: the skills the user activated are named (`skills`) beside the
+    // instruction as typed, no longer written into it (an earlier build's
+    // instruction would carry the blocks and its rerun would activate none).
+    'run.config': Object.freeze({ version: 11, listing: 'own' }),
     // v2: no `shutdown` reason: a process that exits writes nothing for its
     // runs (an earlier build's shutdown stop would fail as damaged).
     'run.stop': Object.freeze({ version: 2, listing: 'own' }),
@@ -195,7 +201,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // v8: a run sender carries no `relation`: any run's message instructs and
     // wakes its recipient (a v7 peer's or sibling's message, stored as
     // information only, would read as an instruction).
-    'followup.queued': Object.freeze({ version: 8, listing: 'followup' }),
+    // v9: a user's message names the skills it activates (`skills`), no
+    // longer only in its text (a v8 row's activations would read as none).
+    'followup.queued': Object.freeze({ version: 9, listing: 'followup' }),
     // v2: `disposition` says why the follow-up left the queue; a v1 row lacks
     // it and fails to decode.
     // v3: no `stale` reason: nothing drops a notice of an ended child (a v2
@@ -229,7 +237,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> =
     // every switch (an earlier build's flag would be silently dropped).
     // v14: an external inquiry holds its open turn once (`turn`) beside the
     // turns before it (`earlierTurns`); an earlier build's would not render.
-    'request.opened': Object.freeze({ version: 14, listing: 'request' }),
+    // v15: a proposal names its agent's source as `run.config` v10 does: an
+    // inline agent's persona inside `agentSource`, no `persona` beside it.
+    'request.opened': Object.freeze({ version: 15, listing: 'request' }),
     // v2: no `setup` arm; a proposal's approve may carry edited files,
     // instruction and options.
     'request.decided': Object.freeze({ version: 2, listing: 'request' }),

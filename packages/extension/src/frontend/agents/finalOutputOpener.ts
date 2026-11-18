@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { Effect, Result } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import { ensureError } from '@texra-ai/harness/schemas';
+import { hostFailed } from '@texra/controllers/session/hostCallFailure';
 
 const CHANNEL = 'FinalOutputOpener';
 
@@ -28,11 +28,11 @@ export const previewFinalOutput = (absolutePath: string) =>
             8000,
           );
         },
-        catch: ensureError,
+        catch: (cause) => hostFailed('showTextDocument', cause),
       }),
     );
     if (Result.isFailure(previewed))
       yield* Effect.logWarning(
-        `Unable to auto-open final output ${absolutePath}: ${String(previewed.failure)}`,
+        `Unable to auto-open final output ${absolutePath}: ${String(previewed.failure.cause)}`,
       ).pipe(withLogChannel(CHANNEL));
   });

@@ -12,6 +12,7 @@ import {
   Deferred,
   Effect,
   Exit,
+  type ManagedRuntime,
   Queue,
   Result,
   Schema,
@@ -66,6 +67,9 @@ export interface WebviewSession {
 }
 
 export interface WebviewTransport {
+  /** The webview's one runtime, for a pane that owns Effect work outside
+   *  any session's graph: it makes its own scope and runs its fibers there. */
+  readonly runtime: ManagedRuntime.ManagedRuntime<never, never>;
   /** One message from the host's session channel. */
   receive(data: unknown): void;
   /** Open (or reuse) a session's graph. */
@@ -293,6 +297,7 @@ export function installWebviewTransport(
     );
 
   return {
+    runtime,
     receive,
     open(key) {
       const held = sessions.get(key);

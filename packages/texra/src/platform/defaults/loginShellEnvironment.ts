@@ -8,7 +8,7 @@
 import { homedir, userInfo } from 'node:os';
 import { delimiter } from 'node:path';
 
-import { Effect, Stream } from 'effect';
+import { Effect, Schema, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -20,6 +20,12 @@ const MARKER = '__TEXRA_LOGIN_ENVIRONMENT__';
 /** A login shell that takes longer than this is not waited for. */
 const TIMEOUT_MS = 10_000;
 
+/** The login shell's environment could not be read; the message says why. */
+class LoginShellUnread extends Schema.TaggedError<LoginShellUnread>()(
+  'LoginShellUnread',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
+
 /**
  * The variables the user's login shell exports, read by running it as a
  * login shell with nothing but the home directory, user name and system
@@ -29,100 +35,105 @@ const TIMEOUT_MS = 10_000;
  */
 function loginShellEnvironment(): Effect.Effect<
   Readonly<Record<string, string>>,
-  Error,
+  LoginShellUnread,
   ChildProcessSpawner
 > {
   // `userInfo` throws for an account with no passwd entry: that is this
   // read's failure, not the caller's crash.
-  return Effect.try({ try: () => userInfo(), catch: ensureError })
-    .pipe(
-      Effect.flatMap(({ shell, username }) =>
-        ChildProcessSpawner.use((spawner) =>
-          spawner.spawn(
-            ChildProcess.make(
-              shell || '/bin/sh',
-              ['-ilc', `printf '${MARKER}'; env -0`],
-              {
-                // The system PATH, so a profile that runs a tool by name
-                // before it sets PATH still finds it. `homedir` is $HOME when
-                // it is set, else the account's passwd entry.
-                env: {
-                  HOME: homedir(),
-                  USER: username,
-                  LOGNAME: username,
-                  PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
-                },
-                extendEnv: false,
-                stdin: 'ignore',
-                stderr: 'ignore',
-                // A session of its own: an interactive shell otherwise takes
-                // the controlling terminal of a caller that has one (a
-                // terminal chat), which then loses its raw mode. Detached,
-                // the shell leads its own process group, which the spawner
-                // kills with SIGKILL when the read times out or is
-                // interrupted, so a child its profile left hanging stops
-                // with it. An interactive shell ignores SIGTERM.
-                detached: true,
-                killSignal: 'SIGKILL',
+  return Effect.try({
+    try: () => userInfo(),
+    catch: (cause) =>
+      new LoginShellUnread({ message: ensureError(cause).message, cause }),
+  }).pipe(
+    Effect.flatMap(({ shell, username }) =>
+      ChildProcessSpawner.use((spawner) =>
+        spawner.spawn(
+          ChildProcess.make(
+            shell || '/bin/sh',
+            ['-ilc', `printf '${MARKER}'; env -0`],
+            {
+              // The system PATH, so a profile that runs a tool by name
+              // before it sets PATH still finds it. `homedir` is $HOME when
+              // it is set, else the account's passwd entry.
+              env: {
+                HOME: homedir(),
+                USER: username,
+                LOGNAME: username,
+                PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
               },
-            ),
+              extendEnv: false,
+              stdin: 'ignore',
+              stderr: 'ignore',
+              // A session of its own: an interactive shell otherwise takes
+              // the controlling terminal of a caller that has one (a
+              // terminal chat), which then loses its raw mode. Detached,
+              // the shell leads its own process group, which the spawner
+              // kills with SIGKILL when the read times out or is
+              // interrupted, so a child its profile left hanging stops
+              // with it. An interactive shell ignores SIGTERM.
+              detached: true,
+              killSignal: 'SIGKILL',
+            },
           ),
-        ).pipe(
-          Effect.flatMap((handle) =>
-            Effect.all(
-              [
-                Stream.mkString(Stream.decodeText(handle.stdout)),
-                handle.exitCode.pipe(
-                  Effect.map((code) => `exit ${code}`),
-                  Effect.catch((error) => Effect.succeed(error.message)),
-                ),
-              ],
-              { concurrency: 'unbounded' },
-            ).pipe(
-              // Once the shell has exited, unreferenced, the spawner leaves
-              // its group alone when the scope closes: background jobs the
-              // profile started survive a read that finished. A shell that
-              // exited non-zero still has its group killed by the spawner.
-              Effect.tap(() => handle.unref),
-            ),
-          ),
-          Effect.flatMap(([stdout, status]) => {
-            const at = stdout.indexOf(MARKER);
-            return at < 0
-              ? Effect.fail(
-                  new Error(
-                    `the login shell ${shell} printed no environment (${status})`,
-                  ),
-                )
-              : Effect.succeed(stdout.slice(at + MARKER.length));
-          }),
-          Effect.scoped,
         ),
+      ).pipe(
+        Effect.flatMap((handle) =>
+          Effect.all(
+            [
+              Stream.mkString(Stream.decodeText(handle.stdout)),
+              handle.exitCode.pipe(
+                Effect.map((code) => `exit ${code}`),
+                Effect.catch((error) => Effect.succeed(error.message)),
+              ),
+            ],
+            { concurrency: 'unbounded' },
+          ).pipe(
+            // Once the shell has exited, unreferenced, the spawner leaves
+            // its group alone when the scope closes: background jobs the
+            // profile started survive a read that finished. A shell that
+            // exited non-zero still has its group killed by the spawner.
+            Effect.tap(() => handle.unref),
+          ),
+        ),
+        Effect.flatMap(([stdout, status]) => {
+          const at = stdout.indexOf(MARKER);
+          return at < 0
+            ? Effect.fail(
+                new LoginShellUnread({
+                  message: `the login shell ${shell} printed no environment (${status})`,
+                }),
+              )
+            : Effect.succeed(stdout.slice(at + MARKER.length));
+        }),
+        Effect.scoped,
       ),
-    )
-    .pipe(
-      Effect.timeoutOrElse({
-        duration: TIMEOUT_MS,
-        orElse: () =>
-          Effect.fail(new Error(`it did not answer within ${TIMEOUT_MS} ms`)),
-      }),
-      Effect.map((printed) =>
-        Object.fromEntries(
-          printed.split('\0').flatMap((line) => {
-            const eq = line.indexOf('=');
-            return eq > 0
-              ? [[line.slice(0, eq), line.slice(eq + 1)] as const]
-              : [];
+    ),
+    Effect.timeoutOrElse({
+      duration: TIMEOUT_MS,
+      orElse: () =>
+        Effect.fail(
+          new LoginShellUnread({
+            message: `it did not answer within ${TIMEOUT_MS} ms`,
           }),
         ),
+    }),
+    Effect.map((printed) =>
+      Object.fromEntries(
+        printed.split('\0').flatMap((line) => {
+          const eq = line.indexOf('=');
+          return eq > 0
+            ? [[line.slice(0, eq), line.slice(eq + 1)] as const]
+            : [];
+        }),
       ),
-      Effect.mapError(
-        (cause) =>
-          new Error(
-            `The login shell's environment was not read: ${toErrorMessage(cause)}`,
-          ),
-      ),
-    );
+    ),
+    Effect.mapError(
+      (cause) =>
+        new LoginShellUnread({
+          message: `The login shell's environment was not read: ${toErrorMessage(cause)}`,
+        }),
+    ),
+  );
 }
 
 /**
@@ -135,7 +146,7 @@ function loginShellEnvironment(): Effect.Effect<
  */
 export function adoptLoginShellEnvironment(): Effect.Effect<
   void,
-  Error,
+  LoginShellUnread,
   ChildProcessSpawner
 > {
   return loginShellEnvironment().pipe(

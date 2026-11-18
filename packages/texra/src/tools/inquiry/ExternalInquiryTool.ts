@@ -269,7 +269,7 @@ const executeAsk = Effect.fn('executeAsk')(function* (
   yield* requests.post({ ...INQUIRY_REQUEST, data: inquiry }).pipe(
     Effect.mapError(
       (error) =>
-        new Error(
+        new ToolError(
           `The inquiry request could not be opened: ${toErrorMessage(error)}`,
           { cause: error },
         ),
@@ -337,8 +337,8 @@ const executeRead = Effect.fn('executeRead')(function* (
   const records = yield* InquiryRecords;
   const manifest = yield* records.readExternalInquiryThread(input.thread_id);
   if (!manifest) {
-    return yield* Effect.fail(
-      new ToolError(`External inquiry thread not found: ${input.thread_id}`),
+    return yield* new ToolError(
+      `External inquiry thread not found: ${input.thread_id}`,
     );
   }
   return buildReadOutput(manifest);

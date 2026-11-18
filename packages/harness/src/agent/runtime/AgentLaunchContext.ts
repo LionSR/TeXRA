@@ -7,11 +7,10 @@
  * reports it as its refusal, a resume refuses with it), and an unknown model
  * is a `LaunchRefused` with the notice its caller shows. The run program takes the result (`executeAgent`).
  */
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import { selectModel } from '@texra-ai/llm';
 import { AgentCatalog } from '@agent/index/agentCatalog';
-import { agentEntryOf } from '@agent/index/agentYamlScanner';
 import { requirePluginLoads } from '@agent/index/pluginAgents';
 import {
   AgentError,
@@ -20,8 +19,10 @@ import {
 } from '@common/errors/agentErrors';
 import { SessionRoots } from '@platform/rootedFs';
 import {
+  AGENT_SOURCE,
   agentName,
   HARNESS_INSTRUCTION_KEY,
+  PersonaSchema,
   type AgentConfig,
 } from '@shared/schemas';
 import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
@@ -58,21 +59,35 @@ const validateModelExists = Effect.fn('AgentLaunchContext.validateModelExists')(
 export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
   function* (input: { config: AgentConfig }) {
     const fullConfig = input.config;
+    const { agentSource } = fullConfig;
     const roots = yield* SessionRoots;
-    // A persona the config carries (its schema accepted it) is the agent;
-    // a named one resolves over a finished catalog, and a miss says why: a
-    // plugin agent's by its plugin's install record (a launch may record
-    // the source-qualified spelling, `plugin:acme:x`).
-    const agentEntry =
-      fullConfig.persona != null
-        ? agentEntryOf(fullConfig.persona, { source: 'inline', path: '' })
+    // A persona the config carries (its schema accepted it) is the agent,
+    // with its defaults applied as a file's are; a named one resolves over
+    // a finished catalog, which stamps the entry's source, and a miss says
+    // why: a plugin agent's by its plugin's install record (a launch may
+    // record the source-qualified spelling, `plugin:acme:x`).
+    const agent =
+      agentSource?.kind === AGENT_SOURCE.INLINE
+        ? {
+            name: fullConfig.agent,
+            path: '',
+            description: agentSource.persona.description,
+            persona: Schema.decodeUnknownSync(PersonaSchema)(
+              agentSource.persona,
+            ),
+            agentSource,
+          }
         : yield* (yield* AgentCatalog)
             .workspaceAgents(roots)
-            .forLaunch(fullConfig.agent, fullConfig.agentSource)
+            .forLaunch(fullConfig.agent, agentSource?.kind)
             .pipe(
+              Effect.map((entry) => ({
+                ...entry,
+                agentSource: { kind: entry.source },
+              })),
               Effect.catchTag('AgentNotFound', (miss) =>
                 Effect.gen(function* () {
-                  if (fullConfig.agentSource === 'plugin')
+                  if (agentSource?.kind === AGENT_SOURCE.PLUGIN)
                     yield* requirePluginLoads(
                       agentName(fullConfig.agent),
                       roots,
@@ -88,9 +103,9 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
                 }),
               ),
             );
-    if (agentEntry.source === 'plugin')
-      yield* requirePluginLoads(agentEntry.name, roots);
-    const { persona } = agentEntry;
+    if (agent.agentSource.kind === AGENT_SOURCE.PLUGIN)
+      yield* requirePluginLoads(agent.name, roots);
+    const { persona } = agent;
 
     // A declared tool nothing could serve is a configuration error: the run
     // is refused (a plugin switched off withholds its tools at the step).
@@ -100,7 +115,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     );
     if (unknown.length > 0)
       return yield* new AgentError({
-        message: `Agent '${agentEntry.name}' declares ${unknown.length === 1 ? 'a tool' : 'tools'} this build does not have: ${unknown.join(', ')}. Edit ${agentEntry.path || 'the persona'} to remove or rename ${unknown.length === 1 ? 'it' : 'them'}; \`delegate_agent\` and \`delegate_workflow\` are now \`agent\`, and \`delegate_multi_agents\` is \`script\` with \`agent\`.`,
+        message: `Agent '${agent.name}' declares ${unknown.length === 1 ? 'a tool' : 'tools'} this build does not have: ${unknown.join(', ')}. Edit ${agent.path || 'the persona'} to remove or rename ${unknown.length === 1 ? 'it' : 'them'}; \`delegate_agent\` and \`delegate_workflow\` are now \`agent\`, and \`delegate_multi_agents\` is \`script\` with \`agent\`.`,
       });
 
     // Validated before registration, so a typo'd model name registers no
@@ -111,9 +126,9 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     // outputs are its registration's, stamped by its launch (`programLaunch`).
     const config: AgentConfig = {
       ...fullConfig,
-      agentSource: agentEntry.source,
+      agentSource: agent.agentSource,
     };
-    return { config, persona, agentEntry, modelConfig };
+    return { config, persona, description: agent.description, modelConfig };
   },
 );
 

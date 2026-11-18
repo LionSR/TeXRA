@@ -24,11 +24,7 @@ import { Effect, Schema, type Scope, Stream } from 'effect';
 import { ChildRuns, ToolContext } from '@texra-ai/harness/plugins';
 
 // Local imports
-import {
-  ensureError,
-  MESSAGE_TYPES,
-  type ToolUseLog,
-} from '@texra-ai/harness/schemas';
+import { MESSAGE_TYPES, type ToolUseLog } from '@texra-ai/harness/schemas';
 import {
   ToolError,
   type AgentTrace,
@@ -51,6 +47,7 @@ import { ClaudeAgentSessions } from './agentCliSessionStores';
 import {
   agentCliTool,
   StreamedToolCards,
+  asToolError,
   type AgentCliTurn,
 } from './agentCliShared';
 import {
@@ -122,11 +119,13 @@ const runStreamedTurn = Effect.fn('runStreamedTurn')(function* (params: {
   prompt: string;
   logger: AgentTrace;
   options: ClaudeTurnOptions;
-}): Effect.fn.Return<AgentCliTurn, Error, Scope.Scope> {
+}): Effect.fn.Return<AgentCliTurn, ToolError, Scope.Scope> {
   const { logger, prompt, options } = params;
   logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
 
-  const query = yield* importClaudeAgentSdk();
+  const query = yield* importClaudeAgentSdk().pipe(
+    Effect.mapError(asToolError),
+  );
 
   // The SDK takes a controller, not a signal: this one exists only at that
   // boundary, aborted when the turn is interrupted.
@@ -187,13 +186,13 @@ const runStreamedTurn = Effect.fn('runStreamedTurn')(function* (params: {
       try: () =>
         Stream.fromAsyncIterable(
           query({ prompt, options: sdkOptions }),
-          ensureError,
+          asToolError,
         ),
-      catch: ensureError,
+      catch: asToolError,
     }),
   ).pipe(
     Stream.runForEach((raw) =>
-      Effect.try({ try: () => onMessage(raw), catch: ensureError }),
+      Effect.try({ try: () => onMessage(raw), catch: asToolError }),
     ),
     Effect.onInterrupt(() => Effect.sync(() => abortController.abort())),
     Effect.ensuring(Effect.sync(() => backgroundTasks.finish())),
@@ -321,11 +320,17 @@ const prepareLaunch = Effect.fn('claudeAgent.prepareLaunch')(function* (
     (yield* ToolContext).env;
   // File edits auto-accepted when a person approved the launch; every
   // permission bypassed when the run's work is auto-approved.
-  const permissionMode: ClaudePermissionMode = (yield* (yield* ChildRuns)
-    .autoApproved)
+  const autoApproved = yield* (yield* ChildRuns).autoApproved.pipe(
+    Effect.mapError(asToolError),
+  );
+  const permissionMode: ClaudePermissionMode = autoApproved
     ? 'bypassPermissions'
     : 'acceptEdits';
-  const claudeRun = yield* readClaudeCodeRun(roots, input);
+  const claudeRun = yield* readClaudeCodeRun(roots, input).pipe(
+    Effect.catchTag('StateReadFailed', (error) =>
+      Effect.fail(asToolError(error)),
+    ),
+  );
   // Mirrors codex so subagents can see the project: a call from inside the
   // workspace runs in that directory with read access to the workspace root
   // for sibling files; an out-of-workspace cwd runs isolated. The SDK's

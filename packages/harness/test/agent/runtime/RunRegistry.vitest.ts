@@ -132,6 +132,7 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
             runs.start(parentId, {
               open: Deferred.await(opened),
               run: () => Effect.never,
+              end: (_, exit) => exit,
             }),
             { startImmediately: true },
           );

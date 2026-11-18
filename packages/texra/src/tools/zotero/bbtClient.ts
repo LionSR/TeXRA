@@ -288,24 +288,18 @@ export const callBetterBibTeX = Effect.fn('bbtClient.callBetterBibTeX')(
     });
     const parsed = Schema.decodeUnknownResult(responseSchema)(raw);
     if (!Result.isSuccess(parsed)) {
-      return yield* Effect.fail(
-        new ToolError(
-          `Better BibTeX returned an unexpected response for ${method}: ${parsed.failure.message}`,
-        ),
+      return yield* new ToolError(
+        `Better BibTeX returned an unexpected response for ${method}: ${parsed.failure.message}`,
       );
     }
     if (parsed.success.error) {
-      return yield* Effect.fail(
-        new ToolError(
-          `Better BibTeX API error: ${parsed.success.error.message}`,
-        ),
+      return yield* new ToolError(
+        `Better BibTeX API error: ${parsed.success.error.message}`,
       );
     }
     if (parsed.success.result === undefined) {
-      return yield* Effect.fail(
-        new ToolError(
-          `Better BibTeX returned an empty response for ${method}.`,
-        ),
+      return yield* new ToolError(
+        `Better BibTeX returned an empty response for ${method}.`,
       );
     }
     return parsed.success.result;
@@ -385,7 +379,7 @@ export const callZoteroConnector = Effect.fn('bbtClient.callZoteroConnector')(
         // reachability/timeout classification.
         const data = yield* response.json.pipe(
           // Body is not JSON or is empty; use the generic status message.
-          Effect.catch(() => Effect.succeed(undefined)),
+          Effect.catch(() => Effect.undefined),
         );
         const error = Predicate.hasProperty(data, 'error')
           ? data.error

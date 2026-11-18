@@ -150,7 +150,7 @@ interface ConfigFormProps {
   readonly entries: readonly TexraSettingRow[];
   readonly readValue: (entry: TexraSettingRow) => unknown;
   /** The write as a program: this form owns the one run, so a rejected write
-   *  rolls its optimistic value back on the same runtime the surface holds. */
+   *  rolls its optimistic value back on the same runner the surface holds. */
   readonly writeValue: (
     entry: TexraSettingRow,
     value: unknown,
@@ -189,7 +189,7 @@ type ConfigFormMode =
     };
 
 export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
-  const { runtime } = useChatProcess();
+  const { chat } = useChatProcess();
   const [mode, setMode] = useState<ConfigFormMode>({ kind: 'categories' });
   // Optimistic overrides: a write is async, so without these a rapid second
   // toggle would recompute from a stale `readValue`. The override is set
@@ -212,7 +212,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   ): void => {
     const previous = effective(entry);
     setOverrides((current) => ({ ...current, [entry.key]: optimisticValue }));
-    runFormWrite(runtime, action, {
+    runFormWrite(chat, action, {
       onError: (cause) => {
         setOverrides((current) => ({ ...current, [entry.key]: previous }));
         props.onError?.(cause);

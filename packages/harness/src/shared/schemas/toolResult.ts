@@ -1,4 +1,4 @@
-import { Schema, SchemaGetter, SchemaIssue, Struct } from 'effect';
+import { Data, Schema, SchemaGetter, SchemaIssue, Struct } from 'effect';
 
 import { LineChangesSchema } from './lineChanges';
 import { Sha256Schema } from './identifiers';
@@ -191,17 +191,22 @@ export const ToolResultSchema = Schema.Union([
 ]);
 export type ToolResult = typeof ToolResultSchema.Type;
 
-export class ToolError extends Error {
+/**
+ * A tool's own failure: the model reads `message` as the failed call's
+ * result. Tagged, so a caller can recover it with `Effect.catchTag` and a
+ * generator can `yield*` it directly.
+ */
+export class ToolError extends Data.TaggedError('ToolError')<{
+  readonly message: string;
   /** Brief human-facing summary carried through to the ToolResult, when set. */
   readonly summary?: string;
-
+  readonly cause?: unknown;
+}> {
   constructor(
     message: string,
     options?: { cause?: unknown; summary?: string },
   ) {
-    super(message, options);
-    this.name = 'ToolError';
-    this.summary = options?.summary;
+    super({ message, ...options });
   }
 }
 

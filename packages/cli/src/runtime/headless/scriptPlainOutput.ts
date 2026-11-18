@@ -11,12 +11,11 @@ import {
   descendantRuns,
   type RunView,
   type SessionView,
-  formatCostUsd,
 } from '@texra-ai/harness/schemas';
 import { scriptStages } from '@texra-ai/harness/transcript';
 import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { runStatus } from '@ui/copy/runStatus';
-import { scriptCallLine } from '@ui/copy/scriptStage';
+import { scriptCallLine, scriptStageSummary } from '@ui/copy/scriptStage';
 
 import type { LocalSession } from '@texra-ai/harness';
 
@@ -48,12 +47,11 @@ function scriptPlainLines(
         );
       lines.set(call.id, scriptCallLine(call));
     }
-    // The stage's total once it has ended, its discarded attempts included.
-    if (stage.outcome !== null && stage.costUsd > 0)
-      lines.set(
-        `${stage.id}:total`,
-        `Script total: ${formatCostUsd(stage.costUsd)}`,
-      );
+    // The stage's totals once it has ended, its discarded attempts
+    // included, in the summary every host's stage header shows.
+    const summary = stage.outcome === null ? '' : scriptStageSummary(stage);
+    if (summary !== '')
+      lines.set(`${stage.id}:total`, `Script total: ${summary}`);
   }
   if (run.outcome !== null && run.identity.kind === 'script')
     lines.set('outcome', `${runStatus(run).word}: ${run.identity.title}`);

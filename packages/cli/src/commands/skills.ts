@@ -52,11 +52,10 @@ const listSkills = Effect.fn('listSkills')(function* (
   // helper. The text list is suppressed on a usage error with no skills
   // (nothing useful to show); the helper skips the write for the
   // resulting empty string.
-  const items = result.skills.map(({ display }) => display);
   yield* emitCliResult({
-    json: items,
+    json: result.skills,
     ndjson: [
-      ...items.map((skill) => ({ kind: 'skill' as const, skill })),
+      ...result.skills.map((skill) => ({ kind: 'skill' as const, skill })),
       ...result.issues.map((issue) => ({
         kind: 'skill-issue' as const,
         issue,

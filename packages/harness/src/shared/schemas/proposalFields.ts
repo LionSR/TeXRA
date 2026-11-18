@@ -4,11 +4,10 @@ import { AgentConfigSchema } from './agentConfig';
 import { FileFieldsSchema } from './fileFields';
 
 export const BaseProposalFieldsSchema = Schema.Struct({
-  // The agent's resolved source and inline persona, its memories and its
-  // working directory, as the run they propose will record them.
+  // The agent's resolved source (an inline agent's persona), its memories
+  // and its working directory, as the run they propose will record them.
   ...Struct.pick(AgentConfigSchema.fields, [
     'agentSource',
-    'persona',
     'memories',
     'workingDirectory',
   ]),

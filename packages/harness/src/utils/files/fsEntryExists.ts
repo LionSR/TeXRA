@@ -58,7 +58,7 @@ export const entryTypeIn = Effect.fn('fsEntryExists.entryTypeIn')(function* (
 > {
   return yield* fs.lstat(target).pipe(
     Effect.map((info) => info.type),
-    Effect.catchIf(meansAbsent, () => Effect.succeed(undefined)),
+    Effect.catchIf(meansAbsent, () => Effect.undefined),
   );
 });
 

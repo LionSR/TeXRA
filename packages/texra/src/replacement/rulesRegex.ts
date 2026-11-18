@@ -196,9 +196,6 @@ export const PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS: RegexRuleSet =
 // If there's additional content after (like in \DIFdel{_{t-1})F_{t-1|t}(}),
 // the additional content is NOT processed to avoid overly aggressive replacements.
 //
-// TODO: Consider multi-pass processing or more sophisticated parsing for complex cases
-// with multiple math fragments within a single \DIFdel block
-//
 // The add set is intentionally the conservative subset: the braced-arithmetic
 // superscript, simple-arithmetic superscript, and single-letter fallback
 // variants are del-only pending evidence the missing cases occur in adds.

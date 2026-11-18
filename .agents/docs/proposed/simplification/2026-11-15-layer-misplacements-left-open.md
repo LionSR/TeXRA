@@ -81,12 +81,14 @@ decides expansion for the web tab strip and the TUI tree.
 
 ## 6. Web components replace the status word `runStatus` decides
 
-`RunHeader.ts` shows "Ready" for a finished run that accepts a follow-up and
-`RunTab.ts` shows "Needs approval" when a descendant waits; the terminal
-paints `runStatus(run).word`. The same run reads "Ready" in the web header
-and "Completed" in the web tab and the terminal. Either the two readings
-become keys in `packages/texra/src/shared/session/runStatusKey.ts`, or the
-overrides go. Decision needed: which word is right.
+`RunHeader.ts` shows "Ready" for a finished run that accepts a follow-up;
+the terminal paints `runStatus(run).word`. The same run reads "Ready" in the
+web header and "Completed" in the web tab and the terminal. Either the
+reading becomes a key in `packages/texra/src/shared/session/runStatusKey.ts`,
+or the override goes. Decision needed: which word is right.
+
+Taken on 2026-11-18 for the tab: a request under the run reads in the status
+table's word for that state, "Waiting on you", not a second "Needs approval".
 
 ## 7. A tool call's time limit and its interrupted reading are decided in the web renderer
 

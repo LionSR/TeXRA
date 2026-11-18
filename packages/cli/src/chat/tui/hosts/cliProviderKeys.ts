@@ -6,7 +6,7 @@
 // graphical hosts. Its notices land in the chat transcript.
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import { type ApiKeyProviderId } from '@texra-ai/llm';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
@@ -17,6 +17,12 @@ import {
 
 import { tuiUi } from './tuiUiHost';
 import type { Secrets, SettingsStores } from '@texra-ai/harness/plugins';
+
+/** A provider key was not written or removed; the message names the cause. */
+class ProviderKeyNotSaved extends Schema.TaggedError<ProviderKeyNotSaved>()(
+  'ProviderKeyNotSaved',
+  { message: Schema.String, cause: Schema.Defect() },
+) {}
 
 /** Run one controller action on the TUI's prompt; a failure names its cause
  *  and stays in the Effect channel. */
@@ -29,7 +35,8 @@ const viaTui = (
   action(new SettingsProfileKeyController({ dialogs: tuiUi, stores })).pipe(
     Effect.mapError((error) =>
       error instanceof ProviderKeyActionFailed
-        ? new Error(`${error.message}: ${toErrorMessage(error.cause)}`, {
+        ? new ProviderKeyNotSaved({
+            message: `${error.message}: ${toErrorMessage(error.cause)}`,
             cause: error,
           })
         : error,

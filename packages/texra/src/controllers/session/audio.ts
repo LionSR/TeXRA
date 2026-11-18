@@ -24,7 +24,6 @@ import {
   meansAbsent,
   pathExists,
 } from '@texra-ai/harness/node';
-import { ensureError } from '@texra-ai/harness/schemas';
 import { SOX_PATH_SETTING } from '@texra/shared/settings/texraSettings';
 import {
   findCommand,
@@ -64,25 +63,36 @@ class AudioRecorderError extends Schema.TaggedError<AudioRecorderError>()(
   },
 ) {}
 
-/** The failure a foreign call of `operation` carries back, logged once here
- *  where the operation is named. A filesystem failure is worded by its errno
- *  text. */
+/** The failure a foreign call carries back. A filesystem failure is worded
+ *  by its errno text. */
+const recorderError = (cause: unknown): AudioRecorderError =>
+  new AudioRecorderError({
+    message: normalizeProviderError(
+      cause instanceof PlatformError.PlatformError
+        ? (cause.reason.cause ?? cause)
+        : cause,
+    ).message,
+    cause,
+  });
+
+/** Log a recorder failure once, where its operation is named. */
+const logRecorderError =
+  (operation: string) =>
+  ({ message }: AudioRecorderError) =>
+    Effect.logError(`Error in ${operation}: ${message}`).pipe(
+      withLogChannel(CHANNEL),
+    );
+
+/** The failure a foreign call of `operation` carries back, logged. */
 const recorderFailure =
   (operation: string) =>
   <A, E, R>(
     self: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, AudioRecorderError, R> =>
-    Effect.catch(self, (cause) => {
-      const { message } = normalizeProviderError(
-        cause instanceof PlatformError.PlatformError
-          ? (cause.reason.cause ?? cause)
-          : cause,
-      );
-      return Effect.logError(`Error in ${operation}: ${message}`).pipe(
-        withLogChannel(CHANNEL),
-        Effect.andThen(Effect.fail(new AudioRecorderError({ message, cause }))),
-      );
-    });
+    self.pipe(
+      Effect.mapError(recorderError),
+      Effect.tapError(logRecorderError(operation)),
+    );
 
 /**
  * How long a SIGTERM'd sox may take to flush and exit before the scope's
@@ -266,6 +276,6 @@ export function transcribeRecording(
       );
       return result.text;
     },
-    catch: ensureError,
-  }).pipe(recorderFailure('transcribeRecording'));
+    catch: recorderError,
+  }).pipe(Effect.tapError(logRecorderError('transcribeRecording')));
 }

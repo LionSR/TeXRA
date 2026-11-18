@@ -9,6 +9,7 @@ import {
   Effect,
   Exit,
   FiberHandle,
+  Schema,
   Scope,
   Stream,
   SubscriptionRef,
@@ -66,6 +67,7 @@ import { expandText } from './input/draftAttachments';
 import { SlashContextProvider } from './commands/slashRegistry';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
+import { runAttentionLine, runStatus } from '@ui/copy/runStatus';
 import { announceForegroundApprovals } from './state/subscribeApprovals';
 import { chatScrollback } from './panes/staticTranscriptRing';
 import { EMPTY_DRAFT } from './input/draftAttachments';
@@ -101,10 +103,17 @@ import { installTerminalTitleUpdates } from './terminalTitle';
 import { TuiSession } from './state/sessionRunState';
 import { createSessionExitController } from './sessionExitController';
 import { ChatProcessProvider } from './chatProcess';
+import { scopeRunner } from '../scopeRunner';
 
 interface ChatResult {
   exitCode: number;
 }
+
+/** The session's rows were not all written before the chat's exit deadline. */
+class SessionRowsNotWritten extends Schema.TaggedError<SessionRowsNotWritten>()(
+  'SessionRowsNotWritten',
+  { message: Schema.String },
+) {}
 
 /** A change of a run's approval grants (`policy.set`). */
 type PolicyChange = Extract<RuntimeCommand, { kind: 'policy.set' }>['change'];
@@ -215,7 +224,7 @@ export async function runChat(
       const modelSelection = modelSelectionExit.value;
       sessionMetaSignal.set({
         agent: defaults.agent,
-        agentSource: agentEntry.source,
+        agentSource: { kind: agentEntry.source },
         model: modelSelection.model,
         modelSource: defaults.modelSource,
         cwd: context.cwd,
@@ -226,7 +235,10 @@ export async function runChat(
         version: context.version,
       });
       if (modelSelection.notice) startupNotices.push(modelSelection.notice);
-      const { history: inputHistory, readFailure } = yield* loadInputHistory;
+      // Stored until the platform closes, after the chat's scope: a graceful
+      // exit keeps the line it was typed after.
+      const { history: inputHistory, readFailure } =
+        yield* loadInputHistory.pipe(Scope.provide(services.shutdownScope));
       if (readFailure !== null)
         startupNotices.push(
           `Input history could not be read (${toErrorMessage(readFailure)}); ↑/↓ and Ctrl-R start from this session's entries.`,
@@ -326,11 +338,15 @@ export async function runChat(
       { discard: true },
     );
   };
-  // From here on `chatScope` owns everything the session holds: what is
-  // added below closes before the service hold above, last in first out,
-  // and the exit drain awaits that close.
+  // The two owners of what the chat starts from outside Effect. The chat's
+  // scope ends what the session on screen holds, and the exit drain awaits
+  // that close; the process's shutdown scope ends what must outlive it (a
+  // message being sent, a run being resumed), on every exit path.
+  const chat = scopeRunner(runtime, chatScope);
+  const untilShutdown = scopeRunner(runtime, services.shutdownScope);
+  // What is added below closes last in first out.
   const onChatClose = (release: () => void): void =>
-    runtime.runSync(Scope.addFinalizer(chatScope, Effect.sync(release)));
+    chat.sync(Effect.addFinalizer(() => Effect.sync(release)));
   // The one session state the TUI renders: the session view
   // bridged into a signal, its transcript tier subscribed for the runs this
   // terminal paints. Bound before anything reads the view: the terminal
@@ -348,23 +364,19 @@ export async function runChat(
   });
   for (const notice of startupNotices) appendLocalNotice(notice);
   if (link !== undefined)
-    runtime.runSync(
-      Effect.gen(function* () {
-        // The service went away (retired by a newer build, or it died) and
-        // the link reaches it again: the chat says so, rather than going
-        // quiet.
-        yield* Stream.runForEach(
-          link.client.changes.pipe(Stream.drop(1)),
-          (client) =>
-            Effect.sync(() =>
-              appendLocalNotice(
-                client === null
-                  ? 'The TeXRA service is offline; TeXRA is reconnecting. If another window runs a newer TeXRA, update this one.'
-                  : 'Reconnected to the TeXRA service.',
-              ),
-            ),
-        ).pipe(Effect.forkIn(chatScope));
-      }),
+    chat.fork(
+      // The service went away (retired by a newer build, or it died) and
+      // the link reaches it again: the chat says so, rather than going
+      // quiet.
+      Stream.runForEach(link.client.changes.pipe(Stream.drop(1)), (client) =>
+        Effect.sync(() =>
+          appendLocalNotice(
+            client === null
+              ? 'The TeXRA service is offline; TeXRA is reconnecting. If another window runs a newer TeXRA, update this one.'
+              : 'Reconnected to the TeXRA service.',
+          ),
+        ),
+      ),
     );
   // Cosmetic, but "texra-local" or a bare shell prompt in every tab makes a
   // multi-session workflow hard to navigate: show project and attention state.
@@ -378,9 +390,7 @@ export async function runChat(
   // The runs this terminal paints, watched on the session for as long as
   // the set holds: the watch keeps their transcripts in the view, and a
   // new set replaces the watch. The chat's scope ends it.
-  const transcriptWatch = runtime.runSync(
-    FiberHandle.make<void, never>().pipe(Scope.provide(chatScope)),
-  );
+  const transcriptWatch = chat.sync(FiberHandle.make<void, never>());
   let subscribedRuns = '';
   const syncTranscriptSubscriptions = (): void => {
     const ids = paintedRunIds.get();
@@ -388,7 +398,7 @@ export async function runChat(
     if (key === subscribedRuns) return;
     subscribedRuns = key;
     const view = runSession.view.current();
-    runtime.runFork(
+    chat.fork(
       FiberHandle.run(
         transcriptWatch,
         Stream.runDrain(
@@ -412,23 +422,23 @@ export async function runChat(
     candidateModel: string,
   ): Effect.Effect<string | undefined, Error> => {
     if (session.canStartRootRun() || !session.canSelectModel()) {
-      return Effect.succeed(undefined);
+      return Effect.undefined;
     }
     // The run's loop answers in this process; the service checks the
     // switch against the run when it is asked.
     const runId = rootRunId.get();
-    if (runId === undefined || runsElsewhere) return Effect.succeed(undefined);
+    if (runId === undefined || runsElsewhere) return Effect.undefined;
     return Effect.flatMap(
       services.session,
       (local) =>
         local.held(runId)?.modelSwitchDisabledReason(candidateModel) ??
-        Effect.succeed(undefined),
+        Effect.undefined,
     );
   };
   // Chat-session controller: owns run start/resume/stop orchestration.
   // The Ink layer never directly mutates session run-state fields, every
   // state change flows through one of the controller's narrow commands.
-  const draft = runtime.runSync(SubscriptionRef.make(EMPTY_DRAFT));
+  const draft = chat.sync(SubscriptionRef.make(EMPTY_DRAFT));
   // The chat's slash commands; their handlers and forms act over the slash
   // context built below.
   const commands = builtinSlashCommands({
@@ -445,8 +455,8 @@ export async function runChat(
     runSession,
     served: runsElsewhere,
     commandName: context.commandName,
-    chatScope,
-    shutdownScope: services.shutdownScope,
+    chat,
+    untilShutdown,
     cwd: context.cwd,
     stores: services,
     runtime,
@@ -456,7 +466,7 @@ export async function runChat(
   });
 
   const inkRef: { current?: InkInstance } = {};
-  const scrollback = chatScrollback(runtime, inkRef);
+  const scrollback = chatScrollback(chat, inkRef);
 
   const resetSessionForClear = (): boolean => {
     const currentRunId = rootRunId.get() ?? selectedRunIdSignal.get();
@@ -491,7 +501,7 @@ export async function runChat(
     session,
     runSession,
     stores: services,
-    runtime,
+    chat,
     processCwd: process.cwd(),
     // The exit controller is built after Ink mounts; `/exit` runs later.
     requestInputExit: () => void exitController.exit(),
@@ -526,12 +536,15 @@ export async function runChat(
   setLogSink(silentLogSink, { trusted: true });
   const ink = render(
     <SlashContextProvider value={slashContext}>
-      <ChatProcessProvider value={{ runtime, roots: services.roots }}>
+      <ChatProcessProvider value={{ chat, roots: services.roots }}>
         <App
           session={runSession}
           draft={draft}
           onSubmit={(message, holdUntil) => {
-            runtime.runFork(
+            // Until shutdown, not until the chat's scope closes: a graceful
+            // exit closes that scope first and then waits for the messages
+            // still being sent.
+            untilShutdown.fork(
               Effect.gen(function* () {
                 const line = expandText(message).trim();
                 if (yield* handleTuiSlashCommand(line, slashContext)) return;
@@ -594,7 +607,8 @@ export async function runChat(
     commandName: context.commandName,
     cwd: context.cwd,
     chatScope,
-    shutdownScope: services.shutdownScope,
+    chat,
+    untilShutdown,
     terminal,
     runtime,
     leaveProcess: services.leave,
@@ -611,9 +625,9 @@ export async function runChat(
       Effect.timeout(SESSION_CLOSE_DEADLINE_MS),
       Effect.mapError(
         () =>
-          new Error(
-            `the session's rows were not all written within ${SESSION_CLOSE_DEADLINE_MS} ms`,
-          ),
+          new SessionRowsNotWritten({
+            message: `the session's rows were not all written within ${SESSION_CLOSE_DEADLINE_MS} ms`,
+          }),
       ),
     ),
     repaintAfterTerminalResume: scrollback.restart,
@@ -626,10 +640,10 @@ export async function runChat(
   // root launch, and the normal first-input path stays available so the
   // user can keep chatting (follow-ups target the root run as usual).
   if (initialResume) {
-    runtime.runFork(chatController.resume(initialResume.id));
+    untilShutdown.fork(chatController.resume(initialResume.id));
   }
 
-  // The one "agent finished" notification: the root run's turn finishes,
+  // The one turn-finished notification: the root run's turn finishes,
   // at WAITING ("your turn", alongside the StatusBar pill) or at its outcome.
   // A run that ends after waiting was already announced, and a stop the user
   // asked for is not news. A turn end, not `attentionOf`'s `finished`: a
@@ -640,16 +654,17 @@ export async function runChat(
     subscribeToSignalChanges([sessionView()], () => {
       const previous = rootStanding;
       rootStanding = rootStandingNow();
-      const outcome = rootStanding?.outcome ?? null;
+      if (rootStanding === undefined) return;
+      const { outcome } = rootStanding;
       if (
         previous?.position !== 'waiting' &&
-        (rootStanding?.position === 'waiting' ||
+        (rootStanding.position === 'waiting' ||
           (outcome !== null &&
             outcome !== previous?.outcome &&
             // A stop ends the run cancelled: no "finished" bell for it.
             outcome !== 'cancelled'))
       ) {
-        notify('agentFinished');
+        notify(runAttentionLine(rootStanding, runStatus(rootStanding).key));
       }
     }),
   );

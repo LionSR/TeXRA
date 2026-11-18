@@ -1,5 +1,5 @@
 import { Box, Text, useStderr, useWindowSize } from 'ink';
-import { Effect, Exit, Fiber, Stream, type Duration } from 'effect';
+import { Effect, Exit, Stream, type Duration } from 'effect';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { apiKeyEntry } from '@texra-ai/llm';
@@ -37,8 +37,10 @@ import {
   statusBarRunTarget,
   subscriptionUsageProviderForStatus,
 } from './statusBarDisplay';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/harness/host';
+import type { ScopeRunner } from '../../scopeRunner';
 import { useChatProcess } from '../chatProcess';
+import { useMountScope } from '../state/useMountScope';
 
 // Polling re-reads what another process changed; an in-process change to
 // model access is followed at once.
@@ -74,7 +76,7 @@ interface StatusBarProps {
  * value, so its report is said once. An undefined key reads nothing.
  */
 function useFollowedRead<K extends string, A, E>(
-  runtime: ProcessRuntime,
+  mount: ScopeRunner,
   key: K | undefined,
   read: (key: K) => Effect.Effect<A, E, ProcessServices>,
   every: Duration.Input,
@@ -85,7 +87,7 @@ function useFollowedRead<K extends string, A, E>(
   }>();
   useEffect(() => {
     if (key === undefined) return;
-    const reads = runtime.runFork(
+    const reads = mount.fork(
       Stream.merge(Stream.tick(every), modelAccessChanges).pipe(
         Stream.switchMap(() => Stream.fromEffect(Effect.exit(read(key)))),
         Stream.changesWith((a, b) => Exit.isFailure(a) && Exit.isFailure(b)),
@@ -94,15 +96,14 @@ function useFollowedRead<K extends string, A, E>(
         ),
       ),
     );
-    return () => {
-      runtime.runFork(Fiber.interrupt(reads));
-    };
-  }, [every, key, read, runtime]);
+    return () => reads.interruptUnsafe();
+  }, [every, key, read, mount]);
   return latest !== undefined && latest.key === key ? latest.exit : undefined;
 }
 
 export function StatusBar(props: StatusBarProps): React.JSX.Element {
-  const { roots, runtime } = useChatProcess();
+  const { roots } = useChatProcess();
+  const mount = useMountScope();
   const subscriptionUsage = useMemo(
     () => new SubscriptionUsageService({ stores: roots }),
     [roots],
@@ -150,7 +151,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     [roots],
   );
   const routeRead = useFollowedRead(
-    runtime,
+    mount,
     accessModel,
     readRoute,
     ROUTE_REFRESH,
@@ -183,7 +184,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     [subscriptionUsage],
   );
   const quotaRead = useFollowedRead(
-    runtime,
+    mount,
     subscriptionUsageProvider,
     readQuota,
     QUOTA_REFRESH,

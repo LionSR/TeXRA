@@ -42,6 +42,7 @@ import {
   type Blobs,
   type SqlRow,
 } from './rowCodec';
+import { StoreCheckFailed } from './storeAside';
 
 /** One aggregate's surrogate, from its two columns. */
 export const AGGREGATE =
@@ -188,7 +189,7 @@ export interface RowReader<E> {
    *  the store lacks fails the read. */
   readonly blobs: (
     digests: readonly string[],
-  ) => Effect.Effect<StoredBlobs, E | Error>;
+  ) => Effect.Effect<StoredBlobs, E | StoreCheckFailed>;
   readonly read: (
     rows: readonly SqlRow[],
     whole: boolean,
@@ -291,7 +292,9 @@ export function rowReader<E>(
       const missing = digests.filter((digest) => !texts.has(digest));
       if (missing.length > 0)
         return Effect.fail(
-          new Error(`${path} holds no readable blob ${missing.join(', ')}`),
+          new StoreCheckFailed({
+            message: `${path} holds no readable blob ${missing.join(', ')}`,
+          }),
         );
       return Effect.succeed((digest: string) => {
         const text = texts.get(digest);

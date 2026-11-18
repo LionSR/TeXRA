@@ -143,6 +143,12 @@ const teardownBudgetMillis = (
 const leadsGroup = (command: ChildProcess.StandardCommand): boolean =>
   process.platform !== 'win32' && command.options.detached !== false;
 
+/** A child process could not be sent `SIGKILL`. */
+class ChildNotKilled extends Schema.TaggedError<ChildNotKilled>()(
+  'ChildNotKilled',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
+
 /** Past its budget: one SIGKILL to a child still running, then a warning
  *  naming the pid. The pid is signalled only while Node has not seen its
  *  exit, so a reused pid is not hit here; the exit listener's sweep can race
@@ -177,9 +183,10 @@ const stopWaiting: (
     yield* Effect.try({
       try: () =>
         process.kill(leadsGroup(stage) ? -handle.pid : handle.pid, 'SIGKILL'),
-      catch: ensureError,
+      catch: (cause) =>
+        new ChildNotKilled({ message: ensureError(cause).message, cause }),
     }).pipe(
-      Effect.catch((error: Error) =>
+      Effect.catch((error) =>
         Effect.logWarning(
           `Could not SIGKILL child process ${handle.pid}: ${error.message}`,
         ),

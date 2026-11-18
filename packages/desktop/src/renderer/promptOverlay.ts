@@ -2,6 +2,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { isCommitEnter } from '@ui/wa/keyActivation';
 import {
   DESKTOP_PROMPT_COMMANDS,
   type DesktopAnswerPromptMessage,
@@ -88,7 +89,7 @@ export function createDesktopPromptOverlay(
     answer(input.value ?? '');
   });
   input.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter' || event.isComposing) return;
+    if (!isCommitEnter(event)) return;
     event.preventDefault();
     form.requestSubmit();
   });

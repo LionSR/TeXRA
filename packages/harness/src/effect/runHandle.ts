@@ -120,9 +120,7 @@ export function runView(
       Effect.as(undefined),
     ),
     Effect.suspend(
-      () =>
-        Context.get(session, Runs).get(runId)?.drained ??
-        Effect.succeed(undefined),
+      () => Context.get(session, Runs).get(runId)?.drained ?? Effect.undefined,
     ),
   );
   // Read once the view applied it, so a view read afterwards includes it.

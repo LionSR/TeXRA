@@ -1,18 +1,17 @@
-// Node imports
-
 // Third-party imports
 import {
-  Cause,
   Clock,
   Effect,
   Exit,
+  Fiber,
   Schema,
   type Scope,
   ScopedRef,
   Semaphore,
   Stream,
 } from 'effect';
-import { WebSocket, createWebSocketStream } from 'ws';
+import { Socket } from 'effect/socket';
+import { WebSocket } from 'ws';
 
 // Local imports - canonical model contract
 import { type Model, type OpenAIResponsesConfiguration } from '../turn.js';
@@ -27,7 +26,6 @@ import { originOf } from '../protocol.js';
 import {
   decodeWireOrFail,
   refuseAmbientHeaders,
-  rejoin,
   wireFail,
 } from './transport.js';
 import {
@@ -37,16 +35,47 @@ import {
   responseParameters,
 } from './openaiResponsesRequest.js';
 import type { SessionToken } from '../node.js';
-import type { ClientRequest, IncomingMessage } from 'node:http';
 
 const JsonFrameSchema = Schema.fromJsonString(Schema.Unknown);
 
 /** A connection older than this is replaced before its next turn. */
 const MAX_CONNECTION_AGE_MS = 55 * 60_000;
 
+/** A handshake that has not finished by then fails as a transport error. */
+const OPEN_TIMEOUT = '30 seconds';
+
+const closed = (cause?: unknown) =>
+  new ModelError({
+    kind: 'transport',
+    message: 'The Responses connection closed.',
+    cause,
+  });
+
+const transportFailure = (cause: unknown) =>
+  new ModelError({
+    kind: 'transport',
+    message: 'The Responses WebSocket failed.',
+    cause,
+  });
+
+const socketFailure = (error: Socket.SocketError) => {
+  if (error.reason._tag === 'SocketCloseError') return closed(error);
+  if (
+    error.reason._tag === 'SocketOpenError' &&
+    error.reason.kind === 'Timeout'
+  )
+    return new ModelError({
+      kind: 'transport',
+      message: `The Responses WebSocket did not open within ${OPEN_TIMEOUT}.`,
+      cause: error,
+    });
+  return transportFailure(error);
+};
+
 /**
  * One physical connection, which carries one turn at a time and is unusable
- * once a turn fails, the socket closes, or it ages out.
+ * once a turn fails, the socket closes, data arrives with no turn reading, or
+ * it ages out.
  */
 const connect = Effect.fnUntraced(function* (
   config: OpenAIResponsesConfiguration,
@@ -55,136 +84,89 @@ const connect = Effect.fnUntraced(function* (
 ) {
   const origin = originOf(config);
   const openedAt = yield* Clock.currentTimeMillis;
-  const closed = new ModelError({
-    kind: 'transport',
-    message: 'The Responses connection closed.',
-  });
+  const scope = yield* Effect.scope;
   let invalid: ModelError | undefined;
-  let phase: 'idle' | 'reading' | 'draining' = 'idle';
-  let pendingRead: Promise<IteratorResult<unknown>> | undefined;
+  let rejected: ModelError | undefined;
+  let reading = false;
   let latestResponseId: string | undefined;
 
-  const failure = (cause: unknown) =>
-    cause instanceof ModelError
-      ? cause
-      : new ModelError({
-          kind: 'transport',
-          message: 'The Responses WebSocket failed.',
-          cause,
-        });
-  const join = (pending: Promise<unknown>, exit: Exit.Exit<unknown, unknown>) =>
-    rejoin(
-      pending,
-      exit,
-      (cause) =>
-        cause === closed ||
-        (Exit.isFailure(exit) &&
-          exit.cause.reasons.some((reason) =>
-            Cause.isFailReason(reason)
-              ? reason.error === cause
-              : Cause.isDieReason(reason) && reason.defect === cause,
-          )),
-    );
-  const resource = yield* Effect.acquireRelease(
+  const ws = yield* Effect.acquireRelease(
     Effect.sync(() => {
       const socket = new WebSocket(endpoint, {
         headers: bearerHeaders(token),
         followRedirects: false,
       });
-      const reader = createWebSocketStream(socket, {
-        readableObjectMode: true,
+      // A refused handshake's status says whether the token is handed back;
+      // the socket's own open error carries only a message.
+      socket.once('unexpected-response', (_request, response) => {
+        const status = response.statusCode;
+        rejected = new ModelError({
+          kind: authOrRejectionKind(status),
+          message: `The Responses WebSocket handshake was rejected${status === undefined ? '' : ` (${status})`}.`,
+          status,
+          requestId:
+            typeof response.headers['x-request-id'] === 'string'
+              ? response.headers['x-request-id']
+              : undefined,
+        });
+        response.destroy();
+        socket.terminate();
       });
-      // This listener records failures while idle as well as during a pending read.
-      reader.on('error', (cause) => {
-        invalid ??= failure(cause);
-      });
-      socket.once('close', () => {
-        invalid ??= closed;
-      });
-      const iterator: AsyncIterator<unknown> = reader[Symbol.asyncIterator]();
-      return {
-        socket,
-        reader,
-        iterator,
-      };
+      return socket;
     }),
-    Effect.fnUntraced(function* ({ socket, reader, iterator }, exit) {
-      invalid ??= closed;
-      reader.destroy(closed);
-      yield* join(
-        iterator.return ? iterator.return() : Promise.resolve(),
-        exit,
-      ).pipe(
-        Effect.ensuring(
-          Effect.callback<void>((resume) => {
-            if (socket.readyState === WebSocket.CLOSED) resume(Effect.void);
-            else socket.once('close', () => resume(Effect.void));
-          }),
-        ),
-      );
-    }),
+    (socket) =>
+      Effect.callback<void>((resume) => {
+        if (socket.readyState === WebSocket.CLOSED) {
+          resume(Effect.void);
+          return;
+        }
+        socket.once('close', () => resume(Effect.void));
+        socket.terminate();
+      }),
   );
-  const { socket, reader, iterator } = resource;
   const invalidate = (error: ModelError) => {
     invalid ??= error;
-    reader.destroy(invalid);
+    ws.terminate();
   };
-  // The sole consumer decodes frames; this synchronous guard only invalidates idle traffic.
-  socket.on('message', () => {
-    if (phase !== 'reading')
-      invalidate(
-        new ModelError({
-          kind: 'provider-rejection',
-          message:
-            'The Responses connection received data without an active turn.',
-        }),
-      );
+  const socket = yield* Socket.fromWebSocket(Effect.succeed(ws), {
+    openTimeout: OPEN_TIMEOUT,
   });
   // Opening runs inside the uninterruptible `ScopedRef` acquisition; the
   // handshake wait stays interruptible.
-  yield* Effect.callback<void, ModelError>((resume) => {
-    const remove = () => {
-      socket.off('open', onOpen);
-      socket.off('error', onError);
-      socket.off('unexpected-response', onUnexpected);
-    };
-    const onOpen = () => {
-      remove();
-      resume(Effect.void);
-    };
-    const onError = (cause: Error) => {
-      remove();
-      resume(Effect.fail(invalid ?? failure(cause)));
-    };
-    const onUnexpected = (
-      request: ClientRequest,
-      response: IncomingMessage,
-    ) => {
-      const status = response.statusCode;
-      const error = new ModelError({
-        kind: authOrRejectionKind(status),
-        message: `The Responses WebSocket handshake was rejected${status === undefined ? '' : ` (${status})`}.`,
-        status,
-        requestId:
-          typeof response.headers['x-request-id'] === 'string'
-            ? response.headers['x-request-id']
-            : undefined,
-      });
-      remove();
-      invalid = error;
-      response.destroy();
-      request.destroy();
-      reader.destroy();
-      resume(Effect.fail(error));
-    };
-    socket.once('open', onOpen);
-    socket.once('error', onError);
-    socket.once('unexpected-response', onUnexpected);
-    return Effect.sync(remove);
-  }).pipe(Effect.interruptible);
+  const { pull } = yield* socket.reader.pipe(
+    Effect.mapError((error) => rejected ?? socketFailure(error)),
+    Effect.interruptible,
+  );
+  const { write } = yield* socket.writer;
+
+  // Between turns one read waits on the socket. A frame or a close it gets
+  // before a turn claims it makes the connection unusable; a turn that
+  // claims it takes its result as the turn's first frames. The read starts
+  // at once, so a frame already buffered when a turn ends is seen then and
+  // not taken by the next turn.
+  const watch = Effect.gen(function* () {
+    const fiber = yield* Effect.forkIn(pull, scope, {
+      startImmediately: true,
+    });
+    fiber.addObserver((exit) => {
+      if (reading) return;
+      invalidate(
+        Exit.isSuccess(exit)
+          ? new ModelError({
+              kind: 'provider-rejection',
+              message:
+                'The Responses connection received data without an active turn.',
+            })
+          : closed(exit.cause),
+      );
+    });
+    return fiber;
+  });
+  let waiting = yield* watch;
+
   const ping = Effect.callback<void>((resume) => {
-    socket.ping((cause: Error | undefined) => {
-      if (cause) invalidate(failure(cause));
+    ws.ping((cause: Error | undefined) => {
+      if (cause) invalidate(transportFailure(cause));
       resume(Effect.void);
     });
   });
@@ -199,6 +181,9 @@ const connect = Effect.fnUntraced(function* (
     let responseId: string | undefined;
     let returnedModel: string | undefined;
     let completed = false;
+    // The frames a read returned that the turn has not decoded yet.
+    const frames: Array<Uint8Array | string> = [];
+    let claimed: typeof waiting | undefined;
     const enrich = (error: ModelError) =>
       fillModelError(error, {
         responseId,
@@ -215,44 +200,39 @@ const connect = Effect.fnUntraced(function* (
       yield* Effect.acquireRelease(
         Effect.suspend(() => {
           if (invalid) return Effect.fail(invalid);
-          phase = 'reading';
+          reading = true;
+          claimed = waiting;
           return Effect.void;
         }),
         Effect.fnUntraced(function* (_, exit) {
-          if (!completed || Exit.isFailure(exit)) invalidate(closed);
-          if (pendingRead) yield* join(pendingRead, exit);
-          pendingRead = undefined;
-          if (!invalid) phase = 'idle';
+          if (!completed || Exit.isFailure(exit)) return invalidate(closed());
+          reading = false;
+          waiting = yield* watch;
         }),
       );
-      yield* Effect.callback<void, ModelError>((resume) => {
-        socket.send(
-          JSON.stringify({
-            type: 'response.create',
-            ...parameters,
-          }),
-          (cause) => resume(cause ? Effect.fail(failure(cause)) : Effect.void),
-        );
-      });
+      yield* write(
+        JSON.stringify({
+          type: 'response.create',
+          ...parameters,
+        }),
+      ).pipe(Effect.mapError(socketFailure));
       const chunks = Stream.fromPull(
         Effect.succeed(
           Effect.gen(function* () {
-            const read = iterator.next();
-            pendingRead = read;
-            const next = yield* Effect.tryPromise({
-              try: () => read,
-              catch: failure,
-            });
-            pendingRead = undefined;
-            if (next.done) return yield* closed;
-            if (typeof next.value !== 'string')
+            if (frames.length === 0) {
+              const read = claimed === undefined ? pull : Fiber.join(claimed);
+              claimed = undefined;
+              frames.push(...(yield* Effect.mapError(read, socketFailure)));
+            }
+            const frame = frames.shift();
+            if (typeof frame !== 'string')
               return yield* wireFail(
                 'The Responses connection returned a binary frame.',
               );
             const raw = yield* decodeWireOrFail(
               JsonFrameSchema,
               'The Responses connection returned invalid JSON.',
-              next.value,
+              frame,
             );
             const envelope = yield* decodeWireOrFail(
               WebSocketEnvelopeSchema,
@@ -292,8 +272,7 @@ const connect = Effect.fnUntraced(function* (
               returnedModel = event.returnedModel ?? undefined;
             }
             if (event.kind !== 'completed') return event;
-            phase = 'draining';
-            if (reader.readableLength > 0)
+            if (frames.length > 0)
               return yield* new ModelError({
                 kind: 'provider-rejection',
                 message:

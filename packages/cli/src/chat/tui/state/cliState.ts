@@ -8,7 +8,7 @@ import {
   APPROVAL_POLICY_DEFAULT,
   type ApprovalPolicy,
   RunIdSchema,
-  type AgentSource,
+  type AgentConfig,
   type RunId,
   descendantRuns,
   FACT_SEPARATOR,
@@ -44,7 +44,7 @@ import type { RunView } from '@texra-ai/harness/schemas';
 export interface SessionMeta {
   readonly agent: string;
   /** The source of the entry `agent` resolved to, pinned on every root run. */
-  readonly agentSource?: AgentSource;
+  readonly agentSource?: NonNullable<AgentConfig['agentSource']>;
   readonly model: string;
   readonly modelSource: RunModelDecisionReason;
   readonly cwd: string;

@@ -23,11 +23,12 @@
  * instead of asked of its model; `RunState.handedDown` ends the turn.
  */
 
-import { Context, Effect, Exit, type Scope, ScopedRef } from 'effect';
+import { Context, Effect, Exit, Schema, type Scope, ScopedRef } from 'effect';
 
 import { buildOpeningSystemPrompt } from '@agent/prompt/PromptBuilder';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import { logUserMessage } from '@agent/trace/traceLogs';
+import { LaunchRefused } from '@common/errors/agentErrors';
 import { sourceLocationUnder } from '@common/storage/storageLayout';
 import {
   type BoundModel,
@@ -53,6 +54,7 @@ import {
 } from '@shared/session/runHistory';
 import { isResuming, type RunState } from '@shared/session/runState';
 import { turnText } from '@shared/session/runFacts';
+import { skillActivationText } from '@skills/runtimeSkills';
 import { sentDefinitions } from '@tools/catalogEntries';
 import { sha256 } from '@utils/core/idHash';
 
@@ -91,7 +93,7 @@ interface ToolUseStart {
 
 /** What {@link openToolUse} committed: the run's cell and the commit of
  *  the batch that opened this activation. */
-interface ToolUseOpening {
+export interface ToolUseOpening {
   readonly cell: RunCell;
   readonly activation: CommitOrdinal;
 }
@@ -109,6 +111,13 @@ const turnResponse = (at: RunState): string =>
 
 /** What a resume's activation rows read of the session. */
 type ActivationServices = SessionLog | SessionRoots | Approvals;
+
+/** A run that cannot open: a resume with no state to continue from, a
+ *  fresh launch onto a run that has some, or a conversation with no task. */
+class RunOpenRejected extends Schema.TaggedError<RunOpenRejected>()(
+  'RunOpenRejected',
+  { message: Schema.String },
+) {}
 
 /** Why a run its rows never opened cannot be continued. */
 const NOT_RESUMABLE_MESSAGE =
@@ -177,7 +186,9 @@ const openRun = Effect.fn('toolUse.openRun')(function* (
             state: RunState | null,
           ) {
             if (state?.at == null)
-              return yield* Effect.fail(new Error(NOT_RESUMABLE_MESSAGE));
+              return yield* new RunOpenRejected({
+                message: NOT_RESUMABLE_MESSAGE,
+              });
             const refused = foreignProtocol(
               runId,
               state,
@@ -200,11 +211,9 @@ const openRun = Effect.fn('toolUse.openRun')(function* (
     ? run.entry.enter(() => opened)
     : Effect.uninterruptible(opened);
   if (!resume && (yield* cell.current).at !== null)
-    return yield* Effect.fail(
-      new Error(
-        `Run ${runId} already has run history state; resume it instead.`,
-      ),
-    );
+    return yield* new RunOpenRejected({
+      message: `Run ${runId} already has run history state; resume it instead.`,
+    });
   return cell;
 });
 
@@ -289,10 +298,10 @@ const afterTextResponse = Effect.fn('toolUse.afterTextResponse')(function* (
 });
 
 /**
- * Open the run's cell and commit what opens it, in the caller's fiber,
- * before the run is forked: a fresh run's opening batch (its registration,
- * its prompt, its first step), a fork's history, or a resume's activation.
- * The loop ({@link runToolUse}) then runs over what this answered.
+ * Open the run's cell and commit what opens it, as the run's fiber opens
+ * the run: a fresh run's opening batch (its registration, its prompt, its
+ * first step), a fork's history, or a resume's activation. The loop
+ * ({@link runToolUse}) then runs over what this answered.
  */
 export const openToolUse = Effect.fn('toolUse.open')(function* (
   start: Pick<ToolUseStart, 'resume'>,
@@ -362,9 +371,19 @@ export const openToolUse = Effect.fn('toolUse.open')(function* (
       // The user's task is the user message.
       const userRequest = run.config.instruction.trim();
       if (!userRequest)
-        return yield* Effect.fail(
-          new Error('A conversation requires a non-empty task.'),
-        );
+        return yield* new RunOpenRejected({
+          message: 'A conversation requires a non-empty task.',
+        });
+      // The skills its user activated lead it, each as its activation block.
+      const skills = run.config.skills ?? [];
+      const request =
+        skills.length === 0
+          ? userRequest
+          : yield* skillActivationText(roots, skills, userRequest).pipe(
+              Effect.catchTag('Rejected', ({ reason }) =>
+                Effect.fail(new LaunchRefused({ message: reason })),
+              ),
+            );
       const content: InputPart[] = [];
       const media = yield* Effect.exit(
         run.config.mediaFiles.length
@@ -377,8 +396,8 @@ export const openToolUse = Effect.fn('toolUse.open')(function* (
       );
       echo(Exit.isSuccess(media) ? media.value.kinds : []);
       if (Exit.isFailure(media)) return yield* Effect.failCause(media.cause);
-      content.push(...media.value.parts, { kind: 'text', text: userRequest });
-      const hooked = yield* step.tools.hooks.opening(opening, userRequest);
+      content.push(...media.value.parts, { kind: 'text', text: request });
+      const hooked = yield* step.tools.hooks.opening(opening, request);
       content.push(...hooked.parts);
       return { content, offered: [...step.rows, ...hooked.rows], handed: [] };
     }),

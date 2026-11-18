@@ -5,7 +5,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import which from 'which';
-import { Context, Effect } from 'effect';
+import { Context, Effect, Schema } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
@@ -38,6 +38,12 @@ export const CommandDirs = Context.Reference<() => readonly string[]>(
   { defaultValue: () => () => [] },
 );
 
+/** The operating system named no home directory for this user. */
+class HomeDirectoryUnresolved extends Schema.TaggedError<HomeDirectoryUnresolved>()(
+  'HomeDirectoryUnresolved',
+  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {}
+
 /**
  * The user's home directory, or `undefined` where none resolves.
  * `os.homedir()` throws a SystemError (UV_ENOENT) where it cannot be
@@ -48,11 +54,15 @@ export const CommandDirs = Context.Reference<() => readonly string[]>(
  */
 export const homeDirectory: Effect.Effect<string | undefined> = Effect.try({
   try: () => os.homedir(),
-  catch: ensureError,
+  catch: (cause) =>
+    new HomeDirectoryUnresolved({ message: ensureError(cause).message, cause }),
 }).pipe(
   Effect.filterOrFail(
     (home) => home !== '',
-    () => new Error('os.homedir() returned an empty string'),
+    () =>
+      new HomeDirectoryUnresolved({
+        message: 'os.homedir() returned an empty string',
+      }),
   ),
   Effect.catch((error) =>
     Effect.logWarning(

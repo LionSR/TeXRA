@@ -190,7 +190,7 @@ export class AgentDirectoryService {
     FileSystem.FileSystem
   > {
     if (!configuredPath) {
-      return Effect.succeed(undefined);
+      return Effect.undefined;
     }
 
     return Effect.gen({ self: this }, function* () {

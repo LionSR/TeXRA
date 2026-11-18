@@ -1,11 +1,19 @@
 import { Schema } from 'effect';
 
+import { QualifiedSkillNameSchema } from './skillName';
+
 /** The most skills a run's catalog keeps per source, and a step lists. */
 export const SKILL_CATALOG_MAX_SKILLS = 200;
 
 /** The most skills a run keeps activated; a newer activation displaces the
  *  oldest. */
 export const ACTIVATED_SKILLS_MAX = 20;
+
+/** The skills a user activates, by qualified name: what a start or a
+ *  message names and what a run records, at most `ACTIVATED_SKILLS_MAX`. */
+export const ActivatedSkillsSchema = Schema.Array(
+  QualifiedSkillNameSchema,
+).check(Schema.isMaxLength(ACTIVATED_SKILLS_MAX));
 
 /** Canonical skill-source scope vocabulary, shared with the skills loader
  *  and the persisted disabled-source setting, so

@@ -5,7 +5,6 @@ import * as vscode from 'vscode';
 // Local imports - utils
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
-import { ensureError } from '@texra-ai/harness/schemas';
 import {
   reportingFailure,
   showLoggedErrorMessage,
@@ -13,6 +12,7 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import type { HostFailed } from '@texra/hosts/uiHosts';
+import { hostFailed } from '@texra/controllers/session/hostCallFailure';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
@@ -84,13 +84,13 @@ const getActiveLatexEditor = Effect.fn('activeFileGuards.getActiveLatexEditor')(
       // A rejected save is the same answer as a declined one: saveFailed.
       const saved = yield* Effect.tryPromise({
         try: () => editor.document.save(),
-        catch: ensureError,
+        catch: (cause) => hostFailed('document.save', cause),
       }).pipe(
         Effect.catch((error) =>
-          Effect.logWarning('Saving the active document failed', error).pipe(
-            withLogChannel(CHANNEL),
-            Effect.as(false),
-          ),
+          Effect.logWarning(
+            'Saving the active document failed',
+            error.cause,
+          ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
         ),
       );
       if (!saved) {
