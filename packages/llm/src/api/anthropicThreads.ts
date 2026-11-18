@@ -12,8 +12,15 @@ import {
   type TurnResult,
 } from '../turn.js';
 import type { ModelError } from '../errors.js';
-import type { MessageCreateParamsStreaming } from '@anthropic-ai/sdk/resources/messages';
-import type { BetaMessageThreadParam } from '@anthropic-ai/sdk/resources/beta/messages';
+import type { Stream } from '@anthropic-ai/sdk/core/streaming';
+import type {
+  MessageCreateParamsStreaming,
+  RawMessageStreamEvent,
+} from '@anthropic-ai/sdk/resources/messages';
+import type {
+  BetaMessageThreadParam,
+  BetaRawMessageStreamEvent,
+} from '@anthropic-ai/sdk/resources/beta/messages';
 
 /*
  * Message threads (beta): the server holds a conversation between turns, so
@@ -99,9 +106,9 @@ interface StoredThread {
 }
 
 /** An SDK event stream, plain or beta: the codec reads either. */
-export type SdkSource = AsyncIterable<unknown> & {
-  readonly controller: AbortController;
-};
+export type SdkSource =
+  | Stream<RawMessageStreamEvent>
+  | Stream<BetaRawMessageStreamEvent>;
 
 /** What a binding sends its requests through. */
 interface MessageThreads {
