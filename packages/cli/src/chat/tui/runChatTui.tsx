@@ -36,7 +36,6 @@ import {
 } from '@cli/runtime/platform/cliContext';
 import { linkedClient } from '@texra/controllers/server/client';
 
-import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/models/chatDefaults';
 import type { CliProcessRuntime } from '@cli/runtime/platform/cliProcessRuntime';
 import { CliExitCode } from '@cli/runtime/platform/exitCodes';
@@ -49,7 +48,6 @@ import {
   acquireTuiTerminal,
   clearTerminalScrollback,
 } from '@cli/tui/terminalCleanup';
-import { getFirstRunDone } from '@texra/controllers/onboarding/onboardingFunnel';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
@@ -178,13 +176,6 @@ export async function runChat(
       const credential = yield* checkModelConnection(services);
       if (credential.notice) startupNotices.push(credential.notice);
       const explicitAgent = initialResume?.config.agent ?? init.agentOverride;
-      // The setup-agent handoff belongs to the moment a first credential
-      // lands, which is after startup when the chat opened without one.
-      const firstRunSetupAgent = firstRunSetupAgentOverride({
-        onboardingConfigured: true,
-        firstRunDone: yield* getFirstRunDone(services.globalState),
-        pinnedAgent: explicitAgent ?? context.envAgent,
-      });
       const defaults = resolveChatDefaults({
         stores: services,
         agentOverride: explicitAgent,
@@ -254,7 +245,6 @@ export async function runChat(
         link,
         runsElsewhere: served,
         defaults,
-        firstRunSetupAgent,
         inputHistory,
         terminalCaps,
       };
@@ -515,14 +505,7 @@ export async function runChat(
     },
     getModelSwitchDisabledReason,
     onAccountChanged: () =>
-      connectChatModel(
-        slashContext,
-        {
-          modelSource: defaults.modelSource,
-          firstRunSetupAgent: startup.firstRunSetupAgent,
-        },
-        modelConnection,
-      ),
+      connectChatModel(slashContext, defaults.modelSource, modelConnection),
   };
 
   // Ink owns the terminal from here: a diagnostic line would land inside

@@ -10,11 +10,8 @@ import { type RunModelDecisionReason } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { CliPlatformServices } from '@cli/runtime/platform/initPlatform';
-import { SETUP_AGENT_HANDOFF_NOTICE } from '@cli/onboarding/setupContinuation';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 
-import { applyInitialCliAgentSelection } from './commands/handlers/agentModelCommands';
-import { openRegisteredCliSlashForm } from './commands/slashForms';
 import {
   patchSessionMeta,
   sessionMeta,
@@ -43,9 +40,8 @@ export interface ModelConnection {
   /** Waits until a model is connected; with none, puts the connect panel
    *  back in front first. */
   readonly connected: Effect.Effect<void>;
-  /** The model is connected: every waiting message goes out. True when one
-   *  was waiting. */
-  readonly open: Effect.Effect<boolean>;
+  /** The model is connected: every waiting message goes out. */
+  readonly open: Effect.Effect<void>;
 }
 
 /** The chat's model connection, open unless {@link modelConnectionNeeded}.
@@ -54,7 +50,6 @@ export function makeModelConnection(
   openConnectPanel: () => void,
 ): ModelConnection {
   const latch = Latch.makeUnsafe(!modelConnectionNeeded.get());
-  let waiting = 0;
   return {
     connected: Effect.suspend(() => {
       if (Latch.isOpen(latch)) return Effect.void;
@@ -62,15 +57,10 @@ export function makeModelConnection(
         'Connect a model and your message will be sent right away.',
       );
       openConnectPanel();
-      waiting += 1;
-      return Latch.await(latch).pipe(
-        Effect.ensuring(Effect.sync(() => (waiting -= 1))),
-      );
+      return Latch.await(latch);
     }),
     open: Effect.sync(() => {
-      const messageWaiting = waiting > 0;
       Latch.openUnsafe(latch);
-      return messageWaiting;
     }),
   };
 }
@@ -100,16 +90,12 @@ export const checkModelConnection = Effect.fn('checkModelConnection')(
 
 /**
  * Re-check after an account change. When a model can answer now: clear the
- * state, resolve the chat's model the way startup does, hand a first run to
- * the setup agent, then let the waiting messages go — or, with none waiting
- * on a first run, open `/agent` so a newcomer sees the agents.
+ * state, resolve the chat's model the way startup does, then let the waiting
+ * messages go.
  */
 export const connectChatModel = Effect.fn('connectChatModel')(function* (
   context: SlashCommandContext,
-  options: {
-    readonly modelSource: RunModelDecisionReason;
-    readonly firstRunSetupAgent: string | undefined;
-  },
+  modelSource: RunModelDecisionReason,
   connection: ModelConnection,
 ) {
   if (!modelConnectionNeeded.get()) return;
@@ -121,17 +107,16 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
   // have connected meanwhile, and only one connects.
   if (!ready || !modelConnectionNeeded.get()) return;
   modelConnectionNeeded.set(false);
-  const setupAgent = options.firstRunSetupAgent;
   // The waiting messages go once the model is resolved, or once resolving it
   // failed or stopped: a failure is said in the transcript, and a run
   // resolves the chat's model again when it starts.
-  const messageWaiting = yield* Effect.gen(function* () {
+  yield* Effect.gen(function* () {
     // A typed failure is said here; a defect goes to the reporting below, and
     // an interruption (the chat closing) goes on unreported.
     const selection = yield* Effect.result(
       selectChatModel(stores, {
         model: sessionMeta.get().model,
-        reason: options.modelSource,
+        reason: modelSource,
       }),
     );
     if (Result.isFailure(selection)) {
@@ -140,17 +125,11 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
       patchSessionMeta({ model: selection.success.model });
       appendLocalNotice(`Model connected: ${selection.success.model}.`);
     }
-    if (setupAgent && context.session.canStartRootRun()) {
-      yield* applyInitialCliAgentSelection(setupAgent, context);
-      appendLocalNotice(SETUP_AGENT_HANDOFF_NOTICE);
-    }
   }).pipe(
     Effect.onInterrupt(() => connection.open),
     reportInTranscript,
     Effect.andThen(connection.open),
   );
-  if (!messageWaiting && setupAgent)
-    openRegisteredCliSlashForm(context.commands.agent);
 }, reportInTranscript);
 
 // Every step already speaks in the transcript; a failure or defect in one does
