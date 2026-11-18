@@ -160,12 +160,9 @@ export const createDesktopHostRequests = (
       export: {
         pickFormat: host.pickTranscriptExportFormat(),
         // The window has already shown the failure (the run host's
-        // `openPath` is `presented`); the port's tag carries its wording out
-        // unchanged.
-        openPath: (filePath: string) =>
-          host
-            .openPath(filePath)
-            .pipe(Effect.mapError((cause) => hostFailed('openPath', cause))),
+        // `openPath` is `presented`); its `HostFailed` carries the wording
+        // out unchanged.
+        openPath: (filePath: string) => host.openPath(filePath),
       },
     };
   });

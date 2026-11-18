@@ -10,11 +10,8 @@ import {
 } from '../shared/desktopLogMessages.js';
 import type { SaveDialogOptions, SaveDialogReturnValue } from 'electron';
 import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
-import {
-  DesktopCommandFailed,
-  parsedRoute,
-  type DesktopCommandRoutes,
-} from './desktopIpcTypes.js';
+import { HostFailed } from '@texra/hosts/uiHosts';
+import { parsedRoute, type DesktopCommandRoutes } from './desktopIpcTypes.js';
 
 /** How long the log file must stay quiet before a follow pushes it: a burst
  *  of entries is one repaint. */
@@ -70,7 +67,8 @@ export function createDesktopLogIpc(
     Effect.try({
       try: () => options.copyLog(text),
       catch: (cause) =>
-        new DesktopCommandFailed({
+        new HostFailed({
+          member: 'clipboard.writeText',
           message: `The log could not be copied: ${toErrorMessage(cause)}`,
           cause,
         }),
@@ -86,7 +84,8 @@ export function createDesktopLogIpc(
           filters: [{ name: 'Text Logs', extensions: ['txt', 'log'] }],
         }),
       catch: (cause) =>
-        new DesktopCommandFailed({
+        new HostFailed({
+          member: 'dialog.showSaveDialog',
           message: `The save dialog could not be shown: ${toErrorMessage(cause)}`,
           cause,
         }),
@@ -99,7 +98,8 @@ export function createDesktopLogIpc(
             ).pipe(
               Effect.mapError(
                 (error) =>
-                  new DesktopCommandFailed({
+                  new HostFailed({
+                    member: 'exportLog',
                     message: `The log could not be written to ${filePath}: ${toErrorMessage(error)}`,
                     cause: error,
                   }),

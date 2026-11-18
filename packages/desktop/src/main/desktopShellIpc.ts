@@ -12,12 +12,11 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { DesktopCommandRoutes } from './desktopIpcTypes.js';
 import type { DesktopPush } from '../shared/desktopOutboundMessages.js';
 import type { HostFailed } from '@texra/hosts/uiHosts';
-import type { DesktopCommandFailed } from './desktopIpcTypes.js';
 import type { DesktopSpawn } from './desktopWindows.js';
 
 interface DesktopShellCommandOptions {
   openExternalUrl(url: string): Effect.Effect<void, HostFailed>;
-  openLogFolder(): Effect.Effect<void, DesktopCommandFailed>;
+  openLogFolder(): Effect.Effect<void, HostFailed>;
   openWorkspaceFolder(): Effect.Effect<
     void,
     Error,
