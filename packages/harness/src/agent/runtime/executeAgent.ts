@@ -161,7 +161,6 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
   // The session is the fiber's: a delegated launch runs on its parent's
   // session, and a root launch on the session it was started on.
   const roots = yield* SessionRoots;
-  const resumed = options.registration === undefined;
   const {
     logger: agentLogger,
     stopAfterCycle,
@@ -169,20 +168,21 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
   } = yield* enterRun(definition, runId, options);
 
   // A resume renders nothing again: the run's rows hold its opening.
-  const opening = resumed
-    ? null
-    : yield* buildTemplateInputs(
-        config,
-        modelConfig.provider === ModelProvider.ANTHROPIC,
-        {
-          // The session's own roots, handed to prompt assembly as data, so
-          // the working directory and memories resolve in this project, not
-          // the calling fiber's.
-          workspaceRoot: roots.workspace,
-          workingDirectory,
-          storageRoot: roots.storage,
-        },
-      );
+  const opening =
+    entry.registration === null
+      ? null
+      : yield* buildTemplateInputs(
+          config,
+          modelConfig.provider === ModelProvider.ANTHROPIC,
+          {
+            // The session's own roots, handed to prompt assembly as data, so
+            // the working directory and memories resolve in this project, not
+            // the calling fiber's.
+            workspaceRoot: roots.workspace,
+            workingDirectory,
+            storageRoot: roots.storage,
+          },
+        );
 
   const launch: RunLaunch = {
     runId,
@@ -247,12 +247,11 @@ const openAgent = Effect.fn('executeAgent.open')(function* (
   { definition, options }: AgentLaunch,
   runId: RunId,
 ) {
-  const resume = options.registration === undefined;
   const launch = yield* buildAgentLaunchContext(definition, runId, options);
   // Said as the launch opens, before the model binds: a host's e2e reads
   // the service's log for it, and a launch refused for want of a key
   // still names the run it was asked for.
-  if (!resume)
+  if (launch.entry.registration !== null)
     yield* Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
       Effect.annotateLogs({
         data: {
@@ -275,14 +274,13 @@ const openAgent = Effect.fn('executeAgent.open')(function* (
       ),
     ),
   );
-  const opening = yield* openToolUse({ resume }).pipe(Effect.provide(services));
+  const opening = yield* openToolUse().pipe(Effect.provide(services));
   return {
     activation: opening.activation,
     description: definition.description,
     launch,
     services,
     opening,
-    resume,
   };
 });
 
@@ -308,20 +306,26 @@ const runAgent = Effect.fn('executeAgent.run')(function* ({
   launch,
   services,
   opening,
-  resume,
   description,
 }: OpenedAgent) {
   const { runId, config } = launch;
   const { parent, awaited } = launch.entry;
   const labelled = parent === null && (yield* LabelsRootRuns);
-  const flow = runToolUse({ resume }, opening).pipe(Effect.provide(services));
+  const flow = runToolUse(opening).pipe(Effect.provide(services));
   const budgeted =
     parent === null || awaited
       ? flow
       : Effect.flatMap(ChildRunBudget, (budget) => budget.withPermits(1)(flow));
   // A labelled run is a root, so its flow takes no budget permit.
   return yield* labelled
-    ? budgeted.pipe(withSessionDescription(runId, config, description, resume))
+    ? budgeted.pipe(
+        withSessionDescription(
+          runId,
+          config,
+          description,
+          launch.entry.registration === null,
+        ),
+      )
     : budgeted;
 });
 

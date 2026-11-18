@@ -27,6 +27,7 @@ import {
   SUBSCRIPTION_ROUTES,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
+import type { HostFailed } from '@texra/hosts/uiHosts';
 import {
   codexAccountLabel,
   type SubscriptionAuthStatus,
@@ -70,12 +71,13 @@ export interface SubscriptionSignInPresenter {
   /**
    * Show (and normally open) the loopback consent URL. The program runs to
    * completion before the callback wait begins, so a host may block on a
-   * browser-choice dialog. Fail to cancel the sign-in; fail with
-   * {@link LoopbackTransportUnavailableError} when no browser could be
-   * reached at all, which is what lets `'auto'` fall back to the device-code
-   * transport.
+   * browser-choice dialog. Fail with `Cancelled` to cancel the sign-in, and
+   * with `HostFailed` when the URL could not be handed to a browser (the
+   * open failed, or the copy for another browser did): the sign-in then
+   * goes on with a one-time device code where the provider has one. The
+   * host only reports; the sign-in decides what follows.
    */
-  presentSignInUrl(url: string): Effect.Effect<void, Error>;
+  presentSignInUrl(url: string): Effect.Effect<void, Cancelled | HostFailed>;
 }
 
 /** A signed-in (or known-signed-out) subscription account, host-neutral. */
@@ -252,7 +254,22 @@ function defineSubscriptionProvider<Id extends SubscriptionProviderId>({
         options.transport === 'device' && signInWithDeviceCode !== undefined
           ? yield* deviceCodeLogin(signInWithDeviceCode, options)
           : yield* subscription
-              .signInWithBrowser((url) => options.present.presentSignInUrl(url))
+              .signInWithBrowser((url) =>
+                // A browser the host could not reach is the loopback route
+                // failing before anything was asked of the user, the same as
+                // a callback port that could not be bound. Worded from the
+                // capability's name alone: a host's message may hold the
+                // URL, which can carry a code.
+                options.present.presentSignInUrl(url).pipe(
+                  Effect.catchTag('HostFailed', (failure) =>
+                    Effect.fail(
+                      new LoopbackTransportUnavailableError({
+                        message: `Could not open a browser for ${descriptor.displayName} sign-in (${failure.member} failed).`,
+                      }),
+                    ),
+                  ),
+                ),
+              )
               .pipe(
                 Effect.catchIf(
                   (error): error is LoopbackTransportUnavailableError =>
@@ -427,4 +444,26 @@ export function subscriptionAuthStatus(
     accountId: status.accountId,
     preferSubscription: provider.isPreferSubscription(stores),
   }));
+}
+
+/**
+ * Every subscription's {@link subscriptionAuthStatus}, keyed by its
+ * provider: the record the settings views and the terminal's account
+ * surfaces read. One field per provider, so a provider added to the wire
+ * set without a status here fails to compile.
+ */
+export function subscriptionAuthStatuses(
+  stores: SettingsStores,
+): Effect.Effect<
+  Readonly<Record<SubscriptionProviderId, SubscriptionAuthStatus>>,
+  SubscriptionStatusError,
+  SubscriptionAccounts
+> {
+  return Effect.all(
+    {
+      chatgpt: subscriptionAuthStatus('chatgpt', stores),
+      grok: subscriptionAuthStatus('grok', stores),
+    },
+    { concurrency: 'unbounded' },
+  );
 }

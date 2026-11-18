@@ -31,12 +31,6 @@ import type { Session } from '@texra-ai/harness';
 /** Frames buffered ahead of the port before the framer suspends. */
 const FRAME_BUFFER = 64;
 
-/** What a framer reads: the session's view, whose `watch` is the ordered
- *  input reader. */
-interface FramerSource {
-  readonly view: Pick<Session['view'], 'current' | 'watch'>;
-}
-
 /** One batch as the subscriber takes it: the rows and chunks of aggregates
  *  it did not name left out, adjacent chunks of one row merged. */
 function framed(
@@ -76,11 +70,11 @@ function framed(
 
 /**
  * The frames that answer one `Subscribe`: a stream that replays, then
- * tails until interrupted. Pure over its source, so a test drives it under
+ * tails until interrupted. Pure over the view, so a test drives it under
  * `TestClock`.
  */
 export function frameSubscription(
-  source: FramerSource,
+  view: Pick<Session['view'], 'current' | 'watch'>,
   subscribe: Subscribe,
 ): Stream.Stream<EventsFrame> {
   const named = new Set(subscribe.aggregates.map((entry) => entry.id));
@@ -89,8 +83,8 @@ export function frameSubscription(
     // reads below, on a cold mount; the subscriber's own on a resubscribe.
     // The watch holds the subscriber's transcript set while it runs.
     const tailFrom =
-      subscribe.cursor === 0 ? source.view.current().cursor : subscribe.cursor;
-    return source.view
+      subscribe.cursor === 0 ? view.current().cursor : subscribe.cursor;
+    return view
       .watch(subscribe.aggregates, {
         cursor: tailFrom,
         debug: subscribe.debug,

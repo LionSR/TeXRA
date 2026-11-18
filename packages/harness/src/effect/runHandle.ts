@@ -8,7 +8,7 @@
  */
 import { Context, Effect, type Scope, Stream, SubscriptionRef } from 'effect';
 
-import { Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { replayTrace } from '@controllers/session/runTrace';
@@ -120,7 +120,9 @@ export function runView(
       Effect.as(undefined),
     ),
     Effect.suspend(
-      () => Context.get(session, Runs).get(runId)?.drained ?? Effect.undefined,
+      () =>
+        Context.get(session, RunRegistry).get(runId)?.drained ??
+        Effect.undefined,
     ),
   );
   // Read once the view applied it, so a view read afterwards includes it.

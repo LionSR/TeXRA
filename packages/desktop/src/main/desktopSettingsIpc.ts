@@ -1,9 +1,6 @@
 import { Effect, type Scope } from 'effect';
 
-import {
-  LoopbackTransportUnavailableError,
-  type SubscriptionDeviceCodePrompt,
-} from '@texra-ai/llm/node';
+import type { SubscriptionDeviceCodePrompt } from '@texra-ai/llm/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { HostFailed } from '@texra/hosts/uiHosts';
 import { SettingsViewInboundMessageSchema } from '@texra/shared/settingsView/settingsViewMessages';
@@ -93,9 +90,9 @@ export function createDesktopSettingsIpc(
       );
 
     /**
-     * The loopback browser is the normal route; failing to reach one is a
-     * transport failure, so the shared flow retries with a device code, which
-     * this window shows in its own dialog.
+     * The loopback browser is the normal route; the shared flow retries with
+     * a device code when the browser could not be opened, which this window
+     * shows in its own dialog.
      */
     const signInSubscription = (providerId: SubscriptionProviderId) => {
       const provider = subscriptionProvider(providerId);
@@ -113,28 +110,23 @@ export function createDesktopSettingsIpc(
               ),
             ),
           presentSignInUrl: (url) =>
-            signInPresentation.openSubscriptionSignInUrl(url).pipe(
-              Effect.mapError(
-                (failure) =>
-                  new LoopbackTransportUnavailableError({
-                    message: `Could not open a browser for ${displayName} sign-in.`,
-                    cause: failure.cause,
-                  }),
-              ),
-              Effect.andThen(
-                Effect.sync(() =>
-                  spawn(
-                    reportPresentation(
-                      displayName,
-                      signInPresentation.presentSubscriptionSignInUrl(
-                        url,
+            signInPresentation
+              .openSubscriptionSignInUrl(url)
+              .pipe(
+                Effect.andThen(
+                  Effect.sync(() =>
+                    spawn(
+                      reportPresentation(
                         displayName,
+                        signInPresentation.presentSubscriptionSignInUrl(
+                          url,
+                          displayName,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
         },
       });
     };

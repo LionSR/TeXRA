@@ -11,15 +11,14 @@ import { Effect } from 'effect';
 import {
   InstalledPlugins,
   ToolAvailability,
+  ToolCatalog,
   type PluginReview,
 } from '@texra-ai/harness/host';
-import { setCliToolEnabled } from '@cli/runtime/tools';
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import { buildPluginRows } from '@texra/controllers/settingsView/pluginRows';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 import {
   PLUGINS_PAGE,
-  PLUGINS_TUI,
   pluginRowKey,
   pluginRowName,
   pluginRowProblem,
@@ -29,6 +28,7 @@ import {
   pluginRowTrust,
   pluginRowUsedBy,
 } from '@ui/copy/plugins';
+import { PLUGINS_TUI } from '../commands/pluginsCopy';
 
 import { AsyncListForm } from './_shared/ListForm';
 import { useChatProcess } from '../chatProcess';
@@ -77,9 +77,10 @@ export function PluginsListForm(
     });
 
   const toggle = (row: PluginRow) => {
+    // A plugin's bundled agents follow its switch (`pluginCatalogLayer`).
     if (row.kind === 'texra')
-      return setCliToolEnabled(row.item.id, row.item.switch === 'off').pipe(
-        Effect.asVoid,
+      return Effect.flatMap(ToolCatalog, (catalog) =>
+        catalog.setEnabled(row.item.id, row.item.switch === 'off'),
       );
     if (row.kind === 'installed')
       // On and trusted switches off; on but changed since it was trusted

@@ -1,10 +1,5 @@
 import * as path from 'node:path';
 import { runDirUnder } from '@texra-ai/harness/plugins';
-// toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
-// swap; safe here since these paths come from getSafeDocumentRelativePath /
-// path.relative on the workflow's own generated outputs, never user input.
-import { toPosixPath } from '@texra-ai/harness/host';
-import { meansAbsent, isNotADirectoryError } from '@texra-ai/harness/node';
 
 import { Effect, FileSystem, Path, PlatformError, Schema } from 'effect';
 
@@ -20,170 +15,96 @@ import {
   type CliRunResult,
   type CliDocumentTaskResult,
 } from '@cli/schemas/cliOutput';
-import { stripRevisionDir } from '@texra/shared/constants/revisionLayout';
-import { getSafeDocumentRelativePath } from '@texra/utils/files/outputFileUtils';
 import {
   finalDocumentOutput,
   type DocumentsResult,
-  type OutputFileSummary,
 } from '@texra/shared/plugins/documentOutputs';
+import {
+  checkOutputDestination,
+  deliverDocumentTaskOutputs,
+  type DeliveryReason,
+  type OutputDeliveryRejected,
+  type OutputDestination,
+} from '@texra/controllers/progressView/documentTaskOutputs';
 
 import { CliUsageError, type CliContext } from '../platform/cliContext';
-import { STDIN_DOCUMENT_TASK_INPUT_BASENAME } from './documentTaskInputs';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
 
-type OutputFlag = '--output' | '--output-dir';
+/** A destination the person cannot write, in the words of the flag that
+ *  named it. */
+function destinationMessage(
+  reason: Extract<DeliveryReason, { _tag: 'Destination' }>,
+): string {
+  const directory = reason.destination === 'directory';
+  const flag = directory ? '--output-dir' : '--output';
+  const target = reason.path;
+  switch (reason.problem) {
+    case 'parentIsFile':
+      return directory
+        ? `--output-dir is not a directory (a parent path component is a file): ${target}`
+        : `--output: a parent path component is a file: ${target}`;
+    case 'wrongKind':
+      return directory
+        ? `--output-dir is not a directory: ${target}`
+        : `--output is a directory; use --output-dir or pick a file path: ${target}`;
+    case 'readOnlyFileSystem':
+      return `${flag} is not writable (read-only file system): ${target}`;
+    case 'permissionDenied':
+      return `${flag} is not writable (permission denied): ${target}`;
+    case 'cannotCreate':
+      return directory
+        ? `--output-dir cannot be created: ${target}`
+        : `--output parent directory cannot be created: ${target}`;
+  }
+}
 
-const notADirectory = (error: PlatformError.PlatformError): boolean =>
-  error.reason._tag === 'BadResource' &&
-  isNotADirectoryError(error.reason.cause);
-
-/** The errno a platform error carries, when the host reported one. */
-function errnoCode(error: PlatformError.PlatformError): string | undefined {
-  const { cause } = error.reason;
-  return cause instanceof Error &&
-    'code' in cause &&
-    typeof cause.code === 'string'
-    ? cause.code
-    : undefined;
+/** A delivery the CLI cannot make, worded for its output: a destination the
+ *  flags named is a usage error; a completed task that wrote too little is
+ *  a rejection of its result. */
+function deliveryError(
+  reason: DeliveryReason,
+  terminalStatus: string,
+): CliUsageError | Rejected {
+  switch (reason._tag) {
+    case 'Destination':
+      return new CliUsageError({ message: destinationMessage(reason) });
+    case 'NoOutputs':
+      return new Rejected({
+        reason:
+          reason.destination === 'directory'
+            ? `Program ${terminalStatus} without generated outputs; nothing was copied to ${reason.path}.`
+            : `Program ${terminalStatus} without a generated output; ${reason.path} was not written.`,
+      });
+    case 'MissingOutputs':
+      return new Rejected({
+        reason: `Program ${terminalStatus} without expected ${pluralize(reason.missing.length, 'output')}: ${reason.missing.join(', ')}; copied ${reason.copied} of ${formatResultCount(reason.expected, 'expected output')} to ${reason.directory}.`,
+      });
+  }
 }
 
 /**
- * The usage error a filesystem failure on a user-supplied output path maps
- * to: the user named a path this process may not create or write, which is
- * not a TeXRA defect. Any other failure stays as it is and reads as a bug.
+ * Fail fast, before the run starts, on an `--output` file or `--output-dir`
+ * directory the final copy would reject; nothing to check when the flag is
+ * not set.
  */
-function outputPathError(
-  target: string,
-  flagLabel: OutputFlag,
-  error: PlatformError.PlatformError,
-): CliUsageError | PlatformError.PlatformError {
-  if (notADirectory(error) || error.reason._tag === 'AlreadyExists') {
-    return new CliUsageError({
-      message:
-        flagLabel === '--output-dir'
-          ? `--output-dir is not a directory (a parent path component is a file): ${target}`
-          : `--output: a parent path component is a file: ${target}`,
-    });
-  }
-  const code = errnoCode(error);
-  if (code === 'EROFS') {
-    return new CliUsageError({
-      message: `${flagLabel} is not writable (read-only file system): ${target}`,
-    });
-  }
-  if (error.reason._tag === 'PermissionDenied' || code === 'EPERM') {
-    return new CliUsageError({
-      message: `${flagLabel} is not writable (permission denied): ${target}`,
-    });
-  }
-  if (meansAbsent(error)) {
-    return new CliUsageError({
-      message:
-        flagLabel === '--output-dir'
-          ? `--output-dir cannot be created: ${target}`
-          : `--output parent directory cannot be created: ${target}`,
-    });
-  }
-  return error;
-}
-
-/**
- * Probe `target`, materialize the directory that the eventual output write
- * requires, and check that the write will be allowed, so a path the run
- * cannot write fails before the model is billed. Using the same recursive
- * mkdir operation as the writer avoids platform-specific ancestor traversal:
- * it handles missing depth, Windows ENOENT-through-file behavior, and symlink
- * resolution natively. The Path service serves dirname so tests can supply
- * NodePath.layerWin32; at runtime NodePath.layer is node:path, so it agrees
- * with path.resolve.
- */
-const probeOutputPath = Effect.fn('probeOutputPath')(
-  function* (
-    target: string,
-    flagLabel: OutputFlag,
-  ): Effect.fn.Return<
-    FileSystem.File.Info | null,
-    PlatformError.PlatformError,
-    FileSystem.FileSystem | Path.Path
-  > {
-    const fs = yield* FileSystem.FileSystem;
-    const pathService = yield* Path.Path;
-    const requiredDirectory =
-      flagLabel === '--output-dir' ? target : pathService.dirname(target);
-    const stats = yield* fs
-      .stat(target)
-      .pipe(Effect.catchIf(meansAbsent, () => Effect.succeed(null)));
-    if (stats === null) {
-      yield* fs.makeDirectory(requiredDirectory, { recursive: true });
-    }
-    // A target of the wrong kind (a file for --output-dir, a directory for
-    // --output) is the caller's report, which names the real problem; a
-    // writability answer about it would not.
-    if (
-      stats !== null &&
-      (stats.type === 'Directory') !== (flagLabel === '--output-dir')
-    ) {
-      return stats;
-    }
-    // An existing --output file is overwritten in place; anything else is
-    // written into the required directory.
-    yield* fs.access(
-      stats !== null && flagLabel === '--output' ? target : requiredDirectory,
-      { writable: true },
-    );
-    return stats;
-  },
-  (effect, target, flagLabel) =>
-    Effect.mapError(effect, (error) =>
-      outputPathError(target, flagLabel, error),
-    ),
-);
-
-/** `--output-dir <path>` must point at a directory (or not exist yet). */
-export function assertOutputDirAvailable(
-  outputDir: string | undefined,
+export function assertOutputDestinationAvailable(
+  kind: OutputDestination['kind'],
+  target: string | undefined,
   cwd: string,
 ): Effect.Effect<
   void,
-  CliUsageError | PlatformError.PlatformError,
+  CliUsageError | OutputDeliveryRejected | PlatformError.PlatformError,
   FileSystem.FileSystem | Path.Path
 > {
-  if (!outputDir) return Effect.void;
-  const target = path.resolve(cwd, outputDir);
-  return probeOutputPath(target, '--output-dir').pipe(
-    Effect.flatMap((stats) =>
-      stats && stats.type !== 'Directory'
-        ? Effect.fail(
-            new CliUsageError({
-              message: `--output-dir is not a directory: ${target}`,
-            }),
-          )
-        : Effect.void,
-    ),
-  );
-}
-
-/** `--output <path>` must end at a writable file path (or not exist yet). */
-export function assertOutputFileAvailable(
-  outputFile: string | undefined,
-  cwd: string,
-): Effect.Effect<
-  void,
-  CliUsageError | PlatformError.PlatformError,
-  FileSystem.FileSystem | Path.Path
-> {
-  if (!outputFile) return Effect.void;
-  const target = path.resolve(cwd, outputFile);
-  return probeOutputPath(target, '--output').pipe(
-    Effect.flatMap((stats) =>
-      stats?.type === 'Directory'
-        ? Effect.fail(
-            new CliUsageError({
-              message: `--output is a directory; use --output-dir or pick a file path: ${target}`,
-            }),
-          )
-        : Effect.void,
+  if (!target) return Effect.void;
+  // A check rejects only for its destination.
+  return checkOutputDestination({ kind, path: target }, cwd).pipe(
+    Effect.catchTag('OutputDeliveryRejected', (rejected) =>
+      Effect.fail(
+        rejected.reason._tag === 'Destination'
+          ? new CliUsageError({ message: destinationMessage(rejected.reason) })
+          : rejected,
+      ),
     ),
   );
 }
@@ -192,103 +113,6 @@ interface DocumentTaskOutputResolutionOptions {
   readonly expectedOutputFiles?: readonly string[];
   /** Storage root of the session that ran the workflow. */
   readonly storageRoot: string;
-}
-
-function outputCopyRelativePathForExpectedOutput(
-  output: OutputFileSummary,
-  expectedRelativePaths: readonly string[],
-): string {
-  const generatedRelativePath = getSafeDocumentRelativePath(
-    stripRevisionDir(
-      toPosixPath(output.relativePath || path.basename(output.absolutePath)),
-    ),
-  );
-  if (expectedRelativePaths.length === 0) return generatedRelativePath;
-
-  const generatedName = path.posix.basename(toPosixPath(generatedRelativePath));
-  const normalizedOriginalPath =
-    output.originalPath == null ? undefined : toPosixPath(output.originalPath);
-  const matchingExpectedPaths =
-    normalizedOriginalPath == null
-      ? []
-      : expectedRelativePaths.filter((expected) => {
-          const normalizedExpected = toPosixPath(expected);
-          if (path.posix.basename(normalizedExpected) !== generatedName) {
-            return false;
-          }
-          return (
-            normalizedOriginalPath === normalizedExpected ||
-            normalizedOriginalPath.endsWith(`/${normalizedExpected}`)
-          );
-        });
-  return matchingExpectedPaths.length === 1
-    ? matchingExpectedPaths[0]
-    : generatedRelativePath;
-}
-
-function commonDirectory(paths: readonly string[]): string {
-  const [firstPath, ...restPaths] = paths;
-  if (firstPath === undefined) return '';
-  const first = path.resolve(firstPath).split(path.sep);
-  const rest = restPaths.map((file) => path.resolve(file).split(path.sep));
-  let sharedLength = 0;
-  while (
-    sharedLength < first.length &&
-    rest.every((parts) => parts[sharedLength] === first[sharedLength])
-  ) {
-    sharedLength += 1;
-  }
-  return (
-    first.slice(0, Math.max(1, sharedLength)).join(path.sep) ||
-    path.parse(firstPath).root
-  );
-}
-
-/**
- * The output names an `--output-dir` run expects when its program declares
- * no outputs of its own (`Program.outputs`): one per input, with a
- * stdin-materialized input reported under its stable basename.
- *
- * Computed at launch, while the stdin materialization path is still known, and
- * persisted with the run so a resume reports the same names. The program's
- * own outputs take precedence over these at output finalization.
- */
-export function inputDerivedOutputFiles(
-  inputFiles: readonly string[],
-  /** The path this run materialized stdin to, when it read stdin. */
-  stdinInputPath?: string,
-): readonly string[] {
-  const absoluteInputs = inputFiles
-    .filter((input) => path.isAbsolute(input))
-    .map((input) => path.resolve(input));
-  const absoluteRoot = commonDirectory(absoluteInputs.map(path.dirname));
-
-  return inputFiles.map((input) => {
-    if (stdinInputPath !== undefined && input === stdinInputPath) {
-      return STDIN_DOCUMENT_TASK_INPUT_BASENAME;
-    }
-    if (!path.isAbsolute(input)) return getSafeDocumentRelativePath(input);
-    return getSafeDocumentRelativePath(path.relative(absoluteRoot, input));
-  });
-}
-
-/** Copy one generated output to its destination, creating the parent path. */
-function copyOutputFile(
-  source: string,
-  targetPath: string,
-  flagLabel: OutputFlag,
-): Effect.Effect<
-  void,
-  CliUsageError | PlatformError.PlatformError,
-  FileSystem.FileSystem
-> {
-  return FileSystem.FileSystem.use((fs) =>
-    fs
-      .makeDirectory(path.dirname(targetPath), { recursive: true })
-      .pipe(Effect.andThen(fs.copyFile(source, targetPath))),
-  ).pipe(
-    Effect.mapError((error) => outputPathError(targetPath, flagLabel, error)),
-  );
 }
 
 export const resolveDocumentTaskOutput = Effect.fn('resolveDocumentTaskOutput')(
@@ -318,69 +142,29 @@ export const resolveDocumentTaskOutput = Effect.fn('resolveDocumentTaskOutput')(
     // Only completed runs may publish to user-requested destinations. Partial or
     // rejected artifacts remain inspectable in run storage through baseResult.
     if (result.outcome !== RUN_OUTCOME.COMPLETED) return baseResult;
-    const terminalStatus = runOutcomeToCliRunStatus(result.outcome);
-    if (documents.outputs.length === 0 && (outputFile || outputDir)) {
-      return yield* new Rejected({
-        reason: outputDir
-          ? `Program ${terminalStatus} without generated outputs; nothing was copied to ${outputDir}.`
-          : `Program ${terminalStatus} without a generated output; ${outputFile} was not written.`,
-      });
-    }
-
-    if (outputDir) {
-      const targetRoot = path.resolve(context.cwd, outputDir);
-      const expectedRelativePaths = (options.expectedOutputFiles ?? []).map(
-        (file) => getSafeDocumentRelativePath(file),
-      );
-      const outputsByRelativePath = new Map<string, OutputFileSummary>();
-      for (const output of documents.outputs) {
-        const relativePath = outputCopyRelativePathForExpectedOutput(
-          output,
-          expectedRelativePaths,
-        );
-        const existing = outputsByRelativePath.get(relativePath);
-        if (existing == null || output.round > existing.round) {
-          outputsByRelativePath.set(relativePath, output);
+    const destination: OutputDestination | undefined = outputDir
+      ? {
+          kind: 'directory',
+          path: outputDir,
+          expected: options.expectedOutputFiles ?? [],
         }
-      }
-
-      // Each output has its own target, so the copies run at once.
-      const copiedOutputs = yield* Effect.forEach(
-        outputsByRelativePath,
-        ([relativePath, output]) => {
-          const targetPath = path.join(targetRoot, relativePath);
-          return copyOutputFile(
-            output.absolutePath,
-            targetPath,
-            '--output-dir',
-          ).pipe(Effect.as(targetPath));
-        },
-        { concurrency: 8 },
-      );
-
-      const missing = expectedRelativePaths.filter(
-        (expected) => !outputsByRelativePath.has(expected),
-      );
-      if (missing.length > 0) {
-        return yield* new Rejected({
-          reason: `Program ${terminalStatus} without expected ${pluralize(missing.length, 'output')}: ${missing.join(', ')}; copied ${copiedOutputs.length} of ${formatResultCount(expectedRelativePaths.length, 'expected output')} to ${targetRoot}.`,
-        });
-      }
-
-      return { ...baseResult, copiedOutputs };
-    }
-
-    const finalOutput = finalDocumentOutput(documents.outputs);
-    if (!outputFile || !finalOutput) {
-      return baseResult;
-    }
-
-    const targetPath = path.resolve(context.cwd, outputFile);
-    if (path.resolve(finalOutput.absolutePath) !== targetPath) {
-      yield* copyOutputFile(finalOutput.absolutePath, targetPath, '--output');
-    }
-
-    return { ...baseResult, copiedOutput: targetPath };
+      : outputFile
+        ? { kind: 'file', path: outputFile }
+        : undefined;
+    if (destination === undefined) return baseResult;
+    const terminalStatus = runOutcomeToCliRunStatus(result.outcome);
+    const copied = yield* deliverDocumentTaskOutputs(
+      documents.outputs,
+      destination,
+      context.cwd,
+    ).pipe(
+      Effect.catchTag('OutputDeliveryRejected', ({ reason }) =>
+        Effect.fail(deliveryError(reason, terminalStatus)),
+      ),
+    );
+    return destination.kind === 'directory'
+      ? { ...baseResult, copiedOutputs: [...copied] }
+      : { ...baseResult, copiedOutput: copied[0] };
   },
 );
 

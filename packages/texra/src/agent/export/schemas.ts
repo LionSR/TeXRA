@@ -7,10 +7,7 @@
  */
 
 import type { ExportNode } from '@texra-ai/harness/host';
-import type {
-  AgentConfig,
-  MediaAttachmentKind,
-} from '@texra-ai/harness/schemas';
+import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 /** The fields of the run's config an export's header shows. */
 export type ExportConfig = Pick<
@@ -23,14 +20,6 @@ export type ExportConfig = Pick<
   | 'contextFiles'
   | 'outputFiles'
 >;
-
-/**
- * Attachment kinds a renderer must be able to label: the canonical media
- * attachment vocabulary, since the transcript row and the exported document
- * describe the same attachment, so a kind added there must also gain a label
- * in every format spec.
- */
-export type ExportAttachmentType = MediaAttachmentKind;
 
 /** A run's export input: its setup and its conversation's nodes. */
 export interface ChatExportInput {

@@ -8,21 +8,21 @@ import { Secrets } from '@texra-ai/harness/plugins';
 import { createFakeUIHosts } from '@test/support/fakeUiPorts';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
+import { commitProviderKey } from '@texra/controllers/settingsView/providerKeyActions';
 
-describe('SettingsProfileKeyController', () => {
+describe('provider key actions', () => {
   // Regression pin: the placeholder guard used to live only in the CLI, so the
   // graphical hosts happily wrote `sk-xxxxxx` into the secret store.
   it.effect('reports a placeholder key instead of storing it', () =>
     Effect.gen(function* () {
       const secrets = new FakeSecrets();
-      const controller = new SettingsProfileKeyController({
-        dialogs: createFakeUIHosts({ confirmResponses: [true] }).dialogs,
-        stores: makeFakeSettingsStores().stores,
-      });
-
       const failure = yield* Effect.flip(
-        controller.commitProviderKey('openai', 'sk-xxxxxx'),
+        commitProviderKey(
+          createFakeUIHosts({ confirmResponses: [true] }).dialogs,
+          makeFakeSettingsStores().stores,
+          'openai',
+          'sk-xxxxxx',
+        ),
       ).pipe(Effect.provide(Secrets.layer(secrets)));
 
       assert.equal(yield* secrets.get('apiKey.openai'), undefined);

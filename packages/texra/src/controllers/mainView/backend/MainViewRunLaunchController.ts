@@ -14,6 +14,7 @@ import {
   type AgentConfig,
   Rejected,
 } from '@texra-ai/harness/schemas';
+import { pickDefaultToolUseAgent } from '@texra/shared/constants/agents';
 import { isPastedImage } from '@texra/shared/utils/pastedImageName';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
@@ -47,9 +48,9 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
      *  resolved from an ambient read at this depth. */
     roots: LaunchRoots,
   ): Effect.fn.Return<AgentConfig, Rejected | StateReadFailed, AgentCatalog> {
-    // The form sends an empty agent or model while nothing is selected;
-    // say so in the form's words rather than as a schema issue.
-    if (!launch.agent || !launch.model)
+    // The form sends an empty model while nothing is selected; say so in
+    // the form's words rather than as a schema issue.
+    if (!launch.model)
       return yield* new Rejected({
         reason: 'Choose an agent and a model first.',
       });
@@ -57,7 +58,11 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
     // resolution shows the agent-config banner. A failed load refuses the
     // launch.
     const workspaceAgents = (yield* AgentCatalog).workspaceAgents(roots);
-    const entry = yield* workspaceAgents.forLaunch(launch.agent).pipe(
+    const visible = yield* workspaceAgents.visible();
+    // An empty agent is the person choosing none: the default of the agents
+    // the form lists, the one its agent chip shows.
+    const agent = launch.agent || pickDefaultToolUseAgent(visible);
+    const entry = yield* workspaceAgents.forLaunch(agent).pipe(
       Effect.catchTags({
         AgentNotFound: () => Effect.succeed(null),
         AgentCatalogLoadError: (failed) =>
@@ -71,15 +76,13 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
     // shows no agent for it, so its launch is refused.
     if (
       entry !== null &&
-      !(yield* workspaceAgents.visible()).some(
-        (shown) => agentKeyOf(shown) === agentKeyOf(entry),
-      )
+      !visible.some((shown) => agentKeyOf(shown) === agentKeyOf(entry))
     )
       return yield* new Rejected({
         reason: `Choose an agent first: ${entry.name} is hidden from the agent selector.`,
       });
     return yield* decodeLaunchConfig({
-      agent: launch.agent,
+      agent,
       model: launch.model,
       instruction,
       ...(launch.skills.length > 0 && { skills: launch.skills }),

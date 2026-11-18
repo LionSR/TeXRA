@@ -9,8 +9,8 @@ import { parseCliHistoryId } from '@cli/runtime/history';
 import { CliUsageError } from '@cli/runtime/platform/cliContext';
 import type { ConnectService } from '../state/attachedTask';
 import { RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
-import { PLUGINS_TUI } from '@ui/copy/plugins';
 
+import { PLUGINS_TUI } from './pluginsCopy';
 import { AgentListForm } from '../forms/AgentListForm';
 import {
   ApprovalPolicyForm,

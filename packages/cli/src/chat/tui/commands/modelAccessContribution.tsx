@@ -126,7 +126,7 @@ export function modelAccessContribution(): SlashCommandContribution & {
           applyCliProviderApiKey(context.stores, provider, apiKey)
         }
         onDone={(provider, modelNotice) => {
-          // The shared key controller posts the "key has been set" notice on
+          // The shared key action posts the "key has been set" notice on
           // every host; only the coding-plan tip is this surface's to write.
           if (modelNotice) appendLocalNotice(modelNotice);
           props.onDone(provider);

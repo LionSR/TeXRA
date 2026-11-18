@@ -1,7 +1,10 @@
 # One writer per project file: the desktop save and the service's runs
 
 Date: 2026-11-16
-Status: proposed, held for two decisions
+Status: proposed. The save's code is now the app's
+(`packages/texra/src/controllers/session/workspaceFileRequest.ts`, answered
+by the window's shared request body); both decisions are taken below; the
+forward to the service is the open step.
 
 Origin: LN-4 of the 2026-11-15 design red-flag audit
 (`../../evidence/2026-11-15-design-red-flags/LN-nonobvious-degradation.md`),
@@ -11,8 +14,9 @@ re-read on `main` after #14971.
 
 `withFileWriteLane` (`packages/harness/src/utils/files/fileWriteLane.ts`) is
 one lane per file per process. The desktop editor's save takes it in the
-Electron main process (`packages/desktop/src/main/desktopWorkspaceIpc.ts`,
-`writeFile`); an agent's approved edit takes it where the tool runs
+process that holds the window, the Electron main process
+(`packages/texra/src/controllers/session/workspaceFileRequest.ts`,
+`writeFile`, which the window's shared request body runs); an agent's approved edit takes it where the tool runs
 (`packages/harness/src/tools/approval/approvedWrite.ts`). A desktop window with
 a folder runs its tasks in the background service whenever the service is
 reached (`openProjectSession`, `where: 'service'`), so on macOS and Linux the
@@ -39,9 +43,8 @@ recovery, and still leaves two writers.
 1. **A new request on the harness's public session surface.** `file.write`
    joins `RuntimeRequest` (`packages/harness/src/shared/session/runtimeRequest.ts`),
    which is not run-scoped like every request there today, and its handler
-   needs the containment rules the desktop holds
-   (`resolveWorkspaceWritePath`: canonical parent, no symlinked final
-   component). That moves workspace-file containment into the harness. An
+   needs the containment rules the editor's save holds (`resolveWritable`:
+   canonical parent, no symlinked final component). That moves workspace-file containment into the harness. An
    older service answers the new kind with a parse error, so the window must
    say "update the service" rather than fail the save silently.
 2. **A save while the service link reconnects.** FB1's policy for a request
@@ -59,6 +62,26 @@ recovery, and still leaves two writers.
    Recommendation: (b). A save is the user's own work and should not depend
    on the service; the window it leaves open is the outage, which the
    service banner already shows.
+
+## Decisions taken (2026-11-18)
+
+1. **Not a harness request.** Compared: (i) `file.write` on the harness's
+   `RuntimeRequest`, served by the session in whichever process holds it,
+   with workspace-file containment moved into the harness; (ii) the app's
+   `workspaceFile` host request, one operation over the session's rooted
+   `WorkspaceFs` and the write lane, served where the window's request body
+   runs, and forwarded by the app to the service when the service holds the
+   project. Chosen: (ii). `RuntimeRequest` is run-scoped and public; what
+   the editor may list, open and save (the tree's hidden entries, agent
+   definitions opened by catalog name) is TeXRA's policy, and the service is
+   app code, so the forward needs no harness surface. The list, read and
+   write moved out of the desktop in one module; the forward is next: the
+   window sends a `write` to the service's process when `GuiSession.where`
+   is `'service'`, and the service answers it with the same operation.
+2. **(b)**, as recommended: while the link is away the window writes in its
+   own process and logs the fallback at warn. Until the forward lands, every
+   save is written in the window's process, which is this policy's outage
+   path taken always.
 
 ## First step taken
 

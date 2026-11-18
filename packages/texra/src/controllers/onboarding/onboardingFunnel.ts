@@ -9,10 +9,13 @@
  *
  * The flags are user-scoped (global state), so a fresh workspace never
  * demotes a veteran back to State 0/1: `firstRunDone` wins. The credential
- * is the shown project's: each host (extension, CLI, desktop) computes
+ * is the shown project's: each window (extension, desktop) computes
  * `hasCredential` under that project's `.env` over the process environment,
  * the key a run of that project would use, and reads and writes the flags
- * below through its `AppState` store.
+ * below through its `AppState` store. The terminal has no funnel: its chat
+ * opens on the "Connect a model" panel when no credential is usable and
+ * otherwise on the default agent. Every process that opens a session still
+ * records the first completed run ({@link recordFirstCompletedRun}).
  *
  * The derivation is {@link deriveOnboardingFunnelState}; each window's host
  * snapshot (`hostSnapshotSource.ts`) holds its inputs and follows them.
@@ -58,7 +61,7 @@ export function setOnboardingDeclined(
 }
 
 /** Whether a real run has completed (or the user skipped setup). */
-export function getFirstRunDone(state: StateStore) {
+function getFirstRunDone(state: StateStore) {
   return Settings.state(state, FIRST_RUN_DONE_KEY);
 }
 

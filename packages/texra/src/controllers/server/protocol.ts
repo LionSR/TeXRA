@@ -39,7 +39,13 @@ import { hash } from 'node:crypto';
 import { type Effect, Schema, Struct } from 'effect';
 import { Rpc, RpcGroup, RpcSchema } from 'effect/rpc';
 
-import { LaunchRefused, type RunRecords } from '@texra-ai/harness';
+import {
+  LaunchRefused,
+  ResumeRefused,
+  RunFailure,
+  ToolsRefused,
+  type RunRecords,
+} from '@texra-ai/harness';
 import {
   AgentConfigSchema,
   AssembleTraceResultSchema,
@@ -133,20 +139,33 @@ export type TaskSummary = typeof TaskSummarySchema.Type;
 /** The run a `task.start` or `task.resume` reached, and the commit of the
  *  activation it reached (`Run.activation`): a window's handle is for that
  *  activation, whatever later activation the run has by then. */
-const TaskStarted = Schema.Struct({
+export const TaskStarted = Schema.Struct({
   runId: RunIdSchema,
   activation: CommitOrdinalSchema,
 });
 
-/** Why `task.start` or `task.resume` did not reach its run, past a refused
- *  launch (`LaunchRefused`, carried as itself). The service shows it
- *  nowhere: the window that asked presents it. */
+/** Why `task.start` or `task.resume` did not reach its run for a reason of
+ *  the service's own: it is shutting down, or could not open the project.
+ *  The service shows it nowhere: the window that asked presents it. */
 export class TaskFailed extends Schema.TaggedError<TaskFailed>()('TaskFailed', {
   message: Schema.String,
 }) {}
 
-/** What `task.start` and `task.resume` fail with. */
-const TaskStartFailed = Schema.Union([TaskFailed, LaunchRefused]);
+/** What `task.start` fails with: the service's own reason, or what the
+ *  session's start failed with, as the class it is, so a window presents
+ *  it as it would its own session's. */
+const TaskStartFailed = Schema.Union([
+  TaskFailed,
+  LaunchRefused,
+  ToolsRefused,
+  RunFailure,
+]);
+/** What `task.resume` fails with: a start's failures, and the run that
+ *  will not continue. */
+const TaskResumeFailed = Schema.Union([
+  ...TaskStartFailed.members,
+  ResumeRefused,
+]);
 
 /** Why a run's records have no answer: the service could not open the
  *  project, or its store refused the read. */
@@ -260,7 +279,7 @@ export const TexraRpcs = RpcGroup.make(
     },
     /** The run that resumed: the asked one, or the parent that owns it. */
     success: TaskStarted,
-    error: TaskStartFailed,
+    error: TaskResumeFailed,
   }),
   /** What the task's activation at `activation` ends with, once it ends:
    *  its stored end (`Run.result`, which fails when none was stored or it

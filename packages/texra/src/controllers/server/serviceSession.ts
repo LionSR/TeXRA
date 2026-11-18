@@ -6,9 +6,14 @@
  * listing folded here, and a watch is the service's feed, read back as the
  * fold inputs it carries.
  */
-import { type RunId, Rejected } from '@texra-ai/harness/schemas';
+import {
+  type RunId,
+  Rejected,
+  type SessionView,
+} from '@texra-ai/harness/schemas';
 import {
   Cause,
+  Deferred,
   Effect,
   Exit,
   Fiber,
@@ -56,9 +61,11 @@ import {
   type ServiceClient,
   type ServiceLink,
 } from './client';
+import type { EventsFrame } from '@texra/shared/session/sessionFrames';
 import {
   RUN_RECORDS,
   type ProjectStateFailed,
+  type TaskSummary,
   type TaskFailed,
   type TaskRecordsFailed,
 } from './protocol';
@@ -223,9 +230,11 @@ export const serviceProjectState = (
 const runFailure = (message: string) =>
   new RunFailure({ cause: new Error(message), message });
 
-/** The service's answer to a start or resume it did not run, as the run's
- *  own failure, worded `prefix` and its message; a refused launch passes
- *  as itself, for this window's presenter to show with its notice. */
+/** The service's own reason for a start or resume it did not run (it is
+ *  shutting down, the project would not open), as the run's failure,
+ *  worded `prefix` and its message. What the session's start or resume
+ *  failed with passes as itself, for this window to present as it would
+ *  its own session's. */
 const taskFailed = (prefix: string) => (error: TaskFailed) =>
   Effect.fail(runFailure(`${prefix}${error.message}`));
 
@@ -580,3 +589,56 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           ),
   };
 });
+
+/**
+ * The live view of `task`'s session, as the service's frames build it: one
+ * level per change, with `task`'s transcript named so its rows load. Each
+ * frame is handed to `onFrame` before it is applied. The stream fails with
+ * {@link ServiceUnavailable} when the service stops sending; it never ends on
+ * its own. The session view's graph lives as long as the stream, one per
+ * watch. Unlike a window's session view, which follows its link through
+ * a reconnect, it ends with the client it was given: a terminal attached to
+ * a task says the service went, rather than waiting on the next one.
+ */
+export function watchTask(
+  client: ServiceClient,
+  task: Pick<TaskSummary, 'workspace' | 'runId'>,
+  onFrame: (frame: EventsFrame) => void = () => {},
+): Stream.Stream<SessionView, ServiceUnavailable> {
+  return Stream.unwrap(
+    Effect.gen(function* () {
+      // The watch only ends when the service does: the task did not end.
+      const ended = yield* Deferred.make<never, ServiceUnavailable>();
+      const endWith = (reason: string) =>
+        Deferred.fail(
+          ended,
+          new ServiceUnavailable({
+            reason: `The TeXRA service stopped sending task ${task.runId}: ${reason}`,
+          }),
+        );
+      const view = yield* remoteSessionView(
+        task.workspace,
+        (aggregates, cursor, debug) =>
+          client['task.watch']({
+            workspace: task.workspace,
+            subscribe: { debug, cursor, aggregates },
+          }).pipe(
+            Stream.tap((frame) => Effect.sync(() => onFrame(frame))),
+            Stream.map((frame) => frame.inputs),
+            // Each end is said through `ended`, which ends the levels below.
+            Stream.concat(
+              Stream.fromEffect(endWith('the service closed the watch.')).pipe(
+                Stream.drain,
+              ),
+            ),
+            Stream.catch((error) =>
+              Stream.fromEffect(endWith(error.message)).pipe(Stream.drain),
+            ),
+          ),
+      );
+      // Name the transcript: the view asks for it from where it stands.
+      yield* view.subscribe([{ id: task.runId, fromSeq: 0 }]);
+      return view.changes.pipe(Stream.interruptWhen(Deferred.await(ended)));
+    }),
+  );
+}

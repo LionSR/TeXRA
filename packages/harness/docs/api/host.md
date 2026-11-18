@@ -130,11 +130,26 @@ interface AgentCatalogShape {
   readonly pinned: (scope: AgentDelegationScope) => AgentEntry[];
   /** One workspace's agents over this catalog, its stores captured. */
   readonly workspaceAgents: (stores: WorkspaceAgentsStores) => WorkspaceAgents;
-  /** Change a custom copy of `entry` (see {@link AgentCustomization}):
+  /** Make a custom copy of `entry` (see {@link AgentCustomization}):
    *  the copy's path. */
   readonly customize: (
     entry: AgentEntry,
     change: AgentCustomization,
+  ) => Effect.Effect<
+    { readonly path: string },
+    | AgentCustomizeRefused
+    | AgentDirectoriesFailed
+    | StateReadFailed
+    | PlatformError.PlatformError
+  >;
+  /**
+   * Keep the custom agent `name` and dismiss its newer-built-in notice: its
+   * copy is re-stamped with the changed bundled version. Refused when the
+   * catalog holds no such custom agent (`noFile`) or its bundled version has
+   * not changed (`current`). The copy's path.
+   */
+  readonly keepCustom: (
+    name: string,
   ) => Effect.Effect<
     { readonly path: string },
     | AgentCustomizeRefused
@@ -147,20 +162,18 @@ interface AgentCatalogShape {
 
 ## AgentCustomization
 
-A change to a custom copy of a bundled agent: `copy` writes a new one
-into the custom directory, stamped with the bundled file's digest
-(`basedOn`), and is refused when one is there; `overwrite` replaces it;
-`keep` re-stamps the user's copy with the changed bundled version, which
-dismisses its newer-version notice and touches nothing else.
+A custom copy of an agent: `copy` writes a new one into the custom
+directory, stamped with the bundled file's digest (`basedOn`), and is
+refused when one is there; `overwrite` replaces it.
 
 ```ts
-type AgentCustomization = 'copy' | 'overwrite' | 'keep';
+type AgentCustomization = 'copy' | 'overwrite';
 ```
 
 ## AgentCustomizeRefused
 
-`customize` or `removeCustom` refused the change: the entry has no file of
-its own to copy or delete (`noFile`), its copy or the file to delete
+`customize`, `keepCustom` or `removeCustom` refused the change: the entry
+has no file of its own to copy, keep or delete (`noFile`), its copy or the file to delete
 would lie outside the custom directory (`escapes`), a copy is already
 there (`exists`, at `path`), or a copy has no newer bundled version
 to keep (`current`).
@@ -1821,6 +1834,23 @@ unparsed in the record so a write keeps every entry, readable or not.
 
 ```ts
 const REASONING_LEVELS_KEY: { readonly key: "reasoningLevels"; readonly slot: "globalState"; readonly schema: withDecodingDefault<$Record<String, Unknown>, never>; }
+```
+
+## redactDiagnostics
+
+Text a host shows as a diagnostic (a health report, a log viewer, an
+exported log) with what would identify the user masked: the home and
+workspace path prefixes as `[path]`, e-mail addresses to their first
+letters, and provider secrets as {@link redactSecrets} does. Paths go
+first, so a path that holds an address or a key-shaped name is one
+`[path]`. The caller names the paths because this module runs in
+browser bundles too and cannot ask the OS for the home directory.
+
+```ts
+function redactDiagnostics(
+  text: string,
+  paths: { readonly home: string; readonly workspace: string | undefined },
+): string
 ```
 
 ## redactSecrets

@@ -29,7 +29,7 @@ import {
 import React from 'react';
 
 import { apiKeySecretName } from '@texra-ai/llm';
-import { AgentCatalog } from '@texra-ai/harness/host';
+import { AgentCatalog, ToolCatalog } from '@texra-ai/harness/host';
 import { Secrets } from '@texra-ai/harness/plugins';
 import {
   attachInteractions,
@@ -163,7 +163,6 @@ import { cliPlatform } from '../src/runtime/platform/initPlatform';
 import { CliExitCode } from '../src/runtime/platform/exitCodes';
 import { holdSignals } from '../src/runtime/platform/processSignals';
 import { resolveCliResourcesPath } from '../src/runtime/platform/cliContext';
-import { setCliToolEnabled } from '../src/runtime/tools';
 import type { CliContext } from '../src/runtime/platform/cliContext';
 import { ChatProcessProvider } from '../src/chat/tui/chatProcess';
 import { scopeRunner } from '../src/chat/scopeRunner';
@@ -339,7 +338,9 @@ const HARNESS_PLATFORM_SERVICES =
   await makeCliProcessRuntime(HARNESS_CLI_CONTEXT).runPromise(cliPlatform);
 if (RESET_MULTI_AGENT_DISABLED) {
   await HARNESS_PLATFORM_SERVICES.runtime.runPromise(
-    setCliToolEnabled('multi-agent', false),
+    Effect.flatMap(ToolCatalog, (catalog) =>
+      catalog.setEnabled('multi-agent', false),
+    ),
   );
 }
 // The one process runtime this harness runs on, as its composition root

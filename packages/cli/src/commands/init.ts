@@ -4,10 +4,12 @@ import { AgentCatalog } from '@texra-ai/harness/host';
 import { pathExists } from '@texra-ai/harness/node';
 import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
 
-import { implicitDefaultToolUseAgents } from '@texra/shared/constants/agents';
+import {
+  implicitDefaultToolUseAgents,
+  pickDefaultToolUseAgent,
+} from '@texra/shared/constants/agents';
 import { CLI_CHEAP_START_MODEL } from '../runtime/platform/cliConfig';
 import { type CliContext } from '../runtime/platform/cliContext';
-import { pickDefaultToolUseAgent } from '../runtime/defaultAgents';
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import {
   buildInitConfig,
@@ -19,11 +21,10 @@ import {
 } from '../runtime/platform/initConfig';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import { writeTextStderr } from '../runtime/platform/logSinks';
-import {
-  CLI_SETUP_RECOVERY,
-  getCliModelAccessList,
-  type CliModelAccess,
-} from '../runtime/models/modelAccess';
+import { CLI_SETUP_RECOVERY } from '../runtime/models/modelAccess';
+import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
+import { loadModelOptions } from '@texra/model/setupCredentialAccess';
+import type { ModelOptionData } from '@texra/shared/pickerOptions';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { cliResult, emitCliResult } from './_helpers/output';
@@ -34,13 +35,11 @@ interface InitAgentOption {
 
 function defaultInitAnswers(
   agents: readonly InitAgentOption[],
-  models: readonly CliModelAccess[],
+  models: readonly ModelOptionData[],
 ): InitAnswers {
   return {
     agent: pickDefaultToolUseAgent(agents),
-    model:
-      models.find((model) => model.available)?.model.value ??
-      CLI_CHEAP_START_MODEL,
+    model: models.find(isModelOptionAvailable)?.value ?? CLI_CHEAP_START_MODEL,
     outputFormat: 'text',
   };
 }
@@ -62,10 +61,10 @@ interface InitSummary {
 
 function initWarning(
   answers: InitAnswers,
-  models: readonly CliModelAccess[],
+  models: readonly ModelOptionData[],
 ): InitSummary['warning'] {
-  const chosen = models.find((model) => model.model.value === answers.model);
-  if (chosen?.available === true) return undefined;
+  const chosen = models.find((model) => model.value === answers.model);
+  if (chosen !== undefined && isModelOptionAvailable(chosen)) return undefined;
   return {
     model: answers.model,
     message: `"${answers.model}" is not currently usable.`,
@@ -109,7 +108,7 @@ function emitInitSummary(
   filePath: string,
   answers: InitAnswers,
   config: InitConfigShape,
-  models: readonly CliModelAccess[],
+  models: readonly ModelOptionData[],
   gitignore: GitignoreOutcome | undefined,
 ) {
   const warning = initWarning(answers, models);
@@ -154,7 +153,7 @@ const runInit = Effect.fn('runInit')(function* (
   const agents = implicitDefaultToolUseAgents(
     yield* (yield* AgentCatalog).workspaceAgents(services).visible(),
   );
-  const models = yield* getCliModelAccessList({ stores: services });
+  const models = yield* loadModelOptions(services);
 
   const interactive =
     !opts.yes &&

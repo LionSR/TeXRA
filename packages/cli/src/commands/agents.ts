@@ -150,15 +150,12 @@ const resetAgent = Effect.fn('resetAgent')(function* (name: string) {
 /** Keep the custom copy and dismiss its newer-built-in notice. */
 const keepAgent = Effect.fn('keepAgent')(function* (name: string) {
   yield* cliPlatform;
-  const catalog = yield* AgentCatalog;
-  const custom = catalog.get(agentKey('custom', name));
-  if (!custom) return refuse(`${name} has no custom copy.`);
-  return yield* catalog.customize(custom, 'keep').pipe(
-    Effect.flatMap(() =>
+  return yield* (yield* AgentCatalog).keepCustom(name).pipe(
+    Effect.flatMap(({ path }) =>
       emitCopyResult({
         action: 'kept',
         name,
-        path: custom.path,
+        path,
         text: `Kept your ${name}; it is now based on the current built-in version.`,
       }),
     ),

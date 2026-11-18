@@ -17,7 +17,7 @@ import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import { pruneStorage } from '../runtime/pruneStorage';
 
-import { getCliModelAccessList } from '../runtime/models/modelAccess';
+import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 
 import { loadConfigAndWarn } from './_helpers/loadConfigAndWarn';
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -32,7 +32,7 @@ const readyReport = (context: CliContext) =>
       kind: 'ready',
       modelAccessList: withProcessServices(
         services.runtime,
-        getCliModelAccessList({ stores: services }),
+        loadModelOptions(services),
       ),
       // Consent is read from the workspace configuration the platform
       // opened.

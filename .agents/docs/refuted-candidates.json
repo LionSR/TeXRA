@@ -848,7 +848,7 @@
     {
       "id": "RF-TC-11-store-credential-comment",
       "candidate": "Reword storeCredential's comment, which says the CLI, the desktop app and the extension share it, as holding only through SettingsProfileKeyController (TC-11 item f, one sub-item, of the 2026-11-15 design red-flag audit)",
-      "why": "The comment is true: the CLI imports storeCredential directly (packages/cli/src/chat/tui/forms/CliConfigForm.tsx), beside the two settings-body importers (settingsGitCommands.ts, SettingsProfileKeyController.ts). The report missed the CLI's direct importer.",
+      "why": "The comment is true: the CLI imports storeCredential directly (packages/cli/src/chat/tui/forms/CliConfigForm.tsx), beside the two settings-body importers (settingsGitCommands.ts, providerKeyActions.ts). The report missed the CLI's direct importer.",
       "ruling": ".agents/docs/evidence/2026-11-15-design-red-flags/TC-app-controllers.md",
       "symbols": [
         {

@@ -3,8 +3,8 @@
  *
  * Every fact about a run — what it is, what it is called, how far it got,
  * whose child it is, what it still has to do — is read off the session fold
- * (`SessionView`), and whether it is live here off `Runs`. The fold is the
- * one reading of the durable rows, so this surface never resolves
+ * (`SessionView`), and whether it is live here off the
+ * `RunRegistry`. The fold is the one reading of the durable rows, so this surface never resolves
  * parentage or a task list a second time.
  */
 
@@ -19,7 +19,8 @@ import {
 } from '@agent/storage/runWorkspaceFiles';
 import { inRunSession, type RunToolCall } from '@agent/runtime/RunCall';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
+import type { RunsShape } from '@agent/runtime/runs';
 import { scriptRunCalls } from '@agent/runtime/scriptRun';
 import { HISTORY_VIEW_SUMMARY } from '@agent/runtime/historyQuery/views';
 import { findExistingRunStoragePathUnder } from '@common/storage/storageLayout';
@@ -69,7 +70,7 @@ import { scriptCallsView } from './executions/scriptCallsView';
 interface RunToolContext {
   readonly runId: RunId;
   /** The session's runs. */
-  readonly runs: Runs['Service'];
+  readonly runs: RunsShape;
 }
 
 /**
@@ -323,7 +324,7 @@ const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
   { run }: RunToolCall,
   input: ExecutionsToolInput,
 ) {
-  const context = { runId: run.runId, runs: yield* Runs };
+  const context = { runId: run.runId, runs: yield* RunRegistry };
   const segments = getPathSegments(input.path);
   const route = EXECUTION_ROUTES.find(({ path }) => {
     const parts = path.split('/').slice(1);
@@ -372,7 +373,7 @@ function resolveRunId(
  *  (`RunsShape.get`), or it left the in-flight phases on `view`. A run
  *  launched here whose start has not been applied yet is running. */
 const waitOver = (
-  runs: Runs['Service'],
+  runs: RunsShape,
   view: SessionView,
   runId: RunId,
 ): boolean => {

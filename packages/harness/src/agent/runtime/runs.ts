@@ -1,7 +1,7 @@
 /**
- * A session's runs as hosts and tools reach them ({@link RunsShape}). The
- * registry behind them (`runRegistry.ts`) is the harness internals'; the
- * `Runs` tag that serves these is its module's.
+ * What tools and the SDK's reads see of a session's run registry
+ * ({@link RunsShape}): stopping a run and reading what this process holds.
+ * The registry itself, with its launch door, is `runRegistry.ts`.
  */
 
 import type { RunId, RunStopReason } from '@shared/schemas';
@@ -33,8 +33,8 @@ export interface LiveRun {
 }
 
 /**
- * A session's runs, as hosts and tools reach them: stop one, and read what
- * this process holds of them. A root starts through `session.start`
+ * The part of the run registry a tool or a read is handed: stop a run, and
+ * read what this process holds of them. A root starts through `session.start`
  * (`rootRun`, which requires the composition root's `SessionOwner`, given
  * to no tool); a run resumes through `resumeRun`.
  */

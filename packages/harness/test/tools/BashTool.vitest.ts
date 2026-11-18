@@ -25,7 +25,7 @@ import {
   RunIdSchema,
 } from '@texra-ai/harness/schemas';
 import * as resumeRunModule from '@agent/runtime/resumeRun';
-import { Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { getRunRecords } from '@agent/storage/runOwnership';
 import { Inbox } from '@agent/followUp/Inbox';
@@ -166,7 +166,7 @@ layer(
               if (woken === parentId) {
                 // A wait is over once no launch of the run is held here.
                 skippedAtResumeTime ??=
-                  Context.get(session, Runs).get(runId) === undefined;
+                  Context.get(session, RunRegistry).get(runId) === undefined;
                 Deferred.doneUnsafe(wakeReached, Effect.void);
               }
               return resume(woken, options);
@@ -238,7 +238,7 @@ layer(
           // which ends the process; the run's outcome is the stop, not the
           // killed process's exit.
           assert.equal(
-            yield* Context.get(session, Runs).stop(runId, 'user'),
+            yield* Context.get(session, RunRegistry).stop(runId, 'user'),
             true,
           );
 

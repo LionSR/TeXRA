@@ -20,7 +20,8 @@ import type {
 } from '@texra-ai/harness/host';
 import { withLogChannel, type SettingsStores } from '@texra-ai/harness/plugins';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
+import { tuiUi } from '@cli/chat/tui/hosts/tuiUiHost';
+import { setProviderKey } from '@texra/controllers/settingsView/providerKeyActions';
 import { missingAgentMessage } from '@cli/runtime/agents';
 import type { HostCommand } from '@texra/shared/session/hostRequest';
 import { followToolEditPreviews } from '@texra/controllers/approval/ToolEditApprovalController';
@@ -107,8 +108,10 @@ export function createTuiHostInteractions(
   stores: TuiApprovalStores,
 ): TuiHostInteractions {
   const apiKeyRetry = new ProgressApiKeyRetryController({
+    // A dismissed prompt is the answer "no key", not a failure: the retry
+    // controller re-reads the store and says the retry did not switch.
     promptForApiKey: (provider) =>
-      promptForCliProviderApiKey(stores.settings, provider).pipe(
+      setProviderKey(tuiUi, stores.settings, provider).pipe(
         Effect.mapError(
           (cause) =>
             new ApiKeyPromptFailed({

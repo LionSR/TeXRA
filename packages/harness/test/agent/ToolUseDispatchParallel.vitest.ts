@@ -97,9 +97,7 @@ const runLoop = (
   tools: Record<string, StepTool>,
   calls: readonly Call[],
 ) =>
-  Effect.flatMap(openToolUse({ resume: false }), (opened) =>
-    runToolUse({ resume: false }, opened),
-  ).pipe(
+  Effect.flatMap(openToolUse(), runToolUse).pipe(
     Effect.provide(
       scriptedInvokerLayer.pipe(
         Layer.provideMerge(

@@ -14,14 +14,14 @@ import {
 import { CliExitCode } from '../runtime/platform/exitCodes';
 import { cliPlatform } from '../runtime/platform/initPlatform';
 import { writeTextStderr } from '../runtime/platform/logSinks';
+import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import {
   cliModelRecord,
+  cliModelStatus,
   formatCliModelDetails,
-  getCliModelAccessList,
   formatNoListableModelsMessage,
   listableModelAccessEntries,
   loadCliModelAccessEntry,
-  type CliModelAccess,
   type CliModelListOptions,
 } from '../runtime/models/modelAccess';
 
@@ -51,22 +51,24 @@ const listModels = Effect.fn('listModels')(function* (
   options: CliModelListOptions,
 ) {
   const services = yield* cliPlatform;
-  const models: readonly CliModelAccess[] = yield* getCliModelAccessList({
-    stores: services,
-    models: options.includeUnavailable === true ? MODELS : undefined,
-  });
+  const models = yield* loadModelOptions(
+    services,
+    options.includeUnavailable === true ? MODELS : undefined,
+  );
 
   const listedModels = listableModelAccessEntries(models, options);
   if (context.outputFormat === 'text' && listedModels.length === 0) {
     writeTextStderr(formatNoListableModelsMessage(options));
   }
-  const records = listedModels.map(({ model }) => cliModelRecord(model));
+  const records = listedModels.map(cliModelRecord);
   yield* emitPagedCliResult(
     cliResult(
       'model',
       records,
       listedModels
-        .map(({ model, status }) => `${model.value}\t${model.label}\t${status}`)
+        .map(
+          (model) => `${model.value}\t${model.label}\t${cliModelStatus(model)}`,
+        )
         .join('\n'),
     ),
   );
@@ -74,16 +76,14 @@ const listModels = Effect.fn('listModels')(function* (
 
 const showModel = Effect.fn('showModel')(function* (id: string) {
   const services = yield* cliPlatform;
-  const entry: CliModelAccess | undefined = yield* loadCliModelAccessEntry(id, {
-    stores: services,
-  });
+  const entry = yield* loadCliModelAccessEntry(id, services);
 
   if (!entry) {
     writeTextStderr(`Model not found: ${id}`);
     return CliExitCode.Usage;
   }
 
-  const record = cliModelRecord(entry.model);
+  const record = cliModelRecord(entry);
   yield* emitCliResult(
     cliResult('model', record, formatCliModelDetails(entry)),
   );

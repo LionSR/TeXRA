@@ -93,6 +93,7 @@ import {
 } from './hostSnapshotSource';
 import { SessionBridge } from './SessionBridge';
 import { findLabelInWorkspace } from './workspaceFileOptions';
+import { answerWorkspaceFile } from './workspaceFileRequest';
 import type { RunId } from '@texra-ai/harness/schemas';
 import {
   agentKeyOf,
@@ -132,7 +133,6 @@ const OWN_REQUEST_LABEL = {
   useCurrentFile: "The editor's current file",
   addOpenedFiles: "The editor's open files",
   gettingStarted: 'Starting a project',
-  workspaceFile: 'The file editor',
 } as const satisfies Partial<Record<HostCommand['kind'], string>>;
 
 /** The requests a host answers its own way. */
@@ -151,7 +151,6 @@ const isOwnHostCommand = (request: HostCommand): request is OwnHostCommand =>
 export type OwnHostHandlers = {
   readonly [K in OwnHostCommand['kind']]?: (
     request: Extract<OwnHostCommand, { kind: K }>,
-    port: string,
   ) => HostVerb<HostOutcome>;
 };
 
@@ -509,6 +508,8 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         case 'openFile':
           yield* bindings.openPath(request.path, request.line ?? undefined);
           return done;
+        case 'workspaceFile':
+          return yield* answerWorkspaceFile(request.action);
         case 'openLabel': {
           // The search is the body's; the host only opens the match.
           const opened = yield* findLabelInWorkspace(
@@ -728,10 +729,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   }
   /** An own kind the host binds runs its handler; one it leaves out is
    *  refused, worded here for both hosts. */
-  const own = (
-    request: OwnHostCommand,
-    port: string,
-  ): HostVerb<HostOutcome> => {
+  const own = (request: OwnHostCommand): HostVerb<HostOutcome> => {
     const handler = host.own[request.kind];
     if (handler === undefined)
       return Effect.fail(
@@ -740,19 +738,16 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         }),
       );
     // cast: the handler bound under `request.kind` takes a request of that kind.
-    return (
-      handler as (
-        request: OwnHostCommand,
-        port: string,
-      ) => HostVerb<HostOutcome>
-    )(request, port);
+    return (handler as (request: OwnHostCommand) => HostVerb<HostOutcome>)(
+      request,
+    );
   };
   function handle(
     request: HostCommand,
     port: string,
   ): Effect.Effect<HostOutcome, HostCommandFailure, ProcessServices> {
     return Effect.provide(
-      isOwnHostCommand(request) ? own(request, port) : shared(request, port),
+      isOwnHostCommand(request) ? own(request) : shared(request, port),
       requestLayer,
     );
   }

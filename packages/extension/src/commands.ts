@@ -27,7 +27,7 @@ import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import {
   settingsTabByCommand,
-  type ExtensionCommandId,
+  type CommandId,
   type SettingsTabCommandId,
 } from '@texra/shared/commands/catalog';
 import {
@@ -70,7 +70,7 @@ type CommandProgram = Effect.Effect<
  * catalog row fails the handler map's `satisfies` until its handler is
  * written.
  */
-type RegisteredCommandId = Exclude<ExtensionCommandId, CommentCommandId>;
+type RegisteredCommandId = Exclude<CommandId, CommentCommandId>;
 
 /** `texra.setApiKey`, optionally naming the provider to start on: one row
  *  for the folder's window and the window without one. */
@@ -172,7 +172,7 @@ export function registerCommands(
     'texra.cleanBuild': () => confirmCleanBuild,
     'texra.auth.chatgpt.signIn': () =>
       settingsViewProvider.signInSubscription('chatgpt'),
-    'texra.runSetupAssistant': () => progressViewProvider.runSetup,
+    'texra.runSetupAssistant': () => progressViewProvider.window.runSetup,
     'texra.openGettingStarted': () => openGettingStarted(context.extension.id),
     'texra.createSampleProject': () =>
       createSampleProject(context.extensionPath),
@@ -180,7 +180,7 @@ export function registerCommands(
     'texra.openProgressViewInTab': () => progressViewProvider.popOutToEditor(),
     'texra.indentCurrentTeX': () => handleIndentCurrentTeX(roots),
     'texra.fixCompilation': () =>
-      handleFixCompilation(roots, progressViewProvider.runValidated),
+      handleFixCompilation(roots, progressViewProvider.window.runValidated),
     'texra.getTeXCount': () => handleGetTeXCount(roots),
     'texra.compileTikzFigures': () => handleCompileTikzFigures(roots),
     'texra.cloneOverleafProject': () => cloneOverleafProject(),
@@ -198,7 +198,7 @@ export function registerCommands(
         config === undefined
           ? progressViewProvider.submit()
           : decodeLaunchConfig(config).pipe(
-              Effect.flatMap(progressViewProvider.runValidated),
+              Effect.flatMap(progressViewProvider.window.runValidated),
               Effect.flatMap((run) => run.result),
             ),
     ),

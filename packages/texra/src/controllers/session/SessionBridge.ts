@@ -262,7 +262,7 @@ export class SessionBridge {
     const { session, host, handleHostCommand } = this.options;
     return {
       'session.frames': (subscribe: Parameters<typeof frameSubscription>[1]) =>
-        frameSubscription({ view: session.view }, subscribe).pipe(
+        frameSubscription(session.view, subscribe).pipe(
           endLogged(`Transcript frames for port ${port} stopped`),
         ),
       'session.host': () =>

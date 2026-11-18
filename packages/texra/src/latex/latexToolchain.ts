@@ -6,9 +6,12 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import {
   CORE_DEPENDENCY_TOOLS,
   DEPENDENCY_USE,
+  HEALTH_LATEX_TOOLS,
   IMAGE_LATEX_TOOLS,
   LATEX_TOOL_ENTRIES,
   missingLatexTools,
+  SUPPORTED_LATEX_COMPILERS,
+  type HealthLatexTool,
   type LatexToolName,
 } from '@texra/shared/constants/latexToolchain';
 import type { MissingTool } from '@texra/shared/session/hostSnapshot';
@@ -32,7 +35,7 @@ export interface LatexToolchainProbe<T extends LatexToolName> {
 
 /**
  * Probe catalog tools: each one's version probe and its path, all at once.
- * The one probe of the LaTeX toolchain; `texra doctor`, the setup assistant,
+ * The one probe of the LaTeX toolchain; the health report, the setup assistant,
  * the settings view's LaTeX tab and the dependency banner each read the
  * tools they report from it. Every call spawns, so a surface reports what is
  * installed now; interrupting it kills the spawned probes.
@@ -64,6 +67,47 @@ export function probeLatexTools<T extends LatexToolName>(
     Effect.withSpan('latex.probeLatexTools'),
   );
 }
+
+/** One listed dependency as this machine has it. */
+interface LatexToolHealth extends HealthLatexTool {
+  readonly installed: boolean;
+}
+
+/** What {@link latexToolchainHealth} found. */
+export interface LatexToolchainHealth {
+  /** A compiler `compileLatex2Pdf` can drive answers its probe: the
+   *  settings view's TeX Distribution row reads the same set. */
+  readonly compiler: boolean;
+  /** Each dependency the report lists, in its row order. */
+  readonly tools: readonly LatexToolHealth[];
+}
+
+/**
+ * Whether this machine can build LaTeX: the compiler question and each
+ * listed dependency, as data. A host words and paints it (`texra doctor`
+ * prints a row per tool); a missing required tool is what fails the report.
+ */
+export const latexToolchainHealth = Effect.fn('latex.latexToolchainHealth')(
+  function* (): Effect.fn.Return<
+    LatexToolchainHealth,
+    never,
+    ChildProcessSpawner
+  > {
+    const { installed } = yield* probeLatexTools([
+      ...new Set([
+        ...SUPPORTED_LATEX_COMPILERS,
+        ...HEALTH_LATEX_TOOLS.map((tool) => tool.name),
+      ]),
+    ]);
+    return {
+      compiler: SUPPORTED_LATEX_COMPILERS.some((name) => installed.has(name)),
+      tools: HEALTH_LATEX_TOOLS.map((tool) => ({
+        ...tool,
+        installed: installed.has(tool.name),
+      })),
+    };
+  },
+);
 
 /**
  * The tools TeXRA's features need that this machine lacks (latexindent,

@@ -7,15 +7,16 @@ import {
   ensureError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
+import { tuiUi } from '@cli/chat/tui/hosts/tuiUiHost';
+import { commitProviderKey } from '@texra/controllers/settingsView/providerKeyActions';
 import { SettingsRequestFailed } from '@texra/controllers/settingsView/settingsHostBindings';
-import { storeCredential } from '@texra/common/secrets/storeCredential';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
 import type { TexraSettingRow } from '@texra/shared/settings/settingSurfaces';
 import {
-  GITHUB_TOKEN_STORAGE_KEY,
+  removeGitHubToken,
   resolveGitHubTokenSource,
+  saveGitHubToken,
 } from '@texra/tools/github/githubAuth';
 
 import { WorkspaceAgentsForm } from './WorkspaceAgentsForm';
@@ -98,10 +99,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
     entry: TexraSettingRow,
     value: unknown,
   ): Effect.fn.Return<void, SettingsRequestFailed, AppSignals> {
-    const result = yield* applyStateSettingUpdate(entry.key, value, {
-      host: 'cli',
-      stores: roots,
-    });
+    const result = yield* applyStateSettingUpdate(entry, value, roots);
     const label = entry.title;
     switch (result.kind) {
       case 'applied':
@@ -192,7 +190,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             // The save and the refresh that follows it are one program.
             onSave={(provider, key) =>
               Effect.gen(function* () {
-                yield* commitCliProviderApiKey(roots, provider, key);
+                yield* commitProviderKey(tuiUi, roots, provider, key);
                 apiKeys.setData(
                   (current) => current && { ...current, [provider]: 'secret' },
                 );
@@ -209,18 +207,14 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             statusView={githubTokenStatusView}
             onSave={(token) =>
               Effect.gen(function* () {
-                yield* storeCredential(yield* Secrets, {
-                  secretName: GITHUB_TOKEN_STORAGE_KEY,
-                  value: token,
-                  kind: 'github',
-                });
+                yield* saveGitHubToken(token);
                 githubToken.setData(() => 'secret');
                 yield* githubToken.refresh();
               })
             }
             onRemove={() =>
               Effect.gen(function* () {
-                yield* (yield* Secrets).delete(GITHUB_TOKEN_STORAGE_KEY);
+                yield* removeGitHubToken;
                 yield* githubToken.refresh();
               })
             }

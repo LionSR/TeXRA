@@ -18,7 +18,7 @@ import { Effect, type Scope } from 'effect';
 import * as vscode from 'vscode';
 
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
-import type { ExtensionCommandId } from '@texra/shared/commands/catalog';
+import type { CommandId } from '@texra/shared/commands/catalog';
 import type {
   InlineCommentProvider,
   InlineCommentThreadView,
@@ -99,7 +99,7 @@ const COMMENT_COMMANDS = {
   'texra.unresolveCommentThread': (thread: vscode.CommentThread) => {
     setThreadResolved(thread, false);
   },
-} satisfies Partial<Record<ExtensionCommandId, (arg: never) => void>>;
+} satisfies Partial<Record<CommandId, (arg: never) => void>>;
 
 /** The commands {@link makeInlineComments} registers. */
 export type CommentCommandId = keyof typeof COMMENT_COMMANDS;

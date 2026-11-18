@@ -6,14 +6,13 @@ import * as path from 'node:path';
 import { Effect, FileSystem, type PlatformError, Schema } from 'effect';
 
 // Local imports - run facts and filesystem access
-import { decideRunModel, pathToLocationIn } from '@texra-ai/harness/host';
+import { pathToLocationIn } from '@texra-ai/harness/host';
 import { entryTypeIn } from '@texra-ai/harness/node';
 import { withLogChannel } from '@texra-ai/harness/plugins';
 import {
   toErrorMessage,
   Rejected,
   fileLocationAddressPath,
-  isModelOptionAvailable,
   RunIdSchema,
   type AgentConfig,
   type AgentConfigInput,
@@ -32,6 +31,7 @@ import {
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
+import { decideLaunchModel } from '@texra/model/modelOptions';
 
 /** A workspace probe could not determine the compile-fixer's editable files. */
 export class CompileFixerPlanFailed extends Schema.TaggedError<CompileFixerPlanFailed>()(
@@ -82,19 +82,9 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
       });
     }
 
-    const decision = decideRunModel(
-      [
-        { model: savedTaskConfig.model, reason: 'agent-config' },
-        {
-          model: input.modelOptions.find(isModelOptionAvailable)?.value,
-          reason: 'access-list-default',
-        },
-      ],
-      (model) =>
-        input.modelOptions.some(
-          (option) => option.value === model && isModelOptionAvailable(option),
-        ),
-    );
+    const { decision } = decideLaunchModel(input.modelOptions, [
+      { model: savedTaskConfig.model, reason: 'agent-config' },
+    ]);
     if (!decision || decision._tag === 'Unavailable') {
       return yield* new Rejected({
         reason: 'No model is available to launch latexFixer.',

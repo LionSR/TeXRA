@@ -6,7 +6,10 @@
  * diff, so blocks can be routed to filenames without trusting response order.
  */
 
-import { diffTextLevenshtein } from '@texra/utils/text/diff';
+// Third-party imports
+import { diff_match_patch } from 'diff-match-patch';
+
+// Local imports
 import type { NamedDocument } from '@texra/utils/text/xmlExtraction';
 import { SCRATCHPAD_TAG } from '@texra/shared/plugins/documentOutputs';
 
@@ -237,7 +240,8 @@ export function collectLatexFencedBlocks(
 function documentSimilarity(a: string, b: string): number {
   if (a === b) return 1;
   const maxLength = Math.max(a.length, b.length, 1);
-  const distance = diffTextLevenshtein(a, b);
+  const dmp = new diff_match_patch();
+  const distance = dmp.diff_levenshtein(dmp.diff_main(a, b, true));
   return Math.max(0, 1 - distance / maxLength);
 }
 

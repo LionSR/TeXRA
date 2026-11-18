@@ -14,19 +14,10 @@ import * as vscode from 'vscode';
 import { Effect, FiberHandle } from 'effect';
 
 import { type WorkspaceRoots } from '@texra-ai/harness';
-import {
-  withProcessServices,
-  type ProcessRuntime,
-  type ProcessServices,
-  pathToLocationIn,
-} from '@texra-ai/harness/host';
+import { type ProcessServices, pathToLocationIn } from '@texra-ai/harness/host';
 import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
 import { commitExists, workspaceRelativePath } from '@texra-ai/harness/node';
-import {
-  toErrorMessage,
-  type AgentConfig,
-  Rejected,
-} from '@texra-ai/harness/schemas';
+import { toErrorMessage, Rejected } from '@texra-ai/harness/schemas';
 import { setApiKey } from '@commands/api/apiKeyCommands';
 import { cloneOverleafProject } from '@commands/git/gitCommands';
 import { downloadArXivSource } from '@commands/latex/arXivCommands';
@@ -71,7 +62,6 @@ import {
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import { pickLauncherFiles } from '@texra/controllers/session/launcherFilePicker';
 import type {
-  GuiWindowHost,
   OwnHostHandlers,
   SharedHostCommandBindings,
 } from '@texra/controllers/session/openGuiWindow';
@@ -97,16 +87,9 @@ export interface ExtensionHostRequestsOptions {
   /** The window's bridge and snapshot. */
   readonly bridge: SessionBridge;
   readonly snapshot: HostSnapshotSource;
-  /** The runtime's notices this window presents its own way. */
-  readonly notices: GuiWindowHost['notices'];
-  /** What this window's editor does for its project's runs. */
-  readonly window: GuiWindowHost['window'];
   readonly extensionPath: string;
   /** The extension's id, which names its getting-started walkthrough. */
   readonly extensionId: string;
-  /** The process runtime the extension root holds; every request handler
-   *  that runs an Effect runs it here. */
-  readonly runtime: ProcessRuntime;
   /** The settings view at a target (`texra.showDashboard`). */
   openSettings(
     target: SettingsTarget | undefined,
@@ -116,11 +99,6 @@ export interface ExtensionHostRequestsOptions {
   signInSubscription(
     providerId: SubscriptionProviderId,
   ): Effect.Effect<void, Error, ProcessServices>;
-  /** Reveal the task list (`texra.showProgressView`). */
-  showProgressView(): Effect.Effect<void, Error>;
-  /** Reveal the task list for a run this window just started, or name the
-   *  run in a toast when it cannot (the run actions' `revealProgress`). */
-  readonly revealProgress: (config: AgentConfig) => Effect.Effect<void, Error>;
   /** The placement commands the sidebar and the editor tab share. */
   popOutToEditor(): Effect.Effect<void, HostCommandFailure, ProcessServices>;
   showInSidebar(): Effect.Effect<void, HostCommandFailure, ProcessServices>;
@@ -183,17 +161,12 @@ const openExportPath = (
 export const createExtensionHostRequests = Effect.fn(
   'createExtensionHostRequests',
 )(function* (options: ExtensionHostRequestsOptions) {
-  const { snapshot, runtime, roots } = options;
+  const { snapshot, roots } = options;
 
   // The window's one comparison refresh: a newer comparison replaces it,
   // and the view's scope ends it.
   const diffRefresh = yield* FiberHandle.make();
   const at = (file: string) => pathToLocationIn(roots.workspace, file);
-  // A file-action port's handler; the process services come from the runtime.
-  const runFileAction = <A, E>(
-    command: string,
-    handler: Effect.Effect<A, E, ProcessServices>,
-  ) => withProcessServices(runtime, runHandler(command, handler));
 
   function getOpenedFiles(): Effect.Effect<string[]> {
     const workspaceRoot = roots.workspace;
@@ -387,20 +360,14 @@ export const createExtensionHostRequests = Effect.fn(
   return {
     bindings,
     own,
-    notices: options.notices,
-    window: options.window,
     // The host's members read `this`, so they cross the boundary bound.
     notify: (level: NoticeLevel, message: string) =>
       vscodeUi.notify(level, message),
-    runs: {
-      revealProgress: options.revealProgress,
-      openFinalOutput: previewFinalOutput,
-      showRunView: options.showProgressView,
-    },
+    openFinalOutput: previewFinalOutput,
     // Each command is named, so a failure carries a tag, never a rejection.
     files: {
       openDiff: (base: string, edited: string, title: string) =>
-        runFileAction(
+        runHandler(
           'compare',
           handleCompare(at(base), at(edited), title, diffRefresh),
         ),

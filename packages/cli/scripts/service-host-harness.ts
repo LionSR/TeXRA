@@ -82,6 +82,7 @@ const approve = (link: ServiceLink) => {
 await Effect.runPromise(
   Effect.scoped(
     Effect.gen(function* () {
+      // The harness starts no service: it attaches to the one running.
       const link = yield* linkService(
         {
           storageRoot,
@@ -91,7 +92,7 @@ await Effect.runPromise(
             }),
           ),
         },
-        Effect.logWarning,
+        { startsService: false, waiting: Effect.logWarning },
       );
       if (mode === 'approve') return yield* approve(link);
       yield* Effect.forkScoped(

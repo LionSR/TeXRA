@@ -12,6 +12,7 @@ import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
   AgentCatalog,
   AgentDirectories,
+  agentToolNames,
   readCustomAgentDir,
   registerCustomAgentRoot,
   CUSTOM_AGENT_DIR_KEY,
@@ -23,13 +24,15 @@ import {
   AGENT_FILE_EXTENSION,
   AgentNameSchema,
   agentKey,
+  agentKeyOf,
+  agentMatchesIdentifier,
   isPackagedAgentSource,
 } from '@texra-ai/harness/schemas';
 import {
   AGENT_TEMPLATE_FILE,
   agentFileFromTemplate,
 } from '@texra/agent/templates/agentTemplates';
-import { SettingsAgentCatalogController } from '@texra/controllers/settingsView/SettingsAgentCatalogController';
+import type { AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import type { ProcessServices } from '@texra-ai/harness/host';
 
@@ -100,15 +103,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
   /** The page's views over the process's agent catalog. */
   const page = Effect.map(AgentCatalog, (agents) => {
     const workspaceAgents = agents.workspaceAgents(ports.roots);
-    return {
-      agents,
-      workspaceAgents,
-      catalog: new SettingsAgentCatalogController({
-        workspaceAgents,
-        getAgents: () => [...agents.list()],
-        newerBuiltInOf: (entry) => agents.newerBuiltIn(entry)?.source,
-      }),
-    };
+    return { agents, workspaceAgents };
   });
   const customDirectory = AgentDirectories.use((directories) =>
     directories.custom(),
@@ -119,9 +114,30 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       'agents',
       ['agents'],
       Effect.gen(function* () {
-        const { agents, catalog } = yield* page;
+        const { agents, workspaceAgents } = yield* page;
+        // An `all` agent list enables every visible agent, never a custom
+        // agent the user hid.
+        const enabledKeys =
+          (yield* workspaceAgents.getEnabledAgentKeys()) ??
+          (yield* workspaceAgents.visible()).map(agentKeyOf);
         return {
-          agents: yield* catalog.buildSelectionItems(),
+          agents: agents
+            .list()
+            .map((entry): AgentSelectionItem => ({
+              name: entry.name,
+              source: entry.source,
+              description: entry.description,
+              filePath: entry.path || undefined,
+              tools: [...agentToolNames(entry)],
+              newerBuiltIn: agents.newerBuiltIn(entry)?.source,
+              // A stored list holds resolved `source:name` keys, but older
+              // workspaces persisted bare names, which
+              // `agentMatchesIdentifier` still matches.
+              enabled: enabledKeys.some((key) =>
+                agentMatchesIdentifier(entry, key),
+              ),
+            }))
+            .toSorted((a, b) => a.name.localeCompare(b.name)),
           customAgentIssues: [...agents.scanIssues()],
         };
       }),
@@ -179,8 +195,17 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     setAllAgentsEnabled: (message) =>
       present.reported(
         'Failed to update agent visibility',
-        Effect.flatMap(page, ({ catalog }) =>
-          catalog.setAllAgentsEnabled(message),
+        // Every agent from one source, as one store step, so a single toggle
+        // landing meanwhile is not lost.
+        Effect.flatMap(page, ({ agents, workspaceAgents }) =>
+          workspaceAgents.setAgentEnabled({
+            source: message.source,
+            name: agents
+              .list()
+              .filter((entry) => entry.source === message.source)
+              .map((entry) => entry.name),
+            enabled: message.enabled,
+          }),
         ).pipe(Effect.andThen(agentsChanged)),
       ),
     openAgentYaml: (message) =>
@@ -301,20 +326,14 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     keepCustomAgent: (message) =>
       present.reported(
         'Failed to keep the custom agent',
-        Effect.gen(function* () {
-          const agents = yield* AgentCatalog;
-          const custom = agents.get(agentKey('custom', message.agentName));
-          if (custom === undefined)
-            return yield* present.alert(
-              `${message.agentName} has no custom copy.`,
-            );
-          yield* agents.customize(custom, 'keep').pipe(
+        Effect.flatMap(AgentCatalog, (agents) =>
+          agents.keepCustom(message.agentName).pipe(
             Effect.andThen(agentFilesChanged),
             Effect.catchTag('AgentCustomizeRefused', (refused) =>
               present.alert(refused.message),
             ),
-          );
-        }),
+          ),
+        ),
       ),
     revealAgentFile: (message) =>
       present.reported(

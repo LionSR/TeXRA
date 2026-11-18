@@ -20,7 +20,11 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postToHost } from '@ui/settings/messageDispatcher';
 import { DetailsOpenController } from '@ui/litControllers/DetailsOpenController';
-import { getLightweightMd } from '@ui/markdown/lightweightMd';
+import { highlightCode } from '@ui/highlighting/highlightCode';
+import {
+  createMarkdownRenderer,
+  type MarkdownItInstance,
+} from '@ui/markdown/createMarkdownRenderer';
 import { markdownStyles } from '@ui/styles/markdownStyles';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import {
@@ -31,6 +35,10 @@ import { renderEmptyMessage } from '@ui/wa/emptyState';
 import { metaStripStyles, renderDotMeta } from '@ui/wa/metaStrip';
 import { memoryItemFacts } from '@ui/copy/memory';
 import type { MemoryViewItem } from '@texra-ai/harness/schemas';
+
+/** The preview's markdown renderer (code highlighting, no math), built on
+ *  the first preview and shared by every item. */
+let previewMd: MarkdownItInstance | null = null;
 
 @customElement('memory-item')
 export class MemoryItem extends LitElement {
@@ -94,7 +102,9 @@ export class MemoryItem extends LitElement {
   private renderMarkdown(text: string): string {
     if (text !== this.cachedPreviewSource) {
       this.cachedPreviewSource = text;
-      this.cachedPreviewHtml = getLightweightMd().render(text);
+      this.cachedPreviewHtml = (previewMd ??= createMarkdownRenderer({
+        highlight: highlightCode,
+      })).render(text);
     }
     return this.cachedPreviewHtml;
   }

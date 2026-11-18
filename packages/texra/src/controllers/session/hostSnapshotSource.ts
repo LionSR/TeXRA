@@ -35,7 +35,6 @@ import {
   AppState,
   getEnabledModels,
   subscribeAppSignal,
-  readModelOptions,
   workspaceEnvironmentLayer,
 } from '@texra-ai/harness/host';
 import {
@@ -60,8 +59,10 @@ import type {
 } from '@texra/shared/session/hostSnapshot';
 import { agentOptionsData } from '@texra/controllers/session/agentOptions';
 import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
-import { modelOptionsFrom } from '@texra/model/modelOptions';
-import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
+import {
+  hasUsableSetupCredential,
+  loadModelOptions,
+} from '@texra/model/setupCredentialAccess';
 import { missingDependencyTools } from '@latex/latexToolchain';
 import {
   deriveOnboardingFunnelState,
@@ -281,11 +282,10 @@ export const openHostSnapshotSource = Effect.fn('openHostSnapshotSource')(
     const loadModels = yield* producer(
       'the models',
       Effect.gen(function* () {
-        const models = yield* readModelOptions(
+        const modelOptions = yield* loadModelOptions(
           stores,
           yield* getEnabledModels(stores),
         );
-        const modelOptions = modelOptionsFrom(models);
         yield* SubscriptionRef.update(inputs, (s) => ({
           ...s,
           catalogs: { ...s.catalogs, modelOptions },

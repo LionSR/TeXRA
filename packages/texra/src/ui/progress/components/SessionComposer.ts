@@ -33,7 +33,6 @@ import {
   type Surface,
 } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@ui/progress/uiEvents';
-import { appendClipboardImageChips } from '@texra/shared/utils/clipboard';
 import {
   clipboardImageFiles,
   getExtensionFromMimeType,
@@ -383,10 +382,15 @@ export class SessionComposer extends LitElement {
     }
     // The paste was taken over above, so its text goes in even when every
     // image failed: otherwise the failure would also cost the typed text.
-    const insert = appendClipboardImageChips(
-      pastedText,
-      added.map(({ fileName }) => fileName),
-    );
+    const chips = added.map(({ fileName }) => `[${fileName}]`).join(' ');
+    const boundary =
+      chips !== '' &&
+      pastedText &&
+      !pastedText.endsWith(' ') &&
+      !pastedText.endsWith('\n')
+        ? ' '
+        : '';
+    const insert = `${pastedText}${boundary}${chips}`;
     // The draft holds each chip's name now and its stored path once the
     // host answers (`sessionSurfaces.applyHostOutcome`).
     const pending = added.map(({ fileName }) => ({ fileName, media: null }));

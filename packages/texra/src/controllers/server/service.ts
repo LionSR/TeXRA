@@ -1,20 +1,17 @@
 /**
  * The service's procedures over the sessions it holds. Each handler answers
  * from the session of the project it names, opened on first use through
- * the service's {@link ServiceProjects}; a task it starts or resumes runs in the service's
- * own fiber set, so a client that disconnects never stops it. The feed a
- * client watches is the session bridge's framer over that session, one port
- * per watch, and a request is the session's one request handler.
+ * the service's {@link ServiceProjects}; a task it starts or resumes is a
+ * run of that session, on its own fiber, so a client that disconnects never
+ * stops it. The feed a client watches is the session bridge's framer over
+ * that session, one port per watch, and a request is the session's one
+ * request handler.
  */
 import { randomUUID } from 'node:crypto';
 
 import {
   Cause,
   Effect,
-  Exit,
-  Fiber,
-  FiberSet,
-  Option,
   Result,
   Schema,
   Scope,
@@ -24,7 +21,7 @@ import {
 } from 'effect';
 import type { RpcGroup } from 'effect/rpc';
 
-import { LaunchRefused, type LocalSession } from '@texra-ai/harness';
+import { type LocalSession, type Run } from '@texra-ai/harness';
 import {
   type RunId,
   toErrorMessage,
@@ -40,6 +37,7 @@ import {
   RUN_RECORDS,
   TaskFailed,
   TaskRecordsFailed,
+  TaskStarted,
   TexraRpcs,
   type RecordRpc,
   type ServiceInfo,
@@ -124,55 +122,30 @@ const internal = Effect.fn('handlers.internal')(function* (
 });
 
 /**
- * Run `start` (a start or a resume) in the service's fiber set, so a
- * client that disconnects never aborts it, and answer once its run has
- * started. A start that fails before its run opens has no row to show it:
- * the window that asked shows it. The service stopping first is no failure
- * of the task's.
+ * What a start or a resume answers its client: the run it reached, or why
+ * it reached none, which is the session's own failure, carried as the class
+ * it is. A start that fails before its run opens has no row to show it: the
+ * window that asked shows it. A client that disconnects once the session's
+ * registry holds the run gives up only this answer: the run is its own
+ * fiber's from then on, and a stop is how it ends. Before that (while the
+ * session accepts the input, or a resume reads the runs above it) the work
+ * is still this request's, so a disconnect there starts nothing and leaves
+ * no row: the client that asked is gone, and nobody else was told of a run.
  */
-function startDetached<A, E extends { readonly message: string }>(
-  runs: FiberSet.FiberSet,
-  start: Effect.Effect<A, E>,
-): Effect.Effect<A, TaskFailed | LaunchRefused> {
-  return FiberSet.run(runs, start).pipe(
-    Effect.flatMap(Fiber.await),
-    Effect.flatMap(
-      Exit.match({
-        onSuccess: Effect.succeed,
-        onFailure: (cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.fail(
-                new TaskFailed({
-                  message: 'The service stopped before the task started.',
-                }),
-              )
-            : Effect.logWarning(
-                'A service task ended with a failure',
-                cause,
-              ).pipe(
-                Effect.andThen(
-                  Option.match(Cause.findErrorOption(cause), {
-                    // A refused launch is carried as itself, for the
-                    // window that asked to show with its notice.
-                    onSome: (error) =>
-                      Effect.fail(
-                        error instanceof LaunchRefused
-                          ? error
-                          : new TaskFailed({ message: error.message }),
-                      ),
-                    onNone: () =>
-                      Effect.fail(
-                        new TaskFailed({
-                          message: toErrorMessage(cause),
-                        }),
-                      ),
-                  }),
-                ),
-              ),
-      }),
+const started = <E>(
+  start: Effect.Effect<Run, E>,
+): Effect.Effect<typeof TaskStarted.Type, E | TaskFailed> =>
+  start.pipe(
+    Effect.tapCause((cause) =>
+      Cause.hasInterruptsOnly(cause)
+        ? Effect.void
+        : Effect.logWarning('A service task ended with a failure', cause),
     ),
+    Effect.catchDefect((defect) =>
+      Effect.fail(new TaskFailed({ message: toErrorMessage(defect) })),
+    ),
+    Effect.map((run) => ({ runId: run.runId, activation: run.activation })),
   );
-}
 
 /** The handlers of {@link TexraRpcs}, over the `projects` and the
  *  transport's `control`. */
@@ -182,8 +155,6 @@ export const serviceHandlers = (
 ) =>
   TexraRpcs.toLayer(
     Effect.gen(function* () {
-      // A task's start and resume are its session's, as every host's are.
-      const runs = yield* FiberSet.make();
       // The start is held until the handler's scope ends, by when the
       // run is the registry's: a drain waits for a start already under way.
       const refuseWhileDraining = Effect.gen(function* () {
@@ -263,7 +234,7 @@ export const serviceHandlers = (
                 () => SubscriptionRef.update(control.watching, (n) => n - 1),
               );
               const session = yield* open(workspace);
-              return frameSubscription({ view: session.view }, subscribe);
+              return frameSubscription(session.view, subscribe);
             }),
           ),
         'task.result': ({ workspace, runId, activation }) =>
@@ -305,12 +276,10 @@ export const serviceHandlers = (
             Effect.gen(function* () {
               yield* refuseWhileDraining;
               const session = yield* open(workspace);
-              const run = yield* startDetached(
-                runs,
+              return yield* started(
                 // A service task stays open for its windows' follow-ups.
                 session.start({ ...start, interactive: true }),
               );
-              return { runId: run.runId, activation: run.activation };
             }),
           ),
         'host.attach': ({ workspace, capabilities }) =>
@@ -384,11 +353,9 @@ export const serviceHandlers = (
               // A run this service is running is answered as it runs: the
               // client takes up the conversation it belongs to (a chat left
               // it waiting here), which the session names.
-              const run = yield* startDetached(
-                runs,
+              return yield* started(
                 session.resume(runId, { interactive: true, apiKeys }),
               );
-              return { runId: run.runId, activation: run.activation };
             }),
           ),
       };

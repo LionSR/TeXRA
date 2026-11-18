@@ -32,7 +32,11 @@ import {
   SessionOwner,
   type SessionServices,
 } from '@agent/runtime/rootLaunch';
-import { LaunchKeys, Runs, RunStopped } from '@agent/runtime/runRegistry';
+import {
+  LaunchKeys,
+  RunRegistry,
+  RunStopped,
+} from '@agent/runtime/runRegistry';
 import type { ITool } from '@tools/core/ToolTypes';
 import { AgentUnavailable, LaunchRefused } from '@common/errors/agentErrors';
 import { asksApproval } from '@agent/runtime/agentToolResolution';
@@ -178,7 +182,7 @@ const start = Effect.fn('start')(function* (
     (SubscriptionRef.getUnsafe(
       Context.get(session, SessionViewAccess).ref,
     ).runs.has(runId) ||
-      Context.get(session, Runs).get(runId) !== undefined)
+      Context.get(session, RunRegistry).get(runId) !== undefined)
   )
     return yield* new LaunchRefused({
       message: `Run ${runId} already exists in this session.`,

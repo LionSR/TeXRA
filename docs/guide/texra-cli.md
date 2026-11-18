@@ -39,9 +39,8 @@ texra config
 Run `texra` with no model connected and the chat still opens, with a
 **Connect a model** panel in front: sign in with a ChatGPT or Grok
 subscription, or add a provider API key. A message typed before you connect
-is sent as soon as you do. On your first run TeXRA then hands the chat to the
-setup assistant and opens `/agent`, where you pick the agent for the chat;
-`/agent` stays available until your first message in any new chat.
+is sent as soon as you do. The chat starts on the default agent; `/agent`
+picks another until your first message in any new chat.
 
 For a guided first run, use `texra setup`. It walks you through sign-in
 (a ChatGPT or Grok subscription, or an API key), checks your

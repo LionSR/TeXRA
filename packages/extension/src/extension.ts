@@ -67,7 +67,7 @@ import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { openTexraGlobalConfigStore } from '@texra/platform/defaults/nodeStores';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
-import type { ExtensionCommandId } from '@texra/shared/commands/catalog';
+import type { CommandId } from '@texra/shared/commands/catalog';
 import {
   openProjectRoots,
   openProjectSession,
@@ -285,7 +285,7 @@ const noFolderCommands = (
  * prerequisite without firing the real command's `onCommand` completion event.
  */
 type WalkthroughCommandNeedingWorkspace = Exclude<
-  ExtensionCommandId,
+  CommandId,
   keyof ReturnType<typeof noFolderCommands>
 >;
 
@@ -455,7 +455,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   setupPill.text = '$(rocket) TeXRA: Get Started';
   setupPill.tooltip =
     'Connect a model: sign in with ChatGPT or add a provider API key';
-  setupPill.command = 'texra.runSetupAssistant' satisfies ExtensionCommandId;
+  setupPill.command = 'texra.runSetupAssistant' satisfies CommandId;
   setupPill.accessibilityInformation = { label: 'TeXRA setup, get started' };
   context.subscriptions.push(setupPill);
   // The settings view is built with the commands, after the progress view
@@ -482,8 +482,10 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     },
   );
   yield* Effect.forkScoped(
-    Stream.runForEach(progressViewProvider.credentialUsable, (usable) =>
-      Effect.sync(() => (usable ? setupPill.hide() : setupPill.show())),
+    Stream.runForEach(
+      progressViewProvider.window.snapshot.credentialUsable,
+      (usable) =>
+        Effect.sync(() => (usable ? setupPill.hide() : setupPill.show())),
     ),
   );
   yield* Effect.logInfo('TeXRA extension activated').pipe(
