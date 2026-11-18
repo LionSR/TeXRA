@@ -429,6 +429,58 @@ export const stopService = (
     }),
   ).pipe(Effect.catchIf(nobodyListens, () => Effect.void));
 
+/** How long {@link stopRunningService} waits for the service to go. */
+const STOP_TIMEOUT = '30 seconds';
+
+/**
+ * Stop the storage root's service and wait until it is gone, within
+ * {@link STOP_TIMEOUT}: its running tasks stop, and can be resumed. A
+ * service this build cannot speak to still takes the stop, the one
+ * procedure every build keeps. Answers the stopped service's pid (absent
+ * when this build could not read its hello), or null when none ran.
+ */
+export const stopRunningService: Effect.Effect<
+  { readonly pid?: number } | null,
+  ServiceUnavailable,
+  GlobalValues
+> = Effect.gen(function* () {
+  // A service this build cannot speak to: its socket is all this build
+  // knows of it.
+  const target:
+    | (Pick<ServiceInfo, 'socket'> & { readonly pid?: number })
+    | null = yield* probeRecordedService.pipe(
+    Effect.catch((error) => {
+      const { failure } = error;
+      return failure.kind === 'unreadable'
+        ? Effect.succeed({ socket: failure.socket })
+        : Effect.fail(error);
+    }),
+  );
+  if (target === null) return null;
+  const service =
+    target.pid === undefined
+      ? 'the TeXRA service'
+      : `the TeXRA service (pid ${target.pid})`;
+  yield* stopService(target.socket, false).pipe(
+    Effect.timeoutOrElse({
+      duration: STOP_TIMEOUT,
+      orElse: () =>
+        Effect.fail(
+          new ServiceUnavailable({
+            reason: `it did not exit within ${STOP_TIMEOUT}`,
+          }),
+        ),
+    }),
+    Effect.mapError(
+      (failure) =>
+        new ServiceUnavailable({
+          reason: `Could not stop ${service}: ${failure.message}`,
+        }),
+    ),
+  );
+  return target.pid === undefined ? {} : { pid: target.pid };
+});
+
 /** The refusal of a running service of a newer build that speaks another
  *  protocol. */
 const newerService = (info: ServiceInfo) =>
