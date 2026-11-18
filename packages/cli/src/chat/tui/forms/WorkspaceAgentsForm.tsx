@@ -97,7 +97,7 @@ export function WorkspaceAgentsForm(
   const [mode, setMode] = useState<WorkspaceAgentsFormMode>('overview');
   // The workspace agents read, every workspace agents write and the default chat-agent write
   // below all target the slots this form was handed.
-  const { roots, runtime } = useChatProcess();
+  const { roots, chat } = useChatProcess();
   const { data, error, reload, reportError } =
     useAsyncListForm<WorkspaceAgentsData>({
       // The workspace agents read loads the local agent catalog the lists read.
@@ -122,7 +122,7 @@ export function WorkspaceAgentsForm(
     action: () => Effect.Effect<void, Error, ProcessServices>,
     nextMode = mode,
   ): void =>
-    runFormWrite(runtime, action, {
+    runFormWrite(chat, action, {
       onSuccess: () => {
         setMode(nextMode);
         reload();

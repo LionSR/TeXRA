@@ -6,7 +6,6 @@ import {
   decideRunModel,
   readModelOptions,
   type ModelVerdict,
-  type ProcessRuntime,
   type RunModelCandidate,
 } from '@texra-ai/harness/host';
 import type { SettingsStores } from '@texra-ai/harness/plugins';
@@ -43,13 +42,8 @@ interface CliRunnableModelResolution {
   readonly notice?: string;
 }
 
-/** Stores and runtime held by command actions and form loaders. */
-export type CliModelStores = SettingsStores & {
-  readonly runtime: ProcessRuntime;
-};
-
 interface CliModelAccessListOptions {
-  readonly stores: CliModelStores;
+  readonly stores: SettingsStores;
   readonly models?: readonly string[];
 }
 
@@ -61,7 +55,7 @@ interface CliModelAccessListOptions {
  * ignored.
  */
 interface CliModelAccessEntryOptions {
-  readonly stores: CliModelStores;
+  readonly stores: SettingsStores;
   /** Optional preloaded list, used by commands that already fetched access. */
   readonly accessList?: readonly CliModelAccess[];
 }

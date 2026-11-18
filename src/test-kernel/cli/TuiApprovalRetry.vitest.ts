@@ -26,6 +26,7 @@ import {
   openRequest as openRunRequest,
 } from '@agent/runtime/requests';
 import { currentApproval } from '@cli/chat/tui/state/approvalQueue';
+import { scopeRunner } from '@cli/chat/scopeRunner';
 import { notices } from '@cli/chat/tui/state/transcript';
 import { bindSessionView } from '@cli/chat/tui/state/sessionView';
 import { startChat, rootRunId } from '@cli/chat/tui/state/cliState';
@@ -121,7 +122,7 @@ const tui = Effect.gen(function* () {
   const interactions = createTuiHostInteractions({
     requests: yield* TestSession,
     settings: roots,
-    runtime: yield* SessionGraph.runtime,
+    chat: scopeRunner(yield* SessionGraph.runtime, yield* Effect.scope),
   });
   yield* attachInteractions(Context.get(session, Interactions), interactions);
   return interactions;
@@ -222,7 +223,7 @@ const decideCurrent = (
     currentApproval.get()?.decide(
       {
         requests: yield* TestSession,
-        runtime: yield* SessionGraph.runtime,
+        chat: scopeRunner(yield* SessionGraph.runtime, yield* Effect.scope),
         performHost,
       },
       decision,

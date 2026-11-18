@@ -86,7 +86,7 @@ interface GitHubTokenFormProps {
 export function GitHubTokenForm(
   props: GitHubTokenFormProps,
 ): React.JSX.Element {
-  const { runtime } = useChatProcess();
+  const { chat } = useChatProcess();
   const [entering, setEntering] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
@@ -95,7 +95,7 @@ export function GitHubTokenForm(
     action: () => Effect.Effect<void, Error, Secrets>,
   ): void => {
     setSaving(true);
-    runFormWrite(runtime, action, {
+    runFormWrite(chat, action, {
       onSuccess: props.onDone,
       onError: (cause) => {
         setSaving(false);
@@ -154,7 +154,7 @@ export function GitHubTokenForm(
           runAction(() => props.onRemove());
           return;
         }
-        runFormWrite(runtime, () => tryOpenBrowser(GITHUB_TOKEN_CREATE_URL), {
+        runFormWrite(chat, () => tryOpenBrowser(GITHUB_TOKEN_CREATE_URL), {
           onSuccess: (opened) => {
             if (!opened) {
               setError(`Open ${GITHUB_TOKEN_CREATE_URL} to create a token.`);

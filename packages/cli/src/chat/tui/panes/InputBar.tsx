@@ -47,6 +47,7 @@ import {
   slashPaletteOpen,
 } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
+import { useMountScope } from '../state/useMountScope';
 import { useSubscriptionRef } from '../state/useSubscriptionRef';
 import type { CursorEdit } from '../input/textInputEditing';
 import type { InputHistory } from '../history/inputHistory';
@@ -112,10 +113,11 @@ const INPUT_BAR_DECORATION_COLUMNS = 6;
 
 export function InputBar(props: InputBarProps): React.JSX.Element {
   const { disabled, history, holdsKeystroke, onSubmit } = props;
-  const { roots, runtime } = useChatProcess();
+  const { roots, chat } = useChatProcess();
+  const mount = useMountScope();
   const draftRef = props.draft;
   const keyboardActive = props.keyboardActive ?? true;
-  const value = useSubscriptionRef(runtime, draftRef).text;
+  const value = useSubscriptionRef(mount, draftRef).text;
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
   const { columns } = useWindowSize();
   const commands = useSlashContext().commands;
@@ -126,8 +128,8 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     [draftRef],
   );
   const writeDraft = useCallback(
-    (next: Draft) => runtime.runSync(SubscriptionRef.set(draftRef, next)),
-    [draftRef, runtime],
+    (next: Draft) => mount.sync(SubscriptionRef.set(draftRef, next)),
+    [draftRef, mount],
   );
   // ↑/↓ history browsing (shell-style). `index` walks the persisted entries,
   // `savedDraft` restores whatever was typed before browsing began, and
@@ -162,7 +164,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     },
     [readDraft, writeDraft],
   );
-  const imagePasteQueue = useImagePastes(runtime);
+  const imagePasteQueue = useImagePastes(mount);
 
   const clearDraft = useCallback(() => {
     imagePasteQueue.discardPending();
@@ -266,7 +268,9 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
           ? historyRef.current?.push(historyText)
           : undefined;
       if (historyPersist) {
-        runtime.runFork(
+        // The chat's work, not the bar's: the entry is written even when a
+        // foreground surface replaces the bar right after the submit.
+        chat.fork(
           Effect.catchCause(historyPersist, (cause) =>
             Effect.sync(() => {
               writeTextStderr(
@@ -278,7 +282,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       }
       onSubmit(message, holdUntil);
     },
-    [clearDraft, commands, onSubmit, readDraft, runtime],
+    [chat, clearDraft, commands, onSubmit, readDraft],
   );
 
   const acceptSlashCommand = useCallback(

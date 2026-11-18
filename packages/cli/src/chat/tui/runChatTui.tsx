@@ -104,6 +104,7 @@ import { installTerminalTitleUpdates } from './terminalTitle';
 import { TuiSession } from './state/sessionRunState';
 import { createSessionExitController } from './sessionExitController';
 import { ChatProcessProvider } from './chatProcess';
+import { scopeRunner } from '../scopeRunner';
 
 interface ChatResult {
   exitCode: number;
@@ -348,11 +349,15 @@ export async function runChat(
       { discard: true },
     );
   };
-  // From here on `chatScope` owns everything the session holds: what is
-  // added below closes before the service hold above, last in first out,
-  // and the exit drain awaits that close.
+  // The two owners of what the chat starts from outside Effect. The chat's
+  // scope ends what the session on screen holds, and the exit drain awaits
+  // that close; the process's shutdown scope ends what must outlive it (a
+  // message being sent, a run being resumed), on every exit path.
+  const chat = scopeRunner(runtime, chatScope);
+  const untilShutdown = scopeRunner(runtime, services.shutdownScope);
+  // What is added below closes last in first out.
   const onChatClose = (release: () => void): void =>
-    runtime.runSync(Scope.addFinalizer(chatScope, Effect.sync(release)));
+    chat.sync(Effect.addFinalizer(() => Effect.sync(release)));
   // The one session state the TUI renders: the session view
   // bridged into a signal, its transcript tier subscribed for the runs this
   // terminal paints. Bound before anything reads the view: the terminal
@@ -370,7 +375,7 @@ export async function runChat(
   });
   for (const notice of startupNotices) appendLocalNotice(notice);
   if (link !== undefined)
-    runtime.runSync(
+    chat.fork(
       // The service went away (retired by a newer build, or it died) and
       // the link reaches it again: the chat says so, rather than going
       // quiet.
@@ -382,7 +387,7 @@ export async function runChat(
               : 'Reconnected to the TeXRA service.',
           ),
         ),
-      ).pipe(Effect.forkIn(chatScope)),
+      ),
     );
   // Cosmetic, but "texra-local" or a bare shell prompt in every tab makes a
   // multi-session workflow hard to navigate: show project and attention state.
@@ -396,9 +401,7 @@ export async function runChat(
   // The runs this terminal paints, watched on the session for as long as
   // the set holds: the watch keeps their transcripts in the view, and a
   // new set replaces the watch. The chat's scope ends it.
-  const transcriptWatch = runtime.runSync(
-    FiberHandle.make<void, never>().pipe(Scope.provide(chatScope)),
-  );
+  const transcriptWatch = chat.sync(FiberHandle.make<void, never>());
   let subscribedRuns = '';
   const syncTranscriptSubscriptions = (): void => {
     const ids = paintedRunIds.get();
@@ -406,7 +409,7 @@ export async function runChat(
     if (key === subscribedRuns) return;
     subscribedRuns = key;
     const view = runSession.view.current();
-    runtime.runFork(
+    chat.fork(
       FiberHandle.run(
         transcriptWatch,
         Stream.runDrain(
@@ -446,7 +449,7 @@ export async function runChat(
   // Chat-session controller: owns run start/resume/stop orchestration.
   // The Ink layer never directly mutates session run-state fields, every
   // state change flows through one of the controller's narrow commands.
-  const draft = runtime.runSync(SubscriptionRef.make(EMPTY_DRAFT));
+  const draft = chat.sync(SubscriptionRef.make(EMPTY_DRAFT));
   // The chat's slash commands; their handlers and forms act over the slash
   // context built below.
   const commands = builtinSlashCommands({
@@ -463,8 +466,8 @@ export async function runChat(
     runSession,
     served: runsElsewhere,
     commandName: context.commandName,
-    chatScope,
-    shutdownScope: services.shutdownScope,
+    chat,
+    untilShutdown,
     cwd: context.cwd,
     stores: services,
     runtime,
@@ -474,7 +477,7 @@ export async function runChat(
   });
 
   const inkRef: { current?: InkInstance } = {};
-  const scrollback = chatScrollback(runtime, inkRef);
+  const scrollback = chatScrollback(chat, inkRef);
 
   const resetSessionForClear = (): boolean => {
     const currentRunId = rootRunId.get() ?? selectedRunIdSignal.get();
@@ -509,7 +512,7 @@ export async function runChat(
     session,
     runSession,
     stores: services,
-    runtime,
+    chat,
     processCwd: process.cwd(),
     // The exit controller is built after Ink mounts; `/exit` runs later.
     requestInputExit: () => void exitController.exit(),
@@ -544,12 +547,15 @@ export async function runChat(
   setLogSink(silentLogSink, { trusted: true });
   const ink = render(
     <SlashContextProvider value={slashContext}>
-      <ChatProcessProvider value={{ runtime, roots: services.roots }}>
+      <ChatProcessProvider value={{ chat, roots: services.roots }}>
         <App
           session={runSession}
           draft={draft}
           onSubmit={(message, holdUntil) => {
-            runtime.runFork(
+            // Until shutdown, not until the chat's scope closes: a graceful
+            // exit closes that scope first and then waits for the messages
+            // still being sent.
+            untilShutdown.fork(
               Effect.gen(function* () {
                 const line = expandText(message).trim();
                 if (yield* handleTuiSlashCommand(line, slashContext)) return;
@@ -612,7 +618,8 @@ export async function runChat(
     commandName: context.commandName,
     cwd: context.cwd,
     chatScope,
-    shutdownScope: services.shutdownScope,
+    chat,
+    untilShutdown,
     terminal,
     runtime,
     leaveProcess: services.leave,
@@ -644,7 +651,7 @@ export async function runChat(
   // root launch, and the normal first-input path stays available so the
   // user can keep chatting (follow-ups target the root run as usual).
   if (initialResume) {
-    runtime.runFork(chatController.resume(initialResume.id));
+    untilShutdown.fork(chatController.resume(initialResume.id));
   }
 
   // The one "agent finished" notification: the root run's turn finishes,
