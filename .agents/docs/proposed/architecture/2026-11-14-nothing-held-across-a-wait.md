@@ -44,7 +44,7 @@ Surface at `7547ab0`, non-test source, 1339 files:
 | Module-level mutable state (`new Map`/`Set` 99, `let` 36)  | 135   | a layer's `Ref`, or constant                                |
 | Keyed and cached lifetimes (`RcMap`, `Cache`, `cached`)    | 90    | the three shapes in rows 9 to 11                            |
 | Locks (`Semaphore`, lanes, `SynchronizedRef`)              | 70    | rows 1, 7 and 8                                             |
-| `Effect.uninterruptible`, `uninterruptibleMask`            | 50    | durable terminals and row 5 only (46 on 2026-11-18)         |
+| `Effect.uninterruptible`, `uninterruptibleMask`            | 50    | durable terminals and row 5 only (45 on 2026-11-18)         |
 | Hand-made `Deferred` and `Latch`                           | 34    | rows 3 and 16                                               |
 | `Effect.forkDetach`                                        | 25    | 0                                                           |
 | `Queue.unbounded`, `PubSub.unbounded`                      | 15    | 0 (row 20; 6 on 2026-11-18)                                 |
