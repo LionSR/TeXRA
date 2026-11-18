@@ -1222,7 +1222,7 @@ const SCENARIOS = [
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/memory',
-      'Choose a memory to preview. Press Esc to close.',
+      'Choose a memory to preview.',
       '/memories/project.md',
       '/memories/ideas.md',
       '/memories/notes/plan.md',
@@ -1254,7 +1254,7 @@ const SCENARIOS = [
       'Esc close',
     ],
     unexpect: [
-      'Choose a memory to preview. Press Esc to close.',
+      'Choose a memory to preview.',
       'No memory files found.',
       '/memory · error',
     ],
