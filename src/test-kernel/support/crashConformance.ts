@@ -1109,12 +1109,10 @@ export function crashConformanceSuite(
                       interactive: true,
                     }).pipe(Effect.provide(session)),
                   () =>
-                    Effect.gen(function* () {
-                      yield* until(
-                        roots.storage,
-                        (rows) => settled(rows).length === 3 && allRead(rows),
-                      );
-                    }),
+                    until(
+                      roots.storage,
+                      (rows) => settled(rows).length === 3 && allRead(rows),
+                    ),
                 );
                 const cleanRows = rowsOf(roots.storage);
                 // The child's turn, the script and the command each reported, and

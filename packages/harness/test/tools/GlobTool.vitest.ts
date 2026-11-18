@@ -71,79 +71,71 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     it.effect.each([{ fileName: 'vanished.tex', tag: 'NotFound' as const }])(
       'omits a match whose metadata lookup fails with $tag',
       ({ fileName, tag }) =>
-        Effect.gen(function* () {
-          yield* withGlobWorkspace((workspaceRoot) =>
-            Effect.gen(function* () {
-              const result = yield* globWithFailedStat(
-                path.join(workspaceRoot, fileName),
-                tag,
-                { pattern: fileName },
-              );
+        withGlobWorkspace((workspaceRoot) =>
+          Effect.gen(function* () {
+            const result = yield* globWithFailedStat(
+              path.join(workspaceRoot, fileName),
+              tag,
+              { pattern: fileName },
+            );
 
-              expect(result).toMatchObject({ status: 'executed' });
-              expect(outputOf(result)).toContain('(no matches)');
-            }),
-          );
-        }),
+            expect(result).toMatchObject({ status: 'executed' });
+            expect(outputOf(result)).toContain('(no matches)');
+          }),
+        ),
     );
 
     it.effect(
       'rejects a pattern that leaves the search directory without walking',
       () =>
-        Effect.gen(function* () {
-          yield* withGlobWorkspace(() =>
-            Effect.gen(function* () {
-              const walk = vi.spyOn(Glob.prototype, 'walk');
+        withGlobWorkspace(() =>
+          Effect.gen(function* () {
+            const walk = vi.spyOn(Glob.prototype, 'walk');
 
-              // The extglob reaches `..` only through the compiled matcher.
-              for (const pattern of ['../*', '@(..|a)/*']) {
-                const result = yield* GlobTool.call({ pattern });
+            // The extglob reaches `..` only through the compiled matcher.
+            for (const pattern of ['../*', '@(..|a)/*']) {
+              const result = yield* GlobTool.call({ pattern });
 
-                expect(result.status).toBe('error');
-                expect(errorOf(result)).toContain(
-                  'must stay under the search directory',
-                );
-              }
-              expect(walk).not.toHaveBeenCalled();
-            }),
-          );
-        }),
+              expect(result.status).toBe('error');
+              expect(errorOf(result)).toContain(
+                'must stay under the search directory',
+              );
+            }
+            expect(walk).not.toHaveBeenCalled();
+          }),
+        ),
     );
 
     it.effect(
       'does not pass unrestricted external paths to the workspace ignore matcher',
       () =>
-        Effect.gen(function* () {
-          yield* withGlobWorkspace(() =>
+        withGlobWorkspace(() =>
+          withTempDirEffect('texra-glob-external-', (externalPath) =>
             Effect.gen(function* () {
-              yield* withTempDirEffect('texra-glob-external-', (externalPath) =>
-                Effect.gen(function* () {
-                  const externalDistPath = path.join(externalPath, 'dist');
-                  yield* Effect.promise(() => mkdir(externalDistPath));
-                  yield* Effect.promise(() =>
-                    writeFile(
-                      path.join(externalDistPath, 'external.tex'),
-                      'external',
-                    ),
-                  );
-                  const { roots } = yield* FakeHost;
-                  yield* roots.workspaceState.update(
-                    TOOL_PATH_PROTECTION_SETTING.key,
-                    false,
-                  );
-
-                  const result = yield* GlobTool.call({
-                    pattern: '**/*.tex',
-                    path: externalPath,
-                  });
-
-                  expect(result).toMatchObject({ status: 'executed' });
-                  expect(outputOf(result)).toContain('external.tex');
-                }),
+              const externalDistPath = path.join(externalPath, 'dist');
+              yield* Effect.promise(() => mkdir(externalDistPath));
+              yield* Effect.promise(() =>
+                writeFile(
+                  path.join(externalDistPath, 'external.tex'),
+                  'external',
+                ),
               );
+              const { roots } = yield* FakeHost;
+              yield* roots.workspaceState.update(
+                TOOL_PATH_PROTECTION_SETTING.key,
+                false,
+              );
+
+              const result = yield* GlobTool.call({
+                pattern: '**/*.tex',
+                path: externalPath,
+              });
+
+              expect(result).toMatchObject({ status: 'executed' });
+              expect(outputOf(result)).toContain('external.tex');
             }),
-          );
-        }),
+          ),
+        ),
     );
   },
 );
