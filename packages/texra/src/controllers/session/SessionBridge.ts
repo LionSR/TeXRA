@@ -202,7 +202,8 @@ export class SessionBridge {
         close: Scope.close(scope, Exit.void),
       };
       const { protocol, receive } = yield* serveOverMessages(
-        (client, message) => port.send({ session: this.key, client, message }),
+        (client, message) =>
+          Effect.sync(() => port.send({ session: this.key, client, message })),
       );
       // Forked before the release finalizer is registered: finalizers run
       // last-in first-out, so the port is released (its map entry, its

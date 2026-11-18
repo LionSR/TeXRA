@@ -198,15 +198,17 @@ export function installWebviewTransport(
       client['session.frames']({ aggregates, cursor, debug }).pipe(
         Stream.map((frame) => frame.inputs),
         Stream.catchCause((cause) => {
-          // The host ended the call (its port closing): the read ends, and
-          // must not end the view's updates with it.
-          if (Cause.hasInterruptsOnly(cause)) return Stream.empty;
-          console.error('[progress] malformed session frame', cause);
-          surfaceListener(key, {
-            kind: 'reportError',
-            reason:
-              'The host sent a malformed update, so this transcript may be incomplete. Reopen the view to reload it.',
-          });
+          // Ended either way, and never the view's updates with it; only a
+          // failure is the host's defect, not the host ending the call (its
+          // port closing).
+          if (Cause.hasFails(cause) || Cause.hasDies(cause)) {
+            console.error('[progress] malformed session frame', cause);
+            surfaceListener(key, {
+              kind: 'reportError',
+              reason:
+                'The host sent a malformed update, so this transcript may be incomplete. Reopen the view to reload it.',
+            });
+          }
           return Stream.empty;
         }),
       );
@@ -217,10 +219,8 @@ export function installWebviewTransport(
     <A, E>(stream: Stream.Stream<A, E>): Stream.Stream<A> =>
       stream.pipe(
         Stream.catchCause((cause) => {
-          // The host ended the call (its port closing): the read ends, and
-          // must not end the view's updates with it.
-          if (Cause.hasInterruptsOnly(cause)) return Stream.empty;
-          console.error(`[progress] the host's ${what} stopped`, cause);
+          if (Cause.hasFails(cause) || Cause.hasDies(cause))
+            console.error(`[progress] the host's ${what} stopped`, cause);
           return Stream.empty;
         }),
       );
@@ -235,7 +235,8 @@ export function installWebviewTransport(
         Effect.gen(function* () {
           const scope = yield* Scope.make();
           const { protocol, receive: deliver } = yield* callOverMessages(
-            (message) => post({ session: key, client: self, message }),
+            (message) =>
+              Effect.sync(() => post({ session: key, client: self, message })),
           );
           const client = yield* RpcClient.make(SessionRpcs).pipe(
             Effect.provideService(RpcClient.Protocol, protocol),

@@ -83,7 +83,7 @@ function traceHandlers(document: Promise<TraceDocument>) {
       ),
     ),
   ).pipe(Stream.filter((trace) => trace !== null));
-  const readOnly = Effect.fail(
+  const refused = Effect.fail(
     new Rejected({ reason: 'An exported trace is read-only.' }),
   );
   return SessionRpcs.toLayer({
@@ -95,8 +95,8 @@ function traceHandlers(document: Promise<TraceDocument>) {
         kind: 'select' as const,
         runId: trace.runId,
       })),
-    'session.request': () => readOnly,
-    'host.request': () => readOnly,
+    'session.request': () => refused,
+    'host.request': () => refused,
   });
 }
 
@@ -109,7 +109,7 @@ function installTraceHostBridge(document: Promise<TraceDocument>): void {
   // each mount of the shell is a new client of it.
   const served = Effect.runSync(
     serveOverMessages((client, message) =>
-      deliver({ session: TRACE_SESSION, client, message }),
+      Effect.sync(() => deliver({ session: TRACE_SESSION, client, message })),
     ),
   );
   Effect.runFork(

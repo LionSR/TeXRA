@@ -374,7 +374,8 @@ export const serviceHandlers = (
             ),
           ),
         'host.focus': ({ attachment }) => hosts.focus(attachment),
-        'host.answer': ({ id, answer }) => hosts.answer(id, answer),
+        'host.answer': ({ attachment, message }) =>
+          hosts.answer(attachment, message),
         'task.resume': ({ workspace, runId, apiKeys }) =>
           Effect.scoped(
             Effect.gen(function* () {

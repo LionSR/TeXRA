@@ -23,7 +23,10 @@ import { RpcClient, RpcServer, type RpcMessage } from 'effect/rpc';
  * channel needs. `send` posts an answer to the client it names.
  */
 export const serveOverMessages = Effect.fnUntraced(function* (
-  send: (client: string, message: RpcMessage.FromServerEncoded) => void,
+  send: (
+    client: string,
+    message: RpcMessage.FromServerEncoded,
+  ) => Effect.Effect<void>,
 ) {
   /** The live client's id for the server, and its name on the channel. */
   let current: { readonly name: string; readonly id: number } | undefined;
@@ -54,9 +57,9 @@ export const serveOverMessages = Effect.fnUntraced(function* (
       return {
         disconnects,
         send: (id, response) =>
-          Effect.sync(() => {
-            if (current?.id === id) send(current.name, response);
-          }),
+          Effect.suspend(() =>
+            current?.id === id ? send(current.name, response) : Effect.void,
+          ),
         end: () => Effect.void,
         clientIds: Effect.sync(
           () => new Set(current === undefined ? [] : [current.id]),
@@ -82,7 +85,7 @@ export const serveOverMessages = Effect.fnUntraced(function* (
  * the client one message the server sent.
  */
 export const callOverMessages = Effect.fnUntraced(function* (
-  send: (message: RpcMessage.FromClientEncoded) => void,
+  send: (message: RpcMessage.FromClientEncoded) => Effect.Effect<void>,
 ) {
   let receive = (_message: RpcMessage.FromServerEncoded): Effect.Effect<void> =>
     Effect.void;
@@ -93,7 +96,7 @@ export const callOverMessages = Effect.fnUntraced(function* (
           discard: true,
         });
       return {
-        send: (_id, message) => Effect.sync(() => send(message)),
+        send: (_id, message) => send(message),
         supportsAck: true,
         supportsTransferables: false,
         codecFor: Schema.toCodecJson,
