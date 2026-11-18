@@ -12,21 +12,21 @@
  */
 import { stripVTControlCharacters } from 'node:util';
 
-import { Effect, Deferred, LogLevel, Option, Predicate, Stream } from 'effect';
+import { Effect, LogLevel, Option, Predicate, Stream } from 'effect';
 
 import { type RunOutcome } from '@texra-ai/harness/schemas';
 import { fullTranscriptEntryLayout } from '@cli/chat/tui/panes/transcriptEntryLayout';
 import type { EventsFrame } from '@texra/shared/session/sessionFrames';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
-import {
+import type {
+  ServiceClient,
   ServiceUnavailable,
-  type ServiceClient,
 } from '@texra/controllers/server/client';
-import { remoteSessionView } from '@texra/shared/session/webviewSessionLayer';
+import { watchTask } from '@texra/controllers/server/serviceSession';
 
 import { writeTextStdout } from '../platform/logSinks';
 import { writeProgressRow } from './sessionProgressSubscription';
-import type { RunView, SessionView } from '@texra-ai/harness/schemas';
+import type { RunView } from '@texra-ai/harness/schemas';
 
 /** How the attached task is printed. */
 interface TaskAttachOutput {
@@ -50,57 +50,6 @@ function writeProgress(
     if (read === 'listing' || event.aggregateId !== aggregate) continue;
     writeProgressRow(event, includeDebugLogs);
   }
-}
-
-/**
- * The live view of `task`'s session, as the service's frames build it: one
- * level per change, with `task`'s transcript named so its rows load. Each
- * frame is handed to `onFrame` before it is applied. The stream fails with
- * {@link ServiceUnavailable} when the service stops sending; it never ends on
- * its own. The session view's graph lives as long as the stream, one per
- * watch.
- */
-export function watchTask(
-  client: ServiceClient,
-  task: Pick<TaskSummary, 'workspace' | 'runId'>,
-  onFrame: (frame: EventsFrame) => void = () => {},
-): Stream.Stream<SessionView, ServiceUnavailable> {
-  return Stream.unwrap(
-    Effect.gen(function* () {
-      // The watch only ends when the service does: the task did not end.
-      const ended = yield* Deferred.make<never, ServiceUnavailable>();
-      const endWith = (reason: string) =>
-        Deferred.fail(
-          ended,
-          new ServiceUnavailable({
-            reason: `The TeXRA service stopped sending task ${task.runId}: ${reason}`,
-          }),
-        );
-      const view = yield* remoteSessionView(
-        task.workspace,
-        (aggregates, cursor, debug) =>
-          client['task.watch']({
-            workspace: task.workspace,
-            subscribe: { debug, cursor, aggregates },
-          }).pipe(
-            Stream.tap((frame) => Effect.sync(() => onFrame(frame))),
-            Stream.map((frame) => frame.inputs),
-            // Each end is said through `ended`, which ends the levels below.
-            Stream.concat(
-              Stream.fromEffect(endWith('the service closed the watch.')).pipe(
-                Stream.drain,
-              ),
-            ),
-            Stream.catch((error) =>
-              Stream.fromEffect(endWith(error.message)).pipe(Stream.drain),
-            ),
-          ),
-      );
-      // Name the transcript: the view asks for it from where it stands.
-      yield* view.subscribe([{ id: task.runId, fromSeq: 0 }]);
-      return view.changes.pipe(Stream.interruptWhen(Deferred.await(ended)));
-    }),
-  );
 }
 
 /**
