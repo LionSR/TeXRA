@@ -144,8 +144,10 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
     // The child registers with its opening, which commits here.
     yield* startChildRun(runId, definition, {
       identity: { kind: 'agent', agent: config.agent },
-      parentId,
-      parentCall: { callId: parent.callId, card: parent.logId, awaited: false },
+      parent: {
+        id: parentId,
+        call: { callId: parent.callId, card: parent.logId, awaited: false },
+      },
       grants,
     });
 

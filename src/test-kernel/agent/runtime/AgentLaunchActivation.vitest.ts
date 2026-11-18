@@ -128,7 +128,7 @@ describe(
                   executeAgent(definition, runId, {
                     registration: {
                       identity: { kind: 'agent', agent: 'assistant' },
-                      parentId,
+                      parent: { id: parentId, call: null },
                     },
                   }),
                 ),

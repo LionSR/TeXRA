@@ -98,8 +98,10 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
   // that fails before it fails this call.
   yield* startChildRun(runId, definition, {
     identity: { kind: 'script', title },
-    parentId,
-    parentCall: { callId: call.callId, card: call.logId, awaited: false },
+    parent: {
+      id: parentId,
+      call: { callId: call.callId, card: call.logId, awaited: false },
+    },
     description: title,
     ...(grants !== undefined && { grants }),
   });

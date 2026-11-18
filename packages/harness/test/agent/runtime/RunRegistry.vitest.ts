@@ -167,7 +167,7 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
           const refusal = yield* Effect.flip(
             registrationRows(generateRunId(), CONFIG, {
               identity: { kind: 'agent', agent: 'chat' },
-              parentId: rootRunId,
+              parent: { id: rootRunId, call: null },
             }).pipe(Effect.provide(session)),
           );
           expect(refusal.message).toMatch(/that run was stopped/);

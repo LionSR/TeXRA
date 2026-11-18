@@ -186,9 +186,9 @@ interface AwaitedChildLaunch {
   /** The run this attempt executes under; the caller owns its derivation. */
   readonly runId: RunId;
   readonly configPayload: AgentConfigPayload;
-  /** The parent's call that launches the child, which owns it, and its
-   *  tool card. */
-  readonly parentCall?: Omit<NonNullable<RunParent['call']>, 'awaited'>;
+  /** The parent's call that launches the child, which owns it and awaits
+   *  its end, and its tool card. */
+  readonly parentCall: Omit<NonNullable<RunParent['call']>, 'awaited'>;
   /** The grants a fresh child is registered with. */
   readonly grants?: ApprovalGrants;
   /** The history a fresh child is born on: a fork's (`forkSeed`). */
@@ -217,10 +217,10 @@ export const executeSubagentInBand = (
         definition,
         {
           identity: { kind: 'agent', agent: definition.config.agent },
-          parentId: launch.parentId,
-          ...(launch.parentCall !== undefined && {
-            parentCall: { ...launch.parentCall, awaited: true },
-          }),
+          parent: {
+            id: launch.parentId,
+            call: { ...launch.parentCall, awaited: true },
+          },
           grants: launch.grants,
           seed: launch.seed,
         },

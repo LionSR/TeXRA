@@ -188,8 +188,10 @@ export const launchProcessChild = Effect.fn('launchProcessChild')(function* (
     yield* registerRun(runId, launch.config, {
       identity: launch.identity,
       takesFollowUps: false,
-      parentId: parent.runId,
-      parentCall: { callId, card: parent.logId, awaited: false },
+      parent: {
+        id: parent.runId,
+        call: { callId, card: parent.logId, awaited: false },
+      },
       description: launch.description,
     });
     const logger = new TraceEmitter((event) => log.publish(runId, event));

@@ -115,19 +115,20 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
 ): Effect.fn.Return<Registration, Error, OpenServices> {
   return yield* Effect.gen(function* () {
     const prior = yield* getRunRecords(runId).exists();
-    if (options.parentId !== undefined) {
+    const parentId = options.parent?.id;
+    if (parentId !== undefined) {
       // The database refuses a closed or unborn parent; this only words
       // the refusal.
       const log = yield* SessionLog;
-      const parent = yield* log.facts(options.parentId);
+      const parent = yield* log.facts(parentId);
       if (parent === null)
         return yield* Effect.fail(
-          new Error(`Parent run ${options.parentId} is unavailable.`),
+          new Error(`Parent run ${parentId} is unavailable.`),
         );
       if (parent.stop !== null || parent.end !== null)
         return yield* Effect.fail(
           new Error(
-            `Cannot launch child run ${runId} under run ${options.parentId}: that run was stopped.`,
+            `Cannot launch child run ${runId} under run ${parentId}: that run was stopped.`,
           ),
         );
     }
