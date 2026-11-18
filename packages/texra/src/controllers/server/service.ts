@@ -125,9 +125,12 @@ const internal = Effect.fn('handlers.internal')(function* (
  * What a start or a resume answers its client: the run it reached, or why
  * it reached none, which is the session's own failure, carried as the class
  * it is. A start that fails before its run opens has no row to show it: the
- * window that asked shows it. A client that disconnects gives
- * up only this answer: the run is its own fiber's from the moment the
- * session's registry holds it, and a stop is how it ends.
+ * window that asked shows it. A client that disconnects once the session's
+ * registry holds the run gives up only this answer: the run is its own
+ * fiber's from then on, and a stop is how it ends. Before that (while the
+ * session accepts the input, or a resume reads the runs above it) the work
+ * is still this request's, so a disconnect there starts nothing and leaves
+ * no row: the client that asked is gone, and nobody else was told of a run.
  */
 const started = <E>(
   start: Effect.Effect<Run, E>,
