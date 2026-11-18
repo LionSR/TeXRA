@@ -32,7 +32,12 @@ import {
   SessionOwner,
   type SessionServices,
 } from '@agent/runtime/rootLaunch';
-import { LaunchKeys, RunRegistry, Runs } from '@agent/runtime/runRegistry';
+import {
+  LaunchKeys,
+  RunRegistry,
+  Runs,
+  RunStopped,
+} from '@agent/runtime/runRegistry';
 import type { ITool } from '@tools/core/ToolTypes';
 import { AgentUnavailable, LaunchRefused } from '@common/errors/agentErrors';
 import { asksApproval } from '@agent/runtime/agentToolResolution';
@@ -77,11 +82,14 @@ type Catalog = Context.Service.Shape<typeof AgentCatalog>;
 const runFailure = (cause: unknown): RunFailure =>
   new RunFailure({ cause, message: toErrorMessage(cause) });
 
-/** A failure of the launch path: a refused launch as itself, an agent this
- *  process cannot run as its refusal (a missing one with the notice that
- *  offers the agent setting), anything else as the run's own. */
+/** A failure of the launch path: a refused launch as itself, one a stop
+ *  cut before it started as a refusal, an agent this process cannot run as
+ *  its refusal (a missing one with the notice that offers the agent
+ *  setting), anything else as the run's own. */
 const launchFailure = (cause: Error): LaunchRefused | RunFailure => {
   if (cause instanceof LaunchRefused) return cause;
+  if (cause instanceof RunStopped)
+    return new LaunchRefused({ message: cause.message });
   if (!(cause instanceof AgentUnavailable)) return runFailure(cause);
   return cause.blocked.blocker === 'agentMissing'
     ? missingAgentRefusal({ agent: cause.blocked.name, message: cause.message })

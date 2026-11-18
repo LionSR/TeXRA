@@ -79,7 +79,7 @@ class ResumeNotOpened extends Schema.TaggedError<ResumeNotOpened>()(
  * The one reading of a resume's failure, at each step that can fail (its
  * record read, its launch): stored rows this build cannot use refuse the
  * resume; any other failure, the disk's, fails it. A launch already here
- * is {@link joinOpening}'s.
+ * is {@link joinOpening}'s, and one a stop cut is refused.
  */
 function refusalFor(
   error: Error,
@@ -105,8 +105,8 @@ function refusalFor(
  * the registry's launch (`RunRegistry.start`), on the session's context
  * whichever fiber asks (a host's, a wake's, a tool's): a run a fiber here
  * drives or opens is answered as it runs ({@link joinOpening}), one whose
- * end is stored is resumed once that fiber has left, and a stop asked
- * while the decision reads ends the run and opens nothing.
+ * end is stored is resumed once that fiber has left, and a stop that cuts
+ * the decision or the opening refuses the resume.
  */
 export const resumeRun = (
   runId: RunId,
@@ -119,6 +119,9 @@ export const resumeRun = (
       })),
       Effect.catchTag('ResumeNotOpened', (notOpened) =>
         Effect.succeed<ResumeHandOff>(notOpened.answer),
+      ),
+      Effect.catchTag('RunStopped', () =>
+        Effect.succeed<ResumeHandOff>(REFUSED),
       ),
       Effect.catch((error) =>
         error instanceof RunLive
@@ -213,10 +216,6 @@ export const openResume = Effect.fn('resumeRun.open')(function* (
   if (rejected !== null) return yield* refuse({ failed: rejected });
   // Its parent, read once: the run's edge for this activation.
   const parentId = yield* persistedParentId(runId);
-  // A stop asked while those reads ran: the registry ends the run on its
-  // rows as this opening fails; there is nothing to activate.
-  if ((yield* RunRegistry).stopAsked(runId) !== null)
-    return yield* refuse(REFUSED);
   const definition = yield* prepareAgentDefinition({ config }).pipe(
     // An agent or plugin this process cannot run now refuses the resume
     // with the reason; the run stays interrupted, never failed, and

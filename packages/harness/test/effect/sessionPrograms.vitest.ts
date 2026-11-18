@@ -9,8 +9,9 @@
  *   parent's handle; the redirect leaves a listener of its own subscribed.
  * - A labelled run's label request is left out of its result's usage or its
  *   view's, or the two disagree.
- * - A stop that reaches a launch still opening, or before it registered,
- *   leaves the run without the stop's row or without an end.
+ * - A stop that reaches a launch still opening leaves the run without the
+ *   stop's row or without an end; one that came before the launch is lost
+ *   and the run runs.
  * - A run whose end the store refused fails its result with "ended without
  *   a stored end" and nothing of why.
  */
@@ -198,12 +199,16 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
             const runId = sdk.held()[0]?.runId;
             assert(runId !== undefined, 'the session holds the launch');
             // A launch the session holds: stopped, then interrupted, as its
-            // opening commits.
-            yield* sdk.request({ kind: 'run.stop', runId, reason: 'user' });
+            // opening commits. The stop's own row waits behind that commit.
+            const stopped = yield* Effect.forkChild(
+              sdk.request({ kind: 'run.stop', runId, reason: 'user' }),
+              { startImmediately: true },
+            );
             const interrupted = yield* Effect.forkChild(
               Fiber.interrupt(launch),
             );
             yield* opening.release;
+            yield* Fiber.join(stopped);
             yield* Fiber.join(interrupted);
             yield* untilStored(roots.storage, (rows) =>
               rows.some((row) => row.run === runId && row.type === 'run.end'),
@@ -222,30 +227,30 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
           }),
       );
 
-      it.effect(
-        'ends cancelled a launch whose stop came before it started',
-        () =>
-          Effect.gen(function* () {
-            const { roots } = yield* FakeHost;
-            const sdk = yield* packageSession(
-              yield* persistentTestSession(roots),
-            );
-            // A host mints the id, and a stop can reach the session before
-            // the launch registers it: no rows exist yet.
-            const runId = generateRunId();
-            yield* sdk.request({ kind: 'run.stop', runId, reason: 'user' });
-            const run = yield* sdk.start({
+      it.effect('refuses a launch whose stop came before it started', () =>
+        Effect.gen(function* () {
+          const { roots } = yield* FakeHost;
+          const sdk = yield* packageSession(
+            yield* persistentTestSession(roots),
+          );
+          // A host mints the id, and a stop can reach the session before
+          // the launch does: no rows exist yet, and none ever run.
+          const runId = generateRunId();
+          yield* sdk.request({ kind: 'run.stop', runId, reason: 'user' });
+          const refused = yield* Effect.flip(
+            sdk.start({
               agent: 'golden_parent',
               instruction: 'Read the notes, plan, delegate.',
               model: MODEL,
               runId,
-            });
-            expect((yield* run.result).outcome).toBe('cancelled');
-            const stops = storedRows(roots.storage)
-              .filter((row) => row.run === runId && row.type === 'run.stop')
-              .map((row) => Schema.decodeUnknownSync(RunStopData)(row.data));
-            expect(stops).toStrictEqual([{ reason: 'user' }]);
-          }),
+            }),
+          );
+          expect(refused._tag).toBe('LaunchRefused');
+          expect(refused.message).toContain('stopped before it started');
+          expect(
+            storedRows(roots.storage).filter((row) => row.run === runId),
+          ).toStrictEqual([]);
+        }),
       );
 
       it.effect(
