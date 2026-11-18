@@ -72,6 +72,7 @@ const parsedJson = (text: string): unknown =>
 const STATUS_BY_ERROR_TYPE: ReadonlyMap<string, number> = new Map([
   ['invalid_request_error', 400],
   ['authentication_error', 401],
+  ['billing_error', 402],
   ['permission_error', 403],
   ['not_found_error', 404],
   ['request_too_large', 413],
