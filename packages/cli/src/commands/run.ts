@@ -1,6 +1,5 @@
 import * as path from 'node:path';
 import { Effect, FileSystem, Result } from 'effect';
-import { hasMagic } from 'glob';
 
 import {
   toErrorMessage,
@@ -52,10 +51,13 @@ import {
 } from '../runtime/headless/terminalStatus';
 import {
   hasMixedStdinDocumentTaskInputSpecs,
-  classifyInputFiles,
   withExpandedRunInputs,
   DOCUMENT_TASK_INPUT_REQUIRED_MESSAGE,
 } from '../runtime/headless/documentTaskInputs';
+import {
+  isTaskFileGlob,
+  splitMediaFiles,
+} from '@texra/controllers/session/taskFiles';
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
@@ -153,16 +155,10 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
     // reading stdin. The expanded files are checked below.
     const literalInputs = init.inputFiles
       .map((file) => file.trim())
-      .filter(
-        (file) =>
-          !hasMagic(file, {
-            magicalBraces: true,
-            windowsPathsNoEscape: process.platform === 'win32',
-          }),
-      );
+      .filter((file) => !isTaskFileGlob(file));
     if (
       hasMixedStdinDocumentTaskInputSpecs(
-        classifyInputFiles(literalInputs).inputFiles,
+        splitMediaFiles(literalInputs).inputFiles,
       )
     ) {
       return yield* failUsage(MULTI_INPUT_OUTPUT_MESSAGE);
@@ -173,7 +169,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
     init.inputFiles,
     init.contextFiles,
     context.cwd,
-    {},
+    { task: 'program' },
     Effect.fnUntraced(function* ({
       inputFiles,
       mediaFiles,
@@ -271,10 +267,7 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
     init.inputFiles,
     init.contextFiles,
     context.cwd,
-    {
-      allowEmptyInput: true,
-      requireWorkspaceFiles: true,
-    },
+    { task: 'agent' },
     Effect.fnUntraced(function* ({
       inputFiles,
       mediaFiles,
