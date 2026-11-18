@@ -8,16 +8,20 @@
  * API's create response is here too: `decodeUploadedFile` reads it.
  */
 import { Effect, Schema, SchemaGetter, Struct } from 'effect';
+import type OpenAI from 'openai';
 
 import { CountSchema } from '../protocol.js';
 import { ResponsesUsageSchema } from './openaiResponsesUsage.js';
 import { uploadedFileSchema } from './uploadCache.js';
 
+// Each literal list below is checked against the SDK's own type, so an
+// SDK rename fails the typecheck; the schemas stay looser where other
+// vendors answer on this protocol.
 const ItemStatusSchema = Schema.Literals([
   'in_progress',
   'completed',
   'incomplete',
-]);
+] as const satisfies readonly OpenAI.Responses.ResponseOutputMessage['status'][]);
 const ReasoningTextSchema = Schema.Struct({
   type: Schema.Literal('reasoning_text'),
   text: Schema.String,
@@ -29,7 +33,14 @@ const OutputItemSchema = Schema.Union([
     role: Schema.Literal('assistant'),
     status: ItemStatusSchema,
     phase: Schema.optional(
-      Schema.NullOr(Schema.Literals(['commentary', 'final_answer'])),
+      Schema.NullOr(
+        Schema.Literals([
+          'commentary',
+          'final_answer',
+        ] as const satisfies readonly NonNullable<
+          OpenAI.Responses.ResponseOutputMessage['phase']
+        >[]),
+      ),
     ),
     content: Schema.Array(
       Schema.Union([
@@ -96,7 +107,7 @@ export const ResponseSchema = Schema.Struct({
     'failed',
     'cancelled',
     'incomplete',
-  ]),
+  ] as const satisfies readonly OpenAI.Responses.ResponseStatus[]),
   output: Schema.Array(OutputItemSchema),
   usage: Schema.optional(Schema.NullOr(ResponsesUsageSchema)),
   error: Schema.optional(
@@ -107,7 +118,12 @@ export const ResponseSchema = Schema.Struct({
   incomplete_details: Schema.optional(
     Schema.NullOr(
       Schema.Struct({
-        reason: Schema.Literals(['max_output_tokens', 'content_filter']),
+        reason: Schema.Literals([
+          'max_output_tokens',
+          'content_filter',
+        ] as const satisfies readonly NonNullable<
+          OpenAI.Responses.Response.IncompleteDetails['reason']
+        >[]),
       }),
     ),
   ),

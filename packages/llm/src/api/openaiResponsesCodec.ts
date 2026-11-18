@@ -311,15 +311,21 @@ export interface DocumentAccess {
   readonly fileIdFor: (base64: string) => string | null;
 }
 
-const TERMINAL_EVENTS = new Set([
+// The event names are checked against the SDK's stream events, so an SDK
+// rename fails the typecheck.
+type StreamEventType = OpenAI.Responses.ResponseStreamEvent['type'];
+
+const TERMINAL_EVENTS = new Set<string>([
   'response.completed',
   'response.incomplete',
   'response.failed',
-]);
-const SNAPSHOT_EVENTS = new Set([
-  'response.created',
-  'response.queued',
-  'response.in_progress',
+] satisfies StreamEventType[]);
+const SNAPSHOT_EVENTS = new Set<string>([
+  ...([
+    'response.created',
+    'response.queued',
+    'response.in_progress',
+  ] satisfies StreamEventType[]),
   ...TERMINAL_EVENTS,
 ]);
 const DELTA_CHANNELS = new Map<string, Append['channel']>([
@@ -327,12 +333,12 @@ const DELTA_CHANNELS = new Map<string, Append['channel']>([
   ['response.refusal.delta', 'refusal'],
   ['response.reasoning_summary_text.delta', 'summary'],
   ['response.reasoning_text.delta', 'reasoning'],
-]);
+] satisfies [StreamEventType, Append['channel']][]);
 // Events that own no content: framing (output_item.done carries the item),
 // the Codex backend's response.metadata notices (serving model, safety hints)
 // and the transport's keepalive, which the SDK's own `accumulateResponse`
 // takes beside the stream events and leaves the response unchanged by.
-const FRAMING_EVENTS = new Set([
+const FRAMING_EVENTS = new Set<string>([
   'response.content_part.added',
   'response.content_part.done',
   'response.output_text.done',
@@ -345,7 +351,7 @@ const FRAMING_EVENTS = new Set([
   'response.function_call_arguments.done',
   'response.metadata',
   'keepalive',
-]);
+] satisfies (StreamEventType | 'response.metadata' | 'keepalive')[]);
 
 /** One decoded Responses event: its parts, and whether it finishes. */
 interface ResponseEventParts {
