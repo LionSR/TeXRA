@@ -7,9 +7,9 @@
  * union, and the inbound (webview → backend) message union plus their
  * dispatchers.
  */
-import { Effect, Schema, Struct } from 'effect';
-
+import { Schema, Struct } from 'effect';
 import {
+  decodingDefault,
   SUBSCRIPTION_AUTH_PROVIDERS,
   AgentScanIssueSchema,
   AgentSourceSchema,
@@ -18,7 +18,9 @@ import {
   SkillDisplayItemSchema,
   DISABLED_SKILLS_SETTING,
   DISABLED_SKILL_SOURCES_SETTING,
+  ToolDependencyStatusSchema,
 } from '@texra-ai/harness/schemas';
+
 import {
   API_KEY_PROVIDER_IDS,
   CredentialOriginSchema,
@@ -38,7 +40,6 @@ import {
   SETTINGS_VIEW_COMMANDS,
   WebviewReadyMessageSchema,
 } from '@texra/shared/ipc';
-import { ToolDependencyStatusSchema } from '@texra-ai/harness/schemas';
 import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import { SettingsTargetSchema } from './settingsTarget';
 import { ProfilePageSchema } from './profileViewMessages';
@@ -163,9 +164,7 @@ export type AgentSelectionItem = typeof AgentSelectionItemSchema.Type;
 /** Outbound: backend → frontend agent selection data */
 const AgentSelectionPageSchema = Schema.Struct({
   agents: Schema.Array(AgentSelectionItemSchema),
-  customAgentIssues: Schema.Array(AgentScanIssueSchema).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
+  customAgentIssues: decodingDefault(Schema.Array(AgentScanIssueSchema), []),
 });
 
 // ==================== Model selection data schema ====================
@@ -246,17 +245,13 @@ const TeamsPageSchema = Schema.Struct({
    * the agent registry so preset cards badge orchestrators by capability
    * instead of guessing from the agent's name.
    */
-  orchestratorAgents: Schema.Array(Schema.String).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
+  orchestratorAgents: decodingDefault(Schema.Array(Schema.String), []),
   /**
    * The team the workspace agents currently resolves to, or null when it runs
    * no team. Owned by the workspace agents so a preset card reports the applied team
    * rather than the last one the user clicked.
    */
-  activePresetId: Schema.NullOr(Schema.String).pipe(
-    Schema.withDecodingDefault(Effect.succeed(null)),
-  ),
+  activePresetId: decodingDefault(Schema.NullOr(Schema.String), null),
 });
 
 // ============================================================

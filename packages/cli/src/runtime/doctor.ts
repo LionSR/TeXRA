@@ -10,10 +10,7 @@ import {
 } from 'effect';
 
 // Local imports
-import {
-  extractErrorMessage,
-  formatResultCount,
-} from '@texra-ai/harness/schemas';
+import { formatResultCount } from '@texra-ai/harness/schemas';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { probeLatexTools } from '@latex/latexToolchain';
 import type { UsageLoggingOptOut } from '@telemetry/UsageLogService';
@@ -30,7 +27,7 @@ import {
 // Local file imports
 import { CliExitCode } from './platform/exitCodes';
 import { writeCliResult } from '../commands/_helpers/output';
-import { writeTextStderr } from './platform/logSinks';
+import { cliErrorMessage, writeTextStderr } from './platform/logSinks';
 import { createCliStyle } from './terminal/style';
 import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from './terminal/terminalRequirements';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -155,7 +152,7 @@ function failFromError(
   message: string,
   error: unknown,
 ): DoctorCheck {
-  return fail(id, name, message, extractErrorMessage(error));
+  return fail(id, name, message, cliErrorMessage(error));
 }
 
 const SUPPORTED_NODE_RANGE = SemVerRange.parseUnsafe(
@@ -212,7 +209,7 @@ function checkDirectory(
           access === 'readwrite'
             ? `${dir} is not readable and writable.`
             : `${dir} is not readable.`,
-          failure.reason.cause ?? failure,
+          failure,
         ),
       ),
     ),

@@ -97,8 +97,6 @@ export function formatIssuesForDiagnostics(
 const ToolResultSharedFields = {
   /** User instruction that was processed */
   userInstruction: Schema.optional(Schema.String),
-  /** Summary added by handlers when attachments are available */
-  attachmentSummary: Schema.optional(Schema.String),
 };
 
 /** A `plugin.fact` of one of the calling tool's plugin's fact kinds

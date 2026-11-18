@@ -1,8 +1,12 @@
 import { Effect, Schema } from 'effect';
+import {
+  decodingDefault,
+  toErrorMessage,
+  type StateKey,
+} from '@texra-ai/harness/schemas';
 
 import { AppState, type ConfigProvider } from '@texra-ai/harness/host';
 import { Settings } from '@texra-ai/harness/plugins';
-import { toErrorMessage, type StateKey } from '@texra-ai/harness/schemas';
 import { TELEMETRY_ENABLED_SETTING } from '@texra/shared/settings/texraSettings';
 
 import { usageLoggingOptOut } from './UsageLogService';
@@ -11,9 +15,7 @@ import { usageLoggingOptOut } from './UsageLogService';
 const NOTICE_SHOWN_KEY = {
   key: 'telemetry.noticeShown',
   slot: 'globalState',
-  schema: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
+  schema: decodingDefault(Schema.Boolean, false),
 } as const satisfies StateKey<boolean>;
 
 /**

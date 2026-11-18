@@ -14,7 +14,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 
 // Local imports
 import {
@@ -33,6 +33,36 @@ import {
   TEXRA_CONFIG_FILE_NAME,
   workspaceTexraConfigPath,
 } from './nodeStorage';
+
+/**
+ * Name the entries of a config file that cannot apply. An unknown key (a
+ * typo such as `texra.modle`) is a setting that silently never applies, and
+ * so is a known key whose value its catalog row rejects: a typed read gets
+ * its row's default, and a fail-closed reader its own reading (telemetry
+ * reads as off). Unknown keys are named for the project file only: the
+ * internal and user files are shared by every TeXRA build on the machine,
+ * and may hold rows this one does not declare.
+ */
+function configFileWarnings(
+  catalog: SettingsCatalog,
+  store: JsonStore,
+  isProjectFile: boolean,
+): string[] {
+  return store.keys().flatMap((key) => {
+    const row = catalog.byStoredKey(key);
+    if (row?.slot !== 'config') {
+      return isProjectFile
+        ? [`Ignoring unknown ${store.filePath} key "${key}".`]
+        : [];
+    }
+    const value = store.get(key);
+    return Result.isFailure(Schema.decodeUnknownResult(row.schema)(value))
+      ? [
+          `Ignoring invalid ${store.filePath} value ${JSON.stringify(value)} for "${key}".`,
+        ]
+      : [];
+  });
+}
 
 /**
  * Open the stores backing the workspace and local config targets. The desktop
@@ -56,6 +86,8 @@ import {
  * must not loosen approvals, and the person must not find out by surprise.
  * A project opt-out of telemetry is honoured, not ignored, so it is not warned.
  * The file is left as it is, so the warning repeats until the key is removed.
+ * `warnings` also names each entry of either store that cannot apply (an
+ * unknown project key, a value its row rejects).
  *
  * No write runner is supplied: a config store is written through the store's
  * own Effect `set`, which composes into the writer's program.
@@ -76,6 +108,7 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
   );
   if (!workspaceRoot) {
     const store = yield* openLocal;
+    warnings.push(...configFileWarnings(catalog, store, false));
     return { workspace: store, local: store, warnings };
   }
   const projectConfigPath = workspaceTexraConfigPath(workspaceRoot);
@@ -101,26 +134,35 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
       `Ignoring "${key}" in ${projectConfigPath}: a project file cannot set it. Set it in the settings view or with /config.`,
     );
   }
+  warnings.push(
+    ...configFileWarnings(catalog, workspace, true),
+    ...configFileWarnings(catalog, local, false),
+  );
   return { workspace, local, warnings };
 });
 
 /**
  * Open the user-level config store under `storageRoot`, which every project
  * of the process reads beneath its own stores. Like the others it follows
- * its file, so a value another window or terminal saves is read.
+ * its file, so a value another window or terminal saves is read. `warnings`
+ * names each value its row rejects.
  */
-export const openTexraGlobalConfigStore = (storageRoot: string) =>
-  JsonStore.open(
+export const openTexraGlobalConfigStore = Effect.fn(
+  'nodeStores.openTexraGlobalConfigStore',
+)(function* (catalog: SettingsCatalog, storageRoot: string) {
+  const store = yield* JsonStore.open(
     path.join(resolveGlobalStoragePath(storageRoot), TEXRA_CONFIG_FILE_NAME),
   );
+  return { store, warnings: configFileWarnings(catalog, store, false) };
+});
 
 /**
  * Open both stores backing a host's {@link JsonConfigProvider} for the
  * workspace `workspaceRoot` under `storageRoot`. Neither store creates
  * anything on open, so a caller that must not create a directory under the
  * storage root (the CLI's pre-platform startup read, whose `clone` entry may
- * only be able to read it) is served too. `warnings` is what the workspace
- * open reported.
+ * only be able to read it) is served too. `warnings` is what the two opens
+ * reported.
  */
 export const openTexraConfigStores = Effect.fn(
   'nodeStores.openTexraConfigStores',
@@ -132,17 +174,17 @@ export const openTexraConfigStores = Effect.fn(
   const [{ workspace, local, warnings }, global] = yield* Effect.all(
     [
       openTexraWorkspaceConfigStores(catalog, storageRoot, workspaceRoot),
-      openTexraGlobalConfigStore(storageRoot),
+      openTexraGlobalConfigStore(catalog, storageRoot),
     ],
     { concurrency: 'unbounded' },
   );
   return {
     stores: {
       workspace,
-      global,
+      global: global.store,
       local,
       catalog,
     } satisfies JsonConfigProviderOptions,
-    warnings,
+    warnings: [...warnings, ...global.warnings],
   };
 });

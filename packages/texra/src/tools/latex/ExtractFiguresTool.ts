@@ -38,10 +38,9 @@ const extractFigures = Effect.fn('ExtractLatexFiguresTool.execute')(function* ({
   const call = yield* ToolContext;
   const { path, display } = yield* resolveLatexFile(texPath);
 
-  const figurePaths = yield* extractFigurePathsFromLatex(
+  const uniqueFigures = yield* extractFigurePathsFromLatex(
     pathToLocationIn(call.env.roots.workspace, path.absolute),
   );
-  const uniqueFigures = [...new Set(figurePaths)];
 
   if (uniqueFigures.length === 0) {
     return emptyExtractionResult('Figures', `No figures found in ${display}.`);

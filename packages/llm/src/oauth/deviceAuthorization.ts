@@ -15,6 +15,8 @@
  */
 import { Duration, Effect, Ref, Schedule, Schema } from 'effect';
 
+import { SubscriptionOAuthError } from './subscriptionOAuthError.js';
+
 /** The device-code prompt a host renders while polling for approval. */
 export interface SubscriptionDeviceCodePrompt {
   /** The one-time code the user types at the verification URL. */
@@ -42,12 +44,6 @@ export class DeviceAuthorizationTransient extends Schema.TaggedError<DeviceAutho
 ) {}
 
 const MAX_CONSECUTIVE_TRANSIENTS = 3;
-
-/** The user code's lifetime elapsed before the user approved. */
-class DeviceCodeTimedOut extends Schema.TaggedError<DeviceCodeTimedOut>()(
-  'DeviceCodeTimedOut',
-  { message: Schema.String },
-) {}
 
 const DEVICE_CODE_TIMED_OUT_MESSAGE =
   'Device-code sign-in timed out. Run sign-in again.';
@@ -77,8 +73,11 @@ interface DeviceAuthorizationOptions<Token, E, R> {
 export const pollDeviceAuthorization = Effect.fn(
   'deviceAuthorization.pollDeviceAuthorization',
 )(function* <Token, E, R>(options: DeviceAuthorizationOptions<Token, E, R>) {
-  const timedOut = new DeviceCodeTimedOut({
+  // The code's lifetime elapsed before the user approved: only a fresh
+  // sign-in can help.
+  const timedOut = new SubscriptionOAuthError({
     message: DEVICE_CODE_TIMED_OUT_MESSAGE,
+    kind: 'expired',
   });
   const extraDelayMs = yield* Ref.make(0);
   // Transients since the last pending answer.

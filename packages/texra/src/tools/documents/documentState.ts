@@ -373,11 +373,7 @@ export const revisionPrompt = Effect.fn('documents.revisionPrompt')(function* (
     prompt: parts.filter(Boolean).join('\n\n'),
     media: yield* revisionMedia(docs, revision, files, asked),
     /** The template files the prompt read, for their card. */
-    loaded: templates.map(({ path }): FileListEntry => ({
-      path,
-      ok: true,
-      source: 'templates',
-    })),
+    loaded: templates.map(({ path }): FileListEntry => ({ path, ok: true })),
   };
 });
 

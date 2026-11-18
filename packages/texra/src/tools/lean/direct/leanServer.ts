@@ -196,10 +196,9 @@ interface ServerEnd {
 }
 
 function spawnFailure(error: PlatformError.PlatformError): LeanStartError {
-  const cause = error.reason.cause ?? error;
   return new LeanStartError({
-    message: `Failed to spawn 'lake env lean --server': ${toErrorMessage(cause)}`,
-    cause,
+    message: `Failed to spawn 'lake env lean --server': ${toErrorMessage(error)}`,
+    cause: error,
   });
 }
 

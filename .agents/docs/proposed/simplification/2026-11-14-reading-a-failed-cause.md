@@ -58,9 +58,9 @@ wording, so they were not folded into a refactor:
 - Done: the provider's `signOut` owns the preference write, and the
   extension's onboarding "Sign in with ChatGPT" runs the settings body's
   sign-in (2026-11-15).
-- A setup-assistant launch failure has one policy per GUI host
-  (`packages/texra/src/controllers/onboarding/setupLaunch.ts`,
-  `packages/extension/src/commands/setup/setupAssistantCommand.ts`).
+- Done: a setup-assistant launch has one policy for both GUI hosts,
+  `openWindowSetup` in
+  `packages/texra/src/controllers/onboarding/setupLaunch.ts` (2026-11-17).
 - The three Unicode-to-LaTeX tables under `packages/texra/src/replacement/`
   and the 61 `HARNESS_*` switches of `packages/cli/scripts/tui-harness.tsx`
   (code-debt report, 2026-11-09).

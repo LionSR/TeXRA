@@ -1,4 +1,9 @@
 import { Effect, Result, Schema } from 'effect';
+import {
+  decodingDefault,
+  ModelBackendSchema,
+  type ModelBackend,
+} from '@shared/schemas';
 
 import {
   acceptedEfforts,
@@ -14,7 +19,6 @@ import {
   wireEffort,
 } from '@texra-ai/llm';
 import { Settings, type StateStore } from '@shared/config/settings';
-import { ModelBackendSchema, type ModelBackend } from '@shared/schemas';
 import type { StateKey } from '@shared/state/stateSettings';
 
 /**
@@ -34,9 +38,7 @@ import type { StateKey } from '@shared/state/stateSettings';
 export const REASONING_LEVELS_KEY = {
   key: 'reasoningLevels',
   slot: 'globalState',
-  schema: Schema.Record(Schema.String, Schema.Unknown).pipe(
-    Schema.withDecodingDefault(Effect.succeed({})),
-  ),
+  schema: decodingDefault(Schema.Record(Schema.String, Schema.Unknown), {}),
 } as const satisfies StateKey<Readonly<Record<string, unknown>>>;
 
 export const reasoningEffortOverrides = Effect.fn('reasoningEffortOverrides')(
