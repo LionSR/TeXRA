@@ -428,3 +428,25 @@ export function subscriptionAuthStatus(
     preferSubscription: provider.isPreferSubscription(stores),
   }));
 }
+
+/**
+ * Every subscription's {@link subscriptionAuthStatus}, keyed by its
+ * provider: the record the settings views and the terminal's account
+ * surfaces read. One field per provider, so a provider added to the wire
+ * set without a status here fails to compile.
+ */
+export function subscriptionAuthStatuses(
+  stores: SettingsStores,
+): Effect.Effect<
+  Readonly<Record<SubscriptionProviderId, SubscriptionAuthStatus>>,
+  SubscriptionStatusError,
+  SubscriptionAccounts
+> {
+  return Effect.all(
+    {
+      chatgpt: subscriptionAuthStatus('chatgpt', stores),
+      grok: subscriptionAuthStatus('grok', stores),
+    },
+    { concurrency: 'unbounded' },
+  );
+}

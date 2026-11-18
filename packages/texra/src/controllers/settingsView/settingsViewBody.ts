@@ -36,7 +36,7 @@ import type { SubscriptionUsageProvider } from '@texra/shared/model/subscription
 import { codingPlanForUsageSetting } from '@texra/model/codingPlanSubscriptions';
 import {
   announceSignIn,
-  subscriptionAuthStatus,
+  subscriptionAuthStatuses,
   subscriptionProvider,
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
@@ -133,12 +133,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       hostStatePage(
         'subscriptionAuth',
         ['subscriptions'],
-        // One field per provider, so a provider added to the wire set
-        // without a status here fails to compile.
-        Effect.all({
-          chatgpt: subscriptionAuthStatus('chatgpt', roots),
-          grok: subscriptionAuthStatus('grok', roots),
-        }),
+        subscriptionAuthStatuses(roots),
       ),
       hostStatePage(
         'subscriptionUsage',

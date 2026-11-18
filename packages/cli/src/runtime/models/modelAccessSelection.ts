@@ -5,7 +5,6 @@ import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import { Secrets, type SettingsStores } from '@texra-ai/harness/plugins';
 import {
   toErrorMessage,
-  SUBSCRIPTION_AUTH_PROVIDERS,
   isSubscriptionAuthProvider,
 } from '@texra-ai/harness/schemas';
 import {
@@ -13,7 +12,7 @@ import {
   type CodingPlanSubscriptionRuntime,
 } from '@texra/model/codingPlanSubscriptions';
 import {
-  subscriptionAuthStatus,
+  subscriptionAuthStatuses,
   subscriptionProvider,
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
@@ -45,17 +44,9 @@ export const readCliModelAccessStatus = Effect.fn(
   'modelAccessSelection.readCliModelAccessStatus',
 )(function* (stores: SettingsStores) {
   const secrets = yield* Secrets;
-  const [subscriptionEntries, codingPlanEntries] = yield* Effect.all(
+  const [subscriptions, codingPlanEntries] = yield* Effect.all(
     [
-      Effect.forEach(
-        SUBSCRIPTION_AUTH_PROVIDERS,
-        (provider) =>
-          Effect.map(
-            subscriptionAuthStatus(provider, stores),
-            (status) => [provider, status] as const,
-          ),
-        { concurrency: 'unbounded' },
-      ),
+      subscriptionAuthStatuses(stores),
       Effect.forEach(
         codingPlanSubscriptionRuntimes,
         Effect.fnUntraced(function* (runtime) {
@@ -72,9 +63,6 @@ export const readCliModelAccessStatus = Effect.fn(
     { concurrency: 'unbounded' },
   );
   type Access = CliModelAccessStatus;
-  const subscriptions =
-    // cast: one entry per SUBSCRIPTION_AUTH_PROVIDERS member, the record's keys.
-    Object.fromEntries(subscriptionEntries) as Access['subscriptions'];
   const codingPlans =
     // cast: one runtime per coding plan, so the plan ids are the record's keys.
     Object.fromEntries(codingPlanEntries) as Access['codingPlans'];
