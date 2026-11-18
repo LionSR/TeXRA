@@ -6,42 +6,18 @@
 // graphical hosts. Its notices land in the chat transcript.
 
 // Third-party imports
-import { Effect, Schema } from 'effect';
+import type { Effect } from 'effect';
 
 import { type ApiKeyProviderId } from '@texra-ai/llm';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
-import {
-  ProviderKeyActionFailed,
-  SettingsProfileKeyController,
-} from '@texra/controllers/settingsView/SettingsProfileKeyController';
+import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
 
 import { tuiUi } from './tuiUiHost';
 import type { Secrets, SettingsStores } from '@texra-ai/harness/plugins';
 
-/** A provider key was not written or removed; the message names the cause. */
-class ProviderKeyNotSaved extends Schema.TaggedError<ProviderKeyNotSaved>()(
-  'ProviderKeyNotSaved',
-  { message: Schema.String, cause: Schema.Defect() },
-) {}
-
-/** Run one controller action on the TUI's prompt; a failure names its cause
- *  and stays in the Effect channel. */
-const viaTui = (
-  stores: SettingsStores,
-  action: (
-    controller: SettingsProfileKeyController,
-  ) => Effect.Effect<void, Error, Secrets>,
-): Effect.Effect<void, Error, Secrets> =>
-  action(new SettingsProfileKeyController({ dialogs: tuiUi, stores })).pipe(
-    Effect.mapError((error) =>
-      error instanceof ProviderKeyActionFailed
-        ? new ProviderKeyNotSaved({
-            message: `${error.message}: ${toErrorMessage(error.cause)}`,
-            cause: error,
-          })
-        : error,
-    ),
-  );
+/** The shared controller on the TUI's prompt. A failed action is the
+ *  controller's own failure; the chat words its cause after its message. */
+const tuiKeys = (stores: SettingsStores) =>
+  new SettingsProfileKeyController({ dialogs: tuiUi, stores });
 
 /** Write a key the calling surface already holds. */
 export const commitCliProviderApiKey = (
@@ -49,7 +25,7 @@ export const commitCliProviderApiKey = (
   provider: ApiKeyProviderId,
   key: string,
 ): Effect.Effect<void, Error, Secrets> =>
-  viaTui(stores, (controller) => controller.commitProviderKey(provider, key));
+  tuiKeys(stores).commitProviderKey(provider, key);
 
 /**
  * Ask for a provider key and write it: the `promptForApiKey` the shared
@@ -62,4 +38,4 @@ export const promptForCliProviderApiKey = (
   stores: SettingsStores,
   provider: ApiKeyProviderId,
 ): Effect.Effect<void, Error, Secrets> =>
-  viaTui(stores, (controller) => controller.setProviderKey(provider));
+  tuiKeys(stores).setProviderKey(provider);
