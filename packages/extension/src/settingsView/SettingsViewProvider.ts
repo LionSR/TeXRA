@@ -148,7 +148,6 @@ export class SettingsViewProvider {
               terminal.sendText(command);
             }),
           editor: vscodeEditorIntegration,
-          requiresOpenWorkspace: () => !roots.workspace,
         },
       }),
     );

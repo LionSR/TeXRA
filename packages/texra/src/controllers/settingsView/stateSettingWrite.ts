@@ -7,8 +7,7 @@
 //   - a value-less message is a no-op (the catalog schemas carry a decoding
 //     default, so parsing `undefined` would silently write a default),
 //   - null explicitly resets a setting while an omitted value remains a no-op,
-//   - a workspace-target config write needs an open workspace folder where
-//     the host says so (the extension).
+//   - a workspace-target config write needs an open workspace folder.
 // Which rows a surface may write is the caller's: a settings view looks the
 // webview's key up among the rows it renders, the CLI writes the rows its
 // `/config` panel lists.
@@ -50,8 +49,7 @@ type StateSettingUpdateResult<E extends WritableRow> =
 export function applyStateSettingUpdate<E extends WritableRow>(
   entry: E,
   value: unknown,
-  roots: SettingsStores,
-  requiresOpenWorkspace?: () => boolean,
+  roots: SettingsStores & { readonly workspace: string | undefined },
 ): Effect.Effect<StateSettingUpdateResult<E>, never, AppSignals> {
   if (value === undefined) return Effect.succeed({ kind: 'ignored' });
   const parsed =
@@ -62,7 +60,7 @@ export function applyStateSettingUpdate<E extends WritableRow>(
   if (
     entry.slot === 'config' &&
     entry.configTarget !== 'global' &&
-    requiresOpenWorkspace?.()
+    roots.workspace === undefined
   ) {
     return Effect.succeed({ kind: 'workspace-required', entry });
   }

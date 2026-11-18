@@ -232,12 +232,7 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       // The webview names the key: only a row this view renders is written.
       const entry = TEXRA_SETTINGS.settingsViewByKey(key);
       if (!entry) return;
-      const result = yield* applyStateSettingUpdate(
-        entry,
-        value,
-        roots,
-        bindings.requiresOpenWorkspace,
-      );
+      const result = yield* applyStateSettingUpdate(entry, value, roots);
       if (result.kind === 'ignored') return;
       const label = result.entry.title;
       if (result.kind === 'rejected') {
