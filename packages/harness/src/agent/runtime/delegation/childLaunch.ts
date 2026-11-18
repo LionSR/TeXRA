@@ -8,10 +8,12 @@
  * (`RunParent.call.awaited`). The run is forked on the session's registry
  * under its id and opens on its own fiber; the call waits for its opening,
  * so a launch that fails before the run exists fails the call, and the run
- * outlives the call that started it. An awaited call reads the child's end once the run here has
- * ended; interrupting the call stops the child, unless the stop detached it
- * (`RunRegistry.stop`), in which case it runs on as a root and only the
- * wait ends.
+ * outlives the call that started it: a background child whose launching
+ * call is interrupted while it opens goes on opening. An awaited call reads
+ * the child's end once the run here has ended; interrupting the call, the
+ * child opening or running, stops the child (`released`), unless the stop
+ * detached it (`RunRegistry.stop`), in which case it runs on as a root and
+ * only the wait ends.
  */
 import { Cause, Effect, Schema } from 'effect';
 
@@ -138,17 +140,14 @@ const childRunEnd = Effect.fn('childRunEnd')(function* (
   start: Effect.Effect<unknown, Error, AgentRunServices>,
 ): Effect.fn.Return<ChildRunEnd, Error, AgentRunServices> {
   const runs = yield* RunRegistry;
-  yield* start;
-  const live = runs.get(runId);
-  // What the child's fiber failed on, when it did: the reason an end is
-  // missing below (the store refused it).
-  const unsaved =
-    live &&
-    (yield* live.drained.pipe(
-      Effect.onInterrupt(() =>
-        // The call let go: the child's stop says so, unless a stop of it
-        // (its parent's cascade) already did.
-        runs.stop(runId, 'released').pipe(
+  // The call let go, the child opening or running: the child's stop says
+  // so, unless a stop of it (its parent's cascade) already did. Nobody
+  // else reads an awaited child's end, so it does not run on unread. A
+  // child that never reached the registry has nothing to release.
+  const release = Effect.suspend(() =>
+    runs.get(runId) === undefined
+      ? Effect.void
+      : runs.stop(runId, 'released').pipe(
           Effect.catchCause((cause) =>
             Effect.logWarning(
               `Subagent ${runId}: its release was not recorded`,
@@ -159,8 +158,13 @@ const childRunEnd = Effect.fn('childRunEnd')(function* (
           ),
           Effect.andThen(runs.awaitDrained(runId)),
         ),
-      ),
-    ));
+  );
+  yield* start.pipe(Effect.onInterrupt(() => release));
+  const live = runs.get(runId);
+  // What the child's fiber failed on, when it did: the reason an end is
+  // missing below (the store refused it).
+  const unsaved =
+    live && (yield* live.drained.pipe(Effect.onInterrupt(() => release)));
   const result = yield* getRunRecords(runId).readRunEnd();
   if (result === null)
     return yield* unsaved === undefined

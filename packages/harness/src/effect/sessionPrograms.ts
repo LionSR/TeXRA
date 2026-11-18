@@ -32,12 +32,7 @@ import {
   SessionOwner,
   type SessionServices,
 } from '@agent/runtime/rootLaunch';
-import {
-  LaunchKeys,
-  RunRegistry,
-  Runs,
-  RunStopped,
-} from '@agent/runtime/runRegistry';
+import { LaunchKeys, Runs, RunStopped } from '@agent/runtime/runRegistry';
 import type { ITool } from '@tools/core/ToolTypes';
 import { AgentUnavailable, LaunchRefused } from '@common/errors/agentErrors';
 import { asksApproval } from '@agent/runtime/agentToolResolution';
@@ -188,25 +183,13 @@ const start = Effect.fn('start')(function* (
     return yield* new LaunchRefused({
       message: `Run ${runId} already exists in this session.`,
     });
-  // A caller interrupted while the run opens never holds it: the opening
-  // unwinds with it. One interrupted after the run opened, before this
-  // hands its handle back, let go of a run that runs: the registry ends it
-  // as a release. Only a run this call opened, so a caller that never
-  // opened one stops nobody else's.
-  let opened = false;
+  // A caller interrupted before the handle comes back gives up only the
+  // wait: the run is its own fiber's, and a stop is how it ends.
   return yield* rootRun({ ...input, config, runId }).pipe(
     Effect.provide(session),
     Effect.provideService(LaunchKeys, input.apiKeys ?? {}),
     Effect.mapError(launchFailure),
-    Effect.map((activation) => {
-      opened = true;
-      return runView(session, runId, activation);
-    }),
-    Effect.onInterrupt(() =>
-      Effect.sync(
-        () => opened && Context.get(session, RunRegistry).interrupt(runId),
-      ),
-    ),
+    Effect.map((activation) => runView(session, runId, activation)),
   );
 });
 

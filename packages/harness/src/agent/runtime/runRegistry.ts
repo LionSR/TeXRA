@@ -438,9 +438,10 @@ export class SessionRunRegistry implements RunsShape {
    * opens the run in a scope it owns, runs it and ends it ({@link Launch}),
    * with the launcher's `LaunchKeys` and the workspace's environment, read
    * once as it opens; the launch answers what the opening answered, or why
-   * it failed. A stop that cuts the opening refuses the launch
-   * (`RunStopped`), and the run ends on the rows the opening had committed,
-   * if any.
+   * it failed. The launcher only waits for that answer: its interruption
+   * leaves the run to its fiber, which a stop reaches. A stop that cuts the
+   * opening refuses the launch (`RunStopped`), and the run ends on the rows
+   * the opening had committed, if any.
    */
   start<A, E, B, C>(
     runId: RunId,
@@ -459,20 +460,6 @@ export class SessionRunRegistry implements RunsShape {
             return Effect.andThen(entered.after, this.start(runId, launch));
           case 'live':
             return Deferred.await(entered.answer).pipe(
-              // The launcher let go while the run opened: a `user` stop of
-              // it, which reaches no run under it. A closing session's
-              // interruption writes nothing.
-              Effect.onInterrupt(() =>
-                this.closing || Deferred.isDoneUnsafe(entered.answer)
-                  ? Effect.void
-                  : this.stopping(runId, 'user', false).pipe(
-                      Effect.catchCause((cause) =>
-                        Effect.logWarning(
-                          `Run ${runId}: the stop of its abandoned launch was not recorded`,
-                        ).pipe(Effect.annotateLogs({ data: cause })),
-                      ),
-                    ),
-              ),
               // The answer wakes the launcher inside the run's own step;
               // the launcher yields once so the run goes on to its first
               // wait, its loop's controls attached, before the launch
