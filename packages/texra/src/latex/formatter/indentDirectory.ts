@@ -2,24 +2,26 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
-import { hasExtension } from '@texra-ai/harness/host';
 import { withLogChannel } from '@texra-ai/harness/plugins';
-import {
-  readDirectoryTypedTolerant,
-  entryTypeIn,
-} from '@texra-ai/harness/node';
+import { entryTypeIn } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
+import type { FileFilterConfig } from '@texra/common/files/fileListingRules';
+import { listWorkspaceFiles } from '@texra/common/files/workspaceFileListing';
 
-import type { ToolMissing } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 import { LatexProgress } from '../progress';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { LatexFormatter } from './texFormatter';
 
-const SKIPPED_DIRECTORIES: ReadonlySet<string> = new Set(
-  FILE_HANDLING_RULES.ignored.bulkOperationDirectories,
-);
+/** Every `.tex` file outside the directories bulk operations skip. */
+const TEX_SOURCES: FileFilterConfig = {
+  include: ['.tex'],
+  excludeExtensions: [],
+  excludeDirs: [...FILE_HANDLING_RULES.ignored.bulkOperationDirectories],
+  excludeKeywords: [],
+  excludeFiles: [],
+};
 
 export type IndentLatexResult =
   | {
@@ -97,63 +99,45 @@ export const indentLatexFilesInDirectory = Effect.fn(
   let indentedCount = 0;
   const failed: string[] = [];
 
-  // One entry whose type cannot be read must not cost the whole directory;
-  // the tolerant listing drops that entry instead.
-  const walkDirectory = Effect.fn('latex.indentWalkDirectory')(function* (
-    dirPath: string,
-  ): Effect.fn.Return<
-    void,
-    PlatformError.PlatformError | ToolMissing,
-    FileSystem.FileSystem | Path.Path | ChildProcessSpawner
-  > {
-    const entries = yield* readDirectoryTypedTolerant(dirPath);
-    for (const [name, type] of entries) {
-      if (SKIPPED_DIRECTORIES.has(name.toLowerCase())) {
-        continue;
-      }
+  const formatFile = Effect.fn('latex.indentFile')(function* (
+    fullPath: string,
+  ) {
+    progress(`Indenting ${path.basename(fullPath)}...`, 0);
+    yield* Effect.logDebug(`Processing file: ${fullPath}`).pipe(
+      withLogChannel(CHANNEL),
+    );
 
-      // Skip symlinks to avoid cycles; we have no realpath/visited guard.
-      if (type === 'SymbolicLink') {
-        continue;
-      }
-
-      const fullPath = path.join(dirPath, name);
-
-      if (type === 'Directory') {
-        yield* walkDirectory(fullPath);
-        continue;
-      }
-
-      if (type !== 'File' || !hasExtension(name, '.tex')) {
-        continue;
-      }
-
-      progress(`Indenting ${path.basename(fullPath)}...`, 0);
-      yield* Effect.logDebug(`Processing file: ${fullPath}`).pipe(
+    // A failed run is `false`. A missing formatter fails the walk with its
+    // `ToolMissing`, once, rather than once per file.
+    if (yield* runFormatter(fullPath, workspaceRoot, config)) {
+      yield* Effect.logInfo(`Successfully formatted: ${fullPath}`).pipe(
         withLogChannel(CHANNEL),
       );
-
-      // A failed run is `false`. A missing formatter fails the walk with its
-      // `ToolMissing`, once, rather than once per file.
-      if (yield* runFormatter(fullPath, workspaceRoot, config)) {
-        yield* Effect.logInfo(`Successfully formatted: ${fullPath}`).pipe(
-          withLogChannel(CHANNEL),
-        );
-        indentedCount++;
-      } else {
-        yield* Effect.logError(`Failed to format ${fullPath}`).pipe(
-          withLogChannel(CHANNEL),
-        );
-        failed.push(fullPath);
-      }
+      indentedCount++;
+    } else {
+      yield* Effect.logError(`Failed to format ${fullPath}`).pipe(
+        withLogChannel(CHANNEL),
+      );
+      failed.push(fullPath);
     }
   });
 
-  const absoluteDirectory = path.isAbsolute(directory)
-    ? directory
-    : path.resolve(workspaceRoot ?? '.', directory);
+  const absoluteDirectory = path.resolve(workspaceRoot ?? '.', directory);
 
-  return yield* walkDirectory(absoluteDirectory).pipe(
+  // The formatter rewrites what the walk finds, so links are skipped: it
+  // never formats a file outside the directory it was given.
+  return yield* listWorkspaceFiles({
+    root: absoluteDirectory,
+    configs: [TEX_SOURCES],
+    links: 'skip',
+  }).pipe(
+    Effect.flatMap(([{ files }]) =>
+      Effect.forEach(
+        files,
+        (file) => formatFile(path.join(absoluteDirectory, file)),
+        { discard: true },
+      ),
+    ),
     Effect.andThen(() =>
       Effect.logInfo(
         `${indentedCount} .tex files have been formatted in ${directory}`,

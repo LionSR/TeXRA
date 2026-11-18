@@ -1,23 +1,26 @@
 // Third-party imports
 import { Effect } from 'effect';
-import { glob } from 'glob';
 
 // Internal imports
 import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/plugins';
+import { getBasename } from '@texra-ai/harness/schemas';
 import {
   FILE_HANDLING_RULES,
   LATEX_BUILD_DIRECTORY,
 } from '@texra/common/files/fileHandlingRules';
+import { listWorkspaceFiles } from '@texra/common/files/workspaceFileListing';
 
 // Local file imports
 import { CHANNEL } from './constants';
-import { GlobFailed } from './artifactFiles';
 
 /**
  * Every `build/` directory under the session's workspace, relative to its
- * root. The workspace filesystem comes from context and is already rooted,
- * so this listing and {@link removeBuildDirectories} cannot name different
- * workspaces.
+ * root, its name compared case-insensitively like every managed directory.
+ * The workspace filesystem comes from context and is already rooted, so
+ * this listing and {@link removeBuildDirectories} cannot name different
+ * workspaces. Only directories are listed, so a plain file named `build` is
+ * never offered for recursive removal, and links are skipped, so the
+ * removal never reaches through one.
  */
 export const findBuildDirectories = Effect.gen(function* () {
   const workspaceRoot = (yield* WorkspaceFs).root;
@@ -25,25 +28,25 @@ export const findBuildDirectories = Effect.gen(function* () {
 
   // A `build/` inside a package or environment tree is not this project's
   // LaTeX output, so those trees are not searched.
-  const ignorePatterns = FILE_HANDLING_RULES.ignored.bulkOperationDirectories
-    .filter((dir) => dir !== LATEX_BUILD_DIRECTORY)
-    .map((dir) => `**/${dir}/**`);
-
-  // The trailing slash makes glob match directories only, so a plain file
-  // named `build` is never listed for recursive removal; results still come
-  // back without the slash. `posix` keeps them `/`-separated on Windows too,
-  // the workspace-relative form every listing here uses.
-  const pattern = `**/${LATEX_BUILD_DIRECTORY}/`;
-  const directories = yield* Effect.tryPromise({
-    try: () =>
-      glob(pattern, {
-        cwd: workspaceRoot,
-        ignore: ignorePatterns,
-        posix: true,
-      }),
-    catch: (cause) => new GlobFailed({ pattern, cause }),
+  const [{ directories }] = yield* listWorkspaceFiles({
+    root: workspaceRoot,
+    configs: [
+      {
+        include: [],
+        excludeExtensions: [],
+        excludeDirs:
+          FILE_HANDLING_RULES.ignored.bulkOperationDirectories.filter(
+            (dir) => dir !== LATEX_BUILD_DIRECTORY,
+          ),
+        excludeKeywords: [],
+        excludeFiles: [],
+      },
+    ],
+    links: 'skip',
   });
-  return directories.toSorted();
+  return directories.filter(
+    (dir) => getBasename(dir).toLowerCase() === LATEX_BUILD_DIRECTORY,
+  );
 });
 
 /**
