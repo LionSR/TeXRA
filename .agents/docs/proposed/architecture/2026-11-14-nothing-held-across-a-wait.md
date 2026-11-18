@@ -44,10 +44,10 @@ Surface at `7547ab0`, non-test source, 1339 files:
 | Module-level mutable state (`new Map`/`Set` 99, `let` 36)  | 135   | a layer's `Ref`, or constant                                |
 | Keyed and cached lifetimes (`RcMap`, `Cache`, `cached`)    | 90    | the three shapes in rows 9 to 11                            |
 | Locks (`Semaphore`, lanes, `SynchronizedRef`)              | 70    | rows 1, 7 and 8                                             |
-| `Effect.uninterruptible`, `uninterruptibleMask`            | 50    | durable terminals and row 5 only                            |
+| `Effect.uninterruptible`, `uninterruptibleMask`            | 50    | durable terminals and row 5 only (46 on 2026-11-18)         |
 | Hand-made `Deferred` and `Latch`                           | 34    | rows 3 and 16                                               |
 | `Effect.forkDetach`                                        | 25    | 0                                                           |
-| `Queue.unbounded`, `PubSub.unbounded`                      | 15    | 0 (row 20)                                                  |
+| `Queue.unbounded`, `PubSub.unbounded`                      | 15    | 0 (row 20; 6 on 2026-11-18)                                 |
 
 ## Rulings this note follows
 
@@ -92,6 +92,10 @@ Each of these replaced a belief the earlier design, or the tree, rested on.
   timeout). `FiberSet.clear` then `awaitEmpty` under a timeout does.
 - **`Terminal.readLine` ends at end of input** with `QuitError`;
   `readline/promises` `question()` never settles there.
+- **`PubSub.publishUnsafe` skips a sliding hub's strategy.** It refuses a
+  full subscriber, so a `PubSub.sliding(1)` fed by it loses the newest
+  value, not the oldest (`settingsInputs.mjs`); `PubSub.publish` slides.
+  `Queue.offerUnsafe` does apply a sliding queue's strategy.
 - **The SQL client has no synchronous transaction.** A transaction through
   it is one turn only inside a region that turns the scheduler's yield off.
 
@@ -348,6 +352,51 @@ Done, on the branch after PR 14927:
   own); the deletion markers are `dropping(256)`, and a refused one is
   logged and stays pending in the store for the next open's pass; the
   unhandled-rejection log is `dropping(64)` (each entry ends the host).
+- Row 12, the input history (`cli/src/chat/tui/history/inputHistory.ts`):
+  each submit forked a push into the chat's scope that took a
+  `Semaphore(1)` and appended, so a line typed just before a graceful exit
+  died with that scope. One fiber in the platform's scope now appends the
+  entries from a `Queue.bounded(64)` in submit order, and that scope's
+  close waits until every entry is stored (`inputHistory.mjs`: 190 of 1560
+  stored before, 1560 after, in order both ways). A push updates the
+  browsable list at once and never waits on the store.
+- Row 20, the settings inputs: the unbounded `PubSub` of input names is one
+  `SubscriptionRef` of a count per input (`settingsHostBindings.ts`); a page
+  rebuilds when a count it follows moved, so only the latest counts matter
+  and the reason it stayed unbounded (a dropped name leaves its one page
+  stale) no longer applies (`settingsInputs.mjs`: no page left stale in 390
+  runs, either shape). A `SubscriptionRef` is itself a `PubSub` with a
+  replay of one, so each page's buffer stays the sliding stage of one
+  rebuild after it.
+- The uninterruptible regions, counted by `surface.mjs` (non-comment lines
+  calling `Effect.uninterruptible` or `uninterruptibleMask` under
+  `packages/*/src`; the same 50 the table counts): 46. Three repeated a
+  mask one level away and are gone: the stdin document write and the
+  GitHub workflow write (the process's file system already finishes a
+  write it started) and `removeRunDirectories` (only ever the cleanup
+  `collect` masks). The desktop registry's construction no longer masks
+  its recent-list read; only its no-workspace open stays masked. Nine of
+  the 46 hold across a wait not bounded here and are named under "Left,
+  with the reason"; each of the other 37 is one of:
+  - a durable terminal or stop (row 5's turn, a run's end, a stop row):
+    `sessionEventsLayer.ts`, `makeRunHistory.ts` (two), `runLoop.ts`,
+    `processRun.ts`, `SessionRequests.ts`'s and `ExecutionsTool.ts`'s
+    `runs.stop`, and in row 6's files `AgentRunLifecycle.ts` (two),
+    `executeAgent.ts` (two) and `runRegistry.ts`, not touched here;
+  - an outside effect with its own deadline and its record (the note's
+    other place): the OAuth exchange and store (three), Zotero's save, a
+    usage batch, the update notice and its record, a session request and
+    its notice (`chatSessionController.ts` 762), the Lean shutdown;
+  - a claim and the fork or registration that ends it, with the wait
+    restored: the chat's launch and resume, the agent CLI's thread claim,
+    the upload cache, the draft recorder's start, the pty start, a GitHub
+    bind, the spawner (`nodeServices.ts`), a committed run removal's local
+    half (`sessionOwners.ts`);
+  - a local write that must not stop half done: `fsDurability.ts`'s
+    `writeFile`, `jsonStore.ts`, `fileSecrets.ts`, `acceptedFileTarget.ts`,
+    the arXiv rename loop, the store's page reclaim, the deletion
+    collector's file removal before its mark;
+  - bounded by its own deadline: a session's close (`sessionLayer.ts`).
 - Checks: `check-fact-spread.mjs` holds `Effect.forkDetach`,
   `Queue.unbounded`, `PubSub.unbounded` and `SynchronizedRef` shrink-only.
 
@@ -374,7 +423,8 @@ Left, with the reason:
   release wakes the first in insertion order). Read from the source, not
   re-measured; the gap under "Needs the owner" was measured on
   `withPerKeyLane`'s counted map, not on one long-lived `Semaphore`. So the
-  lanes keep call order. A queue with one consumer would add an answer channel per caller
+  lanes keep call order. Read again on 2026-11-18: all three still take one
+  permit each. A queue with one consumer would add an answer channel per caller
   (`inOrder`'s caller awaits its message's route; a workspace route answers
   its request), and `routing` must be held from inside `did-navigate`'s own
   step, which a queued reset cannot do.
@@ -382,16 +432,33 @@ Left, with the reason:
   anything over the socket while a model reasons for minutes is not known
   here, so a deadline could fail a healthy turn; the 30 s open deadline
   and the ping (a dead TCP connection fails it) stay the liveness checks.
-- Row 20: `settingsViewBody.ts`'s inputs (each page filters after the
-  `PubSub`, so a dropped input only one page follows is a page that never
-  rebuilds); `appSignals.ts` (a lost `credentialChanged` is a stale
-  credential); `sessionEventsLayer.ts` (published inside the
-  uninterruptible turn, which must not wait); `sessionFrames.ts`,
-  `hostWindows.ts` (rows 16 and 9) and the frontend's `sessionTransport.ts`.
+- Row 20, read again on 2026-11-18. `appSignals.ts`: `emit` is called from
+  callbacks outside any fiber (a secret store's commit, a registry's
+  close), so the producer cannot wait, and every signal is one a
+  subscriber needs (a lost `credentialChanged` is a stale credential, a
+  lost `workspaceFilesWritten` a file view not refreshed); the producers
+  are a person's actions and the app's own writes. `sessionEventsLayer.ts`:
+  published inside row 5's turn, which must not wait, and a dropped batch
+  is rows a live reader never sees. A bound needs each reader to notice a
+  gap (`through` jumps) and read the missing commits from the store, as a
+  reader that subscribes late already does; that is the next step there.
+  `sessionFrames.ts`, `hostWindows.ts` and the frontend's
+  `sessionTransport.ts` are row 16's files (`rpc` replaces their queues)
+  and were not touched.
+- The uninterruptible regions that hold across a wait not bounded here:
+  the chat's send waiting on its forked send (`chatSessionController.ts`
+  905: where the message ends, sent or back in the input, is known only
+  when the send ends); a desktop project's open and close
+  (`desktopProjects.ts` 297, 353, 386: the session's open and the record of it,
+  and the record's removal and the session's close, are one step; row 9's
+  `ScopedCache` replaces both); the tool-edit preview's diff, proposed
+  view and build display (`ToolEditApprovalController.ts`: the request's
+  scope deletes the files they read, so its close waits for them) and its
+  approval, a session request.
 
 Open: fiber-first opening (row 6), the frames on `rpc` (row 16), the
-inbound queues (row 12), the remaining buffers (row 20, above), and
-slice 7. What the passes learned:
+remaining buffers (row 20: the session events' gap read, and the three in
+row 16's files), and slice 7. What the passes learned:
 
 - Row 6 keeps a `Map`, for the reason in its "Stays" cell. Fiber-first
   opening (the run's fiber acquires its own resources) removes the
