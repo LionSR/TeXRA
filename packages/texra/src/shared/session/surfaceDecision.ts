@@ -162,7 +162,7 @@ export function approvalDecisionDelivery(
         return decide(decision);
       }
       const { data } = permission;
-      if (data.credentialSwitch == null) {
+      if (data.credentialSwitch === null) {
         throw new Error(
           `Retry ${requestId} offers no move onto the user's own credential.`,
         );

@@ -30,7 +30,7 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   const title = REQUEST_ASK.retry(data.model);
   const errorText = modelFailureText(data.failure);
   // The run decided the offer; the card only renders it.
-  const canSwitchToPersonalKey = data.credentialSwitch != null;
+  const canSwitchToPersonalKey = data.credentialSwitch !== null;
   // The modal only names the answers, as `REQUEST_ACTIONS` keys them. `y`
   // retries on the credentials the run already has; `approvalDecisionDelivery`
   // turns `k`, a retry on personal credentials, into the host's
