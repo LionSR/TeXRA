@@ -99,10 +99,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
     entry: TexraSettingRow,
     value: unknown,
   ): Effect.fn.Return<void, SettingsRequestFailed, AppSignals> {
-    const result = yield* applyStateSettingUpdate(entry.key, value, {
-      host: 'cli',
-      stores: roots,
-    });
+    const result = yield* applyStateSettingUpdate(entry, value, roots);
     const label = entry.title;
     switch (result.kind) {
       case 'applied':

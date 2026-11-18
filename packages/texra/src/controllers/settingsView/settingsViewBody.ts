@@ -66,6 +66,7 @@ import { settingsToolCommands } from '@texra/controllers/settingsView/settingsTo
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
 import { buildSettingsSnapshotMessage } from '@texra/controllers/settingsView/settingsSnapshot';
 import { applyStateSettingUpdate } from '@texra/controllers/settingsView/stateSettingWrite';
+import { TEXRA_SETTINGS } from '@texra/shared/settings/texraSettings';
 import {
   DERIVED_SETTINGS_SNAPSHOTS,
   type SettingsViewInboundMessage,
@@ -228,11 +229,15 @@ export const makeSettingsViewBody = Effect.fn('makeSettingsViewBody')(
       key: string,
       value: unknown,
     ) {
-      const result = yield* applyStateSettingUpdate(key, value, {
-        host: 'settingsView',
-        stores: roots,
-        requiresOpenWorkspace: bindings.requiresOpenWorkspace,
-      });
+      // The webview names the key: only a row this view renders is written.
+      const entry = TEXRA_SETTINGS.settingsViewByKey(key);
+      if (!entry) return;
+      const result = yield* applyStateSettingUpdate(
+        entry,
+        value,
+        roots,
+        bindings.requiresOpenWorkspace,
+      );
       if (result.kind === 'ignored') return;
       const label = result.entry.title;
       if (result.kind === 'rejected') {
