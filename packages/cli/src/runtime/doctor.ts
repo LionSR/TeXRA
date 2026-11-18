@@ -18,6 +18,11 @@ import { latexToolchainHealth } from '@latex/latexToolchain';
 import type { UsageLoggingOptOut } from '@telemetry/UsageLogService';
 import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
 import {
+  installAdvice,
+  LATEX_DEPENDENCIES,
+} from '@texra/shared/constants/latexToolchain';
+import { osPlatformOf } from '@texra/shared/osPlatform';
+import {
   TELEMETRY_ENABLED_SETTING,
   TEXRA_SETTINGS,
 } from '@texra/shared/settings/texraSettings';
@@ -239,16 +244,18 @@ function checkLatex(): Effect.Effect<
   never,
   ChildProcessSpawner
 > {
+  const platform = osPlatformOf(process.platform);
   return latexToolchainHealth().pipe(
     Effect.map(({ compiler, tools }) => {
       const checks: DoctorCheck[] = [];
       if (!compiler) {
+        const { label, installs } = LATEX_DEPENDENCIES.compiler;
         checks.push(
           fail(
             'latex.compiler',
             'LaTeX compiler',
             'No supported LaTeX compiler was found on PATH.',
-            'Install latexmk or pdflatex.',
+            installAdvice(label, installs, platform).guide,
           ),
         );
       }
@@ -266,7 +273,7 @@ function checkLatex(): Effect.Effect<
             `latex.${tool.name}`,
             `LaTeX ${tool.name}`,
             `${tool.name} was not found on PATH.`,
-            `Install ${tool.name} or a TeX distribution that provides it.`,
+            installAdvice(tool.name, [tool.name], platform).guide,
           );
         }),
       );
@@ -436,9 +443,14 @@ function formatDoctorText(
   return report.checks
     .map((check) => {
       const head = `${marker[check.status]} ${check.name}: ${redactEmailDiagnostics(check.message)}`;
-      return check.hint
-        ? `${head}\n     ${style.muted(redactEmailDiagnostics(check.hint))}`
-        : head;
+      if (!check.hint) return head;
+      // Install advice runs over several lines; each sits under the marker
+      // column, and a blank line between its steps stays blank.
+      const hint = redactEmailDiagnostics(check.hint)
+        .split('\n')
+        .map((line) => (line ? `     ${style.muted(line)}` : ''))
+        .join('\n');
+      return `${head}\n${hint}`;
     })
     .join('\n');
 }
