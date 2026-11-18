@@ -537,9 +537,9 @@ export interface FormProgress {
   readonly status: 'running' | 'succeeded' | 'failed';
   readonly title: string;
   readonly message?: string;
-  readonly copyableMessage?: string;
-  /** Whether `copyableMessage` has already been written to scrollback by `archiveCopyable`. */
-  readonly copyableMessageArchived?: boolean;
+  /** A message the person may copy (a sign-in link), and whether
+   *  `archiveCopyable` has already written it to scrollback. */
+  readonly copyable?: { readonly text: string; readonly archived: boolean };
   readonly archiveCopyable: () => void;
   readonly cancel: () => void;
   readonly dismiss: () => void;

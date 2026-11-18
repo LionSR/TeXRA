@@ -81,15 +81,14 @@ export function bindSelection<T>(
       const title = busyTitle?.(value) ?? 'Working';
       const archiveCopyable = (): void => {
         const current = currentProgress();
-        if (!current?.copyableMessage || current.copyableMessageArchived) {
-          return;
-        }
+        const copyable = current?.copyable;
+        if (!current || !copyable || copyable.archived) return;
         if (echoOnPersist) onPersist?.();
-        appendLocalNotice(current.copyableMessage);
+        appendLocalNotice(copyable.text);
         formProgress.set({
           ...current,
           message: 'Authentication instructions were written to scrollback.',
-          copyableMessageArchived: true,
+          copyable: { ...copyable, archived: true },
         });
       };
       formProgress.set({
@@ -124,7 +123,7 @@ export function bindSelection<T>(
             ...current,
             message,
             ...(options?.copyable
-              ? { copyableMessage: message, copyableMessageArchived: false }
+              ? { copyable: { text: message, archived: false } }
               : {}),
           });
         },
@@ -137,7 +136,7 @@ export function bindSelection<T>(
               Effect.sync(() => {
                 const current = currentProgress();
                 if (!current) return;
-                if (current.copyableMessage) {
+                if (current.copyable) {
                   formProgress.set({ ...current, status: 'succeeded' });
                 } else {
                   close();
@@ -149,15 +148,13 @@ export function bindSelection<T>(
               if (echoOnPersist) onPersist?.();
               const error = Cause.squash(cause);
               const errorMessage = toErrorMessage(error);
-              const copyableMessage = current.copyableMessage;
+              const copyable = current.copyable?.text;
               yield* reportError(
-                copyableMessage
-                  ? new Error(`${errorMessage}\n${copyableMessage}`)
-                  : error,
+                copyable ? new Error(`${errorMessage}\n${copyable}`) : error,
               );
               current = currentProgress();
               if (!current) return;
-              if (current.copyableMessage) {
+              if (current.copyable) {
                 formProgress.set({
                   ...current,
                   status: 'failed',
