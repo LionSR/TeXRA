@@ -276,9 +276,10 @@ in `node_modules/effect` instead of guessing a pattern.
   `errorPredicates`; no barrel); `@utils/errors/errorMessage` narrows `unknown`
   (`toErrorMessage`, `ensureError`, `formatError`) and is browser-safe.
 - **The language service is a gate.** `npm run gate:effect` runs
-  `@effect/language-service` over every source project and fails on any
-  diagnostic, the ones the editor plugin shows. Fix the code; where a rule is
-  wrong for one line, exempt that line with
+  `@effect/language-service` over every source project and the test suites
+  (`tsconfig.test-kernel.json`) and fails on any diagnostic, the ones the
+  editor plugin shows. Fix the code; where a rule is wrong for one line,
+  exempt that line with
   `// @effect-diagnostics-next-line <rule>:off` and the reason.
 - **Logging**: `Effect.log*` with `withLogChannel` (`@logger/effectLog`), and
   structured payloads as `Effect.annotateLogs({ data })` so the progress view
